@@ -72,10 +72,12 @@ services:
       target: dev
       args:
         PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+        PUBLIC_GOOGLE_MAPS_API_KEY: ${PUBLIC_GOOGLE_MAPS_API_KEY:-}
     environment:
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
       PUBLIC_APP_NAME: ${PUBLIC_APP_NAME:-ERP System}
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      PUBLIC_GOOGLE_MAPS_API_KEY: ${PUBLIC_GOOGLE_MAPS_API_KEY:-}
       ORIGIN: http://localhost:5173
     depends_on:
       backend:
