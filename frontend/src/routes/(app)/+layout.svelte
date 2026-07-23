@@ -21,7 +21,7 @@
   let loading = $state(false);
   let searchInput = $state(globalSearch.query);
 
-  const SEARCHABLE_ROUTES = ['/users', '/employees', '/roles', '/departments', '/audit-log'];
+  const SEARCHABLE_ROUTES = ['/users', '/employees', '/roles', '/departments', '/audit-log', '/branches', '/warehouses'];
 
   let showSearch = $derived(SEARCHABLE_ROUTES.includes(page.url.pathname));
   let title = $derived(routeTitle(page.url.pathname));

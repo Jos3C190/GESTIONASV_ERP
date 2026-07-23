@@ -90,8 +90,8 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Inventario',
     items: [
       { label: 'Inventario', icon: ICONS.inventory, route: '/placeholder?module=Inventario', implemented: false, module: 'Inventario' },
-      { label: 'Almacenes', icon: ICONS.warehouses, route: '/placeholder?module=Almacenes', implemented: false, module: 'Almacenes' },
-      { label: 'Sucursales', icon: ICONS.branches, route: '/placeholder?module=Sucursales', implemented: false, module: 'Sucursales' },
+      { label: 'Almacenes', icon: ICONS.warehouses, route: '/warehouses', implemented: true },
+      { label: 'Sucursales', icon: ICONS.branches, route: '/branches', implemented: true },
       { label: 'Traslados', icon: ICONS.transfers, route: '/placeholder?module=Traslados', implemented: false, module: 'Traslados' },
     ]
   },

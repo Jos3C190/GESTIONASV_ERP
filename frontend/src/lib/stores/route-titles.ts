@@ -8,6 +8,8 @@ const TITLES: Record<string, string> = {
   '/roles': 'Roles y permisos',
   '/employees': 'Empleados',
   '/departments': 'Departamentos',
+  '/branches': 'Sucursales',
+  '/warehouses': 'Almacenes',
   '/audit-log': 'Bitácora',
   '/placeholder': 'Módulo',
 };
