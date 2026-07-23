@@ -10,6 +10,9 @@ export default defineConfig({
     strictPort: true,
     fs: {
       strict: false
+    },
+    watch: {
+      usePolling: true
     }
   },
   preview: {
