@@ -253,3 +253,39 @@ body {
   color: rgb(var(--primary));
   border: 1px solid rgb(var(--primary) / 0.15);
 }
+
+/* View Transitions API — Super Fluid 1s Theme Expansion */
+::view-transition-group(root) {
+  animation-duration: 1s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  mix-blend-mode: normal;
+  will-change: clip-path;
+}
+
+::view-transition-new(root) {
+  animation: reveal-theme 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+::view-transition-old(root),
+[data-theme='dark']::view-transition-old(root) {
+  animation: none;
+  animation-fill-mode: both;
+  z-index: -1;
+}
+
+[data-theme='dark']::view-transition-new(root) {
+  animation: reveal-theme 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes reveal-theme {
+  from {
+    clip-path: circle(0% at calc(100% - 140px) 28px);
+  }
+  to {
+    clip-path: circle(150% at calc(100% - 140px) 28px);
+  }
+}

@@ -36,8 +36,27 @@ function makeThemeStore() {
       return value;
     },
     toggle() {
-      value = value === 'dark' ? 'light' : 'dark';
-      apply(value);
+      const next: Theme = value === 'dark' ? 'light' : 'dark';
+
+      const doc = document as Document & {
+        startViewTransition?: (callback: () => void) => void;
+      };
+
+      const switchTheme = () => {
+        value = next;
+        apply(value);
+      };
+
+      if (
+        !browser ||
+        !doc.startViewTransition ||
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ) {
+        switchTheme();
+        return;
+      }
+
+      doc.startViewTransition(switchTheme);
     },
     set(theme: Theme) {
       value = theme;

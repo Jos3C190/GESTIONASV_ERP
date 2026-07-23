@@ -25,7 +25,11 @@
     return result;
   });
 
-  let branches = $derived([...new Set(WAREHOUSES.map(w => ({ id: w.branchId, name: w.branchName })))]);
+  let branches = $derived(
+    Array.from(
+      new Map(WAREHOUSES.map(w => [w.branchId, { id: w.branchId, name: w.branchName }])).values()
+    )
+  );
 </script>
 
 <svelte:head><title>Almacenes — ERP System</title></svelte:head>
