@@ -295,7 +295,7 @@
         onclick={() => statusFilter = 'all'}
         class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary {statusFilter === 'all' ? 'bg-foreground text-surface border-foreground' : 'bg-surface border-border text-foreground-muted hover:bg-surface-hover'}"
       >
-        Todos <span class="rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] font-semibold text-foreground-subtle">{statusCounts.all}</span>
+        Todos <span class="rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] font-semibold text-foreground">{statusCounts.all}</span>
       </button>
 
       <button

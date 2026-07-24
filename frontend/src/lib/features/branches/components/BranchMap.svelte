@@ -10,6 +10,7 @@
   import { onMount, untrack } from 'svelte';
   import type { Branch } from '$lib/features/branches/mock-data';
   import { loadGoogleMapsScript } from '$lib/services/maps';
+  import { theme } from '$lib/stores/theme.svelte';
 
   interface Props {
     branches: Branch[];
@@ -23,6 +24,7 @@
 
   let containerEl: HTMLDivElement | null = $state(null);
   let mapInstance = $state<any>(null);
+  let tileLayerInstance: any = null;
   let markersMap = new Map<string, any>();
   let activeInfoWindow: any = null;
   let useGoogleMaps = $state(Boolean(apiKey));
@@ -63,8 +65,10 @@
       const L = await loadLeaflet();
       if (!containerEl) return;
 
-      // Mapa fijo en Modo Claro (CartoDB Voyager)
-      const tileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+      // CartoDB Positron (light grey) for light mode, Dark Matter for dark mode
+      const tileUrl = theme.current === 'dark'
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
       mapInstance = L.map(containerEl, {
         center: [center.lat, center.lng],
@@ -73,7 +77,7 @@
         attributionControl: false
       });
 
-      L.tileLayer(tileUrl, {
+      tileLayerInstance = L.tileLayer(tileUrl, {
         subdomains: 'abcd',
         maxZoom: 19
       }).addTo(mapInstance);
@@ -83,6 +87,17 @@
       console.error('Error al cargar Leaflet / CartoDB:', err);
     }
   }
+
+  // Reactive effect to change tile layer style when system theme changes
+  $effect(() => {
+    const currentTheme = theme.current;
+    if (mapInstance && tileLayerInstance) {
+      const newUrl = currentTheme === 'dark'
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+      tileLayerInstance.setUrl(newUrl);
+    }
+  });
 
   function renderLeafletMarkers(L: any) {
     if (!mapInstance) return;
@@ -121,13 +136,13 @@
       const marker = L.marker([branch.lat, branch.lng], { icon: customIcon }).addTo(mapInstance);
 
       const infoContent = `
-        <div style="font-family: system-ui, -apple-system, sans-serif; padding: 2px; color: #111827; min-width: 190px;">
-          <h4 style="margin: 0 0 3px 0; font-size: 13px; font-weight: 600; color: #111827;">${branch.name}</h4>
-          <p style="margin: 0 0 4px 0; font-size: 11px; color: #6b7280;">${branch.code} · ${branch.city}</p>
-          <div style="border-top: 1px solid #e5e7eb; margin: 4px 0; padding-top: 4px;">
+        <div style="font-family: system-ui, -apple-system, sans-serif; padding: 2px; color: var(--text-foreground, #111827); min-width: 190px;">
+          <h4 style="margin: 0 0 3px 0; font-size: 13px; font-weight: 600; color: var(--text-foreground, #111827);">${branch.name}</h4>
+          <p style="margin: 0 0 4px 0; font-size: 11px; color: var(--text-foreground-muted, #6b7280);">${branch.code} · ${branch.city}</p>
+          <div style="border-top: 1px solid var(--border, #e5e7eb); margin: 4px 0; padding-top: 4px;">
             <p style="margin: 0 0 2px 0; font-size: 11px;"><strong>Gerente:</strong> ${branch.manager}</p>
             <p style="margin: 0 0 4px 0; font-size: 11px;"><strong>Teléfono:</strong> ${branch.phone}</p>
-            <div style="display: flex; gap: 10px; font-size: 10px; color: #6b7280; margin-top: 4px;">
+            <div style="display: flex; gap: 10px; font-size: 10px; color: var(--text-foreground-muted, #6b7280); margin-top: 4px;">
               <span>👥 <strong>${branch.employees}</strong> empl.</span>
               <span>📦 <strong>${branch.warehouses}</strong> alm.</span>
             </div>
@@ -155,7 +170,7 @@
       await loadGoogleMapsScript(apiKey);
       if (!containerEl) return;
 
-      mapInstance = new window.google.maps.Map(containerEl, {
+      mapInstance = new (window as any).google.maps.Map(containerEl, {
         center: { lat: center.lat, lng: center.lng },
         zoom: center.zoom,
         disableDefaultUI: false,
@@ -189,13 +204,13 @@
         ? '#F59E0B'
         : '#64748B';
 
-      const marker = new window.google.maps.Marker({
+      const marker = new (window as any).google.maps.Marker({
         position: { lat: branch.lat, lng: branch.lng },
         map: mapInstance,
         title: branch.name,
         icon: {
           url: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="${isSelected ? 36 : 28}" height="${isSelected ? 36 : 28}" viewBox="0 0 24 24" fill="${encodeURIComponent(color)}" stroke="%23ffffff" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3" fill="%23ffffff"/></svg>`,
-          scaledSize: new window.google.maps.Size(isSelected ? 36 : 28, isSelected ? 36 : 28)
+          scaledSize: new (window as any).google.maps.Size(isSelected ? 36 : 28, isSelected ? 36 : 28)
         }
       });
 
@@ -215,7 +230,7 @@
       marker.addListener('click', () => {
         if (onSelect) onSelect(branch.id);
         if (activeInfoWindow) activeInfoWindow.close();
-        activeInfoWindow = new window.google.maps.InfoWindow({ content: infoContent });
+        activeInfoWindow = new (window as any).google.maps.InfoWindow({ content: infoContent });
         activeInfoWindow.open(mapInstance, marker);
       });
 
@@ -237,7 +252,7 @@
             mapInstance.panTo({ lat: b.lat, lng: b.lng });
             mapInstance.setZoom(13);
             const m = markersMap.get(b.id);
-            if (m) window.google.maps.event.trigger(m, 'click');
+            if (m) (window as any).google.maps.event.trigger(m, 'click');
           }
         }
       } else if ((window as any).L && mapInstance.setView) {
@@ -287,16 +302,21 @@
   }
 
   :global(.leaflet-popup-content-wrapper) {
-    background: #ffffff !important;
-    border: 1px solid #e5e7eb !important;
+    background: var(--bg-surface-elevated, #ffffff) !important;
+    border: 1px solid var(--border, #e5e7eb) !important;
     border-radius: 12px !important;
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2) !important;
   }
   :global(.leaflet-popup-tip) {
-    background: #ffffff !important;
+    background: var(--bg-surface-elevated, #ffffff) !important;
+    border: 1px solid var(--border, #e5e7eb) !important;
   }
   :global(.custom-branch-pin) {
     background: transparent !important;
     border: none !important;
+  }
+  /* Hacer el mapa de modo oscuro un poco más claro (gris medio) para encajar con el diseño Geist */
+  :global([data-theme="dark"] .leaflet-tile) {
+    filter: brightness(1.45) contrast(0.9) saturate(0.85);
   }
 </style>
