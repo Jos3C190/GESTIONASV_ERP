@@ -74,7 +74,7 @@
           </div>
           <div class="flex flex-col min-w-0 flex-1">
             <span class="truncate text-xs font-semibold leading-tight text-foreground">ERP System</span>
-            <span class="truncate text-[11px] font-medium leading-tight text-foreground-subtle group-hover:text-foreground-muted flex items-center gap-1 mt-0.5">
+            <span class="truncate text-[11px] font-medium leading-tight text-foreground-muted flex items-center gap-1 mt-0.5">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="flex-none text-primary">
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
               </svg>
@@ -82,7 +82,7 @@
             </span>
           </div>
         </div>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="flex-none text-foreground-subtle transition-transform duration-150 {sucursalOpen ? 'rotate-180' : ''}">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="flex-none text-foreground-muted transition-transform duration-150 {sucursalOpen ? 'rotate-180' : ''}">
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
@@ -90,7 +90,7 @@
       {#if sucursalOpen}
         <div class="absolute left-3 right-3 top-full z-50 mt-1 animate-fade-scale rounded-lg border border-border bg-surface-elevated shadow-lifted overflow-hidden">
           <div class="px-3 py-1.5 bg-surface-muted/50 border-b border-border">
-            <p class="text-[10px] font-medium uppercase tracking-wider text-foreground-subtle">Sucursales</p>
+            <p class="text-[10px] font-medium uppercase tracking-wider text-foreground-muted">Sucursales</p>
           </div>
           <div class="py-1 max-h-48 overflow-y-auto">
             {#each sucursales as s (s.id)}
@@ -116,27 +116,27 @@
         {#if collapsed}
           {#if gi > 0}<div class="mx-1 my-2 border-t border-border"></div>{/if}
         {:else}
-          <p class="px-3 pt-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-foreground-subtle">{group.label}</p>
+          <p class="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-foreground-muted/90">{group.label}</p>
         {/if}
         {#each group.items as item (item.route)}
           {#if isVisible(item)}
             <a
               href={item.route}
               onclick={handleClick}
-              class="group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors duration-150 {isActive(item.route) ? 'bg-surface-hover font-medium text-foreground' : 'text-foreground-muted hover:bg-surface-hover/60 hover:text-foreground'} {collapsed ? 'justify-center' : ''}"
+              class="group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors duration-150 {isActive(item.route) ? 'bg-surface-hover font-medium text-foreground' : 'text-foreground/80 hover:bg-surface-hover/70 hover:text-foreground'} {collapsed ? 'justify-center' : ''}"
               title={collapsed ? item.label : ''}
               aria-current={isActive(item.route) ? 'page' : undefined}
             >
               {#if isActive(item.route) && !collapsed}
                 <div class="absolute left-0 top-1/2 h-4 -translate-y-1/2 w-0.5 rounded-r bg-foreground"></div>
               {/if}
-              <svg class="flex-none {isActive(item.route) ? 'text-foreground' : 'text-foreground-subtle'}" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <svg class="flex-none {isActive(item.route) ? 'text-foreground' : 'text-foreground-muted group-hover:text-foreground'}" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d={item.icon} />
               </svg>
               {#if !collapsed}
                 <span class="truncate flex-1">{item.label}</span>
                 {#if !item.implemented}
-                  <span class="flex-none text-[10px] text-foreground-subtle">·</span>
+                  <span class="flex-none text-[10px] text-foreground-muted">·</span>
                 {/if}
               {/if}
             </a>
@@ -150,12 +150,12 @@
   {#if !collapsed}
     <div class="flex-none border-t border-border px-3 py-2.5">
       <div class="flex items-center gap-2.5 rounded-md px-1.5 py-1">
-        <div class="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-foreground-muted/15 text-xs font-medium text-foreground-muted">
+        <div class="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-foreground/10 text-xs font-semibold text-foreground">
           {session.user?.username?.[0]?.toUpperCase() ?? '?'}
         </div>
         <div class="min-w-0 flex-1">
-          <p class="truncate text-xs font-medium text-foreground">{session.user?.username ?? '...'}</p>
-          <p class="truncate text-[11px] text-foreground-subtle">{session.user?.is_superuser ? 'Super Admin' : 'Usuario'}</p>
+          <p class="truncate text-xs font-semibold text-foreground">{session.user?.username ?? '...'}</p>
+          <p class="truncate text-[11px] font-medium text-foreground-muted">{session.user?.is_superuser ? 'Super Admin' : 'Usuario'}</p>
         </div>
       </div>
     </div>
