@@ -55,9 +55,9 @@
   let dataMin = $derived(Math.min(...data.map(d => d.value)));
   let dataMax = $derived(Math.max(...data.map(d => d.value)));
   let ticks = $derived(niceTicks(dataMin * 0.9, dataMax * 1.1, 4));
-  let yMin = $derived(ticks[0]);
-  let yMax = $derived(ticks[ticks.length - 1]);
-  let yRange = $derived(yMax - yMin || 1);
+  let yMin = $derived(ticks[0] ?? 0);
+  let yMax = $derived(ticks[ticks.length - 1] ?? 0);
+  let yRange = $derived((yMax ?? 0) - (yMin ?? 0) || 1);
 
   let stepX = $derived(chartW / Math.max(data.length - 1, 1));
 
@@ -67,11 +67,11 @@
   let linePath = $derived.by(() => {
     const pts = data.map((d, i) => [x(i), y(d.value)] as [number, number]);
     if (pts.length < 2) return '';
-    let path = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+    let path = `M${pts[0]![0].toFixed(1)},${pts[0]![1].toFixed(1)}`;
     for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1] || pts[i];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
+      const p0 = pts[i - 1] || pts[i]!;
+      const p1 = pts[i]!;
+      const p2 = pts[i + 1]!;
       const p3 = pts[i + 2] || p2;
       const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
       const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
@@ -89,7 +89,7 @@
     const indices = n <= 7 ? data.map((_, i) => i) : [0, Math.floor(n / 4), Math.floor(n / 2), Math.floor(n * 3 / 4), n - 1];
     return indices.map(i => ({
       x: x(i),
-      label: new Date(data[i].date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+      label: new Date(data[i]?.date ?? '').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
     }));
   });
 
@@ -102,7 +102,7 @@
   }
 
   let hoverX = $derived(hovered !== null ? x(hovered) : 0);
-  let hoverY = $derived(hovered !== null ? y(data[hovered].value) : 0);
+  let hoverY = $derived(hovered !== null ? y(data[hovered]?.value ?? 0) : 0);
 
   let prefersReduced = $state(false);
   $effect(() => {
@@ -133,7 +133,7 @@
 </script>
 
 <div class="relative w-full" bind:this={containerEl} onmousemove={onMove} onmouseleave={() => hovered = null}>
-  <svg viewBox={`0 0 ${W} ${H}`} class="w-full" style="height: {H}px; display: block;" aria-label="{label}: tendencia de {data.length} días, valores entre {Math.round(yMin)} y {Math.round(yMax)}">
+  <svg viewBox={`0 0 ${W} ${H}`} class="w-full" style="height: {H}px; display: block;" aria-label="{label}: tendencia de {data.length} días, valores entre {Math.round(yMin ?? 0)} y {Math.round(yMax ?? 0)}">
     <defs>
       <linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="rgb(var(--primary))" stop-opacity="0.22" />
@@ -172,8 +172,8 @@
 
   {#if hovered !== null}
     <div class="pointer-events-none absolute z-10 rounded-lg border border-border bg-surface-elevated px-3 py-2 shadow-lifted" style="left: {hoverX}px; top: {hoverY}px; transform: translate(-50%, -130%);">
-      <p class="text-[10px] text-foreground-subtle">{new Date(data[hovered].date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</p>
-      <p class="font-mono text-sm font-bold tabular-nums text-foreground">{data[hovered].value.toLocaleString()}</p>
+      <p class="text-[10px] text-foreground-subtle">{new Date(data[hovered]?.date ?? '').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</p>
+      <p class="font-mono text-sm font-bold tabular-nums text-foreground">{data[hovered]?.value.toLocaleString() ?? ''}</p>
     </div>
   {/if}
 </div>

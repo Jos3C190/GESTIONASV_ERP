@@ -57,8 +57,8 @@
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
               <h3 class="text-sm font-bold text-foreground truncate">{branch.name}</h3>
-              <Badge variant={STATUS_MAP[branch.status].variant}>
-                {STATUS_MAP[branch.status].label}
+              <Badge variant={STATUS_MAP[branch.status]?.variant || 'neutral'}>
+                {STATUS_MAP[branch.status]?.label || branch.status}
               </Badge>
             </div>
             <p class="font-mono text-[10.5px] font-medium text-foreground-subtle mt-0.5">{branch.code}</p>

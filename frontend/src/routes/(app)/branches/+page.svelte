@@ -9,29 +9,65 @@
    */
 
   import { search as globalSearch } from '$lib/stores/search.svelte';
-  import { BRANCHES, type Branch } from '$lib/features/branches/mock-data';
+  import { type Branch } from '$lib/features/branches/mock-data';
+  import { getBranches } from '$lib/services/branches';
   import BranchTable from '$lib/features/branches/components/BranchTable.svelte';
   import BranchMap from '$lib/features/branches/components/BranchMap.svelte';
   import BranchDetail from '$lib/features/branches/components/BranchDetail.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import { onMount } from 'svelte';
 
   let showMap = $state(true);
   let selectedId = $state<string | null>('br-003'); // San Miguel por defecto o primera sucursal
+  let branches = $state<Branch[]>([]);
+  let loading = $state(true);
+
+  let cityFilter = $state('');
+  let statusFilter = $state<'all' | 'active' | 'inactive' | 'maintenance'>('all');
+
+  onMount(async () => {
+    loading = true;
+    try {
+      branches = await getBranches();
+      if (branches.length > 0 && !branches.some(b => b.id === selectedId)) {
+        selectedId = branches[0]?.id ?? null;
+      }
+    } finally {
+      loading = false;
+    }
+  });
+
+  let cities = $derived(
+    Array.from(new Set(branches.map(b => b.city))).sort()
+  );
 
   let filteredBranches = $derived.by(() => {
+    let result = branches;
+
+    if (cityFilter) {
+      result = result.filter(b => b.city === cityFilter);
+    }
+
+    if (statusFilter !== 'all') {
+      result = result.filter(b => b.status === statusFilter);
+    }
+
     const q = globalSearch.query.toLowerCase().trim();
-    if (!q) return BRANCHES;
-    return BRANCHES.filter(b =>
-      b.name.toLowerCase().includes(q) ||
-      b.code.toLowerCase().includes(q) ||
-      b.city.toLowerCase().includes(q) ||
-      b.manager.toLowerCase().includes(q)
-    );
+    if (q) {
+      result = result.filter(b =>
+        b.name.toLowerCase().includes(q) ||
+        b.code.toLowerCase().includes(q) ||
+        b.city.toLowerCase().includes(q) ||
+        b.manager.toLowerCase().includes(q)
+      );
+    }
+
+    return result;
   });
 
   let selectedBranch = $derived(
-    selectedId ? BRANCHES.find(b => b.id === selectedId) ?? null : null
+    selectedId ? branches.find(b => b.id === selectedId) ?? null : null
   );
 
   function onSelect(id: string) {
@@ -39,14 +75,14 @@
   }
 
   // --- Métricas calculadas dinámicamente ---
-  let totalEmployees = $derived(BRANCHES.reduce((sum, b) => sum + b.employees, 0));
-  let totalWarehouses = $derived(BRANCHES.reduce((sum, b) => sum + b.warehouses, 0));
-  let totalSales = $derived(BRANCHES.reduce((sum, b) => sum + b.salesThisMonth, 0));
+  let totalEmployees = $derived(branches.reduce((sum, b) => sum + b.employees, 0));
+  let totalWarehouses = $derived(branches.reduce((sum, b) => sum + b.warehouses, 0));
+  let totalSales = $derived(branches.reduce((sum, b) => sum + b.salesThisMonth, 0));
 
-  let activeCount = $derived(BRANCHES.filter(b => b.status === 'active').length);
-  let maintenanceCount = $derived(BRANCHES.filter(b => b.status === 'maintenance').length);
-  let inactiveCount = $derived(BRANCHES.filter(b => b.status === 'inactive').length);
-  let totalBranches = $derived(BRANCHES.length);
+  let activeCount = $derived(branches.filter(b => b.status === 'active').length);
+  let maintenanceCount = $derived(branches.filter(b => b.status === 'maintenance').length);
+  let inactiveCount = $derived(branches.filter(b => b.status === 'inactive').length);
+  let totalBranches = $derived(branches.length);
 
   // Perímetro y offset para el anillo SVG de sucursales activas
   const ringR = 16;
@@ -56,13 +92,26 @@
 
 <svelte:head><title>Sucursales — ERP System</title></svelte:head>
 
-<div class="p-6 md:p-8 flex flex-col h-[calc(100vh-3.5rem)] space-y-5 overflow-hidden">
+<div class="p-4 sm:p-6 md:p-8 flex flex-col lg:h-[calc(100vh-3.5rem)] space-y-4 sm:space-y-5 overflow-auto lg:overflow-hidden">
   <!-- Header de la página -->
-  <div class="flex flex-none items-center justify-between gap-4">
+  <div class="flex flex-col sm:flex-row flex-none items-start sm:items-center justify-between gap-3 sm:gap-4">
     <p class="text-sm text-foreground-muted">
       {filteredBranches.length} sucursal(es) registradas · Red de operaciones nacional
     </p>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+      <!-- Filtros -->
+      <select bind:value={cityFilter} class="h-9 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground focus:border-primary focus:outline-none">
+        <option value="">Todas las ciudades</option>
+        {#each cities as city}<option value={city}>{city}</option>{/each}
+      </select>
+
+      <select bind:value={statusFilter} class="h-9 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground focus:border-primary focus:outline-none hidden sm:block">
+        <option value="all">Todos los estados</option>
+        <option value="active">Activas</option>
+        <option value="maintenance">Mantenimiento</option>
+        <option value="inactive">Inactivas</option>
+      </select>
+
       <!-- Toggle mapa -->
       <button
         type="button"
@@ -154,37 +203,49 @@
   </div>
 
   <!-- GRID PRINCIPAL DE 2 COLUMNAS (MAESTRO-DETALLE + MAPA COMPLETO) -->
-  <div class="flex-1 min-h-0 grid grid-cols-1 {showMap ? 'lg:grid-cols-12' : 'grid-cols-1'} gap-5 items-stretch">
-
-    <!-- COLUMNA IZQUIERDA: Tabla de sucursales + Panel de detalle horizontal abajo -->
-    <div class="{showMap ? 'lg:col-span-7 xl:col-span-7' : 'lg:col-span-12'} flex flex-col gap-5 flex-1 min-h-0">
-      <!-- Tabla Maestro -->
-      <Card class="flex-1 min-h-0 flex flex-col overflow-hidden p-0 border border-border shadow-sm">
-        <BranchTable
-          branches={filteredBranches}
-          {selectedId}
-          {onSelect}
-        />
-      </Card>
-
-      <!-- Panel de Detalle Horizontal (Debajo de la tabla) -->
-      <Card class="flex-none overflow-hidden p-0 border border-border shadow-sm">
-        <BranchDetail branch={selectedBranch} />
-      </Card>
+  {#if loading}
+    <div class="flex-1 flex items-center justify-center border border-border rounded-xl bg-surface-elevated shadow-sm">
+      <div class="flex flex-col items-center gap-3">
+        <svg class="animate-spin h-5 w-5 text-primary" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="text-xs text-foreground-subtle font-medium">Cargando sucursales...</p>
+      </div>
     </div>
+  {:else}
+    <div class="flex-1 min-h-0 grid grid-cols-1 {showMap ? 'lg:grid-cols-12' : 'grid-cols-1'} gap-5 items-stretch">
 
-    <!-- COLUMNA DERECHA: Mapa a Alto Completo (Estirado al 100% del sobrante) -->
-    {#if showMap}
-      <div class="lg:col-span-5 xl:col-span-5 flex flex-col flex-1 min-h-0">
-        <div class="flex-1 h-full min-h-0 w-full">
-          <BranchMap
+      <!-- COLUMNA IZQUIERDA: Tabla de sucursales + Panel de detalle horizontal abajo -->
+      <div class="{showMap ? 'lg:col-span-7 xl:col-span-7' : 'lg:col-span-12'} flex flex-col gap-5 flex-1 min-h-0">
+        <!-- Tabla Maestro -->
+        <Card class="flex-1 min-h-0 flex flex-col overflow-hidden p-0 border border-border shadow-sm">
+          <BranchTable
             branches={filteredBranches}
             {selectedId}
             {onSelect}
           />
-        </div>
-      </div>
-    {/if}
+        </Card>
 
-  </div>
+        <!-- Panel de Detalle Horizontal (Debajo de la tabla) -->
+        <Card class="flex-none overflow-hidden p-0 border border-border shadow-sm">
+          <BranchDetail branch={selectedBranch} />
+        </Card>
+      </div>
+
+      <!-- COLUMNA DERECHA: Mapa a Alto Completo (Estirado al 100% del sobrante) -->
+      {#if showMap}
+        <div class="lg:col-span-5 xl:col-span-5 flex flex-col flex-1 min-h-[350px] lg:min-h-0 mt-4 lg:mt-0">
+          <div class="flex-1 h-full min-h-0 w-full">
+            <BranchMap
+              branches={filteredBranches}
+              {selectedId}
+              {onSelect}
+            />
+          </div>
+        </div>
+      {/if}
+
+    </div>
+  {/if}
 </div>

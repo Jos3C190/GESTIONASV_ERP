@@ -231,6 +231,44 @@ export interface AuditLogPage {
   meta: PageMeta;
 }
 
+export interface BranchOut {
+  id: string;
+  code: string;
+  name: string;
+  address: string;
+  city: string;
+  phone: string;
+  manager: string;
+  manager_initials: string;
+  lat: number;
+  lng: number;
+  status: 'active' | 'inactive' | 'maintenance';
+  employees: number;
+  warehouses: number;
+  sales_this_month: number;
+  trend: number[];
+  opened_at: string;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface WarehouseOut {
+  id: string;
+  code: string;
+  name: string;
+  branch_id: string;
+  branch_name: string;
+  location: string;
+  capacity: number;
+  used: number;
+  status: 'active' | 'full' | 'maintenance';
+  products: number;
+  last_movement: string;
+  trend: number[] | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
 export const api = {
   auth: {
     login: (login: string, password: string) =>
@@ -361,5 +399,30 @@ export const api = {
       const qs = sp.toString();
       return apiFetch<AuditLogPage>(`/audit-logs${qs ? `?${qs}` : ''}`);
     }
+  },
+  branches: {
+    list: () => apiFetch<BranchOut[]>('/branches'),
+    get: (id: string) => apiFetch<BranchOut>(`/branches/${id}`),
+    create: (data: Record<string, unknown>) =>
+      apiFetch<BranchOut>('/branches', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Record<string, unknown>) =>
+      apiFetch<BranchOut>(`/branches/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: string) =>
+      apiFetch<{ message: string; code: string }>(`/branches/${id}`, { method: 'DELETE' })
+  },
+  warehouses: {
+    list: (params: { branch_id?: string } = {}) => {
+      const sp = new URLSearchParams();
+      if (params.branch_id) sp.set('branch_id', params.branch_id);
+      const qs = sp.toString();
+      return apiFetch<WarehouseOut[]>(`/warehouses${qs ? `?${qs}` : ''}`);
+    },
+    get: (id: string) => apiFetch<WarehouseOut>(`/warehouses/${id}`),
+    create: (data: Record<string, unknown>) =>
+      apiFetch<WarehouseOut>('/warehouses', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Record<string, unknown>) =>
+      apiFetch<WarehouseOut>(`/warehouses/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: string) =>
+      apiFetch<{ message: string; code: string }>(`/warehouses/${id}`, { method: 'DELETE' })
   }
 };

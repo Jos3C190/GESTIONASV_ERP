@@ -109,8 +109,8 @@
 
           <!-- Estado Badge -->
           <td class="px-3.5 py-2.5">
-            <Badge variant={STATUS_MAP[branch.status].variant}>
-              {STATUS_MAP[branch.status].label}
+            <Badge variant={STATUS_MAP[branch.status]?.variant || 'neutral'}>
+              {STATUS_MAP[branch.status]?.label || branch.status}
             </Badge>
           </td>
 

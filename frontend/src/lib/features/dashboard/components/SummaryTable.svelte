@@ -47,7 +47,7 @@
           </td>
           <td class="px-3 py-2.5 text-[13px] text-foreground-muted">{row.dept}</td>
           <td class="px-3 py-2.5">
-            <Badge variant={statusMap[row.status].variant}>{statusMap[row.status].label}</Badge>
+            <Badge variant={statusMap[row.status]?.variant || 'neutral'}>{statusMap[row.status]?.label || row.status}</Badge>
           </td>
           <td class="px-3 py-2.5 text-right font-mono text-[12px] tabular-nums text-foreground-subtle">{row.createdAt}</td>
         </tr>

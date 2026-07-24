@@ -34,11 +34,11 @@
     const step = SW / (sparkline.length - 1);
     const pts = sparkline.map((v, i) => [i * step, SH - ((v - min) / range) * SH] as [number, number]);
     if (pts.length < 2) return '';
-    let path = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+    let path = `M${pts[0]![0].toFixed(1)},${pts[0]![1].toFixed(1)}`;
     for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1] || pts[i];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
+      const p0 = pts[i - 1] || pts[i]!;
+      const p1 = pts[i]!;
+      const p2 = pts[i + 1]!;
       const p3 = pts[i + 2] || p2;
       const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
       const cp1y = p1[1] + (p2[1] - p0[1]) / 6;

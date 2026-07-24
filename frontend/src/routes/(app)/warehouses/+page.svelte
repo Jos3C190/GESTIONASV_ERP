@@ -10,13 +10,18 @@
 
   import { search as globalSearch } from '$lib/stores/search.svelte';
   import {
-    WAREHOUSES, STATUS_MAP, utilizationPct, getShortWarehouseName,
-    type Warehouse,
+    STATUS_MAP, utilizationPct, getShortWarehouseName,
+    type Warehouse
   } from '$lib/features/warehouses/mock-data';
+  import { getWarehouses } from '$lib/services/warehouses';
   import Card from '$lib/components/ui/Card.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import KebabMenu from '$lib/components/ui/KebabMenu.svelte';
+  import { onMount } from 'svelte';
+
+  let warehouses = $state<Warehouse[]>([]);
+  let loading = $state(true);
 
   let branchFilter = $state('');
   let statusFilter = $state<'all' | 'active' | 'full' | 'maintenance'>('all');
@@ -33,6 +38,15 @@
     showBottomFade = scrollHeight > clientHeight && (scrollTop + clientHeight < scrollHeight - 8);
   }
 
+  onMount(async () => {
+    loading = true;
+    try {
+      warehouses = await getWarehouses();
+    } finally {
+      loading = false;
+    }
+  });
+
   $effect(() => {
     if (scrollContainer) {
       checkScrollFade();
@@ -42,28 +56,14 @@
   // Sucursales disponibles para el selector
   let branches = $derived(
     Array.from(
-      new Map(WAREHOUSES.map(w => [w.branchId, { id: w.branchId, name: w.branchName }])).values()
+      new Map(warehouses.map(w => [w.branchId, { id: w.branchId, name: w.branchName }])).values()
     )
   );
-
-  // Conteo dinámico de almacenes por estado
-  let statusCounts = $derived({
-    all: WAREHOUSES.length,
-    active: WAREHOUSES.filter(w => w.status === 'active').length,
-    full: WAREHOUSES.filter(w => w.status === 'full').length,
-    maintenance: WAREHOUSES.filter(w => w.status === 'maintenance').length,
-  });
-
-  // Métricas acumuladas para KPIs
-  let totalCapacity = $derived(WAREHOUSES.reduce((s, w) => s + w.capacity, 0));
-  let totalUsed = $derived(WAREHOUSES.reduce((s, w) => s + w.used, 0));
-  let totalProducts = $derived(WAREHOUSES.reduce((s, w) => s + w.products, 0));
-  let overallPct = $derived(totalCapacity > 0 ? Math.round((totalUsed / totalCapacity) * 100) : 0);
 
   // Filtrado y ordenamiento dinámico
   let filtered = $derived.by(() => {
     const q = globalSearch.query.toLowerCase().trim();
-    let result = [...WAREHOUSES];
+    let result = [...warehouses];
 
     if (q) {
       result = result.filter(w =>
@@ -93,15 +93,35 @@
     return result;
   });
 
+  // Conteo global de almacenes por estado (usado en los chips de filtro)
+  let statusCounts = $derived({
+    all: warehouses.length,
+    active: warehouses.filter(w => w.status === 'active').length,
+    full: warehouses.filter(w => w.status === 'full').length,
+    maintenance: warehouses.filter(w => w.status === 'maintenance').length,
+  });
+
+  // Métricas acumuladas para KPIs basadas en los almacenes filtrados
+  let totalCapacity = $derived(filtered.reduce((s, w) => s + w.capacity, 0));
+  let totalUsed = $derived(filtered.reduce((s, w) => s + w.used, 0));
+  let totalProducts = $derived(filtered.reduce((s, w) => s + w.products, 0));
+  let overallPct = $derived(totalCapacity > 0 ? Math.round((totalUsed / totalCapacity) * 100) : 0);
+
+  // Conteos específicos de la vista filtrada (para KPI 5)
+  let fActiveCount = $derived(filtered.filter(w => w.status === 'active').length);
+  let fFullCount = $derived(filtered.filter(w => w.status === 'full').length);
+  let fMaintCount = $derived(filtered.filter(w => w.status === 'maintenance').length);
+  let fTotalCount = $derived(filtered.length);
+
   // Almacenes ordenados por ocupación para la sección de comparativa (Bento Cell 1)
   let rankedWarehouses = $derived(
-    [...WAREHOUSES].sort((a, b) => utilizationPct(b) - utilizationPct(a))
+    [...filtered].sort((a, b) => utilizationPct(b) - utilizationPct(a))
   );
 
   function resetFilters() {
     branchFilter = '';
     statusFilter = 'all';
-    globalSearch.query = '';
+    globalSearch.clear();
   }
 
   // Color semántico funcional según nivel de ocupación
@@ -115,11 +135,11 @@
 
 <svelte:head><title>Almacenes — ERP System</title></svelte:head>
 
-<div class="p-6 md:p-8 space-y-6">
+<div class="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
   <!-- Header de página (Sin título redundante) -->
-  <div class="flex items-center justify-between gap-4">
+  <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
     <p class="text-sm text-foreground-muted">
-      {WAREHOUSES.length} almacenes registrados en {branches.length} sucursales
+      {warehouses.length} almacenes registrados en {branches.length} sucursales
     </p>
     <Button size="sm">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
@@ -207,7 +227,7 @@
           <div class="h-full rounded-full bg-primary" style="width: 100%;"></div>
         </div>
       </div>
-      <p class="text-[11px] text-foreground-subtle truncate">Distribuida en {statusCounts.all} almacenes</p>
+      <p class="text-[11px] text-foreground-subtle truncate">Distribuida en {fTotalCount} almacenes</p>
     </div>
 
     <!-- Celda Bento 3 (1x1): KPI Ocupado -->
@@ -248,27 +268,27 @@
     <div class="rounded-xl border border-border bg-surface-elevated p-5 h-[160px] flex flex-col justify-between">
       <div class="flex items-center justify-between">
         <span class="text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">Almacenes activos</span>
-        <div class="font-mono text-lg font-bold text-foreground">{statusCounts.active} <span class="text-xs font-normal text-foreground-subtle">/ {statusCounts.all}</span></div>
+        <div class="font-mono text-lg font-bold text-foreground">{fActiveCount} <span class="text-xs font-normal text-foreground-subtle">/ {fTotalCount}</span></div>
       </div>
       <div class="flex items-center gap-3">
         <!-- Mini Anillo SVG Verde -->
         <svg width="40" height="40" viewBox="0 0 40 40" class="-rotate-90 flex-none" aria-hidden="true">
           <circle cx="20" cy="20" r="15" fill="none" stroke="rgb(var(--border))" stroke-width="4.5"/>
           <circle cx="20" cy="20" r="15" fill="none" stroke="rgb(var(--success))" stroke-width="4.5"
-            stroke-dasharray="94.2" stroke-dashoffset={94.2 - (statusCounts.active / statusCounts.all) * 94.2} stroke-linecap="round"/>
+            stroke-dasharray="94.2" stroke-dashoffset={fTotalCount > 0 ? 94.2 - (fActiveCount / fTotalCount) * 94.2 : 94.2} stroke-linecap="round"/>
         </svg>
         <div class="text-[11px] space-y-0.5">
-          <p class="font-semibold text-danger">{statusCounts.full} llenos</p>
-          <p class="font-medium text-warning">{statusCounts.maintenance} en mantenimiento</p>
+          <p class="font-semibold text-danger">{fFullCount} llenos</p>
+          <p class="font-medium text-warning">{fMaintCount} en mantenimiento</p>
         </div>
       </div>
-      <p class="text-[10.5px] text-foreground-subtle truncate">{statusCounts.active} operando normalmente</p>
+      <p class="text-[10.5px] text-foreground-subtle truncate">{fActiveCount} operando normalmente</p>
     </div>
 
   </div>
 
   <!-- Barra de Herramientas (Toolbar: Chips por estado + Filtros + Toggle Grid/Lista) -->
-  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2">
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 pt-2">
     <!-- Chips de Filtro por Estado -->
     <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="Filtrar por estado">
       <button
@@ -301,7 +321,7 @@
     </div>
 
     <!-- Controles derechos (Sucursal, Ordenamiento, Toggle Grid/Lista) -->
-    <div class="flex items-center gap-2 self-end md:self-auto">
+    <div class="flex flex-wrap items-center justify-end gap-2 self-end md:self-auto w-full sm:w-auto">
       <select bind:value={branchFilter} class="h-9 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground focus:border-primary focus:outline-none">
         <option value="">Todas las sucursales</option>
         {#each branches as b (b.id)}<option value={b.id}>{b.name}</option>{/each}
@@ -336,7 +356,17 @@
   </div>
 
   <!-- Vista Principal: Grid o Lista de Tarjetas de Almacén -->
-  {#if filtered.length === 0}
+  {#if loading}
+    <div class="flex items-center justify-center py-24 border border-border rounded-xl bg-surface-elevated shadow-sm">
+      <div class="flex flex-col items-center gap-3">
+        <svg class="animate-spin h-5 w-5 text-primary" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="text-xs text-foreground-subtle font-medium">Cargando almacenes...</p>
+      </div>
+    </div>
+  {:else if filtered.length === 0}
     <!-- Estado Vacío -->
     <Card class="flex flex-col items-center justify-center py-12 text-center">
       <div class="flex h-12 w-12 items-center justify-center rounded-full bg-surface-muted text-foreground-subtle">
@@ -347,7 +377,7 @@
         No se encontraron almacenes que coincidan con los criterios de búsqueda o filtro seleccionados.
       </p>
       <div class="mt-5">
-        <Button variant="outline" size="sm" onclick={resetFilters}>Limpiar filtros</Button>
+        <Button variant="secondary" size="sm" onclick={resetFilters}>Limpiar filtros</Button>
       </div>
     </Card>
   {:else if viewMode === 'grid'}
@@ -392,8 +422,8 @@
           <p class="font-mono text-[11px] text-foreground-subtle tracking-wide">{wh.code}</p>
         </div>
       </div>
-      <Badge variant={STATUS_MAP[wh.status].variant}>
-        {STATUS_MAP[wh.status].label}
+      <Badge variant={STATUS_MAP[wh.status]?.variant || 'neutral'}>
+        {STATUS_MAP[wh.status]?.label || wh.status}
       </Badge>
     </div>
 
