@@ -12,7 +12,9 @@ export default defineConfig({
       strict: false
     },
     watch: {
-      usePolling: true
+      usePolling: true,
+      interval: 1000,
+      ignored: ['**/node_modules/**', '**/.svelte-kit/**', '**/.git/**']
     }
   },
   preview: {

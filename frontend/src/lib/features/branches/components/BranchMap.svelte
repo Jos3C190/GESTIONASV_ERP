@@ -2,21 +2,22 @@
   /**
    * BranchMap — Mapa interactivo de sucursales en CartoDB Light Mode.
    *
-   * Fijo en modo claro (CartoDB Voyager) para máxima legibilidad y estética.
-   * Centra y abre automáticamente la ventana de información (Popup / InfoWindow)
-   * al seleccionar cualquier sucursal desde la tabla lateral de forma ultra-rápida.
+   * Renderiza marcadores para TODAS las sucursales. La sucursal seleccionada se destaca
+   * con tamaño ampliado y brillo en color de acento primario. Hacer clic en cualquier
+   * pin selecciona automáticamente la sucursal.
    */
 
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import type { Branch } from '$lib/features/branches/mock-data';
   import { loadGoogleMapsScript } from '$lib/services/maps';
 
   interface Props {
     branches: Branch[];
     selectedId: string | null;
+    onSelect?: (id: string) => void;
   }
 
-  let { branches, selectedId }: Props = $props();
+  let { branches, selectedId, onSelect }: Props = $props();
 
   const apiKey = (import.meta.env.PUBLIC_GOOGLE_MAPS_API_KEY as string | undefined) ?? '';
 
@@ -90,17 +91,22 @@
     markersMap.clear();
 
     branches.forEach(branch => {
-      if (branch.status === 'inactive') return;
-
       const isSelected = branch.id === selectedId;
-      const color = branch.status === 'maintenance' ? '#f59e0b' : isSelected ? '#0070f3' : '#10b981';
-      const size = isSelected ? 32 : 24;
+      const color = isSelected
+        ? '#0070F3'
+        : branch.status === 'active'
+        ? '#10B981'
+        : branch.status === 'maintenance'
+        ? '#F59E0B'
+        : '#64748B';
+
+      const size = isSelected ? 34 : 24;
 
       const iconHtml = `
-        <div style="position: relative; width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center;">
-          ${isSelected ? `<div style="position: absolute; width: ${size + 16}px; height: ${size + 16}px; border-radius: 50%; background-color: ${color}; opacity: 0.3; filter: blur(2px); animation: markerPulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;"></div>` : ''}
-          <div style="position: relative; width: ${size}px; height: ${size}px; border-radius: 50%; background-color: ${color}; border: 2.5px solid #ffffff; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.12); display: flex; align-items: center; justify-content: center; transition: all 0.2s ease-out;">
-            <div style="width: ${isSelected ? 8 : 6}px; height: ${isSelected ? 8 : 6}px; border-radius: 50%; background-color: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.15);"></div>
+        <div style="position: relative; width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+          ${isSelected ? `<div style="position: absolute; width: ${size + 18}px; height: ${size + 18}px; border-radius: 50%; background-color: ${color}; opacity: 0.35; filter: blur(2px); animation: markerPulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;"></div>` : ''}
+          <div style="position: relative; width: ${size}px; height: ${size}px; border-radius: 50%; background-color: ${color}; border: 2.5px solid #ffffff; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.12); display: flex; align-items: center; justify-content: center; transition: all 0.2s ease-out;">
+            <div style="width: ${isSelected ? 9 : 6}px; height: ${isSelected ? 9 : 6}px; border-radius: 50%; background-color: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.15);"></div>
           </div>
         </div>
       `;
@@ -132,6 +138,10 @@
       marker.bindPopup(infoContent, {
         className: 'custom-leaflet-popup-light',
         autoPan: true
+      });
+
+      marker.on('click', () => {
+        if (onSelect) onSelect(branch.id);
       });
 
       markersMap.set(branch.id, marker);
@@ -170,10 +180,14 @@
     markersMap.clear();
 
     branches.forEach(branch => {
-      if (branch.status === 'inactive') return;
-
       const isSelected = branch.id === selectedId;
-      const color = branch.status === 'maintenance' ? '#f59e0b' : isSelected ? '#0070f3' : '#10b981';
+      const color = isSelected
+        ? '#0070F3'
+        : branch.status === 'active'
+        ? '#10B981'
+        : branch.status === 'maintenance'
+        ? '#F59E0B'
+        : '#64748B';
 
       const marker = new window.google.maps.Marker({
         position: { lat: branch.lat, lng: branch.lng },
@@ -199,6 +213,7 @@
       `;
 
       marker.addListener('click', () => {
+        if (onSelect) onSelect(branch.id);
         if (activeInfoWindow) activeInfoWindow.close();
         activeInfoWindow = new window.google.maps.InfoWindow({ content: infoContent });
         activeInfoWindow.open(mapInstance, marker);
@@ -210,37 +225,40 @@
 
   // Effect ultra-eficiente: Pan, zoom y apertura automática de InfoWindow al seleccionar
   $effect(() => {
+    const id = selectedId;
     if (!mapInstance) return;
 
-    if (useGoogleMaps) {
-      renderGoogleMarkers();
-      if (selectedId) {
-        const b = branches.find(b => b.id === selectedId);
-        if (b) {
-          mapInstance.panTo({ lat: b.lat, lng: b.lng });
-          mapInstance.setZoom(13);
-          const m = markersMap.get(b.id);
-          if (m) window.google.maps.event.trigger(m, 'click');
-        }
-      }
-    } else if ((window as any).L && mapInstance.setView) {
-      const L = (window as any).L;
-      renderLeafletMarkers(L);
-
-      if (selectedId) {
-        const b = branches.find(b => b.id === selectedId);
-        if (b) {
-          mapInstance.flyTo([b.lat, b.lng], 13, { duration: 0.5 });
-          const m = markersMap.get(b.id);
-          if (m) {
-            setTimeout(() => m.openPopup(), 150);
+    untrack(() => {
+      if (useGoogleMaps) {
+        renderGoogleMarkers();
+        if (id) {
+          const b = branches.find(b => b.id === id);
+          if (b) {
+            mapInstance.panTo({ lat: b.lat, lng: b.lng });
+            mapInstance.setZoom(13);
+            const m = markersMap.get(b.id);
+            if (m) window.google.maps.event.trigger(m, 'click');
           }
         }
-      } else {
-        mapInstance.flyTo([center.lat, center.lng], 8, { duration: 0.5 });
-        mapInstance.closePopup();
+      } else if ((window as any).L && mapInstance.setView) {
+        const L = (window as any).L;
+        renderLeafletMarkers(L);
+
+        if (id) {
+          const b = branches.find(b => b.id === id);
+          if (b) {
+            mapInstance.flyTo([b.lat, b.lng], 13, { duration: 0.5 });
+            const m = markersMap.get(b.id);
+            if (m) {
+              setTimeout(() => m.openPopup(), 150);
+            }
+          }
+        } else {
+          mapInstance.flyTo([center.lat, center.lng], 8, { duration: 0.5 });
+          mapInstance.closePopup();
+        }
       }
-    }
+    });
   });
 
   onMount(() => {
@@ -252,8 +270,8 @@
   });
 </script>
 
-<div class="relative h-full w-full overflow-hidden rounded-xl border border-border bg-surface-elevated">
-  <div bind:this={containerEl} class="h-full w-full"></div>
+<div class="relative h-full w-full overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-sm">
+  <div bind:this={containerEl} class="h-full w-full min-h-0"></div>
 </div>
 
 <style>

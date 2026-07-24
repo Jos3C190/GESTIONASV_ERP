@@ -16,6 +16,7 @@
   import Card from '$lib/components/ui/Card.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import KebabMenu from '$lib/components/ui/KebabMenu.svelte';
 
   let branchFilter = $state('');
   let statusFilter = $state<'all' | 'active' | 'full' | 'maintenance'>('all');
@@ -118,7 +119,7 @@
   <!-- Header de página (Sin título redundante) -->
   <div class="flex items-center justify-between gap-4">
     <p class="text-sm text-foreground-muted">
-      {WAREHOUSES.length} almacenes registrados en {branches.length} sucursales · Monitoreo de capacidad en tiempo real
+      {WAREHOUSES.length} almacenes registrados en {branches.length} sucursales
     </p>
     <Button size="sm">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
@@ -466,9 +467,16 @@
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Últ. movimiento: {wh.lastMovement}
       </span>
-      <button class="font-medium text-primary hover:underline flex items-center gap-1">
-        Ver detalle <span aria-hidden="true">›</span>
-      </button>
+      <div class="-mr-1.5 flex items-center">
+        <KebabMenu
+          orientation={isList ? 'vertical' : 'horizontal'}
+          items={[
+            { id: 'detail', label: 'Ver detalle', icon: 'detail', onClick: () => {} },
+            { id: 'edit', label: 'Editar', icon: 'edit', onClick: () => {} },
+            { id: 'delete', label: 'Eliminar', icon: 'delete', variant: 'danger', onClick: () => {} }
+          ]}
+        />
+      </div>
     </div>
 
   </div>
