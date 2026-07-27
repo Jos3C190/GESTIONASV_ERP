@@ -3,9 +3,21 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Protocol
 
 from app.domain.entities.employee import Employee
+
+
+@dataclass(frozen=True, slots=True)
+class EmployeeStats:
+    """Aggregate counts computed directly in the database."""
+    total: int
+    active: int
+    inactive: int
+    on_leave: int       # vacaciones
+    terminated: int     # baja
+    linked_to_user: int
 
 
 class EmployeeRepository(Protocol):
@@ -25,6 +37,9 @@ class EmployeeRepository(Protocol):
         status: str | None = None,
     ) -> tuple[Sequence[Employee], int]:
         """Return (employees, total_count)."""
+
+    async def get_stats(self) -> EmployeeStats:
+        """Return aggregate employee counts via a single DB query."""
 
     async def add(self, emp: Employee) -> Employee: ...
 

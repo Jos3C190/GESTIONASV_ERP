@@ -17,9 +17,11 @@ const TITLES: Record<string, string> = {
 export function routeTitle(pathname: string): string {
   // Check exact match first
   if (TITLES[pathname]) return TITLES[pathname];
+  // Sub-rutas de empleados (crear / editar / detalle) -> "Empleados"
+  if (pathname.startsWith('/employees')) return TITLES['/employees'] ?? 'Empleados';
   // Check prefix for /placeholder?module=X
   for (const key of Object.keys(TITLES)) {
-    if (pathname.startsWith(key)) return TITLES[key];
+    if (pathname.startsWith(key)) return TITLES[key] ?? '';
   }
   return '';
 }

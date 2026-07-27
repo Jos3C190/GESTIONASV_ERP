@@ -221,6 +221,43 @@ async def test_update_employee(e2e_client) -> None:
     assert r.json()["status"] == "vacaciones"
 
 
+async def test_create_employee_with_photo(e2e_client) -> None:
+    headers = await _login_superadmin(e2e_client)
+    r = await e2e_client.post(
+        "/api/v1/employees",
+        headers=headers,
+        json={
+            "employee_code": f"PH_{uuid.uuid4().hex[:6]}",
+            "first_name": "Photo",
+            "last_name": "Graphy",
+            "photo_url": "https://i.pravatar.cc/300?u=test-photo",
+        },
+    )
+    assert r.status_code == 201
+    assert r.json()["photo_url"] == "https://i.pravatar.cc/300?u=test-photo"
+
+
+async def test_update_employee_photo(e2e_client) -> None:
+    headers = await _login_superadmin(e2e_client)
+    emp = await e2e_client.post(
+        "/api/v1/employees",
+        headers=headers,
+        json={
+            "employee_code": f"UPH_{uuid.uuid4().hex[:6]}",
+            "first_name": "Snap",
+            "last_name": "Shot",
+        },
+    )
+    assert emp.json()["photo_url"] is None
+    r = await e2e_client.patch(
+        f"/api/v1/employees/{emp.json()['id']}",
+        headers=headers,
+        json={"photo_url": "https://i.pravatar.cc/300?u=updated"},
+    )
+    assert r.status_code == 200
+    assert r.json()["photo_url"] == "https://i.pravatar.cc/300?u=updated"
+
+
 async def test_delete_employee(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     emp = await e2e_client.post(

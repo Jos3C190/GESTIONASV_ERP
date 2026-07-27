@@ -38,6 +38,16 @@ class EmployeeOut(ORMOut):
     updated_at: datetime | None = None
 
 
+class EmployeeStatsOut(BaseModel):
+    """Aggregate employee counts — computed via a single SQL GROUP BY query."""
+    total: int
+    active: int
+    inactive: int
+    on_leave: int
+    terminated: int
+    linked_to_user: int
+
+
 class CreateDepartmentRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=120)
     description: str | None = None
@@ -63,6 +73,7 @@ class CreateEmployeeRequest(BaseModel):
     position: str | None = None
     hire_date: date | None = None
     status: str = "activo"
+    photo_url: str | None = Field(None, max_length=2048)
 
 
 class UpdateEmployeeRequest(BaseModel):
@@ -77,6 +88,7 @@ class UpdateEmployeeRequest(BaseModel):
     hire_date: date | None = None
     termination_date: date | None = None
     status: str | None = None
+    photo_url: str | None = Field(None, max_length=2048)
 
 
 class LinkUserRequest(BaseModel):

@@ -5,6 +5,8 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import FormField from '$lib/components/ui/FormField.svelte';
+  import KebabMenu from '$lib/components/ui/KebabMenu.svelte';
+  import Avatar from '$lib/components/ui/Avatar.svelte';
 
   let users = $state<UserOut[]>([]);
   let meta = $state<{ page: number; size: number; total: number; pages: number } | null>(null);
@@ -129,8 +131,8 @@
         <option value="inactive">Inactivos</option>
         <option value="superuser">Super admins</option>
       </select>
-      <Button onclick={openCreate}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+      <Button size="sm" onclick={openCreate}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
         Crear
       </Button>
     </div>
@@ -154,13 +156,18 @@
               <th class="px-4 py-3 text-left font-semibold text-foreground">Correo</th>
               <th class="px-4 py-3 text-left font-semibold text-foreground">Estado</th>
               <th class="px-4 py-3 text-left font-semibold text-foreground">Rol</th>
-              <th class="px-4 py-3 text-right font-semibold text-foreground">Acciones</th>
+              <th class="px-2 py-3 text-center font-semibold text-foreground w-11"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-border">
             {#each users as user (user.id)}
               <tr class="hover:bg-surface-muted">
-                <td class="px-4 py-3"><button class="font-medium text-foreground hover:text-primary" onclick={() => openDetail(user)}>{user.username}</button></td>
+                <td class="px-4 py-3">
+                  <button class="flex items-center gap-2.5 font-medium text-foreground hover:text-primary" onclick={() => openDetail(user)}>
+                    <Avatar initials={user.username.substring(0, 2)} size={24} />
+                    {user.username}
+                  </button>
+                </td>
                 <td class="px-4 py-3 text-foreground-muted">{user.email}</td>
                 <td class="px-4 py-3">
                   {#if user.locked_until}
@@ -172,17 +179,16 @@
                   {/if}
                 </td>
                 <td class="px-4 py-3 text-foreground-muted">{user.is_superuser ? 'Super Admin' : 'Usuario'}</td>
-                <td class="px-4 py-3">
-                  <div class="flex items-center justify-end gap-1">
-                    {#if user.locked_until}<Button variant="ghost" size="sm" onclick={() => unlockUser(user)} disabled={actionLoading === user.id}>Desbloquear</Button>{/if}
-                    <Button variant="ghost" size="sm" onclick={() => openReset(user)}>Resetear</Button>
-                    <Button variant="ghost" size="sm" onclick={() => openEdit(user)}>Editar</Button>
-                    {#if user.is_active}
-                      <Button variant="ghost" size="sm" onclick={() => toggleActive(user)} disabled={actionLoading === user.id}>Desactivar</Button>
-                    {:else}
-                      <Button variant="ghost" size="sm" onclick={() => toggleActive(user)} disabled={actionLoading === user.id}>Activar</Button>
-                    {/if}
-                  </div>
+                <td class="px-2 py-3 text-center">
+                  <KebabMenu
+                    items={[
+                      { id: 'detail', label: 'Ver detalle', icon: 'detail', onClick: () => openDetail(user) },
+                      { id: 'edit', label: 'Editar', icon: 'edit', onClick: () => openEdit(user) },
+                      { id: 'reset', label: 'Resetear contraseña', icon: 'key', onClick: () => openReset(user) },
+                      ...(user.locked_until ? [{ id: 'unlock', label: 'Desbloquear', icon: 'unlock' as const, onClick: () => unlockUser(user) }] : []),
+                      { id: 'toggle', label: user.is_active ? 'Desactivar' : 'Activar', icon: 'power', variant: user.is_active ? 'danger' : 'default', onClick: () => toggleActive(user) },
+                    ]}
+                  />
                 </td>
               </tr>
             {/each}

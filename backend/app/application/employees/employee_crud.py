@@ -29,6 +29,7 @@ class CreateEmployeeInput:
     position: str | None = None
     hire_date: date | None = None
     status: EmployeeStatus = EmployeeStatus.ACTIVO
+    photo_url: str | None = None
 
 
 class CreateEmployeeUseCase:
@@ -63,6 +64,7 @@ class CreateEmployeeUseCase:
             position=inp.position,
             hire_date=inp.hire_date,
             status=inp.status,
+            photo_url=inp.photo_url,
         )
         created = await self._employees.add(emp)
         log.info("employee_created", emp_id=str(created.id), code=created.employee_code)
@@ -83,6 +85,7 @@ class UpdateEmployeeInput:
     hire_date: date | None = None
     termination_date: date | None = None
     status: EmployeeStatus | None = None
+    photo_url: str | None = None
 
 
 class UpdateEmployeeUseCase:
@@ -118,7 +121,7 @@ class UpdateEmployeeUseCase:
             hire_date=inp.hire_date if inp.hire_date is not None else emp.hire_date,
             termination_date=inp.termination_date if inp.termination_date is not None else emp.termination_date,
             status=inp.status if inp.status is not None else emp.status,
-            photo_url=emp.photo_url,
+            photo_url=inp.photo_url if inp.photo_url is not None else emp.photo_url,
             created_at=emp.created_at,
             updated_at=emp.updated_at,
             deleted_at=emp.deleted_at,

@@ -365,6 +365,11 @@ export const api = {
       const qs = sp.toString();
       return apiFetch<Page<EmployeeOut>>(`/employees${qs ? `?${qs}` : ''}`);
     },
+    stats: () =>
+      apiFetch<{
+        total: number; active: number; inactive: number;
+        on_leave: number; terminated: number; linked_to_user: number;
+      }>('/employees/stats'),
     get: (id: string) => apiFetch<EmployeeOut>(`/employees/${id}`),
     create: (data: Record<string, unknown>) =>
       apiFetch<EmployeeOut>('/employees', { method: 'POST', body: JSON.stringify(data) }),

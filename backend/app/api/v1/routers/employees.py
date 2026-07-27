@@ -10,6 +10,7 @@ from app.api.v1.schemas.common import MessageOut
 from app.api.v1.schemas.employees import (
     CreateEmployeeRequest,
     EmployeeOut,
+    EmployeeStatsOut,
     LinkUserRequest,
     Page,
     PageMeta,
@@ -75,6 +76,28 @@ async def list_employees(
 
 
 @router.get(
+    "/stats",
+    response_model=EmployeeStatsOut,
+    status_code=status.HTTP_200_OK,
+    summary="Estadísticas agregadas de empleados",
+    dependencies=[Depends(require_permission("employees:read"))],
+)
+async def get_employee_stats(
+    repo: EmployeeRepository = Depends(_get_emp_repo),
+) -> EmployeeStatsOut:
+    """Returns aggregate counts via a single SQL GROUP BY — scales to any number of employees."""
+    stats = await repo.get_stats()
+    return EmployeeStatsOut(
+        total=stats.total,
+        active=stats.active,
+        inactive=stats.inactive,
+        on_leave=stats.on_leave,
+        terminated=stats.terminated,
+        linked_to_user=stats.linked_to_user,
+    )
+
+
+@router.get(
     "/{emp_id}",
     response_model=EmployeeOut,
     status_code=status.HTTP_200_OK,
@@ -117,6 +140,7 @@ async def create_employee(
             position=body.position,
             hire_date=body.hire_date,
             status=EmployeeStatus(body.status),
+            photo_url=body.photo_url,
         )
     )
     return EmployeeOut.model_validate(e, from_attributes=True)
@@ -150,6 +174,7 @@ async def update_employee(
             hire_date=body.hire_date,
             termination_date=body.termination_date,
             status=EmployeeStatus(body.status) if body.status else None,
+            photo_url=body.photo_url,
         )
     )
     return EmployeeOut.model_validate(e, from_attributes=True)

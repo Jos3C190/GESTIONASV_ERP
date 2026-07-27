@@ -102,7 +102,7 @@
           <!-- Encargado -->
           <td class="px-3.5 py-2.5">
             <div class="flex items-center gap-2">
-              <Avatar initials={branch.managerInitials} size={22} />
+              <Avatar initials={branch.managerInitials} size={24} />
               <span class="text-[12px] font-medium text-foreground">{branch.manager}</span>
             </div>
           </td>
