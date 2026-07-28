@@ -133,18 +133,27 @@
         iconAnchor: [size / 2, size / 2]
       });
 
+      const statusColor = branch.status === 'active' ? '#10B981' : branch.status === 'maintenance' ? '#F59E0B' : '#64748B';
+      const statusLabel = branch.status === 'active' ? 'Activa' : branch.status === 'maintenance' ? 'Mantenimiento' : 'Inactiva';
+
       const marker = L.marker([branch.lat, branch.lng], { icon: customIcon }).addTo(mapInstance);
 
       const infoContent = `
-        <div style="font-family: system-ui, -apple-system, sans-serif; padding: 2px; color: var(--text-foreground, #111827); min-width: 190px;">
-          <h4 style="margin: 0 0 3px 0; font-size: 13px; font-weight: 600; color: var(--text-foreground, #111827);">${branch.name}</h4>
-          <p style="margin: 0 0 4px 0; font-size: 11px; color: var(--text-foreground-muted, #6b7280);">${branch.code} · ${branch.city}</p>
-          <div style="border-top: 1px solid var(--border, #e5e7eb); margin: 4px 0; padding-top: 4px;">
-            <p style="margin: 0 0 2px 0; font-size: 11px;"><strong>Gerente:</strong> ${branch.manager}</p>
-            <p style="margin: 0 0 4px 0; font-size: 11px;"><strong>Teléfono:</strong> ${branch.phone}</p>
-            <div style="display: flex; gap: 10px; font-size: 10px; color: var(--text-foreground-muted, #6b7280); margin-top: 4px;">
-              <span>👥 <strong>${branch.employees}</strong> empl.</span>
-              <span>📦 <strong>${branch.warehouses}</strong> alm.</span>
+        <div style="font-family: system-ui, -apple-system, sans-serif; color: var(--text-foreground, #111827); width: 240px; border-radius: 8px; overflow: hidden; margin: -1px;">
+          <div style="position: relative; width: 100%; height: 110px; background: #e5e7eb; overflow: hidden;">
+            <img src="/branch-mockup.png" alt="Sucursal" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy" />
+            <div style="position: absolute; bottom: 6px; left: 8px; background: ${statusColor}; color: #fff; font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase;">${statusLabel}</div>
+          </div>
+          <div style="padding: 8px 10px 6px;">
+            <h4 style="margin: 0 0 1px 0; font-size: 13px; font-weight: 700; color: var(--text-foreground, #111827); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${branch.name}</h4>
+            <p style="margin: 0 0 7px 0; font-size: 10.5px; color: var(--text-foreground-muted, #6b7280);">${branch.code} &middot; ${branch.city}</p>
+            <div style="border-top: 1px solid var(--border, #e5e7eb); padding-top: 6px; display: flex; flex-direction: column; gap: 2px;">
+              <p style="margin: 0; font-size: 11px;"><strong>Gerente:</strong> ${branch.manager}</p>
+              <p style="margin: 0; font-size: 11px;"><strong>Tel&eacute;fono:</strong> ${branch.phone}</p>
+              <div style="display: flex; gap: 12px; font-size: 10.5px; color: var(--text-foreground-muted, #6b7280); margin-top: 4px;">
+                <span>&#128101; <strong>${branch.employees}</strong> empl.</span>
+                <span>&#128230; <strong>${branch.warehouses}</strong> alm.</span>
+              </div>
             </div>
           </div>
         </div>
@@ -214,15 +223,26 @@
         }
       });
 
+      const statusColorG = branch.status === 'active' ? '#10B981' : branch.status === 'maintenance' ? '#F59E0B' : '#64748B';
+      const statusLabelG = branch.status === 'active' ? 'Activa' : branch.status === 'maintenance' ? 'Mantenimiento' : 'Inactiva';
+
       const infoContent = `
-        <div style="font-family: system-ui, sans-serif; padding: 4px; color: #111; max-width: 220px;">
-          <h4 style="margin: 0 0 4px 0; font-size: 13px; font-weight: 600;">${branch.name}</h4>
-          <p style="margin: 0 0 4px 0; font-size: 11px; color: #666;">${branch.code} · ${branch.city}</p>
-          <p style="margin: 0 0 2px 0; font-size: 12px;"><strong>Encargado:</strong> ${branch.manager}</p>
-          <p style="margin: 0 0 4px 0; font-size: 12px;"><strong>Teléfono:</strong> ${branch.phone}</p>
-          <div style="display: flex; gap: 8px; font-size: 11px; color: #444; margin-top: 4px;">
-            <span>👥 ${branch.employees} empl.</span>
-            <span>📦 ${branch.warehouses} alm.</span>
+        <div style="font-family: system-ui, sans-serif; color: #111; width: 240px; border-radius: 8px; overflow: hidden; margin: -1px;">
+          <div style="position: relative; width: 100%; height: 110px; background: #e5e7eb; overflow: hidden;">
+            <img src="/branch-mockup.png" alt="Sucursal" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy" />
+            <div style="position: absolute; bottom: 6px; left: 8px; background: ${statusColorG}; color: #fff; font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase;">${statusLabelG}</div>
+          </div>
+          <div style="padding: 8px 10px 6px;">
+            <h4 style="margin: 0 0 1px 0; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${branch.name}</h4>
+            <p style="margin: 0 0 7px 0; font-size: 10.5px; color: #6b7280;">${branch.code} &middot; ${branch.city}</p>
+            <div style="border-top: 1px solid #e5e7eb; padding-top: 6px; display: flex; flex-direction: column; gap: 2px;">
+              <p style="margin: 0; font-size: 11px;"><strong>Encargado:</strong> ${branch.manager}</p>
+              <p style="margin: 0; font-size: 11px;"><strong>Tel&eacute;fono:</strong> ${branch.phone}</p>
+              <div style="display: flex; gap: 12px; font-size: 10.5px; color: #6b7280; margin-top: 4px;">
+                <span>&#128101; ${branch.employees} empl.</span>
+                <span>&#128230; ${branch.warehouses} alm.</span>
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -262,7 +282,7 @@
         if (id) {
           const b = branches.find(b => b.id === id);
           if (b) {
-            mapInstance.flyTo([b.lat, b.lng], 13, { duration: 0.5 });
+            mapInstance.flyTo([b.lat, b.lng], 15, { duration: 0.5 });
             const m = markersMap.get(b.id);
             if (m) {
               setTimeout(() => m.openPopup(), 150);
