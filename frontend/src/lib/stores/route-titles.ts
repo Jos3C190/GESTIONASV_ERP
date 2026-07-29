@@ -19,6 +19,8 @@ export function routeTitle(pathname: string): string {
   if (TITLES[pathname]) return TITLES[pathname];
   // Sub-rutas de empleados (crear / editar / detalle) -> "Empleados"
   if (pathname.startsWith('/employees')) return TITLES['/employees'] ?? 'Empleados';
+  // Sub-rutas de sucursales (detalle) -> "Sucursales"
+  if (pathname.startsWith('/branches')) return TITLES['/branches'] ?? 'Sucursales';
   // Check prefix for /placeholder?module=X
   for (const key of Object.keys(TITLES)) {
     if (pathname.startsWith(key)) return TITLES[key] ?? '';

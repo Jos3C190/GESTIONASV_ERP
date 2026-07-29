@@ -35,7 +35,7 @@
     for (let i = 0; i < str.length; i++) {
       hash = (hash * 31 + str.charCodeAt(i)) & 0xffffffff;
     }
-    return PALETTES[Math.abs(hash) % PALETTES.length];
+    return PALETTES[Math.abs(hash) % PALETTES.length]!;
   });
 
   let fontSize = $derived(Math.max(9, Math.round(size * 0.36)));

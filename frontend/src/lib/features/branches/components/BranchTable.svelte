@@ -7,6 +7,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import KebabMenu from '$lib/components/ui/KebabMenu.svelte';
+  import { goto } from '$app/navigation';
   import { STATUS_MAP, type Branch } from '$lib/features/branches/mock-data';
 
   interface Props {
@@ -20,7 +21,7 @@
   let { branches, selectedId, onSelect, onEdit, onDelete }: Props = $props();
 
   function handleDetail(branchId: string) {
-    onSelect(branchId);
+    goto(`/branches/${branchId}`);
   }
 
   function handleEdit(branch: Branch) {
