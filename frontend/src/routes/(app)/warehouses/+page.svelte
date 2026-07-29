@@ -9,6 +9,7 @@
    */
 
   import { search as globalSearch } from '$lib/stores/search.svelte';
+  import { goto } from '$app/navigation';
   import {
     STATUS_MAP, utilizationPct, getShortWarehouseName,
     type Warehouse
@@ -501,7 +502,7 @@
         <KebabMenu
           orientation={isList ? 'vertical' : 'horizontal'}
           items={[
-            { id: 'detail', label: 'Ver detalle', icon: 'detail', onClick: () => {} },
+            { id: 'detail', label: 'Ver detalle', icon: 'detail', onClick: () => goto(`/warehouses/${wh.id}`) },
             { id: 'edit', label: 'Editar', icon: 'edit', onClick: () => {} },
             { id: 'delete', label: 'Eliminar', icon: 'delete', variant: 'danger', onClick: () => {} }
           ]}
