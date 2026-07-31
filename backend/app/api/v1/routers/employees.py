@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
-from app.api.v1.deps import SessionDep, require_permission
+from app.api.v1.deps import CurrentUser, SessionDep, get_audit_service, require_permission
 from app.api.v1.schemas.common import MessageOut
 from app.api.v1.schemas.employees import (
     CreateEmployeeRequest,
@@ -16,6 +16,7 @@ from app.api.v1.schemas.employees import (
     PageMeta,
     UpdateEmployeeRequest,
 )
+from app.application.audit.audit_service import AuditService, employee_to_audit_state
 from app.application.employees.employee_crud import (
     CreateEmployeeInput,
     CreateEmployeeUseCase,
@@ -122,8 +123,11 @@ async def get_employee(
 )
 async def create_employee(
     body: CreateEmployeeRequest,
+    request: Request,
+    current: CurrentUser,
     repo: EmployeeRepository = Depends(_get_emp_repo),
     dept_repo: DepartmentRepository = Depends(_get_dept_repo),
+    audit: AuditService = Depends(get_audit_service),
 ) -> EmployeeOut:
     uc = CreateEmployeeUseCase(repo, dept_repo)
     e = await uc.execute(
@@ -143,6 +147,15 @@ async def create_employee(
             photo_url=body.photo_url,
         )
     )
+    await audit.record(
+        action="CREATE",
+        user_id=current.id,
+        resource_type="employees",
+        resource_id=str(e.id),
+        after_state=employee_to_audit_state(e),
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     return EmployeeOut.model_validate(e, from_attributes=True)
 
 
@@ -156,9 +169,13 @@ async def create_employee(
 async def update_employee(
     emp_id: uuid.UUID,
     body: UpdateEmployeeRequest,
+    request: Request,
+    current: CurrentUser,
     repo: EmployeeRepository = Depends(_get_emp_repo),
     dept_repo: DepartmentRepository = Depends(_get_dept_repo),
+    audit: AuditService = Depends(get_audit_service),
 ) -> EmployeeOut:
+    before = await GetEmployeeUseCase(repo).execute(emp_id)
     uc = UpdateEmployeeUseCase(repo, dept_repo)
     e = await uc.execute(
         UpdateEmployeeInput(
@@ -177,6 +194,16 @@ async def update_employee(
             photo_url=body.photo_url,
         )
     )
+    await audit.record(
+        action="UPDATE",
+        user_id=current.id,
+        resource_type="employees",
+        resource_id=str(emp_id),
+        before_state=employee_to_audit_state(before),
+        after_state=employee_to_audit_state(e),
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     return EmployeeOut.model_validate(e, from_attributes=True)
 
 
@@ -189,10 +216,24 @@ async def update_employee(
 )
 async def delete_employee(
     emp_id: uuid.UUID,
+    request: Request,
+    current: CurrentUser,
     repo: EmployeeRepository = Depends(_get_emp_repo),
+    audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
+    before = await GetEmployeeUseCase(repo).execute(emp_id)
     uc = DeleteEmployeeUseCase(repo)
     await uc.execute(emp_id)
+    await audit.record(
+        action="LOGICAL_DELETE",
+        user_id=current.id,
+        resource_type="employees",
+        resource_id=str(emp_id),
+        before_state=employee_to_audit_state(before),
+        after_state={**employee_to_audit_state(before), "deleted": True},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     return MessageOut(message="Empleado eliminado.", code="employee_deleted")
 
 
@@ -206,10 +247,25 @@ async def delete_employee(
 async def link_user(
     emp_id: uuid.UUID,
     body: LinkUserRequest,
+    request: Request,
+    current: CurrentUser,
     repo: EmployeeRepository = Depends(_get_emp_repo),
+    audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
+    before = await GetEmployeeUseCase(repo).execute(emp_id)
     uc = LinkUserUseCase(repo)
     await uc.execute(LinkUserInput(emp_id=emp_id, user_id=body.user_id))
+    after = await GetEmployeeUseCase(repo).execute(emp_id)
+    await audit.record(
+        action="LINK_USER",
+        user_id=current.id,
+        resource_type="employees",
+        resource_id=str(emp_id),
+        before_state=employee_to_audit_state(before),
+        after_state=employee_to_audit_state(after),
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     return MessageOut(message="Usuario vinculado.", code="user_linked")
 
 
@@ -222,8 +278,23 @@ async def link_user(
 )
 async def unlink_user(
     emp_id: uuid.UUID,
+    request: Request,
+    current: CurrentUser,
     repo: EmployeeRepository = Depends(_get_emp_repo),
+    audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
+    before = await GetEmployeeUseCase(repo).execute(emp_id)
     uc = UnlinkUserUseCase(repo)
     await uc.execute(emp_id)
+    after = await GetEmployeeUseCase(repo).execute(emp_id)
+    await audit.record(
+        action="UNLINK_USER",
+        user_id=current.id,
+        resource_type="employees",
+        resource_id=str(emp_id),
+        before_state=employee_to_audit_state(before),
+        after_state=employee_to_audit_state(after),
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     return MessageOut(message="Usuario desvinculado.", code="user_unlinked")

@@ -116,6 +116,15 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   return (await res.json()) as T;
 }
 
+export async function apiDownload(path: string): Promise<Blob> {
+  const url = path.startsWith('http') ? path : `${API_BASE_URL}${API_PREFIX}${path}`;
+  const headers: Record<string, string> = { Accept: 'text/csv' };
+  if (browser && session.token) headers.Authorization = `Bearer ${session.token}`;
+  const res = await fetch(url, { headers, credentials: 'include' });
+  if (!res.ok) throw await parseError(res);
+  return await res.blob();
+}
+
 export interface HealthReport {
   status: string;
   version: string;
@@ -313,7 +322,8 @@ export interface WarehouseOut {
   last_security_audit: string;
   temperature_range: string;
   humidity_range: string;
-  cooling: 'industrial_ac' | 'refrigeracion' | 'ventilacion_natural' | 'mixto' | 'sin_climatizacion';
+  cooling:
+    'industrial_ac' | 'refrigeracion' | 'ventilacion_natural' | 'mixto' | 'sin_climatizacion';
   has_ventilation: boolean;
   last_maintenance: string;
   next_maintenance: string;
@@ -353,6 +363,11 @@ export const api = {
     get: (id: string) => apiFetch<RoleWithPermissions>(`/roles/${id}`),
     create: (data: { name: string; description?: string }) =>
       apiFetch<RoleOut>('/roles', { method: 'POST', body: JSON.stringify(data) }),
+    duplicate: (id: string, data: { name: string; description?: string }) =>
+      apiFetch<RoleWithPermissions>(`/roles/${id}/duplicate`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
     update: (id: string, data: { name?: string; description?: string }) =>
       apiFetch<RoleOut>(`/roles/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id: string) =>
@@ -372,7 +387,24 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ user_id: userId, role_id: roleId })
       }),
-    userRoles: (userId: string) => apiFetch<RoleOut[]>(`/roles/users/${userId}/roles`)
+    userRoles: (userId: string) => apiFetch<RoleOut[]>(`/roles/users/${userId}/roles`),
+    createPermission: (data: { code: string; description?: string; module?: string }) =>
+      apiFetch<PermissionOut>('/roles/permissions', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+    updatePermission: (
+      id: string,
+      data: { code?: string; description?: string; module?: string }
+    ) =>
+      apiFetch<PermissionOut>(`/roles/permissions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+      }),
+    deletePermission: (id: string) =>
+      apiFetch<{ message: string; code: string }>(`/roles/permissions/${id}`, {
+        method: 'DELETE'
+      })
   },
   users: {
     list: (params: { page?: number; size?: number; search?: string } = {}) => {
@@ -384,8 +416,14 @@ export const api = {
       return apiFetch<Page<UserOut>>(`/users${qs ? `?${qs}` : ''}`);
     },
     get: (id: string) => apiFetch<UserOut>(`/users/${id}`),
-    create: (data: { username: string; email: string; password: string; is_superuser?: boolean }) =>
-      apiFetch<UserOut>('/users', { method: 'POST', body: JSON.stringify(data) }),
+    create: (data: {
+      username: string;
+      email: string;
+      password: string;
+      is_superuser?: boolean;
+      employee_id?: string;
+      role_ids?: string[];
+    }) => apiFetch<UserOut>('/users', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: { is_active?: boolean; is_superuser?: boolean }) =>
       apiFetch<UserOut>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     forcePasswordReset: (id: string, newPassword: string) =>
@@ -399,20 +437,38 @@ export const api = {
       apiFetch<{ message: string; code: string }>(`/users/${id}`, { method: 'DELETE' })
   },
   health: {
-    live: () => apiFetch<HealthReport>('/health/live', { noAuth: true, noRefresh: true })
+    live: () =>
+      apiFetch<HealthReport>(`${API_BASE_URL}/health/live`, {
+        noAuth: true,
+        noRefresh: true
+      })
   },
   departments: {
     list: () => apiFetch<DepartmentOut[]>('/departments'),
     get: (id: string) => apiFetch<DepartmentOut>(`/departments/${id}`),
     create: (data: { name: string; description?: string; parent_department_id?: string }) =>
       apiFetch<DepartmentOut>('/departments', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: { name?: string; description?: string; parent_department_id?: string }) =>
-      apiFetch<DepartmentOut>(`/departments/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    update: (
+      id: string,
+      data: { name?: string; description?: string; parent_department_id?: string }
+    ) =>
+      apiFetch<DepartmentOut>(`/departments/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+      }),
     delete: (id: string) =>
       apiFetch<{ message: string; code: string }>(`/departments/${id}`, { method: 'DELETE' })
   },
   employees: {
-    list: (params: { page?: number; size?: number; search?: string; department_id?: string; status?: string } = {}) => {
+    list: (
+      params: {
+        page?: number;
+        size?: number;
+        search?: string;
+        department_id?: string;
+        status?: string;
+      } = {}
+    ) => {
       const sp = new URLSearchParams();
       if (params.page) sp.set('page', String(params.page));
       if (params.size) sp.set('size', String(params.size));
@@ -424,8 +480,12 @@ export const api = {
     },
     stats: () =>
       apiFetch<{
-        total: number; active: number; inactive: number;
-        on_leave: number; terminated: number; linked_to_user: number;
+        total: number;
+        active: number;
+        inactive: number;
+        on_leave: number;
+        terminated: number;
+        linked_to_user: number;
       }>('/employees/stats'),
     get: (id: string) => apiFetch<EmployeeOut>(`/employees/${id}`),
     create: (data: Record<string, unknown>) =>
@@ -440,17 +500,23 @@ export const api = {
         body: JSON.stringify({ user_id: userId })
       }),
     unlinkUser: (empId: string) =>
-      apiFetch<{ message: string; code: string }>(`/employees/${empId}/unlink-user`, { method: 'POST' })
+      apiFetch<{ message: string; code: string }>(`/employees/${empId}/unlink-user`, {
+        method: 'POST'
+      })
   },
   audit: {
-    list: (params: {
-      page?: number;
-      size?: number;
-      user_id?: string;
-      action?: string;
-      resource_type?: string;
-      status?: string;
-    } = {}) => {
+    list: (
+      params: {
+        page?: number;
+        size?: number;
+        user_id?: string;
+        action?: string;
+        resource_type?: string;
+        status?: string;
+        start_date?: string;
+        end_date?: string;
+      } = {}
+    ) => {
       const sp = new URLSearchParams();
       if (params.page) sp.set('page', String(params.page));
       if (params.size) sp.set('size', String(params.size));
@@ -458,8 +524,27 @@ export const api = {
       if (params.action) sp.set('action', params.action);
       if (params.resource_type) sp.set('resource_type', params.resource_type);
       if (params.status) sp.set('status', params.status);
+      if (params.start_date) sp.set('start_date', params.start_date);
+      if (params.end_date) sp.set('end_date', params.end_date);
       const qs = sp.toString();
       return apiFetch<AuditLogPage>(`/audit-logs${qs ? `?${qs}` : ''}`);
+    },
+    get: (id: string) => apiFetch<AuditLogOut>(`/audit-logs/${id}`),
+    exportCsv: (
+      params: {
+        user_id?: string;
+        action?: string;
+        resource_type?: string;
+        start_date?: string;
+        end_date?: string;
+      } = {}
+    ) => {
+      const sp = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (value) sp.set(key, value);
+      }
+      const qs = sp.toString();
+      return apiDownload(`/audit-logs/export${qs ? `?${qs}` : ''}`);
     }
   },
   branches: {

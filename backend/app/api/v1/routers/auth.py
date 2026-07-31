@@ -158,14 +158,25 @@ async def refresh(
     summary="Cerrar sesión",
 )
 async def logout(
+    request: Request,
     response: Response,
     body: RefreshRequest | None = None,
     refresh_cookie: str | None = Cookie(default=None, alias=REFRESH_COOKIE),
     use_case: LogoutUseCase = Depends(get_logout_use_case),
+    audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
     raw = (body.refresh_token if body and body.refresh_token else None) or refresh_cookie
+    user_id = None
     if raw:
-        await use_case.execute(LogoutInput(raw_refresh_token=raw))
+        user_id = await use_case.execute(LogoutInput(raw_refresh_token=raw))
+    await audit.record(
+        action="LOGOUT",
+        user_id=user_id,
+        resource_type="auth",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        metadata={"session_presented": bool(raw)},
+    )
     _clear_refresh_cookie(response)
     return MessageOut(message="Sesión cerrada.", code="logout_ok")
 

@@ -8,7 +8,7 @@ logged instead).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.logging import get_logger
@@ -50,7 +50,7 @@ class AuditService:
                 user_agent=user_agent,
                 status=status,
                 metadata=metadata,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
             await self._repo.add(entry)
         except Exception as exc:
@@ -71,12 +71,43 @@ def user_to_audit_state(user: object) -> dict[str, Any]:
 def employee_to_audit_state(emp: object) -> dict[str, Any]:
     return {
         "id": str(getattr(emp, "id", "")),
+        "user_id": str(getattr(emp, "user_id", "") or "") or None,
         "employee_code": getattr(emp, "employee_code", None),
         "first_name": getattr(emp, "first_name", None),
         "last_name": getattr(emp, "last_name", None),
+        "document_id": getattr(emp, "document_id", None),
+        "birth_date": (
+            getattr(emp, "birth_date", None).isoformat()
+            if getattr(emp, "birth_date", None)
+            else None
+        ),
+        "phone": getattr(emp, "phone", None),
+        "address": getattr(emp, "address", None),
         "department_id": str(getattr(emp, "department_id", "")) or None,
         "position": getattr(emp, "position", None),
+        "hire_date": (
+            getattr(emp, "hire_date", None).isoformat()
+            if getattr(emp, "hire_date", None)
+            else None
+        ),
+        "termination_date": (
+            getattr(emp, "termination_date", None).isoformat()
+            if getattr(emp, "termination_date", None)
+            else None
+        ),
         "status": str(getattr(emp, "status", "")),
+        "photo_url": getattr(emp, "photo_url", None),
+    }
+
+
+def department_to_audit_state(department: object) -> dict[str, Any]:
+    return {
+        "id": str(getattr(department, "id", "")),
+        "name": getattr(department, "name", None),
+        "description": getattr(department, "description", None),
+        "parent_department_id": (
+            str(getattr(department, "parent_department_id", "") or "") or None
+        ),
     }
 
 

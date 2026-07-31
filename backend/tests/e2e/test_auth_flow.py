@@ -172,3 +172,44 @@ async def test_authenticated_user_can_change_password_and_sessions_are_revoked(
         json={"login": "password-user", "password": new_password},
     )
     assert new_login.status_code == 200
+
+
+async def test_logout_is_audited_but_refresh_is_not(e2e_client) -> None:
+    await seed_user(
+        username="logout-auditor",
+        email="logout-auditor@example.com",
+        password="Strong!Passw0rd2026",
+        is_superuser=True,
+    )
+    login = await e2e_client.post(
+        "/api/v1/auth/login",
+        json={"login": "logout-auditor", "password": "Strong!Passw0rd2026"},
+    )
+    access = login.json()["access_token"]
+    refresh = login.json()["refresh_token"]
+    rotated = await e2e_client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh},
+    )
+    assert rotated.status_code == 200
+
+    logout = await e2e_client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {access}"},
+        json={"refresh_token": rotated.json()["refresh_token"]},
+    )
+    assert logout.status_code == 200
+
+    headers = {"Authorization": f"Bearer {access}"}
+    logout_logs = await e2e_client.get(
+        "/api/v1/audit-logs?action=LOGOUT",
+        headers=headers,
+    )
+    assert logout_logs.status_code == 200
+    assert logout_logs.json()["meta"]["total"] >= 1
+    refresh_logs = await e2e_client.get(
+        "/api/v1/audit-logs?action=REFRESH",
+        headers=headers,
+    )
+    assert refresh_logs.status_code == 200
+    assert refresh_logs.json()["meta"]["total"] == 0

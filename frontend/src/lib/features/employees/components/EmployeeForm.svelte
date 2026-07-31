@@ -29,12 +29,7 @@
     departments: DepartmentOut[];
   }
 
-  let {
-    mode,
-    employeeId,
-    initial = {},
-    departments
-  }: Props = $props();
+  let { mode, employeeId, initial = {}, departments }: Props = $props();
 
   let fCode = $state(initial.employee_code ?? '');
   let fFirst = $state(initial.first_name ?? '');
@@ -68,9 +63,9 @@
 
   let canSubmit = $derived(
     fCode.trim().length >= 2 &&
-    fFirst.trim().length >= 2 &&
-    fLast.trim().length >= 2 &&
-    !formLoading
+      fFirst.trim().length >= 2 &&
+      fLast.trim().length >= 2 &&
+      !formLoading
   );
 
   async function handleSubmit(e: SubmitEvent) {
@@ -115,7 +110,10 @@
 
 <div class="max-w-3xl">
   {#if formError}
-    <div class="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger" role="alert">
+    <div
+      class="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+      role="alert"
+    >
       {formError}
     </div>
   {/if}
@@ -131,11 +129,22 @@
         </div>
         <div class="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-4">
           {#if mode === 'create'}
-            <FormField id="e-code" label="Código de empleado" bind:value={fCode} required placeholder="EMP001" />
+            <FormField
+              id="e-code"
+              label="Código de empleado"
+              bind:value={fCode}
+              required
+              placeholder="EMP001"
+            />
           {:else}
             <div>
-              <label for="e-code-readonly" class="mb-1 block text-sm font-medium text-foreground">Código de empleado</label>
-              <div id="e-code-readonly" class="flex h-[42px] items-center rounded-lg border border-border bg-surface-muted px-3 font-mono text-sm text-foreground-muted">
+              <label for="e-code-readonly" class="mb-1 block text-sm font-medium text-foreground"
+                >Código de empleado</label
+              >
+              <div
+                id="e-code-readonly"
+                class="flex h-[42px] items-center rounded-lg border border-border bg-surface-muted px-3 font-mono text-sm text-foreground-muted"
+              >
                 {fCode || '—'}
               </div>
             </div>
@@ -150,8 +159,15 @@
     <!-- Sección: Foto URL -->
     <Card class="p-6">
       <h3 class="mb-1 text-sm font-semibold text-foreground">Foto del empleado</h3>
-      <p class="mb-4 text-xs text-foreground-muted">Pega la URL de una imagen (opcional). Se mostrará como avatar circular.</p>
-      <FormField id="e-photo" label="URL de la foto" bind:value={fPhotoUrl} placeholder="https://i.pravatar.cc/300?u=..." />
+      <p class="mb-4 text-xs text-foreground-muted">
+        Pega la URL de una imagen (opcional). Se mostrará como avatar circular.
+      </p>
+      <FormField
+        id="e-photo"
+        label="URL de la foto"
+        bind:value={fPhotoUrl}
+        placeholder="https://i.pravatar.cc/300?u=..."
+      />
     </Card>
 
     <!-- Sección: Datos laborales -->
@@ -162,12 +178,25 @@
           id="e-dept"
           label="Departamento"
           bind:value={fDept}
-          options={[{ value: '', label: '— Ninguno —' }, ...departments.map((d) => ({ value: d.id, label: d.name }))]}
+          options={[
+            { value: '', label: '— Ninguno —' },
+            ...departments.map((d) => ({ value: d.id, label: d.name }))
+          ]}
         />
-        <FormField id="e-position" label="Cargo" bind:value={fPosition} placeholder="Desarrollador" />
+        <FormField
+          id="e-position"
+          label="Cargo"
+          bind:value={fPosition}
+          placeholder="Desarrollador"
+        />
         <FormField id="e-hire" label="Fecha de contratación" type="date" bind:value={fHireDate} />
         {#if mode === 'edit'}
-          <FormField id="e-termination" label="Fecha de terminación" type="date" bind:value={fTerminationDate} />
+          <FormField
+            id="e-termination"
+            label="Fecha de terminación"
+            type="date"
+            bind:value={fTerminationDate}
+          />
         {/if}
       </div>
     </Card>
@@ -176,11 +205,21 @@
     <Card class="p-6">
       <h3 class="mb-4 text-sm font-semibold text-foreground">Datos personales</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField id="e-doc" label="Documento de identidad" bind:value={fDocId} placeholder="DUI / Pasaporte" />
+        <FormField
+          id="e-doc"
+          label="Documento de identidad"
+          bind:value={fDocId}
+          placeholder="DUI / Pasaporte"
+        />
         <FormField id="e-birth" label="Fecha de nacimiento" type="date" bind:value={fBirthDate} />
         <FormField id="e-phone" label="Teléfono" bind:value={fPhone} placeholder="+503 0000-0000" />
         <div class="sm:col-span-2">
-          <FormField id="e-address" label="Dirección" bind:value={fAddress} placeholder="Calle, ciudad" />
+          <FormField
+            id="e-address"
+            label="Dirección"
+            bind:value={fAddress}
+            placeholder="Calle, ciudad"
+          />
         </div>
       </div>
     </Card>

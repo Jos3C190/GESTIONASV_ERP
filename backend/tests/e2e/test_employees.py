@@ -311,3 +311,80 @@ async def test_employees_require_permission(e2e_client) -> None:
     headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
     r = await e2e_client.get("/api/v1/employees", headers=headers)
     assert r.status_code == 403
+
+
+async def test_department_mutations_are_audited(e2e_client) -> None:
+    headers = await _login_superadmin(e2e_client)
+    created = await e2e_client.post(
+        "/api/v1/departments",
+        headers=headers,
+        json={"name": f"AUD_DEPT_{uuid.uuid4().hex[:6]}"},
+    )
+    dept_id = created.json()["id"]
+    await e2e_client.patch(
+        f"/api/v1/departments/{dept_id}",
+        headers=headers,
+        json={"description": "Actualizado para auditoría"},
+    )
+    await e2e_client.delete(f"/api/v1/departments/{dept_id}", headers=headers)
+
+    logs = await e2e_client.get(
+        f"/api/v1/audit-logs?resource_type=departments&resource_id={dept_id}&size=20",
+        headers=headers,
+    )
+    assert logs.status_code == 200
+    actions = {item["action"] for item in logs.json()["items"]}
+    assert actions == {"CREATE", "UPDATE", "DELETE"}
+    update_log = next(item for item in logs.json()["items"] if item["action"] == "UPDATE")
+    assert update_log["before_state"]["description"] is None
+    assert update_log["after_state"]["description"] == "Actualizado para auditoría"
+
+
+async def test_employee_mutations_and_user_links_are_audited(e2e_client) -> None:
+    headers = await _login_superadmin(e2e_client)
+    user_id = await seed_user(
+        username=f"audit-link-{uuid.uuid4().hex[:6]}",
+        email=f"audit-{uuid.uuid4().hex[:6]}@example.com",
+    )
+    created = await e2e_client.post(
+        "/api/v1/employees",
+        headers=headers,
+        json={
+            "employee_code": f"AUD_EMP_{uuid.uuid4().hex[:6]}",
+            "first_name": "Audit",
+            "last_name": "Employee",
+        },
+    )
+    emp_id = created.json()["id"]
+    await e2e_client.patch(
+        f"/api/v1/employees/{emp_id}",
+        headers=headers,
+        json={"position": "Auditor"},
+    )
+    await e2e_client.post(
+        f"/api/v1/employees/{emp_id}/link-user",
+        headers=headers,
+        json={"user_id": user_id},
+    )
+    await e2e_client.post(
+        f"/api/v1/employees/{emp_id}/unlink-user",
+        headers=headers,
+    )
+    await e2e_client.delete(f"/api/v1/employees/{emp_id}", headers=headers)
+
+    logs = await e2e_client.get(
+        f"/api/v1/audit-logs?resource_type=employees&resource_id={emp_id}&size=20",
+        headers=headers,
+    )
+    assert logs.status_code == 200
+    actions = {item["action"] for item in logs.json()["items"]}
+    assert actions == {
+        "CREATE",
+        "UPDATE",
+        "LINK_USER",
+        "UNLINK_USER",
+        "LOGICAL_DELETE",
+    }
+    link_log = next(item for item in logs.json()["items"] if item["action"] == "LINK_USER")
+    assert link_log["before_state"]["user_id"] is None
+    assert link_log["after_state"]["user_id"] == user_id
