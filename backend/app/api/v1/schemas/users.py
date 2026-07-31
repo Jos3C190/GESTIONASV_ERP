@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field
 
 from app.api.v1.schemas.common import ORMOut, Page, PageMeta  # re-export for router convenience
 
@@ -29,6 +29,8 @@ class CreateUserRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=12, max_length=128)
     is_superuser: bool = False
+    employee_id: uuid.UUID | None = None
+    role_ids: list[uuid.UUID] = Field(default_factory=list, max_length=20)
 
 
 class UpdateUserRequest(BaseModel):
@@ -46,11 +48,11 @@ class MessageOut(BaseModel):
 
 
 __all__ = [
-    "UserOut",
-    "Page",
-    "PageMeta",
     "CreateUserRequest",
-    "UpdateUserRequest",
     "ForcePasswordResetRequest",
     "MessageOut",
+    "Page",
+    "PageMeta",
+    "UpdateUserRequest",
+    "UserOut",
 ]

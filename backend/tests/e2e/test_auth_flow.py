@@ -25,7 +25,8 @@ async def test_login_me_refresh_logout_flow(e2e_client) -> None:
     assert body["token_type"] == "bearer"
     access = body["access_token"]
     refresh = body["refresh_token"]
-    assert access and refresh
+    assert access
+    assert refresh
 
     # 2) /me with the access token
     r = await e2e_client.get(
@@ -129,3 +130,45 @@ async def test_login_nonexistent_user_returns_generic_401(e2e_client) -> None:
 async def test_refresh_with_missing_token_returns_401(e2e_client) -> None:
     r = await e2e_client.post("/api/v1/auth/refresh")
     assert r.status_code == 401
+
+
+async def test_authenticated_user_can_change_password_and_sessions_are_revoked(
+    e2e_client,
+) -> None:
+    old_password = "Strong!Passw0rd2026"
+    new_password = "Nueva!ClaveSegura2026"
+    await seed_user(
+        username="password-user",
+        email="password@example.com",
+        password=old_password,
+    )
+    login = await e2e_client.post(
+        "/api/v1/auth/login",
+        json={"login": "password-user", "password": old_password},
+    )
+    access = login.json()["access_token"]
+    refresh = login.json()["refresh_token"]
+
+    changed = await e2e_client.post(
+        "/api/v1/auth/change-password",
+        headers={"Authorization": f"Bearer {access}"},
+        json={"current_password": old_password, "new_password": new_password},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["code"] == "password_changed"
+
+    revoked = await e2e_client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh},
+    )
+    assert revoked.status_code == 401
+    old_login = await e2e_client.post(
+        "/api/v1/auth/login",
+        json={"login": "password-user", "password": old_password},
+    )
+    assert old_login.status_code == 401
+    new_login = await e2e_client.post(
+        "/api/v1/auth/login",
+        json={"login": "password-user", "password": new_password},
+    )
+    assert new_login.status_code == 200

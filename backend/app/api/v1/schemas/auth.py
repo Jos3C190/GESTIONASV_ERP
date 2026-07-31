@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field
 
 from app.api.v1.schemas.common import ORMOut
 
@@ -16,7 +16,7 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 - OAuth2 token scheme, not a secret
     expires_in: int = Field(..., description="Segundos hasta la expiración del access token.")
     refresh_token: str = Field(..., description="Refresh token raw (se devuelve solo una vez).")
 
@@ -27,6 +27,11 @@ class RefreshRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     refresh_token: str = Field(..., min_length=10, max_length=128)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=12, max_length=128)
 
 
 class UserOut(ORMOut):

@@ -1,14 +1,16 @@
 """SQLAlchemy PermissionRepository."""
+
 from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.rbac import Permission as DomainPermission
 from app.infrastructure.models.rbac import Permission as ORMPermission
+from app.infrastructure.models.rbac import RolePermission
 
 
 def _to_domain(orm: ORMPermission) -> DomainPermission:
@@ -44,9 +46,7 @@ class SqlAlchemyPermissionRepository:
 
     async def list_by_module(self, module: str) -> Sequence[DomainPermission]:
         stmt = (
-            select(ORMPermission)
-            .where(ORMPermission.module == module)
-            .order_by(ORMPermission.code)
+            select(ORMPermission).where(ORMPermission.module == module).order_by(ORMPermission.code)
         )
         result = await self._session.execute(stmt)
         return [_to_domain(p) for p in result.scalars().all()]
@@ -60,6 +60,36 @@ class SqlAlchemyPermissionRepository:
         self._session.add(orm)
         await self._session.flush()
         return _to_domain(orm)
+
+    async def update(self, permission: DomainPermission) -> DomainPermission:
+        result = await self._session.execute(
+            update(ORMPermission)
+            .where(ORMPermission.id == permission.id)
+            .values(
+                code=permission.code,
+                description=permission.description,
+                module=permission.module,
+            )
+            .returning(ORMPermission)
+        )
+        orm = result.scalar_one_or_none()
+        if orm is None:
+            raise LookupError(f"Permission {permission.id} not found")
+        return _to_domain(orm)
+
+    async def is_assigned(self, permission_id: uuid.UUID) -> bool:
+        result = await self._session.execute(
+            select(RolePermission.permission_id)
+            .where(RolePermission.permission_id == permission_id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def delete(self, permission_id: uuid.UUID) -> bool:
+        result = await self._session.execute(
+            delete(ORMPermission).where(ORMPermission.id == permission_id)
+        )
+        return (result.rowcount or 0) > 0
 
     async def bulk_add(self, permissions: Sequence[DomainPermission]) -> int:
         if not permissions:

@@ -7,6 +7,7 @@ Idempotent: safe to re-run. Seeds:
 Permission catalogue and roles arrive in Phase 2 (RBAC). For now we only need
 the super-admin so login works end-to-end.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,7 +25,8 @@ app = typer.Typer(add_completion=False, no_args_is_help=False)
 SUPER_ADMIN_USERNAME = os.environ.get("SUPER_ADMIN_USERNAME", "superadmin")
 SUPER_ADMIN_EMAIL = os.environ.get("SUPER_ADMIN_EMAIL", "superadmin@erp-system.dev")
 SUPER_ADMIN_PASSWORD = os.environ.get(
-    "SUPER_ADMIN_PASSWORD", "Cambio!Seguro2026"  # documented in README; must be rotated in prod
+    "SUPER_ADMIN_PASSWORD",
+    "Cambio!Seguro2026",  # documented in README; must be rotated in prod
 )
 
 
@@ -41,15 +43,18 @@ def _make_session_factory() -> async_sessionmaker[AsyncSession]:
 
 async def _seed_permissions_and_roles() -> None:
     """Seed the permission catalogue and base roles (idempotent)."""
-    from sqlalchemy import select
-
     from app.application.rbac.catalogue import BASE_ROLES, PERMISSION_CATALOGUE
     from app.core.logging import configure_logging, get_logger
     from app.infrastructure.models.rbac import (
         Permission as ORMPermission,
+    )
+    from app.infrastructure.models.rbac import (
         Role as ORMRole,
+    )
+    from app.infrastructure.models.rbac import (
         RolePermission,
     )
+    from sqlalchemy import select
 
     configure_logging()
     log = get_logger("seed")
@@ -90,25 +95,78 @@ async def _seed_permissions_and_roles() -> None:
                 log.info("seed_role_created", name=name)
             # Assign permissions (clear + set).
             await session.execute(
-                __import__("sqlalchemy").delete(RolePermission).where(
-                    RolePermission.role_id == role.id
-                )
+                __import__("sqlalchemy")
+                .delete(RolePermission)
+                .where(RolePermission.role_id == role.id)
             )
             for code in perm_codes:
                 if code in perm_map:
-                    session.add(
-                        RolePermission(role_id=role.id, permission_id=perm_map[code])
-                    )
+                    session.add(RolePermission(role_id=role.id, permission_id=perm_map[code]))
         await session.commit()
         log.info("seed_roles_done")
 
 
-async def _seed_super_admin() -> None:
+async def _seed_geographic_catalogues() -> None:
+    """Seed a minimal valid El Salvador hierarchy for development/testing.
+
+    The catalogues remain read-only through the ERP API. Production deployments
+    can replace or extend this data from the authoritative national catalogue.
+    """
+    from app.infrastructure.models.organization import (
+        District,
+        GeographicDepartment,
+        Municipality,
+    )
     from sqlalchemy import select
 
+    factory = _make_session_factory()
+    async with factory() as session:
+        department = (
+            await session.execute(
+                select(GeographicDepartment).where(GeographicDepartment.name == "San Salvador")
+            )
+        ).scalar_one_or_none()
+        if department is None:
+            department = GeographicDepartment(name="San Salvador")
+            session.add(department)
+            await session.flush()
+
+        municipality = (
+            await session.execute(
+                select(Municipality).where(
+                    Municipality.department_id == department.id,
+                    Municipality.name == "San Salvador Centro",
+                )
+            )
+        ).scalar_one_or_none()
+        if municipality is None:
+            municipality = Municipality(department_id=department.id, name="San Salvador Centro")
+            session.add(municipality)
+            await session.flush()
+
+        district = (
+            await session.execute(
+                select(District).where(
+                    District.municipality_id == municipality.id,
+                    District.name == "San Salvador",
+                )
+            )
+        ).scalar_one_or_none()
+        if district is None:
+            session.add(
+                District(
+                    municipality_id=municipality.id,
+                    name="San Salvador",
+                )
+            )
+        await session.commit()
+
+
+async def _seed_super_admin() -> None:
     from app.core.logging import configure_logging, get_logger
     from app.core.security import hash_password
     from app.infrastructure.models.user import User as ORMUser
+    from sqlalchemy import select
 
     configure_logging()
     log = get_logger("seed")
@@ -116,9 +174,7 @@ async def _seed_super_admin() -> None:
 
     async with factory() as session:
         existing = (
-            await session.execute(
-                select(ORMUser).where(ORMUser.username == SUPER_ADMIN_USERNAME)
-            )
+            await session.execute(select(ORMUser).where(ORMUser.username == SUPER_ADMIN_USERNAME))
         ).scalar_one_or_none()
 
         if existing is not None:
@@ -143,11 +199,10 @@ async def _seed_super_admin() -> None:
 
 async def _seed_demo_users() -> None:
     """Generate demo users with Faker for pagination/search testing."""
-    from sqlalchemy import select
-
     from app.core.logging import configure_logging, get_logger
     from app.core.security import hash_password
     from app.infrastructure.models.user import User as ORMUser
+    from sqlalchemy import select
 
     configure_logging()
     log = get_logger("seed")
@@ -158,10 +213,10 @@ async def _seed_demo_users() -> None:
 
     async with factory() as session:
         existing = (
-            await session.execute(
-                select(ORMUser).where(ORMUser.is_superuser.is_(False))
-            )
-        ).scalars().all()
+            (await session.execute(select(ORMUser).where(ORMUser.is_superuser.is_(False))))
+            .scalars()
+            .all()
+        )
         if len(existing) >= 25:
             log.info("seed_demo_users_skip", count=len(existing))
             return
@@ -189,8 +244,12 @@ def run(phase0: bool = typer.Option(False, "--phase0", help="Phase 0 placeholder
         typer.secho("[seed] Phase 0 — no seed data yet.", fg=typer.colors.CYAN)
         return
 
-    typer.secho("[seed] Phase 2 — seeding permissions, roles, super-admin, demo users...", fg=typer.colors.CYAN)
+    typer.secho(
+        "[seed] Phase 2 — seeding permissions, roles, super-admin, demo users...",
+        fg=typer.colors.CYAN,
+    )
     asyncio.run(_seed_permissions_and_roles())
+    asyncio.run(_seed_geographic_catalogues())
     asyncio.run(_seed_super_admin())
     asyncio.run(_seed_demo_users())
     typer.secho(

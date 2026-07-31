@@ -1,10 +1,11 @@
 """RBAC DTOs — roles, permissions, assignments."""
+
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from app.api.v1.schemas.common import ORMOut
 
@@ -14,6 +15,18 @@ class PermissionOut(ORMOut):
     code: str
     description: str | None = None
     module: str | None = None
+
+
+class CreatePermissionRequest(BaseModel):
+    code: str = Field(..., min_length=3, max_length=120)
+    description: str | None = None
+    module: str | None = Field(None, max_length=64)
+
+
+class UpdatePermissionRequest(BaseModel):
+    code: str | None = Field(None, min_length=3, max_length=120)
+    description: str | None = None
+    module: str | None = Field(None, max_length=64)
 
 
 class RoleOut(ORMOut):
@@ -36,6 +49,11 @@ class CreateRoleRequest(BaseModel):
 
 class UpdateRoleRequest(BaseModel):
     name: str | None = Field(None, min_length=2, max_length=80)
+    description: str | None = None
+
+
+class DuplicateRoleRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=80)
     description: str | None = None
 
 

@@ -129,6 +129,10 @@ class SqlAlchemyRoleRepository:
         result = await self._session.execute(stmt)
         return (result.rowcount or 0) > 0
 
+    async def is_assigned(self, role_id: uuid.UUID) -> bool:
+        stmt = select(UserRole.user_id).where(UserRole.role_id == role_id).limit(1)
+        return (await self._session.execute(stmt)).scalar_one_or_none() is not None
+
     async def set_permissions(
         self, role_id: uuid.UUID, permission_ids: set[uuid.UUID]
     ) -> None:

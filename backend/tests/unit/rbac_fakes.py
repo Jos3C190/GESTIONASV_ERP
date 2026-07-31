@@ -1,9 +1,10 @@
 """In-memory fakes for RBAC ports, used by unit tests."""
+
 from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.domain.entities.rbac import Permission, Role, UserRoleAssignment
 
@@ -32,11 +33,29 @@ class InMemoryPermissionRepository:
             code=permission.code,
             description=permission.description,
             module=permission.module,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         self._by_id[pid] = p
         self._by_code[p.code] = p
         return p
+
+    async def update(self, permission: Permission) -> Permission:
+        previous = self._by_id.get(permission.id)
+        if previous is not None:
+            self._by_code.pop(previous.code, None)
+        self._by_id[permission.id] = permission
+        self._by_code[permission.code] = permission
+        return permission
+
+    async def is_assigned(self, permission_id: uuid.UUID) -> bool:
+        return False
+
+    async def delete(self, permission_id: uuid.UUID) -> bool:
+        permission = self._by_id.pop(permission_id, None)
+        if permission is None:
+            return False
+        self._by_code.pop(permission.code, None)
+        return True
 
     async def bulk_add(self, permissions: Sequence[Permission]) -> int:
         for p in permissions:
@@ -56,9 +75,7 @@ class InMemoryRoleRepository:
     def register_perms(self, perms: list[Permission]) -> None:
         self._all_perms = perms
 
-    async def get_by_id(
-        self, role_id: uuid.UUID, *, load_permissions: bool = False
-    ) -> Role | None:
+    async def get_by_id(self, role_id: uuid.UUID, *, load_permissions: bool = False) -> Role | None:
         r = self._roles_by_id.get(role_id)
         if r is None:
             return None
@@ -75,9 +92,7 @@ class InMemoryRoleRepository:
             )
         return r
 
-    async def get_by_name(
-        self, name: str, *, load_permissions: bool = False
-    ) -> Role | None:
+    async def get_by_name(self, name: str, *, load_permissions: bool = False) -> Role | None:
         for r in self._roles_by_id.values():
             if r.name == name:
                 return await self.get_by_id(r.id, load_permissions=load_permissions)
@@ -100,8 +115,8 @@ class InMemoryRoleRepository:
             name=role.name,
             description=role.description,
             is_system=role.is_system,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         self._roles_by_id[rid] = r
         self._role_perms[rid] = []
@@ -121,21 +136,18 @@ class InMemoryRoleRepository:
         self._role_perms.pop(role_id, None)
         return True
 
-    async def set_permissions(
-        self, role_id: uuid.UUID, permission_ids: set[uuid.UUID]
-    ) -> None:
+    async def is_assigned(self, role_id: uuid.UUID) -> bool:
+        return any(role_id in roles for roles in self._user_roles.values())
+
+    async def set_permissions(self, role_id: uuid.UUID, permission_ids: set[uuid.UUID]) -> None:
         # Convert ids back to Permission objects using the catalog we keep.
         all_perms = {p.id: p for p in self._all_perms}
-        self._role_perms[role_id] = [
-            all_perms[pid] for pid in permission_ids if pid in all_perms
-        ]
+        self._role_perms[role_id] = [all_perms[pid] for pid in permission_ids if pid in all_perms]
 
     async def get_permissions_for_role(self, role_id: uuid.UUID) -> Sequence[Permission]:
         return list(self._role_perms.get(role_id, []))
 
-    async def get_effective_permissions_for_user(
-        self, user_id: uuid.UUID
-    ) -> Sequence[Permission]:
+    async def get_effective_permissions_for_user(self, user_id: uuid.UUID) -> Sequence[Permission]:
         role_ids = self._user_roles.get(user_id, set())
         seen: dict[uuid.UUID, Permission] = {}
         for rid in role_ids:
@@ -161,7 +173,7 @@ class InMemoryRoleRepository:
                 user_id=user_id,
                 role_id=role_id,
                 assigned_by=assigned_by,
-                assigned_at=datetime.now(timezone.utc),
+                assigned_at=datetime.now(UTC),
             )
         )
         return True

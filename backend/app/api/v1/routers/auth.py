@@ -14,9 +14,13 @@ from app.api.v1.deps import (
     get_audit_service,
     get_authenticate_user_use_case,
     get_logout_use_case,
+    get_password_policy,
+    get_refresh_token_repository,
     get_refresh_token_use_case,
+    get_user_repository,
 )
 from app.api.v1.schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
     MeResponse,
     RefreshRequest,
@@ -26,12 +30,16 @@ from app.api.v1.schemas.auth import (
 from app.api.v1.schemas.common import MessageOut
 from app.application.audit.audit_service import AuditService
 from app.application.auth.authenticate_user import AuthenticateUserUseCase, LoginInput
+from app.application.auth.change_password import ChangePasswordInput, ChangePasswordUseCase
 from app.application.auth.logout import LogoutInput, LogoutUseCase
 from app.application.auth.refresh_token import (
     RefreshInput,
     RefreshTokenUseCase,
 )
+from app.application.password_policy import PasswordPolicy
 from app.core.config import settings
+from app.domain.ports.refresh_token_repository import RefreshTokenRepository
+from app.domain.ports.user_repository import UserRepository
 from app.middlewares.rate_limit import rate_limit_login, rate_limit_refresh
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -181,3 +189,38 @@ async def me(current: CurrentUser) -> MeResponse:
 )
 async def me_user(current: CurrentUser) -> UserOut:
     return UserOut.model_validate(current, from_attributes=True)
+
+
+@router.post(
+    "/change-password",
+    response_model=MessageOut,
+    status_code=status.HTTP_200_OK,
+    summary="Cambiar la contraseña del usuario actual",
+)
+async def change_password(
+    payload: ChangePasswordRequest,
+    current: CurrentUser,
+    users: UserRepository = Depends(get_user_repository),
+    sessions: RefreshTokenRepository = Depends(get_refresh_token_repository),
+    policy: PasswordPolicy = Depends(get_password_policy),
+    audit: AuditService = Depends(get_audit_service),
+) -> MessageOut:
+    use_case = ChangePasswordUseCase(users, sessions, policy)
+    await use_case.execute(
+        ChangePasswordInput(
+            user_id=current.id,
+            current_password=payload.current_password,
+            new_password=payload.new_password,
+        )
+    )
+    await audit.record(
+        action="PASSWORD_CHANGE",
+        user_id=current.id,
+        resource_type="users",
+        resource_id=str(current.id),
+        metadata={"password_fields_omitted": True},
+    )
+    return MessageOut(
+        message="Contraseña actualizada. Las sesiones anteriores fueron revocadas.",
+        code="password_changed",
+    )

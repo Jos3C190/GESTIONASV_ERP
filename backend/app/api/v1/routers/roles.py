@@ -3,6 +3,7 @@
 All endpoints require `permissions:read` or `roles:*` permissions via
 `require_permission`. Superusers pass automatically.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -11,7 +12,7 @@ from fastapi import APIRouter, Depends, status
 
 from app.api.v1.deps import (
     CurrentUser,
-    SessionDep,
+    get_audit_service,
     get_permission_repository,
     get_role_repository,
     get_user_repository,
@@ -20,16 +21,19 @@ from app.api.v1.deps import (
 from app.api.v1.schemas.common import MessageOut
 from app.api.v1.schemas.rbac import (
     AssignRoleRequest,
+    CreatePermissionRequest,
     CreateRoleRequest,
+    DuplicateRoleRequest,
     EffectivePermissionsOut,
     PermissionOut,
     RevokeRoleRequest,
     RoleOut,
     RoleWithPermissionsOut,
     SetRolePermissionsRequest,
+    UpdatePermissionRequest,
     UpdateRoleRequest,
-    UserRoleAssignmentOut,
 )
+from app.application.audit.audit_service import AuditService, role_to_audit_state
 from app.application.rbac.check_permission import GetEffectivePermissionsUseCase
 from app.application.rbac.role_assignment import (
     AssignRoleInput,
@@ -39,14 +43,19 @@ from app.application.rbac.role_assignment import (
     RevokeRoleUseCase,
 )
 from app.application.rbac.role_crud import (
+    CreatePermissionInput,
+    CreatePermissionUseCase,
     CreateRoleInput,
     CreateRoleUseCase,
+    DeletePermissionUseCase,
     DeleteRoleUseCase,
     GetRoleUseCase,
     ListPermissionsUseCase,
     ListRolesUseCase,
     SetRolePermissionsInput,
     SetRolePermissionsUseCase,
+    UpdatePermissionInput,
+    UpdatePermissionUseCase,
     UpdateRoleInput,
     UpdateRoleUseCase,
 )
@@ -78,9 +87,7 @@ async def list_roles(
             created_at=r.created_at or __import__("datetime").datetime.now(),
             updated_at=r.updated_at,
             permissions=[
-                PermissionOut(
-                    id=p.id, code=p.code, description=p.description, module=p.module
-                )
+                PermissionOut(id=p.id, code=p.code, description=p.description, module=p.module)
                 for p in r.permissions
             ],
         )
@@ -104,6 +111,94 @@ async def list_permissions(
         PermissionOut(id=p.id, code=p.code, description=p.description, module=p.module)
         for p in perms
     ]
+
+
+@router.post(
+    "/permissions",
+    response_model=PermissionOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("permissions:manage"))],
+)
+async def create_permission(
+    body: CreatePermissionRequest,
+    current: CurrentUser,
+    repo: PermissionRepository = Depends(get_permission_repository),
+    audit: AuditService = Depends(get_audit_service),
+) -> PermissionOut:
+    permission = await CreatePermissionUseCase(repo).execute(
+        CreatePermissionInput(
+            code=body.code,
+            description=body.description,
+            module=body.module,
+        )
+    )
+    await audit.record(
+        action="CREATE",
+        user_id=current.id,
+        resource_type="permissions",
+        resource_id=str(permission.id),
+        after_state={"code": permission.code, "module": permission.module},
+    )
+    return PermissionOut.model_validate(permission, from_attributes=True)
+
+
+@router.patch(
+    "/permissions/{permission_id}",
+    response_model=PermissionOut,
+    dependencies=[Depends(require_permission("permissions:manage"))],
+)
+async def update_permission(
+    permission_id: uuid.UUID,
+    body: UpdatePermissionRequest,
+    current: CurrentUser,
+    repo: PermissionRepository = Depends(get_permission_repository),
+    audit: AuditService = Depends(get_audit_service),
+) -> PermissionOut:
+    before = await repo.get_by_id(permission_id)
+    permission = await UpdatePermissionUseCase(repo).execute(
+        UpdatePermissionInput(
+            permission_id=permission_id,
+            code=body.code,
+            description=body.description,
+            module=body.module,
+        )
+    )
+    await audit.record(
+        action="UPDATE",
+        user_id=current.id,
+        resource_type="permissions",
+        resource_id=str(permission.id),
+        before_state=(
+            {"code": before.code, "module": before.module} if before else None
+        ),
+        after_state={"code": permission.code, "module": permission.module},
+    )
+    return PermissionOut.model_validate(permission, from_attributes=True)
+
+
+@router.delete(
+    "/permissions/{permission_id}",
+    response_model=MessageOut,
+    dependencies=[Depends(require_permission("permissions:manage"))],
+)
+async def delete_permission(
+    permission_id: uuid.UUID,
+    current: CurrentUser,
+    repo: PermissionRepository = Depends(get_permission_repository),
+    audit: AuditService = Depends(get_audit_service),
+) -> MessageOut:
+    before = await repo.get_by_id(permission_id)
+    await DeletePermissionUseCase(repo).execute(permission_id)
+    await audit.record(
+        action="DELETE",
+        user_id=current.id,
+        resource_type="permissions",
+        resource_id=str(permission_id),
+        before_state=(
+            {"code": before.code, "module": before.module} if before else None
+        ),
+    )
+    return MessageOut(message="Permiso eliminado.", code="permission_deleted")
 
 
 @router.get(
@@ -142,10 +237,19 @@ async def get_role(
 )
 async def create_role(
     body: CreateRoleRequest,
+    current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
+    audit: AuditService = Depends(get_audit_service),
 ) -> RoleOut:
     uc = CreateRoleUseCase(repo)
     r = await uc.execute(CreateRoleInput(name=body.name, description=body.description))
+    await audit.record(
+        action="CREATE",
+        user_id=current.id,
+        resource_type="roles",
+        resource_id=str(r.id),
+        after_state=role_to_audit_state(r),
+    )
     return RoleOut(
         id=r.id,
         name=r.name,
@@ -166,11 +270,22 @@ async def create_role(
 async def update_role(
     role_id: uuid.UUID,
     body: UpdateRoleRequest,
+    current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
+    audit: AuditService = Depends(get_audit_service),
 ) -> RoleOut:
+    before = await repo.get_by_id(role_id)
     uc = UpdateRoleUseCase(repo)
     r = await uc.execute(
         UpdateRoleInput(role_id=role_id, name=body.name, description=body.description)
+    )
+    await audit.record(
+        action="UPDATE",
+        user_id=current.id,
+        resource_type="roles",
+        resource_id=str(r.id),
+        before_state=role_to_audit_state(before),
+        after_state=role_to_audit_state(r),
     )
     return RoleOut(
         id=r.id,
@@ -191,11 +306,78 @@ async def update_role(
 )
 async def delete_role(
     role_id: uuid.UUID,
+    current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
+    audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
+    before = await repo.get_by_id(role_id)
     uc = DeleteRoleUseCase(repo)
     await uc.execute(role_id)
+    await audit.record(
+        action="DELETE",
+        user_id=current.id,
+        resource_type="roles",
+        resource_id=str(role_id),
+        before_state=role_to_audit_state(before),
+    )
     return MessageOut(message="Rol eliminado.", code="role_deleted")
+
+
+@router.post(
+    "/{role_id}/duplicate",
+    response_model=RoleWithPermissionsOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("roles:create"))],
+)
+async def duplicate_role(
+    role_id: uuid.UUID,
+    body: DuplicateRoleRequest,
+    current: CurrentUser,
+    repo: RoleRepository = Depends(get_role_repository),
+    perm_repo: PermissionRepository = Depends(get_permission_repository),
+    audit: AuditService = Depends(get_audit_service),
+) -> RoleWithPermissionsOut:
+    source = await GetRoleUseCase(repo).execute(role_id)
+    created = await CreateRoleUseCase(repo).execute(
+        CreateRoleInput(
+            name=body.name,
+            description=body.description or source.description,
+        )
+    )
+    duplicated = await SetRolePermissionsUseCase(repo, perm_repo).execute(
+        SetRolePermissionsInput(
+            role_id=created.id,
+            permission_codes=tuple(permission.code for permission in source.permissions),
+        )
+    )
+    await audit.record(
+        action="DUPLICATE",
+        user_id=current.id,
+        resource_type="roles",
+        resource_id=str(duplicated.id),
+        after_state={
+            **role_to_audit_state(duplicated),
+            "source_role_id": str(role_id),
+            "permission_codes": [p.code for p in duplicated.permissions],
+        },
+    )
+    return RoleWithPermissionsOut(
+        id=duplicated.id,
+        name=duplicated.name,
+        description=duplicated.description,
+        is_system=duplicated.is_system,
+        created_at=duplicated.created_at or __import__("datetime").datetime.now(),
+        updated_at=duplicated.updated_at,
+        permissions=[
+            PermissionOut(
+                id=permission.id,
+                code=permission.code,
+                description=permission.description,
+                module=permission.module,
+            )
+            for permission in duplicated.permissions
+        ],
+    )
 
 
 @router.put(
@@ -208,12 +390,21 @@ async def delete_role(
 async def set_role_permissions(
     role_id: uuid.UUID,
     body: SetRolePermissionsRequest,
+    current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
     perm_repo: PermissionRepository = Depends(get_permission_repository),
+    audit: AuditService = Depends(get_audit_service),
 ) -> RoleWithPermissionsOut:
     uc = SetRolePermissionsUseCase(repo, perm_repo)
     r = await uc.execute(
         SetRolePermissionsInput(role_id=role_id, permission_codes=tuple(body.permission_codes))
+    )
+    await audit.record(
+        action="SET_PERMISSIONS",
+        user_id=current.id,
+        resource_type="roles",
+        resource_id=str(role_id),
+        after_state={"permission_codes": [p.code for p in r.permissions]},
     )
     return RoleWithPermissionsOut(
         id=r.id,
@@ -241,11 +432,20 @@ async def assign_role(
     current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
     user_repo: UserRepository = Depends(get_user_repository),
+    audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
     uc = AssignRoleUseCase(user_repo, repo)
     created = await uc.execute(
         AssignRoleInput(user_id=body.user_id, role_id=body.role_id, assigned_by=current.id)
     )
+    if created:
+        await audit.record(
+            action="ASSIGN_ROLE",
+            user_id=current.id,
+            resource_type="users",
+            resource_id=str(body.user_id),
+            after_state={"role_id": str(body.role_id)},
+        )
     return MessageOut(
         message="Rol asignado." if created else "El usuario ya tenía ese rol.",
         code="role_assigned" if created else "role_already_assigned",
@@ -264,11 +464,20 @@ async def revoke_role(
     current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
     user_repo: UserRepository = Depends(get_user_repository),
+    audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
     uc = RevokeRoleUseCase(user_repo, repo)
     ok = await uc.execute(
         RevokeRoleInput(user_id=body.user_id, role_id=body.role_id, actor_id=current.id)
     )
+    if ok:
+        await audit.record(
+            action="REVOKE_ROLE",
+            user_id=current.id,
+            resource_type="users",
+            resource_id=str(body.user_id),
+            before_state={"role_id": str(body.role_id)},
+        )
     return MessageOut(
         message="Rol revocado." if ok else "El usuario no tenía ese rol.",
         code="role_revoked" if ok else "role_not_assigned",
@@ -321,7 +530,5 @@ async def my_permissions(
     if perms == ("*",):
         from app.application.rbac.catalogue import ALL_PERMISSION_CODES
 
-        return EffectivePermissionsOut(
-            permissions=sorted(ALL_PERMISSION_CODES), is_superuser=True
-        )
+        return EffectivePermissionsOut(permissions=sorted(ALL_PERMISSION_CODES), is_superuser=True)
     return EffectivePermissionsOut(permissions=list(perms), is_superuser=False)

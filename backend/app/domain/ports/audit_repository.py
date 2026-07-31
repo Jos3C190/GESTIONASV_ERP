@@ -1,4 +1,5 @@
 """Port: AuditRepository — append-only (add + list, no update/delete)."""
+
 from __future__ import annotations
 
 import uuid
@@ -15,6 +16,8 @@ class AuditRepository(Protocol):
     complementing the lack of UPDATE/DELETE endpoints."""
 
     async def add(self, log: AuditLog) -> AuditLog: ...
+
+    async def get_by_id(self, log_id: uuid.UUID) -> AuditLog | None: ...
 
     async def list(
         self,

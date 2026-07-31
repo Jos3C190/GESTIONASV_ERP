@@ -202,6 +202,7 @@ async def test_assign_and_revoke_role(e2e_client) -> None:
     uid = await seed_user(username="target", email="target@e.com")
     r = await e2e_client.get("/api/v1/roles", headers=headers)
     role = next((r for r in r.json() if r["name"] == "EMPLEADO"), None)
+    fallback_role = next((r for r in r.json() if r["name"] == "ADMINISTRADOR"), None)
     # Assign
     r = await e2e_client.post(
         "/api/v1/roles/assign",
@@ -210,6 +211,11 @@ async def test_assign_and_revoke_role(e2e_client) -> None:
     )
     assert r.status_code == 200
     assert r.json()["code"] == "role_assigned"
+    await e2e_client.post(
+        "/api/v1/roles/assign",
+        headers=headers,
+        json={"user_id": uid, "role_id": fallback_role["id"]},
+    )
     # Verify assignment
     r = await e2e_client.get(
         f"/api/v1/roles/users/{uid}/roles", headers=headers

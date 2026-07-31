@@ -6,6 +6,7 @@ from decorators) so it survives refactors and can be audited.
 
 Grouped by module for the UI matrix.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -44,8 +45,16 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("permissions:manage", "Modificar matriz permiso-rol", "roles"),
     # --- audit ---
     PermissionSpec("audit_log:read", "Ver bitácora", "audit"),
+    PermissionSpec("logs.view", "Consultar la bitácora", "audit"),
+    PermissionSpec("logs.detail", "Consultar detalle de auditoría", "audit"),
+    PermissionSpec("logs.export", "Exportar registros de auditoría", "audit"),
     # --- auth ---
     PermissionSpec("auth:refresh", "Renovar token (sistema)", "auth"),
+    *tuple(
+        PermissionSpec(f"{resource}.{action}", f"{action} {resource}", resource)
+        for resource in ("companies", "branches", "warehouse_categories", "warehouses", "locations")
+        for action in ("view", "create", "update", "activate", "deactivate")
+    ),
 )
 
 
@@ -87,6 +96,9 @@ BASE_ROLES: tuple[tuple[str, str, bool, tuple[str, ...]], ...] = (
             "roles:read",
             "permissions:read",
             "audit_log:read",
+            "logs.view",
+            "logs.detail",
+            "logs.export",
         ),
     ),
     (

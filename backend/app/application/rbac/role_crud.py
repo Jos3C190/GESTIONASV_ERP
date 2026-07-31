@@ -1,4 +1,5 @@
 """Use cases: role CRUD + permission matrix assignment."""
+
 from __future__ import annotations
 
 import uuid
@@ -54,9 +55,12 @@ class UpdateRoleUseCase:
         if role is None:
             raise NotFoundError("Rol no encontrado.", code="role_not_found")
 
-        if inp.name and inp.name != role.name:
-            if await self._roles.get_by_name(inp.name):
-                raise ConflictError("El nombre de rol ya existe.", code="role_name_taken")
+        if (
+            inp.name
+            and inp.name != role.name
+            and await self._roles.get_by_name(inp.name)
+        ):
+            raise ConflictError("El nombre de rol ya existe.", code="role_name_taken")
 
         updated = Role(
             id=role.id,
@@ -83,6 +87,10 @@ class DeleteRoleUseCase:
         if role.is_system:
             raise BusinessRuleError(
                 "Los roles de sistema no pueden eliminarse.", code="system_role_protected"
+            )
+        if await self._roles.is_assigned(role_id):
+            raise BusinessRuleError(
+                "No puede eliminar un rol asignado a usuarios.", code="role_is_assigned"
             )
         ok = await self._roles.delete(role_id)
         if ok:
@@ -111,9 +119,7 @@ class SetRolePermissionsUseCase:
         all_perms = {p.code: p.id for p in await self._permissions.list_all()}
         for code in inp.permission_codes:
             if code not in all_perms:
-                raise BusinessRuleError(
-                    f"Permiso desconocido: {code}", code="unknown_permission"
-                )
+                raise BusinessRuleError(f"Permiso desconocido: {code}", code="unknown_permission")
             perm_ids.add(all_perms[code])
 
         await self._roles.set_permissions(role.id, perm_ids)
@@ -151,3 +157,78 @@ class ListPermissionsUseCase:
 
     async def execute(self) -> Sequence[Permission]:
         return await self._permissions.list_all()
+
+
+@dataclass(frozen=True, slots=True)
+class CreatePermissionInput:
+    code: str
+    description: str | None = None
+    module: str | None = None
+
+
+class CreatePermissionUseCase:
+    def __init__(self, permissions: PermissionRepository) -> None:
+        self._permissions = permissions
+
+    async def execute(self, inp: CreatePermissionInput) -> Permission:
+        if await self._permissions.get_by_code(inp.code):
+            raise ConflictError(
+                "El identificador del permiso ya existe.",
+                code="permission_code_taken",
+            )
+        permission = Permission(
+            id=uuid.uuid4(),
+            code=inp.code,
+            description=inp.description,
+            module=inp.module,
+        )
+        return await self._permissions.add(permission)
+
+
+@dataclass(frozen=True, slots=True)
+class UpdatePermissionInput:
+    permission_id: uuid.UUID
+    code: str | None = None
+    description: str | None = None
+    module: str | None = None
+
+
+class UpdatePermissionUseCase:
+    def __init__(self, permissions: PermissionRepository) -> None:
+        self._permissions = permissions
+
+    async def execute(self, inp: UpdatePermissionInput) -> Permission:
+        current = await self._permissions.get_by_id(inp.permission_id)
+        if current is None:
+            raise NotFoundError("Permiso no encontrado.", code="permission_not_found")
+        code = inp.code or current.code
+        existing = await self._permissions.get_by_code(code)
+        if existing is not None and existing.id != current.id:
+            raise ConflictError(
+                "El identificador del permiso ya existe.",
+                code="permission_code_taken",
+            )
+        updated = Permission(
+            id=current.id,
+            code=code,
+            description=(inp.description if inp.description is not None else current.description),
+            module=inp.module if inp.module is not None else current.module,
+            created_at=current.created_at,
+        )
+        return await self._permissions.update(updated)
+
+
+class DeletePermissionUseCase:
+    def __init__(self, permissions: PermissionRepository) -> None:
+        self._permissions = permissions
+
+    async def execute(self, permission_id: uuid.UUID) -> bool:
+        permission = await self._permissions.get_by_id(permission_id)
+        if permission is None:
+            raise NotFoundError("Permiso no encontrado.", code="permission_not_found")
+        if await self._permissions.is_assigned(permission_id):
+            raise BusinessRuleError(
+                "No puede eliminar un permiso asignado a roles.",
+                code="permission_is_assigned",
+            )
+        return await self._permissions.delete(permission_id)

@@ -4,6 +4,7 @@ The architectural enforcement of append-only is twofold:
 1. This class deliberately does NOT implement update() or delete() methods.
 2. The API layer does not expose any UPDATE/DELETE endpoint for audit logs.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -11,8 +12,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, func, literal_column, select
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.audit import AuditLog as DomainLog
@@ -58,6 +58,11 @@ class SqlAlchemyAuditRepository:
         self._session.add(orm)
         await self._session.flush()
         return _to_domain(orm)
+
+    async def get_by_id(self, log_id: uuid.UUID) -> DomainLog | None:
+        result = await self._session.execute(select(ORMLog).where(ORMLog.id == log_id))
+        orm = result.scalar_one_or_none()
+        return _to_domain(orm) if orm is not None else None
 
     async def list(
         self,

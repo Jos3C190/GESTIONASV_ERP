@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-
 from app.application.rbac.check_permission import (
     CheckPermissionUseCase,
     GetEffectivePermissionsUseCase,
@@ -29,6 +28,7 @@ from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from app.core.security import hash_password
 from app.domain.entities.rbac import Permission, Role
 from app.domain.entities.user import User
+
 from tests.unit.fakes import InMemoryUserRepository
 from tests.unit.rbac_fakes import (
     InMemoryPermissionRepository,
@@ -44,9 +44,9 @@ def _make_user(*, superuser=False, active=True, uid=None, username="alice", emai
         password_hash=hash_password("Strong!Passw0rd2026"),
         is_active=active,
         is_superuser=superuser,
-        password_changed_at=datetime.now(timezone.utc),
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        password_changed_at=datetime.now(UTC),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -193,7 +193,7 @@ async def test_delete_system_role_forbidden() -> None:
 async def test_set_role_permissions() -> None:
     roles = InMemoryRoleRepository()
     perms = InMemoryPermissionRepository()
-    perm_ids = await _seed_perms(perms, "users:read", "users:create")
+    await _seed_perms(perms, "users:read", "users:create")
     roles.register_perms(list(await perms.list_all()))
     role = await CreateRoleUseCase(roles).execute(CreateRoleInput(name="R"))
     uc = SetRolePermissionsUseCase(roles, perms)
@@ -257,13 +257,33 @@ async def test_revoke_role_success() -> None:
     roles = InMemoryRoleRepository()
     user = await users.add(_make_user())
     role = await CreateRoleUseCase(roles).execute(CreateRoleInput(name="R"))
+    fallback_role = await CreateRoleUseCase(roles).execute(CreateRoleInput(name="FALLBACK"))
     actor = await users.add(_make_user(username="admin", email="a@e.com"))
     await AssignRoleUseCase(users, roles).execute(
         AssignRoleInput(user_id=user.id, role_id=role.id, assigned_by=actor.id)
     )
+    await AssignRoleUseCase(users, roles).execute(
+        AssignRoleInput(user_id=user.id, role_id=fallback_role.id, assigned_by=actor.id)
+    )
     uc = RevokeRoleUseCase(users, roles)
     ok = await uc.execute(RevokeRoleInput(user_id=user.id, role_id=role.id, actor_id=actor.id))
     assert ok is True
+
+
+async def test_revoke_last_role_forbidden() -> None:
+    users = InMemoryUserRepository()
+    roles = InMemoryRoleRepository()
+    user = await users.add(_make_user())
+    actor = await users.add(_make_user(username="admin", email="a@e.com"))
+    role = await CreateRoleUseCase(roles).execute(CreateRoleInput(name="ONLY"))
+    await AssignRoleUseCase(users, roles).execute(
+        AssignRoleInput(user_id=user.id, role_id=role.id, assigned_by=actor.id)
+    )
+    with pytest.raises(BusinessRuleError) as exc:
+        await RevokeRoleUseCase(users, roles).execute(
+            RevokeRoleInput(user_id=user.id, role_id=role.id, actor_id=actor.id)
+        )
+    assert exc.value.code == "user_requires_role"
 
 
 async def test_revoke_superadmin_from_self_forbidden() -> None:

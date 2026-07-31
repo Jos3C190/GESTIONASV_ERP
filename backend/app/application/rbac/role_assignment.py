@@ -80,6 +80,15 @@ class RevokeRoleUseCase:
                 code="self_superadmin_revoke_forbidden",
             )
 
+        assigned_roles = await self._roles.get_roles_for_user(inp.user_id)
+        if any(assigned.id == inp.role_id for assigned in assigned_roles) and len(
+            assigned_roles
+        ) <= 1:
+            raise BusinessRuleError(
+                "El usuario debe conservar al menos un rol.",
+                code="user_requires_role",
+            )
+
         ok = await self._roles.revoke_role_from_user(inp.user_id, inp.role_id)
         log.info(
             "role_revoked",

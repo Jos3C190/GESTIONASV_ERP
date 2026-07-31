@@ -20,7 +20,9 @@ from app.infrastructure.db.session import get_async_session
 async def sec_client():
     """Cliente HTTP asíncrono aislado con mock de base de datos para pruebas de seguridad sin side-effects."""
     app = create_app()
-    mock_session = AsyncMock()
+    mock_session = MagicMock()
+    mock_session.execute = AsyncMock()
+    mock_session.flush = AsyncMock()
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
     mock_session.execute.return_value = mock_result
