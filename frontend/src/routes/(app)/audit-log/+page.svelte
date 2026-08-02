@@ -12,6 +12,9 @@
   import Card from '$lib/components/ui/Card.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import { company } from '$lib/stores/company.svelte';
+  import { branch } from '$lib/stores/branch.svelte';
+  import { queryClient } from '$lib/services/query-client';
 
   let logs = $state<AuditLogOut[]>([]);
   let meta = $state<{ page: number; size: number; total: number; pages: number } | null>(null);
@@ -26,10 +29,15 @@
   let endDate = $state('');
   let page = $state(1);
   let size = $state(20);
+  let logController: AbortController | null = null;
+  let logGeneration = 0;
 
   let modalEntry = $state<AuditLogOut | null>(null);
 
   async function loadLogs() {
+    const generation = ++logGeneration;
+    logController?.abort();
+    logController = new AbortController();
     loading = true;
     error = null;
     if (startDate && endDate && startDate > endDate) {
@@ -46,25 +54,27 @@
         resource_type: resourceFilter || undefined,
         user_id: userFilter || undefined,
         start_date: startDate ? new Date(`${startDate}T00:00:00`).toISOString() : undefined,
-        end_date: endDate ? new Date(`${endDate}T23:59:59`).toISOString() : undefined
+        end_date: endDate ? new Date(`${endDate}T23:59:59`).toISOString() : undefined,
+        signal: logController.signal
       });
+      if (generation !== logGeneration) return;
       logs = result.items;
       meta = result.meta;
     } catch (err) {
+      if (generation !== logGeneration || (err instanceof DOMException && err.name === 'AbortError'))
+        return;
       error = err instanceof HttpError ? err.message : 'Error al cargar bitácora.';
     } finally {
-      loading = false;
+      if (generation === logGeneration) loading = false;
     }
   }
 
   function applyFilters() {
     page = 1;
-    loadLogs();
   }
   function goToPage(p: number) {
     if (p < 1 || (meta && p > meta.pages)) return;
     page = p;
-    loadLogs();
   }
   async function openDetail(entry: AuditLogOut) {
     if (!permissions.hasPermission('logs.detail')) return;
@@ -161,13 +171,20 @@
   });
 
   $effect(() => {
-    loadLogs();
+    void loadLogs();
+    return () => logController?.abort();
   });
 
   onMount(async () => {
     if (!permissions.hasPermission('users:read')) return;
     try {
-      users = (await api.users.list({ page: 1, size: 100 })).items;
+      users = (
+        await queryClient.fetchQuery({
+          queryKey: ['catalogue', 'audit-users', company.id ?? 'none', branch.id ?? 'all'],
+          staleTime: 2 * 60_000,
+          queryFn: ({ signal }) => api.users.list({ page: 1, size: 100, signal })
+        })
+      ).items;
     } catch {
       // El filtro de usuario es complementario; la bitácora sigue disponible.
     }
