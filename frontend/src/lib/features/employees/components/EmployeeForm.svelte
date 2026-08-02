@@ -2,11 +2,15 @@
   /** EmployeeForm — formulario reutilizable para crear/editar empleado (Vercel/Geist). */
 
   import { goto } from '$app/navigation';
+  import { untrack } from 'svelte';
   import { api, HttpError, type DepartmentOut } from '$lib/api/client';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import FormField from '$lib/components/ui/FormField.svelte';
+  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
+  import ImageUpload from '$lib/components/ui/ImageUpload.svelte';
+  import { company } from '$lib/stores/company.svelte';
 
   interface Props {
     mode: 'create' | 'edit';
@@ -31,19 +35,20 @@
 
   let { mode, employeeId, initial = {}, departments }: Props = $props();
 
-  let fCode = $state(initial.employee_code ?? '');
-  let fFirst = $state(initial.first_name ?? '');
-  let fLast = $state(initial.last_name ?? '');
-  let fDocId = $state(initial.document_id ?? '');
-  let fBirthDate = $state(initial.birth_date ?? '');
-  let fPhone = $state(initial.phone ?? '');
-  let fAddress = $state(initial.address ?? '');
-  let fDept = $state(initial.department_id ?? '');
-  let fPosition = $state(initial.position ?? '');
-  let fHireDate = $state(initial.hire_date ?? '');
-  let fStatus = $state(initial.status ?? 'activo');
-  let fTerminationDate = $state(initial.termination_date ?? '');
-  let fPhotoUrl = $state(initial.photo_url ?? '');
+  const initialValues = untrack(() => initial);
+  let fCode = $state(initialValues.employee_code ?? '');
+  let fFirst = $state(initialValues.first_name ?? '');
+  let fLast = $state(initialValues.last_name ?? '');
+  let fDocId = $state(initialValues.document_id ?? '');
+  let fBirthDate = $state(initialValues.birth_date ?? '');
+  let fPhone = $state(initialValues.phone ?? '');
+  let fAddress = $state(initialValues.address ?? '');
+  let fDept = $state(initialValues.department_id ?? '');
+  let fPosition = $state(initialValues.position ?? '');
+  let fHireDate = $state(initialValues.hire_date ?? '');
+  let fStatus = $state(initialValues.status ?? 'activo');
+  let fTerminationDate = $state(initialValues.termination_date ?? '');
+  let fPhotoUrl = $state(initialValues.photo_url ?? '');
 
   let formError = $state<string | null>(null);
   let formLoading = $state(false);
@@ -91,10 +96,13 @@
         payload.employee_code = fCode.trim();
         await api.employees.create(payload);
         await goto('/employees');
-      } else if (mode === 'edit' && employeeId) {
-        payload.termination_date = fTerminationDate || undefined;
-        await api.employees.update(employeeId, payload);
-        await goto(`/employees/${employeeId}`);
+        } else if (mode === 'edit' && employeeId) {
+          payload.termination_date = fTerminationDate || undefined;
+          await api.employees.update(employeeId, payload);
+          if (initialValues.photo_url && initialValues.photo_url !== fPhotoUrl) {
+            await api.media.deleteImageByUrl(company.id!, initialValues.photo_url).catch(() => undefined);
+          }
+          await goto(`/employees/${employeeId}`);
       }
     } catch (err) {
       formError = err instanceof HttpError ? err.message : 'Error inesperado.';
@@ -156,17 +164,15 @@
       </div>
     </Card>
 
-    <!-- Sección: Foto URL -->
+    <!-- Sección: fotografía -->
     <Card class="p-6">
-      <h3 class="mb-1 text-sm font-semibold text-foreground">Foto del empleado</h3>
-      <p class="mb-4 text-xs text-foreground-muted">
-        Pega la URL de una imagen (opcional). Se mostrará como avatar circular.
-      </p>
-      <FormField
+      <ImageUpload
         id="e-photo"
-        label="URL de la foto"
+        label="Fotografía del empleado"
+        purpose="employee_avatar"
+        companyId={company.id}
         bind:value={fPhotoUrl}
-        placeholder="https://i.pravatar.cc/300?u=..."
+        alt={`${fFirst} ${fLast}`.trim()}
       />
     </Card>
 
@@ -174,13 +180,18 @@
     <Card class="p-6">
       <h3 class="mb-4 text-sm font-semibold text-foreground">Datos laborales</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField
+        <SmartSelect
           id="e-dept"
           label="Departamento"
           bind:value={fDept}
+          placeholder="Buscar departamento…"
           options={[
             { value: '', label: '— Ninguno —' },
-            ...departments.map((d) => ({ value: d.id, label: d.name }))
+            ...departments.map((d) => ({
+              value: d.id,
+              label: d.name,
+              description: d.description ?? undefined
+            }))
           ]}
         />
         <FormField

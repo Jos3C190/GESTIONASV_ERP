@@ -7,10 +7,8 @@
 export function resolvePhotoUrl(photoUrl: string | null | undefined, seed: string): string {
   if (photoUrl && photoUrl.trim()) return photoUrl;
   // Genera un seed numérico determinístico (0-69) para pravatar.cc
-  let hash = 0;
-  for (const c of seed) hash = (hash * 31 + c.charCodeAt(0)) & 0xffffffff;
-  const n = Math.abs(hash) % 70;
-  return `https://i.pravatar.cc/300?u=${n}`;
+  void seed;
+  return '';
 }
 
 /** Iniciales a partir de nombre + apellido. */

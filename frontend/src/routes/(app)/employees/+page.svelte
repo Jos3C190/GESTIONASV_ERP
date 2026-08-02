@@ -1,13 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import {
-    api,
-    HttpError,
-    type EmployeeOut,
-    type DepartmentOut,
-    type UserOut,
-    type Page
-  } from '$lib/api/client';
+  import { api, HttpError, type EmployeeOut, type DepartmentOut, type Page } from '$lib/api/client';
   import { search as globalSearch } from '$lib/stores/search.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { resolvePhotoUrl, initialsOf } from '$lib/features/employees/avatar';
@@ -17,8 +10,11 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import KebabMenu from '$lib/components/ui/KebabMenu.svelte';
   import type { KebabItem } from '$lib/components/ui/KebabMenu.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
+  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import { company } from '$lib/stores/company.svelte';
+  import { branch } from '$lib/stores/branch.svelte';
+  import { queryClient } from '$lib/services/query-client';
+  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
 
   let employees = $state<EmployeeOut[]>([]);
   let meta = $state<{ page: number; size: number; total: number; pages: number } | null>(null);
@@ -31,6 +27,8 @@
   let deptFilter = $state('');
   let statusFilter = $state('');
   let actionLoading = $state<string | null>(null);
+  let dataController: AbortController | null = null;
+  let dataGeneration = 0;
 
   // KPI stats del sistema completo (independientes de la paginación)
   let kpiTotal = $state(0);
@@ -38,16 +36,11 @@
   let kpiVacations = $state(0);
   let kpiLinked = $state(0);
 
-  // Modal solo para vincular usuario
-  let showLinkModal = $state(false);
-  let linkEmp = $state<EmployeeOut | null>(null);
-  let users = $state<UserOut[]>([]);
-  let fLinkUserId = $state('');
-  let linkError = $state<string | null>(null);
-  let linkLoading = $state(false);
-
   /** Carga la página actual de la tabla. NO toca page — el caller lo establece. */
   async function loadData() {
+    const generation = ++dataGeneration;
+    dataController?.abort();
+    dataController = new AbortController();
     loading = true;
     error = null;
     try {
@@ -57,17 +50,25 @@
           size,
           search: globalSearch.query || undefined,
           department_id: deptFilter || undefined,
-          status: statusFilter || undefined
+          status: statusFilter || undefined,
+          signal: dataController.signal
         }),
-        api.departments.list()
+        queryClient.fetchQuery({
+          queryKey: ['catalogue', 'departments', company.id ?? 'none', branch.id ?? 'all'],
+          staleTime: 5 * 60_000,
+          queryFn: () => api.departments.catalogue()
+        })
       ]);
+      if (generation !== dataGeneration) return;
       employees = empResult.items;
       meta = empResult.meta;
       departments = deptResult;
     } catch (err) {
+      if (generation !== dataGeneration || (err instanceof DOMException && err.name === 'AbortError'))
+        return;
       error = err instanceof HttpError ? err.message : 'Error.';
     } finally {
-      loading = false;
+      if (generation === dataGeneration) loading = false;
     }
   }
 
@@ -104,66 +105,25 @@
     return m[s] ?? 'badge-neutral';
   }
 
-  async function openLink(e: EmployeeOut) {
-    linkEmp = e;
-    showLinkModal = true;
-    linkError = null;
-    fLinkUserId = '';
-    try {
-      const r = await api.users.list({ size: 100 });
-      users = r.items;
-    } catch {
-      users = [];
-    }
-  }
-  function closeLinkModal() {
-    showLinkModal = false;
-    linkEmp = null;
-    linkError = null;
-  }
-
-  async function handleLink() {
-    if (!linkEmp || !fLinkUserId) return;
-    linkLoading = true;
-    linkError = null;
-    try {
-      await api.employees.linkUser(linkEmp.id, fLinkUserId);
-      success = 'Usuario vinculado correctamente.';
-      closeLinkModal();
-      await Promise.all([loadData(), loadKpis()]);
-    } catch (err) {
-      linkError = err instanceof HttpError ? err.message : 'Error.';
-    } finally {
-      linkLoading = false;
-    }
-  }
-
-  async function deleteEmp(e: EmployeeOut) {
-    if (!confirm(`¿Eliminar al empleado "${e.first_name} ${e.last_name}"?`)) return;
-    actionLoading = e.id;
-    try {
-      await api.employees.delete(e.id);
-      success = 'Empleado eliminado correctamente.';
-      await Promise.all([loadData(), loadKpis()]);
-    } catch (err) {
-      error = err instanceof HttpError ? err.message : 'Error.';
-    } finally {
-      actionLoading = null;
-    }
-  }
-
-  async function unlinkEmp(e: EmployeeOut) {
-    if (!confirm('¿Desvincular la cuenta de usuario de este empleado?')) return;
-    actionLoading = e.id;
-    try {
-      await api.employees.unlinkUser(e.id);
-      success = 'Usuario desvinculado correctamente.';
-      await Promise.all([loadData(), loadKpis()]);
-    } catch (err) {
-      error = err instanceof HttpError ? err.message : 'Error.';
-    } finally {
-      actionLoading = null;
-    }
+  function deleteEmp(e: EmployeeOut) {
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar empleado',
+      description:
+        'El empleado dejará de estar disponible en los procesos operativos. Las relaciones históricas se conservarán.',
+      resourceName: `${e.first_name} ${e.last_name}`,
+      confirmLabel: 'Eliminar empleado',
+      execute: async () => {
+        actionLoading = e.id;
+        try {
+          await api.employees.delete(e.id);
+          success = 'Empleado eliminado correctamente.';
+          await Promise.all([loadData(), loadKpis()]);
+        } finally {
+          actionLoading = null;
+        }
+      }
+    });
   }
 
   function menuItems(emp: EmployeeOut): KebabItem[] {
@@ -176,20 +136,12 @@
       }
     ];
     if (permissions.hasPermission('employees:update')) {
-      items.push(
-        {
-          id: 'edit',
-          label: 'Editar',
-          icon: 'edit',
-          onClick: () => goto(`/employees/${emp.id}/edit`)
-        },
-        {
-          id: 'link',
-          label: emp.user_id ? 'Desvincular usuario' : 'Vincular usuario',
-          icon: emp.user_id ? 'unlink' : 'link',
-          onClick: () => (emp.user_id ? unlinkEmp(emp) : openLink(emp))
-        }
-      );
+      items.push({
+        id: 'edit',
+        label: 'Editar',
+        icon: 'edit',
+        onClick: () => goto(`/employees/${emp.id}/edit`)
+      });
     }
     if (permissions.hasPermission('employees:delete')) {
       items.push({
@@ -216,6 +168,7 @@
       loadData();
       loadKpis();
     });
+    return () => dataController?.abort();
   });
 
   // --- KPI derivados de los datos globales (independientes de la página) ---
@@ -234,22 +187,28 @@
       {meta ? `${meta.total} empleado(s)` : 'Cargando...'}
     </p>
     <div class="flex items-center gap-2">
-      <select
+      <SmartSelect
+        id="employee-department-filter"
+        ariaLabel="Filtrar por departamento"
+        compact
         bind:value={deptFilter}
-        onchange={() => {
+        onselect={() => {
           page = 1;
-          loadData();
         }}
-        class="h-8 rounded-md border border-border bg-surface-muted px-2.5 text-[13px] text-foreground focus:border-primary focus:shadow-glow focus:outline-none"
-      >
-        <option value="">Todos los deptos</option>
-        {#each departments as d (d.id)}<option value={d.id}>{d.name}</option>{/each}
-      </select>
+        placeholder="Buscar departamento…"
+        options={[
+          { value: '', label: 'Todos los departamentos' },
+          ...departments.map((department) => ({
+            value: department.id,
+            label: department.name,
+            description: department.description ?? undefined
+          }))
+        ]}
+      />
       <select
         bind:value={statusFilter}
         onchange={() => {
           page = 1;
-          loadData();
         }}
         class="h-8 rounded-md border border-border bg-surface-muted px-2.5 text-[13px] text-foreground focus:border-primary focus:shadow-glow focus:outline-none"
       >
@@ -532,39 +491,3 @@
       </div>
     </div>{/if}
 </div>
-
-<Modal open={showLinkModal} title="Vincular usuario" onclose={closeLinkModal}>
-  <form
-    onsubmit={(e) => {
-      e.preventDefault();
-      handleLink();
-    }}
-    class="space-y-4"
-  >
-    {#if linkError}<div
-        class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-2 text-sm text-danger"
-      >
-        {linkError}
-      </div>{/if}
-    <p class="text-sm text-foreground-muted">
-      Selecciona el usuario a vincular con <strong
-        >{linkEmp?.first_name} {linkEmp?.last_name}</strong
-      >
-    </p>
-    <FormField
-      id="e-link-user"
-      label="Usuario"
-      bind:value={fLinkUserId}
-      options={[
-        { value: '', label: '— Seleccionar —' },
-        ...users.map((u) => ({ value: u.id, label: `${u.username} (${u.email})` }))
-      ]}
-    />
-    <div class="flex justify-end gap-2 pt-2">
-      <Button variant="secondary" onclick={closeLinkModal}>Cancelar</Button><Button
-        type="submit"
-        disabled={linkLoading || !fLinkUserId}>{linkLoading ? 'Vinculando...' : 'Vincular'}</Button
-      >
-    </div>
-  </form>
-</Modal>

@@ -10,7 +10,7 @@
     loading = true;
     error = null;
     try {
-      departments = await api.departments.list();
+      departments = await api.departments.catalogue();
     } catch (err) {
       error = err instanceof HttpError ? err.message : 'Error al cargar departamentos.';
     } finally {

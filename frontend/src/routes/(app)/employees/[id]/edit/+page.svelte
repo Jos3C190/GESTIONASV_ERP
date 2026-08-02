@@ -17,7 +17,7 @@
     try {
       const [empResult, deptResult] = await Promise.all([
         api.employees.get(empId),
-        api.departments.list()
+        api.departments.catalogue()
       ]);
       emp = empResult;
       departments = deptResult;
