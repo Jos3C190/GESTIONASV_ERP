@@ -186,8 +186,9 @@ export const NAV_GROUPS: NavGroup[] = [
         implemented: false,
         module: 'Inventario'
       },
-      { label: 'Almacenes', icon: ICONS.warehouses, route: '/warehouses', implemented: true },
-      { label: 'Sucursales', icon: ICONS.branches, route: '/branches', implemented: true },
+      { label: 'Almacenes', icon: ICONS.warehouses, route: '/warehouses', implemented: true, requiredPermission: 'warehouses.view' },
+      { label: 'Categorías de almacén', icon: ICONS.inventory, route: '/warehouse-categories', implemented: true, requiredPermission: 'warehouse_categories.view' },
+      { label: 'Sucursales', icon: ICONS.branches, route: '/branches', implemented: true, requiredPermission: 'branches.view' },
       {
         label: 'Traslados',
         icon: ICONS.transfers,

@@ -10,6 +10,9 @@ export const load: LayoutLoad = async () => {
     if (!token) {
       throw redirect(307, '/login');
     }
+    if (!sessionStorage.getItem('erp_active_company')) {
+      throw redirect(307, '/companies');
+    }
   }
   return {};
 };

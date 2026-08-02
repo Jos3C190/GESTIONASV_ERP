@@ -3,6 +3,10 @@
   import { NAV_GROUPS, type NavItem } from '$lib/navigation';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { session } from '$lib/stores/session.svelte';
+  import { company } from '$lib/stores/company.svelte';
+  import { branch } from '$lib/stores/branch.svelte';
+  import { api } from '$lib/api/client';
+  import { clearPrivateQueryCache } from '$lib/services/query-client';
 
   interface Props {
     collapsed?: boolean;
@@ -10,30 +14,9 @@
   }
 
   let { collapsed = false, onNavigate }: Props = $props();
+  let switchingBranch = $state(false);
+  let branchError = $state<string | null>(null);
 
-  // MOCKUP: sucursales — reemplazar por llamada a la API cuando exista el módulo
-  const sucursales = [
-    { id: 'all', name: 'Todas' },
-    { id: 'central', name: 'Matriz Central' },
-    { id: 'norte', name: 'Sucursal Norte' },
-    { id: 'sur', name: 'Sucursal Sur' },
-    { id: 'occidente', name: 'Sucursal Occidente' },
-  ];
-  let sucursalSel = $state('all');
-  let sucursalOpen = $state(false);
-  let sucursalWrap: HTMLElement | null = $state(null);
-
-  // Cerrar el dropdown al hacer clic fuera
-  $effect(() => {
-    if (!sucursalOpen) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (sucursalWrap && !sucursalWrap.contains(e.target as Node)) {
-        sucursalOpen = false;
-      }
-    }
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  });
 
   function isVisible(item: NavItem): boolean {
     if (!item.requiredPermission) return true;
@@ -47,6 +30,23 @@
   function handleClick() {
     onNavigate?.();
   }
+
+  async function changeBranch(event: Event) {
+    const value = (event.currentTarget as HTMLSelectElement).value;
+    const branchId = value === '__all__' ? null : value;
+    if (!company.id) return;
+    switchingBranch = true;
+    branchError = null;
+    try {
+      await api.operationalContext.select(company.id, branchId);
+      await clearPrivateQueryCache();
+      branch.select(branchId);
+    } catch (error) {
+      branchError = error instanceof Error ? error.message : 'No se pudo cambiar la sucursal.';
+    } finally {
+      switchingBranch = false;
+    }
+  }
 </script>
 
 <aside
@@ -54,58 +54,33 @@
   role="navigation"
   aria-label="Navegación principal"
 >
-  <!-- Brand + sucursal selector -->
-  <div class="relative flex h-14 flex-none items-center border-b border-border px-3" bind:this={sucursalWrap}>
+  <!-- Sucursal operativa: la empresa se cambia desde la barra superior. -->
+  <div class="relative flex min-h-14 flex-none items-center border-b border-border px-3 py-2">
     {#if collapsed}
-      <div class="flex h-7 w-7 flex-none items-center justify-center rounded-md bg-foreground text-surface font-bold text-xs mx-auto">
-        E
+      <div class="mx-auto flex h-7 w-7 flex-none items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary" title={branch.label}>
+        {branch.active?.name.slice(0, 1).toUpperCase() ?? 'T'}
       </div>
     {:else}
-      <button
-        type="button"
-        onclick={() => (sucursalOpen = !sucursalOpen)}
-        class="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-surface-hover/80 text-left group focus-visible:shadow-glow"
-        aria-label="Cambiar sucursal"
-        aria-expanded={sucursalOpen}
-      >
-        <div class="flex items-center gap-2.5 min-w-0 flex-1">
-          <div class="flex h-7 w-7 flex-none items-center justify-center rounded-md bg-foreground text-surface font-bold text-xs shadow-sm">
-            E
-          </div>
-          <div class="flex flex-col min-w-0 flex-1">
-            <span class="truncate text-xs font-semibold leading-tight text-foreground">ERP System</span>
-            <span class="truncate text-[11px] font-medium leading-tight text-foreground-muted flex items-center gap-1 mt-0.5">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="flex-none text-primary">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
-              </svg>
-              <span class="truncate">{sucursales.find(s => s.id === sucursalSel)?.name ?? '—'}</span>
-            </span>
-          </div>
-        </div>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="flex-none text-foreground-muted transition-transform duration-150 {sucursalOpen ? 'rotate-180' : ''}">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-
-      {#if sucursalOpen}
-        <div class="absolute left-3 right-3 top-full z-50 mt-1 animate-fade-scale rounded-lg border border-border bg-surface-elevated shadow-lifted overflow-hidden">
-          <div class="px-3 py-1.5 bg-surface-muted/50 border-b border-border">
-            <p class="text-[10px] font-medium uppercase tracking-wider text-foreground-muted">Sucursales</p>
-          </div>
-          <div class="py-1 max-h-48 overflow-y-auto">
-            {#each sucursales as s (s.id)}
-              <button
-                type="button"
-                onclick={() => { sucursalSel = s.id; sucursalOpen = false; }}
-                class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-surface-hover {sucursalSel === s.id ? 'text-primary font-medium bg-primary/5' : 'text-foreground'}"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="flex-none {sucursalSel === s.id ? 'opacity-100' : 'opacity-0'}"><polyline points="20 6 9 17 4 12" /></svg>
-                <span class="flex-1 truncate">{s.name}</span>
-              </button>
+      <div class="w-full min-w-0">
+        <label for="operational-branch" class="mb-1 block truncate text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">Sucursal operativa</label>
+        <div class="relative">
+          <svg class="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-primary" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/></svg>
+          <select
+            id="operational-branch"
+            value={branch.id ?? '__all__'}
+            onchange={changeBranch}
+            disabled={switchingBranch || !branch.ready}
+            class="h-8 w-full appearance-none truncate rounded-md border border-border bg-surface-muted pl-7 pr-7 text-xs font-semibold text-foreground outline-none transition-colors hover:bg-surface-hover focus:border-primary focus:shadow-glow disabled:opacity-60"
+          >
+            {#if branch.accessAllBranches}<option value="__all__">Todas las sucursales</option>{/if}
+            {#each branch.branches as item (item.id)}
+              <option value={item.id}>{item.name}</option>
             {/each}
-          </div>
+          </select>
+          <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-foreground-muted" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </div>
-      {/if}
+        {#if branchError}<p class="mt-1 truncate text-[10px] text-danger" title={branchError}>{branchError}</p>{/if}
+      </div>
     {/if}
   </div>
 

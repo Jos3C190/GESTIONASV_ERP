@@ -2,6 +2,7 @@
   import '../app.css';
   import type { Snippet } from 'svelte';
   import type { LayoutData } from './$types';
+  import ConfirmActionDialog from '$lib/components/ui/ConfirmActionDialog.svelte';
 
   interface Props {
     children: Snippet;
@@ -17,3 +18,4 @@
 </svelte:head>
 
 {@render children()}
+<ConfirmActionDialog />

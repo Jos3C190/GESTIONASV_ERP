@@ -25,23 +25,26 @@
       onclose?.();
     }
   }
+
+  function handleBackdropClick(e: MouseEvent) {
+    if (e.target === e.currentTarget) onclose?.();
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 {#if open}
   <div
-    class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-16"
+    class="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto p-4 pt-16"
     style="background: rgb(2 6 23 / 0.6); backdrop-filter: blur(8px);"
     role="presentation"
-    onclick={() => onclose?.()}
+    onclick={handleBackdropClick}
   >
     <div
       class="w-full {sizes[size]} animate-fade-scale rounded-3xl border border-border bg-surface-elevated shadow-floating"
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      onclick={(e) => e.stopPropagation()}
       tabindex="-1"
     >
       <div class="flex items-center justify-between border-b border-border px-6 py-4">

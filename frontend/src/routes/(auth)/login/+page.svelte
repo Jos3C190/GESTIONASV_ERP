@@ -40,7 +40,7 @@
       session.setUser(me);
       const perms = await api.auth.myPermissions();
       permissions.set(perms.permissions, perms.is_superuser);
-      await goto('/dashboard');
+      await goto('/companies');
     } catch (err) {
       errors.form = err instanceof HttpError ? err.message : 'Error inesperado. Intente nuevamente.';
       session.clear();

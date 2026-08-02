@@ -88,6 +88,8 @@ function createSessionStore() {
       user = null;
       loading = false;
       persist();
+      if (browser) sessionStorage.removeItem('erp_active_company');
+      if (browser) sessionStorage.removeItem('erp_operational_branch');
     },
     setLoading(v: boolean) {
       loading = v;

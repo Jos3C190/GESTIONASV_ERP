@@ -5,7 +5,7 @@ export const load = () => {
   if (browser) {
     const token = sessionStorage.getItem('erp_access_token');
     if (token) {
-      throw redirect(307, '/dashboard');
+      throw redirect(307, '/companies');
     }
     throw redirect(307, '/login');
   }
