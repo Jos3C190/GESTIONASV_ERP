@@ -62,6 +62,12 @@ La semilla oficial crea una sola empresa: **Grupo Lorena**, con sucursales,
 departamentos, empleados, usuarios operativos, categorías, almacenes y
 ubicaciones. Es segura para reejecutarse y no duplica registros.
 
+También registra el logo de la empresa y las galerías de sus siete sucursales
+mediante un manifiesto versionado de 36 activos públicos de Cloudinary. La
+semilla no contiene credenciales ni binarios: para visualizar las imágenes se
+requiere conexión a Internet; las credenciales solo son necesarias para cargar
+o eliminar medios desde la aplicación.
+
 ### URLs
 
 | Servicio           | URL |

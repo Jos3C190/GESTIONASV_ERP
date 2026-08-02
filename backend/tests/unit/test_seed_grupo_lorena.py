@@ -1,4 +1,11 @@
 from seed import seed_data
+from seed.grupo_lorena_media import (
+    BRANCH_MEDIA,
+    COMPANY_ID,
+    COMPANY_LOGO,
+    all_media,
+    validate_media_manifest,
+)
 from seed.seed_grupo_lorena import BRANCHES, EMPLOYEES, main, validate_seed_data
 
 
@@ -23,3 +30,28 @@ def test_grupo_lorena_accounts_use_reserved_email_domain() -> None:
     usernames = [str(employee["username"]) for employee in EMPLOYEES if "username" in employee]
     assert usernames
     assert all(" " not in username and not username[-1].isdigit() for username in usernames)
+
+
+def test_grupo_lorena_media_manifest_covers_every_branch() -> None:
+    branch_codes = {branch.code for branch in BRANCHES}
+    validate_media_manifest(branch_codes)
+    assert set(BRANCH_MEDIA) == branch_codes
+    assert sum(len(assets) for assets in BRANCH_MEDIA.values()) == 35
+    assert len(all_media()) == 36
+
+
+def test_grupo_lorena_media_uses_deterministic_company_scope() -> None:
+    expected_scope = f"erp-mini/development/companies/{COMPANY_ID}/"
+    assert COMPANY_LOGO.public_id.startswith(expected_scope)
+    assert all(asset.public_id.startswith(expected_scope) for asset in all_media())
+    assert all(asset.secure_url.startswith("https://res.cloudinary.com/") for asset in all_media())
+
+
+def test_grupo_lorena_gallery_payload_matches_media_registry() -> None:
+    for assets in BRANCH_MEDIA.values():
+        for asset in assets:
+            assert asset.gallery_item() == {
+                "url": asset.secure_url,
+                "caption": "",
+                "public_id": asset.public_id,
+            }

@@ -16,9 +16,18 @@ import sys
 from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from seed.grupo_lorena_media import (
+    BRANCH_MEDIA,
+    COMPANY_ID,
+    COMPANY_LOGO,
+    MediaSeed,
+    validate_media_manifest,
+)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -527,6 +536,7 @@ def validate_seed_data() -> None:
     }
     if unknown_permissions:
         raise ValueError(f"Permisos empresariales desconocidos: {sorted(unknown_permissions)}")
+    validate_media_manifest(set(branch_codes))
 
 
 def _session_factory() -> async_sessionmaker[AsyncSession]:
@@ -534,6 +544,69 @@ def _session_factory() -> async_sessionmaker[AsyncSession]:
 
     engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True, future=True)
     return async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
+
+
+async def _upsert_media_asset(
+    session: AsyncSession,
+    *,
+    media: MediaSeed,
+    company_id: UUID,
+    owner_type: str,
+    owner_id: UUID,
+    uploaded_by: UUID,
+) -> None:
+    from app.infrastructure.models.media import MediaAsset
+
+    asset = await session.scalar(
+        select(MediaAsset).where(
+            MediaAsset.provider == "cloudinary",
+            MediaAsset.public_id == media.public_id,
+        )
+    )
+    if asset is None:
+        asset = MediaAsset(provider="cloudinary", public_id=media.public_id)
+        session.add(asset)
+    asset.company_id = company_id
+    asset.purpose = media.purpose
+    asset.secure_url = media.secure_url
+    asset.format = media.format
+    asset.bytes = media.bytes
+    asset.width = media.width
+    asset.height = media.height
+    asset.status = "active"
+    asset.owner_type = owner_type
+    asset.owner_id = owner_id
+    asset.uploaded_by = uploaded_by
+
+
+async def _seed_media(
+    session: AsyncSession,
+    *,
+    company: Company,
+    branches: dict[str, Branch],
+    uploaded_by: UUID,
+) -> None:
+    company.logo = COMPANY_LOGO.secure_url
+    await _upsert_media_asset(
+        session,
+        media=COMPANY_LOGO,
+        company_id=company.id,
+        owner_type="company",
+        owner_id=company.id,
+        uploaded_by=uploaded_by,
+    )
+    for branch_code, media_assets in BRANCH_MEDIA.items():
+        branch = branches[branch_code]
+        branch.images = [media.gallery_item() for media in media_assets]
+        for media in media_assets:
+            await _upsert_media_asset(
+                session,
+                media=media,
+                company_id=company.id,
+                owner_type="branch",
+                owner_id=branch.id,
+                uploaded_by=uploaded_by,
+            )
 
 
 async def _seed_rbac(session: AsyncSession) -> dict[str, Role]:
@@ -757,8 +830,13 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
         ).scalar_one_or_none()
         company_created = company is None
         if company is None:
-            company = Company(nit=COMPANY_NIT)
+            company = Company(id=COMPANY_ID, nit=COMPANY_NIT)
             session.add(company)
+        elif company.id != COMPANY_ID:
+            raise RuntimeError(
+                "La empresa Grupo Lorena existente usa un identificador incompatible con sus "
+                "activos multimedia. Ejecute el reinicio de la base de desarrollo."
+            )
         company.name = "Grupo Lorena, S.A. de C.V."
         company.commercial_name = "Grupo Lorena"
         company.nrc = "Pendiente de verificación"
@@ -884,6 +962,13 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                         metadata_={"source": "seed_grupo_lorena", "location": "public_listing"},
                     )
                 )
+
+        await _seed_media(
+            session,
+            company=company,
+            branches=branches,
+            uploaded_by=superadmin_id,
+        )
 
         await _attach_superadmin_to_company(
             session,

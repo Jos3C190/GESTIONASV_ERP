@@ -151,15 +151,15 @@
       const marker = L.marker([branch.lat, branch.lng], { icon: customIcon }).addTo(mapInstance);
 
       const infoContent = `
-        <div style="font-family: system-ui, -apple-system, sans-serif; color: var(--text-foreground, #111827); width: 240px; border-radius: 8px; overflow: hidden; margin: -1px;">
-          <div style="position: relative; width: 100%; height: 110px; background: #e5e7eb; overflow: hidden;">
+        <div style="font-family: Geist, ui-sans-serif, system-ui, -apple-system, sans-serif; color: var(--text-foreground, #111827); width: 248px; overflow: hidden;">
+          <div style="position: relative; width: 100%; height: 112px; background: #e5e7eb; overflow: hidden;">
             <img src="${escapeHtml(coverUrl(branch))}" alt="Sucursal" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy" />
-            <div style="position: absolute; bottom: 6px; left: 8px; background: ${statusColor}; color: #fff; font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase;">${statusLabel}</div>
+            <div style="position: absolute; bottom: 8px; left: 10px; background: ${statusColor}; color: #fff; font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; box-shadow: 0 1px 2px rgb(0 0 0 / 18%);">${statusLabel}</div>
           </div>
-          <div style="padding: 8px 10px 6px;">
-            <h4 style="margin: 0 0 1px 0; font-size: 13px; font-weight: 700; color: var(--text-foreground, #111827); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${branch.name}</h4>
-            <p style="margin: 0 0 7px 0; font-size: 10.5px; color: var(--text-foreground-muted, #6b7280);">${branch.code} &middot; ${branch.city}</p>
-            <div style="border-top: 1px solid var(--border, #e5e7eb); padding-top: 6px; display: flex; flex-direction: column; gap: 2px;">
+          <div style="padding: 10px 12px 11px;">
+            <h4 style="margin: 0 0 2px 0; font-size: 13px; font-weight: 700; color: var(--text-foreground, #111827); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${branch.name}</h4>
+            <p style="margin: 0 0 8px 0; font-size: 10.5px; color: var(--text-foreground-muted, #6b7280);">${branch.code} &middot; ${branch.city}</p>
+            <div style="border-top: 1px solid var(--border, #e5e7eb); padding-top: 7px; display: flex; flex-direction: column; gap: 2px;">
               <p style="margin: 0; font-size: 11px;"><strong>Gerente:</strong> ${branch.manager}</p>
               <p style="margin: 0; font-size: 11px;"><strong>Tel&eacute;fono:</strong> ${escapeHtml(branch.phone || 'Sin teléfono')}</p>
               <div style="display: flex; gap: 12px; font-size: 10.5px; color: var(--text-foreground-muted, #6b7280); margin-top: 4px;">
@@ -253,15 +253,15 @@
             : 'Inactiva';
 
       const infoContent = `
-        <div style="font-family: system-ui, sans-serif; color: #111; width: 240px; border-radius: 8px; overflow: hidden; margin: -1px;">
-          <div style="position: relative; width: 100%; height: 110px; background: #e5e7eb; overflow: hidden;">
+        <div style="font-family: Geist, ui-sans-serif, system-ui, -apple-system, sans-serif; color: #111; width: 248px; overflow: hidden;">
+          <div style="position: relative; width: 100%; height: 112px; background: #e5e7eb; overflow: hidden;">
             <img src="${escapeHtml(coverUrl(branch))}" alt="Sucursal" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy" />
-            <div style="position: absolute; bottom: 6px; left: 8px; background: ${statusColorG}; color: #fff; font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase;">${statusLabelG}</div>
+            <div style="position: absolute; bottom: 8px; left: 10px; background: ${statusColorG}; color: #fff; font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; box-shadow: 0 1px 2px rgb(0 0 0 / 18%);">${statusLabelG}</div>
           </div>
-          <div style="padding: 8px 10px 6px;">
-            <h4 style="margin: 0 0 1px 0; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${branch.name}</h4>
-            <p style="margin: 0 0 7px 0; font-size: 10.5px; color: #6b7280;">${branch.code} &middot; ${branch.city}</p>
-            <div style="border-top: 1px solid #e5e7eb; padding-top: 6px; display: flex; flex-direction: column; gap: 2px;">
+          <div style="padding: 10px 12px 11px;">
+            <h4 style="margin: 0 0 2px 0; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${branch.name}</h4>
+            <p style="margin: 0 0 8px 0; font-size: 10.5px; color: #6b7280;">${branch.code} &middot; ${branch.city}</p>
+            <div style="border-top: 1px solid #e5e7eb; padding-top: 7px; display: flex; flex-direction: column; gap: 2px;">
               <p style="margin: 0; font-size: 11px;"><strong>Encargado:</strong> ${branch.manager}</p>
               <p style="margin: 0; font-size: 11px;"><strong>Tel&eacute;fono:</strong> ${escapeHtml(branch.phone || 'Sin teléfono')}</p>
               <div style="display: flex; gap: 12px; font-size: 10.5px; color: #6b7280; margin-top: 4px;">
@@ -383,15 +383,21 @@
     }
   }
 
-  :global(.leaflet-popup-content-wrapper) {
+  :global(.custom-leaflet-popup-light .leaflet-popup-content-wrapper) {
     background: var(--bg-surface-elevated, #ffffff) !important;
-    border: 1px solid var(--border, #e5e7eb) !important;
-    border-radius: 12px !important;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2) !important;
+    padding: 0 !important;
+    overflow: hidden;
+    border: 0 !important;
+    border-radius: 14px !important;
+    box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.28) !important;
   }
-  :global(.leaflet-popup-tip) {
+  :global(.custom-leaflet-popup-light .leaflet-popup-content) {
+    width: 248px !important;
+    margin: 0 !important;
+  }
+  :global(.custom-leaflet-popup-light .leaflet-popup-tip) {
     background: var(--bg-surface-elevated, #ffffff) !important;
-    border: 1px solid var(--border, #e5e7eb) !important;
+    box-shadow: 3px 3px 8px rgb(0 0 0 / 12%);
   }
   :global(.custom-branch-pin) {
     background: transparent !important;
