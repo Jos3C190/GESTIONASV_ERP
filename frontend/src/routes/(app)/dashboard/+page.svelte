@@ -1,13 +1,8 @@
 <script lang="ts">
   import { session } from '$lib/stores/session.svelte';
-  import {
-    KPIS,
-    SERIES_7D, SERIES_30D, SERIES_90D,
-    DEPT_DISTRIBUTION,
-    SUMMARY_ROWS,
-    TEAM,
-    ONBOARDING_PROGRESS,
-  } from '$lib/features/dashboard/mock-data';
+  import { branch } from '$lib/stores/branch.svelte';
+  import { api, type DashboardSummary } from '$lib/api/client';
+  import { onMount } from 'svelte';
   import KpiCard from '$lib/features/dashboard/components/KpiCard.svelte';
   import AreaChart from '$lib/features/dashboard/components/AreaChart.svelte';
   import DonutChart from '$lib/features/dashboard/components/DonutChart.svelte';
@@ -16,24 +11,62 @@
   import ProgressRing from '$lib/features/dashboard/components/ProgressRing.svelte';
   import AvatarGroup from '$lib/components/ui/AvatarGroup.svelte';
   import Callout from '$lib/components/ui/Callout.svelte';
+  import { company } from '$lib/stores/company.svelte';
+  import { queryClient } from '$lib/services/query-client';
 
   // MOCK_DATA = true — KPIs, serie temporal, distribución y tabla son simulados.
   // ActivityFeed es el único componente que consume datos reales (bitácora).
-  const MOCK_DATA = true;
-
   let loading = $state(true);
+  let summary = $state<DashboardSummary | null>(null);
+  let summaryError = $state<string | null>(null);
   let range = $state<'7D' | '30D' | '90D'>('30D');
 
   let series = $derived.by(() => {
-    if (range === '7D') return SERIES_7D;
-    if (range === '90D') return SERIES_90D;
-    return SERIES_30D;
+    const days = range === '7D' ? 7 : range === '90D' ? 90 : 30;
+    return (summary?.activity_series ?? []).slice(-days);
   });
 
-  // Simular delay de carga para visualizar skeletons
-  $effect(() => {
-    const t = setTimeout(() => { loading = false; }, 400);
-    return () => clearTimeout(t);
+  let team = $derived(summary?.team ?? []);
+  let recentUsers = $derived(
+    (summary?.recent_users ?? []).map((user) => ({
+      name: user.name,
+      initials: user.initials,
+      dept: user.department,
+      status: user.status,
+      createdAt: new Date(user.created_at).toLocaleDateString('es-SV', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      })
+    }))
+  );
+
+  let kpis = $derived([
+    { label: 'Usuarios activos', value: summary?.active_users ?? 0, change: 0, sparkline: [summary?.active_users ?? 0, summary?.active_users ?? 0], icon: 'M17 20h5v-2a4 4 0 0 0-3-3.87M9 20H4v-2a4 4 0 0 1 3-3.87m6-2a4 4 0 1 0-8 0 4 4 0 0 0 8 0z' },
+    { label: 'Empleados', value: summary?.employees ?? 0, change: 0, sparkline: [summary?.employees ?? 0, summary?.employees ?? 0], icon: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z' },
+    { label: 'Almacenes activos', value: summary?.warehouses ?? 0, change: 0, sparkline: [summary?.warehouses ?? 0, summary?.warehouses ?? 0], icon: 'M3 21h18M5 21V8l7-5 7 5v13M8 12h8M8 16h8' },
+    { label: 'Eventos hoy', value: summary?.events_today ?? 0, change: 0, sparkline: [summary?.events_today ?? 0, summary?.events_today ?? 0], icon: 'M13 2L3 14h7l-1 8 10-12h-7l1-8z' }
+  ]);
+
+  onMount(() => {
+    const queryKey = ['dashboard', company.id ?? 'none', branch.id ?? 'all'] as const;
+    void queryClient
+      .fetchQuery({
+        queryKey,
+        staleTime: 15_000,
+        queryFn: ({ signal }) => api.dashboard.summary(signal)
+      })
+      .then((data) => (summary = data))
+      .catch((error) => {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          summaryError =
+            error instanceof Error ? error.message : 'No se pudieron cargar las métricas.';
+        }
+      })
+      .finally(() => (loading = false));
+    return () => {
+      void queryClient.cancelQueries({ queryKey, exact: true });
+    };
   });
 </script>
 
@@ -46,15 +79,17 @@
       Hola, {session.user?.username ?? ''} 👋
     </h1>
     <p class="mt-1 text-sm text-foreground-muted">
-      {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+      {new Date().toLocaleDateString('es-SV', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+      · {branch.label}
     </p>
   </div>
 
-  {#if MOCK_DATA}
+  {#if summaryError}
+    <div class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger" role="alert">{summaryError}</div>
+  {:else}
     <Callout variant="info">
-      <span class="text-foreground-muted">Las métricas son simuladas. </span>
-      <span class="font-medium text-foreground">La actividad reciente es real</span>
-      <span class="text-foreground-muted"> (desde la bitácora).</span>
+      <span class="font-medium text-foreground">Contexto: {branch.label}.</span>
+      <span class="text-foreground-muted"> Las métricas operativas y la actividad reciente respetan este alcance.</span>
     </Callout>
   {/if}
 
@@ -65,7 +100,7 @@
         <div class="h-28 rounded-xl border border-border skeleton"></div>
       {/each}
     {:else}
-      {#each KPIS as kpi (kpi.label)}
+      {#each kpis as kpi (kpi.label)}
         <KpiCard {...kpi} />
       {/each}
     {/if}
@@ -104,7 +139,11 @@
           <div class="flex-1 space-y-2">{#each Array(5) as _}<div class="h-3 rounded skeleton"></div>{/each}</div>
         </div>
       {:else}
-        <DonutChart data={DEPT_DISTRIBUTION} size={140} />
+        {#if (summary?.department_distribution.length ?? 0) > 0}
+          <DonutChart data={summary?.department_distribution ?? []} size={140} />
+        {:else}
+          <div class="flex h-[140px] items-center justify-center text-center text-xs text-foreground-muted">Sin empleados con departamento en este contexto.</div>
+        {/if}
       {/if}
     </div>
   </div>
@@ -129,13 +168,17 @@
         {#if loading}
           <div class="mx-auto h-[120px] w-[120px] rounded-full skeleton"></div>
         {:else}
-          <ProgressRing value={ONBOARDING_PROGRESS} label="Completado" size={120} />
+          <ProgressRing value={summary?.onboarding_progress ?? 0} label="Expedientes completos" size={120} />
         {/if}
       </div>
       <div class="rounded-xl border border-border bg-surface-elevated p-5">
         <h2 class="mb-3 text-sm font-semibold text-foreground">Equipo</h2>
-        <AvatarGroup members={TEAM} max={4} size={28} />
-        <p class="mt-2 text-[11px] text-foreground-subtle">{TEAM.length} miembros activos</p>
+        {#if team.length > 0}
+          <AvatarGroup members={team} max={4} size={28} />
+          <p class="mt-2 text-[11px] text-foreground-subtle">{team.length} empleados activos</p>
+        {:else}
+          <p class="text-xs text-foreground-muted">No hay empleados activos en este contexto.</p>
+        {/if}
       </div>
     </div>
   </div>
@@ -149,7 +192,11 @@
     {#if loading}
       <div class="space-y-2">{#each Array(6) as _}<div class="h-10 rounded skeleton"></div>{/each}</div>
     {:else}
-      <SummaryTable rows={SUMMARY_ROWS} />
+      {#if recentUsers.length > 0}
+        <SummaryTable rows={recentUsers} />
+      {:else}
+        <div class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-foreground-muted">No hay usuarios recientes en este contexto.</div>
+      {/if}
     {/if}
   </div>
 </div>

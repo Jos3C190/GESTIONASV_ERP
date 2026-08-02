@@ -9,6 +9,22 @@
 
   let { data, size = 140 }: Props = $props();
 
+  const MAX_VISIBLE_CATEGORIES = 7;
+
+  let compactData = $derived.by(() => {
+    const ordered = [...data].sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, 'es'));
+    if (ordered.length <= MAX_VISIBLE_CATEGORIES) return ordered;
+    const visible = ordered.slice(0, MAX_VISIBLE_CATEGORIES);
+    const remaining = ordered.slice(MAX_VISIBLE_CATEGORIES);
+    return [
+      ...visible,
+      {
+        label: `Otros (${remaining.length})`,
+        value: remaining.reduce((sum, item) => sum + item.value, 0)
+      }
+    ];
+  });
+
   // Paleta categórica propia: derivada del azul de acento, variando luminosidad.
   // Documentada en docs/design-system.md como "paleta categórica de gráficos".
   const CHART_PALETTE = [
@@ -19,7 +35,7 @@
     '148 163 184',  // slate-400 (neutro claro)
   ];
 
-  let colored = $derived(data.map((d, i) => ({ ...d, color: CHART_PALETTE[i % CHART_PALETTE.length] })));
+  let colored = $derived(compactData.map((d, i) => ({ ...d, color: CHART_PALETTE[i % CHART_PALETTE.length] })));
 
   let total = $derived(colored.reduce((s, d) => s + d.value, 0) || 1);
   let stroke = 14;
@@ -46,7 +62,7 @@
   });
 </script>
 
-<div class="flex h-full items-center gap-5">
+<div class="flex min-h-[140px] items-center gap-5">
   <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} class="flex-none" aria-label="Distribución por departamento, {total} empleados en {colored.length} departamentos">
     <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgb(var(--surface-muted))" stroke-width={stroke} />
     {#each segments as seg (seg.label)}
@@ -68,7 +84,7 @@
     <text x={size / 2} y={size / 2 + 14} text-anchor="middle" fill="rgb(var(--foreground-subtle))" style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em;">total</text>
   </svg>
 
-  <div class="flex-1 space-y-2.5">
+  <div class="min-w-0 flex-1 space-y-2">
     {#each segments as seg (seg.label)}
       <div class="flex items-center gap-2.5">
         <span class="h-2.5 w-2.5 flex-none rounded-sm" style="background: rgb({seg.color});"></span>

@@ -15,7 +15,7 @@
   let containerW = $state(600);
   let animated = $state(false);
 
-  const H = height;
+  let H = $derived(height);
   const PAD = { top: 12, right: 12, bottom: 28, left: 40 };
 
   // Medir ancho real del contenedor
@@ -89,7 +89,7 @@
     const indices = n <= 7 ? data.map((_, i) => i) : [0, Math.floor(n / 4), Math.floor(n / 2), Math.floor(n * 3 / 4), n - 1];
     return indices.map(i => ({
       x: x(i),
-      label: new Date(data[i]?.date ?? '').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+      label: new Date(data[i]?.date ?? '').toLocaleDateString('es-SV', { day: '2-digit', month: 'short' }),
     }));
   });
 
@@ -116,24 +116,26 @@
   let pathLength = $derived(linePath ? 2000 : 0);
   $effect(() => {
     if (prefersReduced) { animated = true; return; }
-    const t = requestAnimationFrame(() => {
+    animated = false;
+    let frame = 0;
+    frame = requestAnimationFrame(() => {
       const start = performance.now();
       const dur = 700;
       function tick(now: number) {
         const p = Math.min((now - start) / dur, 1);
         animated = p >= 1;
-        if (p < 1) requestAnimationFrame(tick);
+        if (p < 1) frame = requestAnimationFrame(tick);
       }
-      requestAnimationFrame(tick);
+      frame = requestAnimationFrame(tick);
     });
-    return () => cancelAnimationFrame(t);
+    return () => cancelAnimationFrame(frame);
   });
 
   let strokeDashoffset = $derived(prefersReduced ? 0 : (animated ? 0 : pathLength));
 </script>
 
-<div class="relative w-full" bind:this={containerEl} onmousemove={onMove} onmouseleave={() => hovered = null}>
-  <svg viewBox={`0 0 ${W} ${H}`} class="w-full" style="height: {H}px; display: block;" aria-label="{label}: tendencia de {data.length} días, valores entre {Math.round(yMin ?? 0)} y {Math.round(yMax ?? 0)}">
+<div class="relative w-full" bind:this={containerEl} onmousemove={onMove} onmouseleave={() => hovered = null} role="figure" aria-label="{label}: tendencia de {data.length} días, valores entre {Math.round(yMin ?? 0)} y {Math.round(yMax ?? 0)}">
+  <svg viewBox={`0 0 ${W} ${H}`} class="w-full" style="height: {H}px; display: block;" aria-hidden="true">
     <defs>
       <linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="rgb(var(--primary))" stop-opacity="0.22" />
@@ -172,7 +174,7 @@
 
   {#if hovered !== null}
     <div class="pointer-events-none absolute z-10 rounded-lg border border-border bg-surface-elevated px-3 py-2 shadow-lifted" style="left: {hoverX}px; top: {hoverY}px; transform: translate(-50%, -130%);">
-      <p class="text-[10px] text-foreground-subtle">{new Date(data[hovered]?.date ?? '').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</p>
+      <p class="text-[10px] text-foreground-subtle">{new Date(data[hovered]?.date ?? '').toLocaleDateString('es-SV', { day: 'numeric', month: 'short' })}</p>
       <p class="font-mono text-sm font-bold tabular-nums text-foreground">{data[hovered]?.value.toLocaleString() ?? ''}</p>
     </div>
   {/if}
