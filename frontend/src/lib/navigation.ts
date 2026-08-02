@@ -128,16 +128,16 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Proveedores',
         icon: ICONS.suppliers,
-        route: '/placeholder?module=Proveedores',
-        implemented: false,
-        module: 'Proveedores'
+        route: '/suppliers',
+        implemented: true,
+        requiredPermission: 'suppliers:read'
       },
       {
         label: 'Productos',
         icon: ICONS.products,
-        route: '/placeholder?module=Productos',
-        implemented: false,
-        module: 'Productos'
+        route: '/products',
+        implemented: true,
+        requiredPermission: 'products:read'
       },
       {
         label: 'Cotizaciones de compra',
