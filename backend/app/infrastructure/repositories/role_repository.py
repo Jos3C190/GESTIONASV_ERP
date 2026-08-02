@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime, timezone
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import delete, exists, func, insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.rbac import Permission as DomainPermission
@@ -86,6 +85,71 @@ class SqlAlchemyRoleRepository:
             _role_to_domain(r, tuple(perm_map.get(r.id, [])))
             for r in roles
         ]
+
+    async def list_page(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        search: str | None = None,
+        is_system: bool | None = None,
+        module: str | None = None,
+        load_permissions: bool = False,
+    ) -> tuple[Sequence[DomainRole], int]:
+        conditions = []
+        if search:
+            pattern = f"%{search.strip()}%"
+            permission_match = exists(
+                select(1)
+                .select_from(RolePermission)
+                .join(ORMPermission, ORMPermission.id == RolePermission.permission_id)
+                .where(
+                    RolePermission.role_id == ORMRole.id,
+                    ORMPermission.code.ilike(pattern),
+                )
+            )
+            conditions.append(
+                or_(
+                    ORMRole.name.ilike(pattern),
+                    ORMRole.description.ilike(pattern),
+                    permission_match,
+                )
+            )
+        if is_system is not None:
+            conditions.append(ORMRole.is_system.is_(is_system))
+        if module:
+            conditions.append(
+                exists(
+                    select(1)
+                    .select_from(RolePermission)
+                    .join(ORMPermission, ORMPermission.id == RolePermission.permission_id)
+                    .where(
+                        RolePermission.role_id == ORMRole.id,
+                        ORMPermission.module == module,
+                    )
+                )
+            )
+
+        total_stmt = select(func.count(ORMRole.id)).where(*conditions)
+        total = int((await self._session.execute(total_stmt)).scalar_one())
+        stmt = (
+            select(ORMRole)
+            .where(*conditions)
+            .order_by(ORMRole.name, ORMRole.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        roles = list((await self._session.execute(stmt)).scalars().all())
+        if not load_permissions:
+            return [_role_to_domain(role) for role in roles], total
+        permission_map = await self._batch_load_permissions([role.id for role in roles])
+        return (
+            [
+                _role_to_domain(role, tuple(permission_map.get(role.id, [])))
+                for role in roles
+            ],
+            total,
+        )
 
     async def _batch_load_permissions(
         self, role_ids: list[uuid.UUID]
@@ -179,6 +243,24 @@ class SqlAlchemyRoleRepository:
         )
         result = await self._session.execute(stmt)
         return [_role_to_domain(r) for r in result.scalars().all()]
+
+    async def get_roles_for_users(
+        self, user_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, Sequence[DomainRole]]:
+        """Load roles for a page of users with one query instead of an N+1 loop."""
+        if not user_ids:
+            return {}
+        stmt = (
+            select(UserRole.user_id, ORMRole)
+            .join(ORMRole, ORMRole.id == UserRole.role_id)
+            .where(UserRole.user_id.in_(user_ids))
+            .order_by(UserRole.user_id, ORMRole.name)
+        )
+        result = await self._session.execute(stmt)
+        roles_by_user: dict[uuid.UUID, list[DomainRole]] = {user_id: [] for user_id in user_ids}
+        for user_id, role in result.all():
+            roles_by_user[user_id].append(_role_to_domain(role))
+        return roles_by_user
 
     async def assign_role_to_user(
         self, user_id: uuid.UUID, role_id: uuid.UUID, assigned_by: uuid.UUID

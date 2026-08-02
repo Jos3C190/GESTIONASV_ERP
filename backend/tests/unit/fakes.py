@@ -1,4 +1,5 @@
 """In-memory fakes for ports, used by unit tests (no DB)."""
+
 from __future__ import annotations
 
 import hashlib
@@ -6,13 +7,13 @@ import hmac
 import secrets
 import uuid
 from collections.abc import Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
+import jwt
 from app.core.config import settings
 from app.domain.entities.auth import RefreshToken
 from app.domain.entities.user import User
 from app.domain.ports.token_service import AccessTokenPayload
-import jwt
 
 
 class InMemoryUserRepository:
@@ -44,26 +45,42 @@ class InMemoryUserRepository:
         return None
 
     async def list_active(
-        self, *, offset: int = 0, limit: int = 20, search: str | None = None
+        self,
+        *,
+        offset: int = 0,
+        limit: int = 20,
+        search: str | None = None,
+        status_filter: str | None = None,
+        company_id: uuid.UUID | None = None,
+        branch_id: uuid.UUID | None = None,
     ) -> tuple[Sequence[User], int]:
         items = [u for u in self._by_id.values() if not u.is_deleted]
         if search:
             s = search.lower()
             items = [u for u in items if s in u.username.lower() or s in u.email.lower()]
+        now = datetime.now(UTC)
+        if status_filter == "active":
+            items = [
+                u
+                for u in items
+                if u.is_active and (u.locked_until is None or u.locked_until <= now)
+            ]
+        elif status_filter == "inactive":
+            items = [u for u in items if not u.is_active]
+        elif status_filter == "superuser":
+            items = [u for u in items if u.is_superuser]
         total = len(items)
         return items[offset : offset + limit], total
 
     async def count_active_superadmins(self) -> int:
         return sum(
-            1
-            for u in self._by_id.values()
-            if u.is_superuser and u.is_active and not u.is_deleted
+            1 for u in self._by_id.values() if u.is_superuser and u.is_active and not u.is_deleted
         )
 
     async def add(self, user: User) -> User:
         # Use a fresh server-generated id
         new_id = uuid.uuid4()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         created = User(
             id=new_id,
             username=user.username,
@@ -107,7 +124,7 @@ class InMemoryUserRepository:
             password_changed_at=u.password_changed_at,
             created_at=u.created_at,
             updated_at=u.updated_at,
-            deleted_at=datetime.now(timezone.utc),
+            deleted_at=datetime.now(UTC),
         )
         return True
 
@@ -117,7 +134,7 @@ class InMemoryRefreshTokenRepository:
         self._by_id: dict[uuid.UUID, RefreshToken] = {}
 
     async def add(self, token: RefreshToken) -> RefreshToken:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stored = RefreshToken(
             id=token.id,
             user_id=token.user_id,
@@ -149,7 +166,7 @@ class InMemoryRefreshTokenRepository:
             user_agent=t.user_agent,
             ip_address=t.ip_address,
             expires_at=t.expires_at,
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
             rotated_from=t.rotated_from,
             created_at=t.created_at,
         )
@@ -164,9 +181,7 @@ class InMemoryRefreshTokenRepository:
         return count
 
     async def list_active_for_user(self, user_id: uuid.UUID) -> Sequence[RefreshToken]:
-        return [
-            t for t in self._by_id.values() if t.user_id == user_id and t.revoked_at is None
-        ]
+        return [t for t in self._by_id.values() if t.user_id == user_id and t.revoked_at is None]
 
 
 class FakeTokenService:
@@ -184,7 +199,7 @@ class FakeTokenService:
         self._refresh_ttl = timedelta(days=refresh_ttl_days)
 
     def issue_access_token(self, *, user_id: uuid.UUID, username: str, is_superuser: bool) -> str:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload = {
             "sub": str(user_id),
             "username": username,
@@ -202,8 +217,8 @@ class FakeTokenService:
             sub=uuid.UUID(str(payload["sub"])),
             username=str(payload["username"]),
             is_superuser=bool(payload["is_superuser"]),
-            exp=datetime.fromtimestamp(int(payload["exp"]), tz=timezone.utc),
-            iat=datetime.fromtimestamp(int(payload["iat"]), tz=timezone.utc),
+            exp=datetime.fromtimestamp(int(payload["exp"]), tz=UTC),
+            iat=datetime.fromtimestamp(int(payload["iat"]), tz=UTC),
             jti=str(payload["jti"]),
         )
 

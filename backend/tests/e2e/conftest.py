@@ -10,6 +10,7 @@ finish, so the running stack remains usable after `pytest`.
 from __future__ import annotations
 
 import os
+import uuid
 from collections.abc import AsyncIterator
 
 import pytest
@@ -32,6 +33,8 @@ async def _restore_seed_after_suite() -> AsyncIterator[None]:
     # Import here so env vars are applied first.
     from app.core.security import hash_password
     from app.infrastructure.db.session import async_session_factory
+    from app.infrastructure.models.employee import Employee as ORMEmployee
+    from app.infrastructure.models.organization import UserCompany
     from app.infrastructure.models.user import User as ORMUser
     from sqlalchemy import select
 
@@ -43,13 +46,32 @@ async def _restore_seed_after_suite() -> AsyncIterator[None]:
                 )
             ).scalar_one_or_none()
             if existing is None:
+                restored = ORMUser(
+                    username="superadmin",
+                    email="superadmin@erp-system.dev",
+                    password_hash=hash_password("Cambio!Seguro2026"),
+                    is_active=True,
+                    is_superuser=True,
+                )
+                session.add(restored)
+                await session.flush()
+                company_id = await get_test_company_id(session=session)
                 session.add(
-                    ORMUser(
-                        username="superadmin",
-                        email="superadmin@erp-system.dev",
-                        password_hash=hash_password("Cambio!Seguro2026"),
-                        is_active=True,
-                        is_superuser=True,
+                    UserCompany(
+                        user_id=restored.id,
+                        company_id=company_id,
+                        is_default=True,
+                        access_all_branches=True,
+                    )
+                )
+                session.add(
+                    ORMEmployee(
+                        company_id=company_id,
+                        employee_code=f"TST-{restored.id.hex[:12].upper()}",
+                        first_name="Superadmin",
+                        last_name="Sistema",
+                        user_id=restored.id,
+                        status="activo",
                     )
                 )
                 await session.commit()
@@ -104,6 +126,8 @@ async def seed_user(
     """
     from app.core.security import hash_password
     from app.infrastructure.db.session import async_session_factory
+    from app.infrastructure.models.employee import Employee as ORMEmployee
+    from app.infrastructure.models.organization import UserCompany
     from app.infrastructure.models.user import User as ORMUser
 
     async with async_session_factory() as session:
@@ -115,9 +139,51 @@ async def seed_user(
             is_superuser=is_superuser,
         )
         session.add(orm)
+        await session.flush()
+        company_id = await get_test_company_id(session=session)
+        session.add(
+            UserCompany(
+                user_id=orm.id,
+                company_id=company_id,
+                is_default=True,
+                access_all_branches=True,
+            )
+        )
+        session.add(
+            ORMEmployee(
+                company_id=company_id,
+                employee_code=f"TST-{orm.id.hex[:12].upper()}",
+                first_name=username,
+                last_name="Prueba",
+                user_id=orm.id,
+                status="activo",
+            )
+        )
         await session.commit()
         await session.refresh(orm)
         return str(orm.id)
+
+
+async def get_test_company_id(*, session: AsyncSession | None = None) -> uuid.UUID:
+    """Return the stable active company used by E2E operational-context tests."""
+    from app.infrastructure.db.session import async_session_factory
+    from app.infrastructure.models.organization import Company
+    from sqlalchemy import select
+
+    async def _read(active_session: AsyncSession) -> uuid.UUID:
+        return (
+            await active_session.execute(
+                select(Company.id)
+                .where(Company.is_active.is_(True))
+                .order_by(Company.created_at, Company.id)
+                .limit(1)
+            )
+        ).scalar_one()
+
+    if session is not None:
+        return await _read(session)
+    async with async_session_factory() as owned_session:
+        return await _read(owned_session)
 
 
 async def count_users() -> int:

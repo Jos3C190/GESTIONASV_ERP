@@ -11,6 +11,9 @@ from app.infrastructure.repositories.employee_repository import (
 from app.infrastructure.repositories.permission_repository import (
     SqlAlchemyPermissionRepository,
 )
+from app.infrastructure.repositories.operational_context_repository import (
+    SqlAlchemyOperationalContextRepository,
+)
 from app.infrastructure.repositories.refresh_token_repository import (
     SqlAlchemyRefreshTokenRepository,
 )
@@ -30,5 +33,6 @@ __all__ = [
     "SqlAlchemyDepartmentRepository",
     "SqlAlchemyEmployeeRepository",
     "SqlAlchemyAuditRepository",
+    "SqlAlchemyOperationalContextRepository",
     "JwtTokenService",
 ]

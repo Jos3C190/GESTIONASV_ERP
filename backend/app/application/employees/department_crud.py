@@ -21,6 +21,7 @@ log = get_logger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class CreateDepartmentInput:
+    company_id: uuid.UUID
     name: str
     description: str | None = None
     parent_department_id: uuid.UUID | None = None
@@ -31,7 +32,7 @@ class CreateDepartmentUseCase:
         self._departments = departments
 
     async def execute(self, inp: CreateDepartmentInput) -> Department:
-        if await self._departments.get_by_name(inp.name):
+        if await self._departments.get_by_name(inp.company_id, inp.name):
             raise ConflictError("El nombre de departamento ya existe.", code="dept_name_taken")
 
         # Validate parent exists and no cycle (creating a new node can't form
@@ -43,9 +44,12 @@ class CreateDepartmentUseCase:
                 raise BusinessRuleError(
                     "Departamento padre no encontrado.", code="parent_not_found"
                 )
+            if parent.company_id != inp.company_id:
+                raise BusinessRuleError("El departamento padre pertenece a otra empresa.", code="parent_company_mismatch")
 
         dept = Department(
             id=uuid.uuid4(),
+            company_id=inp.company_id,
             name=inp.name,
             description=inp.description,
             parent_department_id=inp.parent_department_id,
@@ -77,7 +81,7 @@ class UpdateDepartmentUseCase:
 
         # Name uniqueness
         if new_name != dept.name:
-            existing = await self._departments.get_by_name(new_name)
+            existing = await self._departments.get_by_name(dept.company_id, new_name)
             if existing and existing.id != dept.id:
                 raise ConflictError("El nombre de departamento ya existe.", code="dept_name_taken")
 
@@ -103,6 +107,7 @@ class UpdateDepartmentUseCase:
 
         updated = Department(
             id=dept.id,
+            company_id=dept.company_id,
             name=new_name,
             description=inp.description if inp.description is not None else dept.description,
             parent_department_id=new_parent,
@@ -137,8 +142,25 @@ class ListDepartmentsUseCase:
     def __init__(self, departments: DepartmentRepository) -> None:
         self._departments = departments
 
-    async def execute(self) -> Sequence[Department]:
-        return await self._departments.list_all()
+    async def execute(self, company_id: uuid.UUID) -> Sequence[Department]:
+        return await self._departments.list_all(company_id)
+
+    async def execute_page(
+        self,
+        company_id: uuid.UUID,
+        *,
+        page: int,
+        size: int,
+        search: str | None = None,
+        level: str | None = None,
+    ) -> tuple[Sequence[Department], int]:
+        return await self._departments.list_page(
+            company_id,
+            offset=(page - 1) * size,
+            limit=size,
+            search=search,
+            level=level,
+        )
 
 
 class GetDepartmentUseCase:

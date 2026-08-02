@@ -15,7 +15,8 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 
-from app.api.v1.deps import SessionDep, require_permission
+from app.api.v1.company_access import resolve_branch_scope
+from app.api.v1.deps import CurrentUser, SessionDep, require_permission
 from app.api.v1.schemas.audit import AuditLogOut, AuditLogPage
 from app.api.v1.schemas.common import PageMeta
 from app.core.exceptions import NotFoundError
@@ -35,6 +36,8 @@ def _to_output(log: AuditLog) -> AuditLogOut:
     return AuditLogOut(
         id=log.id,
         user_id=log.user_id,
+        company_id=log.company_id,
+        branch_id=log.branch_id,
         action=log.action,
         resource_type=log.resource_type,
         resource_id=log.resource_id,
@@ -56,10 +59,14 @@ def _to_output(log: AuditLog) -> AuditLogOut:
     dependencies=[Depends(require_permission("logs.view"))],
 )
 async def list_audit_logs(
+    session: SessionDep,
+    current: CurrentUser,
     repo: AuditRepository = Depends(_get_audit_repo),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=200),
     user_id: uuid.UUID | None = Query(None),
+    company_id: uuid.UUID | None = Query(None),
+    branch_id: uuid.UUID | None = Query(None),
     action: str | None = Query(None),
     resource_type: str | None = Query(None),
     resource_id: str | None = Query(None),
@@ -67,12 +74,20 @@ async def list_audit_logs(
     start_date: datetime | None = Query(None),
     end_date: datetime | None = Query(None),
 ) -> AuditLogPage:
+    if company_id is None and not current.is_superuser:
+        raise NotFoundError(
+            "Debe indicar la empresa de la bitácora.", code="company_context_required"
+        )
+    if company_id is not None:
+        await resolve_branch_scope(session, current, company_id, branch_id)
     offset = (page - 1) * size
 
     logs, _has_more = await repo.list(
         limit=size,
         offset=offset,
         user_id=user_id,
+        company_id=company_id,
+        branch_id=branch_id,
         action=action,
         resource_type=resource_type,
         resource_id=resource_id,
@@ -83,6 +98,8 @@ async def list_audit_logs(
 
     total = await repo.count(
         user_id=user_id,
+        company_id=company_id,
+        branch_id=branch_id,
         action=action,
         resource_type=resource_type,
         resource_id=resource_id,
@@ -107,16 +124,28 @@ async def list_audit_logs(
     response_class=StreamingResponse,
 )
 async def export_audit_logs(
+    session: SessionDep,
+    current: CurrentUser,
     repo: AuditRepository = Depends(_get_audit_repo),
     user_id: uuid.UUID | None = Query(None),
+    company_id: uuid.UUID | None = Query(None),
+    branch_id: uuid.UUID | None = Query(None),
     action: str | None = Query(None),
     resource_type: str | None = Query(None),
     start_date: datetime | None = Query(None),
     end_date: datetime | None = Query(None),
 ) -> StreamingResponse:
+    if company_id is None and not current.is_superuser:
+        raise NotFoundError(
+            "Debe indicar la empresa de la bitácora.", code="company_context_required"
+        )
+    if company_id is not None:
+        await resolve_branch_scope(session, current, company_id, branch_id)
     logs, _ = await repo.list(
         limit=10_000,
         user_id=user_id,
+        company_id=company_id,
+        branch_id=branch_id,
         action=action,
         resource_type=resource_type,
         start_date=start_date,
@@ -163,9 +192,18 @@ async def export_audit_logs(
 )
 async def get_audit_log(
     log_id: uuid.UUID,
+    session: SessionDep,
+    current: CurrentUser,
     repo: AuditRepository = Depends(_get_audit_repo),
 ) -> AuditLogOut:
     log = await repo.get_by_id(log_id)
     if log is None:
         raise NotFoundError("Evento de auditoría no encontrado.", code="audit_log_not_found")
+    if log.company_id is None:
+        if not current.is_superuser:
+            raise NotFoundError(
+                "Evento de auditoría no encontrado.", code="audit_log_not_found"
+            )
+    else:
+        await resolve_branch_scope(session, current, log.company_id, log.branch_id)
     return _to_output(log)

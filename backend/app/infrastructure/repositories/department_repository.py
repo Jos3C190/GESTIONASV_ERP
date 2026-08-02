@@ -15,6 +15,7 @@ from app.infrastructure.models.employee import Employee as ORMEmployee
 def _to_domain(orm: ORMDept) -> DomainDept:
     return DomainDept(
         id=orm.id,
+        company_id=orm.company_id,
         name=orm.name,
         description=orm.description,
         parent_department_id=orm.parent_department_id,
@@ -33,16 +34,48 @@ class SqlAlchemyDepartmentRepository:
         orm = result.scalar_one_or_none()
         return _to_domain(orm) if orm else None
 
-    async def get_by_name(self, name: str) -> DomainDept | None:
-        stmt = select(ORMDept).where(ORMDept.name == name)
+    async def get_by_name(self, company_id: uuid.UUID, name: str) -> DomainDept | None:
+        stmt = select(ORMDept).where(ORMDept.company_id == company_id, ORMDept.name == name)
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
         return _to_domain(orm) if orm else None
 
-    async def list_all(self) -> Sequence[DomainDept]:
-        stmt = select(ORMDept).order_by(ORMDept.name)
+    async def list_all(self, company_id: uuid.UUID) -> Sequence[DomainDept]:
+        stmt = select(ORMDept).where(ORMDept.company_id == company_id).order_by(ORMDept.name)
         result = await self._session.execute(stmt)
         return [_to_domain(d) for d in result.scalars().all()]
+
+    async def list_page(
+        self,
+        company_id: uuid.UUID,
+        *,
+        offset: int,
+        limit: int,
+        search: str | None = None,
+        level: str | None = None,
+    ) -> tuple[Sequence[DomainDept], int]:
+        conditions = [ORMDept.company_id == company_id]
+        if search:
+            pattern = f"%{search.strip()}%"
+            conditions.append(
+                (ORMDept.name.ilike(pattern)) | (ORMDept.description.ilike(pattern))
+            )
+        if level == "root":
+            conditions.append(ORMDept.parent_department_id.is_(None))
+        elif level == "child":
+            conditions.append(ORMDept.parent_department_id.is_not(None))
+
+        total_stmt = select(func.count(ORMDept.id)).where(*conditions)
+        total = int((await self._session.execute(total_stmt)).scalar_one())
+        stmt = (
+            select(ORMDept)
+            .where(*conditions)
+            .order_by(ORMDept.name, ORMDept.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        records = (await self._session.execute(stmt)).scalars().all()
+        return [_to_domain(record) for record in records], total
 
     async def list_children(self, parent_id: uuid.UUID) -> Sequence[DomainDept]:
         stmt = select(ORMDept).where(ORMDept.parent_department_id == parent_id).order_by(ORMDept.name)
@@ -65,6 +98,7 @@ class SqlAlchemyDepartmentRepository:
 
     async def add(self, dept: DomainDept) -> DomainDept:
         orm = ORMDept(
+            company_id=dept.company_id,
             name=dept.name,
             description=dept.description,
             parent_department_id=dept.parent_department_id,

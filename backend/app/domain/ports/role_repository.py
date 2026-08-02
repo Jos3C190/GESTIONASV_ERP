@@ -15,6 +15,17 @@ class RoleRepository(Protocol):
 
     async def list_all(self, *, load_permissions: bool = False) -> Sequence[Role]: ...
 
+    async def list_page(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        search: str | None = None,
+        is_system: bool | None = None,
+        module: str | None = None,
+        load_permissions: bool = False,
+    ) -> tuple[Sequence[Role], int]: ...
+
     async def add(self, role: Role) -> Role: ...
 
     async def update(self, role: Role) -> Role: ...
@@ -30,6 +41,10 @@ class RoleRepository(Protocol):
     async def get_effective_permissions_for_user(self, user_id: uuid.UUID) -> Sequence[Permission]: ...
 
     async def get_roles_for_user(self, user_id: uuid.UUID) -> Sequence[Role]: ...
+
+    async def get_roles_for_users(
+        self, user_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, Sequence[Role]]: ...
 
     async def assign_role_to_user(
         self, user_id: uuid.UUID, role_id: uuid.UUID, assigned_by: uuid.UUID

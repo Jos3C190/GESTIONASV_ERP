@@ -17,6 +17,7 @@ class EmployeeStatus(StrEnum):
 @dataclass(frozen=True, slots=True)
 class Department:
     id: uuid.UUID
+    company_id: uuid.UUID
     name: str
     description: str | None = None
     parent_department_id: uuid.UUID | None = None
@@ -27,6 +28,7 @@ class Department:
 @dataclass(frozen=True, slots=True)
 class Employee:
     id: uuid.UUID
+    company_id: uuid.UUID
     employee_code: str
     first_name: str
     last_name: str

@@ -68,8 +68,14 @@ class Settings(BaseSettings):
     # --- Redis (optional) ---
     REDIS_URL: str | None = None
 
-    # --- Uploads (photo storage local path; S3/MinIO later) ---
+    # --- Media / Cloudinary ---
     UPLOADS_DIR: str = "/app/uploads"
+    CLOUDINARY_CLOUD_NAME: str | None = None
+    CLOUDINARY_API_KEY: str | None = None
+    CLOUDINARY_API_SECRET: str | None = Field(default=None, repr=False)
+    CLOUDINARY_UPLOAD_FOLDER: str = "erp-system"
+    MEDIA_MAX_IMAGE_BYTES: int = 10 * 1024 * 1024
+    MEDIA_SIGNATURE_TTL_SECONDS: int = 300
 
     # --- Convenient computed fields ---
 

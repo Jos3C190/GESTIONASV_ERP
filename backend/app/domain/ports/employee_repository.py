@@ -23,7 +23,7 @@ class EmployeeStats:
 class EmployeeRepository(Protocol):
     async def get_by_id(self, emp_id: uuid.UUID) -> Employee | None: ...
 
-    async def get_by_code(self, code: str) -> Employee | None: ...
+    async def get_by_code(self, company_id: uuid.UUID, code: str) -> Employee | None: ...
 
     async def get_by_user_id(self, user_id: uuid.UUID) -> Employee | None: ...
 
@@ -35,10 +35,16 @@ class EmployeeRepository(Protocol):
         search: str | None = None,
         department_id: uuid.UUID | None = None,
         status: str | None = None,
+        company_id: uuid.UUID | None = None,
+        branch_id: uuid.UUID | None = None,
     ) -> tuple[Sequence[Employee], int]:
         """Return (employees, total_count)."""
 
-    async def get_stats(self) -> EmployeeStats:
+    async def get_stats(
+        self,
+        company_id: uuid.UUID | None = None,
+        branch_id: uuid.UUID | None = None,
+    ) -> EmployeeStats:
         """Return aggregate employee counts via a single DB query."""
 
     async def add(self, emp: Employee) -> Employee: ...
@@ -48,5 +54,3 @@ class EmployeeRepository(Protocol):
     async def soft_delete(self, emp_id: uuid.UUID) -> bool: ...
 
     async def link_to_user(self, emp_id: uuid.UUID, user_id: uuid.UUID) -> bool: ...
-
-    async def unlink_from_user(self, emp_id: uuid.UUID) -> bool: ...

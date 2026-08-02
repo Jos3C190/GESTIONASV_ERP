@@ -25,6 +25,7 @@ class UserOut(ORMOut):
 
 
 class CreateUserRequest(BaseModel):
+    company_id: uuid.UUID
     username: str = Field(..., min_length=3, max_length=64)
     email: EmailStr
     password: str = Field(..., min_length=12, max_length=128)

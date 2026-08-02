@@ -19,8 +19,8 @@ _DEFAULTS = {
 }
 
 # Conservative CSP. Tightened further in Phase 1 when we know exact needs.
-_DEV_CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 ws://localhost:* ws://127.0.0.1:*; frame-ancestors 'none'"
-_PROD_CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+_DEV_CSP = "default-src 'self'; img-src 'self' data: blob: https://res.cloudinary.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.cloudinary.com http://localhost:8000 http://127.0.0.1:8000 ws://localhost:* ws://127.0.0.1:*; frame-ancestors 'none'"
+_PROD_CSP = "default-src 'self'; img-src 'self' data: blob: https://res.cloudinary.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://api.cloudinary.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 
 class SecurityHeadersMiddleware:

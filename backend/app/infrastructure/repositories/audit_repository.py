@@ -23,6 +23,8 @@ def _to_domain(orm: ORMLog) -> DomainLog:
     return DomainLog(
         id=orm.id,
         user_id=orm.user_id,
+        company_id=orm.company_id,
+        branch_id=orm.branch_id,
         action=orm.action,
         resource_type=orm.resource_type,
         resource_id=orm.resource_id,
@@ -45,6 +47,8 @@ class SqlAlchemyAuditRepository:
     async def add(self, log: DomainLog) -> DomainLog:
         orm = ORMLog(
             user_id=log.user_id,
+            company_id=log.company_id,
+            branch_id=log.branch_id,
             action=log.action,
             resource_type=log.resource_type,
             resource_id=log.resource_id,
@@ -70,6 +74,8 @@ class SqlAlchemyAuditRepository:
         limit: int = 50,
         offset: int = 0,
         user_id: uuid.UUID | None = None,
+        company_id: uuid.UUID | None = None,
+        branch_id: uuid.UUID | None = None,
         action: str | None = None,
         resource_type: str | None = None,
         resource_id: str | None = None,
@@ -81,6 +87,10 @@ class SqlAlchemyAuditRepository:
         conditions: list[Any] = []
         if user_id is not None:
             conditions.append(ORMLog.user_id == user_id)
+        if company_id is not None:
+            conditions.append(ORMLog.company_id == company_id)
+        if branch_id is not None:
+            conditions.append(ORMLog.branch_id == branch_id)
         if action is not None:
             conditions.append(ORMLog.action == action)
         if resource_type is not None:
@@ -107,6 +117,8 @@ class SqlAlchemyAuditRepository:
         self,
         *,
         user_id: uuid.UUID | None = None,
+        company_id: uuid.UUID | None = None,
+        branch_id: uuid.UUID | None = None,
         action: str | None = None,
         resource_type: str | None = None,
         resource_id: str | None = None,
@@ -117,6 +129,10 @@ class SqlAlchemyAuditRepository:
         conditions: list[Any] = []
         if user_id is not None:
             conditions.append(ORMLog.user_id == user_id)
+        if company_id is not None:
+            conditions.append(ORMLog.company_id == company_id)
+        if branch_id is not None:
+            conditions.append(ORMLog.branch_id == branch_id)
         if action is not None:
             conditions.append(ORMLog.action == action)
         if resource_type is not None:

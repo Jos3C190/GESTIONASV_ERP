@@ -27,6 +27,8 @@ class AuditService:
         *,
         action: str,
         user_id: uuid.UUID | None = None,
+        company_id: uuid.UUID | None = None,
+        branch_id: uuid.UUID | None = None,
         resource_type: str | None = None,
         resource_id: str | None = None,
         before_state: dict[str, Any] | None = None,
@@ -41,6 +43,8 @@ class AuditService:
             entry = AuditLog(
                 id=uuid.uuid4(),
                 user_id=user_id,
+                company_id=company_id,
+                branch_id=branch_id,
                 action=action,
                 resource_type=resource_type,
                 resource_id=resource_id,
@@ -71,6 +75,7 @@ def user_to_audit_state(user: object) -> dict[str, Any]:
 def employee_to_audit_state(emp: object) -> dict[str, Any]:
     return {
         "id": str(getattr(emp, "id", "")),
+        "company_id": str(getattr(emp, "company_id", "")),
         "user_id": str(getattr(emp, "user_id", "") or "") or None,
         "employee_code": getattr(emp, "employee_code", None),
         "first_name": getattr(emp, "first_name", None),
@@ -103,6 +108,7 @@ def employee_to_audit_state(emp: object) -> dict[str, Any]:
 def department_to_audit_state(department: object) -> dict[str, Any]:
     return {
         "id": str(getattr(department, "id", "")),
+        "company_id": str(getattr(department, "company_id", "")),
         "name": getattr(department, "name", None),
         "description": getattr(department, "description", None),
         "parent_department_id": (

@@ -1,11 +1,11 @@
 """Unit tests for user management use cases (in-memory fakes)."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-
 from app.application.users.admin_actions import (
     DeactivateUserUseCase,
     ForcePasswordResetInput,
@@ -18,6 +18,7 @@ from app.application.users.update_user import UpdateUserInput, UpdateUserUseCase
 from app.core.exceptions import AuthorizationError, BusinessRuleError, NotFoundError
 from app.core.security import hash_password, verify_password
 from app.domain.entities.user import User
+
 from tests.unit.fakes import InMemoryUserRepository
 
 
@@ -41,10 +42,10 @@ def _make_user(
         is_active=active,
         is_superuser=superuser,
         failed_login_attempts=failed,
-        locked_until=datetime.now(timezone.utc) + timedelta(minutes=5) if locked else None,
-        password_changed_at=datetime.now(timezone.utc),
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        locked_until=datetime.now(UTC) + timedelta(minutes=5) if locked else None,
+        password_changed_at=datetime.now(UTC),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -70,7 +71,9 @@ async def test_list_users_returns_paginated_result() -> None:
 
 async def test_list_users_search_filters() -> None:
     repo = InMemoryUserRepository()
-    await _seed(repo, _make_user(username="alice"), _make_user(username="bob", email="bob@example.com"))
+    await _seed(
+        repo, _make_user(username="alice"), _make_user(username="bob", email="bob@example.com")
+    )
     uc = ListUsersUseCase(repo)
     result = await uc.execute(ListUsersInput(page=1, size=10, search="ali"))
     assert len(result.items) == 1
@@ -84,6 +87,23 @@ async def test_list_users_empty_result() -> None:
     assert result.items == []
     assert result.total == 0
     assert result.pages == 1
+
+
+async def test_list_users_status_filter_applies_before_pagination() -> None:
+    repo = InMemoryUserRepository()
+    for i in range(12):
+        await repo.add(_make_user(username=f"active{i}", email=f"active{i}@e.com"))
+    for i in range(3):
+        await repo.add(
+            _make_user(username=f"inactive{i}", email=f"inactive{i}@e.com", active=False)
+        )
+    result = await ListUsersUseCase(repo).execute(
+        ListUsersInput(page=1, size=2, status_filter="inactive")
+    )
+    assert len(result.items) == 2
+    assert result.total == 3
+    assert result.pages == 2
+    assert all(not user.is_active for user in result.items)
 
 
 # ---------------- GetUser ----------------

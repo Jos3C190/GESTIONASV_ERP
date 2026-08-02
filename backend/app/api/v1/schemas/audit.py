@@ -13,6 +13,8 @@ from app.api.v1.schemas.common import ORMOut, PageMeta
 class AuditLogOut(ORMOut):
     id: uuid.UUID
     user_id: uuid.UUID | None = None
+    company_id: uuid.UUID | None = None
+    branch_id: uuid.UUID | None = None
     action: str
     resource_type: str | None = None
     resource_id: str | None = None

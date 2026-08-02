@@ -7,8 +7,9 @@ All endpoints require `permissions:read` or `roles:*` permissions via
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.api.v1.deps import (
     CurrentUser,
@@ -18,7 +19,7 @@ from app.api.v1.deps import (
     get_user_repository,
     require_permission,
 )
-from app.api.v1.schemas.common import MessageOut
+from app.api.v1.schemas.common import MessageOut, Page, PageMeta
 from app.api.v1.schemas.rbac import (
     AssignRoleRequest,
     CreatePermissionRequest,
@@ -59,6 +60,7 @@ from app.application.rbac.role_crud import (
     UpdateRoleInput,
     UpdateRoleUseCase,
 )
+from app.domain.entities.rbac import Role
 from app.domain.ports.permission_repository import PermissionRepository
 from app.domain.ports.role_repository import RoleRepository
 from app.domain.ports.user_repository import UserRepository
@@ -66,33 +68,68 @@ from app.domain.ports.user_repository import UserRepository
 router = APIRouter(prefix="/roles", tags=["roles"])
 
 
+def _role_out(role: Role) -> RoleWithPermissionsOut:
+    return RoleWithPermissionsOut(
+        id=role.id,
+        name=role.name,
+        description=role.description,
+        is_system=role.is_system,
+        created_at=role.created_at or datetime.now(UTC),
+        updated_at=role.updated_at,
+        permissions=[
+            PermissionOut(id=p.id, code=p.code, description=p.description, module=p.module)
+            for p in role.permissions
+        ],
+    )
+
+
 @router.get(
     "",
-    response_model=list[RoleWithPermissionsOut],
+    response_model=Page[RoleWithPermissionsOut],
     status_code=status.HTTP_200_OK,
-    summary="Listar roles (con permisos)",
+    summary="Listar roles paginados (con permisos)",
     dependencies=[Depends(require_permission("roles:read"))],
 )
 async def list_roles(
     repo: RoleRepository = Depends(get_role_repository),
-) -> list[RoleWithPermissionsOut]:
+    page: int = Query(1, ge=1),
+    size: int = Query(12, ge=1, le=100),
+    search: str | None = Query(None, max_length=120),
+    is_system: bool | None = Query(None),
+    module: str | None = Query(None, max_length=64),
+) -> Page[RoleWithPermissionsOut]:
     uc = ListRolesUseCase(repo)
-    roles = await uc.execute(load_permissions=True)
-    return [
-        RoleWithPermissionsOut(
-            id=r.id,
-            name=r.name,
-            description=r.description,
-            is_system=r.is_system,
-            created_at=r.created_at or __import__("datetime").datetime.now(),
-            updated_at=r.updated_at,
-            permissions=[
-                PermissionOut(id=p.id, code=p.code, description=p.description, module=p.module)
-                for p in r.permissions
-            ],
-        )
-        for r in roles
-    ]
+    roles, total = await uc.execute_page(
+        page=page,
+        size=size,
+        search=search,
+        is_system=is_system,
+        module=module,
+        load_permissions=True,
+    )
+    return Page(
+        items=[_role_out(role) for role in roles],
+        meta=PageMeta(
+            page=page,
+            size=size,
+            total=total,
+            pages=(total + size - 1) // size if total else 1,
+        ),
+    )
+
+
+@router.get(
+    "/catalogue",
+    response_model=list[RoleWithPermissionsOut],
+    status_code=status.HTTP_200_OK,
+    summary="Catálogo completo de roles",
+    dependencies=[Depends(require_permission("roles:read"))],
+)
+async def role_catalogue(
+    repo: RoleRepository = Depends(get_role_repository),
+) -> list[RoleWithPermissionsOut]:
+    roles = await ListRolesUseCase(repo).execute(load_permissions=True)
+    return [_role_out(role) for role in roles]
 
 
 @router.get(

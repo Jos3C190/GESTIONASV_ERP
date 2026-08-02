@@ -23,6 +23,20 @@ class AuditLog(UUIDPKMixin, Base):
         index=True,
         default=None,
     )
+    company_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("companies.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        default=None,
+    )
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("branches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        default=None,
+    )
     action: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     resource_type: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
     resource_id: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)

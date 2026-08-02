@@ -3,15 +3,18 @@
 Converts between ORM models and domain entities. The application layer only
 sees domain entities, never ORM objects.
 """
+
 from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.user import User as DomainUser
+from app.infrastructure.models.organization import UserBranch, UserCompany
 from app.infrastructure.models.user import User as ORMUser
 
 
@@ -77,15 +80,56 @@ class SqlAlchemyUserRepository:
         return _to_domain(orm) if orm else None
 
     async def list_active(
-        self, *, offset: int = 0, limit: int = 20, search: str | None = None
+        self,
+        *,
+        offset: int = 0,
+        limit: int = 20,
+        search: str | None = None,
+        status_filter: str | None = None,
+        company_id: uuid.UUID | None = None,
+        branch_id: uuid.UUID | None = None,
     ) -> tuple[Sequence[DomainUser], int]:
         base = select(ORMUser).where(ORMUser.deleted_at.is_(None))
         count_base = select(func.count(ORMUser.id)).where(ORMUser.deleted_at.is_(None))
+        if company_id is not None:
+            base = base.join(UserCompany, UserCompany.user_id == ORMUser.id).where(
+                UserCompany.company_id == company_id
+            )
+            count_base = count_base.join(UserCompany, UserCompany.user_id == ORMUser.id).where(
+                UserCompany.company_id == company_id
+            )
+        if branch_id is not None:
+            access_condition = or_(
+                ORMUser.is_superuser.is_(True),
+                UserCompany.access_all_branches.is_(True),
+                UserBranch.branch_id.is_not(None),
+            )
+            join_condition = (
+                (UserBranch.user_id == ORMUser.id)
+                & (UserBranch.company_id == company_id)
+                & (UserBranch.branch_id == branch_id)
+                & UserBranch.is_active.is_(True)
+            )
+            base = base.outerjoin(UserBranch, join_condition).where(access_condition)
+            count_base = count_base.outerjoin(UserBranch, join_condition).where(access_condition)
         if search:
             like = f"%{search}%"
             cond = or_(ORMUser.username.ilike(like), ORMUser.email.ilike(like))
             base = base.where(cond)
             count_base = count_base.where(cond)
+        now = datetime.now(UTC)
+        if status_filter == "active":
+            cond = ORMUser.is_active.is_(True) & or_(
+                ORMUser.locked_until.is_(None), ORMUser.locked_until <= now
+            )
+            base = base.where(cond)
+            count_base = count_base.where(cond)
+        elif status_filter == "inactive":
+            base = base.where(ORMUser.is_active.is_(False))
+            count_base = count_base.where(ORMUser.is_active.is_(False))
+        elif status_filter == "superuser":
+            base = base.where(ORMUser.is_superuser.is_(True))
+            count_base = count_base.where(ORMUser.is_superuser.is_(True))
         base = base.order_by(ORMUser.created_at.desc()).offset(offset).limit(limit)
         items = (await self._session.execute(base)).scalars().all()
         total = int((await self._session.execute(count_base)).scalar_one())
@@ -134,12 +178,12 @@ class SqlAlchemyUserRepository:
         return _to_domain(orm)
 
     async def soft_delete(self, user_id: uuid.UUID) -> bool:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         stmt = (
             update(ORMUser)
             .where(ORMUser.id == user_id, ORMUser.deleted_at.is_(None))
-            .values(deleted_at=datetime.now(timezone.utc))
+            .values(deleted_at=datetime.now(UTC))
         )
         result = await self._session.execute(stmt)
         return (result.rowcount or 0) > 0

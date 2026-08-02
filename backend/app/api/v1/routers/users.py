@@ -3,12 +3,15 @@
 Phase 2: guarded by `require_permission` (dynamic RBAC). Superusers pass
 automatically via the CheckPermissionUseCase shortcut.
 """
+
 from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
+from sqlalchemy import or_, select
 
+from app.api.v1.company_access import resolve_branch_scope
 from app.api.v1.deps import (
     CurrentUser,
     SessionDep,
@@ -18,6 +21,7 @@ from app.api.v1.deps import (
     require_permission,
 )
 from app.api.v1.schemas.common import MessageOut
+from app.api.v1.schemas.rbac import RoleOut
 from app.api.v1.schemas.users import (
     CreateUserRequest,
     ForcePasswordResetRequest,
@@ -51,6 +55,8 @@ from app.domain.ports.department_repository import DepartmentRepository
 from app.domain.ports.employee_repository import EmployeeRepository
 from app.domain.ports.role_repository import RoleRepository
 from app.domain.ports.user_repository import UserRepository
+from app.infrastructure.models.organization import UserBranch, UserCompany
+from app.infrastructure.models.user import User as ORMUser
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -73,6 +79,65 @@ def _get_department_repo(session: SessionDep) -> DepartmentRepository:
     return SqlAlchemyDepartmentRepository(session)
 
 
+async def _require_target_scope(
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    target_id: uuid.UUID,
+) -> uuid.UUID | None:
+    raw_company = request.headers.get("X-Company-ID")
+    if not raw_company:
+        if current.is_superuser:
+            return None
+        from app.core.exceptions import AuthorizationError
+
+        raise AuthorizationError("Debe indicar la empresa.", code="company_context_required")
+    try:
+        company_id = uuid.UUID(raw_company)
+        branch_id = (
+            uuid.UUID(request.headers["X-Branch-ID"])
+            if request.headers.get("X-Branch-ID")
+            else None
+        )
+    except ValueError as exc:
+        from app.core.exceptions import ValidationError
+
+        raise ValidationError("El contexto operativo no es válido.") from exc
+
+    await resolve_branch_scope(session, current, company_id, branch_id)
+    target = await session.get(ORMUser, target_id)
+    if target is None:
+        from app.core.exceptions import NotFoundError
+
+        raise NotFoundError("Usuario no encontrado.", code="user_not_found")
+    if target.is_superuser and not current.is_superuser:
+        from app.core.exceptions import AuthorizationError
+
+        raise AuthorizationError("No puede administrar a un superadministrador.", code="forbidden")
+    stmt = select(UserCompany.user_id).where(
+        UserCompany.user_id == target_id,
+        UserCompany.company_id == company_id,
+    )
+    if branch_id is not None and not target.is_superuser:
+        stmt = stmt.outerjoin(
+            UserBranch,
+            (UserBranch.user_id == UserCompany.user_id)
+            & (UserBranch.company_id == company_id)
+            & (UserBranch.branch_id == branch_id)
+            & UserBranch.is_active.is_(True),
+        ).where(
+            or_(
+                UserCompany.access_all_branches.is_(True),
+                UserBranch.branch_id.is_not(None),
+            )
+        )
+    if await session.scalar(stmt) is None:
+        from app.core.exceptions import NotFoundError
+
+        raise NotFoundError("Usuario no encontrado.", code="user_not_found")
+    return company_id
+
+
 @router.get(
     "",
     response_model=Page[UserOut],
@@ -81,17 +146,86 @@ def _get_department_repo(session: SessionDep) -> DepartmentRepository:
     dependencies=[Depends(require_permission("users:read"))],
 )
 async def list_users(
+    session: SessionDep,
+    current: CurrentUser,
     repo: UserRepository = Depends(_get_user_repo),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     search: str | None = Query(None, max_length=120),
+    status_filter: str | None = Query(
+        None, alias="status", pattern="^(active|inactive|superuser)$"
+    ),
+    company_id: uuid.UUID | None = Query(None),
+    branch_id: uuid.UUID | None = Query(None),
 ) -> Page[UserOut]:
+    if company_id is not None:
+        await resolve_branch_scope(session, current, company_id, branch_id)
+    elif not current.is_superuser:
+        from app.core.exceptions import AuthorizationError
+
+        raise AuthorizationError("Debe indicar la empresa.", code="company_context_required")
     uc = ListUsersUseCase(repo)
-    result = await uc.execute(ListUsersInput(page=page, size=size, search=search))
+    result = await uc.execute(
+        ListUsersInput(
+            page=page,
+            size=size,
+            search=search,
+            status_filter=status_filter,
+            company_id=company_id,
+            branch_id=branch_id,
+        )
+    )
     return Page[UserOut](
         items=[UserOut.model_validate(u, from_attributes=True) for u in result.items],
         meta=PageMeta(page=result.page, size=result.size, total=result.total, pages=result.pages),
     )
+
+
+@router.get(
+    "/batch/roles",
+    response_model=dict[uuid.UUID, list[RoleOut]],
+    status_code=status.HTTP_200_OK,
+    summary="Obtener roles de varios usuarios",
+    dependencies=[
+        Depends(require_permission("users:read")),
+        Depends(require_permission("roles:read")),
+    ],
+)
+async def get_users_roles_batch(
+    session: SessionDep,
+    current: CurrentUser,
+    role_repo: RoleRepository = Depends(get_role_repository),
+    user_ids: list[uuid.UUID] = Query(..., min_length=1, max_length=100),
+    company_id: uuid.UUID = Query(...),
+    branch_id: uuid.UUID | None = Query(None),
+) -> dict[uuid.UUID, list[RoleOut]]:
+    """Return role summaries for the visible users in one database roundtrip."""
+    await resolve_branch_scope(session, current, company_id, branch_id)
+    allowed = select(ORMUser.id).join(UserCompany, UserCompany.user_id == ORMUser.id).where(
+        ORMUser.id.in_(user_ids),
+        ORMUser.deleted_at.is_(None),
+        UserCompany.company_id == company_id,
+    )
+    if branch_id is not None:
+        join_condition = (
+            (UserBranch.user_id == ORMUser.id)
+            & (UserBranch.company_id == company_id)
+            & (UserBranch.branch_id == branch_id)
+            & UserBranch.is_active.is_(True)
+        )
+        allowed = allowed.outerjoin(UserBranch, join_condition).where(
+            or_(
+                ORMUser.is_superuser.is_(True),
+                UserCompany.access_all_branches.is_(True),
+                UserBranch.branch_id.is_not(None),
+            )
+        )
+    allowed_ids = list((await session.execute(allowed)).scalars().all())
+    roles_by_user = await role_repo.get_roles_for_users(allowed_ids)
+    return {
+        user_id: [RoleOut.model_validate(role, from_attributes=True) for role in roles]
+        for user_id, roles in roles_by_user.items()
+    }
 
 
 @router.get(
@@ -103,8 +237,12 @@ async def list_users(
 )
 async def get_user(
     user_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
     repo: UserRepository = Depends(_get_user_repo),
 ) -> UserOut:
+    await _require_target_scope(request, session, current, user_id)
     uc = GetUserUseCase(repo)
     result = await uc.execute(user_id)
     return UserOut.model_validate(result.user, from_attributes=True)
@@ -120,6 +258,7 @@ async def get_user(
 async def create_user(
     body: CreateUserRequest,
     current: CurrentUser,
+    session: SessionDep,
     register_uc: RegisterUserUseCase = Depends(get_register_user_use_case),
     employee_repo: EmployeeRepository = Depends(_get_employee_repo),
     department_repo: DepartmentRepository = Depends(_get_department_repo),
@@ -127,6 +266,10 @@ async def create_user(
     user_repo: UserRepository = Depends(_get_user_repo),
     audit: AuditService = Depends(get_audit_service),
 ) -> UserOut:
+    from app.api.v1.company_access import require_company_access
+    from app.infrastructure.models.organization import UserCompany
+
+    await require_company_access(session, current, body.company_id, require_active=True)
     created = await register_uc.execute(
         RegisterUserInput(
             username=body.username,
@@ -137,18 +280,28 @@ async def create_user(
         )
     )
     if body.employee_id is not None:
+        employee = await employee_repo.get_by_id(body.employee_id)
+        if employee is None or employee.company_id != body.company_id:
+            from app.core.exceptions import BusinessRuleError
+
+            raise BusinessRuleError(
+                "El empleado no pertenece a la empresa seleccionada.",
+                code="employee_company_mismatch",
+            )
         await LinkUserUseCase(employee_repo).execute(
             LinkUserInput(emp_id=body.employee_id, user_id=created.id)
         )
     else:
         await CreateEmployeeUseCase(employee_repo, department_repo).execute(
             CreateEmployeeInput(
+                company_id=body.company_id,
                 employee_code=f"USR-{str(created.id)[:8].upper()}",
                 first_name=body.username,
                 last_name="Usuario",
                 user_id=created.id,
             )
         )
+    session.add(UserCompany(user_id=created.id, company_id=body.company_id, is_default=True))
 
     requested_role_ids = body.role_ids
     if not requested_role_ids:
@@ -173,6 +326,7 @@ async def create_user(
     await audit.record(
         action="CREATE",
         user_id=current.id,
+        company_id=body.company_id,
         resource_type="users",
         resource_id=str(created.id),
         after_state=user_to_audit_state(created),
@@ -190,10 +344,13 @@ async def create_user(
 async def update_user(
     user_id: uuid.UUID,
     body: UpdateUserRequest,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     repo: UserRepository = Depends(_get_user_repo),
     audit: AuditService = Depends(get_audit_service),
 ) -> UserOut:
+    company_id = await _require_target_scope(request, session, current, user_id)
     before = await GetUserUseCase(repo).execute(user_id)
     uc = UpdateUserUseCase(repo)
     updated = await uc.execute(
@@ -207,6 +364,7 @@ async def update_user(
     await audit.record(
         action="UPDATE",
         user_id=current.id,
+        company_id=company_id,
         resource_type="users",
         resource_id=str(user_id),
         before_state=user_to_audit_state(before.user),
@@ -225,10 +383,13 @@ async def update_user(
 async def force_password_reset(
     user_id: uuid.UUID,
     body: ForcePasswordResetRequest,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     repo: UserRepository = Depends(_get_user_repo),
     audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
+    company_id = await _require_target_scope(request, session, current, user_id)
     uc = ForcePasswordResetUseCase(repo)
     await uc.execute(
         ForcePasswordResetInput(
@@ -238,6 +399,7 @@ async def force_password_reset(
     await audit.record(
         action="PASSWORD_RESET",
         user_id=current.id,
+        company_id=company_id,
         resource_type="users",
         resource_id=str(user_id),
         metadata={"password_fields_omitted": True},
@@ -254,15 +416,19 @@ async def force_password_reset(
 )
 async def unlock_account(
     user_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     repo: UserRepository = Depends(_get_user_repo),
     audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
+    company_id = await _require_target_scope(request, session, current, user_id)
     uc = UnlockAccountUseCase(repo)
     await uc.execute(user_id)
     await audit.record(
         action="UNLOCK",
         user_id=current.id,
+        company_id=company_id,
         resource_type="users",
         resource_id=str(user_id),
     )
@@ -278,16 +444,20 @@ async def unlock_account(
 )
 async def deactivate_user(
     user_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     repo: UserRepository = Depends(_get_user_repo),
     audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
+    company_id = await _require_target_scope(request, session, current, user_id)
     before = await GetUserUseCase(repo).execute(user_id)
     uc = DeactivateUserUseCase(repo)
     await uc.execute(user_id, current.id)
     await audit.record(
         action="LOGICAL_DELETE",
         user_id=current.id,
+        company_id=company_id,
         resource_type="users",
         resource_id=str(user_id),
         before_state=user_to_audit_state(before.user),

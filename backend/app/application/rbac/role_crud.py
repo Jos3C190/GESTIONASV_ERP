@@ -139,6 +139,25 @@ class ListRolesUseCase:
     async def execute(self, *, load_permissions: bool = False) -> Sequence[Role]:
         return await self._roles.list_all(load_permissions=load_permissions)
 
+    async def execute_page(
+        self,
+        *,
+        page: int,
+        size: int,
+        search: str | None = None,
+        is_system: bool | None = None,
+        module: str | None = None,
+        load_permissions: bool = False,
+    ) -> tuple[Sequence[Role], int]:
+        return await self._roles.list_page(
+            offset=(page - 1) * size,
+            limit=size,
+            search=search,
+            is_system=is_system,
+            module=module,
+            load_permissions=load_permissions,
+        )
+
 
 class GetRoleUseCase:
     def __init__(self, roles: RoleRepository) -> None:

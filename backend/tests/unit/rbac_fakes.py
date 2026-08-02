@@ -108,6 +108,37 @@ class InMemoryRoleRepository:
                 out.append(r)
         return out
 
+    async def list_page(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        search: str | None = None,
+        is_system: bool | None = None,
+        module: str | None = None,
+        load_permissions: bool = False,
+    ) -> tuple[Sequence[Role], int]:
+        roles = list(await self.list_all(load_permissions=load_permissions))
+        if search:
+            query = search.casefold()
+            roles = [
+                role
+                for role in roles
+                if query in role.name.casefold()
+                or query in (role.description or "").casefold()
+                or any(query in permission.code.casefold() for permission in role.permissions)
+            ]
+        if is_system is not None:
+            roles = [role for role in roles if role.is_system is is_system]
+        if module:
+            roles = [
+                role
+                for role in roles
+                if any(permission.module == module for permission in role.permissions)
+            ]
+        roles.sort(key=lambda role: (role.name, role.id))
+        return roles[offset : offset + limit], len(roles)
+
     async def add(self, role: Role) -> Role:
         rid = uuid.uuid4()
         r = Role(

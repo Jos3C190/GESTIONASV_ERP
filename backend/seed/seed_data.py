@@ -165,6 +165,8 @@ async def _seed_geographic_catalogues() -> None:
 async def _seed_super_admin() -> None:
     from app.core.logging import configure_logging, get_logger
     from app.core.security import hash_password
+    from app.infrastructure.models.employee import Employee
+    from app.infrastructure.models.organization import Company, UserCompany
     from app.infrastructure.models.user import User as ORMUser
     from sqlalchemy import select
 
@@ -189,6 +191,32 @@ async def _seed_super_admin() -> None:
             is_superuser=True,
         )
         session.add(orm)
+        await session.flush()
+        company = (
+            await session.execute(
+                select(Company).where(Company.is_active.is_(True)).order_by(Company.created_at)
+            )
+        ).scalars().first()
+        if company is None:
+            raise RuntimeError("Debe crear la empresa demo antes de sembrar usuarios.")
+        session.add(
+            UserCompany(
+                user_id=orm.id,
+                company_id=company.id,
+                is_default=True,
+                access_all_branches=True,
+            )
+        )
+        session.add(
+            Employee(
+                company_id=company.id,
+                employee_code=f"USR-{orm.id.hex[:12].upper()}",
+                first_name="Superadmin",
+                last_name="Sistema",
+                user_id=orm.id,
+                status="activo",
+            )
+        )
         await session.commit()
         log.info(
             "seed_super_admin_created",
@@ -201,6 +229,8 @@ async def _seed_demo_users() -> None:
     """Generate demo users with Faker for pagination/search testing."""
     from app.core.logging import configure_logging, get_logger
     from app.core.security import hash_password
+    from app.infrastructure.models.employee import Employee
+    from app.infrastructure.models.organization import Company, UserCompany
     from app.infrastructure.models.user import User as ORMUser
     from sqlalchemy import select
 
@@ -212,6 +242,13 @@ async def _seed_demo_users() -> None:
     factory = _make_session_factory()
 
     async with factory() as session:
+        company = (
+            await session.execute(
+                select(Company).where(Company.is_active.is_(True)).order_by(Company.created_at)
+            )
+        ).scalars().first()
+        if company is None:
+            raise RuntimeError("Debe crear la empresa demo antes de sembrar usuarios.")
         existing = (
             (await session.execute(select(ORMUser).where(ORMUser.is_superuser.is_(False))))
             .scalars()
@@ -233,9 +270,161 @@ async def _seed_demo_users() -> None:
                 is_superuser=False,
             )
             session.add(orm)
+            await session.flush()
+            session.add(
+                UserCompany(
+                    user_id=orm.id,
+                    company_id=company.id,
+                    is_default=True,
+                    access_all_branches=True,
+                )
+            )
+            session.add(
+                Employee(
+                    company_id=company.id,
+                    employee_code=f"USR-{orm.id.hex[:12].upper()}",
+                    first_name=username,
+                    last_name="Usuario demo",
+                    user_id=orm.id,
+                    status="activo",
+                )
+            )
             created += 1
         await session.commit()
         log.info("seed_demo_users_created", count=created)
+
+
+async def _seed_organization_demo() -> None:
+    """Seed a usable company context and real Salvadoran map coordinates."""
+    from app.infrastructure.models.organization import (
+        Branch,
+        Company,
+        District,
+        GeographicDepartment,
+        Municipality,
+        UserCompany,
+        Warehouse,
+        WarehouseCategory,
+    )
+    from app.infrastructure.models.user import User as ORMUser
+    from sqlalchemy import select
+
+    factory = _make_session_factory()
+    async with factory() as session:
+        department = (
+            await session.execute(
+                select(GeographicDepartment).where(GeographicDepartment.name == "San Salvador")
+            )
+        ).scalar_one()
+        municipality = (
+            (
+                await session.execute(
+                    select(Municipality).where(Municipality.department_id == department.id)
+                )
+            )
+            .scalars()
+            .first()
+        )
+        district = (
+            (
+                await session.execute(
+                    select(District).where(District.municipality_id == municipality.id)
+                )
+            )
+            .scalars()
+            .first()
+        )
+        company = (
+            await session.execute(select(Company).where(Company.nit == "0614-010101-001-0"))
+        ).scalar_one_or_none()
+        if company is None:
+            company = Company(
+                name="ERP System, S.A. de C.V.",
+                commercial_name="ERP System",
+                nit="0614-010101-001-0",
+                nrc="123456-7",
+                commercial_line_1="Servicios de tecnología",
+                address="Colonia Escalón, San Salvador",
+                department_id=department.id,
+                municipality_id=municipality.id,
+                district_id=district.id,
+                phone="+503 2200-0000",
+                email="info@erp-system.dev",
+                web_site="https://erp-system.dev",
+                description="Empresa demostrativa del entorno local.",
+            )
+            session.add(company)
+            await session.flush()
+
+        users = (await session.execute(select(ORMUser))).scalars().all()
+        for user in users:
+            if await session.get(UserCompany, (user.id, company.id)) is None:
+                session.add(UserCompany(user_id=user.id, company_id=company.id, is_default=True))
+
+        branches = (
+            ("SAL-01", "Matriz Central", "Colonia Escalón, San Salvador", 13.6989, -89.1914),
+            ("SMA-01", "Sucursal San Miguel", "Centro de San Miguel", 13.4833, -88.1833),
+            ("STA-01", "Sucursal Santa Ana", "Centro de Santa Ana", 13.9942, -89.5597),
+        )
+        created_branches: list[Branch] = []
+        for code, name, address, latitude, longitude in branches:
+            branch = (
+                await session.execute(
+                    select(Branch).where(Branch.company_id == company.id, Branch.code == code)
+                )
+            ).scalar_one_or_none()
+            if branch is None:
+                branch = Branch(
+                    company_id=company.id,
+                    code=code,
+                    name=name,
+                    address=address,
+                    department_id=department.id,
+                    municipality_id=municipality.id,
+                    district_id=district.id,
+                    latitude=latitude,
+                    longitude=longitude,
+                    operational_status="active",
+                    zone="El Salvador",
+                    description=f"Sede operativa {name}.",
+                )
+                session.add(branch)
+                await session.flush()
+            created_branches.append(branch)
+
+        category = (
+            await session.execute(
+                select(WarehouseCategory).where(WarehouseCategory.name == "Producto Terminado")
+            )
+        ).scalar_one_or_none()
+        if category is None:
+            category = WarehouseCategory(
+                name="Producto Terminado", description="Productos disponibles para despacho"
+            )
+            session.add(category)
+            await session.flush()
+        for index, branch in enumerate(created_branches, start=1):
+            code = f"ALM-{index:02d}"
+            if (
+                await session.execute(
+                    select(Warehouse).where(
+                        Warehouse.branch_id == branch.id, Warehouse.code == code
+                    )
+                )
+            ).scalar_one_or_none() is None:
+                session.add(
+                    Warehouse(
+                        branch_id=branch.id,
+                        warehouse_category_id=category.id,
+                        code=code,
+                        name=f"Almacén {branch.name}",
+                        warehouse_type="general",
+                        operational_status="active",
+                        physical_location="Bodega principal",
+                        capacity=1000,
+                    )
+                )
+        await session.commit()
 
 
 @app.command()
@@ -250,8 +439,10 @@ def run(phase0: bool = typer.Option(False, "--phase0", help="Phase 0 placeholder
     )
     asyncio.run(_seed_permissions_and_roles())
     asyncio.run(_seed_geographic_catalogues())
+    asyncio.run(_seed_organization_demo())
     asyncio.run(_seed_super_admin())
     asyncio.run(_seed_demo_users())
+    asyncio.run(_seed_organization_demo())
     typer.secho(
         f"[seed] Done. SUPER_ADMIN = {SUPER_ADMIN_USERNAME} / {SUPER_ADMIN_PASSWORD}",
         fg=typer.colors.GREEN,

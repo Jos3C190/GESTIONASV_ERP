@@ -4,13 +4,14 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from app.api.v1.schemas.common import ORMOut, Page, PageMeta
 
 
 class DepartmentOut(ORMOut):
     id: uuid.UUID
+    company_id: uuid.UUID
     name: str
     description: str | None = None
     parent_department_id: uuid.UUID | None = None
@@ -18,8 +19,12 @@ class DepartmentOut(ORMOut):
     updated_at: datetime | None = None
 
 
+DepartmentPage = Page[DepartmentOut]
+
+
 class EmployeeOut(ORMOut):
     id: uuid.UUID
+    company_id: uuid.UUID
     employee_code: str
     first_name: str
     last_name: str
@@ -49,6 +54,7 @@ class EmployeeStatsOut(BaseModel):
 
 
 class CreateDepartmentRequest(BaseModel):
+    company_id: uuid.UUID
     name: str = Field(..., min_length=2, max_length=120)
     description: str | None = None
     parent_department_id: uuid.UUID | None = None
@@ -61,6 +67,7 @@ class UpdateDepartmentRequest(BaseModel):
 
 
 class CreateEmployeeRequest(BaseModel):
+    company_id: uuid.UUID
     employee_code: str = Field(..., min_length=2, max_length=32)
     first_name: str = Field(..., min_length=2, max_length=120)
     last_name: str = Field(..., min_length=2, max_length=120)
@@ -91,18 +98,14 @@ class UpdateEmployeeRequest(BaseModel):
     photo_url: str | None = Field(None, max_length=2048)
 
 
-class LinkUserRequest(BaseModel):
-    user_id: uuid.UUID
-
-
 __all__ = [
-    "DepartmentOut",
-    "EmployeeOut",
     "CreateDepartmentRequest",
-    "UpdateDepartmentRequest",
     "CreateEmployeeRequest",
-    "UpdateEmployeeRequest",
-    "LinkUserRequest",
+    "DepartmentOut",
+    "DepartmentPage",
+    "EmployeeOut",
     "Page",
     "PageMeta",
+    "UpdateDepartmentRequest",
+    "UpdateEmployeeRequest",
 ]

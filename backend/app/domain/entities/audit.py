@@ -12,6 +12,8 @@ class AuditLog:
     id: uuid.UUID
     action: str
     user_id: uuid.UUID | None = None
+    company_id: uuid.UUID | None = None
+    branch_id: uuid.UUID | None = None
     resource_type: str | None = None
     resource_id: str | None = None
     before_state: dict[str, Any] | None = None

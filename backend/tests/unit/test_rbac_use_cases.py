@@ -19,6 +19,7 @@ from app.application.rbac.role_crud import (
     CreateRoleInput,
     CreateRoleUseCase,
     DeleteRoleUseCase,
+    ListRolesUseCase,
     SetRolePermissionsInput,
     SetRolePermissionsUseCase,
     UpdateRoleInput,
@@ -159,6 +160,22 @@ async def test_create_role_duplicate_name() -> None:
     await uc.execute(CreateRoleInput(name="DUP"))
     with pytest.raises(ConflictError):
         await uc.execute(CreateRoleInput(name="DUP"))
+
+
+async def test_list_roles_page_applies_limit_and_search() -> None:
+    roles = InMemoryRoleRepository()
+    for name in ("ADMIN", "EMPLOYEE", "MANAGER"):
+        await CreateRoleUseCase(roles).execute(CreateRoleInput(name=name))
+
+    items, total = await ListRolesUseCase(roles).execute_page(
+        page=1,
+        size=1,
+        search="man",
+        load_permissions=True,
+    )
+
+    assert total == 1
+    assert [role.name for role in items] == ["MANAGER"]
 
 
 async def test_update_role_success() -> None:

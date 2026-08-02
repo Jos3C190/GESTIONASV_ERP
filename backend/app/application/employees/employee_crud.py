@@ -17,6 +17,7 @@ log = get_logger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class CreateEmployeeInput:
+    company_id: uuid.UUID
     employee_code: str
     first_name: str
     last_name: str
@@ -40,7 +41,7 @@ class CreateEmployeeUseCase:
         self._departments = departments
 
     async def execute(self, inp: CreateEmployeeInput) -> Employee:
-        if await self._employees.get_by_code(inp.employee_code):
+        if await self._employees.get_by_code(inp.company_id, inp.employee_code):
             raise ConflictError(
                 "El código de empleado ya existe.", code="employee_code_taken"
             )
@@ -50,8 +51,11 @@ class CreateEmployeeUseCase:
                 raise ConflictError(
                     "Departamento no encontrado.", code="dept_not_found"
                 )
+            if dept.company_id != inp.company_id:
+                raise ConflictError("El departamento pertenece a otra empresa.", code="dept_company_mismatch")
         emp = Employee(
             id=uuid.uuid4(),
+            company_id=inp.company_id,
             user_id=inp.user_id,
             employee_code=inp.employee_code,
             first_name=inp.first_name,
@@ -108,6 +112,7 @@ class UpdateEmployeeUseCase:
 
         updated = Employee(
             id=emp.id,
+            company_id=emp.company_id,
             user_id=emp.user_id,
             employee_code=emp.employee_code,
             first_name=inp.first_name or emp.first_name,
@@ -138,6 +143,8 @@ class ListEmployeesInput:
     search: str | None = None
     department_id: uuid.UUID | None = None
     status: str | None = None
+    company_id: uuid.UUID | None = None
+    branch_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +170,8 @@ class ListEmployeesUseCase:
             search=inp.search,
             department_id=inp.department_id,
             status=inp.status,
+            company_id=inp.company_id,
+            branch_id=inp.branch_id,
         )
         pages = (total + size - 1) // size if total else 1
         return ListEmployeesResult(items=items, total=total, page=page, size=size, pages=pages)
@@ -187,6 +196,11 @@ class DeleteEmployeeUseCase:
         emp = await self._employees.get_by_id(emp_id)
         if emp is None:
             raise NotFoundError("Empleado no encontrado.", code="employee_not_found")
+        if emp.user_id is not None:
+            raise ConflictError(
+                "No se puede eliminar un empleado que posee una cuenta de usuario.",
+                code="employee_has_user",
+            )
         ok = await self._employees.soft_delete(emp_id)
         if ok:
             log.info("employee_deleted", emp_id=str(emp_id))
@@ -213,17 +227,4 @@ class LinkUserUseCase:
             )
         ok = await self._employees.link_to_user(inp.emp_id, inp.user_id)
         log.info("employee_linked", emp_id=str(inp.emp_id), user_id=str(inp.user_id))
-        return ok
-
-
-class UnlinkUserUseCase:
-    def __init__(self, employees: EmployeeRepository) -> None:
-        self._employees = employees
-
-    async def execute(self, emp_id: uuid.UUID) -> bool:
-        emp = await self._employees.get_by_id(emp_id)
-        if emp is None:
-            raise NotFoundError("Empleado no encontrado.", code="employee_not_found")
-        ok = await self._employees.unlink_from_user(emp_id)
-        log.info("employee_unlinked", emp_id=str(emp_id))
         return ok

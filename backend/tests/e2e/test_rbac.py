@@ -8,7 +8,7 @@ import uuid
 
 import pytest
 
-from tests.e2e.conftest import seed_user
+from tests.e2e.conftest import get_test_company_id, seed_user
 
 pytestmark = pytest.mark.e2e
 
@@ -18,7 +18,11 @@ async def _login_as(e2e_client, username: str, password: str) -> dict:
         "/api/v1/auth/login", json={"login": username, "password": password}
     )
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    company_id = await get_test_company_id()
+    return {
+        "Authorization": f"Bearer {r.json()['access_token']}",
+        "X-Company-ID": str(company_id),
+    }
 
 
 async def _login_superadmin(e2e_client) -> dict:
@@ -55,7 +59,7 @@ async def test_me_permissions_normal_user_returns_assigned_only(e2e_client) -> N
     headers = await _login_superadmin(e2e_client)
     uid = await seed_user(username="staff", email="staff@e.com")
     # Get ADMINISTRADOR role id
-    r = await e2e_client.get("/api/v1/roles", headers=headers)
+    r = await e2e_client.get("/api/v1/roles/catalogue", headers=headers)
     roles = r.json()
     admin_role = next((r for r in roles if r["name"] == "ADMINISTRADOR"), None)
     assert admin_role is not None
@@ -106,8 +110,8 @@ async def test_superuser_passes_all_permission_checks(e2e_client) -> None:
 async def test_administrator_can_list_users_but_not_delete_roles(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     uid = await seed_user(username="admin_user", email="adminuser@e.com")
-    r = await e2e_client.get("/api/v1/roles", headers=headers)
-    admin_role = next((r for r in r.json() if r["name"] == "ADMINISTRADOR"), None)
+    r = await e2e_client.get("/api/v1/roles/catalogue", headers=headers)
+    admin_role = next((role for role in r.json() if role["name"] == "ADMINISTRADOR"), None)
     await e2e_client.post(
         "/api/v1/roles/assign",
         headers=headers,
@@ -115,7 +119,10 @@ async def test_administrator_can_list_users_but_not_delete_roles(e2e_client) -> 
     )
     admin_headers = await _login_as(e2e_client, "admin_user", "Strong!Passw0rd2026")
     # Can list users
-    r = await e2e_client.get("/api/v1/users", headers=admin_headers)
+    r = await e2e_client.get(
+        f"/api/v1/users?company_id={admin_headers['X-Company-ID']}",
+        headers=admin_headers,
+    )
     assert r.status_code == 200
     # Cannot delete roles (no roles:delete permission)
     r = await e2e_client.delete(
@@ -129,10 +136,19 @@ async def test_administrator_can_list_users_but_not_delete_roles(e2e_client) -> 
 
 async def test_list_roles(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
-    r = await e2e_client.get("/api/v1/roles", headers=headers)
+    r = await e2e_client.get("/api/v1/roles?size=2&page=1", headers=headers)
     assert r.status_code == 200
-    names = {r["name"] for r in r.json()}
-    assert {"SUPER_ADMIN", "ADMINISTRADOR", "RECURSOS_HUMANOS", "EMPLEADO"}.issubset(names)
+    body = r.json()
+    assert len(body["items"]) == 2
+    assert body["meta"]["page"] == 1
+    assert body["meta"]["size"] == 2
+    assert body["meta"]["total"] >= 4
+
+    filtered = await e2e_client.get(
+        "/api/v1/roles?search=SUPER_ADMIN&is_system=true", headers=headers
+    )
+    assert filtered.status_code == 200
+    assert [role["name"] for role in filtered.json()["items"]] == ["SUPER_ADMIN"]
 
 
 async def test_create_role(e2e_client) -> None:
@@ -168,7 +184,7 @@ async def test_delete_non_system_role(e2e_client) -> None:
 
 async def test_delete_system_role_forbidden(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
-    r = await e2e_client.get("/api/v1/roles", headers=headers)
+    r = await e2e_client.get("/api/v1/roles/catalogue", headers=headers)
     super_role = next((r for r in r.json() if r["name"] == "SUPER_ADMIN"), None)
     r = await e2e_client.delete(
         f"/api/v1/roles/{super_role['id']}", headers=headers
@@ -200,7 +216,7 @@ async def test_set_role_permissions(e2e_client) -> None:
 async def test_assign_and_revoke_role(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     uid = await seed_user(username="target", email="target@e.com")
-    r = await e2e_client.get("/api/v1/roles", headers=headers)
+    r = await e2e_client.get("/api/v1/roles/catalogue", headers=headers)
     role = next((r for r in r.json() if r["name"] == "EMPLEADO"), None)
     fallback_role = next((r for r in r.json() if r["name"] == "ADMINISTRADOR"), None)
     # Assign

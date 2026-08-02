@@ -7,7 +7,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.api.v1.schemas.common import ORMOut
+from app.api.v1.schemas.common import ORMOut, Page
 
 
 class PermissionOut(ORMOut):
@@ -40,6 +40,9 @@ class RoleOut(ORMOut):
 
 class RoleWithPermissionsOut(RoleOut):
     permissions: list[PermissionOut] = Field(default_factory=list)
+
+
+RolePage = Page[RoleWithPermissionsOut]
 
 
 class CreateRoleRequest(BaseModel):

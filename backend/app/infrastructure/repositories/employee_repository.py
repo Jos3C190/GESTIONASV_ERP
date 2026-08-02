@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,11 +12,13 @@ from app.domain.entities.employee import Employee as DomainEmp
 from app.domain.entities.employee import EmployeeStatus
 from app.domain.ports.employee_repository import EmployeeStats
 from app.infrastructure.models.employee import Employee as ORMEmployee
+from app.infrastructure.models.employee import EmployeeBranchAssignment
 
 
 def _to_domain(orm: ORMEmployee) -> DomainEmp:
     return DomainEmp(
         id=orm.id,
+        company_id=orm.company_id,
         user_id=orm.user_id,
         employee_code=orm.employee_code,
         first_name=orm.first_name,
@@ -49,9 +51,9 @@ class SqlAlchemyEmployeeRepository:
         orm = result.scalar_one_or_none()
         return _to_domain(orm) if orm else None
 
-    async def get_by_code(self, code: str) -> DomainEmp | None:
+    async def get_by_code(self, company_id: uuid.UUID, code: str) -> DomainEmp | None:
         stmt = select(ORMEmployee).where(
-            ORMEmployee.employee_code == code, ORMEmployee.deleted_at.is_(None)
+            ORMEmployee.company_id == company_id, ORMEmployee.employee_code == code, ORMEmployee.deleted_at.is_(None)
         )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
@@ -73,9 +75,23 @@ class SqlAlchemyEmployeeRepository:
         search: str | None = None,
         department_id: uuid.UUID | None = None,
         status: str | None = None,
+        company_id: uuid.UUID | None = None,
+        branch_id: uuid.UUID | None = None,
     ) -> tuple[Sequence[DomainEmp], int]:
         base = select(ORMEmployee).where(ORMEmployee.deleted_at.is_(None))
         count_base = select(func.count(ORMEmployee.id)).where(ORMEmployee.deleted_at.is_(None))
+        if company_id is not None:
+            base = base.where(ORMEmployee.company_id == company_id)
+            count_base = count_base.where(ORMEmployee.company_id == company_id)
+        if branch_id is not None:
+            base = base.join(EmployeeBranchAssignment).where(
+                EmployeeBranchAssignment.branch_id == branch_id,
+                EmployeeBranchAssignment.is_active.is_(True),
+            )
+            count_base = count_base.join(EmployeeBranchAssignment).where(
+                EmployeeBranchAssignment.branch_id == branch_id,
+                EmployeeBranchAssignment.is_active.is_(True),
+            )
         if search:
             like = f"%{search}%"
             cond = or_(
@@ -98,6 +114,7 @@ class SqlAlchemyEmployeeRepository:
 
     async def add(self, emp: DomainEmp) -> DomainEmp:
         orm = ORMEmployee(
+            company_id=emp.company_id,
             user_id=emp.user_id,
             employee_code=emp.employee_code,
             first_name=emp.first_name,
@@ -148,7 +165,7 @@ class SqlAlchemyEmployeeRepository:
         stmt = (
             update(ORMEmployee)
             .where(ORMEmployee.id == emp_id, ORMEmployee.deleted_at.is_(None))
-            .values(deleted_at=datetime.now(timezone.utc))
+            .values(deleted_at=datetime.now(UTC))
         )
         result = await self._session.execute(stmt)
         return (result.rowcount or 0) > 0
@@ -162,16 +179,11 @@ class SqlAlchemyEmployeeRepository:
         result = await self._session.execute(stmt)
         return (result.rowcount or 0) > 0
 
-    async def unlink_from_user(self, emp_id: uuid.UUID) -> bool:
-        stmt = (
-            update(ORMEmployee)
-            .where(ORMEmployee.id == emp_id, ORMEmployee.deleted_at.is_(None))
-            .values(user_id=None)
-        )
-        result = await self._session.execute(stmt)
-        return (result.rowcount or 0) > 0
-
-    async def get_stats(self) -> EmployeeStats:
+    async def get_stats(
+        self,
+        company_id: uuid.UUID | None = None,
+        branch_id: uuid.UUID | None = None,
+    ) -> EmployeeStats:
         """Single GROUP BY query — O(1) cost regardless of employee count."""
         base = select(
             ORMEmployee.status,
@@ -182,6 +194,18 @@ class SqlAlchemyEmployeeRepository:
             ORMEmployee.deleted_at.is_(None),
             ORMEmployee.user_id.is_not(None),
         )
+        if company_id is not None:
+            base = base.where(ORMEmployee.company_id == company_id)
+            linked_stmt = linked_stmt.where(ORMEmployee.company_id == company_id)
+        if branch_id is not None:
+            base = base.join(EmployeeBranchAssignment).where(
+                EmployeeBranchAssignment.branch_id == branch_id,
+                EmployeeBranchAssignment.is_active.is_(True),
+            )
+            linked_stmt = linked_stmt.join(EmployeeBranchAssignment).where(
+                EmployeeBranchAssignment.branch_id == branch_id,
+                EmployeeBranchAssignment.is_active.is_(True),
+            )
 
         rows = (await self._session.execute(base)).all()
         linked = int((await self._session.execute(linked_stmt)).scalar_one())
