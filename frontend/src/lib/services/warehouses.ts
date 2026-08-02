@@ -1,4 +1,9 @@
-import { api, type WarehouseOut } from '$lib/api/client';
+import {
+  api,
+  type PageMeta,
+  type WarehouseListSummary,
+  type WarehouseOut
+} from '$lib/api/client';
 import {
   type Warehouse,
   type WarehouseMovement,
@@ -7,8 +12,7 @@ import {
   type WarehouseType,
   type AccessControlType,
   type CoolingType,
-  WAREHOUSES
-} from '$lib/features/warehouses/mock-data';
+} from '$lib/features/warehouses/types';
 
 /**
  * Maps a backend API warehouse representation to the frontend's domain Warehouse entity.
@@ -16,8 +20,10 @@ import {
 export function mapWarehouseOutToWarehouse(w: WarehouseOut): Warehouse {
   return {
     id: w.id,
+    categoryId: w.warehouse_category_id,
     code: w.code,
     name: w.name,
+    description: w.description ?? '',
     type: (w.type ?? 'general') as WarehouseType,
     status: (w.status ?? 'active') as WarehouseStatus,
     location: w.location,
@@ -34,6 +40,7 @@ export function mapWarehouseOutToWarehouse(w: WarehouseOut): Warehouse {
     used: w.used,
     products: w.products,
     manager: w.manager ?? '',
+    managerEmployeeId: w.manager_employee_id,
     managerInitials: w.manager_initials ?? '',
     operators: w.operators ?? 0,
     shifts: w.shifts ?? [],
@@ -84,6 +91,7 @@ export function mapWarehouseOutToWarehouse(w: WarehouseOut): Warehouse {
     sanitaryPermitExpiry: w.sanitary_permit_expiry ?? null,
     lastInspection: w.last_inspection ?? '',
     certifications: w.certifications ?? [],
+    images: w.images ?? [],
     createdAt: w.created_at ?? '',
     updatedAt: w.updated_at ?? null,
   };
@@ -93,34 +101,36 @@ export function mapWarehouseOutToWarehouse(w: WarehouseOut): Warehouse {
  * Fetches all warehouses from the API, optionally filtering by branch.
  * Falls back to mock data if the backend endpoint is not yet implemented or active.
  */
-export async function getWarehouses(params?: { branchId?: string }): Promise<Warehouse[]> {
-  try {
-    const list = await api.warehouses.list({
-      branch_id: params?.branchId
-    });
-    return list.map(mapWarehouseOutToWarehouse);
-  } catch (err) {
-    console.warn('[Warehouses Service] API not ready or returned error. Using mock data.', err);
-    if (params?.branchId) {
-      return WAREHOUSES.filter(w => w.branchId === params.branchId);
-    }
-    return WAREHOUSES;
-  }
+export async function getWarehouses(params?: {
+  branchId?: string;
+  page?: number;
+  size?: number;
+  search?: string;
+  status?: string;
+  sort?: 'capacity' | 'name' | 'movement';
+  signal?: AbortSignal;
+}): Promise<{ items: Warehouse[]; meta: PageMeta; summary: WarehouseListSummary }> {
+  const response = await api.warehouses.list({
+    branch_id: params?.branchId,
+    page: params?.page,
+    size: params?.size,
+    search: params?.search,
+    status: params?.status,
+    sort: params?.sort,
+    signal: params?.signal
+  });
+  return {
+    items: response.items.map(mapWarehouseOutToWarehouse),
+    meta: response.meta,
+    summary: response.summary
+  };
 }
 
 /**
  * Fetches a single warehouse by ID.
  */
 export async function getWarehouse(id: string): Promise<Warehouse> {
-  try {
-    const res = await api.warehouses.get(id);
-    return mapWarehouseOutToWarehouse(res);
-  } catch (err) {
-    console.warn(`[Warehouses Service] API get failed for ${id}. Checking mock data.`, err);
-    const mock = WAREHOUSES.find(w => w.id === id);
-    if (!mock) throw err;
-    return mock;
-  }
+  return mapWarehouseOutToWarehouse(await api.warehouses.get(id));
 }
 
 /**
@@ -130,15 +140,13 @@ export async function createWarehouse(warehouse: Omit<Warehouse, 'id'>): Promise
   const payload = {
     code: warehouse.code,
     name: warehouse.name,
-    type: warehouse.type,
-    status: warehouse.status,
-    location: warehouse.location,
+    warehouse_type: warehouse.type,
+    operational_status: warehouse.status,
+    physical_location: warehouse.location,
     branch_id: warehouse.branchId,
-    branch_name: warehouse.branchName,
-    branch_address: warehouse.branchAddress,
+    warehouse_category_id: warehouse.categoryId,
     capacity: warehouse.capacity,
-    used: warehouse.used,
-    products: warehouse.products,
+    area: warehouse.area || null,
   };
   const res = await api.warehouses.create(payload);
   return mapWarehouseOutToWarehouse(res);
@@ -151,12 +159,10 @@ export async function updateWarehouse(id: string, warehouse: Partial<Warehouse>)
   const payload: Record<string, unknown> = {};
   if (warehouse.code !== undefined) payload.code = warehouse.code;
   if (warehouse.name !== undefined) payload.name = warehouse.name;
-  if (warehouse.type !== undefined) payload.type = warehouse.type;
-  if (warehouse.status !== undefined) payload.status = warehouse.status;
-  if (warehouse.location !== undefined) payload.location = warehouse.location;
+  if (warehouse.type !== undefined) payload.warehouse_type = warehouse.type;
+  if (warehouse.status !== undefined) payload.operational_status = warehouse.status;
+  if (warehouse.location !== undefined) payload.physical_location = warehouse.location;
   if (warehouse.capacity !== undefined) payload.capacity = warehouse.capacity;
-  if (warehouse.used !== undefined) payload.used = warehouse.used;
-  if (warehouse.products !== undefined) payload.products = warehouse.products;
 
   const res = await api.warehouses.update(id, payload);
   return mapWarehouseOutToWarehouse(res);
@@ -166,5 +172,5 @@ export async function updateWarehouse(id: string, warehouse: Partial<Warehouse>)
  * Deletes a warehouse via API.
  */
 export async function deleteWarehouse(id: string): Promise<void> {
-  await api.warehouses.delete(id);
+  await api.warehouses.deactivate(id);
 }
