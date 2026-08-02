@@ -40,22 +40,27 @@ O sin Make:
 
 ```bash
 git clone <repo-url> erp-system && cd erp-system
-# En macOS/Linux/Git Bash:
-bash scripts/setup.sh
-# En Windows PowerShell:
+cp .env.example .env
 docker compose up -d --build
-# luego esperar a que el backend esté healthy y ejecutar:
-docker compose exec backend python -m seed.seed_data
 ```
+
+En Windows PowerShell, use `Copy-Item .env.example .env` en lugar de `cp`.
+Docker Compose
+espera las migraciones, ejecuta la semilla idempotente y levanta el frontend
+solamente cuando la base queda lista.
 
 `make setup` hace todo automáticamente:
 
 1. Copia `.env.example` → `.env`
-2. Construye y levanta los 3 contenedores (db, backend, frontend)
+2. Construye y levanta la base, backend, trabajo de semilla y frontend
 3. Espera a que Postgres esté healthy
 4. Ejecuta migraciones Alembic automáticamente (al arrancar el backend)
-5. Siembra la base de datos: catálogo de permisos, roles base, super-admin, 25 usuarios demo
+5. Siembra RBAC, superadministrador y el contexto operativo de Grupo Lorena
 6. Muestra las URLs y credenciales
+
+La semilla oficial crea una sola empresa: **Grupo Lorena**, con sucursales,
+departamentos, empleados, usuarios operativos, categorías, almacenes y
+ubicaciones. Es segura para reejecutarse y no duplica registros.
 
 ### URLs
 
@@ -72,11 +77,12 @@ docker compose exec backend python -m seed.seed_data
 | Campo | Valor |
 |-------|-------|
 | Usuario | `superadmin` |
-| Contraseña | `Cambio!Seguro2026` |
+| Contraseña | valor de `SUPER_ADMIN_PASSWORD` en `.env` |
 
 > **Cambiar antes de producción.** Ver `.env` para `JWT_SECRET_KEY` y `POSTGRES_PASSWORD`.
 
-25 usuarios demo adicionales con contraseña `Demo!Usuario2026`.
+Los usuarios operativos de la semilla tienen contraseñas aleatorias no
+recuperables. Un administrador debe asignarles una contraseña antes de usarlos.
 
 ---
 
@@ -90,7 +96,7 @@ make ps              # estado de contenedores
 make test            # todos los tests (backend + frontend)
 make test-backend    # tests backend
 make test-frontend   # tests frontend
-make seed            # re-sembrar la base de datos
+make seed            # reejecutar la semilla idempotente de Grupo Lorena
 make reset-db        # wipe + migrar (destructivo)
 make clean           # remover todo (contenedores, volúmenes, imágenes)
 make lint            # lint backend + frontend

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Run the backend seed (idempotent). Phase 1 seeds SUPER_ADMIN + demo users.
+# Run the official Grupo Lorena bootstrap seed (idempotent).
 set -euo pipefail
-echo "[seed] Running backend seed (idempotent)..."
-docker compose exec -T backend python -m seed.seed_data 2>&1 || \
-  echo "[seed] Backend not reachable — is the stack running? Try 'make up' first."
+
+echo "[seed] Running Grupo Lorena seed..."
+docker compose run --rm seed

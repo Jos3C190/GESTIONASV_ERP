@@ -15,6 +15,7 @@
   import Modal from '$lib/components/ui/Modal.svelte';
   import FormField from '$lib/components/ui/FormField.svelte';
   import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
+  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
   import { confirmation } from '$lib/stores/confirmation.svelte';
 
   let roles = $state<RoleWithPermissions[]>([]);
@@ -283,6 +284,36 @@
     });
   }
 
+  function roleMenuItems(role: RoleWithPermissions): KebabItem[] {
+    const items: KebabItem[] = [];
+
+    if (permissions.hasPermission('permissions:manage')) {
+      items.push({
+        id: 'permissions',
+        label: 'Gestionar permisos',
+        icon: 'key',
+        onClick: () => openPermissions(role)
+      });
+    }
+    if (!role.is_system && permissions.hasPermission('roles:update')) {
+      items.push({ id: 'edit', label: 'Editar', icon: 'edit', onClick: () => openEdit(role) });
+    }
+    if (permissions.hasPermission('roles:create')) {
+      items.push({ id: 'duplicate', label: 'Duplicar', icon: 'custom', onClick: () => openDuplicate(role) });
+    }
+    if (!role.is_system && permissions.hasPermission('roles:delete')) {
+      items.push({
+        id: 'delete',
+        label: 'Eliminar',
+        icon: 'delete',
+        variant: 'danger',
+        onClick: () => deleteRole(role)
+      });
+    }
+
+    return items;
+  }
+
   function togglePerm(code: string) {
     if (selectedPerms.has(code)) selectedPerms.delete(code);
     else selectedPerms.add(code);
@@ -406,7 +437,8 @@
       {#each roles as role (role.id)}
         {@const visiblePermissions = role.permissions.slice(0, 5)}
         {@const hiddenPermissionCount = role.permissions.length - visiblePermissions.length}
-        <Card class="flex h-[328px] flex-col p-5 hover-lift">
+        {@const menuItems = roleMenuItems(role)}
+        <Card class="flex h-[252px] flex-col p-5 hover-lift">
           <!-- Header -->
           <div class="flex min-h-[64px] items-start justify-between gap-3">
             <div class="flex min-w-0 items-center gap-3">
@@ -442,24 +474,29 @@
                 </p>
               </div>
             </div>
-            {#if role.is_system}
-              <span
-                class="badge-primary inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg
+            <div class="flex flex-none items-center gap-1">
+              {#if role.is_system}
+                <span
+                  class="badge-primary inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold"
                 >
-                Sistema
-              </span>
-            {/if}
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg
+                  >
+                  Sistema
+                </span>
+              {/if}
+              {#if menuItems.length > 0}
+                <KebabMenu items={menuItems} ariaLabel={`Acciones para ${role.name}`} />
+              {/if}
+            </div>
           </div>
 
           <!-- Permissions -->
@@ -506,49 +543,6 @@
             </div>
           </div>
 
-          <!-- Footer -->
-          <div class="mt-auto flex min-h-[49px] items-end gap-2 border-t border-border pt-4">
-            {#if permissions.hasPermission('permissions:manage')}
-              <Button variant="secondary" size="sm" onclick={() => openPermissions(role)}>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                  ><path
-                    d="M9 12l2 2 4-4M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"
-                  /></svg
-                >
-                Permisos
-              </Button>
-            {/if}
-            {#if !role.is_system}
-              {#if permissions.hasPermission('roles:update')}
-                <Button variant="ghost" size="sm" onclick={() => openEdit(role)}>Editar</Button>
-              {/if}
-              {#if permissions.hasPermission('roles:create')}
-                <Button variant="ghost" size="sm" onclick={() => openDuplicate(role)}
-                  >Duplicar</Button
-                >
-              {/if}
-              {#if permissions.hasPermission('roles:delete')}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onclick={() => deleteRole(role)}
-                  class="!text-danger hover:!bg-danger/10">Eliminar</Button
-                >
-              {/if}
-            {:else if permissions.hasPermission('roles:create')}
-              <Button variant="ghost" size="sm" onclick={() => openDuplicate(role)}>Duplicar</Button
-              >
-            {/if}
-          </div>
         </Card>
       {/each}
     </div>

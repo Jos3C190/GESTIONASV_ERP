@@ -1,4 +1,4 @@
-"""Seed package. Phase 1: super-admin + demo users. Phase 2 adds RBAC catalogue.
+"""Idempotent development bootstrap for the Grupo Lorena ERP context.
 
-Run via: python -m seed.seed_data
+Run with: ``python -m seed.seed_data``.
 """

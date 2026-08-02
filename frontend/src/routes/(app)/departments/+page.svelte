@@ -16,12 +16,14 @@
   import { confirmation } from '$lib/stores/confirmation.svelte';
   import FormField from '$lib/components/ui/FormField.svelte';
   import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
+  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
 
   let departments = $state<DepartmentOut[]>([]);
   let departmentCatalogue = $state<DepartmentOut[]>([]);
   let meta = $state<PageMeta | null>(null);
   let page = $state(1);
-  const pageSize = 12;
+  // La cuadrícula de escritorio usa tres columnas: 15 elementos completan cinco filas útiles.
+  const pageSize = 15;
   let loading = $state(false);
   let error = $state<string | null>(null);
   let success = $state<string | null>(null);
@@ -145,6 +147,22 @@
         await Promise.all([loadDepartments(), loadDepartmentCatalogue()]);
       }
     });
+  }
+
+  function departmentMenuItems(department: DepartmentOut): KebabItem[] {
+    if (!permissions.hasPermission('departments:manage')) return [];
+
+    return [
+      { id: 'branches', label: 'Gestionar sucursales', icon: 'link', onClick: () => openBranches(department) },
+      { id: 'edit', label: 'Editar', icon: 'edit', onClick: () => openEdit(department) },
+      {
+        id: 'delete',
+        label: 'Eliminar',
+        icon: 'delete',
+        variant: 'danger',
+        onClick: () => deleteDept(department)
+      }
+    ];
   }
 
   async function openBranches(d: DepartmentOut) {
@@ -293,6 +311,7 @@
   {:else}
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {#each departments as dept (dept.id)}
+        {@const menuItems = departmentMenuItems(dept)}
         <Card class="p-5 hover-lift">
           <div class="flex items-start justify-between gap-3">
             <div class="flex items-center gap-3">
@@ -320,6 +339,9 @@
                 <p class="text-xs text-foreground-muted">{dept.description ?? 'Sin descripción'}</p>
               </div>
             </div>
+            {#if menuItems.length > 0}
+              <KebabMenu items={menuItems} ariaLabel={`Acciones para ${dept.name}`} />
+            {/if}
           </div>
 
           <div class="mt-4 flex items-center gap-2 rounded-lg bg-surface-muted/50 px-3 py-2">
@@ -339,21 +361,6 @@
               >{parentName(dept.parent_department_id)}</span
             >
           </div>
-
-          {#if permissions.hasPermission('departments:manage')}
-            <div class="mt-4 flex items-center gap-2 border-t border-border pt-3">
-              <Button variant="ghost" size="sm" onclick={() => openBranches(dept)}
-                >Sucursales</Button
-              >
-              <Button variant="ghost" size="sm" onclick={() => openEdit(dept)}>Editar</Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onclick={() => deleteDept(dept)}
-                class="!text-danger hover:!bg-danger/10">Eliminar</Button
-              >
-            </div>
-          {/if}
         </Card>
       {/each}
     </div>

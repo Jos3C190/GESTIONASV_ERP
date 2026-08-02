@@ -30,6 +30,12 @@ services:
     expose:
       - "8000"
 
+  seed:
+    build:
+      target: prod
+    environment:
+      AUTO_SEED: "false"
+
   frontend:
     build:
       target: prod

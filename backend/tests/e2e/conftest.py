@@ -4,7 +4,7 @@ These tests require the dev stack to be running (`make up`). They use the same
 `erp_db` that the backend uses, but clean the auth tables before each test to
 isolate them. Migrations are NOT mocked here — the schema is already in place.
 
-A session-scoped fixture re-seeds the SUPER_ADMIN user after all e2e tests
+A session-scoped fixture restores the SUPER_ADMIN user after all e2e tests
 finish, so the running stack remains usable after `pytest`.
 """
 from __future__ import annotations
@@ -27,8 +27,7 @@ os.environ["DATABASE_URL"] = os.environ.get(
 
 @pytest.fixture(scope="session", autouse=True)
 async def _restore_seed_after_suite() -> AsyncIterator[None]:
-    """After all e2e tests finish, re-seed the SUPER_ADMIN + demo users so
-    the running stack stays usable for manual testing."""
+    """Restore the technical administrator after destructive auth tests."""
     yield
     # Import here so env vars are applied first.
     from app.core.security import hash_password
