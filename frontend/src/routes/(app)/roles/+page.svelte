@@ -4,19 +4,29 @@
     HttpError,
     type RoleWithPermissions,
     type PermissionOut,
-    type UserOut
+    type UserOut,
+    type PageMeta
   } from '$lib/api/client';
+  import { onDestroy, onMount } from 'svelte';
   import { search as globalSearch } from '$lib/stores/search.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import FormField from '$lib/components/ui/FormField.svelte';
+  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
+  import { confirmation } from '$lib/stores/confirmation.svelte';
 
   let roles = $state<RoleWithPermissions[]>([]);
+  let roleCatalogue = $state<RoleWithPermissions[]>([]);
   let allPermissions = $state<PermissionOut[]>([]);
+  let meta = $state<PageMeta | null>(null);
+  let page = $state(1);
+  const pageSize = 12;
   let loading = $state(false);
   let error = $state<string | null>(null);
+  let listController: AbortController | null = null;
+  let requestGeneration = 0;
 
   let modalMode = $state<
     | 'create'
@@ -42,22 +52,58 @@
   let selectedUserRoleIds = $state<Set<string>>(new Set());
   let originalUserRoleIds = $state<Set<string>>(new Set());
   let success = $state<string | null>(null);
+  let permissionQuery = $state('');
+  let assignedRoleQuery = $state('');
 
-  async function loadRoles() {
+  async function loadRoles(
+    requestedPage = page,
+    search = globalSearch.query.trim(),
+    system = systemFilter,
+    module = moduleFilter
+  ) {
+    listController?.abort();
+    const controller = new AbortController();
+    listController = controller;
+    const generation = ++requestGeneration;
     loading = true;
     error = null;
     try {
-      [roles, allPermissions] = await Promise.all([api.roles.list(), api.roles.listPermissions()]);
+      const response = await api.roles.list({
+        page: requestedPage,
+        size: pageSize,
+        search: search || undefined,
+        isSystem: system === 'system' ? true : system === 'custom' ? false : undefined,
+        module: module || undefined,
+        signal: controller.signal
+      });
+      if (generation !== requestGeneration) return;
+      roles = response.items;
+      meta = response.meta;
+      if (requestedPage > response.meta.pages) page = response.meta.pages;
     } catch (err) {
+      if (controller.signal.aborted) return;
       error = err instanceof HttpError ? err.message : 'Error.';
     } finally {
-      loading = false;
+      if (generation === requestGeneration) loading = false;
+    }
+  }
+
+  async function loadPermissions() {
+    try {
+      allPermissions = await api.roles.listPermissions();
+    } catch (err) {
+      error = err instanceof HttpError ? err.message : 'No se pudo cargar el catálogo de permisos.';
     }
   }
 
   function permsByModule(): [string, PermissionOut[]][] {
     const map: Record<string, PermissionOut[]> = {};
-    for (const p of allPermissions) {
+    const normalizedQuery = permissionQuery.trim().toLocaleLowerCase('es');
+    for (const p of allPermissions.filter((permission) =>
+      `${permission.code} ${permission.module ?? ''} ${permission.description ?? ''}`
+        .toLocaleLowerCase('es')
+        .includes(normalizedQuery)
+    )) {
       (map[p.module ?? 'otros'] ??= []).push(p);
     }
     return Object.entries(map);
@@ -105,6 +151,7 @@
     modalRole = r;
     formError = null;
     selectedPerms = new Set(r.permissions.map((p) => p.code));
+    permissionQuery = '';
   }
   async function openAssign() {
     modalMode = 'assign';
@@ -112,9 +159,14 @@
     fUserId = '';
     selectedUserRoleIds = new Set();
     originalUserRoleIds = new Set();
+    assignedRoleQuery = '';
     try {
-      const r = await api.users.list({ size: 100 });
-      users = r.items;
+      const [userPage, catalogue] = await Promise.all([
+        api.users.list({ size: 100 }),
+        api.roles.catalogue()
+      ]);
+      users = userPage.items;
+      roleCatalogue = catalogue;
     } catch {
       users = [];
     }
@@ -186,7 +238,7 @@
         success = 'Roles del usuario actualizados.';
       }
       closeModal();
-      await loadRoles();
+      await Promise.all([loadRoles(), loadPermissions()]);
     } catch (err) {
       formError = err instanceof Error ? err.message : 'Error.';
     } finally {
@@ -194,31 +246,41 @@
     }
   }
 
-  async function deleteRole(r: RoleWithPermissions) {
+  function deleteRole(r: RoleWithPermissions) {
     if (r.is_system) {
-      alert('Los roles de sistema no pueden eliminarse.');
+      error = 'Los roles de sistema están protegidos y no pueden eliminarse.';
       return;
     }
-    if (!confirm(`¿Eliminar el rol "${r.name}"?`)) return;
-    try {
-      await api.roles.delete(r.id);
-      success = 'Rol eliminado.';
-      await loadRoles();
-    } catch (err) {
-      error = err instanceof HttpError ? err.message : 'Error.';
-    }
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar rol',
+      description:
+        'El rol y sus asignaciones dejarán de estar disponibles. Los roles protegidos del sistema no pueden eliminarse.',
+      resourceName: r.name,
+      confirmLabel: 'Eliminar rol',
+      execute: async () => {
+        await api.roles.delete(r.id);
+        success = 'Rol eliminado.';
+        await loadRoles();
+      }
+    });
   }
 
-  async function deletePermission(permission: PermissionOut) {
-    if (!confirm(`¿Eliminar el permiso "${permission.code}"?`)) return;
-    try {
-      await api.roles.deletePermission(permission.id);
-      success = 'Permiso eliminado.';
-      closeModal();
-      await loadRoles();
-    } catch (err) {
-      error = err instanceof HttpError ? err.message : 'Error al eliminar el permiso.';
-    }
+  function deletePermission(permission: PermissionOut) {
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar permiso',
+      description:
+        'El permiso se retirará del catálogo y de los roles que lo utilicen. Esta acción no se puede deshacer desde la interfaz.',
+      resourceName: permission.code,
+      confirmLabel: 'Eliminar permiso',
+      execute: async () => {
+        await api.roles.deletePermission(permission.id);
+        success = 'Permiso eliminado.';
+        closeModal();
+        await Promise.all([loadRoles(), loadPermissions()]);
+      }
+    });
   }
 
   function togglePerm(code: string) {
@@ -230,24 +292,6 @@
   let systemFilter = $state('');
   let moduleFilter = $state('');
 
-  let filteredRoles = $derived.by(() => {
-    const q = globalSearch.query.toLowerCase().trim();
-    let result = roles;
-    if (q) {
-      result = result.filter(
-        (r) =>
-          r.name.toLowerCase().includes(q) ||
-          r.permissions.some((p) => p.code.toLowerCase().includes(q)) ||
-          (r.description ?? '').toLowerCase().includes(q)
-      );
-    }
-    if (systemFilter === 'system') result = result.filter((r) => r.is_system);
-    else if (systemFilter === 'custom') result = result.filter((r) => !r.is_system);
-    if (moduleFilter)
-      result = result.filter((r) => r.permissions.some((p) => (p.module ?? '') === moduleFilter));
-    return result;
-  });
-
   let permModules = $derived.by(() => {
     const s = new Set<string>();
     for (const p of allPermissions) {
@@ -256,9 +300,28 @@
     return [...s].sort();
   });
 
+  let previousFilterKey = '';
   $effect(() => {
-    loadRoles();
+    const filterKey = `${globalSearch.query.trim()}|${systemFilter}|${moduleFilter}`;
+    if (filterKey !== previousFilterKey) {
+      previousFilterKey = filterKey;
+      page = 1;
+    }
+    const requestedPage = page;
+    const search = globalSearch.query.trim();
+    const system = systemFilter;
+    const module = moduleFilter;
+    const timer = window.setTimeout(
+      () => loadRoles(requestedPage, search, system, module),
+      250
+    );
+    return () => window.clearTimeout(timer);
   });
+
+  onMount(() => {
+    void loadPermissions();
+  });
+  onDestroy(() => listController?.abort());
 </script>
 
 <svelte:head><title>Roles — ERP System</title></svelte:head>
@@ -266,7 +329,7 @@
 <div class="p-6 md:p-8">
   <div class="mb-5 flex items-center justify-between gap-4">
     <p class="text-sm text-foreground-muted">
-      {filteredRoles.length} rol(es) · {allPermissions.length} permisos
+      {meta?.total ?? 0} rol(es) · {allPermissions.length} permisos
     </p>
     <div class="flex items-center gap-2">
       <select
@@ -332,13 +395,21 @@
         <div class="h-44 rounded-2xl border border-border skeleton"></div>
       {/each}
     </div>
+  {:else if roles.length === 0}
+    <Card class="p-12">
+      <div class="flex flex-col items-center text-center">
+        <p class="text-sm text-foreground-muted">No hay roles para los filtros seleccionados.</p>
+      </div>
+    </Card>
   {:else}
     <div class="grid gap-5 md:grid-cols-2">
-      {#each filteredRoles as role (role.id)}
-        <Card class="p-5 hover-lift">
+      {#each roles as role (role.id)}
+        {@const visiblePermissions = role.permissions.slice(0, 5)}
+        {@const hiddenPermissionCount = role.permissions.length - visiblePermissions.length}
+        <Card class="flex h-[328px] flex-col p-5 hover-lift">
           <!-- Header -->
-          <div class="flex items-start justify-between gap-3">
-            <div class="flex items-center gap-3">
+          <div class="flex min-h-[64px] items-start justify-between gap-3">
+            <div class="flex min-w-0 items-center gap-3">
               <div
                 class="flex h-10 w-10 flex-none items-center justify-center rounded-xl {role.is_system
                   ? 'bg-foreground'
@@ -362,9 +433,13 @@
                   />
                 </svg>
               </div>
-              <div>
-                <h3 class="text-base font-bold text-foreground">{role.name}</h3>
-                <p class="text-xs text-foreground-muted">{role.description ?? 'Sin descripción'}</p>
+              <div class="min-w-0">
+                <h3 class="truncate text-base font-bold text-foreground" title={role.name}>
+                  {role.name}
+                </h3>
+                <p class="line-clamp-2 text-xs text-foreground-muted">
+                  {role.description ?? 'Sin descripción'}
+                </p>
               </div>
             </div>
             {#if role.is_system}
@@ -388,24 +463,51 @@
           </div>
 
           <!-- Permissions -->
-          <div class="mt-4">
-            <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground-subtle">
-              {role.permissions.length} permiso(s)
-            </p>
-            <div class="flex flex-wrap gap-1.5">
-              {#each role.permissions as perm (perm.code)}
+          <div class="mt-4 min-h-[120px] flex-1">
+            <div class="mb-2.5 flex items-center justify-between gap-3">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground-subtle">
+                Permisos asignados
+              </p>
+              <span
+                class="inline-flex min-w-7 items-center justify-center rounded-full border border-border bg-surface-muted px-2 py-0.5 text-[11px] font-semibold tabular-nums text-foreground-muted"
+                aria-label={`${role.permissions.length} permisos asignados`}
+              >
+                {role.permissions.length}
+              </span>
+            </div>
+            <div class="grid grid-cols-2 auto-rows-[28px] gap-1.5">
+              {#each visiblePermissions as perm (perm.code)}
                 <span
-                  class="rounded-lg border border-border bg-surface-muted px-2 py-1 text-xs font-mono text-foreground-muted"
+                  class="flex min-w-0 items-center truncate rounded-lg border border-border/80 bg-surface-muted/70 px-2.5 text-[11px] font-mono text-foreground-muted"
+                  title={perm.code}
                   >{perm.code}</span
                 >
               {:else}
-                <span class="text-xs italic text-foreground-subtle">Sin permisos asignados</span>
+                <span class="col-span-2 flex h-16 items-center justify-center rounded-xl border border-dashed border-border text-xs text-foreground-subtle">
+                  Sin permisos asignados
+                </span>
               {/each}
+              {#if hiddenPermissionCount > 0}
+                {#if permissions.hasPermission('permissions:manage')}
+                  <button
+                    type="button"
+                    class="flex items-center justify-center rounded-lg border border-primary/25 bg-primary/10 px-2.5 text-[11px] font-semibold text-primary transition-colors hover:border-primary/40 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    aria-label={`Ver ${hiddenPermissionCount} permisos adicionales de ${role.name}`}
+                    onclick={() => openPermissions(role)}
+                  >+{hiddenPermissionCount} permisos</button>
+                {:else}
+                  <span
+                    class="flex items-center justify-center rounded-lg border border-border bg-surface-muted px-2.5 text-[11px] font-semibold text-foreground-muted"
+                    title={role.permissions.slice(5).map((permission) => permission.code).join(', ')}
+                    >+{hiddenPermissionCount} permisos</span
+                  >
+                {/if}
+              {/if}
             </div>
           </div>
 
           <!-- Footer -->
-          <div class="mt-5 flex items-center gap-2 border-t border-border pt-4">
+          <div class="mt-auto flex min-h-[49px] items-end gap-2 border-t border-border pt-4">
             {#if permissions.hasPermission('permissions:manage')}
               <Button variant="secondary" size="sm" onclick={() => openPermissions(role)}>
                 <svg
@@ -449,6 +551,28 @@
           </div>
         </Card>
       {/each}
+    </div>
+  {/if}
+
+  {#if meta && meta.pages > 1}
+    <div class="mt-5 flex items-center justify-between gap-4">
+      <p class="text-xs text-foreground-muted">
+        Página {meta.page} de {meta.pages} · {meta.total} roles
+      </p>
+      <div class="flex gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onclick={() => (page = Math.max(1, page - 1))}
+          disabled={loading || meta.page <= 1}>Anterior</Button
+        >
+        <Button
+          variant="secondary"
+          size="sm"
+          onclick={() => (page = Math.min(meta!.pages, page + 1))}
+          disabled={loading || meta.page >= meta.pages}>Siguiente</Button
+        >
+      </div>
     </div>
   {/if}
 </div>
@@ -561,6 +685,17 @@
       <p class="text-sm text-foreground-muted">
         Permiso para el rol <strong class="text-foreground">{modalRole.name}</strong>
       </p>
+      <input
+        aria-label="Buscar permisos"
+        placeholder="Buscar por código, módulo o descripción…"
+        bind:value={permissionQuery}
+        class="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+      {#if permsByModule().length === 0}
+        <div class="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-foreground-muted">
+          No se encontraron permisos.
+        </div>
+      {/if}
       {#each permsByModule() as [mod, perms]}
         <div class="rounded-xl border border-border bg-surface-muted/50 p-3">
           <p class="mb-3 text-xs font-bold uppercase tracking-wider text-foreground-subtle">
@@ -613,14 +748,15 @@
         >
           {formError}
         </div>{/if}
-      <FormField
+      <SmartSelect
         id="a-user"
         label="Usuario"
         bind:value={fUserId}
-        oninput={loadSelectedUserRoles}
+        onselect={() => loadSelectedUserRoles()}
+        placeholder="Buscar usuario por nombre o correo…"
         options={[
           { value: '', label: '— Seleccionar —' },
-          ...users.map((u) => ({ value: u.id, label: `${u.username} (${u.email})` }))
+          ...users.map((u) => ({ value: u.id, label: u.username, description: u.email }))
         ]}
       />
       <fieldset class="space-y-2" disabled={!fUserId || formLoading}>
@@ -628,8 +764,25 @@
           Roles asignados
           <span class="font-normal text-foreground-muted">({selectedUserRoleIds.size})</span>
         </legend>
+        <input
+          aria-label="Buscar roles asignables"
+          placeholder="Buscar rol por nombre o descripción…"
+          bind:value={assignedRoleQuery}
+          class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+        />
         <div class="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-border p-3">
-          {#each roles as role (role.id)}
+          {#if roleCatalogue.filter((role) =>
+            `${role.name} ${role.description ?? ''}`
+              .toLocaleLowerCase('es')
+              .includes(assignedRoleQuery.trim().toLocaleLowerCase('es'))
+          ).length === 0}
+            <p class="px-2 py-5 text-center text-xs text-foreground-muted">No se encontraron roles.</p>
+          {/if}
+          {#each roleCatalogue.filter((role) =>
+            `${role.name} ${role.description ?? ''}`
+              .toLocaleLowerCase('es')
+              .includes(assignedRoleQuery.trim().toLocaleLowerCase('es'))
+          ) as role (role.id)}
             <label
               class="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-surface-muted"
             >
