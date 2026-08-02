@@ -6,7 +6,7 @@
 
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
-  import { STATUS_MAP, type Branch } from '$lib/features/branches/mock-data';
+import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
 
   interface Props {
     branch: Branch | null;
@@ -38,6 +38,11 @@
     if (branch.status === 'active') return '#0070F3';
     if (branch.status === 'maintenance') return '#F59E0B';
     return '#64748B';
+  });
+
+  let coordinates = $derived.by(() => {
+    if (!branch || !Number.isFinite(branch.lat) || !Number.isFinite(branch.lng)) return '—';
+    return `${branch.lat.toFixed(4)}, ${branch.lng.toFixed(4)}`;
   });
 </script>
 
@@ -161,7 +166,7 @@
           <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
         </svg>
         <p class="text-[9.5px] font-bold uppercase tracking-wider text-foreground-subtle flex-none">Coordenadas:</p>
-        <p class="font-mono text-[11px] font-semibold text-foreground truncate">{branch.lat.toFixed(4)}, {branch.lng.toFixed(4)}</p>
+        <p class="font-mono text-[11px] font-semibold text-foreground truncate">{coordinates}</p>
       </div>
     </div>
 

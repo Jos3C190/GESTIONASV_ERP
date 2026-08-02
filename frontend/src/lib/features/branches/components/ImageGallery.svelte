@@ -5,7 +5,7 @@
    * Soporte de teclado: ← → para navegar, Esc para cerrar lightbox.
    */
 
-  import type { BranchImage } from '$lib/features/branches/mock-data';
+import type { BranchImage } from '$lib/features/branches/types';
 
   interface Props {
     images: BranchImage[];
@@ -39,6 +39,10 @@
     lightboxOpen = false;
   }
 
+  function handleLightboxClick(e: MouseEvent) {
+    if (e.target === e.currentTarget) closeLightbox();
+  }
+
   function handleKeydown(e: KeyboardEvent) {
     if (lightboxOpen) {
       if (e.key === 'Escape') { e.preventDefault(); closeLightbox(); return; }
@@ -57,16 +61,14 @@
   <div class="space-y-3">
     <!-- Imagen principal -->
     <div class="relative group aspect-[16/10] overflow-hidden rounded-2xl border border-border bg-surface-muted shadow-soft">
-      <img
-        src={active.url}
-        alt={active.caption}
-        class="h-full w-full object-cover transition-all duration-500 {lightboxOpen ? '' : 'group-hover:scale-[1.02]'} cursor-zoom-in"
-        loading="lazy"
-        onclick={openLightbox}
-        role="button"
-        tabindex="0"
-        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLightbox(); } }}
-      />
+      <button type="button" class="block h-full w-full cursor-zoom-in" onclick={openLightbox} aria-label={`Ampliar ${active.caption}`}>
+        <img
+          src={active.url}
+          alt={active.caption}
+          class="pointer-events-none h-full w-full object-cover transition-all duration-500 {lightboxOpen ? '' : 'group-hover:scale-[1.02]'}"
+          loading="lazy"
+        />
+      </button>
 
       <!-- Gradiente inferior con caption -->
       <div class="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 via-black/30 to-transparent"></div>
@@ -143,7 +145,7 @@
     role="dialog"
     aria-modal="true"
     aria-label="Visor de imágenes"
-    onclick={closeLightbox}
+    onclick={handleLightboxClick}
     onkeydown={(e) => { if (e.key === 'Escape') { e.preventDefault(); closeLightbox(); } }}
     tabindex="-1"
   >
@@ -159,8 +161,7 @@
     <img
       src={active.url}
       alt={active.caption}
-      class="max-h-[85vh] max-w-[90vw] rounded-xl object-contain shadow-floating"
-      onclick={(e) => e.stopPropagation()}
+      class="pointer-events-none max-h-[85vh] max-w-[90vw] rounded-xl object-contain shadow-floating"
     />
 
     {#if count > 1}

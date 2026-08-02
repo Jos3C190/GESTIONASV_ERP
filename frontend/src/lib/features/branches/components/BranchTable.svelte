@@ -8,7 +8,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import KebabMenu from '$lib/components/ui/KebabMenu.svelte';
   import { goto } from '$app/navigation';
-  import { STATUS_MAP, type Branch } from '$lib/features/branches/mock-data';
+  import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
 
   interface Props {
     branches: Branch[];
@@ -25,20 +25,12 @@
   }
 
   function handleEdit(branch: Branch) {
-    if (onEdit) {
-      onEdit(branch);
-    } else {
-      alert(`Editar "${branch.name}" (Acción de ejemplo)`);
-    }
+    if (onEdit) onEdit(branch);
   }
 
   function handleDelete(branch: Branch) {
     if (onDelete) {
       onDelete(branch);
-    } else {
-      if (confirm(`¿Estás seguro de eliminar la sucursal "${branch.name}"?`)) {
-        alert(`Sucursal "${branch.name}" eliminada.`);
-      }
     }
   }
 
@@ -165,8 +157,8 @@
                 },
                 {
                   id: 'delete',
-                  label: 'Eliminar',
-                  icon: 'delete',
+                  label: branch.status === 'inactive' ? 'Activar' : 'Desactivar',
+                  icon: 'power',
                   variant: 'danger',
                   onClick: () => handleDelete(branch),
                 },

@@ -5,7 +5,8 @@
    */
 
   import { onMount } from 'svelte';
-  import type { Branch } from '$lib/features/branches/mock-data';
+  import type { Branch } from '$lib/features/branches/types';
+  import { loadLeaflet } from '$lib/services/maps';
   import { theme } from '$lib/stores/theme.svelte';
 
   interface Props {
@@ -19,6 +20,9 @@
   let containerEl: HTMLDivElement | null = $state(null);
   let mapInstance = $state<any>(null);
   let tileLayerInstance: any = null;
+  let markerInstance: any = null;
+  let popupTimer: ReturnType<typeof setTimeout> | null = null;
+  let destroyed = false;
 
   let markerColor = $derived.by(() => {
     if (branch.status === 'active') return '#10B981';
@@ -26,33 +30,16 @@
     return '#64748B';
   });
 
-  function loadLeaflet(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      if ((window as any).L) return resolve((window as any).L);
-
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.async = true;
-      script.onload = () => resolve((window as any).L);
-      script.onerror = (err) => reject(err);
-      document.head.appendChild(script);
-    });
-  }
-
   async function initMap() {
-    if (!containerEl) return;
+    if (!containerEl || destroyed) return;
     try {
       const L = await loadLeaflet();
-      if (!containerEl) return;
+      if (!containerEl || destroyed) return;
 
-      const tileUrl = theme.current === 'dark'
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+      const tileUrl =
+        theme.current === 'dark'
+          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+          : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
       mapInstance = L.map(containerEl, {
         center: [branch.lat, branch.lng],
@@ -85,11 +72,17 @@
         iconAnchor: [size / 2, size / 2]
       });
 
-      const marker = L.marker([branch.lat, branch.lng], { icon: customIcon }).addTo(mapInstance);
+      markerInstance = L.marker([branch.lat, branch.lng], { icon: customIcon }).addTo(mapInstance);
 
-      const statusLabel = branch.status === 'active' ? 'Activa' : branch.status === 'maintenance' ? 'Mantenimiento' : 'Inactiva';
+      const statusLabel =
+        branch.status === 'active'
+          ? 'Activa'
+          : branch.status === 'maintenance'
+            ? 'Mantenimiento'
+            : 'Inactiva';
 
-      marker.bindPopup(`
+      markerInstance.bindPopup(
+        `
         <div style="font-family: system-ui, -apple-system, sans-serif; width: 220px; border-radius: 8px; overflow: hidden; margin: -1px;">
           <div style="padding: 10px 12px 8px;">
             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
@@ -100,9 +93,13 @@
             <p style="margin: 4px 0 0 0; font-size: 11px; color: #6b7280;">${branch.address}</p>
           </div>
         </div>
-      `, { className: 'custom-leaflet-popup-light' });
+      `,
+        { className: 'custom-leaflet-popup-light' }
+      );
 
-      setTimeout(() => marker.openPopup(), 300);
+      popupTimer = setTimeout(() => {
+        if (!destroyed && markerInstance && mapInstance) markerInstance.openPopup();
+      }, 300);
     } catch (err) {
       console.error('Error al cargar mapa:', err);
     }
@@ -111,24 +108,54 @@
   $effect(() => {
     const currentTheme = theme.current;
     if (mapInstance && tileLayerInstance) {
-      const newUrl = currentTheme === 'dark'
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+      const newUrl =
+        currentTheme === 'dark'
+          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+          : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
       tileLayerInstance.setUrl(newUrl);
     }
   });
 
-  onMount(() => { initMap(); });
+  onMount(() => {
+    destroyed = false;
+    void initMap();
+
+    return () => {
+      destroyed = true;
+      if (popupTimer) clearTimeout(popupTimer);
+      popupTimer = null;
+      markerInstance?.off?.();
+      markerInstance?.remove?.();
+      markerInstance = null;
+      mapInstance?.off?.();
+      mapInstance?.remove?.();
+      mapInstance = null;
+      tileLayerInstance = null;
+      containerEl = null;
+    };
+  });
 </script>
 
-<div class="relative {fillHeight ? 'flex-1 min-h-[300px]' : 'w-full'} overflow-hidden rounded-xl border border-border bg-surface-elevated" style={fillHeight ? '' : `height: ${height}px`}>
+<div
+  class="relative {fillHeight
+    ? 'flex-1 min-h-[300px]'
+    : 'w-full'} overflow-hidden rounded-xl border border-border bg-surface-elevated"
+  style={fillHeight ? '' : `height: ${height}px`}
+>
   <div bind:this={containerEl} class="h-full w-full"></div>
 </div>
 
 <style>
   @keyframes markerPulse {
-    0%, 100% { transform: scale(0.9); opacity: 0.35; }
-    50% { transform: scale(1.4); opacity: 0.12; }
+    0%,
+    100% {
+      transform: scale(0.9);
+      opacity: 0.35;
+    }
+    50% {
+      transform: scale(1.4);
+      opacity: 0.12;
+    }
   }
 
   :global(.leaflet-popup-content-wrapper) {
@@ -145,7 +172,7 @@
     background: transparent !important;
     border: none !important;
   }
-  :global([data-theme="dark"] .leaflet-tile) {
+  :global([data-theme='dark'] .leaflet-tile) {
     filter: brightness(1.45) contrast(0.9) saturate(0.85);
   }
   :global(.leaflet-container) {
