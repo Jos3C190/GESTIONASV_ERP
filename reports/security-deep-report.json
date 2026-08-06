@@ -1,8 +1,8 @@
 {
 	"@programName": "ZAP",
 	"@version": "2.17.0",
-	"@generated": "Sun, 2 Aug 2026 02:04:13",
-	"created": "2026-08-02T02:04:13.261760586Z",
+	"@generated": "Thu, 6 Aug 2026 00:15:49",
+	"created": "2026-08-06T00:15:49.485689566Z",
 	"insights":[
 		{
 			"level": "Low",
@@ -10,7 +10,7 @@
 			"site": "",
 			"key": "insight.log.warn",
 			"description": "ZAP warnings logged - see the zap.log file for details",
-			"statistic": "255"
+			"statistic": "420"
 		},
 		{
 			"level": "Low",
@@ -58,7 +58,7 @@
 			"site": "http://backend:8000",
 			"key": "insight.endpoint.method.PATCH",
 			"description": "Percentage of endpoints with method PATCH",
-			"statistic": "7"
+			"statistic": "6"
 		},
 		{
 			"level": "Info",
@@ -66,7 +66,7 @@
 			"site": "http://backend:8000",
 			"key": "insight.endpoint.method.POST",
 			"description": "Percentage of endpoints with method POST",
-			"statistic": "27"
+			"statistic": "26"
 		},
 		{
 			"level": "Info",
@@ -74,7 +74,7 @@
 			"site": "http://backend:8000",
 			"key": "insight.endpoint.method.PUT",
 			"description": "Percentage of endpoints with method PUT",
-			"statistic": "1"
+			"statistic": "4"
 		},
 		{
 			"level": "Info",
@@ -82,7 +82,7 @@
 			"site": "http://backend:8000",
 			"key": "insight.endpoint.total",
 			"description": "Count of total endpoints",
-			"statistic": "287"
+			"statistic": "350"
 		},
 		{
 			"level": "Info",
@@ -111,7 +111,7 @@
 					"desc": "<p>A response code of 401 was returned by the server.</p><p>This may indicate that the application is failing to handle unexpected input correctly.</p><p>Raised by the 'Alert on HTTP Response Code Error' script</p>",
 					"instances":[ 
 						{
-							"id": "33",
+							"id": "49",
 							"uri": "http://backend:8000/api/v1/departments/dept_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/dept_id",
 							"method": "DELETE",
@@ -121,7 +121,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13387",
+							"id": "15345",
 							"uri": "http://backend:8000/api/v1/departments/dept_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/dept_id\/",
 							"method": "DELETE",
@@ -131,7 +131,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "39",
+							"id": "55",
 							"uri": "http://backend:8000/api/v1/employees/emp_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/emp_id",
 							"method": "DELETE",
@@ -141,7 +141,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13408",
+							"id": "15389",
 							"uri": "http://backend:8000/api/v1/employees/emp_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/emp_id\/",
 							"method": "DELETE",
@@ -151,7 +151,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "18",
+							"id": "34",
 							"uri": "http://backend:8000/api/v1/roles/permissions/permission_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/permissions\/permission_id",
 							"method": "DELETE",
@@ -161,7 +161,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13464",
+							"id": "15394",
 							"uri": "http://backend:8000/api/v1/roles/permissions/permission_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/permissions\/permission_id\/",
 							"method": "DELETE",
@@ -171,7 +171,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "21",
+							"id": "37",
 							"uri": "http://backend:8000/api/v1/roles/role_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/role_id",
 							"method": "DELETE",
@@ -181,9 +181,29 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13450",
+							"id": "15387",
 							"uri": "http://backend:8000/api/v1/roles/role_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/role_id\/",
+							"method": "DELETE",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "128",
+							"uri": "http://backend:8000/api/v1/suppliers/contacts/10",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/contacts\/10",
+							"method": "DELETE",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15443",
+							"uri": "http://backend:8000/api/v1/suppliers/contacts/10/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/contacts\/10\/",
 							"method": "DELETE",
 							"param": "",
 							"attack": "",
@@ -201,7 +221,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13447",
+							"id": "15440",
 							"uri": "http://backend:8000/api/v1/users/user_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/",
 							"method": "DELETE",
@@ -211,9 +231,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "118",
-							"uri": "http://backend:8000/163174601612063810",
-							"nodeName": "http:\/\/backend:8000\/163174601612063810",
+							"id": "131",
+							"uri": "http://backend:8000/3706302822627122347",
+							"nodeName": "http:\/\/backend:8000\/3706302822627122347",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -221,7 +241,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "166",
+							"id": "197",
 							"uri": "http://backend:8000/api",
 							"nodeName": "http:\/\/backend:8000\/api",
 							"method": "GET",
@@ -231,7 +251,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13476",
+							"id": "15417",
 							"uri": "http://backend:8000/api/",
 							"nodeName": "http:\/\/backend:8000\/api\/",
 							"method": "GET",
@@ -241,9 +261,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "119",
-							"uri": "http://backend:8000/api/7867200269252723903",
-							"nodeName": "http:\/\/backend:8000\/api\/7867200269252723903",
+							"id": "132",
+							"uri": "http://backend:8000/api/8006361277986520129",
+							"nodeName": "http:\/\/backend:8000\/api\/8006361277986520129",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -251,7 +271,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "172",
+							"id": "201",
 							"uri": "http://backend:8000/api/v1",
 							"nodeName": "http:\/\/backend:8000\/api\/v1",
 							"method": "GET",
@@ -261,7 +281,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13480",
+							"id": "15423",
 							"uri": "http://backend:8000/api/v1/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/",
 							"method": "GET",
@@ -271,9 +291,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "120",
-							"uri": "http://backend:8000/api/v1/8380888296910139743",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/8380888296910139743",
+							"id": "133",
+							"uri": "http://backend:8000/api/v1/5338652077438416385",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/5338652077438416385",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -281,7 +301,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "187",
+							"id": "220",
 							"uri": "http://backend:8000/api/v1/audit-logs",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/audit-logs",
 							"method": "GET",
@@ -291,7 +311,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "48",
+							"id": "63",
 							"uri": "http://backend:8000/api/v1/audit-logs?page=1&size=20&user_id=&company_id=&branch_id=&action=&resource_type=&resource_id=&status=&start_date=&end_date=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/audit-logs (action,branch_id,company_id,end_date,page,resource_id,resource_type,size,start_date,status,user_id)",
 							"method": "GET",
@@ -301,7 +321,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13485",
+							"id": "15447",
 							"uri": "http://backend:8000/api/v1/audit-logs/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/audit-logs\/",
 							"method": "GET",
@@ -311,9 +331,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "121",
-							"uri": "http://backend:8000/api/v1/audit-logs/7528449152348324486",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/audit-logs\/7528449152348324486",
+							"id": "134",
+							"uri": "http://backend:8000/api/v1/audit-logs/2213633693494747411",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/audit-logs\/2213633693494747411",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -321,7 +341,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13486",
+							"id": "15451",
 							"uri": "http://backend:8000/api/v1/audit-logs/export",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/audit-logs\/export",
 							"method": "GET",
@@ -331,7 +351,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "49",
+							"id": "64",
 							"uri": "http://backend:8000/api/v1/audit-logs/export?user_id=&company_id=&branch_id=&action=&resource_type=&start_date=&end_date=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/audit-logs\/export (action,branch_id,company_id,end_date,resource_type,start_date,user_id)",
 							"method": "GET",
@@ -341,7 +361,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13489",
+							"id": "15455",
 							"uri": "http://backend:8000/api/v1/audit-logs/export/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/audit-logs\/export\/",
 							"method": "GET",
@@ -351,7 +371,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "50",
+							"id": "65",
 							"uri": "http://backend:8000/api/v1/audit-logs/log_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/audit-logs\/log_id",
 							"method": "GET",
@@ -361,7 +381,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13491",
+							"id": "15450",
 							"uri": "http://backend:8000/api/v1/audit-logs/log_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/audit-logs\/log_id\/",
 							"method": "GET",
@@ -371,7 +391,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "194",
+							"id": "224",
 							"uri": "http://backend:8000/api/v1/auth",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth",
 							"method": "GET",
@@ -381,7 +401,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13483",
+							"id": "15445",
 							"uri": "http://backend:8000/api/v1/auth/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/",
 							"method": "GET",
@@ -391,9 +411,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "122",
-							"uri": "http://backend:8000/api/v1/auth/3739736523678094057",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/3739736523678094057",
+							"id": "135",
+							"uri": "http://backend:8000/api/v1/auth/7571493685381869437",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/7571493685381869437",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -401,7 +421,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "15260",
+							"id": "17511",
 							"uri": "http://backend:8000/api/v1/auth/actuator/health",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/actuator\/health",
 							"method": "GET",
@@ -421,7 +441,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13494",
+							"id": "15457",
 							"uri": "http://backend:8000/api/v1/auth/me/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/me\/",
 							"method": "GET",
@@ -431,9 +451,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "123",
-							"uri": "http://backend:8000/api/v1/auth/me/6651362551490432903",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/me\/6651362551490432903",
+							"id": "136",
+							"uri": "http://backend:8000/api/v1/auth/me/5281968972167744128",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/me\/5281968972167744128",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -441,7 +461,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "28",
+							"id": "44",
 							"uri": "http://backend:8000/api/v1/auth/me/permissions",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/me\/permissions",
 							"method": "GET",
@@ -451,7 +471,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13495",
+							"id": "15458",
 							"uri": "http://backend:8000/api/v1/auth/me/permissions/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/me\/permissions\/",
 							"method": "GET",
@@ -461,7 +481,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "213",
+							"id": "242",
 							"uri": "http://backend:8000/api/v1/branches",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches",
 							"method": "GET",
@@ -471,7 +491,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "60",
+							"id": "75",
 							"uri": "http://backend:8000/api/v1/branches?company_id=company_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches (company_id)",
 							"method": "GET",
@@ -481,7 +501,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13510",
+							"id": "15465",
 							"uri": "http://backend:8000/api/v1/branches/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/",
 							"method": "GET",
@@ -491,9 +511,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "124",
-							"uri": "http://backend:8000/api/v1/branches/9143322306901408842",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/9143322306901408842",
+							"id": "137",
+							"uri": "http://backend:8000/api/v1/branches/4162802618019375990",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/4162802618019375990",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -501,7 +521,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "62",
+							"id": "77",
 							"uri": "http://backend:8000/api/v1/branches/record_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/record_id",
 							"method": "GET",
@@ -511,7 +531,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13512",
+							"id": "15467",
 							"uri": "http://backend:8000/api/v1/branches/record_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/record_id\/",
 							"method": "GET",
@@ -521,9 +541,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "125",
-							"uri": "http://backend:8000/api/v1/branches/record_id/3333002221743346602",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/record_id\/3333002221743346602",
+							"id": "138",
+							"uri": "http://backend:8000/api/v1/branches/record_id/8590197472624686043",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/record_id\/8590197472624686043",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -531,7 +551,277 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "54",
+							"id": "248",
+							"uri": "http://backend:8000/api/v1/catalog",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "15460",
+							"uri": "http://backend:8000/api/v1/catalog/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "139",
+							"uri": "http://backend:8000/api/v1/catalog/3690163189897299599",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/3690163189897299599",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "268",
+							"uri": "http://backend:8000/api/v1/catalog/categories",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/categories",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "109",
+							"uri": "http://backend:8000/api/v1/catalog/categories?active_only=true",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/categories (active_only)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15470",
+							"uri": "http://backend:8000/api/v1/catalog/categories/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/categories\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "140",
+							"uri": "http://backend:8000/api/v1/catalog/categories/964075042113723734",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/categories\/964075042113723734",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "289",
+							"uri": "http://backend:8000/api/v1/catalog/countries",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/countries",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "107",
+							"uri": "http://backend:8000/api/v1/catalog/countries?active_only=true",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/countries (active_only)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15477",
+							"uri": "http://backend:8000/api/v1/catalog/countries/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/countries\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "108",
+							"uri": "http://backend:8000/api/v1/catalog/countries/10",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/countries\/10",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15478",
+							"uri": "http://backend:8000/api/v1/catalog/countries/10/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/countries\/10\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "141",
+							"uri": "http://backend:8000/api/v1/catalog/countries/9185939722437213403",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/countries\/9185939722437213403",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "441",
+							"uri": "http://backend:8000/api/v1/catalog/products",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/products",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "118",
+							"uri": "http://backend:8000/api/v1/catalog/products?category_id=&sub_category_id=&search=ZAP&active_only=true&page=1&size=20",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/products (active_only,category_id,page,search,size,sub_category_id)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15482",
+							"uri": "http://backend:8000/api/v1/catalog/products/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/products\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "120",
+							"uri": "http://backend:8000/api/v1/catalog/products/10",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/products\/10",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15486",
+							"uri": "http://backend:8000/api/v1/catalog/products/10/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/products\/10\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "142",
+							"uri": "http://backend:8000/api/v1/catalog/products/6489220014638515080",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/products\/6489220014638515080",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "461",
+							"uri": "http://backend:8000/api/v1/catalog/sub-categories",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/sub-categories",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "112",
+							"uri": "http://backend:8000/api/v1/catalog/sub-categories?category_id=&active_only=true",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/sub-categories (active_only,category_id)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15489",
+							"uri": "http://backend:8000/api/v1/catalog/sub-categories/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/sub-categories\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "143",
+							"uri": "http://backend:8000/api/v1/catalog/sub-categories/2493964494392837538",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/sub-categories\/2493964494392837538",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "472",
+							"uri": "http://backend:8000/api/v1/catalog/units",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/units",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "115",
+							"uri": "http://backend:8000/api/v1/catalog/units?active_only=true",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/units (active_only)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15504",
+							"uri": "http://backend:8000/api/v1/catalog/units/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/units\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "144",
+							"uri": "http://backend:8000/api/v1/catalog/units/6547303649646191205",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/units\/6547303649646191205",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "69",
 							"uri": "http://backend:8000/api/v1/companies",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies",
 							"method": "GET",
@@ -541,7 +831,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13509",
+							"id": "15500",
 							"uri": "http://backend:8000/api/v1/companies/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/",
 							"method": "GET",
@@ -551,9 +841,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "126",
-							"uri": "http://backend:8000/api/v1/companies/2866459374420270722",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/2866459374420270722",
+							"id": "145",
+							"uri": "http://backend:8000/api/v1/companies/8842584916983355787",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/8842584916983355787",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -561,7 +851,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "53",
+							"id": "68",
 							"uri": "http://backend:8000/api/v1/companies/accessible",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/accessible",
 							"method": "GET",
@@ -571,7 +861,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13516",
+							"id": "15498",
 							"uri": "http://backend:8000/api/v1/companies/accessible/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/accessible\/",
 							"method": "GET",
@@ -581,7 +871,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "56",
+							"id": "71",
 							"uri": "http://backend:8000/api/v1/companies/record_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/record_id",
 							"method": "GET",
@@ -591,7 +881,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13518",
+							"id": "15510",
 							"uri": "http://backend:8000/api/v1/companies/record_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/record_id\/",
 							"method": "GET",
@@ -601,9 +891,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "127",
-							"uri": "http://backend:8000/api/v1/companies/record_id/7042518231041998433",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/record_id\/7042518231041998433",
+							"id": "146",
+							"uri": "http://backend:8000/api/v1/companies/record_id/7936116977670646165",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/record_id\/7936116977670646165",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -611,7 +901,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "214",
+							"id": "489",
 							"uri": "http://backend:8000/api/v1/dashboard",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/dashboard",
 							"method": "GET",
@@ -621,7 +911,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13499",
+							"id": "15493",
 							"uri": "http://backend:8000/api/v1/dashboard/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/dashboard\/",
 							"method": "GET",
@@ -631,9 +921,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "128",
-							"uri": "http://backend:8000/api/v1/dashboard/6311378931479665781",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/dashboard\/6311378931479665781",
+							"id": "147",
+							"uri": "http://backend:8000/api/v1/dashboard/7066928760897194306",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/dashboard\/7066928760897194306",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -641,7 +931,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13515",
+							"id": "15506",
 							"uri": "http://backend:8000/api/v1/dashboard/summary",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/dashboard\/summary",
 							"method": "GET",
@@ -651,7 +941,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "88",
+							"id": "103",
 							"uri": "http://backend:8000/api/v1/dashboard/summary?company_id=company_id&branch_id=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/dashboard\/summary (branch_id,company_id)",
 							"method": "GET",
@@ -661,7 +951,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13517",
+							"id": "15511",
 							"uri": "http://backend:8000/api/v1/dashboard/summary/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/dashboard\/summary\/",
 							"method": "GET",
@@ -671,7 +961,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "218",
+							"id": "491",
 							"uri": "http://backend:8000/api/v1/department-branch-assignments",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/department-branch-assignments",
 							"method": "GET",
@@ -681,7 +971,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13502",
+							"id": "15505",
 							"uri": "http://backend:8000/api/v1/department-branch-assignments/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/department-branch-assignments\/",
 							"method": "GET",
@@ -691,9 +981,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "129",
-							"uri": "http://backend:8000/api/v1/department-branch-assignments/786221276141387174",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/department-branch-assignments\/786221276141387174",
+							"id": "148",
+							"uri": "http://backend:8000/api/v1/department-branch-assignments/8306123918029639738",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/department-branch-assignments\/8306123918029639738",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -701,7 +991,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "233",
+							"id": "493",
 							"uri": "http://backend:8000/api/v1/department-branch-assignments/assignment_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/department-branch-assignments\/assignment_id",
 							"method": "GET",
@@ -711,7 +1001,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13503",
+							"id": "15499",
 							"uri": "http://backend:8000/api/v1/department-branch-assignments/assignment_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/department-branch-assignments\/assignment_id\/",
 							"method": "GET",
@@ -721,9 +1011,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "130",
-							"uri": "http://backend:8000/api/v1/department-branch-assignments/assignment_id/2530549273499049411",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/department-branch-assignments\/assignment_id\/2530549273499049411",
+							"id": "149",
+							"uri": "http://backend:8000/api/v1/department-branch-assignments/assignment_id/8315006953541170274",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/department-branch-assignments\/assignment_id\/8315006953541170274",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -731,7 +1021,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "248",
+							"id": "514",
 							"uri": "http://backend:8000/api/v1/departments",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments",
 							"method": "GET",
@@ -741,7 +1031,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "29",
+							"id": "45",
 							"uri": "http://backend:8000/api/v1/departments?company_id=company_id&page=1&size=12&search=ZAP&level=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments (company_id,level,page,search,size)",
 							"method": "GET",
@@ -751,7 +1041,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13523",
+							"id": "15515",
 							"uri": "http://backend:8000/api/v1/departments/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/",
 							"method": "GET",
@@ -761,9 +1051,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "131",
-							"uri": "http://backend:8000/api/v1/departments/2137766756060380477",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/2137766756060380477",
+							"id": "150",
+							"uri": "http://backend:8000/api/v1/departments/6985121841569809613",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/6985121841569809613",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -771,7 +1061,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13520",
+							"id": "15512",
 							"uri": "http://backend:8000/api/v1/departments/catalogue",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/catalogue",
 							"method": "GET",
@@ -781,7 +1071,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "31",
+							"id": "47",
 							"uri": "http://backend:8000/api/v1/departments/catalogue?company_id=company_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/catalogue (company_id)",
 							"method": "GET",
@@ -791,7 +1081,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13521",
+							"id": "15516",
 							"uri": "http://backend:8000/api/v1/departments/catalogue/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/catalogue\/",
 							"method": "GET",
@@ -801,7 +1091,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "263",
+							"id": "583",
 							"uri": "http://backend:8000/api/v1/departments/department_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/department_id",
 							"method": "GET",
@@ -811,7 +1101,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13537",
+							"id": "15526",
 							"uri": "http://backend:8000/api/v1/departments/department_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/department_id\/",
 							"method": "GET",
@@ -821,9 +1111,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "132",
-							"uri": "http://backend:8000/api/v1/departments/department_id/8782103777590295563",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/department_id\/8782103777590295563",
+							"id": "151",
+							"uri": "http://backend:8000/api/v1/departments/department_id/2107154948611162482",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/department_id\/2107154948611162482",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -831,7 +1121,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "45",
+							"id": "60",
 							"uri": "http://backend:8000/api/v1/departments/department_id/branch-assignments",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/department_id\/branch-assignments",
 							"method": "GET",
@@ -841,7 +1131,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13536",
+							"id": "15530",
 							"uri": "http://backend:8000/api/v1/departments/department_id/branch-assignments/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/department_id\/branch-assignments\/",
 							"method": "GET",
@@ -851,7 +1141,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "32",
+							"id": "48",
 							"uri": "http://backend:8000/api/v1/departments/dept_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/dept_id",
 							"method": "GET",
@@ -861,7 +1151,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13532",
+							"id": "15525",
 							"uri": "http://backend:8000/api/v1/departments/dept_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/dept_id\/",
 							"method": "GET",
@@ -871,7 +1161,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "52",
+							"id": "67",
 							"uri": "http://backend:8000/api/v1/districts?municipality_id=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/districts (municipality_id)",
 							"method": "GET",
@@ -881,7 +1171,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "375",
+							"id": "594",
 							"uri": "http://backend:8000/api/v1/employee-branch-assignments",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employee-branch-assignments",
 							"method": "GET",
@@ -891,7 +1181,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13527",
+							"id": "15520",
 							"uri": "http://backend:8000/api/v1/employee-branch-assignments/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employee-branch-assignments\/",
 							"method": "GET",
@@ -901,9 +1191,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "133",
-							"uri": "http://backend:8000/api/v1/employee-branch-assignments/4826986163351514766",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/employee-branch-assignments\/4826986163351514766",
+							"id": "152",
+							"uri": "http://backend:8000/api/v1/employee-branch-assignments/7320720466660015878",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/employee-branch-assignments\/7320720466660015878",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -911,7 +1201,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "387",
+							"id": "607",
 							"uri": "http://backend:8000/api/v1/employee-branch-assignments/assignment_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employee-branch-assignments\/assignment_id",
 							"method": "GET",
@@ -921,7 +1211,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13528",
+							"id": "15521",
 							"uri": "http://backend:8000/api/v1/employee-branch-assignments/assignment_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employee-branch-assignments\/assignment_id\/",
 							"method": "GET",
@@ -931,9 +1221,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "134",
-							"uri": "http://backend:8000/api/v1/employee-branch-assignments/assignment_id/2297103732278456792",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/employee-branch-assignments\/assignment_id\/2297103732278456792",
+							"id": "153",
+							"uri": "http://backend:8000/api/v1/employee-branch-assignments/assignment_id/4704744535855367492",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/employee-branch-assignments\/assignment_id\/4704744535855367492",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -941,7 +1231,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "412",
+							"id": "626",
 							"uri": "http://backend:8000/api/v1/employees",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees",
 							"method": "GET",
@@ -951,7 +1241,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "35",
+							"id": "51",
 							"uri": "http://backend:8000/api/v1/employees?company_id=company_id&page=1&size=20&search=ZAP&department_id=&status=&branch_id=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees (branch_id,company_id,department_id,page,search,size,status)",
 							"method": "GET",
@@ -961,7 +1251,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13542",
+							"id": "15534",
 							"uri": "http://backend:8000/api/v1/employees/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/",
 							"method": "GET",
@@ -971,9 +1261,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "135",
-							"uri": "http://backend:8000/api/v1/employees/5838014682537870710",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/5838014682537870710",
+							"id": "154",
+							"uri": "http://backend:8000/api/v1/employees/211149373328624886",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/211149373328624886",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -981,7 +1271,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13539",
+							"id": "15533",
 							"uri": "http://backend:8000/api/v1/employees/emp_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/emp_id",
 							"method": "GET",
@@ -991,7 +1281,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "38",
+							"id": "54",
 							"uri": "http://backend:8000/api/v1/employees/emp_id?branch_id=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/emp_id (branch_id)",
 							"method": "GET",
@@ -1001,7 +1291,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13541",
+							"id": "15535",
 							"uri": "http://backend:8000/api/v1/employees/emp_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/emp_id\/",
 							"method": "GET",
@@ -1011,7 +1301,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "430",
+							"id": "646",
 							"uri": "http://backend:8000/api/v1/employees/employee_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/employee_id",
 							"method": "GET",
@@ -1021,7 +1311,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13548",
+							"id": "15538",
 							"uri": "http://backend:8000/api/v1/employees/employee_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/employee_id\/",
 							"method": "GET",
@@ -1031,9 +1321,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "136",
-							"uri": "http://backend:8000/api/v1/employees/employee_id/1648607319159110688",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/employee_id\/1648607319159110688",
+							"id": "155",
+							"uri": "http://backend:8000/api/v1/employees/employee_id/2066942214879921900",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/employee_id\/2066942214879921900",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1041,7 +1331,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "41",
+							"id": "57",
 							"uri": "http://backend:8000/api/v1/employees/employee_id/branch-assignments",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/employee_id\/branch-assignments",
 							"method": "GET",
@@ -1051,7 +1341,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13549",
+							"id": "15541",
 							"uri": "http://backend:8000/api/v1/employees/employee_id/branch-assignments/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/employee_id\/branch-assignments\/",
 							"method": "GET",
@@ -1061,7 +1351,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13552",
+							"id": "15542",
 							"uri": "http://backend:8000/api/v1/employees/stats",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/stats",
 							"method": "GET",
@@ -1071,7 +1361,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "37",
+							"id": "53",
 							"uri": "http://backend:8000/api/v1/employees/stats?company_id=company_id&branch_id=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/stats (branch_id,company_id)",
 							"method": "GET",
@@ -1081,7 +1371,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13555",
+							"id": "15543",
 							"uri": "http://backend:8000/api/v1/employees/stats/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/stats\/",
 							"method": "GET",
@@ -1091,7 +1381,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "496",
+							"id": "668",
 							"uri": "http://backend:8000/api/v1/locations",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations",
 							"method": "GET",
@@ -1101,7 +1391,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "79",
+							"id": "94",
 							"uri": "http://backend:8000/api/v1/locations?warehouse_id=warehouse_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations (warehouse_id)",
 							"method": "GET",
@@ -1111,7 +1401,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13559",
+							"id": "15553",
 							"uri": "http://backend:8000/api/v1/locations/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/",
 							"method": "GET",
@@ -1121,9 +1411,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "137",
-							"uri": "http://backend:8000/api/v1/locations/5944522158869518416",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/5944522158869518416",
+							"id": "156",
+							"uri": "http://backend:8000/api/v1/locations/2538859329482519204",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/2538859329482519204",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1131,7 +1421,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "503",
+							"id": "676",
 							"uri": "http://backend:8000/api/v1/locations/record_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/record_id",
 							"method": "GET",
@@ -1141,7 +1431,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13554",
+							"id": "15548",
 							"uri": "http://backend:8000/api/v1/locations/record_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/record_id\/",
 							"method": "GET",
@@ -1151,9 +1441,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "138",
-							"uri": "http://backend:8000/api/v1/locations/record_id/3020510401696854729",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/record_id\/3020510401696854729",
+							"id": "157",
+							"uri": "http://backend:8000/api/v1/locations/record_id/3165206588101754775",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/record_id\/3165206588101754775",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1161,7 +1451,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "512",
+							"id": "678",
 							"uri": "http://backend:8000/api/v1/media",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/media",
 							"method": "GET",
@@ -1171,7 +1461,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13556",
+							"id": "15550",
 							"uri": "http://backend:8000/api/v1/media/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/media\/",
 							"method": "GET",
@@ -1181,9 +1471,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "139",
-							"uri": "http://backend:8000/api/v1/media/8477278885599866335",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/media\/8477278885599866335",
+							"id": "158",
+							"uri": "http://backend:8000/api/v1/media/955937408374860029",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/media\/955937408374860029",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1191,7 +1481,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "51",
+							"id": "66",
 							"uri": "http://backend:8000/api/v1/municipalities?department_id=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/municipalities (department_id)",
 							"method": "GET",
@@ -1201,7 +1491,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "563",
+							"id": "687",
 							"uri": "http://backend:8000/api/v1/operational-contexts",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/operational-contexts",
 							"method": "GET",
@@ -1211,7 +1501,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13562",
+							"id": "15551",
 							"uri": "http://backend:8000/api/v1/operational-contexts/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/operational-contexts\/",
 							"method": "GET",
@@ -1221,9 +1511,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "140",
-							"uri": "http://backend:8000/api/v1/operational-contexts/4277438388560619065",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/operational-contexts\/4277438388560619065",
+							"id": "159",
+							"uri": "http://backend:8000/api/v1/operational-contexts/9135825794513880998",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/operational-contexts\/9135825794513880998",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1231,7 +1521,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "84",
+							"id": "99",
 							"uri": "http://backend:8000/api/v1/operational-contexts/company_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/operational-contexts\/company_id",
 							"method": "GET",
@@ -1241,7 +1531,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13564",
+							"id": "15558",
 							"uri": "http://backend:8000/api/v1/operational-contexts/company_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/operational-contexts\/company_id\/",
 							"method": "GET",
@@ -1251,9 +1541,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "141",
-							"uri": "http://backend:8000/api/v1/operational-contexts/company_id/6573850329035880741",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/operational-contexts\/company_id\/6573850329035880741",
+							"id": "160",
+							"uri": "http://backend:8000/api/v1/operational-contexts/company_id/3501960368828071786",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/operational-contexts\/company_id\/3501960368828071786",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1261,7 +1551,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "638",
+							"id": "713",
 							"uri": "http://backend:8000/api/v1/roles",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles",
 							"method": "GET",
@@ -1271,7 +1561,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13",
+							"id": "29",
 							"uri": "http://backend:8000/api/v1/roles?page=1&size=12&search=ZAP&is_system=&module=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles (is_system,module,page,search,size)",
 							"method": "GET",
@@ -1281,7 +1571,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13573",
+							"id": "15563",
 							"uri": "http://backend:8000/api/v1/roles/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/",
 							"method": "GET",
@@ -1291,9 +1581,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "142",
-							"uri": "http://backend:8000/api/v1/roles/6387719991741058799",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/6387719991741058799",
+							"id": "161",
+							"uri": "http://backend:8000/api/v1/roles/914966941167119521",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/914966941167119521",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1301,7 +1591,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "15",
+							"id": "31",
 							"uri": "http://backend:8000/api/v1/roles/catalogue",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/catalogue",
 							"method": "GET",
@@ -1311,7 +1601,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13572",
+							"id": "15565",
 							"uri": "http://backend:8000/api/v1/roles/catalogue/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/catalogue\/",
 							"method": "GET",
@@ -1321,7 +1611,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "16",
+							"id": "32",
 							"uri": "http://backend:8000/api/v1/roles/permissions",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/permissions",
 							"method": "GET",
@@ -1331,7 +1621,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13574",
+							"id": "15566",
 							"uri": "http://backend:8000/api/v1/roles/permissions/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/permissions\/",
 							"method": "GET",
@@ -1341,9 +1631,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "143",
-							"uri": "http://backend:8000/api/v1/roles/permissions/2083322695077406828",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/permissions\/2083322695077406828",
+							"id": "162",
+							"uri": "http://backend:8000/api/v1/roles/permissions/7765822960342909886",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/permissions\/7765822960342909886",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1351,7 +1641,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "20",
+							"id": "36",
 							"uri": "http://backend:8000/api/v1/roles/role_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/role_id",
 							"method": "GET",
@@ -1361,7 +1651,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13571",
+							"id": "15567",
 							"uri": "http://backend:8000/api/v1/roles/role_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/role_id\/",
 							"method": "GET",
@@ -1371,9 +1661,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "144",
-							"uri": "http://backend:8000/api/v1/roles/role_id/4262653000214629826",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/role_id\/4262653000214629826",
+							"id": "163",
+							"uri": "http://backend:8000/api/v1/roles/role_id/6046363963180702837",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/role_id\/6046363963180702837",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1381,7 +1671,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "653",
+							"id": "734",
 							"uri": "http://backend:8000/api/v1/roles/users",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/users",
 							"method": "GET",
@@ -1391,7 +1681,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13578",
+							"id": "15571",
 							"uri": "http://backend:8000/api/v1/roles/users/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/users\/",
 							"method": "GET",
@@ -1401,9 +1691,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "145",
-							"uri": "http://backend:8000/api/v1/roles/users/5615582465190091027",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/users\/5615582465190091027",
+							"id": "164",
+							"uri": "http://backend:8000/api/v1/roles/users/8758501367755533509",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/users\/8758501367755533509",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1411,7 +1701,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "660",
+							"id": "750",
 							"uri": "http://backend:8000/api/v1/roles/users/user_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/users\/user_id",
 							"method": "GET",
@@ -1421,7 +1711,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13576",
+							"id": "15569",
 							"uri": "http://backend:8000/api/v1/roles/users/user_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/users\/user_id\/",
 							"method": "GET",
@@ -1431,9 +1721,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "146",
-							"uri": "http://backend:8000/api/v1/roles/users/user_id/1925433202685681011",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/users\/user_id\/1925433202685681011",
+							"id": "165",
+							"uri": "http://backend:8000/api/v1/roles/users/user_id/3876167001969313129",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/users\/user_id\/3876167001969313129",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1441,7 +1731,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "27",
+							"id": "43",
 							"uri": "http://backend:8000/api/v1/roles/users/user_id/roles",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/users\/user_id\/roles",
 							"method": "GET",
@@ -1451,7 +1741,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13583",
+							"id": "15576",
 							"uri": "http://backend:8000/api/v1/roles/users/user_id/roles/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/users\/user_id\/roles\/",
 							"method": "GET",
@@ -1461,7 +1751,107 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "675",
+							"id": "777",
+							"uri": "http://backend:8000/api/v1/suppliers",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "122",
+							"uri": "http://backend:8000/api/v1/suppliers?country_id=&search=ZAP&active_only=true&page=1&size=20",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers (active_only,country_id,page,search,size)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15579",
+							"uri": "http://backend:8000/api/v1/suppliers/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "124",
+							"uri": "http://backend:8000/api/v1/suppliers/10",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/10",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15581",
+							"uri": "http://backend:8000/api/v1/suppliers/10/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/10\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "167",
+							"uri": "http://backend:8000/api/v1/suppliers/10/2257682265054812889",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/10\/2257682265054812889",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "166",
+							"uri": "http://backend:8000/api/v1/suppliers/8571485598192185587",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/8571485598192185587",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "796",
+							"uri": "http://backend:8000/api/v1/suppliers/contacts",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/contacts",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15586",
+							"uri": "http://backend:8000/api/v1/suppliers/contacts/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/contacts\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "168",
+							"uri": "http://backend:8000/api/v1/suppliers/contacts/7773426822327063436",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/contacts\/7773426822327063436",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "812",
 							"uri": "http://backend:8000/api/v1/users",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users",
 							"method": "GET",
@@ -1481,7 +1871,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13586",
+							"id": "15590",
 							"uri": "http://backend:8000/api/v1/users/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/",
 							"method": "GET",
@@ -1491,9 +1881,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "147",
-							"uri": "http://backend:8000/api/v1/users/267923611781235687",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/267923611781235687",
+							"id": "169",
+							"uri": "http://backend:8000/api/v1/users/708925785793729912",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/708925785793729912",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1501,7 +1891,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "691",
+							"id": "834",
 							"uri": "http://backend:8000/api/v1/users/batch",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/batch",
 							"method": "GET",
@@ -1511,7 +1901,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13593",
+							"id": "15597",
 							"uri": "http://backend:8000/api/v1/users/batch/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/batch\/",
 							"method": "GET",
@@ -1521,9 +1911,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "148",
-							"uri": "http://backend:8000/api/v1/users/batch/5420289721495461481",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/batch\/5420289721495461481",
+							"id": "170",
+							"uri": "http://backend:8000/api/v1/users/batch/5389131703380395401",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/batch\/5389131703380395401",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1531,7 +1921,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13590",
+							"id": "15594",
 							"uri": "http://backend:8000/api/v1/users/batch/roles",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/batch\/roles",
 							"method": "GET",
@@ -1551,7 +1941,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13594",
+							"id": "15596",
 							"uri": "http://backend:8000/api/v1/users/batch/roles/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/batch\/roles\/",
 							"method": "GET",
@@ -1571,7 +1961,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13597",
+							"id": "15599",
 							"uri": "http://backend:8000/api/v1/users/user_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/",
 							"method": "GET",
@@ -1581,9 +1971,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "149",
-							"uri": "http://backend:8000/api/v1/users/user_id/6434370637793179499",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/6434370637793179499",
+							"id": "171",
+							"uri": "http://backend:8000/api/v1/users/user_id/7483681954994275378",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/7483681954994275378",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1591,7 +1981,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "695",
+							"id": "849",
 							"uri": "http://backend:8000/api/v1/users/user_id/companies",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/companies",
 							"method": "GET",
@@ -1601,7 +1991,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13589",
+							"id": "15591",
 							"uri": "http://backend:8000/api/v1/users/user_id/companies/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/companies\/",
 							"method": "GET",
@@ -1611,9 +2001,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "150",
-							"uri": "http://backend:8000/api/v1/users/user_id/companies/4806838061418288068",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/companies\/4806838061418288068",
+							"id": "172",
+							"uri": "http://backend:8000/api/v1/users/user_id/companies/8472713424877779907",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/companies\/8472713424877779907",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1621,7 +2011,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "698",
+							"id": "850",
 							"uri": "http://backend:8000/api/v1/users/user_id/companies/company_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/companies\/company_id",
 							"method": "GET",
@@ -1631,7 +2021,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13596",
+							"id": "15600",
 							"uri": "http://backend:8000/api/v1/users/user_id/companies/company_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/companies\/company_id\/",
 							"method": "GET",
@@ -1641,9 +2031,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "151",
-							"uri": "http://backend:8000/api/v1/users/user_id/companies/company_id/9087349346060947437",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/companies\/company_id\/9087349346060947437",
+							"id": "173",
+							"uri": "http://backend:8000/api/v1/users/user_id/companies/company_id/416435604921543366",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/companies\/company_id\/416435604921543366",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1651,7 +2041,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "86",
+							"id": "101",
 							"uri": "http://backend:8000/api/v1/users/user_id/companies/company_id/branch-access",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/companies\/company_id\/branch-access",
 							"method": "GET",
@@ -1661,7 +2051,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13602",
+							"id": "15603",
 							"uri": "http://backend:8000/api/v1/users/user_id/companies/company_id/branch-access/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/companies\/company_id\/branch-access\/",
 							"method": "GET",
@@ -1671,7 +2061,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "729",
+							"id": "869",
 							"uri": "http://backend:8000/api/v1/warehouse-categories",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories",
 							"method": "GET",
@@ -1681,7 +2071,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "66",
+							"id": "81",
 							"uri": "http://backend:8000/api/v1/warehouse-categories?company_id=company_id&page=1&size=12&search=ZAP",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories (company_id,page,search,size)",
 							"method": "GET",
@@ -1691,7 +2081,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13606",
+							"id": "15611",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/",
 							"method": "GET",
@@ -1701,9 +2091,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "152",
-							"uri": "http://backend:8000/api/v1/warehouse-categories/2758641010171236994",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/2758641010171236994",
+							"id": "174",
+							"uri": "http://backend:8000/api/v1/warehouse-categories/4743987347051247030",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/4743987347051247030",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1711,7 +2101,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13607",
+							"id": "15608",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/catalogue",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/catalogue",
 							"method": "GET",
@@ -1721,7 +2111,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "68",
+							"id": "83",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/catalogue?company_id=company_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/catalogue (company_id)",
 							"method": "GET",
@@ -1731,7 +2121,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13610",
+							"id": "15609",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/catalogue/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/catalogue\/",
 							"method": "GET",
@@ -1741,7 +2131,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "733",
+							"id": "872",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/record_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/record_id",
 							"method": "GET",
@@ -1751,7 +2141,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13604",
+							"id": "15607",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/record_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/record_id\/",
 							"method": "GET",
@@ -1761,9 +2151,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "153",
-							"uri": "http://backend:8000/api/v1/warehouse-categories/record_id/5366604403423111242",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/record_id\/5366604403423111242",
+							"id": "175",
+							"uri": "http://backend:8000/api/v1/warehouse-categories/record_id/5798687575975728994",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/record_id\/5798687575975728994",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1771,7 +2161,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "754",
+							"id": "894",
 							"uri": "http://backend:8000/api/v1/warehouses",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses",
 							"method": "GET",
@@ -1781,7 +2171,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "72",
+							"id": "87",
 							"uri": "http://backend:8000/api/v1/warehouses?company_id=company_id&branch_id=&page=1&size=9&search=ZAP&status=&sort=capacity",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses (branch_id,company_id,page,search,size,sort,status)",
 							"method": "GET",
@@ -1791,7 +2181,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13616",
+							"id": "15616",
 							"uri": "http://backend:8000/api/v1/warehouses/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/",
 							"method": "GET",
@@ -1801,9 +2191,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "154",
-							"uri": "http://backend:8000/api/v1/warehouses/2094823206604928926",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/2094823206604928926",
+							"id": "176",
+							"uri": "http://backend:8000/api/v1/warehouses/8004423332511755164",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/8004423332511755164",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1811,7 +2201,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13614",
+							"id": "15617",
 							"uri": "http://backend:8000/api/v1/warehouses/catalogue",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/catalogue",
 							"method": "GET",
@@ -1821,7 +2211,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "74",
+							"id": "89",
 							"uri": "http://backend:8000/api/v1/warehouses/catalogue?company_id=company_id&branch_id=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/catalogue (branch_id,company_id)",
 							"method": "GET",
@@ -1831,7 +2221,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13615",
+							"id": "15622",
 							"uri": "http://backend:8000/api/v1/warehouses/catalogue/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/catalogue\/",
 							"method": "GET",
@@ -1841,7 +2231,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "75",
+							"id": "90",
 							"uri": "http://backend:8000/api/v1/warehouses/record_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/record_id",
 							"method": "GET",
@@ -1851,7 +2241,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13619",
+							"id": "15620",
 							"uri": "http://backend:8000/api/v1/warehouses/record_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/record_id\/",
 							"method": "GET",
@@ -1861,9 +2251,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "155",
-							"uri": "http://backend:8000/api/v1/warehouses/record_id/7964821322647330940",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/record_id\/7964821322647330940",
+							"id": "177",
+							"uri": "http://backend:8000/api/v1/warehouses/record_id/4447849119566215626",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/record_id\/4447849119566215626",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1871,9 +2261,9 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "156",
-							"uri": "http://backend:8000/health/8765246803494030250",
-							"nodeName": "http:\/\/backend:8000\/health\/8765246803494030250",
+							"id": "178",
+							"uri": "http://backend:8000/health/2095333860081660217",
+							"nodeName": "http:\/\/backend:8000\/health\/2095333860081660217",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -1881,7 +2271,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "63",
+							"id": "78",
 							"uri": "http://backend:8000/api/v1/branches/record_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/record_id ()({\"address\":\"688 Zaproxy Ridge\",\"department_id\":\"John Doe\",\"municipality_id\":\"John Doe\",\"district_id\":\"John Doe\",\"company_id\":\"John Doe\",\"code\":\"John Doe\",\"name\":\"ZAP\",\"phone\":9999999999,\"email\":zaproxy@example.com,\"latitude\":1.2,\"longitude\":1.2,\"operational_status\":\"active\",\"manager_employee_id\":\"John Doe\",\"opened_at\":\"1970-01-01\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"schedule\":[\"John Doe\"],\"zone\":\"John Doe\",\"services)",
 							"method": "PATCH",
@@ -1891,7 +2281,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13379",
+							"id": "15306",
 							"uri": "http://backend:8000/api/v1/branches/record_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/record_id\/ ()({\"address\":\"688 Zaproxy Ridge\",\"department_id\":\"John Doe\",\"municipality_id\":\"John Doe\",\"district_id\":\"John Doe\",\"company_id\":\"John Doe\",\"code\":\"John Doe\",\"name\":\"ZAP\",\"phone\":9999999999,\"email\":zaproxy@example.com,\"latitude\":1.2,\"longitude\":1.2,\"operational_status\":\"active\",\"manager_employee_id\":\"John Doe\",\"opened_at\":\"1970-01-01\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"schedule\":[\"John Doe\"],\"zone\":\"John Doe\",\"services)",
 							"method": "PATCH",
@@ -1901,7 +2291,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "57",
+							"id": "72",
 							"uri": "http://backend:8000/api/v1/companies/record_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/record_id ()({\"address\":\"688 Zaproxy Ridge\",\"department_id\":\"John Doe\",\"municipality_id\":\"John Doe\",\"district_id\":\"John Doe\",\"name\":\"ZAP\",\"commercial_name\":\"John Doe\",\"nit\":\"John Doe\",\"nrc\":\"John Doe\",\"commercial_line_1\":\"John Doe\",\"commercial_line_2\":\"John Doe\",\"commercial_line_3\":\"John Doe\",\"phone\":9999999999,\"email\":zaproxy@example.com,\"web_site\":\"John Doe\",\"logo\":\"John Doe\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "PATCH",
@@ -1911,7 +2301,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13377",
+							"id": "15335",
 							"uri": "http://backend:8000/api/v1/companies/record_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/record_id\/ ()({\"address\":\"688 Zaproxy Ridge\",\"department_id\":\"John Doe\",\"municipality_id\":\"John Doe\",\"district_id\":\"John Doe\",\"name\":\"ZAP\",\"commercial_name\":\"John Doe\",\"nit\":\"John Doe\",\"nrc\":\"John Doe\",\"commercial_line_1\":\"John Doe\",\"commercial_line_2\":\"John Doe\",\"commercial_line_3\":\"John Doe\",\"phone\":9999999999,\"email\":zaproxy@example.com,\"web_site\":\"John Doe\",\"logo\":\"John Doe\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "PATCH",
@@ -1921,7 +2311,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "34",
+							"id": "50",
 							"uri": "http://backend:8000/api/v1/departments/dept_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/dept_id ()({\"name\":ZAP,\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"parent_department_id\":\"John Doe\"})",
 							"method": "PATCH",
@@ -1931,7 +2321,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13386",
+							"id": "15336",
 							"uri": "http://backend:8000/api/v1/departments/dept_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/dept_id\/ ()({\"name\":ZAP,\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"parent_department_id\":\"John Doe\"})",
 							"method": "PATCH",
@@ -1941,7 +2331,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "40",
+							"id": "56",
 							"uri": "http://backend:8000/api/v1/employees/emp_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/emp_id ()({first_name,last_name,document_id,birth_date,phone,address,department_id,position,hire_date,termination_date,status,photo_url})",
 							"method": "PATCH",
@@ -1951,7 +2341,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13388",
+							"id": "15357",
 							"uri": "http://backend:8000/api/v1/employees/emp_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/emp_id\/ ()({first_name,last_name,document_id,birth_date,phone,address,department_id,position,hire_date,termination_date,status,photo_url})",
 							"method": "PATCH",
@@ -1961,7 +2351,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "81",
+							"id": "96",
 							"uri": "http://backend:8000/api/v1/locations/record_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/record_id ()({warehouse_id,code,aisle,rack,level,position,capacity,notes})",
 							"method": "PATCH",
@@ -1971,7 +2361,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13461",
+							"id": "15393",
 							"uri": "http://backend:8000/api/v1/locations/record_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/record_id\/ ()({warehouse_id,code,aisle,rack,level,position,capacity,notes})",
 							"method": "PATCH",
@@ -1981,7 +2371,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "85",
+							"id": "100",
 							"uri": "http://backend:8000/api/v1/operational-contexts/company_id/preference",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/operational-contexts\/company_id\/preference ()({branch_id})",
 							"method": "PATCH",
@@ -1991,7 +2381,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13448",
+							"id": "15392",
 							"uri": "http://backend:8000/api/v1/operational-contexts/company_id/preference/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/operational-contexts\/company_id\/preference\/ ()({branch_id})",
 							"method": "PATCH",
@@ -2001,7 +2391,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "19",
+							"id": "35",
 							"uri": "http://backend:8000/api/v1/roles/permissions/permission_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/permissions\/permission_id ()({\"code\":\"John Doe\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"module\":\"John Doe\"})",
 							"method": "PATCH",
@@ -2011,7 +2401,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13420",
+							"id": "15362",
 							"uri": "http://backend:8000/api/v1/roles/permissions/permission_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/permissions\/permission_id\/ ()({\"code\":\"John Doe\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"module\":\"John Doe\"})",
 							"method": "PATCH",
@@ -2021,7 +2411,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "22",
+							"id": "38",
 							"uri": "http://backend:8000/api/v1/roles/role_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/role_id ()({\"name\":ZAP,\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "PATCH",
@@ -2031,7 +2421,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13424",
+							"id": "15368",
 							"uri": "http://backend:8000/api/v1/roles/role_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/role_id\/ ()({\"name\":ZAP,\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "PATCH",
@@ -2041,7 +2431,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "10",
+							"id": "11",
 							"uri": "http://backend:8000/api/v1/users/user_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id ()({is_active,is_superuser})",
 							"method": "PATCH",
@@ -2051,7 +2441,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13449",
+							"id": "15441",
 							"uri": "http://backend:8000/api/v1/users/user_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/ ()({is_active,is_superuser})",
 							"method": "PATCH",
@@ -2061,7 +2451,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "69",
+							"id": "84",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/record_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/record_id ()({\"company_id\":\"John Doe\",\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "PATCH",
@@ -2071,7 +2461,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13467",
+							"id": "15411",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/record_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/record_id\/ ()({\"company_id\":\"John Doe\",\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "PATCH",
@@ -2081,7 +2471,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "76",
+							"id": "91",
 							"uri": "http://backend:8000/api/v1/warehouses/record_id",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/record_id ()({\"branch_id\":\"John Doe\",\"warehouse_category_id\":\"John Doe\",\"code\":\"John Doe\",\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"warehouse_type\":\"general\",\"operational_status\":\"active\",\"physical_location\":\"John Doe\",\"manager_employee_id\":\"John Doe\",\"area\":1.2,\"height\":1.2,\"length\":1.2,\"width\":1.2,\"shelves_total\":10,\"capacity\":10,\"shifts\":[\"John Doe\"],\"cameras\":10,\"access_control\":\"John Doe\",\"has_alarm\":false,\"fire_syst)",
 							"method": "PATCH",
@@ -2091,7 +2481,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13472",
+							"id": "15410",
 							"uri": "http://backend:8000/api/v1/warehouses/record_id/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/record_id\/ ()({\"branch_id\":\"John Doe\",\"warehouse_category_id\":\"John Doe\",\"code\":\"John Doe\",\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"warehouse_type\":\"general\",\"operational_status\":\"active\",\"physical_location\":\"John Doe\",\"manager_employee_id\":\"John Doe\",\"area\":1.2,\"height\":1.2,\"length\":1.2,\"width\":1.2,\"shelves_total\":10,\"capacity\":10,\"shifts\":[\"John Doe\"],\"cameras\":10,\"access_control\":\"John Doe\",\"has_alarm\":false,\"fire_syst)",
 							"method": "PATCH",
@@ -2111,7 +2501,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13412",
+							"id": "15347",
 							"uri": "http://backend:8000/api/v1/auth/change-password/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/change-password\/ ()({current_password,new_password})",
 							"method": "POST",
@@ -2131,7 +2521,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "679",
+							"id": "638",
 							"uri": "http://backend:8000/api/v1/auth/login",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/login ()({login,password})",
 							"method": "POST",
@@ -2141,7 +2531,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13389",
+							"id": "15333",
 							"uri": "http://backend:8000/api/v1/auth/login/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/login\/ ()({login,password})",
 							"method": "POST",
@@ -2161,7 +2551,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13415",
+							"id": "15351",
 							"uri": "http://backend:8000/api/v1/auth/logout/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/logout\/ ()({refresh_token})",
 							"method": "POST",
@@ -2171,7 +2561,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "183",
+							"id": "185",
 							"uri": "http://backend:8000/api/v1/auth/refresh",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/refresh ()({refresh_token})",
 							"method": "POST",
@@ -2191,7 +2581,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "3365",
+							"id": "3839",
 							"uri": "http://backend:8000/api/v1/auth/refresh",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/refresh ()({refresh_token})",
 							"method": "POST",
@@ -2201,7 +2591,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13390",
+							"id": "15339",
 							"uri": "http://backend:8000/api/v1/auth/refresh/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/refresh\/ ()({refresh_token})",
 							"method": "POST",
@@ -2211,7 +2601,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "61",
+							"id": "76",
 							"uri": "http://backend:8000/api/v1/branches",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches ()({\"address\":\"688 Zaproxy Ridge\",\"department_id\":\"John Doe\",\"municipality_id\":\"John Doe\",\"district_id\":\"John Doe\",\"company_id\":\"John Doe\",\"code\":\"John Doe\",\"name\":\"ZAP\",\"phone\":9999999999,\"email\":zaproxy@example.com,\"latitude\":1.2,\"longitude\":1.2,\"operational_status\":\"active\",\"manager_employee_id\":\"John Doe\",\"opened_at\":\"1970-01-01\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"schedule\":[\"John Doe\"],\"zone\":\"John Doe\",\"services)",
 							"method": "POST",
@@ -2221,7 +2611,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13376",
+							"id": "15314",
 							"uri": "http://backend:8000/api/v1/branches/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/ ()({\"address\":\"688 Zaproxy Ridge\",\"department_id\":\"John Doe\",\"municipality_id\":\"John Doe\",\"district_id\":\"John Doe\",\"company_id\":\"John Doe\",\"code\":\"John Doe\",\"name\":\"ZAP\",\"phone\":9999999999,\"email\":zaproxy@example.com,\"latitude\":1.2,\"longitude\":1.2,\"operational_status\":\"active\",\"manager_employee_id\":\"John Doe\",\"opened_at\":\"1970-01-01\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"schedule\":[\"John Doe\"],\"zone\":\"John Doe\",\"services)",
 							"method": "POST",
@@ -2231,7 +2621,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "64",
+							"id": "79",
 							"uri": "http://backend:8000/api/v1/branches/record_id/activate",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/record_id\/activate",
 							"method": "POST",
@@ -2241,7 +2631,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13416",
+							"id": "15341",
 							"uri": "http://backend:8000/api/v1/branches/record_id/activate/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/record_id\/activate\/",
 							"method": "POST",
@@ -2251,7 +2641,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "65",
+							"id": "80",
 							"uri": "http://backend:8000/api/v1/branches/record_id/deactivate",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/record_id\/deactivate",
 							"method": "POST",
@@ -2261,7 +2651,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13402",
+							"id": "15340",
 							"uri": "http://backend:8000/api/v1/branches/record_id/deactivate/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/branches\/record_id\/deactivate\/",
 							"method": "POST",
@@ -2271,7 +2661,87 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "55",
+							"id": "110",
+							"uri": "http://backend:8000/api/v1/catalog/categories",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/categories ()({\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "15317",
+							"uri": "http://backend:8000/api/v1/catalog/categories/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/categories\/ ()({\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "119",
+							"uri": "http://backend:8000/api/v1/catalog/products",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/products ()({\"id_category\":10,\"id_sub_category\":10,\"sku\":\"John Doe\",\"name\":\"ZAP\",\"purchase_unit\":10,\"sale_unit\":10,\"original_code\":\"John Doe\",\"internal_code\":\"John Doe\",\"size\":\"John Doe\",\"dimensions\":\"John Doe\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"presentation\":\"John Doe\"})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "15325",
+							"uri": "http://backend:8000/api/v1/catalog/products/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/products\/ ()({\"id_category\":10,\"id_sub_category\":10,\"sku\":\"John Doe\",\"name\":\"ZAP\",\"purchase_unit\":10,\"sale_unit\":10,\"original_code\":\"John Doe\",\"internal_code\":\"John Doe\",\"size\":\"John Doe\",\"dimensions\":\"John Doe\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"presentation\":\"John Doe\"})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "113",
+							"uri": "http://backend:8000/api/v1/catalog/sub-categories",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/sub-categories ()({\"id_category\":10,\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "15334",
+							"uri": "http://backend:8000/api/v1/catalog/sub-categories/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/sub-categories\/ ()({\"id_category\":10,\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "116",
+							"uri": "http://backend:8000/api/v1/catalog/units",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/units ()({name,type})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15344",
+							"uri": "http://backend:8000/api/v1/catalog/units/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/units\/ ()({name,type})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "70",
 							"uri": "http://backend:8000/api/v1/companies",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies ()({\"address\":\"688 Zaproxy Ridge\",\"department_id\":\"John Doe\",\"municipality_id\":\"John Doe\",\"district_id\":\"John Doe\",\"name\":\"ZAP\",\"commercial_name\":\"John Doe\",\"nit\":\"John Doe\",\"nrc\":\"John Doe\",\"commercial_line_1\":\"John Doe\",\"commercial_line_2\":\"John Doe\",\"commercial_line_3\":\"John Doe\",\"phone\":9999999999,\"email\":zaproxy@example.com,\"web_site\":\"John Doe\",\"logo\":\"John Doe\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "POST",
@@ -2281,7 +2751,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13378",
+							"id": "15332",
 							"uri": "http://backend:8000/api/v1/companies/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/ ()({\"address\":\"688 Zaproxy Ridge\",\"department_id\":\"John Doe\",\"municipality_id\":\"John Doe\",\"district_id\":\"John Doe\",\"name\":\"ZAP\",\"commercial_name\":\"John Doe\",\"nit\":\"John Doe\",\"nrc\":\"John Doe\",\"commercial_line_1\":\"John Doe\",\"commercial_line_2\":\"John Doe\",\"commercial_line_3\":\"John Doe\",\"phone\":9999999999,\"email\":zaproxy@example.com,\"web_site\":\"John Doe\",\"logo\":\"John Doe\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "POST",
@@ -2291,7 +2761,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "58",
+							"id": "73",
 							"uri": "http://backend:8000/api/v1/companies/record_id/activate",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/record_id\/activate",
 							"method": "POST",
@@ -2301,7 +2771,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13410",
+							"id": "15352",
 							"uri": "http://backend:8000/api/v1/companies/record_id/activate/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/record_id\/activate\/",
 							"method": "POST",
@@ -2311,7 +2781,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "59",
+							"id": "74",
 							"uri": "http://backend:8000/api/v1/companies/record_id/deactivate",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/record_id\/deactivate",
 							"method": "POST",
@@ -2321,7 +2791,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13406",
+							"id": "15342",
 							"uri": "http://backend:8000/api/v1/companies/record_id/deactivate/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/companies\/record_id\/deactivate\/",
 							"method": "POST",
@@ -2331,7 +2801,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "46",
+							"id": "61",
 							"uri": "http://backend:8000/api/v1/department-branch-assignments",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/department-branch-assignments ()({department_id,branch_id,manager_employee_id,opened_at})",
 							"method": "POST",
@@ -2341,7 +2811,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13411",
+							"id": "15350",
 							"uri": "http://backend:8000/api/v1/department-branch-assignments/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/department-branch-assignments\/ ()({department_id,branch_id,manager_employee_id,opened_at})",
 							"method": "POST",
@@ -2351,7 +2821,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "47",
+							"id": "62",
 							"uri": "http://backend:8000/api/v1/department-branch-assignments/assignment_id/end",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/department-branch-assignments\/assignment_id\/end",
 							"method": "POST",
@@ -2361,7 +2831,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13414",
+							"id": "15343",
 							"uri": "http://backend:8000/api/v1/department-branch-assignments/assignment_id/end/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/department-branch-assignments\/assignment_id\/end\/",
 							"method": "POST",
@@ -2371,7 +2841,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "30",
+							"id": "46",
 							"uri": "http://backend:8000/api/v1/departments",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments ()({\"company_id\":\"John Doe\",\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"parent_department_id\":\"John Doe\"})",
 							"method": "POST",
@@ -2381,7 +2851,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13385",
+							"id": "15354",
 							"uri": "http://backend:8000/api/v1/departments/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/departments\/ ()({\"company_id\":\"John Doe\",\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"parent_department_id\":\"John Doe\"})",
 							"method": "POST",
@@ -2391,7 +2861,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "43",
+							"id": "58",
 							"uri": "http://backend:8000/api/v1/employee-branch-assignments",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employee-branch-assignments ()({employee_id,branch_id,is_primary,assigned_from,assigned_until,position,shift})",
 							"method": "POST",
@@ -2401,7 +2871,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13405",
+							"id": "15386",
 							"uri": "http://backend:8000/api/v1/employee-branch-assignments/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employee-branch-assignments\/ ()({employee_id,branch_id,is_primary,assigned_from,assigned_until,position,shift})",
 							"method": "POST",
@@ -2411,7 +2881,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "44",
+							"id": "59",
 							"uri": "http://backend:8000/api/v1/employee-branch-assignments/assignment_id/end",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employee-branch-assignments\/assignment_id\/end",
 							"method": "POST",
@@ -2421,7 +2891,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13413",
+							"id": "15391",
 							"uri": "http://backend:8000/api/v1/employee-branch-assignments/assignment_id/end/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employee-branch-assignments\/assignment_id\/end\/",
 							"method": "POST",
@@ -2431,7 +2901,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "36",
+							"id": "52",
 							"uri": "http://backend:8000/api/v1/employees",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees ()({company_id,employee_code,first_name,last_name,user_id,document_id,birth_date,phone,address,department_id,position,hire_date,status,photo_url})",
 							"method": "POST",
@@ -2441,7 +2911,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13375",
+							"id": "15358",
 							"uri": "http://backend:8000/api/v1/employees/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/employees\/ ()({company_id,employee_code,first_name,last_name,user_id,document_id,birth_date,phone,address,department_id,position,hire_date,status,photo_url})",
 							"method": "POST",
@@ -2451,7 +2921,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "80",
+							"id": "95",
 							"uri": "http://backend:8000/api/v1/locations",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations ()({warehouse_id,code,aisle,rack,level,position,capacity,notes})",
 							"method": "POST",
@@ -2461,7 +2931,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13455",
+							"id": "15385",
 							"uri": "http://backend:8000/api/v1/locations/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/ ()({warehouse_id,code,aisle,rack,level,position,capacity,notes})",
 							"method": "POST",
@@ -2471,7 +2941,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "83",
+							"id": "98",
 							"uri": "http://backend:8000/api/v1/locations/record_id/activate",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/record_id\/activate",
 							"method": "POST",
@@ -2481,7 +2951,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13407",
+							"id": "15398",
 							"uri": "http://backend:8000/api/v1/locations/record_id/activate/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/record_id\/activate\/",
 							"method": "POST",
@@ -2491,7 +2961,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "82",
+							"id": "97",
 							"uri": "http://backend:8000/api/v1/locations/record_id/deactivate",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/record_id\/deactivate",
 							"method": "POST",
@@ -2501,7 +2971,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13403",
+							"id": "15390",
 							"uri": "http://backend:8000/api/v1/locations/record_id/deactivate/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/locations\/record_id\/deactivate\/",
 							"method": "POST",
@@ -2511,7 +2981,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "90",
+							"id": "105",
 							"uri": "http://backend:8000/api/v1/media/confirm",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/media\/confirm ()({company_id,purpose,public_id,secure_url,format,bytes,width,height})",
 							"method": "POST",
@@ -2521,7 +2991,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13446",
+							"id": "15396",
 							"uri": "http://backend:8000/api/v1/media/confirm/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/media\/confirm\/ ()({company_id,purpose,public_id,secure_url,format,bytes,width,height})",
 							"method": "POST",
@@ -2531,7 +3001,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "91",
+							"id": "106",
 							"uri": "http://backend:8000/api/v1/media/delete",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/media\/delete ()({company_id,public_id,secure_url})",
 							"method": "POST",
@@ -2541,7 +3011,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13459",
+							"id": "15382",
 							"uri": "http://backend:8000/api/v1/media/delete/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/media\/delete\/ ()({company_id,public_id,secure_url})",
 							"method": "POST",
@@ -2551,7 +3021,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "89",
+							"id": "104",
 							"uri": "http://backend:8000/api/v1/media/upload-signature",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/media\/upload-signature ()({company_id,purpose})",
 							"method": "POST",
@@ -2561,7 +3031,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13456",
+							"id": "15397",
 							"uri": "http://backend:8000/api/v1/media/upload-signature/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/media\/upload-signature\/ ()({company_id,purpose})",
 							"method": "POST",
@@ -2571,7 +3041,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "14",
+							"id": "30",
 							"uri": "http://backend:8000/api/v1/roles",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles ()({\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "POST",
@@ -2581,7 +3051,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13426",
+							"id": "15367",
 							"uri": "http://backend:8000/api/v1/roles/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/ ()({\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "POST",
@@ -2591,7 +3061,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "25",
+							"id": "41",
 							"uri": "http://backend:8000/api/v1/roles/assign",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/assign ()({user_id,role_id})",
 							"method": "POST",
@@ -2601,7 +3071,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13445",
+							"id": "15388",
 							"uri": "http://backend:8000/api/v1/roles/assign/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/assign\/ ()({user_id,role_id})",
 							"method": "POST",
@@ -2611,7 +3081,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "17",
+							"id": "33",
 							"uri": "http://backend:8000/api/v1/roles/permissions",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/permissions ()({\"code\":\"John Doe\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"module\":\"John Doe\"})",
 							"method": "POST",
@@ -2621,7 +3091,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13419",
+							"id": "15361",
 							"uri": "http://backend:8000/api/v1/roles/permissions/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/permissions\/ ()({\"code\":\"John Doe\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"module\":\"John Doe\"})",
 							"method": "POST",
@@ -2631,7 +3101,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "26",
+							"id": "42",
 							"uri": "http://backend:8000/api/v1/roles/revoke",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/revoke ()({user_id,role_id})",
 							"method": "POST",
@@ -2641,7 +3111,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13462",
+							"id": "15400",
 							"uri": "http://backend:8000/api/v1/roles/revoke/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/revoke\/ ()({user_id,role_id})",
 							"method": "POST",
@@ -2651,7 +3121,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "23",
+							"id": "39",
 							"uri": "http://backend:8000/api/v1/roles/role_id/duplicate",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/role_id\/duplicate ()({\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "POST",
@@ -2661,9 +3131,49 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13425",
+							"id": "15366",
 							"uri": "http://backend:8000/api/v1/roles/role_id/duplicate/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/role_id\/duplicate\/ ()({\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "123",
+							"uri": "http://backend:8000/api/v1/suppliers",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers ()({\"code\":\"John Doe\",\"name\":\"ZAP\",\"country\":10,\"address\":688 Zaproxy Ridge,\"phone\":9999999999,\"email\":zaproxy@example.com,\"website\":\"John Doe\"})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "15412",
+							"uri": "http://backend:8000/api/v1/suppliers/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/ ()({\"code\":\"John Doe\",\"name\":\"ZAP\",\"country\":10,\"address\":688 Zaproxy Ridge,\"phone\":9999999999,\"email\":zaproxy@example.com,\"website\":\"John Doe\"})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "126",
+							"uri": "http://backend:8000/api/v1/suppliers/10/contacts",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/10\/contacts ()({\"full_name\":\"John Doe\",\"phone\":9999999999,\"email\":zaproxy@example.com})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "15422",
+							"uri": "http://backend:8000/api/v1/suppliers/10/contacts/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/10\/contacts\/ ()({\"full_name\":\"John Doe\",\"phone\":9999999999,\"email\":zaproxy@example.com})",
 							"method": "POST",
 							"param": "",
 							"attack": "",
@@ -2681,7 +3191,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13454",
+							"id": "15437",
 							"uri": "http://backend:8000/api/v1/users/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/ ()({company_id,username,email,password,is_superuser,employee_id,role_ids:[]})",
 							"method": "POST",
@@ -2691,7 +3201,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "11",
+							"id": "23",
 							"uri": "http://backend:8000/api/v1/users/user_id/force-password-reset",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/force-password-reset ()({new_password})",
 							"method": "POST",
@@ -2701,7 +3211,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13451",
+							"id": "15429",
 							"uri": "http://backend:8000/api/v1/users/user_id/force-password-reset/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/force-password-reset\/ ()({new_password})",
 							"method": "POST",
@@ -2711,7 +3221,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "12",
+							"id": "28",
 							"uri": "http://backend:8000/api/v1/users/user_id/unlock",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/unlock",
 							"method": "POST",
@@ -2721,7 +3231,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13452",
+							"id": "15439",
 							"uri": "http://backend:8000/api/v1/users/user_id/unlock/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/unlock\/",
 							"method": "POST",
@@ -2731,7 +3241,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "67",
+							"id": "82",
 							"uri": "http://backend:8000/api/v1/warehouse-categories",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories ()({\"company_id\":\"John Doe\",\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "POST",
@@ -2741,7 +3251,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13468",
+							"id": "15413",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/ ()({\"company_id\":\"John Doe\",\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.})",
 							"method": "POST",
@@ -2751,7 +3261,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "71",
+							"id": "86",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/record_id/activate",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/record_id\/activate",
 							"method": "POST",
@@ -2761,7 +3271,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13457",
+							"id": "15438",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/record_id/activate/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/record_id\/activate\/",
 							"method": "POST",
@@ -2771,7 +3281,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "70",
+							"id": "85",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/record_id/deactivate",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/record_id\/deactivate",
 							"method": "POST",
@@ -2781,7 +3291,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13463",
+							"id": "15436",
 							"uri": "http://backend:8000/api/v1/warehouse-categories/record_id/deactivate/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouse-categories\/record_id\/deactivate\/",
 							"method": "POST",
@@ -2791,7 +3301,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "73",
+							"id": "88",
 							"uri": "http://backend:8000/api/v1/warehouses",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses ()({\"branch_id\":\"John Doe\",\"warehouse_category_id\":\"John Doe\",\"code\":\"John Doe\",\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"warehouse_type\":\"general\",\"operational_status\":\"active\",\"physical_location\":\"John Doe\",\"manager_employee_id\":\"John Doe\",\"area\":1.2,\"height\":1.2,\"length\":1.2,\"width\":1.2,\"shelves_total\":10,\"capacity\":10,\"shifts\":[\"John Doe\"],\"cameras\":10,\"access_control\":\"John Doe\",\"has_alarm\":false,\"fire_syst)",
 							"method": "POST",
@@ -2801,7 +3311,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13473",
+							"id": "15403",
 							"uri": "http://backend:8000/api/v1/warehouses/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/ ()({\"branch_id\":\"John Doe\",\"warehouse_category_id\":\"John Doe\",\"code\":\"John Doe\",\"name\":\"ZAP\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"warehouse_type\":\"general\",\"operational_status\":\"active\",\"physical_location\":\"John Doe\",\"manager_employee_id\":\"John Doe\",\"area\":1.2,\"height\":1.2,\"length\":1.2,\"width\":1.2,\"shelves_total\":10,\"capacity\":10,\"shifts\":[\"John Doe\"],\"cameras\":10,\"access_control\":\"John Doe\",\"has_alarm\":false,\"fire_syst)",
 							"method": "POST",
@@ -2811,7 +3321,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "78",
+							"id": "93",
 							"uri": "http://backend:8000/api/v1/warehouses/record_id/activate",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/record_id\/activate",
 							"method": "POST",
@@ -2821,7 +3331,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13477",
+							"id": "15435",
 							"uri": "http://backend:8000/api/v1/warehouses/record_id/activate/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/record_id\/activate\/",
 							"method": "POST",
@@ -2831,7 +3341,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "77",
+							"id": "92",
 							"uri": "http://backend:8000/api/v1/warehouses/record_id/deactivate",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/record_id\/deactivate",
 							"method": "POST",
@@ -2841,7 +3351,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13479",
+							"id": "15428",
 							"uri": "http://backend:8000/api/v1/warehouses/record_id/deactivate/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/warehouses\/record_id\/deactivate\/",
 							"method": "POST",
@@ -2851,7 +3361,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "9998",
+							"id": "11450",
 							"uri": "http://backend:8000/computeMetadata/v1/",
 							"nodeName": "http:\/\/backend:8000\/computeMetadata\/v1\/ ()({current_password,new_password})",
 							"method": "POST",
@@ -2861,7 +3371,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "9996",
+							"id": "11448",
 							"uri": "http://backend:8000/latest/meta-data/",
 							"nodeName": "http:\/\/backend:8000\/latest\/meta-data\/ ()({current_password,new_password})",
 							"method": "POST",
@@ -2871,7 +3381,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "10029",
+							"id": "11471",
 							"uri": "http://backend:8000/metadata/instance",
 							"nodeName": "http:\/\/backend:8000\/metadata\/instance ()({current_password,new_password})",
 							"method": "POST",
@@ -2881,7 +3391,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "10033",
+							"id": "11477",
 							"uri": "http://backend:8000/metadata/v1",
 							"nodeName": "http:\/\/backend:8000\/metadata\/v1 ()({current_password,new_password})",
 							"method": "POST",
@@ -2891,7 +3401,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "10002",
+							"id": "11454",
 							"uri": "http://backend:8000/opc/v1/instance/",
 							"nodeName": "http:\/\/backend:8000\/opc\/v1\/instance\/ ()({current_password,new_password})",
 							"method": "POST",
@@ -2901,7 +3411,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "10007",
+							"id": "11458",
 							"uri": "http://backend:8000/opc/v2/instance/",
 							"nodeName": "http:\/\/backend:8000\/opc\/v2\/instance\/ ()({current_password,new_password})",
 							"method": "POST",
@@ -2911,7 +3421,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "10035",
+							"id": "11485",
 							"uri": "http://backend:8000/openstack/latest/meta_data.json",
 							"nodeName": "http:\/\/backend:8000\/openstack\/latest\/meta_data.json ()({current_password,new_password})",
 							"method": "POST",
@@ -2921,7 +3431,87 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "24",
+							"id": "111",
+							"uri": "http://backend:8000/api/v1/catalog/categories/10",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/categories\/10 ()({\"name\":ZAP,\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"is_active\":true})",
+							"method": "PUT",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "15312",
+							"uri": "http://backend:8000/api/v1/catalog/categories/10/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/categories\/10\/ ()({\"name\":ZAP,\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"is_active\":true})",
+							"method": "PUT",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "121",
+							"uri": "http://backend:8000/api/v1/catalog/products/10",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/products\/10 ()({\"id_category\":10,\"id_sub_category\":10,\"sku\":\"John Doe\",\"name\":ZAP,\"purchase_unit\":10,\"sale_unit\":10,\"original_code\":\"John Doe\",\"internal_code\":\"John Doe\",\"size\":\"John Doe\",\"dimensions\":\"John Doe\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"presentation\":\"John Doe\",\"is_active\":true})",
+							"method": "PUT",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "15315",
+							"uri": "http://backend:8000/api/v1/catalog/products/10/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/products\/10\/ ()({\"id_category\":10,\"id_sub_category\":10,\"sku\":\"John Doe\",\"name\":ZAP,\"purchase_unit\":10,\"sale_unit\":10,\"original_code\":\"John Doe\",\"internal_code\":\"John Doe\",\"size\":\"John Doe\",\"dimensions\":\"John Doe\",\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"presentation\":\"John Doe\",\"is_active\":true})",
+							"method": "PUT",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "114",
+							"uri": "http://backend:8000/api/v1/catalog/sub-categories/10",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/sub-categories\/10 ()({\"name\":ZAP,\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"is_active\":true})",
+							"method": "PUT",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "15316",
+							"uri": "http://backend:8000/api/v1/catalog/sub-categories/10/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/sub-categories\/10\/ ()({\"name\":ZAP,\"description\":Zaproxy alias impedit expedita quisquam pariatur exercitationem. Nemo rerum eveniet dolores rem quia dignissimos.,\"is_active\":true})",
+							"method": "PUT",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "117",
+							"uri": "http://backend:8000/api/v1/catalog/units/10",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/units\/10 ()({\"name\":ZAP,\"type\":\"John Doe\",\"is_active\":true})",
+							"method": "PUT",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "15331",
+							"uri": "http://backend:8000/api/v1/catalog/units/10/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/catalog\/units\/10\/ ()({\"name\":ZAP,\"type\":\"John Doe\",\"is_active\":true})",
+							"method": "PUT",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "40",
 							"uri": "http://backend:8000/api/v1/roles/role_id/permissions",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/role_id\/permissions ()({permission_codes:[]})",
 							"method": "PUT",
@@ -2931,7 +3521,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13453",
+							"id": "15399",
 							"uri": "http://backend:8000/api/v1/roles/role_id/permissions/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/roles\/role_id\/permissions\/ ()({permission_codes:[]})",
 							"method": "PUT",
@@ -2941,7 +3531,47 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "87",
+							"id": "125",
+							"uri": "http://backend:8000/api/v1/suppliers/10",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/10 ()({\"code\":\"John Doe\",\"name\":ZAP,\"country\":10,\"address\":688 Zaproxy Ridge,\"phone\":9999999999,\"email\":zaproxy@example.com,\"website\":\"John Doe\",\"is_active\":true})",
+							"method": "PUT",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "15414",
+							"uri": "http://backend:8000/api/v1/suppliers/10/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/10\/ ()({\"code\":\"John Doe\",\"name\":ZAP,\"country\":10,\"address\":688 Zaproxy Ridge,\"phone\":9999999999,\"email\":zaproxy@example.com,\"website\":\"John Doe\",\"is_active\":true})",
+							"method": "PUT",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "127",
+							"uri": "http://backend:8000/api/v1/suppliers/contacts/10",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/contacts\/10 ()({\"full_name\":\"John Doe\",\"phone\":9999999999,\"email\":zaproxy@example.com,\"is_active\":true})",
+							"method": "PUT",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "15418",
+							"uri": "http://backend:8000/api/v1/suppliers/contacts/10/",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/suppliers\/contacts\/10\/ ()({\"full_name\":\"John Doe\",\"phone\":9999999999,\"email\":zaproxy@example.com,\"is_active\":true})",
+							"method": "PUT",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "102",
 							"uri": "http://backend:8000/api/v1/users/user_id/companies/company_id/branch-access",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/companies\/company_id\/branch-access ()({access_all_branches,branch_ids:[],default_branch_id})",
 							"method": "PUT",
@@ -2951,7 +3581,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "13458",
+							"id": "15421",
 							"uri": "http://backend:8000/api/v1/users/user_id/companies/company_id/branch-access/",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/companies\/company_id\/branch-access\/ ()({access_all_branches,branch_ids:[],default_branch_id})",
 							"method": "PUT",
@@ -2961,7 +3591,7 @@
 							"otherinfo": ""
 						}
 					],
-					"count": "285",
+					"count": "348",
 					"systemic": false,
 					"solution": "",
 					"otherinfo": "",
@@ -2981,7 +3611,7 @@
 					"desc": "<p>The given request has been identified as an authentication request. The 'Other Info' field contains a set of key=value lines which identify any relevant fields. If the request is in a context which has an Authentication Method set to \"Auto-Detect\" then this rule will change the authentication to match the request identified.</p>",
 					"instances":[ 
 						{
-							"id": "102",
+							"id": "19",
 							"uri": "http://backend:8000/api/v1/users",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users ()({company_id,username,email,password,is_superuser,employee_id,role_ids:[]})",
 							"method": "POST",
@@ -2991,7 +3621,7 @@
 							"otherinfo": "userParam=email\nuserValue=zaproxy@example.com\npasswordParam=password"
 						},
 						{
-							"id": "94",
+							"id": "17",
 							"uri": "http://backend:8000/api/v1/auth/login",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/login ()({login,password})",
 							"method": "POST",
@@ -3021,7 +3651,7 @@
 					"desc": "<p>The request appeared to contain sensitive information leaked in the URL. This can violate PCI and most organizational compliance policies. You can configure the list of strings for this check to add or remove values specific to your environment.</p>",
 					"instances":[ 
 						{
-							"id": "117",
+							"id": "130",
 							"uri": "http://backend:8000/api/v1/audit-logs?page=1&size=20&user_id=&company_id=&branch_id=&action=&resource_type=&resource_id=&status=&start_date=&end_date=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/audit-logs (action,branch_id,company_id,end_date,page,resource_id,resource_type,size,start_date,status,user_id)",
 							"method": "GET",
@@ -3031,7 +3661,7 @@
 							"otherinfo": "The URL contains potentially sensitive information. The following string was found via the pattern: user\nuser_id"
 						},
 						{
-							"id": "116",
+							"id": "129",
 							"uri": "http://backend:8000/api/v1/audit-logs/export?user_id=&company_id=&branch_id=&action=&resource_type=&start_date=&end_date=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/audit-logs\/export (action,branch_id,company_id,end_date,resource_type,start_date,user_id)",
 							"method": "GET",
@@ -3041,7 +3671,7 @@
 							"otherinfo": "The URL contains potentially sensitive information. The following string was found via the pattern: user\nuser_id"
 						},
 						{
-							"id": "99",
+							"id": "10",
 							"uri": "http://backend:8000/api/v1/users/batch/roles?user_ids=user_ids&company_id=company_id&branch_id=",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/batch\/roles (branch_id,company_id,user_ids)",
 							"method": "GET",
@@ -3071,9 +3701,9 @@
 					"desc": "<p>The response contents are not storable by caching components such as proxy servers. If the response does not contain sensitive, personal or user-specific information, it may benefit from being stored and cached, to improve performance.</p>",
 					"instances":[ 
 						{
-							"id": "96",
-							"uri": "http://backend:8000/api/v1/auth/me",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/me",
+							"id": "13",
+							"uri": "http://backend:8000/api/v1/users?page=1&size=20&search=ZAP&status=&company_id=&branch_id=",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/users (branch_id,company_id,page,search,size,status)",
 							"method": "GET",
 							"param": "",
 							"attack": "",
@@ -3081,7 +3711,17 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "103",
+							"id": "16",
+							"uri": "http://backend:8000/api/v1/users/batch/roles?user_ids=user_ids&company_id=company_id&branch_id=",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/batch\/roles (branch_id,company_id,user_ids)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15",
 							"uri": "http://backend:8000/api/v1/auth/change-password",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/change-password ()({current_password,new_password})",
 							"method": "POST",
@@ -3091,7 +3731,7 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "101",
+							"id": "20",
 							"uri": "http://backend:8000/api/v1/auth/logout",
 							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/logout ()({refresh_token})",
 							"method": "POST",
@@ -3101,23 +3741,13 @@
 							"otherinfo": ""
 						},
 						{
-							"id": "105",
-							"uri": "http://backend:8000/api/v1/users",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/users ()({company_id,username,email,password,is_superuser,employee_id,role_ids:[]})",
+							"id": "14",
+							"uri": "http://backend:8000/api/v1/auth/refresh",
+							"nodeName": "http:\/\/backend:8000\/api\/v1\/auth\/refresh ()({refresh_token})",
 							"method": "POST",
 							"param": "",
 							"attack": "",
-							"evidence": "401",
-							"otherinfo": ""
-						},
-						{
-							"id": "107",
-							"uri": "http://backend:8000/api/v1/users/user_id/unlock",
-							"nodeName": "http:\/\/backend:8000\/api\/v1\/users\/user_id\/unlock",
-							"method": "POST",
-							"param": "",
-							"attack": "",
-							"evidence": "401",
+							"evidence": "422",
 							"otherinfo": ""
 						}
 					],
@@ -3128,7 +3758,7 @@
 					"reference": "<p>https://datatracker.ietf.org/doc/html/rfc7234</p><p>https://datatracker.ietf.org/doc/html/rfc7231</p><p>https://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html</p>",
 					"cweid": "524",
 					"wascid": "13",
-					"sourceid": "13"
+					"sourceid": "15"
 				},
 				{
 					"pluginid": "10049",
@@ -3141,7 +3771,7 @@
 					"desc": "<p>The response contents are storable by caching components such as proxy servers, and may be retrieved directly from the cache, rather than from the origin server by the caching servers, in response to similar requests from other users. If the response data is sensitive, personal or user-specific, this may result in sensitive information being leaked. In some cases, this may even result in a user gaining complete control of the session of another user, depending on the configuration of the caching components in use in their environment. This is primarily an issue where \"shared\" caching servers such as \"proxy\" caches are configured on the local network. This configuration is typically found in corporate or educational environments, for instance.</p>",
 					"instances":[ 
 						{
-							"id": "95",
+							"id": "18",
 							"uri": "http://backend:8000/health",
 							"nodeName": "http:\/\/backend:8000\/health",
 							"method": "GET",
@@ -3151,7 +3781,7 @@
 							"otherinfo": "In the absence of an explicitly specified caching lifetime directive in the response, a liberal lifetime heuristic of 1 year was assumed. This is permitted by rfc7234."
 						},
 						{
-							"id": "92",
+							"id": "21",
 							"uri": "http://backend:8000/health/live",
 							"nodeName": "http:\/\/backend:8000\/health\/live",
 							"method": "GET",
@@ -3161,7 +3791,7 @@
 							"otherinfo": "In the absence of an explicitly specified caching lifetime directive in the response, a liberal lifetime heuristic of 1 year was assumed. This is permitted by rfc7234."
 						},
 						{
-							"id": "93",
+							"id": "22",
 							"uri": "http://backend:8000/health/ready",
 							"nodeName": "http:\/\/backend:8000\/health\/ready",
 							"method": "GET",
@@ -3169,19 +3799,9 @@
 							"attack": "",
 							"evidence": "",
 							"otherinfo": "In the absence of an explicitly specified caching lifetime directive in the response, a liberal lifetime heuristic of 1 year was assumed. This is permitted by rfc7234."
-						},
-						{
-							"id": "42",
-							"uri": "http://backend:8000/openapi.json",
-							"nodeName": "http:\/\/backend:8000\/openapi.json",
-							"method": "GET",
-							"param": "",
-							"attack": "",
-							"evidence": "",
-							"otherinfo": "In the absence of an explicitly specified caching lifetime directive in the response, a liberal lifetime heuristic of 1 year was assumed. This is permitted by rfc7234."
 						}
 					],
-					"count": "4",
+					"count": "3",
 					"systemic": false,
 					"solution": "<p>Validate that the response does not contain sensitive, personal or user-specific information. If it does, consider the use of the following HTTP response headers, to limit, or prevent the content being stored and retrieved from the cache by another user:</p><p>Cache-Control: no-cache, no-store, must-revalidate, private</p><p>Pragma: no-cache</p><p>Expires: 0</p><p>This configuration directs both HTTP 1.0 and HTTP 1.1 compliant caching servers to not store the response, and to not retrieve the response (without validation) from the cache, in response to a similar request.</p>",
 					"otherinfo": "<p>In the absence of an explicitly specified caching lifetime directive in the response, a liberal lifetime heuristic of 1 year was assumed. This is permitted by rfc7234.</p>",
