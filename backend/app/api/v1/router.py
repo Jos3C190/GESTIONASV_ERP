@@ -10,14 +10,16 @@ from fastapi import APIRouter
 from app.api.v1.routers import (
     audit_logs,
     auth,
-    departments,
+    catalog,
     dashboard,
+    departments,
     employees,
     health,
     media,
     operational_context,
     organization,
     roles,
+    suppliers,
     users,
     workforce,
 )
@@ -36,3 +38,5 @@ api_router.include_router(organization.router, prefix="/api/v1")
 api_router.include_router(operational_context.router, prefix="/api/v1")
 api_router.include_router(dashboard.router, prefix="/api/v1")
 api_router.include_router(media.router, prefix="/api/v1")
+api_router.include_router(catalog.router, prefix="/api/v1")
+api_router.include_router(suppliers.router, prefix="/api/v1")
