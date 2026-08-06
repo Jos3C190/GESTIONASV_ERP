@@ -710,13 +710,13 @@
   {@const strokeOffset = strokeDash - (pct / 100) * strokeDash}
 
   <div
-    class="rounded-xl border border-border bg-surface-elevated p-4 md:p-5 transition-all duration-200 hover:border-primary/40 hover:shadow-md flex {isList
+    class="rounded-xl border border-border bg-surface-elevated p-4 md:p-5 transition-all duration-200 hover:border-primary/40 hover:shadow-md flex min-w-0 overflow-hidden {isList
       ? 'flex-col sm:flex-row sm:items-center justify-between gap-4'
       : 'flex-col gap-4'}"
   >
     <!-- Header de la tarjeta: Icono + Nombre + Código + Badge -->
-    <div class="flex items-start justify-between gap-3 {isList ? 'sm:w-1/3 flex-none' : ''}">
-      <div class="flex items-start gap-3 min-w-0">
+    <div class="flex items-start justify-between gap-3 min-w-0 {isList ? 'sm:w-1/3 flex-none' : ''}">
+      <div class="flex items-start gap-3 min-w-0 flex-1">
         <div
           class="flex h-10 w-10 flex-none items-center justify-center rounded-lg bg-primary/10 text-primary"
         >
@@ -746,18 +746,20 @@
             >
           {/if}
         </div>
-        <div class="min-w-0">
-          <h4 class="font-bold text-sm text-foreground truncate">{wh.name}</h4>
-          <p class="font-mono text-[11px] text-foreground-subtle tracking-wide">{wh.code}</p>
+        <div class="min-w-0 flex-1">
+          <h4 class="font-bold text-sm text-foreground truncate" title={wh.name}>{wh.name}</h4>
+          <p class="font-mono text-[11px] text-foreground-subtle tracking-wide truncate">{wh.code}</p>
         </div>
       </div>
-      <Badge variant={STATUS_MAP[wh.status]?.variant || 'neutral'}>
-        {STATUS_MAP[wh.status]?.label || wh.status}
-      </Badge>
+      <div class="flex-none">
+        <Badge variant={STATUS_MAP[wh.status]?.variant || 'neutral'}>
+          {STATUS_MAP[wh.status]?.label || wh.status}
+        </Badge>
+      </div>
     </div>
 
     <!-- Cuerpo de la tarjeta: Medidor circular SVG de capacidad + Meta info -->
-    <div class="flex items-center gap-4 {isList ? 'flex-1 justify-between' : ''}">
+    <div class="flex items-center gap-4 min-w-0 {isList ? 'flex-1 justify-between' : ''}">
       <!-- Medidor Circular de Capacidad -->
       <div
         class="relative flex-none flex items-center justify-center"
@@ -809,8 +811,11 @@
       </div>
 
       <!-- Meta Info (Sucursal, Ubicación, Unidades y Productos) -->
-      <div class="flex-1 space-y-1.5 text-xs">
-        <p class="text-[11.5px] text-foreground-muted flex items-center gap-1.5 truncate">
+      <div class="flex-1 space-y-1.5 text-xs min-w-0">
+        <p
+          class="text-[11.5px] text-foreground-muted flex items-center gap-1.5 min-w-0"
+          title="{wh.branchName} · {wh.location}"
+        >
           <svg
             width="12"
             height="12"
@@ -825,28 +830,31 @@
               r="3"
             /></svg
           >
-          <span class="truncate">{wh.branchName} · {wh.location}</span>
+          <span class="truncate flex-1">{wh.branchName} · {wh.location}</span>
         </p>
-        <div class="flex items-center justify-between text-xs">
-          <span class="text-foreground-subtle">Capacidad:</span>
-          <span class="font-mono font-medium text-foreground"
+        <div class="flex items-center justify-between text-xs gap-2 min-w-0">
+          <span class="text-foreground-subtle flex-none">Capacidad:</span>
+          <span class="font-mono font-medium text-foreground truncate text-right"
             >{wh.used.toLocaleString()} / {wh.capacity.toLocaleString()} u</span
           >
         </div>
-        <div class="flex items-center justify-between text-xs">
-          <span class="text-foreground-subtle">Productos:</span>
-          <span class="font-semibold text-foreground">{wh.products.toLocaleString()}</span>
+        <div class="flex items-center justify-between text-xs gap-2 min-w-0">
+          <span class="text-foreground-subtle flex-none">Productos:</span>
+          <span class="font-semibold text-foreground truncate text-right">{wh.products.toLocaleString()}</span>
         </div>
       </div>
     </div>
 
     <!-- Footer de la tarjeta: Último movimiento + Enlace ver detalle -->
     <div
-      class="flex items-center justify-between border-t border-border/60 pt-3 text-xs text-foreground-subtle {isList
+      class="flex items-center justify-between border-t border-border/60 pt-3 text-xs text-foreground-subtle gap-2 min-w-0 {isList
         ? 'sm:w-auto sm:border-t-0 sm:pt-0 gap-4'
         : ''}"
     >
-      <span class="flex items-center gap-1">
+      <span
+        class="flex items-center gap-1 min-w-0 truncate"
+        title="Últ. movimiento: {wh.lastMovement}"
+      >
         <svg
           width="12"
           height="12"
@@ -854,11 +862,12 @@
           fill="none"
           stroke="currentColor"
           stroke-width="2"
+          class="flex-none"
           ><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg
         >
-        Últ. movimiento: {wh.lastMovement}
+        <span class="truncate">Últ. movimiento: {wh.lastMovement}</span>
       </span>
-      <div class="-mr-1.5 flex items-center">
+      <div class="-mr-1.5 flex flex-none items-center">
         <KebabMenu
           orientation={isList ? 'vertical' : 'horizontal'}
           items={[
@@ -868,6 +877,16 @@
               icon: 'detail',
               onClick: () => goto(`/warehouses/${wh.id}`)
             },
+            ...(permissions.hasPermission('locations.view')
+              ? [
+                  {
+                    id: 'locations',
+                    label: 'Ubicaciones',
+                    icon: 'locations' as const,
+                    onClick: () => goto(`/warehouses/${wh.id}/locations`)
+                  }
+                ]
+              : []),
             ...(permissions.hasPermission('warehouses.update')
               ? [
                   {

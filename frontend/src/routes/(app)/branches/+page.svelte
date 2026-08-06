@@ -49,8 +49,8 @@
         staleTime: force ? 0 : 30_000,
         queryFn: ({ signal }) => getBranches(signal)
       });
-      if (branches.length > 0 && !branches.some((b) => b.id === selectedId)) {
-        selectedId = branches[0]?.id ?? null;
+      if (selectedId && !branches.some((b) => b.id === selectedId)) {
+        selectedId = null;
       }
     } catch (err) {
       error = err instanceof HttpError ? err.message : 'No se pudieron cargar las sucursales.';

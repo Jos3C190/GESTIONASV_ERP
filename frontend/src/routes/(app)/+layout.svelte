@@ -38,7 +38,9 @@
     '/audit-log',
     '/branches',
     '/warehouses',
-    '/warehouse-categories'
+    '/warehouse-categories',
+    '/suppliers',
+    '/products'
   ];
 
   let showSearch = $derived(SEARCHABLE_ROUTES.includes(page.url.pathname));

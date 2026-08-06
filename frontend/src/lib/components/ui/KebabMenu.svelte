@@ -7,7 +7,17 @@
   export interface KebabItem {
     id: string;
     label: string;
-    icon?: 'detail' | 'edit' | 'delete' | 'link' | 'unlink' | 'key' | 'unlock' | 'power' | 'custom';
+    icon?:
+      | 'detail'
+      | 'edit'
+      | 'delete'
+      | 'link'
+      | 'unlink'
+      | 'key'
+      | 'unlock'
+      | 'power'
+      | 'locations'
+      | 'custom';
     variant?: 'default' | 'danger';
     onClick: () => void;
   }
@@ -300,6 +310,24 @@
             class="flex-none"
           >
             <path d="M18.36 6.64a9 9 0 1 1-12.73 0" /><line x1="12" y1="2" x2="12" y2="12" />
+          </svg>
+        {:else if item.icon === 'locations'}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="text-primary flex-none"
+          >
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle
+              cx="12"
+              cy="10"
+              r="3"
+            />
           </svg>
         {/if}
         {item.label}

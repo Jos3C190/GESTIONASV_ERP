@@ -12,6 +12,8 @@ const TITLES: Record<string, string> = {
   '/warehouses': 'Almacenes',
   '/warehouse-categories': 'Categorías de almacén',
   '/audit-log': 'Bitácora',
+  '/suppliers': 'Proveedores',
+  '/products': 'Productos',
   '/placeholder': 'Módulo'
 };
 
@@ -26,6 +28,8 @@ export function routeTitle(pathname: string): string {
   if (pathname.startsWith('/warehouses')) return TITLES['/warehouses'] ?? 'Almacenes';
   if (pathname.startsWith('/warehouse-categories'))
     return TITLES['/warehouse-categories'] ?? 'Categorías de almacén';
+  if (pathname.startsWith('/suppliers')) return TITLES['/suppliers'] ?? 'Proveedores';
+  if (pathname.startsWith('/products')) return TITLES['/products'] ?? 'Productos';
   // Check prefix for /placeholder?module=X
   for (const key of Object.keys(TITLES)) {
     if (pathname.startsWith(key)) return TITLES[key] ?? '';
