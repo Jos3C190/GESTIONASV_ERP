@@ -64,3 +64,7 @@ logs/
 
 # ===== Local uploads =====
 backend/uploads/
+
+# ===== Database dumps =====
+*.dump
+*.sql.gz
