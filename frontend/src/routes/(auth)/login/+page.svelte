@@ -40,7 +40,7 @@
       session.setUser(me);
       const perms = await api.auth.myPermissions();
       permissions.set(perms.permissions, perms.is_superuser);
-      await goto('/companies');
+      await goto('/splash');
     } catch (err) {
       errors.form = err instanceof HttpError ? err.message : 'Error inesperado. Intente nuevamente.';
       session.clear();
@@ -147,7 +147,7 @@
       </form>
 
       <p class="mt-8 text-center text-xs text-foreground-subtle">
-        Acceso restringido a usuarios autorizados · Fase 6
+        Acceso restringido a usuarios autorizados
       </p>
     </div>
   </div>
