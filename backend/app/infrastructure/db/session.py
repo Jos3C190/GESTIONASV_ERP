@@ -23,6 +23,10 @@ log = get_logger(__name__)
 
 
 def _build_engine(url: str) -> AsyncEngine:
+    connect_args: dict[str, Any] = {}
+    if "+asyncpg" in url:
+        connect_args["prepared_statement_cache_size"] = 0
+
     return create_async_engine(
         url,
         echo=settings.DB_ECHO,
@@ -31,6 +35,7 @@ def _build_engine(url: str) -> AsyncEngine:
         max_overflow=settings.DB_MAX_OVERFLOW,
         pool_timeout=settings.DB_POOL_TIMEOUT,
         pool_recycle=settings.DB_POOL_RECYCLE,
+        connect_args=connect_args,
         future=True,
     )
 
