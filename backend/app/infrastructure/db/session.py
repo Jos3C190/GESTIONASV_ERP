@@ -27,6 +27,7 @@ def _build_engine(url: str) -> AsyncEngine:
     if "+asyncpg" in url or "postgresql" in url:
         connect_args["statement_cache_size"] = 0
         connect_args["prepared_statement_cache_size"] = 0
+        connect_args["prepared_statement_name_func"] = lambda: ""
 
     return create_async_engine(
         url,

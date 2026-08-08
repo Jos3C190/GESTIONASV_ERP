@@ -546,6 +546,7 @@ def _session_factory() -> async_sessionmaker[AsyncSession]:
     if "+asyncpg" in settings.DATABASE_URL or "postgresql" in settings.DATABASE_URL:
         connect_args["statement_cache_size"] = 0
         connect_args["prepared_statement_cache_size"] = 0
+        connect_args["prepared_statement_name_func"] = lambda: ""
 
     engine = create_async_engine(
         settings.DATABASE_URL,
