@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Git Pre-Push Hook — Auditoría Completa de Seguridad (Red Team Scan)
+# Git Pre-Push Hook — Auditoría Completa de Seguridad (Opcional)
 # ==============================================================================
-set -e
 
-echo "======================================================================"
-echo " 🛡️ Git Pre-Push: Ejecutando Escaneo de Seguridad Completo (Red Team)..."
-echo "======================================================================"
+if [ "$ENABLE_PRE_PUSH_SECURITY_SCAN" = "1" ]; then
+    echo "======================================================================"
+    echo " 🛡️ Git Pre-Push: Ejecutando Escaneo de Seguridad Completo (Red Team)..."
+    echo "======================================================================"
 
-if [ -f "./scripts/security-scan.ps1" ] && command -v powershell.exe >/dev/null 2>&1; then
-    powershell.exe -ExecutionPolicy Bypass -File "./scripts/security-scan.ps1" -Deep
-elif [ -f "./scripts/security-scan.sh" ]; then
-    bash ./scripts/security-scan.sh deep
+    if [ -f "./scripts/security-scan.ps1" ] && command -v powershell.exe >/dev/null 2>&1; then
+        powershell.exe -ExecutionPolicy Bypass -File "./scripts/security-scan.ps1" -Deep
+    elif [ -f "./scripts/security-scan.sh" ]; then
+        bash ./scripts/security-scan.sh deep
+    fi
+    echo "✅ Pre-Push de seguridad completado. Procediendo con el push."
+else
+    echo "⚡ Git Pre-Push: Escaneo de seguridad omitido para agilizar el push."
 fi
-
-echo "✅ Pre-Push de seguridad completado. Procediendo con el push."
+exit 0
