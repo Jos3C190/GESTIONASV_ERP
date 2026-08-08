@@ -95,7 +95,11 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[misc]
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        prod_origin = "https://proyecto-erp-one.vercel.app"
+        if prod_origin not in origins:
+            origins.append(prod_origin)
+        return origins
 
     @field_validator("JWT_SECRET_KEY")
     @classmethod

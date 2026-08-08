@@ -542,7 +542,17 @@ def validate_seed_data() -> None:
 def _session_factory() -> async_sessionmaker[AsyncSession]:
     from app.core.config import settings
 
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True, future=True)
+    connect_args: dict[str, Any] = {}
+    if "+asyncpg" in settings.DATABASE_URL or "postgresql" in settings.DATABASE_URL:
+        connect_args["statement_cache_size"] = 0
+        connect_args["prepared_statement_cache_size"] = 0
+
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        pool_pre_ping=True,
+        connect_args=connect_args,
+        future=True,
+    )
     return async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
 
 

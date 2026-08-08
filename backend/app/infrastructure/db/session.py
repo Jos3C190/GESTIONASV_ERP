@@ -24,7 +24,8 @@ log = get_logger(__name__)
 
 def _build_engine(url: str) -> AsyncEngine:
     connect_args: dict[str, Any] = {}
-    if "+asyncpg" in url:
+    if "+asyncpg" in url or "postgresql" in url:
+        connect_args["statement_cache_size"] = 0
         connect_args["prepared_statement_cache_size"] = 0
 
     return create_async_engine(

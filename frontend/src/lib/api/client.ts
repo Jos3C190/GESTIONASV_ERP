@@ -112,7 +112,22 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     if (branch.id) headers['X-Branch-ID'] = branch.id;
   }
 
-  const res = await fetch(url, { ...rest, headers, credentials: 'include' });
+  let res: Response;
+  try {
+    res = await fetch(url, { ...rest, headers, credentials: 'include' });
+  } catch {
+    // If initial fetch fails due to network/cold start on Render, wait 2.5s and retry once
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    try {
+      res = await fetch(url, { ...rest, headers, credentials: 'include' });
+    } catch {
+      throw new HttpError(
+        'network_error',
+        'No se pudo conectar con el servidor. Si el servicio estaba inactivo en Render, intente nuevamente en unos segundos.',
+        0
+      );
+    }
+  }
 
   // 401 -> try refresh -> retry once
   if (res.status === 401 && browser && !noRefresh && !noAuth) {
