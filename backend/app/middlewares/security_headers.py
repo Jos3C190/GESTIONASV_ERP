@@ -15,7 +15,7 @@ _DEFAULTS = {
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
     "Cross-Origin-Opener-Policy": "same-origin",
-    "Cross-Origin-Resource-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "cross-origin",
 }
 
 # Conservative CSP. Tightened further in Phase 1 when we know exact needs.

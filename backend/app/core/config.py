@@ -63,7 +63,10 @@ class Settings(BaseSettings):
 
     # --- Cookies / security ---
     SECURE_COOKIES: bool = True
-    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+    CORS_ORIGINS: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,https://proyecto-erp-one.vercel.app"
+    )
+    CORS_ORIGIN_REGEX: str | None = r"https://.*\.vercel\.app"
 
     # --- Redis (optional) ---
     REDIS_URL: str | None = None
