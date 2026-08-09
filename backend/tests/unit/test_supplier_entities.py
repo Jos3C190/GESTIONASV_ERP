@@ -1,14 +1,17 @@
 """Unit tests for supplier domain entities."""
 
 import uuid
+
 from app.domain.entities.supplier import Supplier, SupplierContact
 
 
 def test_supplier_and_contact():
     s_uuid = uuid.uuid4()
+    company_id = uuid.uuid4()
     c = SupplierContact(id=1, supplier_id=5, full_name="Carlos Rivas", phone="+503 7000-1122")
     s = Supplier(
         id=5,
+        company_id=company_id,
         uuid=s_uuid,
         code="PROV-001",
         name="Harinas SV",

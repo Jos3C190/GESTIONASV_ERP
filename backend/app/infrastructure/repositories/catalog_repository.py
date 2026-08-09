@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import uuid
-from typing import Sequence
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit
 from app.infrastructure.models.catalog import (
-    CategoryModel, CountryModel, ProductModel, SubCategoryModel, UnitModel,
+    CategoryModel,
+    CountryModel,
+    ProductModel,
+    SubCategoryModel,
+    UnitModel,
 )
 
 
@@ -31,6 +34,7 @@ def _to_category(orm: CategoryModel) -> Category:
     return Category(
         id=orm.id_category,
         uuid=orm.uuid,
+        company_id=orm.company_id,
         name=orm.name,
         description=orm.description,
         is_active=orm.is_active,
@@ -42,6 +46,7 @@ def _to_category(orm: CategoryModel) -> Category:
 def _to_sub_category(orm: SubCategoryModel) -> SubCategory:
     return SubCategory(
         id=orm.id_sub_category,
+        company_id=orm.company_id,
         category_id=orm.id_category,
         name=orm.name,
         description=orm.description,
@@ -66,6 +71,7 @@ def _to_product(orm: ProductModel) -> Product:
     return Product(
         id=orm.id_product,
         uuid=orm.uuid,
+        company_id=orm.company_id,
         category_id=orm.id_category,
         sub_category_id=orm.id_sub_category,
         sku=orm.sku,
@@ -110,52 +116,55 @@ class SqlAlchemyCatalogRepository:
         return _to_country(orm)
 
     # --- Categories ---
-    async def list_categories(self, active_only: bool = True) -> list[Category]:
-        stmt = select(CategoryModel)
+    async def list_categories(self, company_id: uuid.UUID, active_only: bool = True) -> list[Category]:
+        stmt = select(CategoryModel).where(CategoryModel.company_id == company_id)
         if active_only:
             stmt = stmt.where(CategoryModel.is_active.is_(True))
         stmt = stmt.order_by(CategoryModel.name)
         res = await self._session.execute(stmt)
         return [_to_category(c) for c in res.scalars().all()]
 
-    async def get_category_by_id(self, category_id: int) -> Category | None:
-        stmt = select(CategoryModel).where(CategoryModel.id_category == category_id)
+    async def get_category_by_id(self, company_id: uuid.UUID, category_id: int) -> Category | None:
+        stmt = select(CategoryModel).where(
+            CategoryModel.company_id == company_id, CategoryModel.id_category == category_id
+        )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_category(orm) if orm else None
 
-    async def get_category_by_uuid(self, cat_uuid: uuid.UUID) -> Category | None:
-        stmt = select(CategoryModel).where(CategoryModel.uuid == cat_uuid)
+    async def get_category_by_uuid(self, company_id: uuid.UUID, cat_uuid: uuid.UUID) -> Category | None:
+        stmt = select(CategoryModel).where(
+            CategoryModel.company_id == company_id, CategoryModel.uuid == cat_uuid
+        )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_category(orm) if orm else None
 
-    async def create_category(self, name: str, description: str | None = None) -> Category:
-        orm = CategoryModel(name=name, description=description)
+    async def create_category(self, company_id: uuid.UUID, name: str, description: str | None = None) -> Category:
+        orm = CategoryModel(company_id=company_id, name=name, description=description)
         self._session.add(orm)
         await self._session.flush()
         return _to_category(orm)
 
     async def update_category(
-        self, category_id: int, name: str | None = None, description: str | None = None, is_active: bool | None = None
+        self, company_id: uuid.UUID, category_id: int, **changes: object
     ) -> Category | None:
-        stmt = select(CategoryModel).where(CategoryModel.id_category == category_id)
+        stmt = select(CategoryModel).where(
+            CategoryModel.company_id == company_id, CategoryModel.id_category == category_id
+        )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         if not orm:
             return None
-        if name is not None:
-            orm.name = name
-        if description is not None:
-            orm.description = description
-        if is_active is not None:
-            orm.is_active = is_active
+        for field in ("name", "description", "is_active"):
+            if field in changes:
+                setattr(orm, field, changes[field])
         await self._session.flush()
         return _to_category(orm)
 
     # --- SubCategories ---
-    async def list_sub_categories(self, category_id: int | None = None, active_only: bool = True) -> list[SubCategory]:
-        stmt = select(SubCategoryModel)
+    async def list_sub_categories(self, company_id: uuid.UUID, category_id: int | None = None, active_only: bool = True) -> list[SubCategory]:
+        stmt = select(SubCategoryModel).where(SubCategoryModel.company_id == company_id)
         if category_id is not None:
             stmt = stmt.where(SubCategoryModel.id_category == category_id)
         if active_only:
@@ -164,32 +173,35 @@ class SqlAlchemyCatalogRepository:
         res = await self._session.execute(stmt)
         return [_to_sub_category(s) for s in res.scalars().all()]
 
-    async def get_sub_category_by_id(self, sub_category_id: int) -> SubCategory | None:
-        stmt = select(SubCategoryModel).where(SubCategoryModel.id_sub_category == sub_category_id)
+    async def get_sub_category_by_id(self, company_id: uuid.UUID, sub_category_id: int) -> SubCategory | None:
+        stmt = select(SubCategoryModel).where(
+            SubCategoryModel.company_id == company_id,
+            SubCategoryModel.id_sub_category == sub_category_id,
+        )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_sub_category(orm) if orm else None
 
-    async def create_sub_category(self, category_id: int, name: str, description: str | None = None) -> SubCategory:
-        orm = SubCategoryModel(id_category=category_id, name=name, description=description)
+    async def create_sub_category(self, company_id: uuid.UUID, category_id: int, name: str, description: str | None = None) -> SubCategory:
+        orm = SubCategoryModel(company_id=company_id, id_category=category_id, name=name, description=description)
         self._session.add(orm)
         await self._session.flush()
         return _to_sub_category(orm)
 
     async def update_sub_category(
-        self, sub_category_id: int, name: str | None = None, description: str | None = None, is_active: bool | None = None
+        self, company_id: uuid.UUID, sub_category_id: int, **changes: object
     ) -> SubCategory | None:
-        stmt = select(SubCategoryModel).where(SubCategoryModel.id_sub_category == sub_category_id)
+        stmt = select(SubCategoryModel).where(
+            SubCategoryModel.company_id == company_id,
+            SubCategoryModel.id_sub_category == sub_category_id,
+        )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         if not orm:
             return None
-        if name is not None:
-            orm.name = name
-        if description is not None:
-            orm.description = description
-        if is_active is not None:
-            orm.is_active = is_active
+        for field in ("name", "description", "is_active"):
+            if field in changes:
+                setattr(orm, field, changes[field])
         await self._session.flush()
         return _to_sub_category(orm)
 
@@ -234,6 +246,7 @@ class SqlAlchemyCatalogRepository:
     # --- Products ---
     async def list_products(
         self,
+        company_id: uuid.UUID,
         category_id: int | None = None,
         sub_category_id: int | None = None,
         search: str | None = None,
@@ -241,7 +254,7 @@ class SqlAlchemyCatalogRepository:
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[list[Product], int]:
-        conditions = []
+        conditions = [ProductModel.company_id == company_id]
         if category_id is not None:
             conditions.append(ProductModel.id_category == category_id)
         if sub_category_id is not None:
@@ -276,26 +289,33 @@ class SqlAlchemyCatalogRepository:
         items = [_to_product(p) for p in res.scalars().all()]
         return items, total
 
-    async def get_product_by_id(self, product_id: int) -> Product | None:
-        stmt = select(ProductModel).where(ProductModel.id_product == product_id)
+    async def get_product_by_id(self, company_id: uuid.UUID, product_id: int) -> Product | None:
+        stmt = select(ProductModel).where(
+            ProductModel.company_id == company_id, ProductModel.id_product == product_id
+        )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_product(orm) if orm else None
 
-    async def get_product_by_uuid(self, prod_uuid: uuid.UUID) -> Product | None:
-        stmt = select(ProductModel).where(ProductModel.uuid == prod_uuid)
+    async def get_product_by_uuid(self, company_id: uuid.UUID, prod_uuid: uuid.UUID) -> Product | None:
+        stmt = select(ProductModel).where(
+            ProductModel.company_id == company_id, ProductModel.uuid == prod_uuid
+        )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_product(orm) if orm else None
 
-    async def get_product_by_sku(self, sku: str) -> Product | None:
-        stmt = select(ProductModel).where(ProductModel.sku == sku)
+    async def get_product_by_sku(self, company_id: uuid.UUID, sku: str) -> Product | None:
+        stmt = select(ProductModel).where(
+            ProductModel.company_id == company_id, ProductModel.sku == sku
+        )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_product(orm) if orm else None
 
     async def create_product(
         self,
+        company_id: uuid.UUID,
         category_id: int,
         sub_category_id: int | None,
         sku: str,
@@ -310,6 +330,7 @@ class SqlAlchemyCatalogRepository:
         presentation: str | None = None,
     ) -> Product:
         orm = ProductModel(
+            company_id=company_id,
             id_category=category_id,
             id_sub_category=sub_category_id,
             sku=sku,
@@ -327,14 +348,23 @@ class SqlAlchemyCatalogRepository:
         await self._session.flush()
         return _to_product(orm)
 
-    async def update_product(self, product_id: int, **kwargs) -> Product | None:
-        stmt = select(ProductModel).where(ProductModel.id_product == product_id)
+    async def update_product(self, company_id: uuid.UUID, product_id: int, **kwargs) -> Product | None:
+        stmt = select(ProductModel).where(
+            ProductModel.company_id == company_id, ProductModel.id_product == product_id
+        )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         if not orm:
             return None
+        field_map = {
+            "category_id": "id_category",
+            "sub_category_id": "id_sub_category",
+            "purchase_unit_id": "purchase_unit",
+            "sale_unit_id": "sale_unit",
+        }
         for key, value in kwargs.items():
-            if hasattr(orm, key) and value is not None:
-                setattr(orm, key, value)
+            orm_field = field_map.get(key, key)
+            if hasattr(orm, orm_field):
+                setattr(orm, orm_field, value)
         await self._session.flush()
         return _to_product(orm)

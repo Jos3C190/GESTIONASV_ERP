@@ -19,32 +19,32 @@ class CatalogRepository(Protocol):
         ...
 
     # Categories
-    async def list_categories(self, active_only: bool = True) -> list[Category]:
+    async def list_categories(self, company_id: uuid.UUID, active_only: bool = True) -> list[Category]:
         ...
 
-    async def get_category_by_id(self, category_id: int) -> Category | None:
+    async def get_category_by_id(self, company_id: uuid.UUID, category_id: int) -> Category | None:
         ...
 
-    async def get_category_by_uuid(self, cat_uuid: uuid.UUID) -> Category | None:
+    async def get_category_by_uuid(self, company_id: uuid.UUID, cat_uuid: uuid.UUID) -> Category | None:
         ...
 
-    async def create_category(self, name: str, description: str | None = None) -> Category:
+    async def create_category(self, company_id: uuid.UUID, name: str, description: str | None = None) -> Category:
         ...
 
-    async def update_category(self, category_id: int, name: str | None = None, description: str | None = None, is_active: bool | None = None) -> Category | None:
+    async def update_category(self, company_id: uuid.UUID, category_id: int, **changes: object) -> Category | None:
         ...
 
     # SubCategories
-    async def list_sub_categories(self, category_id: int | None = None, active_only: bool = True) -> list[SubCategory]:
+    async def list_sub_categories(self, company_id: uuid.UUID, category_id: int | None = None, active_only: bool = True) -> list[SubCategory]:
         ...
 
-    async def get_sub_category_by_id(self, sub_category_id: int) -> SubCategory | None:
+    async def get_sub_category_by_id(self, company_id: uuid.UUID, sub_category_id: int) -> SubCategory | None:
         ...
 
-    async def create_sub_category(self, category_id: int, name: str, description: str | None = None) -> SubCategory:
+    async def create_sub_category(self, company_id: uuid.UUID, category_id: int, name: str, description: str | None = None) -> SubCategory:
         ...
 
-    async def update_sub_category(self, sub_category_id: int, name: str | None = None, description: str | None = None, is_active: bool | None = None) -> SubCategory | None:
+    async def update_sub_category(self, company_id: uuid.UUID, sub_category_id: int, **changes: object) -> SubCategory | None:
         ...
 
     # Units
@@ -63,6 +63,7 @@ class CatalogRepository(Protocol):
     # Products
     async def list_products(
         self,
+        company_id: uuid.UUID,
         category_id: int | None = None,
         sub_category_id: int | None = None,
         search: str | None = None,
@@ -72,17 +73,18 @@ class CatalogRepository(Protocol):
     ) -> tuple[list[Product], int]:
         ...
 
-    async def get_product_by_id(self, product_id: int) -> Product | None:
+    async def get_product_by_id(self, company_id: uuid.UUID, product_id: int) -> Product | None:
         ...
 
-    async def get_product_by_uuid(self, prod_uuid: uuid.UUID) -> Product | None:
+    async def get_product_by_uuid(self, company_id: uuid.UUID, prod_uuid: uuid.UUID) -> Product | None:
         ...
 
-    async def get_product_by_sku(self, sku: str) -> Product | None:
+    async def get_product_by_sku(self, company_id: uuid.UUID, sku: str) -> Product | None:
         ...
 
     async def create_product(
         self,
+        company_id: uuid.UUID,
         category_id: int,
         sub_category_id: int | None,
         sku: str,
@@ -100,6 +102,7 @@ class CatalogRepository(Protocol):
 
     async def update_product(
         self,
+        company_id: uuid.UUID,
         product_id: int,
         **kwargs,
     ) -> Product | None:

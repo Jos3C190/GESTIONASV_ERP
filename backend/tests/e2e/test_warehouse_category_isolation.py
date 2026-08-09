@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from tests.e2e.conftest import seed_user
+from tests.e2e.conftest import get_test_company_id, seed_user
 
 pytestmark = pytest.mark.e2e
 
@@ -17,6 +17,38 @@ async def _login(e2e_client, username: str, password: str) -> str:
     )
     assert response.status_code == 200, response.text
     return response.json()["access_token"]
+
+
+async def _create_secondary_company() -> uuid.UUID:
+    """Create the second tenant explicitly so isolation tests never depend on seed volume."""
+    from app.infrastructure.db.session import async_session_factory
+    from app.infrastructure.models.organization import Company, District, Municipality
+    from sqlalchemy import select
+
+    async with async_session_factory() as session:
+        district, department_id = (
+            await session.execute(
+                select(District, Municipality.department_id)
+                .join(Municipality, Municipality.id == District.municipality_id)
+                .order_by(District.id)
+                .limit(1)
+            )
+        ).one()
+        suffix = uuid.uuid4().hex[:12]
+        company = Company(
+            name=f"Empresa de aislamiento {suffix}",
+            commercial_name=f"Aislamiento {suffix}",
+            nit=f"TST-{suffix}",
+            nrc=f"TST-{suffix}",
+            address="Dirección exclusiva para pruebas automatizadas",
+            department_id=department_id,
+            municipality_id=district.municipality_id,
+            district_id=district.id,
+            is_active=True,
+        )
+        session.add(company)
+        await session.commit()
+        return company.id
 
 
 async def test_categories_are_isolated_by_company_and_reject_cross_assignment(
@@ -31,12 +63,13 @@ async def test_categories_are_isolated_by_company_and_reject_cross_assignment(
     )
     token = await _login(e2e_client, "category-admin", password)
     auth = {"Authorization": f"Bearer {token}"}
+    secondary_company_id = await _create_secondary_company()
     companies_response = await e2e_client.get("/api/v1/companies", headers=auth)
     assert companies_response.status_code == 200, companies_response.text
     companies = companies_response.json()
     assert len(companies) >= 2
-    first_company_id = companies[0]["id"]
-    second_company_id = companies[1]["id"]
+    first_company_id = str(await get_test_company_id())
+    second_company_id = str(secondary_company_id)
     category_name = f"Aislamiento {uuid.uuid4().hex[:10]}"
     created_ids: list[str] = []
 
@@ -117,6 +150,7 @@ async def test_user_cannot_list_categories_from_an_unassigned_company(e2e_client
         password=password,
     )
     token = await _login(e2e_client, "category-limited", password)
+    await _create_secondary_company()
     async with async_session_factory() as session:
         assigned_id = (
             await session.execute(

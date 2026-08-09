@@ -31,6 +31,7 @@ class UpdatePermissionRequest(BaseModel):
 
 class RoleOut(ORMOut):
     id: uuid.UUID
+    company_id: uuid.UUID | None = None
     name: str
     description: str | None = None
     is_system: bool
@@ -77,6 +78,7 @@ class RevokeRoleRequest(BaseModel):
 class UserRoleAssignmentOut(BaseModel):
     user_id: uuid.UUID
     role_id: uuid.UUID
+    company_id: uuid.UUID
     assigned_by: uuid.UUID | None = None
     assigned_at: datetime | None = None
 

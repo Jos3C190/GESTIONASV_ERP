@@ -19,16 +19,18 @@ class Permission:
 class Role:
     id: uuid.UUID
     name: str
+    company_id: uuid.UUID | None = None
     description: str | None = None
     is_system: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
     permissions: tuple[Permission, ...] = ()
 
-    def with_permissions(self, perms: tuple[Permission, ...]) -> "Role":
+    def with_permissions(self, perms: tuple[Permission, ...]) -> Role:
         return Role(
             id=self.id,
             name=self.name,
+            company_id=self.company_id,
             description=self.description,
             is_system=self.is_system,
             created_at=self.created_at,
@@ -41,5 +43,6 @@ class Role:
 class UserRoleAssignment:
     user_id: uuid.UUID
     role_id: uuid.UUID
+    company_id: uuid.UUID
     assigned_by: uuid.UUID | None
     assigned_at: datetime | None = None

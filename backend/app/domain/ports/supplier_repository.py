@@ -10,6 +10,7 @@ from app.domain.entities.supplier import Supplier, SupplierContact
 class SupplierRepository(Protocol):
     async def list_suppliers(
         self,
+        company_id: uuid.UUID,
         country_id: int | None = None,
         search: str | None = None,
         active_only: bool = True,
@@ -18,17 +19,18 @@ class SupplierRepository(Protocol):
     ) -> tuple[list[Supplier], int]:
         ...
 
-    async def get_supplier_by_id(self, supplier_id: int) -> Supplier | None:
+    async def get_supplier_by_id(self, company_id: uuid.UUID, supplier_id: int) -> Supplier | None:
         ...
 
-    async def get_supplier_by_uuid(self, supplier_uuid: uuid.UUID) -> Supplier | None:
+    async def get_supplier_by_uuid(self, company_id: uuid.UUID, supplier_uuid: uuid.UUID) -> Supplier | None:
         ...
 
-    async def get_supplier_by_code(self, code: str) -> Supplier | None:
+    async def get_supplier_by_code(self, company_id: uuid.UUID, code: str) -> Supplier | None:
         ...
 
     async def create_supplier(
         self,
+        company_id: uuid.UUID,
         code: str,
         name: str,
         country_id: int,
@@ -41,6 +43,7 @@ class SupplierRepository(Protocol):
 
     async def update_supplier(
         self,
+        company_id: uuid.UUID,
         supplier_id: int,
         **kwargs,
     ) -> Supplier | None:
@@ -49,6 +52,7 @@ class SupplierRepository(Protocol):
     # Supplier Contacts
     async def add_contact(
         self,
+        company_id: uuid.UUID,
         supplier_id: int,
         full_name: str,
         phone: str | None = None,
@@ -58,6 +62,7 @@ class SupplierRepository(Protocol):
 
     async def update_contact(
         self,
+        company_id: uuid.UUID,
         contact_id: int,
         full_name: str | None = None,
         phone: str | None = None,
@@ -66,5 +71,5 @@ class SupplierRepository(Protocol):
     ) -> SupplierContact | None:
         ...
 
-    async def delete_contact(self, contact_id: int) -> bool:
+    async def deactivate_contact(self, company_id: uuid.UUID, contact_id: int) -> bool:
         ...

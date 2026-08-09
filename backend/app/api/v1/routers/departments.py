@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 
-from app.api.v1.company_access import require_company_access
+from app.api.v1.company_access import require_company_access, require_company_wide_scope
 from app.api.v1.deps import CurrentUser, SessionDep, get_audit_service, require_permission
 from app.api.v1.schemas.common import MessageOut, Page, PageMeta
 from app.api.v1.schemas.employees import (
@@ -130,6 +130,7 @@ async def create_department(
     audit: AuditService = Depends(get_audit_service),
 ) -> DepartmentOut:
     await require_company_access(session, current, body.company_id, require_active=True)
+    await require_company_wide_scope(session, current, body.company_id)
     uc = CreateDepartmentUseCase(repo)
     d = await uc.execute(
         CreateDepartmentInput(
@@ -170,6 +171,7 @@ async def update_department(
 ) -> DepartmentOut:
     before = await GetDepartmentUseCase(repo).execute(dept_id)
     await require_company_access(session, current, before.company_id, require_active=True)
+    await require_company_wide_scope(session, current, before.company_id)
     uc = UpdateDepartmentUseCase(repo)
     d = await uc.execute(
         UpdateDepartmentInput(
@@ -210,6 +212,7 @@ async def delete_department(
 ) -> MessageOut:
     before = await GetDepartmentUseCase(repo).execute(dept_id)
     await require_company_access(session, current, before.company_id, require_active=True)
+    await require_company_wide_scope(session, current, before.company_id)
     active_assignment = await session.scalar(
         select(DepartmentBranchAssignment.id).where(
             DepartmentBranchAssignment.department_id == dept_id,

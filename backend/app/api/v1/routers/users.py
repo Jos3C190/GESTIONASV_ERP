@@ -221,7 +221,7 @@ async def get_users_roles_batch(
             )
         )
     allowed_ids = list((await session.execute(allowed)).scalars().all())
-    roles_by_user = await role_repo.get_roles_for_users(allowed_ids)
+    roles_by_user = await role_repo.get_roles_for_users(allowed_ids, company_id)
     return {
         user_id: [RoleOut.model_validate(role, from_attributes=True) for role in roles]
         for user_id, roles in roles_by_user.items()
@@ -302,10 +302,11 @@ async def create_user(
             )
         )
     session.add(UserCompany(user_id=created.id, company_id=body.company_id, is_default=True))
+    await session.flush()
 
     requested_role_ids = body.role_ids
     if not requested_role_ids:
-        default_role = await role_repo.get_by_name("EMPLEADO")
+        default_role = await role_repo.get_by_name(body.company_id, "EMPLEADO")
         if default_role is None:
             from app.core.exceptions import BusinessRuleError
 
@@ -319,6 +320,7 @@ async def create_user(
         await role_assignment.execute(
             AssignRoleInput(
                 user_id=created.id,
+                company_id=body.company_id,
                 role_id=role_id,
                 assigned_by=current.id,
             )

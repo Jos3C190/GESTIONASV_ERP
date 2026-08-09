@@ -9,7 +9,7 @@ typical probe expectations. They are also registered in `main.py` separately.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, status
 from sqlalchemy import text
@@ -19,10 +19,11 @@ from app.api.v1.schemas.common import HealthComponent, HealthReport
 from app.core.config import settings
 
 router = APIRouter(prefix="/health", tags=["health"])
+EXPECTED_SCHEMA_REVISION = "0022"
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @router.get("/live", summary="Liveness probe", status_code=status.HTTP_200_OK)
@@ -40,20 +41,30 @@ async def live() -> HealthReport:
 async def ready(session: SessionDep) -> HealthReport:
     db_status = "ok"
     detail: str | None = None
+    schema_status = "unknown"
+    schema_detail: str | None = None
     try:
         result = await session.execute(text("SELECT 1"))
         _ = result.scalar_one()
-    except Exception as exc:  # noqa: BLE001
+        revision = (await session.execute(text("SELECT version_num FROM alembic_version"))).scalar_one()
+        schema_status = "ok" if revision == EXPECTED_SCHEMA_REVISION else "outdated"
+        if schema_status != "ok":
+            schema_detail = f"Expected {EXPECTED_SCHEMA_REVISION}; found {revision}"
+    except Exception as exc:
         db_status = "down"
         detail = str(exc)[:200]
+        schema_status = "unknown"
 
-    overall = "ok" if db_status == "ok" else "degraded"
+    overall = "ok" if db_status == "ok" and schema_status == "ok" else "degraded"
     return HealthReport(
         status=overall,
         version=settings.APP_NAME,
         environment=settings.ENVIRONMENT,
         timestamp=_now(),
-        components=[HealthComponent(name="database", status=db_status, detail=detail)],
+        components=[
+            HealthComponent(name="database", status=db_status, detail=detail),
+            HealthComponent(name="schema", status=schema_status, detail=schema_detail),
+        ],
     )
 
 

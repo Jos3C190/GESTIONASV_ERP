@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, text
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,6 +17,10 @@ if TYPE_CHECKING:
 
 class SupplierModel(TimestampMixin, Base):
     __tablename__ = "suppliers"
+    __table_args__ = (
+        UniqueConstraint("company_id", "code", name="uq_suppliers_company_code"),
+        Index("ix_suppliers_company_active_name", "company_id", "is_active", "name"),
+    )
 
     id_supplier: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
@@ -28,7 +32,10 @@ class SupplierModel(TimestampMixin, Base):
         index=True,
         server_default=text("gen_random_uuid()"),
     )
-    code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     country_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("countries.id_country", ondelete="RESTRICT"), nullable=False, index=True

@@ -15,7 +15,7 @@ import secrets
 import sys
 from dataclasses import dataclass
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -661,7 +661,6 @@ async def _seed_rbac(session: AsyncSession) -> dict[str, Role]:
 async def _ensure_superadmin(session: AsyncSession, roles: dict[str, Role]) -> User:
     """Create the technical administrator once without rotating its password."""
     from app.core.security import hash_password
-    from app.infrastructure.models.rbac import Role, UserRole
     from app.infrastructure.models.user import User
 
     user = (
@@ -687,11 +686,6 @@ async def _ensure_superadmin(session: AsyncSession, roles: dict[str, Role]) -> U
         user.is_superuser = True
         user.deleted_at = None
 
-    superadmin_role = roles.get("SUPER_ADMIN")
-    if not isinstance(superadmin_role, Role):
-        raise TypeError("No se pudo inicializar el rol SUPER_ADMIN.")
-    if await session.get(UserRole, (user.id, superadmin_role.id)) is None:
-        session.add(UserRole(user_id=user.id, role_id=superadmin_role.id, assigned_by=user.id))
     return user
 
 
@@ -706,6 +700,7 @@ async def _attach_superadmin_to_company(
     """Ensure the bootstrap account satisfies user/employee/company invariants."""
     from app.infrastructure.models.employee import Employee
     from app.infrastructure.models.organization import Branch, Company, UserCompany
+    from app.infrastructure.models.rbac import Role, UserRole
     from app.infrastructure.models.user import User
 
     if not isinstance(user, User) or not isinstance(company, Company):
@@ -720,6 +715,19 @@ async def _attach_superadmin_to_company(
     membership.is_default = True
     membership.access_all_branches = True
     membership.last_branch_id = headquarters_branch.id
+    await session.flush()
+    superadmin_role = await session.scalar(select(Role).where(Role.name == "SUPER_ADMIN"))
+    if superadmin_role is None:
+        raise RuntimeError("No existe la plantilla de rol SUPER_ADMIN.")
+    if await session.get(UserRole, (user.id, company.id, superadmin_role.id)) is None:
+        session.add(
+            UserRole(
+                user_id=user.id,
+                company_id=company.id,
+                role_id=superadmin_role.id,
+                assigned_by=user.id,
+            )
+        )
 
     employee = (
         await session.execute(select(Employee).where(Employee.user_id == user.id))
@@ -867,6 +875,9 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
         )
         company.is_active = True
         await session.flush()
+        for role in roles.values():
+            if not role.is_system:
+                role.company_id = company.id
 
         if company_created:
             session.add(
@@ -1094,12 +1105,18 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     session.add(membership)
                 membership.access_all_branches = bool(employee_seed.get("all_branches", False))
                 membership.last_branch_id = branches[str(employee_seed["branch"])].id
+                await session.flush()
                 role = roles.get(str(employee_seed["role"]))
                 if role is None:
                     raise RuntimeError(f"No existe el rol requerido: {employee_seed['role']}")
-                if await session.get(UserRole, (user.id, role.id)) is None:
+                if await session.get(UserRole, (user.id, company.id, role.id)) is None:
                     session.add(
-                        UserRole(user_id=user.id, role_id=role.id, assigned_by=superadmin_id)
+                        UserRole(
+                            user_id=user.id,
+                            company_id=company.id,
+                            role_id=role.id,
+                            assigned_by=superadmin_id,
+                        )
                     )
                 if not membership.access_all_branches:
                     branch = branches[str(employee_seed["branch"])]

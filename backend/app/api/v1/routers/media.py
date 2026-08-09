@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import or_, select
 
-from app.api.v1.company_access import require_company_access
+from app.api.v1.company_access import require_company_access, require_company_wide_scope
 from app.api.v1.deps import CurrentUser, SessionDep, require_permission
 from app.api.v1.schemas.media import (
     ConfirmUploadIn,
@@ -204,6 +204,7 @@ async def delete_asset(
     body: DeleteAssetIn, session: SessionDep, current: CurrentUser
 ) -> dict[str, str]:
     await require_company_access(session, current, body.company_id, require_active=True)
+    await require_company_wide_scope(session, current, body.company_id)
     lookup = [MediaAsset.company_id == body.company_id, MediaAsset.status != "deleted"]
     lookup.append(
         MediaAsset.public_id == body.public_id

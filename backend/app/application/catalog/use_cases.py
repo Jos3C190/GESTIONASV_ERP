@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from app.core.exceptions import ConflictError, NotFoundError
+
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit
 from app.domain.ports.catalog_repository import CatalogRepository
 
@@ -23,42 +24,48 @@ class CatalogUseCases:
         return country
 
     # --- Categories ---
-    async def list_categories(self, active_only: bool = True) -> list[Category]:
-        return await self._repo.list_categories(active_only=active_only)
+    async def list_categories(self, company_id: uuid.UUID, active_only: bool = True) -> list[Category]:
+        return await self._repo.list_categories(company_id, active_only=active_only)
 
-    async def get_category(self, category_id: int) -> Category:
-        category = await self._repo.get_category_by_id(category_id)
+    async def get_category(self, company_id: uuid.UUID, category_id: int) -> Category:
+        category = await self._repo.get_category_by_id(company_id, category_id)
         if not category:
             raise NotFoundError("Categoría no encontrada", code="category_not_found")
         return category
 
-    async def create_category(self, name: str, description: str | None = None) -> Category:
-        return await self._repo.create_category(name=name, description=description)
+    async def create_category(self, company_id: uuid.UUID, name: str, description: str | None = None) -> Category:
+        return await self._repo.create_category(company_id, name=name, description=description)
 
     async def update_category(
-        self, category_id: int, name: str | None = None, description: str | None = None, is_active: bool | None = None
+        self, company_id: uuid.UUID, category_id: int, **changes: object
     ) -> Category:
-        category = await self._repo.update_category(
-            category_id=category_id, name=name, description=description, is_active=is_active
-        )
+        if changes.get("name") is None and "name" in changes:
+            raise ValidationError("El nombre de la categoría es obligatorio.", code="category_name_required")
+        category = await self._repo.update_category(company_id, category_id, **changes)
         if not category:
             raise NotFoundError("Categoría no encontrada", code="category_not_found")
         return category
 
     # --- SubCategories ---
-    async def list_sub_categories(self, category_id: int | None = None, active_only: bool = True) -> list[SubCategory]:
-        return await self._repo.list_sub_categories(category_id=category_id, active_only=active_only)
+    async def list_sub_categories(self, company_id: uuid.UUID, category_id: int | None = None, active_only: bool = True) -> list[SubCategory]:
+        return await self._repo.list_sub_categories(company_id, category_id=category_id, active_only=active_only)
 
-    async def create_sub_category(self, category_id: int, name: str, description: str | None = None) -> SubCategory:
-        await self.get_category(category_id)
-        return await self._repo.create_sub_category(category_id=category_id, name=name, description=description)
+    async def get_sub_category(self, company_id: uuid.UUID, sub_category_id: int) -> SubCategory:
+        sub_category = await self._repo.get_sub_category_by_id(company_id, sub_category_id)
+        if not sub_category:
+            raise NotFoundError("SubcategorÃ­a no encontrada", code="sub_category_not_found")
+        return sub_category
+
+    async def create_sub_category(self, company_id: uuid.UUID, category_id: int, name: str, description: str | None = None) -> SubCategory:
+        await self.get_category(company_id, category_id)
+        return await self._repo.create_sub_category(company_id, category_id=category_id, name=name, description=description)
 
     async def update_sub_category(
-        self, sub_category_id: int, name: str | None = None, description: str | None = None, is_active: bool | None = None
+        self, company_id: uuid.UUID, sub_category_id: int, **changes: object
     ) -> SubCategory:
-        sub = await self._repo.update_sub_category(
-            sub_category_id=sub_category_id, name=name, description=description, is_active=is_active
-        )
+        if changes.get("name") is None and "name" in changes:
+            raise ValidationError("El nombre de la subcategoría es obligatorio.", code="subcategory_name_required")
+        sub = await self._repo.update_sub_category(company_id, sub_category_id, **changes)
         if not sub:
             raise NotFoundError("Subcategoría no encontrada", code="sub_category_not_found")
         return sub
@@ -81,6 +88,7 @@ class CatalogUseCases:
     # --- Products ---
     async def list_products(
         self,
+        company_id: uuid.UUID,
         category_id: int | None = None,
         sub_category_id: int | None = None,
         search: str | None = None,
@@ -89,6 +97,7 @@ class CatalogUseCases:
         limit: int = 50,
     ) -> tuple[list[Product], int]:
         return await self._repo.list_products(
+            company_id,
             category_id=category_id,
             sub_category_id=sub_category_id,
             search=search,
@@ -97,20 +106,21 @@ class CatalogUseCases:
             limit=limit,
         )
 
-    async def get_product(self, product_id: int) -> Product:
-        product = await self._repo.get_product_by_id(product_id)
+    async def get_product(self, company_id: uuid.UUID, product_id: int) -> Product:
+        product = await self._repo.get_product_by_id(company_id, product_id)
         if not product:
             raise NotFoundError("Producto no encontrado", code="product_not_found")
         return product
 
-    async def get_product_by_uuid(self, prod_uuid: uuid.UUID) -> Product:
-        product = await self._repo.get_product_by_uuid(prod_uuid)
+    async def get_product_by_uuid(self, company_id: uuid.UUID, prod_uuid: uuid.UUID) -> Product:
+        product = await self._repo.get_product_by_uuid(company_id, prod_uuid)
         if not product:
             raise NotFoundError("Producto no encontrado", code="product_not_found")
         return product
 
     async def create_product(
         self,
+        company_id: uuid.UUID,
         category_id: int,
         sub_category_id: int | None,
         sku: str,
@@ -125,17 +135,22 @@ class CatalogUseCases:
         presentation: str | None = None,
     ) -> Product:
         # Validate unique SKU
-        existing = await self._repo.get_product_by_sku(sku)
+        existing = await self._repo.get_product_by_sku(company_id, sku)
         if existing:
             raise ConflictError(f"El SKU '{sku}' ya está registrado", code="sku_already_exists")
 
         # Validate category and units exist
-        await self.get_category(category_id)
+        await self.get_category(company_id, category_id)
         if sub_category_id is not None:
-            sub = await self._repo.get_sub_category_by_id(sub_category_id)
+            sub = await self._repo.get_sub_category_by_id(company_id, sub_category_id)
             if not sub:
                 raise NotFoundError("Subcategoría no encontrada", code="sub_category_not_found")
-        
+            if sub.category_id != category_id:
+                raise ValidationError(
+                    "La subcategoría no pertenece a la categoría seleccionada.",
+                    code="subcategory_category_mismatch",
+                )
+
         unit_p = await self._repo.get_unit_by_id(purchase_unit_id)
         if not unit_p:
             raise NotFoundError("Unidad de compra no encontrada", code="purchase_unit_not_found")
@@ -145,6 +160,7 @@ class CatalogUseCases:
             raise NotFoundError("Unidad de venta no encontrada", code="sale_unit_not_found")
 
         return await self._repo.create_product(
+            company_id,
             category_id=category_id,
             sub_category_id=sub_category_id,
             sku=sku,
@@ -159,8 +175,34 @@ class CatalogUseCases:
             presentation=presentation,
         )
 
-    async def update_product(self, product_id: int, **kwargs) -> Product:
-        product = await self._repo.update_product(product_id=product_id, **kwargs)
+    async def update_product(self, company_id: uuid.UUID, product_id: int, **changes: object) -> Product:
+        current = await self.get_product(company_id, product_id)
+        required = ("category_id", "sku", "name", "purchase_unit_id", "sale_unit_id")
+        if any(field in changes and changes[field] is None for field in required):
+            raise ValidationError("No se puede vaciar un campo obligatorio del producto.", code="product_required_field")
+
+        category_id = int(changes.get("category_id", current.category_id))
+        await self.get_category(company_id, category_id)
+        sub_category_id = changes.get("sub_category_id", current.sub_category_id)
+        if sub_category_id is not None:
+            sub = await self._repo.get_sub_category_by_id(company_id, int(sub_category_id))
+            if not sub:
+                raise NotFoundError("Subcategoría no encontrada", code="sub_category_not_found")
+            if sub.category_id != category_id:
+                raise ValidationError(
+                    "La subcategoría no pertenece a la categoría seleccionada.",
+                    code="subcategory_category_mismatch",
+                )
+        for field, code in (("purchase_unit_id", "purchase_unit_not_found"), ("sale_unit_id", "sale_unit_not_found")):
+            unit_id = int(changes.get(field, getattr(current, field)))
+            if await self._repo.get_unit_by_id(unit_id) is None:
+                raise NotFoundError("Unidad de medida no encontrada", code=code)
+        if "sku" in changes:
+            duplicate = await self._repo.get_product_by_sku(company_id, str(changes["sku"]))
+            if duplicate and duplicate.id != product_id:
+                raise ConflictError("El SKU ya está registrado en esta empresa.", code="sku_already_exists")
+
+        product = await self._repo.update_product(company_id, product_id, **changes)
         if not product:
             raise NotFoundError("Producto no encontrado", code="product_not_found")
         return product

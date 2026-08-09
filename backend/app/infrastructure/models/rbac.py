@@ -4,8 +4,20 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.db.base import Base, TimestampMixin, UUIDPKMixin
@@ -25,9 +37,16 @@ class Permission(UUIDPKMixin, Base):
 
 class Role(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "roles"
-    __table_args__ = ({"comment": "Roles (is_system protects critical roles from deletion)."},)
+    __table_args__ = (
+        UniqueConstraint("company_id", "name", name="uq_roles_company_name"),
+        Index("uq_roles_global_name", "name", unique=True, postgresql_where=text("company_id IS NULL")),
+        {"comment": "System role templates and company-owned custom roles."},
+    )
 
-    name: Mapped[str] = mapped_column(String(80), nullable=False, unique=True, index=True)
+    company_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    name: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     is_system: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false", default=False
@@ -56,9 +75,17 @@ class UserRole(Base):
 
     __tablename__ = "user_roles"
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["user_id", "company_id"],
+            ["user_companies.user_id", "user_companies.company_id"],
+            ondelete="CASCADE",
+            name="fk_user_roles_user_company",
+        ),
     )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, index=True)
     role_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True
     )

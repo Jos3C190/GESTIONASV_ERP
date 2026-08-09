@@ -72,7 +72,13 @@ async def test_batch_user_roles_returns_one_scoped_payload(e2e_client) -> None:
         role_id = (
             await session.execute(select(Role.id).where(Role.name == "EMPLEADO"))
         ).scalar_one()
-        session.add(UserRole(user_id=UUID(user_id), role_id=role_id))
+        session.add(
+            UserRole(
+                user_id=UUID(user_id),
+                company_id=UUID(headers["X-Company-ID"]),
+                role_id=role_id,
+            )
+        )
         await session.commit()
 
     response = await e2e_client.get(

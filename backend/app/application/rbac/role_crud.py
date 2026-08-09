@@ -17,6 +17,7 @@ log = get_logger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class CreateRoleInput:
+    company_id: uuid.UUID
     name: str
     description: str | None = None
 
@@ -26,11 +27,12 @@ class CreateRoleUseCase:
         self._roles = roles
 
     async def execute(self, inp: CreateRoleInput) -> Role:
-        if await self._roles.get_by_name(inp.name):
+        if await self._roles.get_by_name(inp.company_id, inp.name):
             raise ConflictError("El nombre de rol ya existe.", code="role_name_taken")
         new_role = Role(
             id=uuid.uuid4(),
             name=inp.name,
+            company_id=inp.company_id,
             description=inp.description,
             is_system=False,
         )
@@ -41,6 +43,7 @@ class CreateRoleUseCase:
 
 @dataclass(frozen=True, slots=True)
 class UpdateRoleInput:
+    company_id: uuid.UUID
     role_id: uuid.UUID
     name: str | None = None
     description: str | None = None
@@ -51,20 +54,21 @@ class UpdateRoleUseCase:
         self._roles = roles
 
     async def execute(self, inp: UpdateRoleInput) -> Role:
-        role = await self._roles.get_by_id(inp.role_id)
+        role = await self._roles.get_by_id(inp.company_id, inp.role_id)
         if role is None:
             raise NotFoundError("Rol no encontrado.", code="role_not_found")
 
         if (
             inp.name
             and inp.name != role.name
-            and await self._roles.get_by_name(inp.name)
+            and await self._roles.get_by_name(inp.company_id, inp.name)
         ):
             raise ConflictError("El nombre de rol ya existe.", code="role_name_taken")
 
         updated = Role(
             id=role.id,
             name=inp.name or role.name,
+            company_id=role.company_id,
             description=inp.description if inp.description is not None else role.description,
             is_system=role.is_system,
             created_at=role.created_at,
@@ -80,19 +84,19 @@ class DeleteRoleUseCase:
     def __init__(self, roles: RoleRepository) -> None:
         self._roles = roles
 
-    async def execute(self, role_id: uuid.UUID) -> bool:
-        role = await self._roles.get_by_id(role_id)
+    async def execute(self, company_id: uuid.UUID, role_id: uuid.UUID) -> bool:
+        role = await self._roles.get_by_id(company_id, role_id)
         if role is None:
             raise NotFoundError("Rol no encontrado.", code="role_not_found")
         if role.is_system:
             raise BusinessRuleError(
                 "Los roles de sistema no pueden eliminarse.", code="system_role_protected"
             )
-        if await self._roles.is_assigned(role_id):
+        if await self._roles.is_assigned(company_id, role_id):
             raise BusinessRuleError(
                 "No puede eliminar un rol asignado a usuarios.", code="role_is_assigned"
             )
-        ok = await self._roles.delete(role_id)
+        ok = await self._roles.delete(company_id, role_id)
         if ok:
             log.info("role_deleted", role_id=str(role_id))
         return ok
@@ -100,6 +104,7 @@ class DeleteRoleUseCase:
 
 @dataclass(frozen=True, slots=True)
 class SetRolePermissionsInput:
+    company_id: uuid.UUID
     role_id: uuid.UUID
     permission_codes: tuple[str, ...]
 
@@ -110,7 +115,7 @@ class SetRolePermissionsUseCase:
         self._permissions = permissions
 
     async def execute(self, inp: SetRolePermissionsInput) -> Role:
-        role = await self._roles.get_by_id(inp.role_id, load_permissions=True)
+        role = await self._roles.get_by_id(inp.company_id, inp.role_id, load_permissions=True)
         if role is None:
             raise NotFoundError("Rol no encontrado.", code="role_not_found")
 
@@ -122,25 +127,26 @@ class SetRolePermissionsUseCase:
                 raise BusinessRuleError(f"Permiso desconocido: {code}", code="unknown_permission")
             perm_ids.add(all_perms[code])
 
-        await self._roles.set_permissions(role.id, perm_ids)
+        await self._roles.set_permissions(inp.company_id, role.id, perm_ids)
         log.info(
             "role_permissions_set",
             role_id=str(role.id),
             count=len(perm_ids),
         )
         # Return updated role with permissions loaded
-        return await self._roles.get_by_id(role.id, load_permissions=True) or role
+        return await self._roles.get_by_id(inp.company_id, role.id, load_permissions=True) or role
 
 
 class ListRolesUseCase:
     def __init__(self, roles: RoleRepository) -> None:
         self._roles = roles
 
-    async def execute(self, *, load_permissions: bool = False) -> Sequence[Role]:
-        return await self._roles.list_all(load_permissions=load_permissions)
+    async def execute(self, company_id: uuid.UUID, *, load_permissions: bool = False) -> Sequence[Role]:
+        return await self._roles.list_all(company_id, load_permissions=load_permissions)
 
     async def execute_page(
         self,
+        company_id: uuid.UUID,
         *,
         page: int,
         size: int,
@@ -150,6 +156,7 @@ class ListRolesUseCase:
         load_permissions: bool = False,
     ) -> tuple[Sequence[Role], int]:
         return await self._roles.list_page(
+            company_id,
             offset=(page - 1) * size,
             limit=size,
             search=search,
@@ -163,8 +170,8 @@ class GetRoleUseCase:
     def __init__(self, roles: RoleRepository) -> None:
         self._roles = roles
 
-    async def execute(self, role_id: uuid.UUID) -> Role:
-        role = await self._roles.get_by_id(role_id, load_permissions=True)
+    async def execute(self, company_id: uuid.UUID, role_id: uuid.UUID) -> Role:
+        role = await self._roles.get_by_id(company_id, role_id, load_permissions=True)
         if role is None:
             raise NotFoundError("Rol no encontrado.", code="role_not_found")
         return role

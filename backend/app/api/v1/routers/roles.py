@@ -9,10 +9,17 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
+from app.api.v1.company_access import (
+    request_company_id,
+    request_company_id_or_default,
+    require_company_access,
+    require_company_wide_scope,
+)
 from app.api.v1.deps import (
     CurrentUser,
+    SessionDep,
     get_audit_service,
     get_permission_repository,
     get_role_repository,
@@ -64,6 +71,7 @@ from app.domain.entities.rbac import Role
 from app.domain.ports.permission_repository import PermissionRepository
 from app.domain.ports.role_repository import RoleRepository
 from app.domain.ports.user_repository import UserRepository
+from app.infrastructure.models.organization import UserCompany
 
 router = APIRouter(prefix="/roles", tags=["roles"])
 
@@ -71,6 +79,7 @@ router = APIRouter(prefix="/roles", tags=["roles"])
 def _role_out(role: Role) -> RoleWithPermissionsOut:
     return RoleWithPermissionsOut(
         id=role.id,
+        company_id=role.company_id,
         name=role.name,
         description=role.description,
         is_system=role.is_system,
@@ -91,6 +100,9 @@ def _role_out(role: Role) -> RoleWithPermissionsOut:
     dependencies=[Depends(require_permission("roles:read"))],
 )
 async def list_roles(
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
     page: int = Query(1, ge=1),
     size: int = Query(12, ge=1, le=100),
@@ -98,8 +110,11 @@ async def list_roles(
     is_system: bool | None = Query(None),
     module: str | None = Query(None, max_length=64),
 ) -> Page[RoleWithPermissionsOut]:
+    company_id = request_company_id(request)
+    await require_company_access(session, current, company_id)
     uc = ListRolesUseCase(repo)
     roles, total = await uc.execute_page(
+        company_id,
         page=page,
         size=size,
         search=search,
@@ -126,9 +141,14 @@ async def list_roles(
     dependencies=[Depends(require_permission("roles:read"))],
 )
 async def role_catalogue(
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
 ) -> list[RoleWithPermissionsOut]:
-    roles = await ListRolesUseCase(repo).execute(load_permissions=True)
+    company_id = request_company_id(request)
+    await require_company_access(session, current, company_id)
+    roles = await ListRolesUseCase(repo).execute(company_id, load_permissions=True)
     return [_role_out(role) for role in roles]
 
 
@@ -162,6 +182,8 @@ async def create_permission(
     repo: PermissionRepository = Depends(get_permission_repository),
     audit: AuditService = Depends(get_audit_service),
 ) -> PermissionOut:
+    if not current.is_superuser:
+        raise HTTPException(403, "El catálogo global de permisos solo puede modificarlo un superadministrador.")
     permission = await CreatePermissionUseCase(repo).execute(
         CreatePermissionInput(
             code=body.code,
@@ -191,6 +213,8 @@ async def update_permission(
     repo: PermissionRepository = Depends(get_permission_repository),
     audit: AuditService = Depends(get_audit_service),
 ) -> PermissionOut:
+    if not current.is_superuser:
+        raise HTTPException(403, "El catálogo global de permisos solo puede modificarlo un superadministrador.")
     before = await repo.get_by_id(permission_id)
     permission = await UpdatePermissionUseCase(repo).execute(
         UpdatePermissionInput(
@@ -224,6 +248,8 @@ async def delete_permission(
     repo: PermissionRepository = Depends(get_permission_repository),
     audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
+    if not current.is_superuser:
+        raise HTTPException(403, "El catálogo global de permisos solo puede modificarlo un superadministrador.")
     before = await repo.get_by_id(permission_id)
     await DeletePermissionUseCase(repo).execute(permission_id)
     await audit.record(
@@ -247,12 +273,18 @@ async def delete_permission(
 )
 async def get_role(
     role_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
 ) -> RoleWithPermissionsOut:
+    company_id = request_company_id(request)
+    await require_company_access(session, current, company_id)
     uc = GetRoleUseCase(repo)
-    r = await uc.execute(role_id)
+    r = await uc.execute(company_id, role_id)
     return RoleWithPermissionsOut(
         id=r.id,
+        company_id=r.company_id,
         name=r.name,
         description=r.description,
         is_system=r.is_system,
@@ -274,21 +306,27 @@ async def get_role(
 )
 async def create_role(
     body: CreateRoleRequest,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
     audit: AuditService = Depends(get_audit_service),
 ) -> RoleOut:
+    company_id = request_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
     uc = CreateRoleUseCase(repo)
-    r = await uc.execute(CreateRoleInput(name=body.name, description=body.description))
+    r = await uc.execute(CreateRoleInput(company_id=company_id, name=body.name, description=body.description))
     await audit.record(
         action="CREATE",
         user_id=current.id,
+        company_id=company_id,
         resource_type="roles",
         resource_id=str(r.id),
         after_state=role_to_audit_state(r),
     )
     return RoleOut(
         id=r.id,
+        company_id=r.company_id,
         name=r.name,
         description=r.description,
         is_system=r.is_system,
@@ -307,18 +345,25 @@ async def create_role(
 async def update_role(
     role_id: uuid.UUID,
     body: UpdateRoleRequest,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
     audit: AuditService = Depends(get_audit_service),
 ) -> RoleOut:
-    before = await repo.get_by_id(role_id)
+    company_id = request_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
+    before = await repo.get_by_id(company_id, role_id)
+    if before and before.company_id is None:
+        raise HTTPException(403, "Los roles de sistema son plantillas protegidas.")
     uc = UpdateRoleUseCase(repo)
     r = await uc.execute(
-        UpdateRoleInput(role_id=role_id, name=body.name, description=body.description)
+        UpdateRoleInput(company_id=company_id, role_id=role_id, name=body.name, description=body.description)
     )
     await audit.record(
         action="UPDATE",
         user_id=current.id,
+        company_id=company_id,
         resource_type="roles",
         resource_id=str(r.id),
         before_state=role_to_audit_state(before),
@@ -326,6 +371,7 @@ async def update_role(
     )
     return RoleOut(
         id=r.id,
+        company_id=r.company_id,
         name=r.name,
         description=r.description,
         is_system=r.is_system,
@@ -343,16 +389,21 @@ async def update_role(
 )
 async def delete_role(
     role_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
     audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
-    before = await repo.get_by_id(role_id)
+    company_id = request_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
+    before = await repo.get_by_id(company_id, role_id)
     uc = DeleteRoleUseCase(repo)
-    await uc.execute(role_id)
+    await uc.execute(company_id, role_id)
     await audit.record(
         action="DELETE",
         user_id=current.id,
+        company_id=company_id,
         resource_type="roles",
         resource_id=str(role_id),
         before_state=role_to_audit_state(before),
@@ -369,20 +420,26 @@ async def delete_role(
 async def duplicate_role(
     role_id: uuid.UUID,
     body: DuplicateRoleRequest,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
     perm_repo: PermissionRepository = Depends(get_permission_repository),
     audit: AuditService = Depends(get_audit_service),
 ) -> RoleWithPermissionsOut:
-    source = await GetRoleUseCase(repo).execute(role_id)
+    company_id = request_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
+    source = await GetRoleUseCase(repo).execute(company_id, role_id)
     created = await CreateRoleUseCase(repo).execute(
         CreateRoleInput(
+            company_id=company_id,
             name=body.name,
             description=body.description or source.description,
         )
     )
     duplicated = await SetRolePermissionsUseCase(repo, perm_repo).execute(
         SetRolePermissionsInput(
+            company_id=company_id,
             role_id=created.id,
             permission_codes=tuple(permission.code for permission in source.permissions),
         )
@@ -390,6 +447,7 @@ async def duplicate_role(
     await audit.record(
         action="DUPLICATE",
         user_id=current.id,
+        company_id=company_id,
         resource_type="roles",
         resource_id=str(duplicated.id),
         after_state={
@@ -400,6 +458,7 @@ async def duplicate_role(
     )
     return RoleWithPermissionsOut(
         id=duplicated.id,
+        company_id=duplicated.company_id,
         name=duplicated.name,
         description=duplicated.description,
         is_system=duplicated.is_system,
@@ -427,24 +486,33 @@ async def duplicate_role(
 async def set_role_permissions(
     role_id: uuid.UUID,
     body: SetRolePermissionsRequest,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
     perm_repo: PermissionRepository = Depends(get_permission_repository),
     audit: AuditService = Depends(get_audit_service),
 ) -> RoleWithPermissionsOut:
+    company_id = request_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
+    role = await repo.get_by_id(company_id, role_id)
+    if role and role.company_id is None:
+        raise HTTPException(403, "Los permisos de las plantillas del sistema están protegidos.")
     uc = SetRolePermissionsUseCase(repo, perm_repo)
     r = await uc.execute(
-        SetRolePermissionsInput(role_id=role_id, permission_codes=tuple(body.permission_codes))
+        SetRolePermissionsInput(company_id=company_id, role_id=role_id, permission_codes=tuple(body.permission_codes))
     )
     await audit.record(
         action="SET_PERMISSIONS",
         user_id=current.id,
+        company_id=company_id,
         resource_type="roles",
         resource_id=str(role_id),
         after_state={"permission_codes": [p.code for p in r.permissions]},
     )
     return RoleWithPermissionsOut(
         id=r.id,
+        company_id=r.company_id,
         name=r.name,
         description=r.description,
         is_system=r.is_system,
@@ -466,19 +534,26 @@ async def set_role_permissions(
 )
 async def assign_role(
     body: AssignRoleRequest,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
+    company_id = request_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
+    if await session.get(UserCompany, (body.user_id, company_id)) is None:
+        raise HTTPException(404, "Usuario no encontrado en la empresa seleccionada.")
     uc = AssignRoleUseCase(user_repo, repo)
     created = await uc.execute(
-        AssignRoleInput(user_id=body.user_id, role_id=body.role_id, assigned_by=current.id)
+        AssignRoleInput(user_id=body.user_id, company_id=company_id, role_id=body.role_id, assigned_by=current.id)
     )
     if created:
         await audit.record(
             action="ASSIGN_ROLE",
             user_id=current.id,
+            company_id=company_id,
             resource_type="users",
             resource_id=str(body.user_id),
             after_state={"role_id": str(body.role_id)},
@@ -498,19 +573,26 @@ async def assign_role(
 )
 async def revoke_role(
     body: RevokeRoleRequest,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
+    company_id = request_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
+    if await session.get(UserCompany, (body.user_id, company_id)) is None:
+        raise HTTPException(404, "Usuario no encontrado en la empresa seleccionada.")
     uc = RevokeRoleUseCase(user_repo, repo)
     ok = await uc.execute(
-        RevokeRoleInput(user_id=body.user_id, role_id=body.role_id, actor_id=current.id)
+        RevokeRoleInput(user_id=body.user_id, company_id=company_id, role_id=body.role_id, actor_id=current.id)
     )
     if ok:
         await audit.record(
             action="REVOKE_ROLE",
             user_id=current.id,
+            company_id=company_id,
             resource_type="users",
             resource_id=str(body.user_id),
             before_state={"role_id": str(body.role_id)},
@@ -530,13 +612,21 @@ async def revoke_role(
 )
 async def get_user_roles(
     user_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
     repo: RoleRepository = Depends(get_role_repository),
 ) -> list[RoleOut]:
+    company_id = request_company_id(request)
+    await require_company_access(session, current, company_id)
+    if await session.get(UserCompany, (user_id, company_id)) is None:
+        raise HTTPException(404, "Usuario no encontrado en la empresa seleccionada.")
     uc = GetUserRolesUseCase(repo)
-    roles = await uc.execute(user_id)
+    roles = await uc.execute(user_id, company_id)
     return [
         RoleOut(
             id=r.id,
+            company_id=r.company_id,
             name=r.name,
             description=r.description,
             is_system=r.is_system,
@@ -558,12 +648,16 @@ me_router = APIRouter(prefix="/auth", tags=["auth"])
     summary="Permisos efectivos del usuario actual",
 )
 async def my_permissions(
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     user_repo: UserRepository = Depends(get_user_repository),
     role_repo: RoleRepository = Depends(get_role_repository),
 ) -> EffectivePermissionsOut:
+    company_id = await request_company_id_or_default(request, session, current)
+    await require_company_access(session, current, company_id)
     uc = GetEffectivePermissionsUseCase(user_repo, role_repo)
-    perms = await uc.execute(current.id)
+    perms = await uc.execute(current.id, company_id)
     if perms == ("*",):
         from app.application.rbac.catalogue import ALL_PERMISSION_CODES
 

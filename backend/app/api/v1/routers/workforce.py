@@ -139,7 +139,9 @@ async def assign_employee(
     current: CurrentUser,
     audit: AuditService = Depends(get_audit_service),
 ):
-    await validate_employee_branch(session, current, body.employee_id, body.branch_id)
+    employee, _branch = await validate_employee_branch(
+        session, current, body.employee_id, body.branch_id
+    )
     existing = await session.scalar(
         select(EmployeeBranchAssignment.id).where(
             EmployeeBranchAssignment.employee_id == body.employee_id,

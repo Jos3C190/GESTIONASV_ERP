@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,6 +32,10 @@ class CountryModel(TimestampMixin, Base):
 
 class CategoryModel(TimestampMixin, Base):
     __tablename__ = "categories"
+    __table_args__ = (
+        UniqueConstraint("company_id", "name", name="uq_categories_company_name"),
+        Index("ix_categories_company_active_name", "company_id", "is_active", "name"),
+    )
 
     id_category: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
@@ -43,7 +47,10 @@ class CategoryModel(TimestampMixin, Base):
         index=True,
         server_default=text("gen_random_uuid()"),
     )
-    name: Mapped[str] = mapped_column(String(150), nullable=False, unique=True, index=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -55,9 +62,16 @@ class CategoryModel(TimestampMixin, Base):
 
 class SubCategoryModel(TimestampMixin, Base):
     __tablename__ = "sub_categories"
+    __table_args__ = (
+        UniqueConstraint("company_id", "id_category", "name", name="uq_subcategories_company_category_name"),
+        Index("ix_subcategories_company_category_active", "company_id", "id_category", "is_active"),
+    )
 
     id_sub_category: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True
     )
     id_category: Mapped[int] = mapped_column(
         Integer, ForeignKey("categories.id_category", ondelete="RESTRICT"), nullable=False, index=True
@@ -83,6 +97,10 @@ class UnitModel(TimestampMixin, Base):
 
 class ProductModel(TimestampMixin, Base):
     __tablename__ = "products"
+    __table_args__ = (
+        UniqueConstraint("company_id", "sku", name="uq_products_company_sku"),
+        Index("ix_products_company_active_name", "company_id", "is_active", "name"),
+    )
 
     id_product: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
@@ -94,10 +112,13 @@ class ProductModel(TimestampMixin, Base):
         index=True,
         server_default=text("gen_random_uuid()"),
     )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     id_sub_category: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("sub_categories.id_sub_category", ondelete="SET NULL"), nullable=True, index=True
     )
-    sku: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
+    sku: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     id_category: Mapped[int] = mapped_column(
         Integer, ForeignKey("categories.id_category", ondelete="RESTRICT"), nullable=False, index=True
     )

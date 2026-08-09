@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.domain.entities.supplier import Supplier, SupplierContact
 from app.domain.ports.catalog_repository import CatalogRepository
 from app.domain.ports.supplier_repository import SupplierRepository
@@ -17,6 +17,7 @@ class SupplierUseCases:
 
     async def list_suppliers(
         self,
+        company_id: uuid.UUID,
         country_id: int | None = None,
         search: str | None = None,
         active_only: bool = True,
@@ -24,6 +25,7 @@ class SupplierUseCases:
         limit: int = 50,
     ) -> tuple[list[Supplier], int]:
         return await self._supplier_repo.list_suppliers(
+            company_id,
             country_id=country_id,
             search=search,
             active_only=active_only,
@@ -31,20 +33,21 @@ class SupplierUseCases:
             limit=limit,
         )
 
-    async def get_supplier(self, supplier_id: int) -> Supplier:
-        supplier = await self._supplier_repo.get_supplier_by_id(supplier_id)
+    async def get_supplier(self, company_id: uuid.UUID, supplier_id: int) -> Supplier:
+        supplier = await self._supplier_repo.get_supplier_by_id(company_id, supplier_id)
         if not supplier:
             raise NotFoundError("Proveedor no encontrado", code="supplier_not_found")
         return supplier
 
-    async def get_supplier_by_uuid(self, supplier_uuid: uuid.UUID) -> Supplier:
-        supplier = await self._supplier_repo.get_supplier_by_uuid(supplier_uuid)
+    async def get_supplier_by_uuid(self, company_id: uuid.UUID, supplier_uuid: uuid.UUID) -> Supplier:
+        supplier = await self._supplier_repo.get_supplier_by_uuid(company_id, supplier_uuid)
         if not supplier:
             raise NotFoundError("Proveedor no encontrado", code="supplier_not_found")
         return supplier
 
     async def create_supplier(
         self,
+        company_id: uuid.UUID,
         code: str,
         name: str,
         country_id: int,
@@ -54,7 +57,7 @@ class SupplierUseCases:
         website: str | None = None,
     ) -> Supplier:
         # Validate unique code
-        existing = await self._supplier_repo.get_supplier_by_code(code)
+        existing = await self._supplier_repo.get_supplier_by_code(company_id, code)
         if existing:
             raise ConflictError(f"El código de proveedor '{code}' ya existe", code="supplier_code_exists")
 
@@ -64,6 +67,7 @@ class SupplierUseCases:
             raise NotFoundError("País especificado no encontrado", code="country_not_found")
 
         return await self._supplier_repo.create_supplier(
+            company_id,
             code=code,
             name=name,
             country_id=country_id,
@@ -73,13 +77,20 @@ class SupplierUseCases:
             website=website,
         )
 
-    async def update_supplier(self, supplier_id: int, **kwargs) -> Supplier:
+    async def update_supplier(self, company_id: uuid.UUID, supplier_id: int, **kwargs: object) -> Supplier:
+        current = await self.get_supplier(company_id, supplier_id)
+        if any(field in kwargs and kwargs[field] is None for field in ("code", "name", "country_id", "is_active")):
+            raise ValidationError("No se puede vaciar un campo obligatorio del proveedor.", code="supplier_required_field")
         if "country_id" in kwargs and kwargs["country_id"] is not None:
             country = await self._catalog_repo.get_country_by_id(kwargs["country_id"])
             if not country:
                 raise NotFoundError("País especificado no encontrado", code="country_not_found")
 
-        supplier = await self._supplier_repo.update_supplier(supplier_id=supplier_id, **kwargs)
+        if "code" in kwargs:
+            duplicate = await self._supplier_repo.get_supplier_by_code(company_id, str(kwargs["code"]))
+            if duplicate and duplicate.id != current.id:
+                raise ConflictError("El código ya está registrado en esta empresa.", code="supplier_code_exists")
+        supplier = await self._supplier_repo.update_supplier(company_id, supplier_id, **kwargs)
         if not supplier:
             raise NotFoundError("Proveedor no encontrado", code="supplier_not_found")
         return supplier
@@ -87,18 +98,21 @@ class SupplierUseCases:
     # Contacts
     async def add_contact(
         self,
+        company_id: uuid.UUID,
         supplier_id: int,
         full_name: str,
         phone: str | None = None,
         email: str | None = None,
     ) -> SupplierContact:
-        await self.get_supplier(supplier_id)
+        await self.get_supplier(company_id, supplier_id)
         return await self._supplier_repo.add_contact(
+            company_id,
             supplier_id=supplier_id, full_name=full_name, phone=phone, email=email
         )
 
     async def update_contact(
         self,
+        company_id: uuid.UUID,
         contact_id: int,
         full_name: str | None = None,
         phone: str | None = None,
@@ -106,6 +120,7 @@ class SupplierUseCases:
         is_active: bool | None = None,
     ) -> SupplierContact:
         contact = await self._supplier_repo.update_contact(
+            company_id,
             contact_id=contact_id,
             full_name=full_name,
             phone=phone,
@@ -116,8 +131,8 @@ class SupplierUseCases:
             raise NotFoundError("Contacto de proveedor no encontrado", code="contact_not_found")
         return contact
 
-    async def delete_contact(self, contact_id: int) -> bool:
-        deleted = await self._supplier_repo.delete_contact(contact_id)
+    async def deactivate_contact(self, company_id: uuid.UUID, contact_id: int) -> bool:
+        deleted = await self._supplier_repo.deactivate_contact(company_id, contact_id)
         if not deleted:
             raise NotFoundError("Contacto de proveedor no encontrado", code="contact_not_found")
         return True

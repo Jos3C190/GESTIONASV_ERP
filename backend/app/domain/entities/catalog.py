@@ -22,6 +22,7 @@ class Country:
 class Category:
     id: int
     uuid: uuid.UUID
+    company_id: uuid.UUID
     name: str
     description: str | None = None
     is_active: bool = True
@@ -32,6 +33,7 @@ class Category:
 @dataclass(frozen=True, slots=True)
 class SubCategory:
     id: int
+    company_id: uuid.UUID
     category_id: int
     name: str
     description: str | None = None
@@ -54,6 +56,7 @@ class Unit:
 class Product:
     id: int
     uuid: uuid.UUID
+    company_id: uuid.UUID
     category_id: int
     sub_category_id: int | None
     sku: str

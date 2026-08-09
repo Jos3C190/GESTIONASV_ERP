@@ -28,13 +28,15 @@ class CheckPermissionUseCase:
         self._users = users
         self._roles = roles
 
-    async def execute(self, user_id: uuid.UUID, required_permission: str) -> PermissionCheckResult:
+    async def execute(
+        self, user_id: uuid.UUID, company_id: uuid.UUID, required_permission: str
+    ) -> PermissionCheckResult:
         user = await self._users.get_by_id(user_id)
         if user is None or not user.is_active:
             return PermissionCheckResult(allowed=False, reason="user_invalid")
         if user.is_superuser:
             return PermissionCheckResult(allowed=True, reason="superuser")
-        perms = await self._roles.get_effective_permissions_for_user(user_id)
+        perms = await self._roles.get_effective_permissions_for_user(user_id, company_id)
         codes = {p.code for p in perms}
         if required_permission in codes:
             return PermissionCheckResult(allowed=True, reason="granted")
@@ -48,7 +50,7 @@ class GetEffectivePermissionsUseCase:
         self._users = users
         self._roles = roles
 
-    async def execute(self, user_id: uuid.UUID) -> tuple[str, ...]:
+    async def execute(self, user_id: uuid.UUID, company_id: uuid.UUID) -> tuple[str, ...]:
         user = await self._users.get_by_id(user_id)
         if user is None or not user.is_active:
             return ()
@@ -56,5 +58,5 @@ class GetEffectivePermissionsUseCase:
             # Return a sentinel indicating all permissions; the API layer can
             # materialise the full catalogue for the frontend.
             return ("*",)
-        perms = await self._roles.get_effective_permissions_for_user(user_id)
+        perms = await self._roles.get_effective_permissions_for_user(user_id, company_id)
         return tuple(p.code for p in perms)

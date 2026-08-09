@@ -60,6 +60,7 @@ class SupplierUpdate(BaseModel):
 class SupplierResponse(ORMOut):
     id: int = Field(..., serialization_alias="id_supplier")
     uuid: uuid.UUID
+    company_id: uuid.UUID
     code: str
     name: str
     country_id: int = Field(..., serialization_alias="country")

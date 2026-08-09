@@ -8,18 +8,19 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.auth.get_current_user import GetCurrentUserUseCase
+from app.application.audit.audit_service import AuditService
 from app.application.auth.authenticate_user import AuthenticateUserUseCase
+from app.application.auth.get_current_user import GetCurrentUserUseCase
 from app.application.auth.logout import LogoutUseCase
 from app.application.auth.refresh_token import RefreshTokenUseCase
 from app.application.auth.register_user import RegisterUserUseCase
 from app.application.password_policy import PasswordPolicy
 from app.application.rbac.check_permission import CheckPermissionUseCase
-from app.application.audit.audit_service import AuditService
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.domain.entities.user import User
 from app.domain.ports.audit_repository import AuditRepository
@@ -156,10 +157,32 @@ def require_permission(required_code: str):
     """
 
     async def _checker(
+        request: Request,
+        session: SessionDep,
         current: CurrentUser,
         checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
     ) -> User:
-        result = await checker.execute(current.id, required_code)
+        raw_company = request.headers.get("X-Company-ID")
+        try:
+            if raw_company:
+                company_id = uuid.UUID(raw_company)
+            else:
+                from app.infrastructure.models.organization import UserCompany
+
+                membership = await session.scalar(
+                    select(UserCompany)
+                    .where(UserCompany.user_id == current.id)
+                    .order_by(UserCompany.is_default.desc(), UserCompany.company_id)
+                    .limit(1)
+                )
+                if membership is None:
+                    raise AuthorizationError(
+                        "Seleccione una empresa para continuar.", code="company_context_required"
+                    )
+                company_id = membership.company_id
+        except ValueError as exc:
+            raise AuthorizationError("El contexto de empresa no es válido.", code="invalid_company_context") from exc
+        result = await checker.execute(current.id, company_id, required_code)
         if not result.allowed:
             from app.core.logging import get_logger
 
@@ -178,20 +201,20 @@ def require_permission(required_code: str):
 
 
 __all__ = [
-    "SessionDep",
     "CurrentUser",
-    "get_current_user",
-    "get_user_repository",
-    "get_refresh_token_repository",
-    "get_role_repository",
-    "get_permission_repository",
-    "get_token_service",
-    "get_password_policy",
+    "SessionDep",
     "get_authenticate_user_use_case",
-    "get_refresh_token_use_case",
-    "get_logout_use_case",
-    "get_register_user_use_case",
-    "get_current_user_use_case",
     "get_check_permission_use_case",
+    "get_current_user",
+    "get_current_user_use_case",
+    "get_logout_use_case",
+    "get_password_policy",
+    "get_permission_repository",
+    "get_refresh_token_repository",
+    "get_refresh_token_use_case",
+    "get_register_user_use_case",
+    "get_role_repository",
+    "get_token_service",
+    "get_user_repository",
     "require_permission",
 ]

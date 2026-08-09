@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -34,6 +34,7 @@ def _to_supplier(orm: SupplierModel) -> Supplier:
     return Supplier(
         id=orm.id_supplier,
         uuid=orm.uuid,
+        company_id=orm.company_id,
         code=orm.code,
         name=orm.name,
         country_id=orm.country_id,
@@ -54,13 +55,14 @@ class SqlAlchemySupplierRepository:
 
     async def list_suppliers(
         self,
+        company_id: uuid.UUID,
         country_id: int | None = None,
         search: str | None = None,
         active_only: bool = True,
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[list[Supplier], int]:
-        conditions = []
+        conditions = [SupplierModel.company_id == company_id]
         if country_id is not None:
             conditions.append(SupplierModel.country_id == country_id)
         if active_only:
@@ -93,31 +95,31 @@ class SqlAlchemySupplierRepository:
         items = [_to_supplier(s) for s in res.scalars().all()]
         return items, total
 
-    async def get_supplier_by_id(self, supplier_id: int) -> Supplier | None:
+    async def get_supplier_by_id(self, company_id: uuid.UUID, supplier_id: int) -> Supplier | None:
         stmt = (
             select(SupplierModel)
             .options(selectinload(SupplierModel.contacts))
-            .where(SupplierModel.id_supplier == supplier_id)
+            .where(SupplierModel.company_id == company_id, SupplierModel.id_supplier == supplier_id)
         )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_supplier(orm) if orm else None
 
-    async def get_supplier_by_uuid(self, supplier_uuid: uuid.UUID) -> Supplier | None:
+    async def get_supplier_by_uuid(self, company_id: uuid.UUID, supplier_uuid: uuid.UUID) -> Supplier | None:
         stmt = (
             select(SupplierModel)
             .options(selectinload(SupplierModel.contacts))
-            .where(SupplierModel.uuid == supplier_uuid)
+            .where(SupplierModel.company_id == company_id, SupplierModel.uuid == supplier_uuid)
         )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_supplier(orm) if orm else None
 
-    async def get_supplier_by_code(self, code: str) -> Supplier | None:
+    async def get_supplier_by_code(self, company_id: uuid.UUID, code: str) -> Supplier | None:
         stmt = (
             select(SupplierModel)
             .options(selectinload(SupplierModel.contacts))
-            .where(SupplierModel.code == code)
+            .where(SupplierModel.company_id == company_id, SupplierModel.code == code)
         )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
@@ -125,6 +127,7 @@ class SqlAlchemySupplierRepository:
 
     async def create_supplier(
         self,
+        company_id: uuid.UUID,
         code: str,
         name: str,
         country_id: int,
@@ -134,6 +137,7 @@ class SqlAlchemySupplierRepository:
         website: str | None = None,
     ) -> Supplier:
         orm = SupplierModel(
+            company_id=company_id,
             code=code,
             name=name,
             country_id=country_id,
@@ -146,18 +150,18 @@ class SqlAlchemySupplierRepository:
         await self._session.flush()
         return _to_supplier(orm)
 
-    async def update_supplier(self, supplier_id: int, **kwargs) -> Supplier | None:
+    async def update_supplier(self, company_id: uuid.UUID, supplier_id: int, **kwargs) -> Supplier | None:
         stmt = (
             select(SupplierModel)
             .options(selectinload(SupplierModel.contacts))
-            .where(SupplierModel.id_supplier == supplier_id)
+            .where(SupplierModel.company_id == company_id, SupplierModel.id_supplier == supplier_id)
         )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         if not orm:
             return None
         for key, value in kwargs.items():
-            if hasattr(orm, key) and value is not None:
+            if hasattr(orm, key):
                 setattr(orm, key, value)
         await self._session.flush()
         return _to_supplier(orm)
@@ -165,11 +169,20 @@ class SqlAlchemySupplierRepository:
     # Contacts
     async def add_contact(
         self,
+        company_id: uuid.UUID,
         supplier_id: int,
         full_name: str,
         phone: str | None = None,
         email: str | None = None,
     ) -> SupplierContact:
+        supplier = await self._session.scalar(
+            select(SupplierModel).where(
+                SupplierModel.company_id == company_id,
+                SupplierModel.id_supplier == supplier_id,
+            )
+        )
+        if supplier is None:
+            raise LookupError("supplier_not_found")
         orm = SupplierContactModel(
             id_supplier=supplier_id,
             full_name=full_name,
@@ -182,13 +195,21 @@ class SqlAlchemySupplierRepository:
 
     async def update_contact(
         self,
+        company_id: uuid.UUID,
         contact_id: int,
         full_name: str | None = None,
         phone: str | None = None,
         email: str | None = None,
         is_active: bool | None = None,
     ) -> SupplierContact | None:
-        stmt = select(SupplierContactModel).where(SupplierContactModel.id_supplier_contact == contact_id)
+        stmt = (
+            select(SupplierContactModel)
+            .join(SupplierModel, SupplierModel.id_supplier == SupplierContactModel.id_supplier)
+            .where(
+                SupplierModel.company_id == company_id,
+                SupplierContactModel.id_supplier_contact == contact_id,
+            )
+        )
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         if not orm:
@@ -204,7 +225,17 @@ class SqlAlchemySupplierRepository:
         await self._session.flush()
         return _to_supplier_contact(orm)
 
-    async def delete_contact(self, contact_id: int) -> bool:
-        stmt = delete(SupplierContactModel).where(SupplierContactModel.id_supplier_contact == contact_id)
-        res = await self._session.execute(stmt)
-        return res.rowcount > 0
+    async def deactivate_contact(self, company_id: uuid.UUID, contact_id: int) -> bool:
+        contact = await self._session.scalar(
+            select(SupplierContactModel)
+            .join(SupplierModel, SupplierModel.id_supplier == SupplierContactModel.id_supplier)
+            .where(
+                SupplierModel.company_id == company_id,
+                SupplierContactModel.id_supplier_contact == contact_id,
+            )
+        )
+        if contact is None:
+            return False
+        contact.is_active = False
+        await self._session.flush()
+        return True

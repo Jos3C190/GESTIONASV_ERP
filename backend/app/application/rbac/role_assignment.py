@@ -15,6 +15,7 @@ log = get_logger(__name__)
 @dataclass(frozen=True, slots=True)
 class AssignRoleInput:
     user_id: uuid.UUID
+    company_id: uuid.UUID
     role_id: uuid.UUID
     assigned_by: uuid.UUID
 
@@ -28,7 +29,7 @@ class AssignRoleUseCase:
         user = await self._users.get_by_id(inp.user_id)
         if user is None:
             raise NotFoundError("Usuario no encontrado.", code="user_not_found")
-        role = await self._roles.get_by_id(inp.role_id)
+        role = await self._roles.get_by_id(inp.company_id, inp.role_id)
         if role is None:
             raise NotFoundError("Rol no encontrado.", code="role_not_found")
 
@@ -41,7 +42,7 @@ class AssignRoleUseCase:
             )
 
         created = await self._roles.assign_role_to_user(
-            inp.user_id, inp.role_id, inp.assigned_by
+            inp.user_id, inp.company_id, inp.role_id, inp.assigned_by
         )
         log.info(
             "role_assigned",
@@ -56,6 +57,7 @@ class AssignRoleUseCase:
 @dataclass(frozen=True, slots=True)
 class RevokeRoleInput:
     user_id: uuid.UUID
+    company_id: uuid.UUID
     role_id: uuid.UUID
     actor_id: uuid.UUID
 
@@ -69,7 +71,7 @@ class RevokeRoleUseCase:
         user = await self._users.get_by_id(inp.user_id)
         if user is None:
             raise NotFoundError("Usuario no encontrado.", code="user_not_found")
-        role = await self._roles.get_by_id(inp.role_id)
+        role = await self._roles.get_by_id(inp.company_id, inp.role_id)
         if role is None:
             raise NotFoundError("Rol no encontrado.", code="role_not_found")
 
@@ -80,7 +82,7 @@ class RevokeRoleUseCase:
                 code="self_superadmin_revoke_forbidden",
             )
 
-        assigned_roles = await self._roles.get_roles_for_user(inp.user_id)
+        assigned_roles = await self._roles.get_roles_for_user(inp.user_id, inp.company_id)
         if any(assigned.id == inp.role_id for assigned in assigned_roles) and len(
             assigned_roles
         ) <= 1:
@@ -89,7 +91,7 @@ class RevokeRoleUseCase:
                 code="user_requires_role",
             )
 
-        ok = await self._roles.revoke_role_from_user(inp.user_id, inp.role_id)
+        ok = await self._roles.revoke_role_from_user(inp.user_id, inp.company_id, inp.role_id)
         log.info(
             "role_revoked",
             user_id=str(inp.user_id),
@@ -104,5 +106,5 @@ class GetUserRolesUseCase:
     def __init__(self, roles: RoleRepository) -> None:
         self._roles = roles
 
-    async def execute(self, user_id: uuid.UUID):
-        return await self._roles.get_roles_for_user(user_id)
+    async def execute(self, user_id: uuid.UUID, company_id: uuid.UUID):
+        return await self._roles.get_roles_for_user(user_id, company_id)

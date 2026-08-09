@@ -4,14 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.db.session import session_scope
 from app.infrastructure.models.catalog import (
-    CategoryModel, CountryModel, ProductModel, SubCategoryModel, UnitModel,
+    CategoryModel,
+    CountryModel,
+    ProductModel,
+    SubCategoryModel,
+    UnitModel,
 )
+from app.infrastructure.models.organization import Company
 from app.infrastructure.models.supplier import SupplierContactModel, SupplierModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from seed.seed_grupo_lorena import COMPANY_ID
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("seed_catalog")
@@ -149,8 +156,12 @@ CATEGORIES_DATA = [
 ]
 
 
-async def seed_catalog_data(db: AsyncSession) -> None:
+async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
     logger.info("Starting Catalog & Supplier Seed Data...")
+    company = await db.get(Company, COMPANY_ID)
+    if company is None:
+        raise RuntimeError("Ejecute primero la semilla principal de Grupo Lorena.")
+    company_id = company.id
 
     # 1. Countries
     for country in COUNTRIES_DATA:
@@ -185,11 +196,13 @@ async def seed_catalog_data(db: AsyncSession) -> None:
     cat_map = {}
     sub_map = {}
     for cat_info in CATEGORIES_DATA:
-        stmt = select(CategoryModel).where(CategoryModel.name == cat_info["name"])
+        stmt = select(CategoryModel).where(
+            CategoryModel.company_id == company_id, CategoryModel.name == cat_info["name"]
+        )
         res = await db.execute(stmt)
         cat = res.scalar_one_or_none()
         if not cat:
-            cat = CategoryModel(name=cat_info["name"], description=cat_info["description"])
+            cat = CategoryModel(company_id=company_id, name=cat_info["name"], description=cat_info["description"])
             db.add(cat)
             await db.flush()
         cat_map[cat_info["name"]] = cat.id_category
@@ -197,12 +210,13 @@ async def seed_catalog_data(db: AsyncSession) -> None:
         for sub_name in cat_info["sub_categories"]:
             sub_stmt = select(SubCategoryModel).where(
                 SubCategoryModel.id_category == cat.id_category,
+                SubCategoryModel.company_id == company_id,
                 SubCategoryModel.name == sub_name,
             )
             sub_res = await db.execute(sub_stmt)
             sub = sub_res.scalar_one_or_none()
             if not sub:
-                sub = SubCategoryModel(id_category=cat.id_category, name=sub_name)
+                sub = SubCategoryModel(company_id=company_id, id_category=cat.id_category, name=sub_name)
                 db.add(sub)
                 await db.flush()
             sub_map[sub_name] = sub.id_sub_category
@@ -239,11 +253,13 @@ async def seed_catalog_data(db: AsyncSession) -> None:
 
     for sup_info in suppliers_data:
         contacts = sup_info.pop("contacts")
-        stmt = select(SupplierModel).where(SupplierModel.code == sup_info["code"])
+        stmt = select(SupplierModel).where(
+            SupplierModel.company_id == company_id, SupplierModel.code == sup_info["code"]
+        )
         res = await db.execute(stmt)
         sup = res.scalar_one_or_none()
         if not sup:
-            sup = SupplierModel(**sup_info)
+            sup = SupplierModel(company_id=company_id, **sup_info)
             db.add(sup)
             await db.flush()
 
@@ -289,10 +305,12 @@ async def seed_catalog_data(db: AsyncSession) -> None:
     ]
 
     for prod in products_data:
-        stmt = select(ProductModel).where(ProductModel.sku == prod["sku"])
+        stmt = select(ProductModel).where(
+            ProductModel.company_id == company_id, ProductModel.sku == prod["sku"]
+        )
         res = await db.execute(stmt)
         if not res.scalar_one_or_none():
-            p = ProductModel(**prod)
+            p = ProductModel(company_id=company_id, **prod)
             db.add(p)
     await db.flush()
     await db.commit()

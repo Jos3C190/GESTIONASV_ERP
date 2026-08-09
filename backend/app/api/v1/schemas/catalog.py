@@ -37,6 +37,7 @@ class CategoryUpdate(BaseModel):
 class CategoryResponse(ORMOut):
     id: int = Field(..., serialization_alias="id_category")
     uuid: uuid.UUID
+    company_id: uuid.UUID
     name: str
     description: str | None = None
     is_active: bool
@@ -60,6 +61,7 @@ class SubCategoryUpdate(BaseModel):
 class SubCategoryResponse(ORMOut):
     id: int = Field(..., serialization_alias="id_sub_category")
     category_id: int = Field(..., serialization_alias="id_category")
+    company_id: uuid.UUID
     name: str
     description: str | None = None
     is_active: bool
@@ -123,6 +125,7 @@ class ProductUpdate(BaseModel):
 class ProductResponse(ORMOut):
     id: int = Field(..., serialization_alias="id_product")
     uuid: uuid.UUID
+    company_id: uuid.UUID
     category_id: int = Field(..., serialization_alias="id_category")
     sub_category_id: int | None = Field(None, serialization_alias="id_sub_category")
     sku: str
