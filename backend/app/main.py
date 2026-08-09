@@ -71,11 +71,12 @@ async def _run_migrations() -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
     log.info("startup", environment=settings.ENVIRONMENT, debug=settings.DEBUG)
-    try:
-        await _run_migrations()
-    except Exception:
-        log.exception("migration_failed")
-        raise
+    if settings.RUN_MIGRATIONS_ON_STARTUP:
+        try:
+            await _run_migrations()
+        except Exception:
+            log.exception("migration_failed")
+            raise
     yield
     log.info("shutdown")
     await dispose_engine()

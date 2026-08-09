@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     BACKEND_HOST: str = "0.0.0.0"
     BACKEND_PORT: int = 8000
     BACKEND_WORKERS: int = 1
+    RUN_MIGRATIONS_ON_STARTUP: bool = True
 
     # --- Database ---
     POSTGRES_USER: str = "erp_admin"
@@ -95,11 +96,7 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[misc]
     @property
     def cors_origin_list(self) -> list[str]:
-        origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
-        prod_origin = "https://proyecto-erp-one.vercel.app"
-        if prod_origin not in origins:
-            origins.append(prod_origin)
-        return origins
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
     @field_validator("JWT_SECRET_KEY")
     @classmethod
