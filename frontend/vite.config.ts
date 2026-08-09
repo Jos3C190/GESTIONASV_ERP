@@ -1,8 +1,9 @@
 import { sveltekit } from '@sveltejs/kit/vite';
+import { svelteTesting } from '@testing-library/svelte/vite';
 import { defineConfig } from 'vite';
 
-export default defineConfig({
-  plugins: [sveltekit()],
+export default defineConfig(({ mode }) => ({
+  plugins: [sveltekit(), ...(mode === 'test' ? [svelteTesting()] : [])],
   server: {
     host: '0.0.0.0',
     port: 5173,
@@ -25,4 +26,4 @@ export default defineConfig({
       include: ['src/lib/**/*.{ts,svelte}']
     }
   }
-});
+}));

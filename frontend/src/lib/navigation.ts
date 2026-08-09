@@ -140,6 +140,20 @@ export const NAV_GROUPS: NavGroup[] = [
         requiredPermission: 'products:read'
       },
       {
+        label: 'Categorías de productos',
+        icon: ICONS.inventory,
+        route: '/inventory/categories',
+        implemented: true,
+        requiredPermission: 'products:read'
+      },
+      {
+        label: 'Unidades de medida',
+        icon: ICONS.pricing,
+        route: '/inventory/units',
+        implemented: true,
+        requiredPermission: 'reference_data:read'
+      },
+      {
         label: 'Cotizaciones de compra',
         icon: ICONS.purchaseQuotes,
         route: '/placeholder?module=Cotizaciones de compra',
