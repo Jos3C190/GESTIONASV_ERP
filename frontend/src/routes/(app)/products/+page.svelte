@@ -71,7 +71,7 @@
     loading = true;
     errorMsg = null;
     try {
-      const [catsRes, subsRes, unitsRes, prodsRes, allProdsRes] = await Promise.all([
+      const [catsRes, subsRes, unitsRes, prodsRes, stats] = await Promise.all([
         catalogApi.listCategories(true),
         catalogApi.listSubCategories(undefined, true),
         catalogApi.listUnits(true),
@@ -83,7 +83,7 @@
           page: untrack(() => page),
           size: 10
         }),
-        catalogApi.listProducts({ active_only: false, size: 100 })
+        catalogApi.productStats()
       ]);
 
       if (generation !== dataGeneration) return;
@@ -96,11 +96,10 @@
       totalPages = prodsRes.meta.pages;
 
       // KPIs
-      const allItems = allProdsRes.items;
-      kpiTotal = allProdsRes.meta.total;
-      kpiActive = allItems.filter((p) => p.is_active).length;
-      kpiInactive = kpiTotal - kpiActive;
-      kpiCategoriesCount = catsRes.length;
+      kpiTotal = stats.total;
+      kpiActive = stats.active;
+      kpiInactive = stats.inactive;
+      kpiCategoriesCount = stats.categories;
     } catch (err: unknown) {
       if (generation !== dataGeneration) return;
       errorMsg = err instanceof Error ? err.message : 'Error al cargar productos';
@@ -235,7 +234,7 @@
 
   function menuItems(prod: Product): KebabItem[] {
     const items: KebabItem[] = [];
-    if (permissions.hasPermission('catalog:write')) {
+    if (permissions.hasPermission('products:manage')) {
       items.push({
         id: 'edit',
         label: 'Editar',
@@ -306,7 +305,7 @@
         </select>
       {/if}
 
-      {#if permissions.hasPermission('catalog:write')}
+      {#if permissions.hasPermission('products:manage')}
         <Button size="sm" onclick={openCreateModal}>
           <svg
             width="14"

@@ -64,7 +64,7 @@
     loading = true;
     errorMsg = null;
     try {
-      const [cRes, sRes, allSuppliersRes] = await Promise.all([
+      const [cRes, sRes, stats] = await Promise.all([
         catalogApi.listCountries(true),
         suppliersApi.listSuppliers({
           country_id: selectedCountry,
@@ -73,7 +73,7 @@
           page: untrack(() => page),
           size: 10
         }),
-        suppliersApi.listSuppliers({ active_only: false, size: 100 })
+        suppliersApi.stats()
       ]);
 
       if (generation !== dataGeneration) return;
@@ -84,12 +84,10 @@
       totalPages = sRes.meta.pages;
 
       // KPIs
-      const allItems = allSuppliersRes.items;
-      kpiTotal = allSuppliersRes.meta.total;
-      kpiActive = allItems.filter((s) => s.is_active).length;
-      kpiInactive = kpiTotal - kpiActive;
-      const uniqueCountries = new Set(allItems.map((s) => s.country));
-      kpiCountriesCount = uniqueCountries.size;
+      kpiTotal = stats.total;
+      kpiActive = stats.active;
+      kpiInactive = stats.inactive;
+      kpiCountriesCount = stats.countries;
     } catch (err: unknown) {
       if (generation !== dataGeneration) return;
       errorMsg = err instanceof Error ? err.message : 'Error al cargar proveedores';
@@ -265,7 +263,7 @@
       }
     ];
 
-    if (permissions.hasPermission('suppliers:write')) {
+    if (permissions.hasPermission('suppliers:manage')) {
       items.push({
         id: 'edit',
         label: 'Editar',
@@ -317,7 +315,7 @@
         {/each}
       </select>
 
-      {#if permissions.hasPermission('suppliers:write')}
+      {#if permissions.hasPermission('suppliers:manage')}
         <Button size="sm" onclick={openCreateSupplierModal}>
           <svg
             width="14"

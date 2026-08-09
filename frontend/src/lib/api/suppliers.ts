@@ -2,6 +2,13 @@ import { apiFetch } from '$lib/api/client';
 import type { Supplier, SupplierContact } from '$lib/types/supplier';
 import type { PageResponse } from '$lib/api/catalog';
 
+export interface SupplierStats {
+  total: number;
+  active: number;
+  inactive: number;
+  countries: number;
+}
+
 export const suppliersApi = {
   listSuppliers: (params?: {
     country_id?: number;
@@ -18,6 +25,8 @@ export const suppliersApi = {
     if (params?.size) q.append('size', params.size.toString());
     return apiFetch<PageResponse<Supplier>>(`/suppliers?${q.toString()}`);
   },
+
+  stats: () => apiFetch<SupplierStats>('/suppliers/stats'),
 
   getSupplier: (id: number) =>
     apiFetch<Supplier>(`/suppliers/${id}`),

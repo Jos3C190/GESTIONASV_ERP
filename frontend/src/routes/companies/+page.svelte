@@ -74,7 +74,11 @@
         commercial_name: item.commercial_name,
         logo: item.logo
       });
-      const context = await api.operationalContext.get(item.id);
+      const [context, companyPermissions] = await Promise.all([
+        api.operationalContext.get(item.id),
+        api.auth.myPermissions()
+      ]);
+      permissions.set(companyPermissions.permissions, companyPermissions.is_superuser);
       branch.configure(context);
       if (!context.access_all_branches && context.branches.length === 0) {
         throw new Error('No tiene sucursales autorizadas en esta empresa.');

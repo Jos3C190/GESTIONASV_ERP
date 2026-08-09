@@ -11,6 +11,13 @@ export interface PageResponse<T> {
   };
 }
 
+export interface ProductStats {
+  total: number;
+  active: number;
+  inactive: number;
+  categories: number;
+}
+
 export const catalogApi = {
   // Countries
   listCountries: (activeOnly = true) =>
@@ -86,6 +93,8 @@ export const catalogApi = {
     if (params?.size) q.append('size', params.size.toString());
     return apiFetch<PageResponse<Product>>(`/catalog/products?${q.toString()}`);
   },
+
+  productStats: () => apiFetch<ProductStats>('/catalog/products/stats'),
 
   getProduct: (id: number) =>
     apiFetch<Product>(`/catalog/products/${id}`),
