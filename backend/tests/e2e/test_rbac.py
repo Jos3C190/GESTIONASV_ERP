@@ -178,7 +178,12 @@ async def test_delete_non_system_role(e2e_client) -> None:
         "/api/v1/roles", headers=headers, json={"name": unique}
     )
     rid = create.json()["id"]
-    r = await e2e_client.delete(f"/api/v1/roles/{rid}", headers=headers)
+    r = await e2e_client.request(
+        "DELETE",
+        f"/api/v1/roles/{rid}",
+        headers=headers,
+        json={"reason": "Rol creado por error durante la prueba"},
+    )
     assert r.status_code == 200
 
 
@@ -186,11 +191,14 @@ async def test_delete_system_role_forbidden(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     r = await e2e_client.get("/api/v1/roles/catalogue", headers=headers)
     super_role = next((r for r in r.json() if r["name"] == "SUPER_ADMIN"), None)
-    r = await e2e_client.delete(
-        f"/api/v1/roles/{super_role['id']}", headers=headers
+    r = await e2e_client.request(
+        "DELETE",
+        f"/api/v1/roles/{super_role['id']}",
+        headers=headers,
+        json={"reason": "Validación de protección del rol del sistema"},
     )
-    assert r.status_code == 422
-    assert r.json()["code"] == "system_role_protected"
+    assert r.status_code == 409
+    assert r.json()["code"] == "record_has_dependencies"
 
 
 async def test_set_role_permissions(e2e_client) -> None:

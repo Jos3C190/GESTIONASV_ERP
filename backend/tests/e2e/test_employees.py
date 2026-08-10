@@ -124,9 +124,14 @@ async def test_delete_department_with_employees_blocked(e2e_client) -> None:
             "department_id": did,
         },
     )
-    r = await e2e_client.delete(f"/api/v1/departments/{did}", headers=headers)
-    assert r.status_code == 422
-    assert r.json()["code"] == "dept_has_employees"
+    r = await e2e_client.request(
+        "DELETE",
+        f"/api/v1/departments/{did}",
+        headers=headers,
+        json={"reason": "Registro creado por error durante la prueba"},
+    )
+    assert r.status_code == 409
+    assert r.json()["code"] == "record_has_dependencies"
 
 
 async def test_delete_empty_department(e2e_client) -> None:
@@ -134,7 +139,12 @@ async def test_delete_empty_department(e2e_client) -> None:
     d = await e2e_client.post(
         "/api/v1/departments", headers=headers, json={"company_id": headers["X-Company-ID"], "name": f"EMPTY_{uuid.uuid4().hex[:6]}"}
     )
-    r = await e2e_client.delete(f"/api/v1/departments/{d.json()['id']}", headers=headers)
+    r = await e2e_client.request(
+        "DELETE",
+        f"/api/v1/departments/{d.json()['id']}",
+        headers=headers,
+        json={"reason": "Registro creado por error durante la prueba"},
+    )
     assert r.status_code == 200
 
 
@@ -287,7 +297,12 @@ async def test_delete_employee(e2e_client) -> None:
             "last_name": "Me",
         },
     )
-    r = await e2e_client.delete(f"/api/v1/employees/{emp.json()['id']}", headers=headers)
+    r = await e2e_client.request(
+        "DELETE",
+        f"/api/v1/employees/{emp.json()['id']}",
+        headers=headers,
+        json={"reason": "Registro creado por error durante la prueba"},
+    )
     assert r.status_code == 200
     # Verify it no longer appears in list
     r = await e2e_client.get(f"/api/v1/employees?company_id={headers['X-Company-ID']}", headers=headers)
@@ -317,7 +332,12 @@ async def test_department_mutations_are_audited(e2e_client) -> None:
         headers=headers,
         json={"description": "Actualizado para auditoría"},
     )
-    await e2e_client.delete(f"/api/v1/departments/{dept_id}", headers=headers)
+    await e2e_client.request(
+        "DELETE",
+        f"/api/v1/departments/{dept_id}",
+        headers=headers,
+        json={"reason": "Registro creado para verificar la auditoría"},
+    )
 
     logs = await e2e_client.get(
         f"/api/v1/audit-logs?resource_type=departments&resource_id={dept_id}&size=20",
@@ -325,7 +345,7 @@ async def test_department_mutations_are_audited(e2e_client) -> None:
     )
     assert logs.status_code == 200
     actions = {item["action"] for item in logs.json()["items"]}
-    assert actions == {"CREATE", "UPDATE", "DELETE"}
+    assert actions == {"CREATE", "UPDATE", "LOGICAL_DELETE"}
     update_log = next(item for item in logs.json()["items"] if item["action"] == "UPDATE")
     assert update_log["before_state"]["description"] is None
     assert update_log["after_state"]["description"] == "Actualizado para auditoría"
@@ -349,7 +369,12 @@ async def test_employee_mutations_are_audited(e2e_client) -> None:
         headers=headers,
         json={"position": "Auditor"},
     )
-    await e2e_client.delete(f"/api/v1/employees/{emp_id}", headers=headers)
+    await e2e_client.request(
+        "DELETE",
+        f"/api/v1/employees/{emp_id}",
+        headers=headers,
+        json={"reason": "Registro creado para verificar la auditoría"},
+    )
 
     logs = await e2e_client.get(
         f"/api/v1/audit-logs?resource_type=employees&resource_id={emp_id}&size=20",

@@ -256,8 +256,10 @@ async def test_deactivate_user_success() -> None:
     uc = DeactivateUserUseCase(repo)
     ok = await uc.execute(target.id, actor.id)
     assert ok is True
-    deleted = await repo.get_by_id(target.id)
-    assert deleted is None  # soft-deleted users are filtered out
+    deactivated = await repo.get_by_id(target.id)
+    assert deactivated is not None
+    assert deactivated.is_active is False
+    assert deactivated.deleted_at is None
 
 
 async def test_deactivate_user_cannot_self() -> None:

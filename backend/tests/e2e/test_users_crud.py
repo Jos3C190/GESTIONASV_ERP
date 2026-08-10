@@ -156,11 +156,14 @@ async def test_create_user_success(e2e_client) -> None:
     linked_employee = next(
         employee for employee in employees.json()["items"] if employee["user_id"] == body["id"]
     )
-    delete_linked = await e2e_client.delete(
-        f"/api/v1/employees/{linked_employee['id']}", headers=headers
+    delete_linked = await e2e_client.request(
+        "DELETE",
+        f"/api/v1/employees/{linked_employee['id']}",
+        headers=headers,
+        json={"reason": "Validación de dependencia activa"},
     )
     assert delete_linked.status_code == 409
-    assert delete_linked.json()["code"] == "employee_has_user"
+    assert delete_linked.json()["code"] == "record_has_dependencies"
 
 
 async def test_database_rejects_active_user_without_employee(e2e_client) -> None:
@@ -246,6 +249,23 @@ async def test_update_user_activate_deactivate(e2e_client) -> None:
     assert r.json()["is_active"] is False
 
 
+async def test_deactivated_user_access_token_is_rejected_immediately(e2e_client) -> None:
+    target_id = await seed_user(username="target", email="target@e.com")
+    target_headers = await _login_as(e2e_client, "target", "Strong!Passw0rd2026")
+    admin_headers = await _login_superadmin(e2e_client)
+
+    response = await e2e_client.patch(
+        f"/api/v1/users/{target_id}",
+        headers=admin_headers,
+        json={"is_active": False},
+    )
+    assert response.status_code == 200
+
+    response = await e2e_client.get("/api/v1/auth/me", headers=target_headers)
+    assert response.status_code == 401
+    assert response.json()["code"] == "account_inactive"
+
+
 async def test_force_password_reset_success(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     uid = await seed_user(username="resetme", email="resetme@e.com")
@@ -284,9 +304,10 @@ async def test_deactivate_user_success(e2e_client) -> None:
     uid = await seed_user(username="deleteme", email="delete@e.com")
     r = await e2e_client.delete(f"/api/v1/users/{uid}", headers=headers)
     assert r.status_code == 200
-    # User no longer appears in list
+    # Deactivation is operational state, not deletion/paperera.
     r = await e2e_client.get("/api/v1/users", headers=headers)
-    assert all(u["id"] != uid for u in r.json()["items"])
+    deactivated = next(u for u in r.json()["items"] if u["id"] == uid)
+    assert deactivated["is_active"] is False
 
 
 async def test_deactivate_user_cannot_self(e2e_client) -> None:

@@ -6,11 +6,19 @@ from seed.grupo_lorena_media import (
     all_media,
     validate_media_manifest,
 )
-from seed.seed_grupo_lorena import BRANCHES, EMPLOYEES, main, validate_seed_data
+from seed.seed_grupo_lorena import BRANCHES, EMPLOYEES, seed, validate_seed_data
 
 
 def test_default_seed_entrypoint_is_grupo_lorena() -> None:
-    assert seed_data.main is main
+    assert seed_data.seed_grupo_lorena is seed
+    assert callable(seed_data.main)
+
+
+def test_seed_reconciliation_requires_explicit_force_flag(monkeypatch) -> None:
+    monkeypatch.delenv("FORCE_SEED", raising=False)
+    assert seed_data.force_seed_enabled() is False
+    monkeypatch.setenv("FORCE_SEED", "true")
+    assert seed_data.force_seed_enabled() is True
 
 
 def test_grupo_lorena_seed_data_is_consistent() -> None:

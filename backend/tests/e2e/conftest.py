@@ -1,15 +1,10 @@
-"""E2E fixtures: real FastAPI app + real Postgres (the docker `db` service).
+"""E2E fixtures for the real FastAPI app and isolated ``erp_db_test``.
 
-These tests require the dev stack to be running (`make up`). They use the same
-`erp_db` that the backend uses, but clean the auth tables before each test to
-isolate them. Migrations are NOT mocked here — the schema is already in place.
-
-A session-scoped fixture restores the SUPER_ADMIN user after all e2e tests
-finish, so the running stack remains usable after `pytest`.
+The root test fixture rebuilds, migrates and seeds that database once per
+suite. Development data is never used by setup, execution or cleanup.
 """
 from __future__ import annotations
 
-import os
 import uuid
 from collections.abc import AsyncIterator
 
@@ -17,65 +12,6 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
-# Force the test DSN to the real dev DB so e2e tests hit the running stack.
-os.environ["DATABASE_URL"] = os.environ.get(
-    "DATABASE_URL_E2E",
-    "postgresql+asyncpg://erp_admin:change_me_in_production_please@db:5432/erp_db",
-)
-
-
-@pytest.fixture(scope="session", autouse=True)
-async def _restore_seed_after_suite() -> AsyncIterator[None]:
-    """Restore the technical administrator after destructive auth tests."""
-    yield
-    # Import here so env vars are applied first.
-    from app.core.security import hash_password
-    from app.infrastructure.db.session import async_session_factory
-    from app.infrastructure.models.employee import Employee as ORMEmployee
-    from app.infrastructure.models.organization import UserCompany
-    from app.infrastructure.models.user import User as ORMUser
-    from sqlalchemy import select
-
-    try:
-        async with async_session_factory() as session:
-            existing = (
-                await session.execute(
-                    select(ORMUser).where(ORMUser.username == "superadmin")
-                )
-            ).scalar_one_or_none()
-            if existing is None:
-                restored = ORMUser(
-                    username="superadmin",
-                    email="superadmin@erp-system.dev",
-                    password_hash=hash_password("Cambio!Seguro2026"),
-                    is_active=True,
-                    is_superuser=True,
-                )
-                session.add(restored)
-                await session.flush()
-                company_id = await get_test_company_id(session=session)
-                session.add(
-                    UserCompany(
-                        user_id=restored.id,
-                        company_id=company_id,
-                        is_default=True,
-                        access_all_branches=True,
-                    )
-                )
-                session.add(
-                    ORMEmployee(
-                        company_id=company_id,
-                        employee_code=f"TST-{restored.id.hex[:12].upper()}",
-                        first_name="Superadmin",
-                        last_name="Sistema",
-                        user_id=restored.id,
-                        status="activo",
-                    )
-                )
-                await session.commit()
-    except Exception:
-        pass  # best-effort restoration; don't fail the suite on cleanup
 
 
 @pytest.fixture

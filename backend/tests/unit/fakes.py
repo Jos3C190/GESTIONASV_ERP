@@ -106,16 +106,16 @@ class InMemoryUserRepository:
         self._by_id[user.id] = user
         return user
 
-    async def soft_delete(self, user_id: uuid.UUID) -> bool:
+    async def deactivate(self, user_id: uuid.UUID) -> bool:
         u = self._by_id.get(user_id)
-        if u is None or u.is_deleted:
+        if u is None or u.is_deleted or not u.is_active:
             return False
         self._by_id[user_id] = User(
             id=u.id,
             username=u.username,
             email=u.email,
             password_hash=u.password_hash,
-            is_active=u.is_active,
+            is_active=False,
             is_superuser=u.is_superuser,
             mfa_enabled=u.mfa_enabled,
             last_login_at=u.last_login_at,
@@ -124,7 +124,7 @@ class InMemoryUserRepository:
             password_changed_at=u.password_changed_at,
             created_at=u.created_at,
             updated_at=u.updated_at,
-            deleted_at=datetime.now(UTC),
+            deleted_at=u.deleted_at,
         )
         return True
 
