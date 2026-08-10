@@ -4,10 +4,12 @@ Handles role CRUD, role<->permission assignment, user<->role assignment, and
 the effective-permissions query (the union of all permissions across a user's
 roles).
 """
+
 from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, exists, func, insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,7 +79,9 @@ class SqlAlchemyRoleRepository:
         perms = await self.get_permissions_for_role(company_id, orm.id) if load_permissions else ()
         return _role_to_domain(orm, tuple(perms))
 
-    async def list_all(self, company_id: uuid.UUID, *, load_permissions: bool = False) -> Sequence[DomainRole]:
+    async def list_all(
+        self, company_id: uuid.UUID, *, load_permissions: bool = False
+    ) -> Sequence[DomainRole]:
         stmt = select(ORMRole).where(self._scope(company_id)).order_by(ORMRole.name)
         result = await self._session.execute(stmt)
         roles = result.scalars().all()
@@ -86,10 +90,7 @@ class SqlAlchemyRoleRepository:
         # Batch-load permissions for all roles in 2 queries (not N+1).
         role_ids = [r.id for r in roles]
         perm_map = await self._batch_load_permissions(role_ids)
-        return [
-            _role_to_domain(r, tuple(perm_map.get(r.id, [])))
-            for r in roles
-        ]
+        return [_role_to_domain(r, tuple(perm_map.get(r.id, []))) for r in roles]
 
     async def list_page(
         self,
@@ -150,10 +151,7 @@ class SqlAlchemyRoleRepository:
             return [_role_to_domain(role) for role in roles], total
         permission_map = await self._batch_load_permissions([role.id for role in roles])
         return (
-            [
-                _role_to_domain(role, tuple(permission_map.get(role.id, [])))
-                for role in roles
-            ],
+            [_role_to_domain(role, tuple(permission_map.get(role.id, []))) for role in roles],
             total,
         )
 
@@ -176,7 +174,12 @@ class SqlAlchemyRoleRepository:
         return out
 
     async def add(self, role: DomainRole) -> DomainRole:
-        orm = ORMRole(company_id=role.company_id, name=role.name, description=role.description, is_system=role.is_system)
+        orm = ORMRole(
+            company_id=role.company_id,
+            name=role.name,
+            description=role.description,
+            is_system=role.is_system,
+        )
         self._session.add(orm)
         await self._session.flush()
         return _role_to_domain(orm)
@@ -195,16 +198,28 @@ class SqlAlchemyRoleRepository:
         return _role_to_domain(orm)
 
     async def delete(self, company_id: uuid.UUID, role_id: uuid.UUID) -> bool:
-        stmt = delete(ORMRole).where(
-            ORMRole.id == role_id, ORMRole.company_id == company_id, ORMRole.is_system.is_(False)
+        stmt = (
+            update(ORMRole)
+            .where(
+                ORMRole.id == role_id,
+                ORMRole.company_id == company_id,
+                ORMRole.is_system.is_(False),
+                ORMRole.deleted_at.is_(None),
+            )
+            .values(
+                deleted_at=datetime.now(UTC),
+                deletion_reason="Eliminado desde Roles y permisos",
+            )
         )
         result = await self._session.execute(stmt)
         return (result.rowcount or 0) > 0
 
     async def is_assigned(self, company_id: uuid.UUID, role_id: uuid.UUID) -> bool:
-        stmt = select(UserRole.user_id).where(
-            UserRole.company_id == company_id, UserRole.role_id == role_id
-        ).limit(1)
+        stmt = (
+            select(UserRole.user_id)
+            .where(UserRole.company_id == company_id, UserRole.role_id == role_id)
+            .limit(1)
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none() is not None
 
     async def set_permissions(
@@ -212,16 +227,16 @@ class SqlAlchemyRoleRepository:
     ) -> None:
         if await self.get_by_id(company_id, role_id) is None:
             raise LookupError("role_not_found")
-        await self._session.execute(
-            delete(RolePermission).where(RolePermission.role_id == role_id)
-        )
+        await self._session.execute(delete(RolePermission).where(RolePermission.role_id == role_id))
         if permission_ids:
             await self._session.execute(
                 insert(RolePermission),
                 [{"role_id": role_id, "permission_id": pid} for pid in permission_ids],
             )
 
-    async def get_permissions_for_role(self, company_id: uuid.UUID, role_id: uuid.UUID) -> Sequence[DomainPermission]:
+    async def get_permissions_for_role(
+        self, company_id: uuid.UUID, role_id: uuid.UUID
+    ) -> Sequence[DomainPermission]:
         if await self.get_by_id(company_id, role_id) is None:
             return ()
         stmt = (
@@ -248,7 +263,9 @@ class SqlAlchemyRoleRepository:
         result = await self._session.execute(stmt)
         return [_perm_to_domain(p) for p in result.scalars().all()]
 
-    async def get_roles_for_user(self, user_id: uuid.UUID, company_id: uuid.UUID) -> Sequence[DomainRole]:
+    async def get_roles_for_user(
+        self, user_id: uuid.UUID, company_id: uuid.UUID
+    ) -> Sequence[DomainRole]:
         stmt = (
             select(ORMRole)
             .join(UserRole, UserRole.role_id == ORMRole.id)
@@ -289,12 +306,16 @@ class SqlAlchemyRoleRepository:
         if existing.scalar_one_or_none() is not None:
             return False  # idempotent
         self._session.add(
-            UserRole(user_id=user_id, company_id=company_id, role_id=role_id, assigned_by=assigned_by)
+            UserRole(
+                user_id=user_id, company_id=company_id, role_id=role_id, assigned_by=assigned_by
+            )
         )
         await self._session.flush()
         return True
 
-    async def revoke_role_from_user(self, user_id: uuid.UUID, company_id: uuid.UUID, role_id: uuid.UUID) -> bool:
+    async def revoke_role_from_user(
+        self, user_id: uuid.UUID, company_id: uuid.UUID, role_id: uuid.UUID
+    ) -> bool:
         stmt = delete(UserRole).where(
             UserRole.user_id == user_id,
             UserRole.company_id == company_id,
@@ -303,7 +324,9 @@ class SqlAlchemyRoleRepository:
         result = await self._session.execute(stmt)
         return (result.rowcount or 0) > 0
 
-    async def list_user_role_assignments(self, user_id: uuid.UUID, company_id: uuid.UUID) -> Sequence[UserRoleAssignment]:
+    async def list_user_role_assignments(
+        self, user_id: uuid.UUID, company_id: uuid.UUID
+    ) -> Sequence[UserRoleAssignment]:
         stmt = (
             select(UserRole, ORMRole)
             .join(ORMRole, ORMRole.id == UserRole.role_id)

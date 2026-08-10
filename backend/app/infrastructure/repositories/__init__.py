@@ -11,6 +11,7 @@ from app.infrastructure.repositories.department_repository import (
 from app.infrastructure.repositories.employee_repository import (
     SqlAlchemyEmployeeRepository,
 )
+from app.infrastructure.repositories.lifecycle_repository import SqlAlchemyLifecycleRepository
 from app.infrastructure.repositories.operational_context_repository import (
     SqlAlchemyOperationalContextRepository,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "SqlAlchemyPermissionRepository",
     "SqlAlchemyDepartmentRepository",
     "SqlAlchemyEmployeeRepository",
+    "SqlAlchemyLifecycleRepository",
     "SqlAlchemyAuditRepository",
     "SqlAlchemyOperationalContextRepository",
     "SqlAlchemyCatalogRepository",

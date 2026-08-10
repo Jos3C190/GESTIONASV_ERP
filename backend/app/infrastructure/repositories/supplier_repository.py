@@ -105,7 +105,9 @@ class SqlAlchemySupplierRepository:
         orm = res.scalar_one_or_none()
         return _to_supplier(orm) if orm else None
 
-    async def get_supplier_by_uuid(self, company_id: uuid.UUID, supplier_uuid: uuid.UUID) -> Supplier | None:
+    async def get_supplier_by_uuid(
+        self, company_id: uuid.UUID, supplier_uuid: uuid.UUID
+    ) -> Supplier | None:
         stmt = (
             select(SupplierModel)
             .options(selectinload(SupplierModel.contacts))
@@ -150,7 +152,9 @@ class SqlAlchemySupplierRepository:
         await self._session.flush()
         return _to_supplier(orm)
 
-    async def update_supplier(self, company_id: uuid.UUID, supplier_id: int, **kwargs) -> Supplier | None:
+    async def update_supplier(
+        self, company_id: uuid.UUID, supplier_id: int, **kwargs
+    ) -> Supplier | None:
         stmt = (
             select(SupplierModel)
             .options(selectinload(SupplierModel.contacts))
@@ -167,6 +171,20 @@ class SqlAlchemySupplierRepository:
         return _to_supplier(orm)
 
     # Contacts
+    async def get_contact_by_id(
+        self, company_id: uuid.UUID, contact_id: int
+    ) -> SupplierContact | None:
+        stmt = (
+            select(SupplierContactModel)
+            .join(SupplierModel, SupplierModel.id_supplier == SupplierContactModel.id_supplier)
+            .where(
+                SupplierModel.company_id == company_id,
+                SupplierContactModel.id_supplier_contact == contact_id,
+            )
+        )
+        orm = (await self._session.execute(stmt)).scalar_one_or_none()
+        return _to_supplier_contact(orm) if orm else None
+
     async def add_contact(
         self,
         company_id: uuid.UUID,

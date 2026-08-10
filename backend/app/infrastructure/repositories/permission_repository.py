@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.rbac import Permission as DomainPermission
@@ -87,7 +88,12 @@ class SqlAlchemyPermissionRepository:
 
     async def delete(self, permission_id: uuid.UUID) -> bool:
         result = await self._session.execute(
-            delete(ORMPermission).where(ORMPermission.id == permission_id)
+            update(ORMPermission)
+            .where(ORMPermission.id == permission_id, ORMPermission.deleted_at.is_(None))
+            .values(
+                deleted_at=datetime.now(UTC),
+                deletion_reason="Eliminado desde Roles y permisos",
+            )
         )
         return (result.rowcount or 0) > 0
 

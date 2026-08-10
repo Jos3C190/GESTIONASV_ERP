@@ -14,6 +14,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.user import User as DomainUser
+from app.infrastructure.models.auth import PasswordResetToken, RefreshToken
 from app.infrastructure.models.organization import UserBranch, UserCompany
 from app.infrastructure.models.user import User as ORMUser
 
@@ -42,6 +43,24 @@ class SqlAlchemyUserRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def _revoke_auth_credentials(self, user_id: uuid.UUID, *, revoked_at: datetime) -> None:
+        await self._session.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=revoked_at)
+        )
+        await self._session.execute(
+            update(PasswordResetToken)
+            .where(
+                PasswordResetToken.user_id == user_id,
+                PasswordResetToken.used_at.is_(None),
+            )
+            .values(used_at=revoked_at)
+        )
 
     async def get_by_id(self, user_id: uuid.UUID) -> DomainUser | None:
         stmt = select(ORMUser).where(ORMUser.id == user_id, ORMUser.deleted_at.is_(None))
@@ -175,15 +194,23 @@ class SqlAlchemyUserRepository:
         orm = result.scalar_one_or_none()
         if orm is None:
             raise LookupError(f"User {user.id} not found")
+        if not user.is_active:
+            await self._revoke_auth_credentials(user.id, revoked_at=datetime.now(UTC))
         return _to_domain(orm)
 
-    async def soft_delete(self, user_id: uuid.UUID) -> bool:
-        from datetime import datetime
-
+    async def deactivate(self, user_id: uuid.UUID) -> bool:
+        revoked_at = datetime.now(UTC)
         stmt = (
             update(ORMUser)
-            .where(ORMUser.id == user_id, ORMUser.deleted_at.is_(None))
-            .values(deleted_at=datetime.now(UTC))
+            .where(
+                ORMUser.id == user_id,
+                ORMUser.deleted_at.is_(None),
+                ORMUser.is_active.is_(True),
+            )
+            .values(is_active=False)
         )
         result = await self._session.execute(stmt)
-        return (result.rowcount or 0) > 0
+        changed = (result.rowcount or 0) > 0
+        if changed:
+            await self._revoke_auth_credentials(user_id, revoked_at=revoked_at)
+        return changed

@@ -39,7 +39,9 @@ class SupplierUseCases:
             raise NotFoundError("Proveedor no encontrado", code="supplier_not_found")
         return supplier
 
-    async def get_supplier_by_uuid(self, company_id: uuid.UUID, supplier_uuid: uuid.UUID) -> Supplier:
+    async def get_supplier_by_uuid(
+        self, company_id: uuid.UUID, supplier_uuid: uuid.UUID
+    ) -> Supplier:
         supplier = await self._supplier_repo.get_supplier_by_uuid(company_id, supplier_uuid)
         if not supplier:
             raise NotFoundError("Proveedor no encontrado", code="supplier_not_found")
@@ -59,7 +61,9 @@ class SupplierUseCases:
         # Validate unique code
         existing = await self._supplier_repo.get_supplier_by_code(company_id, code)
         if existing:
-            raise ConflictError(f"El código de proveedor '{code}' ya existe", code="supplier_code_exists")
+            raise ConflictError(
+                f"El código de proveedor '{code}' ya existe", code="supplier_code_exists"
+            )
 
         # Validate country exists
         country = await self._catalog_repo.get_country_by_id(country_id)
@@ -77,25 +81,43 @@ class SupplierUseCases:
             website=website,
         )
 
-    async def update_supplier(self, company_id: uuid.UUID, supplier_id: int, **kwargs: object) -> Supplier:
+    async def update_supplier(
+        self, company_id: uuid.UUID, supplier_id: int, **kwargs: object
+    ) -> Supplier:
         current = await self.get_supplier(company_id, supplier_id)
-        if any(field in kwargs and kwargs[field] is None for field in ("code", "name", "country_id", "is_active")):
-            raise ValidationError("No se puede vaciar un campo obligatorio del proveedor.", code="supplier_required_field")
+        if any(
+            field in kwargs and kwargs[field] is None
+            for field in ("code", "name", "country_id", "is_active")
+        ):
+            raise ValidationError(
+                "No se puede vaciar un campo obligatorio del proveedor.",
+                code="supplier_required_field",
+            )
         if "country_id" in kwargs and kwargs["country_id"] is not None:
             country = await self._catalog_repo.get_country_by_id(kwargs["country_id"])
             if not country:
                 raise NotFoundError("País especificado no encontrado", code="country_not_found")
 
         if "code" in kwargs:
-            duplicate = await self._supplier_repo.get_supplier_by_code(company_id, str(kwargs["code"]))
+            duplicate = await self._supplier_repo.get_supplier_by_code(
+                company_id, str(kwargs["code"])
+            )
             if duplicate and duplicate.id != current.id:
-                raise ConflictError("El código ya está registrado en esta empresa.", code="supplier_code_exists")
+                raise ConflictError(
+                    "El código ya está registrado en esta empresa.", code="supplier_code_exists"
+                )
         supplier = await self._supplier_repo.update_supplier(company_id, supplier_id, **kwargs)
         if not supplier:
             raise NotFoundError("Proveedor no encontrado", code="supplier_not_found")
         return supplier
 
     # Contacts
+    async def get_contact(self, company_id: uuid.UUID, contact_id: int) -> SupplierContact:
+        contact = await self._supplier_repo.get_contact_by_id(company_id, contact_id)
+        if not contact:
+            raise NotFoundError("Contacto de proveedor no encontrado", code="contact_not_found")
+        return contact
+
     async def add_contact(
         self,
         company_id: uuid.UUID,
@@ -106,8 +128,7 @@ class SupplierUseCases:
     ) -> SupplierContact:
         await self.get_supplier(company_id, supplier_id)
         return await self._supplier_repo.add_contact(
-            company_id,
-            supplier_id=supplier_id, full_name=full_name, phone=phone, email=email
+            company_id, supplier_id=supplier_id, full_name=full_name, phone=phone, email=email
         )
 
     async def update_contact(

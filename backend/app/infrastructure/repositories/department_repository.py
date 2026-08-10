@@ -1,10 +1,12 @@
 """SQLAlchemy DepartmentRepository — with hierarchy + cycle detection."""
+
 from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.employee import Department as DomainDept
@@ -57,9 +59,7 @@ class SqlAlchemyDepartmentRepository:
         conditions = [ORMDept.company_id == company_id]
         if search:
             pattern = f"%{search.strip()}%"
-            conditions.append(
-                (ORMDept.name.ilike(pattern)) | (ORMDept.description.ilike(pattern))
-            )
+            conditions.append((ORMDept.name.ilike(pattern)) | (ORMDept.description.ilike(pattern)))
         if level == "root":
             conditions.append(ORMDept.parent_department_id.is_(None))
         elif level == "child":
@@ -78,7 +78,9 @@ class SqlAlchemyDepartmentRepository:
         return [_to_domain(record) for record in records], total
 
     async def list_children(self, parent_id: uuid.UUID) -> Sequence[DomainDept]:
-        stmt = select(ORMDept).where(ORMDept.parent_department_id == parent_id).order_by(ORMDept.name)
+        stmt = (
+            select(ORMDept).where(ORMDept.parent_department_id == parent_id).order_by(ORMDept.name)
+        )
         result = await self._session.execute(stmt)
         return [_to_domain(d) for d in result.scalars().all()]
 
@@ -111,7 +113,11 @@ class SqlAlchemyDepartmentRepository:
         stmt = (
             update(ORMDept)
             .where(ORMDept.id == dept.id)
-            .values(name=dept.name, description=dept.description, parent_department_id=dept.parent_department_id)
+            .values(
+                name=dept.name,
+                description=dept.description,
+                parent_department_id=dept.parent_department_id,
+            )
             .returning(ORMDept)
         )
         result = await self._session.execute(stmt)
@@ -121,7 +127,11 @@ class SqlAlchemyDepartmentRepository:
         return _to_domain(orm)
 
     async def delete(self, dept_id: uuid.UUID) -> bool:
-        stmt = delete(ORMDept).where(ORMDept.id == dept_id)
+        stmt = (
+            update(ORMDept)
+            .where(ORMDept.id == dept_id, ORMDept.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(UTC), deletion_reason="Eliminado desde Departamentos")
+        )
         result = await self._session.execute(stmt)
         return (result.rowcount or 0) > 0
 

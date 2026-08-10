@@ -1,4 +1,5 @@
 """SQLAlchemy EmployeeRepository."""
+
 from __future__ import annotations
 
 import uuid
@@ -44,16 +45,16 @@ class SqlAlchemyEmployeeRepository:
         self._session = session
 
     async def get_by_id(self, emp_id: uuid.UUID) -> DomainEmp | None:
-        stmt = select(ORMEmployee).where(
-            ORMEmployee.id == emp_id, ORMEmployee.deleted_at.is_(None)
-        )
+        stmt = select(ORMEmployee).where(ORMEmployee.id == emp_id, ORMEmployee.deleted_at.is_(None))
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
         return _to_domain(orm) if orm else None
 
     async def get_by_code(self, company_id: uuid.UUID, code: str) -> DomainEmp | None:
         stmt = select(ORMEmployee).where(
-            ORMEmployee.company_id == company_id, ORMEmployee.employee_code == code, ORMEmployee.deleted_at.is_(None)
+            ORMEmployee.company_id == company_id,
+            ORMEmployee.employee_code == code,
+            ORMEmployee.deleted_at.is_(None),
         )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
@@ -165,7 +166,10 @@ class SqlAlchemyEmployeeRepository:
         stmt = (
             update(ORMEmployee)
             .where(ORMEmployee.id == emp_id, ORMEmployee.deleted_at.is_(None))
-            .values(deleted_at=datetime.now(UTC))
+            .values(
+                deleted_at=datetime.now(UTC),
+                deletion_reason="Eliminado desde Empleados",
+            )
         )
         result = await self._session.execute(stmt)
         return (result.rowcount or 0) > 0
@@ -185,10 +189,14 @@ class SqlAlchemyEmployeeRepository:
         branch_id: uuid.UUID | None = None,
     ) -> EmployeeStats:
         """Single GROUP BY query — O(1) cost regardless of employee count."""
-        base = select(
-            ORMEmployee.status,
-            func.count(ORMEmployee.id).label("cnt"),
-        ).where(ORMEmployee.deleted_at.is_(None)).group_by(ORMEmployee.status)
+        base = (
+            select(
+                ORMEmployee.status,
+                func.count(ORMEmployee.id).label("cnt"),
+            )
+            .where(ORMEmployee.deleted_at.is_(None))
+            .group_by(ORMEmployee.status)
+        )
 
         linked_stmt = select(func.count(ORMEmployee.id)).where(
             ORMEmployee.deleted_at.is_(None),

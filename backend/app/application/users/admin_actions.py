@@ -3,11 +3,11 @@
 These are admin actions on a target user. All enforce the actor-vs-target and
 last-superadmin business rules where applicable.
 """
+
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
 from app.core.exceptions import AuthorizationError, BusinessRuleError, NotFoundError
 from app.core.logging import get_logger
@@ -90,7 +90,7 @@ class UnlockAccountUseCase:
         return result
 
 
-# ---------------- DeactivateUser (soft delete) ----------------
+# ---------------- DeactivateUser (operational state, not deletion) ----------------
 
 
 class DeactivateUserUseCase:
@@ -115,7 +115,9 @@ class DeactivateUserUseCase:
                     code="last_superadmin_protected",
                 )
 
-        ok = await self._users.soft_delete(target_id)
+        if not user.is_active:
+            return False
+        ok = await self._users.deactivate(target_id)
         if ok:
             log.info("user_deactivated", user_id=str(target_id), actor_id=str(actor_id))
         return ok

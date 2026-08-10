@@ -1,10 +1,11 @@
 """AuditService — helper to record audit log entries.
 
 Use cases call `AuditService.record(...)` after a successful (or failed) action.
-The service creates an AuditLog and persists it via the AuditRepository. It
-never raises — audit failures must not break the business operation (they are
-logged instead).
+The service creates an AuditLog and persists it via the AuditRepository.
+Telemetry is best-effort by default; regulated lifecycle mutations opt into a
+strict transactional append with ``required=True``.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -37,8 +38,13 @@ class AuditService:
         user_agent: str | None = None,
         status: str = "success",
         metadata: dict[str, Any] | None = None,
+        required: bool = False,
     ) -> None:
-        """Record an audit entry. Never raises — logs on failure."""
+        """Append an audit entry, optionally as a transactional requirement.
+
+        Most telemetry remains best-effort. Regulated lifecycle mutations pass
+        ``required=True`` so a failed append aborts their database transaction.
+        """
         try:
             entry = AuditLog(
                 id=uuid.uuid4(),
@@ -59,6 +65,8 @@ class AuditService:
             await self._repo.add(entry)
         except Exception as exc:
             log.warning("audit_record_failed", action=action, error=str(exc))
+            if required:
+                raise
 
 
 def user_to_audit_state(user: object) -> dict[str, Any]:
@@ -91,9 +99,7 @@ def employee_to_audit_state(emp: object) -> dict[str, Any]:
         "department_id": str(getattr(emp, "department_id", "")) or None,
         "position": getattr(emp, "position", None),
         "hire_date": (
-            getattr(emp, "hire_date", None).isoformat()
-            if getattr(emp, "hire_date", None)
-            else None
+            getattr(emp, "hire_date", None).isoformat() if getattr(emp, "hire_date", None) else None
         ),
         "termination_date": (
             getattr(emp, "termination_date", None).isoformat()

@@ -1,4 +1,5 @@
 """Use case: GetCurrentUser — return the authenticated user's profile."""
+
 from __future__ import annotations
 
 import uuid
@@ -22,4 +23,6 @@ class GetCurrentUserUseCase:
         user = await self._users.get_by_id(user_id)
         if user is None or user.is_deleted:
             raise AuthenticationError("Usuario no encontrado.", code="user_not_found")
+        if not user.is_active:
+            raise AuthenticationError("La cuenta está inactiva.", code="account_inactive")
         return GetCurrentUserResult(user=user)

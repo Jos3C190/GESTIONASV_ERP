@@ -42,4 +42,5 @@ class UserRepository(Protocol):
 
     async def update(self, user: User) -> User: ...
 
-    async def soft_delete(self, user_id: uuid.UUID) -> bool: ...
+    async def deactivate(self, user_id: uuid.UUID) -> bool:
+        """Disable login while retaining the visible user record."""
