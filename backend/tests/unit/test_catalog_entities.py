@@ -35,8 +35,8 @@ def test_category_and_subcategory():
 
 def test_unit_and_product():
     company_id = uuid.uuid4()
-    u_buy = Unit(id=1, name="Kilogramo", type="Masa")
-    u_sale = Unit(id=2, name="Unidad", type="Cantidad")
+    u_buy = Unit(id=1, name="Kilogramo", type="Masa", code="KILOGRAM", symbol="kg")
+    u_sale = Unit(id=2, name="Unidad", type="Cantidad", code="UNIT", symbol="u")
     p_uuid = uuid.uuid4()
 
     p = Product(

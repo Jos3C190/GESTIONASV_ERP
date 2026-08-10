@@ -48,16 +48,28 @@ class CatalogRepository(Protocol):
         ...
 
     # Units
-    async def list_units(self, active_only: bool = True) -> list[Unit]:
+    async def list_units(self, company_id: uuid.UUID, active_only: bool = True) -> list[Unit]:
         ...
 
-    async def get_unit_by_id(self, unit_id: int) -> Unit | None:
+    async def list_global_units(self, active_only: bool = False) -> list[Unit]:
         ...
 
-    async def create_unit(self, name: str, type_: str) -> Unit:
+    async def get_unit_by_id(self, company_id: uuid.UUID, unit_id: int, *, require_enabled: bool = False) -> Unit | None:
         ...
 
-    async def update_unit(self, unit_id: int, name: str | None = None, type_: str | None = None, is_active: bool | None = None) -> Unit | None:
+    async def get_unit_by_code(self, company_id: uuid.UUID | None, code: str) -> Unit | None:
+        ...
+
+    async def count_unit_usage(self, unit_id: int, company_id: uuid.UUID | None = None) -> int:
+        ...
+
+    async def create_unit(self, company_id: uuid.UUID | None, **values: object) -> Unit:
+        ...
+
+    async def update_unit(self, company_id: uuid.UUID | None, unit_id: int, expected_version: int, **changes: object) -> Unit | None:
+        ...
+
+    async def configure_unit(self, company_id: uuid.UUID, unit_id: int, expected_version: int, *, enabled: bool, alias: str | None = None) -> Unit | None:
         ...
 
     # Products

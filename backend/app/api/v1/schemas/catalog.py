@@ -73,21 +73,44 @@ class SubCategoryResponse(ORMOut):
 class UnitCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     type: str = Field(..., min_length=1, max_length=50)
+    code: str = Field(..., min_length=1, max_length=40, pattern=r"^[A-Za-z0-9._-]+$")
+    symbol: str = Field(..., min_length=1, max_length=20)
+    description: str | None = Field(None, max_length=500)
 
 
 class UnitUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     type: str | None = Field(None, min_length=1, max_length=50)
     is_active: bool | None = None
+    code: str | None = Field(None, min_length=1, max_length=40, pattern=r"^[A-Za-z0-9._-]+$")
+    symbol: str | None = Field(None, min_length=1, max_length=20)
+    description: str | None = Field(None, max_length=500)
+    alias: str | None = Field(None, max_length=100)
+    version: int = Field(..., ge=1)
 
 
 class UnitResponse(ORMOut):
     id: int = Field(..., serialization_alias="id_unit")
     name: str
     type: str
+    code: str
+    symbol: str
+    owner_company_id: uuid.UUID | None = None
+    description: str | None = None
+    is_standard: bool
+    is_enabled: bool
+    alias: str | None = None
+    version: int
+    configuration_version: int
+    usage_count: int = 0
     is_active: bool
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class UnitConfigurationUpdate(BaseModel):
+    version: int = Field(..., ge=1)
+    alias: str | None = Field(None, max_length=100)
 
 
 # --- Product ---

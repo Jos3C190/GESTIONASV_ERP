@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.core.exceptions import ConcurrencyError, ConflictError, NotFoundError, ValidationError
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit
 from app.domain.ports.catalog_repository import CatalogRepository
 
@@ -71,19 +71,88 @@ class CatalogUseCases:
         return sub
 
     # --- Units ---
-    async def list_units(self, active_only: bool = True) -> list[Unit]:
-        return await self._repo.list_units(active_only=active_only)
+    async def list_units(self, company_id: uuid.UUID, active_only: bool = True) -> list[Unit]:
+        return await self._repo.list_units(company_id, active_only=active_only)
 
-    async def create_unit(self, name: str, type_: str) -> Unit:
-        return await self._repo.create_unit(name=name, type_=type_)
+    async def list_global_units(self, active_only: bool = False) -> list[Unit]:
+        return await self._repo.list_global_units(active_only=active_only)
+
+    async def get_unit(self, company_id: uuid.UUID, unit_id: int, *, require_enabled: bool = False) -> Unit:
+        unit = await self._repo.get_unit_by_id(company_id, unit_id, require_enabled=require_enabled)
+        if not unit:
+            raise NotFoundError("Unidad de medida no disponible para esta empresa", code="unit_not_available")
+        return unit
+
+    async def create_unit(
+        self,
+        company_id: uuid.UUID | None,
+        *,
+        name: str,
+        type_: str,
+        code: str,
+        symbol: str,
+        description: str | None = None,
+    ) -> Unit:
+        if await self._repo.get_unit_by_code(company_id, code):
+            raise ConflictError(
+                f"El código '{code.strip().upper()}' ya está registrado o reservado por una unidad estándar.",
+                code="unit_code_already_exists",
+            )
+        return await self._repo.create_unit(
+            company_id,
+            name=name,
+            type_=type_,
+            code=code,
+            symbol=symbol,
+            description=description,
+        )
 
     async def update_unit(
-        self, unit_id: int, name: str | None = None, type_: str | None = None, is_active: bool | None = None
+        self,
+        company_id: uuid.UUID | None,
+        unit_id: int,
+        expected_version: int,
+        **changes: object,
     ) -> Unit:
-        unit = await self._repo.update_unit(unit_id=unit_id, name=name, type_=type_, is_active=is_active)
+        if changes.get("is_active") is False:
+            usage = await self._repo.count_unit_usage(unit_id, company_id)
+            if usage:
+                raise ConflictError(
+                    f"La unidad está vinculada a {usage} producto(s) y no puede desactivarse.",
+                    code="unit_in_use",
+                )
+        unit = await self._repo.update_unit(company_id, unit_id, expected_version, **changes)
         if not unit:
-            raise NotFoundError("Unidad de medida no encontrada", code="unit_not_found")
+            raise ConcurrencyError(
+                "La unidad fue modificada por otro usuario o ya no está disponible. Recargue e intente de nuevo.",
+                code="unit_version_conflict",
+            )
         return unit
+
+    async def configure_unit(
+        self,
+        company_id: uuid.UUID,
+        unit_id: int,
+        expected_version: int,
+        *,
+        enabled: bool,
+        alias: str | None = None,
+    ) -> Unit:
+        current = await self.get_unit(company_id, unit_id)
+        if not enabled and current.usage_count > 0:
+            raise ConflictError(
+                f"La unidad está vinculada a {current.usage_count} producto(s) y no puede desactivarse.",
+                code="unit_in_use",
+            )
+        updated = await self._repo.configure_unit(
+            company_id, unit_id, expected_version, enabled=enabled, alias=alias
+        )
+        if not updated:
+            raise ConcurrencyError(
+                "La configuración fue modificada por otro usuario. Recargue e intente de nuevo.",
+                code="unit_version_conflict",
+            )
+        return updated
 
     # --- Products ---
     async def list_products(
@@ -151,11 +220,11 @@ class CatalogUseCases:
                     code="subcategory_category_mismatch",
                 )
 
-        unit_p = await self._repo.get_unit_by_id(purchase_unit_id)
+        unit_p = await self._repo.get_unit_by_id(company_id, purchase_unit_id, require_enabled=True)
         if not unit_p:
             raise NotFoundError("Unidad de compra no encontrada", code="purchase_unit_not_found")
 
-        unit_s = await self._repo.get_unit_by_id(sale_unit_id)
+        unit_s = await self._repo.get_unit_by_id(company_id, sale_unit_id, require_enabled=True)
         if not unit_s:
             raise NotFoundError("Unidad de venta no encontrada", code="sale_unit_not_found")
 
@@ -195,7 +264,7 @@ class CatalogUseCases:
                 )
         for field, code in (("purchase_unit_id", "purchase_unit_not_found"), ("sale_unit_id", "sale_unit_not_found")):
             unit_id = int(changes.get(field, getattr(current, field)))
-            if await self._repo.get_unit_by_id(unit_id) is None:
+            if await self._repo.get_unit_by_id(company_id, unit_id, require_enabled=True) is None:
                 raise NotFoundError("Unidad de medida no encontrada", code=code)
         if "sku" in changes:
             duplicate = await self._repo.get_product_by_sku(company_id, str(changes["sku"]))

@@ -2,47 +2,74 @@
 `Base.metadata`.
 """
 
-from app.infrastructure.models.audit import AuditLog  # noqa: F401
-from app.infrastructure.models.auth import PasswordResetToken, RefreshToken  # noqa: F401
-from app.infrastructure.models.catalog import (  # noqa: F401
-    CategoryModel, CountryModel, ProductModel, SubCategoryModel, UnitModel,
+from app.infrastructure.models.audit import AuditLog
+from app.infrastructure.models.auth import PasswordResetToken, RefreshToken
+from app.infrastructure.models.catalog import (
+    CategoryModel,
+    CompanyUnitModel,
+    CountryModel,
+    ProductModel,
+    SubCategoryModel,
+    UnitModel,
 )
-from app.infrastructure.models.employee import Department, DepartmentBranchAssignment, Employee, EmployeeBranchAssignment  # noqa: F401
-from app.infrastructure.models.media import MediaAsset  # noqa: F401
-from app.infrastructure.models.organization import (  # noqa: F401
-    Branch, Company, District, GeographicDepartment, Location, Municipality,
-    UserBranch, UserCompany, Warehouse, WarehouseCategory,
+from app.infrastructure.models.employee import (
+    Department,
+    DepartmentBranchAssignment,
+    Employee,
+    EmployeeBranchAssignment,
 )
-from app.infrastructure.models.rbac import (  # noqa: F401
+from app.infrastructure.models.media import MediaAsset
+from app.infrastructure.models.organization import (
+    Branch,
+    Company,
+    District,
+    GeographicDepartment,
+    Location,
+    Municipality,
+    UserBranch,
+    UserCompany,
+    Warehouse,
+    WarehouseCategory,
+)
+from app.infrastructure.models.rbac import (
     Permission,
     Role,
     RolePermission,
     UserRole,
 )
-from app.infrastructure.models.supplier import SupplierContactModel, SupplierModel  # noqa: F401
-from app.infrastructure.models.user import User  # noqa: F401
+from app.infrastructure.models.supplier import SupplierContactModel, SupplierModel
+from app.infrastructure.models.user import User
 
 __all__: list[str] = [
-    "User",
-    "RefreshToken",
-    "PasswordResetToken",
-    "Role",
-    "Permission",
-    "RolePermission",
-    "UserRole",
+    "AuditLog",
+    "Branch",
+    "CategoryModel",
+    "Company",
+    "CompanyUnitModel",
+    "CountryModel",
     "Department",
+    "DepartmentBranchAssignment",
+    "District",
     "Employee",
     "EmployeeBranchAssignment",
-    "DepartmentBranchAssignment",
-    "AuditLog",
-    "GeographicDepartment", "Municipality", "District", "Company", "Branch",
-    "WarehouseCategory", "Warehouse", "Location", "UserCompany", "UserBranch",
+    "GeographicDepartment",
+    "Location",
     "MediaAsset",
-    "CountryModel",
-    "CategoryModel",
-    "SubCategoryModel",
-    "UnitModel",
+    "Municipality",
+    "PasswordResetToken",
+    "Permission",
     "ProductModel",
-    "SupplierModel",
+    "RefreshToken",
+    "Role",
+    "RolePermission",
+    "SubCategoryModel",
     "SupplierContactModel",
+    "SupplierModel",
+    "UnitModel",
+    "User",
+    "UserBranch",
+    "UserCompany",
+    "UserRole",
+    "Warehouse",
+    "WarehouseCategory",
 ]

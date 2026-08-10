@@ -63,14 +63,41 @@ export const catalogApi = {
   listUnits: (activeOnly = true) =>
     apiFetch<Unit[]>(`/catalog/units?active_only=${activeOnly}`),
 
-  createUnit: (data: { name: string; type: string }) =>
+  createUnit: (data: { name: string; type: string; code: string; symbol: string; description?: string }) =>
     apiFetch<Unit>('/catalog/units', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  updateUnit: (id: number, data: Partial<{ name: string; type: string; is_active: boolean }>) =>
+  updateUnit: (id: number, data: Partial<{ name: string; type: string; code: string; symbol: string; description: string; is_active: boolean }> & { version: number }) =>
     apiFetch<Unit>(`/catalog/units/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  activateUnit: (id: number, version: number, alias?: string | null) =>
+    apiFetch<Unit>(`/catalog/units/${id}/activate`, {
+      method: 'POST',
+      body: JSON.stringify({ version, alias }),
+    }),
+
+  deactivateUnit: (id: number, version: number, alias?: string | null) =>
+    apiFetch<Unit>(`/catalog/units/${id}/deactivate`, {
+      method: 'POST',
+      body: JSON.stringify({ version, alias }),
+    }),
+
+  listGlobalUnits: (activeOnly = false) =>
+    apiFetch<Unit[]>(`/catalog/units/global?active_only=${activeOnly}`),
+
+  createGlobalUnit: (data: { name: string; type: string; code: string; symbol: string; description?: string }) =>
+    apiFetch<Unit>('/catalog/units/global', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateGlobalUnit: (id: number, data: Partial<{ name: string; type: string; code: string; symbol: string; description: string; is_active: boolean }> & { version: number }) =>
+    apiFetch<Unit>(`/catalog/units/global/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),

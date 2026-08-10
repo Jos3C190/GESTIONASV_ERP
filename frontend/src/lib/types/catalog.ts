@@ -33,6 +33,16 @@ export interface Unit {
   id_unit: number;
   name: string;
   type: string;
+  code: string;
+  symbol: string;
+  owner_company_id?: string | null;
+  description?: string | null;
+  is_standard: boolean;
+  is_enabled: boolean;
+  alias?: string | null;
+  version: number;
+  configuration_version: number;
+  usage_count: number;
   is_active: boolean;
   created_at?: string;
   updated_at?: string;

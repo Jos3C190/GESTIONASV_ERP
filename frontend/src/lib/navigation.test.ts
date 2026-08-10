@@ -19,7 +19,7 @@ describe('catalog navigation', () => {
     expect(itemByRoute('/inventory/units')).toMatchObject({
       label: 'Unidades de medida',
       implemented: true,
-      requiredPermission: 'reference_data:read'
+      requiredPermission: 'units:read'
     });
   });
 

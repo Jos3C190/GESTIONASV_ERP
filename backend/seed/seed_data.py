@@ -11,7 +11,11 @@ Run with::
 
 from __future__ import annotations
 
+import asyncio
+
+from seed.seed_catalog import main as seed_catalog
 from seed.seed_grupo_lorena import main
 
 if __name__ == "__main__":
     main()
+    asyncio.run(seed_catalog())

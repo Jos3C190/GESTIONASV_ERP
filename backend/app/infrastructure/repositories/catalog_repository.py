@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit
 from app.infrastructure.models.catalog import (
     CategoryModel,
+    CompanyUnitModel,
     CountryModel,
     ProductModel,
     SubCategoryModel,
@@ -56,11 +57,21 @@ def _to_sub_category(orm: SubCategoryModel) -> SubCategory:
     )
 
 
-def _to_unit(orm: UnitModel) -> Unit:
+def _to_unit(orm: UnitModel, config: CompanyUnitModel | None = None, usage_count: int = 0) -> Unit:
     return Unit(
         id=orm.id_unit,
         name=orm.name,
         type=orm.type,
+        code=orm.code,
+        symbol=orm.symbol,
+        owner_company_id=orm.owner_company_id,
+        description=orm.description,
+        is_standard=orm.is_standard,
+        is_enabled=config.is_enabled if config else orm.is_active,
+        alias=config.alias if config else None,
+        version=orm.version,
+        configuration_version=config.version if config else orm.version,
+        usage_count=usage_count,
         is_active=orm.is_active,
         created_at=orm.created_at,
         updated_at=orm.updated_at,
@@ -206,42 +217,151 @@ class SqlAlchemyCatalogRepository:
         return _to_sub_category(orm)
 
     # --- Units ---
-    async def list_units(self, active_only: bool = True) -> list[Unit]:
-        stmt = select(UnitModel)
+    async def list_units(self, company_id: uuid.UUID, active_only: bool = True) -> list[Unit]:
+        usage = (
+            select(func.count(ProductModel.id_product))
+            .where(
+                ProductModel.company_id == company_id,
+                or_(ProductModel.purchase_unit == UnitModel.id_unit, ProductModel.sale_unit == UnitModel.id_unit),
+            )
+            .correlate(UnitModel)
+            .scalar_subquery()
+        )
+        stmt = (
+            select(UnitModel, CompanyUnitModel, usage)
+            .join(CompanyUnitModel, CompanyUnitModel.unit_id == UnitModel.id_unit)
+            .where(
+                CompanyUnitModel.company_id == company_id,
+                or_(UnitModel.owner_company_id.is_(None), UnitModel.owner_company_id == company_id),
+            )
+        )
+        if active_only:
+            stmt = stmt.where(UnitModel.is_active.is_(True), CompanyUnitModel.is_enabled.is_(True))
+        stmt = stmt.order_by(UnitModel.is_standard.desc(), UnitModel.name)
+        res = await self._session.execute(stmt)
+        return [_to_unit(unit, config, int(count or 0)) for unit, config, count in res.all()]
+
+    async def list_global_units(self, active_only: bool = False) -> list[Unit]:
+        stmt = select(UnitModel).where(UnitModel.owner_company_id.is_(None))
         if active_only:
             stmt = stmt.where(UnitModel.is_active.is_(True))
-        stmt = stmt.order_by(UnitModel.name)
-        res = await self._session.execute(stmt)
-        return [_to_unit(u) for u in res.scalars().all()]
+        result = await self._session.execute(stmt.order_by(UnitModel.name))
+        return [_to_unit(unit) for unit in result.scalars().all()]
 
-    async def get_unit_by_id(self, unit_id: int) -> Unit | None:
-        stmt = select(UnitModel).where(UnitModel.id_unit == unit_id)
+    async def get_unit_by_id(
+        self, company_id: uuid.UUID, unit_id: int, *, require_enabled: bool = False
+    ) -> Unit | None:
+        usage = (
+            select(func.count(ProductModel.id_product))
+            .where(
+                ProductModel.company_id == company_id,
+                or_(ProductModel.purchase_unit == unit_id, ProductModel.sale_unit == unit_id),
+            )
+            .scalar_subquery()
+        )
+        stmt = (
+            select(UnitModel, CompanyUnitModel, usage)
+            .join(CompanyUnitModel, CompanyUnitModel.unit_id == UnitModel.id_unit)
+            .where(
+                UnitModel.id_unit == unit_id,
+                CompanyUnitModel.company_id == company_id,
+                or_(UnitModel.owner_company_id.is_(None), UnitModel.owner_company_id == company_id),
+            )
+        )
+        if require_enabled:
+            stmt = stmt.where(UnitModel.is_active.is_(True), CompanyUnitModel.is_enabled.is_(True))
         res = await self._session.execute(stmt)
-        orm = res.scalar_one_or_none()
-        return _to_unit(orm) if orm else None
+        row = res.one_or_none()
+        return _to_unit(row[0], row[1], int(row[2] or 0)) if row else None
 
-    async def create_unit(self, name: str, type_: str) -> Unit:
-        orm = UnitModel(name=name, type=type_)
+    async def get_unit_by_code(self, company_id: uuid.UUID | None, code: str) -> Unit | None:
+        scope = UnitModel.owner_company_id.is_(None)
+        if company_id is not None:
+            scope = or_(UnitModel.owner_company_id.is_(None), UnitModel.owner_company_id == company_id)
+        result = await self._session.execute(
+            select(UnitModel).where(scope, func.lower(UnitModel.code) == code.strip().lower())
+        )
+        unit = result.scalars().first()
+        return _to_unit(unit) if unit else None
+
+    async def count_unit_usage(self, unit_id: int, company_id: uuid.UUID | None = None) -> int:
+        stmt = select(func.count(ProductModel.id_product)).where(
+            or_(ProductModel.purchase_unit == unit_id, ProductModel.sale_unit == unit_id)
+        )
+        if company_id is not None:
+            stmt = stmt.where(ProductModel.company_id == company_id)
+        return int((await self._session.scalar(stmt)) or 0)
+
+    async def create_unit(self, company_id: uuid.UUID | None, **values: object) -> Unit:
+        orm = UnitModel(
+            owner_company_id=company_id,
+            is_standard=company_id is None,
+            name=str(values["name"]).strip(),
+            type=str(values["type_"]).strip(),
+            code=str(values["code"]).strip().upper(),
+            symbol=str(values["symbol"]).strip(),
+            description=values.get("description"),
+        )
         self._session.add(orm)
+        await self._session.flush()
+        if company_id is not None:
+            config = CompanyUnitModel(company_id=company_id, unit_id=orm.id_unit)
+            self._session.add(config)
+            await self._session.flush()
+            return _to_unit(orm, config)
+        # Standards become available to every existing company.
+        from app.infrastructure.models.organization import Company
+
+        company_ids = (await self._session.execute(select(Company.id))).scalars().all()
+        for existing_company_id in company_ids:
+            self._session.add(CompanyUnitModel(company_id=existing_company_id, unit_id=orm.id_unit))
         await self._session.flush()
         return _to_unit(orm)
 
     async def update_unit(
-        self, unit_id: int, name: str | None = None, type_: str | None = None, is_active: bool | None = None
+        self, company_id: uuid.UUID | None, unit_id: int, expected_version: int, **changes: object
     ) -> Unit | None:
-        stmt = select(UnitModel).where(UnitModel.id_unit == unit_id)
+        stmt = select(UnitModel).where(UnitModel.id_unit == unit_id, UnitModel.owner_company_id == company_id)
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         if not orm:
             return None
-        if name is not None:
-            orm.name = name
-        if type_ is not None:
-            orm.type = type_
-        if is_active is not None:
-            orm.is_active = is_active
+        if orm.version != expected_version:
+            return None
+        field_map = {"type_": "type"}
+        for field in ("name", "type_", "code", "symbol", "description", "is_active"):
+            if field in changes and changes[field] is not None:
+                value = changes[field]
+                if field == "code":
+                    value = str(value).strip().upper()
+                setattr(orm, field_map.get(field, field), value)
+        orm.version += 1
         await self._session.flush()
-        return _to_unit(orm)
+        if company_id is None:
+            return _to_unit(orm)
+        config = await self._session.get(CompanyUnitModel, (company_id, unit_id))
+        return _to_unit(orm, config)
+
+    async def configure_unit(
+        self,
+        company_id: uuid.UUID,
+        unit_id: int,
+        expected_version: int,
+        *,
+        enabled: bool,
+        alias: str | None = None,
+    ) -> Unit | None:
+        config = await self._session.get(CompanyUnitModel, (company_id, unit_id))
+        if config is None or config.version != expected_version:
+            return None
+        unit = await self._session.get(UnitModel, unit_id)
+        if unit is None or (unit.owner_company_id is not None and unit.owner_company_id != company_id):
+            return None
+        config.is_enabled = enabled
+        config.alias = alias.strip() if alias else None
+        config.version += 1
+        await self._session.flush()
+        return _to_unit(unit, config)
 
     # --- Products ---
     async def list_products(

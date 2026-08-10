@@ -151,7 +151,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: ICONS.pricing,
         route: '/inventory/units',
         implemented: true,
-        requiredPermission: 'reference_data:read'
+        requiredPermission: 'units:read'
       },
       {
         label: 'Cotizaciones de compra',

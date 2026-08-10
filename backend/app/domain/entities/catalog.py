@@ -47,6 +47,16 @@ class Unit:
     id: int
     name: str
     type: str
+    code: str
+    symbol: str
+    owner_company_id: uuid.UUID | None = None
+    description: str | None = None
+    is_standard: bool = True
+    is_enabled: bool = True
+    alias: str | None = None
+    version: int = 1
+    configuration_version: int = 1
+    usage_count: int = 0
     is_active: bool = True
     created_at: datetime | None = None
     updated_at: datetime | None = None

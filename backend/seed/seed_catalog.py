@@ -8,6 +8,7 @@ import logging
 from app.infrastructure.db.session import session_scope
 from app.infrastructure.models.catalog import (
     CategoryModel,
+    CompanyUnitModel,
     CountryModel,
     ProductModel,
     SubCategoryModel,
@@ -119,17 +120,17 @@ COUNTRIES_DATA = [
 ]
 
 UNITS_DATA = [
-    {"name": "Unidad (u)", "type": "Cantidad"},
-    {"name": "Caja (cj)", "type": "Empaque"},
-    {"name": "Paquete (pq)", "type": "Empaque"},
-    {"name": "Kilogramo (kg)", "type": "Masa"},
-    {"name": "Gramo (g)", "type": "Masa"},
-    {"name": "Libra (lb)", "type": "Masa"},
-    {"name": "Litro (L)", "type": "Volumen"},
-    {"name": "Mililitro (ml)", "type": "Volumen"},
-    {"name": "Galón (gal)", "type": "Volumen"},
-    {"name": "Metro (m)", "type": "Longitud"},
-    {"name": "Centímetro (cm)", "type": "Longitud"},
+    {"code": "UNIT", "symbol": "u", "name": "Unidad (u)", "type": "Cantidad"},
+    {"code": "BOX", "symbol": "cj", "name": "Caja (cj)", "type": "Empaque"},
+    {"code": "PACK", "symbol": "pq", "name": "Paquete (pq)", "type": "Empaque"},
+    {"code": "KILOGRAM", "symbol": "kg", "name": "Kilogramo (kg)", "type": "Masa"},
+    {"code": "GRAM", "symbol": "g", "name": "Gramo (g)", "type": "Masa"},
+    {"code": "POUND", "symbol": "lb", "name": "Libra (lb)", "type": "Masa"},
+    {"code": "LITER", "symbol": "L", "name": "Litro (L)", "type": "Volumen"},
+    {"code": "MILLILITER", "symbol": "mL", "name": "Mililitro (ml)", "type": "Volumen"},
+    {"code": "GALLON", "symbol": "gal", "name": "Galón (gal)", "type": "Volumen"},
+    {"code": "METER", "symbol": "m", "name": "Metro (m)", "type": "Longitud"},
+    {"code": "CENTIMETER", "symbol": "cm", "name": "Centímetro (cm)", "type": "Longitud"},
 ]
 
 CATEGORIES_DATA = [
@@ -186,9 +187,16 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
         res = await db.execute(stmt)
         u = res.scalar_one_or_none()
         if not u:
-            u = UnitModel(**unit)
+            u = UnitModel(**unit, owner_company_id=None, is_standard=True)
             db.add(u)
             await db.flush()
+        elif u.is_standard:
+            u.code = unit["code"]
+            u.symbol = unit["symbol"]
+            u.type = unit["type"]
+        config = await db.get(CompanyUnitModel, (company_id, u.id_unit))
+        if config is None:
+            db.add(CompanyUnitModel(company_id=company_id, unit_id=u.id_unit))
         units_map[unit["name"]] = u.id_unit
     logger.info("Units seeded.")
 

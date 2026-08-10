@@ -22,6 +22,7 @@ from app.api.v1.schemas.catalog import (
     SubCategoryCreate,
     SubCategoryResponse,
     SubCategoryUpdate,
+    UnitConfigurationUpdate,
     UnitCreate,
     UnitResponse,
     UnitUpdate,
@@ -226,10 +227,72 @@ async def update_sub_category(
     dependencies=[Depends(require_permission("reference_data:read"))],
 )
 async def list_units(
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
     active_only: bool = Query(True),
     use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
 ) -> list[UnitResponse]:
-    return await use_cases.list_units(active_only=active_only)
+    company_id = request_company_id(request)
+    await require_company_access(session, current, company_id)
+    return await use_cases.list_units(company_id, active_only=active_only)
+
+
+@router.get(
+    "/units/global",
+    response_model=list[UnitResponse],
+    dependencies=[Depends(require_permission("units:manage_global"))],
+    summary="Listar catálogo global de unidades",
+)
+async def list_global_units(
+    current: CurrentUser,
+    active_only: bool = Query(False),
+    use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
+) -> list[UnitResponse]:
+    if not current.is_superuser:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso reservado al superadministrador.")
+    return await use_cases.list_global_units(active_only=active_only)
+
+
+@router.post(
+    "/units/global",
+    response_model=UnitResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("units:manage_global"))],
+    summary="Crear unidad estándar global",
+)
+async def create_global_unit(
+    payload: UnitCreate,
+    current: CurrentUser,
+    audit: AuditService = Depends(get_audit_service),
+    use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
+) -> UnitResponse:
+    if not current.is_superuser:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso reservado al superadministrador.")
+    created = await use_cases.create_unit(None, name=payload.name, type_=payload.type, code=payload.code, symbol=payload.symbol, description=payload.description)
+    await audit.record(action="CREATE", user_id=current.id, resource_type="measurement_units_global", resource_id=str(created.id), after_state={"code": created.code, "name": created.name})
+    return created
+
+
+@router.put(
+    "/units/global/{unit_id}",
+    response_model=UnitResponse,
+    dependencies=[Depends(require_permission("units:manage_global"))],
+    summary="Actualizar unidad estándar global",
+)
+async def update_global_unit(
+    unit_id: int,
+    payload: UnitUpdate,
+    current: CurrentUser,
+    audit: AuditService = Depends(get_audit_service),
+    use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
+) -> UnitResponse:
+    if not current.is_superuser:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso reservado al superadministrador.")
+    changes = payload.model_dump(exclude={"version"}, exclude_unset=True)
+    updated = await use_cases.update_unit(None, unit_id, payload.version, **changes)
+    await audit.record(action="UPDATE", user_id=current.id, resource_type="measurement_units_global", resource_id=str(unit_id), after_state={"code": updated.code, "name": updated.name, "version": updated.version})
+    return updated
 
 
 @router.post(
@@ -237,16 +300,21 @@ async def list_units(
     response_model=UnitResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Crear unidad de medida",
-    dependencies=[Depends(require_permission("products:manage"))],
+    dependencies=[Depends(require_permission("units:create"))],
 )
 async def create_unit(
     payload: UnitCreate,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
+    audit: AuditService = Depends(get_audit_service),
     use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
 ) -> UnitResponse:
-    if not current.is_superuser:
-        raise HTTPException(403, "Las unidades de medida son administradas globalmente.")
-    return await use_cases.create_unit(name=payload.name, type_=payload.type)
+    company_id = request_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
+    created = await use_cases.create_unit(company_id, name=payload.name, type_=payload.type, code=payload.code, symbol=payload.symbol, description=payload.description)
+    await audit.record(action="CREATE", user_id=current.id, company_id=company_id, resource_type="measurement_units", resource_id=str(created.id), after_state={"code": created.code, "name": created.name})
+    return created
 
 
 @router.put(
@@ -254,19 +322,54 @@ async def create_unit(
     response_model=UnitResponse,
     status_code=status.HTTP_200_OK,
     summary="Actualizar unidad de medida",
-    dependencies=[Depends(require_permission("products:manage"))],
+    dependencies=[Depends(require_permission("units:update"))],
 )
 async def update_unit(
     unit_id: int,
     payload: UnitUpdate,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
+    audit: AuditService = Depends(get_audit_service),
     use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
 ) -> UnitResponse:
-    if not current.is_superuser:
-        raise HTTPException(403, "Las unidades de medida son administradas globalmente.")
-    return await use_cases.update_unit(
-        unit_id=unit_id, name=payload.name, type_=payload.type, is_active=payload.is_active
-    )
+    company_id = request_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
+    before = await use_cases.get_unit(company_id, unit_id)
+    if before.is_standard:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Las unidades estándar solo pueden configurarse, no editarse.")
+    changes = payload.model_dump(exclude={"version", "alias"}, exclude_unset=True)
+    updated = await use_cases.update_unit(company_id, unit_id, payload.version, **changes)
+    await audit.record(action="UPDATE", user_id=current.id, company_id=company_id, resource_type="measurement_units", resource_id=str(unit_id), before_state={"code": before.code, "name": before.name, "version": before.version}, after_state={"code": updated.code, "name": updated.name, "version": updated.version})
+    return updated
+
+
+async def _configure_unit(
+    unit_id: int,
+    payload: UnitConfigurationUpdate,
+    enabled: bool,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: CatalogUseCases,
+    audit: AuditService,
+) -> UnitResponse:
+    company_id = request_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
+    before = await use_cases.get_unit(company_id, unit_id)
+    updated = await use_cases.configure_unit(company_id, unit_id, payload.version, enabled=enabled, alias=payload.alias)
+    await audit.record(action="ACTIVATE" if enabled else "DEACTIVATE", user_id=current.id, company_id=company_id, resource_type="company_units", resource_id=str(unit_id), before_state={"is_enabled": before.is_enabled, "alias": before.alias, "version": before.version}, after_state={"is_enabled": updated.is_enabled, "alias": updated.alias, "version": updated.version})
+    return updated
+
+
+@router.post("/units/{unit_id}/activate", response_model=UnitResponse, dependencies=[Depends(require_permission("units:activate"))])
+async def activate_unit(unit_id: int, payload: UnitConfigurationUpdate, request: Request, session: SessionDep, current: CurrentUser, use_cases: CatalogUseCases = Depends(_get_catalog_use_cases), audit: AuditService = Depends(get_audit_service)) -> UnitResponse:
+    return await _configure_unit(unit_id, payload, True, request, session, current, use_cases, audit)
+
+
+@router.post("/units/{unit_id}/deactivate", response_model=UnitResponse, dependencies=[Depends(require_permission("units:deactivate"))])
+async def deactivate_unit(unit_id: int, payload: UnitConfigurationUpdate, request: Request, session: SessionDep, current: CurrentUser, use_cases: CatalogUseCases = Depends(_get_catalog_use_cases), audit: AuditService = Depends(get_audit_service)) -> UnitResponse:
+    return await _configure_unit(unit_id, payload, False, request, session, current, use_cases, audit)
 
 
 # --- Products ---

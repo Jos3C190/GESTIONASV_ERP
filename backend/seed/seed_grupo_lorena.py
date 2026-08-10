@@ -729,18 +729,32 @@ async def _attach_superadmin_to_company(
             )
         )
 
-    employee = (
+    employee_by_user = (
         await session.execute(select(Employee).where(Employee.user_id == user.id))
     ).scalar_one_or_none()
-    if employee is None:
-        employee = (
-            await session.execute(
-                select(Employee).where(
-                    Employee.company_id == company.id,
-                    Employee.employee_code == SUPER_ADMIN_EMPLOYEE_CODE,
-                )
+    employee_by_code = (
+        await session.execute(
+            select(Employee).where(
+                Employee.company_id == company.id,
+                Employee.employee_code == SUPER_ADMIN_EMPLOYEE_CODE,
             )
-        ).scalar_one_or_none()
+        )
+    ).scalar_one_or_none()
+    # A restored/mock database may contain a stale user link on another employee.
+    # Preserve both business records and make the canonical seed code authoritative.
+    if (
+        employee_by_user is not None
+        and employee_by_code is not None
+        and employee_by_user.id != employee_by_code.id
+    ):
+        employee_by_user.user_id = None
+        # The user link is unique. Release the stale association before assigning
+        # it to the canonical bootstrap employee so executemany ordering cannot
+        # produce a transient uniqueness violation.
+        await session.flush()
+        employee = employee_by_code
+    else:
+        employee = employee_by_user or employee_by_code
     if employee is None:
         employee = Employee(company_id=company.id, employee_code=SUPER_ADMIN_EMPLOYEE_CODE)
         session.add(employee)
