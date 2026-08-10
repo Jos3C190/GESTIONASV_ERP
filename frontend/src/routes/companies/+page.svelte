@@ -297,14 +297,14 @@
               onclick={() => selectCompany(item)}
             >
               <div
-                class="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl border border-border bg-surface-elevated shadow-soft transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-border-strong group-hover:shadow-lifted group-focus-within:border-primary/50 {item.is_active
+                class="relative isolate flex aspect-square items-center justify-center overflow-hidden rounded-2xl border border-border bg-surface-elevated shadow-soft [clip-path:inset(0_round_1rem)] transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-border-strong group-hover:shadow-lifted group-focus-within:border-primary/50 {item.is_active
                   ? ''
                   : 'grayscale'}"
               >
                 {#if item.logo}<img
                     src={item.logo}
                     alt="Logo de {item.commercial_name}"
-                    class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]"
+                    class="h-full w-full transform-gpu object-cover transition-transform duration-300 will-change-transform group-hover:scale-[1.025]"
                   />{:else}<div
                     class="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/15 to-accent/10"
                   >
