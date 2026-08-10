@@ -16,10 +16,10 @@ from app.infrastructure.models.catalog import (
 )
 from app.infrastructure.models.organization import Company
 from app.infrastructure.models.supplier import SupplierContactModel, SupplierModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from seed.seed_grupo_lorena import COMPANY_ID
+from seed.seed_grupo_lorena import COMPANY_ID, _restore_seed_record
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("seed_catalog")
@@ -34,12 +34,10 @@ COUNTRIES_DATA = [
     {"name": "Costa Rica", "iso_code_2": "CR", "iso_code_3": "CRI", "phone_code": "+506"},
     {"name": "Panamá", "iso_code_2": "PA", "iso_code_3": "PAN", "phone_code": "+507"},
     {"name": "Belice", "iso_code_2": "BZ", "iso_code_3": "BLZ", "phone_code": "+501"},
-
     # América del Norte
     {"name": "México", "iso_code_2": "MX", "iso_code_3": "MEX", "phone_code": "+52"},
     {"name": "Estados Unidos", "iso_code_2": "US", "iso_code_3": "USA", "phone_code": "+1"},
     {"name": "Canadá", "iso_code_2": "CA", "iso_code_3": "CAN", "phone_code": "+1"},
-
     # América del Sur
     {"name": "Colombia", "iso_code_2": "CO", "iso_code_3": "COL", "phone_code": "+57"},
     {"name": "Venezuela", "iso_code_2": "VE", "iso_code_3": "VEN", "phone_code": "+58"},
@@ -53,9 +51,13 @@ COUNTRIES_DATA = [
     {"name": "Uruguay", "iso_code_2": "UY", "iso_code_3": "URY", "phone_code": "+598"},
     {"name": "Guyana", "iso_code_2": "GY", "iso_code_3": "GUY", "phone_code": "+592"},
     {"name": "Surinam", "iso_code_2": "SR", "iso_code_3": "SUR", "phone_code": "+597"},
-
     # Caribe
-    {"name": "República Dominicana", "iso_code_2": "DO", "iso_code_3": "DOM", "phone_code": "+1-809"},
+    {
+        "name": "República Dominicana",
+        "iso_code_2": "DO",
+        "iso_code_3": "DOM",
+        "phone_code": "+1-809",
+    },
     {"name": "Puerto Rico", "iso_code_2": "PR", "iso_code_3": "PRI", "phone_code": "+1-787"},
     {"name": "Cuba", "iso_code_2": "CU", "iso_code_3": "CUB", "phone_code": "+53"},
     {"name": "Haití", "iso_code_2": "HT", "iso_code_3": "HTI", "phone_code": "+509"},
@@ -64,7 +66,6 @@ COUNTRIES_DATA = [
     {"name": "Barbados", "iso_code_2": "BB", "iso_code_3": "BRB", "phone_code": "+1-246"},
     {"name": "Trinidad y Tobago", "iso_code_2": "TT", "iso_code_3": "TTO", "phone_code": "+1-868"},
     {"name": "Curazao", "iso_code_2": "CW", "iso_code_3": "CUW", "phone_code": "+599"},
-
     # Europa
     {"name": "España", "iso_code_2": "ES", "iso_code_3": "ESP", "phone_code": "+34"},
     {"name": "Portugal", "iso_code_2": "PT", "iso_code_3": "PRT", "phone_code": "+351"},
@@ -88,7 +89,6 @@ COUNTRIES_DATA = [
     {"name": "Grecia", "iso_code_2": "GR", "iso_code_3": "GRC", "phone_code": "+30"},
     {"name": "Turquía", "iso_code_2": "TR", "iso_code_3": "TUR", "phone_code": "+90"},
     {"name": "Rusia", "iso_code_2": "RU", "iso_code_3": "RUS", "phone_code": "+7"},
-
     # Asia y Medio Oriente
     {"name": "China", "iso_code_2": "CN", "iso_code_3": "CHN", "phone_code": "+86"},
     {"name": "Japón", "iso_code_2": "JP", "iso_code_3": "JPN", "phone_code": "+81"},
@@ -103,14 +103,17 @@ COUNTRIES_DATA = [
     {"name": "Malasia", "iso_code_2": "MY", "iso_code_3": "MYS", "phone_code": "+60"},
     {"name": "Filipinas", "iso_code_2": "PH", "iso_code_3": "PHL", "phone_code": "+63"},
     {"name": "Israel", "iso_code_2": "IL", "iso_code_3": "ISR", "phone_code": "+972"},
-    {"name": "Emiratos Árabes Unidos", "iso_code_2": "AE", "iso_code_3": "ARE", "phone_code": "+971"},
+    {
+        "name": "Emiratos Árabes Unidos",
+        "iso_code_2": "AE",
+        "iso_code_3": "ARE",
+        "phone_code": "+971",
+    },
     {"name": "Arabia Saudita", "iso_code_2": "SA", "iso_code_3": "SAU", "phone_code": "+966"},
     {"name": "Qatar", "iso_code_2": "QA", "iso_code_3": "QAT", "phone_code": "+974"},
-
     # Oceanía
     {"name": "Australia", "iso_code_2": "AU", "iso_code_3": "AUS", "phone_code": "+61"},
     {"name": "Nueva Zelanda", "iso_code_2": "NZ", "iso_code_3": "NZL", "phone_code": "+64"},
-
     # África
     {"name": "Sudáfrica", "iso_code_2": "ZA", "iso_code_3": "ZAF", "phone_code": "+27"},
     {"name": "Egipto", "iso_code_2": "EG", "iso_code_3": "EGY", "phone_code": "+20"},
@@ -137,7 +140,11 @@ CATEGORIES_DATA = [
     {
         "name": "Panadería y Repostería",
         "description": "Insumos y productos terminados de panaderías y pastelerías",
-        "sub_categories": ["Harinas y Harinados", "Levaduras y Mejoradores", "Rellenos y Coberturas"],
+        "sub_categories": [
+            "Harinas y Harinados",
+            "Levaduras y Mejoradores",
+            "Rellenos y Coberturas",
+        ],
     },
     {
         "name": "Materia Prima Alimenticia",
@@ -147,35 +154,60 @@ CATEGORIES_DATA = [
     {
         "name": "Empaques y Desechables",
         "description": "Cajas, bolsas y envoltorios alimenticios",
-        "sub_categories": ["Cajas de Cartón", "Bolsas Biodegradables", "Envoltorios Grado Alimenticio"],
+        "sub_categories": [
+            "Cajas de Cartón",
+            "Bolsas Biodegradables",
+            "Envoltorios Grado Alimenticio",
+        ],
     },
     {
         "name": "Bebidas y Cafetería",
         "description": "Café en grano, jarabes y suministros de cafetería",
-        "sub_categories": ["Café en Grano/Molido", "Jarabes y Saborizantes", "Insumos para Bebidas"],
+        "sub_categories": [
+            "Café en Grano/Molido",
+            "Jarabes y Saborizantes",
+            "Insumos para Bebidas",
+        ],
     },
 ]
 
 
 async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
     logger.info("Starting Catalog & Supplier Seed Data...")
-    company = await db.get(Company, COMPANY_ID)
+    company = await db.scalar(
+        select(Company)
+        .where(Company.id == COMPANY_ID)
+        .execution_options(include_deleted=True)
+    )
     if company is None:
         raise RuntimeError("Ejecute primero la semilla principal de Grupo Lorena.")
+    _restore_seed_record(company)
     company_id = company.id
 
     # 1. Countries
     for country in COUNTRIES_DATA:
-        stmt = select(CountryModel).where(CountryModel.iso_code_2 == country["iso_code_2"])
+        stmt = select(CountryModel).where(
+            func.lower(CountryModel.iso_code_2) == country["iso_code_2"].casefold()
+        ).order_by(CountryModel.created_at.desc()).limit(1)
         res = await db.execute(stmt)
-        if not res.scalar_one_or_none():
+        existing_country = res.scalar_one_or_none()
+        if existing_country is None:
             c = CountryModel(**country)
             db.add(c)
+        else:
+            for field, value in country.items():
+                setattr(existing_country, field, value)
+            existing_country.is_active = True
     await db.flush()
     logger.info("Countries seeded.")
 
     # Get El Salvador country ID
-    es_stmt = select(CountryModel).where(CountryModel.iso_code_2 == "SV")
+    es_stmt = (
+        select(CountryModel)
+        .where(func.lower(CountryModel.iso_code_2) == "sv")
+        .order_by(CountryModel.created_at.desc())
+        .limit(1)
+    )
     es_res = await db.execute(es_stmt)
     es_country = es_res.scalar_one_or_none()
     country_id = es_country.id_country if es_country else 1
@@ -183,7 +215,16 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
     # 2. Units
     units_map = {}
     for unit in UNITS_DATA:
-        stmt = select(UnitModel).where(UnitModel.name == unit["name"])
+        stmt = (
+            select(UnitModel)
+            .where(
+                UnitModel.owner_company_id.is_(None),
+                func.lower(UnitModel.code) == unit["code"].casefold(),
+            )
+            .order_by(UnitModel.deleted_at.asc().nullsfirst(), UnitModel.created_at.desc())
+            .limit(1)
+            .execution_options(include_deleted=True)
+        )
         res = await db.execute(stmt)
         u = res.scalar_one_or_none()
         if not u:
@@ -191,12 +232,19 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
             db.add(u)
             await db.flush()
         elif u.is_standard:
+            _restore_seed_record(u)
             u.code = unit["code"]
+            u.name = unit["name"]
             u.symbol = unit["symbol"]
             u.type = unit["type"]
+            u.is_active = True
+        else:
+            raise RuntimeError(f"La unidad global {unit['code']} no es una unidad estándar.")
         config = await db.get(CompanyUnitModel, (company_id, u.id_unit))
         if config is None:
-            db.add(CompanyUnitModel(company_id=company_id, unit_id=u.id_unit))
+            config = CompanyUnitModel(company_id=company_id, unit_id=u.id_unit)
+            db.add(config)
+        config.is_enabled = True
         units_map[unit["name"]] = u.id_unit
     logger.info("Units seeded.")
 
@@ -204,29 +252,56 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
     cat_map = {}
     sub_map = {}
     for cat_info in CATEGORIES_DATA:
-        stmt = select(CategoryModel).where(
-            CategoryModel.company_id == company_id, CategoryModel.name == cat_info["name"]
+        stmt = (
+            select(CategoryModel)
+            .where(
+                CategoryModel.company_id == company_id,
+                func.lower(CategoryModel.name) == cat_info["name"].casefold(),
+            )
+            .order_by(CategoryModel.deleted_at.asc().nullsfirst(), CategoryModel.created_at.desc())
+            .limit(1)
+            .execution_options(include_deleted=True)
         )
         res = await db.execute(stmt)
         cat = res.scalar_one_or_none()
         if not cat:
-            cat = CategoryModel(company_id=company_id, name=cat_info["name"], description=cat_info["description"])
+            cat = CategoryModel(
+                company_id=company_id, name=cat_info["name"], description=cat_info["description"]
+            )
             db.add(cat)
             await db.flush()
+        else:
+            _restore_seed_record(cat)
+            cat.description = cat_info["description"]
+            cat.is_active = True
         cat_map[cat_info["name"]] = cat.id_category
 
         for sub_name in cat_info["sub_categories"]:
-            sub_stmt = select(SubCategoryModel).where(
-                SubCategoryModel.id_category == cat.id_category,
-                SubCategoryModel.company_id == company_id,
-                SubCategoryModel.name == sub_name,
+            sub_stmt = (
+                select(SubCategoryModel)
+                .where(
+                    SubCategoryModel.id_category == cat.id_category,
+                    SubCategoryModel.company_id == company_id,
+                    func.lower(SubCategoryModel.name) == sub_name.casefold(),
+                )
+                .order_by(
+                    SubCategoryModel.deleted_at.asc().nullsfirst(),
+                    SubCategoryModel.created_at.desc(),
+                )
+                .limit(1)
+                .execution_options(include_deleted=True)
             )
             sub_res = await db.execute(sub_stmt)
             sub = sub_res.scalar_one_or_none()
             if not sub:
-                sub = SubCategoryModel(company_id=company_id, id_category=cat.id_category, name=sub_name)
+                sub = SubCategoryModel(
+                    company_id=company_id, id_category=cat.id_category, name=sub_name
+                )
                 db.add(sub)
                 await db.flush()
+            else:
+                _restore_seed_record(sub)
+                sub.is_active = True
             sub_map[sub_name] = sub.id_sub_category
     logger.info("Categories and SubCategories seeded.")
 
@@ -241,8 +316,16 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
             "email": "ventas@harinaselsalvador.com.sv",
             "website": "https://harinaselsalvador.com.sv",
             "contacts": [
-                {"full_name": "Carlos Mendoza", "phone": "+503 7845-1234", "email": "cmendoza@harinas.com.sv"},
-                {"full_name": "Ana María Rivas", "phone": "+503 7912-8844", "email": "arivas@harinas.com.sv"},
+                {
+                    "full_name": "Carlos Mendoza",
+                    "phone": "+503 7845-1234",
+                    "email": "cmendoza@harinas.com.sv",
+                },
+                {
+                    "full_name": "Ana María Rivas",
+                    "phone": "+503 7912-8844",
+                    "email": "arivas@harinas.com.sv",
+                },
             ],
         },
         {
@@ -254,27 +337,64 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
             "email": "contacto@distrilacteos.com",
             "website": "https://distrilacteos.com",
             "contacts": [
-                {"full_name": "Roberto Gómez", "phone": "+503 7100-3322", "email": "rgomez@distrilacteos.com"},
+                {
+                    "full_name": "Roberto Gómez",
+                    "phone": "+503 7100-3322",
+                    "email": "rgomez@distrilacteos.com",
+                },
             ],
         },
     ]
 
     for sup_info in suppliers_data:
-        contacts = sup_info.pop("contacts")
-        stmt = select(SupplierModel).where(
-            SupplierModel.company_id == company_id, SupplierModel.code == sup_info["code"]
+        contacts = sup_info["contacts"]
+        supplier_values = {key: value for key, value in sup_info.items() if key != "contacts"}
+        stmt = (
+            select(SupplierModel)
+            .where(
+                SupplierModel.company_id == company_id,
+                func.lower(SupplierModel.code) == str(sup_info["code"]).casefold(),
+            )
+            .order_by(SupplierModel.deleted_at.asc().nullsfirst(), SupplierModel.created_at.desc())
+            .limit(1)
+            .execution_options(include_deleted=True)
         )
         res = await db.execute(stmt)
         sup = res.scalar_one_or_none()
         if not sup:
-            sup = SupplierModel(company_id=company_id, **sup_info)
+            sup = SupplierModel(company_id=company_id, **supplier_values)
             db.add(sup)
             await db.flush()
+        else:
+            _restore_seed_record(sup)
+            for field, value in supplier_values.items():
+                setattr(sup, field, value)
+            sup.is_active = True
 
-            for contact in contacts:
-                c_model = SupplierContactModel(id_supplier=sup.id_supplier, **contact)
-                db.add(c_model)
-            await db.flush()
+        for contact in contacts:
+            existing_contact = await db.scalar(
+                select(SupplierContactModel)
+                .where(
+                    SupplierContactModel.id_supplier == sup.id_supplier,
+                    func.lower(SupplierContactModel.full_name)
+                    == str(contact["full_name"]).casefold(),
+                )
+                .order_by(
+                    SupplierContactModel.deleted_at.asc().nullsfirst(),
+                    SupplierContactModel.created_at.desc(),
+                )
+                .limit(1)
+                .execution_options(include_deleted=True)
+            )
+            if existing_contact is None:
+                existing_contact = SupplierContactModel(id_supplier=sup.id_supplier, **contact)
+                db.add(existing_contact)
+            else:
+                _restore_seed_record(existing_contact)
+                for field, value in contact.items():
+                    setattr(existing_contact, field, value)
+                existing_contact.is_active = True
+        await db.flush()
     logger.info("Suppliers seeded.")
 
     # 5. Demo Products
@@ -313,13 +433,26 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
     ]
 
     for prod in products_data:
-        stmt = select(ProductModel).where(
-            ProductModel.company_id == company_id, ProductModel.sku == prod["sku"]
+        stmt = (
+            select(ProductModel)
+            .where(
+                ProductModel.company_id == company_id,
+                func.lower(ProductModel.sku) == str(prod["sku"]).casefold(),
+            )
+            .order_by(ProductModel.deleted_at.asc().nullsfirst(), ProductModel.created_at.desc())
+            .limit(1)
+            .execution_options(include_deleted=True)
         )
         res = await db.execute(stmt)
-        if not res.scalar_one_or_none():
+        product = res.scalar_one_or_none()
+        if product is None:
             p = ProductModel(company_id=company_id, **prod)
             db.add(p)
+        else:
+            _restore_seed_record(product)
+            for field, value in prod.items():
+                setattr(product, field, value)
+            product.is_active = True
     await db.flush()
     await db.commit()
     logger.info("Products seeded successfully.")

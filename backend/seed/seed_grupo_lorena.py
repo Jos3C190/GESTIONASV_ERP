@@ -18,7 +18,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from seed.grupo_lorena_media import (
@@ -557,6 +557,15 @@ def _session_factory() -> async_sessionmaker[AsyncSession]:
     return async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
 
 
+def _restore_seed_record(record: Any) -> Any:
+    """Restore a canonical seed record instead of creating a hidden duplicate."""
+    if hasattr(record, "deleted_at"):
+        record.deleted_at = None
+        record.deleted_by = None
+        record.deletion_reason = None
+    return record
+
+
 async def _upsert_media_asset(
     session: AsyncSession,
     *,
@@ -620,37 +629,67 @@ async def _seed_media(
             )
 
 
-async def _seed_rbac(session: AsyncSession) -> dict[str, Role]:
+async def _seed_rbac(session: AsyncSession) -> dict[str, Role]:  # noqa: C901
     """Upsert the audited permission catalogue and all base roles."""
     from app.application.rbac.catalogue import BASE_ROLES, PERMISSION_CATALOGUE
     from app.infrastructure.models.rbac import Permission, Role, RolePermission
 
-    permissions = {
-        item.code: item for item in (await session.execute(select(Permission))).scalars().all()
-    }
+    permission_rows = (
+        await session.execute(
+            select(Permission)
+            .order_by(Permission.deleted_at.asc().nullsfirst(), Permission.created_at.desc())
+            .execution_options(include_deleted=True)
+        )
+    ).scalars()
+    permissions: dict[str, Permission] = {}
+    for item in permission_rows:
+        permissions.setdefault(item.code.casefold(), item)
     for specification in PERMISSION_CATALOGUE:
-        permission = permissions.get(specification.code)
+        permission = permissions.get(specification.code.casefold())
         if permission is None:
             permission = Permission(code=specification.code)
             session.add(permission)
-            permissions[specification.code] = permission
+            permissions[specification.code.casefold()] = permission
+        else:
+            _restore_seed_record(permission)
+            permission.code = specification.code
         permission.description = specification.description
         permission.module = specification.module
     await session.flush()
 
-    roles = {item.name: item for item in (await session.execute(select(Role))).scalars().all()}
+    role_rows = (
+        await session.execute(
+            select(Role)
+            .where((Role.company_id == COMPANY_ID) | (Role.company_id.is_(None)))
+            .order_by(Role.deleted_at.asc().nullsfirst(), Role.created_at.desc())
+            .execution_options(include_deleted=True)
+        )
+    ).scalars()
+    role_candidates: dict[tuple[str, UUID | None], Role] = {}
+    for item in role_rows:
+        role_candidates.setdefault((item.name.casefold(), item.company_id), item)
+
+    roles: dict[str, Role] = {}
     for role_name, description, is_system, permission_codes in BASE_ROLES:
-        role = roles.get(role_name)
+        key = role_name.casefold()
+        role = role_candidates.get((key, None if is_system else COMPANY_ID))
+        if role is None and not is_system:
+            legacy_role = role_candidates.get((key, None))
+            if legacy_role is not None and not legacy_role.is_system:
+                role = legacy_role
         if role is None:
             role = Role(name=role_name)
             session.add(role)
             await session.flush()
-            roles[role_name] = role
+        else:
+            _restore_seed_record(role)
+        role.name = role_name
         role.description = description
         role.is_system = is_system
+        roles[role_name] = role
         await session.execute(delete(RolePermission).where(RolePermission.role_id == role.id))
         for code in permission_codes:
-            permission = permissions.get(code)
+            permission = permissions.get(code.casefold())
             if permission is None:
                 raise RuntimeError(f"No existe el permiso requerido por {role_name}: {code}")
             session.add(RolePermission(role_id=role.id, permission_id=permission.id))
@@ -664,7 +703,13 @@ async def _ensure_superadmin(session: AsyncSession, roles: dict[str, Role]) -> U
     from app.infrastructure.models.user import User
 
     user = (
-        await session.execute(select(User).where(User.username == SUPER_ADMIN_USERNAME))
+        await session.execute(
+            select(User)
+            .where(func.lower(User.username) == SUPER_ADMIN_USERNAME.casefold())
+            .order_by(User.deleted_at.asc().nullsfirst(), User.created_at.desc())
+            .limit(1)
+            .execution_options(include_deleted=True)
+        )
     ).scalar_one_or_none()
     if user is None:
         password = os.environ.get("SUPER_ADMIN_PASSWORD")
@@ -682,9 +727,11 @@ async def _ensure_superadmin(session: AsyncSession, roles: dict[str, Role]) -> U
         session.add(user)
         await session.flush()
     else:
+        _restore_seed_record(user)
+        user.username = SUPER_ADMIN_USERNAME
+        user.email = SUPER_ADMIN_EMAIL
         user.is_active = True
         user.is_superuser = True
-        user.deleted_at = None
 
     return user
 
@@ -716,7 +763,15 @@ async def _attach_superadmin_to_company(
     membership.access_all_branches = True
     membership.last_branch_id = headquarters_branch.id
     await session.flush()
-    superadmin_role = await session.scalar(select(Role).where(Role.name == "SUPER_ADMIN"))
+    superadmin_role = await session.scalar(
+        select(Role)
+        .where(func.lower(Role.name) == "super_admin", Role.company_id.is_(None))
+        .order_by(Role.deleted_at.asc().nullsfirst(), Role.created_at.desc())
+        .limit(1)
+        .execution_options(include_deleted=True)
+    )
+    if superadmin_role is not None:
+        _restore_seed_record(superadmin_role)
     if superadmin_role is None:
         raise RuntimeError("No existe la plantilla de rol SUPER_ADMIN.")
     if await session.get(UserRole, (user.id, company.id, superadmin_role.id)) is None:
@@ -730,14 +785,24 @@ async def _attach_superadmin_to_company(
         )
 
     employee_by_user = (
-        await session.execute(select(Employee).where(Employee.user_id == user.id))
+        await session.execute(
+            select(Employee)
+            .where(Employee.user_id == user.id)
+            .order_by(Employee.deleted_at.asc().nullsfirst(), Employee.created_at.desc())
+            .limit(1)
+            .execution_options(include_deleted=True)
+        )
     ).scalar_one_or_none()
     employee_by_code = (
         await session.execute(
-            select(Employee).where(
+            select(Employee)
+            .where(
                 Employee.company_id == company.id,
-                Employee.employee_code == SUPER_ADMIN_EMPLOYEE_CODE,
+                func.lower(Employee.employee_code) == SUPER_ADMIN_EMPLOYEE_CODE.casefold(),
             )
+            .order_by(Employee.deleted_at.asc().nullsfirst(), Employee.created_at.desc())
+            .limit(1)
+            .execution_options(include_deleted=True)
         )
     ).scalar_one_or_none()
     # A restored/mock database may contain a stale user link on another employee.
@@ -766,7 +831,7 @@ async def _attach_superadmin_to_company(
     employee.department_id = technology_department.id
     employee.user_id = user.id
     employee.status = "activo"
-    employee.deleted_at = None
+    _restore_seed_record(employee)
 
 
 def _schedule(branch: BranchSeed) -> list[dict[str, str | None]]:
@@ -814,31 +879,51 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
         superadmin = await _ensure_superadmin(session, roles)
         superadmin_id = superadmin.id
 
-        # Remove only unused automated test roles. System and assigned roles stay intact.
-        used_role_ids = select(UserRole.role_id)
-        await session.execute(
-            delete(Role).where(
-                Role.id.not_in(used_role_ids),
-                Role.is_system.is_(False),
-                Role.name.op("~")(r"^(CUSTOM_|PERM_)[0-9A-Fa-f]+$"),
+        permission_rows = (
+            await session.execute(
+                select(Permission)
+                .order_by(Permission.deleted_at.asc().nullsfirst(), Permission.created_at.desc())
+                .execution_options(include_deleted=True)
             )
-        )
+        ).scalars()
+        permissions: dict[str, Permission] = {}
+        for item in permission_rows:
+            permissions.setdefault(item.code.casefold(), item)
 
-        permissions = {
-            item.code: item for item in (await session.execute(select(Permission))).scalars().all()
-        }
+        business_role_rows = (
+            await session.execute(
+                select(Role)
+                .where(
+                    func.lower(Role.name).in_([name.casefold() for name in ROLE_PERMISSIONS]),
+                    (Role.company_id == COMPANY_ID) | (Role.company_id.is_(None)),
+                )
+                .order_by(Role.deleted_at.asc().nullsfirst(), Role.created_at.desc())
+                .execution_options(include_deleted=True)
+            )
+        ).scalars()
+        business_role_candidates: dict[tuple[str, UUID | None], Role] = {}
+        for item in business_role_rows:
+            business_role_candidates.setdefault((item.name.casefold(), item.company_id), item)
         for role_name, (description, permission_codes) in ROLE_PERMISSIONS.items():
             role = roles.get(role_name)
             if role is None:
-                role = Role(name=role_name, description=description, is_system=False)
-                session.add(role)
-                await session.flush()
+                role = business_role_candidates.get((role_name.casefold(), COMPANY_ID))
+                if role is None:
+                    legacy_role = business_role_candidates.get((role_name.casefold(), None))
+                    if legacy_role is not None and not legacy_role.is_system:
+                        role = legacy_role
+                if role is None:
+                    role = Role(name=role_name, description=description, is_system=False)
+                    session.add(role)
+                    await session.flush()
                 roles[role_name] = role
-            else:
-                role.description = description
+            _restore_seed_record(role)
+            role.name = role_name
+            role.description = description
+            role.is_system = False
             await session.execute(delete(RolePermission).where(RolePermission.role_id == role.id))
             for code in permission_codes:
-                permission = permissions.get(code)
+                permission = permissions.get(code.casefold())
                 if permission is None:
                     raise RuntimeError(f"No existe el permiso requerido: {code}")
                 session.add(RolePermission(role_id=role.id, permission_id=permission.id))
@@ -858,18 +943,28 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             raise RuntimeError(f"Faltan distritos oficiales: {sorted(missing_districts)}")
 
         headquarters_district, headquarters_municipality = geography["San Miguel"]
-        company = (
-            await session.execute(select(Company).where(Company.nit == COMPANY_NIT))
-        ).scalar_one_or_none()
+        company = await session.scalar(
+            select(Company)
+            .where(Company.id == COMPANY_ID)
+            .execution_options(include_deleted=True)
+        )
         company_created = company is None
         if company is None:
+            conflicting_company = await session.scalar(
+                select(Company)
+                .where(func.lower(Company.nit) == COMPANY_NIT.casefold())
+                .order_by(Company.deleted_at.asc().nullsfirst(), Company.created_at.desc())
+                .limit(1)
+                .execution_options(include_deleted=True)
+            )
+            if conflicting_company is not None:
+                raise RuntimeError(
+                    "La empresa Grupo Lorena existente usa un identificador incompatible con "
+                    "sus activos multimedia. Ejecute el reinicio de la base de desarrollo."
+                )
             company = Company(id=COMPANY_ID, nit=COMPANY_NIT)
             session.add(company)
-        elif company.id != COMPANY_ID:
-            raise RuntimeError(
-                "La empresa Grupo Lorena existente usa un identificador incompatible con sus "
-                "activos multimedia. Ejecute el reinicio de la base de desarrollo."
-            )
+        _restore_seed_record(company)
         company.name = "Grupo Lorena, S.A. de C.V."
         company.commercial_name = "Grupo Lorena"
         company.nrc = "Pendiente de verificación"
@@ -911,9 +1006,16 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
         for name, _parent, description in DEPARTMENTS:
             department = (
                 await session.execute(
-                    select(Department).where(
-                        Department.company_id == company.id, Department.name == name
+                    select(Department)
+                    .where(
+                        Department.company_id == company.id,
+                        func.lower(Department.name) == name.casefold(),
                     )
+                    .order_by(
+                        Department.deleted_at.asc().nullsfirst(), Department.created_at.desc()
+                    )
+                    .limit(1)
+                    .execution_options(include_deleted=True)
                 )
             ).scalar_one_or_none()
             if department is None:
@@ -933,7 +1035,9 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     )
                 )
             else:
-                department.description = description
+                _restore_seed_record(department)
+            department.name = name
+            department.description = description
             departments[name] = department
         for name, parent_name, _description in DEPARTMENTS:
             departments[name].parent_department_id = (
@@ -945,15 +1049,23 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             district, municipality = geography[branch_seed.district]
             branch = (
                 await session.execute(
-                    select(Branch).where(
-                        Branch.company_id == company.id, Branch.code == branch_seed.code
+                    select(Branch)
+                    .where(
+                        Branch.company_id == company.id,
+                        func.lower(Branch.code) == branch_seed.code.casefold(),
                     )
+                    .order_by(Branch.deleted_at.asc().nullsfirst(), Branch.created_at.desc())
+                    .limit(1)
+                    .execution_options(include_deleted=True)
                 )
             ).scalar_one_or_none()
             branch_created = branch is None
             if branch is None:
                 branch = Branch(company_id=company.id, code=branch_seed.code)
                 session.add(branch)
+            else:
+                _restore_seed_record(branch)
+            branch.code = branch_seed.code
             branch.name = branch_seed.name
             branch.address = branch_seed.address
             branch.department_id = municipality.department_id
@@ -1024,9 +1136,17 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
         for name, description in category_specs.items():
             category = (
                 await session.execute(
-                    select(WarehouseCategory).where(
-                        WarehouseCategory.company_id == company.id, WarehouseCategory.name == name
+                    select(WarehouseCategory)
+                    .where(
+                        WarehouseCategory.company_id == company.id,
+                        func.lower(WarehouseCategory.name) == name.casefold(),
                     )
+                    .order_by(
+                        WarehouseCategory.deleted_at.asc().nullsfirst(),
+                        WarehouseCategory.created_at.desc(),
+                    )
+                    .limit(1)
+                    .execution_options(include_deleted=True)
                 )
             ).scalar_one_or_none()
             if category is None:
@@ -1048,8 +1168,10 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     )
                 )
             else:
-                category.description = description
-                category.is_active = True
+                _restore_seed_record(category)
+            category.name = name
+            category.description = description
+            category.is_active = True
             categories[name] = category
 
         employees: dict[str, Employee] = {}
@@ -1058,15 +1180,23 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             code = str(employee_seed["code"])
             employee = (
                 await session.execute(
-                    select(Employee).where(
-                        Employee.company_id == company.id, Employee.employee_code == code
+                    select(Employee)
+                    .where(
+                        Employee.company_id == company.id,
+                        func.lower(Employee.employee_code) == code.casefold(),
                     )
+                    .order_by(Employee.deleted_at.asc().nullsfirst(), Employee.created_at.desc())
+                    .limit(1)
+                    .execution_options(include_deleted=True)
                 )
             ).scalar_one_or_none()
             employee_created = employee is None
             if employee is None:
                 employee = Employee(company_id=company.id, employee_code=code)
                 session.add(employee)
+            else:
+                _restore_seed_record(employee)
+            employee.employee_code = code
             employee.first_name = str(employee_seed["first"])
             employee.last_name = str(employee_seed["last"])
             employee.department_id = departments[str(employee_seed["department"])].id
@@ -1083,7 +1213,13 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             if username:
                 username = str(username)
                 user = (
-                    await session.execute(select(User).where(User.username == username))
+                    await session.execute(
+                        select(User)
+                        .where(func.lower(User.username) == username.casefold())
+                        .order_by(User.deleted_at.asc().nullsfirst(), User.created_at.desc())
+                        .limit(1)
+                        .execution_options(include_deleted=True)
+                    )
                 ).scalar_one_or_none()
                 if user is None:
                     user = User(
@@ -1110,6 +1246,11 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                             },
                         )
                     )
+                else:
+                    _restore_seed_record(user)
+                    user.is_active = True
+                    user.username = username
+                    user.email = f"{username}@grupo-lorena.example"
                 employee.user_id = user.id
                 membership = await session.get(UserCompany, (user.id, company.id))
                 if membership is None:
@@ -1171,10 +1312,17 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             branch = branches[str(employee_seed["branch"])]
             assignment = (
                 await session.execute(
-                    select(EmployeeBranchAssignment).where(
+                    select(EmployeeBranchAssignment)
+                    .where(
                         EmployeeBranchAssignment.employee_id == employee.id,
                         EmployeeBranchAssignment.branch_id == branch.id,
                     )
+                    .order_by(
+                        EmployeeBranchAssignment.is_active.desc(),
+                        EmployeeBranchAssignment.assigned_from.desc(),
+                        EmployeeBranchAssignment.created_at.desc(),
+                    )
+                    .limit(1)
                 )
             ).scalar_one_or_none()
             if assignment is None:
@@ -1217,9 +1365,14 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             warehouse_code = f"BOD-{branch_seed.code.removeprefix('LOR-')}"
             warehouse = (
                 await session.execute(
-                    select(Warehouse).where(
-                        Warehouse.branch_id == branch.id, Warehouse.code == warehouse_code
+                    select(Warehouse)
+                    .where(
+                        Warehouse.branch_id == branch.id,
+                        func.lower(Warehouse.code) == warehouse_code.casefold(),
                     )
+                    .order_by(Warehouse.deleted_at.asc().nullsfirst(), Warehouse.created_at.desc())
+                    .limit(1)
+                    .execution_options(include_deleted=True)
                 )
             ).scalar_one_or_none()
             warehouse_created = warehouse is None
@@ -1230,6 +1383,9 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     warehouse_category_id=categories["Inventario de tienda"].id,
                 )
                 session.add(warehouse)
+            else:
+                _restore_seed_record(warehouse)
+            warehouse.code = warehouse_code
             warehouse.name = f"Bodega de tienda {branch_seed.district}"
             warehouse.warehouse_category_id = categories["Inventario de tienda"].id
             warehouse.warehouse_type = "general"
@@ -1276,9 +1432,14 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                 location_code = f"{aisle}-{location_index:02d}"
                 location = (
                     await session.execute(
-                        select(Location).where(
-                            Location.warehouse_id == warehouse.id, Location.code == location_code
+                        select(Location)
+                        .where(
+                            Location.warehouse_id == warehouse.id,
+                            func.lower(Location.code) == location_code.casefold(),
                         )
+                        .order_by(Location.deleted_at.asc().nullsfirst(), Location.created_at.desc())
+                        .limit(1)
+                        .execution_options(include_deleted=True)
                     )
                 ).scalar_one_or_none()
                 if location is None:
@@ -1295,6 +1456,16 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                             is_active=True,
                         )
                     )
+                else:
+                    _restore_seed_record(location)
+                    location.code = location_code
+                    location.aisle = aisle
+                    location.rack = "R01"
+                    location.level = "N01"
+                    location.position = f"P{location_index:02d}"
+                    location.capacity = capacity
+                    location.notes = f"Zona de {label.lower()} de la bodega."
+                    location.is_active = True
 
         await session.commit()
         print(
