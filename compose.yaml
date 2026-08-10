@@ -123,7 +123,6 @@ services:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
       PUBLIC_GOOGLE_MAPS_API_KEY: ${PUBLIC_GOOGLE_MAPS_API_KEY:-}
       ORIGIN: http://localhost:5173
-      SVELTEKIT_OUT_DIR: .svelte-kit-dev
     depends_on:
       backend:
         condition: service_healthy

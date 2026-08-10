@@ -1,6 +1,5 @@
 node_modules
 .svelte-kit
-.svelte-kit-dev
 build
 dist
 .vite
