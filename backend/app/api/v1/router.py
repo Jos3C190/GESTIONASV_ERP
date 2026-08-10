@@ -3,6 +3,7 @@
 Phase 0: health. Phase 1: auth. Phase 1b: users. Phase 2: RBAC.
 Phase 3: employees + departments. Phase 4: audit log (read-only).
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter
@@ -15,6 +16,7 @@ from app.api.v1.routers import (
     departments,
     employees,
     health,
+    lifecycle,
     media,
     operational_context,
     organization,
@@ -40,3 +42,4 @@ api_router.include_router(dashboard.router, prefix="/api/v1")
 api_router.include_router(media.router, prefix="/api/v1")
 api_router.include_router(catalog.router, prefix="/api/v1")
 api_router.include_router(suppliers.router, prefix="/api/v1")
+api_router.include_router(lifecycle.router, prefix="/api/v1")
