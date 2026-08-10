@@ -61,6 +61,12 @@ from app.infrastructure.models.user import User as ORMUser
 router = APIRouter(prefix="/users", tags=["users"])
 
 
+def _status_action(before_active: bool, after_active: bool) -> str:
+    if before_active == after_active:
+        return "UPDATE"
+    return "ACTIVATE" if after_active else "DEACTIVATE"
+
+
 def _get_user_repo(session: SessionDep) -> UserRepository:
     from app.infrastructure.repositories import SqlAlchemyUserRepository
 
@@ -201,10 +207,14 @@ async def get_users_roles_batch(
 ) -> dict[uuid.UUID, list[RoleOut]]:
     """Return role summaries for the visible users in one database roundtrip."""
     await resolve_branch_scope(session, current, company_id, branch_id)
-    allowed = select(ORMUser.id).join(UserCompany, UserCompany.user_id == ORMUser.id).where(
-        ORMUser.id.in_(user_ids),
-        ORMUser.deleted_at.is_(None),
-        UserCompany.company_id == company_id,
+    allowed = (
+        select(ORMUser.id)
+        .join(UserCompany, UserCompany.user_id == ORMUser.id)
+        .where(
+            ORMUser.id.in_(user_ids),
+            ORMUser.deleted_at.is_(None),
+            UserCompany.company_id == company_id,
+        )
     )
     if branch_id is not None:
         join_condition = (
@@ -364,7 +374,7 @@ async def update_user(
         )
     )
     await audit.record(
-        action="UPDATE",
+        action=_status_action(before.user.is_active, updated.is_active),
         user_id=current.id,
         company_id=company_id,
         resource_type="users",
@@ -441,7 +451,8 @@ async def unlock_account(
     "/{user_id}",
     response_model=MessageOut,
     status_code=status.HTTP_200_OK,
-    summary="Desactivar usuario (soft delete)",
+    summary="Desactivar usuario (compatibilidad; no envía a papelera)",
+    deprecated=True,
     dependencies=[Depends(require_permission("users:deactivate"))],
 )
 async def deactivate_user(
@@ -455,14 +466,18 @@ async def deactivate_user(
     company_id = await _require_target_scope(request, session, current, user_id)
     before = await GetUserUseCase(repo).execute(user_id)
     uc = DeactivateUserUseCase(repo)
-    await uc.execute(user_id, current.id)
-    await audit.record(
-        action="LOGICAL_DELETE",
-        user_id=current.id,
-        company_id=company_id,
-        resource_type="users",
-        resource_id=str(user_id),
-        before_state=user_to_audit_state(before.user),
-        after_state={**user_to_audit_state(before.user), "is_active": False},
+    changed = await uc.execute(user_id, current.id)
+    if changed:
+        await audit.record(
+            action="DEACTIVATE",
+            user_id=current.id,
+            company_id=company_id,
+            resource_type="users",
+            resource_id=str(user_id),
+            before_state=user_to_audit_state(before.user),
+            after_state={**user_to_audit_state(before.user), "is_active": False},
+        )
+    return MessageOut(
+        message="Usuario desactivado." if changed else "El usuario ya estaba desactivado.",
+        code="user_deactivated" if changed else "user_already_inactive",
     )
-    return MessageOut(message="Usuario desactivado.", code="user_deactivated")

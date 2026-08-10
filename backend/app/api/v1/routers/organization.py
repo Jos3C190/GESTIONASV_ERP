@@ -116,6 +116,7 @@ async def _update(
     user_id: uuid.UUID,
     company_id: uuid.UUID | None = None,
     branch_id: uuid.UUID | None = None,
+    action: str = "UPDATE",
 ) -> dict[str, Any]:
     obj = await session.get(cls, record_id)
     if obj is None:
@@ -130,7 +131,7 @@ async def _update(
     after = _dump(obj)
     session.add(
         AuditLog(
-            action="UPDATE",
+            action=action,
             user_id=user_id,
             company_id=company_id,
             branch_id=branch_id,
@@ -228,9 +229,7 @@ async def _ensure_branch_manager_assignment(
     )
 
 
-async def _branches_out(
-    session: AsyncSession, branches: list[Branch]
-) -> list[dict[str, Any]]:
+async def _branches_out(session: AsyncSession, branches: list[Branch]) -> list[dict[str, Any]]:
     """Serialize branches with a constant number of aggregate queries."""
     if not branches:
         return []
@@ -510,7 +509,12 @@ async def activate_company(
 ) -> dict[str, Any]:
     await _require_company_access(session, current, record_id)
     return await _update(
-        session, Company, record_id, {"is_active": True}, user_id=_actor_id(request)
+        session,
+        Company,
+        record_id,
+        {"is_active": True},
+        user_id=_actor_id(request),
+        action="ACTIVATE",
     )
 
 
@@ -528,7 +532,12 @@ async def deactivate_company(
     if active_branch:
         raise HTTPException(409, "Desactive primero todas las sucursales de la empresa.")
     return await _update(
-        session, Company, record_id, {"is_active": False}, user_id=_actor_id(request)
+        session,
+        Company,
+        record_id,
+        {"is_active": False},
+        user_id=_actor_id(request),
+        action="DEACTIVATE",
     )
 
 
@@ -680,6 +689,7 @@ async def activate_branch(
         user_id=_actor_id(request),
         company_id=branch.company_id,
         branch_id=record_id,
+        action="ACTIVATE",
     )
 
 
@@ -720,6 +730,7 @@ async def deactivate_branch(
         user_id=_actor_id(request),
         company_id=branch.company_id,
         branch_id=record_id,
+        action="DEACTIVATE",
     )
 
 
@@ -748,9 +759,7 @@ async def list_categories(
         )
     total = int(
         (
-            await session.execute(
-                select(func.count(WarehouseCategory.id)).where(*conditions)
-            )
+            await session.execute(select(func.count(WarehouseCategory.id)).where(*conditions))
         ).scalar_one()
     )
     rows = list(
@@ -785,12 +794,16 @@ async def warehouse_category_catalogue(
 ) -> list[dict[str, Any]]:
     await require_company_access(session, current, company_id)
     rows = (
-        await session.execute(
-            select(WarehouseCategory)
-            .where(WarehouseCategory.company_id == company_id)
-            .order_by(WarehouseCategory.name, WarehouseCategory.id)
+        (
+            await session.execute(
+                select(WarehouseCategory)
+                .where(WarehouseCategory.company_id == company_id)
+                .order_by(WarehouseCategory.name, WarehouseCategory.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [_dump(item) for item in rows]
 
 
@@ -869,6 +882,7 @@ async def deactivate_category(
         {"is_active": False},
         user_id=_actor_id(request),
         company_id=category.company_id,
+        action="DEACTIVATE",
     )
 
 
@@ -893,6 +907,7 @@ async def activate_category(
         {"is_active": True},
         user_id=_actor_id(request),
         company_id=category.company_id,
+        action="ACTIVATE",
     )
 
 
@@ -939,9 +954,7 @@ async def list_warehouses(
                 func.coalesce(func.sum(Warehouse.capacity), 0),
                 func.count(Warehouse.id).filter(Warehouse.operational_status == "active"),
                 func.count(Warehouse.id).filter(Warehouse.operational_status == "full"),
-                func.count(Warehouse.id).filter(
-                    Warehouse.operational_status == "maintenance"
-                ),
+                func.count(Warehouse.id).filter(Warehouse.operational_status == "maintenance"),
                 func.count(Warehouse.id).filter(Warehouse.operational_status == "inactive"),
             )
             .select_from(Warehouse)
@@ -957,9 +970,7 @@ async def list_warehouses(
                 func.count(Warehouse.id),
                 func.count(Warehouse.id).filter(Warehouse.operational_status == "active"),
                 func.count(Warehouse.id).filter(Warehouse.operational_status == "full"),
-                func.count(Warehouse.id).filter(
-                    Warehouse.operational_status == "maintenance"
-                ),
+                func.count(Warehouse.id).filter(Warehouse.operational_status == "maintenance"),
                 func.count(Warehouse.id).filter(Warehouse.operational_status == "inactive"),
             )
             .select_from(Warehouse)
@@ -1214,6 +1225,7 @@ async def deactivate_warehouse(
         user_id=_actor_id(request),
         company_id=branch.company_id,
         branch_id=branch.id,
+        action="DEACTIVATE",
     )
 
 
@@ -1237,6 +1249,7 @@ async def activate_warehouse(
         user_id=_actor_id(request),
         company_id=branch.company_id,
         branch_id=branch.id,
+        action="ACTIVATE",
     )
 
 
@@ -1353,6 +1366,7 @@ async def deactivate_location(
         user_id=_actor_id(request),
         company_id=branch.company_id,
         branch_id=branch.id,
+        action="DEACTIVATE",
     )
 
 
@@ -1393,4 +1407,5 @@ async def activate_location(
         user_id=_actor_id(request),
         company_id=branch.company_id,
         branch_id=branch.id,
+        action="ACTIVATE",
     )

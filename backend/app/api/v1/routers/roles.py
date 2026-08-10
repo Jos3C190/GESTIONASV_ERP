@@ -27,6 +27,7 @@ from app.api.v1.deps import (
     require_permission,
 )
 from app.api.v1.schemas.common import MessageOut, Page, PageMeta
+from app.api.v1.schemas.lifecycle import SoftDeleteRequest
 from app.api.v1.schemas.rbac import (
     AssignRoleRequest,
     CreatePermissionRequest,
@@ -42,6 +43,7 @@ from app.api.v1.schemas.rbac import (
     UpdateRoleRequest,
 )
 from app.application.audit.audit_service import AuditService, role_to_audit_state
+from app.application.lifecycle import LifecycleService
 from app.application.rbac.check_permission import GetEffectivePermissionsUseCase
 from app.application.rbac.role_assignment import (
     AssignRoleInput,
@@ -55,8 +57,6 @@ from app.application.rbac.role_crud import (
     CreatePermissionUseCase,
     CreateRoleInput,
     CreateRoleUseCase,
-    DeletePermissionUseCase,
-    DeleteRoleUseCase,
     GetRoleUseCase,
     ListPermissionsUseCase,
     ListRolesUseCase,
@@ -72,6 +72,7 @@ from app.domain.ports.permission_repository import PermissionRepository
 from app.domain.ports.role_repository import RoleRepository
 from app.domain.ports.user_repository import UserRepository
 from app.infrastructure.models.organization import UserCompany
+from app.infrastructure.repositories import SqlAlchemyLifecycleRepository
 
 router = APIRouter(prefix="/roles", tags=["roles"])
 
@@ -183,7 +184,9 @@ async def create_permission(
     audit: AuditService = Depends(get_audit_service),
 ) -> PermissionOut:
     if not current.is_superuser:
-        raise HTTPException(403, "El catálogo global de permisos solo puede modificarlo un superadministrador.")
+        raise HTTPException(
+            403, "El catálogo global de permisos solo puede modificarlo un superadministrador."
+        )
     permission = await CreatePermissionUseCase(repo).execute(
         CreatePermissionInput(
             code=body.code,
@@ -214,7 +217,9 @@ async def update_permission(
     audit: AuditService = Depends(get_audit_service),
 ) -> PermissionOut:
     if not current.is_superuser:
-        raise HTTPException(403, "El catálogo global de permisos solo puede modificarlo un superadministrador.")
+        raise HTTPException(
+            403, "El catálogo global de permisos solo puede modificarlo un superadministrador."
+        )
     before = await repo.get_by_id(permission_id)
     permission = await UpdatePermissionUseCase(repo).execute(
         UpdatePermissionInput(
@@ -229,9 +234,7 @@ async def update_permission(
         user_id=current.id,
         resource_type="permissions",
         resource_id=str(permission.id),
-        before_state=(
-            {"code": before.code, "module": before.module} if before else None
-        ),
+        before_state=({"code": before.code, "module": before.module} if before else None),
         after_state={"code": permission.code, "module": permission.module},
     )
     return PermissionOut.model_validate(permission, from_attributes=True)
@@ -240,28 +243,64 @@ async def update_permission(
 @router.delete(
     "/permissions/{permission_id}",
     response_model=MessageOut,
+    deprecated=True,
+    summary="Eliminar permiso lógicamente (ruta de compatibilidad)",
     dependencies=[Depends(require_permission("permissions:manage"))],
 )
 async def delete_permission(
     permission_id: uuid.UUID,
+    body: SoftDeleteRequest,
+    request: Request,
+    session: SessionDep,
     current: CurrentUser,
     repo: PermissionRepository = Depends(get_permission_repository),
     audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
     if not current.is_superuser:
-        raise HTTPException(403, "El catálogo global de permisos solo puede modificarlo un superadministrador.")
+        raise HTTPException(
+            403, "El catálogo global de permisos solo puede modificarlo un superadministrador."
+        )
     before = await repo.get_by_id(permission_id)
-    await DeletePermissionUseCase(repo).execute(permission_id)
-    await audit.record(
-        action="DELETE",
-        user_id=current.id,
-        resource_type="permissions",
-        resource_id=str(permission_id),
-        before_state=(
-            {"code": before.code, "module": before.module} if before else None
-        ),
+    deleted = await LifecycleService(SqlAlchemyLifecycleRepository(session)).delete(
+        "permissions",
+        str(permission_id),
+        company_id=uuid.UUID(int=0),
+        actor_id=current.id,
+        reason=body.reason,
+        allow_global=True,
     )
-    return MessageOut(message="Permiso eliminado.", code="permission_deleted")
+    if deleted.operation_applied:
+        await audit.record(
+            action="LOGICAL_DELETE",
+            user_id=current.id,
+            resource_type="permissions",
+            resource_id=str(permission_id),
+            before_state={
+                "code": before.code if before else None,
+                "module": before.module if before else None,
+                "label": deleted.label,
+                "deleted_at": None,
+                "deleted_by": None,
+                "deletion_reason": None,
+            },
+            after_state={
+                "label": deleted.label,
+                "deleted_at": deleted.deleted_at.isoformat() if deleted.deleted_at else None,
+                "deleted_by": str(deleted.deleted_by) if deleted.deleted_by else None,
+                "deletion_reason": deleted.deletion_reason,
+            },
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            required=True,
+        )
+    return MessageOut(
+        message=(
+            "Permiso eliminado."
+            if deleted.operation_applied
+            else "El permiso ya estaba en la papelera."
+        ),
+        code=("permission_deleted" if deleted.operation_applied else "permission_already_deleted"),
+    )
 
 
 @router.get(
@@ -315,7 +354,9 @@ async def create_role(
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
     uc = CreateRoleUseCase(repo)
-    r = await uc.execute(CreateRoleInput(company_id=company_id, name=body.name, description=body.description))
+    r = await uc.execute(
+        CreateRoleInput(company_id=company_id, name=body.name, description=body.description)
+    )
     await audit.record(
         action="CREATE",
         user_id=current.id,
@@ -358,7 +399,9 @@ async def update_role(
         raise HTTPException(403, "Los roles de sistema son plantillas protegidas.")
     uc = UpdateRoleUseCase(repo)
     r = await uc.execute(
-        UpdateRoleInput(company_id=company_id, role_id=role_id, name=body.name, description=body.description)
+        UpdateRoleInput(
+            company_id=company_id, role_id=role_id, name=body.name, description=body.description
+        )
     )
     await audit.record(
         action="UPDATE",
@@ -384,11 +427,13 @@ async def update_role(
     "/{role_id}",
     response_model=MessageOut,
     status_code=status.HTTP_200_OK,
-    summary="Eliminar rol (no sistema)",
+    summary="Eliminar rol lógicamente (ruta de compatibilidad)",
+    deprecated=True,
     dependencies=[Depends(require_permission("roles:delete"))],
 )
 async def delete_role(
     role_id: uuid.UUID,
+    body: SoftDeleteRequest,
     request: Request,
     session: SessionDep,
     current: CurrentUser,
@@ -398,17 +443,43 @@ async def delete_role(
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
     before = await repo.get_by_id(company_id, role_id)
-    uc = DeleteRoleUseCase(repo)
-    await uc.execute(company_id, role_id)
-    await audit.record(
-        action="DELETE",
-        user_id=current.id,
+    deleted = await LifecycleService(SqlAlchemyLifecycleRepository(session)).delete(
+        "roles",
+        str(role_id),
         company_id=company_id,
-        resource_type="roles",
-        resource_id=str(role_id),
-        before_state=role_to_audit_state(before),
+        actor_id=current.id,
+        reason=body.reason,
     )
-    return MessageOut(message="Rol eliminado.", code="role_deleted")
+    if deleted.operation_applied:
+        await audit.record(
+            action="LOGICAL_DELETE",
+            user_id=current.id,
+            company_id=company_id,
+            resource_type="roles",
+            resource_id=str(role_id),
+            before_state={
+                **role_to_audit_state(before),
+                "label": deleted.label,
+                "deleted_at": None,
+                "deleted_by": None,
+                "deletion_reason": None,
+            },
+            after_state={
+                "label": deleted.label,
+                "deleted_at": deleted.deleted_at.isoformat() if deleted.deleted_at else None,
+                "deleted_by": str(deleted.deleted_by) if deleted.deleted_by else None,
+                "deletion_reason": deleted.deletion_reason,
+            },
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            required=True,
+        )
+    return MessageOut(
+        message="Rol eliminado."
+        if deleted.operation_applied
+        else "El rol ya estaba en la papelera.",
+        code="role_deleted" if deleted.operation_applied else "role_already_deleted",
+    )
 
 
 @router.post(
@@ -500,7 +571,9 @@ async def set_role_permissions(
         raise HTTPException(403, "Los permisos de las plantillas del sistema están protegidos.")
     uc = SetRolePermissionsUseCase(repo, perm_repo)
     r = await uc.execute(
-        SetRolePermissionsInput(company_id=company_id, role_id=role_id, permission_codes=tuple(body.permission_codes))
+        SetRolePermissionsInput(
+            company_id=company_id, role_id=role_id, permission_codes=tuple(body.permission_codes)
+        )
     )
     await audit.record(
         action="SET_PERMISSIONS",
@@ -547,7 +620,12 @@ async def assign_role(
         raise HTTPException(404, "Usuario no encontrado en la empresa seleccionada.")
     uc = AssignRoleUseCase(user_repo, repo)
     created = await uc.execute(
-        AssignRoleInput(user_id=body.user_id, company_id=company_id, role_id=body.role_id, assigned_by=current.id)
+        AssignRoleInput(
+            user_id=body.user_id,
+            company_id=company_id,
+            role_id=body.role_id,
+            assigned_by=current.id,
+        )
     )
     if created:
         await audit.record(
@@ -586,7 +664,9 @@ async def revoke_role(
         raise HTTPException(404, "Usuario no encontrado en la empresa seleccionada.")
     uc = RevokeRoleUseCase(user_repo, repo)
     ok = await uc.execute(
-        RevokeRoleInput(user_id=body.user_id, company_id=company_id, role_id=body.role_id, actor_id=current.id)
+        RevokeRoleInput(
+            user_id=body.user_id, company_id=company_id, role_id=body.role_id, actor_id=current.id
+        )
     )
     if ok:
         await audit.record(

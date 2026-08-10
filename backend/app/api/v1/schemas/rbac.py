@@ -5,9 +5,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from app.api.v1.schemas.common import ORMOut, Page
+from app.application.rbac.catalogue import ALL_PERMISSION_CODES
 
 
 class PermissionOut(ORMOut):
@@ -15,6 +16,13 @@ class PermissionOut(ORMOut):
     code: str
     description: str | None = None
     module: str | None = None
+
+    @computed_field
+    @property
+    def is_protected(self) -> bool:
+        """Standard catalogue permissions cannot be renamed or deleted."""
+
+        return self.code in ALL_PERMISSION_CODES
 
 
 class CreatePermissionRequest(BaseModel):

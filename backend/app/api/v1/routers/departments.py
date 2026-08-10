@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.api.v1.company_access import require_company_access, require_company_wide_scope
 from app.api.v1.deps import CurrentUser, SessionDep, get_audit_service, require_permission
@@ -15,6 +14,7 @@ from app.api.v1.schemas.employees import (
     DepartmentOut,
     UpdateDepartmentRequest,
 )
+from app.api.v1.schemas.lifecycle import SoftDeleteRequest
 from app.application.audit.audit_service import (
     AuditService,
     department_to_audit_state,
@@ -22,14 +22,14 @@ from app.application.audit.audit_service import (
 from app.application.employees.department_crud import (
     CreateDepartmentInput,
     CreateDepartmentUseCase,
-    DeleteDepartmentUseCase,
     GetDepartmentUseCase,
     ListDepartmentsUseCase,
     UpdateDepartmentInput,
     UpdateDepartmentUseCase,
 )
+from app.application.lifecycle import LifecycleService
 from app.domain.ports.department_repository import DepartmentRepository
-from app.infrastructure.models.employee import DepartmentBranchAssignment
+from app.infrastructure.repositories import SqlAlchemyLifecycleRepository
 
 router = APIRouter(prefix="/departments", tags=["departments"])
 
@@ -199,11 +199,13 @@ async def update_department(
     "/{dept_id}",
     response_model=MessageOut,
     status_code=status.HTTP_200_OK,
-    summary="Eliminar departamento",
-    dependencies=[Depends(require_permission("departments:manage"))],
+    summary="Eliminar departamento lógicamente (ruta de compatibilidad)",
+    deprecated=True,
+    dependencies=[Depends(require_permission("departments:delete"))],
 )
 async def delete_department(
     dept_id: uuid.UUID,
+    body: SoftDeleteRequest,
     request: Request,
     current: CurrentUser,
     session: SessionDep,
@@ -213,24 +215,42 @@ async def delete_department(
     before = await GetDepartmentUseCase(repo).execute(dept_id)
     await require_company_access(session, current, before.company_id, require_active=True)
     await require_company_wide_scope(session, current, before.company_id)
-    active_assignment = await session.scalar(
-        select(DepartmentBranchAssignment.id).where(
-            DepartmentBranchAssignment.department_id == dept_id,
-            DepartmentBranchAssignment.is_active.is_(True),
-        )
-    )
-    if active_assignment:
-        raise HTTPException(409, "Deshabilite primero el departamento en todas las sucursales.")
-    uc = DeleteDepartmentUseCase(repo)
-    await uc.execute(dept_id)
-    await audit.record(
-        action="DELETE",
-        user_id=current.id,
+    deleted = await LifecycleService(SqlAlchemyLifecycleRepository(session)).delete(
+        "departments",
+        str(dept_id),
         company_id=before.company_id,
-        resource_type="departments",
-        resource_id=str(dept_id),
-        before_state=department_to_audit_state(before),
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
+        actor_id=current.id,
+        reason=body.reason,
     )
-    return MessageOut(message="Departamento eliminado.", code="dept_deleted")
+    if deleted.operation_applied:
+        await audit.record(
+            action="LOGICAL_DELETE",
+            user_id=current.id,
+            company_id=before.company_id,
+            resource_type="departments",
+            resource_id=str(dept_id),
+            before_state={
+                **department_to_audit_state(before),
+                "label": deleted.label,
+                "deleted_at": None,
+                "deleted_by": None,
+                "deletion_reason": None,
+            },
+            after_state={
+                "label": deleted.label,
+                "deleted_at": deleted.deleted_at.isoformat() if deleted.deleted_at else None,
+                "deleted_by": str(deleted.deleted_by) if deleted.deleted_by else None,
+                "deletion_reason": deleted.deletion_reason,
+            },
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            required=True,
+        )
+    return MessageOut(
+        message=(
+            "Departamento eliminado."
+            if deleted.operation_applied
+            else "El departamento ya estaba en la papelera."
+        ),
+        code="dept_deleted" if deleted.operation_applied else "dept_already_deleted",
+    )

@@ -8,7 +8,11 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 
-from app.api.v1.company_access import require_company_access, resolve_branch_scope
+from app.api.v1.company_access import (
+    require_company_access,
+    require_company_wide_scope,
+    resolve_branch_scope,
+)
 from app.api.v1.deps import CurrentUser, SessionDep, get_audit_service, require_permission
 from app.api.v1.schemas.common import MessageOut
 from app.api.v1.schemas.employees import (
@@ -19,25 +23,27 @@ from app.api.v1.schemas.employees import (
     PageMeta,
     UpdateEmployeeRequest,
 )
+from app.api.v1.schemas.lifecycle import SoftDeleteRequest
 from app.application.audit.audit_service import AuditService, employee_to_audit_state
 from app.application.employees.employee_crud import (
     CreateEmployeeInput,
     CreateEmployeeUseCase,
-    DeleteEmployeeUseCase,
     GetEmployeeUseCase,
     ListEmployeesInput,
     ListEmployeesUseCase,
     UpdateEmployeeInput,
     UpdateEmployeeUseCase,
 )
+from app.application.lifecycle import LifecycleService
 from app.domain.entities.employee import EmployeeStatus
 from app.domain.ports.department_repository import DepartmentRepository
 from app.domain.ports.employee_repository import EmployeeRepository
+from app.infrastructure.media_assets import attach_media_by_url
 from app.infrastructure.models.employee import (
     DepartmentBranchAssignment,
     EmployeeBranchAssignment,
 )
-from app.infrastructure.media_assets import attach_media_by_url
+from app.infrastructure.repositories import SqlAlchemyLifecycleRepository
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
@@ -233,8 +239,12 @@ async def create_employee(
         )
     )
     await attach_media_by_url(
-        session, secure_url=e.photo_url, company_id=e.company_id,
-        owner_type="employee", owner_id=e.id, replace_single=True,
+        session,
+        secure_url=e.photo_url,
+        company_id=e.company_id,
+        owner_type="employee",
+        owner_id=e.id,
+        replace_single=True,
     )
     if branch_id is not None:
         session.add(
@@ -336,8 +346,12 @@ async def update_employee(
         )
     )
     await attach_media_by_url(
-        session, secure_url=e.photo_url, company_id=e.company_id,
-        owner_type="employee", owner_id=e.id, replace_single=True,
+        session,
+        secure_url=e.photo_url,
+        company_id=e.company_id,
+        owner_type="employee",
+        owner_id=e.id,
+        replace_single=True,
     )
     await audit.record(
         action="UPDATE",
@@ -358,11 +372,13 @@ async def update_employee(
     "/{emp_id}",
     response_model=MessageOut,
     status_code=status.HTTP_200_OK,
-    summary="Eliminar empleado (soft delete)",
+    summary="Eliminar empleado lógicamente (ruta de compatibilidad)",
+    deprecated=True,
     dependencies=[Depends(require_permission("employees:delete"))],
 )
 async def delete_employee(
     emp_id: uuid.UUID,
+    body: SoftDeleteRequest,
     request: Request,
     current: CurrentUser,
     session: SessionDep,
@@ -370,35 +386,43 @@ async def delete_employee(
     audit: AuditService = Depends(get_audit_service),
 ) -> MessageOut:
     before = await GetEmployeeUseCase(repo).execute(emp_id)
-    branch_id = await _require_employee_scope(
-        session,
-        current,
-        request,
-        employee_id=emp_id,
+    await require_company_wide_scope(session, current, before.company_id)
+    deleted = await LifecycleService(SqlAlchemyLifecycleRepository(session)).delete(
+        "employees",
+        str(emp_id),
         company_id=before.company_id,
+        actor_id=current.id,
+        reason=body.reason,
     )
-    active_assignment = await session.scalar(
-        select(EmployeeBranchAssignment.id).where(
-            EmployeeBranchAssignment.employee_id == emp_id,
-            EmployeeBranchAssignment.is_active.is_(True),
+    if deleted.operation_applied:
+        await audit.record(
+            action="LOGICAL_DELETE",
+            user_id=current.id,
+            company_id=before.company_id,
+            resource_type="employees",
+            resource_id=str(emp_id),
+            before_state={
+                **employee_to_audit_state(before),
+                "label": deleted.label,
+                "deleted_at": None,
+                "deleted_by": None,
+                "deletion_reason": None,
+            },
+            after_state={
+                "label": deleted.label,
+                "deleted_at": deleted.deleted_at.isoformat() if deleted.deleted_at else None,
+                "deleted_by": str(deleted.deleted_by) if deleted.deleted_by else None,
+                "deletion_reason": deleted.deletion_reason,
+            },
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            required=True,
         )
+    return MessageOut(
+        message=(
+            "Empleado eliminado."
+            if deleted.operation_applied
+            else "El empleado ya estaba en la papelera."
+        ),
+        code="employee_deleted" if deleted.operation_applied else "employee_already_deleted",
     )
-    if active_assignment:
-        raise HTTPException(
-            409, "Finalice primero las asignaciones activas del empleado a sucursales."
-        )
-    uc = DeleteEmployeeUseCase(repo)
-    await uc.execute(emp_id)
-    await audit.record(
-        action="LOGICAL_DELETE",
-        user_id=current.id,
-        company_id=before.company_id,
-        branch_id=branch_id,
-        resource_type="employees",
-        resource_id=str(emp_id),
-        before_state=employee_to_audit_state(before),
-        after_state={**employee_to_audit_state(before), "deleted": True},
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
-    return MessageOut(message="Empleado eliminado.", code="employee_deleted")

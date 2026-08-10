@@ -31,6 +31,12 @@ from app.infrastructure.repositories import (
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
 
+def _status_action(before_active: bool, after_active: bool) -> str:
+    if before_active == after_active:
+        return "UPDATE"
+    return "ACTIVATE" if after_active else "DEACTIVATE"
+
+
 def _get_supplier_use_cases(session: SessionDep) -> SupplierUseCases:
     supplier_repo = SqlAlchemySupplierRepository(session)
     catalog_repo = SqlAlchemyCatalogRepository(session)
@@ -142,7 +148,14 @@ async def create_supplier(
         email=payload.email,
         website=payload.website,
     )
-    await audit.record(action="CREATE", user_id=current.id, company_id=company_id, resource_type="suppliers", resource_id=str(created.id), after_state={"code": created.code, "name": created.name})
+    await audit.record(
+        action="CREATE",
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="suppliers",
+        resource_id=str(created.id),
+        after_state={"code": created.code, "name": created.name},
+    )
     return created
 
 
@@ -167,7 +180,15 @@ async def update_supplier(
     before = await use_cases.get_supplier(company_id, supplier_id)
     update_data = payload.model_dump(exclude_unset=True)
     updated = await use_cases.update_supplier(company_id, supplier_id, **update_data)
-    await audit.record(action="UPDATE", user_id=current.id, company_id=company_id, resource_type="suppliers", resource_id=str(supplier_id), before_state={"code": before.code, "name": before.name, "is_active": before.is_active}, after_state={"code": updated.code, "name": updated.name, "is_active": updated.is_active})
+    await audit.record(
+        action=_status_action(before.is_active, updated.is_active),
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="suppliers",
+        resource_id=str(supplier_id),
+        before_state={"code": before.code, "name": before.name, "is_active": before.is_active},
+        after_state={"code": updated.code, "name": updated.name, "is_active": updated.is_active},
+    )
     return updated
 
 
@@ -197,7 +218,14 @@ async def add_contact(
         phone=payload.phone,
         email=payload.email,
     )
-    await audit.record(action="CREATE", user_id=current.id, company_id=company_id, resource_type="supplier_contacts", resource_id=str(created.id), after_state={"supplier_id": created.supplier_id, "full_name": created.full_name})
+    await audit.record(
+        action="CREATE",
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="supplier_contacts",
+        resource_id=str(created.id),
+        after_state={"supplier_id": created.supplier_id, "full_name": created.full_name},
+    )
     return created
 
 
@@ -219,6 +247,7 @@ async def update_contact(
 ) -> SupplierContactResponse:
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
+    before = await use_cases.get_contact(company_id, contact_id)
     updated = await use_cases.update_contact(
         company_id,
         contact_id=contact_id,
@@ -227,18 +256,34 @@ async def update_contact(
         email=payload.email,
         is_active=payload.is_active,
     )
-    await audit.record(action="UPDATE", user_id=current.id, company_id=company_id, resource_type="supplier_contacts", resource_id=str(contact_id), after_state={"supplier_id": updated.supplier_id, "full_name": updated.full_name, "is_active": updated.is_active})
+    await audit.record(
+        action=_status_action(before.is_active, updated.is_active),
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="supplier_contacts",
+        resource_id=str(contact_id),
+        before_state={
+            "supplier_id": before.supplier_id,
+            "full_name": before.full_name,
+            "is_active": before.is_active,
+        },
+        after_state={
+            "supplier_id": updated.supplier_id,
+            "full_name": updated.full_name,
+            "is_active": updated.is_active,
+        },
+    )
     return updated
 
 
-@router.delete(
-    "/contacts/{contact_id}",
+@router.post(
+    "/contacts/{contact_id}/deactivate",
     response_model=MessageOut,
     status_code=status.HTTP_200_OK,
-    summary="Eliminar contacto de proveedor",
+    summary="Desactivar contacto de proveedor",
     dependencies=[Depends(require_permission("suppliers:manage"))],
 )
-async def delete_contact(
+async def deactivate_contact(
     contact_id: int,
     request: Request,
     session: SessionDep,
@@ -248,6 +293,41 @@ async def delete_contact(
 ) -> MessageOut:
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
+    before = await use_cases.get_contact(company_id, contact_id)
     await use_cases.deactivate_contact(company_id, contact_id)
-    await audit.record(action="DEACTIVATE", user_id=current.id, company_id=company_id, resource_type="supplier_contacts", resource_id=str(contact_id), after_state={"is_active": False})
-    return MessageOut(message="Contacto desactivado exitosamente")
+    if before.is_active:
+        await audit.record(
+            action="DEACTIVATE",
+            user_id=current.id,
+            company_id=company_id,
+            resource_type="supplier_contacts",
+            resource_id=str(contact_id),
+            before_state={"is_active": True},
+            after_state={"is_active": False},
+        )
+    return MessageOut(
+        message=(
+            "Contacto desactivado exitosamente"
+            if before.is_active
+            else "El contacto ya estaba desactivado"
+        )
+    )
+
+
+@router.delete(
+    "/contacts/{contact_id}",
+    response_model=MessageOut,
+    status_code=status.HTTP_200_OK,
+    summary="Desactivar contacto de proveedor (compatibilidad)",
+    deprecated=True,
+    dependencies=[Depends(require_permission("suppliers:manage"))],
+)
+async def deactivate_contact_legacy(
+    contact_id: int,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: SupplierUseCases = Depends(_get_supplier_use_cases),
+    audit: AuditService = Depends(get_audit_service),
+) -> MessageOut:
+    return await deactivate_contact(contact_id, request, session, current, use_cases, audit)

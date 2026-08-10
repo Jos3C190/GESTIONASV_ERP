@@ -36,6 +36,12 @@ from app.infrastructure.repositories import SqlAlchemyCatalogRepository
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
 
+def _status_action(before_active: bool, after_active: bool) -> str:
+    if before_active == after_active:
+        return "UPDATE"
+    return "ACTIVATE" if after_active else "DEACTIVATE"
+
+
 def _get_catalog_use_cases(session: SessionDep) -> CatalogUseCases:
     repo = SqlAlchemyCatalogRepository(session)
     return CatalogUseCases(repo)
@@ -132,7 +138,7 @@ async def update_category(
     await require_company_wide_scope(session, current, company_id)
     before = await use_cases.get_category(company_id, category_id)
     updated = await use_cases.update_category(company_id, category_id, **payload.model_dump(exclude_unset=True))
-    await audit.record(action="UPDATE", user_id=current.id, company_id=company_id, resource_type="product_categories", resource_id=str(category_id), before_state={"name": before.name, "is_active": before.is_active}, after_state={"name": updated.name, "is_active": updated.is_active})
+    await audit.record(action=_status_action(before.is_active, updated.is_active), user_id=current.id, company_id=company_id, resource_type="product_categories", resource_id=str(category_id), before_state={"name": before.name, "is_active": before.is_active}, after_state={"name": updated.name, "is_active": updated.is_active})
     return updated
 
 
@@ -207,7 +213,7 @@ async def update_sub_category(
     before = await use_cases.get_sub_category(company_id, sub_category_id)
     updated = await use_cases.update_sub_category(company_id, sub_category_id, **payload.model_dump(exclude_unset=True))
     await audit.record(
-        action="UPDATE",
+        action=_status_action(before.is_active, updated.is_active),
         user_id=current.id,
         company_id=company_id,
         resource_type="sub_categories",
@@ -510,5 +516,5 @@ async def update_product(
     before = await use_cases.get_product(company_id, product_id)
     update_data = payload.model_dump(exclude_unset=True)
     updated = await use_cases.update_product(company_id, product_id, **update_data)
-    await audit.record(action="UPDATE", user_id=current.id, company_id=company_id, resource_type="products", resource_id=str(product_id), before_state={"sku": before.sku, "name": before.name, "is_active": before.is_active}, after_state={"sku": updated.sku, "name": updated.name, "is_active": updated.is_active})
+    await audit.record(action=_status_action(before.is_active, updated.is_active), user_id=current.id, company_id=company_id, resource_type="products", resource_id=str(product_id), before_state={"sku": before.sku, "name": before.name, "is_active": before.is_active}, after_state={"sku": updated.sku, "name": updated.name, "is_active": updated.is_active})
     return updated
