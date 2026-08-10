@@ -70,7 +70,7 @@
   });
 </script>
 
-<svelte:head><title>Dashboard — ERP System</title></svelte:head>
+<svelte:head><title>Dashboard — GestionaSV</title></svelte:head>
 
 <div class="p-6 md:p-8">
   <!-- Header -->

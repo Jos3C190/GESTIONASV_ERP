@@ -140,7 +140,7 @@
   }
 </script>
 
-<svelte:head><title>Ubicaciones físicas — ERP System</title></svelte:head>
+<svelte:head><title>Ubicaciones físicas — GestionaSV</title></svelte:head>
 
 <div class="p-6 md:p-8">
   <!-- Header con botón back (Homologado con detalle de almacén) -->

@@ -191,7 +191,7 @@
   });
 </script>
 
-<svelte:head><title>Bitácora — ERP System</title></svelte:head>
+<svelte:head><title>Bitácora — GestionaSV</title></svelte:head>
 
 <div class="p-6 md:p-8">
   <div class="mb-5 flex items-center justify-between gap-4">

@@ -293,7 +293,7 @@
   let activeRatio = $derived(kpiTotal > 0 ? Math.round((kpiActive / kpiTotal) * 100) : 0);
 </script>
 
-<svelte:head><title>Proveedores — ERP System</title></svelte:head>
+<svelte:head><title>Proveedores — GestionaSV</title></svelte:head>
 
 <div class="p-6 md:p-8">
   <!-- Header -->

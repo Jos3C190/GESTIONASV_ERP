@@ -161,7 +161,7 @@
   }
 </script>
 
-<svelte:head><title>Categorías de almacén — ERP System</title></svelte:head>
+<svelte:head><title>Categorías de almacén — GestionaSV</title></svelte:head>
 
 <div class="space-y-4 p-4 sm:space-y-6 sm:p-6 md:p-8">
   <div class="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">

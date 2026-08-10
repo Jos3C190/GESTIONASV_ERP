@@ -21,7 +21,7 @@
   $effect(() => { loadDepartments(); });
 </script>
 
-<svelte:head><title>Crear empleado — ERP System</title></svelte:head>
+<svelte:head><title>Crear empleado — GestionaSV</title></svelte:head>
 
 <div class="p-6 md:p-8">
   <div class="mb-6 flex items-center gap-3">

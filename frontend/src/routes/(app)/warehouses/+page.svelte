@@ -198,7 +198,7 @@
   }
 </script>
 
-<svelte:head><title>Almacenes — ERP System</title></svelte:head>
+<svelte:head><title>Almacenes — GestionaSV</title></svelte:head>
 
 <div class="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
   <!-- Header de página (Sin título redundante) -->

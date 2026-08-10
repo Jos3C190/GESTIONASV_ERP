@@ -355,7 +355,7 @@
   onDestroy(() => listController?.abort());
 </script>
 
-<svelte:head><title>Roles — ERP System</title></svelte:head>
+<svelte:head><title>Roles — GestionaSV</title></svelte:head>
 
 <div class="p-6 md:p-8">
   <div class="mb-5 flex items-center justify-between gap-4">

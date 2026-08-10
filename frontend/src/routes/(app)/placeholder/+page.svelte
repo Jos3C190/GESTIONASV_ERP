@@ -6,7 +6,7 @@
   let moduleName = $derived(page.url.searchParams.get('module') ?? 'Módulo');
 </script>
 
-<svelte:head><title>{moduleName} — ERP System</title></svelte:head>
+<svelte:head><title>{moduleName} — GestionaSV</title></svelte:head>
 
 <div class="flex min-h-full items-center justify-center p-6">
   <div class="w-full max-w-lg animate-fade-scale">
@@ -24,7 +24,7 @@
         </div>
         <h2 class="text-xl font-bold text-foreground">{moduleName}</h2>
         <p class="mt-2 text-sm text-foreground-muted">
-          Este módulo está en desarrollo. Estará disponible en una próxima fase del ERP System.
+          Este módulo está en desarrollo. Estará disponible próximamente en GestionaSV.
         </p>
         <div class="mt-8">
           <Button onclick={() => (window.location.href = '/dashboard')}>

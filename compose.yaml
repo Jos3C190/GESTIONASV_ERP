@@ -123,6 +123,7 @@ services:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
       PUBLIC_GOOGLE_MAPS_API_KEY: ${PUBLIC_GOOGLE_MAPS_API_KEY:-}
       ORIGIN: http://localhost:5173
+      SVELTEKIT_OUT_DIR: .svelte-kit-dev
     depends_on:
       backend:
         condition: service_healthy
@@ -133,7 +134,6 @@ services:
     volumes:
       - ./frontend:/app
       - frontend-node-modules:/app/node_modules
-      - frontend-svelte-kit:/app/.svelte-kit
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:5173/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s
@@ -192,4 +192,3 @@ volumes:
   redis-data:
   backend-cache:
   frontend-node-modules:
-  frontend-svelte-kit:

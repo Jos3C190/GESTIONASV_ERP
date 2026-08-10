@@ -13,8 +13,8 @@
 </script>
 
 <svelte:head>
-  <title>ERP System</title>
-  <meta name="description" content="ERP System — panel de gestión empresarial." />
+  <title>GestionaSV</title>
+  <meta name="description" content="GestionaSV — panel de gestión empresarial." />
 </svelte:head>
 
 {@render children()}

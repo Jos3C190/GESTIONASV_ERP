@@ -115,7 +115,7 @@
 </script>
 
 <svelte:head
-  ><title>{branch ? `${branch.name} — Sucursales` : 'Sucursal — ERP System'}</title></svelte:head
+  ><title>{branch ? `${branch.name} — Sucursales` : 'Sucursal — GestionaSV'}</title></svelte:head
 >
 
 <div class="p-6 md:p-8">

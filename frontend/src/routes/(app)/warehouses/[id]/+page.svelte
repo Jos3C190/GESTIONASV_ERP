@@ -135,7 +135,7 @@
 </script>
 
 <svelte:head
-  ><title>{warehouse ? `${warehouse.name} — Almacenes` : 'Almacén — ERP System'}</title
+  ><title>{warehouse ? `${warehouse.name} — Almacenes` : 'Almacén — GestionaSV'}</title
   ></svelte:head
 >
 

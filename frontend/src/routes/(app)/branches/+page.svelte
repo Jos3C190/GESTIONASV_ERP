@@ -141,7 +141,7 @@
   );
 </script>
 
-<svelte:head><title>Sucursales — ERP System</title></svelte:head>
+<svelte:head><title>Sucursales — GestionaSV</title></svelte:head>
 
 <div
   class="p-4 sm:p-6 md:p-8 flex flex-col lg:h-[calc(100vh-3.5rem)] space-y-4 sm:space-y-5 overflow-auto lg:overflow-hidden"

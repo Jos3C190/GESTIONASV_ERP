@@ -229,13 +229,13 @@
   onMount(load);
 </script>
 
-<svelte:head><title>Seleccionar empresa — ERP System</title></svelte:head>
+<svelte:head><title>Seleccionar empresa — GestionaSV</title></svelte:head>
 
 <main class="min-h-screen bg-surface px-6 py-10 text-foreground">
   <div class="mx-auto max-w-6xl">
     <header class="mb-10 flex items-center justify-between gap-4">
       <div>
-        <p class="text-sm font-semibold text-primary">ERP System</p>
+        <p class="text-sm font-semibold text-primary">GestionaSV</p>
         <h1 class="mt-1 text-3xl font-bold tracking-tight">¿En qué empresa trabajará?</h1>
         <p class="mt-2 text-sm text-foreground-muted">
           Seleccione el contexto operativo para continuar.

@@ -178,7 +178,7 @@
   let linkedRatio = $derived(kpiTotal > 0 ? Math.round((kpiLinked / kpiTotal) * 100) : 0);
 </script>
 
-<svelte:head><title>Empleados — ERP System</title></svelte:head>
+<svelte:head><title>Empleados — GestionaSV</title></svelte:head>
 
 <div class="p-6 md:p-8">
   <!-- Header -->

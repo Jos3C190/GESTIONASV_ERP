@@ -150,7 +150,7 @@
 </script>
 
 <svelte:head
-  ><title>{emp ? `${emp.first_name} ${emp.last_name} — Empleados` : 'Empleado — ERP System'}</title
+  ><title>{emp ? `${emp.first_name} ${emp.last_name} — Empleados` : 'Empleado — GestionaSV'}</title
   ></svelte:head
 >
 

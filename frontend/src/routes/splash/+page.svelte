@@ -33,7 +33,7 @@
 </script>
 
 <svelte:head>
-  <title>Cargando — ERP System</title>
+  <title>Cargando — GestionaSV</title>
 </svelte:head>
 
 <div

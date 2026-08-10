@@ -7,6 +7,7 @@
   import Callout from '$lib/components/ui/Callout.svelte';
   import { catalogApi } from '$lib/api/catalog';
   import type { Category, SubCategory } from '$lib/types/catalog';
+  import { search as globalSearch } from '$lib/stores/search.svelte';
 
   // Svelte 5 Runes State
   let categories = $state<Category[]>([]);
@@ -32,6 +33,25 @@
   let formSubDesc = $state<string>('');
   let formSubIsActive = $state<boolean>(true);
   let savingSub = $state<boolean>(false);
+
+  let filteredCategories = $derived.by(() => {
+    const query = globalSearch.query.trim().toLocaleLowerCase('es-SV');
+    if (!query) return categories;
+
+    return categories.filter((category) => {
+      const categoryMatches = [category.name, category.description]
+        .filter(Boolean)
+        .some((value) => value!.toLocaleLowerCase('es-SV').includes(query));
+      const hasMatchingSubCategory = subCategories.some(
+        (subCategory) =>
+          subCategory.id_category === category.id_category &&
+          [subCategory.name, subCategory.description]
+            .filter(Boolean)
+            .some((value) => value!.toLocaleLowerCase('es-SV').includes(query))
+      );
+      return categoryMatches || hasMatchingSubCategory;
+    });
+  });
 
   async function loadData() {
     loading = true;
@@ -147,17 +167,35 @@
   }
 </script>
 
-<svelte:head><title>Categorías de Productos — ERP System</title></svelte:head>
+<svelte:head><title>Categorías de Productos — GestionaSV</title></svelte:head>
 
-<div class="flex flex-col gap-6 p-6 animate-fade-scale">
-  <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-2xl font-bold text-foreground">Categorías y Subcategorías</h1>
-      <p class="mt-1 text-sm text-foreground-muted">Organización jerárquica del catálogo de productos.</p>
-    </div>
-    <div class="flex gap-2">
-      <Button variant="secondary" onclick={() => openCreateSubCategoryModal()}>Nueva Subcategoría</Button>
-      <Button variant="primary" onclick={openCreateCategoryModal}>Nueva Categoría</Button>
+<div class="p-6 md:p-8 animate-fade-scale">
+  <div class="mb-5 flex items-center justify-between gap-4">
+    <p class="text-sm text-foreground-muted">
+      {loading
+        ? 'Cargando...'
+        : globalSearch.query.trim()
+          ? `${filteredCategories.length} categorías encontradas`
+          : `${categories.length} categorías`}
+    </p>
+    <div class="flex items-center gap-2">
+      <Button size="sm" variant="secondary" onclick={() => openCreateSubCategoryModal()}>
+        Nueva subcategoría
+      </Button>
+      <Button size="sm" variant="primary" onclick={openCreateCategoryModal}>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg
+        >
+        Nueva categoría
+      </Button>
     </div>
   </div>
 
@@ -171,13 +209,18 @@
         <div class="h-24 bg-surface-muted rounded-xl animate-pulse"></div>
       {/each}
     </div>
-  {:else if categories.length === 0}
+  {:else if filteredCategories.length === 0}
     <Card class="p-12 text-center">
-      <h3 class="text-lg font-semibold text-foreground">Sin categorías registradas</h3>
+      <h3 class="text-lg font-semibold text-foreground">
+        {globalSearch.query.trim() ? 'No se encontraron categorías' : 'Sin categorías registradas'}
+      </h3>
+      {#if globalSearch.query.trim()}
+        <p class="mt-1 text-sm text-foreground-muted">Pruebe con otro término de búsqueda.</p>
+      {/if}
     </Card>
   {:else}
     <div class="grid grid-cols-1 gap-6">
-      {#each categories as cat}
+      {#each filteredCategories as cat}
         {@const catSubList = subCategories.filter((s) => s.id_category === cat.id_category)}
         <Card class="p-5">
           <div class="flex items-start justify-between border-b border-border pb-4 mb-4">

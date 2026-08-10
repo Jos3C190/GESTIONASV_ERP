@@ -40,7 +40,9 @@
     '/warehouses',
     '/warehouse-categories',
     '/suppliers',
-    '/products'
+    '/products',
+    '/inventory/categories',
+    '/inventory/units'
   ];
 
   let showSearch = $derived(SEARCHABLE_ROUTES.includes(page.url.pathname));

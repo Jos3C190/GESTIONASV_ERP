@@ -352,7 +352,7 @@
 </script>
 
 <svelte:head
-  ><title>{mode === 'create' ? 'Nuevo almacén' : 'Editar almacén'} — ERP System</title></svelte:head
+  ><title>{mode === 'create' ? 'Nuevo almacén' : 'Editar almacén'} — GestionaSV</title></svelte:head
 >
 <div class="min-h-full bg-background px-6 pb-6 md:px-8 md:pb-8">
   <header

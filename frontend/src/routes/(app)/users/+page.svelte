@@ -369,7 +369,7 @@
   });
 </script>
 
-<svelte:head><title>Usuarios — ERP System</title></svelte:head>
+<svelte:head><title>Usuarios — GestionaSV</title></svelte:head>
 
 <div class="p-6 md:p-8">
   <div class="mb-5 flex items-center justify-between gap-4">

@@ -50,7 +50,7 @@
   }
 </script>
 
-<svelte:head><title>Iniciar sesión — ERP System</title></svelte:head>
+<svelte:head><title>Iniciar sesión — GestionaSV</title></svelte:head>
 
 <div class="flex min-h-screen">
   <!-- Hero side -->
@@ -64,7 +64,7 @@
         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
           <span class="text-lg font-bold text-white">E</span>
         </div>
-        <span class="text-base font-semibold text-white">ERP System</span>
+        <span class="text-base font-semibold text-white">GestionaSV</span>
       </div>
 
       <div class="relative z-10">
@@ -75,14 +75,9 @@
           Sistema modular de planificación de recursos empresariales. 
           Acceso seguro, control granular, datos en tiempo real.
         </p>
-        <div class="mt-8 flex gap-6">
-          <div><p class="text-2xl font-bold text-white">6</p><p class="text-xs text-white/70">Módulos activos</p></div>
-          <div><p class="text-2xl font-bold text-white">17</p><p class="text-xs text-white/70">Próximamente</p></div>
-          <div><p class="text-2xl font-bold text-white">21</p><p class="text-xs text-white/70">Permisos</p></div>
-        </div>
       </div>
 
-      <p class="relative z-10 text-xs text-white/60">© 2026 ERP System · Todos los derechos reservados</p>
+      <p class="relative z-10 text-xs text-white/60">© 2026 GestionaSV · Todos los derechos reservados</p>
     </div>
   </div>
 
@@ -93,7 +88,7 @@
         <div class="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-foreground text-surface">
           <span class="text-lg font-bold">E</span>
         </div>
-        <h1 class="text-xl font-bold text-foreground">ERP System</h1>
+        <h1 class="text-xl font-bold text-foreground">GestionaSV</h1>
       </div>
 
       <h2 class="text-2xl font-bold tracking-tight text-foreground">Bienvenido</h2>
