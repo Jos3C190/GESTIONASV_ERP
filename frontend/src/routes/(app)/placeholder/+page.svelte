@@ -18,9 +18,6 @@
               <path d="M12 6v6l4 2" /><circle cx="12" cy="12" r="9" />
             </svg>
           </div>
-          <div class="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-accent/20">
-            <span class="h-2 w-2 rounded-full bg-accent animate-pulse-glow"></span>
-          </div>
         </div>
         <h2 class="text-xl font-bold text-foreground">{moduleName}</h2>
         <p class="mt-2 text-sm text-foreground-muted">
