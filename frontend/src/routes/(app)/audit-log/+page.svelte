@@ -120,7 +120,10 @@
       CREATE: 'Registro creado',
       UPDATE: 'Registro actualizado',
       DELETE: 'Registro eliminado',
-      LOGICAL_DELETE: 'Registro desactivado',
+      LOGICAL_DELETE: 'Registro enviado a la papelera',
+      RESTORE: 'Registro restaurado',
+      ACTIVATE: 'Registro activado',
+      DEACTIVATE: 'Registro desactivado',
       DUPLICATE: 'Rol duplicado',
       SET_PERMISSIONS: 'Permisos actualizados',
       ASSIGN_ROLE: 'Rol asignado',
@@ -134,7 +137,9 @@
   function actionBadgeClass(action: string): string {
     if (action.includes('SUCCESS')) return 'badge-success';
     if (action.includes('FAILED')) return 'badge-danger';
-    if (action === 'CREATE' || action === 'DUPLICATE') return 'badge-primary';
+    if (action === 'CREATE' || action === 'DUPLICATE' || action === 'RESTORE')
+      return 'badge-primary';
+    if (action === 'ACTIVATE') return 'badge-success';
     if (
       [
         'UPDATE',
@@ -146,7 +151,7 @@
       ].includes(action)
     )
       return 'badge-warning';
-    if (action.includes('DELETE')) return 'badge-danger';
+    if (action.includes('DELETE') || action === 'DEACTIVATE') return 'badge-danger';
     return 'badge-neutral';
   }
   function timeAgo(iso: string): string {
@@ -208,7 +213,7 @@
       class="h-8 rounded-md border border-border bg-surface-muted px-2.5 text-[13px] text-foreground focus:border-primary focus:shadow-glow focus:outline-none"
     >
       <option value="">Todas las acciones</option>
-      {#each [['LOGIN_SUCCESS', 'Login exitoso'], ['LOGIN_FAILED', 'Login fallido'], ['LOGOUT', 'Cierre de sesión'], ['PASSWORD_CHANGE', 'Cambio de contraseña'], ['PASSWORD_RESET', 'Restablecimiento de contraseña'], ['CREATE', 'Creación'], ['UPDATE', 'Actualización'], ['DELETE', 'Eliminación'], ['LOGICAL_DELETE', 'Desactivación'], ['DUPLICATE', 'Duplicación'], ['SET_PERMISSIONS', 'Cambio de permisos'], ['ASSIGN_ROLE', 'Asignación de rol'], ['REVOKE_ROLE', 'Revocación de rol'], ['LINK_USER', 'Vinculación de usuario'], ['UNLINK_USER', 'Desvinculación de usuario'], ['UNLOCK', 'Desbloqueo de usuario']] as option}
+      {#each [['LOGIN_SUCCESS', 'Login exitoso'], ['LOGIN_FAILED', 'Login fallido'], ['LOGOUT', 'Cierre de sesión'], ['PASSWORD_CHANGE', 'Cambio de contraseña'], ['PASSWORD_RESET', 'Restablecimiento de contraseña'], ['CREATE', 'Creación'], ['UPDATE', 'Actualización'], ['DELETE', 'Eliminación'], ['LOGICAL_DELETE', 'Enviado a la papelera'], ['RESTORE', 'Restauración'], ['ACTIVATE', 'Activación'], ['DEACTIVATE', 'Desactivación'], ['DUPLICATE', 'Duplicación'], ['SET_PERMISSIONS', 'Cambio de permisos'], ['ASSIGN_ROLE', 'Asignación de rol'], ['REVOKE_ROLE', 'Revocación de rol'], ['LINK_USER', 'Vinculación de usuario'], ['UNLINK_USER', 'Desvinculación de usuario'], ['UNLOCK', 'Desbloqueo de usuario']] as option}
         <option value={option[0]}>{option[1]}</option>
       {/each}
     </select>

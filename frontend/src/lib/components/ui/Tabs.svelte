@@ -1,8 +1,6 @@
 <script lang="ts">
   /** Tabs — pestañas minimalistas con indicador animado estilo Vercel/Geist. */
 
-  import type { Snippet } from 'svelte';
-
   export interface TabItem {
     id: string;
     label: string;

@@ -5,8 +5,12 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import Callout from '$lib/components/ui/Callout.svelte';
+  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
+  import { api, HttpError } from '$lib/api/client';
   import { catalogApi } from '$lib/api/catalog';
   import type { Category, SubCategory } from '$lib/types/catalog';
+  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import { permissions } from '$lib/stores/permissions.svelte';
   import { search as globalSearch } from '$lib/stores/search.svelte';
 
   // Svelte 5 Runes State
@@ -63,8 +67,8 @@
       ]);
       categories = cats;
       subCategories = subs;
-    } catch (err: any) {
-      errorMsg = err.message || 'Error al cargar categorías';
+    } catch (err) {
+      errorMsg = err instanceof HttpError ? err.message : 'Error al cargar categorías';
     } finally {
       loading = false;
     }
@@ -111,8 +115,8 @@
       }
       showCatModal = false;
       await loadData();
-    } catch (err: any) {
-      alert(err.message || 'Error al guardar categoría');
+    } catch (err) {
+      errorMsg = err instanceof HttpError ? err.message : 'Error al guardar categoría';
     } finally {
       savingCat = false;
     }
@@ -159,11 +163,136 @@
       }
       showSubModal = false;
       await loadData();
-    } catch (err: any) {
-      alert(err.message || 'Error al guardar subcategoría');
+    } catch (err) {
+      errorMsg = err instanceof HttpError ? err.message : 'Error al guardar subcategoría';
     } finally {
       savingSub = false;
     }
+  }
+
+  async function toggleCategory(cat: Category) {
+    if (!cat.is_active) {
+      try {
+        await catalogApi.updateCategory(cat.id_category, { is_active: true });
+        await loadData();
+      } catch (err) {
+        errorMsg = err instanceof HttpError ? err.message : 'No se pudo activar la categoría.';
+      }
+      return;
+    }
+    confirmation.request({
+      kind: 'deactivate',
+      title: 'Desactivar categoría de productos',
+      description:
+        'La categoría dejará de estar disponible para nuevas asignaciones. Los productos y el historial existentes se conservarán.',
+      resourceName: cat.name,
+      confirmLabel: 'Desactivar categoría',
+      execute: async () => {
+        await catalogApi.updateCategory(cat.id_category, { is_active: false });
+        await loadData();
+      }
+    });
+  }
+
+  async function toggleSubCategory(sub: SubCategory) {
+    if (!sub.is_active) {
+      try {
+        await catalogApi.updateSubCategory(sub.id_sub_category, { is_active: true });
+        await loadData();
+      } catch (err) {
+        errorMsg = err instanceof HttpError ? err.message : 'No se pudo activar la subcategoría.';
+      }
+      return;
+    }
+    confirmation.request({
+      kind: 'deactivate',
+      title: 'Desactivar subcategoría de productos',
+      description:
+        'La subcategoría dejará de estar disponible para nuevas asignaciones. Los productos y el historial existentes se conservarán.',
+      resourceName: sub.name,
+      confirmLabel: 'Desactivar subcategoría',
+      execute: async () => {
+        await catalogApi.updateSubCategory(sub.id_sub_category, { is_active: false });
+        await loadData();
+      }
+    });
+  }
+
+  function deleteCategory(cat: Category) {
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar categoría de productos',
+      description:
+        'La categoría se ocultará de la operación diaria y pasará a la Papelera. No podrá eliminarse mientras conserve subcategorías o productos dependientes.',
+      resourceName: cat.name,
+      confirmLabel: 'Eliminar categoría',
+      requireReason: true,
+      reasonLabel: 'Motivo de eliminación',
+      execute: async (reason) => {
+        if (!reason) return;
+        await api.lifecycle.delete('product_categories', String(cat.id_category), reason);
+        await loadData();
+      }
+    });
+  }
+
+  function deleteSubCategory(sub: SubCategory) {
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar subcategoría de productos',
+      description:
+        'La subcategoría se ocultará de la operación diaria y pasará a la Papelera. No podrá eliminarse mientras conserve productos dependientes.',
+      resourceName: sub.name,
+      confirmLabel: 'Eliminar subcategoría',
+      requireReason: true,
+      reasonLabel: 'Motivo de eliminación',
+      execute: async (reason) => {
+        if (!reason) return;
+        await api.lifecycle.delete('product_subcategories', String(sub.id_sub_category), reason);
+        await loadData();
+      }
+    });
+  }
+
+  function categoryActions(cat: Category): KebabItem[] {
+    const actions: KebabItem[] = [];
+    if (permissions.hasPermission('products:manage')) {
+      actions.push(
+        { id: 'add-subcategory', label: 'Nueva subcategoría', icon: 'custom', onClick: () => openCreateSubCategoryModal(cat.id_category) },
+        { id: 'edit', label: 'Editar', icon: 'edit', onClick: () => openEditCategoryModal(cat) },
+        {
+          id: 'status',
+          label: cat.is_active ? 'Desactivar' : 'Activar',
+          icon: 'power',
+          variant: cat.is_active ? 'danger' : 'default',
+          onClick: () => void toggleCategory(cat)
+        }
+      );
+    }
+    if (permissions.hasPermission('product_categories:delete')) {
+      actions.push({ id: 'delete', label: 'Eliminar', icon: 'delete', variant: 'danger', onClick: () => deleteCategory(cat) });
+    }
+    return actions;
+  }
+
+  function subCategoryActions(sub: SubCategory): KebabItem[] {
+    const actions: KebabItem[] = [];
+    if (permissions.hasPermission('products:manage')) {
+      actions.push(
+        { id: 'edit', label: 'Editar', icon: 'edit', onClick: () => openEditSubCategoryModal(sub) },
+        {
+          id: 'status',
+          label: sub.is_active ? 'Desactivar' : 'Activar',
+          icon: 'power',
+          variant: sub.is_active ? 'danger' : 'default',
+          onClick: () => void toggleSubCategory(sub)
+        }
+      );
+    }
+    if (permissions.hasPermission('product_categories:delete')) {
+      actions.push({ id: 'delete', label: 'Eliminar', icon: 'delete', variant: 'danger', onClick: () => deleteSubCategory(sub) });
+    }
+    return actions;
   }
 </script>
 
@@ -178,25 +307,27 @@
           ? `${filteredCategories.length} categorías encontradas`
           : `${categories.length} categorías`}
     </p>
-    <div class="flex items-center gap-2">
-      <Button size="sm" variant="secondary" onclick={() => openCreateSubCategoryModal()}>
-        Nueva subcategoría
-      </Button>
-      <Button size="sm" variant="primary" onclick={openCreateCategoryModal}>
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg
-        >
-        Nueva categoría
-      </Button>
-    </div>
+    {#if permissions.hasPermission('products:manage')}
+      <div class="flex items-center gap-2">
+        <Button size="sm" variant="secondary" onclick={() => openCreateSubCategoryModal()}>
+          Nueva subcategoría
+        </Button>
+        <Button size="sm" variant="primary" onclick={openCreateCategoryModal}>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg
+          >
+          Nueva categoría
+        </Button>
+      </div>
+    {/if}
   </div>
 
   {#if errorMsg}
@@ -231,10 +362,9 @@
               </div>
               <p class="text-xs text-foreground-muted mt-1">{cat.description || 'Sin descripción'}</p>
             </div>
-            <div class="flex gap-2">
-              <Button size="sm" variant="ghost" onclick={() => openCreateSubCategoryModal(cat.id_category)}>+ Subcategoría</Button>
-              <Button size="sm" variant="ghost" onclick={() => openEditCategoryModal(cat)}>Editar Categoría</Button>
-            </div>
+            {#if categoryActions(cat).length > 0}
+              <KebabMenu items={categoryActions(cat)} ariaLabel={`Acciones de ${cat.name}`} />
+            {/if}
           </div>
 
           <!-- Subcategories -->
@@ -252,7 +382,9 @@
                         <span class="text-xs text-foreground-muted block">{sub.description}</span>
                       {/if}
                     </div>
-                    <Button size="sm" variant="ghost" onclick={() => openEditSubCategoryModal(sub)}>Editar</Button>
+                    {#if subCategoryActions(sub).length > 0}
+                      <KebabMenu items={subCategoryActions(sub)} ariaLabel={`Acciones de ${sub.name}`} />
+                    {/if}
                   </div>
                 {/each}
               </div>
@@ -275,12 +407,6 @@
           <label for="cdesc" class="block text-xs font-medium text-foreground-muted mb-1">Descripción</label>
           <textarea id="cdesc" rows="2" bind:value={formCatDesc} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"></textarea>
         </div>
-        {#if isEditingCat}
-          <div class="flex items-center gap-2">
-            <input type="checkbox" id="cactive" bind:checked={formCatIsActive} />
-            <label for="cactive" class="text-sm text-foreground">Categoría Activa</label>
-          </div>
-        {/if}
         <div class="flex justify-end gap-2 pt-4 border-t border-border">
           <Button type="button" variant="secondary" onclick={() => (showCatModal = false)}>Cancelar</Button>
           <Button type="submit" variant="primary" disabled={savingCat}>{savingCat ? 'Guardando...' : 'Guardar'}</Button>
@@ -309,12 +435,6 @@
           <label for="sdesc" class="block text-xs font-medium text-foreground-muted mb-1">Descripción</label>
           <textarea id="sdesc" rows="2" bind:value={formSubDesc} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"></textarea>
         </div>
-        {#if isEditingSub}
-          <div class="flex items-center gap-2">
-            <input type="checkbox" id="sactive" bind:checked={formSubIsActive} />
-            <label for="sactive" class="text-sm text-foreground">Subcategoría Activa</label>
-          </div>
-        {/if}
         <div class="flex justify-end gap-2 pt-4 border-t border-border">
           <Button type="button" variant="secondary" onclick={() => (showSubModal = false)}>Cancelar</Button>
           <Button type="submit" variant="primary" disabled={savingSub}>{savingSub ? 'Guardando...' : 'Guardar'}</Button>

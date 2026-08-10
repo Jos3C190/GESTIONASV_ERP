@@ -16,6 +16,7 @@ const TITLES: Record<string, string> = {
   '/products': 'Productos',
   '/inventory/categories': 'Categorías de productos',
   '/inventory/units': 'Unidades de medida',
+  '/trash': 'Papelera',
   '/placeholder': 'Módulo'
 };
 

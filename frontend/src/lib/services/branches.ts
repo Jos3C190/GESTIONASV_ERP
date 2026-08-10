@@ -152,8 +152,8 @@ export async function updateBranch(id: string, branch: Partial<Branch>): Promise
 }
 
 /**
- * Deletes a branch via API.
+ * Deactivates a branch without removing it from the master data catalogue.
  */
-export async function deleteBranch(id: string): Promise<void> {
+export async function deactivateBranch(id: string): Promise<void> {
   await api.branches.deactivate(id);
 }

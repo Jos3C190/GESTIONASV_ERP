@@ -27,4 +27,13 @@ describe('catalog navigation', () => {
     expect(routeTitle('/inventory/categories')).toBe('Categorías de productos');
     expect(routeTitle('/inventory/units')).toBe('Unidades de medida');
   });
+
+  it('exposes the lifecycle trash with its dedicated permission and title', () => {
+    expect(itemByRoute('/trash')).toMatchObject({
+      label: 'Papelera',
+      implemented: true,
+      requiredPermission: 'lifecycle:read'
+    });
+    expect(routeTitle('/trash')).toBe('Papelera');
+  });
 });

@@ -133,6 +133,25 @@
     }
   }
 
+
+  function deleteCategory(category: Category) {
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar categoría de almacén',
+      description:
+        'La categoría se ocultará de la operación diaria y pasará a la Papelera. No podrá eliminarse mientras existan almacenes que dependan de ella.',
+      resourceName: category.name,
+      confirmLabel: 'Eliminar categoría',
+      requireReason: true,
+      reasonLabel: 'Motivo de eliminación',
+      execute: async (reason) => {
+        if (!reason) return;
+        await api.lifecycle.delete('warehouse_categories', category.id, reason);
+        await load();
+      }
+    });
+  }
+
   function menuItems(category: Category): KebabItem[] {
     const actions: KebabItem[] = [];
     if (permissions.hasPermission('warehouse_categories.update')) {
@@ -155,6 +174,15 @@
         icon: 'power',
         variant: category.is_active ? 'danger' : 'default',
         onClick: () => void toggle(category)
+      });
+    }
+    if (permissions.hasPermission('warehouse_categories.delete')) {
+      actions.push({
+        id: 'delete',
+        label: 'Eliminar',
+        icon: 'delete',
+        variant: 'danger',
+        onClick: () => deleteCategory(category)
       });
     }
     return actions;

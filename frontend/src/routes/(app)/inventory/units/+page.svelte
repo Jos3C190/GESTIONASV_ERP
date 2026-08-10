@@ -5,7 +5,7 @@
   import FormField from '$lib/components/ui/FormField.svelte';
   import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
-  import { HttpError } from '$lib/api/client';
+  import { api, HttpError } from '$lib/api/client';
   import { catalogApi } from '$lib/api/catalog';
   import { confirmation } from '$lib/stores/confirmation.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
@@ -131,6 +131,24 @@
     });
   }
 
+  function deleteUnit(unit: Unit) {
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar unidad personalizada',
+      description:
+        'La unidad se ocultará de la operación diaria y pasará a la Papelera. No podrá eliminarse mientras esté vinculada a productos.',
+      resourceName: unit.alias || unit.name,
+      confirmLabel: 'Eliminar unidad',
+      requireReason: true,
+      reasonLabel: 'Motivo de eliminación',
+      execute: async (reason) => {
+        if (!reason) return;
+        await api.lifecycle.delete('units', String(unit.id_unit), reason);
+        await load();
+      }
+    });
+  }
+
   function menuItems(unit: Unit): KebabItem[] {
     const items: KebabItem[] = [];
     const canEdit = unit.is_standard
@@ -145,6 +163,15 @@
         icon: 'power',
         variant: unit.is_enabled ? 'danger' : 'default',
         onClick: () => void toggle(unit)
+      });
+    }
+    if (!unit.is_standard && permissions.hasPermission('units:delete')) {
+      items.push({
+        id: 'delete',
+        label: 'Eliminar',
+        icon: 'delete',
+        variant: 'danger',
+        onClick: () => deleteUnit(unit)
       });
     }
     return items;

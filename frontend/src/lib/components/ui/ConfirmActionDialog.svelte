@@ -8,6 +8,7 @@
   let isDanger = $derived(
     confirmation.current?.kind === 'delete' || confirmation.current?.kind === 'revoke'
   );
+  let isRestore = $derived(confirmation.current?.kind === 'restore');
 
   function handleBackdrop(event: MouseEvent) {
     if (event.target === event.currentTarget) confirmation.cancel();
@@ -70,7 +71,9 @@
         <div
           class="flex h-10 w-10 flex-none items-center justify-center rounded-full {isDanger
             ? 'bg-danger/10 text-danger'
-            : 'bg-warning/10 text-warning'}"
+            : isRestore
+              ? 'bg-success/10 text-success'
+              : 'bg-warning/10 text-warning'}"
           aria-hidden="true"
         >
           {#if confirmation.current.kind === 'delete'}
@@ -86,6 +89,18 @@
               ><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path
                 d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
               /></svg
+            >
+          {:else if confirmation.current.kind === 'restore'}
+            <svg
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 3v6h6" /></svg
             >
           {:else if confirmation.current.kind === 'end-assignment' || confirmation.current.kind === 'revoke'}
             <svg
@@ -129,6 +144,26 @@
               {confirmation.current.resourceName}
             </div>
           {/if}
+          {#if confirmation.current.requireReason}
+            <label
+              for="confirm-action-reason"
+              class="mt-4 block text-xs font-medium text-foreground"
+            >
+              {confirmation.current.reasonLabel ?? 'Motivo de eliminación'}
+            </label>
+            <textarea
+              id="confirm-action-reason"
+              rows="3"
+              maxlength="500"
+              value={confirmation.reason}
+              oninput={(event) => confirmation.setReason(event.currentTarget.value)}
+              placeholder="Explique brevemente por qué debe eliminarse este registro"
+              class="mt-1.5 w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary focus:shadow-glow"
+            ></textarea>
+            <p class="mt-1 text-[11px] text-foreground-subtle">
+              El registro irá a la papelera y podrá restaurarse.
+            </p>
+          {/if}
         </div>
       </div>
 
@@ -154,7 +189,7 @@
           >Cancelar</button
         >
         <Button
-          variant={isDanger ? 'danger' : 'warning'}
+          variant={isDanger ? 'danger' : isRestore ? 'success' : 'warning'}
           disabled={confirmation.loading}
           onclick={() => void confirmation.proceed()}
         >

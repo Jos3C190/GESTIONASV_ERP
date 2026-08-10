@@ -73,8 +73,8 @@ export const suppliersApi = {
       body: JSON.stringify(data),
     }),
 
-  deleteContact: (contactId: number) =>
-    apiFetch<{ message: string }>(`/suppliers/contacts/${contactId}`, {
-      method: 'DELETE',
+  deactivateContact: (contactId: number) =>
+    apiFetch<SupplierContact>(`/suppliers/contacts/${contactId}/deactivate`, {
+      method: 'POST',
     }),
 };

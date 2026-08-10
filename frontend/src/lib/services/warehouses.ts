@@ -169,8 +169,8 @@ export async function updateWarehouse(id: string, warehouse: Partial<Warehouse>)
 }
 
 /**
- * Deletes a warehouse via API.
+ * Deactivates a warehouse without removing it from the master data catalogue.
  */
-export async function deleteWarehouse(id: string): Promise<void> {
+export async function deactivateWarehouse(id: string): Promise<void> {
   await api.warehouses.deactivate(id);
 }

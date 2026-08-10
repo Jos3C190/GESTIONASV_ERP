@@ -19,6 +19,7 @@
   import KebabMenu from '$lib/components/ui/KebabMenu.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import { confirmation } from '$lib/stores/confirmation.svelte';
+  import { session } from '$lib/stores/session.svelte';
   import { company } from '$lib/stores/company.svelte';
   import { branch } from '$lib/stores/branch.svelte';
   import { queryClient } from '$lib/services/query-client';
@@ -334,6 +335,30 @@
     }
   }
 
+  function deleteUser(user: UserOut) {
+    if (actionLoading) return;
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar usuario',
+      description:
+        'El usuario desaparecerá de la operación diaria y quedará disponible en la Papelera. Desactivarlo continúa siendo una acción independiente y reversible.',
+      resourceName: user.username,
+      confirmLabel: 'Eliminar usuario',
+      requireReason: true,
+      execute: async (reason) => {
+        if (!reason) throw new Error('Indique el motivo de eliminación.');
+        actionLoading = user.id;
+        try {
+          await api.lifecycle.delete('users', user.id, reason);
+          success = 'Usuario enviado a la Papelera.';
+          await loadUsers({ force: true });
+        } finally {
+          actionLoading = null;
+        }
+      }
+    });
+  }
+
   function toggleCreateRole(roleId: string) {
     if (fRoleIds.has(roleId)) fRoleIds.delete(roleId);
     else fRoleIds.add(roleId);
@@ -361,7 +386,7 @@
     // La búsqueda es la única dependencia reactiva de este efecto. Sin
     // `untrack`, las lecturas de `page` dentro de loadUsers() hacen que cada
     // intento de paginar vuelva a ejecutar el efecto y restablezca la página 1.
-    globalSearch.query;
+    void globalSearch.query;
     untrack(() => {
       page = 1;
       void loadUsers();
@@ -493,7 +518,7 @@
                         icon: 'detail',
                         onClick: () => openDetail(user)
                       },
-                      ...(permissions.hasPermission('users:update')
+                      ...(permissions.hasPermission('users:update') && session.user?.id !== user.id
                         ? [
                             {
                               id: 'edit',
@@ -538,6 +563,17 @@
                               variant: user.is_active ? 'danger' : 'default',
                               onClick: () => toggleActive(user)
                             } as const
+                          ]
+                        : []),
+                      ...(permissions.hasPermission('users:delete') && session.user?.id !== user.id
+                        ? [
+                            {
+                              id: 'delete',
+                              label: 'Eliminar',
+                              icon: 'delete' as const,
+                              variant: 'danger' as const,
+                              onClick: () => deleteUser(user)
+                            }
                           ]
                         : [])
                     ]}

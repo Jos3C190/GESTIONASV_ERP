@@ -15,10 +15,11 @@
     selectedId: string | null;
     onSelect: (id: string) => void;
     onEdit?: (branch: Branch) => void;
+    onToggleStatus?: (branch: Branch) => void;
     onDelete?: (branch: Branch) => void;
   }
 
-  let { branches, selectedId, onSelect, onEdit, onDelete }: Props = $props();
+  let { branches, selectedId, onSelect, onEdit, onToggleStatus, onDelete }: Props = $props();
 
   function handleDetail(branchId: string) {
     goto(`/branches/${branchId}`);
@@ -26,12 +27,6 @@
 
   function handleEdit(branch: Branch) {
     if (onEdit) onEdit(branch);
-  }
-
-  function handleDelete(branch: Branch) {
-    if (onDelete) {
-      onDelete(branch);
-    }
   }
 
   function branchMenuItems(branch: Branch): KebabItem[] {
@@ -52,14 +47,25 @@
             }
           ]
         : []),
+      ...(onToggleStatus
+        ? [
+            {
+              id: 'status',
+              label: branch.status === 'inactive' ? 'Activar' : 'Desactivar',
+              icon: 'power' as const,
+              variant: branch.status === 'inactive' ? ('default' as const) : ('danger' as const),
+              onClick: () => onToggleStatus(branch)
+            }
+          ]
+        : []),
       ...(onDelete
         ? [
             {
               id: 'delete',
-              label: branch.status === 'inactive' ? 'Activar' : 'Desactivar',
-              icon: 'power' as const,
+              label: 'Eliminar',
+              icon: 'delete' as const,
               variant: 'danger' as const,
-              onClick: () => handleDelete(branch)
+              onClick: () => onDelete(branch)
             }
           ]
         : [])

@@ -4,6 +4,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
+  import { api } from '$lib/api/client';
   import { catalogApi } from '$lib/api/catalog';
   import type { Category, Product, SubCategory, Unit } from '$lib/types/catalog';
   import { search as globalSearch } from '$lib/stores/search.svelte';
@@ -232,6 +233,24 @@
     });
   }
 
+  function deleteProduct(prod: Product) {
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar producto',
+      description:
+        'El producto desaparecerá del catálogo operativo y quedará disponible en la Papelera. La eliminación se bloqueará si mantiene dependencias que deban resolverse.',
+      resourceName: `${prod.name} · ${prod.sku}`,
+      confirmLabel: 'Eliminar producto',
+      requireReason: true,
+      execute: async (reason) => {
+        if (!reason) throw new Error('Indique el motivo de eliminación.');
+        await api.lifecycle.delete('products', String(prod.id_product), reason);
+        successMsg = 'Producto enviado a la Papelera.';
+        await loadData();
+      }
+    });
+  }
+
   function menuItems(prod: Product): KebabItem[] {
     const items: KebabItem[] = [];
     if (permissions.hasPermission('products:manage')) {
@@ -247,6 +266,15 @@
         icon: prod.is_active ? 'delete' : 'edit',
         variant: prod.is_active ? 'danger' : 'default',
         onClick: () => toggleProductStatus(prod)
+      });
+    }
+    if (permissions.hasPermission('products:delete')) {
+      items.push({
+        id: 'delete',
+        label: 'Eliminar',
+        icon: 'delete',
+        variant: 'danger',
+        onClick: () => deleteProduct(prod)
       });
     }
     return items;

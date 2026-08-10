@@ -256,12 +256,14 @@
       kind: 'delete',
       title: 'Eliminar rol',
       description:
-        'El rol y sus asignaciones dejarán de estar disponibles. Los roles protegidos del sistema no pueden eliminarse.',
+        'El rol desaparecerá de la operación diaria y quedará disponible en la Papelera. Los roles protegidos del sistema no pueden eliminarse.',
       resourceName: r.name,
       confirmLabel: 'Eliminar rol',
-      execute: async () => {
-        await api.roles.delete(r.id);
-        success = 'Rol eliminado.';
+      requireReason: true,
+      execute: async (reason) => {
+        if (!reason) throw new Error('Indique el motivo de eliminación.');
+        await api.lifecycle.delete('roles', r.id, reason);
+        success = 'Rol enviado a la Papelera.';
         await loadRoles();
       }
     });
@@ -272,12 +274,14 @@
       kind: 'delete',
       title: 'Eliminar permiso',
       description:
-        'El permiso se retirará del catálogo y de los roles que lo utilicen. Esta acción no se puede deshacer desde la interfaz.',
+        'El permiso personalizado desaparecerá del catálogo y quedará disponible en la Papelera. Los permisos estándar del sistema están protegidos.',
       resourceName: permission.code,
       confirmLabel: 'Eliminar permiso',
-      execute: async () => {
-        await api.roles.deletePermission(permission.id);
-        success = 'Permiso eliminado.';
+      requireReason: true,
+      execute: async (reason) => {
+        if (!reason) throw new Error('Indique el motivo de eliminación.');
+        await api.lifecycle.delete('permissions', permission.id, reason);
+        success = 'Permiso enviado a la Papelera.';
         closeModal();
         await Promise.all([loadRoles(), loadPermissions()]);
       }
@@ -650,7 +654,7 @@
         placeholder="Descripción del permiso"
       />
       <div class="flex justify-end gap-2 pt-2">
-        {#if modalMode === 'permission-edit' && modalPermission}
+        {#if modalMode === 'permission-edit' && modalPermission && !modalPermission.is_protected && permissions.hasPermission('permissions:delete')}
           <Button
             variant="ghost"
             onclick={() => deletePermission(modalPermission!)}
@@ -707,7 +711,7 @@
                   class="h-4 w-4 rounded border-border text-primary focus:shadow-glow"
                 />
                 <span class="font-mono text-xs">{p.code}</span>
-                {#if permissions.hasPermission('permissions:manage')}
+                {#if permissions.hasPermission('permissions:manage') && !p.is_protected}
                   <button
                     type="button"
                     class="ml-auto text-[11px] text-primary hover:underline"

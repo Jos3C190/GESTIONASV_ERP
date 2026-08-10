@@ -4,9 +4,10 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
+  import { api } from '$lib/api/client';
   import { suppliersApi } from '$lib/api/suppliers';
   import { catalogApi } from '$lib/api/catalog';
-  import type { Supplier } from '$lib/types/supplier';
+  import type { Supplier, SupplierContact } from '$lib/types/supplier';
   import type { Country } from '$lib/types/catalog';
   import { search as globalSearch } from '$lib/stores/search.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
@@ -230,6 +231,36 @@
     }
   }
 
+  async function refreshSelectedSupplier() {
+    if (!selectedSupplier) return;
+    selectedSupplier = await suppliersApi.getSupplier(selectedSupplier.id_supplier);
+    await loadData();
+  }
+
+  async function toggleContact(contact: SupplierContact) {
+    if (!contact.is_active) {
+      try {
+        await suppliersApi.updateContact(contact.id_supplier_contact, { is_active: true });
+        await refreshSelectedSupplier();
+      } catch (err) {
+        errorMsg = err instanceof Error ? err.message : 'No se pudo activar el contacto.';
+      }
+      return;
+    }
+    confirmation.request({
+      kind: 'deactivate',
+      title: 'Desactivar contacto',
+      description:
+        'El contacto dejará de estar disponible para nuevas gestiones con el proveedor. Su historial se conservará.',
+      resourceName: contact.full_name,
+      confirmLabel: 'Desactivar contacto',
+      execute: async () => {
+        await suppliersApi.deactivateContact(contact.id_supplier_contact);
+        await refreshSelectedSupplier();
+      }
+    });
+  }
+
   function handleDeleteContact(contactId: number, name: string) {
     if (!selectedSupplier) return;
     confirmation.request({
@@ -238,17 +269,56 @@
       description: `¿Está seguro de eliminar el contacto "${name}"?`,
       resourceName: name,
       confirmLabel: 'Eliminar contacto',
-      execute: async () => {
-        try {
-          await suppliersApi.deleteContact(contactId);
-          if (selectedSupplier) {
-            const updated = await suppliersApi.getSupplier(selectedSupplier.id_supplier);
-            selectedSupplier = updated;
-          }
-          await loadData();
-        } catch (err: unknown) {
-          errorMsg = err instanceof Error ? err.message : 'Error al eliminar contacto';
+      requireReason: true,
+      execute: async (reason) => {
+        if (!reason) throw new Error('Indique el motivo de eliminación.');
+        await api.lifecycle.delete('supplier_contacts', String(contactId), reason);
+        await refreshSelectedSupplier();
+      }
+    });
+  }
+
+  function contactMenuItems(contact: SupplierContact): KebabItem[] {
+    const items: KebabItem[] = [];
+    if (permissions.hasPermission('suppliers:manage')) {
+      items.push({
+        id: 'status',
+        label: contact.is_active ? 'Desactivar' : 'Activar',
+        icon: 'power',
+        variant: contact.is_active ? 'danger' : 'default',
+        onClick: () => void toggleContact(contact)
+      });
+    }
+    if (permissions.hasPermission('suppliers:delete')) {
+      items.push({
+        id: 'delete',
+        label: 'Eliminar',
+        icon: 'delete',
+        variant: 'danger',
+        onClick: () => handleDeleteContact(contact.id_supplier_contact, contact.full_name)
+      });
+    }
+    return items;
+  }
+
+  function deleteSupplier(sup: Supplier) {
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar proveedor',
+      description:
+        'El proveedor desaparecerá de la operación diaria y quedará disponible en la Papelera. La eliminación se bloqueará mientras conserve contactos u otras dependencias.',
+      resourceName: sup.name,
+      confirmLabel: 'Eliminar proveedor',
+      requireReason: true,
+      execute: async (reason) => {
+        if (!reason) throw new Error('Indique el motivo de eliminación.');
+        await api.lifecycle.delete('suppliers', String(sup.id_supplier), reason);
+        if (selectedSupplier?.id_supplier === sup.id_supplier) {
+          selectedSupplier = null;
+          showContactModal = false;
         }
+        successMsg = 'Proveedor enviado a la Papelera.';
+        await loadData();
       }
     });
   }
@@ -276,6 +346,15 @@
         icon: sup.is_active ? 'delete' : 'edit',
         variant: sup.is_active ? 'danger' : 'default',
         onClick: () => toggleSupplierStatus(sup)
+      });
+    }
+    if (permissions.hasPermission('suppliers:delete')) {
+      items.push({
+        id: 'delete',
+        label: 'Eliminar',
+        icon: 'delete',
+        variant: 'danger',
+        onClick: () => deleteSupplier(sup)
       });
     }
     return items;
@@ -623,19 +702,21 @@
     <Modal open={showContactModal} title={`Contactos — ${selectedSupplier.name}`} onclose={() => (showContactModal = false)}>
       <div class="space-y-6">
         <!-- Add Contact Form -->
-        <form onsubmit={handleAddContact} class="bg-surface-muted/50 p-4 rounded-lg space-y-3">
-          <h4 class="text-xs font-semibold uppercase text-foreground-muted">Agregar Nuevo Contacto</h4>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <input type="text" required placeholder="Nombre completo *" bind:value={contactName} class="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none" />
-            <input type="text" placeholder="Teléfono" bind:value={contactPhone} class="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none" />
-            <input type="email" placeholder="Email" bind:value={contactEmail} class="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none" />
-          </div>
-          <div class="flex justify-end">
-            <Button type="submit" size="sm" variant="primary" disabled={savingContact}>
-              {savingContact ? 'Agregando...' : '+ Agregar Contacto'}
-            </Button>
-          </div>
-        </form>
+        {#if permissions.hasPermission('suppliers:manage')}
+          <form onsubmit={handleAddContact} class="bg-surface-muted/50 p-4 rounded-lg space-y-3">
+            <h4 class="text-xs font-semibold uppercase text-foreground-muted">Agregar Nuevo Contacto</h4>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <input type="text" required placeholder="Nombre completo *" bind:value={contactName} class="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none" />
+              <input type="text" placeholder="Teléfono" bind:value={contactPhone} class="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none" />
+              <input type="email" placeholder="Email" bind:value={contactEmail} class="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none" />
+            </div>
+            <div class="flex justify-end">
+              <Button type="submit" size="sm" variant="primary" disabled={savingContact}>
+                {savingContact ? 'Agregando...' : '+ Agregar Contacto'}
+              </Button>
+            </div>
+          </form>
+        {/if}
 
         <!-- Contacts List -->
         <div class="space-y-2">
@@ -646,15 +727,20 @@
             <div class="divide-y divide-border border border-border rounded-lg">
               {#each selectedSupplier.contacts as contact}
                 <div class="flex items-center justify-between p-3">
-                  <div>
-                    <div class="font-medium text-sm text-foreground">{contact.full_name}</div>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <div class="truncate font-medium text-sm text-foreground">{contact.full_name}</div>
+                      <span class="rounded-md px-1.5 py-0.5 text-[10px] font-medium {contact.is_active ? 'bg-success/10 text-success' : 'bg-surface-muted text-foreground-subtle'}">
+                        {contact.is_active ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </div>
                     <div class="text-xs text-foreground-muted">
                       {contact.phone || 'Sin tel'} {contact.email ? ` | ${contact.email}` : ''}
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" class="text-danger hover:bg-danger/10" onclick={() => handleDeleteContact(contact.id_supplier_contact, contact.full_name)}>
-                    Eliminar
-                  </Button>
+                  {#if contactMenuItems(contact).length > 0}
+                    <KebabMenu items={contactMenuItems(contact)} ariaLabel={`Acciones de ${contact.full_name}`} />
+                  {/if}
                 </div>
               {/each}
             </div>

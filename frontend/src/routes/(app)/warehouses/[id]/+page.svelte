@@ -9,10 +9,8 @@
     STATUS_MAP,
     TYPE_LABEL,
     utilizationPct,
-    getCapacityVariant,
     type Warehouse,
-    type WarehouseMovement,
-    type WarehouseProduct
+    type WarehouseMovement
   } from '$lib/features/warehouses/types';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';

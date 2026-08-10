@@ -36,46 +36,6 @@
     if (branchId) loadData();
   });
 
-  // === Sparkline de tendencia de ventas ===
-  const SW = 320;
-  const SH = 72;
-
-  let sparkPath = $derived.by(() => {
-    if (!branch?.trend || branch.trend.length === 0) return '';
-    const trend = branch.trend;
-    const max = Math.max(...trend, 1);
-    const min = Math.min(...trend);
-    const range = max - min || 1;
-    const step = SW / (trend.length - 1);
-    return trend
-      .map((v, i) => {
-        const x = i * step;
-        const y = SH - 8 - ((v - min) / range) * (SH - 16);
-        return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(' ');
-  });
-
-  let areaPath = $derived.by(() => {
-    if (!sparkPath) return '';
-    const last = branch?.trend?.length ?? 0;
-    const step = SW / Math.max(last - 1, 1);
-    return `${sparkPath} L${((last - 1) * step).toFixed(1)},${SH} L0,${SH} Z`;
-  });
-
-  let strokeColor = $derived.by(() => {
-    if (!branch) return 'rgb(var(--primary))';
-    if (branch.status === 'active') return '#0070F3';
-    if (branch.status === 'maintenance') return '#F59E0B';
-    return '#64748B';
-  });
-
-  let occupancyPct = $derived(
-    branch && branch.capacity > 0 && branch.employees > 0
-      ? Math.min(Math.round((branch.employees / branch.capacity) * 100), 100)
-      : 0
-  );
-
   let salesGrowth = $derived(
     branch && branch.salesLastMonth > 0
       ? ((branch.salesThisMonth - branch.salesLastMonth) / branch.salesLastMonth) * 100
@@ -268,7 +228,7 @@
             {#if branch.customerRating > 0}
               <div class="mt-2 flex items-center gap-2">
                 <div class="flex items-center gap-0.5">
-                  {#each Array(fullStars) as _, i}
+                  {#each Array(fullStars) as _}
                     <svg
                       width="14"
                       height="14"
@@ -297,7 +257,7 @@
                       /></svg
                     >
                   {/if}
-                  {#each Array(5 - fullStars - (hasHalfStar ? 1 : 0)) as _, i}
+                  {#each Array(5 - fullStars - (hasHalfStar ? 1 : 0)) as _}
                     <svg
                       width="14"
                       height="14"

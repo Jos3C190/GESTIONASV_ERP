@@ -82,4 +82,34 @@ describe('ConfirmActionDialog', () => {
     ).toHaveAttribute('role', 'alert');
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
   });
+
+  it('requires and forwards a deletion reason before executing', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined);
+    render(ConfirmActionDialog);
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar producto',
+      description: 'El producto se enviará a la Papelera.',
+      confirmLabel: 'Eliminar producto',
+      requireReason: true,
+      execute
+    });
+
+    const action = await screen.findByRole('button', { name: 'Eliminar producto' });
+    await fireEvent.click(action);
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(await screen.findByText('Indique un motivo de al menos 3 caracteres.')).toHaveAttribute(
+      'role',
+      'alert'
+    );
+
+    await fireEvent.input(screen.getByLabelText('Motivo de eliminación'), {
+      target: { value: 'Registro creado por error' }
+    });
+    await fireEvent.click(action);
+
+    await waitFor(() => expect(execute).toHaveBeenCalledWith('Registro creado por error'));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  });
 });

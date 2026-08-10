@@ -17,6 +17,7 @@
   import Modal from '$lib/components/ui/Modal.svelte';
   import FormField from '$lib/components/ui/FormField.svelte';
   import { confirmation } from '$lib/stores/confirmation.svelte';
+  import { permissions } from '$lib/stores/permissions.svelte';
 
   let emp = $state<EmployeeOut | null>(null);
   let departments = $state<DepartmentOut[]>([]);
@@ -133,13 +134,15 @@
       kind: 'delete',
       title: 'Eliminar empleado',
       description:
-        'El empleado dejará de estar disponible en los procesos operativos. Esta acción puede estar bloqueada por relaciones activas.',
+        'El empleado desaparecerá de la operación diaria y quedará disponible en la Papelera. Esta acción puede estar bloqueada por relaciones activas.',
       resourceName: `${employee.first_name} ${employee.last_name}`,
       confirmLabel: 'Eliminar empleado',
-      execute: async () => {
+      requireReason: true,
+      execute: async (reason) => {
+        if (!reason) throw new Error('Indique el motivo de eliminación.');
         actionLoading = true;
         try {
-          await api.employees.delete(employee.id);
+          await api.lifecycle.delete('employees', employee.id, reason);
           await goto('/employees');
         } finally {
           actionLoading = false;
@@ -179,32 +182,36 @@
       <h1 class="text-xl font-bold text-foreground">Detalle del empleado</h1>
       <p class="text-sm text-foreground-muted">Información completa del empleado.</p>
     </div>
-    {#if emp}
+    {#if emp && permissions.hasAnyPermission(['employees:update', 'employees:delete'])}
       <div class="flex items-center gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          onclick={() => emp && goto(`/employees/${emp.id}/edit`)}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-            ><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path
-              d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-            /></svg
+        {#if permissions.hasPermission('employees:update')}
+          <Button
+            variant="secondary"
+            size="sm"
+            onclick={() => emp && goto(`/employees/${emp.id}/edit`)}
           >
-          Editar
-        </Button>
-        <Button variant="ghost" size="sm" onclick={deleteEmp} disabled={actionLoading}
-          >Eliminar</Button
-        >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              ><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path
+                d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+              /></svg
+            >
+            Editar
+          </Button>
+        {/if}
+        {#if permissions.hasPermission('employees:delete')}
+          <Button variant="ghost" size="sm" onclick={deleteEmp} disabled={actionLoading}
+            >Eliminar</Button
+          >
+        {/if}
       </div>
     {/if}
   </div>

@@ -131,6 +131,25 @@
     }
   }
 
+
+  function deleteWarehouse(wh: Warehouse) {
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar almacén',
+      description:
+        'El almacén se ocultará de la operación diaria y pasará a la Papelera. La eliminación se bloqueará mientras conserve ubicaciones u otras dependencias activas.',
+      resourceName: wh.name,
+      confirmLabel: 'Eliminar almacén',
+      requireReason: true,
+      reasonLabel: 'Motivo de eliminación',
+      execute: async (reason) => {
+        if (!reason) return;
+        await api.lifecycle.delete('warehouses', wh.id, reason);
+        await loadWarehouses(true);
+      }
+    });
+  }
+
   $effect(() => {
     if (scrollContainer) {
       checkScrollFade();
@@ -905,6 +924,17 @@
                     icon: 'power' as const,
                     variant: 'danger' as const,
                     onClick: () => toggleWarehouse(wh)
+                  }
+                ]
+              : []),
+            ...(permissions.hasPermission('warehouses.delete')
+              ? [
+                  {
+                    id: 'delete',
+                    label: 'Eliminar',
+                    icon: 'delete' as const,
+                    variant: 'danger' as const,
+                    onClick: () => deleteWarehouse(wh)
                   }
                 ]
               : [])

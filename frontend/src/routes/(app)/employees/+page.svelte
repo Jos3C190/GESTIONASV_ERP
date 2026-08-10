@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { api, HttpError, type EmployeeOut, type DepartmentOut, type Page } from '$lib/api/client';
+  import { api, HttpError, type EmployeeOut, type DepartmentOut } from '$lib/api/client';
   import { search as globalSearch } from '$lib/stores/search.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { resolvePhotoUrl, initialsOf } from '$lib/features/employees/avatar';
@@ -26,7 +26,6 @@
   let size = $state(10);
   let deptFilter = $state('');
   let statusFilter = $state('');
-  let actionLoading = $state<string | null>(null);
   let dataController: AbortController | null = null;
   let dataGeneration = 0;
 
@@ -110,18 +109,15 @@
       kind: 'delete',
       title: 'Eliminar empleado',
       description:
-        'El empleado dejará de estar disponible en los procesos operativos. Las relaciones históricas se conservarán.',
+        'El empleado desaparecerá de la operación diaria y quedará disponible en la Papelera. Las relaciones históricas se conservarán.',
       resourceName: `${e.first_name} ${e.last_name}`,
       confirmLabel: 'Eliminar empleado',
-      execute: async () => {
-        actionLoading = e.id;
-        try {
-          await api.employees.delete(e.id);
-          success = 'Empleado eliminado correctamente.';
-          await Promise.all([loadData(), loadKpis()]);
-        } finally {
-          actionLoading = null;
-        }
+      requireReason: true,
+      execute: async (reason) => {
+        if (!reason) throw new Error('Indique el motivo de eliminación.');
+        await api.lifecycle.delete('employees', e.id, reason);
+        success = 'Empleado enviado a la Papelera.';
+        await Promise.all([loadData(), loadKpis()]);
       }
     });
   }

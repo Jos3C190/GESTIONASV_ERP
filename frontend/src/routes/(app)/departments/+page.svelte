@@ -138,31 +138,37 @@
       kind: 'delete',
       title: 'Eliminar departamento',
       description:
-        'Esta acción eliminará el departamento. No podrá completarse si todavía tiene empleados o dependencias activas.',
+        'El departamento desaparecerá de la operación diaria y quedará disponible en la Papelera. No podrá completarse si todavía tiene empleados o dependencias activas.',
       resourceName: d.name,
       confirmLabel: 'Eliminar',
-      execute: async () => {
-        await api.departments.delete(d.id);
-        success = 'Departamento eliminado correctamente.';
+      requireReason: true,
+      execute: async (reason) => {
+        if (!reason) throw new Error('Indique el motivo de eliminación.');
+        await api.lifecycle.delete('departments', d.id, reason);
+        success = 'Departamento enviado a la Papelera.';
         await Promise.all([loadDepartments(), loadDepartmentCatalogue()]);
       }
     });
   }
 
   function departmentMenuItems(department: DepartmentOut): KebabItem[] {
-    if (!permissions.hasPermission('departments:manage')) return [];
-
-    return [
-      { id: 'branches', label: 'Gestionar sucursales', icon: 'link', onClick: () => openBranches(department) },
-      { id: 'edit', label: 'Editar', icon: 'edit', onClick: () => openEdit(department) },
-      {
+    const items: KebabItem[] = [];
+    if (permissions.hasPermission('departments:manage')) {
+      items.push(
+        { id: 'branches', label: 'Gestionar sucursales', icon: 'link', onClick: () => openBranches(department) },
+        { id: 'edit', label: 'Editar', icon: 'edit', onClick: () => openEdit(department) }
+      );
+    }
+    if (permissions.hasPermission('departments:delete')) {
+      items.push({
         id: 'delete',
         label: 'Eliminar',
         icon: 'delete',
         variant: 'danger',
         onClick: () => deleteDept(department)
-      }
-    ];
+      });
+    }
+    return items;
   }
 
   async function openBranches(d: DepartmentOut) {

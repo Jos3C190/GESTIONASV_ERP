@@ -42,7 +42,8 @@
     '/suppliers',
     '/products',
     '/inventory/categories',
-    '/inventory/units'
+    '/inventory/units',
+    '/trash'
   ];
 
   let showSearch = $derived(SEARCHABLE_ROUTES.includes(page.url.pathname));

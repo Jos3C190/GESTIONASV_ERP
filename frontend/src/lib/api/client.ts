@@ -204,11 +204,22 @@ export interface Page<T> {
   meta: PageMeta;
 }
 
+export interface DeletedRecordOut {
+  resource: string;
+  record_id: string;
+  label: string;
+  company_id: string | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
+  deletion_reason: string | null;
+}
+
 export interface PermissionOut {
   id: string;
   code: string;
   description: string | null;
   module: string | null;
+  is_protected: boolean;
 }
 
 export interface RoleOut {
@@ -1079,5 +1090,35 @@ export const api = {
       apiFetch(`/locations/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     activate: (id: string) => apiFetch(`/locations/${id}/activate`, { method: 'POST' }),
     deactivate: (id: string) => apiFetch(`/locations/${id}/deactivate`, { method: 'POST' })
+  },
+  lifecycle: {
+    list: (
+      params: {
+        page?: number;
+        size?: number;
+        resource?: string;
+        search?: string;
+        signal?: AbortSignal;
+      } = {}
+    ) => {
+      const query = new URLSearchParams({
+        page: String(params.page ?? 1),
+        size: String(params.size ?? 20)
+      });
+      if (params.resource) query.set('resource', params.resource);
+      if (params.search) query.set('search', params.search);
+      return apiFetch<Page<DeletedRecordOut>>(`/lifecycle/trash?${query}`, {
+        signal: params.signal
+      });
+    },
+    delete: (resource: string, recordId: string, reason: string) =>
+      apiFetch<DeletedRecordOut>(`/lifecycle/${resource}/${recordId}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ reason })
+      }),
+    restore: (resource: string, recordId: string) =>
+      apiFetch<DeletedRecordOut>(`/lifecycle/${resource}/${recordId}/restore`, {
+        method: 'POST'
+      })
   }
 };

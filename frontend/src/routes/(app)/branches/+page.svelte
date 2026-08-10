@@ -89,6 +89,28 @@
     }
   }
 
+  function deleteBranch(branch: Branch) {
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar sucursal',
+      description:
+        'La sucursal se ocultará de la operación diaria y pasará a la Papelera. El sistema impedirá la eliminación si aún conserva dependencias activas.',
+      resourceName: branch.name,
+      confirmLabel: 'Eliminar sucursal',
+      requireReason: true,
+      reasonLabel: 'Motivo de eliminación',
+      execute: async (reason) => {
+        if (!reason) return;
+        await api.lifecycle.delete('branches', branch.id, reason);
+        if (company.id) {
+          operationalBranch.configure(await api.operationalContext.get(company.id));
+        }
+        if (selectedId === branch.id) selectedId = null;
+        await loadBranches(true);
+      }
+    });
+  }
+
   let cities = $derived(Array.from(new Set(branches.map((b) => b.city))).sort());
 
   let filteredBranches = $derived.by(() => {
@@ -416,8 +438,11 @@
             onEdit={permissions.hasPermission('branches.update')
               ? (item) => goto(`/branches/${item.id}/edit`)
               : undefined}
-            onDelete={permissions.hasAnyPermission(['branches.activate', 'branches.deactivate'])
+            onToggleStatus={permissions.hasAnyPermission(['branches.activate', 'branches.deactivate'])
               ? (item) => void toggleBranch(item)
+              : undefined}
+            onDelete={permissions.hasPermission('branches.delete')
+              ? (item) => deleteBranch(item)
               : undefined}
           />
         </Card>

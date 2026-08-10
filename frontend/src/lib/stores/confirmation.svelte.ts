@@ -1,4 +1,4 @@
-export type ConfirmActionKind = 'delete' | 'deactivate' | 'end-assignment' | 'revoke';
+export type ConfirmActionKind = 'delete' | 'deactivate' | 'restore' | 'end-assignment' | 'revoke';
 
 export interface ConfirmActionRequest {
   kind: ConfirmActionKind;
@@ -6,13 +6,16 @@ export interface ConfirmActionRequest {
   description: string;
   confirmLabel: string;
   resourceName?: string;
-  execute: () => void | Promise<void>;
+  requireReason?: boolean;
+  reasonLabel?: string;
+  execute: (reason?: string) => void | Promise<void>;
 }
 
 function createConfirmationStore() {
   let current = $state<ConfirmActionRequest | null>(null);
   let loading = $state(false);
   let error = $state<string | null>(null);
+  let reason = $state('');
   let returnFocus: HTMLElement | null = null;
 
   function restoreFocus() {
@@ -34,25 +37,39 @@ function createConfirmationStore() {
     get error() {
       return error;
     },
+    get reason() {
+      return reason;
+    },
+    setReason(value: string) {
+      reason = value;
+      if (error) error = null;
+    },
     request(next: ConfirmActionRequest) {
       if (loading) return;
       returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       error = null;
+      reason = '';
       current = next;
     },
     cancel() {
       if (loading || current === null) return;
       current = null;
       error = null;
+      reason = '';
       restoreFocus();
     },
     async proceed() {
       if (loading || current === null) return;
+      if (current.requireReason && reason.trim().length < 3) {
+        error = 'Indique un motivo de al menos 3 caracteres.';
+        return;
+      }
       loading = true;
       error = null;
       try {
-        await current.execute();
+        await current.execute(reason.trim() || undefined);
         current = null;
+        reason = '';
         restoreFocus();
       } catch (cause) {
         error = cause instanceof Error ? cause.message : 'No se pudo completar la operación.';
@@ -64,6 +81,7 @@ function createConfirmationStore() {
       current = null;
       loading = false;
       error = null;
+      reason = '';
       returnFocus = null;
     }
   };

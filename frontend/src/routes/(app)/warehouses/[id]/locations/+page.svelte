@@ -117,6 +117,25 @@
     }
   }
 
+
+  function deleteLocation(x: Location) {
+    confirmation.request({
+      kind: 'delete',
+      title: 'Eliminar ubicación física',
+      description:
+        'La ubicación se ocultará de la operación diaria y pasará a la Papelera. El sistema validará que no conserve dependencias activas.',
+      resourceName: x.code,
+      confirmLabel: 'Eliminar ubicación',
+      requireReason: true,
+      reasonLabel: 'Motivo de eliminación',
+      execute: async (reason) => {
+        if (!reason) return;
+        await api.lifecycle.delete('locations', x.id, reason);
+        await load();
+      }
+    });
+  }
+
   function menuItems(x: Location): KebabItem[] {
     const res: KebabItem[] = [];
     if (permissions.hasPermission('locations.update')) {
@@ -134,6 +153,15 @@
         icon: x.is_active ? 'delete' : 'edit',
         variant: x.is_active ? 'danger' : 'default',
         onClick: () => toggle(x)
+      });
+    }
+    if (permissions.hasPermission('locations.delete')) {
+      res.push({
+        id: 'delete',
+        label: 'Eliminar',
+        icon: 'delete',
+        variant: 'danger',
+        onClick: () => deleteLocation(x)
       });
     }
     return res;
