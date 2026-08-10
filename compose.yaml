@@ -72,8 +72,8 @@ services:
     restart: unless-stopped
 
   # ---------------- One-shot database bootstrap ----------------
-  # Runs after Alembic finishes in the backend. The seed is idempotent, so
-  # rebuilding the development stack is safe and never duplicates records.
+  # Runs after Alembic finishes. A durable app_meta marker makes ordinary
+  # restarts no-ops, preserving records intentionally sent to the trash.
   seed:
     build:
       context: ./backend
@@ -96,6 +96,7 @@ services:
       ARGON2_MEMORY_COST: ${ARGON2_MEMORY_COST:-65536}
       ARGON2_PARALLELISM: ${ARGON2_PARALLELISM:-4}
       AUTO_SEED: ${AUTO_SEED:-true}
+      FORCE_SEED: ${FORCE_SEED:-false}
       SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-superadmin}
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-superadmin@erp-system.dev}
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}

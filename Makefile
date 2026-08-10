@@ -14,7 +14,7 @@ help: ## Show this help
 setup: ## One-command setup: copy .env, build, start, migrate, seed
 	@./scripts/setup.sh
 
-up: ## Start dev stack and run the idempotent bootstrap seed
+up: ## Start dev stack and run the first-setup bootstrap when needed
 	$(COMPOSE) up -d --build
 
 down: ## Stop dev stack
@@ -32,7 +32,7 @@ ps: ## Show container status
 build: ## (Re)build images
 	$(COMPOSE) build
 
-seed: ## Re-run the idempotent Grupo Lorena seed
+seed: ## Run the Grupo Lorena bootstrap only when not initialized (or FORCE_SEED=true)
 	@./scripts/seed.sh
 
 reset-db: ## Wipe and recreate the database (DESTRUCTIVE)

@@ -63,7 +63,7 @@ docker compose up -d --build
 
 En Windows PowerShell, use `Copy-Item .env.example .env` en lugar de `cp`.
 Docker Compose
-espera las migraciones, ejecuta la semilla idempotente y levanta el frontend
+espera las migraciones, ejecuta la semilla de primer setup y levanta el frontend
 solamente cuando la base queda lista.
 
 `make setup` hace todo automáticamente:
@@ -77,7 +77,8 @@ solamente cuando la base queda lista.
 
 La semilla oficial crea una sola empresa: **Grupo Lorena**, con sucursales,
 departamentos, empleados, usuarios operativos, categorías, almacenes y
-ubicaciones. Es segura para reejecutarse y no duplica registros.
+ubicaciones. Tras completarse guarda un marcador en `app_meta`; los reinicios
+posteriores la omiten para no resucitar registros eliminados intencionalmente.
 
 También registra el logo de la empresa y las galerías de sus siete sucursales
 mediante un manifiesto versionado de 36 activos públicos de Cloudinary. La
@@ -119,7 +120,8 @@ make ps              # estado de contenedores
 make test            # todos los tests (backend + frontend)
 make test-backend    # tests backend
 make test-frontend   # tests frontend
-make seed            # reejecutar la semilla idempotente de Grupo Lorena
+make seed            # ejecutar solo si el bootstrap todavía no fue completado
+# FORCE_SEED=true make seed  # reconciliación explícita (puede restaurar canónicos)
 make reset-db        # wipe + migrar (destructivo)
 make clean           # remover todo (contenedores, volúmenes, imágenes)
 make lint            # lint backend + frontend

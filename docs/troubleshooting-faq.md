@@ -69,6 +69,12 @@ docker compose up -d --build
 docker compose exec backend python -m seed.seed_data
 ```
 
+La semilla guarda el marcador `seed.grupo_lorena.initialized` en `app_meta` y,
+después del primer setup, los reinicios normales no modifican datos de negocio.
+Para reconciliar deliberadamente los registros canónicos use
+`FORCE_SEED=true`; esta opción puede restaurar registros de demostración enviados
+a la papelera y no debe habilitarse de forma permanente.
+
 ---
 
 ## 2. Problemas de Backend y Alembic (FastAPI)
@@ -158,7 +164,9 @@ Ejecuta el script de semilla directo:
 ```bash
 make seed
 ```
-Este comando agrega los permisos y roles faltantes sin destruir los datos existentes.
+Este comando solo actúa si el bootstrap no tiene marcador. Para reconciliar
+deliberadamente el dataset canónico, ejecute `FORCE_SEED=true make seed`; revise
+antes la papelera porque esa operación puede restaurar registros de demostración.
 
 ---
 
