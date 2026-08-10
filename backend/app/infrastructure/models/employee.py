@@ -5,14 +5,14 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, ForeignKey, Index, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPKMixin
 
 
-class Department(UUIDPKMixin, TimestampMixin, Base):
+class Department(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "departments"
     __table_args__ = ({"comment": "Departments (self-referencing hierarchy)."},)
 
@@ -32,7 +32,15 @@ class Department(UUIDPKMixin, TimestampMixin, Base):
         default=None,
     )
     __table_args__ = (
-        UniqueConstraint("company_id", "name", name="uq_departments_company_name"),
+        Index(
+            "uq_departments_company_name_visible",
+            "company_id",
+            func.lower(name),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index("ix_departments_company_deleted_at", "company_id", "deleted_at"),
         {"comment": "Departments scoped to a company."},
     )
 
@@ -51,11 +59,9 @@ class Employee(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
         PGUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        unique=True,
-        index=True,
         default=None,
     )
-    employee_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    employee_code: Mapped[str] = mapped_column(String(32), nullable=False)
     first_name: Mapped[str] = mapped_column(String(120), nullable=False)
     last_name: Mapped[str] = mapped_column(String(120), nullable=False)
     document_id: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
@@ -77,7 +83,22 @@ class Employee(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     photo_url: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     __table_args__ = (
-        UniqueConstraint("company_id", "employee_code", name="uq_employees_company_code"),
+        Index(
+            "uq_employees_company_code_visible",
+            "company_id",
+            func.lower(employee_code),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_employees_user_visible",
+            "user_id",
+            unique=True,
+            postgresql_where=text("user_id IS NOT NULL AND deleted_at IS NULL"),
+            sqlite_where=text("user_id IS NOT NULL AND deleted_at IS NULL"),
+        ),
+        Index("ix_employees_company_deleted_at", "company_id", "deleted_at"),
         {"comment": "Employee profiles scoped to a company."},
     )
 

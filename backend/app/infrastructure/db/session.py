@@ -3,23 +3,49 @@
 Single shared engine per process. `get_async_session` is the FastAPI dependency
 used by endpoints. Tests can override the engine via `set_test_engine`.
 """
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.orm import Session, with_loader_criteria
 
 from app.core.config import settings
 from app.core.logging import get_logger
 
 log = get_logger(__name__)
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _exclude_soft_deleted_records(execute_state: Any) -> None:
+    """Apply the safe default for every ORM SELECT in the application.
+
+    Administrative lifecycle operations opt out explicitly with
+    ``execution_options(include_deleted=True)``.  Centralising the predicate
+    prevents a new endpoint from accidentally exposing deleted records.
+    """
+
+    if not execute_state.is_select or execute_state.execution_options.get("include_deleted"):
+        return
+
+    from app.infrastructure.db.base import SoftDeleteMixin
+
+    execute_state.statement = execute_state.statement.options(
+        with_loader_criteria(
+            SoftDeleteMixin,
+            lambda model: model.deleted_at.is_(None),
+            include_aliases=True,
+        )
+    )
 
 
 def _build_engine(url: str) -> AsyncEngine:
@@ -90,8 +116,8 @@ async def session_scope() -> AsyncIterator[AsyncSession]:
 
 async def create_all() -> None:
     """DEV ONLY — creates tables from metadata. Production uses Alembic."""
-    from app.infrastructure.db.base import Base
     from app.infrastructure import models  # noqa: F401 — register tables
+    from app.infrastructure.db.base import Base
 
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -107,7 +133,7 @@ _test_engine: AsyncEngine | None = None
 
 def set_test_engine(engine: AsyncEngine) -> None:
     """Rebind the session factory to a test engine (conftest.py uses this)."""
-    global _test_engine, async_session_factory
+    global _test_engine, async_session_factory  # noqa: PLW0603
     _test_engine = engine
     async_session_factory = async_sessionmaker(
         bind=engine, expire_on_commit=False, autoflush=False, class_=AsyncSession
@@ -118,13 +144,13 @@ def get_engine() -> AsyncEngine:
     return _test_engine if _test_engine is not None else async_engine
 
 
-__all__: dict[str, Any] = {
-    "async_engine": async_engine,
-    "async_session_factory": async_session_factory,
-    "get_async_session": get_async_session,
-    "session_scope": session_scope,
-    "create_all": create_all,
-    "dispose_engine": dispose_engine,
-    "set_test_engine": set_test_engine,
-    "get_engine": get_engine,
-}
+__all__ = [
+    "async_engine",
+    "async_session_factory",
+    "create_all",
+    "dispose_engine",
+    "get_async_session",
+    "get_engine",
+    "session_scope",
+    "set_test_engine",
+]

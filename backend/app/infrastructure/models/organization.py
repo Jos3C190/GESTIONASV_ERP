@@ -18,13 +18,14 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.infrastructure.db.base import Base, TimestampMixin, UUIDPKMixin
+from app.infrastructure.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPKMixin
 
 
 class GeographicDepartment(UUIDPKMixin, Base):
@@ -56,12 +57,12 @@ class District(UUIDPKMixin, Base):
     )
 
 
-class Company(UUIDPKMixin, TimestampMixin, Base):
+class Company(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "companies"
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     commercial_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    nit: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
-    nrc: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    nit: Mapped[str] = mapped_column(String(32), nullable=False)
+    nrc: Mapped[str] = mapped_column(String(32), nullable=False)
     commercial_line_1: Mapped[str | None] = mapped_column(String(200))
     commercial_line_2: Mapped[str | None] = mapped_column(String(200))
     commercial_line_3: Mapped[str | None] = mapped_column(String(200))
@@ -83,9 +84,25 @@ class Company(UUIDPKMixin, TimestampMixin, Base):
     logo: Mapped[str | None] = mapped_column(String(2048))
     description: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default="true")
+    __table_args__ = (
+        Index(
+            "uq_companies_nit_visible",
+            func.lower(nit),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_companies_nrc_visible",
+            func.lower(nrc),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+    )
 
 
-class Branch(UUIDPKMixin, TimestampMixin, Base):
+class Branch(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "branches"
     company_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
@@ -167,12 +184,27 @@ class Branch(UUIDPKMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default="true")
     __table_args__ = (
         UniqueConstraint("id", "company_id", name="uq_branches_id_company_id"),
-        UniqueConstraint("company_id", "name", name="uq_branches_company_name"),
-        UniqueConstraint("company_id", "code", name="uq_branches_company_code"),
+        Index(
+            "uq_branches_company_name_visible",
+            "company_id",
+            func.lower(name),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_branches_company_code_visible",
+            "company_id",
+            func.lower(code),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index("ix_branches_company_deleted_at", "company_id", "deleted_at"),
     )
 
 
-class WarehouseCategory(UUIDPKMixin, TimestampMixin, Base):
+class WarehouseCategory(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "warehouse_categories"
     company_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
@@ -181,12 +213,20 @@ class WarehouseCategory(UUIDPKMixin, TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default="true")
     __table_args__ = (
-        UniqueConstraint("company_id", "name", name="uq_warehouse_categories_company_name"),
+        Index(
+            "uq_warehouse_categories_company_name_visible",
+            "company_id",
+            func.lower(name),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
         Index("ix_warehouse_categories_company_id", "company_id"),
+        Index("ix_warehouse_categories_company_deleted_at", "company_id", "deleted_at"),
     )
 
 
-class Warehouse(UUIDPKMixin, TimestampMixin, Base):
+class Warehouse(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "warehouses"
     branch_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT"), nullable=False
@@ -235,8 +275,23 @@ class Warehouse(UUIDPKMixin, TimestampMixin, Base):
     images: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default="true")
     __table_args__ = (
-        UniqueConstraint("branch_id", "name", name="uq_warehouses_branch_name"),
-        UniqueConstraint("branch_id", "code", name="uq_warehouses_branch_code"),
+        Index(
+            "uq_warehouses_branch_name_visible",
+            "branch_id",
+            func.lower(name),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_warehouses_branch_code_visible",
+            "branch_id",
+            func.lower(code),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index("ix_warehouses_branch_deleted_at", "branch_id", "deleted_at"),
     )
 
 
@@ -327,7 +382,7 @@ class UserBranch(Base):
     )
 
 
-class Location(UUIDPKMixin, TimestampMixin, Base):
+class Location(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "locations"
     warehouse_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False
@@ -342,13 +397,24 @@ class Location(UUIDPKMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default="true")
     __table_args__ = (
         CheckConstraint("capacity > 0", name="ck_locations_capacity_positive"),
-        UniqueConstraint("warehouse_id", "code", name="uq_locations_warehouse_code"),
-        UniqueConstraint(
+        Index(
+            "uq_locations_warehouse_code_visible",
+            "warehouse_id",
+            func.lower(code),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_locations_warehouse_coordinates_visible",
             "warehouse_id",
             "aisle",
             "rack",
             "level",
             "position",
-            name="uq_locations_warehouse_coordinates",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
         ),
+        Index("ix_locations_warehouse_deleted_at", "warehouse_id", "deleted_at"),
     )

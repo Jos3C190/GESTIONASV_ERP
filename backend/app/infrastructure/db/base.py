@@ -6,13 +6,14 @@ Design choices (per master prompt section 4):
 - `deleted_at` for soft-delete on business entities.
 - Naming convention for constraints so Alembic autogenerate produces stable names.
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import DateTime, func, text
+from sqlalchemy import DateTime, ForeignKey, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -42,14 +43,28 @@ class TimestampMixin:
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
-        onupdate=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(UTC),
     )
 
 
 class SoftDeleteMixin:
+    """Auditable logical deletion shared by user-managed business records.
+
+    ``is_active`` remains an operational lifecycle flag.  These fields mean
+    that the record was explicitly removed and must be hidden from normal
+    queries until an authorised restore operation is performed.
+    """
+
     deleted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, default=None
+        DateTime(timezone=True), nullable=True, default=None, index=True
     )
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        default=None,
+    )
+    deletion_reason: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
     @property
     def is_deleted(self) -> bool:

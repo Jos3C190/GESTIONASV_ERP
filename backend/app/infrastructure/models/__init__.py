@@ -38,9 +38,11 @@ from app.infrastructure.models.rbac import (
     UserRole,
 )
 from app.infrastructure.models.supplier import SupplierContactModel, SupplierModel
+from app.infrastructure.models.system import AppMeta
 from app.infrastructure.models.user import User
 
 __all__: list[str] = [
+    "AppMeta",
     "AuditLog",
     "Branch",
     "CategoryModel",
