@@ -221,3 +221,28 @@ External images are HTTPS references rendered directly by the browser; the API
 never downloads or probes those URLs. Cloudinary assets must be staged/active,
 belong to the current company, and have the purpose matching the relation.
 Removed assets are marked `detached` for the existing cleanup process.
+
+## 9. International supplier master data (revision 0033)
+
+`suppliers.name` remains the commercial name and `suppliers.address` remains a
+legacy compatibility field. Revision `0033` adds optional legal identity,
+company-scoped supplier groups, workflow status/hold dates, currency, payment
+terms, payment method and an external reference. Existing suppliers are
+backfilled only to `supplier_status = approved`; no tax or legal values are
+invented.
+
+Fiscal identifiers live in `supplier_tax_identifiers` and are generic
+(`country_id`, `identifier_type`, `value`) so an El Salvador supplier may use
+NIT/NRC while an international supplier may use VAT, EIN, RFC or any local
+identifier. They are optional, repeatable and normalized for duplicate
+detection; only one may be primary per country.
+
+`supplier_groups`, `currencies`, `payment_terms` and `supplier_addresses` are
+normalized catalogues/relations. Existing non-empty legacy addresses are copied
+to one primary `other` address without deleting the original column.
+
+`supplier_bank_accounts` stores only AES-GCM ciphertext and the last four
+digits. The encryption key is supplied by `SUPPLIER_DATA_ENCRYPTION_KEY` from
+the deployment secret manager; APIs never return or audit full account numbers,
+IBANs, ciphertext or keys. The 0033 downgrade refuses to run while supplier
+master data, addresses, banking records or custom catalog rows exist.

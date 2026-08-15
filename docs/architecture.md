@@ -151,6 +151,14 @@ and are edited inside the existing supplier/contact modals. Their API accepts
 either a claimed Cloudinary asset or an HTTPS reference without making
 server-side requests to the external host.
 
+Supplier master data in revision `0033` keeps tax identifiers, addresses,
+payment terms and bank accounts in separate aggregates. Fiscal identifiers are
+country/type/value records rather than El Salvador-specific columns. Bank
+secrets cross the application boundary only as plaintext request values, are
+immediately AES-GCM encrypted with the deployment key, and leave the API as
+masked last-four projections. The supplier list deliberately projects no bank
+data and the detailed response is permission-filtered.
+
 ### ADR-004 — No FOUC for theme
 **Decision:** Theme is applied by an inline blocking script in `app.html`
 before Svelte hydrates. **Rationale:** avoids the dark-mode flash. The script

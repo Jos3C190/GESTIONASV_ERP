@@ -46,6 +46,14 @@ from app.infrastructure.models.rbac import (
 )
 from app.infrastructure.models.supplier import SupplierContactModel, SupplierModel
 from app.infrastructure.models.supplier_image import SupplierContactImageModel, SupplierImageModel
+from app.infrastructure.models.supplier_master_data import (
+    CurrencyModel,
+    PaymentTermsModel,
+    SupplierAddressModel,
+    SupplierBankAccountModel,
+    SupplierGroupModel,
+    SupplierTaxIdentifierModel,
+)
 from app.infrastructure.models.system import AppMeta
 from app.infrastructure.models.user import User
 
@@ -57,6 +65,7 @@ __all__: list[str] = [
     "Company",
     "CompanyUnitModel",
     "CountryModel",
+    "CurrencyModel",
     "Department",
     "DepartmentBranchAssignment",
     "District",
@@ -71,6 +80,7 @@ __all__: list[str] = [
     "MediaAsset",
     "Municipality",
     "PasswordResetToken",
+    "PaymentTermsModel",
     "Permission",
     "ProductImageModel",
     "ProductModel",
@@ -78,10 +88,14 @@ __all__: list[str] = [
     "Role",
     "RolePermission",
     "SubCategoryModel",
+    "SupplierAddressModel",
+    "SupplierBankAccountModel",
     "SupplierContactImageModel",
     "SupplierContactModel",
+    "SupplierGroupModel",
     "SupplierImageModel",
     "SupplierModel",
+    "SupplierTaxIdentifierModel",
     "UnitModel",
     "User",
     "UserBranch",

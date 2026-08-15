@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import distinct, func, select
@@ -27,6 +28,7 @@ from app.application.audit.audit_service import AuditService
 from app.application.suppliers.use_cases import SupplierUseCases
 from app.core.exceptions import AuthorizationError
 from app.domain.entities.media_image import SingleImageDraft
+from app.domain.entities.supplier import Supplier
 from app.infrastructure.models.supplier import SupplierModel
 from app.infrastructure.repositories import (
     SqlAlchemyCatalogRepository,
@@ -59,6 +61,17 @@ async def _require_supplier_images_permission(
     )
     if "suppliers:images" not in {permission.code for permission in permissions}:
         raise AuthorizationError("Permiso requerido: suppliers:images", code="forbidden")
+
+
+async def _supplier_for_user(session: SessionDep, current: CurrentUser, supplier: Supplier) -> Supplier:
+    if current.is_superuser:
+        return supplier
+    permissions = await SqlAlchemyRoleRepository(session).get_effective_permissions_for_user(
+        current.id, supplier.company_id
+    )
+    if "suppliers:bank_accounts" in {permission.code for permission in permissions}:
+        return supplier
+    return replace(supplier, bank_accounts=())
 
 
 def _image_draft(image: SupplierImageInput | None) -> SingleImageDraft | None:
@@ -97,6 +110,23 @@ def _image_audit_action(before: object | None, after: object | None) -> str:
         )
         return "REPLACE_IMAGE" if changed_identity else "UPDATE_IMAGE"
     return "UPDATE_IMAGE"
+
+
+def _supplier_audit_state(supplier: object) -> dict[str, object]:
+    """Return a safe supplier snapshot; no bank or tax values are included."""
+    return {
+        "code": getattr(supplier, "code", None),
+        "name": getattr(supplier, "name", None),
+        "legal_name": getattr(supplier, "legal_name", None),
+        "supplier_group_id": str(getattr(supplier, "supplier_group_id", None) or "") or None,
+        "supplier_status": getattr(supplier, "supplier_status", None),
+        "default_currency_code": getattr(supplier, "default_currency_code", None),
+        "payment_terms_id": str(getattr(supplier, "payment_terms_id", None) or "") or None,
+        "default_payment_method": getattr(supplier, "default_payment_method", None),
+        "external_reference": getattr(supplier, "external_reference", None),
+        "is_active": getattr(supplier, "is_active", None),
+        "logo_image": _image_audit_state(getattr(supplier, "logo_image", None)),
+    }
 
 
 @router.get(
@@ -174,7 +204,8 @@ async def get_supplier(
 ) -> SupplierResponse:
     company_id = request_company_id(request)
     await require_company_access(session, current, company_id)
-    return await use_cases.get_supplier(company_id, supplier_id)
+    supplier = await use_cases.get_supplier(company_id, supplier_id)
+    return await _supplier_for_user(session, current, supplier)
 
 
 @router.post(
@@ -205,6 +236,16 @@ async def create_supplier(
         phone=payload.phone,
         email=payload.email,
         website=payload.website,
+        legal_name=payload.legal_name,
+        supplier_group_id=payload.supplier_group_id,
+        supplier_status=payload.supplier_status,
+        hold_reason=payload.hold_reason,
+        hold_from=payload.hold_from,
+        hold_until=payload.hold_until,
+        default_currency_code=payload.default_currency_code,
+        payment_terms_id=payload.payment_terms_id,
+        default_payment_method=payload.default_payment_method,
+        external_reference=payload.external_reference,
         image=_image_draft(payload.image),
     )
     await audit.record(
@@ -214,12 +255,10 @@ async def create_supplier(
         resource_type="suppliers",
         resource_id=str(created.id),
         after_state={
-            "code": created.code,
-            "name": created.name,
-            "logo_image": _image_audit_state(created.logo_image),
+            **_supplier_audit_state(created),
         },
     )
-    return created
+    return await _supplier_for_user(session, current, created)
 
 
 @router.put(
@@ -249,27 +288,23 @@ async def update_supplier(
     await audit.record(
         action=(
             _image_audit_action(before.logo_image, updated.logo_image)
-            if "image" in update_data
+            if "image" in update_data and len(update_data) == 1
             else _status_action(before.is_active, updated.is_active)
+            if set(update_data).issubset({"is_active"})
+            else "UPDATE"
         ),
         user_id=current.id,
         company_id=company_id,
         resource_type="suppliers",
         resource_id=str(supplier_id),
         before_state={
-            "code": before.code,
-            "name": before.name,
-            "is_active": before.is_active,
-            "logo_image": _image_audit_state(before.logo_image),
+            **_supplier_audit_state(before),
         },
         after_state={
-            "code": updated.code,
-            "name": updated.name,
-            "is_active": updated.is_active,
-            "logo_image": _image_audit_state(updated.logo_image),
+            **_supplier_audit_state(updated),
         },
     )
-    return updated
+    return await _supplier_for_user(session, current, updated)
 
 
 # --- Supplier Contacts ---

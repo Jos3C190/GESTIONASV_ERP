@@ -5,7 +5,13 @@ from app.domain.entities.catalog import Category, Country, Product, SubCategory,
 from app.domain.entities.employee import Department, Employee, EmployeeStatus
 from app.domain.entities.media_image import SingleImage, SingleImageDraft
 from app.domain.entities.rbac import Permission, Role, UserRoleAssignment
-from app.domain.entities.supplier import Supplier, SupplierContact
+from app.domain.entities.supplier import (
+    Supplier,
+    SupplierAddress,
+    SupplierBankAccount,
+    SupplierContact,
+    SupplierTaxIdentifier,
+)
 from app.domain.entities.user import User, UserStatus
 
 __all__ = [
@@ -23,7 +29,10 @@ __all__ = [
     "SingleImageDraft",
     "SubCategory",
     "Supplier",
+    "SupplierAddress",
+    "SupplierBankAccount",
     "SupplierContact",
+    "SupplierTaxIdentifier",
     "Unit",
     "User",
     "UserRoleAssignment",

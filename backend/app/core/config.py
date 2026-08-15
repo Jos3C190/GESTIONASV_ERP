@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     CLOUDINARY_UPLOAD_FOLDER: str = "erp-system"
     MEDIA_MAX_IMAGE_BYTES: int = 10 * 1024 * 1024
     MEDIA_SIGNATURE_TTL_SECONDS: int = 300
+    SUPPLIER_DATA_ENCRYPTION_KEY: str | None = Field(default=None, repr=False)
 
     # --- Convenient computed fields ---
 

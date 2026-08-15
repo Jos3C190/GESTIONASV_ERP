@@ -183,6 +183,19 @@ require `media.upload`; external HTTPS references do not. Assets are claimed
 transactionally with the supplier/contact UUID and company scope, and are
 detached rather than physically deleted during the business transaction.
 
+Supplier master data adds `suppliers:tax_identifiers`, `suppliers:addresses` and
+`suppliers:bank_accounts`. The first two protect fiscal/address mutations;
+bank endpoints additionally require the banking permission and return only
+masked last-four projections. Bank account and IBAN values are encrypted with
+AES-GCM before persistence using the environment-managed
+`SUPPLIER_DATA_ENCRYPTION_KEY`. Missing key configuration fails closed for bank
+writes. Audit snapshots include IDs, origin, status and last four digits only;
+they never contain plaintext, ciphertext or complete financial identifiers.
+
+Supplier tax identifiers are intentionally country/type driven rather than
+hard-coded to El Salvador's NIT/NRC. No external URL is fetched by the backend;
+only HTTPS references without credentials or local/private hosts are accepted.
+
 Para conocer la arquitectura completa de escáneres DAST en contenedor (OWASP ZAP OpenAPI scan), auditoría de dependencias (Trivy), pruebas adversariales (Pytest fuzzing) y el bloqueo automático mediante `.githooks` (`pre-commit` y `pre-push`), consulta el documento dedicado:
 
 👉 **[docs/red-team-blue-team.md](file:///d:/josec/Documents/Ciclo%20X/TRANSACCIONES%20COMERCIALES%20POR%20MEDIOS%20ELECTR%C3%93NICOS%20SECCI%C3%93N%20A/PROYECTO_ERP/docs/red-team-blue-team.md)**

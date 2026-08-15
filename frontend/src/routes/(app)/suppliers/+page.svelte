@@ -7,7 +7,7 @@
   import { api } from '$lib/api/client';
   import { suppliersApi } from '$lib/api/suppliers';
   import { catalogApi } from '$lib/api/catalog';
-  import type { Supplier, SupplierContact, SupplierImageDraft } from '$lib/types/supplier';
+  import type { Currency, PaymentTerms, Supplier, SupplierContact, SupplierGroup, SupplierImageDraft, SupplierStatus } from '$lib/types/supplier';
   import SingleImageEditor from '$lib/features/suppliers/components/SingleImageEditor.svelte';
   import type { Country } from '$lib/types/catalog';
   import { company } from '$lib/stores/company.svelte';
@@ -18,6 +18,9 @@
   // Svelte 5 Runes State
   let suppliers = $state<Supplier[]>([]);
   let countries = $state<Country[]>([]);
+  let currencies = $state<Currency[]>([]);
+  let supplierGroups = $state<SupplierGroup[]>([]);
+  let paymentTerms = $state<PaymentTerms[]>([]);
   let loading = $state<boolean>(true);
   let errorMsg = $state<string | null>(null);
   let successMsg = $state<string | null>(null);
@@ -40,6 +43,7 @@
   let showSupplierModal = $state<boolean>(false);
   let isEditingSupplier = $state<boolean>(false);
   let editingSupplierId = $state<number | null>(null);
+  let editingSupplierDetail = $state<Supplier | null>(null);
   let savingSupplier = $state<boolean>(false);
 
   // Supplier Form
@@ -52,6 +56,30 @@
   let formWebsite = $state<string>('');
   let formIsActive = $state<boolean>(true);
   let formImage = $state<SupplierImageDraft | null>(null);
+  let formLegalName = $state<string>('');
+  let formSupplierGroupId = $state<string>('');
+  let formSupplierStatus = $state<SupplierStatus>('approved');
+  let formHoldReason = $state<string>('');
+  let formDefaultCurrency = $state<string>('');
+  let formPaymentTermsId = $state<string>('');
+  let formPaymentMethod = $state<string>('');
+  let formExternalReference = $state<string>('');
+  let formTaxType = $state<string>('');
+  let formTaxValue = $state<string>('');
+  let formTaxPrimary = $state<boolean>(true);
+  let formTaxId = $state<string | null>(null);
+  let formAddressType = $state<'fiscal' | 'billing' | 'delivery' | 'return' | 'office' | 'other'>('fiscal');
+  let formAddressLine1 = $state<string>('');
+  let formAddressCity = $state<string>('');
+  let formAddressState = $state<string>('');
+  let formAddressPostal = $state<string>('');
+  let formAddressId = $state<string | null>(null);
+  let formBankName = $state<string>('');
+  let formBankHolder = $state<string>('');
+  let formBankAccount = $state<string>('');
+  let formBankIban = $state<string>('');
+  let formBankPrimary = $state<boolean>(true);
+  let formBankId = $state<string | null>(null);
 
   // Contacts Modal State
   let showContactModal = $state<boolean>(false);
@@ -65,6 +93,9 @@
 
   let canEditImages = $derived(permissions.hasPermission('suppliers:images'));
   let canUploadImages = $derived(permissions.hasPermission('media.upload'));
+  let canManageTax = $derived(permissions.hasPermission('suppliers:tax_identifiers'));
+  let canManageAddresses = $derived(permissions.hasPermission('suppliers:addresses'));
+  let canManageBanks = $derived(permissions.hasPermission('suppliers:bank_accounts'));
 
   let dataGeneration = 0;
 
@@ -73,7 +104,7 @@
     loading = true;
     errorMsg = null;
     try {
-      const [cRes, sRes, stats] = await Promise.all([
+      const [cRes, sRes, stats, currencyRes, groupRes, paymentRes] = await Promise.all([
         catalogApi.listCountries(true),
         suppliersApi.listSuppliers({
           country_id: selectedCountry,
@@ -82,12 +113,18 @@
           page: untrack(() => page),
           size: 10
         }),
-        suppliersApi.stats()
+        suppliersApi.stats(),
+        suppliersApi.currencies(),
+        suppliersApi.groups(),
+        suppliersApi.paymentTerms()
       ]);
 
       if (generation !== dataGeneration) return;
 
       countries = cRes;
+      currencies = currencyRes;
+      supplierGroups = groupRes;
+      paymentTerms = paymentRes;
       suppliers = sRes.items;
       totalItems = sRes.meta.total;
       totalPages = sRes.meta.pages;
@@ -123,6 +160,7 @@
   function openCreateSupplierModal() {
     isEditingSupplier = false;
     editingSupplierId = null;
+    editingSupplierDetail = null;
     formCode = '';
     formName = '';
     formCountry = countries[0]?.id_country;
@@ -132,27 +170,79 @@
     formWebsite = '';
     formIsActive = true;
     formImage = null;
+    formLegalName = '';
+    formSupplierGroupId = '';
+    formSupplierStatus = 'approved';
+    formHoldReason = '';
+    formDefaultCurrency = '';
+    formPaymentTermsId = '';
+    formPaymentMethod = '';
+    formExternalReference = '';
+    formTaxType = '';
+    formTaxValue = '';
+    formTaxPrimary = true;
+    formTaxId = null;
+    formAddressType = 'fiscal';
+    formAddressLine1 = '';
+    formAddressCity = '';
+    formAddressState = '';
+    formAddressPostal = '';
+    formAddressId = null;
+    formBankName = '';
+    formBankHolder = '';
+    formBankAccount = '';
+    formBankIban = '';
+    formBankPrimary = true;
+    formBankId = null;
     showSupplierModal = true;
   }
 
-  function openEditSupplierModal(sup: Supplier) {
+  async function openEditSupplierModal(sup: Supplier) {
+    const detail = await suppliersApi.getSupplier(sup.id_supplier);
+    editingSupplierDetail = detail;
     isEditingSupplier = true;
     editingSupplierId = sup.id_supplier;
-    formCode = sup.code;
-    formName = sup.name;
-    formCountry = sup.country;
-    formAddress = sup.address ?? '';
-    formPhone = sup.phone ?? '';
-    formEmail = sup.email ?? '';
-    formWebsite = sup.website ?? '';
-    formIsActive = sup.is_active;
-    formImage = sup.logo_image
+    formCode = detail.code;
+    formName = detail.name;
+    formCountry = detail.country;
+    formAddress = detail.address ?? '';
+    formPhone = detail.phone ?? '';
+    formEmail = detail.email ?? '';
+    formWebsite = detail.website ?? '';
+    formIsActive = detail.is_active;
+    formLegalName = detail.legal_name ?? '';
+    formSupplierGroupId = detail.supplier_group_id ?? '';
+    formSupplierStatus = detail.supplier_status ?? 'approved';
+    formHoldReason = detail.hold_reason ?? '';
+    formDefaultCurrency = detail.default_currency_code ?? '';
+    formPaymentTermsId = detail.payment_terms_id ?? '';
+    formPaymentMethod = detail.default_payment_method ?? '';
+    formExternalReference = detail.external_reference ?? '';
+    const firstTax = detail.tax_identifiers?.[0];
+    formTaxId = firstTax?.id ?? null;
+    formTaxType = firstTax?.identifier_type ?? '';
+    formTaxValue = firstTax?.value ?? '';
+    const firstAddress = detail.addresses?.find((address) => address.is_primary) ?? detail.addresses?.[0];
+    formAddressId = firstAddress?.id ?? null;
+    formAddressType = firstAddress?.address_type ?? 'fiscal';
+    formAddressLine1 = firstAddress?.line1 ?? '';
+    formAddressCity = firstAddress?.city ?? '';
+    formAddressState = firstAddress?.state_region ?? '';
+    formAddressPostal = firstAddress?.postal_code ?? '';
+    const firstBank = detail.bank_accounts?.find((account) => account.is_primary) ?? detail.bank_accounts?.[0];
+    formBankId = firstBank?.id ?? null;
+    formBankName = firstBank?.bank_name ?? '';
+    formBankHolder = firstBank?.account_holder ?? '';
+    formBankAccount = '';
+    formBankIban = '';
+    formBankPrimary = firstBank?.is_primary ?? true;
+    formImage = detail.logo_image
       ? {
-          id: sup.logo_image.id,
-          source_type: sup.logo_image.source_type,
-          url: sup.logo_image.url,
-          media_asset_id: sup.logo_image.media_asset_id ?? null,
-          alt_text: sup.logo_image.alt_text ?? sup.name
+          id: detail.logo_image.id,
+          source_type: detail.logo_image.source_type,
+          url: detail.logo_image.url,
+          media_asset_id: detail.logo_image.media_asset_id ?? null,
+          alt_text: detail.logo_image.alt_text ?? detail.name
         }
       : null;
     showSupplierModal = true;
@@ -174,12 +264,35 @@
           phone: formPhone,
           email: formEmail,
           website: formWebsite,
+          legal_name: formLegalName || null,
+          supplier_group_id: formSupplierGroupId || null,
+          supplier_status: formSupplierStatus,
+          hold_reason: formHoldReason || null,
+          default_currency_code: formDefaultCurrency || null,
+          payment_terms_id: formPaymentTermsId || null,
+          default_payment_method: formPaymentMethod || null,
+          external_reference: formExternalReference || null,
           is_active: formIsActive,
           ...(canEditImages ? { image: formImage } : {})
         });
+        if (canManageTax && formTaxType.trim() && formTaxValue.trim()) {
+          const taxData = { country_id: formCountry, identifier_type: formTaxType, value: formTaxValue, is_primary: formTaxPrimary, is_verified: false };
+          if (formTaxId) await suppliersApi.updateTaxIdentifier(editingSupplierId, formTaxId, taxData);
+          else await suppliersApi.addTaxIdentifier(editingSupplierId, taxData);
+        }
+        if (canManageAddresses && formAddressLine1.trim()) {
+          const addressData = { address_type: formAddressType, line1: formAddressLine1, city: formAddressCity || null, state_region: formAddressState || null, postal_code: formAddressPostal || null, country_id: formCountry, is_primary: true };
+          if (formAddressId) await suppliersApi.updateAddress(editingSupplierId, formAddressId, addressData);
+          else await suppliersApi.addAddress(editingSupplierId, addressData);
+        }
+        if (canManageBanks && formBankName.trim() && formBankHolder.trim() && formBankAccount.trim()) {
+          const bankData = { bank_name: formBankName, account_holder: formBankHolder, account_number: formBankAccount, iban: formBankIban || null, country_id: formCountry, currency_code: formDefaultCurrency || null, is_primary: formBankPrimary, is_verified: false, status: 'active' as const };
+          if (formBankId) await suppliersApi.updateBankAccount(editingSupplierId, formBankId, bankData);
+          else await suppliersApi.addBankAccount(editingSupplierId, bankData);
+        }
         successMsg = 'Proveedor actualizado exitosamente.';
       } else {
-        await suppliersApi.createSupplier({
+        const createdSupplier = await suppliersApi.createSupplier({
           code: formCode,
           name: formName,
           country: formCountry,
@@ -187,8 +300,25 @@
           phone: formPhone,
           email: formEmail,
           website: formWebsite,
+          legal_name: formLegalName || undefined,
+          supplier_group_id: formSupplierGroupId || undefined,
+          supplier_status: formSupplierStatus,
+          hold_reason: formHoldReason || undefined,
+          default_currency_code: formDefaultCurrency || undefined,
+          payment_terms_id: formPaymentTermsId || undefined,
+          default_payment_method: formPaymentMethod || undefined,
+          external_reference: formExternalReference || undefined,
           ...(canEditImages ? { image: formImage } : {})
         });
+        if (canManageTax && formTaxType.trim() && formTaxValue.trim()) {
+          await suppliersApi.addTaxIdentifier(createdSupplier.id_supplier, { country_id: formCountry, identifier_type: formTaxType, value: formTaxValue, is_primary: formTaxPrimary, is_verified: false });
+        }
+        if (canManageAddresses && formAddressLine1.trim()) {
+          await suppliersApi.addAddress(createdSupplier.id_supplier, { address_type: formAddressType, line1: formAddressLine1, city: formAddressCity || null, state_region: formAddressState || null, postal_code: formAddressPostal || null, country_id: formCountry, is_primary: true });
+        }
+        if (canManageBanks && formBankName.trim() && formBankHolder.trim() && formBankAccount.trim()) {
+          await suppliersApi.addBankAccount(createdSupplier.id_supplier, { bank_name: formBankName, account_holder: formBankHolder, account_number: formBankAccount, iban: formBankIban || null, country_id: formCountry, currency_code: formDefaultCurrency || null, is_primary: formBankPrimary, is_verified: false, status: 'active' });
+        }
         successMsg = 'Proveedor creado exitosamente.';
       }
       showSupplierModal = false;
@@ -488,6 +618,7 @@
             ><path d="M19 21V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v16" /><line x1="1" y1="21" x2="23" y2="21" /></svg
           >
         </div>
+
       </div>
       <div>
         <div class="font-mono text-2xl font-bold tabular-nums text-foreground">
@@ -727,6 +858,126 @@
             <input id="sup-name" type="text" required bind:value={formName} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
           </div>
         </div>
+
+        <div class="border-t border-border pt-4 space-y-3">
+          <div>
+            <h4 class="text-sm font-semibold text-foreground">Identidad legal y clasificación</h4>
+            <p class="text-xs text-foreground-muted">Los identificadores fiscales se registran por país y tipo; ninguno es obligatorio.</p>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="sup-legal-name" class="block text-xs font-medium text-foreground-muted mb-1">Razón social legal</label>
+              <input id="sup-legal-name" bind:value={formLegalName} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" placeholder="Opcional para proveedores internacionales" />
+            </div>
+            <div>
+              <label for="sup-external-reference" class="block text-xs font-medium text-foreground-muted mb-1">Referencia externa</label>
+              <input id="sup-external-reference" bind:value={formExternalReference} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" placeholder="Código en otro ERP" />
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label for="sup-group" class="block text-xs font-medium text-foreground-muted mb-1">Grupo de proveedor</label>
+              <select id="sup-group" bind:value={formSupplierGroupId} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none">
+                <option value="">Sin grupo</option>
+                {#each supplierGroups as group}<option value={group.id}>{group.name}</option>{/each}
+              </select>
+            </div>
+            <div>
+              <label for="sup-currency" class="block text-xs font-medium text-foreground-muted mb-1">Moneda predeterminada</label>
+              <select id="sup-currency" bind:value={formDefaultCurrency} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none">
+                <option value="">Sin definir</option>
+                {#each currencies as currency}<option value={currency.code}>{currency.code} — {currency.name}</option>{/each}
+              </select>
+            </div>
+            <div>
+              <label for="sup-terms" class="block text-xs font-medium text-foreground-muted mb-1">Términos de pago</label>
+              <select id="sup-terms" bind:value={formPaymentTermsId} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none">
+                <option value="">Sin definir</option>
+                {#each paymentTerms as terms}<option value={terms.id}>{terms.name} ({terms.net_days} días)</option>{/each}
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="sup-payment-method" class="block text-xs font-medium text-foreground-muted mb-1">Método de pago predeterminado</label>
+              <select id="sup-payment-method" bind:value={formPaymentMethod} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none">
+                <option value="">Sin definir</option><option value="bank_transfer">Transferencia bancaria</option><option value="cash">Efectivo</option><option value="card">Tarjeta</option><option value="check">Cheque</option>
+              </select>
+            </div>
+            <div>
+              <label for="sup-status" class="block text-xs font-medium text-foreground-muted mb-1">Estado del proveedor</label>
+              <select id="sup-status" bind:value={formSupplierStatus} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none">
+                <option value="pending_review">Pendiente de revisión</option><option value="approved">Aprobado</option><option value="on_hold">En espera</option><option value="suspended">Suspendido</option><option value="rejected">Rechazado</option><option value="retired">Retirado</option>
+              </select>
+            </div>
+          </div>
+          {#if formSupplierStatus === 'on_hold'}
+            <div>
+              <label for="sup-hold-reason" class="block text-xs font-medium text-foreground-muted mb-1">Motivo de bloqueo</label>
+              <textarea id="sup-hold-reason" rows="2" bind:value={formHoldReason} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" placeholder="Explique por qué queda en espera"></textarea>
+            </div>
+          {/if}
+        </div>
+
+        {#if canManageTax}
+          <div class="border-t border-border pt-4 space-y-3">
+            <div><h4 class="text-sm font-semibold text-foreground">Información fiscal internacional</h4><p class="text-xs text-foreground-muted">Para El Salvador puede usar NIT/NRC; para otros países use VAT, EIN, RFC u otro tipo local.</p></div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <input id="sup-tax-type" bind:value={formTaxType} aria-label="Tipo de identificación fiscal" class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground" placeholder="NIT, VAT, EIN..." />
+              <input id="sup-tax-value" bind:value={formTaxValue} aria-label="Número de identificación fiscal" class="md:col-span-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground" placeholder="Identificador fiscal opcional" />
+            </div>
+            <label class="flex items-center gap-2 text-xs text-foreground-muted"><input type="checkbox" bind:checked={formTaxPrimary} class="rounded border-border text-primary" /> Identificador principal del país</label>
+          </div>
+        {:else if isEditingSupplier}
+          <div class="border-t border-border pt-4 space-y-2">
+            <div><h4 class="text-sm font-semibold text-foreground">Información fiscal internacional</h4><p class="text-xs text-foreground-muted">Solo lectura. Se requiere suppliers:tax_identifiers para administrar estos registros.</p></div>
+            {#if editingSupplierDetail?.tax_identifiers?.length}
+              {#each editingSupplierDetail.tax_identifiers as tax}
+                <div class="rounded-lg border border-border bg-surface-muted/30 px-3 py-2 text-sm text-foreground"><span class="font-medium">{tax.identifier_type}:</span> {tax.value}{tax.is_primary ? ' · Principal' : ''}</div>
+              {/each}
+            {:else}<p class="text-xs text-foreground-muted">Sin identificadores fiscales registrados.</p>{/if}
+          </div>
+        {/if}
+
+        {#if canManageAddresses}
+          <div class="border-t border-border pt-4 space-y-3">
+            <div><h4 class="text-sm font-semibold text-foreground">Dirección principal</h4><p class="text-xs text-foreground-muted">La dirección heredada se conserva; este registro estructurado permite facturación y entrega.</p></div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <select bind:value={formAddressType} aria-label="Tipo de dirección" class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"><option value="fiscal">Fiscal</option><option value="billing">Facturación</option><option value="delivery">Entrega</option><option value="office">Oficina</option><option value="other">Otra</option></select>
+              <input bind:value={formAddressLine1} aria-label="Línea de dirección" class="md:col-span-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground" placeholder="Línea principal de dirección" />
+              <input bind:value={formAddressCity} aria-label="Ciudad" class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground" placeholder="Ciudad" />
+              <input bind:value={formAddressState} aria-label="Estado o departamento" class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground" placeholder="Estado / departamento" />
+              <input bind:value={formAddressPostal} aria-label="Código postal" class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground" placeholder="Código postal" />
+            </div>
+          </div>
+        {:else if isEditingSupplier}
+          <div class="border-t border-border pt-4 space-y-2">
+            <div><h4 class="text-sm font-semibold text-foreground">Direcciones</h4><p class="text-xs text-foreground-muted">Solo lectura. Se requiere suppliers:addresses para administrar direcciones.</p></div>
+            {#if editingSupplierDetail?.addresses?.length}
+              {#each editingSupplierDetail.addresses as address}
+                <div class="rounded-lg border border-border bg-surface-muted/30 px-3 py-2 text-sm text-foreground"><span class="font-medium">{address.address_type}:</span> {address.line1}{address.city ? ` · ${address.city}` : ''}{address.is_primary ? ' · Principal' : ''}</div>
+              {/each}
+            {:else}<p class="text-xs text-foreground-muted">Sin direcciones estructuradas registradas.</p>{/if}
+          </div>
+        {/if}
+
+        {#if canManageBanks}
+          <div class="border-t border-border pt-4 space-y-3">
+            <div><h4 class="text-sm font-semibold text-foreground">Cuenta bancaria protegida</h4><p class="text-xs text-foreground-muted">Se cifra al guardar y solo se muestran los últimos cuatro dígitos. Déjela vacía para conservar cuentas existentes.</p></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input bind:value={formBankName} aria-label="Banco" class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground" placeholder="Banco" />
+              <input bind:value={formBankHolder} aria-label="Titular de la cuenta" class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground" placeholder="Titular de la cuenta" />
+              <input bind:value={formBankAccount} aria-label="Número de cuenta" class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground" placeholder="Número de cuenta" autocomplete="off" />
+              <input bind:value={formBankIban} aria-label="IBAN" class="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground" placeholder="IBAN opcional" autocomplete="off" />
+            </div>
+            <label class="flex items-center gap-2 text-xs text-foreground-muted"><input type="checkbox" bind:checked={formBankPrimary} class="rounded border-border text-primary" /> Cuenta principal</label>
+          </div>
+        {:else if isEditingSupplier}
+          <div class="border-t border-border pt-4 space-y-2">
+            <div><h4 class="text-sm font-semibold text-foreground">Cuentas bancarias protegidas</h4><p class="text-xs text-foreground-muted">Solo lectura. Se requiere suppliers:bank_accounts para consultar o administrar cuentas.</p></div>
+            <p class="text-xs text-foreground-muted">Los datos bancarios completos nunca se muestran.</p>
+          </div>
+        {/if}
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>

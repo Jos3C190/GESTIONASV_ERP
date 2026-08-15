@@ -9,7 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.domain.entities.media_image import SingleImage, SingleImageDraft
-from app.domain.entities.supplier import Supplier, SupplierContact
+from app.domain.entities.supplier import (
+    Supplier,
+    SupplierAddress,
+    SupplierBankAccount,
+    SupplierContact,
+    SupplierTaxIdentifier,
+)
 from app.infrastructure.models.media import MediaAsset
 from app.infrastructure.models.supplier import SupplierContactModel, SupplierModel
 from app.infrastructure.models.supplier_image import SupplierContactImageModel, SupplierImageModel
@@ -46,12 +52,62 @@ def _to_supplier_contact(orm: SupplierContactModel) -> SupplierContact:
     )
 
 
-def _to_supplier(orm: SupplierModel) -> Supplier:
+def _to_supplier(orm: SupplierModel, *, include_details: bool = True, include_bank_accounts: bool = True) -> Supplier:
     contacts = (
         tuple(_to_supplier_contact(c) for c in orm.contacts)
         if hasattr(orm, "contacts") and orm.contacts
         else ()
     )
+    tax_identifiers = tuple(
+        SupplierTaxIdentifier(
+            id=item.id,
+            supplier_id=item.supplier_id,
+            country_id=item.country_id,
+            identifier_type=item.identifier_type,
+            value=item.value,
+            normalized_value=item.normalized_value,
+            is_primary=item.is_primary,
+            is_verified=item.is_verified,
+            verified_at=item.verified_at,
+            valid_from=item.valid_from,
+            valid_until=item.valid_until,
+        )
+        for item in getattr(orm, "tax_identifiers", ())
+    ) if include_details else ()
+    addresses = tuple(
+        SupplierAddress(
+            id=item.id,
+            supplier_id=item.supplier_id,
+            address_type=item.address_type,
+            line1=item.line1,
+            line2=item.line2,
+            country_id=item.country_id,
+            state_region=item.state_region,
+            city=item.city,
+            postal_code=item.postal_code,
+            phone=item.phone,
+            email=item.email,
+            is_primary=item.is_primary,
+        )
+        for item in getattr(orm, "addresses", ())
+    ) if include_details else ()
+    bank_accounts = tuple(
+        SupplierBankAccount(
+            id=item.id,
+            supplier_id=item.supplier_id,
+            bank_name=item.bank_name,
+            account_holder=item.account_holder,
+            country_id=item.country_id,
+            currency_code=item.currency_code,
+            account_type=item.account_type,
+            last_four=item.last_four,
+            is_primary=item.is_primary,
+            is_verified=item.is_verified,
+            status=item.status,
+            verified_at=item.verified_at,
+        )
+        for item in getattr(orm, "bank_accounts", ())
+    ) if include_bank_accounts else ()
     return Supplier(
         id=orm.id_supplier,
         uuid=orm.uuid,
@@ -64,7 +120,20 @@ def _to_supplier(orm: SupplierModel) -> Supplier:
         email=orm.email,
         website=orm.website,
         is_active=orm.is_active,
+        legal_name=orm.legal_name,
+        supplier_group_id=orm.supplier_group_id,
+        supplier_status=orm.supplier_status,
+        hold_reason=orm.hold_reason,
+        hold_from=orm.hold_from,
+        hold_until=orm.hold_until,
+        default_currency_code=orm.default_currency_code,
+        payment_terms_id=orm.payment_terms_id,
+        default_payment_method=orm.default_payment_method,
+        external_reference=orm.external_reference,
         logo_image=_to_image(getattr(orm, "image", None)),
+        tax_identifiers=tax_identifiers,
+        addresses=addresses,
+        bank_accounts=bank_accounts,
         contacts=contacts,
         created_at=orm.created_at,
         updated_at=orm.updated_at,
@@ -117,7 +186,7 @@ class SqlAlchemySupplierRepository:
             .limit(limit)
         )
         res = await self._session.execute(stmt)
-        items = [_to_supplier(s) for s in res.scalars().all()]
+        items = [_to_supplier(s, include_details=False, include_bank_accounts=False) for s in res.scalars().all()]
         return items, total
 
     async def get_supplier_by_id(self, company_id: uuid.UUID, supplier_id: int) -> Supplier | None:
@@ -126,6 +195,9 @@ class SqlAlchemySupplierRepository:
             .options(
                 selectinload(SupplierModel.image),
                 selectinload(SupplierModel.contacts).selectinload(SupplierContactModel.image),
+                selectinload(SupplierModel.tax_identifiers),
+                selectinload(SupplierModel.addresses),
+                selectinload(SupplierModel.bank_accounts),
             )
             .where(SupplierModel.company_id == company_id, SupplierModel.id_supplier == supplier_id)
         )
@@ -141,6 +213,9 @@ class SqlAlchemySupplierRepository:
             .options(
                 selectinload(SupplierModel.image),
                 selectinload(SupplierModel.contacts).selectinload(SupplierContactModel.image),
+                selectinload(SupplierModel.tax_identifiers),
+                selectinload(SupplierModel.addresses),
+                selectinload(SupplierModel.bank_accounts),
             )
             .where(SupplierModel.company_id == company_id, SupplierModel.uuid == supplier_uuid)
         )
@@ -154,6 +229,9 @@ class SqlAlchemySupplierRepository:
             .options(
                 selectinload(SupplierModel.image),
                 selectinload(SupplierModel.contacts).selectinload(SupplierContactModel.image),
+                selectinload(SupplierModel.tax_identifiers),
+                selectinload(SupplierModel.addresses),
+                selectinload(SupplierModel.bank_accounts),
             )
             .where(SupplierModel.company_id == company_id, SupplierModel.code == code)
         )
@@ -172,6 +250,7 @@ class SqlAlchemySupplierRepository:
         email: str | None = None,
         website: str | None = None,
         image: SingleImageDraft | None = None,
+        **master_data: object,
     ) -> Supplier:
         orm = SupplierModel(
             company_id=company_id,
@@ -182,6 +261,7 @@ class SqlAlchemySupplierRepository:
             phone=phone,
             email=email,
             website=website,
+            **master_data,
         )
         self._session.add(orm)
         await self._session.flush()
@@ -197,6 +277,9 @@ class SqlAlchemySupplierRepository:
             .options(
                 selectinload(SupplierModel.image),
                 selectinload(SupplierModel.contacts).selectinload(SupplierContactModel.image),
+                selectinload(SupplierModel.tax_identifiers),
+                selectinload(SupplierModel.addresses),
+                selectinload(SupplierModel.bank_accounts),
             )
             .where(SupplierModel.company_id == company_id, SupplierModel.id_supplier == supplier_id)
         )
@@ -317,6 +400,9 @@ class SqlAlchemySupplierRepository:
             .options(
                 selectinload(SupplierModel.image),
                 selectinload(SupplierModel.contacts).selectinload(SupplierContactModel.image),
+                selectinload(SupplierModel.tax_identifiers),
+                selectinload(SupplierModel.addresses),
+                selectinload(SupplierModel.bank_accounts),
             )
         )
         orm = result.scalar_one()

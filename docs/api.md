@@ -89,6 +89,24 @@ Image objects use `source_type=cloudinary` with a previously confirmed asset
 also require `media.upload`; external URLs are rendered by the browser and are
 never fetched by the API.
 
+### International supplier master data
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/currencies` | `suppliers:read` | Active ISO-4217 currency catalogue |
+| `GET/POST` | `/api/v1/supplier-groups` | `suppliers:read` / `suppliers:manage` | Company-scoped supplier groups |
+| `PATCH/DELETE` | `/api/v1/supplier-groups/{id}` | `suppliers:manage` | Maintain a supplier group |
+| `GET/POST/PATCH` | `/api/v1/payment-terms[/{id}]` | `suppliers:read` / `suppliers:manage` | Company-scoped payment terms |
+| `GET/POST/PATCH/DELETE` | `/api/v1/suppliers/{id}/tax-identifiers[/{tax_id}]` | `suppliers:read` / `suppliers:tax_identifiers` | Optional country/type fiscal identifiers |
+| `GET/POST/PATCH/DELETE` | `/api/v1/suppliers/{id}/addresses[/{address_id}]` | `suppliers:read` / `suppliers:addresses` | Multiple typed supplier addresses |
+| `GET/POST/PATCH/DELETE` | `/api/v1/suppliers/{id}/bank-accounts[/{account_id}]` | `suppliers:bank_accounts` | Encrypted accounts, masked responses only |
+
+`POST/PUT /suppliers` accepts optional `legal_name`, `supplier_group_id`,
+`supplier_status`, hold fields, `default_currency_code`, `payment_terms_id`,
+`default_payment_method` and `external_reference`. Omitting an existing
+optional field on update preserves it. Tax identifiers accept arbitrary
+country-specific types; the API never requires NIT, NRC or VAT.
+
 ### Audit Log (read-only)
 | Method | Path | Permission | Description |
 |--------|------|------------|-------------|

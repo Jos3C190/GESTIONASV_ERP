@@ -59,6 +59,7 @@ class SupplierUseCases:
         email: str | None = None,
         website: str | None = None,
         image: SingleImageDraft | None = None,
+        **master_data: object,
     ) -> Supplier:
         # Validate unique code
         existing = await self._supplier_repo.get_supplier_by_code(company_id, code)
@@ -82,6 +83,7 @@ class SupplierUseCases:
             email=email,
             website=website,
             image=self._normalize_image(image),
+            **master_data,
         )
 
     async def update_supplier(
