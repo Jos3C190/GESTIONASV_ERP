@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.domain.entities.media_image import SingleImageDraft, normalize_single_image_draft
 from app.domain.entities.supplier import Supplier, SupplierContact
 from app.domain.ports.catalog_repository import CatalogRepository
 from app.domain.ports.supplier_repository import SupplierRepository
@@ -57,6 +58,7 @@ class SupplierUseCases:
         phone: str | None = None,
         email: str | None = None,
         website: str | None = None,
+        image: SingleImageDraft | None = None,
     ) -> Supplier:
         # Validate unique code
         existing = await self._supplier_repo.get_supplier_by_code(company_id, code)
@@ -79,6 +81,7 @@ class SupplierUseCases:
             phone=phone,
             email=email,
             website=website,
+            image=self._normalize_image(image),
         )
 
     async def update_supplier(
@@ -106,6 +109,8 @@ class SupplierUseCases:
                 raise ConflictError(
                     "El código ya está registrado en esta empresa.", code="supplier_code_exists"
                 )
+        if "image" in kwargs:
+            kwargs["image"] = self._normalize_image(kwargs["image"])
         supplier = await self._supplier_repo.update_supplier(company_id, supplier_id, **kwargs)
         if not supplier:
             raise NotFoundError("Proveedor no encontrado", code="supplier_not_found")
@@ -125,28 +130,30 @@ class SupplierUseCases:
         full_name: str,
         phone: str | None = None,
         email: str | None = None,
+        image: SingleImageDraft | None = None,
     ) -> SupplierContact:
         await self.get_supplier(company_id, supplier_id)
         return await self._supplier_repo.add_contact(
-            company_id, supplier_id=supplier_id, full_name=full_name, phone=phone, email=email
+            company_id,
+            supplier_id=supplier_id,
+            full_name=full_name,
+            phone=phone,
+            email=email,
+            image=self._normalize_image(image),
         )
 
     async def update_contact(
         self,
         company_id: uuid.UUID,
         contact_id: int,
-        full_name: str | None = None,
-        phone: str | None = None,
-        email: str | None = None,
-        is_active: bool | None = None,
+        **changes: object,
     ) -> SupplierContact:
+        if "image" in changes:
+            changes["image"] = self._normalize_image(changes["image"])
         contact = await self._supplier_repo.update_contact(
             company_id,
             contact_id=contact_id,
-            full_name=full_name,
-            phone=phone,
-            email=email,
-            is_active=is_active,
+            **changes,
         )
         if not contact:
             raise NotFoundError("Contacto de proveedor no encontrado", code="contact_not_found")
@@ -157,3 +164,14 @@ class SupplierUseCases:
         if not deleted:
             raise NotFoundError("Contacto de proveedor no encontrado", code="contact_not_found")
         return True
+
+    @staticmethod
+    def _normalize_image(image: object) -> SingleImageDraft | None:
+        if image is None:
+            return None
+        if not isinstance(image, SingleImageDraft):
+            raise ValidationError("La imagen del proveedor no es válida.", code="supplier_image_invalid")
+        try:
+            return normalize_single_image_draft(image)
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="supplier_image_invalid") from exc

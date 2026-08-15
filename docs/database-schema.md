@@ -206,3 +206,18 @@ zero-based `position`, and `is_cover`. Product list responses project only
 `cover_image` and `image_count`; individual product responses include the
 complete ordered gallery. Removed Cloudinary assets are marked `detached` for
 the existing cleanup process.
+
+## 8. Supplier and supplier-contact primary images (revision 0032)
+
+Revision `0032` adds one normalized primary image relation for each supplier
+and supplier contact. `supplier_images` stores the supplier logo and
+`supplier_contact_images` stores the contact avatar. Both tables validate
+Cloudinary/external source parity, enforce one relation per owner, and retain
+accessible alternative text without storing binary content. Existing supplier
+contacts receive a persistent UUID so staged Cloudinary assets can be claimed
+with the same owner isolation used by other media flows.
+
+External images are HTTPS references rendered directly by the browser; the API
+never downloads or probes those URLs. Cloudinary assets must be staged/active,
+belong to the current company, and have the purpose matching the relation.
+Removed assets are marked `detached` for the existing cleanup process.

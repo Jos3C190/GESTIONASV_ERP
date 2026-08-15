@@ -13,6 +13,10 @@ from app.infrastructure.db.base import Base, SoftDeleteMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from app.infrastructure.models.catalog import CountryModel
+    from app.infrastructure.models.supplier_image import (
+        SupplierContactImageModel,
+        SupplierImageModel,
+    )
 
 
 class SupplierModel(TimestampMixin, SoftDeleteMixin, Base):
@@ -56,6 +60,12 @@ class SupplierModel(TimestampMixin, SoftDeleteMixin, Base):
     )
 
     country: Mapped[CountryModel] = relationship("CountryModel", back_populates="suppliers")
+    image: Mapped[SupplierImageModel | None] = relationship(
+        "SupplierImageModel",
+        back_populates="supplier",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
     contacts: Mapped[list[SupplierContactModel]] = relationship(
         "SupplierContactModel", back_populates="supplier", cascade="all, delete-orphan"
     )
@@ -68,6 +78,9 @@ class SupplierContactModel(TimestampMixin, SoftDeleteMixin, Base):
     )
 
     id_supplier_contact: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    uuid: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False, unique=True, index=True, server_default=text("gen_random_uuid()")
+    )
     id_supplier: Mapped[int] = mapped_column(
         Integer, ForeignKey("suppliers.id_supplier", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -77,3 +90,9 @@ class SupplierContactModel(TimestampMixin, SoftDeleteMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     supplier: Mapped[SupplierModel] = relationship("SupplierModel", back_populates="contacts")
+    image: Mapped[SupplierContactImageModel | None] = relationship(
+        "SupplierContactImageModel",
+        back_populates="supplier_contact",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )

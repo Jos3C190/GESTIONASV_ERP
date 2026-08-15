@@ -7,8 +7,10 @@
   import { api } from '$lib/api/client';
   import { suppliersApi } from '$lib/api/suppliers';
   import { catalogApi } from '$lib/api/catalog';
-  import type { Supplier, SupplierContact } from '$lib/types/supplier';
+  import type { Supplier, SupplierContact, SupplierImageDraft } from '$lib/types/supplier';
+  import SingleImageEditor from '$lib/features/suppliers/components/SingleImageEditor.svelte';
   import type { Country } from '$lib/types/catalog';
+  import { company } from '$lib/stores/company.svelte';
   import { search as globalSearch } from '$lib/stores/search.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { confirmation } from '$lib/stores/confirmation.svelte';
@@ -49,6 +51,7 @@
   let formEmail = $state<string>('');
   let formWebsite = $state<string>('');
   let formIsActive = $state<boolean>(true);
+  let formImage = $state<SupplierImageDraft | null>(null);
 
   // Contacts Modal State
   let showContactModal = $state<boolean>(false);
@@ -56,7 +59,12 @@
   let contactName = $state<string>('');
   let contactPhone = $state<string>('');
   let contactEmail = $state<string>('');
+  let contactImage = $state<SupplierImageDraft | null>(null);
+  let editingContactId = $state<number | null>(null);
   let savingContact = $state<boolean>(false);
+
+  let canEditImages = $derived(permissions.hasPermission('suppliers:images'));
+  let canUploadImages = $derived(permissions.hasPermission('media.upload'));
 
   let dataGeneration = 0;
 
@@ -123,6 +131,7 @@
     formEmail = '';
     formWebsite = '';
     formIsActive = true;
+    formImage = null;
     showSupplierModal = true;
   }
 
@@ -137,6 +146,15 @@
     formEmail = sup.email ?? '';
     formWebsite = sup.website ?? '';
     formIsActive = sup.is_active;
+    formImage = sup.logo_image
+      ? {
+          id: sup.logo_image.id,
+          source_type: sup.logo_image.source_type,
+          url: sup.logo_image.url,
+          media_asset_id: sup.logo_image.media_asset_id ?? null,
+          alt_text: sup.logo_image.alt_text ?? sup.name
+        }
+      : null;
     showSupplierModal = true;
   }
 
@@ -156,7 +174,8 @@
           phone: formPhone,
           email: formEmail,
           website: formWebsite,
-          is_active: formIsActive
+          is_active: formIsActive,
+          ...(canEditImages ? { image: formImage } : {})
         });
         successMsg = 'Proveedor actualizado exitosamente.';
       } else {
@@ -167,7 +186,8 @@
           address: formAddress,
           phone: formPhone,
           email: formEmail,
-          website: formWebsite
+          website: formWebsite,
+          ...(canEditImages ? { image: formImage } : {})
         });
         successMsg = 'Proveedor creado exitosamente.';
       }
@@ -202,10 +222,36 @@
 
   function openContactsModal(sup: Supplier) {
     selectedSupplier = sup;
+    editingContactId = null;
     contactName = '';
     contactPhone = '';
     contactEmail = '';
+    contactImage = null;
     showContactModal = true;
+  }
+
+  function openEditContact(contact: SupplierContact) {
+    editingContactId = contact.id_supplier_contact;
+    contactName = contact.full_name;
+    contactPhone = contact.phone ?? '';
+    contactEmail = contact.email ?? '';
+    contactImage = contact.avatar_image
+      ? {
+          id: contact.avatar_image.id,
+          source_type: contact.avatar_image.source_type,
+          url: contact.avatar_image.url,
+          media_asset_id: contact.avatar_image.media_asset_id ?? null,
+          alt_text: contact.avatar_image.alt_text ?? contact.full_name
+        }
+      : null;
+  }
+
+  function resetContactForm() {
+    editingContactId = null;
+    contactName = '';
+    contactPhone = '';
+    contactEmail = '';
+    contactImage = null;
   }
 
   async function handleAddContact(e: SubmitEvent) {
@@ -213,14 +259,22 @@
     if (!selectedSupplier) return;
     savingContact = true;
     try {
-      await suppliersApi.addContact(selectedSupplier.id_supplier, {
-        full_name: contactName,
-        phone: contactPhone,
-        email: contactEmail
-      });
-      contactName = '';
-      contactPhone = '';
-      contactEmail = '';
+      if (editingContactId) {
+        await suppliersApi.updateContact(editingContactId, {
+          full_name: contactName,
+          phone: contactPhone,
+          email: contactEmail,
+          ...(canEditImages ? { image: contactImage } : {})
+        });
+      } else {
+        await suppliersApi.addContact(selectedSupplier.id_supplier, {
+          full_name: contactName,
+          phone: contactPhone,
+          email: contactEmail,
+          ...(canEditImages ? { image: contactImage } : {})
+        });
+      }
+      resetContactForm();
       const updated = await suppliersApi.getSupplier(selectedSupplier.id_supplier);
       selectedSupplier = updated;
       await loadData();
@@ -281,6 +335,12 @@
   function contactMenuItems(contact: SupplierContact): KebabItem[] {
     const items: KebabItem[] = [];
     if (permissions.hasPermission('suppliers:manage')) {
+      items.push({
+        id: 'edit',
+        label: 'Editar',
+        icon: 'edit',
+        onClick: () => openEditContact(contact)
+      });
       items.push({
         id: 'status',
         label: contact.is_active ? 'Desactivar' : 'Activar',
@@ -573,10 +633,29 @@
               <tr class="hover:bg-surface-muted">
                 <td class="px-4 py-3 font-mono text-foreground">{sup.code}</td>
                 <td class="px-4 py-3">
-                  <div class="font-medium text-foreground">{sup.name}</div>
-                  {#if sup.address}
-                    <div class="text-xs text-foreground-muted truncate max-w-xs">{sup.address}</div>
-                  {/if}
+                  <div class="flex items-center gap-3">
+                    <div class="h-9 w-9 flex-none overflow-hidden rounded-lg border border-border bg-surface-muted">
+                      {#if sup.logo_image?.url}
+                        <img
+                          src={sup.logo_image.url}
+                          alt={sup.logo_image.alt_text || `Logo de ${sup.name}`}
+                          loading="lazy"
+                          referrerpolicy="no-referrer"
+                          class="h-full w-full object-cover"
+                        />
+                      {:else}
+                        <div class="flex h-full items-center justify-center text-xs font-semibold text-foreground-muted">
+                          {sup.name.slice(0, 2).toUpperCase()}
+                        </div>
+                      {/if}
+                    </div>
+                    <div class="min-w-0">
+                      <div class="font-medium text-foreground">{sup.name}</div>
+                      {#if sup.address}
+                        <div class="max-w-xs truncate text-xs text-foreground-muted">{sup.address}</div>
+                      {/if}
+                    </div>
+                  </div>
                 </td>
                 <td class="px-4 py-3 text-foreground-muted">{getCountryName(sup.country)}</td>
                 <td class="px-4 py-3 text-foreground-muted text-xs">
@@ -680,6 +759,17 @@
           <textarea id="sup-addr" rows="2" bind:value={formAddress} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"></textarea>
         </div>
 
+        <SingleImageEditor
+          bind:image={formImage}
+          companyId={company.id ?? ''}
+          purpose="supplier_logo"
+          label="Imagen corporativa"
+          emptyLabel="Logo o imagen principal del proveedor."
+          altFallback={`Logo de ${formName || 'proveedor'}`}
+          editable={canEditImages}
+          canUpload={canUploadImages}
+        />
+
         {#if isEditingSupplier}
           <div class="flex items-center gap-2">
             <input type="checkbox" id="sup-active" bind:checked={formIsActive} class="rounded border-border text-primary" />
@@ -704,15 +794,34 @@
         <!-- Add Contact Form -->
         {#if permissions.hasPermission('suppliers:manage')}
           <form onsubmit={handleAddContact} class="bg-surface-muted/50 p-4 rounded-lg space-y-3">
-            <h4 class="text-xs font-semibold uppercase text-foreground-muted">Agregar Nuevo Contacto</h4>
+            <div class="flex items-center justify-between gap-3">
+              <h4 class="text-xs font-semibold uppercase text-foreground-muted">
+                {editingContactId ? 'Editar Contacto' : 'Agregar Nuevo Contacto'}
+              </h4>
+              {#if editingContactId}
+                <button type="button" class="text-xs text-foreground-muted hover:underline" onclick={resetContactForm}>
+                  Nuevo contacto
+                </button>
+              {/if}
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
               <input type="text" required placeholder="Nombre completo *" bind:value={contactName} class="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none" />
               <input type="text" placeholder="Teléfono" bind:value={contactPhone} class="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none" />
               <input type="email" placeholder="Email" bind:value={contactEmail} class="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none" />
             </div>
+            <SingleImageEditor
+              bind:image={contactImage}
+              companyId={company.id ?? ''}
+              purpose="supplier_contact_avatar"
+              label="Fotografía del contacto"
+              emptyLabel="Avatar opcional para identificar al contacto."
+              altFallback={contactName || 'Contacto del proveedor'}
+              editable={canEditImages}
+              canUpload={canUploadImages}
+            />
             <div class="flex justify-end">
               <Button type="submit" size="sm" variant="primary" disabled={savingContact}>
-                {savingContact ? 'Agregando...' : '+ Agregar Contacto'}
+                {savingContact ? 'Guardando...' : editingContactId ? 'Guardar cambios' : '+ Agregar Contacto'}
               </Button>
             </div>
           </form>
@@ -727,7 +836,23 @@
             <div class="divide-y divide-border border border-border rounded-lg">
               {#each selectedSupplier.contacts as contact}
                 <div class="flex items-center justify-between p-3">
-                  <div class="min-w-0">
+                  <div class="flex min-w-0 items-center gap-3">
+                    <div class="h-9 w-9 flex-none overflow-hidden rounded-full border border-border bg-surface-muted">
+                      {#if contact.avatar_image?.url}
+                        <img
+                          src={contact.avatar_image.url}
+                          alt={contact.avatar_image.alt_text || contact.full_name}
+                          loading="lazy"
+                          referrerpolicy="no-referrer"
+                          class="h-full w-full object-cover"
+                        />
+                      {:else}
+                        <div class="flex h-full items-center justify-center text-xs font-semibold text-foreground-muted">
+                          {contact.full_name.slice(0, 1).toUpperCase()}
+                        </div>
+                      {/if}
+                    </div>
+                    <div class="min-w-0">
                     <div class="flex items-center gap-2">
                       <div class="truncate font-medium text-sm text-foreground">{contact.full_name}</div>
                       <span class="rounded-md px-1.5 py-0.5 text-[10px] font-medium {contact.is_active ? 'bg-success/10 text-success' : 'bg-surface-muted text-foreground-subtle'}">
@@ -737,6 +862,7 @@
                     <div class="text-xs text-foreground-muted">
                       {contact.phone || 'Sin tel'} {contact.email ? ` | ${contact.email}` : ''}
                     </div>
+                  </div>
                   </div>
                   {#if contactMenuItems(contact).length > 0}
                     <KebabMenu items={contactMenuItems(contact)} ariaLabel={`Acciones de ${contact.full_name}`} />

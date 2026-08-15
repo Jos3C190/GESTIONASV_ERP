@@ -60,6 +60,7 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("units:manage_global", "Administrar el catálogo global de unidades", "units"),
     PermissionSpec("suppliers:read", "Ver proveedores", "suppliers"),
     PermissionSpec("suppliers:manage", "Gestionar proveedores y contactos", "suppliers"),
+    PermissionSpec("suppliers:images", "Gestionar imágenes de proveedores y contactos", "suppliers"),
     PermissionSpec("suppliers:delete", "Eliminar proveedores y contactos", "suppliers"),
     PermissionSpec("suppliers:restore", "Restaurar proveedores y contactos", "suppliers"),
     # --- roles ---
@@ -156,6 +157,7 @@ BASE_ROLES: tuple[tuple[str, str, bool, tuple[str, ...]], ...] = (
             "units:restore",
             "suppliers:read",
             "suppliers:manage",
+            "suppliers:images",
             "suppliers:delete",
             "suppliers:restore",
             "roles:read",

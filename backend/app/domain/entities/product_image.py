@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-import ipaddress
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from urllib.parse import urlparse
+
+from app.domain.entities.media_image import (
+    MAX_ALT_TEXT_LENGTH,
+    MAX_IMAGE_URL_LENGTH,
+    validate_external_image_url,
+)
 
 MAX_PRODUCT_IMAGES = 20
-MAX_IMAGE_URL_LENGTH = 2048
-MAX_ALT_TEXT_LENGTH = 160
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,28 +36,6 @@ class ProductImageDraft:
     alt_text: str | None
     position: int
     is_cover: bool
-
-
-def validate_external_image_url(url: str) -> str:
-    """Validate an external image reference without making a network request."""
-    value = url.strip()
-    if len(value) > MAX_IMAGE_URL_LENGTH:
-        raise ValueError("La URL de imagen supera el máximo permitido.")
-    parsed = urlparse(value)
-    hostname = (parsed.hostname or "").lower().rstrip(".")
-    if parsed.scheme.lower() != "https" or not hostname:
-        raise ValueError("Las imágenes externas deben usar una URL HTTPS válida.")
-    if parsed.username or parsed.password:
-        raise ValueError("La URL de imagen no puede contener credenciales.")
-    if hostname == "localhost" or hostname.endswith(".localhost"):
-        raise ValueError("No se permiten URLs locales para imágenes externas.")
-    try:
-        address = ipaddress.ip_address(hostname)
-    except ValueError:
-        address = None
-    if address is not None and (address.is_private or address.is_loopback or address.is_link_local):
-        raise ValueError("No se permiten direcciones privadas para imágenes externas.")
-    return value
 
 
 def normalize_product_image_drafts(drafts: list[ProductImageDraft]) -> list[ProductImageDraft]:

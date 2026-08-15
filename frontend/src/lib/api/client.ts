@@ -340,7 +340,13 @@ export interface CompanyOut {
 }
 
 export type MediaPurpose =
-  'company_logo' | 'employee_avatar' | 'branch_image' | 'warehouse_image' | 'product_image';
+  | 'company_logo'
+  | 'employee_avatar'
+  | 'branch_image'
+  | 'warehouse_image'
+  | 'product_image'
+  | 'supplier_logo'
+  | 'supplier_contact_avatar';
 
 export interface UploadedImage {
   assetId: string;

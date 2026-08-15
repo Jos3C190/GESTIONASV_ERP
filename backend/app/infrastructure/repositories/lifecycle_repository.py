@@ -28,6 +28,7 @@ from app.infrastructure.models.employee import (
     Employee,
     EmployeeBranchAssignment,
 )
+from app.infrastructure.models.media import MediaAsset
 from app.infrastructure.models.organization import (
     Branch,
     Company,
@@ -39,6 +40,7 @@ from app.infrastructure.models.organization import (
 )
 from app.infrastructure.models.rbac import Permission, Role, RolePermission, UserRole
 from app.infrastructure.models.supplier import SupplierContactModel, SupplierModel
+from app.infrastructure.models.supplier_image import SupplierContactImageModel, SupplierImageModel
 from app.infrastructure.models.user import User
 
 
@@ -194,6 +196,39 @@ class SqlAlchemyLifecycleRepository:
     async def _exists(self, model: type[Any], *conditions: Any) -> bool:
         stmt = select(1).select_from(model).where(*conditions).limit(1)
         return (await self._session.scalar(stmt)) is not None
+
+    async def _detach_supplier_image(self, resource: str, record: Any) -> None:
+        """Detach supplier media when a supplier/contact enters the trash.
+
+        Lifecycle deletion is intentionally the single place that handles soft
+        deletion across modules.  Removing the relation here prevents an asset
+        from remaining active and owned by a record that normal application
+        queries no longer expose.  The Cloudinary object itself is left for the
+        existing detached-asset cleaner.
+        """
+        if resource == "suppliers":
+            image = await self._session.scalar(
+                select(SupplierImageModel).where(
+                    SupplierImageModel.supplier_id == record.id_supplier
+                )
+            )
+        elif resource == "supplier_contacts":
+            image = await self._session.scalar(
+                select(SupplierContactImageModel).where(
+                    SupplierContactImageModel.supplier_contact_id == record.id_supplier_contact
+                )
+            )
+        else:
+            return
+        if image is None:
+            return
+        if image.media_asset_id is not None:
+            asset = await self._session.get(MediaAsset, image.media_asset_id)
+            if asset is not None and asset.status != "deleted":
+                asset.status = "detached"
+                asset.owner_type = None
+                asset.owner_id = None
+        await self._session.delete(image)
 
     async def _deletion_blockers(  # noqa: C901
         self,
@@ -677,6 +712,7 @@ class SqlAlchemyLifecycleRepository:
                 f"No se puede eliminar porque mantiene relación con: {detail}.",
                 code="record_has_dependencies",
             )
+        await self._detach_supplier_image(resource, record)
         record.deleted_at = datetime.now(UTC)
         record.deleted_by = actor_id
         record.deletion_reason = reason

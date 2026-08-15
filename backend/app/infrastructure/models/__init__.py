@@ -25,7 +25,6 @@ from app.infrastructure.models.location import (
     LocationCodeScheme,
 )
 from app.infrastructure.models.media import MediaAsset
-from app.infrastructure.models.product_image import ProductImageModel
 from app.infrastructure.models.organization import (
     Branch,
     Company,
@@ -38,6 +37,7 @@ from app.infrastructure.models.organization import (
     Warehouse,
     WarehouseCategory,
 )
+from app.infrastructure.models.product_image import ProductImageModel
 from app.infrastructure.models.rbac import (
     Permission,
     Role,
@@ -45,6 +45,7 @@ from app.infrastructure.models.rbac import (
     UserRole,
 )
 from app.infrastructure.models.supplier import SupplierContactModel, SupplierModel
+from app.infrastructure.models.supplier_image import SupplierContactImageModel, SupplierImageModel
 from app.infrastructure.models.system import AppMeta
 from app.infrastructure.models.user import User
 
@@ -68,16 +69,18 @@ __all__: list[str] = [
     "LocationCodeAlias",
     "LocationCodeScheme",
     "MediaAsset",
-    "ProductImageModel",
     "Municipality",
     "PasswordResetToken",
     "Permission",
+    "ProductImageModel",
     "ProductModel",
     "RefreshToken",
     "Role",
     "RolePermission",
     "SubCategoryModel",
+    "SupplierContactImageModel",
     "SupplierContactModel",
+    "SupplierImageModel",
     "SupplierModel",
     "UnitModel",
     "User",

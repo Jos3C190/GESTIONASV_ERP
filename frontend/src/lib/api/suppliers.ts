@@ -1,5 +1,5 @@
 import { apiFetch } from '$lib/api/client';
-import type { Supplier, SupplierContact } from '$lib/types/supplier';
+import type { Supplier, SupplierContact, SupplierImageDraft } from '$lib/types/supplier';
 import type { PageResponse } from '$lib/api/catalog';
 
 export interface SupplierStats {
@@ -39,6 +39,7 @@ export const suppliersApi = {
     phone?: string;
     email?: string;
     website?: string;
+    image?: SupplierImageDraft | null;
   }) =>
     apiFetch<Supplier>('/suppliers', {
       method: 'POST',
@@ -54,6 +55,7 @@ export const suppliersApi = {
     email: string;
     website: string;
     is_active: boolean;
+    image?: SupplierImageDraft | null;
   }>) =>
     apiFetch<Supplier>(`/suppliers/${id}`, {
       method: 'PUT',
@@ -61,13 +63,25 @@ export const suppliersApi = {
     }),
 
   // Contacts
-  addContact: (supplierId: number, data: { full_name: string; phone?: string; email?: string }) =>
+  addContact: (
+    supplierId: number,
+    data: { full_name: string; phone?: string; email?: string; image?: SupplierImageDraft | null }
+  ) =>
     apiFetch<SupplierContact>(`/suppliers/${supplierId}/contacts`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  updateContact: (contactId: number, data: Partial<{ full_name: string; phone: string; email: string; is_active: boolean }>) =>
+  updateContact: (
+    contactId: number,
+    data: Partial<{
+      full_name: string;
+      phone: string;
+      email: string;
+      is_active: boolean;
+      image: SupplierImageDraft | null;
+    }>
+  ) =>
     apiFetch<SupplierContact>(`/suppliers/contacts/${contactId}`, {
       method: 'PUT',
       body: JSON.stringify(data),

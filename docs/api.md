@@ -74,6 +74,21 @@
 | `PATCH` | `/api/v1/departments/{id}` | `departments:manage` | Update department |
 | `DELETE` | `/api/v1/departments/{id}` | `departments:manage` | Delete department (if empty) |
 
+### Suppliers and contacts (require_permission)
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/suppliers` | `suppliers:read` | List suppliers; includes a lightweight logo projection when available |
+| `GET` | `/api/v1/suppliers/{id}` | `suppliers:read` | Get supplier, complete logo and contact avatars |
+| `POST` | `/api/v1/suppliers` | `suppliers:manage` + `suppliers:images` (when `image` is sent) | Create supplier with optional primary logo |
+| `PUT` | `/api/v1/suppliers/{id}` | `suppliers:manage` + `suppliers:images` (when `image` is present) | Update supplier; omitted `image` preserves it, `null` removes it |
+| `POST` | `/api/v1/suppliers/{id}/contacts` | `suppliers:manage` + `suppliers:images` (when `image` is sent) | Add contact with optional avatar |
+| `PUT` | `/api/v1/suppliers/contacts/{id}` | `suppliers:manage` + `suppliers:images` (when `image` is present) | Update contact; omitted `image` preserves it, `null` removes it |
+
+Image objects use `source_type=cloudinary` with a previously confirmed asset
+(`media_asset_id`) or `source_type=external` with an HTTPS URL. Local uploads
+also require `media.upload`; external URLs are rendered by the browser and are
+never fetched by the API.
+
 ### Audit Log (read-only)
 | Method | Path | Permission | Description |
 |--------|------|------------|-------------|

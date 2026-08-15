@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Protocol
 
+from app.domain.entities.media_image import SingleImageDraft
 from app.domain.entities.supplier import Supplier, SupplierContact
 
 
@@ -39,6 +40,7 @@ class SupplierRepository(Protocol):
         phone: str | None = None,
         email: str | None = None,
         website: str | None = None,
+        image: SingleImageDraft | None = None,
     ) -> Supplier: ...
 
     async def update_supplier(
@@ -60,6 +62,7 @@ class SupplierRepository(Protocol):
         full_name: str,
         phone: str | None = None,
         email: str | None = None,
+        image: SingleImageDraft | None = None,
     ) -> SupplierContact: ...
 
     async def update_contact(
@@ -70,6 +73,7 @@ class SupplierRepository(Protocol):
         phone: str | None = None,
         email: str | None = None,
         is_active: bool | None = None,
+        image: SingleImageDraft | None | object = None,
     ) -> SupplierContact | None: ...
 
     async def deactivate_contact(self, company_id: uuid.UUID, contact_id: int) -> bool: ...

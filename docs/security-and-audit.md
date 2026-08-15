@@ -178,6 +178,11 @@ The CSP therefore permits HTTPS image sources while keeping scripts and
 connections restricted. Gallery mutations are recorded in the append-only
 audit log without storing binary content.
 
+Supplier logos and contact avatars use `suppliers:images`. Local uploads also
+require `media.upload`; external HTTPS references do not. Assets are claimed
+transactionally with the supplier/contact UUID and company scope, and are
+detached rather than physically deleted during the business transaction.
+
 Para conocer la arquitectura completa de escáneres DAST en contenedor (OWASP ZAP OpenAPI scan), auditoría de dependencias (Trivy), pruebas adversariales (Pytest fuzzing) y el bloqueo automático mediante `.githooks` (`pre-commit` y `pre-push`), consulta el documento dedicado:
 
 👉 **[docs/red-team-blue-team.md](file:///d:/josec/Documents/Ciclo%20X/TRANSACCIONES%20COMERCIALES%20POR%20MEDIOS%20ELECTR%C3%93NICOS%20SECCI%C3%93N%20A/PROYECTO_ERP/docs/red-team-blue-team.md)**

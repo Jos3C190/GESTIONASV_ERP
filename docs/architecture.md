@@ -145,6 +145,12 @@ Product image galleries follow the same explicit migration policy. Revision
 Cloudinary assets transactionally and never performs server-side requests to
 external HTTPS image URLs.
 
+Supplier logos and contact avatars use the same media boundary with revision
+0032. They are one-to-one relational attachments, use persistent owner UUIDs,
+and are edited inside the existing supplier/contact modals. Their API accepts
+either a claimed Cloudinary asset or an HTTPS reference without making
+server-side requests to the external host.
+
 ### ADR-004 — No FOUC for theme
 **Decision:** Theme is applied by an inline blocking script in `app.html`
 before Svelte hydrates. **Rationale:** avoids the dark-mode flash. The script

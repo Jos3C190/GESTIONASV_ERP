@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import distinct, func, select
 
@@ -17,14 +19,18 @@ from app.api.v1.schemas.supplier import (
     SupplierContactResponse,
     SupplierContactUpdate,
     SupplierCreate,
+    SupplierImageInput,
     SupplierResponse,
     SupplierUpdate,
 )
 from app.application.audit.audit_service import AuditService
 from app.application.suppliers.use_cases import SupplierUseCases
+from app.core.exceptions import AuthorizationError
+from app.domain.entities.media_image import SingleImageDraft
 from app.infrastructure.models.supplier import SupplierModel
 from app.infrastructure.repositories import (
     SqlAlchemyCatalogRepository,
+    SqlAlchemyRoleRepository,
     SqlAlchemySupplierRepository,
 )
 
@@ -41,6 +47,56 @@ def _get_supplier_use_cases(session: SessionDep) -> SupplierUseCases:
     supplier_repo = SqlAlchemySupplierRepository(session)
     catalog_repo = SqlAlchemyCatalogRepository(session)
     return SupplierUseCases(supplier_repo, catalog_repo)
+
+
+async def _require_supplier_images_permission(
+    session: SessionDep, current: CurrentUser, company_id: uuid.UUID
+) -> None:
+    if current.is_superuser:
+        return
+    permissions = await SqlAlchemyRoleRepository(session).get_effective_permissions_for_user(
+        current.id, company_id
+    )
+    if "suppliers:images" not in {permission.code for permission in permissions}:
+        raise AuthorizationError("Permiso requerido: suppliers:images", code="forbidden")
+
+
+def _image_draft(image: SupplierImageInput | None) -> SingleImageDraft | None:
+    if image is None:
+        return None
+    return SingleImageDraft(
+        source_type=image.source_type,
+        url=image.url,
+        media_asset_id=image.media_asset_id,
+        alt_text=image.alt_text,
+    )
+
+
+def _image_audit_state(image: object | None) -> dict[str, object] | None:
+    if image is None:
+        return None
+    return {
+        "id": str(getattr(image, "id", "")),
+        "source_type": getattr(image, "source_type", None),
+        "media_asset_id": str(getattr(image, "media_asset_id", "") or "") or None,
+        "url": getattr(image, "url", None),
+        "alt_text": getattr(image, "alt_text", None),
+    }
+
+
+def _image_audit_action(before: object | None, after: object | None) -> str:
+    """Return a stable audit action for a single-image transition."""
+    if before is None and after is not None:
+        return "ADD_IMAGE"
+    if before is not None and after is None:
+        return "REMOVE_IMAGE"
+    if before is not None and after is not None:
+        changed_identity = any(
+            getattr(before, field, None) != getattr(after, field, None)
+            for field in ("media_asset_id", "source_type", "url")
+        )
+        return "REPLACE_IMAGE" if changed_identity else "UPDATE_IMAGE"
+    return "UPDATE_IMAGE"
 
 
 @router.get(
@@ -138,6 +194,8 @@ async def create_supplier(
 ) -> SupplierResponse:
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
+    if payload.image is not None:
+        await _require_supplier_images_permission(session, current, company_id)
     created = await use_cases.create_supplier(
         company_id,
         code=payload.code,
@@ -147,6 +205,7 @@ async def create_supplier(
         phone=payload.phone,
         email=payload.email,
         website=payload.website,
+        image=_image_draft(payload.image),
     )
     await audit.record(
         action="CREATE",
@@ -154,7 +213,11 @@ async def create_supplier(
         company_id=company_id,
         resource_type="suppliers",
         resource_id=str(created.id),
-        after_state={"code": created.code, "name": created.name},
+        after_state={
+            "code": created.code,
+            "name": created.name,
+            "logo_image": _image_audit_state(created.logo_image),
+        },
     )
     return created
 
@@ -179,15 +242,32 @@ async def update_supplier(
     await require_company_wide_scope(session, current, company_id)
     before = await use_cases.get_supplier(company_id, supplier_id)
     update_data = payload.model_dump(exclude_unset=True)
+    if "image" in update_data:
+        await _require_supplier_images_permission(session, current, company_id)
+        update_data["image"] = _image_draft(payload.image)
     updated = await use_cases.update_supplier(company_id, supplier_id, **update_data)
     await audit.record(
-        action=_status_action(before.is_active, updated.is_active),
+        action=(
+            _image_audit_action(before.logo_image, updated.logo_image)
+            if "image" in update_data
+            else _status_action(before.is_active, updated.is_active)
+        ),
         user_id=current.id,
         company_id=company_id,
         resource_type="suppliers",
         resource_id=str(supplier_id),
-        before_state={"code": before.code, "name": before.name, "is_active": before.is_active},
-        after_state={"code": updated.code, "name": updated.name, "is_active": updated.is_active},
+        before_state={
+            "code": before.code,
+            "name": before.name,
+            "is_active": before.is_active,
+            "logo_image": _image_audit_state(before.logo_image),
+        },
+        after_state={
+            "code": updated.code,
+            "name": updated.name,
+            "is_active": updated.is_active,
+            "logo_image": _image_audit_state(updated.logo_image),
+        },
     )
     return updated
 
@@ -211,12 +291,15 @@ async def add_contact(
 ) -> SupplierContactResponse:
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
+    if payload.image is not None:
+        await _require_supplier_images_permission(session, current, company_id)
     created = await use_cases.add_contact(
         company_id,
         supplier_id=supplier_id,
         full_name=payload.full_name,
         phone=payload.phone,
         email=payload.email,
+        image=_image_draft(payload.image),
     )
     await audit.record(
         action="CREATE",
@@ -224,7 +307,11 @@ async def add_contact(
         company_id=company_id,
         resource_type="supplier_contacts",
         resource_id=str(created.id),
-        after_state={"supplier_id": created.supplier_id, "full_name": created.full_name},
+        after_state={
+            "supplier_id": created.supplier_id,
+            "full_name": created.full_name,
+            "avatar_image": _image_audit_state(created.avatar_image),
+        },
     )
     return created
 
@@ -248,16 +335,21 @@ async def update_contact(
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
     before = await use_cases.get_contact(company_id, contact_id)
+    update_data = payload.model_dump(exclude_unset=True)
+    if "image" in update_data:
+        await _require_supplier_images_permission(session, current, company_id)
+        update_data["image"] = _image_draft(payload.image)
     updated = await use_cases.update_contact(
         company_id,
         contact_id=contact_id,
-        full_name=payload.full_name,
-        phone=payload.phone,
-        email=payload.email,
-        is_active=payload.is_active,
+        **update_data,
     )
     await audit.record(
-        action=_status_action(before.is_active, updated.is_active),
+        action=(
+            _image_audit_action(before.avatar_image, updated.avatar_image)
+            if "image" in update_data
+            else _status_action(before.is_active, updated.is_active)
+        ),
         user_id=current.id,
         company_id=company_id,
         resource_type="supplier_contacts",
@@ -266,11 +358,13 @@ async def update_contact(
             "supplier_id": before.supplier_id,
             "full_name": before.full_name,
             "is_active": before.is_active,
+            "avatar_image": _image_audit_state(before.avatar_image),
         },
         after_state={
             "supplier_id": updated.supplier_id,
             "full_name": updated.full_name,
             "is_active": updated.is_active,
+            "avatar_image": _image_audit_state(updated.avatar_image),
         },
     )
     return updated

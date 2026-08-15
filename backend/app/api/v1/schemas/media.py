@@ -6,7 +6,13 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 MediaPurpose = Literal[
-    "company_logo", "employee_avatar", "branch_image", "warehouse_image", "product_image"
+    "company_logo",
+    "employee_avatar",
+    "branch_image",
+    "warehouse_image",
+    "product_image",
+    "supplier_logo",
+    "supplier_contact_avatar",
 ]
 
 
