@@ -69,3 +69,7 @@ backend/uploads/
 # ===== Database dumps =====
 *.dump
 *.sql.gz
+
+# Migration drafts are intentionally kept outside Alembic's discoverable
+# versions directory because the development app auto-upgrades on reload.
+backend/alembic/drafts/

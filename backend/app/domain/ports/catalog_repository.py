@@ -5,6 +5,7 @@ import uuid
 from typing import Protocol
 
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit
+from app.domain.entities.product_image import ProductImageDraft
 
 
 class CatalogRepository(Protocol):
@@ -109,6 +110,7 @@ class CatalogRepository(Protocol):
         dimensions: str | None = None,
         description: str | None = None,
         presentation: str | None = None,
+        images: list[ProductImageDraft] | None = None,
     ) -> Product:
         ...
 

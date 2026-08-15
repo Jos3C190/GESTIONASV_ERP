@@ -6,6 +6,10 @@ import uuid
 
 from app.core.exceptions import ConcurrencyError, ConflictError, NotFoundError, ValidationError
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit
+from app.domain.entities.product_image import (
+    ProductImageDraft,
+    normalize_product_image_drafts,
+)
 from app.domain.ports.catalog_repository import CatalogRepository
 
 
@@ -202,6 +206,7 @@ class CatalogUseCases:
         dimensions: str | None = None,
         description: str | None = None,
         presentation: str | None = None,
+        images: list[ProductImageDraft] | None = None,
     ) -> Product:
         # Validate unique SKU
         existing = await self._repo.get_product_by_sku(company_id, sku)
@@ -228,6 +233,7 @@ class CatalogUseCases:
         if not unit_s:
             raise NotFoundError("Unidad de venta no encontrada", code="sale_unit_not_found")
 
+        normalized_images = self._normalize_images(images)
         return await self._repo.create_product(
             company_id,
             category_id=category_id,
@@ -242,10 +248,13 @@ class CatalogUseCases:
             dimensions=dimensions,
             description=description,
             presentation=presentation,
+            images=normalized_images,
         )
 
     async def update_product(self, company_id: uuid.UUID, product_id: int, **changes: object) -> Product:
+        changes = dict(changes)
         current = await self.get_product(company_id, product_id)
+        images_provided, normalized_images = self._extract_images(changes)
         required = ("category_id", "sku", "name", "purchase_unit_id", "sale_unit_id")
         if any(field in changes and changes[field] is None for field in required):
             raise ValidationError("No se puede vaciar un campo obligatorio del producto.", code="product_required_field")
@@ -271,7 +280,28 @@ class CatalogUseCases:
             if duplicate and duplicate.id != product_id:
                 raise ConflictError("El SKU ya está registrado en esta empresa.", code="sku_already_exists")
 
-        product = await self._repo.update_product(company_id, product_id, **changes)
+        repository_changes = (
+            {**changes, "images": normalized_images} if images_provided else changes
+        )
+        product = await self._repo.update_product(company_id, product_id, **repository_changes)
         if not product:
             raise NotFoundError("Producto no encontrado", code="product_not_found")
         return product
+
+    @staticmethod
+    def _extract_images(changes: dict[str, object]) -> tuple[bool, list[ProductImageDraft] | None]:
+        if "images" not in changes:
+            return False, None
+        images = changes.pop("images")
+        return True, CatalogUseCases._normalize_images(images)
+
+    @staticmethod
+    def _normalize_images(images: object) -> list[ProductImageDraft]:
+        if images is None:
+            return []
+        if not isinstance(images, list) or any(not isinstance(image, ProductImageDraft) for image in images):
+            raise ValidationError("La galería de imágenes no es válida.", code="product_images_invalid")
+        try:
+            return normalize_product_image_drafts(images)
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="product_images_invalid") from exc

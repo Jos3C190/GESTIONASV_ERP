@@ -35,6 +35,9 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       DEBUG: ${DEBUG:-true}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # In development, migrations are an explicit operator/test step. This
+      # prevents a hot-reload from applying a draft revision to live data.
+      RUN_MIGRATIONS_ON_STARTUP: ${RUN_MIGRATIONS_ON_STARTUP:-false}
       CORS_ORIGINS: ${CORS_ORIGINS}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}

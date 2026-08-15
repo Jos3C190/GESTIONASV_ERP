@@ -100,10 +100,11 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   }
   const url = path.startsWith('http') ? path : `${API_BASE_URL}${API_PREFIX}${path}`;
   const { noAuth, noRefresh, headers: initHeaders, ...rest } = options;
+  const isMultipart = typeof FormData !== 'undefined' && rest.body instanceof FormData;
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
-    ...(rest.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(rest.body && !isMultipart ? { 'Content-Type': 'application/json' } : {}),
     ...((initHeaders ?? {}) as Record<string, string>)
   };
   if (!noAuth && browser && session.token) {
@@ -338,9 +339,11 @@ export interface CompanyOut {
   updated_at: string;
 }
 
-export type MediaPurpose = 'company_logo' | 'employee_avatar' | 'branch_image' | 'warehouse_image';
+export type MediaPurpose =
+  'company_logo' | 'employee_avatar' | 'branch_image' | 'warehouse_image' | 'product_image';
 
 export interface UploadedImage {
+  assetId: string;
   url: string;
   publicId: string;
   width: number;
@@ -599,20 +602,24 @@ export const api = {
         bytes: number;
         format: string;
       };
-      await apiFetch('/media/confirm', {
-        method: 'POST',
-        body: JSON.stringify({
-          company_id: companyId || null,
-          purpose,
-          public_id: result.public_id,
-          secure_url: result.secure_url,
-          format: result.format,
-          bytes: result.bytes,
-          width: result.width,
-          height: result.height
-        })
-      });
+      const confirmed = await apiFetch<{ id: string; url: string; public_id: string }>(
+        '/media/confirm',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            company_id: companyId || null,
+            purpose,
+            public_id: result.public_id,
+            secure_url: result.secure_url,
+            format: result.format,
+            bytes: result.bytes,
+            width: result.width,
+            height: result.height
+          })
+        }
+      );
       return {
+        assetId: confirmed.id,
         url: result.secure_url,
         publicId: result.public_id,
         width: result.width,
@@ -805,7 +812,9 @@ export const api = {
       return apiFetch<Page<DepartmentOut>>(`/departments?${query}`, { signal: params.signal });
     },
     catalogue: (signal?: AbortSignal) =>
-      apiFetch<DepartmentOut[]>(`/departments/catalogue?company_id=${company.id ?? ''}`, { signal }),
+      apiFetch<DepartmentOut[]>(`/departments/catalogue?company_id=${company.id ?? ''}`, {
+        signal
+      }),
     get: (id: string) => apiFetch<DepartmentOut>(`/departments/${id}`),
     create: (data: { name: string; description?: string; parent_department_id?: string }) =>
       apiFetch<DepartmentOut>('/departments', {

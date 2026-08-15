@@ -18,7 +18,14 @@ from app.infrastructure.models.employee import (
     Employee,
     EmployeeBranchAssignment,
 )
+from app.infrastructure.models.location import (
+    LocationBatchJob,
+    LocationBatchRow,
+    LocationCodeAlias,
+    LocationCodeScheme,
+)
 from app.infrastructure.models.media import MediaAsset
+from app.infrastructure.models.product_image import ProductImageModel
 from app.infrastructure.models.organization import (
     Branch,
     Company,
@@ -56,7 +63,12 @@ __all__: list[str] = [
     "EmployeeBranchAssignment",
     "GeographicDepartment",
     "Location",
+    "LocationBatchJob",
+    "LocationBatchRow",
+    "LocationCodeAlias",
+    "LocationCodeScheme",
     "MediaAsset",
+    "ProductImageModel",
     "Municipality",
     "PasswordResetToken",
     "Permission",

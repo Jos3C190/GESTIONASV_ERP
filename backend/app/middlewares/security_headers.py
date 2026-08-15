@@ -19,8 +19,8 @@ _DEFAULTS = {
 }
 
 # Conservative CSP. Tightened further in Phase 1 when we know exact needs.
-_DEV_CSP = "default-src 'self'; img-src 'self' data: blob: https://res.cloudinary.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.cloudinary.com http://localhost:8000 http://127.0.0.1:8000 ws://localhost:* ws://127.0.0.1:*; frame-ancestors 'none'"
-_PROD_CSP = "default-src 'self'; img-src 'self' data: blob: https://res.cloudinary.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://api.cloudinary.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+_DEV_CSP = "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.cloudinary.com http://localhost:8000 http://127.0.0.1:8000 ws://localhost:* ws://127.0.0.1:*; frame-ancestors 'none'"
+_PROD_CSP = "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://api.cloudinary.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 
 class SecurityHeadersMiddleware:
@@ -45,7 +45,7 @@ class SecurityHeadersMiddleware:
             assert isinstance(message, dict)
             if message.get("type") == "http.response.start":
                 raw = message.get("headers", [])
-                existing = {k.decode().lower() for k, _ in (raw or []) if isinstance(k, (bytes, bytearray))}
+                existing = {k.decode().lower() for k, _ in (raw or []) if isinstance(k, bytes | bytearray)}
                 for k, v in headers.items():
                     lk = k.lower()
                     if lk not in existing:

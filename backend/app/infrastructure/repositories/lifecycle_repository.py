@@ -711,6 +711,21 @@ class SqlAlchemyLifecycleRepository:
         allow_global: bool = False,
     ) -> DeletedRecord:
         del actor_id  # actor is recorded by the audit service at the API boundary
+        locked_location_warehouse: Warehouse | None = None
+        if resource == "locations":
+            policy = self._policy(resource)
+            parsed_id = self._parse_id(policy, record_id)
+            warehouse_id = await self._session.scalar(
+                select(Location.warehouse_id)
+                .where(Location.id == parsed_id)
+                .execution_options(include_deleted=True)
+            )
+            if warehouse_id is not None:
+                # Match create/update/publish lock order: warehouse first, then
+                # location.  This serializes capacity and restore decisions.
+                locked_location_warehouse = await self._session.scalar(
+                    select(Warehouse).where(Warehouse.id == warehouse_id).with_for_update()
+                )
         policy, record = await self._get(resource, record_id)
         actual_company_id = await self._assert_scope(
             policy, record, company_id, allow_global=allow_global
@@ -734,6 +749,32 @@ class SqlAlchemyLifecycleRepository:
                 f"No se puede restaurar porque {', '.join(blockers)}.",
                 code="restore_parent_deleted",
             )
+        if resource == "locations" and record.is_active:
+            warehouse = locked_location_warehouse
+            if (
+                warehouse is None
+                or not warehouse.is_active
+                or warehouse.operational_status in {"inactive", "full"}
+            ):
+                raise ConflictError(
+                    "No se puede restaurar una ubicación activa en el estado actual del almacén.",
+                    code="warehouse_not_commissionable",
+                )
+            active_capacity = int(
+                await self._session.scalar(
+                    select(func.coalesce(func.sum(Location.capacity), 0)).where(
+                        Location.warehouse_id == record.warehouse_id,
+                        Location.is_active.is_(True),
+                        Location.deleted_at.is_(None),
+                    )
+                )
+                or 0
+            )
+            if warehouse.capacity and active_capacity + record.capacity > warehouse.capacity:
+                raise ConflictError(
+                    "No se puede restaurar porque superaría la capacidad del almacén.",
+                    code="warehouse_location_capacity_exceeded",
+                )
         deleted_at = record.deleted_at
         deleted_by = record.deleted_by
         deletion_reason = record.deletion_reason

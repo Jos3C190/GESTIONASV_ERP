@@ -94,7 +94,8 @@ Client ─► CORS ─► RequestContext (request_id, access log) ─► Securit
 ## 5. Deployment topologies
 
 - **Development** (`compose.yaml`): `db` + `backend` (hot reload) + `frontend`
-  (Vite dev server). Migrations run automatically on backend startup.
+  (Vite dev server). Schema upgrades are an explicit operator step; startup
+  migration remains opt-in only for disposable environments.
 - **Production** (`compose.prod.yaml`, `--profile prod`): multi-stage images,
   non-root users, no dev tools, Nginx in front as reverse proxy. TLS is
   terminated upstream (configurable). `/docs` and `/redoc` disabled.
@@ -131,12 +132,18 @@ async-native; mixing sync DB calls would block the event loop. **Consequences:**
 test code must be async; some third-party libs that require sync sessions are
 unsuitable.
 
-### ADR-003 — Migrations on startup
-**Decision:** The backend container runs `alembic upgrade head` on startup via
-the lifespan hook. **Rationale:** single-command setup goal; avoids a separate
-init container. **Consequences:** not ideal for blue/green deploys with
-long-running migrations — for production, decouple migrations into a one-shot
-Job/InitContainer (documented in `docs/api.md` when relevant).
+### ADR-003 — Explicit migration step
+**Decision:** development and production deployments run `alembic upgrade
+head` as an explicit one-shot operator/CI step; `RUN_MIGRATIONS_ON_STARTUP`
+defaults to false in Compose. **Rationale:** a hot reload must never turn a
+newly created revision file into an implicit database write. **Consequences:**
+local setup and deployments must migrate before starting or promoting the API;
+production should use a Job/InitContainer with backup and readiness checks.
+
+Product image galleries follow the same explicit migration policy. Revision
+0031 creates a product-owned relational gallery; the API claims staged
+Cloudinary assets transactionally and never performs server-side requests to
+external HTTPS image URLs.
 
 ### ADR-004 — No FOUC for theme
 **Decision:** Theme is applied by an inline blocking script in `app.html`

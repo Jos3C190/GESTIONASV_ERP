@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.api.v1.schemas.common import ORMOut
 
@@ -114,6 +116,46 @@ class UnitConfigurationUpdate(BaseModel):
 
 
 # --- Product ---
+class ProductImageInput(BaseModel):
+    id: uuid.UUID | None = None
+    source_type: Literal["cloudinary", "external"]
+    url: str = Field(..., min_length=10, max_length=2048)
+    media_asset_id: uuid.UUID | None = None
+    alt_text: str | None = Field(None, max_length=160)
+    position: int = Field(..., ge=0, le=19)
+    is_cover: bool = False
+
+    @model_validator(mode="after")
+    def validate_source(self) -> ProductImageInput:
+        if self.source_type == "external":
+            parsed = urlparse(self.url.strip())
+            hostname = (parsed.hostname or "").lower().rstrip(".")
+            if parsed.scheme.lower() != "https" or not hostname:
+                raise ValueError("Las imágenes externas deben usar una URL HTTPS válida.")
+            if parsed.username or parsed.password:
+                raise ValueError("La URL de imagen no puede contener credenciales.")
+            if hostname == "localhost" or hostname.endswith(".localhost"):
+                raise ValueError("No se permiten URLs locales para imágenes externas.")
+            if self.media_asset_id is not None:
+                raise ValueError("Una imagen externa no puede referenciar un asset Cloudinary.")
+        elif self.media_asset_id is None:
+            raise ValueError("Una imagen Cloudinary debe referenciar su asset cargado.")
+        return self
+
+
+class ProductImageResponse(ORMOut):
+    id: uuid.UUID
+    product_id: int
+    source_type: Literal["cloudinary", "external"]
+    url: str
+    media_asset_id: uuid.UUID | None = None
+    alt_text: str | None = None
+    position: int
+    is_cover: bool
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class ProductCreate(BaseModel):
     category_id: int = Field(..., alias="id_category")
     sub_category_id: int | None = Field(None, alias="id_sub_category")
@@ -127,6 +169,7 @@ class ProductCreate(BaseModel):
     dimensions: str | None = None
     description: str | None = None
     presentation: str | None = None
+    images: list[ProductImageInput] | None = Field(None, max_length=20)
 
 
 class ProductUpdate(BaseModel):
@@ -143,6 +186,7 @@ class ProductUpdate(BaseModel):
     description: str | None = None
     presentation: str | None = None
     is_active: bool | None = None
+    images: list[ProductImageInput] | None = Field(None, max_length=20)
 
 
 class ProductResponse(ORMOut):
@@ -162,5 +206,8 @@ class ProductResponse(ORMOut):
     description: str | None = None
     presentation: str | None = None
     is_active: bool
+    images: list[ProductImageResponse] = Field(default_factory=list)
+    image_count: int = 0
+    cover_image: ProductImageResponse | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

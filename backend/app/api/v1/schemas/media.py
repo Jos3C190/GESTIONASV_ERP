@@ -5,7 +5,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-MediaPurpose = Literal["company_logo", "employee_avatar", "branch_image", "warehouse_image"]
+MediaPurpose = Literal[
+    "company_logo", "employee_avatar", "branch_image", "warehouse_image", "product_image"
+]
 
 
 class UploadSignatureIn(BaseModel):

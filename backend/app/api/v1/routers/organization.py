@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, or_, select, update
@@ -16,10 +16,17 @@ from app.api.v1.company_access import (
     get_branch_context,
     require_company_access,
     require_company_wide_scope,
+    require_resource_company,
     resolve_branch_scope,
 )
-from app.api.v1.deps import CurrentUser, SessionDep, require_permission
+from app.api.v1.deps import (
+    CurrentUser,
+    SessionDep,
+    get_check_permission_use_case,
+    require_permission,
+)
 from app.api.v1.schemas.common import Page, PageMeta
+from app.api.v1.schemas.location import LocationOut
 from app.api.v1.schemas.organization import (
     BranchIn,
     CompanyIn,
@@ -29,6 +36,9 @@ from app.api.v1.schemas.organization import (
     WarehouseListSummary,
     WarehousePage,
 )
+from app.application.locations.use_cases import LocationUseCases
+from app.application.rbac.check_permission import CheckPermissionUseCase
+from app.core.exceptions import AuthorizationError
 from app.infrastructure.media_assets import attach_media_by_url
 from app.infrastructure.models.audit import AuditLog
 from app.infrastructure.models.employee import Employee, EmployeeBranchAssignment
@@ -44,6 +54,7 @@ from app.infrastructure.models.organization import (
     Warehouse,
     WarehouseCategory,
 )
+from app.infrastructure.repositories.location_repository import SqlAlchemyLocationRepository
 
 router = APIRouter(tags=["organization"])
 
@@ -1118,14 +1129,16 @@ async def create_warehouse(
 @router.patch(
     "/warehouses/{record_id}", dependencies=[Depends(require_permission("warehouses.update"))]
 )
-async def update_warehouse(
+async def update_warehouse(  # noqa: C901 - validates cross-resource warehouse invariants
     record_id: uuid.UUID,
     body: WarehouseIn,
     request: Request,
     session: SessionDep,
     current: CurrentUser,
 ) -> dict[str, Any]:
-    existing = await session.get(Warehouse, record_id)
+    existing = await session.scalar(
+        select(Warehouse).where(Warehouse.id == record_id).with_for_update()
+    )
     if existing is None:
         raise HTTPException(404, "Almacén no encontrado.")
     current_branch = await session.get(Branch, existing.branch_id)
@@ -1140,6 +1153,7 @@ async def update_warehouse(
             .where(
                 Location.warehouse_id == record_id,
                 Location.is_active.is_(True),
+                Location.deleted_at.is_(None),
             )
             .limit(1)
         )
@@ -1148,6 +1162,21 @@ async def update_warehouse(
                 409,
                 "No se puede cambiar la sucursal mientras el almacén tenga ubicaciones físicas activas.",
             )
+    active_capacity = int(
+        await session.scalar(
+            select(func.coalesce(func.sum(Location.capacity), 0)).where(
+                Location.warehouse_id == record_id,
+                Location.is_active.is_(True),
+                Location.deleted_at.is_(None),
+            )
+        )
+        or 0
+    )
+    if body.capacity and body.capacity < active_capacity:
+        raise HTTPException(
+            409,
+            "La capacidad del almacén no puede ser menor que la suma de ubicaciones activas.",
+        )
     category = await _require_active(
         session,
         WarehouseCategory,
@@ -1205,14 +1234,20 @@ async def update_warehouse(
 async def deactivate_warehouse(
     record_id: uuid.UUID, request: Request, session: SessionDep, current: CurrentUser
 ) -> dict[str, Any]:
-    warehouse = await session.get(Warehouse, record_id)
+    warehouse = await session.scalar(
+        select(Warehouse).where(Warehouse.id == record_id).with_for_update()
+    )
     if warehouse is None:
         raise HTTPException(404, "Almacén no encontrado.")
     branch = await session.get(Branch, warehouse.branch_id)
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
     active_location = await session.scalar(
         select(Location.id)
-        .where(Location.warehouse_id == record_id, Location.is_active.is_(True))
+        .where(
+            Location.warehouse_id == record_id,
+            Location.is_active.is_(True),
+            Location.deleted_at.is_(None),
+        )
         .limit(1)
     )
     if active_location:
@@ -1255,14 +1290,19 @@ async def activate_warehouse(
 
 @router.get("/locations", dependencies=[Depends(require_permission("locations.view"))])
 async def list_locations(
-    session: SessionDep, current: CurrentUser, warehouse_id: uuid.UUID
+    request: Request, session: SessionDep, current: CurrentUser, warehouse_id: uuid.UUID
 ) -> list[dict[str, Any]]:
     warehouse = await session.get(Warehouse, warehouse_id)
     if warehouse is None:
         raise HTTPException(404, "Almacén no encontrado.")
     branch = await session.get(Branch, warehouse.branch_id)
+    require_resource_company(
+        request, branch.company_id, not_found_detail="Almacén no encontrado."
+    )
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
-    stmt = select(Location).where(Location.warehouse_id == warehouse_id)
+    stmt = select(Location).where(
+        Location.warehouse_id == warehouse_id, Location.deleted_at.is_(None)
+    )
     return [
         _dump(item)
         for item in (await session.execute(stmt.order_by(Location.code))).scalars().all()
@@ -1279,24 +1319,16 @@ async def create_location(
 ) -> dict[str, Any]:
     warehouse = await _require_active(session, Warehouse, body.warehouse_id, "El almacén")
     branch = await session.get(Branch, warehouse.branch_id)
+    require_resource_company(
+        request, branch.company_id, not_found_detail="Almacén no encontrado."
+    )
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
-    current_capacity = await session.scalar(
-        select(func.coalesce(func.sum(Location.capacity), 0)).where(
-            Location.warehouse_id == body.warehouse_id, Location.is_active.is_(True)
-        )
+    record = await LocationUseCases(SqlAlchemyLocationRepository(session)).create_location(
+        body.warehouse_id,
+        body.model_dump(exclude={"warehouse_id", "code"}),
+        actor_id=_actor_id(request),
     )
-    if warehouse.capacity and int(current_capacity or 0) + body.capacity > warehouse.capacity:
-        raise HTTPException(
-            409, "La capacidad acumulada de las ubicaciones supera la capacidad del almacén."
-        )
-    return await _create(
-        session,
-        Location,
-        body,
-        user_id=_actor_id(request),
-        company_id=branch.company_id,
-        branch_id=branch.id,
-    )
+    return LocationOut.model_validate(record).model_dump(mode="json", exclude_none=True)
 
 
 @router.patch(
@@ -1308,38 +1340,53 @@ async def update_location(
     request: Request,
     session: SessionDep,
     current: CurrentUser,
+    checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
 ) -> dict[str, Any]:
     existing = await session.get(Location, record_id)
     if existing is None:
         raise HTTPException(404, "Ubicación no encontrada.")
     current_warehouse = await session.get(Warehouse, existing.warehouse_id)
     current_branch = await session.get(Branch, current_warehouse.branch_id)
+    require_resource_company(
+        request, current_branch.company_id, not_found_detail="Ubicación no encontrada."
+    )
     await resolve_branch_scope(session, current, current_branch.company_id, current_branch.id)
-    warehouse = await _require_active(session, Warehouse, body.warehouse_id, "El almacén")
-    branch = await session.get(Branch, warehouse.branch_id)
-    await resolve_branch_scope(session, current, branch.company_id, branch.id)
-    if current_branch.company_id != branch.company_id:
-        raise HTTPException(409, "No se puede mover una ubicación entre empresas.")
-    current_capacity = await session.scalar(
-        select(func.coalesce(func.sum(Location.capacity), 0)).where(
-            Location.warehouse_id == body.warehouse_id,
-            Location.is_active.is_(True),
-            Location.id != record_id,
-        )
+    if body.warehouse_id != existing.warehouse_id:
+        raise HTTPException(409, "No se puede mover una ubicación entre almacenes.")
+    legacy_values = {
+        "area": existing.area,
+        "aisle": body.aisle,
+        "rack": body.rack,
+        "level": body.level,
+        "position": body.position,
+        "capacity": body.capacity,
+        "notes": body.notes if "notes" in body.model_fields_set else existing.notes,
+        "location_type": existing.location_type,
+        "lifecycle_status": existing.lifecycle_status,
+        "barcode": existing.barcode,
+        "verification_code": existing.verification_code,
+        "pick_sequence": existing.pick_sequence,
+        "putaway_sequence": existing.putaway_sequence,
+        "external_id": existing.external_id,
+    }
+    use_cases = LocationUseCases(SqlAlchemyLocationRepository(session))
+    required = await use_cases.required_update_permissions(
+        existing.warehouse_id, record_id, legacy_values
     )
-    if warehouse.capacity and int(current_capacity or 0) + body.capacity > warehouse.capacity:
-        raise HTTPException(
-            409, "La capacidad acumulada de las ubicaciones supera la capacidad del almacén."
-        )
-    return await _update(
-        session,
-        Location,
+    for permission in required:
+        result = await checker.execute(current.id, current_branch.company_id, permission)
+        if not result.allowed:
+            raise AuthorizationError(
+                f"Permiso requerido: {permission}",
+                code="location_operation_forbidden",
+            )
+    record = await use_cases.update_location(
+        existing.warehouse_id,
         record_id,
-        body.model_dump(exclude_none=True),
-        user_id=_actor_id(request),
-        company_id=branch.company_id,
-        branch_id=branch.id,
+        legacy_values,
+        actor_id=_actor_id(request),
     )
+    return LocationOut.model_validate(record).model_dump(mode="json", exclude_none=True)
 
 
 @router.post(
@@ -1352,17 +1399,29 @@ async def deactivate_location(
     session: SessionDep,
     current: CurrentUser,
 ) -> dict[str, Any]:
-    location = await session.get(Location, record_id)
+    location = await session.scalar(
+        select(Location).where(Location.id == record_id, Location.deleted_at.is_(None))
+    )
     if location is None:
         raise HTTPException(404, "Ubicación no encontrada.")
-    warehouse = await session.get(Warehouse, location.warehouse_id)
+    warehouse = await session.scalar(
+        select(Warehouse).where(Warehouse.id == location.warehouse_id).with_for_update()
+    )
+    location = await session.scalar(
+        select(Location)
+        .where(Location.id == record_id, Location.deleted_at.is_(None))
+        .with_for_update()
+    )
     branch = await session.get(Branch, warehouse.branch_id)
+    require_resource_company(
+        request, branch.company_id, not_found_detail="Ubicación no encontrada."
+    )
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
     return await _update(
         session,
         Location,
         record_id,
-        {"is_active": False},
+        {"is_active": False, "lifecycle_status": "retired"},
         user_id=_actor_id(request),
         company_id=branch.company_id,
         branch_id=branch.id,
@@ -1380,18 +1439,31 @@ async def activate_location(
     session: SessionDep,
     current: CurrentUser,
 ) -> dict[str, Any]:
-    location = await session.get(Location, record_id)
+    location = await session.scalar(
+        select(Location).where(Location.id == record_id, Location.deleted_at.is_(None))
+    )
     if location is None:
         raise HTTPException(404, "Ubicación no encontrada.")
-    warehouse = await session.get(Warehouse, location.warehouse_id)
+    warehouse = await session.scalar(
+        select(Warehouse).where(Warehouse.id == location.warehouse_id).with_for_update()
+    )
+    location = await session.scalar(
+        select(Location)
+        .where(Location.id == record_id, Location.deleted_at.is_(None))
+        .with_for_update()
+    )
     branch = await session.get(Branch, warehouse.branch_id)
+    require_resource_company(
+        request, branch.company_id, not_found_detail="Ubicación no encontrada."
+    )
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
-    if not warehouse.is_active:
-        raise HTTPException(409, "No se puede activar una ubicación de un almacén inactivo.")
+    if not warehouse.is_active or warehouse.operational_status in {"inactive", "full"}:
+        raise HTTPException(409, "El almacén no admite activar ubicaciones en su estado actual.")
     current_capacity = await session.scalar(
         select(func.coalesce(func.sum(Location.capacity), 0)).where(
             Location.warehouse_id == location.warehouse_id,
             Location.is_active.is_(True),
+            Location.deleted_at.is_(None),
             Location.id != record_id,
         )
     )
@@ -1403,7 +1475,7 @@ async def activate_location(
         session,
         Location,
         record_id,
-        {"is_active": True},
+        {"is_active": True, "lifecycle_status": "active"},
         user_id=_actor_id(request),
         company_id=branch.company_id,
         branch_id=branch.id,

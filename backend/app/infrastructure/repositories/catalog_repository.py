@@ -6,8 +6,10 @@ import uuid
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import noload, selectinload
 
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit
+from app.domain.entities.product_image import ProductImage, ProductImageDraft
 from app.infrastructure.models.catalog import (
     CategoryModel,
     CompanyUnitModel,
@@ -16,6 +18,8 @@ from app.infrastructure.models.catalog import (
     SubCategoryModel,
     UnitModel,
 )
+from app.infrastructure.models.media import MediaAsset
+from app.infrastructure.models.product_image import ProductImageModel
 
 
 def _to_country(orm: CountryModel) -> Country:
@@ -78,7 +82,30 @@ def _to_unit(orm: UnitModel, config: CompanyUnitModel | None = None, usage_count
     )
 
 
-def _to_product(orm: ProductModel) -> Product:
+def _to_product_image(orm: ProductImageModel) -> ProductImage:
+    return ProductImage(
+        id=orm.id,
+        product_id=orm.product_id,
+        source_type=orm.source_type,
+        url=orm.url,
+        media_asset_id=orm.media_asset_id,
+        alt_text=orm.alt_text,
+        position=orm.position,
+        is_cover=orm.is_cover,
+        created_at=orm.created_at,
+        updated_at=orm.updated_at,
+    )
+
+
+def _to_product(
+    orm: ProductModel,
+    *,
+    image_count: int | None = None,
+    cover_image: ProductImage | None = None,
+) -> Product:
+    loaded_images = orm.__dict__.get("images")
+    images = tuple(_to_product_image(image) for image in loaded_images or [])
+    resolved_cover = cover_image or next((image for image in images if image.is_cover), None)
     return Product(
         id=orm.id_product,
         uuid=orm.uuid,
@@ -96,6 +123,9 @@ def _to_product(orm: ProductModel) -> Product:
         description=orm.description,
         presentation=orm.presentation,
         is_active=orm.is_active,
+        images=images,
+        image_count=image_count if image_count is not None else len(images),
+        cover_image=resolved_cover,
         created_at=orm.created_at,
         updated_at=orm.updated_at,
     )
@@ -397,22 +427,41 @@ class SqlAlchemyCatalogRepository:
         count_res = await self._session.execute(count_stmt)
         total = count_res.scalar_one()
 
-        # Query items
+        # Query items. The gallery is deliberately not loaded here; only its
+        # count and cover are projected for the catalogue table.
         stmt = (
-            select(ProductModel)
+            select(ProductModel, func.count(ProductImageModel.id).label("image_count"))
+            .outerjoin(ProductImageModel, ProductImageModel.product_id == ProductModel.id_product)
             .where(*conditions)
+            .group_by(ProductModel.id_product)
             .order_by(ProductModel.name)
             .offset(skip)
             .limit(limit)
+            .options(noload(ProductModel.images))
         )
         res = await self._session.execute(stmt)
-        items = [_to_product(p) for p in res.scalars().all()]
+        rows = res.all()
+        product_ids = [product.id_product for product, _count in rows]
+        covers: dict[int, ProductImage] = {}
+        if product_ids:
+            cover_rows = await self._session.execute(
+                select(ProductImageModel).where(
+                    ProductImageModel.product_id.in_(product_ids), ProductImageModel.is_cover.is_(True)
+                )
+            )
+            covers = {
+                image.product_id: _to_product_image(image) for image in cover_rows.scalars().all()
+            }
+        items = [
+            _to_product(product, image_count=int(count), cover_image=covers.get(product.id_product))
+            for product, count in rows
+        ]
         return items, total
 
     async def get_product_by_id(self, company_id: uuid.UUID, product_id: int) -> Product | None:
         stmt = select(ProductModel).where(
             ProductModel.company_id == company_id, ProductModel.id_product == product_id
-        )
+        ).options(selectinload(ProductModel.images))
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_product(orm) if orm else None
@@ -420,7 +469,7 @@ class SqlAlchemyCatalogRepository:
     async def get_product_by_uuid(self, company_id: uuid.UUID, prod_uuid: uuid.UUID) -> Product | None:
         stmt = select(ProductModel).where(
             ProductModel.company_id == company_id, ProductModel.uuid == prod_uuid
-        )
+        ).options(selectinload(ProductModel.images))
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_product(orm) if orm else None
@@ -428,7 +477,7 @@ class SqlAlchemyCatalogRepository:
     async def get_product_by_sku(self, company_id: uuid.UUID, sku: str) -> Product | None:
         stmt = select(ProductModel).where(
             ProductModel.company_id == company_id, ProductModel.sku == sku
-        )
+        ).options(noload(ProductModel.images))
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_product(orm) if orm else None
@@ -448,6 +497,7 @@ class SqlAlchemyCatalogRepository:
         dimensions: str | None = None,
         description: str | None = None,
         presentation: str | None = None,
+        images: list[ProductImageDraft] | None = None,
     ) -> Product:
         orm = ProductModel(
             company_id=company_id,
@@ -466,13 +516,15 @@ class SqlAlchemyCatalogRepository:
         )
         self._session.add(orm)
         await self._session.flush()
-        return _to_product(orm)
+        if images is not None:
+            await self._sync_product_images(orm, company_id, images)
+        return await self._get_product_with_images(company_id, orm.id_product)
 
     async def update_product(self, company_id: uuid.UUID, product_id: int, **kwargs) -> Product | None:
         stmt = select(ProductModel).where(
             ProductModel.company_id == company_id, ProductModel.id_product == product_id
         )
-        res = await self._session.execute(stmt)
+        res = await self._session.execute(stmt.options(selectinload(ProductModel.images)))
         orm = res.scalar_one_or_none()
         if not orm:
             return None
@@ -482,9 +534,84 @@ class SqlAlchemyCatalogRepository:
             "purchase_unit_id": "purchase_unit",
             "sale_unit_id": "sale_unit",
         }
+        images = kwargs.pop("images", None) if "images" in kwargs else None
         for key, value in kwargs.items():
             orm_field = field_map.get(key, key)
             if hasattr(orm, orm_field):
                 setattr(orm, orm_field, value)
         await self._session.flush()
+        if images is not None:
+            await self._sync_product_images(orm, company_id, images)
+        return await self._get_product_with_images(company_id, product_id)
+
+    async def _get_product_with_images(self, company_id: uuid.UUID, product_id: int) -> Product:
+        result = await self._session.execute(
+            select(ProductModel)
+            .where(ProductModel.company_id == company_id, ProductModel.id_product == product_id)
+            .execution_options(populate_existing=True)
+            .options(selectinload(ProductModel.images))
+        )
+        orm = result.scalar_one()
         return _to_product(orm)
+
+    async def _sync_product_images(
+        self, product: ProductModel, company_id: uuid.UUID, drafts: list[ProductImageDraft]
+    ) -> None:
+        """Replace a product gallery atomically and claim staged media assets."""
+        existing = (
+            await self._session.execute(
+                select(ProductImageModel).where(ProductImageModel.product_id == product.id_product)
+            )
+        ).scalars().all()
+        incoming_asset_ids = {
+            draft.media_asset_id
+            for draft in drafts
+            if getattr(draft, "source_type", None) == "cloudinary"
+            and getattr(draft, "media_asset_id", None) is not None
+        }
+
+        for image in existing:
+            if image.media_asset_id and image.media_asset_id not in incoming_asset_ids:
+                asset = await self._session.get(MediaAsset, image.media_asset_id)
+                if asset is not None:
+                    asset.status = "detached"
+                    asset.owner_type = None
+                    asset.owner_id = None
+            await self._session.delete(image)
+        if existing:
+            await self._session.flush()
+
+        for draft in drafts:
+            media_asset_id = draft.media_asset_id
+            source_type = draft.source_type
+            if source_type == "cloudinary":
+                asset = await self._session.scalar(
+                    select(MediaAsset).where(
+                        MediaAsset.id == media_asset_id,
+                        MediaAsset.company_id == company_id,
+                        MediaAsset.purpose == "product_image",
+                        MediaAsset.status.in_(("staged", "active")),
+                    )
+                )
+                if asset is None:
+                    raise ValueError("El asset Cloudinary no existe, no pertenece a la empresa o ya fue usado.")
+                if asset.owner_id not in (None, product.uuid) or asset.owner_type not in (None, "product"):
+                    raise ValueError("El asset Cloudinary ya está asociado a otro recurso.")
+                asset.status = "active"
+                asset.owner_type = "product"
+                asset.owner_id = product.uuid
+                url = asset.secure_url
+            else:
+                url = draft.url
+            self._session.add(
+                ProductImageModel(
+                    product_id=product.id_product,
+                    media_asset_id=media_asset_id,
+                    source_type=source_type,
+                    url=url,
+                    alt_text=draft.alt_text,
+                    position=draft.position,
+                    is_cover=draft.is_cover,
+                )
+            )
+        await self._session.flush()

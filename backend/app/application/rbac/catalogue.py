@@ -45,6 +45,7 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("reference_data:read", "Consultar catálogos de referencia", "catalog"),
     PermissionSpec("products:read", "Ver productos y sus categorías", "products"),
     PermissionSpec("products:manage", "Gestionar productos y sus categorías", "products"),
+    PermissionSpec("products:images", "Gestionar la galería de imágenes de productos", "products"),
     PermissionSpec("products:delete", "Eliminar productos lógicamente", "products"),
     PermissionSpec("products:restore", "Restaurar productos eliminados", "products"),
     PermissionSpec("product_categories:delete", "Eliminar categorías de productos", "products"),
@@ -86,6 +87,13 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
         for resource in ("companies", "branches", "warehouse_categories", "warehouses", "locations")
         for action in ("view", "create", "update", "activate", "deactivate", "delete", "restore")
     ),
+    PermissionSpec("locations.scheme", "Versionar esquemas de códigos de ubicación", "locations"),
+    PermissionSpec("locations.bulk", "Generar y publicar ubicaciones por lotes", "locations"),
+    PermissionSpec("locations.import", "Importar ubicaciones desde CSV o XLSX", "locations"),
+    PermissionSpec("locations.export", "Exportar ubicaciones", "locations"),
+    PermissionSpec("locations.recode", "Renumerar ubicaciones conservando alias", "locations"),
+    PermissionSpec("locations.labels", "Generar etiquetas de ubicación", "locations"),
+    PermissionSpec("locations.commission", "Comisionar y retirar ubicaciones", "locations"),
 )
 
 
@@ -134,6 +142,7 @@ BASE_ROLES: tuple[tuple[str, str, bool, tuple[str, ...]], ...] = (
             "reference_data:read",
             "products:read",
             "products:manage",
+            "products:images",
             "products:delete",
             "products:restore",
             "product_categories:delete",

@@ -206,7 +206,9 @@ class WarehouseIn(BaseModel):
 
 class LocationIn(BaseModel):
     warehouse_id: uuid.UUID
-    code: str = Field(min_length=1, max_length=120)
+    # Kept only so older clients do not fail validation during rollout.  The
+    # server ignores it and always projects the code from physical coordinates.
+    code: str | None = Field(None, min_length=1, max_length=120, deprecated=True)
     aisle: str = Field(min_length=1, max_length=64)
     rack: str = Field(min_length=1, max_length=64)
     level: str = Field(min_length=1, max_length=64)

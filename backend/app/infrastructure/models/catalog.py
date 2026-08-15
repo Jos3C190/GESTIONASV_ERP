@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.infrastructure.db.base import Base, SoftDeleteMixin, TimestampMixin
 
 if TYPE_CHECKING:
+    from app.infrastructure.models.product_image import ProductImageModel
     from app.infrastructure.models.supplier import SupplierModel
 
 
@@ -255,4 +256,11 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
     category: Mapped[CategoryModel] = relationship("CategoryModel", back_populates="products")
     sub_category: Mapped[SubCategoryModel | None] = relationship(
         "SubCategoryModel", back_populates="products"
+    )
+    images: Mapped[list[ProductImageModel]] = relationship(
+        "ProductImageModel",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductImageModel.position",
+        lazy="selectin",
     )

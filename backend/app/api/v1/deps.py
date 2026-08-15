@@ -3,6 +3,7 @@
 Centralising providers here keeps routers thin and makes testing trivial: tests
 override a single dependency to swap a real repo for an in-memory fake.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -181,7 +182,9 @@ def require_permission(required_code: str):
                     )
                 company_id = membership.company_id
         except ValueError as exc:
-            raise AuthorizationError("El contexto de empresa no es válido.", code="invalid_company_context") from exc
+            raise AuthorizationError(
+                "El contexto de empresa no es válido.", code="invalid_company_context"
+            ) from exc
         result = await checker.execute(current.id, company_id, required_code)
         if not result.allowed:
             from app.core.logging import get_logger
@@ -192,9 +195,14 @@ def require_permission(required_code: str):
                 required_permission=required_code,
                 reason=result.reason,
             )
-            raise AuthorizationError(
-                f"Permiso requerido: {required_code}", code="forbidden"
-            )
+            raise AuthorizationError(f"Permiso requerido: {required_code}", code="forbidden")
+        # Permission assignment alone is not proof of a current company
+        # membership (stale/corrupt role rows must fail closed).  Validate the
+        # company and membership before persisting the effective tenant so
+        # resource routers can bind globally addressed rows to the same tenant.
+        from app.api.v1.company_access import authorize_request_company
+
+        await authorize_request_company(request, session, current, company_id)
         return current
 
     return _checker

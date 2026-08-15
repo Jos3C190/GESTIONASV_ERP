@@ -388,15 +388,71 @@ class Location(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
         PGUUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False
     )
     code: Mapped[str] = mapped_column(String(120), nullable=False)
+    area: Mapped[str | None] = mapped_column(String(64))
     aisle: Mapped[str] = mapped_column(String(64), nullable=False)
     rack: Mapped[str] = mapped_column(String(64), nullable=False)
     level: Mapped[str] = mapped_column(String(64), nullable=False)
     position: Mapped[str] = mapped_column(String(64), nullable=False)
     capacity: Mapped[int] = mapped_column(Integer, nullable=False)
+    location_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="standard"
+    )
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(24), nullable=False, server_default="active"
+    )
+    barcode: Mapped[str | None] = mapped_column(String(120))
+    verification_code: Mapped[str | None] = mapped_column(String(120))
+    pick_sequence: Mapped[int | None] = mapped_column(Integer)
+    putaway_sequence: Mapped[int | None] = mapped_column(Integer)
+    external_id: Mapped[str | None] = mapped_column(String(120))
+    code_scheme_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True)
+    )
+    scheme_version: Mapped[int | None] = mapped_column(Integer)
+    code_source: Mapped[str] = mapped_column(String(20), nullable=False, server_default="legacy")
     notes: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default="true")
     __table_args__ = (
+        UniqueConstraint("id", "warehouse_id", name="uq_locations_identity_warehouse"),
+        ForeignKeyConstraint(
+            ["code_scheme_id", "warehouse_id", "scheme_version"],
+            [
+                "location_code_schemes.id",
+                "location_code_schemes.warehouse_id",
+                "location_code_schemes.version",
+            ],
+            name="fk_locations_scheme_scope_version",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "(code_scheme_id IS NULL) = (scheme_version IS NULL)",
+            name="ck_locations_scheme_reference_complete",
+        ),
+        CheckConstraint(
+            "(lifecycle_status = 'retired') = (is_active = false)",
+            name="ck_locations_lifecycle_active_consistent",
+        ),
         CheckConstraint("capacity > 0", name="ck_locations_capacity_positive"),
+        CheckConstraint(
+            "pick_sequence IS NULL OR pick_sequence >= 0",
+            name="ck_locations_pick_sequence_nonnegative",
+        ),
+        CheckConstraint(
+            "putaway_sequence IS NULL OR putaway_sequence >= 0",
+            name="ck_locations_putaway_sequence_nonnegative",
+        ),
+        CheckConstraint(
+            "lifecycle_status IN ('draft','active','blocked','blocked_in','blocked_out','maintenance','retired')",
+            name="ck_locations_lifecycle_status",
+        ),
+        CheckConstraint(
+            "location_type IN ('standard','bulk','receiving','reserve','picking','staging','quality','packing','shipping','returns','virtual')",
+            name="ck_locations_type",
+        ),
+        CheckConstraint(
+            "code_source IN ('legacy','generated','imported','recode')",
+            name="ck_locations_code_source",
+        ),
         Index(
             "uq_locations_warehouse_code_visible",
             "warehouse_id",
@@ -408,6 +464,7 @@ class Location(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
         Index(
             "uq_locations_warehouse_coordinates_visible",
             "warehouse_id",
+            text("coalesce(area, '')"),
             "aisle",
             "rack",
             "level",
@@ -415,6 +472,36 @@ class Location(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
             sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_locations_warehouse_barcode_visible",
+            "warehouse_id",
+            func.lower(barcode),
+            unique=True,
+            postgresql_where=text("barcode IS NOT NULL AND deleted_at IS NULL"),
+            sqlite_where=text("barcode IS NOT NULL AND deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_locations_warehouse_verification_visible",
+            "warehouse_id",
+            func.lower(verification_code),
+            unique=True,
+            postgresql_where=text("verification_code IS NOT NULL AND deleted_at IS NULL"),
+            sqlite_where=text("verification_code IS NOT NULL AND deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_locations_warehouse_external_id_visible",
+            "warehouse_id",
+            func.lower(external_id),
+            unique=True,
+            postgresql_where=text("external_id IS NOT NULL AND deleted_at IS NULL"),
+            sqlite_where=text("external_id IS NOT NULL AND deleted_at IS NULL"),
+        ),
+        Index(
+            "ix_locations_warehouse_status_code",
+            "warehouse_id",
+            "lifecycle_status",
+            "code",
         ),
         Index("ix_locations_warehouse_deleted_at", "warehouse_id", "deleted_at"),
     )

@@ -1,0 +1,27 @@
+ERP database backup manifest
+Created before the warehouse-location overhaul.
+
+Source schema revision: 0027
+Public tables restored: 33
+Location rows restored: 21
+Location id/code fingerprint (MD5): aaee31130922233031c34454bc185248
+
+Native custom dump (PostgreSQL 17):
+  file: erp_pre_location_overhaul_20260812_223415.dump
+  bytes: 203419
+  sha256: 2B1E5384D4C45B7B6584D8678A40069C0BBE1EA510243839046436A5D24B3004
+
+Portable UTF-8 plain-SQL dump (PostgreSQL 16-compatible):
+  file: erp_pre_location_overhaul_20260812_223415_utf8.sql.gz
+  bytes: 59598
+  sha256: CB96A96CE41A8BBEF31B04CF9DED0E4F373948061173911DB4024030530AE23D
+
+Superseded portable dump (do not use for disaster recovery):
+  file: erp_pre_location_overhaul_20260812_223415_pg16.sql.gz
+  reason: its previous text conversion corrupted non-ASCII display strings.
+
+Verification:
+  The canonical custom dump and the corrected portable UTF-8 dump were each
+  restored into isolated temporary databases. Revision 0027, 33 public tables,
+  21 locations, the location fingerprint, and accented RBAC names were checked.
+  Both exact temporary databases were then dropped.

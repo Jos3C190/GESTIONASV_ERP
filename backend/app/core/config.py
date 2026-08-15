@@ -29,11 +29,11 @@ class Settings(BaseSettings):
     BACKEND_HOST: str = "0.0.0.0"
     BACKEND_PORT: int = 8000
     BACKEND_WORKERS: int = 1
-    RUN_MIGRATIONS_ON_STARTUP: bool = True
+    RUN_MIGRATIONS_ON_STARTUP: bool = False
 
     # --- Database ---
     POSTGRES_USER: str = "erp_admin"
-    POSTGRES_PASSWORD: str = "change_me"
+    POSTGRES_PASSWORD: str = "change_me"  # noqa: S105 - development-only fallback
     POSTGRES_DB: str = "erp_db"
     POSTGRES_HOST: str = "db"
     POSTGRES_PORT: int = 5432

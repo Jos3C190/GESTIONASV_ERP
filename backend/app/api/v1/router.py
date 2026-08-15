@@ -17,6 +17,7 @@ from app.api.v1.routers import (
     employees,
     health,
     lifecycle,
+    locations,
     media,
     operational_context,
     organization,
@@ -37,6 +38,7 @@ api_router.include_router(employees.router, prefix="/api/v1")
 api_router.include_router(workforce.router, prefix="/api/v1")
 api_router.include_router(audit_logs.router, prefix="/api/v1")
 api_router.include_router(organization.router, prefix="/api/v1")
+api_router.include_router(locations.router, prefix="/api/v1")
 api_router.include_router(operational_context.router, prefix="/api/v1")
 api_router.include_router(dashboard.router, prefix="/api/v1")
 api_router.include_router(media.router, prefix="/api/v1")

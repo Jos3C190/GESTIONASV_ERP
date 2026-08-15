@@ -1,5 +1,12 @@
 import { apiFetch } from '$lib/api/client';
-import type { Category, Country, Product, SubCategory, Unit } from '$lib/types/catalog';
+import type {
+  Category,
+  Country,
+  Product,
+  ProductImageDraft,
+  SubCategory,
+  Unit
+} from '$lib/types/catalog';
 
 export interface PageResponse<T> {
   items: T[];
@@ -30,13 +37,16 @@ export const catalogApi = {
   createCategory: (data: { name: string; description?: string }) =>
     apiFetch<Category>('/catalog/categories', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(data)
     }),
 
-  updateCategory: (id: number, data: Partial<{ name: string; description: string; is_active: boolean }>) =>
+  updateCategory: (
+    id: number,
+    data: Partial<{ name: string; description: string; is_active: boolean }>
+  ) =>
     apiFetch<Category>(`/catalog/categories/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: JSON.stringify(data)
     }),
 
   // SubCategories
@@ -50,56 +60,90 @@ export const catalogApi = {
   createSubCategory: (data: { id_category: number; name: string; description?: string }) =>
     apiFetch<SubCategory>('/catalog/sub-categories', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(data)
     }),
 
-  updateSubCategory: (id: number, data: Partial<{ name: string; description: string; is_active: boolean }>) =>
+  updateSubCategory: (
+    id: number,
+    data: Partial<{ name: string; description: string; is_active: boolean }>
+  ) =>
     apiFetch<SubCategory>(`/catalog/sub-categories/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: JSON.stringify(data)
     }),
 
   // Units
-  listUnits: (activeOnly = true) =>
-    apiFetch<Unit[]>(`/catalog/units?active_only=${activeOnly}`),
+  listUnits: (activeOnly = true) => apiFetch<Unit[]>(`/catalog/units?active_only=${activeOnly}`),
 
-  createUnit: (data: { name: string; type: string; code: string; symbol: string; description?: string }) =>
+  createUnit: (data: {
+    name: string;
+    type: string;
+    code: string;
+    symbol: string;
+    description?: string;
+  }) =>
     apiFetch<Unit>('/catalog/units', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(data)
     }),
 
-  updateUnit: (id: number, data: Partial<{ name: string; type: string; code: string; symbol: string; description: string; is_active: boolean }> & { version: number }) =>
+  updateUnit: (
+    id: number,
+    data: Partial<{
+      name: string;
+      type: string;
+      code: string;
+      symbol: string;
+      description: string;
+      is_active: boolean;
+    }> & { version: number }
+  ) =>
     apiFetch<Unit>(`/catalog/units/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: JSON.stringify(data)
     }),
 
   activateUnit: (id: number, version: number, alias?: string | null) =>
     apiFetch<Unit>(`/catalog/units/${id}/activate`, {
       method: 'POST',
-      body: JSON.stringify({ version, alias }),
+      body: JSON.stringify({ version, alias })
     }),
 
   deactivateUnit: (id: number, version: number, alias?: string | null) =>
     apiFetch<Unit>(`/catalog/units/${id}/deactivate`, {
       method: 'POST',
-      body: JSON.stringify({ version, alias }),
+      body: JSON.stringify({ version, alias })
     }),
 
   listGlobalUnits: (activeOnly = false) =>
     apiFetch<Unit[]>(`/catalog/units/global?active_only=${activeOnly}`),
 
-  createGlobalUnit: (data: { name: string; type: string; code: string; symbol: string; description?: string }) =>
+  createGlobalUnit: (data: {
+    name: string;
+    type: string;
+    code: string;
+    symbol: string;
+    description?: string;
+  }) =>
     apiFetch<Unit>('/catalog/units/global', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(data)
     }),
 
-  updateGlobalUnit: (id: number, data: Partial<{ name: string; type: string; code: string; symbol: string; description: string; is_active: boolean }> & { version: number }) =>
+  updateGlobalUnit: (
+    id: number,
+    data: Partial<{
+      name: string;
+      type: string;
+      code: string;
+      symbol: string;
+      description: string;
+      is_active: boolean;
+    }> & { version: number }
+  ) =>
     apiFetch<Unit>(`/catalog/units/global/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: JSON.stringify(data)
     }),
 
   // Products
@@ -123,8 +167,7 @@ export const catalogApi = {
 
   productStats: () => apiFetch<ProductStats>('/catalog/products/stats'),
 
-  getProduct: (id: number) =>
-    apiFetch<Product>(`/catalog/products/${id}`),
+  getProduct: (id: number) => apiFetch<Product>(`/catalog/products/${id}`),
 
   createProduct: (data: {
     id_category: number;
@@ -139,29 +182,34 @@ export const catalogApi = {
     dimensions?: string;
     description?: string;
     presentation?: string;
+    images?: ProductImageDraft[];
   }) =>
     apiFetch<Product>('/catalog/products', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(data)
     }),
 
-  updateProduct: (id: number, data: Partial<{
-    id_category: number;
-    id_sub_category?: number | null;
-    sku: string;
-    name: string;
-    purchase_unit: number;
-    sale_unit: number;
-    original_code: string;
-    internal_code: string;
-    size: string;
-    dimensions: string;
-    description: string;
-    presentation: string;
-    is_active: boolean;
-  }>) =>
+  updateProduct: (
+    id: number,
+    data: Partial<{
+      id_category: number;
+      id_sub_category?: number | null;
+      sku: string;
+      name: string;
+      purchase_unit: number;
+      sale_unit: number;
+      original_code: string;
+      internal_code: string;
+      size: string;
+      dimensions: string;
+      description: string;
+      presentation: string;
+      is_active: boolean;
+      images: ProductImageDraft[];
+    }>
+  ) =>
     apiFetch<Product>(`/catalog/products/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+      body: JSON.stringify(data)
+    })
 };

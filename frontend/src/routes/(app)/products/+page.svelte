@@ -4,9 +4,11 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
+  import ProductImagesEditor from '$lib/features/products/components/ProductImagesEditor.svelte';
   import { api } from '$lib/api/client';
   import { catalogApi } from '$lib/api/catalog';
-  import type { Category, Product, SubCategory, Unit } from '$lib/types/catalog';
+  import type { Category, Product, ProductImageDraft, SubCategory, Unit } from '$lib/types/catalog';
+  import { company } from '$lib/stores/company.svelte';
   import { search as globalSearch } from '$lib/stores/search.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { confirmation } from '$lib/stores/confirmation.svelte';
@@ -55,16 +57,36 @@
   let formPresentation = $state<string>('');
   let formDescription = $state<string>('');
   let formIsActive = $state<boolean>(true);
+  let formImages = $state<ProductImageDraft[]>([]);
 
   let dataGeneration = 0;
 
   // Derived filtered subcategories for header filter & form
   let filteredSubCategories = $derived(
-    selectedCategory ? subCategories.filter((s) => s.id_category === selectedCategory) : subCategories
+    selectedCategory
+      ? subCategories.filter((s) => s.id_category === selectedCategory)
+      : subCategories
   );
 
   let formFilteredSubCategories = $derived(
     formCategory ? subCategories.filter((s) => s.id_category === formCategory) : []
+  );
+  let canEditImages = $derived(permissions.hasPermission('products:images'));
+  let canUploadImages = $derived(permissions.hasPermission('media.upload'));
+  let galleryValid = $derived(
+    !canEditImages ||
+      (formImages.length <= 20 &&
+        formImages.every((image) => {
+          if (!image.url.trim()) return false;
+          if (image.source_type === 'cloudinary') return Boolean(image.media_asset_id);
+          try {
+            const parsed = new URL(image.url.trim());
+            return parsed.protocol === 'https:' && !parsed.username && !parsed.password;
+          } catch {
+            return false;
+          }
+        }) &&
+        (formImages.length === 0 || formImages.filter((image) => image.is_cover).length === 1))
   );
 
   async function loadData() {
@@ -141,10 +163,11 @@
     formPresentation = '';
     formDescription = '';
     formIsActive = true;
+    formImages = [];
     showModal = true;
   }
 
-  function openEditModal(prod: Product) {
+  async function openEditModal(prod: Product) {
     isEditing = true;
     editingId = prod.id_product;
     formSku = prod.sku;
@@ -160,12 +183,31 @@
     formPresentation = prod.presentation ?? '';
     formDescription = prod.description ?? '';
     formIsActive = prod.is_active;
+    try {
+      const fullProduct = await catalogApi.getProduct(prod.id_product);
+      formImages = fullProduct.images.map((image) => ({
+        id: image.id,
+        source_type: image.source_type,
+        url: image.url,
+        media_asset_id: image.media_asset_id ?? null,
+        alt_text: image.alt_text ?? '',
+        position: image.position,
+        is_cover: image.is_cover
+      }));
+    } catch (err: unknown) {
+      errorMsg = err instanceof Error ? err.message : 'No se pudo cargar la galería del producto';
+      formImages = [];
+    }
     showModal = true;
   }
 
   async function handleSave(e: SubmitEvent) {
     e.preventDefault();
     if (!formCategory || !formPurchaseUnit || !formSaleUnit) return;
+    if (!galleryValid) {
+      errorMsg = 'Complete las imágenes con una URL válida, un asset cargado y una portada.';
+      return;
+    }
     saving = true;
     errorMsg = null;
     successMsg = null;
@@ -184,7 +226,8 @@
           dimensions: formDimensions,
           presentation: formPresentation,
           description: formDescription,
-          is_active: formIsActive
+          is_active: formIsActive,
+          ...(canEditImages ? { images: formImages } : {})
         });
         successMsg = 'Producto actualizado exitosamente.';
       } else {
@@ -200,7 +243,8 @@
           size: formSize,
           dimensions: formDimensions,
           presentation: formPresentation,
-          description: formDescription
+          description: formDescription,
+          ...(canEditImages ? { images: formImages } : {})
         });
         successMsg = 'Producto creado exitosamente.';
       }
@@ -363,14 +407,28 @@
           >Total productos</span
         >
         <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            ><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            ><path
+              d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+            /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line
+              x1="12"
+              y1="22.08"
+              x2="12"
+              y2="12"
+            /></svg
           >
         </div>
       </div>
       <div>
         <div class="font-mono text-2xl font-bold tabular-nums text-foreground">
-          {#if loading}<span class="inline-block h-7 w-16 rounded skeleton"></span>{:else}{kpiTotal}{/if}
+          {#if loading}<span class="inline-block h-7 w-16 rounded skeleton"
+            ></span>{:else}{kpiTotal}{/if}
         </div>
         <p class="text-[11px] text-foreground-subtle mt-1">Registrados en inventario</p>
       </div>
@@ -385,14 +443,23 @@
           >Activos</span
         >
         <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-success/10 text-success">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            ><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            ><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline
+              points="22 4 12 14.01 9 11.01"
+            /></svg
           >
         </div>
       </div>
       <div>
         <div class="font-mono text-2xl font-bold tabular-nums text-foreground">
-          {#if loading}<span class="inline-block h-7 w-10 rounded skeleton"></span>{:else}{kpiActive}{/if}
+          {#if loading}<span class="inline-block h-7 w-10 rounded skeleton"
+            ></span>{:else}{kpiActive}{/if}
         </div>
         <p class="text-[11px] text-foreground-subtle mt-1">Disponibles en el catálogo</p>
       </div>
@@ -407,14 +474,23 @@
           >Categorías</span
         >
         <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-warning/10 text-warning">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            ><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            ><path
+              d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"
+            /><line x1="7" y1="7" x2="7.01" y2="7" /></svg
           >
         </div>
       </div>
       <div>
         <div class="font-mono text-2xl font-bold tabular-nums text-foreground">
-          {#if loading}<span class="inline-block h-7 w-8 rounded skeleton"></span>{:else}{kpiCategoriesCount}{/if}
+          {#if loading}<span class="inline-block h-7 w-8 rounded skeleton"
+            ></span>{:else}{kpiCategoriesCount}{/if}
         </div>
         <p class="text-[11px] text-foreground-subtle mt-1">Líneas de producto</p>
       </div>
@@ -429,7 +505,8 @@
           >Inactivos</span
         >
         <div class="font-mono text-lg font-bold text-foreground">
-          {#if loading}<span class="inline-block h-5 w-12 rounded skeleton"></span>{:else}{kpiInactive}
+          {#if loading}<span class="inline-block h-5 w-12 rounded skeleton"
+            ></span>{:else}{kpiInactive}
             <span class="text-xs font-normal text-foreground-subtle">/ {kpiTotal}</span>{/if}
         </div>
       </div>
@@ -473,12 +550,18 @@
   </div>
 
   {#if errorMsg}
-    <div class="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger" role="alert">
+    <div
+      class="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+      role="alert"
+    >
       {errorMsg}
     </div>
   {/if}
   {#if successMsg}
-    <div class="mb-4 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm text-success" role="status">
+    <div
+      class="mb-4 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"
+      role="status"
+    >
       {successMsg}
     </div>
   {/if}
@@ -498,6 +581,7 @@
         <table class="w-full text-sm">
           <thead class="border-b border-border bg-surface-muted">
             <tr>
+              <th class="px-4 py-3 text-left font-semibold text-foreground">Imagen</th>
               <th class="px-4 py-3 text-left font-semibold text-foreground">SKU</th>
               <th class="px-4 py-3 text-left font-semibold text-foreground">Producto</th>
               <th class="px-4 py-3 text-left font-semibold text-foreground">Categoría</th>
@@ -510,12 +594,40 @@
           <tbody class="divide-y divide-border">
             {#each products as prod (prod.id_product)}
               <tr class="hover:bg-surface-muted">
+                <td class="px-4 py-3">
+                  <div
+                    class="relative h-10 w-10 overflow-hidden rounded-md border border-border bg-surface-muted"
+                  >
+                    {#if prod.cover_image}
+                      <img
+                        src={prod.cover_image.url}
+                        alt={prod.cover_image.alt_text || `Portada de ${prod.name}`}
+                        class="h-full w-full object-cover"
+                        loading="lazy"
+                        referrerpolicy="no-referrer"
+                      />
+                    {:else}
+                      <div
+                        class="flex h-full items-center justify-center text-[10px] text-foreground-subtle"
+                      >
+                        —
+                      </div>
+                    {/if}
+                    {#if prod.image_count > 1}
+                      <span
+                        class="absolute -right-1 -top-1 rounded-full bg-foreground px-1 text-[9px] text-surface"
+                        >+{prod.image_count - 1}</span
+                      >
+                    {/if}
+                  </div>
+                </td>
                 <td class="px-4 py-3 font-mono text-foreground">{prod.sku}</td>
                 <td class="px-4 py-3">
                   <div class="font-medium text-foreground">{prod.name}</div>
                   {#if prod.internal_code || prod.presentation}
                     <div class="text-xs text-foreground-muted">
-                      {prod.internal_code ? `Cód. Int: ${prod.internal_code}` : ''} {prod.presentation ? `| Pres: ${prod.presentation}` : ''}
+                      {prod.internal_code ? `Cód. Int: ${prod.internal_code}` : ''}
+                      {prod.presentation ? `| Pres: ${prod.presentation}` : ''}
                     </div>
                   {/if}
                 </td>
@@ -524,7 +636,9 @@
                 <td class="px-4 py-3 text-foreground-muted">{getUnitName(prod.sale_unit)}</td>
                 <td class="px-4 py-3">
                   <span
-                    class="{prod.is_active ? 'badge-success' : 'badge-neutral'} inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
+                    class="{prod.is_active
+                      ? 'badge-success'
+                      : 'badge-neutral'} inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
                   >
                     <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
                     {prod.is_active ? 'Activo' : 'Inactivo'}
@@ -564,31 +678,65 @@
 
   <!-- Modal Form -->
   {#if showModal}
-    <Modal open={showModal} title={isEditing ? 'Editar Producto' : 'Nuevo Producto'} onclose={() => (showModal = false)}>
+    <Modal
+      open={showModal}
+      title={isEditing ? 'Editar Producto' : 'Nuevo Producto'}
+      size="lg"
+      onclose={() => (showModal = false)}
+    >
       <form onsubmit={handleSave} class="space-y-4">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label for="sku-field" class="block text-xs font-medium text-foreground-muted mb-1">SKU *</label>
-            <input id="sku-field" type="text" required bind:value={formSku} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
+            <label for="sku-field" class="block text-xs font-medium text-foreground-muted mb-1"
+              >SKU *</label
+            >
+            <input
+              id="sku-field"
+              type="text"
+              required
+              bind:value={formSku}
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            />
           </div>
           <div>
-            <label for="name-field" class="block text-xs font-medium text-foreground-muted mb-1">Nombre del Producto *</label>
-            <input id="name-field" type="text" required bind:value={formName} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
+            <label for="name-field" class="block text-xs font-medium text-foreground-muted mb-1"
+              >Nombre del Producto *</label
+            >
+            <input
+              id="name-field"
+              type="text"
+              required
+              bind:value={formName}
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            />
           </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label for="cat-field" class="block text-xs font-medium text-foreground-muted mb-1">Categoría *</label>
-            <select id="cat-field" required bind:value={formCategory} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none">
+            <label for="cat-field" class="block text-xs font-medium text-foreground-muted mb-1"
+              >Categoría *</label
+            >
+            <select
+              id="cat-field"
+              required
+              bind:value={formCategory}
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            >
               {#each categories as cat}
                 <option value={cat.id_category}>{cat.name}</option>
               {/each}
             </select>
           </div>
           <div>
-            <label for="subcat-field" class="block text-xs font-medium text-foreground-muted mb-1">Subcategoría</label>
-            <select id="subcat-field" bind:value={formSubCategory} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none">
+            <label for="subcat-field" class="block text-xs font-medium text-foreground-muted mb-1"
+              >Subcategoría</label
+            >
+            <select
+              id="subcat-field"
+              bind:value={formSubCategory}
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            >
               <option value={undefined}>-- Sin Subcategoría --</option>
               {#each formFilteredSubCategories as sub}
                 <option value={sub.id_sub_category}>{sub.name}</option>
@@ -599,16 +747,30 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label for="punit-field" class="block text-xs font-medium text-foreground-muted mb-1">Unidad de Compra *</label>
-            <select id="punit-field" required bind:value={formPurchaseUnit} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none">
+            <label for="punit-field" class="block text-xs font-medium text-foreground-muted mb-1"
+              >Unidad de Compra *</label
+            >
+            <select
+              id="punit-field"
+              required
+              bind:value={formPurchaseUnit}
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            >
               {#each units as unit}
                 <option value={unit.id_unit}>{unit.name} ({unit.type})</option>
               {/each}
             </select>
           </div>
           <div>
-            <label for="sunit-field" class="block text-xs font-medium text-foreground-muted mb-1">Unidad de Venta *</label>
-            <select id="sunit-field" required bind:value={formSaleUnit} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none">
+            <label for="sunit-field" class="block text-xs font-medium text-foreground-muted mb-1"
+              >Unidad de Venta *</label
+            >
+            <select
+              id="sunit-field"
+              required
+              bind:value={formSaleUnit}
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            >
               {#each units as unit}
                 <option value={unit.id_unit}>{unit.name} ({unit.type})</option>
               {/each}
@@ -618,33 +780,80 @@
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label for="orig-field" class="block text-xs font-medium text-foreground-muted mb-1">Código Original</label>
-            <input id="orig-field" type="text" bind:value={formOriginalCode} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
+            <label for="orig-field" class="block text-xs font-medium text-foreground-muted mb-1"
+              >Código Original</label
+            >
+            <input
+              id="orig-field"
+              type="text"
+              bind:value={formOriginalCode}
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            />
           </div>
           <div>
-            <label for="int-field" class="block text-xs font-medium text-foreground-muted mb-1">Código Interno</label>
-            <input id="int-field" type="text" bind:value={formInternalCode} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
+            <label for="int-field" class="block text-xs font-medium text-foreground-muted mb-1"
+              >Código Interno</label
+            >
+            <input
+              id="int-field"
+              type="text"
+              bind:value={formInternalCode}
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            />
           </div>
           <div>
-            <label for="pres-field" class="block text-xs font-medium text-foreground-muted mb-1">Presentación</label>
-            <input id="pres-field" type="text" bind:value={formPresentation} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" placeholder="Ej: Ck 50lb" />
+            <label for="pres-field" class="block text-xs font-medium text-foreground-muted mb-1"
+              >Presentación</label
+            >
+            <input
+              id="pres-field"
+              type="text"
+              bind:value={formPresentation}
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+              placeholder="Ej: Ck 50lb"
+            />
           </div>
         </div>
 
         <div>
-          <label for="desc-field" class="block text-xs font-medium text-foreground-muted mb-1">Descripción</label>
-          <textarea id="desc-field" rows="2" bind:value={formDescription} class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"></textarea>
+          <label for="desc-field" class="block text-xs font-medium text-foreground-muted mb-1"
+            >Descripción</label
+          >
+          <textarea
+            id="desc-field"
+            rows="2"
+            bind:value={formDescription}
+            class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+          ></textarea>
         </div>
 
         {#if isEditing}
           <div class="flex items-center gap-2">
-            <input type="checkbox" id="is_active" bind:checked={formIsActive} class="rounded border-border text-primary" />
-            <label for="is_active" class="text-sm font-medium text-foreground">Producto Activo</label>
+            <input
+              type="checkbox"
+              id="is_active"
+              bind:checked={formIsActive}
+              class="rounded border-border text-primary"
+            />
+            <label for="is_active" class="text-sm font-medium text-foreground"
+              >Producto Activo</label
+            >
           </div>
         {/if}
 
+        {#if canEditImages || (isEditing && formImages.length > 0)}
+          <ProductImagesEditor
+            bind:images={formImages}
+            companyId={company.id ?? ''}
+            editable={canEditImages}
+            canUpload={canUploadImages}
+          />
+        {/if}
+
         <div class="flex justify-end gap-3 pt-4 border-t border-border">
-          <Button type="button" variant="secondary" onclick={() => (showModal = false)}>Cancelar</Button>
+          <Button type="button" variant="secondary" onclick={() => (showModal = false)}
+            >Cancelar</Button
+          >
           <Button type="submit" variant="primary" disabled={saving}>
             {saving ? 'Guardando...' : 'Guardar Producto'}
           </Button>

@@ -12,6 +12,7 @@ from app.infrastructure.repositories.employee_repository import (
     SqlAlchemyEmployeeRepository,
 )
 from app.infrastructure.repositories.lifecycle_repository import SqlAlchemyLifecycleRepository
+from app.infrastructure.repositories.location_repository import SqlAlchemyLocationRepository
 from app.infrastructure.repositories.operational_context_repository import (
     SqlAlchemyOperationalContextRepository,
 )
@@ -33,16 +34,17 @@ from app.infrastructure.repositories.user_repository import (
 )
 
 __all__ = [
-    "SqlAlchemyUserRepository",
-    "SqlAlchemyRefreshTokenRepository",
-    "SqlAlchemyRoleRepository",
-    "SqlAlchemyPermissionRepository",
+    "JwtTokenService",
+    "SqlAlchemyAuditRepository",
+    "SqlAlchemyCatalogRepository",
     "SqlAlchemyDepartmentRepository",
     "SqlAlchemyEmployeeRepository",
     "SqlAlchemyLifecycleRepository",
-    "SqlAlchemyAuditRepository",
+    "SqlAlchemyLocationRepository",
     "SqlAlchemyOperationalContextRepository",
-    "SqlAlchemyCatalogRepository",
+    "SqlAlchemyPermissionRepository",
+    "SqlAlchemyRefreshTokenRepository",
+    "SqlAlchemyRoleRepository",
     "SqlAlchemySupplierRepository",
-    "JwtTokenService",
+    "SqlAlchemyUserRepository",
 ]

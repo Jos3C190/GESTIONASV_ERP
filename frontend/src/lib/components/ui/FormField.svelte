@@ -13,6 +13,7 @@
     min?: string;
     max?: string;
     step?: string;
+    maxlength?: number;
   }
 
   let {
@@ -28,7 +29,8 @@
     options,
     min,
     max,
-    step
+    step,
+    maxlength
   }: Props = $props();
 
   function handleInput(e: Event) {
@@ -63,6 +65,7 @@
       {min}
       {max}
       {step}
+      {maxlength}
       bind:value
       oninput={handleInput}
       class="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"

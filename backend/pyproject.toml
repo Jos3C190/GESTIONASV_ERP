@@ -32,6 +32,7 @@ dependencies = [
     "python-dotenv>=1.0,<2",
     "typer>=0.12,<1",
     "faker>=25.0,<37",
+    "openpyxl>=3.1.5,<4",
 ]
 
 [project.optional-dependencies]

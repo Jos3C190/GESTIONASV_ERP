@@ -182,6 +182,13 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
             "locations.view",
             "locations.create",
             "locations.update",
+            "locations.scheme",
+            "locations.bulk",
+            "locations.import",
+            "locations.export",
+            "locations.recode",
+            "locations.labels",
+            "locations.commission",
             "employees:read",
             "employees:update",
             "audit_log:read",
@@ -217,6 +224,13 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
             "locations.update",
             "locations.activate",
             "locations.deactivate",
+            "locations.scheme",
+            "locations.bulk",
+            "locations.import",
+            "locations.export",
+            "locations.recode",
+            "locations.labels",
+            "locations.commission",
             "employees:read",
         ),
     ),
@@ -237,6 +251,10 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
             "logs.export",
         ),
     ),
+}
+
+LEGACY_ROLE_NAME_ALIASES: dict[str, str] = {
+    "JEFE DE ALMACÃ‰N": "JEFE DE ALMACÉN",
 }
 
 
@@ -904,6 +922,12 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
         business_role_candidates: dict[tuple[str, UUID | None], Role] = {}
         for item in business_role_rows:
             business_role_candidates.setdefault((item.name.casefold(), item.company_id), item)
+        for legacy_name, canonical_name in LEGACY_ROLE_NAME_ALIASES.items():
+            canonical_key = canonical_name.casefold()
+            for company_id in (COMPANY_ID, None):
+                legacy = business_role_candidates.get((legacy_name.casefold(), company_id))
+                if legacy is not None:
+                    business_role_candidates.setdefault((canonical_key, company_id), legacy)
         for role_name, (description, permission_codes) in ROLE_PERMISSIONS.items():
             role = roles.get(role_name)
             if role is None:

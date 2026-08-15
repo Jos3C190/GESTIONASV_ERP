@@ -64,6 +64,32 @@ export interface Product {
   description?: string | null;
   presentation?: string | null;
   is_active: boolean;
+  images: ProductImage[];
+  image_count: number;
+  cover_image: ProductImage | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface ProductImage {
+  id: string;
+  product_id: number;
+  source_type: 'cloudinary' | 'external';
+  url: string;
+  media_asset_id?: string | null;
+  alt_text?: string | null;
+  position: number;
+  is_cover: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductImageDraft {
+  id?: string;
+  source_type: 'cloudinary' | 'external';
+  url: string;
+  media_asset_id?: string | null;
+  alt_text?: string | null;
+  position: number;
+  is_cover: boolean;
 }

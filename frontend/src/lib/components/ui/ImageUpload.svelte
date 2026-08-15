@@ -9,6 +9,7 @@
     companyId?: string | null;
     value: string;
     publicId?: string;
+    assetId?: string | null;
     alt?: string;
     shape?: 'square' | 'wide';
     disabled?: boolean;
@@ -21,6 +22,7 @@
     companyId = null,
     value = $bindable(),
     publicId = $bindable(''),
+    assetId = $bindable(''),
     alt = '',
     shape = 'square',
     disabled = false
@@ -44,6 +46,7 @@
       progress = 100;
       value = result.url;
       publicId = result.publicId;
+      assetId = result.assetId;
     } catch (err) {
       error = err instanceof HttpError ? err.message : 'No se pudo cargar la imagen.';
       progress = 0;
@@ -75,6 +78,7 @@
       execute: () => {
         value = '';
         publicId = '';
+        assetId = '';
       }
     });
   }

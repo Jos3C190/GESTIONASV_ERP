@@ -62,4 +62,26 @@ describe('apiFetch', () => {
       globalThis.fetch = original;
     }
   });
+
+  it('lets the browser set the multipart boundary for FormData bodies', async () => {
+    const original = globalThis.fetch;
+    let capturedHeaders: HeadersInit | undefined;
+    globalThis.fetch = (async (_input, init) => {
+      capturedHeaders = init?.headers;
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }) as typeof fetch;
+    try {
+      const body = new FormData();
+      body.set('file', new File(['a,b\n1,2'], 'locations.csv', { type: 'text/csv' }));
+      await apiFetch('http://example.test/import', { method: 'POST', body });
+      const headers = new Headers(capturedHeaders);
+      expect(headers.get('Content-Type')).toBeNull();
+      expect(headers.get('Accept')).toBe('application/json');
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
 });

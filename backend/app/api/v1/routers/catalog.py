@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import distinct, func, select
 
@@ -17,6 +19,7 @@ from app.api.v1.schemas.catalog import (
     CategoryUpdate,
     CountryResponse,
     ProductCreate,
+    ProductImageInput,
     ProductResponse,
     ProductUpdate,
     SubCategoryCreate,
@@ -30,8 +33,10 @@ from app.api.v1.schemas.catalog import (
 from app.api.v1.schemas.common import Page, PageMeta
 from app.application.audit.audit_service import AuditService
 from app.application.catalog.use_cases import CatalogUseCases
+from app.core.exceptions import AuthorizationError
+from app.domain.entities.product_image import ProductImageDraft
 from app.infrastructure.models.catalog import ProductModel
-from app.infrastructure.repositories import SqlAlchemyCatalogRepository
+from app.infrastructure.repositories import SqlAlchemyCatalogRepository, SqlAlchemyRoleRepository
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -45,6 +50,47 @@ def _status_action(before_active: bool, after_active: bool) -> str:
 def _get_catalog_use_cases(session: SessionDep) -> CatalogUseCases:
     repo = SqlAlchemyCatalogRepository(session)
     return CatalogUseCases(repo)
+
+
+async def _require_product_images_permission(
+    session: SessionDep, current: CurrentUser, company_id: uuid.UUID
+) -> None:
+    if current.is_superuser:
+        return
+    permissions = await SqlAlchemyRoleRepository(session).get_effective_permissions_for_user(
+        current.id, company_id
+    )
+    if "products:images" not in {permission.code for permission in permissions}:
+        raise AuthorizationError("Permiso requerido: products:images", code="forbidden")
+
+
+def _image_drafts(images: list[ProductImageInput] | None) -> list[ProductImageDraft] | None:
+    if images is None:
+        return None
+    return [
+        ProductImageDraft(
+            id=image.id,
+            source_type=image.source_type,
+            url=image.url,
+            media_asset_id=image.media_asset_id,
+            alt_text=image.alt_text,
+            position=image.position,
+            is_cover=image.is_cover,
+        )
+        for image in images
+    ]
+
+
+def _gallery_audit_state(product: object) -> list[dict[str, object]]:
+    return [
+        {
+            "id": str(image.id),
+            "source_type": image.source_type,
+            "position": image.position,
+            "is_cover": image.is_cover,
+        }
+        for image in getattr(product, "images", ())
+    ]
 
 
 # --- Countries ---
@@ -476,6 +522,8 @@ async def create_product(
 ) -> ProductResponse:
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
+    if payload.images is not None:
+        await _require_product_images_permission(session, current, company_id)
     created = await use_cases.create_product(
         company_id,
         category_id=payload.category_id,
@@ -490,8 +538,16 @@ async def create_product(
         dimensions=payload.dimensions,
         description=payload.description,
         presentation=payload.presentation,
+        images=_image_drafts(payload.images),
     )
-    await audit.record(action="CREATE", user_id=current.id, company_id=company_id, resource_type="products", resource_id=str(created.id), after_state={"sku": created.sku, "name": created.name})
+    await audit.record(
+        action="CREATE",
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="products",
+        resource_id=str(created.id),
+        after_state={"sku": created.sku, "name": created.name, "images": _gallery_audit_state(created)},
+    )
     return created
 
 
@@ -515,6 +571,27 @@ async def update_product(
     await require_company_wide_scope(session, current, company_id)
     before = await use_cases.get_product(company_id, product_id)
     update_data = payload.model_dump(exclude_unset=True)
+    if "images" in update_data:
+        await _require_product_images_permission(session, current, company_id)
+        update_data["images"] = _image_drafts(payload.images)
     updated = await use_cases.update_product(company_id, product_id, **update_data)
-    await audit.record(action=_status_action(before.is_active, updated.is_active), user_id=current.id, company_id=company_id, resource_type="products", resource_id=str(product_id), before_state={"sku": before.sku, "name": before.name, "is_active": before.is_active}, after_state={"sku": updated.sku, "name": updated.name, "is_active": updated.is_active})
+    await audit.record(
+        action="UPDATE_IMAGES" if "images" in update_data else _status_action(before.is_active, updated.is_active),
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="products",
+        resource_id=str(product_id),
+        before_state={
+            "sku": before.sku,
+            "name": before.name,
+            "is_active": before.is_active,
+            "images": _gallery_audit_state(before),
+        },
+        after_state={
+            "sku": updated.sku,
+            "name": updated.name,
+            "is_active": updated.is_active,
+            "images": _gallery_audit_state(updated),
+        },
+    )
     return updated

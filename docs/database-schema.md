@@ -169,7 +169,40 @@ erDiagram
   (`downgrade()` implemented and tested).
 - `compare_type` and `compare_server_default` are enabled so autogenerate
   catches type drift.
-- Migrations run on container startup via the FastAPI lifespan hook (see
-  ADR-003 in `architecture.md`). For production deploys with long-running
-  migrations, decouple into an init container.
+- Migrations are an explicit one-shot deployment step (see ADR-003 in
+  `architecture.md`). The API startup hook remains opt-in for disposable
+  environments only; ordinary development and production set
+  `RUN_MIGRATIONS_ON_STARTUP=false`.
 - `create_all()` is **dev/test only**; production always uses Alembic.
+
+## 6. Warehouse location integrity (revision 0030)
+
+Revision `0030` makes two application invariants enforceable by PostgreSQL:
+
+- `code_scheme_id` and `scheme_version` are either both null (legacy code) or
+  both present, in both `locations` and `location_code_aliases`. The existing
+  composite foreign keys then validate the exact warehouse-scoped scheme
+  version.
+- A location is retired if and only if `is_active` is false. Every non-retired
+  lifecycle state (`draft`, `active`, blocked variants, or `maintenance`) stays
+  active in the persistence model.
+
+The migration runs read-only preflight checks before creating constraints and
+aborts without repairing data when it finds an inconsistent row. Operators
+must resolve those rows deliberately, rerun the preflight, and only then
+promote the migration. Its downgrade drops only the three checks and does not
+rewrite business data or permissions.
+
+## 7. Product image galleries (revision 0031)
+
+Revision `0031` adds the normalized `product_images` table. Each product can
+have up to 20 ordered images and exactly one cover when the gallery is
+non-empty. Cloudinary images reference a staged/active `media_assets` row owned
+by the same company; external images are stored as HTTPS references only. The
+backend never fetches external image URLs.
+
+The gallery stores `source_type`, URL, optional accessible `alt_text`,
+zero-based `position`, and `is_cover`. Product list responses project only
+`cover_image` and `image_count`; individual product responses include the
+complete ordered gallery. Removed Cloudinary assets are marked `detached` for
+the existing cleanup process.

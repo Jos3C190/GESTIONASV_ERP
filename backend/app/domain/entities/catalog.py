@@ -5,6 +5,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.domain.entities.product_image import ProductImage
+
 
 @dataclass(frozen=True, slots=True)
 class Country:
@@ -80,5 +82,8 @@ class Product:
     description: str | None = None
     presentation: str | None = None
     is_active: bool = True
+    images: tuple[ProductImage, ...] = ()
+    image_count: int = 0
+    cover_image: ProductImage | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
