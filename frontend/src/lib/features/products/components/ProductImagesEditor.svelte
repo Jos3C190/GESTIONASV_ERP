@@ -155,8 +155,7 @@
             ? 'border-primary text-primary'
             : 'border-border text-foreground-muted'}"
           onclick={() => changeSource(index, 'external')}
-          disabled={!editable || (image.source_type !== 'cloudinary' && !canUpload)}
-          >URL externa</button
+          disabled={!editable}>URL externa</button
         >
         <button
           type="button"

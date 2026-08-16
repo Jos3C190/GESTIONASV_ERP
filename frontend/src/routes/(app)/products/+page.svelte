@@ -1,100 +1,52 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
-  import ProductImagesEditor from '$lib/features/products/components/ProductImagesEditor.svelte';
+  import { goto } from '$app/navigation';
   import { api } from '$lib/api/client';
   import { catalogApi } from '$lib/api/catalog';
-  import type { Category, Product, ProductImageDraft, SubCategory, Unit } from '$lib/types/catalog';
-  import { company } from '$lib/stores/company.svelte';
+  import type { Category, Product, SubCategory, Unit } from '$lib/types/catalog';
+  import Card from '$lib/components/ui/Card.svelte';
+  import Badge from '$lib/components/ui/Badge.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
+  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
   import { search as globalSearch } from '$lib/stores/search.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { confirmation } from '$lib/stores/confirmation.svelte';
 
-  // Svelte 5 Runes State
   let products = $state<Product[]>([]);
   let categories = $state<Category[]>([]);
   let subCategories = $state<SubCategory[]>([]);
   let units = $state<Unit[]>([]);
-  let loading = $state<boolean>(true);
+  let loading = $state(true);
   let errorMsg = $state<string | null>(null);
   let successMsg = $state<string | null>(null);
-
-  // Filters
   let selectedCategory = $state<number | undefined>(undefined);
   let selectedSubCategory = $state<number | undefined>(undefined);
-
-  // Pagination
-  let page = $state<number>(1);
-  let totalPages = $state<number>(1);
-  let totalItems = $state<number>(0);
-
-  // KPI Stats
-  let kpiTotal = $state<number>(0);
-  let kpiActive = $state<number>(0);
-  let kpiCategoriesCount = $state<number>(0);
-  let kpiInactive = $state<number>(0);
-
-  // Modal State
-  let showModal = $state<boolean>(false);
-  let isEditing = $state<boolean>(false);
-  let editingId = $state<number | null>(null);
-  let saving = $state<boolean>(false);
-
-  // Form State
-  let formSku = $state<string>('');
-  let formName = $state<string>('');
-  let formCategory = $state<number | undefined>(undefined);
-  let formSubCategory = $state<number | undefined>(undefined);
-  let formPurchaseUnit = $state<number | undefined>(undefined);
-  let formSaleUnit = $state<number | undefined>(undefined);
-  let formOriginalCode = $state<string>('');
-  let formInternalCode = $state<string>('');
-  let formSize = $state<string>('');
-  let formDimensions = $state<string>('');
-  let formPresentation = $state<string>('');
-  let formDescription = $state<string>('');
-  let formIsActive = $state<boolean>(true);
-  let formImages = $state<ProductImageDraft[]>([]);
-
+  let page = $state(1);
+  let totalPages = $state(1);
+  let totalItems = $state(0);
+  let kpiTotal = $state(0);
+  let kpiActive = $state(0);
+  let kpiInactive = $state(0);
+  let kpiCategories = $state(0);
   let dataGeneration = 0;
 
-  // Derived filtered subcategories for header filter & form
   let filteredSubCategories = $derived(
     selectedCategory
-      ? subCategories.filter((s) => s.id_category === selectedCategory)
+      ? subCategories.filter((item) => item.id_category === selectedCategory)
       : subCategories
   );
+  let activeRatio = $derived(kpiTotal > 0 ? Math.round((kpiActive / kpiTotal) * 100) : 0);
 
-  let formFilteredSubCategories = $derived(
-    formCategory ? subCategories.filter((s) => s.id_category === formCategory) : []
-  );
-  let canEditImages = $derived(permissions.hasPermission('products:images'));
-  let canUploadImages = $derived(permissions.hasPermission('media.upload'));
-  let galleryValid = $derived(
-    !canEditImages ||
-      (formImages.length <= 20 &&
-        formImages.every((image) => {
-          if (!image.url.trim()) return false;
-          if (image.source_type === 'cloudinary') return Boolean(image.media_asset_id);
-          try {
-            const parsed = new URL(image.url.trim());
-            return parsed.protocol === 'https:' && !parsed.username && !parsed.password;
-          } catch {
-            return false;
-          }
-        }) &&
-        (formImages.length === 0 || formImages.filter((image) => image.is_cover).length === 1))
-  );
+  function categoryName(id: number) {
+    return categories.find((item) => item.id_category === id)?.name ?? '—';
+  }
 
   async function loadData() {
     const generation = ++dataGeneration;
     loading = true;
     errorMsg = null;
     try {
-      const [catsRes, subsRes, unitsRes, prodsRes, stats] = await Promise.all([
+      const [categoryData, subCategoryData, unitData, productPage, stats] = await Promise.all([
         catalogApi.listCategories(true),
         catalogApi.listSubCategories(undefined, true),
         catalogApi.listUnits(true),
@@ -108,208 +60,103 @@
         }),
         catalogApi.productStats()
       ]);
-
       if (generation !== dataGeneration) return;
-
-      categories = catsRes;
-      subCategories = subsRes;
-      units = unitsRes;
-      products = prodsRes.items;
-      totalItems = prodsRes.meta.total;
-      totalPages = prodsRes.meta.pages;
-
-      // KPIs
+      categories = categoryData;
+      subCategories = subCategoryData;
+      units = unitData;
+      products = productPage.items;
+      totalItems = productPage.meta.total;
+      totalPages = productPage.meta.pages;
       kpiTotal = stats.total;
       kpiActive = stats.active;
       kpiInactive = stats.inactive;
-      kpiCategoriesCount = stats.categories;
+      kpiCategories = stats.categories;
     } catch (err: unknown) {
       if (generation !== dataGeneration) return;
-      errorMsg = err instanceof Error ? err.message : 'Error al cargar productos';
+      errorMsg = err instanceof Error ? err.message : 'No se pudo cargar el catálogo.';
     } finally {
       if (generation === dataGeneration) loading = false;
     }
   }
 
-  function goToPage(p: number) {
-    if (p < 1 || p > totalPages) return;
-    page = p;
-    loadData();
+  function goToPage(next: number) {
+    if (next < 1 || next > totalPages) return;
+    page = next;
+    void loadData();
   }
 
   $effect(() => {
-    const _q = globalSearch.query;
-    const _c = selectedCategory;
-    const _sc = selectedSubCategory;
+    const query = globalSearch.query;
+    const category = selectedCategory;
+    const subCategory = selectedSubCategory;
     untrack(() => {
+      void query;
+      void category;
+      void subCategory;
       page = 1;
-      loadData();
+      void loadData();
     });
   });
 
-  function openCreateModal() {
-    isEditing = false;
-    editingId = null;
-    formSku = '';
-    formName = '';
-    formCategory = categories[0]?.id_category;
-    formSubCategory = undefined;
-    formPurchaseUnit = units[0]?.id_unit;
-    formSaleUnit = units[0]?.id_unit;
-    formOriginalCode = '';
-    formInternalCode = '';
-    formSize = '';
-    formDimensions = '';
-    formPresentation = '';
-    formDescription = '';
-    formIsActive = true;
-    formImages = [];
-    showModal = true;
-  }
-
-  async function openEditModal(prod: Product) {
-    isEditing = true;
-    editingId = prod.id_product;
-    formSku = prod.sku;
-    formName = prod.name;
-    formCategory = prod.id_category;
-    formSubCategory = prod.id_sub_category ?? undefined;
-    formPurchaseUnit = prod.purchase_unit;
-    formSaleUnit = prod.sale_unit;
-    formOriginalCode = prod.original_code ?? '';
-    formInternalCode = prod.internal_code ?? '';
-    formSize = prod.size ?? '';
-    formDimensions = prod.dimensions ?? '';
-    formPresentation = prod.presentation ?? '';
-    formDescription = prod.description ?? '';
-    formIsActive = prod.is_active;
-    try {
-      const fullProduct = await catalogApi.getProduct(prod.id_product);
-      formImages = fullProduct.images.map((image) => ({
-        id: image.id,
-        source_type: image.source_type,
-        url: image.url,
-        media_asset_id: image.media_asset_id ?? null,
-        alt_text: image.alt_text ?? '',
-        position: image.position,
-        is_cover: image.is_cover
-      }));
-    } catch (err: unknown) {
-      errorMsg = err instanceof Error ? err.message : 'No se pudo cargar la galería del producto';
-      formImages = [];
-    }
-    showModal = true;
-  }
-
-  async function handleSave(e: SubmitEvent) {
-    e.preventDefault();
-    if (!formCategory || !formPurchaseUnit || !formSaleUnit) return;
-    if (!galleryValid) {
-      errorMsg = 'Complete las imágenes con una URL válida, un asset cargado y una portada.';
-      return;
-    }
-    saving = true;
-    errorMsg = null;
-    successMsg = null;
-    try {
-      if (isEditing && editingId) {
-        await catalogApi.updateProduct(editingId, {
-          id_category: formCategory,
-          id_sub_category: formSubCategory || null,
-          sku: formSku,
-          name: formName,
-          purchase_unit: formPurchaseUnit,
-          sale_unit: formSaleUnit,
-          original_code: formOriginalCode,
-          internal_code: formInternalCode,
-          size: formSize,
-          dimensions: formDimensions,
-          presentation: formPresentation,
-          description: formDescription,
-          is_active: formIsActive,
-          ...(canEditImages ? { images: formImages } : {})
-        });
-        successMsg = 'Producto actualizado exitosamente.';
-      } else {
-        await catalogApi.createProduct({
-          id_category: formCategory,
-          id_sub_category: formSubCategory || null,
-          sku: formSku,
-          name: formName,
-          purchase_unit: formPurchaseUnit,
-          sale_unit: formSaleUnit,
-          original_code: formOriginalCode,
-          internal_code: formInternalCode,
-          size: formSize,
-          dimensions: formDimensions,
-          presentation: formPresentation,
-          description: formDescription,
-          ...(canEditImages ? { images: formImages } : {})
-        });
-        successMsg = 'Producto creado exitosamente.';
-      }
-      showModal = false;
-      await loadData();
-    } catch (err: unknown) {
-      errorMsg = err instanceof Error ? err.message : 'Error al guardar el producto';
-    } finally {
-      saving = false;
-    }
-  }
-
-  function toggleProductStatus(prod: Product) {
-    const actionText = prod.is_active ? 'desactivar' : 'activar';
+  function toggleProductStatus(product: Product) {
     confirmation.request({
-      kind: prod.is_active ? 'deactivate' : 'deactivate',
-      title: `${prod.is_active ? 'Desactivar' : 'Activar'} producto`,
-      description: `¿Está seguro de que desea ${actionText} el producto "${prod.name}" (SKU: ${prod.sku})?`,
-      resourceName: prod.name,
-      confirmLabel: prod.is_active ? 'Desactivar' : 'Activar',
+      kind: 'deactivate',
+      title: `${product.is_active ? 'Desactivar' : 'Activar'} producto`,
+      description: `¿Desea ${product.is_active ? 'desactivar' : 'activar'} "${product.name}"?`,
+      resourceName: product.name,
+      confirmLabel: product.is_active ? 'Desactivar' : 'Activar',
       execute: async () => {
         try {
-          await catalogApi.updateProduct(prod.id_product, { is_active: !prod.is_active });
-          successMsg = `Producto ${prod.is_active ? 'desactivado' : 'activado'} correctamente.`;
+          await catalogApi.updateProduct(product.id_product, { is_active: !product.is_active });
+          successMsg = `Producto ${product.is_active ? 'desactivado' : 'activado'} correctamente.`;
           await loadData();
         } catch (err: unknown) {
-          errorMsg = err instanceof Error ? err.message : 'Error al cambiar estado del producto';
+          errorMsg = err instanceof Error ? err.message : 'No se pudo cambiar el estado.';
         }
       }
     });
   }
 
-  function deleteProduct(prod: Product) {
+  function deleteProduct(product: Product) {
     confirmation.request({
       kind: 'delete',
       title: 'Eliminar producto',
       description:
-        'El producto desaparecerá del catálogo operativo y quedará disponible en la Papelera. La eliminación se bloqueará si mantiene dependencias que deban resolverse.',
-      resourceName: `${prod.name} · ${prod.sku}`,
+        'El producto quedará en la Papelera y dejará de mostrarse en el catálogo operativo.',
+      resourceName: `${product.name} · ${product.sku}`,
       confirmLabel: 'Eliminar producto',
       requireReason: true,
       execute: async (reason) => {
         if (!reason) throw new Error('Indique el motivo de eliminación.');
-        await api.lifecycle.delete('products', String(prod.id_product), reason);
+        await api.lifecycle.delete('products', String(product.id_product), reason);
         successMsg = 'Producto enviado a la Papelera.';
         await loadData();
       }
     });
   }
 
-  function menuItems(prod: Product): KebabItem[] {
-    const items: KebabItem[] = [];
+  function menuItems(product: Product): KebabItem[] {
+    const items: KebabItem[] = [
+      {
+        id: 'detail',
+        label: 'Ver detalle',
+        icon: 'detail',
+        onClick: () => void goto(`/products/${product.id_product}`)
+      }
+    ];
     if (permissions.hasPermission('products:manage')) {
       items.push({
         id: 'edit',
         label: 'Editar',
         icon: 'edit',
-        onClick: () => openEditModal(prod)
+        onClick: () => void goto(`/products/${product.id_product}/edit`)
       });
       items.push({
         id: 'toggle-status',
-        label: prod.is_active ? 'Desactivar' : 'Activar',
-        icon: prod.is_active ? 'delete' : 'edit',
-        variant: prod.is_active ? 'danger' : 'default',
-        onClick: () => toggleProductStatus(prod)
+        label: product.is_active ? 'Desactivar' : 'Activar',
+        icon: product.is_active ? 'delete' : 'power',
+        variant: product.is_active ? 'danger' : 'default',
+        onClick: () => toggleProductStatus(product)
       });
     }
     if (permissions.hasPermission('products:delete')) {
@@ -318,67 +165,27 @@
         label: 'Eliminar',
         icon: 'delete',
         variant: 'danger',
-        onClick: () => deleteProduct(prod)
+        onClick: () => deleteProduct(product)
       });
     }
     return items;
   }
-
-  function getCategoryName(catId: number): string {
-    return categories.find((c) => c.id_category === catId)?.name || '—';
-  }
-
-  function getUnitName(unitId: number): string {
-    return units.find((u) => u.id_unit === unitId)?.name || '—';
-  }
-
-  // Ring geometry calculation
-  const ringR = 16;
-  const ringC = 2 * Math.PI * ringR;
-  let ringOffset = $derived(kpiTotal > 0 ? ringC - (kpiActive / kpiTotal) * ringC : ringC);
-  let activeRatio = $derived(kpiTotal > 0 ? Math.round((kpiActive / kpiTotal) * 100) : 0);
 </script>
 
-<svelte:head><title>Catálogo de Productos — GestionaSV</title></svelte:head>
+<svelte:head><title>Catálogo de productos — GestionaSV</title></svelte:head>
 
 <div class="p-6 md:p-8">
-  <!-- Header -->
-  <div class="mb-5 flex items-center justify-between gap-4">
-    <p class="text-sm text-foreground-muted">
-      {loading ? 'Cargando...' : `${totalItems} producto(s)`}
-    </p>
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <p class="text-xs font-medium uppercase tracking-wider text-foreground-subtle">Inventario</p>
+      <h1 class="mt-1 text-2xl font-bold text-foreground">Catálogo de productos</h1>
+      <p class="mt-1 text-sm text-foreground-muted">
+        Identidad comercial, unidades e imágenes de tus productos.
+      </p>
+    </div>
     <div class="flex items-center gap-2">
-      <select
-        bind:value={selectedCategory}
-        onchange={() => {
-          selectedSubCategory = undefined;
-          page = 1;
-        }}
-        class="h-8 rounded-md border border-border bg-surface-muted px-2.5 text-[13px] text-foreground focus:border-primary focus:shadow-glow focus:outline-none"
-      >
-        <option value={undefined}>Todas las categorías</option>
-        {#each categories as cat}
-          <option value={cat.id_category}>{cat.name}</option>
-        {/each}
-      </select>
-
-      {#if selectedCategory}
-        <select
-          bind:value={selectedSubCategory}
-          onchange={() => {
-            page = 1;
-          }}
-          class="h-8 rounded-md border border-border bg-surface-muted px-2.5 text-[13px] text-foreground focus:border-primary focus:shadow-glow focus:outline-none"
-        >
-          <option value={undefined}>Todas las subcategorías</option>
-          {#each filteredSubCategories as sub}
-            <option value={sub.id_sub_category}>{sub.name}</option>
-          {/each}
-        </select>
-      {/if}
-
       {#if permissions.hasPermission('products:manage')}
-        <Button size="sm" onclick={openCreateModal}>
+        <Button size="sm" onclick={() => goto('/products/new')}>
           <svg
             width="14"
             height="14"
@@ -390,475 +197,243 @@
             stroke-linejoin="round"
             aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg
           >
-          Crear
+          Nuevo producto
         </Button>
       {/if}
     </div>
   </div>
 
-  <!-- KPI CARDS GRID -->
-  <div class="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-    <!-- KPI 1: Total Productos -->
-    <div
-      class="rounded-xl border border-border bg-surface-elevated p-4 md:p-5 shadow-sm flex flex-col justify-between h-[120px]"
+  <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <Card class="p-5"
+      ><p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+        Total productos
+      </p>
+      <p class="mt-2 font-mono text-2xl font-bold tabular-nums text-foreground">
+        {loading ? '—' : kpiTotal}
+      </p>
+      <p class="mt-1 text-xs text-foreground-muted">Registrados en el catálogo</p></Card
     >
-      <div class="flex items-center justify-between">
-        <span class="text-[10.5px] font-bold uppercase tracking-wider text-foreground-subtle"
-          >Total productos</span
-        >
-        <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            ><path
-              d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
-            /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line
-              x1="12"
-              y1="22.08"
-              x2="12"
-              y2="12"
-            /></svg
-          >
-        </div>
-      </div>
-      <div>
-        <div class="font-mono text-2xl font-bold tabular-nums text-foreground">
-          {#if loading}<span class="inline-block h-7 w-16 rounded skeleton"
-            ></span>{:else}{kpiTotal}{/if}
-        </div>
-        <p class="text-[11px] text-foreground-subtle mt-1">Registrados en inventario</p>
-      </div>
-    </div>
-
-    <!-- KPI 2: Productos Activos -->
-    <div
-      class="rounded-xl border border-border bg-surface-elevated p-4 md:p-5 shadow-sm flex flex-col justify-between h-[120px]"
+    <Card class="p-5"
+      ><p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">Activos</p>
+      <p class="mt-2 font-mono text-2xl font-bold tabular-nums text-success">
+        {loading ? '—' : kpiActive}
+      </p>
+      <p class="mt-1 text-xs text-foreground-muted">{activeRatio}% del catálogo</p></Card
     >
-      <div class="flex items-center justify-between">
-        <span class="text-[10.5px] font-bold uppercase tracking-wider text-foreground-subtle"
-          >Activos</span
-        >
-        <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-success/10 text-success">
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            ><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline
-              points="22 4 12 14.01 9 11.01"
-            /></svg
-          >
-        </div>
-      </div>
-      <div>
-        <div class="font-mono text-2xl font-bold tabular-nums text-foreground">
-          {#if loading}<span class="inline-block h-7 w-10 rounded skeleton"
-            ></span>{:else}{kpiActive}{/if}
-        </div>
-        <p class="text-[11px] text-foreground-subtle mt-1">Disponibles en el catálogo</p>
-      </div>
-    </div>
-
-    <!-- KPI 3: Categorías -->
-    <div
-      class="rounded-xl border border-border bg-surface-elevated p-4 md:p-5 shadow-sm flex flex-col justify-between h-[120px]"
+    <Card class="p-5"
+      ><p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+        Categorías
+      </p>
+      <p class="mt-2 font-mono text-2xl font-bold tabular-nums text-foreground">
+        {loading ? '—' : kpiCategories}
+      </p>
+      <p class="mt-1 text-xs text-foreground-muted">Líneas disponibles</p></Card
     >
-      <div class="flex items-center justify-between">
-        <span class="text-[10.5px] font-bold uppercase tracking-wider text-foreground-subtle"
-          >Categorías</span
-        >
-        <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-warning/10 text-warning">
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            ><path
-              d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"
-            /><line x1="7" y1="7" x2="7.01" y2="7" /></svg
-          >
-        </div>
-      </div>
-      <div>
-        <div class="font-mono text-2xl font-bold tabular-nums text-foreground">
-          {#if loading}<span class="inline-block h-7 w-8 rounded skeleton"
-            ></span>{:else}{kpiCategoriesCount}{/if}
-        </div>
-        <p class="text-[11px] text-foreground-subtle mt-1">Líneas de producto</p>
-      </div>
-    </div>
-
-    <!-- KPI 4: Inactivos + Mini Ring -->
-    <div
-      class="rounded-xl border border-border bg-surface-elevated p-4 md:p-5 shadow-sm flex flex-col justify-between h-[120px]"
+    <Card class="p-5"
+      ><p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+        Inactivos
+      </p>
+      <p class="mt-2 font-mono text-2xl font-bold tabular-nums text-warning">
+        {loading ? '—' : kpiInactive}
+      </p>
+      <p class="mt-1 text-xs text-foreground-muted">Requieren revisión</p></Card
     >
-      <div class="flex items-center justify-between">
-        <span class="text-[10.5px] font-bold uppercase tracking-wider text-foreground-subtle"
-          >Inactivos</span
-        >
-        <div class="font-mono text-lg font-bold text-foreground">
-          {#if loading}<span class="inline-block h-5 w-12 rounded skeleton"
-            ></span>{:else}{kpiInactive}
-            <span class="text-xs font-normal text-foreground-subtle">/ {kpiTotal}</span>{/if}
-        </div>
-      </div>
-      <div class="flex items-center gap-3">
-        <svg
-          width="40"
-          height="40"
-          viewBox="0 0 40 40"
-          class="-rotate-90 flex-none"
-          aria-hidden="true"
-        >
-          <circle
-            cx="20"
-            cy="20"
-            r={ringR}
-            fill="none"
-            stroke="rgb(var(--border))"
-            stroke-width="4.5"
-          />
-          <circle
-            cx="20"
-            cy="20"
-            r={ringR}
-            fill="none"
-            stroke="rgb(var(--primary))"
-            stroke-width="4.5"
-            stroke-dasharray={ringC.toFixed(1)}
-            stroke-dashoffset={ringOffset.toFixed(1)}
-            stroke-linecap="round"
-            class="transition-all duration-700 ease-out"
-          />
-        </svg>
-        <div class="text-[11px] space-y-0.5 text-foreground-muted">
-          <p><strong class="font-semibold text-foreground">{activeRatio}%</strong> activos</p>
-          <p>
-            <strong class="font-semibold text-foreground-subtle">{kpiInactive}</strong> inactivos
-          </p>
-        </div>
-      </div>
-    </div>
   </div>
 
-  {#if errorMsg}
-    <div
-      class="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+  <Card class="mb-5 p-4">
+    <div class="grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(180px,1fr)_minmax(180px,1fr)]">
+      <div class="relative">
+        <svg
+          class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground-subtle"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg
+        ><input
+          aria-label="Buscar productos"
+          placeholder="Buscar por SKU, nombre o código..."
+          value={globalSearch.query}
+          oninput={(event) =>
+            globalSearch.setDebounced((event.currentTarget as HTMLInputElement).value)}
+          class="h-10 w-full rounded-lg border border-border bg-surface px-3 pl-9 text-sm text-foreground placeholder:text-foreground-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+      <select
+        aria-label="Filtrar por categoría"
+        bind:value={selectedCategory}
+        onchange={() => {
+          selectedSubCategory = undefined;
+          page = 1;
+        }}
+        class="h-10 rounded-lg border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+        ><option value={undefined}>Todas las categorías</option
+        >{#each categories as category}<option value={category.id_category}>{category.name}</option
+          >{/each}</select
+      >
+      <select
+        aria-label="Filtrar por subcategoría"
+        bind:value={selectedSubCategory}
+        disabled={!selectedCategory}
+        onchange={() => {
+          page = 1;
+        }}
+        class="h-10 rounded-lg border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+        ><option value={undefined}>Todas las subcategorías</option
+        >{#each filteredSubCategories as item}<option value={item.id_sub_category}
+            >{item.name}</option
+          >{/each}</select
+      >
+    </div>
+  </Card>
+
+  {#if errorMsg}<div
+      class="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
       role="alert"
     >
       {errorMsg}
-    </div>
-  {/if}
-  {#if successMsg}
-    <div
-      class="mb-4 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"
+    </div>{/if}
+  {#if successMsg}<div
+      class="mb-4 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"
       role="status"
     >
       {successMsg}
-    </div>
-  {/if}
+    </div>{/if}
 
-  <!-- Data Table -->
   <Card class="overflow-hidden p-0">
     {#if loading}
-      <div class="flex items-center justify-center py-16">
-        <p class="text-sm text-foreground-muted">Cargando...</p>
+      <div class="flex items-center justify-center py-20 text-sm text-foreground-muted">
+        Cargando catálogo...
       </div>
     {:else if products.length === 0}
-      <div class="flex flex-col items-center justify-center py-16">
-        <p class="text-sm text-foreground-muted">No se encontraron productos.</p>
+      <div class="flex flex-col items-center justify-center px-6 py-20 text-center">
+        <div
+          class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"
+        >
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            ><path d="m21 16-9 5-9-5V8l9-5 9 5v8Z" /><path d="m3 8 9 5 9-5M12 13v8" /></svg
+          >
+        </div>
+        <h2 class="text-base font-semibold text-foreground">No hay productos para mostrar</h2>
+        <p class="mt-1 max-w-md text-sm text-foreground-muted">
+          Crea el primer producto o ajusta los filtros de búsqueda.
+        </p>
+        {#if permissions.hasPermission('products:manage')}<Button
+            class="mt-5"
+            size="sm"
+            onclick={() => goto('/products/new')}>Crear primer producto</Button
+          >{/if}
       </div>
     {:else}
       <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="border-b border-border bg-surface-muted">
-            <tr>
-              <th class="px-4 py-3 text-left font-semibold text-foreground">Imagen</th>
-              <th class="px-4 py-3 text-left font-semibold text-foreground">SKU</th>
-              <th class="px-4 py-3 text-left font-semibold text-foreground">Producto</th>
-              <th class="px-4 py-3 text-left font-semibold text-foreground">Categoría</th>
-              <th class="px-4 py-3 text-left font-semibold text-foreground">Unid. Compra</th>
-              <th class="px-4 py-3 text-left font-semibold text-foreground">Unid. Venta</th>
-              <th class="px-4 py-3 text-left font-semibold text-foreground">Estado</th>
-              <th class="px-2 py-3 text-center font-semibold text-foreground w-11"></th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-border">
-            {#each products as prod (prod.id_product)}
-              <tr class="hover:bg-surface-muted">
-                <td class="px-4 py-3">
-                  <div
-                    class="relative h-10 w-10 overflow-hidden rounded-md border border-border bg-surface-muted"
-                  >
-                    {#if prod.cover_image}
-                      <img
-                        src={prod.cover_image.url}
-                        alt={prod.cover_image.alt_text || `Portada de ${prod.name}`}
-                        class="h-full w-full object-cover"
-                        loading="lazy"
-                        referrerpolicy="no-referrer"
-                      />
-                    {:else}
-                      <div
-                        class="flex h-full items-center justify-center text-[10px] text-foreground-subtle"
+        <table class="w-full min-w-[760px] text-sm">
+          <thead class="border-b border-border bg-surface-muted/40"
+            ><tr
+              ><th class="px-5 py-3 text-left font-semibold text-foreground">Producto</th><th
+                class="px-5 py-3 text-left font-semibold text-foreground">Categoría</th
+              ><th class="px-5 py-3 text-left font-semibold text-foreground">Unidades</th><th
+                class="px-5 py-3 text-left font-semibold text-foreground">Estado</th
+              ><th class="px-5 py-3 text-right font-semibold text-foreground">Acciones</th></tr
+            ></thead
+          ><tbody class="divide-y divide-border">
+            {#each products as product (product.id_product)}
+              <tr class="transition-colors hover:bg-surface-muted/30">
+                <td class="px-5 py-3.5"
+                  ><div class="flex items-center gap-3">
+                    <a
+                      href={`/products/${product.id_product}`}
+                      class="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-xl border border-border bg-surface-muted text-primary hover:border-primary/50"
+                      >{#if product.cover_image}<img
+                          src={product.cover_image.url}
+                          alt={product.cover_image.alt_text || product.name}
+                          loading="lazy"
+                          referrerpolicy="no-referrer"
+                          class="h-full w-full object-cover"
+                        />{:else}<svg
+                          width="21"
+                          height="21"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          aria-hidden="true"
+                          ><rect x="3" y="3" width="18" height="18" rx="3" /><circle
+                            cx="8.5"
+                            cy="8.5"
+                            r="1.5"
+                          /><path d="m21 15-5-5L5 21" /></svg
+                        >{/if}</a
+                    >
+                    <div class="min-w-0">
+                      <a
+                        href={`/products/${product.id_product}`}
+                        class="block truncate font-medium text-foreground hover:text-primary"
+                        >{product.name}</a
                       >
-                        —
+                      <div class="mt-0.5 flex items-center gap-2 text-xs text-foreground-muted">
+                        <span class="font-mono">{product.sku}</span
+                        >{#if product.image_count > 1}<span
+                            class="rounded-full bg-surface-muted px-1.5 py-0.5"
+                            >+{product.image_count - 1}</span
+                          >{/if}
                       </div>
-                    {/if}
-                    {#if prod.image_count > 1}
-                      <span
-                        class="absolute -right-1 -top-1 rounded-full bg-foreground px-1 text-[9px] text-surface"
-                        >+{prod.image_count - 1}</span
-                      >
-                    {/if}
-                  </div>
-                </td>
-                <td class="px-4 py-3 font-mono text-foreground">{prod.sku}</td>
-                <td class="px-4 py-3">
-                  <div class="font-medium text-foreground">{prod.name}</div>
-                  {#if prod.internal_code || prod.presentation}
-                    <div class="text-xs text-foreground-muted">
-                      {prod.internal_code ? `Cód. Int: ${prod.internal_code}` : ''}
-                      {prod.presentation ? `| Pres: ${prod.presentation}` : ''}
                     </div>
-                  {/if}
-                </td>
-                <td class="px-4 py-3 text-foreground-muted">{getCategoryName(prod.id_category)}</td>
-                <td class="px-4 py-3 text-foreground-muted">{getUnitName(prod.purchase_unit)}</td>
-                <td class="px-4 py-3 text-foreground-muted">{getUnitName(prod.sale_unit)}</td>
-                <td class="px-4 py-3">
-                  <span
-                    class="{prod.is_active
-                      ? 'badge-success'
-                      : 'badge-neutral'} inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
-                  >
-                    <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
-                    {prod.is_active ? 'Activo' : 'Inactivo'}
-                  </span>
-                </td>
-                <td class="px-2 py-3 text-center">
-                  <KebabMenu items={menuItems(prod)} />
-                </td>
+                  </div></td
+                >
+                <td class="px-5 py-3.5 text-foreground-muted"
+                  >{categoryName(product.id_category)}</td
+                >
+                <td class="px-5 py-3.5 text-xs text-foreground-muted"
+                  ><span
+                    >Compra {units.find((unit) => unit.id_unit === product.purchase_unit)?.name ??
+                      `#${product.purchase_unit}`}</span
+                  ><span class="mx-1 text-foreground-subtle">·</span><span
+                    >Venta {units.find((unit) => unit.id_unit === product.sale_unit)?.name ??
+                      `#${product.sale_unit}`}</span
+                  ></td
+                >
+                <td class="px-5 py-3.5"
+                  ><Badge variant={product.is_active ? 'success' : 'neutral'}
+                    >{product.is_active ? 'Activo' : 'Inactivo'}</Badge
+                  ></td
+                >
+                <td class="px-5 py-3.5 text-right"
+                  ><KebabMenu
+                    items={menuItems(product)}
+                    ariaLabel={`Acciones de ${product.name}`}
+                  /></td
+                >
               </tr>
             {/each}
           </tbody>
         </table>
       </div>
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs text-foreground-muted"
+      >
+        <span>{totalItems} producto(s) · Página {page} de {totalPages}</span>
+        <div class="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={page <= 1}
+            onclick={() => goToPage(page - 1)}>Anterior</Button
+          ><Button
+            size="sm"
+            variant="secondary"
+            disabled={page >= totalPages}
+            onclick={() => goToPage(page + 1)}>Siguiente</Button
+          >
+        </div>
+      </div>
     {/if}
   </Card>
-
-  <!-- Pagination -->
-  {#if totalPages > 1}
-    <div class="mt-4 flex items-center justify-between">
-      <p class="text-xs text-foreground-muted">Página {page} de {totalPages}</p>
-      <div class="flex gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          onclick={() => goToPage(page - 1)}
-          disabled={page <= 1}>Anterior</Button
-        >
-        <Button
-          variant="secondary"
-          size="sm"
-          onclick={() => goToPage(page + 1)}
-          disabled={page >= totalPages}>Siguiente</Button
-        >
-      </div>
-    </div>
-  {/if}
-
-  <!-- Modal Form -->
-  {#if showModal}
-    <Modal
-      open={showModal}
-      title={isEditing ? 'Editar Producto' : 'Nuevo Producto'}
-      size="lg"
-      onclose={() => (showModal = false)}
-    >
-      <form onsubmit={handleSave} class="space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label for="sku-field" class="block text-xs font-medium text-foreground-muted mb-1"
-              >SKU *</label
-            >
-            <input
-              id="sku-field"
-              type="text"
-              required
-              bind:value={formSku}
-              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-            />
-          </div>
-          <div>
-            <label for="name-field" class="block text-xs font-medium text-foreground-muted mb-1"
-              >Nombre del Producto *</label
-            >
-            <input
-              id="name-field"
-              type="text"
-              required
-              bind:value={formName}
-              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-            />
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label for="cat-field" class="block text-xs font-medium text-foreground-muted mb-1"
-              >Categoría *</label
-            >
-            <select
-              id="cat-field"
-              required
-              bind:value={formCategory}
-              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-            >
-              {#each categories as cat}
-                <option value={cat.id_category}>{cat.name}</option>
-              {/each}
-            </select>
-          </div>
-          <div>
-            <label for="subcat-field" class="block text-xs font-medium text-foreground-muted mb-1"
-              >Subcategoría</label
-            >
-            <select
-              id="subcat-field"
-              bind:value={formSubCategory}
-              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-            >
-              <option value={undefined}>-- Sin Subcategoría --</option>
-              {#each formFilteredSubCategories as sub}
-                <option value={sub.id_sub_category}>{sub.name}</option>
-              {/each}
-            </select>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label for="punit-field" class="block text-xs font-medium text-foreground-muted mb-1"
-              >Unidad de Compra *</label
-            >
-            <select
-              id="punit-field"
-              required
-              bind:value={formPurchaseUnit}
-              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-            >
-              {#each units as unit}
-                <option value={unit.id_unit}>{unit.name} ({unit.type})</option>
-              {/each}
-            </select>
-          </div>
-          <div>
-            <label for="sunit-field" class="block text-xs font-medium text-foreground-muted mb-1"
-              >Unidad de Venta *</label
-            >
-            <select
-              id="sunit-field"
-              required
-              bind:value={formSaleUnit}
-              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-            >
-              {#each units as unit}
-                <option value={unit.id_unit}>{unit.name} ({unit.type})</option>
-              {/each}
-            </select>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label for="orig-field" class="block text-xs font-medium text-foreground-muted mb-1"
-              >Código Original</label
-            >
-            <input
-              id="orig-field"
-              type="text"
-              bind:value={formOriginalCode}
-              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-            />
-          </div>
-          <div>
-            <label for="int-field" class="block text-xs font-medium text-foreground-muted mb-1"
-              >Código Interno</label
-            >
-            <input
-              id="int-field"
-              type="text"
-              bind:value={formInternalCode}
-              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-            />
-          </div>
-          <div>
-            <label for="pres-field" class="block text-xs font-medium text-foreground-muted mb-1"
-              >Presentación</label
-            >
-            <input
-              id="pres-field"
-              type="text"
-              bind:value={formPresentation}
-              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-              placeholder="Ej: Ck 50lb"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label for="desc-field" class="block text-xs font-medium text-foreground-muted mb-1"
-            >Descripción</label
-          >
-          <textarea
-            id="desc-field"
-            rows="2"
-            bind:value={formDescription}
-            class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-          ></textarea>
-        </div>
-
-        {#if isEditing}
-          <div class="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="is_active"
-              bind:checked={formIsActive}
-              class="rounded border-border text-primary"
-            />
-            <label for="is_active" class="text-sm font-medium text-foreground"
-              >Producto Activo</label
-            >
-          </div>
-        {/if}
-
-        {#if canEditImages || (isEditing && formImages.length > 0)}
-          <ProductImagesEditor
-            bind:images={formImages}
-            companyId={company.id ?? ''}
-            editable={canEditImages}
-            canUpload={canUploadImages}
-          />
-        {/if}
-
-        <div class="flex justify-end gap-3 pt-4 border-t border-border">
-          <Button type="button" variant="secondary" onclick={() => (showModal = false)}
-            >Cancelar</Button
-          >
-          <Button type="submit" variant="primary" disabled={saving}>
-            {saving ? 'Guardando...' : 'Guardar Producto'}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  {/if}
 </div>

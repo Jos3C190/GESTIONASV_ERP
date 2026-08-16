@@ -1,0 +1,318 @@
+<script lang="ts">
+  import { page } from '$app/state';
+  import { goto } from '$app/navigation';
+  import { catalogApi } from '$lib/api/catalog';
+  import type { Category, Product, Unit } from '$lib/types/catalog';
+  import { permissions } from '$lib/stores/permissions.svelte';
+  import Badge from '$lib/components/ui/Badge.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
+  import Card from '$lib/components/ui/Card.svelte';
+
+  let product = $state<Product | null>(null);
+  let categories = $state<Category[]>([]);
+  let units = $state<Unit[]>([]);
+  let loading = $state(true);
+  let error = $state<string | null>(null);
+  let imageErrors = $state<Record<string, boolean>>({});
+  let productId = $derived(Number(page.params.id));
+
+  const statusLabel = (active: boolean) => (active ? 'Activo' : 'Inactivo');
+
+  function categoryName(id: number) {
+    return categories.find((item) => item.id_category === id)?.name ?? 'Sin categoría';
+  }
+
+  function unitName(id: number) {
+    return units.find((item) => item.id_unit === id)?.name ?? '—';
+  }
+
+  function handleImageError(id: string) {
+    imageErrors = { ...imageErrors, [id]: true };
+  }
+
+  async function load() {
+    if (!Number.isInteger(productId) || productId < 1) {
+      error = 'Producto no válido.';
+      loading = false;
+      return;
+    }
+    loading = true;
+    error = null;
+    try {
+      const [productData, categoryData, unitData] = await Promise.all([
+        catalogApi.getProduct(productId),
+        catalogApi.listCategories(true),
+        catalogApi.listUnits(true)
+      ]);
+      product = productData;
+      categories = categoryData;
+      units = unitData;
+    } catch (err: unknown) {
+      error = err instanceof Error ? err.message : 'No se pudo cargar el producto.';
+    } finally {
+      loading = false;
+    }
+  }
+
+  $effect(() => {
+    if (productId) void load();
+  });
+</script>
+
+<svelte:head>
+  <title>{product ? `${product.name} — Productos` : 'Detalle del producto — GestionaSV'}</title>
+</svelte:head>
+
+<div class="p-6 md:p-8">
+  <div class="mb-6 flex items-center gap-3">
+    <a
+      href="/products"
+      class="flex h-8 w-8 items-center justify-center rounded-md text-foreground-muted hover:bg-surface-hover hover:text-foreground"
+      aria-label="Volver a productos"
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        ><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg
+      >
+    </a>
+    <div class="min-w-0 flex-1">
+      <h1 class="text-xl font-bold text-foreground">Detalle del producto</h1>
+      <p class="text-sm text-foreground-muted">
+        Información comercial, operativa y visual del producto.
+      </p>
+    </div>
+    {#if product && permissions.hasPermission('products:manage')}
+      <Button
+        variant="secondary"
+        size="sm"
+        onclick={() => goto(`/products/${product.id_product}/edit`)}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          ><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg
+        >
+        Editar
+      </Button>
+    {/if}
+  </div>
+
+  {#if loading}
+    <div class="space-y-5">
+      <div class="h-36 rounded-2xl skeleton"></div>
+      <div class="grid gap-4 md:grid-cols-4">
+        <div class="h-28 rounded-2xl skeleton"></div>
+        <div class="h-28 rounded-2xl skeleton"></div>
+        <div class="h-28 rounded-2xl skeleton"></div>
+        <div class="h-28 rounded-2xl skeleton"></div>
+      </div>
+      <div class="h-96 rounded-2xl skeleton"></div>
+    </div>
+  {:else if error}
+    <div
+      class="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+      role="alert"
+    >
+      {error}
+    </div>
+  {:else if product}
+    {@const cover =
+      product.cover_image ?? product.images.find((image) => image.is_cover) ?? product.images[0]}
+    <div class="space-y-5">
+      <Card class="p-6">
+        <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
+          <div
+            class="h-24 w-24 flex-none overflow-hidden rounded-2xl border border-border bg-surface-muted"
+          >
+            {#if cover && !imageErrors[cover.id]}
+              <img
+                src={cover.url}
+                alt={cover.alt_text || product.name}
+                class="h-full w-full object-cover"
+                referrerpolicy="no-referrer"
+                onerror={() => handleImageError(cover.id)}
+              />
+            {:else}
+              <div class="flex h-full items-center justify-center text-primary" aria-hidden="true">
+                <svg
+                  width="36"
+                  height="36"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  ><rect x="3" y="3" width="18" height="18" rx="3" /><circle
+                    cx="8.5"
+                    cy="8.5"
+                    r="1.5"
+                  /><path d="m21 15-5-5L5 21" /></svg
+                >
+              </div>
+            {/if}
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-3">
+              <h2 class="text-lg font-bold text-foreground">{product.name}</h2>
+              <Badge variant={product.is_active ? 'success' : 'neutral'}
+                >{statusLabel(product.is_active)}</Badge
+              >
+            </div>
+            <div
+              class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-foreground-muted"
+            >
+              <span class="font-mono text-xs">{product.sku}</span>
+              <span>{categoryName(product.id_category)}</span>
+              {#if product.internal_code}<span>Ref. {product.internal_code}</span>{/if}
+            </div>
+          </div>
+          <div class="text-left sm:text-right">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+              Imágenes
+            </p>
+            <p class="font-mono text-2xl font-bold tabular-nums text-foreground">
+              {product.image_count ?? product.images.length}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <Card class="p-5"
+          ><p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+            Categoría
+          </p>
+          <p class="mt-2 truncate text-sm font-semibold text-foreground">
+            {categoryName(product.id_category)}
+          </p>
+          <p class="mt-1 text-xs text-foreground-muted">
+            {product.id_sub_category ? 'Subcategoría asignada' : 'Sin subcategoría'}
+          </p></Card
+        >
+        <Card class="p-5"
+          ><p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+            Unidad de compra
+          </p>
+          <p class="mt-2 text-sm font-semibold text-foreground">
+            {unitName(product.purchase_unit)}
+          </p>
+          <p class="mt-1 text-xs text-foreground-muted">Unidad de abastecimiento</p></Card
+        >
+        <Card class="p-5"
+          ><p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+            Unidad de venta
+          </p>
+          <p class="mt-2 text-sm font-semibold text-foreground">{unitName(product.sale_unit)}</p>
+          <p class="mt-1 text-xs text-foreground-muted">Unidad comercial</p></Card
+        >
+        <Card class="p-5"
+          ><p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+            Estado
+          </p>
+          <p class="mt-2 text-sm font-semibold text-foreground">{statusLabel(product.is_active)}</p>
+          <p class="mt-1 text-xs text-foreground-muted">
+            {product.updated_at
+              ? `Actualizado ${new Date(product.updated_at).toLocaleDateString('es-SV')}`
+              : 'Catálogo operativo'}
+          </p></Card
+        >
+      </div>
+
+      <div class="grid gap-5 lg:grid-cols-2">
+        <Card class="p-6">
+          <h3 class="mb-4 text-sm font-semibold text-foreground">Información comercial</h3>
+          <dl class="grid gap-4 text-sm sm:grid-cols-2">
+            <div>
+              <dt class="text-xs text-foreground-muted">SKU</dt>
+              <dd class="mt-1 font-mono text-foreground">{product.sku}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-foreground-muted">Código original</dt>
+              <dd class="mt-1 text-foreground">{product.original_code || '—'}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-foreground-muted">Tamaño</dt>
+              <dd class="mt-1 text-foreground">{product.size || '—'}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-foreground-muted">Dimensiones</dt>
+              <dd class="mt-1 text-foreground">{product.dimensions || '—'}</dd>
+            </div>
+            <div class="sm:col-span-2">
+              <dt class="text-xs text-foreground-muted">Presentación</dt>
+              <dd class="mt-1 text-foreground">{product.presentation || '—'}</dd>
+            </div>
+          </dl>
+        </Card>
+        <Card class="p-6">
+          <h3 class="mb-4 text-sm font-semibold text-foreground">Descripción</h3>
+          <p class="min-h-24 whitespace-pre-wrap text-sm leading-relaxed text-foreground-muted">
+            {product.description || 'Este producto no tiene descripción registrada.'}
+          </p>
+        </Card>
+      </div>
+
+      <Card class="p-6">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-semibold text-foreground">Galería del producto</h3>
+            <p class="mt-1 text-xs text-foreground-muted">
+              {product.images.length
+                ? `${product.images.length} imagen(es) registrada(s)`
+                : 'No hay imágenes registradas.'}
+            </p>
+          </div>
+          {#if cover}<Badge variant="primary">Portada definida</Badge>{/if}
+        </div>
+        {#if product.images.length}
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {#each product.images as image (image.id)}
+              <figure class="overflow-hidden rounded-xl border border-border bg-surface-muted">
+                <div class="aspect-square">
+                  {#if !imageErrors[image.id]}<img
+                      src={image.url}
+                      alt={image.alt_text || product.name}
+                      loading="lazy"
+                      referrerpolicy="no-referrer"
+                      class="h-full w-full object-cover"
+                      onerror={() => handleImageError(image.id)}
+                    />{:else}<div
+                      class="flex h-full items-center justify-center p-3 text-center text-xs text-foreground-subtle"
+                    >
+                      No se pudo cargar la imagen
+                    </div>{/if}
+                </div>
+                <figcaption
+                  class="flex items-center justify-between gap-2 px-2.5 py-2 text-[11px] text-foreground-muted"
+                >
+                  <span class="truncate">{image.alt_text || `Imagen ${image.position + 1}`}</span
+                  >{#if image.is_cover}<span class="shrink-0 text-primary">Portada</span>{/if}
+                </figcaption>
+              </figure>
+            {/each}
+          </div>
+        {:else}
+          <div
+            class="rounded-xl border border-dashed border-border p-10 text-center text-sm text-foreground-muted"
+          >
+            Agrega una portada o imágenes adicionales desde Editar producto.
+          </div>
+        {/if}
+      </Card>
+    </div>
+  {/if}
+</div>
