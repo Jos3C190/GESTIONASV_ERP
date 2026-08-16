@@ -159,6 +159,13 @@ immediately AES-GCM encrypted with the deployment key, and leave the API as
 masked last-four projections. The supplier list deliberately projects no bank
 data and the detailed response is permission-filtered.
 
+Product physical measurements in revision `0034` are deliberately independent
+from the commercial unit catalogue. The domain owns a small fixed set of SI
+and imperial dimension/weight codes, validates them again at the API and
+database boundaries, and computes volume in m³ only when length, width and
+height are all present. This keeps purchase/sale units configurable without
+making physical dimensions ambiguous or silently mixing business concepts.
+
 ### ADR-004 — No FOUC for theme
 **Decision:** Theme is applied by an inline blocking script in `app.html`
 before Svelte hydrates. **Rationale:** avoids the dark-mode flash. The script

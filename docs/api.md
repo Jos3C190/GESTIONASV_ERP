@@ -74,6 +74,21 @@
 | `PATCH` | `/api/v1/departments/{id}` | `departments:manage` | Update department |
 | `DELETE` | `/api/v1/departments/{id}` | `departments:manage` | Delete department (if empty) |
 
+### Products and measurements (require_permission)
+
+`POST` and `PUT /api/v1/catalog/products` accept structured physical
+measurements: `dimension_length`, `dimension_width`, `dimension_height`,
+`dimension_unit`, `weight` and `weight_unit`. Dimension units are fixed to
+`mm`, `cm`, `m`, `in`, `ft`; weight units are fixed to `mg`, `g`, `kg`, `t`,
+`oz`, `lb`. They are independent of the configurable purchase/sale `units`
+catalogue. `size` remains free text. `dimensions` is response-only legacy
+compatibility and is not a writable field.
+
+The product response includes `dimension_summary`, `volume` and `volume_unit`.
+Volume is read-only, expressed in m³, and is `null` until all three dimensions
+are present. Omitting measurement fields on update preserves them; sending
+`null` clears the corresponding measurement.
+
 ### Suppliers and contacts (require_permission)
 | Method | Path | Permission | Description |
 |--------|------|------------|-------------|

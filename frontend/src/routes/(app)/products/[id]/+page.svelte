@@ -93,7 +93,7 @@
       <Button
         variant="secondary"
         size="sm"
-        onclick={() => goto(`/products/${product.id_product}/edit`)}
+        onclick={() => product && goto(`/products/${product.id_product}/edit`)}
       >
         <svg
           width="14"
@@ -250,8 +250,28 @@
             </div>
             <div>
               <dt class="text-xs text-foreground-muted">Dimensiones</dt>
-              <dd class="mt-1 text-foreground">{product.dimensions || '—'}</dd>
+              <dd class="mt-1 text-foreground">{product.dimension_summary || '—'}</dd>
             </div>
+            <div>
+              <dt class="text-xs text-foreground-muted">Peso</dt>
+              <dd class="mt-1 text-foreground">
+                {product.weight != null ? `${product.weight} ${product.weight_unit ?? ''}` : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs text-foreground-muted">Volumen</dt>
+              <dd class="mt-1 text-foreground">
+                {product.volume != null
+                  ? `${product.volume} ${product.volume_unit ?? 'm³'}`
+                  : 'No calculable'}
+              </dd>
+            </div>
+            {#if product.dimensions_legacy}
+              <div class="sm:col-span-2">
+                <dt class="text-xs text-foreground-muted">Dimensión anterior</dt>
+                <dd class="mt-1 text-foreground-muted">{product.dimensions_legacy}</dd>
+              </div>
+            {/if}
             <div class="sm:col-span-2">
               <dt class="text-xs text-foreground-muted">Presentación</dt>
               <dd class="mt-1 text-foreground">{product.presentation || '—'}</dd>

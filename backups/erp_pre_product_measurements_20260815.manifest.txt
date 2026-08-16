@@ -1,0 +1,24 @@
+ERP database backup manifest
+Created before product measurement normalization (revision 0034).
+
+Source schema revision: 0033
+Products restored: 2
+Commercial units restored: 11
+
+Native custom dump:
+  file: erp_pre_product_measurements_20260815.dump
+  bytes: 280801
+  sha256: 68DDA1C4A46F0C6CE9246E946CFD6157DEF2A4F2A0A4EBF0858213A56D2D9897
+
+Verification:
+  The dump was restored with pg_restore into isolated scratch databases
+  erp_product_measurements_20260815 and erp_product_measurements_20260815_b.
+  Revision 0033, product count and unit count were verified before migration.
+  Scratch upgrade 0033->0034 created all measurement columns and checks;
+  valid/invalid measurement probes, valid and ambiguous legacy backfill, and
+  upgrade/downgrade cycles were verified. Temporary databases were dropped.
+
+Rollback:
+  Restore the custom dump into an isolated database, stop application writes,
+  and follow the documented Alembic rollback procedure before replacing the
+  active database. The dump is retained locally and was not pushed.

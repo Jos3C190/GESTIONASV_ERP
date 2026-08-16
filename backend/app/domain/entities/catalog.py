@@ -4,8 +4,10 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 
 from app.domain.entities.product_image import ProductImage
+from app.domain.product_measurements import calculate_volume, format_dimension_summary
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +81,13 @@ class Product:
     internal_code: str | None = None
     size: str | None = None
     dimensions: str | None = None
+    dimensions_legacy: str | None = None
+    dimension_length: Decimal | None = None
+    dimension_width: Decimal | None = None
+    dimension_height: Decimal | None = None
+    dimension_unit: str | None = None
+    weight: Decimal | None = None
+    weight_unit: str | None = None
     description: str | None = None
     presentation: str | None = None
     is_active: bool = True
@@ -87,3 +96,25 @@ class Product:
     cover_image: ProductImage | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+    @property
+    def dimension_summary(self) -> str | None:
+        return format_dimension_summary(
+            self.dimension_length,
+            self.dimension_width,
+            self.dimension_height,
+            self.dimension_unit,
+        ) or self.dimensions_legacy or self.dimensions
+
+    @property
+    def volume(self) -> Decimal | None:
+        return calculate_volume(
+            self.dimension_length,
+            self.dimension_width,
+            self.dimension_height,
+            self.dimension_unit,
+        )
+
+    @property
+    def volume_unit(self) -> str | None:
+        return "m³" if self.volume is not None else None

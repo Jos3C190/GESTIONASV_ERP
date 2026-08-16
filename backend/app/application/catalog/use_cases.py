@@ -11,6 +11,7 @@ from app.domain.entities.product_image import (
     normalize_product_image_drafts,
 )
 from app.domain.ports.catalog_repository import CatalogRepository
+from app.domain.product_measurements import validate_measurements
 
 
 class CatalogUseCases:
@@ -203,7 +204,12 @@ class CatalogUseCases:
         original_code: str | None = None,
         internal_code: str | None = None,
         size: str | None = None,
-        dimensions: str | None = None,
+        dimension_length: object = None,
+        dimension_width: object = None,
+        dimension_height: object = None,
+        dimension_unit: str | None = None,
+        weight: object = None,
+        weight_unit: str | None = None,
         description: str | None = None,
         presentation: str | None = None,
         images: list[ProductImageDraft] | None = None,
@@ -233,6 +239,18 @@ class CatalogUseCases:
         if not unit_s:
             raise NotFoundError("Unidad de venta no encontrada", code="sale_unit_not_found")
 
+        try:
+            length, width, height, product_weight = validate_measurements(
+                dimension_length=dimension_length,
+                dimension_width=dimension_width,
+                dimension_height=dimension_height,
+                dimension_unit=dimension_unit,
+                weight=weight,
+                weight_unit=weight_unit,
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="product_measurements_invalid") from exc
+
         normalized_images = self._normalize_images(images)
         return await self._repo.create_product(
             company_id,
@@ -245,7 +263,12 @@ class CatalogUseCases:
             original_code=original_code,
             internal_code=internal_code,
             size=size,
-            dimensions=dimensions,
+            dimension_length=length,
+            dimension_width=width,
+            dimension_height=height,
+            dimension_unit=dimension_unit,
+            weight=product_weight,
+            weight_unit=weight_unit,
             description=description,
             presentation=presentation,
             images=normalized_images,
@@ -280,6 +303,8 @@ class CatalogUseCases:
             if duplicate and duplicate.id != product_id:
                 raise ConflictError("El SKU ya está registrado en esta empresa.", code="sku_already_exists")
 
+        changes = self._validate_measurement_changes(current, changes)
+
         repository_changes = (
             {**changes, "images": normalized_images} if images_provided else changes
         )
@@ -287,6 +312,47 @@ class CatalogUseCases:
         if not product:
             raise NotFoundError("Producto no encontrado", code="product_not_found")
         return product
+
+    @staticmethod
+    def _validate_measurement_changes(current: Product, changes: dict[str, object]) -> dict[str, object]:
+        measurement_fields = {
+            "dimension_length",
+            "dimension_width",
+            "dimension_height",
+            "dimension_unit",
+            "weight",
+            "weight_unit",
+        }
+        if not measurement_fields.intersection(changes):
+            return changes
+        if changes.get("weight", object()) is None and "weight_unit" not in changes:
+            changes["weight_unit"] = None
+        dimension_names = ("dimension_length", "dimension_width", "dimension_height")
+        if all(changes.get(field, object()) is None for field in dimension_names) and "dimension_unit" not in changes:
+            changes["dimension_unit"] = None
+        effective = {
+            field: changes[field] if field in changes else getattr(current, field)
+            for field in measurement_fields
+        }
+        try:
+            length, width, height, product_weight = validate_measurements(**effective)
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="product_measurements_invalid") from exc
+        # Explicitly clearing a measurement also clears its paired unit. This
+        # keeps PATCH semantics ergonomic while preserving strict DB checks.
+        if product_weight is None and "weight_unit" not in changes:
+            changes["weight_unit"] = None
+        if not any(value is not None for value in (length, width, height)) and "dimension_unit" not in changes:
+            changes["dimension_unit"] = None
+        for field, value in (
+            ("dimension_length", length),
+            ("dimension_width", width),
+            ("dimension_height", height),
+            ("weight", product_weight),
+        ):
+            if field in changes:
+                changes[field] = value
+        return changes
 
     @staticmethod
     def _extract_images(changes: dict[str, object]) -> tuple[bool, list[ProductImageDraft] | None]:

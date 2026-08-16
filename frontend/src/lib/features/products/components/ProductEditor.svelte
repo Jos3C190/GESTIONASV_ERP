@@ -12,6 +12,13 @@
   import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
   import EditorSectionNav from '$lib/components/editor/EditorSectionNav.svelte';
   import ProductImagesEditor from './ProductImagesEditor.svelte';
+  import type { DimensionUnit, WeightUnit } from '$lib/features/products/measurements';
+  import {
+    calculateProductVolume,
+    DIMENSION_UNITS,
+    formatProductDimensions,
+    WEIGHT_UNITS
+  } from '$lib/features/products/measurements';
 
   interface Props {
     mode: 'create' | 'edit';
@@ -28,7 +35,12 @@
     original_code: string;
     internal_code: string;
     size: string;
-    dimensions: string;
+    dimension_length: string;
+    dimension_width: string;
+    dimension_height: string;
+    dimension_unit: DimensionUnit;
+    weight: string;
+    weight_unit: WeightUnit;
     presentation: string;
     description: string;
     is_active: boolean;
@@ -46,7 +58,12 @@
     original_code: '',
     internal_code: '',
     size: '',
-    dimensions: '',
+    dimension_length: '',
+    dimension_width: '',
+    dimension_height: '',
+    dimension_unit: 'cm',
+    weight: '',
+    weight_unit: 'kg',
     presentation: '',
     description: '',
     is_active: true,
@@ -110,6 +127,27 @@
   const unitOptions = $derived(
     units.map((item) => ({ value: String(item.id_unit), label: `${item.name} (${item.symbol})` }))
   );
+  const dimensionOptions = DIMENSION_UNITS.map((item) => ({
+    value: item.value,
+    label: item.label
+  }));
+  const weightOptions = WEIGHT_UNITS.map((item) => ({ value: item.value, label: item.label }));
+  const dimensionSummary = $derived(
+    formatProductDimensions(
+      form.dimension_length ? Number(form.dimension_length) : null,
+      form.dimension_width ? Number(form.dimension_width) : null,
+      form.dimension_height ? Number(form.dimension_height) : null,
+      form.dimension_unit
+    )
+  );
+  const volume = $derived(
+    calculateProductVolume(
+      form.dimension_length ? Number(form.dimension_length) : null,
+      form.dimension_width ? Number(form.dimension_width) : null,
+      form.dimension_height ? Number(form.dimension_height) : null,
+      form.dimension_unit
+    )
+  );
 
   function fromProduct(product: Product) {
     form = {
@@ -123,7 +161,12 @@
       original_code: product.original_code ?? '',
       internal_code: product.internal_code ?? '',
       size: product.size ?? '',
-      dimensions: product.dimensions ?? '',
+      dimension_length: product.dimension_length != null ? String(product.dimension_length) : '',
+      dimension_width: product.dimension_width != null ? String(product.dimension_width) : '',
+      dimension_height: product.dimension_height != null ? String(product.dimension_height) : '',
+      dimension_unit: product.dimension_unit ?? 'cm',
+      weight: product.weight != null ? String(product.weight) : '',
+      weight_unit: product.weight_unit ?? 'kg',
       presentation: product.presentation ?? '',
       description: product.description ?? '',
       is_active: product.is_active,
@@ -200,11 +243,34 @@
     if (!form.category_id) next.category_id = 'Seleccione una categoría.';
     if (!form.purchase_unit) next.purchase_unit = 'Seleccione la unidad de compra.';
     if (!form.sale_unit) next.sale_unit = 'Seleccione la unidad de venta.';
+    const dimensionValues = [form.dimension_length, form.dimension_width, form.dimension_height];
+    if (
+      dimensionValues.some(
+        (value) => value !== '' && (!Number.isFinite(Number(value)) || Number(value) < 0)
+      )
+    ) {
+      next.dimensions = 'Las dimensiones deben ser números no negativos.';
+    }
+    if (dimensionValues.some(Boolean) && !form.dimension_unit) {
+      next.dimensions = 'Seleccione la unidad de dimensión.';
+    }
+    if (form.weight !== '' && (!Number.isFinite(Number(form.weight)) || Number(form.weight) < 0)) {
+      next.weight = 'El peso debe ser un número no negativo.';
+    }
+    if (form.weight !== '' && !form.weight_unit) next.weight = 'Seleccione la unidad de peso.';
     if (!galleryValid)
       next.gallery = 'Revise las imágenes: URL HTTPS válida, asset cargado y una portada.';
     errors = next;
     if (Object.keys(next).length) {
-      scrollToSection(next.gallery ? 'gallery' : next.category_id ? 'classification' : 'general');
+      scrollToSection(
+        next.gallery
+          ? 'gallery'
+          : next.dimensions || next.weight
+            ? 'identifiers'
+            : next.category_id
+              ? 'classification'
+              : 'general'
+      );
       return false;
     }
     return true;
@@ -221,7 +287,15 @@
       original_code: form.original_code.trim(),
       internal_code: form.internal_code.trim(),
       size: form.size.trim(),
-      dimensions: form.dimensions.trim(),
+      dimension_length: form.dimension_length === '' ? null : Number(form.dimension_length),
+      dimension_width: form.dimension_width === '' ? null : Number(form.dimension_width),
+      dimension_height: form.dimension_height === '' ? null : Number(form.dimension_height),
+      dimension_unit:
+        form.dimension_length || form.dimension_width || form.dimension_height
+          ? form.dimension_unit
+          : null,
+      weight: form.weight === '' ? null : Number(form.weight),
+      weight_unit: form.weight === '' ? null : form.weight_unit,
       presentation: form.presentation.trim(),
       description: form.description.trim(),
       ...(mode === 'edit' ? { is_active: form.is_active } : {}),
@@ -475,10 +549,56 @@
               placeholder="Ej. Mediano"
             />
             <FormField
-              id="product-dimensions"
-              label="Dimensiones"
-              bind:value={form.dimensions}
-              placeholder="Ej. 20 × 30 cm"
+              id="product-dimension-length"
+              label="Largo"
+              type="number"
+              min="0"
+              step="0.001"
+              bind:value={form.dimension_length}
+              error={errors.dimensions}
+              placeholder="Ej. 20"
+            />
+            <FormField
+              id="product-dimension-width"
+              label="Ancho"
+              type="number"
+              min="0"
+              step="0.001"
+              bind:value={form.dimension_width}
+              placeholder="Ej. 30"
+            />
+            <FormField
+              id="product-dimension-height"
+              label="Alto"
+              type="number"
+              min="0"
+              step="0.001"
+              bind:value={form.dimension_height}
+              placeholder="Ej. 10"
+            />
+            <SmartSelect
+              id="product-dimension-unit"
+              label="Unidad de dimensión"
+              bind:value={form.dimension_unit}
+              error={errors.dimensions}
+              options={dimensionOptions}
+            />
+            <FormField
+              id="product-weight"
+              label="Peso"
+              type="number"
+              min="0"
+              step="0.001"
+              bind:value={form.weight}
+              error={errors.weight}
+              placeholder="Ej. 2.5"
+            />
+            <SmartSelect
+              id="product-weight-unit"
+              label="Unidad de peso"
+              bind:value={form.weight_unit}
+              error={errors.weight}
+              options={weightOptions}
             />
             <FormField
               id="product-presentation"
@@ -496,6 +616,25 @@
                 /> Producto activo</label
               >
             {/if}
+            <div
+              class="rounded-lg border border-border bg-surface-muted p-3 text-sm sm:col-span-2 lg:col-span-3"
+            >
+              <div class="flex flex-wrap gap-x-8 gap-y-2">
+                <div>
+                  <span class="text-foreground-muted">Resumen dimensional</span>
+                  <p class="font-medium text-foreground">{dimensionSummary ?? 'No indicado'}</p>
+                </div>
+                <div>
+                  <span class="text-foreground-muted">Volumen</span>
+                  <p class="font-medium text-foreground">
+                    {volume != null ? `${volume.toFixed(6)} m³` : 'No calculable'}
+                  </p>
+                </div>
+              </div>
+              <p class="mt-2 text-xs text-foreground-muted">
+                El volumen se calcula automáticamente cuando se completan largo, ancho y alto.
+              </p>
+            </div>
             <div class="sm:col-span-2 lg:col-span-3">
               <label
                 for="product-description"

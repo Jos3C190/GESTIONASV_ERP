@@ -61,6 +61,16 @@ export interface Product {
   internal_code?: string | null;
   size?: string | null;
   dimensions?: string | null;
+  dimensions_legacy?: string | null;
+  dimension_length?: number | null;
+  dimension_width?: number | null;
+  dimension_height?: number | null;
+  dimension_unit?: 'mm' | 'cm' | 'm' | 'in' | 'ft' | null;
+  weight?: number | null;
+  weight_unit?: 'mg' | 'g' | 'kg' | 't' | 'oz' | 'lb' | null;
+  dimension_summary?: string | null;
+  volume?: number | null;
+  volume_unit?: string | null;
   description?: string | null;
   presentation?: string | null;
   is_active: boolean;

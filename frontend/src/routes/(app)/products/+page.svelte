@@ -383,6 +383,10 @@
                         >{#if product.image_count > 1}<span
                             class="rounded-full bg-surface-muted px-1.5 py-0.5"
                             >+{product.image_count - 1}</span
+                          >{/if}{#if product.dimension_summary}<span class="truncate"
+                            >{product.dimension_summary}</span
+                          >{/if}{#if product.weight != null}<span
+                            >{product.weight} {product.weight_unit}</span
                           >{/if}
                       </div>
                     </div>

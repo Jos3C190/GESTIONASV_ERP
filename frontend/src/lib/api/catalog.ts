@@ -179,7 +179,12 @@ export const catalogApi = {
     original_code?: string;
     internal_code?: string;
     size?: string;
-    dimensions?: string;
+    dimension_length?: number | null;
+    dimension_width?: number | null;
+    dimension_height?: number | null;
+    dimension_unit?: 'mm' | 'cm' | 'm' | 'in' | 'ft' | null;
+    weight?: number | null;
+    weight_unit?: 'mg' | 'g' | 'kg' | 't' | 'oz' | 'lb' | null;
     description?: string;
     presentation?: string;
     images?: ProductImageDraft[];
@@ -201,7 +206,12 @@ export const catalogApi = {
       original_code: string;
       internal_code: string;
       size: string;
-      dimensions: string;
+      dimension_length: number | null;
+      dimension_width: number | null;
+      dimension_height: number | null;
+      dimension_unit: 'mm' | 'cm' | 'm' | 'in' | 'ft' | null;
+      weight: number | null;
+      weight_unit: 'mg' | 'g' | 'kg' | 't' | 'oz' | 'lb' | null;
       description: string;
       presentation: string;
       is_active: boolean;

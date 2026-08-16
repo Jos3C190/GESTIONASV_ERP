@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     func,
@@ -223,6 +226,13 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     size: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
     dimensions: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
+    dimensions_legacy: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    dimension_length: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    dimension_width: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    dimension_height: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    dimension_unit: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    weight: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    weight_unit: Mapped[str | None] = mapped_column(String(4), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     presentation: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
     purchase_unit: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
@@ -239,6 +249,38 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
         ),
         Index("ix_products_company_active_name", "company_id", "is_active", "name"),
         Index("ix_products_company_deleted_at", "company_id", "deleted_at"),
+        CheckConstraint(
+            "dimension_length IS NULL OR dimension_length >= 0",
+            name="ck_products_dimension_length_nonnegative",
+        ),
+        CheckConstraint(
+            "dimension_width IS NULL OR dimension_width >= 0",
+            name="ck_products_dimension_width_nonnegative",
+        ),
+        CheckConstraint(
+            "dimension_height IS NULL OR dimension_height >= 0",
+            name="ck_products_dimension_height_nonnegative",
+        ),
+        CheckConstraint(
+            "weight IS NULL OR weight >= 0",
+            name="ck_products_weight_nonnegative",
+        ),
+        CheckConstraint(
+            "dimension_unit IS NULL OR dimension_unit IN ('mm', 'cm', 'm', 'in', 'ft')",
+            name="ck_products_dimension_unit",
+        ),
+        CheckConstraint(
+            "weight_unit IS NULL OR weight_unit IN ('mg', 'g', 'kg', 't', 'oz', 'lb')",
+            name="ck_products_weight_unit",
+        ),
+        CheckConstraint(
+            "((dimension_length IS NULL AND dimension_width IS NULL AND dimension_height IS NULL) = (dimension_unit IS NULL))",
+            name="ck_products_dimension_unit_pair",
+        ),
+        CheckConstraint(
+            "((weight IS NULL) = (weight_unit IS NULL))",
+            name="ck_products_weight_unit_pair",
+        ),
         ForeignKeyConstraint(
             ["company_id", "purchase_unit"],
             ["company_units.company_id", "company_units.unit_id"],

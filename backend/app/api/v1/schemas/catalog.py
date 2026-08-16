@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.api.v1.schemas.common import ORMOut
+
+DimensionUnit = Literal["mm", "cm", "m", "in", "ft"]
+WeightUnit = Literal["mg", "g", "kg", "t", "oz", "lb"]
 
 
 # --- Country ---
@@ -157,6 +161,8 @@ class ProductImageResponse(ORMOut):
 
 
 class ProductCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
     category_id: int = Field(..., alias="id_category")
     sub_category_id: int | None = Field(None, alias="id_sub_category")
     sku: str = Field(..., min_length=2, max_length=100)
@@ -165,14 +171,32 @@ class ProductCreate(BaseModel):
     sale_unit_id: int = Field(..., alias="sale_unit")
     original_code: str | None = None
     internal_code: str | None = None
-    size: str | None = None
-    dimensions: str | None = None
+    size: str | None = Field(None, max_length=50)
+    dimension_length: Decimal | None = Field(None, ge=0, max_digits=12, decimal_places=3)
+    dimension_width: Decimal | None = Field(None, ge=0, max_digits=12, decimal_places=3)
+    dimension_height: Decimal | None = Field(None, ge=0, max_digits=12, decimal_places=3)
+    dimension_unit: DimensionUnit | None = None
+    weight: Decimal | None = Field(None, ge=0, max_digits=12, decimal_places=3)
+    weight_unit: WeightUnit | None = None
     description: str | None = None
     presentation: str | None = None
     images: list[ProductImageInput] | None = Field(None, max_length=20)
 
+    @model_validator(mode="after")
+    def validate_measurement_pairs(self) -> ProductCreate:
+        has_dimensions = any(
+            value is not None for value in (self.dimension_length, self.dimension_width, self.dimension_height)
+        )
+        if has_dimensions != (self.dimension_unit is not None):
+            raise ValueError("Las dimensiones requieren una unidad y no se permite unidad sin medidas.")
+        if (self.weight is None) != (self.weight_unit is None):
+            raise ValueError("El peso requiere una unidad y no se permite unidad sin peso.")
+        return self
+
 
 class ProductUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
     category_id: int | None = Field(None, alias="id_category")
     sub_category_id: int | None = Field(None, alias="id_sub_category")
     sku: str | None = Field(None, min_length=2, max_length=100)
@@ -181,8 +205,13 @@ class ProductUpdate(BaseModel):
     sale_unit_id: int | None = Field(None, alias="sale_unit")
     original_code: str | None = None
     internal_code: str | None = None
-    size: str | None = None
-    dimensions: str | None = None
+    size: str | None = Field(None, max_length=50)
+    dimension_length: Decimal | None = Field(None, ge=0, max_digits=12, decimal_places=3)
+    dimension_width: Decimal | None = Field(None, ge=0, max_digits=12, decimal_places=3)
+    dimension_height: Decimal | None = Field(None, ge=0, max_digits=12, decimal_places=3)
+    dimension_unit: DimensionUnit | None = None
+    weight: Decimal | None = Field(None, ge=0, max_digits=12, decimal_places=3)
+    weight_unit: WeightUnit | None = None
     description: str | None = None
     presentation: str | None = None
     is_active: bool | None = None
@@ -203,6 +232,16 @@ class ProductResponse(ORMOut):
     internal_code: str | None = None
     size: str | None = None
     dimensions: str | None = None
+    dimensions_legacy: str | None = None
+    dimension_length: Decimal | None = None
+    dimension_width: Decimal | None = None
+    dimension_height: Decimal | None = None
+    dimension_unit: DimensionUnit | None = None
+    weight: Decimal | None = None
+    weight_unit: WeightUnit | None = None
+    dimension_summary: str | None = None
+    volume: Decimal | None = None
+    volume_unit: str | None = None
     description: str | None = None
     presentation: str | None = None
     is_active: bool

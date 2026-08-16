@@ -246,3 +246,20 @@ digits. The encryption key is supplied by `SUPPLIER_DATA_ENCRYPTION_KEY` from
 the deployment secret manager; APIs never return or audit full account numbers,
 IBANs, ciphertext or keys. The 0033 downgrade refuses to run while supplier
 master data, addresses, banking records or custom catalog rows exist.
+
+## 10. Product measurements (revision 0034)
+
+Revision `0034` normalizes physical product measurements without changing the
+commercial `units` catalogue used by purchase and sale units. Products now
+store optional `dimension_length`, `dimension_width`, `dimension_height`,
+`dimension_unit`, `weight` and `weight_unit` values. Dimension units are the
+fixed codes `mm`, `cm`, `m`, `in` and `ft`; weight units are `mg`, `g`, `kg`,
+`t`, `oz` and `lb`. PostgreSQL checks reject negative values, unsupported
+codes, and measurements without their paired unit.
+
+The former free-text `dimensions` column remains for API compatibility. During
+the migration, unambiguous strings such as `20 x 30 x 10 cm` are backfilled
+into structured columns; ambiguous values remain in `dimensions_legacy` and
+are never discarded. New writes use only structured fields. Volume is derived
+at read time in cubic metres from all three dimensions and is never stored as
+a user-editable value.
