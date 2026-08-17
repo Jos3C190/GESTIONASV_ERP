@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 from urllib.parse import urlparse
@@ -14,6 +14,10 @@ from app.api.v1.schemas.common import ORMOut
 
 DimensionUnit = Literal["mm", "cm", "m", "in", "ft"]
 WeightUnit = Literal["mg", "g", "kg", "t", "oz", "lb"]
+ProductKind = Literal["goods", "service"]
+ProductLifecycleStatus = Literal["draft", "active", "blocked", "discontinued", "retired"]
+StorageCondition = Literal["ambient", "cool", "refrigerated", "frozen", "dry", "other"]
+IdentifierType = Literal["ean", "upc", "gtin", "isbn", "manufacturer", "internal", "other"]
 
 
 # --- Country ---
@@ -180,6 +184,30 @@ class ProductCreate(BaseModel):
     weight_unit: WeightUnit | None = None
     description: str | None = None
     presentation: str | None = None
+    product_kind: ProductKind = "goods"
+    lifecycle_status: ProductLifecycleStatus = "active"
+    can_purchase: bool = True
+    can_sell: bool = True
+    sales_name: str | None = Field(None, max_length=200)
+    internal_name: str | None = Field(None, max_length=200)
+    document_name: str | None = Field(None, max_length=160)
+    sales_description: str | None = None
+    purchase_description: str | None = None
+    internal_notes: str | None = None
+    keywords: list[str] = Field(default_factory=list, max_length=20)
+    origin_country_id: int | None = None
+    brand_id: uuid.UUID | None = None
+    manufacturer_id: uuid.UUID | None = None
+    storage_condition: StorageCondition | None = None
+    storage_temperature_min_c: Decimal | None = Field(None, ge=-273.15, max_digits=6, decimal_places=2)
+    storage_temperature_max_c: Decimal | None = Field(None, ge=-273.15, max_digits=6, decimal_places=2)
+    storage_humidity_max_percent: Decimal | None = Field(None, ge=0, le=100, max_digits=5, decimal_places=2)
+    is_fragile: bool = False
+    keep_dry: bool = False
+    keep_upright: bool = False
+    stackable: bool = True
+    max_stack_height: Decimal | None = Field(None, gt=0, max_digits=8, decimal_places=2)
+    handling_notes: str | None = None
     images: list[ProductImageInput] | None = Field(None, max_length=20)
 
     @model_validator(mode="after")
@@ -191,6 +219,16 @@ class ProductCreate(BaseModel):
             raise ValueError("Las dimensiones requieren una unidad y no se permite unidad sin medidas.")
         if (self.weight is None) != (self.weight_unit is None):
             raise ValueError("El peso requiere una unidad y no se permite unidad sin peso.")
+        if (self.product_kind == "service" and any(
+            value is not None for value in (
+                self.storage_condition, self.storage_temperature_min_c,
+                self.storage_temperature_max_c, self.storage_humidity_max_percent,
+                self.max_stack_height, self.handling_notes,
+            )
+        )) or (self.product_kind == "service" and (not self.stackable or any((self.is_fragile, self.keep_dry, self.keep_upright)))):
+            raise ValueError("Los datos de almacenamiento solo aplican a bienes físicos.")
+        if self.storage_temperature_min_c is not None and self.storage_temperature_max_c is not None and self.storage_temperature_min_c > self.storage_temperature_max_c:
+            raise ValueError("La temperatura mínima no puede superar la máxima.")
         return self
 
 
@@ -216,6 +254,31 @@ class ProductUpdate(BaseModel):
     presentation: str | None = None
     is_active: bool | None = None
     images: list[ProductImageInput] | None = Field(None, max_length=20)
+    product_kind: ProductKind | None = None
+    lifecycle_status: ProductLifecycleStatus | None = None
+    can_purchase: bool | None = None
+    can_sell: bool | None = None
+    sales_name: str | None = Field(None, max_length=200)
+    internal_name: str | None = Field(None, max_length=200)
+    document_name: str | None = Field(None, max_length=160)
+    sales_description: str | None = None
+    purchase_description: str | None = None
+    internal_notes: str | None = None
+    keywords: list[str] | None = Field(None, max_length=20)
+    origin_country_id: int | None = None
+    brand_id: uuid.UUID | None = None
+    manufacturer_id: uuid.UUID | None = None
+    storage_condition: StorageCondition | None = None
+    storage_temperature_min_c: Decimal | None = Field(None, ge=-273.15, max_digits=6, decimal_places=2)
+    storage_temperature_max_c: Decimal | None = Field(None, ge=-273.15, max_digits=6, decimal_places=2)
+    storage_humidity_max_percent: Decimal | None = Field(None, ge=0, le=100, max_digits=5, decimal_places=2)
+    is_fragile: bool | None = None
+    keep_dry: bool | None = None
+    keep_upright: bool | None = None
+    stackable: bool | None = None
+    max_stack_height: Decimal | None = Field(None, gt=0, max_digits=8, decimal_places=2)
+    handling_notes: str | None = None
+    expected_updated_at: datetime | None = None
 
 
 class ProductResponse(ORMOut):
@@ -244,9 +307,175 @@ class ProductResponse(ORMOut):
     volume_unit: str | None = None
     description: str | None = None
     presentation: str | None = None
+    product_kind: ProductKind = "goods"
+    lifecycle_status: ProductLifecycleStatus = "active"
+    can_purchase: bool = True
+    can_sell: bool = True
+    sales_name: str | None = None
+    internal_name: str | None = None
+    document_name: str | None = None
+    sales_description: str | None = None
+    purchase_description: str | None = None
+    internal_notes: str | None = None
+    keywords: list[str] = Field(default_factory=list)
+    origin_country_id: int | None = None
+    brand_id: uuid.UUID | None = None
+    manufacturer_id: uuid.UUID | None = None
+    storage_condition: StorageCondition | None = None
+    storage_temperature_min_c: Decimal | None = None
+    storage_temperature_max_c: Decimal | None = None
+    storage_humidity_max_percent: Decimal | None = None
+    is_fragile: bool = False
+    keep_dry: bool = False
+    keep_upright: bool = False
+    stackable: bool = True
+    max_stack_height: Decimal | None = None
+    handling_notes: str | None = None
+    identifiers: list[ProductIdentifierResponse] = Field(default_factory=list)
+    supplier_links: list[ProductSupplierResponse] = Field(default_factory=list)
     is_active: bool
     images: list[ProductImageResponse] = Field(default_factory=list)
     image_count: int = 0
     cover_image: ProductImageResponse | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class ProductIdentifierResponse(ORMOut):
+    id: uuid.UUID
+    product_id: int
+    company_id: uuid.UUID
+    identifier_type: IdentifierType
+    value: str
+    normalized_value: str
+    is_primary: bool
+    is_active: bool
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class ProductSupplierResponse(ORMOut):
+    id: uuid.UUID
+    product_id: int
+    supplier_id: int
+    company_id: uuid.UUID
+    supplier_product_code: str | None = None
+    unit_cost: Decimal | None = None
+    currency_code: str | None = None
+    minimum_order_qty: Decimal | None = None
+    order_multiple: Decimal | None = None
+    lead_time_days: int | None = None
+    is_preferred: bool
+    status: Literal["active", "inactive"]
+    valid_from: date | None = None
+    valid_until: date | None = None
+    notes: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class ProductIdentifierCreate(BaseModel):
+    identifier_type: IdentifierType
+    value: str = Field(..., min_length=1, max_length=160)
+    is_primary: bool = False
+
+    @model_validator(mode="after")
+    def validate_identifier(self) -> ProductIdentifierCreate:
+        value = "".join(ch for ch in self.value if ch.isalnum())
+        if self.identifier_type in {"ean", "upc", "gtin"}:
+            lengths = {"ean": {8, 13, 14}, "upc": {12}, "gtin": {8, 12, 13, 14}}
+            if len(value) not in lengths[self.identifier_type] or not value.isdigit():
+                raise ValueError(f"El identificador {self.identifier_type.upper()} debe tener una longitud válida.")
+            digits = [int(item) for item in value]
+            check = digits.pop()
+            total = sum(digit * (3 if (len(digits) - index) % 2 else 1) for index, digit in enumerate(digits))
+            if (10 - total % 10) % 10 != check:
+                raise ValueError("El dígito de control del identificador no es válido.")
+        return self
+
+
+class ProductIdentifierUpdate(BaseModel):
+    identifier_type: IdentifierType | None = None
+    value: str | None = Field(None, min_length=1, max_length=160)
+    is_primary: bool | None = None
+    is_active: bool | None = None
+
+
+class ProductSupplierCreate(BaseModel):
+    supplier_id: int
+    supplier_product_code: str | None = Field(None, max_length=120)
+    unit_cost: Decimal | None = Field(None, ge=0, max_digits=14, decimal_places=4)
+    currency_code: str | None = Field(None, min_length=3, max_length=3, pattern=r"^[A-Za-z]{3}$")
+    minimum_order_qty: Decimal | None = Field(None, gt=0, max_digits=14, decimal_places=4)
+    order_multiple: Decimal | None = Field(None, gt=0, max_digits=14, decimal_places=4)
+    lead_time_days: int | None = Field(None, ge=0)
+    is_preferred: bool = False
+    status: Literal["active", "inactive"] = "active"
+    valid_from: date | None = None
+    valid_until: date | None = None
+    notes: str | None = None
+
+    @model_validator(mode="after")
+    def validate_supplier_terms(self) -> ProductSupplierCreate:
+        if self.unit_cost is not None and not self.currency_code:
+            raise ValueError("La moneda es obligatoria cuando se informa un costo.")
+        if self.valid_from and self.valid_until and self.valid_until < self.valid_from:
+            raise ValueError("La vigencia final no puede ser anterior a la inicial.")
+        if self.is_preferred and self.status != "active":
+            raise ValueError("Una relación inactiva no puede ser preferida.")
+        return self
+
+
+class ProductSupplierUpdate(ProductSupplierCreate):
+    supplier_id: int | None = None
+
+
+class ProductSupplierReplace(BaseModel):
+    """Complete supplier set submitted from the product editor."""
+
+    suppliers: list[ProductSupplierCreate] = Field(default_factory=list, max_length=100)
+
+
+class ProductBrandCreate(BaseModel):
+    code: str = Field(..., min_length=1, max_length=60)
+    name: str = Field(..., min_length=2, max_length=160)
+
+
+class ProductBrandUpdate(BaseModel):
+    code: str | None = Field(None, min_length=1, max_length=60)
+    name: str | None = Field(None, min_length=2, max_length=160)
+    is_active: bool | None = None
+
+
+class ProductBrandResponse(ORMOut):
+    id: uuid.UUID
+    company_id: uuid.UUID
+    code: str
+    name: str
+    normalized_name: str
+    is_active: bool
+
+
+class ProductManufacturerCreate(BaseModel):
+    legal_name: str = Field(..., min_length=2, max_length=240)
+    commercial_name: str | None = Field(None, max_length=200)
+    country_id: int | None = None
+    website: str | None = Field(None, max_length=2048)
+
+
+class ProductManufacturerUpdate(ProductManufacturerCreate):
+    legal_name: str | None = Field(None, min_length=2, max_length=240)
+    is_active: bool | None = None
+
+
+class ProductManufacturerResponse(ORMOut):
+    id: uuid.UUID
+    company_id: uuid.UUID
+    legal_name: str
+    commercial_name: str | None = None
+    country_id: int | None = None
+    website: str | None = None
+    is_active: bool
+
+
+ProductResponse.model_rebuild()

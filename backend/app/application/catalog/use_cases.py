@@ -11,6 +11,7 @@ from app.domain.entities.product_image import (
     normalize_product_image_drafts,
 )
 from app.domain.ports.catalog_repository import CatalogRepository
+from app.domain.product_master import normalize_keywords
 from app.domain.product_measurements import validate_measurements
 
 
@@ -212,6 +213,30 @@ class CatalogUseCases:
         weight_unit: str | None = None,
         description: str | None = None,
         presentation: str | None = None,
+        product_kind: str = "goods",
+        lifecycle_status: str = "active",
+        can_purchase: bool = True,
+        can_sell: bool = True,
+        sales_name: str | None = None,
+        internal_name: str | None = None,
+        document_name: str | None = None,
+        sales_description: str | None = None,
+        purchase_description: str | None = None,
+        internal_notes: str | None = None,
+        keywords: list[str] | None = None,
+        origin_country_id: int | None = None,
+        brand_id: uuid.UUID | None = None,
+        manufacturer_id: uuid.UUID | None = None,
+        storage_condition: str | None = None,
+        storage_temperature_min_c: object = None,
+        storage_temperature_max_c: object = None,
+        storage_humidity_max_percent: object = None,
+        is_fragile: bool = False,
+        keep_dry: bool = False,
+        keep_upright: bool = False,
+        stackable: bool = True,
+        max_stack_height: object = None,
+        handling_notes: str | None = None,
         images: list[ProductImageDraft] | None = None,
     ) -> Product:
         # Validate unique SKU
@@ -252,6 +277,15 @@ class CatalogUseCases:
             raise ValidationError(str(exc), code="product_measurements_invalid") from exc
 
         normalized_images = self._normalize_images(images)
+        try:
+            normalized_keywords = normalize_keywords(keywords)
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="product_keywords_invalid") from exc
+        if (product_kind == "service" and any(
+            value is not None for value in (storage_condition, storage_temperature_min_c, storage_temperature_max_c, storage_humidity_max_percent, max_stack_height, handling_notes)
+        )) or (product_kind == "service" and (not stackable or any((is_fragile, keep_dry, keep_upright)))):
+            raise ValidationError("Los datos de almacenamiento solo aplican a bienes físicos.", code="product_service_storage_invalid")
+        is_active = lifecycle_status in ("active",)
         return await self._repo.create_product(
             company_id,
             category_id=category_id,
@@ -271,10 +305,35 @@ class CatalogUseCases:
             weight_unit=weight_unit,
             description=description,
             presentation=presentation,
+            product_kind=product_kind,
+            lifecycle_status=lifecycle_status,
+            can_purchase=can_purchase,
+            can_sell=can_sell,
+            sales_name=sales_name,
+            internal_name=internal_name,
+            document_name=document_name,
+            sales_description=sales_description,
+            purchase_description=purchase_description,
+            internal_notes=internal_notes,
+            keywords=normalized_keywords,
+            origin_country_id=origin_country_id,
+            brand_id=brand_id,
+            manufacturer_id=manufacturer_id,
+            storage_condition=storage_condition,
+            storage_temperature_min_c=storage_temperature_min_c,
+            storage_temperature_max_c=storage_temperature_max_c,
+            storage_humidity_max_percent=storage_humidity_max_percent,
+            is_fragile=is_fragile,
+            keep_dry=keep_dry,
+            keep_upright=keep_upright,
+            stackable=stackable,
+            max_stack_height=max_stack_height,
+            handling_notes=handling_notes,
+            is_active=is_active,
             images=normalized_images,
         )
 
-    async def update_product(self, company_id: uuid.UUID, product_id: int, **changes: object) -> Product:
+    async def update_product(self, company_id: uuid.UUID, product_id: int, **changes: object) -> Product:  # noqa: C901
         changes = dict(changes)
         current = await self.get_product(company_id, product_id)
         images_provided, normalized_images = self._extract_images(changes)
@@ -304,6 +363,30 @@ class CatalogUseCases:
                 raise ConflictError("El SKU ya está registrado en esta empresa.", code="sku_already_exists")
 
         changes = self._validate_measurement_changes(current, changes)
+
+        if "keywords" in changes:
+            try:
+                changes["keywords"] = normalize_keywords(changes["keywords"])
+            except ValueError as exc:
+                raise ValidationError(str(exc), code="product_keywords_invalid") from exc
+        effective_kind = str(changes.get("product_kind", current.product_kind))
+        storage_keys = ("storage_condition", "storage_temperature_min_c", "storage_temperature_max_c", "storage_humidity_max_percent", "max_stack_height", "handling_notes", "is_fragile", "keep_dry", "keep_upright")
+        if effective_kind == "service" and (changes.get("stackable", current.stackable) is False or any(changes.get(key, getattr(current, key)) not in (None, False) for key in storage_keys)):
+            raise ValidationError("Los datos de almacenamiento solo aplican a bienes físicos.", code="product_service_storage_invalid")
+        if "lifecycle_status" in changes:
+            if current.lifecycle_status == "retired" and changes["lifecycle_status"] == "active":
+                raise ConflictError(
+                    "Un producto retirado no puede reactivarse; cree una nueva ficha.",
+                    code="product_retired_immutable",
+                )
+            changes["is_active"] = changes["lifecycle_status"] == "active"
+        elif "is_active" in changes and changes["is_active"] is not None:
+            if current.lifecycle_status == "retired" and changes["is_active"]:
+                raise ConflictError(
+                    "Un producto retirado no puede reactivarse; cree una nueva ficha.",
+                    code="product_retired_immutable",
+                )
+            changes["lifecycle_status"] = "active" if changes["is_active"] else "blocked"
 
         repository_changes = (
             {**changes, "images": normalized_images} if images_provided else changes

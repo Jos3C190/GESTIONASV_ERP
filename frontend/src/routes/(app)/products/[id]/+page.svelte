@@ -286,6 +286,127 @@
         </Card>
       </div>
 
+      <div class="grid gap-5 lg:grid-cols-2">
+        <Card class="p-6">
+          <h3 class="mb-4 text-sm font-semibold text-foreground">
+            Nombres y clasificación operativa
+          </h3>
+          <dl class="grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt class="text-xs text-foreground-muted">Nombre de venta</dt>
+              <dd class="mt-1 text-foreground">{product.sales_name || '—'}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-foreground-muted">Nombre interno</dt>
+              <dd class="mt-1 text-foreground">{product.internal_name || '—'}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-foreground-muted">Nombre para documentos</dt>
+              <dd class="mt-1 text-foreground">{product.document_name || '—'}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-foreground-muted">Tipo</dt>
+              <dd class="mt-1 text-foreground">
+                {product.product_kind === 'service' ? 'Servicio' : 'Bien físico'}
+              </dd>
+            </div>
+            <div class="sm:col-span-2">
+              <dt class="text-xs text-foreground-muted">Palabras clave</dt>
+              <dd class="mt-1 text-foreground">{product.keywords?.join(', ') || '—'}</dd>
+            </div>
+          </dl>
+        </Card>
+        <Card class="p-6">
+          <h3 class="mb-4 text-sm font-semibold text-foreground">Almacenamiento y manipulación</h3>
+          {#if product.product_kind === 'service'}
+            <p class="text-sm text-foreground-muted">No aplica a servicios.</p>
+          {:else}
+            <dl class="grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt class="text-xs text-foreground-muted">Condición</dt>
+                <dd class="mt-1 text-foreground">{product.storage_condition || '—'}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-foreground-muted">Temperatura</dt>
+                <dd class="mt-1 text-foreground">
+                  {product.storage_temperature_min_c != null ||
+                  product.storage_temperature_max_c != null
+                    ? `${product.storage_temperature_min_c ?? '—'} a ${product.storage_temperature_max_c ?? '—'} °C`
+                    : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs text-foreground-muted">Humedad máxima</dt>
+                <dd class="mt-1 text-foreground">
+                  {product.storage_humidity_max_percent != null
+                    ? `${product.storage_humidity_max_percent}%`
+                    : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs text-foreground-muted">Apilado</dt>
+                <dd class="mt-1 text-foreground">
+                  {product.stackable === false ? 'No apilable' : 'Apilable'}
+                </dd>
+              </div>
+              <div class="sm:col-span-2">
+                <dt class="text-xs text-foreground-muted">Indicaciones</dt>
+                <dd class="mt-1 whitespace-pre-wrap text-foreground-muted">
+                  {product.handling_notes || '—'}
+                </dd>
+              </div>
+            </dl>
+          {/if}
+        </Card>
+      </div>
+
+      <Card class="p-6">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-semibold text-foreground">Proveedores vinculados</h3>
+            <p class="mt-1 text-xs text-foreground-muted">Relaciones de abastecimiento actuales.</p>
+          </div>
+          {#if permissions.hasPermission('products:suppliers')}<Badge variant="primary"
+              >Gestionable desde Editar</Badge
+            >{/if}
+        </div>
+        {#if product.supplier_links?.length}
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="border-b border-border"
+                ><tr
+                  ><th class="px-3 py-2 text-left text-xs text-foreground-muted">Proveedor</th><th
+                    class="px-3 py-2 text-left text-xs text-foreground-muted">Código</th
+                  ><th class="px-3 py-2 text-left text-xs text-foreground-muted">Entrega</th><th
+                    class="px-3 py-2 text-left text-xs text-foreground-muted">Estado</th
+                  ></tr
+                ></thead
+              ><tbody class="divide-y divide-border"
+                >{#each product.supplier_links as relation (relation.id)}<tr
+                    ><td class="px-3 py-2 text-foreground"
+                      >#{relation.supplier_id}{#if relation.is_preferred}<span class="ml-2"
+                          ><Badge variant="success">Preferido</Badge></span
+                        >{/if}</td
+                    ><td class="px-3 py-2 text-foreground-muted"
+                      >{relation.supplier_product_code || '—'}</td
+                    ><td class="px-3 py-2 text-foreground-muted"
+                      >{relation.lead_time_days != null
+                        ? `${relation.lead_time_days} días`
+                        : '—'}</td
+                    ><td class="px-3 py-2 text-foreground-muted"
+                      >{relation.status === 'active' ? 'Activo' : 'Inactivo'}</td
+                    ></tr
+                  >{/each}</tbody
+              >
+            </table>
+          </div>
+        {:else}<div
+            class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-foreground-muted"
+          >
+            Todavía no hay proveedores vinculados.
+          </div>{/if}
+      </Card>
+
       <Card class="p-6">
         <div class="mb-4 flex items-center justify-between gap-3">
           <div>

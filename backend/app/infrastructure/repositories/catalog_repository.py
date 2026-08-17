@@ -10,6 +10,7 @@ from sqlalchemy.orm import noload, selectinload
 
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit
 from app.domain.entities.product_image import ProductImage, ProductImageDraft
+from app.domain.entities.product_master import ProductIdentifier, ProductSupplier
 from app.infrastructure.models.catalog import (
     CategoryModel,
     CompanyUnitModel,
@@ -20,6 +21,7 @@ from app.infrastructure.models.catalog import (
 )
 from app.infrastructure.models.media import MediaAsset
 from app.infrastructure.models.product_image import ProductImageModel
+from app.infrastructure.models.product_master import ProductIdentifierModel, ProductSupplierModel
 
 
 def _to_country(orm: CountryModel) -> Country:
@@ -97,6 +99,27 @@ def _to_product_image(orm: ProductImageModel) -> ProductImage:
     )
 
 
+def _to_product_identifier(orm: ProductIdentifierModel) -> ProductIdentifier:
+    return ProductIdentifier(
+        id=orm.id, product_id=orm.product_id, company_id=orm.company_id,
+        identifier_type=orm.identifier_type, value=orm.value,
+        normalized_value=orm.normalized_value, is_primary=orm.is_primary,
+        is_active=orm.is_active, created_at=orm.created_at, updated_at=orm.updated_at,
+    )
+
+
+def _to_product_supplier(orm: ProductSupplierModel) -> ProductSupplier:
+    return ProductSupplier(
+        id=orm.id, product_id=orm.product_id, supplier_id=orm.supplier_id,
+        company_id=orm.company_id, supplier_product_code=orm.supplier_product_code,
+        unit_cost=orm.unit_cost, currency_code=orm.currency_code,
+        minimum_order_qty=orm.minimum_order_qty, order_multiple=orm.order_multiple,
+        lead_time_days=orm.lead_time_days, is_preferred=orm.is_preferred,
+        status=orm.status, valid_from=orm.valid_from, valid_until=orm.valid_until,
+        notes=orm.notes, created_at=orm.created_at, updated_at=orm.updated_at,
+    )
+
+
 def _to_product(
     orm: ProductModel,
     *,
@@ -105,6 +128,8 @@ def _to_product(
 ) -> Product:
     loaded_images = orm.__dict__.get("images")
     images = tuple(_to_product_image(image) for image in loaded_images or [])
+    loaded_identifiers = orm.__dict__.get("identifiers")
+    loaded_suppliers = orm.__dict__.get("supplier_links")
     resolved_cover = cover_image or next((image for image in images if image.is_cover), None)
     return Product(
         id=orm.id_product,
@@ -129,6 +154,32 @@ def _to_product(
         weight_unit=orm.weight_unit,
         description=orm.description,
         presentation=orm.presentation,
+        product_kind=orm.product_kind,
+        lifecycle_status=orm.lifecycle_status,
+        can_purchase=orm.can_purchase,
+        can_sell=orm.can_sell,
+        sales_name=orm.sales_name,
+        internal_name=orm.internal_name,
+        document_name=orm.document_name,
+        sales_description=orm.sales_description,
+        purchase_description=orm.purchase_description,
+        internal_notes=orm.internal_notes,
+        keywords=tuple(orm.keywords or []),
+        origin_country_id=orm.origin_country_id,
+        brand_id=orm.brand_id,
+        manufacturer_id=orm.manufacturer_id,
+        storage_condition=orm.storage_condition,
+        storage_temperature_min_c=orm.storage_temperature_min_c,
+        storage_temperature_max_c=orm.storage_temperature_max_c,
+        storage_humidity_max_percent=orm.storage_humidity_max_percent,
+        is_fragile=orm.is_fragile,
+        keep_dry=orm.keep_dry,
+        keep_upright=orm.keep_upright,
+        stackable=orm.stackable,
+        max_stack_height=orm.max_stack_height,
+        handling_notes=orm.handling_notes,
+        identifiers=tuple(_to_product_identifier(item) for item in loaded_identifiers or []),
+        supplier_links=tuple(_to_product_supplier(item) for item in loaded_suppliers or []),
         is_active=orm.is_active,
         images=images,
         image_count=image_count if image_count is not None else len(images),
@@ -444,7 +495,7 @@ class SqlAlchemyCatalogRepository:
             .order_by(ProductModel.name)
             .offset(skip)
             .limit(limit)
-            .options(noload(ProductModel.images))
+            .options(noload(ProductModel.images), noload(ProductModel.identifiers), noload(ProductModel.supplier_links))
         )
         res = await self._session.execute(stmt)
         rows = res.all()
@@ -468,7 +519,7 @@ class SqlAlchemyCatalogRepository:
     async def get_product_by_id(self, company_id: uuid.UUID, product_id: int) -> Product | None:
         stmt = select(ProductModel).where(
             ProductModel.company_id == company_id, ProductModel.id_product == product_id
-        ).options(selectinload(ProductModel.images))
+        ).options(selectinload(ProductModel.images), selectinload(ProductModel.identifiers), selectinload(ProductModel.supplier_links))
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_product(orm) if orm else None
@@ -476,7 +527,7 @@ class SqlAlchemyCatalogRepository:
     async def get_product_by_uuid(self, company_id: uuid.UUID, prod_uuid: uuid.UUID) -> Product | None:
         stmt = select(ProductModel).where(
             ProductModel.company_id == company_id, ProductModel.uuid == prod_uuid
-        ).options(selectinload(ProductModel.images))
+        ).options(selectinload(ProductModel.images), selectinload(ProductModel.identifiers), selectinload(ProductModel.supplier_links))
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_product(orm) if orm else None
@@ -484,7 +535,7 @@ class SqlAlchemyCatalogRepository:
     async def get_product_by_sku(self, company_id: uuid.UUID, sku: str) -> Product | None:
         stmt = select(ProductModel).where(
             ProductModel.company_id == company_id, ProductModel.sku == sku
-        ).options(noload(ProductModel.images))
+        ).options(noload(ProductModel.images), noload(ProductModel.identifiers), noload(ProductModel.supplier_links))
         res = await self._session.execute(stmt)
         orm = res.scalar_one_or_none()
         return _to_product(orm) if orm else None
@@ -509,6 +560,31 @@ class SqlAlchemyCatalogRepository:
         weight_unit: str | None = None,
         description: str | None = None,
         presentation: str | None = None,
+        product_kind: str = "goods",
+        lifecycle_status: str = "active",
+        can_purchase: bool = True,
+        can_sell: bool = True,
+        sales_name: str | None = None,
+        internal_name: str | None = None,
+        document_name: str | None = None,
+        sales_description: str | None = None,
+        purchase_description: str | None = None,
+        internal_notes: str | None = None,
+        keywords: list[str] | None = None,
+        origin_country_id: int | None = None,
+        brand_id: uuid.UUID | None = None,
+        manufacturer_id: uuid.UUID | None = None,
+        storage_condition: str | None = None,
+        storage_temperature_min_c: object = None,
+        storage_temperature_max_c: object = None,
+        storage_humidity_max_percent: object = None,
+        is_fragile: bool = False,
+        keep_dry: bool = False,
+        keep_upright: bool = False,
+        stackable: bool = True,
+        max_stack_height: object = None,
+        handling_notes: str | None = None,
+        is_active: bool = True,
         images: list[ProductImageDraft] | None = None,
     ) -> Product:
         orm = ProductModel(
@@ -530,6 +606,31 @@ class SqlAlchemyCatalogRepository:
             weight_unit=weight_unit,
             description=description,
             presentation=presentation,
+            product_kind=product_kind,
+            lifecycle_status=lifecycle_status,
+            can_purchase=can_purchase,
+            can_sell=can_sell,
+            sales_name=sales_name,
+            internal_name=internal_name,
+            document_name=document_name,
+            sales_description=sales_description,
+            purchase_description=purchase_description,
+            internal_notes=internal_notes,
+            keywords=keywords or [],
+            origin_country_id=origin_country_id,
+            brand_id=brand_id,
+            manufacturer_id=manufacturer_id,
+            storage_condition=storage_condition,
+            storage_temperature_min_c=storage_temperature_min_c,
+            storage_temperature_max_c=storage_temperature_max_c,
+            storage_humidity_max_percent=storage_humidity_max_percent,
+            is_fragile=is_fragile,
+            keep_dry=keep_dry,
+            keep_upright=keep_upright,
+            stackable=stackable,
+            max_stack_height=max_stack_height,
+            handling_notes=handling_notes,
+            is_active=is_active,
         )
         self._session.add(orm)
         await self._session.flush()
@@ -541,7 +642,7 @@ class SqlAlchemyCatalogRepository:
         stmt = select(ProductModel).where(
             ProductModel.company_id == company_id, ProductModel.id_product == product_id
         )
-        res = await self._session.execute(stmt.options(selectinload(ProductModel.images)))
+        res = await self._session.execute(stmt.options(selectinload(ProductModel.images), selectinload(ProductModel.identifiers), selectinload(ProductModel.supplier_links)))
         orm = res.scalar_one_or_none()
         if not orm:
             return None
@@ -566,7 +667,7 @@ class SqlAlchemyCatalogRepository:
             select(ProductModel)
             .where(ProductModel.company_id == company_id, ProductModel.id_product == product_id)
             .execution_options(populate_existing=True)
-            .options(selectinload(ProductModel.images))
+            .options(selectinload(ProductModel.images), selectinload(ProductModel.identifiers), selectinload(ProductModel.supplier_links))
         )
         orm = result.scalar_one()
         return _to_product(orm)

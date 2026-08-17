@@ -64,6 +64,16 @@ async def _require_product_images_permission(
         raise AuthorizationError("Permiso requerido: products:images", code="forbidden")
 
 
+async def _require_product_permission(
+    session: SessionDep, current: CurrentUser, company_id: uuid.UUID, code: str
+) -> None:
+    if current.is_superuser:
+        return
+    permissions = await SqlAlchemyRoleRepository(session).get_effective_permissions_for_user(current.id, company_id)
+    if code not in {permission.code for permission in permissions}:
+        raise AuthorizationError(f"Permiso requerido: {code}", code="forbidden")
+
+
 def _image_drafts(images: list[ProductImageInput] | None) -> list[ProductImageDraft] | None:
     if images is None:
         return None
@@ -159,6 +169,30 @@ async def create_category(
 ) -> CategoryResponse:
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
+    if payload.lifecycle_status != "active" or payload.product_kind != "goods" or any(
+        value not in (None, False, "", [])
+        for value in (
+            payload.sales_name,
+            payload.internal_name,
+            payload.document_name,
+            payload.sales_description,
+            payload.purchase_description,
+            payload.internal_notes,
+            payload.keywords,
+            payload.origin_country_id,
+            payload.brand_id,
+            payload.manufacturer_id,
+            payload.storage_condition,
+            payload.storage_temperature_min_c,
+            payload.storage_temperature_max_c,
+            payload.storage_humidity_max_percent,
+            payload.max_stack_height,
+            payload.handling_notes,
+        )
+    ) or any((payload.is_fragile, payload.keep_dry, payload.keep_upright)):
+        await _require_product_permission(session, current, company_id, "products:master_data")
+    if payload.lifecycle_status != "active":
+        await _require_product_permission(session, current, company_id, "products:lifecycle")
     created = await use_cases.create_category(company_id, name=payload.name, description=payload.description)
     await audit.record(action="CREATE", user_id=current.id, company_id=company_id, resource_type="product_categories", resource_id=str(created.id), after_state={"name": created.name})
     return created
@@ -543,6 +577,30 @@ async def create_product(
         weight_unit=payload.weight_unit,
         description=payload.description,
         presentation=payload.presentation,
+        product_kind=payload.product_kind,
+        lifecycle_status=payload.lifecycle_status,
+        can_purchase=payload.can_purchase,
+        can_sell=payload.can_sell,
+        sales_name=payload.sales_name,
+        internal_name=payload.internal_name,
+        document_name=payload.document_name,
+        sales_description=payload.sales_description,
+        purchase_description=payload.purchase_description,
+        internal_notes=payload.internal_notes,
+        keywords=payload.keywords,
+        origin_country_id=payload.origin_country_id,
+        brand_id=payload.brand_id,
+        manufacturer_id=payload.manufacturer_id,
+        storage_condition=payload.storage_condition,
+        storage_temperature_min_c=payload.storage_temperature_min_c,
+        storage_temperature_max_c=payload.storage_temperature_max_c,
+        storage_humidity_max_percent=payload.storage_humidity_max_percent,
+        is_fragile=payload.is_fragile,
+        keep_dry=payload.keep_dry,
+        keep_upright=payload.keep_upright,
+        stackable=payload.stackable,
+        max_stack_height=payload.max_stack_height,
+        handling_notes=payload.handling_notes,
         images=_image_drafts(payload.images),
     )
     await audit.record(
@@ -576,6 +634,11 @@ async def update_product(
     await require_company_wide_scope(session, current, company_id)
     before = await use_cases.get_product(company_id, product_id)
     update_data = payload.model_dump(exclude_unset=True)
+    master_fields = {"product_kind", "sales_name", "internal_name", "document_name", "sales_description", "purchase_description", "internal_notes", "keywords", "origin_country_id", "brand_id", "manufacturer_id", "storage_condition", "storage_temperature_min_c", "storage_temperature_max_c", "storage_humidity_max_percent", "is_fragile", "keep_dry", "keep_upright", "stackable", "max_stack_height", "handling_notes", "can_purchase", "can_sell"}
+    if master_fields.intersection(update_data):
+        await _require_product_permission(session, current, company_id, "products:master_data")
+    if "lifecycle_status" in update_data or "is_active" in update_data:
+        await _require_product_permission(session, current, company_id, "products:lifecycle")
     if "images" in update_data:
         await _require_product_images_permission(session, current, company_id)
         update_data["images"] = _image_drafts(payload.images)

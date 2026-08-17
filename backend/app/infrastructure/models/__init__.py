@@ -38,6 +38,12 @@ from app.infrastructure.models.organization import (
     WarehouseCategory,
 )
 from app.infrastructure.models.product_image import ProductImageModel
+from app.infrastructure.models.product_master import (
+    ProductBrandModel,
+    ProductIdentifierModel,
+    ProductManufacturerModel,
+    ProductSupplierModel,
+)
 from app.infrastructure.models.rbac import (
     Permission,
     Role,
@@ -83,7 +89,11 @@ __all__: list[str] = [
     "PaymentTermsModel",
     "Permission",
     "ProductImageModel",
+    "ProductBrandModel",
+    "ProductIdentifierModel",
+    "ProductManufacturerModel",
     "ProductModel",
+    "ProductSupplierModel",
     "RefreshToken",
     "Role",
     "RolePermission",

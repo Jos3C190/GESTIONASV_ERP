@@ -3,7 +3,14 @@
   import { onMount, tick } from 'svelte';
   import { HttpError } from '$lib/api/client';
   import { catalogApi } from '$lib/api/catalog';
-  import type { Category, Product, ProductImageDraft, SubCategory, Unit } from '$lib/types/catalog';
+  import type {
+    Category,
+    Product,
+    ProductImageDraft,
+    ProductSupplierDraft,
+    SubCategory,
+    Unit
+  } from '$lib/types/catalog';
   import { company } from '$lib/stores/company.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import Button from '$lib/components/ui/Button.svelte';
@@ -12,6 +19,7 @@
   import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
   import EditorSectionNav from '$lib/components/editor/EditorSectionNav.svelte';
   import ProductImagesEditor from './ProductImagesEditor.svelte';
+  import ProductSuppliersEditor from './ProductSuppliersEditor.svelte';
   import type { DimensionUnit, WeightUnit } from '$lib/features/products/measurements';
   import {
     calculateProductVolume,
@@ -43,8 +51,30 @@
     weight_unit: WeightUnit;
     presentation: string;
     description: string;
+    product_kind: 'goods' | 'service';
+    lifecycle_status: 'draft' | 'active' | 'blocked' | 'discontinued' | 'retired';
+    can_purchase: boolean;
+    can_sell: boolean;
+    sales_name: string;
+    internal_name: string;
+    document_name: string;
+    sales_description: string;
+    purchase_description: string;
+    internal_notes: string;
+    keywords: string;
+    storage_condition: 'ambient' | 'cool' | 'refrigerated' | 'frozen' | 'dry' | 'other' | '';
+    storage_temperature_min_c: string;
+    storage_temperature_max_c: string;
+    storage_humidity_max_percent: string;
+    is_fragile: boolean;
+    keep_dry: boolean;
+    keep_upright: boolean;
+    stackable: boolean;
+    max_stack_height: string;
+    handling_notes: string;
     is_active: boolean;
     images: ProductImageDraft[];
+    supplier_links: ProductSupplierDraft[];
   };
 
   let { mode, productId }: Props = $props();
@@ -66,14 +96,39 @@
     weight_unit: 'kg',
     presentation: '',
     description: '',
+    product_kind: 'goods',
+    lifecycle_status: 'active',
+    can_purchase: true,
+    can_sell: true,
+    sales_name: '',
+    internal_name: '',
+    document_name: '',
+    sales_description: '',
+    purchase_description: '',
+    internal_notes: '',
+    keywords: '',
+    storage_condition: '',
+    storage_temperature_min_c: '',
+    storage_temperature_max_c: '',
+    storage_humidity_max_percent: '',
+    is_fragile: false,
+    keep_dry: false,
+    keep_upright: false,
+    stackable: true,
+    max_stack_height: '',
+    handling_notes: '',
     is_active: true,
-    images: []
+    images: [],
+    supplier_links: []
   });
 
   const sections = [
     ['general', 'Identidad del producto'],
     ['classification', 'Clasificación y unidades'],
     ['identifiers', 'Códigos y presentación'],
+    ['master', 'Información comercial'],
+    ['storage', 'Almacenamiento'],
+    ['suppliers', 'Proveedores'],
     ['gallery', 'Galería de imágenes'],
     ['review', 'Revisión']
   ] as const;
@@ -92,6 +147,7 @@
   let editorHeader: HTMLElement;
 
   let canManage = $derived(permissions.hasPermission('products:manage'));
+  let canEditSuppliers = $derived(permissions.hasPermission('products:suppliers'));
   let canEditImages = $derived(permissions.hasPermission('products:images'));
   let canUploadImages = $derived(permissions.hasPermission('media.upload'));
   let dirty = $derived(!loading && initialSnapshot !== JSON.stringify(form));
@@ -169,6 +225,32 @@
       weight_unit: product.weight_unit ?? 'kg',
       presentation: product.presentation ?? '',
       description: product.description ?? '',
+      product_kind: product.product_kind ?? 'goods',
+      lifecycle_status: product.lifecycle_status ?? (product.is_active ? 'active' : 'blocked'),
+      can_purchase: product.can_purchase ?? true,
+      can_sell: product.can_sell ?? true,
+      sales_name: product.sales_name ?? '',
+      internal_name: product.internal_name ?? '',
+      document_name: product.document_name ?? '',
+      sales_description: product.sales_description ?? '',
+      purchase_description: product.purchase_description ?? '',
+      internal_notes: product.internal_notes ?? '',
+      keywords: (product.keywords ?? []).join(', '),
+      storage_condition: product.storage_condition ?? '',
+      storage_temperature_min_c:
+        product.storage_temperature_min_c != null ? String(product.storage_temperature_min_c) : '',
+      storage_temperature_max_c:
+        product.storage_temperature_max_c != null ? String(product.storage_temperature_max_c) : '',
+      storage_humidity_max_percent:
+        product.storage_humidity_max_percent != null
+          ? String(product.storage_humidity_max_percent)
+          : '',
+      is_fragile: product.is_fragile ?? false,
+      keep_dry: product.keep_dry ?? false,
+      keep_upright: product.keep_upright ?? false,
+      stackable: product.stackable ?? true,
+      max_stack_height: product.max_stack_height != null ? String(product.max_stack_height) : '',
+      handling_notes: product.handling_notes ?? '',
       is_active: product.is_active,
       images: (product.images ?? []).map((image) => ({
         id: image.id,
@@ -178,6 +260,21 @@
         alt_text: image.alt_text ?? '',
         position: image.position,
         is_cover: image.is_cover
+      })),
+      supplier_links: (product.supplier_links ?? []).map((relation) => ({
+        id: relation.id,
+        supplier_id: relation.supplier_id,
+        supplier_product_code: relation.supplier_product_code ?? '',
+        unit_cost: relation.unit_cost ?? null,
+        currency_code: relation.currency_code ?? null,
+        minimum_order_qty: relation.minimum_order_qty ?? null,
+        order_multiple: relation.order_multiple ?? null,
+        lead_time_days: relation.lead_time_days ?? null,
+        is_preferred: relation.is_preferred,
+        status: relation.status,
+        valid_from: relation.valid_from ?? null,
+        valid_until: relation.valid_until ?? null,
+        notes: relation.notes ?? null
       }))
     };
   }
@@ -258,18 +355,63 @@
       next.weight = 'El peso debe ser un número no negativo.';
     }
     if (form.weight !== '' && !form.weight_unit) next.weight = 'Seleccione la unidad de peso.';
+    if (
+      form.product_kind === 'service' &&
+      (form.storage_condition ||
+        form.storage_temperature_min_c ||
+        form.storage_temperature_max_c ||
+        form.storage_humidity_max_percent ||
+        form.max_stack_height ||
+        form.is_fragile ||
+        form.keep_dry ||
+        form.keep_upright)
+    ) {
+      next.storage = 'Los datos de almacenamiento solo aplican a bienes físicos.';
+    }
+    if (
+      form.storage_temperature_min_c !== '' &&
+      form.storage_temperature_max_c !== '' &&
+      Number(form.storage_temperature_min_c) > Number(form.storage_temperature_max_c)
+    ) {
+      next.storage = 'La temperatura mínima no puede superar la máxima.';
+    }
+    if (canEditSuppliers) {
+      const supplierIds = form.supplier_links.map((relation) => relation.supplier_id);
+      if (supplierIds.some((supplierId) => !Number.isInteger(supplierId) || supplierId < 1)) {
+        next.suppliers = 'Seleccione un proveedor para cada relación.';
+      } else if (new Set(supplierIds).size !== supplierIds.length) {
+        next.suppliers = 'Un proveedor no puede repetirse en el mismo producto.';
+      } else if (form.supplier_links.filter((relation) => relation.is_preferred).length > 1) {
+        next.suppliers = 'Solo puede existir un proveedor preferido.';
+      } else if (
+        !form.can_purchase &&
+        form.supplier_links.some((relation) => relation.status === 'active')
+      ) {
+        next.suppliers = 'Un producto que no se compra no puede tener relaciones activas.';
+      } else if (
+        form.supplier_links.some(
+          (relation) => relation.unit_cost != null && !relation.currency_code
+        )
+      ) {
+        next.suppliers = 'Cada costo unitario requiere una moneda.';
+      }
+    }
     if (!galleryValid)
       next.gallery = 'Revise las imágenes: URL HTTPS válida, asset cargado y una portada.';
     errors = next;
     if (Object.keys(next).length) {
       scrollToSection(
-        next.gallery
-          ? 'gallery'
-          : next.dimensions || next.weight
-            ? 'identifiers'
-            : next.category_id
-              ? 'classification'
-              : 'general'
+        next.suppliers
+          ? 'suppliers'
+          : next.gallery
+            ? 'gallery'
+            : next.dimensions || next.weight
+              ? 'identifiers'
+              : next.storage
+                ? 'storage'
+                : next.category_id
+                  ? 'classification'
+                  : 'general'
       );
       return false;
     }
@@ -298,6 +440,33 @@
       weight_unit: form.weight === '' ? null : form.weight_unit,
       presentation: form.presentation.trim(),
       description: form.description.trim(),
+      product_kind: form.product_kind,
+      lifecycle_status: form.lifecycle_status,
+      can_purchase: form.can_purchase,
+      can_sell: form.can_sell,
+      sales_name: form.sales_name.trim(),
+      internal_name: form.internal_name.trim(),
+      document_name: form.document_name.trim(),
+      sales_description: form.sales_description.trim(),
+      purchase_description: form.purchase_description.trim(),
+      internal_notes: form.internal_notes.trim(),
+      keywords: form.keywords
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+      storage_condition: form.storage_condition || null,
+      storage_temperature_min_c:
+        form.storage_temperature_min_c === '' ? null : Number(form.storage_temperature_min_c),
+      storage_temperature_max_c:
+        form.storage_temperature_max_c === '' ? null : Number(form.storage_temperature_max_c),
+      storage_humidity_max_percent:
+        form.storage_humidity_max_percent === '' ? null : Number(form.storage_humidity_max_percent),
+      is_fragile: form.is_fragile,
+      keep_dry: form.keep_dry,
+      keep_upright: form.keep_upright,
+      stackable: form.stackable,
+      max_stack_height: form.max_stack_height === '' ? null : Number(form.max_stack_height),
+      handling_notes: form.handling_notes.trim(),
       ...(mode === 'edit' ? { is_active: form.is_active } : {}),
       ...(canEditImages ? { images: form.images.filter((image) => image.url.trim()) } : {})
     };
@@ -315,10 +484,16 @@
     try {
       if (mode === 'edit' && productId) {
         await catalogApi.updateProduct(productId, payload());
+        if (canEditSuppliers) {
+          await catalogApi.replaceProductSuppliers(productId, form.supplier_links);
+        }
         initialSnapshot = JSON.stringify(form);
         await goto(`/products/${productId}`);
       } else {
         const created = await catalogApi.createProduct(payload());
+        if (canEditSuppliers && form.supplier_links.length) {
+          await catalogApi.replaceProductSuppliers(created.id_product, form.supplier_links);
+        }
         await goto(`/products/${created.id_product}`);
       }
     } catch (err: unknown) {
@@ -650,6 +825,251 @@
               ></textarea>
             </div>
           </div>
+        </Card>
+
+        <Card id="master" class="scroll-mt-24 p-6">
+          <h2 class="mb-1 text-base font-semibold">Información comercial</h2>
+          <p class="mb-5 text-sm text-foreground-muted">
+            Nombres y descripciones adaptados a cada operación del ERP.
+          </p>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <FormField
+              id="product-sales-name"
+              label="Nombre de venta"
+              bind:value={form.sales_name}
+              placeholder="Nombre que verá el cliente"
+            />
+            <FormField
+              id="product-internal-name"
+              label="Nombre interno"
+              bind:value={form.internal_name}
+              placeholder="Referencia operativa"
+            />
+            <FormField
+              id="product-document-name"
+              label="Nombre para documentos"
+              bind:value={form.document_name}
+              placeholder="Nombre corto para facturas"
+            />
+            <FormField
+              id="product-keywords"
+              label="Palabras clave"
+              bind:value={form.keywords}
+              placeholder="harina, trigo, repostería"
+            />
+            <label class="flex items-center gap-2 text-sm font-medium text-foreground"
+              ><input
+                type="checkbox"
+                bind:checked={form.can_purchase}
+                class="rounded border-border text-primary"
+              /> Se puede comprar</label
+            >
+            <label class="flex items-center gap-2 text-sm font-medium text-foreground"
+              ><input
+                type="checkbox"
+                bind:checked={form.can_sell}
+                class="rounded border-border text-primary"
+              /> Se puede vender</label
+            >
+            <SmartSelect
+              id="product-kind"
+              label="Tipo de producto"
+              bind:value={form.product_kind}
+              options={[
+                { value: 'goods', label: 'Bien físico' },
+                { value: 'service', label: 'Servicio' }
+              ]}
+            />
+            <SmartSelect
+              id="product-status"
+              label="Estado"
+              bind:value={form.lifecycle_status}
+              options={[
+                { value: 'draft', label: 'Borrador' },
+                { value: 'active', label: 'Activo' },
+                { value: 'blocked', label: 'Bloqueado' },
+                { value: 'discontinued', label: 'Descontinuado' },
+                { value: 'retired', label: 'Retirado' }
+              ]}
+            />
+            <div class="sm:col-span-2">
+              <label
+                for="product-sales-description"
+                class="mb-1 block text-sm font-medium text-foreground"
+                >Descripción para ventas</label
+              >
+              <textarea
+                id="product-sales-description"
+                bind:value={form.sales_description}
+                rows="3"
+                maxlength="4000"
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted"
+                placeholder="Descripción comercial para clientes."
+              ></textarea>
+            </div>
+            <div class="sm:col-span-2">
+              <label
+                for="product-purchase-description"
+                class="mb-1 block text-sm font-medium text-foreground"
+                >Descripción para compras</label
+              >
+              <textarea
+                id="product-purchase-description"
+                bind:value={form.purchase_description}
+                rows="3"
+                maxlength="4000"
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted"
+                placeholder="Información útil para abastecimiento."
+              ></textarea>
+            </div>
+            <div class="sm:col-span-2">
+              <label
+                for="product-internal-notes"
+                class="mb-1 block text-sm font-medium text-foreground">Notas internas</label
+              >
+              <textarea
+                id="product-internal-notes"
+                bind:value={form.internal_notes}
+                rows="3"
+                maxlength="4000"
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted"
+                placeholder="Notas que no se muestran al cliente."
+              ></textarea>
+            </div>
+          </div>
+        </Card>
+
+        <Card id="storage" class="scroll-mt-24 p-6">
+          <h2 class="mb-1 text-base font-semibold">Almacenamiento y manipulación</h2>
+          <p class="mb-5 text-sm text-foreground-muted">
+            Reglas operativas para bienes físicos; no aplican a servicios.
+          </p>
+          {#if errors.storage}<p
+              class="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+              role="alert"
+            >
+              {errors.storage}
+            </p>{/if}
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <SmartSelect
+              id="product-storage-condition"
+              label="Condición de almacenamiento"
+              bind:value={form.storage_condition}
+              options={[
+                { value: '', label: 'No especificada' },
+                { value: 'ambient', label: 'Ambiente' },
+                { value: 'cool', label: 'Fresco' },
+                { value: 'refrigerated', label: 'Refrigerado' },
+                { value: 'frozen', label: 'Congelado' },
+                { value: 'dry', label: 'Seco' },
+                { value: 'other', label: 'Otra' }
+              ]}
+              disabled={form.product_kind === 'service'}
+            />
+            <FormField
+              id="product-temp-min"
+              label="Temperatura mínima (°C)"
+              type="number"
+              step="0.01"
+              bind:value={form.storage_temperature_min_c}
+              disabled={form.product_kind === 'service'}
+            />
+            <FormField
+              id="product-temp-max"
+              label="Temperatura máxima (°C)"
+              type="number"
+              step="0.01"
+              bind:value={form.storage_temperature_max_c}
+              disabled={form.product_kind === 'service'}
+            />
+            <FormField
+              id="product-humidity"
+              label="Humedad máxima (%)"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              bind:value={form.storage_humidity_max_percent}
+              disabled={form.product_kind === 'service'}
+            />
+            <FormField
+              id="product-stack-height"
+              label="Altura máxima de apilado"
+              type="number"
+              min="0"
+              step="0.01"
+              bind:value={form.max_stack_height}
+              disabled={form.product_kind === 'service'}
+            />
+            <label class="flex items-center gap-2 text-sm font-medium text-foreground"
+              ><input
+                type="checkbox"
+                bind:checked={form.is_fragile}
+                disabled={form.product_kind === 'service'}
+                class="rounded border-border text-primary"
+              /> Frágil</label
+            >
+            <label class="flex items-center gap-2 text-sm font-medium text-foreground"
+              ><input
+                type="checkbox"
+                bind:checked={form.keep_dry}
+                disabled={form.product_kind === 'service'}
+                class="rounded border-border text-primary"
+              /> Mantener seco</label
+            >
+            <label class="flex items-center gap-2 text-sm font-medium text-foreground"
+              ><input
+                type="checkbox"
+                bind:checked={form.keep_upright}
+                disabled={form.product_kind === 'service'}
+                class="rounded border-border text-primary"
+              /> Mantener vertical</label
+            >
+            <label class="flex items-center gap-2 text-sm font-medium text-foreground"
+              ><input
+                type="checkbox"
+                bind:checked={form.stackable}
+                disabled={form.product_kind === 'service'}
+                class="rounded border-border text-primary"
+              /> Apilable</label
+            >
+            <div class="sm:col-span-2 lg:col-span-3">
+              <label
+                for="product-handling-notes"
+                class="mb-1 block text-sm font-medium text-foreground">Notas de manipulación</label
+              >
+              <textarea
+                id="product-handling-notes"
+                bind:value={form.handling_notes}
+                rows="3"
+                maxlength="4000"
+                disabled={form.product_kind === 'service'}
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted"
+                placeholder="Indicaciones para traslado y almacenamiento."
+              ></textarea>
+            </div>
+          </div>
+        </Card>
+
+        <Card id="suppliers" class="scroll-mt-24 p-6">
+          <ProductSuppliersEditor
+            bind:relations={form.supplier_links}
+            editable={canEditSuppliers}
+          />
+          {#if errors.suppliers}
+            <p
+              class="mt-3 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+              role="alert"
+            >
+              {errors.suppliers}
+            </p>
+          {/if}
+          {#if !canEditSuppliers}
+            <p class="mt-3 text-xs text-foreground-muted">
+              Puede consultar los proveedores vinculados, pero necesita el permiso
+              <code class="rounded bg-surface-muted px-1">products:suppliers</code> para modificarlos.
+            </p>
+          {/if}
         </Card>
 
         <Card id="gallery" class="scroll-mt-24 p-6">

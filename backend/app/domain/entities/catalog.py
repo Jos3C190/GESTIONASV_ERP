@@ -7,6 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from app.domain.entities.product_image import ProductImage
+from app.domain.entities.product_master import ProductIdentifier, ProductSupplier
 from app.domain.product_measurements import calculate_volume, format_dimension_summary
 
 
@@ -90,6 +91,32 @@ class Product:
     weight_unit: str | None = None
     description: str | None = None
     presentation: str | None = None
+    product_kind: str = "goods"
+    lifecycle_status: str = "active"
+    can_purchase: bool = True
+    can_sell: bool = True
+    sales_name: str | None = None
+    internal_name: str | None = None
+    document_name: str | None = None
+    sales_description: str | None = None
+    purchase_description: str | None = None
+    internal_notes: str | None = None
+    keywords: tuple[str, ...] = ()
+    origin_country_id: int | None = None
+    brand_id: uuid.UUID | None = None
+    manufacturer_id: uuid.UUID | None = None
+    storage_condition: str | None = None
+    storage_temperature_min_c: Decimal | None = None
+    storage_temperature_max_c: Decimal | None = None
+    storage_humidity_max_percent: Decimal | None = None
+    is_fragile: bool = False
+    keep_dry: bool = False
+    keep_upright: bool = False
+    stackable: bool = True
+    max_stack_height: Decimal | None = None
+    handling_notes: str | None = None
+    identifiers: tuple[ProductIdentifier, ...] = ()
+    supplier_links: tuple[ProductSupplier, ...] = ()
     is_active: bool = True
     images: tuple[ProductImage, ...] = ()
     image_count: int = 0

@@ -7,6 +7,7 @@ import type {
   SubCategory,
   Unit
 } from '$lib/types/catalog';
+import type { ProductIdentifier, ProductSupplier } from '$lib/types/catalog';
 
 export interface PageResponse<T> {
   items: T[];
@@ -187,6 +188,30 @@ export const catalogApi = {
     weight_unit?: 'mg' | 'g' | 'kg' | 't' | 'oz' | 'lb' | null;
     description?: string;
     presentation?: string;
+    product_kind?: 'goods' | 'service';
+    lifecycle_status?: 'draft' | 'active' | 'blocked' | 'discontinued' | 'retired';
+    can_purchase?: boolean;
+    can_sell?: boolean;
+    sales_name?: string;
+    internal_name?: string;
+    document_name?: string;
+    sales_description?: string;
+    purchase_description?: string;
+    internal_notes?: string;
+    keywords?: string[];
+    origin_country_id?: number | null;
+    brand_id?: string | null;
+    manufacturer_id?: string | null;
+    storage_condition?: 'ambient' | 'cool' | 'refrigerated' | 'frozen' | 'dry' | 'other' | null;
+    storage_temperature_min_c?: number | null;
+    storage_temperature_max_c?: number | null;
+    storage_humidity_max_percent?: number | null;
+    is_fragile?: boolean;
+    keep_dry?: boolean;
+    keep_upright?: boolean;
+    stackable?: boolean;
+    max_stack_height?: number | null;
+    handling_notes?: string;
     images?: ProductImageDraft[];
   }) =>
     apiFetch<Product>('/catalog/products', {
@@ -215,11 +240,96 @@ export const catalogApi = {
       description: string;
       presentation: string;
       is_active: boolean;
+      product_kind: 'goods' | 'service';
+      lifecycle_status: 'draft' | 'active' | 'blocked' | 'discontinued' | 'retired';
+      can_purchase: boolean;
+      can_sell: boolean;
+      sales_name: string;
+      internal_name: string;
+      document_name: string;
+      sales_description: string;
+      purchase_description: string;
+      internal_notes: string;
+      keywords: string[];
+      origin_country_id: number | null;
+      brand_id: string | null;
+      manufacturer_id: string | null;
+      storage_condition: 'ambient' | 'cool' | 'refrigerated' | 'frozen' | 'dry' | 'other' | null;
+      storage_temperature_min_c: number | null;
+      storage_temperature_max_c: number | null;
+      storage_humidity_max_percent: number | null;
+      is_fragile: boolean;
+      keep_dry: boolean;
+      keep_upright: boolean;
+      stackable: boolean;
+      max_stack_height: number | null;
+      handling_notes: string;
       images: ProductImageDraft[];
     }>
   ) =>
     apiFetch<Product>(`/catalog/products/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data)
-    })
+    }),
+  listProductIdentifiers: (productId: number) =>
+    apiFetch<ProductIdentifier[]>(`/catalog/products/${productId}/identifiers`),
+  createProductIdentifier: (
+    productId: number,
+    data: {
+      identifier_type: ProductIdentifier['identifier_type'];
+      value: string;
+      is_primary?: boolean;
+    }
+  ) =>
+    apiFetch<ProductIdentifier>(`/catalog/products/${productId}/identifiers`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  updateProductIdentifier: (
+    productId: number,
+    identifierId: string,
+    data: Partial<{
+      identifier_type: ProductIdentifier['identifier_type'];
+      value: string;
+      is_primary: boolean;
+      is_active: boolean;
+    }>
+  ) =>
+    apiFetch<ProductIdentifier>(`/catalog/products/${productId}/identifiers/${identifierId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    }),
+  deleteProductIdentifier: (productId: number, identifierId: string) =>
+    apiFetch<void>(`/catalog/products/${productId}/identifiers/${identifierId}`, {
+      method: 'DELETE'
+    }),
+  listProductSuppliers: (productId: number) =>
+    apiFetch<ProductSupplier[]>(`/catalog/products/${productId}/suppliers`),
+  replaceProductSuppliers: (
+    productId: number,
+    suppliers: Array<Omit<ProductSupplier, 'id' | 'product_id' | 'company_id'>>
+  ) =>
+    apiFetch<ProductSupplier[]>(`/catalog/products/${productId}/suppliers`, {
+      method: 'PUT',
+      body: JSON.stringify({ suppliers })
+    }),
+  createProductSupplier: (
+    productId: number,
+    data: Omit<ProductSupplier, 'id' | 'product_id' | 'company_id'>
+  ) =>
+    apiFetch<ProductSupplier>(`/catalog/products/${productId}/suppliers`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  updateProductSupplier: (
+    productId: number,
+    relationId: string,
+    data: Partial<Omit<ProductSupplier, 'id' | 'product_id' | 'company_id'>>
+  ) =>
+    apiFetch<ProductSupplier>(`/catalog/products/${productId}/suppliers/${relationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    }),
+  deleteProductSupplier: (productId: number, relationId: string) =>
+    apiFetch<void>(`/catalog/products/${productId}/suppliers/${relationId}`, { method: 'DELETE' })
 };

@@ -196,6 +196,29 @@ Supplier tax identifiers are intentionally country/type driven rather than
 hard-coded to El Salvador's NIT/NRC. No external URL is fetched by the backend;
 only HTTPS references without credentials or local/private hosts are accepted.
 
+### Product-domain security boundaries
+
+Future product capabilities are intentionally blocked until their consuming
+modules exist. Inventory, purchasing, landed costs, price lists, packaging,
+variants, fiscal data and compliance documents must not be simulated with
+unvalidated product columns. When activated, each capability must define its
+own RBAC permission, tenant/company checks, append-only audit events,
+idempotency and rollback behavior. Sensitive future values such as costs,
+accounting mappings, compliance files or integration credentials must be
+permission-filtered and must never be written to audit logs in plaintext.
+
+The complete dependency and acceptance register is maintained in
+`docs/product-module-future-debt.txt`.
+
+Product master mutations are separated by permission: `products:master_data`
+for the commercial/storage ficha, `products:identifiers` for codes,
+`products:suppliers` for sourcing terms and `products:lifecycle` for status
+transitions. Product supplier and identifier endpoints always bind both the
+product and relation to the effective company; preferred-supplier changes lock
+the product row. Audit events retain IDs, origin/type, preferred state and
+commercial terms needed for traceability, without exposing credentials or
+future inventory secrets.
+
 Para conocer la arquitectura completa de escáneres DAST en contenedor (OWASP ZAP OpenAPI scan), auditoría de dependencias (Trivy), pruebas adversariales (Pytest fuzzing) y el bloqueo automático mediante `.githooks` (`pre-commit` y `pre-push`), consulta el documento dedicado:
 
 👉 **[docs/red-team-blue-team.md](file:///d:/josec/Documents/Ciclo%20X/TRANSACCIONES%20COMERCIALES%20POR%20MEDIOS%20ELECTR%C3%93NICOS%20SECCI%C3%93N%20A/PROYECTO_ERP/docs/red-team-blue-team.md)**

@@ -89,6 +89,33 @@ Volume is read-only, expressed in m³, and is `null` until all three dimensions
 are present. Omitting measurement fields on update preserves them; sending
 `null` clears the corresponding measurement.
 
+### Deferred product API scope
+
+The API does not expose inventory balances, purchase orders, landed-cost
+allocation, price lists, packaging conversions, product variants, fiscal
+accounting rules or compliance documents yet. These endpoints remain deferred
+until their consuming modules exist. The dependency and acceptance matrix is
+documented in [`docs/product-module-future-debt.txt`](product-module-future-debt.txt).
+
+### Product master and sourcing
+
+`POST`/`PUT /api/v1/catalog/products` accept the product kind/lifecycle,
+commercial names and descriptions, keywords, origin, brand/manufacturer and
+storage/handling fields. Services cannot carry physical storage data, and
+`is_active` remains a compatibility projection of lifecycle status.
+
+| Method | Endpoint | Permission | Purpose |
+|---|---|---|---|
+| `GET/POST/PATCH/DELETE` | `/api/v1/catalog/brands[/{id}]` | `products:read` / `products:master_data` | Company-scoped brands |
+| `GET/POST/PATCH/DELETE` | `/api/v1/catalog/manufacturers[/{id}]` | `products:read` / `products:master_data` | Company-scoped manufacturers |
+| `GET/POST/PATCH/DELETE` | `/api/v1/catalog/products/{id}/identifiers[/{identifier_id}]` | `products:read` / `products:identifiers` | Product identifiers |
+| `GET/POST/PATCH/DELETE` | `/api/v1/catalog/products/{id}/suppliers[/{relation_id}]` | `products:read` / `products:suppliers` | Current supplier sourcing links |
+| `PUT` | `/api/v1/catalog/products/{id}/suppliers` | `products:suppliers` | Replace the complete sourcing set atomically from the product editor |
+| `GET` | `/api/v1/suppliers/{id}/products` | `suppliers:read` | Products sourced from a supplier |
+
+The product list remains lightweight; detail responses include structured
+identifiers and supplier links. Costs are not exposed in catalogue rows.
+
 ### Suppliers and contacts (require_permission)
 | Method | Path | Permission | Description |
 |--------|------|------------|-------------|

@@ -26,6 +26,7 @@ from app.infrastructure.db.base import Base, SoftDeleteMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from app.infrastructure.models.catalog import CountryModel
+    from app.infrastructure.models.product_master import ProductSupplierModel
     from app.infrastructure.models.supplier_image import (
         SupplierContactImageModel,
         SupplierImageModel,
@@ -133,6 +134,9 @@ class SupplierModel(TimestampMixin, SoftDeleteMixin, Base):
     )
     bank_accounts: Mapped[list[SupplierBankAccountModel]] = relationship(
         "SupplierBankAccountModel", back_populates="supplier", cascade="all, delete-orphan"
+    )
+    product_links: Mapped[list[ProductSupplierModel]] = relationship(
+        "ProductSupplierModel", back_populates="supplier", cascade="all, delete-orphan", overlaps="product,supplier_links"
     )
 
 

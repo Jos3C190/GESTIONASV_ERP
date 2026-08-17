@@ -263,3 +263,37 @@ into structured columns; ambiguous values remain in `dimensions_legacy` and
 are never discarded. New writes use only structured fields. Volume is derived
 at read time in cubic metres from all three dimensions and is never stored as
 a user-editable value.
+
+## 11. Deferred product-domain data
+
+The product master intentionally does not yet contain inventory balances,
+reorder policies, purchase documents, landed-cost allocations, price lists,
+packaging conversions, variants, fiscal accounts or compliance documents.
+Those concepts require consuming modules and transactional invariants; adding
+columns before those workflows exist would create disconnected data and false
+operational guarantees. The complete backlog, dependencies, activation gates
+and acceptance criteria are maintained in
+[`docs/product-module-future-debt.txt`](product-module-future-debt.txt).
+
+## 12. Product master enrichment (revisions 0035–0036)
+
+Revisions `0035` and `0036` extend the product master without coupling it to
+future inventory or purchasing balances. Products now have an explicit kind
+(`goods` or `service`), lifecycle (`draft`, `active`, `blocked`,
+`discontinued`, `retired`), purchase/sale flags, commercial and internal names,
+separate descriptions, keywords, origin country, company-scoped brand and
+manufacturer references, and physical storage/handling rules. `is_active` is
+kept for compatibility and is constrained to match the lifecycle.
+
+`product_brands` and `product_manufacturers` are company-scoped catalogs with
+composite tenant-safe foreign keys. Physical storage fields are only valid for
+goods; temperature is expressed in Celsius and ranges are checked in the
+database.
+
+`product_identifiers` stores optional EAN/UPC/GTIN/ISBN, manufacturer, internal
+and generic identifiers. Values are normalized for uniqueness, and only one
+primary identifier is allowed per product/type. `product_suppliers` stores the
+current sourcing relationship (cost, currency, MOQ, multiple, lead time,
+preferred flag and validity), with company-composite foreign keys, one active
+preferred supplier per product and constraints for approved suppliers. Price
+history, purchasing documents and inventory conversions remain deferred.

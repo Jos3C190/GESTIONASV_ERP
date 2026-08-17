@@ -166,6 +166,27 @@ database boundaries, and computes volume in m³ only when length, width and
 height are all present. This keeps purchase/sale units configurable without
 making physical dimensions ambiguous or silently mixing business concepts.
 
+### ADR-005 — Deferred product-domain capabilities
+
+The product master remains a stable reference aggregate. Inventory balances,
+purchase transactions, retaceo, price assignment, packaging conversions,
+variants, fiscal accounting and compliance documents are separate bounded
+capabilities and are not represented by placeholder columns. Each capability
+must arrive with its own transaction model, permissions, audit events,
+tenant-scoped constraints and consuming UI. The activation gates and future
+debt register live in `docs/product-module-future-debt.txt`.
+
+### ADR-006 — Product master and procurement reference data
+
+Revisions `0035` and `0036` add stable product reference data before inventory
+and purchasing transactions exist. Lifecycle, names, descriptions, keywords,
+storage constraints, identifiers and current supplier terms are useful to
+catalogue, receiving preparation and future purchasing without pretending that
+stock or price history already exists. Supplier links use company-composite
+foreign keys and row locks for preferred-supplier changes. Historical price
+curves, MOQ conversions and replenishment rules remain deferred until their
+consuming modules exist.
+
 ### ADR-004 — No FOUC for theme
 **Decision:** Theme is applied by an inline blocking script in `app.html`
 before Svelte hydrates. **Rationale:** avoids the dark-mode flash. The script

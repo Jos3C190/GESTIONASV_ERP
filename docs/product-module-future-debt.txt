@@ -1,0 +1,248 @@
+DEUDA FUTURA DEL MÓDULO DE PRODUCTOS
+====================================
+
+Propósito
+---------
+Este registro documenta capacidades deliberadamente aplazadas del maestro de
+productos. No se deben implementar agregando columnas aisladas: cada iniciativa
+debe esperar al módulo que consuma sus datos, reglas y transacciones.
+
+Estados permitidos: pendiente, bloqueada, lista, implementada.
+Prioridades: alta, media, baja.
+
+INV-001 | Libro de existencias y movimientos
+--------------------------------------------
+Prioridad: alta
+Módulo dependiente: Inventario
+Problema que resuelve: El maestro de productos no conoce existencias por
+almacén, ubicación, entradas, salidas, ajustes ni reservas.
+Datos requeridos: producto, almacén, ubicación, cantidad, unidad base,
+movimiento, documento origen, usuario, fecha y saldo.
+Reglas de negocio: movimientos inmutables; saldos derivados del kardex;
+empresa, producto y ubicación deben coincidir; no permitir saldos negativos
+salvo una política explícita.
+Riesgos: doble contabilización, saldos negativos y pérdida de trazabilidad.
+Criterio de activación: existir almacenes operativos, ubicaciones e inventario
+transaccional.
+Criterio de aceptación: el saldo por producto/almacén/ubicación coincide con
+el kardex y todos los movimientos son auditables.
+Estado: bloqueada
+
+INV-002 | Reabastecimiento y disponibilidad
+--------------------------------------------
+Prioridad: alta
+Módulo dependiente: Inventario y Compras
+Problema que resuelve: No se pueden calcular faltantes, stock mínimo, máximo,
+seguridad, comprometido o en tránsito.
+Datos requeridos: política por almacén, mínimo, máximo, punto de reorden,
+stock de seguridad, proveedor preferido, plazo y múltiplo de compra.
+Reglas de negocio: una política por producto y almacén; servicios no generan
+reabastecimiento; las propuestas deben considerar existencias, reservas,
+órdenes abiertas y mercancía en tránsito.
+Riesgos: compras duplicadas o alertas falsas si no existe saldo confiable.
+Criterio de activación: INV-001 y órdenes de compra operativas.
+Criterio de aceptación: una propuesta de compra explica su cálculo y no
+duplica una orden ya abierta.
+Estado: bloqueada
+
+INV-003 | Lotes, series y vencimientos
+--------------------------------------
+Prioridad: alta
+Módulo dependiente: Inventario y Calidad
+Problema que resuelve: No existe trazabilidad por lote, número de serie,
+fecha de fabricación o caducidad.
+Datos requeridos: lote/serie, fechas, proveedor, recepción, ubicación,
+estado de calidad y producto.
+Reglas de negocio: los productos configurados para trazabilidad deben exigir
+el identificador en recepción, traslado, venta y ajuste.
+Riesgos: retiros de producto incompletos y venta de mercancía vencida.
+Criterio de activación: soporte de recepción e inventario por unidad/lote.
+Criterio de aceptación: se puede rastrear un lote desde el proveedor hasta
+cada salida afectada.
+Estado: bloqueada
+
+INV-004 | Costeo y conteos físicos
+-----------------------------------
+Prioridad: media
+Módulo dependiente: Inventario y Contabilidad
+Problema que resuelve: No existe costo valorizado ni conciliación entre
+conteo físico y saldo del sistema.
+Datos requeridos: método de costeo, costo unitario, ajustes, conteos,
+diferencias y aprobaciones.
+Reglas de negocio: los ajustes requieren motivo y autorización; el método de
+costeo debe ser consistente por empresa o categoría.
+Riesgos: inventario y contabilidad divergentes.
+Criterio de activación: kardex estable y plan contable disponible.
+Criterio de aceptación: un conteo genera diferencias reproducibles y asientos
+o movimientos aprobados.
+Estado: bloqueada
+
+PUR-001 | Cotizaciones, órdenes y recepción de compras
+-------------------------------------------------------
+Prioridad: alta
+Módulo dependiente: Compras
+Problema que resuelve: La relación producto-proveedor no tiene documentos que
+representen solicitud, aprobación, compra o recepción.
+Datos requeridos: solicitud, cotización, proveedor, líneas, precios, moneda,
+impuestos, fechas, aprobaciones, recepción parcial y diferencias.
+Reglas de negocio: estados explícitos, separación de funciones, recepción
+parcial idempotente y relación con el proveedor preferido sin obligarlo.
+Riesgos: compras sin autorización, cantidades duplicadas y recepción falsa.
+Criterio de activación: proveedores y productos con relaciones activas.
+Criterio de aceptación: una orden aprobada puede recibirse parcial o
+completamente y deja trazabilidad hasta el inventario.
+Estado: bloqueada
+
+PUR-002 | Historial de costos y ofertas por proveedor
+------------------------------------------------------
+Prioridad: alta
+Módulo dependiente: Compras y Asignación de precios
+Problema que resuelve: El costo actual del proveedor no conserva vigencias,
+escalas ni evidencia histórica.
+Datos requeridos: proveedor, producto, cantidad mínima, costo, moneda,
+vigencia, plazo, condición comercial y documento origen.
+Reglas de negocio: no sobrescribir precios históricos; impedir solapamientos
+ambiguos; conservar la moneda y unidad de compra de cada oferta.
+Riesgos: usar precios vencidos o comparar costos en unidades incompatibles.
+Criterio de activación: existen cotizaciones u órdenes que consumen ofertas.
+Criterio de aceptación: el sistema selecciona la oferta vigente correcta y
+explica el precio utilizado.
+Estado: bloqueada
+
+PUR-003 | Lead time y desempeño de proveedores
+------------------------------------------------
+Prioridad: media
+Módulo dependiente: Compras, recepción e inventario
+Problema que resuelve: El plazo del maestro es estático y no mide desempeño.
+Datos requeridos: fecha prometida, fecha recibida, cantidad, incidencias,
+calidad y proveedor.
+Reglas de negocio: separar plazo contratado del plazo observado; no alterar
+históricos por cambios en el maestro.
+Riesgos: reabastecimiento basado en promedios incompletos.
+Criterio de activación: suficientes recepciones confirmadas.
+Criterio de aceptación: reportes de cumplimiento reproducibles por proveedor.
+Estado: bloqueada
+
+RET-001 | Retaceo y costo landed
+---------------------------------
+Prioridad: alta
+Módulo dependiente: Compras internacionales y Retaceo
+Problema que resuelve: El costo del producto importado no incluye gastos
+logísticos, aduanales ni seguros.
+Datos requeridos: embarque, factura, transporte, seguro, aranceles, impuestos,
+gastos portuarios, base de distribución y líneas afectadas.
+Reglas de negocio: documentos inmutables después del cierre; distribución
+reproducible y configurable por valor, peso, volumen o cantidad.
+Riesgos: costo unitario incorrecto y márgenes falsos.
+Criterio de activación: compras internacionales y documentos de importación.
+Criterio de aceptación: el costo landed se reconcilia con el total del
+embarque y queda auditado por producto.
+Estado: bloqueada
+
+PRC-001 | Listas y reglas de precios
+-------------------------------------
+Prioridad: alta
+Módulo dependiente: Asignación de precios, Ventas y Fiscalidad
+Problema que resuelve: El producto no tiene precio comercial por cliente,
+segmento, moneda o volumen.
+Datos requeridos: lista, producto/variante, moneda, unidad, precio, vigencia,
+segmento, descuento y reglas de redondeo.
+Reglas de negocio: precedencia explícita; no solapamiento ambiguo; aprobación
+para cambios sensibles; precio siempre asociado a una unidad.
+Riesgos: cotizaciones inconsistentes y márgenes negativos.
+Criterio de activación: módulo de ventas o asignación de precios operativo.
+Criterio de aceptación: dado un cliente, fecha, moneda y cantidad, el precio
+seleccionado es determinista y explicable.
+Estado: bloqueada
+
+PKG-001 | Empaques y conversiones
+-----------------------------------
+Prioridad: media
+Módulo dependiente: Inventario y unidad base
+Problema que resuelve: No se representan cajas, paquetes, pallets ni códigos
+de barras por presentación.
+Datos requeridos: tipo de empaque, cantidad contenida, unidad de referencia,
+código, dimensiones, peso y empaque predeterminado de compra/venta.
+Reglas de negocio: toda conversión debe indicar unidad origen y destino;
+prohibir conversiones implícitas; un empaque puede desactivarse sin borrar
+historial.
+Riesgos: cantidades incorrectas por confundir empaque con unidad comercial.
+Criterio de activación: unidad base de inventario definida.
+Criterio de aceptación: recibir, vender y mover un empaque conserva cantidades
+equivalentes y códigos correctos.
+Estado: bloqueada
+
+VAR-001 | Familias, variantes y atributos
+------------------------------------------
+Prioridad: media
+Módulo dependiente: Catálogo, Ventas e Inventario
+Problema que resuelve: El campo `size` no representa combinaciones como color,
+talla, sabor o material.
+Datos requeridos: familia, atributo, valor, combinación válida, SKU, código,
+imagen, proveedor y precio por variante.
+Reglas de negocio: cada variante tiene identidad propia; combinaciones únicas;
+SKU, imágenes, abastecimiento y existencias pertenecen a la variante, no se
+comparten accidentalmente con la familia.
+Riesgos: duplicar SKU, mezclar inventario entre variantes o migrar `size` de
+forma incorrecta.
+Criterio de activación: necesidad confirmada de familias con más de un SKU.
+Criterio de aceptación: una variante puede venderse, abastecerse y rastrearse
+de forma independiente.
+Estado: bloqueada
+
+FIS-001 | Fiscalidad y contabilidad del producto
+------------------------------------------------
+Prioridad: alta
+Módulo dependiente: Facturación, DTE y Contabilidad
+Problema que resuelve: El producto no tiene tratamiento fiscal ni cuentas
+contables asociadas.
+Datos requeridos: categoría fiscal, impuesto, código HS, cuenta de inventario,
+COGS, ingresos, país y vigencia.
+Reglas de negocio: reglas por país y tipo de operación; no asumir IVA para
+productos internacionales; cambios fiscales con vigencia y auditoría.
+Riesgos: documentos fiscales inválidos y asientos incorrectos.
+Criterio de activación: facturación/DTE y plan contable disponibles.
+Criterio de aceptación: una factura usa el tratamiento fiscal y cuentas
+correspondientes, con evidencia de la regla aplicada.
+Estado: bloqueada
+
+QLT-001 | Calidad y cumplimiento
+----------------------------------
+Prioridad: media
+Módulo dependiente: Calidad y sector regulado
+Problema que resuelve: No se controlan certificados, fichas técnicas,
+alérgenos, ingredientes, registros sanitarios ni hojas de seguridad.
+Datos requeridos: tipo de documento, archivo, emisor, vigencia, producto,
+país, restricciones y aprobación.
+Reglas de negocio: documentos vencidos generan alerta o bloqueo según la
+política del producto; auditoría de aprobación y reemplazo.
+Riesgos: comercializar productos sin documentación vigente.
+Criterio de activación: productos regulados o política de calidad aprobada.
+Criterio de aceptación: el estado documental de un producto es consultable y
+las reglas de bloqueo son configurables.
+Estado: pendiente
+
+INT-001 | Integraciones y sincronización
+----------------------------------------
+Prioridad: baja
+Módulo dependiente: Sistemas externos y contratos de integración
+Problema que resuelve: No existe sincronización con ERP contable,
+marketplaces, proveedores ni lectores.
+Datos requeridos: sistema origen, identificador externo, payload versionado,
+cursor, estado, reintentos y errores.
+Reglas de negocio: idempotencia, no sobrescribir campos locales sin política,
+registro de conflictos y secretos fuera del repositorio.
+Riesgos: duplicados, pérdida de cambios locales y exposición de credenciales.
+Criterio de activación: contrato externo aprobado y propietario definido.
+Criterio de aceptación: una sincronización puede reintentarse sin duplicar ni
+perder productos, y todos los errores son visibles.
+Estado: bloqueada
+
+Regla de activación general
+----------------------------
+Una deuda solo cambia a "lista" cuando el módulo dependiente tiene modelos,
+transacciones, permisos, auditoría y casos de prueba suficientes para consumir
+la información. No se deben agregar columnas aisladas para anticipar una
+funcionalidad cuyo proceso aún no existe.
+
+Última revisión: 2026-08-16

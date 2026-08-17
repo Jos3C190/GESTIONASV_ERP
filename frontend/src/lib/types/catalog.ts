@@ -74,12 +74,71 @@ export interface Product {
   description?: string | null;
   presentation?: string | null;
   is_active: boolean;
+  product_kind?: 'goods' | 'service';
+  lifecycle_status?: 'draft' | 'active' | 'blocked' | 'discontinued' | 'retired';
+  can_purchase?: boolean;
+  can_sell?: boolean;
+  sales_name?: string | null;
+  internal_name?: string | null;
+  document_name?: string | null;
+  sales_description?: string | null;
+  purchase_description?: string | null;
+  internal_notes?: string | null;
+  keywords?: string[];
+  origin_country_id?: number | null;
+  brand_id?: string | null;
+  manufacturer_id?: string | null;
+  storage_condition?: 'ambient' | 'cool' | 'refrigerated' | 'frozen' | 'dry' | 'other' | null;
+  storage_temperature_min_c?: number | null;
+  storage_temperature_max_c?: number | null;
+  storage_humidity_max_percent?: number | null;
+  is_fragile?: boolean;
+  keep_dry?: boolean;
+  keep_upright?: boolean;
+  stackable?: boolean;
+  max_stack_height?: number | null;
+  handling_notes?: string | null;
+  identifiers?: ProductIdentifier[];
+  supplier_links?: ProductSupplier[];
   images: ProductImage[];
   image_count: number;
   cover_image: ProductImage | null;
   created_at?: string;
   updated_at?: string;
 }
+
+export interface ProductIdentifier {
+  id: string;
+  product_id: number;
+  company_id: string;
+  identifier_type: 'ean' | 'upc' | 'gtin' | 'isbn' | 'manufacturer' | 'internal' | 'other';
+  value: string;
+  normalized_value: string;
+  is_primary: boolean;
+  is_active: boolean;
+}
+
+export interface ProductSupplier {
+  id: string;
+  product_id: number;
+  supplier_id: number;
+  company_id: string;
+  supplier_product_code?: string | null;
+  unit_cost?: number | null;
+  currency_code?: string | null;
+  minimum_order_qty?: number | null;
+  order_multiple?: number | null;
+  lead_time_days?: number | null;
+  is_preferred: boolean;
+  status: 'active' | 'inactive';
+  valid_from?: string | null;
+  valid_until?: string | null;
+  notes?: string | null;
+}
+
+export type ProductSupplierDraft = Omit<ProductSupplier, 'id' | 'product_id' | 'company_id'> & {
+  id?: string;
+};
 
 export interface ProductImage {
   id: string;

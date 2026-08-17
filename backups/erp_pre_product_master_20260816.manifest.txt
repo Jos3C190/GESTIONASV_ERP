@@ -1,0 +1,9 @@
+Backup: erp_pre_product_master_20260816.dump
+Created: 2026-08-16T15:22:26-06:00
+Format: PostgreSQL custom archive (pg_dump -Fc)
+Database revision: 0034
+Products rows: 2
+Suppliers rows: 2
+SHA-256: 14763A8BB4F960C3533462CF7CB4F2FD72E972490971C44B293C973B0AAD452A
+Verification: pg_restore --list includes alembic_version, products and suppliers tables/data.
+Purpose: rollback point before product master enrichment and product-supplier relations.
