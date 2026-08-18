@@ -177,7 +177,7 @@
 
 <svelte:head><title>Proveedores — GestionaSV</title></svelte:head>
 
-<div class="min-h-full bg-background px-4 pb-8 sm:px-6 md:px-8">
+<div class="min-h-full bg-background px-4 pb-8 pt-4 sm:px-6 sm:pt-6 md:px-8 md:pt-8">
   <header
     class="mb-5 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4"
   >
@@ -262,16 +262,8 @@
       {success}
     </div>{/if}
 
-  <Card class="overflow-hidden p-0"
-    ><div class="flex items-center justify-between border-b border-border px-4 py-3">
-      <div>
-        <h2 class="text-sm font-semibold text-foreground">Directorio de proveedores</h2>
-        <p class="mt-1 text-xs text-foreground-muted">
-          {loading ? 'Cargando…' : `${totalItems} proveedor(es)`}
-        </p>
-      </div>
-    </div>
-    {#if loading}<div class="flex items-center justify-center py-20">
+  <Card class="overflow-hidden p-0">
+    {#if loading}<div class="flex items-center justify-center py-16">
         <div class="flex flex-col items-center gap-3">
           <svg
             class="h-5 w-5 animate-spin text-primary"
@@ -291,10 +283,10 @@
               d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
             /></svg
           >
-          <p class="text-xs text-foreground-muted">Cargando proveedores…</p>
+          <p class="text-sm text-foreground-muted">Cargando proveedores…</p>
         </div>
       </div>{:else if suppliers.length === 0}<div
-        class="flex flex-col items-center justify-center px-5 py-20 text-center"
+        class="flex flex-col items-center justify-center py-16"
       >
         <p class="text-sm font-medium text-foreground">No se encontraron proveedores</p>
         <p class="mt-1 text-xs text-foreground-muted">
@@ -318,8 +310,7 @@
               ><th class="w-11 px-2 py-3"></th></tr
             ></thead
           ><tbody class="divide-y divide-border"
-            >{#each suppliers as supplier (supplier.id_supplier)}<tr
-                class="transition-colors hover:bg-surface-muted"
+            >{#each suppliers as supplier (supplier.id_supplier)}<tr class="hover:bg-surface-muted"
                 ><td class="px-4 py-3 font-mono text-xs text-foreground"
                   ><a
                     class="hover:text-primary hover:underline"
@@ -375,13 +366,11 @@
               >{/each}</tbody
           >
         </table>
-      </div>{/if}</Card
-  >
+      </div>{/if}
+  </Card>
 
-  {#if totalPages > 1}<div
-      class="mt-4 flex items-center justify-between text-xs text-foreground-muted"
-    >
-      <span>Página {page} de {totalPages}</span>
+  {#if totalPages > 1}<div class="mt-4 flex items-center justify-between">
+      <p class="text-xs text-foreground-muted">Página {page} de {totalPages}</p>
       <div class="flex gap-2">
         <Button variant="secondary" size="sm" onclick={() => pageTo(page - 1)} disabled={page <= 1}
           >Anterior</Button
