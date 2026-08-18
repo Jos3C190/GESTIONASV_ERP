@@ -181,17 +181,43 @@
 <svelte:head><title>Catálogo de productos — GestionaSV</title></svelte:head>
 
 <div class="p-6 md:p-8">
-  <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
-    <div>
-      <p class="text-xs font-medium uppercase tracking-wider text-foreground-subtle">Inventario</p>
-      <h1 class="mt-1 text-2xl font-bold text-foreground">Catálogo de productos</h1>
-      <p class="mt-1 text-sm text-foreground-muted">
-        Identidad comercial, unidades e imágenes de tus productos.
-      </p>
-    </div>
-    <div class="flex items-center gap-2">
+  <div
+    class="mb-6 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4"
+  >
+    <p class="text-sm text-foreground-muted">
+      {totalItems} producto(s) registrados · Catálogo general
+    </p>
+    <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+      <select
+        aria-label="Filtrar por categoría"
+        bind:value={selectedCategory}
+        onchange={() => {
+          selectedSubCategory = undefined;
+          page = 1;
+        }}
+        class="h-9 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground focus:border-primary focus:outline-none sm:min-w-[190px]"
+      >
+        <option value={undefined}>Todas las categorías</option>
+        {#each categories as category}
+          <option value={category.id_category}>{category.name}</option>
+        {/each}
+      </select>
+      <select
+        aria-label="Filtrar por subcategoría"
+        bind:value={selectedSubCategory}
+        disabled={!selectedCategory}
+        onchange={() => {
+          page = 1;
+        }}
+        class="h-9 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[190px]"
+      >
+        <option value={undefined}>Todas las subcategorías</option>
+        {#each filteredSubCategories as item}
+          <option value={item.id_sub_category}>{item.name}</option>
+        {/each}
+      </select>
       {#if permissions.hasPermission('products:manage')}
-        <Button size="sm" onclick={() => goto('/products/new')}>
+        <Button size="sm" class="whitespace-nowrap" onclick={() => goto('/products/new')}>
           <svg
             width="14"
             height="14"
@@ -245,55 +271,6 @@
       <p class="mt-1 text-xs text-foreground-muted">Requieren revisión</p></Card
     >
   </div>
-
-  <Card class="mb-5 p-4">
-    <div class="grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(180px,1fr)_minmax(180px,1fr)]">
-      <div class="relative">
-        <svg
-          class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground-subtle"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg
-        ><input
-          aria-label="Buscar productos"
-          placeholder="Buscar por SKU, nombre o código..."
-          value={globalSearch.query}
-          oninput={(event) =>
-            globalSearch.setDebounced((event.currentTarget as HTMLInputElement).value)}
-          class="h-10 w-full rounded-lg border border-border bg-surface px-3 pl-9 text-sm text-foreground placeholder:text-foreground-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-      </div>
-      <select
-        aria-label="Filtrar por categoría"
-        bind:value={selectedCategory}
-        onchange={() => {
-          selectedSubCategory = undefined;
-          page = 1;
-        }}
-        class="h-10 rounded-lg border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-        ><option value={undefined}>Todas las categorías</option
-        >{#each categories as category}<option value={category.id_category}>{category.name}</option
-          >{/each}</select
-      >
-      <select
-        aria-label="Filtrar por subcategoría"
-        bind:value={selectedSubCategory}
-        disabled={!selectedCategory}
-        onchange={() => {
-          page = 1;
-        }}
-        class="h-10 rounded-lg border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-        ><option value={undefined}>Todas las subcategorías</option
-        >{#each filteredSubCategories as item}<option value={item.id_sub_category}
-            >{item.name}</option
-          >{/each}</select
-      >
-    </div>
-  </Card>
 
   {#if errorMsg}<div
       class="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"

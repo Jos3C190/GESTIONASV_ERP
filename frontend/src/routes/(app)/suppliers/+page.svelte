@@ -179,27 +179,25 @@
 
 <div class="min-h-full bg-background px-4 pb-8 sm:px-6 md:px-8">
   <header
-    class="mb-5 flex flex-col gap-3 border-b border-border pb-4 pt-5 sm:flex-row sm:items-center sm:justify-between md:pt-8"
+    class="mb-5 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4"
   >
-    <div>
-      <h1 class="text-xl font-bold text-foreground">Proveedores</h1>
-      <p class="mt-1 text-sm text-foreground-muted">
-        Maestro comercial, fiscal y operativo de proveedores.
-      </p>
-    </div>
-    <div class="flex flex-wrap items-center gap-2">
+    <p class="text-sm text-foreground-muted">
+      {totalItems} proveedor(es) registrados · Maestro comercial y operativo
+    </p>
+    <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
       <select
         aria-label="Filtrar por país"
         value={selectedCountry}
         onchange={(event) => {
           selectedCountry = (event.currentTarget as HTMLSelectElement).value;
         }}
-        class="h-9 rounded-lg border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+        class="h-9 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground focus:border-primary focus:outline-none"
         ><option value="">Todos los países</option>{#each countries as country}<option
             value={country.id_country}>{country.name} ({country.iso_code_2})</option
           >{/each}</select
       >{#if permissions.hasPermission('suppliers:manage')}<Button
           size="sm"
+          class="whitespace-nowrap"
           onclick={() => goto('/suppliers/new')}
           ><svg
             width="14"

@@ -29,9 +29,9 @@
   let query = $state('');
   let onlySelected = $state(false);
   let typeFilter = $state<'all' | 'existing' | 'new' | 'retired'>('all');
-  let statusFilter = $state<
-    'all' | 'active' | 'draft' | 'blocked' | 'retired' | 'discontinued'
-  >('all');
+  let statusFilter = $state<'all' | 'active' | 'draft' | 'blocked' | 'retired' | 'discontinued'>(
+    'all'
+  );
   let attributeFilters = $state<Record<string, string>>({});
 
   let selectedSet = $derived(new Set(selectedKeys));
@@ -200,8 +200,11 @@
         Tipo
         <select
           class="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground"
-          bind:value={typeFilter}
+          value={typeFilter}
           aria-label="Filtrar por tipo"
+          onchange={(event) => {
+            typeFilter = (event.currentTarget as HTMLSelectElement).value as typeof typeFilter;
+          }}
         >
           <option value="all">Todos los tipos</option>
           <option value="existing">Existentes</option>
@@ -213,8 +216,11 @@
         Estado
         <select
           class="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground"
-          bind:value={statusFilter}
+          value={statusFilter}
           aria-label="Filtrar por estado"
+          onchange={(event) => {
+            statusFilter = (event.currentTarget as HTMLSelectElement).value as typeof statusFilter;
+          }}
         >
           <option value="all">Todos los estados</option>
           <option value="active">Activa</option>
@@ -258,9 +264,12 @@
       </div>
     {/if}
 
-    <div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-foreground-muted">
+    <div
+      class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-foreground-muted"
+    >
       <span>{visibleCandidates.length} de {candidates.length} combinaciones visibles</span>
-      {#if hasActiveFilters}<span>Las acciones en bloque aplican solo a las filas visibles.</span>{/if}
+      {#if hasActiveFilters}<span>Las acciones en bloque aplican solo a las filas visibles.</span
+        >{/if}
     </div>
   {/if}
 
@@ -279,7 +288,7 @@
         </tr>
       </thead>
       <tbody>
-        {#each visibleCandidates as variant (variantCombinationKey(variant))}
+        {#each visibleCandidates as variant, index (`${variant.id ?? variantCombinationKey(variant)}:${variant.lifecycle_status}:${variant.sku}:${index}`)}
           {@const key = variantCombinationKey(variant)}
           <tr class="border-b border-border last:border-0">
             <td class="px-3 py-2 align-middle">
@@ -327,7 +336,7 @@
     Los filtros solo cambian las filas visibles; no modifican la selección hasta que use una acción
     en bloque.
     <br />
-    Las combinaciones no seleccionadas que ya existan se conservarán en el historial y pasarán a
-    estado retirada solo después de confirmar el guardado.
+    Las combinaciones no seleccionadas que ya existan se conservarán en el historial y pasarán a estado
+    retirada solo después de confirmar el guardado.
   </p>
 </section>

@@ -7,6 +7,7 @@
     type UserOut,
     type PageMeta
   } from '$lib/api/client';
+  import { goto } from '$app/navigation';
   import { onDestroy, onMount } from 'svelte';
   import { search as globalSearch } from '$lib/stores/search.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
@@ -30,14 +31,7 @@
   let requestGeneration = 0;
 
   let modalMode = $state<
-    | 'create'
-    | 'edit'
-    | 'duplicate'
-    | 'permissions'
-    | 'permission-create'
-    | 'permission-edit'
-    | 'assign'
-    | null
+    'create' | 'edit' | 'duplicate' | 'permission-create' | 'permission-edit' | 'assign' | null
   >(null);
   let modalRole = $state<RoleWithPermissions | null>(null);
   let formError = $state<string | null>(null);
@@ -47,13 +41,11 @@
   let modalPermission = $state<PermissionOut | null>(null);
   let fPermissionCode = $state('');
   let fPermissionModule = $state('');
-  let selectedPerms = $state<Set<string>>(new Set());
   let users = $state<UserOut[]>([]);
   let fUserId = $state('');
   let selectedUserRoleIds = $state<Set<string>>(new Set());
   let originalUserRoleIds = $state<Set<string>>(new Set());
   let success = $state<string | null>(null);
-  let permissionQuery = $state('');
   let assignedRoleQuery = $state('');
 
   async function loadRoles(
@@ -97,19 +89,6 @@
     }
   }
 
-  function permsByModule(): [string, PermissionOut[]][] {
-    const map: Record<string, PermissionOut[]> = {};
-    const normalizedQuery = permissionQuery.trim().toLocaleLowerCase('es');
-    for (const p of allPermissions.filter((permission) =>
-      `${permission.code} ${permission.module ?? ''} ${permission.description ?? ''}`
-        .toLocaleLowerCase('es')
-        .includes(normalizedQuery)
-    )) {
-      (map[p.module ?? 'otros'] ??= []).push(p);
-    }
-    return Object.entries(map);
-  }
-
   function openCreate() {
     modalMode = 'create';
     modalRole = null;
@@ -139,20 +118,8 @@
     fPermissionModule = '';
     fDesc = '';
   }
-  function openPermissionEdit(p: PermissionOut) {
-    modalMode = 'permission-edit';
-    modalPermission = p;
-    formError = null;
-    fPermissionCode = p.code;
-    fPermissionModule = p.module ?? '';
-    fDesc = p.description ?? '';
-  }
   function openPermissions(r: RoleWithPermissions) {
-    modalMode = 'permissions';
-    modalRole = r;
-    formError = null;
-    selectedPerms = new Set(r.permissions.map((p) => p.code));
-    permissionQuery = '';
+    void goto(`/roles/${r.id}/permissions`);
   }
   async function openAssign() {
     modalMode = 'assign';
@@ -225,9 +192,6 @@
           description: fDesc || undefined
         });
         success = 'Permiso actualizado correctamente.';
-      } else if (modalMode === 'permissions' && modalRole) {
-        await api.roles.setPermissions(modalRole.id, [...selectedPerms]);
-        success = 'Matriz de permisos actualizada.';
       } else if (modalMode === 'assign' && fUserId) {
         if (selectedUserRoleIds.size === 0) {
           throw new Error('El usuario debe conservar al menos un rol.');
@@ -291,10 +255,12 @@
   function roleMenuItems(role: RoleWithPermissions): KebabItem[] {
     const items: KebabItem[] = [];
 
-    if (permissions.hasPermission('permissions:manage')) {
+    if (permissions.hasAnyPermission(['permissions:read', 'permissions:manage'])) {
       items.push({
         id: 'permissions',
-        label: 'Gestionar permisos',
+        label: permissions.hasPermission('permissions:manage')
+          ? 'Gestionar permisos'
+          : 'Ver permisos',
         icon: 'key',
         onClick: () => openPermissions(role)
       });
@@ -303,7 +269,12 @@
       items.push({ id: 'edit', label: 'Editar', icon: 'edit', onClick: () => openEdit(role) });
     }
     if (permissions.hasPermission('roles:create')) {
-      items.push({ id: 'duplicate', label: 'Duplicar', icon: 'custom', onClick: () => openDuplicate(role) });
+      items.push({
+        id: 'duplicate',
+        label: 'Duplicar',
+        icon: 'custom',
+        onClick: () => openDuplicate(role)
+      });
     }
     if (!role.is_system && permissions.hasPermission('roles:delete')) {
       items.push({
@@ -316,12 +287,6 @@
     }
 
     return items;
-  }
-
-  function togglePerm(code: string) {
-    if (selectedPerms.has(code)) selectedPerms.delete(code);
-    else selectedPerms.add(code);
-    selectedPerms = new Set(selectedPerms);
   }
 
   let systemFilter = $state('');
@@ -346,10 +311,7 @@
     const search = globalSearch.query.trim();
     const system = systemFilter;
     const module = moduleFilter;
-    const timer = window.setTimeout(
-      () => loadRoles(requestedPage, search, system, module),
-      250
-    );
+    const timer = window.setTimeout(() => loadRoles(requestedPage, search, system, module), 250);
     return () => window.clearTimeout(timer);
   });
 
@@ -506,7 +468,9 @@
           <!-- Permissions -->
           <div class="mt-4 min-h-[120px] flex-1">
             <div class="mb-2.5 flex items-center justify-between gap-3">
-              <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground-subtle">
+              <p
+                class="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground-subtle"
+              >
                 Permisos asignados
               </p>
               <span
@@ -520,33 +484,35 @@
               {#each visiblePermissions as perm (perm.code)}
                 <span
                   class="flex min-w-0 items-center truncate rounded-lg border border-border/80 bg-surface-muted/70 px-2.5 text-[11px] font-mono text-foreground-muted"
-                  title={perm.code}
-                  >{perm.code}</span
+                  title={perm.code}>{perm.code}</span
                 >
               {:else}
-                <span class="col-span-2 flex h-16 items-center justify-center rounded-xl border border-dashed border-border text-xs text-foreground-subtle">
+                <span
+                  class="col-span-2 flex h-16 items-center justify-center rounded-xl border border-dashed border-border text-xs text-foreground-subtle"
+                >
                   Sin permisos asignados
                 </span>
               {/each}
               {#if hiddenPermissionCount > 0}
-                {#if permissions.hasPermission('permissions:manage')}
+                {#if permissions.hasAnyPermission(['permissions:read', 'permissions:manage'])}
                   <button
                     type="button"
                     class="flex items-center justify-center rounded-lg border border-primary/25 bg-primary/10 px-2.5 text-[11px] font-semibold text-primary transition-colors hover:border-primary/40 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     aria-label={`Ver ${hiddenPermissionCount} permisos adicionales de ${role.name}`}
-                    onclick={() => openPermissions(role)}
-                  >+{hiddenPermissionCount} permisos</button>
+                    onclick={() => openPermissions(role)}>+{hiddenPermissionCount} permisos</button
+                  >
                 {:else}
                   <span
                     class="flex items-center justify-center rounded-lg border border-border bg-surface-muted px-2.5 text-[11px] font-semibold text-foreground-muted"
-                    title={role.permissions.slice(5).map((permission) => permission.code).join(', ')}
-                    >+{hiddenPermissionCount} permisos</span
+                    title={role.permissions
+                      .slice(5)
+                      .map((permission) => permission.code)
+                      .join(', ')}>+{hiddenPermissionCount} permisos</span
                   >
                 {/if}
               {/if}
             </div>
           </div>
-
         </Card>
       {/each}
     </div>
@@ -583,15 +549,13 @@
       ? 'Editar rol'
       : modalMode === 'duplicate'
         ? 'Duplicar rol'
-        : modalMode === 'permissions'
-          ? 'Matriz de permisos'
-          : modalMode === 'permission-create'
-            ? 'Crear permiso'
-            : modalMode === 'permission-edit'
-              ? 'Editar permiso'
-              : 'Asignar rol a usuario'}
+        : modalMode === 'permission-create'
+          ? 'Crear permiso'
+          : modalMode === 'permission-edit'
+            ? 'Editar permiso'
+            : 'Asignar rol a usuario'}
   onclose={closeModal}
-  size={modalMode === 'permissions' ? 'lg' : 'md'}
+  size="md"
 >
   {#if modalMode === 'create' || modalMode === 'edit' || modalMode === 'duplicate'}
     <form
@@ -667,72 +631,6 @@
         >
       </div>
     </form>
-  {:else if modalMode === 'permissions' && modalRole}
-    <form
-      onsubmit={(e) => {
-        e.preventDefault();
-        handleSubmit();
-      }}
-      class="space-y-4"
-    >
-      {#if formError}<div
-          class="rounded-xl border border-danger/30 bg-danger/10 px-4 py-2.5 text-sm text-danger"
-        >
-          {formError}
-        </div>{/if}
-      <p class="text-sm text-foreground-muted">
-        Permiso para el rol <strong class="text-foreground">{modalRole.name}</strong>
-      </p>
-      <input
-        aria-label="Buscar permisos"
-        placeholder="Buscar por código, módulo o descripción…"
-        bind:value={permissionQuery}
-        class="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-      />
-      {#if permsByModule().length === 0}
-        <div class="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-foreground-muted">
-          No se encontraron permisos.
-        </div>
-      {/if}
-      {#each permsByModule() as [mod, perms]}
-        <div class="rounded-xl border border-border bg-surface-muted/50 p-3">
-          <p class="mb-3 text-xs font-bold uppercase tracking-wider text-foreground-subtle">
-            {mod}
-          </p>
-          <div class="grid grid-cols-2 gap-2">
-            {#each perms as p (p.code)}
-              <label
-                class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-hover cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedPerms.has(p.code)}
-                  onchange={() => togglePerm(p.code)}
-                  class="h-4 w-4 rounded border-border text-primary focus:shadow-glow"
-                />
-                <span class="font-mono text-xs">{p.code}</span>
-                {#if permissions.hasPermission('permissions:manage') && !p.is_protected}
-                  <button
-                    type="button"
-                    class="ml-auto text-[11px] text-primary hover:underline"
-                    onclick={(event) => {
-                      event.preventDefault();
-                      openPermissionEdit(p);
-                    }}>Editar</button
-                  >
-                {/if}
-              </label>
-            {/each}
-          </div>
-        </div>
-      {/each}
-      <div class="flex justify-end gap-2 pt-2">
-        <Button variant="secondary" onclick={closeModal}>Cancelar</Button><Button
-          type="submit"
-          disabled={formLoading}>{formLoading ? 'Guardando...' : 'Guardar permisos'}</Button
-        >
-      </div>
-    </form>
   {:else if modalMode === 'assign'}
     <form
       onsubmit={(e) => {
@@ -769,18 +667,16 @@
           class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
         />
         <div class="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-border p-3">
-          {#if roleCatalogue.filter((role) =>
-            `${role.name} ${role.description ?? ''}`
+          {#if roleCatalogue.filter((role) => `${role.name} ${role.description ?? ''}`
               .toLocaleLowerCase('es')
-              .includes(assignedRoleQuery.trim().toLocaleLowerCase('es'))
-          ).length === 0}
-            <p class="px-2 py-5 text-center text-xs text-foreground-muted">No se encontraron roles.</p>
+              .includes(assignedRoleQuery.trim().toLocaleLowerCase('es'))).length === 0}
+            <p class="px-2 py-5 text-center text-xs text-foreground-muted">
+              No se encontraron roles.
+            </p>
           {/if}
-          {#each roleCatalogue.filter((role) =>
-            `${role.name} ${role.description ?? ''}`
+          {#each roleCatalogue.filter((role) => `${role.name} ${role.description ?? ''}`
               .toLocaleLowerCase('es')
-              .includes(assignedRoleQuery.trim().toLocaleLowerCase('es'))
-          ) as role (role.id)}
+              .includes(assignedRoleQuery.trim().toLocaleLowerCase('es'))) as role (role.id)}
             <label
               class="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-surface-muted"
             >
