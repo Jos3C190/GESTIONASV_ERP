@@ -64,6 +64,11 @@ function friendlyStatusMessage(status: number): string {
 
 let refreshing: Promise<boolean> | null = null;
 
+function redirectToLoginAfterAuthFailure(): void {
+  if (!browser || window.location.pathname === '/login') return;
+  window.location.replace('/login');
+}
+
 async function tryRefresh(): Promise<boolean> {
   if (!browser) return false;
   if (refreshing) return refreshing;
@@ -137,13 +142,17 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
       headers['Authorization'] = `Bearer ${session.token}`;
       const retryRes = await fetch(url, { ...rest, headers, credentials: 'include' });
       if (!retryRes.ok) {
-        if (retryRes.status === 401) session.clear();
+        if (retryRes.status === 401) {
+          session.clear();
+          redirectToLoginAfterAuthFailure();
+        }
         throw await parseError(retryRes);
       }
       if (retryRes.status === 204) return undefined as T;
       return (await retryRes.json()) as T;
     }
     session.clear();
+    redirectToLoginAfterAuthFailure();
   }
 
   if (!res.ok) {

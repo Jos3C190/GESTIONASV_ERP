@@ -8,7 +8,6 @@ error handling).
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -71,6 +70,17 @@ async def test_cors_preflight(app_client: AsyncClient) -> None:
     )
     assert r.status_code in (200, 204)
     assert r.headers.get("access-control-allow-origin") in ("http://localhost:5173", "*")
+
+
+async def test_cors_headers_are_present_on_auth_errors(app_client: AsyncClient) -> None:
+    """Expired/missing sessions must not be misreported as a CORS failure."""
+    r = await app_client.get(
+        "/api/v1/auth/me",
+        headers={"Origin": "http://localhost:5173"},
+    )
+    assert r.status_code == 401
+    assert r.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    assert r.headers.get("access-control-allow-credentials") == "true"
 
 
 async def test_unknown_route_returns_404(app_client: AsyncClient) -> None:

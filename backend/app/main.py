@@ -11,8 +11,8 @@ Shutdown:
 """
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await dispose_engine()
 
 
-def create_app() -> FastAPI:
+def create_app() -> FastAPI | CORSMiddleware:
     docs_url = "/docs" if not settings.is_production else None
     redoc_url = "/redoc" if not settings.is_production else None
     openapi_url = "/openapi.json" if not settings.is_production else None
@@ -98,23 +98,9 @@ def create_app() -> FastAPI:
         debug=settings.DEBUG,
     )
 
-    # Middlewares (order matters: outermost first).
-    # CORS is the outermost so preflight always works.
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origin_list,
-        allow_origin_regex=settings.CORS_ORIGIN_REGEX,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=[
-            "Authorization",
-            "Content-Type",
-            "X-Requested-With",
-            "X-Company-ID",
-            "X-Branch-ID",
-        ],
-        expose_headers=["X-Request-Id"],
-    )
+    # Register request and security middleware on the FastAPI application.
+    # CORS is applied as a wrapper below so it also decorates error responses
+    # produced by FastAPI's outer exception middleware.
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
 
@@ -134,7 +120,29 @@ def create_app() -> FastAPI:
             "health": "/health",
         }
 
-    return app
+    # Wrap the complete application instead of registering CORS as an inner
+    # FastAPI middleware. Starlette's documented pattern guarantees that
+    # authentication and validation errors retain CORS headers as well.
+    cors_app = CORSMiddleware(
+        app,
+        allow_origins=settings.cors_origin_list,
+        allow_origin_regex=settings.CORS_ORIGIN_REGEX,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-Requested-With",
+            "X-Company-ID",
+            "X-Branch-ID",
+        ],
+        expose_headers=["X-Request-Id"],
+    )
+    # Keep FastAPI's testing/dependency-override contract available on the
+    # outer ASGI wrapper. The inner application reads the same dictionary,
+    # so security fixtures can continue to replace dependencies safely.
+    cors_app.dependency_overrides = app.dependency_overrides  # type: ignore[attr-defined]
+    return cors_app
 
 
 app = create_app()

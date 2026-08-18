@@ -24,6 +24,7 @@ services:
       ENVIRONMENT: production
       DEBUG: "false"
       LOG_LEVEL: WARNING
+      SECURE_COOKIES: "true"
     restart: unless-stopped
     ports: !reset []
     # Let Nginx (or your reverse proxy) expose 8000.

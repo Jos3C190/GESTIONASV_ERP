@@ -50,7 +50,10 @@ services:
       LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10/minute}
       REFRESH_RATE_LIMIT: ${REFRESH_RATE_LIMIT:-30/minute}
       RESET_RATE_LIMIT: ${RESET_RATE_LIMIT:-5/minute}
-      SECURE_COOKIES: ${SECURE_COOKIES:-true}
+      # Local development runs over http://localhost, so Secure cookies would
+      # never be sent and refresh-token rotation would fail after 15 minutes.
+      # Production overrides this to true in compose.prod.yaml.
+      SECURE_COOKIES: ${SECURE_COOKIES:-false}
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
