@@ -318,18 +318,18 @@
     {:else}
       <div class="overflow-x-auto">
         <table class="w-full min-w-[760px] text-sm">
-          <thead class="border-b border-border bg-surface-muted/40"
+          <thead class="border-b border-border bg-surface-muted"
             ><tr
-              ><th class="px-5 py-3 text-left font-semibold text-foreground">Producto</th><th
-                class="px-5 py-3 text-left font-semibold text-foreground">Categoría</th
-              ><th class="px-5 py-3 text-left font-semibold text-foreground">Unidades</th><th
-                class="px-5 py-3 text-left font-semibold text-foreground">Estado</th
-              ><th class="px-5 py-3 text-right font-semibold text-foreground">Acciones</th></tr
+              ><th class="px-4 py-3 text-left font-semibold text-foreground">Producto</th><th
+                class="px-4 py-3 text-left font-semibold text-foreground">Categoría</th
+              ><th class="px-4 py-3 text-left font-semibold text-foreground">Unidades</th><th
+                class="px-4 py-3 text-left font-semibold text-foreground">Estado</th
+              ><th class="px-4 py-3 text-right font-semibold text-foreground"></th></tr
             ></thead
           ><tbody class="divide-y divide-border">
             {#each products as product (product.id_product)}
-              <tr class="transition-colors hover:bg-surface-muted/30">
-                <td class="px-5 py-3.5"
+              <tr class="hover:bg-surface-muted">
+                <td class="px-4 py-3"
                   ><div class="flex items-center gap-3">
                     <a
                       href={`/products/${product.id_product}`}
@@ -378,10 +378,8 @@
                     </div>
                   </div></td
                 >
-                <td class="px-5 py-3.5 text-foreground-muted"
-                  >{categoryName(product.id_category)}</td
-                >
-                <td class="px-5 py-3.5 text-xs text-foreground-muted"
+                <td class="px-4 py-3 text-foreground-muted">{categoryName(product.id_category)}</td>
+                <td class="px-4 py-3 text-xs text-foreground-muted"
                   ><span
                     >Compra {units.find((unit) => unit.id_unit === product.purchase_unit)?.name ??
                       `#${product.purchase_unit}`}</span
@@ -390,12 +388,12 @@
                       `#${product.sale_unit}`}</span
                   ></td
                 >
-                <td class="px-5 py-3.5"
+                <td class="px-4 py-3"
                   ><Badge variant={product.is_active ? 'success' : 'neutral'}
                     >{product.is_active ? 'Activo' : 'Inactivo'}</Badge
                   ></td
                 >
-                <td class="px-5 py-3.5 text-right"
+                <td class="px-4 py-3 text-right"
                   ><KebabMenu
                     items={menuItems(product)}
                     ariaLabel={`Acciones de ${product.name}`}
@@ -406,24 +404,22 @@
           </tbody>
         </table>
       </div>
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs text-foreground-muted"
-      >
-        <span>{totalItems} producto(s) · Página {page} de {totalPages}</span>
-        <div class="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={page <= 1}
-            onclick={() => goToPage(page - 1)}>Anterior</Button
-          ><Button
-            size="sm"
-            variant="secondary"
-            disabled={page >= totalPages}
-            onclick={() => goToPage(page + 1)}>Siguiente</Button
-          >
-        </div>
-      </div>
     {/if}
   </Card>
+  {#if totalPages > 1}<div class="mt-4 flex items-center justify-between">
+      <p class="text-xs text-foreground-muted">Página {page} de {totalPages}</p>
+      <div class="flex gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onclick={() => goToPage(page - 1)}
+          disabled={page <= 1}>Anterior</Button
+        ><Button
+          variant="secondary"
+          size="sm"
+          onclick={() => goToPage(page + 1)}
+          disabled={page >= totalPages}>Siguiente</Button
+        >
+      </div>
+    </div>{/if}
 </div>
