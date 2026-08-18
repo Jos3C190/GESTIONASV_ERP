@@ -142,6 +142,12 @@
         label: 'Ver detalle',
         icon: 'detail',
         onClick: () => void goto(`/products/${product.id_product}`)
+      },
+      {
+        id: 'variants',
+        label: product.variant_mode === 'template' ? 'Gestionar variantes' : 'Configurar variantes',
+        icon: 'variants',
+        onClick: () => void goto(`/products/${product.id_product}/variants`)
       }
     ];
     if (permissions.hasPermission('products:manage')) {
@@ -376,7 +382,10 @@
                       <a
                         href={`/products/${product.id_product}`}
                         class="block truncate font-medium text-foreground hover:text-primary"
-                        >{product.name}</a
+                        >{product.name}{#if product.variant_mode === 'template'}<span
+                            class="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                            >Familia · {product.variant_count ?? 0}</span
+                          >{/if}</a
                       >
                       <div class="mt-0.5 flex items-center gap-2 text-xs text-foreground-muted">
                         <span class="font-mono">{product.sku}</span

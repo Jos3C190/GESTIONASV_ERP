@@ -723,6 +723,10 @@
               bind:value={form.size}
               placeholder="Ej. Mediano"
             />
+            <p class="-mt-2 text-xs text-foreground-muted sm:col-span-2 lg:col-span-3">
+              Use este campo para tamaños comerciales como S, M o XL. Para combinaciones como color
+              o talla use Variantes y atributos.
+            </p>
             <FormField
               id="product-dimension-length"
               label="Largo"

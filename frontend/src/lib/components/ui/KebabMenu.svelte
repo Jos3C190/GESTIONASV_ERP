@@ -17,6 +17,7 @@
       | 'unlock'
       | 'power'
       | 'locations'
+      | 'variants'
       | 'custom';
     variant?: 'default' | 'danger';
     onClick: () => void;
@@ -328,6 +329,23 @@
               cy="10"
               r="3"
             />
+          </svg>
+        {:else if item.icon === 'variants'}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            class="text-primary flex-none"
+            aria-hidden="true"
+          >
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
+            <rect x="14" y="14" width="7" height="7" />
           </svg>
         {/if}
         {item.label}

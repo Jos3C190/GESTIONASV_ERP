@@ -103,13 +103,18 @@ export interface Product {
   images: ProductImage[];
   image_count: number;
   cover_image: ProductImage | null;
+  variant_mode?: 'standalone' | 'template';
+  variant_count?: number;
+  variant_attributes?: ProductFamilyAttribute[];
+  variants?: ProductVariant[];
   created_at?: string;
   updated_at?: string;
 }
 
 export interface ProductIdentifier {
   id: string;
-  product_id: number;
+  product_id?: number | null;
+  variant_id?: string | null;
   company_id: string;
   identifier_type: 'ean' | 'upc' | 'gtin' | 'isbn' | 'manufacturer' | 'internal' | 'other';
   value: string;
@@ -142,7 +147,8 @@ export type ProductSupplierDraft = Omit<ProductSupplier, 'id' | 'product_id' | '
 
 export interface ProductImage {
   id: string;
-  product_id: number;
+  product_id?: number | null;
+  variant_id?: string | null;
   source_type: 'cloudinary' | 'external';
   url: string;
   media_asset_id?: string | null;
@@ -161,4 +167,99 @@ export interface ProductImageDraft {
   alt_text?: string | null;
   position: number;
   is_cover: boolean;
+}
+
+export interface ProductFamilyAttributeValue {
+  id: string;
+  attribute_id: string;
+  code: string;
+  label: string;
+  position: number;
+  is_active: boolean;
+}
+
+export interface ProductFamilyAttribute {
+  id: string;
+  product_id: number;
+  code: string;
+  name: string;
+  position: number;
+  is_active: boolean;
+  values: ProductFamilyAttributeValue[];
+}
+
+export interface ProductVariantValue {
+  attribute_code: string;
+  value_code: string;
+  label: string;
+}
+
+export interface ProductVariantImageDraft {
+  source_type: 'cloudinary' | 'external';
+  url: string;
+  media_asset_id?: string | null;
+  alt_text?: string | null;
+}
+
+export interface ProductVariantDraft {
+  id?: string | null;
+  sku: string;
+  name_override?: string | null;
+  lifecycle_status: 'draft' | 'active' | 'blocked' | 'discontinued' | 'retired';
+  values: { attribute_code: string; value_code: string }[];
+  identifiers: {
+    identifier_type: ProductIdentifier['identifier_type'];
+    value: string;
+    is_primary?: boolean;
+  }[];
+  image?: ProductVariantImageDraft | null;
+}
+
+export interface ProductVariant {
+  id: string;
+  product_id: number;
+  company_id: string;
+  sku: string;
+  name_override?: string | null;
+  display_name: string;
+  combination_key: string;
+  lifecycle_status: 'draft' | 'active' | 'blocked' | 'discontinued' | 'retired';
+  is_active: boolean;
+  values: ProductVariantValue[];
+  identifiers: ProductIdentifier[];
+  image?: ProductImage | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductVariantUpdateInput {
+  sku?: string;
+  name_override?: string | null;
+  lifecycle_status?: ProductVariant['lifecycle_status'];
+  identifiers?: ProductVariantDraft['identifiers'];
+  image?: ProductVariantImageDraft | null;
+  expected_updated_at: string;
+}
+
+export interface ProductVariantConfig {
+  attributes: {
+    /** Stable UI identity; stripped before sending variant_config to the API. */
+    _key?: string;
+    code: string;
+    name: string;
+    position: number;
+    values: { _key?: string; code: string; label: string; position: number }[];
+  }[];
+  variants: ProductVariantDraft[];
+}
+
+/** API-safe representation without editor-only stable keys. */
+export interface ProductVariantConfigPayload {
+  attributes: {
+    code: string;
+    name: string;
+    position: number;
+    values: { code: string; label: string; position: number }[];
+  }[];
+  variants: ProductVariantDraft[];
 }

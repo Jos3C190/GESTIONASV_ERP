@@ -4,6 +4,9 @@ import type {
   Country,
   Product,
   ProductImageDraft,
+  ProductVariant,
+  ProductVariantConfigPayload,
+  ProductVariantUpdateInput,
   SubCategory,
   Unit
 } from '$lib/types/catalog';
@@ -213,6 +216,7 @@ export const catalogApi = {
     max_stack_height?: number | null;
     handling_notes?: string;
     images?: ProductImageDraft[];
+    variant_config?: ProductVariantConfigPayload;
   }) =>
     apiFetch<Product>('/catalog/products', {
       method: 'POST',
@@ -265,10 +269,35 @@ export const catalogApi = {
       max_stack_height: number | null;
       handling_notes: string;
       images: ProductImageDraft[];
+      variant_config: ProductVariantConfigPayload;
     }>
   ) =>
     apiFetch<Product>(`/catalog/products/${id}`, {
       method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+  getProductVariants: (productId: number) =>
+    apiFetch<ProductVariant[]>(`/catalog/products/${productId}/variants`),
+  previewProductVariants: (productId: number, data: ProductVariantConfigPayload) =>
+    apiFetch<{
+      attribute_count: number;
+      variant_count: number;
+      attributes: unknown[];
+      variants: unknown[];
+    }>(`/catalog/products/${productId}/variants/preview`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  replaceProductVariantConfig: (productId: number, data: ProductVariantConfigPayload) =>
+    apiFetch<Product>(`/catalog/products/${productId}/variant-config`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+  getProductVariant: (productId: number, variantId: string) =>
+    apiFetch<ProductVariant>(`/catalog/products/${productId}/variants/${variantId}`),
+  updateProductVariant: (productId: number, variantId: string, data: ProductVariantUpdateInput) =>
+    apiFetch<ProductVariant>(`/catalog/products/${productId}/variants/${variantId}`, {
+      method: 'PATCH',
       body: JSON.stringify(data)
     }),
   listProductIdentifiers: (productId: number) =>

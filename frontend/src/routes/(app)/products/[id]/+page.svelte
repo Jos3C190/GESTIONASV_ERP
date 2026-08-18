@@ -89,6 +89,31 @@
         Información comercial, operativa y visual del producto.
       </p>
     </div>
+    {#if product}
+      <Button
+        variant="secondary"
+        size="sm"
+        onclick={() => product && goto(`/products/${product.id_product}/variants`)}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          ><path d="M4 5h16M4 12h16M4 19h16" /><circle cx="8" cy="5" r="2" /><circle
+            cx="16"
+            cy="12"
+            r="2"
+          /><circle cx="10" cy="19" r="2" /></svg
+        >
+        {product.variant_mode === 'template' ? 'Gestionar variantes' : 'Configurar variantes'}
+      </Button>
+    {/if}
     {#if product && permissions.hasPermission('products:manage')}
       <Button
         variant="secondary"
@@ -359,6 +384,99 @@
           {/if}
         </Card>
       </div>
+
+      {#if product.variant_mode === 'template'}
+        <Card class="p-6">
+          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 class="text-sm font-semibold text-foreground">Familia y variantes</h3>
+              <p class="mt-1 text-xs text-foreground-muted">
+                El producto padre es una plantilla; las operaciones futuras usarán el SKU de cada
+                variante.
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <Badge variant="primary"
+                >{product.variant_count ?? product.variants?.length ?? 0} variantes</Badge
+              >
+              <Button
+                size="sm"
+                variant="secondary"
+                onclick={() => product && goto(`/products/${product.id_product}/variants`)}
+                >Gestionar</Button
+              >
+            </div>
+          </div>
+          {#if product.variant_attributes?.length}
+            <div class="mb-4 flex flex-wrap gap-2">
+              {#each product.variant_attributes as attribute (attribute.id)}
+                <span
+                  class="rounded-full border border-border px-2.5 py-1 text-xs text-foreground-muted"
+                  >{attribute.name}: {attribute.values
+                    .filter((value) => value.is_active)
+                    .map((value) => value.label)
+                    .join(', ')}</span
+                >
+              {/each}
+            </div>
+          {/if}
+          <div class="overflow-x-auto rounded-lg border border-border">
+            <table class="w-full min-w-[640px] text-sm">
+              <thead
+                class="border-b border-border bg-surface-muted/30 text-left text-xs text-foreground-muted"
+                ><tr
+                  ><th class="px-3 py-2">Imagen</th><th class="px-3 py-2">SKU</th><th
+                    class="px-3 py-2">Combinación</th
+                  ><th class="px-3 py-2">Estado</th><th class="px-3 py-2">Identificadores</th><th class="px-3 py-2">Acciones</th></tr
+                ></thead
+              >
+              <tbody class="divide-y divide-border">
+                {#each product.variants ?? [] as variant (variant.id)}
+                  <tr>
+                    <td class="px-3 py-2">
+                      {#if variant.image?.url}
+                        <img
+                          src={variant.image.url}
+                          alt={variant.display_name}
+                          loading="lazy"
+                          referrerpolicy="no-referrer"
+                          class="h-10 w-10 rounded-md border border-border object-cover"
+                        />
+                      {:else}
+                        <span
+                          class="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-surface-muted text-xs text-foreground-subtle"
+                          aria-label="Sin imagen">—</span
+                        >
+                      {/if}
+                    </td>
+                    <td class="px-3 py-2 font-mono text-foreground"
+                      >{variant.sku}
+                      <div class="font-sans text-xs text-foreground-muted">
+                        {variant.name_override || variant.display_name}
+                      </div></td
+                    >
+                    <td class="px-3 py-2 text-foreground-muted"
+                      >{variant.values
+                        .map((value) => `${value.attribute_code}: ${value.label}`)
+                        .join(' · ')}</td
+                    >
+                    <td class="px-3 py-2 text-foreground-muted">{variant.lifecycle_status}</td>
+                    <td class="px-3 py-2 text-foreground-muted"
+                      >{variant.identifiers.length || '—'}</td
+                    >
+                    <td class="whitespace-nowrap px-3 py-2">
+                      <a
+                        class="text-xs font-medium text-primary hover:underline"
+                        href={`/products/${product.id_product}/variants/${variant.id}/edit`}
+                      >Editar variante</a>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      {/if}
 
       <Card class="p-6">
         <div class="mb-4 flex items-center justify-between gap-3">
