@@ -34,6 +34,10 @@ if TYPE_CHECKING:
         ProductManufacturerModel,
         ProductSupplierModel,
     )
+    from app.infrastructure.models.product_variant import (
+        ProductFamilyAttributeModel,
+        ProductVariantModel,
+    )
     from app.infrastructure.models.supplier import SupplierModel
 
 
@@ -267,6 +271,7 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
     stackable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     max_stack_height: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
     handling_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    variant_mode: Mapped[str] = mapped_column(String(16), nullable=False, server_default="standalone")
     purchase_unit: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     sale_unit: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -339,6 +344,7 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint("product_kind IN ('goods','service')", name="ck_products_product_kind"),
+        CheckConstraint("variant_mode IN ('standalone','template')", name="ck_products_variant_mode"),
         CheckConstraint("lifecycle_status IN ('draft','active','blocked','discontinued','retired')", name="ck_products_lifecycle_status"),
         CheckConstraint("is_active = (lifecycle_status = 'active')", name="ck_products_active_matches_lifecycle"),
         CheckConstraint("storage_condition IS NULL OR storage_condition IN ('ambient','cool','refrigerated','frozen','dry','other')", name="ck_products_storage_condition"),
@@ -364,6 +370,20 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
     )
     supplier_links: Mapped[list[ProductSupplierModel]] = relationship(
         "ProductSupplierModel", back_populates="product", cascade="all, delete-orphan", overlaps="supplier,product_links"
+    )
+    variants: Mapped[list[ProductVariantModel]] = relationship(
+        "ProductVariantModel",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductVariantModel.created_at",
+        lazy="selectin",
+    )
+    variant_attributes: Mapped[list[ProductFamilyAttributeModel]] = relationship(
+        "ProductFamilyAttributeModel",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductFamilyAttributeModel.position",
+        lazy="selectin",
     )
     brand: Mapped[ProductBrandModel | None] = relationship("ProductBrandModel", foreign_keys=[brand_id], viewonly=True)
     manufacturer: Mapped[ProductManufacturerModel | None] = relationship("ProductManufacturerModel", foreign_keys=[manufacturer_id], viewonly=True)

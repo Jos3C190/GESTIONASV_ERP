@@ -1,5 +1,25 @@
 # Database Schema
 
+## Product families and variants (0037)
+
+The catalog keeps the current product as the family parent. `products.variant_mode`
+is `standalone` for regular products and becomes `template` when the first
+variant is created. Family attributes and allowed values live in
+`product_family_attributes` and `product_family_attribute_values`; variants,
+their canonical combinations and lifecycle are stored in `product_variants`.
+`product_variant_attribute_values` enforces one value per attribute. A variant
+may have one primary image in `product_variant_images`.
+
+`product_sku_registry` reserves SKUs across products and variants within a
+company. `product_identifiers` now targets exactly one product or variant, so
+EAN/UPC/GTIN uniqueness cannot be bypassed by moving between tables. Existing
+products are not backfilled into families. The migration is fail-closed on
+downgrade when variant data exists.
+
+Variants are catalog identity only in this revision. Inventory, purchasing,
+sales, pricing, lot and serial tables must reference `variant_id` only when
+those bounded contexts are implemented.
+
 > **Versión:** `v1.0.0` | **Última actualización:** `22/07/2026`  
 > Complete schema design and conventions for PostgreSQL 16.
 
@@ -268,9 +288,11 @@ a user-editable value.
 
 The product master intentionally does not yet contain inventory balances,
 reorder policies, purchase documents, landed-cost allocations, price lists,
-packaging conversions, variants, fiscal accounts or compliance documents.
-Those concepts require consuming modules and transactional invariants; adding
-columns before those workflows exist would create disconnected data and false
+packaging conversions, fiscal accounts or compliance documents. Variant
+families are present as catalog identity, but inventory, purchasing, sales,
+pricing, lot/serial and compliance records do not yet consume `variant_id`.
+Those operational concepts require consuming modules and transactional invariants; adding
+operational columns before those workflows exist would create disconnected data and false
 operational guarantees. The complete backlog, dependencies, activation gates
 and acceptance criteria are maintained in
 [`docs/product-module-future-debt.txt`](product-module-future-debt.txt).

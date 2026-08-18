@@ -178,16 +178,84 @@ Prioridad: media
 Módulo dependiente: Catálogo, Ventas e Inventario
 Problema que resuelve: El campo `size` no representa combinaciones como color,
 talla, sabor o material.
-Datos requeridos: familia, atributo, valor, combinación válida, SKU, código,
-imagen, proveedor y precio por variante.
-Reglas de negocio: cada variante tiene identidad propia; combinaciones únicas;
-SKU, imágenes, abastecimiento y existencias pertenecen a la variante, no se
-comparten accidentalmente con la familia.
+Datos requeridos: familia, atributo, valor, combinación válida, SKU,
+identificadores e imagen principal opcional.
+Reglas de negocio: cada variante tiene identidad propia y combinaciones únicas;
+SKU, identificadores e imagen pertenecen a la variante. Los proveedores y
+costos se heredan deliberadamente del padre hasta que Compras defina reglas
+específicas por variante.
 Riesgos: duplicar SKU, mezclar inventario entre variantes o migrar `size` de
 forma incorrecta.
 Criterio de activación: necesidad confirmada de familias con más de un SKU.
-Criterio de aceptación: una variante puede venderse, abastecerse y rastrearse
-de forma independiente.
+Criterio de aceptación: el catálogo permite definir atributos, generar
+combinaciones, reservar SKU e identificar la variante sin mezclarla con el
+producto padre.
+Estado: implementada (maestro de catálogo y edición individual; no incluye
+inventario, compras, ventas ni precios)
+
+VAR-002 | Inventario por variante
+---------------------------------
+Prioridad: alta
+Módulo dependiente: Inventario
+Problema que resuelve: las existencias, reservas y movimientos todavía no
+consumen `variant_id`, por lo que una familia no puede tener saldo operativo
+separado por color, talla u otra combinación.
+Datos requeridos: `variant_id`, almacén, ubicación, unidad base, cantidad,
+movimiento, lote/serie y documento origen.
+Reglas de negocio: los saldos deben pertenecer a la variante o al producto
+standalone, nunca a ambos; el padre template no puede recibir existencias.
+Riesgos: mezclar inventario entre variantes y saldos imposibles de auditar.
+Criterio de activación: existir kardex, existencias y reservas transaccionales.
+Criterio de aceptación: cada movimiento conserva la variante y los saldos por
+SKU son reproducibles.
+Estado: bloqueada
+
+VAR-003 | Compras por variante
+-----------------------------
+Prioridad: alta
+Módulo dependiente: Compras y recepción
+Problema que resuelve: las órdenes y recepciones aún enlazan únicamente al
+producto padre.
+Datos requeridos: `variant_id`, SKU del proveedor, precio, moneda, MOQ,
+plazo y unidad de compra.
+Reglas de negocio: proveedores y costos se heredan del padre hasta que Compras
+defina excepciones explícitas por variante.
+Riesgos: comprar una variante y recepcionarla en otra.
+Criterio de activación: órdenes de compra y recepción parcial operativas.
+Criterio de aceptación: una orden identifica y recibe exactamente la variante
+solicitada.
+Estado: bloqueada
+
+VAR-004 | Ventas y precios por variante
+---------------------------------------
+Prioridad: alta
+Módulo dependiente: Ventas y Asignación de precios
+Problema que resuelve: precios y documentos comerciales aún no consumen
+`variant_id`.
+Datos requeridos: `variant_id`, lista, moneda, unidad, vigencia, segmento,
+descuento y reglas de redondeo.
+Reglas de negocio: el precio debe resolverse por variante cuando exista y
+caer al padre solo con una política explícita.
+Riesgos: cobrar precio de otra combinación o aplicar descuentos incorrectos.
+Criterio de activación: documentos de venta y listas de precios operativas.
+Criterio de aceptación: cotización/factura conserva la variante elegida y el
+precio aplicado es determinista.
+Estado: bloqueada
+
+VAR-005 | Lotes, series y trazabilidad por variante
+---------------------------------------------------
+Prioridad: alta
+Módulo dependiente: Inventario y Calidad
+Problema que resuelve: la trazabilidad futura debe identificar la variante,
+no solo la familia.
+Datos requeridos: `variant_id`, lote/serie, caducidad, recepción, ubicación,
+estado de calidad y documento origen.
+Reglas de negocio: una variante retirada conserva su SKU para reconstruir la
+historia; no se reutiliza su combinación.
+Riesgos: retiros incompletos y confusión entre variantes con la misma familia.
+Criterio de activación: recepción, lotes y series disponibles.
+Criterio de aceptación: se puede rastrear un lote o serie desde recepción
+hasta todas sus salidas.
 Estado: bloqueada
 
 FIS-001 | Fiscalidad y contabilidad del producto

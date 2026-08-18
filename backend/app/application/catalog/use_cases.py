@@ -10,9 +10,14 @@ from app.domain.entities.product_image import (
     ProductImageDraft,
     normalize_product_image_drafts,
 )
+from app.domain.entities.product_variants import (
+    ProductVariantConfigDraft,
+    ProductVariantUpdateDraft,
+)
 from app.domain.ports.catalog_repository import CatalogRepository
 from app.domain.product_master import normalize_keywords
 from app.domain.product_measurements import validate_measurements
+from app.domain.product_variants import normalize_variant_config, normalize_variant_update
 
 
 class CatalogUseCases:
@@ -193,6 +198,47 @@ class CatalogUseCases:
             raise NotFoundError("Producto no encontrado", code="product_not_found")
         return product
 
+    async def get_variant(self, company_id: uuid.UUID, product_id: int, variant_id: uuid.UUID):
+        variant = await self._repo.get_variant(company_id, product_id, variant_id)
+        if not variant:
+            raise NotFoundError("Variante no encontrada", code="product_variant_not_found")
+        return variant
+
+    async def update_variant(
+        self,
+        company_id: uuid.UUID,
+        product_id: int,
+        variant_id: uuid.UUID,
+        draft: ProductVariantUpdateDraft,
+    ):
+        try:
+            return await self._repo.update_variant(
+                company_id,
+                product_id,
+                variant_id,
+                normalize_variant_update(draft),
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="product_variant_invalid") from exc
+
+    async def replace_variant_config(
+        self,
+        company_id: uuid.UUID,
+        product_id: int,
+        variant_config: ProductVariantConfigDraft,
+    ) -> Product:
+        try:
+            product = await self._repo.replace_variant_config(
+                company_id,
+                product_id,
+                self._normalize_variant_config(variant_config),
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="product_variants_invalid") from exc
+        if not product:
+            raise NotFoundError("Producto no encontrado", code="product_not_found")
+        return product
+
     async def create_product(
         self,
         company_id: uuid.UUID,
@@ -238,6 +284,7 @@ class CatalogUseCases:
         max_stack_height: object = None,
         handling_notes: str | None = None,
         images: list[ProductImageDraft] | None = None,
+        variant_config: ProductVariantConfigDraft | None = None,
     ) -> Product:
         # Validate unique SKU
         existing = await self._repo.get_product_by_sku(company_id, sku)
@@ -277,6 +324,7 @@ class CatalogUseCases:
             raise ValidationError(str(exc), code="product_measurements_invalid") from exc
 
         normalized_images = self._normalize_images(images)
+        normalized_variants = self._normalize_variant_config(variant_config)
         try:
             normalized_keywords = normalize_keywords(keywords)
         except ValueError as exc:
@@ -286,57 +334,63 @@ class CatalogUseCases:
         )) or (product_kind == "service" and (not stackable or any((is_fragile, keep_dry, keep_upright)))):
             raise ValidationError("Los datos de almacenamiento solo aplican a bienes físicos.", code="product_service_storage_invalid")
         is_active = lifecycle_status in ("active",)
-        return await self._repo.create_product(
-            company_id,
-            category_id=category_id,
-            sub_category_id=sub_category_id,
-            sku=sku,
-            name=name,
-            purchase_unit_id=purchase_unit_id,
-            sale_unit_id=sale_unit_id,
-            original_code=original_code,
-            internal_code=internal_code,
-            size=size,
-            dimension_length=length,
-            dimension_width=width,
-            dimension_height=height,
-            dimension_unit=dimension_unit,
-            weight=product_weight,
-            weight_unit=weight_unit,
-            description=description,
-            presentation=presentation,
-            product_kind=product_kind,
-            lifecycle_status=lifecycle_status,
-            can_purchase=can_purchase,
-            can_sell=can_sell,
-            sales_name=sales_name,
-            internal_name=internal_name,
-            document_name=document_name,
-            sales_description=sales_description,
-            purchase_description=purchase_description,
-            internal_notes=internal_notes,
-            keywords=normalized_keywords,
-            origin_country_id=origin_country_id,
-            brand_id=brand_id,
-            manufacturer_id=manufacturer_id,
-            storage_condition=storage_condition,
-            storage_temperature_min_c=storage_temperature_min_c,
-            storage_temperature_max_c=storage_temperature_max_c,
-            storage_humidity_max_percent=storage_humidity_max_percent,
-            is_fragile=is_fragile,
-            keep_dry=keep_dry,
-            keep_upright=keep_upright,
-            stackable=stackable,
-            max_stack_height=max_stack_height,
-            handling_notes=handling_notes,
-            is_active=is_active,
-            images=normalized_images,
-        )
+        try:
+            return await self._repo.create_product(
+                company_id,
+                category_id=category_id,
+                sub_category_id=sub_category_id,
+                sku=sku,
+                name=name,
+                purchase_unit_id=purchase_unit_id,
+                sale_unit_id=sale_unit_id,
+                original_code=original_code,
+                internal_code=internal_code,
+                size=size,
+                dimension_length=length,
+                dimension_width=width,
+                dimension_height=height,
+                dimension_unit=dimension_unit,
+                weight=product_weight,
+                weight_unit=weight_unit,
+                description=description,
+                presentation=presentation,
+                product_kind=product_kind,
+                lifecycle_status=lifecycle_status,
+                can_purchase=can_purchase,
+                can_sell=can_sell,
+                sales_name=sales_name,
+                internal_name=internal_name,
+                document_name=document_name,
+                sales_description=sales_description,
+                purchase_description=purchase_description,
+                internal_notes=internal_notes,
+                keywords=normalized_keywords,
+                origin_country_id=origin_country_id,
+                brand_id=brand_id,
+                manufacturer_id=manufacturer_id,
+                storage_condition=storage_condition,
+                storage_temperature_min_c=storage_temperature_min_c,
+                storage_temperature_max_c=storage_temperature_max_c,
+                storage_humidity_max_percent=storage_humidity_max_percent,
+                is_fragile=is_fragile,
+                keep_dry=keep_dry,
+                keep_upright=keep_upright,
+                stackable=stackable,
+                max_stack_height=max_stack_height,
+                handling_notes=handling_notes,
+                is_active=is_active,
+                images=normalized_images,
+                variant_config=normalized_variants,
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="product_variants_invalid") from exc
 
     async def update_product(self, company_id: uuid.UUID, product_id: int, **changes: object) -> Product:  # noqa: C901
         changes = dict(changes)
         current = await self.get_product(company_id, product_id)
         images_provided, normalized_images = self._extract_images(changes)
+        variants_provided = "variant_config" in changes
+        normalized_variants = self._normalize_variant_config(changes.pop("variant_config", None)) if variants_provided else None
         required = ("category_id", "sku", "name", "purchase_unit_id", "sale_unit_id")
         if any(field in changes and changes[field] is None for field in required):
             raise ValidationError("No se puede vaciar un campo obligatorio del producto.", code="product_required_field")
@@ -388,10 +442,15 @@ class CatalogUseCases:
                 )
             changes["lifecycle_status"] = "active" if changes["is_active"] else "blocked"
 
-        repository_changes = (
-            {**changes, "images": normalized_images} if images_provided else changes
-        )
-        product = await self._repo.update_product(company_id, product_id, **repository_changes)
+        repository_changes = dict(changes)
+        if images_provided:
+            repository_changes["images"] = normalized_images
+        if variants_provided:
+            repository_changes["variant_config"] = normalized_variants
+        try:
+            product = await self._repo.update_product(company_id, product_id, **repository_changes)
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="product_variants_invalid") from exc
         if not product:
             raise NotFoundError("Producto no encontrado", code="product_not_found")
         return product
@@ -454,3 +513,12 @@ class CatalogUseCases:
             return normalize_product_image_drafts(images)
         except ValueError as exc:
             raise ValidationError(str(exc), code="product_images_invalid") from exc
+
+    @staticmethod
+    def _normalize_variant_config(config: ProductVariantConfigDraft | None) -> ProductVariantConfigDraft | None:
+        if config is None:
+            return None
+        try:
+            return normalize_variant_config(config)
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="product_variants_invalid") from exc

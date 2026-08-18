@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from app.domain.entities.product_image import ProductImage
 from app.domain.entities.product_master import ProductIdentifier, ProductSupplier
+from app.domain.entities.product_variants import ProductFamilyAttribute, ProductVariant
 from app.domain.product_measurements import calculate_volume, format_dimension_summary
 
 
@@ -121,6 +122,10 @@ class Product:
     images: tuple[ProductImage, ...] = ()
     image_count: int = 0
     cover_image: ProductImage | None = None
+    variant_mode: str = "standalone"
+    variant_count: int = 0
+    variant_attributes: tuple[ProductFamilyAttribute, ...] = ()
+    variants: tuple[ProductVariant, ...] = ()
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

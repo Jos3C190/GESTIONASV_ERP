@@ -12,6 +12,39 @@
 
 ## 2. Endpoints
 
+### Product families and variants
+
+`POST` and `PUT /api/v1/catalog/products` accept the optional `variant_config`
+object with up to five attributes and 500 variants. Sending it is protected by
+`products:variants`; variant images additionally require `products:images` and
+local Cloudinary uploads require `media.upload`. Omitting it on update preserves
+the existing family configuration. `variants` is a sparse declaration: it does
+not need to contain the full Cartesian product of attribute values. This allows
+business combinations such as `Rojo/S` and `Azul/M` without creating
+unsupported combinations. On a replacement, an existing variant omitted from
+the declaration is retired (never physically deleted), so clients should show
+an explicit confirmation before saving that change.
+
+| Method | Path | Permission | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/catalog/products/{id}/variants` | `products:read` | List family variants |
+| `GET` | `/api/v1/catalog/products/{id}/variants/{variant_id}` | `products:read` | Get one variant |
+| `PATCH` | `/api/v1/catalog/products/{id}/variants/{variant_id}` | field-dependent | Edit SKU, name, status, identifiers or image without changing the combination |
+| `POST` | `/api/v1/catalog/products/{id}/variants/preview` | `products:variants` | Validate and preview a complete or sparse combination set |
+| `PUT` | `/api/v1/catalog/products/{id}/variant-config` | `products:variants` | Replace declared attributes and variants atomically |
+
+The product detail includes complete family attributes, variants, identifiers
+and primary variant images. Product lists expose only `variant_mode` and
+`variant_count`.
+
+The individual `PATCH` is sparse: omitted fields are preserved; `name_override: null`,
+`identifiers: []` and `image: null` explicitly clear those values. It requires
+`expected_updated_at` and returns `409 variant_stale` when the row changed after
+it was loaded. The attribute combination is intentionally immutable in this
+endpoint; structural changes belong in the family manager. General variant
+fields require `products:variants`, identifiers require `products:identifiers`,
+and images require `products:images` (plus `media.upload` only for local uploads).
+
 ### Health (no auth)
 | Method | Path | Description |
 |--------|------|-------------|
@@ -92,8 +125,10 @@ are present. Omitting measurement fields on update preserves them; sending
 ### Deferred product API scope
 
 The API does not expose inventory balances, purchase orders, landed-cost
-allocation, price lists, packaging conversions, product variants, fiscal
-accounting rules or compliance documents yet. These endpoints remain deferred
+allocation, price lists, packaging conversions, fiscal accounting rules or
+compliance documents yet. Variant master data is available, but operational
+inventory, purchasing, sales and pricing endpoints that consume `variant_id`
+remain deferred
 until their consuming modules exist. The dependency and acceptance matrix is
 documented in [`docs/product-module-future-debt.txt`](product-module-future-debt.txt).
 

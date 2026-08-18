@@ -6,6 +6,10 @@ from typing import Protocol
 
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit
 from app.domain.entities.product_image import ProductImageDraft
+from app.domain.entities.product_variants import (
+    ProductVariantConfigDraft,
+    ProductVariantUpdateDraft,
+)
 
 
 class CatalogRepository(Protocol):
@@ -116,6 +120,7 @@ class CatalogRepository(Protocol):
         description: str | None = None,
         presentation: str | None = None,
         images: list[ProductImageDraft] | None = None,
+        variant_config: ProductVariantConfigDraft | None = None,
     ) -> Product:
         ...
 
@@ -125,4 +130,19 @@ class CatalogRepository(Protocol):
         product_id: int,
         **kwargs,
     ) -> Product | None:
+        ...
+
+    async def get_variant(self, company_id: uuid.UUID, product_id: int, variant_id: uuid.UUID) -> object | None:
+        ...
+
+    async def update_variant(
+        self,
+        company_id: uuid.UUID,
+        product_id: int,
+        variant_id: uuid.UUID,
+        draft: ProductVariantUpdateDraft,
+    ) -> object | None:
+        ...
+
+    async def replace_variant_config(self, company_id: uuid.UUID, product_id: int, config: ProductVariantConfigDraft) -> Product:
         ...

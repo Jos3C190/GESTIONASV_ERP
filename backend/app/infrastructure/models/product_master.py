@@ -30,6 +30,7 @@ from app.infrastructure.db.base import Base, TimestampMixin
 if TYPE_CHECKING:
     from app.infrastructure.models.catalog import ProductModel
     from app.infrastructure.models.supplier import SupplierModel
+    from app.infrastructure.models.product_variant import ProductVariantModel
 
 
 class ProductBrandModel(TimestampMixin, Base):
@@ -65,7 +66,8 @@ class ProductIdentifierModel(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
-    product_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    product_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    variant_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True, index=True)
     identifier_type: Mapped[str] = mapped_column(String(24), nullable=False)
     value: Mapped[str] = mapped_column(String(160), nullable=False)
     normalized_value: Mapped[str] = mapped_column(String(160), nullable=False)
@@ -73,11 +75,15 @@ class ProductIdentifierModel(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     __table_args__ = (
         ForeignKeyConstraint(["company_id", "product_id"], ["products.company_id", "products.id_product"], ondelete="CASCADE", name="fk_product_identifiers_product_company"),
+        ForeignKeyConstraint(["company_id", "variant_id"], ["product_variants.company_id", "product_variants.id"], ondelete="CASCADE", name="fk_product_identifiers_variant_company"),
         UniqueConstraint("company_id", "identifier_type", "normalized_value", name="uq_product_identifiers_company_value"),
         Index("uq_product_identifiers_primary", "product_id", "identifier_type", unique=True, postgresql_where=text("is_primary = true")),
+        Index("uq_product_identifiers_variant_primary", "variant_id", "identifier_type", unique=True, postgresql_where=text("is_primary = true AND variant_id IS NOT NULL")),
         CheckConstraint("identifier_type IN ('ean','upc','gtin','isbn','manufacturer','internal','other')", name="ck_product_identifiers_type"),
+        CheckConstraint("(product_id IS NOT NULL) <> (variant_id IS NOT NULL)", name="ck_product_identifiers_exact_target"),
     )
-    product: Mapped[ProductModel] = relationship("ProductModel", back_populates="identifiers")
+    product: Mapped[ProductModel | None] = relationship("ProductModel", back_populates="identifiers")
+    variant: Mapped[ProductVariantModel | None] = relationship("ProductVariantModel", back_populates="identifiers")
 
 
 class ProductSupplierModel(TimestampMixin, Base):

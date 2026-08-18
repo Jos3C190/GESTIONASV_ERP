@@ -34,6 +34,19 @@ Este documento describe la arquitectura de seguridad, los mecanismos de autentic
 
 ## 2. Autenticación y Gestión de Tokens
 
+### Catalog variant authorization and audit
+
+The `products:variants` permission controls family attributes, values and
+variant lifecycle. `products:read` is sufficient for viewing them;
+`products:identifiers` controls variant identifiers and `products:images`
+controls variant images. A Cloudinary upload additionally requires
+`media.upload`. Permissions are resolved from the authenticated user's company
+scope and are never inferred from a role name supplied by a tenant.
+
+Variant operations are audited with product/variant IDs, SKU, combination,
+state, identifiers and image source metadata. Binary content and secrets are
+never written to the audit log.
+
 ### 2.1 Esquema Dual de Tokens (Access + Refresh Token)
 
 El sistema emplea JWT (JSON Web Tokens) firmados mediante algoritmos asimétricos o simétricos HMAC-SHA256 (`HS256`).
@@ -200,7 +213,7 @@ only HTTPS references without credentials or local/private hosts are accepted.
 
 Future product capabilities are intentionally blocked until their consuming
 modules exist. Inventory, purchasing, landed costs, price lists, packaging,
-variants, fiscal data and compliance documents must not be simulated with
+variant operations, fiscal data and compliance documents must not be simulated with
 unvalidated product columns. When activated, each capability must define its
 own RBAC permission, tenant/company checks, append-only audit events,
 idempotency and rollback behavior. Sensitive future values such as costs,

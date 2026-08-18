@@ -22,6 +22,9 @@ from app.api.v1.schemas.catalog import (
     ProductImageInput,
     ProductResponse,
     ProductUpdate,
+    ProductVariantConfigInput,
+    ProductVariantResponse,
+    ProductVariantUpdateInput,
     SubCategoryCreate,
     SubCategoryResponse,
     SubCategoryUpdate,
@@ -35,6 +38,16 @@ from app.application.audit.audit_service import AuditService
 from app.application.catalog.use_cases import CatalogUseCases
 from app.core.exceptions import AuthorizationError
 from app.domain.entities.product_image import ProductImageDraft
+from app.domain.entities.product_variants import (
+    ProductFamilyAttributeDraft,
+    ProductFamilyAttributeValueDraft,
+    ProductVariantConfigDraft,
+    ProductVariantDraft,
+    ProductVariantIdentifierDraft,
+    ProductVariantImageDraft,
+    ProductVariantUpdateDraft,
+    ProductVariantValueDraft,
+)
 from app.infrastructure.models.catalog import ProductModel
 from app.infrastructure.repositories import SqlAlchemyCatalogRepository, SqlAlchemyRoleRepository
 
@@ -69,7 +82,9 @@ async def _require_product_permission(
 ) -> None:
     if current.is_superuser:
         return
-    permissions = await SqlAlchemyRoleRepository(session).get_effective_permissions_for_user(current.id, company_id)
+    permissions = await SqlAlchemyRoleRepository(session).get_effective_permissions_for_user(
+        current.id, company_id
+    )
     if code not in {permission.code for permission in permissions}:
         raise AuthorizationError(f"Permiso requerido: {code}", code="forbidden")
 
@@ -100,6 +115,173 @@ def _gallery_audit_state(product: object) -> list[dict[str, object]]:
             "is_cover": image.is_cover,
         }
         for image in getattr(product, "images", ())
+    ]
+
+
+def _variant_config_drafts(
+    payload: ProductVariantConfigInput | None,
+) -> ProductVariantConfigDraft | None:
+    if payload is None:
+        return None
+    return ProductVariantConfigDraft(
+        attributes=tuple(
+            ProductFamilyAttributeDraft(
+                code=attribute.code,
+                name=attribute.name,
+                position=attribute.position,
+                values=tuple(
+                    ProductFamilyAttributeValueDraft(
+                        code=value.code,
+                        label=value.label,
+                        position=value.position,
+                    )
+                    for value in attribute.values
+                ),
+            )
+            for attribute in payload.attributes
+        ),
+        variants=tuple(
+            ProductVariantDraft(
+                id=variant.id,
+                sku=variant.sku,
+                name_override=variant.name_override,
+                lifecycle_status=variant.lifecycle_status,
+                values=tuple(
+                    ProductVariantValueDraft(
+                        attribute_code=value.attribute_code,
+                        value_code=value.value_code,
+                    )
+                    for value in variant.values
+                ),
+                identifiers=tuple(
+                    ProductVariantIdentifierDraft(
+                        identifier_type=identifier.identifier_type,
+                        value=identifier.value,
+                        is_primary=identifier.is_primary,
+                    )
+                    for identifier in variant.identifiers
+                ),
+                image=(
+                    ProductVariantImageDraft(
+                        source_type=variant.image.source_type,
+                        url=variant.image.url,
+                        media_asset_id=variant.image.media_asset_id,
+                        alt_text=variant.image.alt_text,
+                    )
+                    if variant.image is not None
+                    else None
+                ),
+            )
+            for variant in payload.variants
+        ),
+    )
+
+
+def _variant_config_has_images(payload: ProductVariantConfigInput | None) -> bool:
+    return bool(payload and any(variant.image is not None for variant in payload.variants))
+
+
+def _variant_config_has_identifiers(payload: ProductVariantConfigInput | None) -> bool:
+    return bool(payload and any(variant.identifiers for variant in payload.variants))
+
+
+def _variant_update_draft(payload: ProductVariantUpdateInput) -> ProductVariantUpdateDraft:
+    provided = frozenset(
+        {"sku", "name_override", "lifecycle_status", "identifiers", "image"}.intersection(
+            payload.model_fields_set
+        )
+    )
+    return ProductVariantUpdateDraft(
+        expected_updated_at=payload.expected_updated_at,
+        provided_fields=provided,
+        sku=payload.sku,
+        name_override=payload.name_override,
+        lifecycle_status=payload.lifecycle_status,
+        identifiers=(
+            tuple(
+                ProductVariantIdentifierDraft(
+                    identifier_type=identifier.identifier_type,
+                    value=identifier.value,
+                    is_primary=identifier.is_primary,
+                )
+                for identifier in payload.identifiers
+            )
+            if "identifiers" in provided and payload.identifiers is not None
+            else None
+        ),
+        image=(
+            ProductVariantImageDraft(
+                source_type=payload.image.source_type,
+                url=payload.image.url,
+                media_asset_id=payload.image.media_asset_id,
+                alt_text=payload.image.alt_text,
+            )
+            if "image" in provided and payload.image is not None
+            else None
+        ),
+    )
+
+
+def _single_variant_audit_state(variant: object) -> dict[str, object]:
+    return {
+        "id": str(variant.id),
+        "sku": variant.sku,
+        "name_override": variant.name_override,
+        "combination_key": variant.combination_key,
+        "lifecycle_status": variant.lifecycle_status,
+        "values": [
+            {
+                "attribute_code": value.attribute_code,
+                "value_code": value.value_code,
+                "label": value.label,
+            }
+            for value in variant.values
+        ],
+        "identifiers": [
+            {"id": str(identifier.id), "identifier_type": identifier.identifier_type}
+            for identifier in variant.identifiers
+        ],
+        "image": (
+            {
+                "id": str(variant.image.id),
+                "source_type": variant.image.source_type,
+            }
+            if variant.image
+            else None
+        ),
+    }
+
+
+def _product_has_variant_images(product: object) -> bool:
+    return any(
+        getattr(variant, "image", None) is not None for variant in getattr(product, "variants", ())
+    )
+
+
+def _product_has_variant_identifiers(product: object) -> bool:
+    return any(
+        bool(getattr(variant, "identifiers", ())) for variant in getattr(product, "variants", ())
+    )
+
+
+def _variant_audit_state(product: object) -> list[dict[str, object]]:
+    return [
+        {
+            "id": str(variant.id),
+            "sku": variant.sku,
+            "combination_key": variant.combination_key,
+            "lifecycle_status": variant.lifecycle_status,
+            "values": [
+                {
+                    "attribute_code": value.attribute_code,
+                    "value_code": value.value_code,
+                    "label": value.label,
+                }
+                for value in variant.values
+            ],
+            "image_id": str(variant.image.id) if variant.image else None,
+        }
+        for variant in getattr(product, "variants", ())
     ]
 
 
@@ -169,32 +351,46 @@ async def create_category(
 ) -> CategoryResponse:
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
-    if payload.lifecycle_status != "active" or payload.product_kind != "goods" or any(
-        value not in (None, False, "", [])
-        for value in (
-            payload.sales_name,
-            payload.internal_name,
-            payload.document_name,
-            payload.sales_description,
-            payload.purchase_description,
-            payload.internal_notes,
-            payload.keywords,
-            payload.origin_country_id,
-            payload.brand_id,
-            payload.manufacturer_id,
-            payload.storage_condition,
-            payload.storage_temperature_min_c,
-            payload.storage_temperature_max_c,
-            payload.storage_humidity_max_percent,
-            payload.max_stack_height,
-            payload.handling_notes,
+    if (
+        payload.lifecycle_status != "active"
+        or payload.product_kind != "goods"
+        or any(
+            value not in (None, False, "", [])
+            for value in (
+                payload.sales_name,
+                payload.internal_name,
+                payload.document_name,
+                payload.sales_description,
+                payload.purchase_description,
+                payload.internal_notes,
+                payload.keywords,
+                payload.origin_country_id,
+                payload.brand_id,
+                payload.manufacturer_id,
+                payload.storage_condition,
+                payload.storage_temperature_min_c,
+                payload.storage_temperature_max_c,
+                payload.storage_humidity_max_percent,
+                payload.max_stack_height,
+                payload.handling_notes,
+            )
         )
-    ) or any((payload.is_fragile, payload.keep_dry, payload.keep_upright)):
+        or any((payload.is_fragile, payload.keep_dry, payload.keep_upright))
+    ):
         await _require_product_permission(session, current, company_id, "products:master_data")
     if payload.lifecycle_status != "active":
         await _require_product_permission(session, current, company_id, "products:lifecycle")
-    created = await use_cases.create_category(company_id, name=payload.name, description=payload.description)
-    await audit.record(action="CREATE", user_id=current.id, company_id=company_id, resource_type="product_categories", resource_id=str(created.id), after_state={"name": created.name})
+    created = await use_cases.create_category(
+        company_id, name=payload.name, description=payload.description
+    )
+    await audit.record(
+        action="CREATE",
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="product_categories",
+        resource_id=str(created.id),
+        after_state={"name": created.name},
+    )
     return created
 
 
@@ -217,8 +413,18 @@ async def update_category(
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
     before = await use_cases.get_category(company_id, category_id)
-    updated = await use_cases.update_category(company_id, category_id, **payload.model_dump(exclude_unset=True))
-    await audit.record(action=_status_action(before.is_active, updated.is_active), user_id=current.id, company_id=company_id, resource_type="product_categories", resource_id=str(category_id), before_state={"name": before.name, "is_active": before.is_active}, after_state={"name": updated.name, "is_active": updated.is_active})
+    updated = await use_cases.update_category(
+        company_id, category_id, **payload.model_dump(exclude_unset=True)
+    )
+    await audit.record(
+        action=_status_action(before.is_active, updated.is_active),
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="product_categories",
+        resource_id=str(category_id),
+        before_state={"name": before.name, "is_active": before.is_active},
+        after_state={"name": updated.name, "is_active": updated.is_active},
+    )
     return updated
 
 
@@ -240,7 +446,9 @@ async def list_sub_categories(
 ) -> list[SubCategoryResponse]:
     company_id = request_company_id(request)
     await require_company_access(session, current, company_id)
-    return await use_cases.list_sub_categories(company_id, category_id=category_id, active_only=active_only)
+    return await use_cases.list_sub_categories(
+        company_id, category_id=category_id, active_only=active_only
+    )
 
 
 @router.post(
@@ -260,7 +468,12 @@ async def create_sub_category(
 ) -> SubCategoryResponse:
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
-    created = await use_cases.create_sub_category(company_id, category_id=payload.category_id, name=payload.name, description=payload.description)
+    created = await use_cases.create_sub_category(
+        company_id,
+        category_id=payload.category_id,
+        name=payload.name,
+        description=payload.description,
+    )
     await audit.record(
         action="CREATE",
         user_id=current.id,
@@ -291,15 +504,25 @@ async def update_sub_category(
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
     before = await use_cases.get_sub_category(company_id, sub_category_id)
-    updated = await use_cases.update_sub_category(company_id, sub_category_id, **payload.model_dump(exclude_unset=True))
+    updated = await use_cases.update_sub_category(
+        company_id, sub_category_id, **payload.model_dump(exclude_unset=True)
+    )
     await audit.record(
         action=_status_action(before.is_active, updated.is_active),
         user_id=current.id,
         company_id=company_id,
         resource_type="sub_categories",
         resource_id=str(sub_category_id),
-        before_state={"category_id": before.category_id, "name": before.name, "is_active": before.is_active},
-        after_state={"category_id": updated.category_id, "name": updated.name, "is_active": updated.is_active},
+        before_state={
+            "category_id": before.category_id,
+            "name": before.name,
+            "is_active": before.is_active,
+        },
+        after_state={
+            "category_id": updated.category_id,
+            "name": updated.name,
+            "is_active": updated.is_active,
+        },
     )
     return updated
 
@@ -355,8 +578,21 @@ async def create_global_unit(
 ) -> UnitResponse:
     if not current.is_superuser:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso reservado al superadministrador.")
-    created = await use_cases.create_unit(None, name=payload.name, type_=payload.type, code=payload.code, symbol=payload.symbol, description=payload.description)
-    await audit.record(action="CREATE", user_id=current.id, resource_type="measurement_units_global", resource_id=str(created.id), after_state={"code": created.code, "name": created.name})
+    created = await use_cases.create_unit(
+        None,
+        name=payload.name,
+        type_=payload.type,
+        code=payload.code,
+        symbol=payload.symbol,
+        description=payload.description,
+    )
+    await audit.record(
+        action="CREATE",
+        user_id=current.id,
+        resource_type="measurement_units_global",
+        resource_id=str(created.id),
+        after_state={"code": created.code, "name": created.name},
+    )
     return created
 
 
@@ -377,7 +613,13 @@ async def update_global_unit(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso reservado al superadministrador.")
     changes = payload.model_dump(exclude={"version"}, exclude_unset=True)
     updated = await use_cases.update_unit(None, unit_id, payload.version, **changes)
-    await audit.record(action="UPDATE", user_id=current.id, resource_type="measurement_units_global", resource_id=str(unit_id), after_state={"code": updated.code, "name": updated.name, "version": updated.version})
+    await audit.record(
+        action="UPDATE",
+        user_id=current.id,
+        resource_type="measurement_units_global",
+        resource_id=str(unit_id),
+        after_state={"code": updated.code, "name": updated.name, "version": updated.version},
+    )
     return updated
 
 
@@ -398,8 +640,22 @@ async def create_unit(
 ) -> UnitResponse:
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
-    created = await use_cases.create_unit(company_id, name=payload.name, type_=payload.type, code=payload.code, symbol=payload.symbol, description=payload.description)
-    await audit.record(action="CREATE", user_id=current.id, company_id=company_id, resource_type="measurement_units", resource_id=str(created.id), after_state={"code": created.code, "name": created.name})
+    created = await use_cases.create_unit(
+        company_id,
+        name=payload.name,
+        type_=payload.type,
+        code=payload.code,
+        symbol=payload.symbol,
+        description=payload.description,
+    )
+    await audit.record(
+        action="CREATE",
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="measurement_units",
+        resource_id=str(created.id),
+        after_state={"code": created.code, "name": created.name},
+    )
     return created
 
 
@@ -423,10 +679,21 @@ async def update_unit(
     await require_company_wide_scope(session, current, company_id)
     before = await use_cases.get_unit(company_id, unit_id)
     if before.is_standard:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Las unidades estándar solo pueden configurarse, no editarse.")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Las unidades estándar solo pueden configurarse, no editarse.",
+        )
     changes = payload.model_dump(exclude={"version", "alias"}, exclude_unset=True)
     updated = await use_cases.update_unit(company_id, unit_id, payload.version, **changes)
-    await audit.record(action="UPDATE", user_id=current.id, company_id=company_id, resource_type="measurement_units", resource_id=str(unit_id), before_state={"code": before.code, "name": before.name, "version": before.version}, after_state={"code": updated.code, "name": updated.name, "version": updated.version})
+    await audit.record(
+        action="UPDATE",
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="measurement_units",
+        resource_id=str(unit_id),
+        before_state={"code": before.code, "name": before.name, "version": before.version},
+        after_state={"code": updated.code, "name": updated.name, "version": updated.version},
+    )
     return updated
 
 
@@ -443,19 +710,65 @@ async def _configure_unit(
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
     before = await use_cases.get_unit(company_id, unit_id)
-    updated = await use_cases.configure_unit(company_id, unit_id, payload.version, enabled=enabled, alias=payload.alias)
-    await audit.record(action="ACTIVATE" if enabled else "DEACTIVATE", user_id=current.id, company_id=company_id, resource_type="company_units", resource_id=str(unit_id), before_state={"is_enabled": before.is_enabled, "alias": before.alias, "version": before.version}, after_state={"is_enabled": updated.is_enabled, "alias": updated.alias, "version": updated.version})
+    updated = await use_cases.configure_unit(
+        company_id, unit_id, payload.version, enabled=enabled, alias=payload.alias
+    )
+    await audit.record(
+        action="ACTIVATE" if enabled else "DEACTIVATE",
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="company_units",
+        resource_id=str(unit_id),
+        before_state={
+            "is_enabled": before.is_enabled,
+            "alias": before.alias,
+            "version": before.version,
+        },
+        after_state={
+            "is_enabled": updated.is_enabled,
+            "alias": updated.alias,
+            "version": updated.version,
+        },
+    )
     return updated
 
 
-@router.post("/units/{unit_id}/activate", response_model=UnitResponse, dependencies=[Depends(require_permission("units:activate"))])
-async def activate_unit(unit_id: int, payload: UnitConfigurationUpdate, request: Request, session: SessionDep, current: CurrentUser, use_cases: CatalogUseCases = Depends(_get_catalog_use_cases), audit: AuditService = Depends(get_audit_service)) -> UnitResponse:
-    return await _configure_unit(unit_id, payload, True, request, session, current, use_cases, audit)
+@router.post(
+    "/units/{unit_id}/activate",
+    response_model=UnitResponse,
+    dependencies=[Depends(require_permission("units:activate"))],
+)
+async def activate_unit(
+    unit_id: int,
+    payload: UnitConfigurationUpdate,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
+    audit: AuditService = Depends(get_audit_service),
+) -> UnitResponse:
+    return await _configure_unit(
+        unit_id, payload, True, request, session, current, use_cases, audit
+    )
 
 
-@router.post("/units/{unit_id}/deactivate", response_model=UnitResponse, dependencies=[Depends(require_permission("units:deactivate"))])
-async def deactivate_unit(unit_id: int, payload: UnitConfigurationUpdate, request: Request, session: SessionDep, current: CurrentUser, use_cases: CatalogUseCases = Depends(_get_catalog_use_cases), audit: AuditService = Depends(get_audit_service)) -> UnitResponse:
-    return await _configure_unit(unit_id, payload, False, request, session, current, use_cases, audit)
+@router.post(
+    "/units/{unit_id}/deactivate",
+    response_model=UnitResponse,
+    dependencies=[Depends(require_permission("units:deactivate"))],
+)
+async def deactivate_unit(
+    unit_id: int,
+    payload: UnitConfigurationUpdate,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
+    audit: AuditService = Depends(get_audit_service),
+) -> UnitResponse:
+    return await _configure_unit(
+        unit_id, payload, False, request, session, current, use_cases, audit
+    )
 
 
 # --- Products ---
@@ -539,6 +852,186 @@ async def get_product(
     return await use_cases.get_product(company_id, product_id)
 
 
+@router.get(
+    "/products/{product_id}/variants",
+    response_model=list[ProductVariantResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Listar variantes del producto",
+    dependencies=[Depends(require_permission("products:read"))],
+)
+async def list_product_variants(
+    product_id: int,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
+) -> list[ProductVariantResponse]:
+    company_id = request_company_id(request)
+    await require_company_access(session, current, company_id)
+    product = await use_cases.get_product(company_id, product_id)
+    return [ProductVariantResponse.model_validate(variant) for variant in product.variants]
+
+
+@router.get(
+    "/products/{product_id}/variants/{variant_id}",
+    response_model=ProductVariantResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Obtener una variante",
+    dependencies=[Depends(require_permission("products:read"))],
+)
+async def get_product_variant(
+    product_id: int,
+    variant_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
+) -> ProductVariantResponse:
+    company_id = request_company_id(request)
+    await require_company_access(session, current, company_id)
+    variant = await use_cases.get_variant(company_id, product_id, variant_id)
+    return ProductVariantResponse.model_validate(variant)
+
+
+@router.patch(
+    "/products/{product_id}/variants/{variant_id}",
+    response_model=ProductVariantResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Actualizar una variante",
+    dependencies=[Depends(require_permission("products:read"))],
+)
+async def update_product_variant(  # noqa: C901 - dynamic permissions and audit events are explicit
+    product_id: int,
+    variant_id: uuid.UUID,
+    payload: ProductVariantUpdateInput,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
+    audit: AuditService = Depends(get_audit_service),
+) -> ProductVariantResponse:
+    company_id = request_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
+    provided = payload.model_fields_set
+    if provided.intersection({"sku", "name_override", "lifecycle_status"}):
+        await _require_product_permission(session, current, company_id, "products:variants")
+    if "identifiers" in provided:
+        await _require_product_permission(session, current, company_id, "products:identifiers")
+    if "image" in provided:
+        await _require_product_images_permission(session, current, company_id)
+
+    before = await use_cases.get_variant(company_id, product_id, variant_id)
+    async with session.begin_nested():
+        updated = await use_cases.update_variant(
+            company_id,
+            product_id,
+            variant_id,
+            _variant_update_draft(payload),
+        )
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Variante no encontrada")
+        before_state = _single_variant_audit_state(before)
+        after_state = _single_variant_audit_state(updated)
+        actions: list[str] = []
+        if provided.intersection({"sku", "name_override", "lifecycle_status"}):
+            actions.append("UPDATE_VARIANT")
+        if before.sku != updated.sku:
+            actions.append("CHANGE_VARIANT_SKU")
+        if before.lifecycle_status != updated.lifecycle_status:
+            actions.append("CHANGE_VARIANT_STATUS")
+        if "identifiers" in provided:
+            actions.append("UPDATE_VARIANT_IDENTIFIERS")
+        if "image" in provided:
+            actions.append("UPDATE_VARIANT_IMAGE")
+        for action in actions:
+            await audit.record(
+                action=action,
+                user_id=current.id,
+                company_id=company_id,
+                resource_type="product_variants",
+                resource_id=str(variant_id),
+                before_state=before_state,
+                after_state=after_state,
+            )
+    return ProductVariantResponse.model_validate(updated)
+
+
+@router.post(
+    "/products/{product_id}/variants/preview",
+    status_code=status.HTTP_200_OK,
+    summary="Previsualizar combinaciones de variantes",
+    dependencies=[Depends(require_permission("products:variants"))],
+)
+async def preview_product_variants(
+    product_id: int,
+    payload: ProductVariantConfigInput,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
+) -> dict[str, object]:
+    company_id = request_company_id(request)
+    await require_company_access(session, current, company_id)
+    await use_cases.get_product(company_id, product_id)
+    if _variant_config_has_images(payload):
+        await _require_product_images_permission(session, current, company_id)
+    if _variant_config_has_identifiers(payload):
+        await _require_product_permission(session, current, company_id, "products:identifiers")
+    return {
+        "attribute_count": len(payload.attributes),
+        "variant_count": len(payload.variants),
+        "attributes": payload.attributes,
+        "variants": payload.variants,
+    }
+
+
+@router.put(
+    "/products/{product_id}/variant-config",
+    response_model=ProductResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Guardar familia y variantes",
+    dependencies=[Depends(require_permission("products:variants"))],
+)
+async def replace_product_variant_config(
+    product_id: int,
+    payload: ProductVariantConfigInput,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
+    audit: AuditService = Depends(get_audit_service),
+) -> ProductResponse:
+    company_id = request_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
+    before = await use_cases.get_product(company_id, product_id)
+    if _variant_config_has_images(payload) or _product_has_variant_images(before):
+        await _require_product_images_permission(session, current, company_id)
+    if _variant_config_has_identifiers(payload) or _product_has_variant_identifiers(before):
+        await _require_product_permission(session, current, company_id, "products:identifiers")
+    async with session.begin_nested():
+        updated = await use_cases.replace_variant_config(
+            company_id,
+            product_id,
+            _variant_config_drafts(payload),
+        )
+        await audit.record(
+            action="UPDATE_VARIANTS",
+            user_id=current.id,
+            company_id=company_id,
+            resource_type="products",
+            resource_id=str(product_id),
+            before_state={
+                "variant_mode": before.variant_mode,
+                "variants": _variant_audit_state(before),
+            },
+            after_state={
+                "variant_mode": updated.variant_mode,
+                "variants": _variant_audit_state(updated),
+            },
+        )
+    return updated
+
+
 @router.post(
     "/products",
     response_model=ProductResponse,
@@ -558,59 +1051,73 @@ async def create_product(
     await require_company_wide_scope(session, current, company_id)
     if payload.images is not None:
         await _require_product_images_permission(session, current, company_id)
-    created = await use_cases.create_product(
-        company_id,
-        category_id=payload.category_id,
-        sub_category_id=payload.sub_category_id,
-        sku=payload.sku,
-        name=payload.name,
-        purchase_unit_id=payload.purchase_unit_id,
-        sale_unit_id=payload.sale_unit_id,
-        original_code=payload.original_code,
-        internal_code=payload.internal_code,
-        size=payload.size,
-        dimension_length=payload.dimension_length,
-        dimension_width=payload.dimension_width,
-        dimension_height=payload.dimension_height,
-        dimension_unit=payload.dimension_unit,
-        weight=payload.weight,
-        weight_unit=payload.weight_unit,
-        description=payload.description,
-        presentation=payload.presentation,
-        product_kind=payload.product_kind,
-        lifecycle_status=payload.lifecycle_status,
-        can_purchase=payload.can_purchase,
-        can_sell=payload.can_sell,
-        sales_name=payload.sales_name,
-        internal_name=payload.internal_name,
-        document_name=payload.document_name,
-        sales_description=payload.sales_description,
-        purchase_description=payload.purchase_description,
-        internal_notes=payload.internal_notes,
-        keywords=payload.keywords,
-        origin_country_id=payload.origin_country_id,
-        brand_id=payload.brand_id,
-        manufacturer_id=payload.manufacturer_id,
-        storage_condition=payload.storage_condition,
-        storage_temperature_min_c=payload.storage_temperature_min_c,
-        storage_temperature_max_c=payload.storage_temperature_max_c,
-        storage_humidity_max_percent=payload.storage_humidity_max_percent,
-        is_fragile=payload.is_fragile,
-        keep_dry=payload.keep_dry,
-        keep_upright=payload.keep_upright,
-        stackable=payload.stackable,
-        max_stack_height=payload.max_stack_height,
-        handling_notes=payload.handling_notes,
-        images=_image_drafts(payload.images),
-    )
-    await audit.record(
-        action="CREATE",
-        user_id=current.id,
-        company_id=company_id,
-        resource_type="products",
-        resource_id=str(created.id),
-        after_state={"sku": created.sku, "name": created.name, "images": _gallery_audit_state(created)},
-    )
+    if payload.variant_config is not None:
+        await _require_product_permission(session, current, company_id, "products:variants")
+        if _variant_config_has_images(payload.variant_config):
+            await _require_product_images_permission(session, current, company_id)
+        if _variant_config_has_identifiers(payload.variant_config):
+            await _require_product_permission(session, current, company_id, "products:identifiers")
+    async with session.begin_nested():
+        created = await use_cases.create_product(
+            company_id,
+            category_id=payload.category_id,
+            sub_category_id=payload.sub_category_id,
+            sku=payload.sku,
+            name=payload.name,
+            purchase_unit_id=payload.purchase_unit_id,
+            sale_unit_id=payload.sale_unit_id,
+            original_code=payload.original_code,
+            internal_code=payload.internal_code,
+            size=payload.size,
+            dimension_length=payload.dimension_length,
+            dimension_width=payload.dimension_width,
+            dimension_height=payload.dimension_height,
+            dimension_unit=payload.dimension_unit,
+            weight=payload.weight,
+            weight_unit=payload.weight_unit,
+            description=payload.description,
+            presentation=payload.presentation,
+            product_kind=payload.product_kind,
+            lifecycle_status=payload.lifecycle_status,
+            can_purchase=payload.can_purchase,
+            can_sell=payload.can_sell,
+            sales_name=payload.sales_name,
+            internal_name=payload.internal_name,
+            document_name=payload.document_name,
+            sales_description=payload.sales_description,
+            purchase_description=payload.purchase_description,
+            internal_notes=payload.internal_notes,
+            keywords=payload.keywords,
+            origin_country_id=payload.origin_country_id,
+            brand_id=payload.brand_id,
+            manufacturer_id=payload.manufacturer_id,
+            storage_condition=payload.storage_condition,
+            storage_temperature_min_c=payload.storage_temperature_min_c,
+            storage_temperature_max_c=payload.storage_temperature_max_c,
+            storage_humidity_max_percent=payload.storage_humidity_max_percent,
+            is_fragile=payload.is_fragile,
+            keep_dry=payload.keep_dry,
+            keep_upright=payload.keep_upright,
+            stackable=payload.stackable,
+            max_stack_height=payload.max_stack_height,
+            handling_notes=payload.handling_notes,
+            images=_image_drafts(payload.images),
+            variant_config=_variant_config_drafts(payload.variant_config),
+        )
+        await audit.record(
+            action="CREATE",
+            user_id=current.id,
+            company_id=company_id,
+            resource_type="products",
+            resource_id=str(created.id),
+            after_state={
+                "sku": created.sku,
+                "name": created.name,
+                "images": _gallery_audit_state(created),
+                "variant_mode": created.variant_mode,
+                "variants": _variant_audit_state(created),
+            },
+        )
     return created
 
 
@@ -634,7 +1141,31 @@ async def update_product(
     await require_company_wide_scope(session, current, company_id)
     before = await use_cases.get_product(company_id, product_id)
     update_data = payload.model_dump(exclude_unset=True)
-    master_fields = {"product_kind", "sales_name", "internal_name", "document_name", "sales_description", "purchase_description", "internal_notes", "keywords", "origin_country_id", "brand_id", "manufacturer_id", "storage_condition", "storage_temperature_min_c", "storage_temperature_max_c", "storage_humidity_max_percent", "is_fragile", "keep_dry", "keep_upright", "stackable", "max_stack_height", "handling_notes", "can_purchase", "can_sell"}
+    master_fields = {
+        "product_kind",
+        "sales_name",
+        "internal_name",
+        "document_name",
+        "sales_description",
+        "purchase_description",
+        "internal_notes",
+        "keywords",
+        "origin_country_id",
+        "brand_id",
+        "manufacturer_id",
+        "storage_condition",
+        "storage_temperature_min_c",
+        "storage_temperature_max_c",
+        "storage_humidity_max_percent",
+        "is_fragile",
+        "keep_dry",
+        "keep_upright",
+        "stackable",
+        "max_stack_height",
+        "handling_notes",
+        "can_purchase",
+        "can_sell",
+    }
     if master_fields.intersection(update_data):
         await _require_product_permission(session, current, company_id, "products:master_data")
     if "lifecycle_status" in update_data or "is_active" in update_data:
@@ -642,24 +1173,44 @@ async def update_product(
     if "images" in update_data:
         await _require_product_images_permission(session, current, company_id)
         update_data["images"] = _image_drafts(payload.images)
-    updated = await use_cases.update_product(company_id, product_id, **update_data)
-    await audit.record(
-        action="UPDATE_IMAGES" if "images" in update_data else _status_action(before.is_active, updated.is_active),
-        user_id=current.id,
-        company_id=company_id,
-        resource_type="products",
-        resource_id=str(product_id),
-        before_state={
-            "sku": before.sku,
-            "name": before.name,
-            "is_active": before.is_active,
-            "images": _gallery_audit_state(before),
-        },
-        after_state={
-            "sku": updated.sku,
-            "name": updated.name,
-            "is_active": updated.is_active,
-            "images": _gallery_audit_state(updated),
-        },
-    )
+    if "variant_config" in update_data:
+        await _require_product_permission(session, current, company_id, "products:variants")
+        if _variant_config_has_images(payload.variant_config) or _product_has_variant_images(
+            before
+        ):
+            await _require_product_images_permission(session, current, company_id)
+        if _variant_config_has_identifiers(
+            payload.variant_config
+        ) or _product_has_variant_identifiers(before):
+            await _require_product_permission(session, current, company_id, "products:identifiers")
+        update_data["variant_config"] = _variant_config_drafts(payload.variant_config)
+    async with session.begin_nested():
+        updated = await use_cases.update_product(company_id, product_id, **update_data)
+        await audit.record(
+            action=(
+                "UPDATE_VARIANTS"
+                if "variant_config" in update_data
+                else "UPDATE_IMAGES"
+                if "images" in update_data
+                else _status_action(before.is_active, updated.is_active)
+            ),
+            user_id=current.id,
+            company_id=company_id,
+            resource_type="products",
+            resource_id=str(product_id),
+            before_state={
+                "sku": before.sku,
+                "name": before.name,
+                "is_active": before.is_active,
+                "images": _gallery_audit_state(before),
+                "variants": _variant_audit_state(before),
+            },
+            after_state={
+                "sku": updated.sku,
+                "name": updated.name,
+                "is_active": updated.is_active,
+                "images": _gallery_audit_state(updated),
+                "variants": _variant_audit_state(updated),
+            },
+        )
     return updated

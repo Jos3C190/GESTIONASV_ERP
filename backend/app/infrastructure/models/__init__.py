@@ -38,6 +38,14 @@ from app.infrastructure.models.organization import (
     WarehouseCategory,
 )
 from app.infrastructure.models.product_image import ProductImageModel
+from app.infrastructure.models.product_variant import (
+    ProductFamilyAttributeModel,
+    ProductFamilyAttributeValueModel,
+    ProductSkuRegistryModel,
+    ProductVariantAttributeValueModel,
+    ProductVariantImageModel,
+    ProductVariantModel,
+)
 from app.infrastructure.models.product_master import (
     ProductBrandModel,
     ProductIdentifierModel,
@@ -89,6 +97,12 @@ __all__: list[str] = [
     "PaymentTermsModel",
     "Permission",
     "ProductImageModel",
+    "ProductFamilyAttributeModel",
+    "ProductFamilyAttributeValueModel",
+    "ProductSkuRegistryModel",
+    "ProductVariantAttributeValueModel",
+    "ProductVariantImageModel",
+    "ProductVariantModel",
     "ProductBrandModel",
     "ProductIdentifierModel",
     "ProductManufacturerModel",

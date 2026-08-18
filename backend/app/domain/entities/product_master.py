@@ -11,7 +11,7 @@ from decimal import Decimal
 @dataclass(frozen=True, slots=True)
 class ProductIdentifier:
     id: uuid.UUID
-    product_id: int
+    product_id: int | None
     company_id: uuid.UUID
     identifier_type: str
     value: str
@@ -20,6 +20,7 @@ class ProductIdentifier:
     is_active: bool = True
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    variant_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

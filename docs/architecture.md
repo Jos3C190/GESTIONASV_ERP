@@ -17,6 +17,24 @@ erp-system/
 
 ## 2. Backend — Clean / Hexagonal layering
 
+### 2.4 Catalog variants boundary
+
+Product families and variants are a catalog bounded context. The parent product
+owns inherited master data and supplier relations; each variant owns only its
+SKU, canonical attribute combination, lifecycle, identifiers and one primary
+image. The repository reserves SKUs and synchronizes the family graph in one
+transaction. The family graph supports sparse combinations: the catalog can
+declare only the combinations the business actually offers, while preserving
+omitted historical variants as retired for traceability. No inventory, purchase, sales, price or replenishment behavior is
+introduced until those contexts consume `variant_id`.
+
+Individual variant maintenance is deliberately separate from the family
+manager. `PATCH /variants/{variant_id}` locks the parent and variant in a
+stable order, applies a sparse update under optimistic concurrency, and never
+accepts attribute/value assignments. SKU, identifiers, lifecycle and image
+changes are audited independently; changing a combination requires a new
+family combination plus retirement of the old identity.
+
 ```
 Presentation (api/v1) ──► Application (use cases) ──► Domain (entities, ports)
                                   ▲

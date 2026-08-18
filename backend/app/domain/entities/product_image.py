@@ -16,7 +16,7 @@ MAX_PRODUCT_IMAGES = 20
 @dataclass(frozen=True, slots=True)
 class ProductImage:
     id: uuid.UUID
-    product_id: int
+    product_id: int | None
     source_type: str
     url: str
     media_asset_id: uuid.UUID | None
@@ -25,6 +25,7 @@ class ProductImage:
     is_cover: bool
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    variant_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
