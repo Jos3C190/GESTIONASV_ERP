@@ -1,0 +1,16 @@
+ERP System — backup previo a migración 0037
+
+Fecha local: 2026-08-17 08:24:36 America/El_Salvador
+Base: erp_db (PostgreSQL, contenedor local)
+Formato: PostgreSQL custom (-Fc)
+Revisión Alembic antes del cambio: 0036
+Productos antes del cambio: 2
+Archivo: erp_pre_0037_variants_20260817_082436.dump
+Tamaño: 303622 bytes
+SHA-256: 23F05CE5E3ABD3AF1FB3BB0E1F69400D32D9F30F407B4ED698CC46B534811C5C
+
+Verificación:
+- Restaurado correctamente en la base scratch erp_db_0037_scratch.
+- La restauración conservó la revisión 0036 y 2 productos.
+- La migración 0037 se aplicó correctamente en scratch y creó product_variants.
+- La base scratch fue eliminada después de la verificación.
