@@ -4,11 +4,19 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { getWarehouse } from '$lib/services/warehouses';
+  import { inventoryApi } from '$lib/features/inventory/services';
+  import type { CapacitySummary } from '$lib/features/inventory/types';
+  import CapacitySummaryPanel from '$lib/features/inventory/components/CapacitySummaryPanel.svelte';
+  import HandlingUnitsPanel from '$lib/features/inventory/components/HandlingUnitsPanel.svelte';
+  import WarehouseCapacityGroupsSummary from '$lib/features/warehouses/components/WarehouseCapacityGroupsSummary.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import {
+    CAPACITY_ENFORCEMENT_LABEL,
+    CAPACITY_PROFILE_LABEL,
+    CAPACITY_STATUS_LABEL,
     STATUS_MAP,
     TYPE_LABEL,
-    utilizationPct,
+    type CapacityStatus,
     type Warehouse,
     type WarehouseMovement
   } from '$lib/features/warehouses/types';
@@ -21,15 +29,32 @@
   let warehouse = $state<Warehouse | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let capacitySummary = $state<CapacitySummary | null>(null);
+  let capacityLoading = $state(false);
+  let capacityError = $state<string | null>(null);
 
-  let warehouseId = $derived(page.params.id);
+  let warehouseId = $derived(page.params.id ?? '');
 
   async function loadData() {
     if (!warehouseId) return;
+    const canLoadCapacity = permissions.hasPermission('inventory:capacity');
     loading = true;
     error = null;
+    capacitySummary = null;
+    capacityError = null;
     try {
       warehouse = await getWarehouse(warehouseId);
+      if (canLoadCapacity) {
+        capacityLoading = true;
+        try {
+          capacitySummary = await inventoryApi.getCapacitySummary(warehouseId);
+        } catch (err) {
+          capacityError =
+            err instanceof Error ? err.message : 'No se pudo cargar la ocupación física.';
+        } finally {
+          capacityLoading = false;
+        }
+      }
     } catch (err) {
       error = err instanceof Error ? err.message : 'Error al cargar el almacén.';
     } finally {
@@ -38,51 +63,16 @@
   }
 
   $effect(() => {
-    if (warehouseId) loadData();
+    void permissions.hasPermission('inventory:capacity');
+    if (warehouseId) void loadData();
   });
 
   // === Métricas calculadas ===
-  let utilization = $derived(warehouse ? utilizationPct(warehouse) : 0);
   let shelvesOccupiedPct = $derived(
-    warehouse && warehouse.shelvesTotal > 0
+    warehouse && warehouse.shelvesTotal > 0 && warehouse.shelvesOccupied != null
       ? Math.round((warehouse.shelvesOccupied / warehouse.shelvesTotal) * 100)
-      : 0
+      : null
   );
-
-  // Sparkline de utilización
-  const SW = 240;
-  const SH = 56;
-
-  let sparkPath = $derived.by(() => {
-    if (!warehouse?.trend || warehouse.trend.length === 0) return '';
-    const trend = warehouse.trend;
-    const max = Math.max(...trend, 1);
-    const min = Math.min(...trend);
-    const range = max - min || 1;
-    const step = SW / (trend.length - 1);
-    return trend
-      .map((v, i) => {
-        const x = i * step;
-        const y = SH - 8 - ((v - min) / range) * (SH - 16);
-        return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(' ');
-  });
-
-  let areaPath = $derived.by(() => {
-    if (!sparkPath) return '';
-    const last = warehouse?.trend?.length ?? 0;
-    const step = SW / Math.max(last - 1, 1);
-    return `${sparkPath} L${((last - 1) * step).toFixed(1)},${SH} L0,${SH} Z`;
-  });
-
-  let sparkColor = $derived.by(() => {
-    if (!warehouse) return '#0070F3';
-    if (warehouse.status === 'active') return '#0070F3';
-    if (warehouse.status === 'full') return '#EF4444';
-    if (warehouse.status === 'maintenance') return '#F59E0B';
-    return '#64748B';
-  });
 
   // === Tabs ===
   const TABS = [
@@ -101,6 +91,24 @@
   function fmtMoney(value: number): string {
     if (!value) return '—';
     return `$${value.toLocaleString()}`;
+  }
+
+  function capacityVariant(status: CapacityStatus): 'success' | 'warning' | 'danger' | 'neutral' {
+    if (status === 'available') return 'success';
+    if (status === 'warning' || status === 'incomplete') return 'warning';
+    if (
+      status === 'critical' ||
+      status === 'full' ||
+      status === 'over_operational' ||
+      status === 'over_certified'
+    )
+      return 'danger';
+    return 'neutral';
+  }
+
+  function physicalMetric(value: number | null, unit: string): string {
+    if (value == null) return 'No registrado';
+    return `${Number(value).toLocaleString('es-SV', { maximumFractionDigits: 3 })} ${unit}`;
   }
 
   function movementTypeLabel(t: WarehouseMovement['type']): {
@@ -312,24 +320,22 @@
               </span>
             </div>
           </div>
-          <!-- Métricas inline rápidas -->
-          <div class="hidden sm:flex flex-col gap-3 flex-none">
-            <div class="text-right">
-              <p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
-                Ocupación
-              </p>
-              <p class="font-mono text-lg font-bold tabular-nums text-foreground">{utilization}%</p>
-              <div class="mt-1 h-1.5 w-32 overflow-hidden rounded-full bg-surface-muted">
-                <div
-                  class="h-full rounded-full"
-                  style="width: {utilization}%; background: {utilization >= 90
-                    ? '#EF4444'
-                    : utilization >= 70
-                      ? '#F59E0B'
-                      : '#10B981'};"
-                ></div>
-              </div>
-            </div>
+          <div class="flex flex-none flex-col items-start gap-1.5 sm:items-end">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+              Estado de capacidad
+            </p>
+            <Badge variant={capacityVariant(capacitySummary?.status ?? warehouse.capacityStatus)}>
+              {CAPACITY_STATUS_LABEL[capacitySummary?.status ?? warehouse.capacityStatus]}
+            </Badge>
+            <p class="text-[10px] text-foreground-muted">
+              {capacityLoading
+                ? 'Calculando ocupación…'
+                : capacitySummary?.effectiveUtilizationPct == null
+                  ? capacitySummary?.measurementStatus === 'incomplete'
+                    ? 'Hay mercancía pendiente de medir'
+                    : 'Ocupación no calculable'
+                  : `${capacitySummary.effectiveUtilizationPct.toLocaleString('es-SV', { maximumFractionDigits: 1 })}% proyectado`}
+            </p>
           </div>
         </div>
       </Card>
@@ -391,7 +397,7 @@
           </div>
         </Card>
 
-        <!-- Dimensiones -->
+        <!-- Dimensiones y capacidad física -->
         <Card class="p-5">
           <p
             class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle mb-3 flex items-center gap-1.5"
@@ -407,7 +413,7 @@
               stroke-linejoin="round"
               ><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 3v18" /></svg
             >
-            Dimensiones
+            Capacidad física
           </p>
           <dl class="space-y-1 text-[11.5px]">
             <div class="flex items-center justify-between gap-2">
@@ -415,17 +421,58 @@
               <dd class="font-mono text-foreground">{fmt(warehouse.area)} m²</dd>
             </div>
             <div class="flex items-center justify-between gap-2">
-              <dt class="text-foreground-muted">L × A × H</dt>
+              <dt class="text-foreground-muted">Dimensiones generales</dt>
               <dd class="font-mono text-foreground text-[10.5px]">
-                {fmt(warehouse.length)} × {fmt(warehouse.height)} × {fmt(warehouse.width)} m
+                {fmt(warehouse.length)} × {fmt(warehouse.width)} × {fmt(warehouse.height)} m
               </dd>
             </div>
             <div class="flex items-center justify-between gap-2">
-              <dt class="text-foreground-muted">Estantes</dt>
-              <dd class="font-mono text-foreground">
-                {warehouse.shelvesOccupied} <span class="text-foreground-muted">/</span>
-                {warehouse.shelvesTotal}
+              <dt class="text-foreground-muted">Dimensiones útiles</dt>
+              <dd class="font-mono text-foreground text-[10.5px]">
+                {warehouse.usableLengthM == null ? '—' : warehouse.usableLengthM} ×
+                {warehouse.usableWidthM == null ? '—' : warehouse.usableWidthM} ×
+                {warehouse.usableHeightM == null ? '—' : warehouse.usableHeightM} m
               </dd>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <dt class="text-foreground-muted">Peso operativo</dt>
+              <dd class="font-mono text-foreground">
+                {physicalMetric(warehouse.operationalMaxWeightKg, 'kg')}
+              </dd>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <dt class="text-foreground-muted">Peso certificado</dt>
+              <dd class="font-mono text-foreground">
+                {physicalMetric(warehouse.certifiedMaxWeightKg, 'kg')}
+              </dd>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <dt class="text-foreground-muted">Volumen operativo</dt>
+              <dd class="font-mono text-foreground">
+                {physicalMetric(warehouse.operationalUsableVolumeM3, 'm³')}
+              </dd>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <dt class="text-foreground-muted">Volumen certificado</dt>
+              <dd class="font-mono text-foreground">
+                {physicalMetric(warehouse.certifiedUsableVolumeM3, 'm³')}
+              </dd>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <dt class="text-foreground-muted">Perfil</dt>
+              <dd class="text-right text-foreground">
+                {CAPACITY_PROFILE_LABEL[warehouse.capacityProfile]}
+              </dd>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <dt class="text-foreground-muted">Control</dt>
+              <dd class="text-right text-foreground">
+                {CAPACITY_ENFORCEMENT_LABEL[warehouse.capacityEnforcementMode]}
+              </dd>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <dt class="text-foreground-muted">Elegible</dt>
+              <dd class="text-foreground">{warehouse.storageEligible ? 'Sí' : 'No'}</dd>
             </div>
           </dl>
         </Card>
@@ -500,7 +547,10 @@
             {fmtMoney(warehouse.inventoryValue)}
           </p>
           <p class="mt-1 text-[10.5px] text-foreground-subtle">
-            {fmt(warehouse.totalSKUs)} SKUs · rotación {warehouse.inventoryTurnover.toFixed(1)}x/año
+            {fmt(warehouse.totalSKUs)} SKUs · rotación
+            {warehouse.inventoryTurnover > 0
+              ? `${warehouse.inventoryTurnover.toFixed(1)}x/año`
+              : 'no calculada'}
           </p>
         </Card>
       </div>
@@ -515,83 +565,19 @@
       <!-- TAB: Resumen -->
       {#if activeTab === 'resumen'}
         <div id="tab-panel-resumen" role="tabpanel" aria-labelledby="tab-resumen" class="space-y-5">
-          <!-- Tendencia de utilización -->
-          {#if warehouse.trend && warehouse.trend.length > 0}
-            <Card class="p-6">
-              <div class="mb-4 flex items-center justify-between">
-                <h3 class="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-foreground-subtle"
-                    ><path d="M3 3v18h18" /><path d="m7 14 4-4 4 4 6-6" /></svg
-                  >
-                  Tendencia de utilización (7 días)
-                </h3>
-                <div class="text-right">
-                  <p class="font-mono text-lg font-bold tabular-nums text-foreground">
-                    {utilization}%
-                  </p>
-                  <p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
-                    ocupación actual
-                  </p>
-                </div>
-              </div>
-              <div class="relative w-full overflow-hidden rounded-md bg-surface-muted/20 p-2">
-                <svg
-                  width="100%"
-                  height={SH}
-                  viewBox={`0 0 ${SW} ${SH}`}
-                  preserveAspectRatio="none"
-                  aria-hidden="true"
-                >
-                  <defs>
-                    <linearGradient id="wh-spark-fill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stop-color={sparkColor} stop-opacity="0.22" />
-                      <stop offset="100%" stop-color={sparkColor} stop-opacity="0" />
-                    </linearGradient>
-                  </defs>
-                  <path d={areaPath} fill="url(#wh-spark-fill)" />
-                  <path
-                    d={sparkPath}
-                    fill="none"
-                    stroke={sparkColor}
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-              </div>
-              <div class="mt-3 flex flex-wrap items-center gap-4 text-[11px] text-foreground-muted">
-                <span
-                  >Min: <span class="font-mono font-semibold text-foreground"
-                    >{Math.min(...warehouse.trend)}%</span
-                  ></span
-                >
-                <span
-                  >Max: <span class="font-mono font-semibold text-foreground"
-                    >{Math.max(...warehouse.trend)}%</span
-                  ></span
-                >
-                <span
-                  >Promedio: <span class="font-mono font-semibold text-foreground"
-                    >{Math.round(
-                      warehouse.trend.reduce((a, b) => a + b, 0) / warehouse.trend.length
-                    )}%</span
-                  ></span
-                >
-              </div>
-            </Card>
-          {/if}
+          <CapacitySummaryPanel
+            summary={capacitySummary}
+            loading={capacityLoading}
+            error={capacityError}
+          />
+
+          <WarehouseCapacityGroupsSummary
+            warehouseId={warehouse.id}
+            canViewLocations={permissions.hasPermission('locations.view')}
+          />
 
           <!-- Ocupación de estantes -->
-          {#if warehouse.shelvesTotal > 0}
+          {#if warehouse.shelvesTotal > 0 && warehouse.shelvesOccupied != null}
             <Card class="p-6">
               <h3 class="mb-4 text-sm font-semibold text-foreground flex items-center gap-2">
                 <svg
@@ -623,14 +609,15 @@
               >
                 <span>{warehouse.shelvesOccupied} ocupados de {warehouse.shelvesTotal} totales</span
                 >
-                <span class="font-mono text-foreground">{shelvesOccupiedPct}%</span>
+                <span class="font-mono text-foreground">{shelvesOccupiedPct ?? '—'}%</span>
               </div>
               <div class="h-2 w-full overflow-hidden rounded-full bg-surface-muted">
                 <div
                   class="h-full rounded-full transition-all duration-500"
-                  style="width: {shelvesOccupiedPct}%; background: {shelvesOccupiedPct >= 90
+                  style="width: {shelvesOccupiedPct ?? 0}%; background: {(shelvesOccupiedPct ??
+                    0) >= 90
                     ? 'rgb(var(--danger))'
-                    : shelvesOccupiedPct >= 70
+                    : (shelvesOccupiedPct ?? 0) >= 70
                       ? 'rgb(var(--warning))'
                       : 'rgb(var(--success))'};"
                 ></div>
@@ -697,21 +684,35 @@
                     </div>
                   </li>
                 {/if}
-                {#if utilization >= 90}
-                  <li class="flex items-start gap-2.5">
-                    <span
-                      class="mt-0.5 inline-flex h-5 w-5 flex-none items-center justify-center rounded-full bg-danger/15 text-danger text-[10px] font-bold"
-                      >!</span
-                    >
-                    <div>
-                      <p class="font-medium text-foreground">Capacidad crítica al {utilization}%</p>
-                      <p class="text-[11px] text-foreground-muted">
-                        Considere redistribución o ampliación
-                      </p>
-                    </div>
-                  </li>
-                {/if}
-                {#if warehouse.shelvesTotal > 0 && shelvesOccupiedPct < 30 && warehouse.status === 'active'}
+                <li class="flex items-start gap-2.5">
+                  <span
+                    class="mt-0.5 inline-flex h-5 w-5 flex-none items-center justify-center rounded-full bg-primary/15 text-primary text-[10px] font-bold"
+                    >i</span
+                  >
+                  <div>
+                    <p class="font-medium text-foreground">
+                      {capacityLoading
+                        ? 'Calculando ocupación física'
+                        : capacityError
+                          ? 'Ocupación física no disponible'
+                          : capacitySummary?.measurementStatus === 'incomplete'
+                            ? 'Mercancía pendiente de medir'
+                            : capacitySummary
+                              ? 'Ocupación física actualizada'
+                              : 'Ocupación física no cargada'}
+                    </p>
+                    <p class="text-[11px] text-foreground-muted">
+                      {capacityError
+                        ? capacityError
+                        : capacitySummary?.measurementStatus === 'incomplete'
+                          ? 'Los porcentajes desconocidos no se sustituyen por cero.'
+                          : capacitySummary
+                            ? 'Incluye existencias y reservas vigentes por peso y volumen.'
+                            : 'Consulte el resumen de capacidad con permiso de inventario.'}
+                    </p>
+                  </div>
+                </li>
+                {#if shelvesOccupiedPct != null && warehouse.shelvesTotal > 0 && shelvesOccupiedPct < 30 && warehouse.status === 'active'}
                   <li class="flex items-start gap-2.5">
                     <span
                       class="mt-0.5 inline-flex h-5 w-5 flex-none items-center justify-center rounded-full bg-primary/15 text-primary text-[10px] font-bold"
@@ -727,7 +728,7 @@
                     </div>
                   </li>
                 {/if}
-                {#if warehouse.lowStockItems === 0 && warehouse.expiringItems === 0 && utilization < 90 && !(warehouse.shelvesTotal > 0 && shelvesOccupiedPct < 30 && warehouse.status === 'active')}
+                {#if warehouse.lowStockItems === 0 && warehouse.expiringItems === 0 && !(shelvesOccupiedPct != null && warehouse.shelvesTotal > 0 && shelvesOccupiedPct < 30 && warehouse.status === 'active')}
                   <li class="flex items-center gap-2.5 text-foreground-muted">
                     <svg
                       width="14"
@@ -740,7 +741,7 @@
                       stroke-linejoin="round"
                       class="text-success flex-none"><polyline points="20 6 9 17 4 12" /></svg
                     >
-                    Sin alertas activas. Operación normal.
+                    Sin alertas de existencias registradas.
                   </li>
                 {/if}
               </ul>
@@ -849,12 +850,26 @@
                 Rotación
               </p>
               <p class="font-mono text-xl font-bold tabular-nums text-success mt-1">
-                {warehouse.inventoryTurnover.toFixed(1)}<span
-                  class="text-[10px] font-normal text-foreground-muted">x/año</span
-                >
+                {warehouse.inventoryTurnover > 0
+                  ? `${warehouse.inventoryTurnover.toFixed(1)}x/año`
+                  : '—'}
               </p>
             </div>
           </div>
+
+          {#if permissions.hasPermission('inventory:read')}
+            <HandlingUnitsPanel
+              warehouseId={warehouse.id}
+              canVerify={permissions.hasPermission('inventory:receive')}
+            />
+          {:else}
+            <Card class="p-5">
+              <p class="text-sm font-semibold text-foreground">Inventario físico restringido</p>
+              <p class="mt-1 text-xs text-foreground-muted">
+                Su rol no permite consultar las unidades logísticas de este almacén.
+              </p>
+            </Card>
+          {/if}
 
           <!-- Top categorías -->
           {#if warehouse.topCategories.length > 0}
