@@ -103,6 +103,22 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("locations.recode", "Renumerar ubicaciones conservando alias", "locations"),
     PermissionSpec("locations.labels", "Generar etiquetas de ubicación", "locations"),
     PermissionSpec("locations.commission", "Comisionar y retirar ubicaciones", "locations"),
+    # --- inventory and physical capacity ---
+    PermissionSpec("inventory:read", "Consultar inventario y capacidad", "inventory"),
+    PermissionSpec(
+        "inventory:manage_packaging",
+        "Gestionar unidades base y presentaciones",
+        "inventory",
+    ),
+    PermissionSpec("inventory:receive", "Registrar recepciones de inventario", "inventory"),
+    PermissionSpec("inventory:move", "Registrar movimientos y traslados", "inventory"),
+    PermissionSpec("inventory:capacity", "Consultar proyecciones de capacidad", "inventory"),
+    PermissionSpec("inventory:reserve", "Reservar y confirmar capacidad", "inventory"),
+    PermissionSpec(
+        "capacity:override_operational",
+        "Autorizar exceso del límite operativo",
+        "inventory",
+    ),
 )
 
 

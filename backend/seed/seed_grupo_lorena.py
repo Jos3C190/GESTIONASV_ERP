@@ -189,6 +189,13 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
             "locations.recode",
             "locations.labels",
             "locations.commission",
+            "inventory:read",
+            "inventory:manage_packaging",
+            "inventory:receive",
+            "inventory:move",
+            "inventory:capacity",
+            "inventory:reserve",
+            "capacity:override_operational",
             "employees:read",
             "employees:update",
             "audit_log:read",
@@ -206,6 +213,8 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
             "warehouses.view",
             "warehouses.update",
             "locations.view",
+            "inventory:read",
+            "inventory:capacity",
             "employees:read",
         ),
     ),
@@ -231,6 +240,12 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
             "locations.recode",
             "locations.labels",
             "locations.commission",
+            "inventory:read",
+            "inventory:manage_packaging",
+            "inventory:receive",
+            "inventory:move",
+            "inventory:capacity",
+            "inventory:reserve",
             "employees:read",
         ),
     ),
@@ -242,6 +257,8 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
             "warehouse_categories.view",
             "warehouses.view",
             "locations.view",
+            "inventory:read",
+            "inventory:capacity",
             "employees:read",
             "roles:read",
             "permissions:read",
@@ -1419,7 +1436,15 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             warehouse.area = 45 + index * 3
             warehouse.height = 3.2
             warehouse.shelves_total = 18 + index
-            warehouse.capacity = 900 + index * 100
+            # Mock limits are expressed in canonical physical units.  They are
+            # deliberately not container counts or product quantities.
+            warehouse.certified_max_weight_kg = 15_000 + index * 1_000
+            warehouse.operational_max_weight_kg = 12_000 + index * 800
+            warehouse.certified_usable_volume_m3 = 110 + index * 5
+            warehouse.operational_usable_volume_m3 = 90 + index * 4
+            warehouse.capacity_profile = "general_mixed"
+            warehouse.capacity_enforcement_mode = "enforce"
+            warehouse.storage_eligible = True
             warehouse.shifts = ["mañana", "tarde"]
             warehouse.cameras = 2
             warehouse.access_control = "teclado"
@@ -1450,8 +1475,13 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     )
                 )
 
-            for location_index, (label, aisle, capacity) in enumerate(
-                (("Recepción", "REC", 200), ("Seco", "SEC", 500), ("Empaque", "EMP", 300)), start=1
+            for location_index, (label, aisle, location_type, storage_eligible) in enumerate(
+                (
+                    ("Recepción", "REC", "receiving", False),
+                    ("Seco", "SEC", "standard", True),
+                    ("Empaque", "EMP", "packing", False),
+                ),
+                start=1,
             ):
                 location_code = f"{aisle}-{location_index:02d}"
                 location = (
@@ -1475,7 +1505,14 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                             rack="R01",
                             level="N01",
                             position=f"P{location_index:02d}",
-                            capacity=capacity,
+                            location_type=location_type,
+                            certified_max_weight_kg=10_000 if storage_eligible else None,
+                            operational_max_weight_kg=8_000 if storage_eligible else None,
+                            certified_usable_volume_m3=75 if storage_eligible else None,
+                            operational_usable_volume_m3=60 if storage_eligible else None,
+                            capacity_profile="general_mixed" if storage_eligible else "transit",
+                            capacity_enforcement_mode="enforce" if storage_eligible else "disabled",
+                            storage_eligible=storage_eligible,
                             notes=f"Zona de {label.lower()} de la bodega.",
                             is_active=True,
                         )
@@ -1487,7 +1524,18 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     location.rack = "R01"
                     location.level = "N01"
                     location.position = f"P{location_index:02d}"
-                    location.capacity = capacity
+                    location.location_type = location_type
+                    location.certified_max_weight_kg = 10_000 if storage_eligible else None
+                    location.operational_max_weight_kg = 8_000 if storage_eligible else None
+                    location.certified_usable_volume_m3 = 75 if storage_eligible else None
+                    location.operational_usable_volume_m3 = 60 if storage_eligible else None
+                    location.capacity_profile = (
+                        "general_mixed" if storage_eligible else "transit"
+                    )
+                    location.capacity_enforcement_mode = (
+                        "enforce" if storage_eligible else "disabled"
+                    )
+                    location.storage_eligible = storage_eligible
                     location.notes = f"Zona de {label.lower()} de la bodega."
                     location.is_active = True
 
