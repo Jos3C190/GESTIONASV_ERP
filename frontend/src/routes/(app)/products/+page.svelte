@@ -7,7 +7,9 @@
   import Card from '$lib/components/ui/Card.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import AsyncSmartSelect, { type AsyncSmartOption } from '$lib/components/ui/AsyncSmartSelect.svelte';
+  import AsyncSmartSelect, {
+    type AsyncSmartOption
+  } from '$lib/components/ui/AsyncSmartSelect.svelte';
   import DistributionDonut from '$lib/features/products/components/DistributionDonut.svelte';
   import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
   import { search as globalSearch } from '$lib/stores/search.svelte';
@@ -328,172 +330,185 @@
       {successMsg}
     </div>{/if}
 
-  <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_330px] lg:items-start">
-  <Card class="overflow-hidden p-0">
-    {#if loading}
-      <div class="flex items-center justify-center py-20 text-sm text-foreground-muted">
-        Cargando catálogo...
-      </div>
-    {:else if products.length === 0}
-      <div class="flex flex-col items-center justify-center px-6 py-20 text-center">
-        <div
-          class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            ><path d="m21 16-9 5-9-5V8l9-5 9 5v8Z" /><path d="m3 8 9 5 9-5M12 13v8" /></svg
-          >
-        </div>
-        <h2 class="text-base font-semibold text-foreground">No hay productos para mostrar</h2>
-        <p class="mt-1 max-w-md text-sm text-foreground-muted">
-          Crea el primer producto o ajusta los filtros de búsqueda.
-        </p>
-        {#if permissions.hasPermission('products:manage')}<Button
-            class="mt-5"
-            size="sm"
-            onclick={() => goto('/products/new')}>Crear primer producto</Button
-          >{/if}
-      </div>
-    {:else}
-      <div class="overflow-x-auto">
-        <table class="w-full min-w-[760px] text-sm">
-          <thead class="border-b border-border bg-surface-muted"
-            ><tr
-              ><th class="px-4 py-3 text-left font-semibold text-foreground">Producto</th><th
-                class="px-4 py-3 text-left font-semibold text-foreground">Categoría</th
-              ><th class="px-4 py-3 text-left font-semibold text-foreground">Unidades</th><th
-                class="px-4 py-3 text-left font-semibold text-foreground">Estado</th
-              ><th class="px-4 py-3 text-right font-semibold text-foreground"></th></tr
-            ></thead
-          ><tbody class="divide-y divide-border">
-            {#each products as product (product.id_product)}
-              <tr class="hover:bg-surface-muted">
-                <td class="px-4 py-3"
-                  ><div class="flex items-center gap-3">
-                    <a
-                      href={`/products/${product.id_product}`}
-                      class="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-xl border border-border bg-surface-muted text-primary hover:border-primary/50"
-                      >{#if product.cover_image}<img
-                          src={product.cover_image.url}
-                          alt={product.cover_image.alt_text || product.name}
-                          loading="lazy"
-                          referrerpolicy="no-referrer"
-                          class="h-full w-full object-cover"
-                        />{:else}<svg
-                          width="21"
-                          height="21"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          aria-hidden="true"
-                          ><rect x="3" y="3" width="18" height="18" rx="3" /><circle
-                            cx="8.5"
-                            cy="8.5"
-                            r="1.5"
-                          /><path d="m21 15-5-5L5 21" /></svg
-                        >{/if}</a
+  <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_330px] lg:items-stretch">
+    <div class="flex min-h-0 flex-col">
+      <Card class="flex-1 overflow-hidden p-0">
+        {#if loading}
+          <div class="flex items-center justify-center py-20 text-sm text-foreground-muted">
+            Cargando catálogo...
+          </div>
+        {:else if products.length === 0}
+          <div class="flex flex-col items-center justify-center px-6 py-20 text-center">
+            <div
+              class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                ><path d="m21 16-9 5-9-5V8l9-5 9 5v8Z" /><path d="m3 8 9 5 9-5M12 13v8" /></svg
+              >
+            </div>
+            <h2 class="text-base font-semibold text-foreground">No hay productos para mostrar</h2>
+            <p class="mt-1 max-w-md text-sm text-foreground-muted">
+              Crea el primer producto o ajusta los filtros de búsqueda.
+            </p>
+            {#if permissions.hasPermission('products:manage')}<Button
+                class="mt-5"
+                size="sm"
+                onclick={() => goto('/products/new')}>Crear primer producto</Button
+              >{/if}
+          </div>
+        {:else}
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[760px] text-sm">
+              <thead class="border-b border-border bg-surface-muted"
+                ><tr
+                  ><th class="px-4 py-3 text-left font-semibold text-foreground">Producto</th><th
+                    class="px-4 py-3 text-left font-semibold text-foreground">Categoría</th
+                  ><th class="px-4 py-3 text-left font-semibold text-foreground">Unidades</th><th
+                    class="px-4 py-3 text-left font-semibold text-foreground">Estado</th
+                  ><th class="px-4 py-3 text-right font-semibold text-foreground"></th></tr
+                ></thead
+              ><tbody class="divide-y divide-border">
+                {#each products as product (product.id_product)}
+                  <tr class="hover:bg-surface-muted">
+                    <td class="px-4 py-3"
+                      ><div class="flex items-center gap-3">
+                        <a
+                          href={`/products/${product.id_product}`}
+                          class="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-xl border border-border bg-surface-muted text-primary hover:border-primary/50"
+                          >{#if product.cover_image}<img
+                              src={product.cover_image.url}
+                              alt={product.cover_image.alt_text || product.name}
+                              loading="lazy"
+                              referrerpolicy="no-referrer"
+                              class="h-full w-full object-cover"
+                            />{:else}<svg
+                              width="21"
+                              height="21"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="1.5"
+                              aria-hidden="true"
+                              ><rect x="3" y="3" width="18" height="18" rx="3" /><circle
+                                cx="8.5"
+                                cy="8.5"
+                                r="1.5"
+                              /><path d="m21 15-5-5L5 21" /></svg
+                            >{/if}</a
+                        >
+                        <div class="min-w-0">
+                          <a
+                            href={`/products/${product.id_product}`}
+                            class="block truncate font-medium text-foreground hover:text-primary"
+                            >{product.name}{#if product.variant_mode === 'template'}<span
+                                class="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                                >Familia · {product.variant_count ?? 0}</span
+                              >{/if}</a
+                          >
+                          <div class="mt-0.5 flex items-center gap-2 text-xs text-foreground-muted">
+                            <span class="font-mono">{product.sku}</span
+                            >{#if product.image_count > 1}<span
+                                class="rounded-full bg-surface-muted px-1.5 py-0.5"
+                                >+{product.image_count - 1}</span
+                              >{/if}{#if product.dimension_summary}<span class="truncate"
+                                >{product.dimension_summary}</span
+                              >{/if}{#if product.weight != null}<span
+                                >{product.weight} {product.weight_unit}</span
+                              >{/if}
+                          </div>
+                        </div>
+                      </div></td
                     >
-                    <div class="min-w-0">
-                      <a
-                        href={`/products/${product.id_product}`}
-                        class="block truncate font-medium text-foreground hover:text-primary"
-                        >{product.name}{#if product.variant_mode === 'template'}<span
-                            class="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
-                            >Familia · {product.variant_count ?? 0}</span
-                          >{/if}</a
-                      >
-                      <div class="mt-0.5 flex items-center gap-2 text-xs text-foreground-muted">
-                        <span class="font-mono">{product.sku}</span
-                        >{#if product.image_count > 1}<span
-                            class="rounded-full bg-surface-muted px-1.5 py-0.5"
-                            >+{product.image_count - 1}</span
-                          >{/if}{#if product.dimension_summary}<span class="truncate"
-                            >{product.dimension_summary}</span
-                          >{/if}{#if product.weight != null}<span
-                            >{product.weight} {product.weight_unit}</span
-                          >{/if}
-                      </div>
-                    </div>
-                  </div></td
-                >
-                <td class="px-4 py-3 text-foreground-muted">{categoryName(product)}</td>
-                <td class="px-4 py-3 text-xs text-foreground-muted"
-                  ><span
-                    >Compra {units.find((unit) => unit.id_unit === product.purchase_unit)?.name ??
-                      `#${product.purchase_unit}`}</span
-                  ><span class="mx-1 text-foreground-subtle">·</span><span
-                    >Venta {units.find((unit) => unit.id_unit === product.sale_unit)?.name ??
-                      `#${product.sale_unit}`}</span
-                  ></td
-                >
-                <td class="px-4 py-3"
-                  ><Badge variant={product.is_active ? 'success' : 'neutral'}
-                    >{product.is_active ? 'Activo' : 'Inactivo'}</Badge
-                  ></td
-                >
-                <td class="px-4 py-3 text-right"
-                  ><KebabMenu
-                    items={menuItems(product)}
-                    ariaLabel={`Acciones de ${product.name}`}
-                  /></td
-                >
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    {/if}
-  </Card>
-  <aside class="space-y-4" aria-label="Distribución del catálogo">
-    {#if insightError}
-      <div class="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-xs text-danger" role="alert">
-        {insightError}
-      </div>
-    {:else if insightLoading}
-      <Card class="h-[210px] animate-pulse p-4"><div class="h-4 w-32 rounded bg-surface-muted"></div><div class="mt-5 h-32 rounded-lg bg-surface-muted"></div></Card>
-      <Card class="h-[210px] animate-pulse p-4"><div class="h-4 w-36 rounded bg-surface-muted"></div><div class="mt-5 h-32 rounded-lg bg-surface-muted"></div></Card>
-    {:else}
-      <DistributionDonut
-        title="Productos por categoría"
-        description="Seleccione un segmento para filtrar"
-        data={categoryDistribution}
-        onselect={(id) => {
-          const label = categoryDistribution.find((item) => item.id === id)?.label ?? '';
-          selectCategory(String(id), { value: String(id), label });
-        }}
-      />
-      <DistributionDonut
-        title="Productos por subcategoría"
-        description="Grupos principales del resultado actual"
-        data={subCategoryDistribution}
-        onselect={(id) => {
-          const label = subCategoryDistribution.find((item) => item.id === id)?.label ?? '';
-          selectSubCategory(String(id), { value: String(id), label });
-        }}
-      />
-    {/if}
-  </aside>
-  </div>
-  {#if totalPages > 1}<div class="mt-4 flex items-center justify-between">
-      <p class="text-xs text-foreground-muted">Página {page} de {totalPages}</p>
-      <div class="flex gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          onclick={() => goToPage(page - 1)}
-          disabled={page <= 1}>Anterior</Button
-        ><Button
-          variant="secondary"
-          size="sm"
-          onclick={() => goToPage(page + 1)}
-          disabled={page >= totalPages}>Siguiente</Button
+                    <td class="px-4 py-3 text-foreground-muted">{categoryName(product)}</td>
+                    <td class="px-4 py-3 text-xs text-foreground-muted"
+                      ><span
+                        >Compra {units.find((unit) => unit.id_unit === product.purchase_unit)
+                          ?.name ?? `#${product.purchase_unit}`}</span
+                      ><span class="mx-1 text-foreground-subtle">·</span><span
+                        >Venta {units.find((unit) => unit.id_unit === product.sale_unit)?.name ??
+                          `#${product.sale_unit}`}</span
+                      ></td
+                    >
+                    <td class="px-4 py-3"
+                      ><Badge variant={product.is_active ? 'success' : 'neutral'}
+                        >{product.is_active ? 'Activo' : 'Inactivo'}</Badge
+                      ></td
+                    >
+                    <td class="px-4 py-3 text-right"
+                      ><KebabMenu
+                        items={menuItems(product)}
+                        ariaLabel={`Acciones de ${product.name}`}
+                      /></td
+                    >
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+      </Card>
+      {#if totalPages > 1}<div class="mt-4 flex items-center justify-between">
+          <p class="text-xs text-foreground-muted">Página {page} de {totalPages}</p>
+          <div class="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onclick={() => goToPage(page - 1)}
+              disabled={page <= 1}>Anterior</Button
+            ><Button
+              variant="secondary"
+              size="sm"
+              onclick={() => goToPage(page + 1)}
+              disabled={page >= totalPages}>Siguiente</Button
+            >
+          </div>
+        </div>{/if}
+    </div>
+    <aside class="flex min-h-0 flex-col gap-4" aria-label="Distribución del catálogo">
+      {#if insightError}
+        <div
+          class="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-xs text-danger"
+          role="alert"
         >
-      </div>
-    </div>{/if}
+          {insightError}
+        </div>
+      {:else if insightLoading}
+        <Card class="flex min-h-[210px] flex-1 animate-pulse flex-col p-4"
+          ><div class="h-4 w-32 rounded bg-surface-muted"></div>
+          <div class="mt-5 flex-1 rounded-lg bg-surface-muted"></div></Card
+        >
+        <Card class="flex min-h-[210px] flex-1 animate-pulse flex-col p-4"
+          ><div class="h-4 w-36 rounded bg-surface-muted"></div>
+          <div class="mt-5 flex-1 rounded-lg bg-surface-muted"></div></Card
+        >
+      {:else}
+        <DistributionDonut
+          class="min-h-[210px] flex-1"
+          title="Productos por categoría"
+          description="Seleccione un segmento para filtrar"
+          data={categoryDistribution}
+          onselect={(id) => {
+            const label = categoryDistribution.find((item) => item.id === id)?.label ?? '';
+            selectCategory(String(id), { value: String(id), label });
+          }}
+        />
+        <DistributionDonut
+          class="min-h-[210px] flex-1"
+          title="Productos por subcategoría"
+          description="Grupos principales del resultado actual"
+          data={subCategoryDistribution}
+          onselect={(id) => {
+            const label = subCategoryDistribution.find((item) => item.id === id)?.label ?? '';
+            selectSubCategory(String(id), { value: String(id), label });
+          }}
+        />
+      {/if}
+    </aside>
+  </div>
 </div>
