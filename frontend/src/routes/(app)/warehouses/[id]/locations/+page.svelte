@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page as routePage } from '$app/state';
+  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { api, HttpError, type PageMeta } from '$lib/api/client';
   import { company } from '$lib/stores/company.svelte';
@@ -13,10 +14,10 @@
   import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
   import type { KebabItem } from '$lib/components/ui/KebabMenu.svelte';
   import LocationTable from '$lib/features/locations/components/LocationTable.svelte';
-  import LocationFormModal from '$lib/features/locations/components/LocationFormModal.svelte';
-  import BatchGeneratorModal from '$lib/features/locations/components/BatchGeneratorModal.svelte';
-  import LocationImportModal from '$lib/features/locations/components/LocationImportModal.svelte';
   import LocationCodeSchemeModal from '$lib/features/locations/components/LocationCodeSchemeModal.svelte';
+  import { capacityGroupPath } from '$lib/features/warehouses/capacity-groups.logic';
+  import { listCapacityGroups } from '$lib/features/warehouses/capacity-groups.service';
+  import type { WarehouseCapacityGroup } from '$lib/features/warehouses/capacity-groups.types';
   import {
     getLocationCodeScheme,
     getLocationSummary,
@@ -25,7 +26,6 @@
   import {
     LOCATION_STATUS_OPTIONS,
     LOCATION_TYPE_OPTIONS,
-    type LocationBatchJob,
     type LocationCodeScheme,
     type LocationOut,
     type LocationSummary
@@ -33,11 +33,15 @@
 
   const PAGE_SIZE = 25;
   const NO_AREA_FILTER = '__none__';
+  const NO_STRUCTURE_FILTER = '__unassigned__';
   const warehouseId = $derived(routePage.params.id ?? '');
   let warehouseName = $state('');
   let items = $state<LocationOut[]>([]);
   let summary = $state<LocationSummary | null>(null);
   let scheme = $state<LocationCodeScheme | null>(null);
+  let capacityGroups = $state<WarehouseCapacityGroup[]>([]);
+  let capacityGroupsError = $state<string | null>(null);
+  let capacityGroupsLoading = $state(true);
   let meta = $state<PageMeta | null>(null);
   let loading = $state(true);
   let contextLoading = $state(true);
@@ -49,10 +53,7 @@
   let typeFilter = $state('');
   let statusFilter = $state('');
   let activityFilter = $state('');
-  let formOpen = $state(false);
-  let editing = $state<LocationOut | null>(null);
-  let generatorOpen = $state(false);
-  let importOpen = $state(false);
+  let structureFilter = $state('');
   let schemeOpen = $state(false);
   let actionLoading = $state<string | null>(null);
   let loadGeneration = 0;
@@ -63,7 +64,45 @@
   let canImport = $derived(permissions.hasPermission('locations.import'));
   let canManageScheme = $derived(permissions.hasPermission('locations.scheme'));
   let hasFilters = $derived(
-    Boolean(search.trim() || areaFilter || typeFilter || statusFilter || activityFilter)
+    Boolean(
+      search.trim() || areaFilter || typeFilter || statusFilter || activityFilter || structureFilter
+    )
+  );
+  let structureOptions = $derived([
+    {
+      value: NO_STRUCTURE_FILTER,
+      label: 'Sin estructura',
+      description: 'Ubicaciones directas del almacén'
+    },
+    ...capacityGroups
+      .slice()
+      .sort((left, right) =>
+        `${capacityGroupPath(capacityGroups, left.id)} ${left.name}`.localeCompare(
+          `${capacityGroupPath(capacityGroups, right.id)} ${right.name}`,
+          'es',
+          { numeric: true, sensitivity: 'base' }
+        )
+      )
+      .map((group) => ({
+        value: group.id,
+        label: `${capacityGroupPath(capacityGroups, group.id) || group.code} · ${group.name}`,
+        description: `${group.subtreeLocationCount} ubicación(es) en esta estructura y subestructuras${group.isActive ? '' : ' · Inactiva'}`
+      }))
+  ]);
+  let structurePathById = $derived(
+    Object.fromEntries(
+      capacityGroups.map((group) => [
+        group.id,
+        `${capacityGroupPath(capacityGroups, group.id) || group.code} · ${group.name}`
+      ])
+    ) as Record<string, string>
+  );
+  let selectedStructureLabel = $derived(
+    structureFilter === NO_STRUCTURE_FILTER
+      ? 'Sin estructura'
+      : structureFilter
+        ? (structurePathById[structureFilter] ?? `Estructura ${structureFilter}`)
+        : ''
   );
   let blockedCount = $derived(
     (summary?.by_status.blocked ?? 0) +
@@ -113,6 +152,19 @@
       ]);
       warehouseName = warehouse.name;
       scheme = activeScheme;
+      readFiltersFromUrl();
+      capacityGroupsLoading = true;
+      try {
+        capacityGroups = await listCapacityGroups(warehouseId);
+        capacityGroupsError = null;
+      } catch (cause) {
+        capacityGroupsError =
+          cause instanceof HttpError
+            ? cause.message
+            : 'No se pudo cargar el catálogo de estructuras.';
+      } finally {
+        capacityGroupsLoading = false;
+      }
       await loadData();
     } catch (cause) {
       error =
@@ -140,7 +192,8 @@
         areaFilter,
         typeFilter,
         statusFilter,
-        activityFilter
+        activityFilter,
+        structureFilter
       ] as const;
       const summaryKey = [...prefix, 'summary'] as const;
       const [pageResult, summaryResult] = await Promise.all([
@@ -161,6 +214,13 @@
                   : activityFilter === 'inactive'
                     ? false
                     : undefined,
+              capacity_group_id:
+                structureFilter && structureFilter !== NO_STRUCTURE_FILTER
+                  ? structureFilter
+                  : undefined,
+              include_descendants:
+                structureFilter && structureFilter !== NO_STRUCTURE_FILTER ? true : undefined,
+              unassigned: structureFilter === NO_STRUCTURE_FILTER,
               signal
             })
         }),
@@ -192,6 +252,7 @@
 
   function applyFilters() {
     currentPage = 1;
+    syncFiltersToUrl();
     void loadData();
   }
 
@@ -207,17 +268,57 @@
     typeFilter = '';
     statusFilter = '';
     activityFilter = '';
+    structureFilter = '';
+    syncFiltersToUrl();
     applyFilters();
   }
 
+  function readFiltersFromUrl() {
+    const params = routePage.url.searchParams;
+    search = params.get('search') ?? '';
+    areaFilter = params.get('area') ?? '';
+    typeFilter = params.get('location_type') ?? '';
+    statusFilter = params.get('lifecycle_status') ?? '';
+    const active = params.get('is_active');
+    activityFilter = active === 'true' ? 'active' : active === 'false' ? 'inactive' : '';
+    structureFilter =
+      params.get('unassigned') === 'true'
+        ? NO_STRUCTURE_FILTER
+        : (params.get('capacity_group_id') ?? '');
+  }
+
+  function syncFiltersToUrl() {
+    const params = new URLSearchParams(routePage.url.searchParams);
+    const setOrDelete = (key: string, value: string) => {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    };
+    setOrDelete('search', search.trim());
+    setOrDelete('area', areaFilter);
+    setOrDelete('location_type', typeFilter);
+    setOrDelete('lifecycle_status', statusFilter);
+    setOrDelete(
+      'is_active',
+      activityFilter === 'active' ? 'true' : activityFilter === 'inactive' ? 'false' : ''
+    );
+    params.delete('capacity_group_id');
+    params.delete('include_descendants');
+    params.delete('unassigned');
+    if (structureFilter === NO_STRUCTURE_FILTER) params.set('unassigned', 'true');
+    else if (structureFilter) {
+      params.set('capacity_group_id', structureFilter);
+      params.set('include_descendants', 'true');
+    }
+    const query = params.toString();
+    history.replaceState(history.state, '', `${routePage.url.pathname}${query ? `?${query}` : ''}`);
+  }
+
   function openCreate() {
-    editing = null;
-    formOpen = true;
+    void goto(`/warehouses/${warehouseId}/locations/new`);
   }
 
   function openEdit(location: LocationOut) {
-    editing = location;
-    formOpen = true;
+    void goto(`/warehouses/${warehouseId}/locations/${location.id}/edit`);
   }
 
   async function activate(location: LocationOut) {
@@ -308,18 +409,6 @@
     return actions;
   }
 
-  function handleSaved(location: LocationOut, createAnother: boolean) {
-    success = createAnother
-      ? `${location.code} creada. Puede registrar la siguiente ubicación.`
-      : `${location.code} guardada correctamente.`;
-    void loadData(true);
-  }
-
-  function handlePublished(job: LocationBatchJob) {
-    success = `${job.total_rows.toLocaleString('es-SV')} filas procesadas en el lote.`;
-    void loadData(true);
-  }
-
   function goToPage(nextPage: number) {
     if (!meta || nextPage < 1 || nextPage > meta.pages || nextPage === currentPage) return;
     currentPage = nextPage;
@@ -379,7 +468,11 @@
             Configurar códigos
           </Button>
         {/if}
-        {#if canImport}<Button variant="secondary" size="sm" onclick={() => (importOpen = true)}>
+        {#if canImport}<Button
+            variant="secondary"
+            size="sm"
+            onclick={() => void goto(`/warehouses/${warehouseId}/locations/import`)}
+          >
             <svg
               width="14"
               height="14"
@@ -394,7 +487,7 @@
         {#if canGenerate}<Button
             variant="secondary"
             size="sm"
-            onclick={() => (generatorOpen = true)}
+            onclick={() => void goto(`/warehouses/${warehouseId}/locations/generate`)}
           >
             <svg
               width="14"
@@ -439,13 +532,13 @@
     {/if}
 
     <section
-      class="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+      class="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6"
       aria-label="Resumen de ubicaciones"
     >
       {#if contextLoading || (!summary && loading)}
-        {#each Array(4) as _}<div class="h-24 rounded-xl skeleton"></div>{/each}
+        {#each Array(6) as _}<div class="h-24 rounded-xl skeleton"></div>{/each}
       {:else}
-        {#each [['Ubicaciones', summary?.total ?? 0, 'Total registrado'], ['Activas', summary?.active ?? 0, `${summary?.inactive ?? 0} inactivas`], ['Capacidad', summary?.total_capacity ?? 0, 'Capacidad configurada'], ['Bloqueadas', blockedCount, 'Requieren atención']] as metric (metric[0])}
+        {#each [['Ubicaciones', summary?.total ?? 0, 'Total registrado'], ['Elegibles', summary?.storage_eligible ?? 0, 'Almacenamiento normal'], ['Configuradas', summary?.capacity_configured ?? 0, 'Límites completos'], ['Incompletas', summary?.capacity_incomplete ?? 0, 'Requieren revisión'], ['Activas', summary?.active ?? 0, 'Disponibles operativamente'], ['Bloqueadas', blockedCount, 'Entrada o salida restringida']] as metric (metric[0])}
           <Card class="p-4">
             <p class="text-xs font-medium text-foreground-muted">{metric[0]}</p>
             <p class="mt-2 font-mono text-2xl font-semibold text-foreground">
@@ -459,7 +552,7 @@
 
     <Card class="mb-4 p-4">
       <div
-        class="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,2fr)_repeat(4,minmax(150px,1fr))_auto]"
+        class="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,2fr)_repeat(5,minmax(150px,1fr))_auto]"
       >
         <div class="relative">
           <label for="location-search" class="sr-only">Buscar ubicaciones</label>
@@ -482,6 +575,16 @@
             class="h-[42px] w-full rounded-lg border border-border bg-surface pl-10 pr-3 text-sm text-foreground placeholder:text-foreground-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
+        <SmartSelect
+          id="location-structure-filter"
+          ariaLabel="Estructura — incluye subestructuras"
+          bind:value={structureFilter}
+          options={structureOptions}
+          placeholder={capacityGroupsLoading ? 'Cargando estructuras…' : 'Todas las estructuras'}
+          compact
+          disabled={capacityGroupsLoading}
+          onselect={applyFilters}
+        />
         <SmartSelect
           id="location-area-filter"
           ariaLabel="Filtrar por área"
@@ -524,6 +627,27 @@
         {#if hasFilters}<Button variant="ghost" size="sm" onclick={clearFilters}>Limpiar</Button
           >{/if}
       </div>
+      {#if capacityGroupsError}
+        <div
+          class="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning"
+          role="status"
+        >
+          {capacityGroupsError} Puede consultar todas las ubicaciones y usar los demás filtros.
+        </div>
+      {/if}
+      {#if structureFilter}
+        <div
+          class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-foreground-muted"
+        >
+          <span>
+            Mostrando ubicaciones de <strong class="font-semibold text-foreground"
+              >{selectedStructureLabel}</strong
+            >
+            {#if structureFilter !== NO_STRUCTURE_FILTER}<span> y sus subestructuras</span>{/if}
+          </span>
+          <Button variant="ghost" size="sm" onclick={clearFilters}>Quitar filtro</Button>
+        </div>
+      {/if}
     </Card>
 
     <Card class="overflow-hidden p-0">
@@ -562,7 +686,8 @@
             {#if !hasFilters && canGenerate}<Button
                 variant="secondary"
                 size="sm"
-                onclick={() => (generatorOpen = true)}>Generar por rangos</Button
+                onclick={() => void goto(`/warehouses/${warehouseId}/locations/generate`)}
+                >Generar por rangos</Button
               >{/if}
             {#if !hasFilters && canCreate}<Button size="sm" onclick={openCreate}
                 >Crear primera ubicación</Button
@@ -570,7 +695,7 @@
           </div>
         </div>
       {:else}
-        <LocationTable {items} {actionsFor} />
+        <LocationTable {items} {actionsFor} capacityGroupLabels={structurePathById} />
       {/if}
     </Card>
 
@@ -598,36 +723,6 @@
   </div>
 </div>
 
-<LocationFormModal
-  open={formOpen}
-  {warehouseId}
-  location={editing}
-  canRecode={permissions.hasPermission('locations.recode')}
-  canCommission={permissions.hasPermission('locations.commission')}
-  canActivate={permissions.hasPermission('locations.activate')}
-  canDeactivate={permissions.hasPermission('locations.deactivate')}
-  onclose={() => {
-    formOpen = false;
-    editing = null;
-  }}
-  onsaved={handleSaved}
-/>
-<BatchGeneratorModal
-  open={generatorOpen}
-  {warehouseId}
-  {scheme}
-  hasPermission={(code) => permissions.hasPermission(code)}
-  onclose={() => (generatorOpen = false)}
-  onpublished={handlePublished}
-/>
-<LocationImportModal
-  open={importOpen}
-  {warehouseId}
-  {scheme}
-  hasPermission={(code) => permissions.hasPermission(code)}
-  onclose={() => (importOpen = false)}
-  onpublished={handlePublished}
-/>
 {#if scheme}
   <LocationCodeSchemeModal
     open={schemeOpen}

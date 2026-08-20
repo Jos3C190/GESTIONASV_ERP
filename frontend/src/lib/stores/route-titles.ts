@@ -23,6 +23,20 @@ const TITLES: Record<string, string> = {
 export function routeTitle(pathname: string): string {
   // Check exact match first
   if (TITLES[pathname]) return TITLES[pathname];
+  // Gestión de estructuras físicas dentro de un almacén
+  if (/^\/warehouses\/[^/]+\/structures\/?$/.test(pathname)) {
+    return 'Estructuras y límites compartidos';
+  }
+  if (/^\/warehouses\/[^/]+\/locations\/new\/?$/.test(pathname)) return 'Nueva ubicación';
+  if (/^\/warehouses\/[^/]+\/locations\/generate\/?$/.test(pathname)) {
+    return 'Generar ubicaciones por rangos';
+  }
+  if (/^\/warehouses\/[^/]+\/locations\/import\/?$/.test(pathname)) {
+    return 'Importar ubicaciones';
+  }
+  if (/^\/warehouses\/[^/]+\/locations\/[^/]+\/edit\/?$/.test(pathname)) {
+    return 'Editar ubicación';
+  }
   // Sub-rutas de empleados (crear / editar / detalle) -> "Empleados"
   if (pathname.startsWith('/employees')) return TITLES['/employees'] ?? 'Empleados';
   // Sub-rutas de sucursales (detalle) -> "Sucursales"
