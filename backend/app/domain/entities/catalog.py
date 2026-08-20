@@ -128,6 +128,10 @@ class Product:
     variants: tuple[ProductVariant, ...] = ()
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    # Resolved only by paginated catalogue queries. Keeping it optional keeps
+    # the domain compatible with detail/create flows that do not join the
+    # category table.
+    category_name: str | None = None
 
     @property
     def dimension_summary(self) -> str | None:

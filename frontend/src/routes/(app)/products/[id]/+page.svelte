@@ -7,6 +7,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
+  import PackagingManager from '$lib/features/inventory/components/PackagingManager.svelte';
 
   let product = $state<Product | null>(null);
   let categories = $state<Category[]>([]);
@@ -384,6 +385,17 @@
           {/if}
         </Card>
       </div>
+
+      {#if product.product_kind === 'goods' && product.variant_mode === 'standalone' && permissions.hasPermission('inventory:read')}
+        <Card class="p-6">
+          <PackagingManager
+            productId={product.id_product}
+            defaultBaseUnitId={product.sale_unit}
+            unitOptions={units.map((unit) => ({ id: unit.id_unit, label: unit.name }))}
+            canManage={permissions.hasPermission('inventory:manage_packaging')}
+          />
+        </Card>
+      {/if}
 
       {#if product.variant_mode === 'template'}
         <Card class="p-6">

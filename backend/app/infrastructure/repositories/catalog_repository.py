@@ -235,6 +235,7 @@ def _to_product(
     image_count: int | None = None,
     variant_count: int | None = None,
     cover_image: ProductImage | None = None,
+    category_name: str | None = None,
 ) -> Product:
     loaded_images = orm.__dict__.get("images")
     images = tuple(_to_product_image(image) for image in loaded_images or [])
@@ -302,6 +303,7 @@ def _to_product(
         variants=tuple(_to_variant(item, orm.name) for item in loaded_variants or []),
         created_at=orm.created_at,
         updated_at=orm.updated_at,
+        category_name=category_name,
     )
 
 
@@ -608,7 +610,10 @@ class SqlAlchemyCatalogRepository:
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[list[Product], int]:
-        conditions = [ProductModel.company_id == company_id]
+        # Soft-deleted products belong to the recycle bin, not to the active
+        # catalogue. Keeping this predicate here also keeps the table and its
+        # server-side distribution insights on the same population.
+        conditions = [ProductModel.company_id == company_id, ProductModel.deleted_at.is_(None)]
         if category_id is not None:
             conditions.append(ProductModel.id_category == category_id)
         if sub_category_id is not None:
@@ -636,15 +641,21 @@ class SqlAlchemyCatalogRepository:
         stmt = (
             select(
                 ProductModel,
+                CategoryModel.name,
                 func.count(distinct(ProductImageModel.id)).label("image_count"),
                 func.count(distinct(ProductVariantModel.id)).label("variant_count"),
+            )
+            .join(
+                CategoryModel,
+                (CategoryModel.id_category == ProductModel.id_category)
+                & (CategoryModel.company_id == company_id),
             )
             .outerjoin(ProductImageModel, ProductImageModel.product_id == ProductModel.id_product)
             .outerjoin(
                 ProductVariantModel, ProductVariantModel.product_id == ProductModel.id_product
             )
             .where(*conditions)
-            .group_by(ProductModel.id_product)
+            .group_by(ProductModel.id_product, CategoryModel.name)
             .order_by(ProductModel.name)
             .offset(skip)
             .limit(limit)
@@ -658,7 +669,10 @@ class SqlAlchemyCatalogRepository:
         )
         res = await self._session.execute(stmt)
         rows = res.all()
-        product_ids = [product.id_product for product, _image_count, _variant_count in rows]
+        product_ids = [
+            product.id_product
+            for product, _category_name, _image_count, _variant_count in rows
+        ]
         covers: dict[int, ProductImage] = {}
         if product_ids:
             cover_rows = await self._session.execute(
@@ -676,8 +690,9 @@ class SqlAlchemyCatalogRepository:
                 image_count=int(image_count),
                 variant_count=int(variant_count),
                 cover_image=covers.get(product.id_product),
+                category_name=category_name,
             )
-            for product, image_count, variant_count in rows
+            for product, category_name, image_count, variant_count in rows
         ]
         return items, total
 

@@ -11,6 +11,7 @@ export interface Country {
 
 export interface Category {
   id_category: number;
+  category_name?: string | null;
   uuid: string;
   name: string;
   description?: string | null;
@@ -55,6 +56,7 @@ export interface Product {
   id_sub_category?: number | null;
   sku: string;
   name: string;
+  category_name?: string | null;
   purchase_unit: number;
   sale_unit: number;
   original_code?: string | null;

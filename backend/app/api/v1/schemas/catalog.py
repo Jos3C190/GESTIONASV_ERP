@@ -81,6 +81,28 @@ class SubCategoryResponse(ORMOut):
     updated_at: datetime | None = None
 
 
+class CatalogOptionResponse(BaseModel):
+    """Small, searchable option used by large catalogue filters."""
+
+    id: int
+    label: str
+    parent_id: int | None = None
+
+
+class ProductDistributionItem(BaseModel):
+    id: int | None = None
+    parent_id: int | None = None
+    label: str
+    value: int = Field(..., ge=0)
+    filterable: bool = True
+
+
+class ProductDistributionResponse(BaseModel):
+    scope_total: int = Field(..., ge=0)
+    categories: list[ProductDistributionItem] = Field(default_factory=list)
+    subcategories: list[ProductDistributionItem] = Field(default_factory=list)
+
+
 # --- Unit ---
 class UnitCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -484,6 +506,7 @@ class ProductResponse(ORMOut):
     uuid: uuid.UUID
     company_id: uuid.UUID
     category_id: int = Field(..., serialization_alias="id_category")
+    category_name: str | None = None
     sub_category_id: int | None = Field(None, serialization_alias="id_sub_category")
     sku: str
     name: str

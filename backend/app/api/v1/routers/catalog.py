@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import distinct, func, select
+from sqlalchemy import desc, distinct, func, or_, select
 
 from app.api.v1.company_access import (
     request_company_id,
@@ -14,11 +14,13 @@ from app.api.v1.company_access import (
 )
 from app.api.v1.deps import CurrentUser, SessionDep, get_audit_service, require_permission
 from app.api.v1.schemas.catalog import (
+    CatalogOptionResponse,
     CategoryCreate,
     CategoryResponse,
     CategoryUpdate,
     CountryResponse,
     ProductCreate,
+    ProductDistributionResponse,
     ProductImageInput,
     ProductResponse,
     ProductUpdate,
@@ -48,10 +50,38 @@ from app.domain.entities.product_variants import (
     ProductVariantUpdateDraft,
     ProductVariantValueDraft,
 )
-from app.infrastructure.models.catalog import ProductModel
+from app.infrastructure.models.catalog import CategoryModel, ProductModel, SubCategoryModel
 from app.infrastructure.repositories import SqlAlchemyCatalogRepository, SqlAlchemyRoleRepository
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
+
+
+def _product_scope_conditions(
+    company_id: uuid.UUID,
+    *,
+    category_id: int | None,
+    sub_category_id: int | None,
+    search: str | None,
+    active_only: bool,
+):
+    conditions = [ProductModel.company_id == company_id, ProductModel.deleted_at.is_(None)]
+    if category_id is not None:
+        conditions.append(ProductModel.id_category == category_id)
+    if sub_category_id is not None:
+        conditions.append(ProductModel.id_sub_category == sub_category_id)
+    if active_only:
+        conditions.append(ProductModel.is_active.is_(True))
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+        conditions.append(
+            or_(
+                ProductModel.name.ilike(pattern),
+                ProductModel.sku.ilike(pattern),
+                ProductModel.original_code.ilike(pattern),
+                ProductModel.internal_code.ilike(pattern),
+            )
+        )
+    return conditions
 
 
 def _status_action(before_active: bool, after_active: bool) -> str:
@@ -316,6 +346,49 @@ async def get_country(
 
 # --- Categories ---
 @router.get(
+    "/category-options",
+    response_model=Page[CatalogOptionResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Buscar categorías para filtros",
+    dependencies=[Depends(require_permission("products:read"))],
+)
+async def category_options(
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    q: str | None = Query(None, max_length=100),
+    active_only: bool = Query(True),
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),
+) -> Page[CatalogOptionResponse]:
+    company_id = request_company_id(request)
+    await require_company_access(session, current, company_id)
+    conditions = [CategoryModel.company_id == company_id, CategoryModel.deleted_at.is_(None)]
+    if active_only:
+        conditions.append(CategoryModel.is_active.is_(True))
+    if q and q.strip():
+        conditions.append(CategoryModel.name.ilike(f"%{q.strip()}%"))
+    total = int(
+        (await session.execute(select(func.count()).select_from(CategoryModel).where(*conditions)))
+        .scalar_one()
+    )
+    rows = (
+        await session.execute(
+            select(CategoryModel.id_category, CategoryModel.name)
+            .where(*conditions)
+            .order_by(CategoryModel.name, CategoryModel.id_category)
+            .offset((page - 1) * size)
+            .limit(size)
+        )
+    ).all()
+    pages = (total + size - 1) // size if total else 0
+    return Page(
+        items=[CatalogOptionResponse(id=int(row.id_category), label=row.name) for row in rows],
+        meta=PageMeta(page=page, size=size, total=total, pages=pages),
+    )
+
+
+@router.get(
     "/categories",
     response_model=list[CategoryResponse],
     status_code=status.HTTP_200_OK,
@@ -429,6 +502,63 @@ async def update_category(
 
 
 # --- SubCategories ---
+@router.get(
+    "/sub-category-options",
+    response_model=Page[CatalogOptionResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Buscar subcategorías para filtros",
+    dependencies=[Depends(require_permission("products:read"))],
+)
+async def sub_category_options(
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    category_id: int | None = Query(None),
+    q: str | None = Query(None, max_length=100),
+    active_only: bool = Query(True),
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),
+) -> Page[CatalogOptionResponse]:
+    company_id = request_company_id(request)
+    await require_company_access(session, current, company_id)
+    conditions = [
+        SubCategoryModel.company_id == company_id,
+        SubCategoryModel.deleted_at.is_(None),
+    ]
+    if category_id is not None:
+        conditions.append(SubCategoryModel.id_category == category_id)
+    if active_only:
+        conditions.append(SubCategoryModel.is_active.is_(True))
+    if q and q.strip():
+        conditions.append(SubCategoryModel.name.ilike(f"%{q.strip()}%"))
+    total = int(
+        (
+            await session.execute(
+                select(func.count()).select_from(SubCategoryModel).where(*conditions)
+            )
+        ).scalar_one()
+    )
+    rows = (
+        await session.execute(
+            select(SubCategoryModel.id_sub_category, SubCategoryModel.name, SubCategoryModel.id_category)
+            .where(*conditions)
+            .order_by(SubCategoryModel.name, SubCategoryModel.id_sub_category)
+            .offset((page - 1) * size)
+            .limit(size)
+        )
+    ).all()
+    pages = (total + size - 1) // size if total else 0
+    return Page(
+        items=[
+            CatalogOptionResponse(
+                id=int(row.id_sub_category), label=row.name, parent_id=int(row.id_category)
+            )
+            for row in rows
+        ],
+        meta=PageMeta(page=page, size=size, total=total, pages=pages),
+    )
+
+
 @router.get(
     "/sub-categories",
     response_model=list[SubCategoryResponse],
@@ -826,11 +956,134 @@ async def product_stats(request: Request, session: SessionDep, current: CurrentU
                 func.count(distinct(ProductModel.id_category)).filter(
                     ProductModel.is_active.is_(True)
                 ),
-            ).where(ProductModel.company_id == company_id)
+            ).where(ProductModel.company_id == company_id, ProductModel.deleted_at.is_(None))
         )
     ).one()
     total, active, categories = (int(value or 0) for value in row)
     return {"total": total, "active": active, "inactive": total - active, "categories": categories}
+
+
+@router.get(
+    "/products/distribution",
+    response_model=ProductDistributionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Distribución agregada del catálogo",
+    dependencies=[Depends(require_permission("products:read"))],
+)
+async def product_distribution(
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    category_id: int | None = Query(None),
+    sub_category_id: int | None = Query(None),
+    search: str | None = Query(None, max_length=100),
+    active_only: bool = Query(False),
+) -> ProductDistributionResponse:
+    """Return bounded server-side aggregates for the catalogue insights.
+
+    The endpoint deliberately returns at most six named groups plus an
+    informational ``Otros``/``Sin subcategoría`` bucket. This keeps the
+    browser payload bounded even when a company has thousands of categories.
+    """
+    company_id = request_company_id(request)
+    await require_company_access(session, current, company_id)
+    conditions = _product_scope_conditions(
+        company_id,
+        category_id=category_id,
+        sub_category_id=sub_category_id,
+        search=search,
+        active_only=active_only,
+    )
+    scope_total = int(
+        (await session.execute(select(func.count()).select_from(ProductModel).where(*conditions)))
+        .scalar_one()
+    )
+
+    category_count = func.count(ProductModel.id_product)
+    category_rows = (
+        await session.execute(
+            select(CategoryModel.id_category, CategoryModel.name, category_count.label("value"))
+            .join(
+                ProductModel,
+                (ProductModel.id_category == CategoryModel.id_category)
+                & (ProductModel.company_id == company_id),
+            )
+            .where(*conditions, CategoryModel.deleted_at.is_(None))
+            .group_by(CategoryModel.id_category, CategoryModel.name)
+            .order_by(desc(category_count), CategoryModel.name)
+            .limit(6)
+        )
+    ).all()
+    category_items = [
+        {"id": int(row.id_category), "label": row.name, "value": int(row.value), "filterable": True}
+        for row in category_rows
+    ]
+    category_other = scope_total - sum(item["value"] for item in category_items)
+    if category_other > 0:
+        category_items.append(
+            {"id": None, "label": "Otros", "value": category_other, "filterable": False}
+        )
+
+    sub_count = func.count(ProductModel.id_product)
+    sub_rows = (
+        await session.execute(
+            select(
+                SubCategoryModel.id_sub_category,
+                SubCategoryModel.name,
+                SubCategoryModel.id_category,
+                sub_count.label("value"),
+            )
+            .join(
+                ProductModel,
+                (ProductModel.id_sub_category == SubCategoryModel.id_sub_category)
+                & (ProductModel.company_id == company_id),
+            )
+            .where(
+                *conditions,
+                ProductModel.id_sub_category.is_not(None),
+                SubCategoryModel.deleted_at.is_(None),
+            )
+            .group_by(
+                SubCategoryModel.id_sub_category,
+                SubCategoryModel.name,
+                SubCategoryModel.id_category,
+            )
+            .order_by(desc(sub_count), SubCategoryModel.name)
+            .limit(6)
+        )
+    ).all()
+    sub_items = [
+        {
+            "id": int(row.id_sub_category),
+            "parent_id": int(row.id_category),
+            "label": row.name,
+            "value": int(row.value),
+            "filterable": True,
+        }
+        for row in sub_rows
+    ]
+    sub_none = int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(ProductModel)
+                .where(*conditions, ProductModel.id_sub_category.is_(None))
+            )
+        ).scalar_one()
+    )
+    sub_other = scope_total - sum(item["value"] for item in sub_items) - sub_none
+    if sub_other > 0:
+        sub_items.append(
+            {"id": None, "label": "Otros", "value": sub_other, "filterable": False}
+        )
+    if sub_none > 0:
+        sub_items.append(
+            {"id": None, "label": "Sin subcategoría", "value": sub_none, "filterable": False}
+        )
+
+    return ProductDistributionResponse(
+        scope_total=scope_total, categories=category_items, subcategories=sub_items
+    )
 
 
 @router.get(

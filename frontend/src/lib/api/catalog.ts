@@ -29,12 +29,45 @@ export interface ProductStats {
   categories: number;
 }
 
+export interface CatalogOption {
+  id: number;
+  label: string;
+  parent_id?: number | null;
+}
+
+export interface ProductDistributionItem {
+  id: number | null;
+  parent_id?: number | null;
+  label: string;
+  value: number;
+  filterable: boolean;
+}
+
+export interface ProductDistribution {
+  scope_total: number;
+  categories: ProductDistributionItem[];
+  subcategories: ProductDistributionItem[];
+}
+
 export const catalogApi = {
   // Countries
   listCountries: (activeOnly = true) =>
     apiFetch<Country[]>(`/catalog/countries?active_only=${activeOnly}`),
 
   // Categories
+  searchCategoryOptions: (params?: {
+    query?: string;
+    page?: number;
+    size?: number;
+    activeOnly?: boolean;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.query?.trim()) q.append('q', params.query.trim());
+    q.append('active_only', (params?.activeOnly ?? true).toString());
+    q.append('page', String(params?.page ?? 1));
+    q.append('size', String(params?.size ?? 50));
+    return apiFetch<PageResponse<CatalogOption>>(`/catalog/category-options?${q.toString()}`);
+  },
   listCategories: (activeOnly = true) =>
     apiFetch<Category[]>(`/catalog/categories?active_only=${activeOnly}`),
 
@@ -54,6 +87,21 @@ export const catalogApi = {
     }),
 
   // SubCategories
+  searchSubCategoryOptions: (params?: {
+    categoryId?: number;
+    query?: string;
+    page?: number;
+    size?: number;
+    activeOnly?: boolean;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.categoryId) q.append('category_id', String(params.categoryId));
+    if (params?.query?.trim()) q.append('q', params.query.trim());
+    q.append('active_only', (params?.activeOnly ?? true).toString());
+    q.append('page', String(params?.page ?? 1));
+    q.append('size', String(params?.size ?? 50));
+    return apiFetch<PageResponse<CatalogOption>>(`/catalog/sub-category-options?${q.toString()}`);
+  },
   listSubCategories: (categoryId?: number, activeOnly = true) => {
     const params = new URLSearchParams();
     if (categoryId) params.append('category_id', categoryId.toString());
@@ -170,6 +218,20 @@ export const catalogApi = {
   },
 
   productStats: () => apiFetch<ProductStats>('/catalog/products/stats'),
+
+  productDistribution: (params?: {
+    category_id?: number;
+    sub_category_id?: number;
+    search?: string;
+    active_only?: boolean;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.category_id) q.append('category_id', String(params.category_id));
+    if (params?.sub_category_id) q.append('sub_category_id', String(params.sub_category_id));
+    if (params?.search?.trim()) q.append('search', params.search.trim());
+    q.append('active_only', String(params?.active_only ?? false));
+    return apiFetch<ProductDistribution>(`/catalog/products/distribution?${q.toString()}`);
+  },
 
   getProduct: (id: number) => apiFetch<Product>(`/catalog/products/${id}`),
 

@@ -6,6 +6,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
+  import PackagingManager from '$lib/features/inventory/components/PackagingManager.svelte';
   import ProductVariantImageEditor from '$lib/features/products/components/ProductVariantImageEditor.svelte';
   import { company } from '$lib/stores/company.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
@@ -14,7 +15,8 @@
     ProductIdentifier,
     ProductVariant,
     ProductVariantImageDraft,
-    ProductVariantUpdateInput
+    ProductVariantUpdateInput,
+    Unit
   } from '$lib/types/catalog';
 
   type VariantStatus = ProductVariant['lifecycle_status'];
@@ -36,6 +38,11 @@
     image: ProductVariantImageDraft | null;
   }
 
+  interface UnitLoadResult {
+    data: Unit[];
+    error: string | null;
+  }
+
   const statusOptions: { value: VariantStatus; label: string }[] = [
     { value: 'draft', label: 'Borrador' },
     { value: 'active', label: 'Activa' },
@@ -48,6 +55,7 @@
   let variantId = $derived((page.params as { variantId?: string }).variantId ?? '');
   let product = $state<Product | null>(null);
   let variant = $state<ProductVariant | null>(null);
+  let units = $state<Unit[]>([]);
   let form = $state<FormState>({
     sku: '',
     name_override: null,
@@ -59,6 +67,7 @@
   let loading = $state(true);
   let saving = $state(false);
   let error = $state<string | null>(null);
+  let inventoryUnitsError = $state<string | null>(null);
   let conflict = $state(false);
   let pendingTarget = $state<string | null>(null);
   let bypassNavigationGuard = $state(false);
@@ -121,14 +130,27 @@
     }
     loading = true;
     error = null;
+    inventoryUnitsError = null;
     conflict = false;
     try {
-      const [loadedProduct, loadedVariant] = await Promise.all([
+      const unitsRequest: Promise<UnitLoadResult> = permissions.hasPermission('inventory:read')
+        ? catalogApi
+            .listUnits(true)
+            .then((data) => ({ data, error: null }))
+            .catch(() => ({
+              data: [],
+              error: 'No se pudo cargar el catálogo de unidades para las presentaciones.'
+            }))
+        : Promise.resolve({ data: [], error: null });
+      const [loadedProduct, loadedVariant, unitResult] = await Promise.all([
         catalogApi.getProduct(productId),
-        catalogApi.getProductVariant(productId, variantId)
+        catalogApi.getProductVariant(productId, variantId),
+        unitsRequest
       ]);
       product = loadedProduct;
       variant = loadedVariant;
+      units = unitResult.data;
+      inventoryUnitsError = unitResult.error;
       form = toForm(loadedVariant);
       baseline = cloneForm(form);
     } catch (err: unknown) {
@@ -606,6 +628,26 @@
             > para modificar la imagen.
           </p>{/if}
       </Card>
+
+      {#if product.product_kind === 'goods' && permissions.hasPermission('inventory:read')}
+        <Card class="p-6">
+          {#if inventoryUnitsError}
+            <div
+              class="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger"
+              role="alert"
+            >
+              {inventoryUnitsError}
+            </div>
+          {:else}
+            <PackagingManager
+              variantId={variant.id}
+              defaultBaseUnitId={product.sale_unit}
+              unitOptions={units.map((unit) => ({ id: unit.id_unit, label: unit.name }))}
+              canManage={permissions.hasPermission('inventory:manage_packaging')}
+            />
+          {/if}
+        </Card>
+      {/if}
 
       <Card class="p-5"
         ><div class="flex items-start gap-3">

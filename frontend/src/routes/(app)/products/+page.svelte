@@ -2,25 +2,27 @@
   import { untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import type { Category, Product, SubCategory, Unit } from '$lib/types/catalog';
+  import { catalogApi, type ProductDistributionItem } from '$lib/api/catalog';
+  import type { Product, Unit } from '$lib/types/catalog';
   import Card from '$lib/components/ui/Card.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import AsyncSmartSelect, { type AsyncSmartOption } from '$lib/components/ui/AsyncSmartSelect.svelte';
+  import DistributionDonut from '$lib/features/products/components/DistributionDonut.svelte';
   import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
   import { search as globalSearch } from '$lib/stores/search.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { confirmation } from '$lib/stores/confirmation.svelte';
 
   let products = $state<Product[]>([]);
-  let categories = $state<Category[]>([]);
-  let subCategories = $state<SubCategory[]>([]);
   let units = $state<Unit[]>([]);
   let loading = $state(true);
   let errorMsg = $state<string | null>(null);
   let successMsg = $state<string | null>(null);
   let selectedCategory = $state<number | undefined>(undefined);
   let selectedSubCategory = $state<number | undefined>(undefined);
+  let selectedCategoryLabel = $state('');
+  let selectedSubCategoryLabel = $state('');
   let page = $state(1);
   let totalPages = $state(1);
   let totalItems = $state(0);
@@ -29,16 +31,30 @@
   let kpiInactive = $state(0);
   let kpiCategories = $state(0);
   let dataGeneration = 0;
+  let insightGeneration = 0;
+  let insightLoading = $state(true);
+  let insightError = $state<string | null>(null);
+  let categoryDistribution = $state<ProductDistributionItem[]>([]);
+  let subCategoryDistribution = $state<ProductDistributionItem[]>([]);
 
-  let filteredSubCategories = $derived(
-    selectedCategory
-      ? subCategories.filter((item) => item.id_category === selectedCategory)
-      : subCategories
-  );
   let activeRatio = $derived(kpiTotal > 0 ? Math.round((kpiActive / kpiTotal) * 100) : 0);
 
-  function categoryName(id: number) {
-    return categories.find((item) => item.id_category === id)?.name ?? '—';
+  function categoryName(product: Product) {
+    return product.category_name ?? '—';
+  }
+
+  async function loadCategoryOptions(query: string): Promise<AsyncSmartOption[]> {
+    const result = await catalogApi.searchCategoryOptions({ query, size: 50 });
+    return result.items.map((item) => ({ value: String(item.id), label: item.label }));
+  }
+
+  async function loadSubCategoryOptions(query: string): Promise<AsyncSmartOption[]> {
+    const result = await catalogApi.searchSubCategoryOptions({
+      categoryId: selectedCategory,
+      query,
+      size: 50
+    });
+    return result.items.map((item) => ({ value: String(item.id), label: item.label }));
   }
 
   async function loadData() {
@@ -46,9 +62,7 @@
     loading = true;
     errorMsg = null;
     try {
-      const [categoryData, subCategoryData, unitData, productPage, stats] = await Promise.all([
-        catalogApi.listCategories(true),
-        catalogApi.listSubCategories(undefined, true),
+      const [unitData, productPage, stats] = await Promise.all([
         catalogApi.listUnits(true),
         catalogApi.listProducts({
           category_id: selectedCategory,
@@ -61,8 +75,6 @@
         catalogApi.productStats()
       ]);
       if (generation !== dataGeneration) return;
-      categories = categoryData;
-      subCategories = subCategoryData;
       units = unitData;
       products = productPage.items;
       totalItems = productPage.meta.total;
@@ -76,6 +88,30 @@
       errorMsg = err instanceof Error ? err.message : 'No se pudo cargar el catálogo.';
     } finally {
       if (generation === dataGeneration) loading = false;
+    }
+  }
+
+  async function loadInsights() {
+    const generation = ++insightGeneration;
+    insightLoading = true;
+    insightError = null;
+    try {
+      const result = await catalogApi.productDistribution({
+        category_id: selectedCategory,
+        sub_category_id: selectedSubCategory,
+        search: globalSearch.query.trim() || undefined,
+        active_only: false
+      });
+      if (generation !== insightGeneration) return;
+      categoryDistribution = result.categories;
+      subCategoryDistribution = result.subcategories;
+    } catch (err: unknown) {
+      if (generation !== insightGeneration) return;
+      insightError = err instanceof Error ? err.message : 'No se pudo cargar la distribución.';
+      categoryDistribution = [];
+      subCategoryDistribution = [];
+    } finally {
+      if (generation === insightGeneration) insightLoading = false;
     }
   }
 
@@ -95,8 +131,23 @@
       void subCategory;
       page = 1;
       void loadData();
+      void loadInsights();
     });
   });
+
+  function selectCategory(value: string, option?: AsyncSmartOption) {
+    selectedCategory = value ? Number(value) : undefined;
+    selectedCategoryLabel = option?.label ?? '';
+    selectedSubCategory = undefined;
+    selectedSubCategoryLabel = '';
+    page = 1;
+  }
+
+  function selectSubCategory(value: string, option?: AsyncSmartOption) {
+    selectedSubCategory = value ? Number(value) : undefined;
+    selectedSubCategoryLabel = option?.label ?? '';
+    page = 1;
+  }
 
   function toggleProductStatus(product: Product) {
     confirmation.request({
@@ -188,34 +239,26 @@
       {totalItems} producto(s) registrados · Catálogo general
     </p>
     <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-      <select
-        aria-label="Filtrar por categoría"
-        bind:value={selectedCategory}
-        onchange={() => {
-          selectedSubCategory = undefined;
-          page = 1;
-        }}
-        class="h-9 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground focus:border-primary focus:outline-none sm:min-w-[190px]"
-      >
-        <option value={undefined}>Todas las categorías</option>
-        {#each categories as category}
-          <option value={category.id_category}>{category.name}</option>
-        {/each}
-      </select>
-      <select
-        aria-label="Filtrar por subcategoría"
-        bind:value={selectedSubCategory}
-        disabled={!selectedCategory}
-        onchange={() => {
-          page = 1;
-        }}
-        class="h-9 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[190px]"
-      >
-        <option value={undefined}>Todas las subcategorías</option>
-        {#each filteredSubCategories as item}
-          <option value={item.id_sub_category}>{item.name}</option>
-        {/each}
-      </select>
+      <AsyncSmartSelect
+        id="product-category-filter"
+        ariaLabel="Filtrar por categoría"
+        value={selectedCategory ? String(selectedCategory) : ''}
+        selectedLabel={selectedCategoryLabel}
+        placeholder="Todas las categorías"
+        compact
+        loadOptions={loadCategoryOptions}
+        onselect={selectCategory}
+      />
+      {#key selectedCategory ?? 'all'}<AsyncSmartSelect
+          id="product-subcategory-filter"
+          ariaLabel="Filtrar por subcategoría"
+          value={selectedSubCategory ? String(selectedSubCategory) : ''}
+          selectedLabel={selectedSubCategoryLabel}
+          placeholder="Todas las subcategorías"
+          compact
+          loadOptions={loadSubCategoryOptions}
+          onselect={selectSubCategory}
+        />{/key}
       {#if permissions.hasPermission('products:manage')}
         <Button size="sm" class="whitespace-nowrap" onclick={() => goto('/products/new')}>
           <svg
@@ -285,6 +328,7 @@
       {successMsg}
     </div>{/if}
 
+  <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_330px] lg:items-start">
   <Card class="overflow-hidden p-0">
     {#if loading}
       <div class="flex items-center justify-center py-20 text-sm text-foreground-muted">
@@ -378,7 +422,7 @@
                     </div>
                   </div></td
                 >
-                <td class="px-4 py-3 text-foreground-muted">{categoryName(product.id_category)}</td>
+                <td class="px-4 py-3 text-foreground-muted">{categoryName(product)}</td>
                 <td class="px-4 py-3 text-xs text-foreground-muted"
                   ><span
                     >Compra {units.find((unit) => unit.id_unit === product.purchase_unit)?.name ??
@@ -406,6 +450,36 @@
       </div>
     {/if}
   </Card>
+  <aside class="space-y-4" aria-label="Distribución del catálogo">
+    {#if insightError}
+      <div class="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-xs text-danger" role="alert">
+        {insightError}
+      </div>
+    {:else if insightLoading}
+      <Card class="h-[210px] animate-pulse p-4"><div class="h-4 w-32 rounded bg-surface-muted"></div><div class="mt-5 h-32 rounded-lg bg-surface-muted"></div></Card>
+      <Card class="h-[210px] animate-pulse p-4"><div class="h-4 w-36 rounded bg-surface-muted"></div><div class="mt-5 h-32 rounded-lg bg-surface-muted"></div></Card>
+    {:else}
+      <DistributionDonut
+        title="Productos por categoría"
+        description="Seleccione un segmento para filtrar"
+        data={categoryDistribution}
+        onselect={(id) => {
+          const label = categoryDistribution.find((item) => item.id === id)?.label ?? '';
+          selectCategory(String(id), { value: String(id), label });
+        }}
+      />
+      <DistributionDonut
+        title="Productos por subcategoría"
+        description="Grupos principales del resultado actual"
+        data={subCategoryDistribution}
+        onselect={(id) => {
+          const label = subCategoryDistribution.find((item) => item.id === id)?.label ?? '';
+          selectSubCategory(String(id), { value: String(id), label });
+        }}
+      />
+    {/if}
+  </aside>
+  </div>
   {#if totalPages > 1}<div class="mt-4 flex items-center justify-between">
       <p class="text-xs text-foreground-muted">Página {page} de {totalPages}</p>
       <div class="flex gap-2">
