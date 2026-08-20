@@ -286,21 +286,40 @@ a user-editable value.
 
 ## 11. Deferred product-domain data
 
-The product master intentionally does not yet contain inventory balances,
-reorder policies, purchase documents, landed-cost allocations, price lists,
-packaging conversions, fiscal accounts or compliance documents. Variant
-families are present as catalog identity, but inventory, purchasing, sales,
-pricing, lot/serial and compliance records do not yet consume `variant_id`.
-Those operational concepts require consuming modules and transactional invariants; adding
-operational columns before those workflows exist would create disconnected data and false
-operational guarantees. The complete backlog, dependencies, activation gates
-and acceptance criteria are maintained in
-[`docs/product-module-future-debt.txt`](product-module-future-debt.txt).
+Inventory identity, versioned packaging conversions, lightweight handling units,
+lots, expiry, movements, balances and capacity reservations are implemented by
+revision `0040`. Purchasing documents, landed-cost allocation, price history,
+replenishment policies, serial tracking and full regulatory compatibility remain
+separate concerns and are not inferred from the physical-capacity model.
+
+## 13. Physical capacity and inventory (revisions 0039–0040)
+
+Revision `0039` removes ambiguous pallet/generic capacity from the forward
+schema. Warehouses and storage locations store certified and operational limits
+for kilograms and usable cubic metres, a capacity profile, enforcement mode,
+storage eligibility and optional usable dimensions. Structural groups represent
+shared rack, bay, level, floor or cold-room constraints; location maximums are
+not summed to infer structural strength.
+
+Revision `0040` adds inventory identities for standalone products or variants,
+versioned packaging definitions, non-nested handling units, immutable movement
+headers and lines, materialised balances, expiring capacity reservations and
+temporary operational overrides. Movement lines preserve packaging and physical
+measurement snapshots so later master-data changes do not rewrite history.
+
+Capacity uses canonical units and computes `projected = occupied + reserved` at
+the location, warehouse and applicable structural groups. PostgreSQL constraints
+enforce positive limits, operational-at-or-below-certified boundaries, valid
+state catalogues and composite item/override references. Company ownership of
+locations is resolved through warehouse and branch and is also checked by every
+inventory application command. Unknown measurements remain
+explicit; they do not contribute a fabricated zero and normal receipt is blocked
+until the stock is measured or placed in controlled quarantine.
 
 ## 12. Product master enrichment (revisions 0035–0036)
 
-Revisions `0035` and `0036` extend the product master without coupling it to
-future inventory or purchasing balances. Products now have an explicit kind
+Revisions `0035` and `0036` extend the product master without embedding
+transactional inventory or purchasing balances in the catalogue row. Products now have an explicit kind
 (`goods` or `service`), lifecycle (`draft`, `active`, `blocked`,
 `discontinued`, `retired`), purchase/sale flags, commercial and internal names,
 separate descriptions, keywords, origin country, company-scoped brand and

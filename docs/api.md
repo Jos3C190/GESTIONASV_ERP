@@ -37,6 +37,20 @@ The product detail includes complete family attributes, variants, identifiers
 and primary variant images. Product lists expose only `variant_mode` and
 `variant_count`.
 
+### Large-catalogue filters and distribution
+
+| Method | Path | Permission | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/catalog/category-options?q=&page=1&size=50` | `products:read` | Bounded, company-scoped category lookup for filters |
+| `GET` | `/api/v1/catalog/sub-category-options?category_id=&q=&page=1&size=50` | `products:read` | Bounded subcategory lookup; `category_id` is optional for global search |
+| `GET` | `/api/v1/catalog/products/distribution` | `products:read` | Server-side category/subcategory aggregates following the active product filters |
+
+Option lookups return only `{id, label, parent_id}` plus standard pagination
+metadata. The frontend never downloads the complete category catalogue to
+populate a dropdown. Distribution returns at most six named groups plus
+non-filterable `Otros`/`Sin subcategoría` buckets, so chart payloads remain
+bounded for companies with thousands of categories.
+
 The individual `PATCH` is sparse: omitted fields are preserved; `name_override: null`,
 `identifiers: []` and `image: null` explicitly clear those values. It requires
 `expected_updated_at` and returns `409 variant_stale` when the row changed after
@@ -199,6 +213,69 @@ country-specific types; the API never requires NIT, NRC or VAT.
   for audit log (keyset over `created_at DESC, id DESC`).
 - **IDs**: all UUIDs.
 - **Rate limiting**: login 10/min, refresh 30/min, reset 5/min per IP.
+
+### Warehouse, location and inventory capacity (0039–0040)
+
+Warehouse and location create/update endpoints accept certified and operational
+limits for `weight_kg` and `usable_volume_m3`, plus `capacity_profile`,
+`capacity_enforcement_mode`, `storage_eligible` and optional usable dimensions.
+There is no pallet-capacity field or generic `capacity` alias.
+
+`GET /api/v1/warehouses/{warehouse_id}/locations` accepts the additive query
+parameters `capacity_group_id`, `include_descendants` (default `true`) and
+`unassigned`. A structure filter returns direct assignments plus all visible
+descendant structures; `unassigned=true` returns only locations directly under
+the warehouse and cannot be combined with `capacity_group_id`. Invalid
+combinations return `location_filter_conflict`; a structure from another
+warehouse or a deleted structure returns `location_capacity_group_not_found`.
+`GET /api/v1/warehouses/{warehouse_id}/locations/{location_id}` returns one
+location for the warehouse and requires `locations.view`; the warehouse scope is
+checked before the location is returned, so an ID from another warehouse is not
+disclosed.
+`GET /api/v1/warehouses/{warehouse_id}/capacity-groups` adds
+`direct_location_count` and `subtree_location_count`; these are assignment
+counts, not occupied inventory or available capacity.
+
+Enforcement modes are `disabled`, `observe` and `enforce`. Responses keep the
+operational state separate from a derived `capacity_status`. Inventory capacity
+summaries return occupied, reserved, projected, available and utilisation values
+for weight and volume independently. A missing measurement is returned as
+unknown/incomplete, never as numeric zero.
+
+For a location summary, the additive `scope_path` field lists the location,
+each structural ancestor and the warehouse. Every entry contains its own weight
+and volume metrics and measurement state. `limiting_scope` identifies the most
+utilised applicable scope; ties prefer the most specific scope. It is `null`
+when any applicable scope has incomplete measurements.
+
+The summary status can be `not_configured`, `incomplete`, `available`,
+`warning`, `critical`, `full`, `over_operational` or `over_certified`.
+`over_certified` is a hard safety alarm and takes precedence over an active
+operational override and the generic `full` state.
+
+Packaging definitions are versioned per inventory item and unit of measure.
+Movement writes require an idempotency key, persist immutable lines and update
+balances atomically. Receiving with incomplete physical measures is restricted
+to quarantine. Reservations expire, can be cancelled or consumed, and remain in
+the projected load until their terminal transition. Operational overrides
+require their own permission, reason and expiration; certified limits never
+accept an override.
+
+`GET /api/v1/warehouses/{warehouse_id}/capacity-configuration-diagnostics`
+requires `warehouses.view`. It returns configuration-only issues and never
+inventory quantities. Codes include `parent_limit_not_configured`,
+`nominal_capacity_overallocated` and historical
+`capacity_child_limit_exceeds_parent` inconsistencies. Nominal overallocation
+is diagnostic only.
+
+Capacity and hierarchy writes retain the standard `{ "code", "message" }`
+error contract. Stable conflict codes are
+`capacity_child_limit_exceeds_parent`,
+`capacity_limit_below_projected_usage`, `capacity_usage_incomplete`,
+`capacity_group_reparent_exceeds_target` and
+`capacity_group_has_active_assignments`. New configurations are validated
+immediately; historical inconsistencies remain readable and appear in
+diagnostics, while unrelated metadata edits are not blocked.
 
 ## 4. Security headers (applied)
 - `X-Content-Type-Options: nosniff`

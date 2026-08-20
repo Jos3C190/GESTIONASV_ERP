@@ -232,6 +232,39 @@ the product row. Audit events retain IDs, origin/type, preferred state and
 commercial terms needed for traceability, without exposing credentials or
 future inventory secrets.
 
+### Physical warehouse capacity and inventory (revisions 0039–0040)
+
+Capacity changes are tenant-scoped and audited with before/after certified and
+operational limits, profile and enforcement mode. Database checks keep every
+operational limit at or below its certified boundary. Certified limits are
+never overridable. A temporary operational exception requires the dedicated
+`capacity:override_operational` permission, a non-empty business reason, a short
+expiration and an audit record.
+
+Revision 0040 auto-assigns its new permissions only to the visible, global
+`SUPER_ADMIN` system role. Company-owned role names are user-managed labels and
+are never treated as a stable authorization identity by the migration;
+administrators (or the development seed) must assign the inventory permissions
+explicitly. Permission catalogue rows and grants are preserved on downgrade
+because they are shared RBAC data and may have existed before the revision.
+
+Inventory commands use deterministic locks from warehouse and structural group
+to location, plus idempotency keys for posted movements. A movement header and
+its lines form an immutable ledger. Posted rows cannot be edited or deleted;
+the dedicated workflow that will create compensating reversal movements remains
+an explicit follow-up. Balance and handling-unit updates commit atomically with
+the ledger so a transfer cannot free its origin without occupying its destination.
+
+Missing or unreliable weight/volume fails closed for normal stock: reception is
+limited to quarantine until measurements are verified. Active reservations are
+included in projected consumption and cannot silently disappear; cancellation,
+expiry and consumption are explicit audited transitions. Company predicates at
+the application boundary and composite foreign keys protect inventory identities
+and scoped overrides. Because a location inherits its company through
+`location -> warehouse -> branch`, direct SQL imports must use the same validated
+service boundary until that lineage is also enforced by a database trigger or a
+denormalized composite key.
+
 Para conocer la arquitectura completa de escáneres DAST en contenedor (OWASP ZAP OpenAPI scan), auditoría de dependencias (Trivy), pruebas adversariales (Pytest fuzzing) y el bloqueo automático mediante `.githooks` (`pre-commit` y `pre-push`), consulta el documento dedicado:
 
 👉 **[docs/red-team-blue-team.md](file:///d:/josec/Documents/Ciclo%20X/TRANSACCIONES%20COMERCIALES%20POR%20MEDIOS%20ELECTR%C3%93NICOS%20SECCI%C3%93N%20A/PROYECTO_ERP/docs/red-team-blue-team.md)**

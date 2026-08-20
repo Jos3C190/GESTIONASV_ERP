@@ -7,7 +7,12 @@ Este registro documenta capacidades deliberadamente aplazadas del maestro de
 productos. No se deben implementar agregando columnas aisladas: cada iniciativa
 debe esperar al módulo que consuma sus datos, reglas y transacciones.
 
-Estados permitidos: pendiente, bloqueada, lista, implementada.
+El seguimiento de capacidad física e inventario se incluye al final de este
+archivo porque ahora pertenece al núcleo transaccional de Inventario, no al
+maestro de productos.
+
+Estados permitidos: pendiente, bloqueada, lista, implementada, implementada
+parcialmente.
 Prioridades: alta, media, baja.
 
 INV-001 | Libro de existencias y movimientos
@@ -26,7 +31,9 @@ Criterio de activación: existir almacenes operativos, ubicaciones e inventario
 transaccional.
 Criterio de aceptación: el saldo por producto/almacén/ubicación coincide con
 el kardex y todos los movimientos son auditables.
-Estado: bloqueada
+Estado: implementada parcialmente en el núcleo de Inventario (ledger inmutable,
+saldos, reservas, unidades logísticas y auditoría). Integración con Compras,
+Ventas y Contabilidad permanece pendiente.
 
 INV-002 | Reabastecimiento y disponibilidad
 --------------------------------------------
@@ -59,7 +66,9 @@ Riesgos: retiros de producto incompletos y venta de mercancía vencida.
 Criterio de activación: soporte de recepción e inventario por unidad/lote.
 Criterio de aceptación: se puede rastrear un lote desde el proveedor hasta
 cada salida afectada.
-Estado: bloqueada
+Estado: implementada parcialmente en Inventario (lote, caducidad, recepción,
+ubicación, estado y movimientos). Series unitarias, Calidad y trazabilidad
+comercial extremo a extremo permanecen pendientes.
 
 INV-004 | Costeo y conteos físicos
 -----------------------------------
@@ -159,8 +168,8 @@ PKG-001 | Empaques y conversiones
 -----------------------------------
 Prioridad: media
 Módulo dependiente: Inventario y unidad base
-Problema que resuelve: No se representan cajas, paquetes, pallets ni códigos
-de barras por presentación.
+Problema que resuelve: No se representan cajas, sacos, paquetes, rollos,
+contenedores, producto suelto ni códigos de barras por presentación.
 Datos requeridos: tipo de empaque, cantidad contenida, unidad de referencia,
 código, dimensiones, peso y empaque predeterminado de compra/venta.
 Reglas de negocio: toda conversión debe indicar unidad origen y destino;
@@ -170,7 +179,9 @@ Riesgos: cantidades incorrectas por confundir empaque con unidad comercial.
 Criterio de activación: unidad base de inventario definida.
 Criterio de aceptación: recibir, vender y mover un empaque conserva cantidades
 equivalentes y códigos correctos.
-Estado: bloqueada
+Estado: implementada parcialmente en Inventario (identidad, conversión a unidad
+base, medidas, versionado, recepción y movimiento). Códigos de barras por
+presentación y consumo desde Ventas quedan sujetos a esos módulos.
 
 VAR-001 | Familias, variantes y atributos
 ------------------------------------------
@@ -208,7 +219,8 @@ Riesgos: mezclar inventario entre variantes y saldos imposibles de auditar.
 Criterio de activación: existir kardex, existencias y reservas transaccionales.
 Criterio de aceptación: cada movimiento conserva la variante y los saldos por
 SKU son reproducibles.
-Estado: bloqueada
+Estado: implementada en el núcleo de Inventario (identidad exclusiva de producto
+standalone o variante, ledger, unidades logísticas, saldos y reservas).
 
 VAR-003 | Compras por variante
 -----------------------------
@@ -225,6 +237,132 @@ Criterio de activación: órdenes de compra y recepción parcial operativas.
 Criterio de aceptación: una orden identifica y recibe exactamente la variante
 solicitada.
 Estado: bloqueada
+
+CAP-001 | Capacidad física sin tipo de contenedor
+--------------------------------------------------
+Prioridad: alta
+Módulo dependiente: Inventario y Almacenes
+Problema que resuelve: La capacidad nominal basada en una cantidad genérica o
+en un tipo único de contenedor no representa bodegas mixtas de cajas, sacos,
+paquetes, rollos, contenedores y producto suelto.
+Datos requeridos: límite certificado y operativo en kg, volumen útil en m3,
+dimensiones opcionales, perfil, elegibilidad de almacenamiento y grupos
+estructurales.
+Reglas de negocio: el límite certificado nunca se excede; el operativo puede
+tener una excepción temporal autorizada y auditada solo en la ubicación; peso y
+volumen se calculan por separado y no se suman máximos de ubicaciones para
+inferir resistencia estructural.
+Criterio de activación: límites aprobados, modo de control y ubicaciones
+clasificadas entre almacenamiento, tránsito o virtual.
+Criterio de aceptación: el sistema calcula ocupado + reservado, muestra ambos
+porcentajes y bloquea ingresos que excedan un límite aplicable.
+Estado: implementada en el núcleo de Capacidad e Inventario. El estado
+`over_certified` identifica una violación física conocida y no admite excepción.
+La validación jerárquica de configuración también está implementada: compara
+ubicación, estructura y almacén por métrica/tipo de límite, protege reducciones
+y reasignaciones con consumo real, expone diagnósticos de métricas faltantes y
+trata la suma nominal de hijos únicamente como advertencia de planeación.
+La navegación de estructuras también permite abrir sus ubicaciones directas y
+las de todas sus subestructuras, filtrar ubicaciones sin estructura y conservar
+la ruta física completa. Los conteos mostrados en estructuras son asignaciones
+de ubicaciones, no ocupación de inventario.
+
+CAP-002 | Presentaciones y unidades logísticas físicas
+--------------------------------------------------------
+Prioridad: alta
+Módulo dependiente: Inventario, Recepción y Calidad
+Problema que resuelve: Una cantidad de producto no basta para conocer el peso y
+volumen ocupados cuando las unidades llegan en presentaciones distintas.
+Datos requeridos: unidad base, presentación versionada, cantidad contenida,
+peso bruto, volumen o dimensiones, lote, vencimiento y medición real.
+Reglas de negocio: las medidas reales de la unidad logística completa no se
+multiplican otra vez por la cantidad interna; una medida incompleta solo entra
+en cuarentena; los valores desconocidos nunca se convierten en cero.
+Criterio de activación: identidad inventariable, presentación vigente y flujo
+de recepción con permisos y auditoría.
+Criterio de aceptación: una recepción conserva snapshot de la presentación,
+permite verificar la unidad logística y actualiza saldo y capacidad de forma
+atómica.
+Estado: implementada en el núcleo de Inventario. La división, unión y
+reempaque explícitos de unidades logísticas quedan pendientes.
+
+CAP-003 | Correcciones compensatorias del ledger
+-------------------------------------------------
+Prioridad: alta
+Módulo dependiente: Inventario y Auditoría
+Problema que resuelve: Un ledger inmutable necesita una forma controlada de
+corregir un movimiento publicado sin editar ni borrar su historial.
+Datos requeridos: movimiento origen, movimiento compensatorio, actor, motivo,
+autorización, idempotencia y relación entre ambos.
+Reglas de negocio: las correcciones deben ser compensatorias, auditables,
+idempotentes y rechazar reversiones parciales que dejen saldos imposibles.
+Criterio de activación: política de correcciones aprobada y pruebas de
+recepción, traslado, picking, despacho y ajuste.
+Criterio de aceptación: una reversión válida reconstruye los saldos sin editar
+el movimiento original y una repetición devuelve el mismo resultado.
+Estado: pendiente. El ledger actual ya es inmutable y atómico, pero todavía no
+expone el flujo compensatorio.
+
+CAP-004 | Integridad empresa-ubicación en base de datos
+--------------------------------------------------------
+Prioridad: media
+Módulo dependiente: Plataforma PostgreSQL y Seguridad
+Problema que resuelve: La ubicación hereda su empresa mediante almacén y
+sucursal, por lo que una escritura SQL directa podría saltarse la validación
+de empresa que hoy realiza la aplicación.
+Datos requeridos: clave compuesta o trigger que valide empresa, almacén,
+sucursal, ubicación, reservas, saldos y unidades logísticas.
+Reglas de negocio: ningún artículo, saldo, reserva, excepción o movimiento
+puede cruzar empresas, incluso fuera de la API.
+Criterio de activación: diseño de integridad aprobado y migración sin bloquear
+datos existentes.
+Criterio de aceptación: PostgreSQL rechaza una inserción cruzada entre dos
+empresas aunque no utilice la aplicación.
+Estado: pendiente. La API y las excepciones operativas ya aplican validación de
+empresa y ubicación; falta la defensa equivalente para escrituras directas.
+
+CAP-005 | Medición independiente y políticas especializadas
+--------------------------------------------------------------
+Prioridad: media
+Módulo dependiente: Inventario, Seguridad, Calidad y Operaciones
+Problema que resuelve: La primera versión trata una unidad con peso conocido y
+volumen desconocido como medición incompleta global, y todavía no calcula
+presión de piso, estabilidad de apilamiento, temperatura, compatibilidad de
+peligrosos ni permanencia de cross-dock.
+Datos requeridos: calidad independiente por métrica, carga por área,
+apilamiento, rangos térmicos, matrices de compatibilidad y tiempos objetivo.
+Reglas de negocio: cada política debe tener fuente aprobada, vigencia,
+responsable y auditoría; no se deben inferir reglas regulatorias desde texto
+libre ni desde kg/m3.
+Criterio de activación: procedimiento operativo aprobado y motor de reglas
+específico por tipo de almacén.
+Criterio de aceptación: la capacidad muestra la métrica conocida sin ocultarla,
+y cada política especializada bloquea o alerta según su propia configuración.
+Estado: pendiente. El perfil `cold` y los perfiles de piso, sobredimensionado y
+tránsito existen como extensiones controladas, sin simular todavía esos
+motores.
+
+CAP-006 | Validación PostgreSQL de capacidad e inventario
+-----------------------------------------------------------
+Prioridad: alta
+Módulo dependiente: DevOps y PostgreSQL
+Problema que resuelve: Las pruebas locales validan modelos, contratos y SQL
+offline, pero aún falta ejecutar la matriz completa contra una instancia
+PostgreSQL real.
+Datos requeridos: servicio PostgreSQL, migración desde 0037, datos de dos
+empresas, ubicaciones, reservas, movimientos y rollback controlado.
+Reglas de negocio: no promover a producción sin probar upgrade, downgrade
+seguro, aislamiento de empresas, locks, idempotencia y restricciones físicas.
+Criterio de activación: entorno PostgreSQL reproducible y datos de prueba
+aislados.
+Criterio de aceptación: `0037 -> head`, operaciones concurrentes y pruebas de
+integridad pasan en PostgreSQL; cualquier downgrade con datos físicos falla de
+forma segura y explicable.
+Estado: parcialmente implementada. La matriz automatizada, locks, migraciones,
+idempotencia y reglas jerárquicas se ejecutan contra PostgreSQL real en el
+entorno de desarrollo. Sigue pendiente formalizar el pipeline reproducible de
+promoción, rollback con copias de producción anonimizadas y pruebas sostenidas
+de carga/concurrencia antes del despliegue productivo.
 
 VAR-004 | Ventas y precios por variante
 ---------------------------------------
@@ -256,7 +394,9 @@ Riesgos: retiros incompletos y confusión entre variantes con la misma familia.
 Criterio de activación: recepción, lotes y series disponibles.
 Criterio de aceptación: se puede rastrear un lote o serie desde recepción
 hasta todas sus salidas.
-Estado: bloqueada
+Estado: implementada parcialmente para lote, caducidad, recepción, ubicación,
+estado y movimientos. Series unitarias y trazabilidad comercial extremo a
+extremo continúan pendientes.
 
 FIS-001 | Fiscalidad y contabilidad del producto
 ------------------------------------------------
@@ -313,4 +453,4 @@ transacciones, permisos, auditoría y casos de prueba suficientes para consumir
 la información. No se deben agregar columnas aisladas para anticipar una
 funcionalidad cuyo proceso aún no existe.
 
-Última revisión: 2026-08-16
+Última revisión: 2026-08-20

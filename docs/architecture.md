@@ -184,6 +184,14 @@ database boundaries, and computes volume in m³ only when length, width and
 height are all present. This keeps purchase/sale units configurable without
 making physical dimensions ambiguous or silently mixing business concepts.
 
+The product catalogue list is designed for high-cardinality tenants. Product
+rows remain server-paginated; category and subcategory filters use company-
+scoped searchable option endpoints with bounded pages instead of loading every
+option into the browser. Distribution charts aggregate in PostgreSQL and
+return only leading groups plus informational remainder buckets. Chart
+failures are isolated from the product table, and asynchronous selections are
+guarded against stale responses.
+
 ### ADR-005 — Deferred product-domain capabilities
 
 The product master remains a stable reference aggregate. Inventory balances,
@@ -211,3 +219,28 @@ before Svelte hydrates. **Rationale:** avoids the dark-mode flash. The script
 is tiny and does not itself introduce XSS (no user input is read).
 **Consequences:** CSP allows inline scripts in dev only; production tightens
 this with a nonce strategy once auth is wired (Phase 1).
+
+### ADR-007 — Physical capacity is not stock
+
+Revisions `0039` and `0040` separate approved physical limits from transactional
+inventory. Warehouses, structural groups and storage locations expose certified
+and operational limits in canonical kilograms and usable cubic metres. No pallet
+shape, container type or product count is assumed. A certified limit is a hard
+safety boundary; an operational limit is the lower day-to-day boundary and may
+only be exceeded by an authorised, expiring and audited exception.
+
+Inventory consumption comes from versioned packaging definitions or actual
+receiving measurements. The immutable movement ledger updates materialised
+balances and lightweight handling units in the same transaction. Capacity is
+evaluated as `occupied + active reservations`, independently for weight and
+volume, under deterministic `Warehouse -> structural group -> Location` locks.
+The largest known percentage is a summary indicator only; both metrics remain
+visible, and missing measurements never become zero.
+
+Storage, transit and virtual locations are distinguished explicitly. Only a
+storage-eligible scope participates in normal capacity enforcement. Operational
+state (`active`, `maintenance`, `inactive`) is independent from derived capacity
+state (`not_configured`, `incomplete`, `available`, `warning`, `critical`,
+`full`, `over_operational`, `over_certified`). A known certified-limit breach
+is reported as `over_certified` ahead of any operational override or generic
+full state because no operational authorisation can relax that safety boundary.
