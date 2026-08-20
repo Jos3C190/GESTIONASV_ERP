@@ -1,4 +1,5 @@
 import { apiFetch, HttpError, type PageMeta } from '$lib/api/client';
+import { listCapacityGroups } from '$lib/features/warehouses/capacity-groups.service';
 import type {
   LocationBatchJob,
   LocationBatchRow,
@@ -22,19 +23,44 @@ const integer = (value: unknown, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
 };
+const decimal = (value: unknown): number | null => {
+  if (value == null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 export function normalizeLocation(value: unknown, warehouseId = ''): LocationOut {
   const source = (value ?? {}) as Record<string, unknown>;
   return {
     id: text(source.id),
     warehouse_id: text(source.warehouse_id, warehouseId),
+    capacity_group_id: nullableText(source.capacity_group_id),
     code: text(source.code),
     area: nullableText(source.area),
     aisle: text(source.aisle),
     rack: text(source.rack),
     level: text(source.level),
     position: text(source.position),
-    capacity: integer(source.capacity),
+    certified_max_weight_kg: decimal(source.certified_max_weight_kg),
+    operational_max_weight_kg: decimal(source.operational_max_weight_kg),
+    certified_usable_volume_m3: decimal(source.certified_usable_volume_m3),
+    operational_usable_volume_m3: decimal(source.operational_usable_volume_m3),
+    capacity_profile: text(
+      source.capacity_profile,
+      'general_mixed'
+    ) as LocationOut['capacity_profile'],
+    capacity_enforcement_mode: text(
+      source.capacity_enforcement_mode,
+      'disabled'
+    ) as LocationOut['capacity_enforcement_mode'],
+    capacity_status: text(
+      source.capacity_status,
+      'not_configured'
+    ) as LocationOut['capacity_status'],
+    storage_eligible: source.storage_eligible === true,
+    usable_length_m: decimal(source.usable_length_m),
+    usable_width_m: decimal(source.usable_width_m),
+    usable_height_m: decimal(source.usable_height_m),
     notes: nullableText(source.notes),
     location_type: text(source.location_type, 'standard'),
     lifecycle_status: text(
@@ -76,6 +102,10 @@ function queryString(params: LocationListParams): string {
   if (params.location_type) query.set('location_type', params.location_type);
   if (params.lifecycle_status) query.set('lifecycle_status', params.lifecycle_status);
   if (params.is_active !== undefined) query.set('is_active', String(params.is_active));
+  if (params.capacity_group_id) query.set('capacity_group_id', params.capacity_group_id);
+  if (params.include_descendants !== undefined)
+    query.set('include_descendants', String(params.include_descendants));
+  if (params.unassigned) query.set('unassigned', 'true');
   return query.toString();
 }
 
@@ -190,6 +220,34 @@ export async function listLocations(
       items = items.filter((item) => item.lifecycle_status === params.lifecycle_status);
     if (params.is_active !== undefined)
       items = items.filter((item) => item.is_active === params.is_active);
+    if (params.unassigned) items = items.filter((item) => item.capacity_group_id == null);
+    if (params.capacity_group_id) {
+      const allowed = new Set([params.capacity_group_id]);
+      if (params.include_descendants !== false) {
+        let groups: Awaited<ReturnType<typeof listCapacityGroups>> = [];
+        try {
+          groups = await listCapacityGroups(warehouseId, params.signal);
+        } catch (groupError) {
+          if (params.signal?.aborted) throw groupError;
+        }
+        const children = new Map<string, string[]>();
+        for (const group of groups) {
+          if (group.parentId) {
+            children.set(group.parentId, [...(children.get(group.parentId) ?? []), group.id]);
+          }
+        }
+        const pending = [...(children.get(params.capacity_group_id) ?? [])];
+        while (pending.length > 0) {
+          const child = pending.pop();
+          if (!child || allowed.has(child)) continue;
+          allowed.add(child);
+          pending.push(...(children.get(child) ?? []));
+        }
+      }
+      items = items.filter(
+        (item) => item.capacity_group_id != null && allowed.has(item.capacity_group_id)
+      );
+    }
     const total = items.length;
     const offset = (page - 1) * size;
     return {
@@ -210,24 +268,23 @@ export async function getLocationSummary(
     );
     return {
       total: integer(source.total),
-      total_capacity: integer(source.total_capacity),
+      storage_eligible: integer(source.storage_eligible),
+      capacity_configured: integer(source.capacity_configured),
+      capacity_incomplete: integer(source.capacity_incomplete),
       active: integer(source.active),
       inactive: integer(source.inactive),
       by_status: source.by_status ?? {},
       by_type: source.by_type ?? {},
       areas:
         source.areas && typeof source.areas === 'object' && !Array.isArray(source.areas)
-          ? Object.entries(source.areas).reduce<Record<string, number>>(
-              (areas, [area, count]) => {
-                // Older API responses used the translated label as the key.
-                // Merge it into the canonical sentinel so both deployments
-                // render one “Sin área” option instead of two.
-                const key = area === 'Sin área' ? '__none__' : area;
-                areas[key] = (areas[key] ?? 0) + integer(count);
-                return areas;
-              },
-              {}
-            )
+          ? Object.entries(source.areas).reduce<Record<string, number>>((areas, [area, count]) => {
+              // Older API responses used the translated label as the key.
+              // Merge it into the canonical sentinel so both deployments
+              // render one “Sin área” option instead of two.
+              const key = area === 'Sin área' ? '__none__' : area;
+              areas[key] = (areas[key] ?? 0) + integer(count);
+              return areas;
+            }, {})
           : {}
     };
   } catch (error) {
@@ -242,7 +299,9 @@ export async function getLocationSummary(
     }
     return {
       total: items.length,
-      total_capacity: items.reduce((sum, item) => sum + item.capacity, 0),
+      storage_eligible: items.filter((item) => item.storage_eligible).length,
+      capacity_configured: items.filter((item) => item.capacity_status === 'available').length,
+      capacity_incomplete: items.filter((item) => item.capacity_status === 'incomplete').length,
       active: items.filter((item) => item.is_active).length,
       inactive: items.filter((item) => !item.is_active).length,
       by_status: byStatus,
@@ -274,6 +333,17 @@ export async function createLocation(
   const response = await apiFetch<unknown>(`/warehouses/${warehouseId}/locations`, {
     method: 'POST',
     body: JSON.stringify(input)
+  });
+  return normalizeLocation(response, warehouseId);
+}
+
+export async function getLocation(
+  warehouseId: string,
+  locationId: string,
+  signal?: AbortSignal
+): Promise<LocationOut> {
+  const response = await apiFetch<unknown>(`/warehouses/${warehouseId}/locations/${locationId}`, {
+    signal
   });
   return normalizeLocation(response, warehouseId);
 }

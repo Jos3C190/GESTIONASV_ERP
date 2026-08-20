@@ -11,7 +11,6 @@ describe('location service normalization', () => {
   it('unifica el bucket legado "Sin área" con el sentinel técnico', async () => {
     vi.mocked(apiFetch).mockResolvedValueOnce({
       total: 4,
-      total_capacity: 110,
       active: 4,
       inactive: 0,
       by_status: { active: 4 },
@@ -24,7 +23,7 @@ describe('location service normalization', () => {
     expect(result.areas).toEqual({ __none__: 3, PICKING: 1 });
   });
 
-  it('adapta el contrato legado a la entidad tipada durante un despliegue escalonado', () => {
+  it('normaliza una ubicación sin convertir mediciones ausentes en cero', () => {
     const result = normalizeLocation(
       {
         id: 'loc-1',
@@ -33,7 +32,6 @@ describe('location service normalization', () => {
         rack: '1',
         level: '2',
         position: '3',
-        capacity: '40',
         is_active: true
       },
       'warehouse-1'
@@ -42,7 +40,11 @@ describe('location service normalization', () => {
     expect(result).toMatchObject({
       id: 'loc-1',
       warehouse_id: 'warehouse-1',
-      capacity: 40,
+      certified_max_weight_kg: null,
+      operational_max_weight_kg: null,
+      certified_usable_volume_m3: null,
+      operational_usable_volume_m3: null,
+      capacity_status: 'not_configured',
       location_type: 'standard',
       lifecycle_status: 'active',
       code_source: 'legacy'
@@ -61,7 +63,14 @@ describe('location service normalization', () => {
       rack: '01',
       level: '02',
       position: '03',
-      capacity: 20,
+      certified_max_weight_kg: 1000,
+      operational_max_weight_kg: 900,
+      certified_usable_volume_m3: 100,
+      operational_usable_volume_m3: 90,
+      capacity_profile: 'rack',
+      capacity_enforcement_mode: 'observe',
+      capacity_status: 'available',
+      storage_eligible: true,
       location_type: 'picking',
       lifecycle_status: 'blocked_out',
       scheme_id: 'scheme-1',

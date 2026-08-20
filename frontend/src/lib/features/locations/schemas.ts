@@ -14,47 +14,138 @@ const numericDraftValue = (schema: z.ZodType<string>) =>
     return typeof value === 'number' ? String(value) : value;
   }, schema);
 
-export const locationDraftSchema = z.object({
-  area: z.string().trim().max(64, 'El área no puede exceder 64 caracteres.'),
-  aisle: coordinate('El pasillo'),
-  rack: coordinate('El rack'),
-  level: coordinate('El nivel'),
-  position: coordinate('La posición'),
-  capacity: numericDraftValue(
+const optionalPositive = (label: string) =>
+  numericDraftValue(
     z
       .string()
       .trim()
-      .min(1, 'La capacidad es obligatoria.')
-      .refine((value) => Number.isInteger(Number(value)) && Number(value) > 0, {
-        message: 'La capacidad debe ser un entero mayor que cero.'
+      .refine((value) => value === '' || Number(value) > 0, {
+        message: `${label} debe ser mayor que cero.`
       })
-  ),
-  notes: z.string().trim().max(4000, 'Las notas no pueden exceder 4,000 caracteres.'),
-  location_type: z.string().trim().min(1, 'Seleccione un tipo de ubicación.'),
-  lifecycle_status: z.string().trim().min(1, 'Seleccione un estado operativo.'),
-  pick_sequence: numericDraftValue(
-    z
+  );
+
+export const locationDraftSchema = z
+  .object({
+    capacity_group_id: z.string().trim(),
+    area: z.string().trim().max(64, 'El área no puede exceder 64 caracteres.'),
+    aisle: coordinate('El pasillo'),
+    rack: coordinate('El rack'),
+    level: coordinate('El nivel'),
+    position: coordinate('La posición'),
+    certified_max_weight_kg: optionalPositive('El límite certificado de peso'),
+    operational_max_weight_kg: optionalPositive('El límite operativo de peso'),
+    certified_usable_volume_m3: optionalPositive('El volumen útil certificado'),
+    operational_usable_volume_m3: optionalPositive('El volumen útil operativo'),
+    usable_length_m: optionalPositive('El largo útil'),
+    usable_width_m: optionalPositive('El ancho útil'),
+    usable_height_m: optionalPositive('La altura útil'),
+    capacity_profile: z.enum([
+      'general_mixed',
+      'rack',
+      'bulk_floor',
+      'cold',
+      'oversize_manual',
+      'transit'
+    ]),
+    capacity_enforcement_mode: z.enum(['disabled', 'observe', 'enforce']),
+    storage_eligible: z.boolean(),
+    notes: z.string().trim().max(4000, 'Las notas no pueden exceder 4,000 caracteres.'),
+    location_type: z.string().trim().min(1, 'Seleccione un tipo de ubicación.'),
+    lifecycle_status: z.string().trim().min(1, 'Seleccione un estado operativo.'),
+    pick_sequence: numericDraftValue(
+      z
+        .string()
+        .trim()
+        .refine(
+          (value) => value === '' || (Number.isInteger(Number(value)) && Number(value) >= 0),
+          {
+            message: 'La secuencia de picking debe ser un entero positivo.'
+          }
+        )
+    ),
+    putaway_sequence: numericDraftValue(
+      z
+        .string()
+        .trim()
+        .refine(
+          (value) => value === '' || (Number.isInteger(Number(value)) && Number(value) >= 0),
+          {
+            message: 'La secuencia de acomodo debe ser un entero positivo.'
+          }
+        )
+    ),
+    external_id: z
       .string()
       .trim()
-      .refine((value) => value === '' || (Number.isInteger(Number(value)) && Number(value) >= 0), {
-        message: 'La secuencia de picking debe ser un entero positivo.'
-      })
-  ),
-  putaway_sequence: numericDraftValue(
-    z
+      .max(120, 'La referencia externa no puede exceder 120 caracteres.'),
+    barcode: z.string().trim().max(120, 'El código de barras no puede exceder 120 caracteres.'),
+    verification_code: z
       .string()
       .trim()
-      .refine((value) => value === '' || (Number.isInteger(Number(value)) && Number(value) >= 0), {
-        message: 'La secuencia de acomodo debe ser un entero positivo.'
-      })
-  ),
-  external_id: z.string().trim().max(120, 'La referencia externa no puede exceder 120 caracteres.'),
-  barcode: z.string().trim().max(120, 'El código de barras no puede exceder 120 caracteres.'),
-  verification_code: z
-    .string()
-    .trim()
-    .max(120, 'El código de verificación no puede exceder 120 caracteres.')
-});
+      .max(120, 'El código de verificación no puede exceder 120 caracteres.')
+  })
+  .superRefine((value, context) => {
+    const certifiedWeight = Number(value.certified_max_weight_kg);
+    const operationalWeight = Number(value.operational_max_weight_kg);
+    const certifiedVolume = Number(value.certified_usable_volume_m3);
+    const operationalVolume = Number(value.operational_usable_volume_m3);
+    if (
+      value.certified_max_weight_kg &&
+      value.operational_max_weight_kg &&
+      operationalWeight > certifiedWeight
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['operational_max_weight_kg'],
+        message: 'El límite operativo no puede superar el certificado.'
+      });
+    }
+    if (
+      value.certified_usable_volume_m3 &&
+      value.operational_usable_volume_m3 &&
+      operationalVolume > certifiedVolume
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['operational_usable_volume_m3'],
+        message: 'El límite operativo no puede superar el certificado.'
+      });
+    }
+    if (!value.storage_eligible && value.capacity_enforcement_mode !== 'disabled') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['capacity_enforcement_mode'],
+        message: 'Las ubicaciones no elegibles deben mantener deshabilitado el control de límites.'
+      });
+    }
+    if (value.capacity_enforcement_mode === 'enforce') {
+      const required = [
+        [
+          'certified_max_weight_kg',
+          value.certified_max_weight_kg,
+          'Configure el límite certificado de peso para bloquear excesos.'
+        ],
+        [
+          'operational_max_weight_kg',
+          value.operational_max_weight_kg,
+          'Configure el límite operativo de peso para bloquear excesos.'
+        ],
+        [
+          'certified_usable_volume_m3',
+          value.certified_usable_volume_m3,
+          'Configure el volumen útil certificado para bloquear excesos.'
+        ],
+        [
+          'operational_usable_volume_m3',
+          value.operational_usable_volume_m3,
+          'Configure el volumen útil operativo para bloquear excesos.'
+        ]
+      ] as const;
+      for (const [path, present, message] of required) {
+        if (!present) context.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+      }
+    }
+  });
 
 export type LocationFieldErrors = Partial<Record<keyof LocationDraft, string>>;
 
@@ -75,12 +166,30 @@ export function validateLocationDraft(
   return {
     success: true,
     data: {
+      capacity_group_id: value.capacity_group_id || null,
       area: value.area || null,
       aisle: value.aisle,
       rack: value.rack,
       level: value.level,
       position: value.position,
-      capacity: Number(value.capacity),
+      certified_max_weight_kg: !value.certified_max_weight_kg
+        ? null
+        : Number(value.certified_max_weight_kg),
+      operational_max_weight_kg: !value.operational_max_weight_kg
+        ? null
+        : Number(value.operational_max_weight_kg),
+      certified_usable_volume_m3: !value.certified_usable_volume_m3
+        ? null
+        : Number(value.certified_usable_volume_m3),
+      operational_usable_volume_m3: !value.operational_usable_volume_m3
+        ? null
+        : Number(value.operational_usable_volume_m3),
+      capacity_profile: value.capacity_profile,
+      capacity_enforcement_mode: value.capacity_enforcement_mode,
+      storage_eligible: value.storage_eligible,
+      usable_length_m: !value.usable_length_m ? null : Number(value.usable_length_m),
+      usable_width_m: !value.usable_width_m ? null : Number(value.usable_width_m),
+      usable_height_m: !value.usable_height_m ? null : Number(value.usable_height_m),
       notes: value.notes || null,
       location_type: value.location_type,
       lifecycle_status: value.lifecycle_status,

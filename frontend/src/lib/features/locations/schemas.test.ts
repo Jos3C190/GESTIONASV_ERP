@@ -3,12 +3,22 @@ import { axisSize, batchCardinality, validateLocationDraft } from './schemas';
 import type { LocationDraft } from './types';
 
 const validDraft = (): LocationDraft => ({
+  capacity_group_id: '',
   area: ' Picking ',
   aisle: ' A ',
   rack: '03',
   level: '02',
   position: '04',
-  capacity: '25',
+  certified_max_weight_kg: '1000',
+  operational_max_weight_kg: '900',
+  certified_usable_volume_m3: '120',
+  operational_usable_volume_m3: '100',
+  capacity_profile: 'general_mixed',
+  capacity_enforcement_mode: 'observe',
+  storage_eligible: true,
+  usable_length_m: '10',
+  usable_width_m: '8',
+  usable_height_m: '3',
   notes: '',
   location_type: 'standard',
   lifecycle_status: 'active',
@@ -27,7 +37,10 @@ describe('location schemas', () => {
     expect(result.data).toMatchObject({
       area: 'Picking',
       aisle: 'A',
-      capacity: 25,
+      certified_max_weight_kg: 1000,
+      operational_max_weight_kg: 900,
+      certified_usable_volume_m3: 120,
+      operational_usable_volume_m3: 100,
       pick_sequence: 10,
       putaway_sequence: null
     });
@@ -37,22 +50,32 @@ describe('location schemas', () => {
   it('acepta los números que entregan los inputs HTML de tipo number', () => {
     const result = validateLocationDraft({
       ...validDraft(),
-      capacity: 20,
+      certified_max_weight_kg: 1200,
+      operational_max_weight_kg: 1000,
       pick_sequence: 3,
       putaway_sequence: 0
     });
 
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data).toMatchObject({ capacity: 20, pick_sequence: 3, putaway_sequence: 0 });
+    expect(result.data).toMatchObject({
+      certified_max_weight_kg: 1200,
+      operational_max_weight_kg: 1000,
+      pick_sequence: 3,
+      putaway_sequence: 0
+    });
   });
 
-  it('entrega errores asociados a campos para capacidad y coordenadas inválidas', () => {
-    const result = validateLocationDraft({ ...validDraft(), aisle: '', capacity: '1.5' });
+  it('entrega errores asociados a campos para límites y coordenadas inválidas', () => {
+    const result = validateLocationDraft({
+      ...validDraft(),
+      aisle: '',
+      operational_max_weight_kg: '1200'
+    });
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.errors.aisle).toContain('obligatorio');
-    expect(result.errors.capacity).toContain('entero');
+    expect(result.errors.operational_max_weight_kg).toContain('superar');
   });
 
   it('calcula rangos alfabéticos, numéricos y cardinalidad cartesiana', () => {

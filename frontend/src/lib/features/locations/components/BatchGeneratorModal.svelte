@@ -4,6 +4,7 @@
   import Modal from '$lib/components/ui/Modal.svelte';
   import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
   import { HttpError } from '$lib/api/client';
+  import type { CapacityEnforcementMode, CapacityProfile } from '$lib/features/warehouses/types';
   import { batchCardinality, createIdempotencyKey } from '../schemas';
   import { previewGeneratedLocations, publishLocationBatch } from '../services';
   import {
@@ -18,6 +19,7 @@
 
   interface Props {
     open: boolean;
+    inline?: boolean;
     warehouseId: string;
     scheme?: LocationCodeScheme | null;
     hasPermission?: (permission: string) => boolean;
@@ -27,6 +29,7 @@
 
   let {
     open,
+    inline = false,
     warehouseId,
     scheme = null,
     hasPermission = () => true,
@@ -43,8 +46,17 @@
     position: { start: '1', end: '2' }
   });
   let area = $state('');
-  let capacity = $state('1');
   let locationType = $state('standard');
+  let certifiedWeight = $state('');
+  let operationalWeight = $state('');
+  let certifiedVolume = $state('');
+  let operationalVolume = $state('');
+  let usableLength = $state('');
+  let usableWidth = $state('');
+  let usableHeight = $state('');
+  let capacityProfile = $state<CapacityProfile>('general_mixed');
+  let capacityEnforcementMode = $state<CapacityEnforcementMode>('observe');
+  let storageEligible = $state(true);
   let job = $state<LocationBatchJob | null>(null);
   let loading = $state(false);
   let publishing = $state(false);
@@ -68,12 +80,36 @@
     }))
   );
   let cardinality = $derived(batchCardinality(axes));
-  let valid = $derived(
-    cardinality > 0 &&
-      cardinality <= 50_000 &&
-      Number.isInteger(Number(capacity)) &&
-      Number(capacity) > 0
-  );
+  const optionalNumber = (value: string) => (value === '' ? null : Number(value));
+  function limitError(): string | null {
+    const values = [
+      certifiedWeight,
+      operationalWeight,
+      certifiedVolume,
+      operationalVolume,
+      usableLength,
+      usableWidth,
+      usableHeight
+    ];
+    if (
+      values.some(
+        (value) => value !== '' && (!Number.isFinite(Number(value)) || Number(value) <= 0)
+      )
+    )
+      return 'Los límites y dimensiones deben ser mayores que cero.';
+    if (certifiedWeight && operationalWeight && Number(operationalWeight) > Number(certifiedWeight))
+      return 'El peso operativo no puede superar el certificado.';
+    if (certifiedVolume && operationalVolume && Number(operationalVolume) > Number(certifiedVolume))
+      return 'El volumen operativo no puede superar el certificado.';
+    if (
+      capacityEnforcementMode === 'enforce' &&
+      (!certifiedWeight || !operationalWeight || !certifiedVolume || !operationalVolume)
+    )
+      return 'Para bloquear excesos configure los límites certificados y operativos de peso y volumen.';
+    return null;
+  }
+  let capacityValidationError = $derived(limitError());
+  let valid = $derived(cardinality > 0 && cardinality <= 50_000 && !capacityValidationError);
   let requiredPermissions = $derived(job ? locationBatchRequiredPermissions(job) : []);
   let missingPermissions = $derived(
     requiredPermissions.filter((permission) => !hasPermission(permission))
@@ -81,10 +117,10 @@
   let canPublish = $derived(
     Boolean(
       job &&
-        job.error_count === 0 &&
-        job.conflict_count === 0 &&
-        missingPermissions.length === 0 &&
-        confirmed
+      job.error_count === 0 &&
+      job.conflict_count === 0 &&
+      missingPermissions.length === 0 &&
+      confirmed
     )
   );
 
@@ -115,7 +151,16 @@
         axes,
         defaults: {
           area: area.trim() || null,
-          capacity: Number(capacity),
+          certified_max_weight_kg: optionalNumber(certifiedWeight),
+          operational_max_weight_kg: optionalNumber(operationalWeight),
+          certified_usable_volume_m3: optionalNumber(certifiedVolume),
+          operational_usable_volume_m3: optionalNumber(operationalVolume),
+          usable_length_m: optionalNumber(usableLength),
+          usable_width_m: optionalNumber(usableWidth),
+          usable_height_m: optionalNumber(usableHeight),
+          capacity_profile: capacityProfile,
+          capacity_enforcement_mode: capacityEnforcementMode,
+          storage_eligible: storageEligible,
           location_type: locationType,
           lifecycle_status: 'active'
         }
@@ -145,7 +190,7 @@
   }
 </script>
 
-<Modal {open} size="lg" title="Generar ubicaciones por rangos" {onclose}>
+<Modal {open} {inline} size="lg" title="Generar ubicaciones por rangos" {onclose}>
   <div class="mb-6 flex items-center gap-2" aria-label={`Paso ${step} de 3`}>
     {#each [1, 2, 3] as number}
       <div class="flex flex-1 items-center gap-2">
@@ -215,7 +260,7 @@
         {/each}
       </div>
 
-      <div class="grid gap-4 border-t border-border pt-5 sm:grid-cols-3">
+      <div class="grid gap-4 border-t border-border pt-5 sm:grid-cols-2 lg:grid-cols-4">
         <FormField
           id="batch-area"
           label="Área o zona"
@@ -229,16 +274,104 @@
           options={LOCATION_TYPE_OPTIONS.map((item) => ({ ...item }))}
           required
         />
+        <SmartSelect
+          id="batch-capacity-profile"
+          label="Perfil físico"
+          bind:value={capacityProfile}
+          options={[
+            { value: 'general_mixed', label: 'Mixto general' },
+            { value: 'rack', label: 'Rack' },
+            { value: 'bulk_floor', label: 'Piso / granel' },
+            { value: 'cold', label: 'Cámara fría' },
+            { value: 'oversize_manual', label: 'Sobredimensionado manual' },
+            { value: 'transit', label: 'Tránsito' }
+          ]}
+        />
+        <SmartSelect
+          id="batch-capacity-enforcement"
+          label="Control de límites"
+          bind:value={capacityEnforcementMode}
+          options={[
+            { value: 'disabled', label: 'Deshabilitado' },
+            { value: 'observe', label: 'Solo observar' },
+            { value: 'enforce', label: 'Bloquear excesos' }
+          ]}
+        />
         <FormField
-          id="batch-capacity"
-          label="Capacidad por ubicación"
+          id="batch-certified-weight"
+          label="Peso certificado (kg)"
           type="number"
-          min="1"
-          step="1"
-          bind:value={capacity}
-          required
+          min="0.001"
+          step="0.001"
+          bind:value={certifiedWeight}
+          placeholder="Opcional"
+        />
+        <FormField
+          id="batch-operational-weight"
+          label="Peso operativo (kg)"
+          type="number"
+          min="0.001"
+          step="0.001"
+          bind:value={operationalWeight}
+          placeholder="Opcional"
+        />
+        <FormField
+          id="batch-certified-volume"
+          label="Volumen certificado (m³)"
+          type="number"
+          min="0.001"
+          step="0.001"
+          bind:value={certifiedVolume}
+          placeholder="Opcional"
+        />
+        <FormField
+          id="batch-operational-volume"
+          label="Volumen operativo (m³)"
+          type="number"
+          min="0.001"
+          step="0.001"
+          bind:value={operationalVolume}
+          placeholder="Opcional"
+        />
+        <div class="flex items-end">
+          <label
+            class="flex min-h-[42px] w-full items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm text-foreground"
+          >
+            <input type="checkbox" bind:checked={storageEligible} />
+            Elegible para almacenar
+          </label>
+        </div>
+        <FormField
+          id="batch-usable-length"
+          label="Largo útil (m)"
+          type="number"
+          min="0.001"
+          step="0.001"
+          bind:value={usableLength}
+          placeholder="Opcional"
+        />
+        <FormField
+          id="batch-usable-width"
+          label="Ancho útil (m)"
+          type="number"
+          min="0.001"
+          step="0.001"
+          bind:value={usableWidth}
+          placeholder="Opcional"
+        />
+        <FormField
+          id="batch-usable-height"
+          label="Altura útil (m)"
+          type="number"
+          min="0.001"
+          step="0.001"
+          bind:value={usableHeight}
+          placeholder="Opcional"
         />
       </div>
+      {#if capacityValidationError}
+        <p class="text-xs text-danger" role="alert">{capacityValidationError}</p>
+      {/if}
 
       <div class="rounded-xl border border-primary/20 bg-primary/5 p-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
@@ -276,8 +409,8 @@
         >
           <p class="font-medium">No puede publicar este impacto con sus permisos actuales.</p>
           <p class="mt-1 text-xs">
-            Faltan: {missingPermissions.map(locationPermissionLabel).join(', ')}. Solicite estos permisos
-            o vuelva a configurar un lote que no requiera esas operaciones.
+            Faltan: {missingPermissions.map(locationPermissionLabel).join(', ')}. Solicite estos
+            permisos o vuelva a configurar un lote que no requiera esas operaciones.
           </p>
         </div>
       {/if}

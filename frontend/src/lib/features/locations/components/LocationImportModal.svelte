@@ -14,6 +14,7 @@
 
   interface Props {
     open: boolean;
+    inline?: boolean;
     warehouseId: string;
     scheme?: LocationCodeScheme | null;
     hasPermission?: (permission: string) => boolean;
@@ -23,6 +24,7 @@
 
   let {
     open,
+    inline = false,
     warehouseId,
     scheme = null,
     hasPermission = () => true,
@@ -118,7 +120,7 @@
   }
 </script>
 
-<Modal {open} size="lg" title="Importar ubicaciones" {onclose}>
+<Modal {open} {inline} size="lg" title="Importar ubicaciones" {onclose}>
   <div class="mb-6 flex items-center gap-2" aria-label={`Paso ${step} de 3`}>
     {#each [1, 2, 3] as number}
       <div class="flex flex-1 items-center gap-2">
@@ -216,8 +218,11 @@
           <p>
             <span class="font-medium text-foreground">Opcionales:</span>
             <span class="font-mono"
-              >area, capacity, location_type, lifecycle_status, barcode, verification_code,
-              pick_sequence, putaway_sequence, external_id, notes</span
+              >area, certified_max_weight_kg, operational_max_weight_kg, certified_usable_volume_m3,
+              operational_usable_volume_m3, capacity_profile, capacity_enforcement_mode,
+              storage_eligible, usable_length_m, usable_width_m, usable_height_m, location_type,
+              lifecycle_status, barcode, verification_code, pick_sequence, putaway_sequence,
+              external_id, notes</span
             >
           </p>
         </div>
@@ -229,7 +234,10 @@
             >.
           </p>
           <p class="mt-2">
-            Si incluye <span class="font-mono">capacity, location_type</span> o
+            Si incluye <span class="font-mono"
+              >límites físicos, perfil, modo de control, location_type</span
+            >
+            o
             <span class="font-mono">lifecycle_status</span>, cada fila debe contener un valor
             válido. El código siempre se autogenera y nunca se toma del archivo.
           </p>

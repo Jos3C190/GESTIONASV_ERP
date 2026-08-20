@@ -38,11 +38,7 @@
     return `${segment.prefix}${value}`;
   }
 
-  let preview = $derived(
-    segments
-      .map(segmentPreview)
-      .join(separator)
-  );
+  let preview = $derived(segments.map(segmentPreview).join(separator));
   let valid = $derived(
     name.trim().length >= 2 &&
       separator.length >= 1 &&

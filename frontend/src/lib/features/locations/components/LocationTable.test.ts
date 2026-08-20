@@ -12,7 +12,18 @@ const location: LocationOut = {
   rack: '01',
   level: '02',
   position: '03',
-  capacity: 25,
+  capacity_group_id: null,
+  certified_max_weight_kg: 1000,
+  operational_max_weight_kg: 900,
+  certified_usable_volume_m3: 100,
+  operational_usable_volume_m3: 90,
+  capacity_profile: 'rack',
+  capacity_enforcement_mode: 'observe',
+  capacity_status: 'available',
+  storage_eligible: true,
+  usable_length_m: 10,
+  usable_width_m: 8,
+  usable_height_m: 3,
   notes: null,
   location_type: 'standard',
   lifecycle_status: 'active',
@@ -34,7 +45,9 @@ describe('LocationTable', () => {
     render(LocationTable, { props: { items: [location], actionsFor: () => [] } });
     expect(screen.getAllByText('PICK-A-01-02-03')).toHaveLength(2);
     expect(screen.getAllByText('Activa')).toHaveLength(2);
+    expect(screen.getAllByText('Configurada')).toHaveLength(2);
     expect(screen.getAllByLabelText('Ruta física')).toHaveLength(2);
+    expect(screen.getAllByText('Directa del almacén')).toHaveLength(2);
   });
 
   it('no renderiza menús vacíos para usuarios de solo lectura', () => {

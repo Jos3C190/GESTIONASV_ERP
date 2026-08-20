@@ -23,7 +23,7 @@ describe('LocationImportModal', () => {
     expect(screen.getByText(/lifecycle_status, barcode, verification_code/)).toBeInTheDocument();
     expect(
       screen.getByText(
-        /area, capacity, location_type, lifecycle_status, barcode, verification_code,[\s\S]*pick_sequence, putaway_sequence, external_id, notes/
+        /area, certified_max_weight_kg, operational_max_weight_kg,[\s\S]*certified_usable_volume_m3,[\s\S]*capacity_enforcement_mode,[\s\S]*external_id, notes/
       )
     ).toBeInTheDocument();
     expect(

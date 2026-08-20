@@ -8,8 +8,12 @@ const serviceMocks = vi.hoisted(() => ({
   updateLocation: vi.fn(),
   previewLocationCode: vi.fn()
 }));
+const capacityGroupMocks = vi.hoisted(() => ({
+  listCapacityGroups: vi.fn()
+}));
 
 vi.mock('../services', () => serviceMocks);
+vi.mock('../../warehouses/capacity-groups.service', () => capacityGroupMocks);
 
 const legacyLocation: LocationOut = {
   id: 'location-legacy',
@@ -20,7 +24,18 @@ const legacyLocation: LocationOut = {
   rack: '01',
   level: '01',
   position: '01',
-  capacity: 10,
+  capacity_group_id: null,
+  certified_max_weight_kg: 1000,
+  operational_max_weight_kg: 900,
+  certified_usable_volume_m3: 100,
+  operational_usable_volume_m3: 90,
+  capacity_profile: 'general_mixed',
+  capacity_enforcement_mode: 'observe',
+  capacity_status: 'available',
+  storage_eligible: true,
+  usable_length_m: 10,
+  usable_width_m: 8,
+  usable_height_m: 3,
   notes: null,
   location_type: 'receiving',
   lifecycle_status: 'active',
@@ -40,6 +55,7 @@ const legacyLocation: LocationOut = {
 describe('LocationFormModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    capacityGroupMocks.listCapacityGroups.mockResolvedValue([]);
     serviceMocks.previewLocationCode.mockResolvedValue({
       code: 'AREC-RR01-N01-P01',
       normalized_components: {
@@ -127,14 +143,15 @@ describe('LocationFormModal', () => {
 
     const submit = screen.getByRole('button', { name: 'Guardar cambios' });
     expect(submit).toBeEnabled();
-    await fireEvent.click(submit);
+    await fireEvent.submit(submit.closest('form')!);
 
     await waitFor(() => {
       expect(serviceMocks.updateLocation).toHaveBeenCalledWith(
         'warehouse-1',
         'location-legacy',
         expect.objectContaining({
-          capacity: 10,
+          certified_max_weight_kg: 1000,
+          operational_max_weight_kg: 900,
           notes: null,
           lifecycle_status: 'active',
           barcode: '7501234567890',
@@ -192,7 +209,9 @@ describe('LocationFormModal', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled()
     );
-    await fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await fireEvent.submit(
+      screen.getByRole('button', { name: 'Guardar cambios' }).closest('form')!
+    );
     await waitFor(() =>
       expect(serviceMocks.updateLocation).toHaveBeenCalledWith(
         'warehouse-1',
@@ -225,7 +244,7 @@ describe('LocationFormModal', () => {
     expect(screen.getByLabelText(/^Rack/)).toBeDisabled();
     expect(screen.getByLabelText(/^Nivel/)).toBeDisabled();
     expect(screen.getByLabelText(/^Posición/)).toBeDisabled();
-    expect(screen.getByLabelText(/^Capacidad operativa/)).toBeEnabled();
+    expect(screen.getByLabelText(/^Peso certificado/)).toBeEnabled();
     expect(screen.getByLabelText('Referencia externa')).toBeEnabled();
     expect(screen.getByLabelText('Código de barras')).toBeEnabled();
     expect(screen.getByText(/puede actualizar capacidad, secuencias/i)).toBeVisible();

@@ -64,12 +64,14 @@ describe('BatchJobReview', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
 
-    await waitFor(() => expect(serviceMocks.getLocationBatch).toHaveBeenCalledWith(
-      'job-1',
-      2,
-      2,
-      expect.any(AbortSignal)
-    ));
+    await waitFor(() =>
+      expect(serviceMocks.getLocationBatch).toHaveBeenCalledWith(
+        'job-1',
+        2,
+        2,
+        expect.any(AbortSignal)
+      )
+    );
     expect(await screen.findByText('A-3')).toBeVisible();
     expect(screen.getByText('A-4')).toBeVisible();
     expect(screen.getByText(/Filas 3–4 de 5/)).toBeVisible();

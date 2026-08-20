@@ -1,4 +1,9 @@
 import type { PageMeta } from '$lib/api/client';
+import type {
+  CapacityEnforcementMode,
+  CapacityProfile,
+  CapacityStatus
+} from '$lib/features/warehouses/types';
 
 export type LocationType =
   | 'standard'
@@ -27,13 +32,24 @@ export type LocationLifecycleStatus =
 export interface LocationOut {
   id: string;
   warehouse_id: string;
+  capacity_group_id: string | null;
   code: string;
   area: string | null;
   aisle: string;
   rack: string;
   level: string;
   position: string;
-  capacity: number;
+  certified_max_weight_kg: number | null;
+  operational_max_weight_kg: number | null;
+  certified_usable_volume_m3: number | null;
+  operational_usable_volume_m3: number | null;
+  capacity_profile: CapacityProfile;
+  capacity_enforcement_mode: CapacityEnforcementMode;
+  capacity_status: CapacityStatus;
+  storage_eligible: boolean;
+  usable_length_m: number | null;
+  usable_width_m: number | null;
+  usable_height_m: number | null;
   notes: string | null;
   location_type: LocationType;
   lifecycle_status: LocationLifecycleStatus;
@@ -57,7 +73,9 @@ export interface LocationPage {
 
 export interface LocationSummary {
   total: number;
-  total_capacity: number;
+  storage_eligible: number;
+  capacity_configured: number;
+  capacity_incomplete: number;
   active: number;
   inactive: number;
   by_status: Record<string, number>;
@@ -73,16 +91,29 @@ export interface LocationListParams {
   location_type?: string;
   lifecycle_status?: string;
   is_active?: boolean;
+  capacity_group_id?: string;
+  include_descendants?: boolean;
+  unassigned?: boolean;
   signal?: AbortSignal;
 }
 
 export interface LocationDraft {
+  capacity_group_id: string;
   area: string;
   aisle: string;
   rack: string;
   level: string;
   position: string;
-  capacity: string | number;
+  certified_max_weight_kg: string | number;
+  operational_max_weight_kg: string | number;
+  certified_usable_volume_m3: string | number;
+  operational_usable_volume_m3: string | number;
+  capacity_profile: CapacityProfile;
+  capacity_enforcement_mode: CapacityEnforcementMode;
+  storage_eligible: boolean;
+  usable_length_m: string | number;
+  usable_width_m: string | number;
+  usable_height_m: string | number;
   notes: string;
   location_type: string;
   lifecycle_status: string;
@@ -94,12 +125,22 @@ export interface LocationDraft {
 }
 
 export interface LocationMutationInput {
+  capacity_group_id: string | null;
   area: string | null;
   aisle: string;
   rack: string;
   level: string;
   position: string;
-  capacity: number;
+  certified_max_weight_kg: number | null;
+  operational_max_weight_kg: number | null;
+  certified_usable_volume_m3: number | null;
+  operational_usable_volume_m3: number | null;
+  capacity_profile: CapacityProfile;
+  capacity_enforcement_mode: CapacityEnforcementMode;
+  storage_eligible: boolean;
+  usable_length_m: number | null;
+  usable_width_m: number | null;
+  usable_height_m: number | null;
   notes: string | null;
   location_type: string;
   lifecycle_status: string;
@@ -171,7 +212,17 @@ export interface LocationBatchAxis {
 
 export interface LocationBatchDefaults {
   area?: string | null;
-  capacity: number;
+  capacity_group_id?: string | null;
+  certified_max_weight_kg?: number | null;
+  operational_max_weight_kg?: number | null;
+  certified_usable_volume_m3?: number | null;
+  operational_usable_volume_m3?: number | null;
+  capacity_profile: CapacityProfile;
+  capacity_enforcement_mode: CapacityEnforcementMode;
+  storage_eligible: boolean;
+  usable_length_m?: number | null;
+  usable_width_m?: number | null;
+  usable_height_m?: number | null;
   location_type: string;
   lifecycle_status?: string;
   notes?: string | null;
@@ -262,7 +313,7 @@ export const LOCATION_TYPE_OPTIONS = [
     label: 'Almacenamiento general',
     description: 'Ubicación física de uso general.'
   },
-  { value: 'bulk', label: 'Piso / granel', description: 'Tarimas o materiales sin rack.' },
+  { value: 'bulk', label: 'Piso / granel', description: 'Cajas, sacos o materiales sin rack.' },
   { value: 'receiving', label: 'Recepción', description: 'Ingreso y verificación de mercancía.' },
   { value: 'reserve', label: 'Reserva', description: 'Existencias de reposición y largo plazo.' },
   { value: 'picking', label: 'Picking', description: 'Preparación eficiente de pedidos.' },
