@@ -12,6 +12,8 @@
   import FormField from '$lib/components/ui/FormField.svelte';
   import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
   import WarehouseImagesEditor from './WarehouseImagesEditor.svelte';
+  import { listCapacityGroups } from '../capacity-groups.service';
+  import type { WarehouseCapacityGroup } from '../capacity-groups.types';
   import type { Warehouse, WarehouseImage } from '../types';
 
   interface Props {
@@ -38,6 +40,43 @@
     ['tarde', 'Tarde'],
     ['noche', 'Noche']
   ] as const;
+  const CAPACITY_PROFILE_OPTIONS = [
+    {
+      value: 'general_mixed',
+      label: 'Mixto general',
+      description: 'Cajas, sacos, paquetes y producto suelto.'
+    },
+    { value: 'rack', label: 'Rack', description: 'Ubicaciones estructuradas en estantería.' },
+    {
+      value: 'bulk_floor',
+      label: 'Piso / granel',
+      description: 'Carga apoyada directamente sobre piso.'
+    },
+    {
+      value: 'cold',
+      label: 'Cámara fría',
+      description: 'Espacio con condiciones térmicas controladas.'
+    },
+    {
+      value: 'oversize_manual',
+      label: 'Sobredimensionado manual',
+      description: 'Requiere validación dimensional manual.'
+    },
+    {
+      value: 'transit',
+      label: 'Tránsito',
+      description: 'Recepción, consolidación o despacho temporal.'
+    }
+  ];
+  const CAPACITY_ENFORCEMENT_OPTIONS = [
+    { value: 'disabled', label: 'Deshabilitado', description: 'No evalúa los límites físicos.' },
+    {
+      value: 'observe',
+      label: 'Solo observar',
+      description: 'Reporta datos sin bloquear movimientos.'
+    },
+    { value: 'enforce', label: 'Bloquear excesos', description: 'Exige peso y volumen completos.' }
+  ];
   const enumOptions = (items: [string, string][]) =>
     items.map(([value, label]) => ({ value, label }));
   const empty = () => ({
@@ -55,7 +94,16 @@
     length: '',
     width: '',
     shelves_total: '',
-    capacity: '',
+    certified_max_weight_kg: '',
+    operational_max_weight_kg: '',
+    certified_usable_volume_m3: '',
+    operational_usable_volume_m3: '',
+    capacity_profile: 'general_mixed',
+    capacity_enforcement_mode: 'observe',
+    storage_eligible: true,
+    usable_length_m: '',
+    usable_width_m: '',
+    usable_height_m: '',
     shifts: [] as string[],
     cameras: '',
     access_control: 'sin_control',
@@ -89,6 +137,7 @@
   >([]);
   let managers = $state<EmployeeOut[]>([]);
   let locations = $state<Record<string, unknown>[]>([]);
+  let capacityGroups = $state<WarehouseCapacityGroup[]>([]);
   let originalImages = $state<WarehouseImage[]>([]);
   let editorHeader: HTMLElement;
   let activeSection = $state('general');
@@ -97,6 +146,14 @@
   );
   let canViewLocations = $derived(permissions.hasPermission('locations.view'));
   let dirty = $derived(!loading && initialSnapshot !== JSON.stringify(f));
+  let capacityConfigured = $derived(
+    Boolean(
+      f.certified_max_weight_kg &&
+      f.operational_max_weight_kg &&
+      f.certified_usable_volume_m3 &&
+      f.operational_usable_volume_m3
+    )
+  );
   let branchOptions = $derived(
     branches.map((item) => ({ value: item.id, label: item.name, description: item.code }))
   );
@@ -161,7 +218,16 @@
       length: String(warehouse.length || ''),
       width: String(warehouse.width || ''),
       shelves_total: String(warehouse.shelvesTotal || ''),
-      capacity: String(warehouse.capacity || ''),
+      certified_max_weight_kg: String(warehouse.certifiedMaxWeightKg ?? ''),
+      operational_max_weight_kg: String(warehouse.operationalMaxWeightKg ?? ''),
+      certified_usable_volume_m3: String(warehouse.certifiedUsableVolumeM3 ?? ''),
+      operational_usable_volume_m3: String(warehouse.operationalUsableVolumeM3 ?? ''),
+      capacity_profile: warehouse.capacityProfile,
+      capacity_enforcement_mode: warehouse.capacityEnforcementMode,
+      storage_eligible: warehouse.storageEligible,
+      usable_length_m: String(warehouse.usableLengthM ?? ''),
+      usable_width_m: String(warehouse.usableWidthM ?? ''),
+      usable_height_m: String(warehouse.usableHeightM ?? ''),
       shifts: [...warehouse.shifts],
       cameras: String(warehouse.cameras || ''),
       access_control: warehouse.accessControl || 'sin_control',
@@ -214,6 +280,7 @@
         fromWarehouse(warehouse);
         await Promise.all([
           loadManagers(f.branch_id, true),
+          listCapacityGroups(warehouseId).then((data) => (capacityGroups = data)),
           canViewLocations
             ? api.locations.list(warehouseId).then((data) => (locations = data))
             : Promise.resolve()
@@ -241,8 +308,100 @@
     if (f.name.trim().length < 2) next.name = 'Ingrese el nombre.';
     if (!f.branch_id) next.branch_id = 'Seleccione una sucursal.';
     if (!f.warehouse_category_id) next.warehouse_category_id = 'Seleccione una categoría.';
-    if (f.capacity !== '' && Number(f.capacity) <= 0)
-      next.capacity = 'La capacidad debe ser mayor que cero.';
+    const positiveFields = [
+      ['certified_max_weight_kg', 'El límite certificado de peso'],
+      ['operational_max_weight_kg', 'El límite operativo de peso'],
+      ['certified_usable_volume_m3', 'El volumen útil certificado'],
+      ['operational_usable_volume_m3', 'El volumen útil operativo'],
+      ['usable_length_m', 'El largo útil'],
+      ['usable_width_m', 'El ancho útil'],
+      ['usable_height_m', 'La altura útil']
+    ] as const;
+    for (const [field, label] of positiveFields) {
+      if (f[field] !== '' && (!Number.isFinite(Number(f[field])) || Number(f[field]) <= 0))
+        next[field] = `${label} debe ser mayor que cero.`;
+    }
+    if (f.operational_max_weight_kg && !f.certified_max_weight_kg)
+      next.certified_max_weight_kg = 'Configure el límite certificado antes del operativo.';
+    if (
+      f.operational_max_weight_kg &&
+      f.certified_max_weight_kg &&
+      Number(f.operational_max_weight_kg) > Number(f.certified_max_weight_kg)
+    )
+      next.operational_max_weight_kg = 'El límite operativo no puede superar el certificado.';
+    if (f.operational_usable_volume_m3 && !f.certified_usable_volume_m3)
+      next.certified_usable_volume_m3 = 'Configure el volumen certificado antes del operativo.';
+    if (
+      f.operational_usable_volume_m3 &&
+      f.certified_usable_volume_m3 &&
+      Number(f.operational_usable_volume_m3) > Number(f.certified_usable_volume_m3)
+    )
+      next.operational_usable_volume_m3 = 'El límite operativo no puede superar el certificado.';
+
+    if (mode === 'edit') {
+      const directGroups = capacityGroups.filter((group) => !group.parentId && group.isActive);
+      const directLocations = locations.filter(
+        (location) =>
+          location.capacity_group_id == null &&
+          location.is_active !== false &&
+          location.storage_eligible !== false
+      );
+      const childComparisons = [
+        [
+          'certified_max_weight_kg',
+          'certifiedMaxWeightKg',
+          'certified_max_weight_kg',
+          'peso certificado'
+        ],
+        [
+          'operational_max_weight_kg',
+          'operationalMaxWeightKg',
+          'operational_max_weight_kg',
+          'peso operativo'
+        ],
+        [
+          'certified_usable_volume_m3',
+          'certifiedUsableVolumeM3',
+          'certified_usable_volume_m3',
+          'volumen certificado'
+        ],
+        [
+          'operational_usable_volume_m3',
+          'operationalUsableVolumeM3',
+          'operational_usable_volume_m3',
+          'volumen operativo'
+        ]
+      ] as const;
+      for (const [formField, groupField, locationField, label] of childComparisons) {
+        if (!f[formField]) continue;
+        const proposed = Number(f[formField]);
+        const groupAbove = directGroups.find(
+          (group) => group[groupField] != null && Number(group[groupField]) > proposed
+        );
+        const locationAbove = directLocations.find(
+          (location) =>
+            location[locationField] != null && Number(location[locationField]) > proposed
+        );
+        if (groupAbove) {
+          next[formField] = `No puede quedar debajo del ${label} de ${groupAbove.code}.`;
+        } else if (locationAbove) {
+          next[formField] = `No puede quedar debajo del ${label} de una ubicación independiente.`;
+        }
+      }
+    }
+    if (!f.storage_eligible && f.capacity_enforcement_mode !== 'disabled')
+      next.capacity_enforcement_mode =
+        'Las áreas no elegibles deben mantener deshabilitado el control de límites.';
+    if (f.capacity_enforcement_mode === 'enforce') {
+      if (!f.certified_max_weight_kg)
+        next.certified_max_weight_kg = 'Requerido para bloquear excesos.';
+      if (!f.operational_max_weight_kg)
+        next.operational_max_weight_kg = 'Requerido para bloquear excesos.';
+      if (!f.certified_usable_volume_m3)
+        next.certified_usable_volume_m3 = 'Requerido para bloquear excesos.';
+      if (!f.operational_usable_volume_m3)
+        next.operational_usable_volume_m3 = 'Requerido para bloquear excesos.';
+    }
     if (f.last_maintenance && f.next_maintenance && f.next_maintenance < f.last_maintenance)
       next.next_maintenance = 'No puede ser anterior al último mantenimiento.';
     if (f.sanitary_permit_expiry && !f.sanitary_permit.trim())
@@ -251,7 +410,17 @@
     if (Object.keys(next).length) {
       if (next.code || next.name) scrollToSection('general');
       else if (next.branch_id || next.warehouse_category_id) scrollToSection('organization');
-      else if (next.capacity) scrollToSection('capacity');
+      else if (
+        next.certified_max_weight_kg ||
+        next.operational_max_weight_kg ||
+        next.certified_usable_volume_m3 ||
+        next.operational_usable_volume_m3 ||
+        next.capacity_enforcement_mode ||
+        next.usable_length_m ||
+        next.usable_width_m ||
+        next.usable_height_m
+      )
+        scrollToSection('capacity');
       else if (next.next_maintenance) scrollToSection('maintenance');
       else scrollToSection('compliance');
       return false;
@@ -274,7 +443,16 @@
       length: num(f.length),
       width: num(f.width),
       shelves_total: num(f.shelves_total),
-      capacity: num(f.capacity),
+      certified_max_weight_kg: num(f.certified_max_weight_kg),
+      operational_max_weight_kg: num(f.operational_max_weight_kg),
+      certified_usable_volume_m3: num(f.certified_usable_volume_m3),
+      operational_usable_volume_m3: num(f.operational_usable_volume_m3),
+      capacity_profile: f.capacity_profile,
+      capacity_enforcement_mode: f.capacity_enforcement_mode,
+      storage_eligible: f.storage_eligible,
+      usable_length_m: num(f.usable_length_m),
+      usable_width_m: num(f.usable_width_m),
+      usable_height_m: num(f.usable_height_m),
       shifts: f.shifts,
       cameras: num(f.cameras),
       access_control: f.access_control || null,
@@ -476,7 +654,6 @@
               bind:value={f.operational_status}
               options={enumOptions([
                 ['active', 'Activo'],
-                ['full', 'Lleno'],
                 ['maintenance', 'Mantenimiento'],
                 ['inactive', 'Inactivo']
               ])}
@@ -574,6 +751,14 @@
         <Card id="capacity" class="scroll-mt-24 p-6"
           ><h2 class="mb-1 text-base font-semibold">Dimensiones y capacidad</h2>
           <p class="mb-5 text-sm text-foreground-muted">Parámetros físicos y capacidad nominal.</p>
+          {#if f.operational_status === 'active' && f.storage_eligible && !capacityConfigured}
+            <div
+              class="mb-5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
+            >
+              La configuración física está incompleta. Registre los límites certificados y
+              operativos de peso y volumen antes de activar el bloqueo.
+            </div>
+          {/if}
           <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <FormField
               id="warehouse-area"
@@ -609,14 +794,91 @@
               type="number"
               min="0"
               bind:value={f.shelves_total}
+            /><SmartSelect
+              id="warehouse-capacity-profile"
+              label="Perfil físico"
+              bind:value={f.capacity_profile}
+              options={CAPACITY_PROFILE_OPTIONS}
+            /><SmartSelect
+              id="warehouse-capacity-enforcement"
+              label="Control de límites"
+              bind:value={f.capacity_enforcement_mode}
+              options={CAPACITY_ENFORCEMENT_OPTIONS}
+              error={errors.capacity_enforcement_mode}
             /><FormField
-              id="warehouse-capacity"
-              label="Capacidad (unidades)"
+              id="warehouse-certified-weight"
+              label="Peso certificado (kg)"
               type="number"
-              min="1"
-              bind:value={f.capacity}
-              error={errors.capacity}
+              min="0.001"
+              step="0.001"
+              bind:value={f.certified_max_weight_kg}
+              error={errors.certified_max_weight_kg}
+            /><FormField
+              id="warehouse-operational-weight"
+              label="Peso operativo (kg)"
+              type="number"
+              min="0.001"
+              step="0.001"
+              bind:value={f.operational_max_weight_kg}
+              error={errors.operational_max_weight_kg}
+            /><FormField
+              id="warehouse-certified-volume"
+              label="Volumen útil certificado (m³)"
+              type="number"
+              min="0.001"
+              step="0.001"
+              bind:value={f.certified_usable_volume_m3}
+              error={errors.certified_usable_volume_m3}
+            /><FormField
+              id="warehouse-operational-volume"
+              label="Volumen útil operativo (m³)"
+              type="number"
+              min="0.001"
+              step="0.001"
+              bind:value={f.operational_usable_volume_m3}
+              error={errors.operational_usable_volume_m3}
+            /><FormField
+              id="warehouse-usable-length"
+              label="Largo útil (m)"
+              type="number"
+              min="0.001"
+              step="0.001"
+              bind:value={f.usable_length_m}
+              error={errors.usable_length_m}
+            /><FormField
+              id="warehouse-usable-width"
+              label="Ancho útil (m)"
+              type="number"
+              min="0.001"
+              step="0.001"
+              bind:value={f.usable_width_m}
+              error={errors.usable_width_m}
+            /><FormField
+              id="warehouse-usable-height"
+              label="Altura útil (m)"
+              type="number"
+              min="0.001"
+              step="0.001"
+              bind:value={f.usable_height_m}
+              error={errors.usable_height_m}
             />
+            <label
+              class="sm:col-span-2 xl:col-span-3 flex items-start gap-3 rounded-lg border border-border bg-surface-muted/30 p-3 text-sm"
+            >
+              <input
+                type="checkbox"
+                bind:checked={f.storage_eligible}
+                class="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <span>
+                <span class="block font-medium text-foreground"
+                  >Elegible para almacenamiento normal</span
+                >
+                <span class="mt-0.5 block text-xs text-foreground-muted">
+                  Desactívelo para áreas virtuales o exclusivamente temporales.
+                </span>
+              </span>
+            </label>
           </div></Card
         >
 
