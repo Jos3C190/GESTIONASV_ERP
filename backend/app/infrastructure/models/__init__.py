@@ -18,6 +18,16 @@ from app.infrastructure.models.employee import (
     Employee,
     EmployeeBranchAssignment,
 )
+from app.infrastructure.models.inventory import (
+    CapacityOperationalOverrideModel,
+    CapacityReservationModel,
+    InventoryBalanceModel,
+    InventoryHandlingUnitModel,
+    InventoryItemModel,
+    InventoryMovementLineModel,
+    InventoryMovementModel,
+    InventoryPackagingModel,
+)
 from app.infrastructure.models.location import (
     LocationBatchJob,
     LocationBatchRow,
@@ -35,9 +45,16 @@ from app.infrastructure.models.organization import (
     UserBranch,
     UserCompany,
     Warehouse,
+    WarehouseCapacityGroup,
     WarehouseCategory,
 )
 from app.infrastructure.models.product_image import ProductImageModel
+from app.infrastructure.models.product_master import (
+    ProductBrandModel,
+    ProductIdentifierModel,
+    ProductManufacturerModel,
+    ProductSupplierModel,
+)
 from app.infrastructure.models.product_variant import (
     ProductFamilyAttributeModel,
     ProductFamilyAttributeValueModel,
@@ -45,12 +62,6 @@ from app.infrastructure.models.product_variant import (
     ProductVariantAttributeValueModel,
     ProductVariantImageModel,
     ProductVariantModel,
-)
-from app.infrastructure.models.product_master import (
-    ProductBrandModel,
-    ProductIdentifierModel,
-    ProductManufacturerModel,
-    ProductSupplierModel,
 )
 from app.infrastructure.models.rbac import (
     Permission,
@@ -75,6 +86,8 @@ __all__: list[str] = [
     "AppMeta",
     "AuditLog",
     "Branch",
+    "CapacityOperationalOverrideModel",
+    "CapacityReservationModel",
     "CategoryModel",
     "Company",
     "CompanyUnitModel",
@@ -86,6 +99,12 @@ __all__: list[str] = [
     "Employee",
     "EmployeeBranchAssignment",
     "GeographicDepartment",
+    "InventoryBalanceModel",
+    "InventoryHandlingUnitModel",
+    "InventoryItemModel",
+    "InventoryMovementLineModel",
+    "InventoryMovementModel",
+    "InventoryPackagingModel",
     "Location",
     "LocationBatchJob",
     "LocationBatchRow",
@@ -96,18 +115,18 @@ __all__: list[str] = [
     "PasswordResetToken",
     "PaymentTermsModel",
     "Permission",
-    "ProductImageModel",
+    "ProductBrandModel",
     "ProductFamilyAttributeModel",
     "ProductFamilyAttributeValueModel",
+    "ProductIdentifierModel",
+    "ProductImageModel",
+    "ProductManufacturerModel",
+    "ProductModel",
     "ProductSkuRegistryModel",
+    "ProductSupplierModel",
     "ProductVariantAttributeValueModel",
     "ProductVariantImageModel",
     "ProductVariantModel",
-    "ProductBrandModel",
-    "ProductIdentifierModel",
-    "ProductManufacturerModel",
-    "ProductModel",
-    "ProductSupplierModel",
     "RefreshToken",
     "Role",
     "RolePermission",
@@ -126,5 +145,6 @@ __all__: list[str] = [
     "UserCompany",
     "UserRole",
     "Warehouse",
+    "WarehouseCapacityGroup",
     "WarehouseCategory",
 ]

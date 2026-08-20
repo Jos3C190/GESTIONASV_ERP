@@ -12,16 +12,17 @@ from app.api.v1.routers import (
     audit_logs,
     auth,
     catalog,
-    product_master,
     dashboard,
     departments,
     employees,
     health,
+    inventory,
     lifecycle,
     locations,
     media,
     operational_context,
     organization,
+    product_master,
     roles,
     supplier_master,
     suppliers,
@@ -41,6 +42,7 @@ api_router.include_router(workforce.router, prefix="/api/v1")
 api_router.include_router(audit_logs.router, prefix="/api/v1")
 api_router.include_router(organization.router, prefix="/api/v1")
 api_router.include_router(locations.router, prefix="/api/v1")
+api_router.include_router(inventory.router, prefix="/api/v1")
 api_router.include_router(operational_context.router, prefix="/api/v1")
 api_router.include_router(dashboard.router, prefix="/api/v1")
 api_router.include_router(media.router, prefix="/api/v1")
