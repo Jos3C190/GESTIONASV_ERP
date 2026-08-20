@@ -15,6 +15,7 @@ from app.infrastructure.models.catalog import (
     UnitModel,
 )
 from app.infrastructure.models.organization import Company
+from app.infrastructure.models.product_master import ProductSupplierModel
 from app.infrastructure.models.supplier import SupplierContactModel, SupplierModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -175,9 +176,7 @@ CATEGORIES_DATA = [
 async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
     logger.info("Starting Catalog & Supplier Seed Data...")
     company = await db.scalar(
-        select(Company)
-        .where(Company.id == COMPANY_ID)
-        .execution_options(include_deleted=True)
+        select(Company).where(Company.id == COMPANY_ID).execution_options(include_deleted=True)
     )
     if company is None:
         raise RuntimeError("Ejecute primero la semilla principal de Grupo Lorena.")
@@ -186,9 +185,12 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
 
     # 1. Countries
     for country in COUNTRIES_DATA:
-        stmt = select(CountryModel).where(
-            func.lower(CountryModel.iso_code_2) == country["iso_code_2"].casefold()
-        ).order_by(CountryModel.created_at.desc()).limit(1)
+        stmt = (
+            select(CountryModel)
+            .where(func.lower(CountryModel.iso_code_2) == country["iso_code_2"].casefold())
+            .order_by(CountryModel.created_at.desc())
+            .limit(1)
+        )
         res = await db.execute(stmt)
         existing_country = res.scalar_one_or_none()
         if existing_country is None:
@@ -344,6 +346,166 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
                 },
             ],
         },
+        {
+            "code": "PROV-003",
+            "name": "Azúcares y Endulzantes del Valle",
+            "country_id": country_id,
+            "address": "Zona Industrial Santa Elena, Antiguo Cuscatlán",
+            "phone": "+503 2208-0310",
+            "email": "ventas@azucaresvalle.demo.sv",
+            "website": None,
+            "contacts": [
+                {
+                    "full_name": "María Fernanda Castillo",
+                    "phone": "+503 7003-1103",
+                    "email": "mcastillo@azucaresvalle.demo.sv",
+                }
+            ],
+        },
+        {
+            "code": "PROV-004",
+            "name": "Levaduras y Mejoradores Centro",
+            "country_id": country_id,
+            "address": "Colonia Escalón, San Salvador",
+            "phone": "+503 2208-0410",
+            "email": "ventas@levadurascentro.demo.sv",
+            "website": None,
+            "contacts": [
+                {
+                    "full_name": "Jorge Alberto Paredes",
+                    "phone": "+503 7004-1104",
+                    "email": "jparedes@levadurascentro.demo.sv",
+                }
+            ],
+        },
+        {
+            "code": "PROV-005",
+            "name": "Coberturas y Cacao del Pacífico",
+            "country_id": country_id,
+            "address": "Boulevard Merliot, Santa Tecla",
+            "phone": "+503 2208-0510",
+            "email": "comercial@cacaopacifico.demo.sv",
+            "website": None,
+            "contacts": [
+                {
+                    "full_name": "Daniela Hernández",
+                    "phone": "+503 7005-1105",
+                    "email": "dhernandez@cacaopacifico.demo.sv",
+                }
+            ],
+        },
+        {
+            "code": "PROV-006",
+            "name": "Rellenos Frutales Artesanales",
+            "country_id": country_id,
+            "address": "Carretera a San Juan Opico, La Libertad",
+            "phone": "+503 2208-0610",
+            "email": "pedidos@rellenosfrutales.demo.sv",
+            "website": None,
+            "contacts": [
+                {
+                    "full_name": "Luis Enrique Molina",
+                    "phone": "+503 7006-1106",
+                    "email": "lmolina@rellenosfrutales.demo.sv",
+                }
+            ],
+        },
+        {
+            "code": "PROV-007",
+            "name": "Grasas y Margarinas para Repostería",
+            "country_id": country_id,
+            "address": "Parque Industrial Plan de La Laguna, Antiguo Cuscatlán",
+            "phone": "+503 2208-0710",
+            "email": "ventas@grasasreposteria.demo.sv",
+            "website": None,
+            "contacts": [
+                {
+                    "full_name": "Patricia Elena Ruiz",
+                    "phone": "+503 7007-1107",
+                    "email": "pruiz@grasasreposteria.demo.sv",
+                }
+            ],
+        },
+        {
+            "code": "PROV-008",
+            "name": "Empaques de Cartón Centroamericanos",
+            "country_id": country_id,
+            "address": "Zona Industrial Soyapango, San Salvador",
+            "phone": "+503 2208-0810",
+            "email": "pedidos@empaquescarton.demo.sv",
+            "website": None,
+            "contacts": [
+                {
+                    "full_name": "Óscar Armando Flores",
+                    "phone": "+503 7008-1108",
+                    "email": "oflores@empaquescarton.demo.sv",
+                }
+            ],
+        },
+        {
+            "code": "PROV-009",
+            "name": "Bolsas y Empaques Biodegradables",
+            "country_id": country_id,
+            "address": "Zona Comercial San Marcos, San Salvador",
+            "phone": "+503 2208-0910",
+            "email": "ventas@bolsasbio.demo.sv",
+            "website": None,
+            "contacts": [
+                {
+                    "full_name": "Karla Beatriz Santos",
+                    "phone": "+503 7009-1109",
+                    "email": "ksantos@bolsasbio.demo.sv",
+                }
+            ],
+        },
+        {
+            "code": "PROV-010",
+            "name": "Café Tostado de Altura",
+            "country_id": country_id,
+            "address": "Barrio El Centro, Santa Ana",
+            "phone": "+503 2208-1010",
+            "email": "comercial@cafealtura.demo.sv",
+            "website": None,
+            "contacts": [
+                {
+                    "full_name": "Andrés Mauricio López",
+                    "phone": "+503 7010-1110",
+                    "email": "alopez@cafealtura.demo.sv",
+                }
+            ],
+        },
+        {
+            "code": "PROV-011",
+            "name": "Jarabes y Saborizantes del Istmo",
+            "country_id": country_id,
+            "address": "Colonia San Benito, San Salvador",
+            "phone": "+503 2208-1110",
+            "email": "pedidos@jarabersistmo.demo.sv",
+            "website": None,
+            "contacts": [
+                {
+                    "full_name": "Sofía Gabriela Núñez",
+                    "phone": "+503 7011-1111",
+                    "email": "snunez@jarabersistmo.demo.sv",
+                }
+            ],
+        },
+        {
+            "code": "PROV-012",
+            "name": "Suministros para Cafetería Lorena",
+            "country_id": country_id,
+            "address": "Centro Comercial Las Cascadas, Antiguo Cuscatlán",
+            "phone": "+503 2208-1210",
+            "email": "ventas@suministroslorena.demo.sv",
+            "website": None,
+            "contacts": [
+                {
+                    "full_name": "Ricardo Alexander Mejía",
+                    "phone": "+503 7012-1112",
+                    "email": "rmejia@suministroslorena.demo.sv",
+                }
+            ],
+        },
     ]
 
     for sup_info in suppliers_data:
@@ -430,6 +592,196 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
             "presentation": "Caja 10kg",
             "description": "Mantequilla pura de vaca para laminado de hojaldre y pastelería fina.",
         },
+        {
+            "sku": "PRD-HAR-003",
+            "name": "Harina Integral de Trigo 25kg",
+            "id_category": cat_pan,
+            "id_sub_category": sub_harina,
+            "original_code": "HAR-INT-25",
+            "internal_code": "INT-003",
+            "purchase_unit": unit_kg,
+            "sale_unit": unit_kg,
+            "presentation": "Saco 25kg",
+            "description": "Harina integral para panes rústicos, bollería y productos con alto contenido de fibra.",
+            "weight": 25,
+            "weight_unit": "kg",
+            "dimension_length": 65,
+            "dimension_width": 40,
+            "dimension_height": 15,
+            "dimension_unit": "cm",
+            "variant_mode": "standalone",
+        },
+        {
+            "sku": "PRD-AZU-004",
+            "name": "Azúcar Glass Premium 10kg",
+            "id_category": cat_map.get("Materia Prima Alimenticia", 1),
+            "id_sub_category": sub_map.get("Azúcar y Endulzantes", 1),
+            "original_code": "AZU-GLA-10",
+            "internal_code": "INT-004",
+            "purchase_unit": unit_cj,
+            "sale_unit": unit_kg,
+            "presentation": "Caja 10kg",
+            "description": "Azúcar pulverizada para glaseados, rellenos y decoración de repostería.",
+            "weight": 10,
+            "weight_unit": "kg",
+            "dimension_length": 38,
+            "dimension_width": 28,
+            "dimension_height": 24,
+            "dimension_unit": "cm",
+            "variant_mode": "standalone",
+        },
+        {
+            "sku": "PRD-LEV-005",
+            "name": "Levadura Instantánea 500g",
+            "id_category": cat_pan,
+            "id_sub_category": sub_map.get("Levaduras y Mejoradores", 1),
+            "original_code": "LEV-INS-500",
+            "internal_code": "INT-005",
+            "purchase_unit": unit_cj,
+            "sale_unit": unit_u,
+            "presentation": "Caja 20 sobres",
+            "description": "Levadura seca instantánea para fermentación uniforme en procesos de panificación.",
+            "weight": 0.5,
+            "weight_unit": "kg",
+            "dimension_length": 22,
+            "dimension_width": 16,
+            "dimension_height": 12,
+            "dimension_unit": "cm",
+            "variant_mode": "standalone",
+        },
+        {
+            "sku": "PRD-CHO-006",
+            "name": "Chocolate de Cobertura Semiamargo 5kg",
+            "id_category": cat_pan,
+            "id_sub_category": sub_map.get("Rellenos y Coberturas", 1),
+            "original_code": "CHO-SEM-05",
+            "internal_code": "INT-006",
+            "purchase_unit": unit_cj,
+            "sale_unit": unit_kg,
+            "presentation": "Bloque 5kg",
+            "description": "Chocolate semiamargo para baños, decoraciones y elaboración de ganaches.",
+            "weight": 5,
+            "weight_unit": "kg",
+            "dimension_length": 35,
+            "dimension_width": 22,
+            "dimension_height": 12,
+            "dimension_unit": "cm",
+            "variant_mode": "standalone",
+        },
+        {
+            "sku": "PRD-REL-007",
+            "name": "Relleno de Guayaba 4kg",
+            "id_category": cat_pan,
+            "id_sub_category": sub_map.get("Rellenos y Coberturas", 1),
+            "original_code": "REL-GUA-04",
+            "internal_code": "INT-007",
+            "purchase_unit": unit_cj,
+            "sale_unit": unit_kg,
+            "presentation": "Cubeta 4kg",
+            "description": "Relleno de guayaba listo para uso en pan dulce, tartas y pasteles.",
+            "weight": 4,
+            "weight_unit": "kg",
+            "dimension_length": 28,
+            "dimension_width": 28,
+            "dimension_height": 24,
+            "dimension_unit": "cm",
+            "variant_mode": "standalone",
+        },
+        {
+            "sku": "PRD-MAR-008",
+            "name": "Margarina Repostera 15kg",
+            "id_category": cat_map.get("Materia Prima Alimenticia", 1),
+            "id_sub_category": sub_map.get("Aceites y Grasas", 1),
+            "original_code": "MAR-REP-15",
+            "internal_code": "INT-008",
+            "purchase_unit": unit_cj,
+            "sale_unit": unit_kg,
+            "presentation": "Caja 15kg",
+            "description": "Margarina de alto rendimiento para batidos, masas y laminados de pastelería.",
+            "weight": 15,
+            "weight_unit": "kg",
+            "dimension_length": 45,
+            "dimension_width": 30,
+            "dimension_height": 22,
+            "dimension_unit": "cm",
+            "variant_mode": "standalone",
+        },
+        {
+            "sku": "PRD-EMP-009",
+            "name": "Caja de Cartón para Pastel 12 pulgadas",
+            "id_category": cat_map.get("Empaques y Desechables", 1),
+            "id_sub_category": sub_map.get("Cajas de Cartón", 1),
+            "original_code": "CAJ-PAS-12",
+            "internal_code": "INT-009",
+            "purchase_unit": unit_cj,
+            "sale_unit": unit_u,
+            "presentation": "Paquete 25 unidades",
+            "description": "Caja plegable de cartón grado alimenticio para pasteles de hasta 12 pulgadas.",
+            "weight": 0.18,
+            "weight_unit": "kg",
+            "dimension_length": 33,
+            "dimension_width": 33,
+            "dimension_height": 15,
+            "dimension_unit": "cm",
+            "variant_mode": "standalone",
+        },
+        {
+            "sku": "PRD-EMP-010",
+            "name": "Bolsa Biodegradable Mediana",
+            "id_category": cat_map.get("Empaques y Desechables", 1),
+            "id_sub_category": sub_map.get("Bolsas Biodegradables", 1),
+            "original_code": "BOL-BIO-M",
+            "internal_code": "INT-010",
+            "purchase_unit": unit_cj,
+            "sale_unit": unit_u,
+            "presentation": "Paquete 100 unidades",
+            "description": "Bolsa biodegradable para despacho de panadería y productos de cafetería.",
+            "weight": 0.08,
+            "weight_unit": "kg",
+            "dimension_length": 30,
+            "dimension_width": 20,
+            "dimension_height": 5,
+            "dimension_unit": "cm",
+            "variant_mode": "standalone",
+        },
+        {
+            "sku": "PRD-CAF-011",
+            "name": "Café Tostado y Molido 1kg",
+            "id_category": cat_map.get("Bebidas y Cafetería", 1),
+            "id_sub_category": sub_map.get("Café en Grano/Molido", 1),
+            "original_code": "CAF-TOS-01",
+            "internal_code": "INT-011",
+            "purchase_unit": unit_cj,
+            "sale_unit": unit_kg,
+            "presentation": "Bolsa 1kg",
+            "description": "Café tostado y molido de perfil balanceado para cafeterías y bebidas frías.",
+            "weight": 1,
+            "weight_unit": "kg",
+            "dimension_length": 28,
+            "dimension_width": 18,
+            "dimension_height": 8,
+            "dimension_unit": "cm",
+            "variant_mode": "standalone",
+        },
+        {
+            "sku": "PRD-JAR-012",
+            "name": "Jarabe de Vainilla 1L",
+            "id_category": cat_map.get("Bebidas y Cafetería", 1),
+            "id_sub_category": sub_map.get("Jarabes y Saborizantes", 1),
+            "original_code": "JAR-VAI-01",
+            "internal_code": "INT-012",
+            "purchase_unit": unit_cj,
+            "sale_unit": unit_u,
+            "presentation": "Botella 1L",
+            "description": "Jarabe sabor vainilla para cafés, frappés, batidos y postres de cafetería.",
+            "weight": 1.2,
+            "weight_unit": "kg",
+            "dimension_length": 30,
+            "dimension_width": 10,
+            "dimension_height": 10,
+            "dimension_unit": "cm",
+            "variant_mode": "standalone",
+        },
     ]
 
     for prod in products_data:
@@ -453,6 +805,73 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
             for field, value in prod.items():
                 setattr(product, field, value)
             product.is_active = True
+    await db.flush()
+
+    # 6. Supplier sourcing links for the new standalone demo products.
+    # Keeping these links in the seed makes the product and supplier screens
+    # useful together without creating any product variants.
+    sourcing_data = [
+        ("PRD-HAR-003", "PROV-001", 18.50),
+        ("PRD-AZU-004", "PROV-003", 12.75),
+        ("PRD-LEV-005", "PROV-004", 9.40),
+        ("PRD-CHO-006", "PROV-005", 28.00),
+        ("PRD-REL-007", "PROV-006", 16.25),
+        ("PRD-MAR-008", "PROV-007", 31.50),
+        ("PRD-EMP-009", "PROV-008", 14.00),
+        ("PRD-EMP-010", "PROV-009", 6.50),
+        ("PRD-CAF-011", "PROV-010", 11.75),
+        ("PRD-JAR-012", "PROV-011", 8.90),
+    ]
+    for sku, supplier_code, unit_cost in sourcing_data:
+        product = await db.scalar(
+            select(ProductModel).where(
+                ProductModel.company_id == company_id,
+                func.lower(ProductModel.sku) == sku.casefold(),
+            )
+        )
+        supplier = await db.scalar(
+            select(SupplierModel).where(
+                SupplierModel.company_id == company_id,
+                func.lower(SupplierModel.code) == supplier_code.casefold(),
+            )
+        )
+        if product is None or supplier is None:
+            raise RuntimeError(f"No se pudo enlazar {sku} con {supplier_code}.")
+        link = await db.scalar(
+            select(ProductSupplierModel).where(
+                ProductSupplierModel.company_id == company_id,
+                ProductSupplierModel.product_id == product.id_product,
+                ProductSupplierModel.supplier_id == supplier.id_supplier,
+            )
+        )
+        existing_links = (
+            await db.scalars(
+                select(ProductSupplierModel).where(
+                    ProductSupplierModel.company_id == company_id,
+                    ProductSupplierModel.product_id == product.id_product,
+                )
+            )
+        ).all()
+        for existing_link in existing_links:
+            if link is None or existing_link.id != link.id:
+                existing_link.is_preferred = False
+        await db.flush()
+        if link is None:
+            link = ProductSupplierModel(
+                company_id=company_id,
+                product_id=product.id_product,
+                supplier_id=supplier.id_supplier,
+            )
+            db.add(link)
+        link.supplier_product_code = f"{supplier_code}-{sku.removeprefix('PRD-')}"
+        link.unit_cost = unit_cost
+        link.currency_code = "USD"
+        link.minimum_order_qty = 1
+        link.order_multiple = 1
+        link.lead_time_days = 3
+        link.is_preferred = True
+        link.status = "active"
+        link.notes = "Relación demo para pruebas de abastecimiento de Grupo Lorena."
     await db.flush()
     await db.commit()
     logger.info("Products seeded successfully.")
