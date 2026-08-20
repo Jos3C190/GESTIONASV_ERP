@@ -42,6 +42,9 @@ from app.infrastructure.models.rbac import Permission, Role, RolePermission, Use
 from app.infrastructure.models.supplier import SupplierContactModel, SupplierModel
 from app.infrastructure.models.supplier_image import SupplierContactImageModel, SupplierImageModel
 from app.infrastructure.models.user import User
+from app.infrastructure.repositories.capacity_hierarchy_repository import (
+    SqlAlchemyCapacityHierarchyRepository,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -758,7 +761,7 @@ class SqlAlchemyLifecycleRepository:
             )
             if warehouse_id is not None:
                 # Match create/update/publish lock order: warehouse first, then
-                # location.  This serializes capacity and restore decisions.
+                # location. This serializes commissioning and restore decisions.
                 locked_location_warehouse = await self._session.scalar(
                     select(Warehouse).where(Warehouse.id == warehouse_id).with_for_update()
                 )
@@ -790,27 +793,24 @@ class SqlAlchemyLifecycleRepository:
             if (
                 warehouse is None
                 or not warehouse.is_active
-                or warehouse.operational_status in {"inactive", "full"}
+                or warehouse.operational_status == "inactive"
             ):
                 raise ConflictError(
                     "No se puede restaurar una ubicación activa en el estado actual del almacén.",
                     code="warehouse_not_commissionable",
                 )
-            active_capacity = int(
-                await self._session.scalar(
-                    select(func.coalesce(func.sum(Location.capacity), 0)).where(
-                        Location.warehouse_id == record.warehouse_id,
-                        Location.is_active.is_(True),
-                        Location.deleted_at.is_(None),
-                    )
-                )
-                or 0
+        if resource == "locations":
+            await SqlAlchemyCapacityHierarchyRepository(self._session).validate_location_write(
+                record.warehouse_id,
+                {
+                    "capacity_group_id": record.capacity_group_id,
+                    "certified_max_weight_kg": record.certified_max_weight_kg,
+                    "operational_max_weight_kg": record.operational_max_weight_kg,
+                    "certified_usable_volume_m3": record.certified_usable_volume_m3,
+                    "operational_usable_volume_m3": record.operational_usable_volume_m3,
+                    "capacity_enforcement_mode": record.capacity_enforcement_mode,
+                },
             )
-            if warehouse.capacity and active_capacity + record.capacity > warehouse.capacity:
-                raise ConflictError(
-                    "No se puede restaurar porque superaría la capacidad del almacén.",
-                    code="warehouse_location_capacity_exceeded",
-                )
         deleted_at = record.deleted_at
         deleted_by = record.deleted_by
         deletion_reason = record.deletion_reason

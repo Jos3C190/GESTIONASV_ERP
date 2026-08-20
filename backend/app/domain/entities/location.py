@@ -13,9 +13,11 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from app.core.exceptions import ValidationError
+from app.domain.entities.warehouse_capacity import CapacityStatus, capacity_status_for
 
 LOCATION_COMPONENT_KEYS = frozenset({"area", "aisle", "rack", "level", "position"})
 LOCATION_LIFECYCLE_STATUSES = frozenset(
@@ -155,7 +157,17 @@ class LocationRecord:
     rack: str
     level: str
     position: str
-    capacity: int
+    capacity_group_id: uuid.UUID | None
+    certified_max_weight_kg: Decimal | None
+    operational_max_weight_kg: Decimal | None
+    certified_usable_volume_m3: Decimal | None
+    operational_usable_volume_m3: Decimal | None
+    capacity_profile: str
+    capacity_enforcement_mode: str
+    storage_eligible: bool
+    usable_length_m: Decimal | None
+    usable_width_m: Decimal | None
+    usable_height_m: Decimal | None
     notes: str | None
     location_type: str
     lifecycle_status: str
@@ -170,6 +182,10 @@ class LocationRecord:
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+    @property
+    def capacity_status(self) -> CapacityStatus:
+        return capacity_status_for(self)
 
 
 @dataclass(frozen=True, slots=True)

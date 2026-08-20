@@ -11,6 +11,7 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -38,9 +39,13 @@ from app.infrastructure.models.organization import (
     Location,
     Municipality,
     Warehouse,
+    WarehouseCapacityGroup,
     WarehouseCategory,
 )
 from app.infrastructure.models.user import User
+from app.infrastructure.repositories.capacity_hierarchy_repository import (
+    SqlAlchemyCapacityHierarchyRepository,
+)
 from app.infrastructure.repositories.lifecycle_repository import (
     SqlAlchemyLifecycleRepository,
 )
@@ -80,7 +85,8 @@ def _suffix() -> str:
 async def _add_context(
     session: AsyncSession,
     *,
-    warehouse_capacity: int = 100,
+    warehouse_operational_weight_kg: Decimal = Decimal("10000"),
+    warehouse_operational_volume_m3: Decimal = Decimal("500"),
     operational_status: str = "active",
 ) -> LocationContext:
     suffix = _suffix()
@@ -160,7 +166,13 @@ async def _add_context(
         code=f"W{suffix[:8]}",
         warehouse_type="general",
         operational_status=operational_status,
-        capacity=warehouse_capacity,
+        certified_max_weight_kg=warehouse_operational_weight_kg * Decimal("1.20"),
+        operational_max_weight_kg=warehouse_operational_weight_kg,
+        certified_usable_volume_m3=warehouse_operational_volume_m3 * Decimal("1.20"),
+        operational_usable_volume_m3=warehouse_operational_volume_m3,
+        capacity_profile="general_mixed",
+        capacity_enforcement_mode="enforce",
+        storage_eligible=True,
         is_active=True,
     )
     session.add(warehouse)
@@ -221,18 +233,31 @@ def _projection(
 def _values(
     projection: CodeProjection,
     *,
-    capacity: int,
+    operational_weight_kg: Decimal | int,
+    operational_volume_m3: Decimal | int = Decimal("1"),
     external_id: str | None = None,
     code_source: str = "generated",
 ) -> dict[str, Any]:
     components = projection.normalized_components
+    weight = Decimal(operational_weight_kg)
+    volume = Decimal(operational_volume_m3)
     return {
         "area": None,
         "aisle": components["aisle"],
         "rack": components["rack"],
         "level": components["level"],
         "position": components["position"],
-        "capacity": capacity,
+        "capacity_group_id": None,
+        "certified_max_weight_kg": weight + Decimal("1"),
+        "operational_max_weight_kg": weight,
+        "certified_usable_volume_m3": volume + Decimal("0.5"),
+        "operational_usable_volume_m3": volume,
+        "capacity_profile": "rack",
+        "capacity_enforcement_mode": "enforce",
+        "storage_eligible": True,
+        "usable_length_m": None,
+        "usable_width_m": None,
+        "usable_height_m": None,
         "notes": None,
         "location_type": "standard",
         "lifecycle_status": "active",
@@ -251,7 +276,8 @@ def _values(
 def _source_row(
     projection: CodeProjection,
     *,
-    capacity: int,
+    operational_weight_kg: Decimal | int,
+    operational_volume_m3: Decimal | int = Decimal("1"),
     external_id: str | None = None,
     row_number: int = 2,
 ) -> dict[str, Any]:
@@ -260,11 +286,41 @@ def _source_row(
         "code": projection.code,
         **_values(
             projection,
-            capacity=capacity,
+            operational_weight_kg=operational_weight_kg,
+            operational_volume_m3=operational_volume_m3,
             external_id=external_id,
             code_source="imported",
         ),
     }
+
+
+async def _add_capacity_group(
+    session: AsyncSession,
+    context: LocationContext,
+    *,
+    code: str,
+    parent_id: uuid.UUID | None = None,
+    certified_weight: Decimal = Decimal("6"),
+    operational_weight: Decimal = Decimal("5"),
+) -> WarehouseCapacityGroup:
+    group = WarehouseCapacityGroup(
+        warehouse_id=context.warehouse_id,
+        parent_id=parent_id,
+        code=code,
+        name=f"Grupo {code}",
+        group_type="rack",
+        certified_max_weight_kg=certified_weight,
+        operational_max_weight_kg=operational_weight,
+        certified_usable_volume_m3=Decimal("5"),
+        operational_usable_volume_m3=Decimal("4"),
+        capacity_profile="rack",
+        capacity_enforcement_mode="enforce",
+        storage_eligible=True,
+        is_active=True,
+    )
+    session.add(group)
+    await session.flush()
+    return group
 
 
 @pytest.mark.asyncio
@@ -277,7 +333,11 @@ async def test_historical_alias_is_reserved_from_reuse_by_another_location(
     location = await repository.create_location(
         context.warehouse_id,
         projection=old_projection,
-        values=_values(old_projection, capacity=1, external_id="LEGACY-1"),
+        values=_values(
+            old_projection,
+            operational_weight_kg=1,
+            external_id="LEGACY-1",
+        ),
         actor_id=context.actor_id,
     )
     new_projection = _projection(context, code="A02-R01-N01-P01", aisle="02")
@@ -286,7 +346,11 @@ async def test_historical_alias_is_reserved_from_reuse_by_another_location(
         context.warehouse_id,
         location.id,
         projection=new_projection,
-        values=_values(new_projection, capacity=1, external_id="LEGACY-1"),
+        values=_values(
+            new_projection,
+            operational_weight_kg=1,
+            external_id="LEGACY-1",
+        ),
         actor_id=context.actor_id,
     )
     alias = await location_session.scalar(
@@ -305,7 +369,11 @@ async def test_historical_alias_is_reserved_from_reuse_by_another_location(
         await repository.create_location(
             context.warehouse_id,
             projection=other_projection,
-            values=_values(other_projection, capacity=1, external_id="OTHER-1"),
+            values=_values(
+                other_projection,
+                operational_weight_kg=1,
+                external_id="OTHER-1",
+            ),
             actor_id=context.actor_id,
         )
 
@@ -313,16 +381,23 @@ async def test_historical_alias_is_reserved_from_reuse_by_another_location(
 
 
 @pytest.mark.asyncio
-async def test_bulk_update_capacity_delta_is_revalidated_under_warehouse_lock(
+async def test_bulk_update_rejects_location_limit_above_warehouse_limit(
     location_session: AsyncSession,
 ) -> None:
-    context = await _add_context(location_session, warehouse_capacity=10)
+    context = await _add_context(
+        location_session,
+        warehouse_operational_weight_kg=Decimal("10"),
+    )
     repository = SqlAlchemyLocationRepository(location_session)
     projection = _projection(context, code="A01-R01-N01-P01", aisle="01")
-    await repository.create_location(
+    location = await repository.create_location(
         context.warehouse_id,
         projection=projection,
-        values=_values(projection, capacity=4, external_id="CAPACITY-1"),
+        values=_values(
+            projection,
+            operational_weight_kg=4,
+            external_id="PHYSICAL-LIMIT-1",
+        ),
         actor_id=context.actor_id,
     )
     job = await repository.create_batch_preview(
@@ -331,7 +406,13 @@ async def test_bulk_update_capacity_delta_is_revalidated_under_warehouse_lock(
         idempotency_key=f"capacity-{_suffix()}",
         input_checksum="a" * 64,
         scheme=context.scheme,
-        source_rows=[_source_row(projection, capacity=11, external_id="CAPACITY-1")],
+        source_rows=[
+            _source_row(
+                projection,
+                operational_weight_kg=11,
+                external_id="PHYSICAL-LIMIT-1",
+            )
+        ],
         actor_id=context.actor_id,
     )
     assert job.update_count == 1
@@ -339,7 +420,172 @@ async def test_bulk_update_capacity_delta_is_revalidated_under_warehouse_lock(
     with pytest.raises(ConflictError) as error:
         await repository.publish_batch(job.id, actor_id=context.actor_id)
 
-    assert error.value.code == "warehouse_location_capacity_exceeded"
+    assert error.value.code == "capacity_child_limit_exceeds_parent"
+    assert await location_session.scalar(
+        select(Location.operational_max_weight_kg).where(Location.id == location.id)
+    ) == Decimal("4")
+
+
+@pytest.mark.asyncio
+async def test_location_limit_cannot_exceed_assigned_structure(
+    location_session: AsyncSession,
+) -> None:
+    context = await _add_context(location_session)
+    group = await _add_capacity_group(location_session, context, code="RACK-A")
+    repository = SqlAlchemyLocationRepository(location_session)
+    projection = _projection(context, code="A01-R01-N01-P01", aisle="01")
+    values = _values(projection, operational_weight_kg=6)
+    values["capacity_group_id"] = group.id
+
+    with pytest.raises(ConflictError) as error:
+        await repository.create_location(
+            context.warehouse_id,
+            projection=projection,
+            values=values,
+            actor_id=context.actor_id,
+        )
+
+    assert error.value.code == "capacity_child_limit_exceeds_parent"
+
+
+@pytest.mark.asyncio
+async def test_nominal_overallocation_is_diagnostic_and_does_not_block_groups(
+    location_session: AsyncSession,
+) -> None:
+    context = await _add_context(
+        location_session,
+        warehouse_operational_weight_kg=Decimal("10"),
+    )
+    await _add_capacity_group(
+        location_session,
+        context,
+        code="RACK-A",
+        certified_weight=Decimal("7"),
+        operational_weight=Decimal("6"),
+    )
+    await _add_capacity_group(
+        location_session,
+        context,
+        code="RACK-B",
+        certified_weight=Decimal("7"),
+        operational_weight=Decimal("6"),
+    )
+
+    diagnostics = await SqlAlchemyCapacityHierarchyRepository(location_session).diagnostics(
+        context.warehouse_id
+    )
+
+    warnings = [
+        issue
+        for issue in diagnostics["issues"]
+        if issue["code"] == "nominal_capacity_overallocated"
+        and issue["scope_type"] == "warehouse"
+        and issue["metric"] == "weight"
+    ]
+    assert {issue["limit_kind"] for issue in warnings} == {"certified", "operational"}
+
+
+@pytest.mark.asyncio
+async def test_list_locations_filters_structure_subtree_and_unassigned(
+    location_session: AsyncSession,
+) -> None:
+    context = await _add_context(location_session)
+    root = await _add_capacity_group(location_session, context, code="RACK-A")
+    child = await _add_capacity_group(location_session, context, code="NIVEL-01", parent_id=root.id)
+    grandchild = await _add_capacity_group(
+        location_session, context, code="BAHIA-01", parent_id=child.id
+    )
+    repository = SqlAlchemyLocationRepository(location_session)
+
+    for index, group_id in enumerate((root.id, child.id, grandchild.id, None), start=1):
+        projection = _projection(
+            context,
+            code=f"A{index:02d}-R01-N01-P01",
+            aisle=f"{index:02d}",
+        )
+        values = _values(projection, operational_weight_kg=1, external_id=f"FILTER-{index}")
+        values["capacity_group_id"] = group_id
+        await repository.create_location(
+            context.warehouse_id,
+            projection=projection,
+            values=values,
+            actor_id=context.actor_id,
+        )
+
+    subtree, subtree_total = await repository.list_locations(
+        context.warehouse_id,
+        page=1,
+        size=20,
+        search=None,
+        area=None,
+        location_type=None,
+        lifecycle_status=None,
+        is_active=None,
+        capacity_group_id=root.id,
+        include_descendants=True,
+        unassigned=False,
+    )
+    assert subtree_total == 3
+    assert {item.capacity_group_id for item in subtree} == {root.id, child.id, grandchild.id}
+
+    direct, direct_total = await repository.list_locations(
+        context.warehouse_id,
+        page=1,
+        size=20,
+        search=None,
+        area=None,
+        location_type=None,
+        lifecycle_status=None,
+        is_active=None,
+        capacity_group_id=root.id,
+        include_descendants=False,
+        unassigned=False,
+    )
+    assert direct_total == 1
+    assert [item.capacity_group_id for item in direct] == [root.id]
+
+    unassigned, unassigned_total = await repository.list_locations(
+        context.warehouse_id,
+        page=1,
+        size=20,
+        search=None,
+        area=None,
+        location_type=None,
+        lifecycle_status=None,
+        is_active=None,
+        capacity_group_id=None,
+        include_descendants=True,
+        unassigned=True,
+    )
+    assert unassigned_total == 1
+    assert unassigned[0].capacity_group_id is None
+
+
+@pytest.mark.asyncio
+async def test_structure_with_active_location_cannot_be_deactivated(
+    location_session: AsyncSession,
+) -> None:
+    context = await _add_context(location_session)
+    group = await _add_capacity_group(location_session, context, code="RACK-A")
+    repository = SqlAlchemyLocationRepository(location_session)
+    projection = _projection(context, code="A01-R01-N01-P01", aisle="01")
+    values = _values(projection, operational_weight_kg=4)
+    values["capacity_group_id"] = group.id
+    await repository.create_location(
+        context.warehouse_id,
+        projection=projection,
+        values=values,
+        actor_id=context.actor_id,
+    )
+
+    with pytest.raises(ConflictError) as error:
+        await SqlAlchemyCapacityHierarchyRepository(location_session).validate_group_write(
+            context.warehouse_id,
+            {"is_active": False},
+            group_id=group.id,
+        )
+
+    assert error.value.code == "capacity_group_has_active_assignments"
 
 
 @pytest.mark.asyncio
@@ -352,7 +598,11 @@ async def test_bulk_publish_rejects_stale_update_without_overwriting_third_party
     location = await repository.create_location(
         context.warehouse_id,
         projection=projection,
-        values=_values(projection, capacity=1, external_id="STALE-1"),
+        values=_values(
+            projection,
+            operational_weight_kg=1,
+            external_id="STALE-1",
+        ),
         actor_id=context.actor_id,
     )
     job = await repository.create_batch_preview(
@@ -361,14 +611,24 @@ async def test_bulk_publish_rejects_stale_update_without_overwriting_third_party
         idempotency_key=f"stale-{_suffix()}",
         input_checksum="8" * 64,
         scheme=context.scheme,
-        source_rows=[_source_row(projection, capacity=2, external_id="STALE-1")],
+        source_rows=[
+            _source_row(
+                projection,
+                operational_weight_kg=2,
+                external_id="STALE-1",
+            )
+        ],
         actor_id=context.actor_id,
     )
     await repository.update_location(
         context.warehouse_id,
         location.id,
         projection=projection,
-        values=_values(projection, capacity=3, external_id="STALE-1"),
+        values=_values(
+            projection,
+            operational_weight_kg=3,
+            external_id="STALE-1",
+        ),
         actor_id=context.actor_id,
     )
 
@@ -377,11 +637,14 @@ async def test_bulk_publish_rejects_stale_update_without_overwriting_third_party
 
     assert error.value.code == "location_batch_stale_preview"
     assert await location_session.scalar(
-        select(Location.capacity).where(Location.id == location.id)
-    ) == 3
-    assert await location_session.scalar(
-        select(LocationBatchJob.status).where(LocationBatchJob.id == job.id)
-    ) == "preview"
+        select(Location.operational_max_weight_kg).where(Location.id == location.id)
+    ) == Decimal("3")
+    assert (
+        await location_session.scalar(
+            select(LocationBatchJob.status).where(LocationBatchJob.id == job.id)
+        )
+        == "preview"
+    )
 
 
 @pytest.mark.asyncio
@@ -395,12 +658,14 @@ async def test_bulk_recode_cycle_reuses_aliases_owned_by_same_location(
     location = await repository.create_location(
         context.warehouse_id,
         projection=projection_a,
-        values=_values(projection_a, capacity=1, external_id="CYCLE-1"),
+        values=_values(
+            projection_a,
+            operational_weight_kg=1,
+            external_id="CYCLE-1",
+        ),
         actor_id=context.actor_id,
     )
-    for sequence, projection in enumerate(
-        (projection_b, projection_a, projection_b), start=1
-    ):
+    for sequence, projection in enumerate((projection_b, projection_a, projection_b), start=1):
         job = await repository.create_batch_preview(
             context.warehouse_id,
             kind="import",
@@ -408,21 +673,29 @@ async def test_bulk_recode_cycle_reuses_aliases_owned_by_same_location(
             input_checksum=str(sequence) * 64,
             scheme=context.scheme,
             source_rows=[
-                _source_row(projection, capacity=1, external_id="CYCLE-1")
+                _source_row(
+                    projection,
+                    operational_weight_kg=1,
+                    external_id="CYCLE-1",
+                )
             ],
             actor_id=context.actor_id,
         )
         published = await repository.publish_batch(job.id, actor_id=context.actor_id)
         assert published.status == "published"
 
-    assert await location_session.scalar(
-        select(Location.code).where(Location.id == location.id)
-    ) == projection_b.code
-    assert await location_session.scalar(
-        select(func.count(LocationCodeAlias.id)).where(
-            LocationCodeAlias.location_id == location.id
+    assert (
+        await location_session.scalar(select(Location.code).where(Location.id == location.id))
+        == projection_b.code
+    )
+    assert (
+        await location_session.scalar(
+            select(func.count(LocationCodeAlias.id)).where(
+                LocationCodeAlias.location_id == location.id
+            )
         )
-    ) == 2
+        == 2
+    )
 
 
 @pytest.mark.asyncio
@@ -431,8 +704,7 @@ async def test_bulk_preview_rejects_positive_impact_in_non_commissionable_wareho
 ) -> None:
     context = await _add_context(
         location_session,
-        warehouse_capacity=100,
-        operational_status="full",
+        operational_status="inactive",
     )
     repository = SqlAlchemyLocationRepository(location_session)
     projection = _projection(context, code="A01-R01-N01-P01", aisle="01")
@@ -440,10 +712,10 @@ async def test_bulk_preview_rejects_positive_impact_in_non_commissionable_wareho
         await repository.create_batch_preview(
             context.warehouse_id,
             kind="generate",
-            idempotency_key=f"full-{_suffix()}",
+            idempotency_key=f"inactive-{_suffix()}",
             input_checksum="b" * 64,
             scheme=context.scheme,
-            source_rows=[_source_row(projection, capacity=1)],
+            source_rows=[_source_row(projection, operational_weight_kg=1)],
             actor_id=context.actor_id,
         )
 
@@ -464,7 +736,11 @@ async def test_coordinate_only_match_adopts_unique_legacy_location(
         level="N01",
         position="P01",
     )
-    legacy_values = _values(legacy_projection, capacity=4, code_source="legacy")
+    legacy_values = _values(
+        legacy_projection,
+        operational_weight_kg=4,
+        code_source="legacy",
+    )
     legacy = await repository.create_location(
         context.warehouse_id,
         projection=legacy_projection,
@@ -486,7 +762,7 @@ async def test_coordinate_only_match_adopts_unique_legacy_location(
         idempotency_key=f"adopt-{_suffix()}",
         input_checksum="1" * 64,
         scheme=context.scheme,
-        source_rows=[_source_row(generated_projection, capacity=4)],
+        source_rows=[_source_row(generated_projection, operational_weight_kg=4)],
         actor_id=context.actor_id,
     )
 
@@ -499,12 +775,15 @@ async def test_coordinate_only_match_adopts_unique_legacy_location(
     assert adopted is not None
     assert adopted.code == generated_projection.code
     assert adopted.aisle == "01"
-    assert await location_session.scalar(
-        select(func.count(LocationCodeAlias.id)).where(
-            LocationCodeAlias.location_id == legacy.id,
-            LocationCodeAlias.alias_code == legacy_projection.code,
+    assert (
+        await location_session.scalar(
+            select(func.count(LocationCodeAlias.id)).where(
+                LocationCodeAlias.location_id == legacy.id,
+                LocationCodeAlias.alias_code == legacy_projection.code,
+            )
         )
-    ) == 1
+        == 1
+    )
 
 
 @pytest.mark.asyncio
@@ -524,7 +803,11 @@ async def test_coordinate_only_match_never_hijacks_managed_location(
     await repository.create_location(
         context.warehouse_id,
         projection=current_projection,
-        values=_values(current_projection, capacity=1, code_source="generated"),
+        values=_values(
+            current_projection,
+            operational_weight_kg=1,
+            code_source="generated",
+        ),
         actor_id=context.actor_id,
     )
     incoming = _projection(context, code="A01-R01-N01-P01", aisle="01")
@@ -535,7 +818,7 @@ async def test_coordinate_only_match_never_hijacks_managed_location(
         idempotency_key=f"no-hijack-{_suffix()}",
         input_checksum="2" * 64,
         scheme=context.scheme,
-        source_rows=[_source_row(incoming, capacity=1)],
+        source_rows=[_source_row(incoming, operational_weight_kg=1)],
         actor_id=context.actor_id,
     )
 
@@ -544,13 +827,17 @@ async def test_coordinate_only_match_never_hijacks_managed_location(
 
 
 @pytest.mark.asyncio
-async def test_partial_import_preserves_omitted_metadata_and_retired_state_when_full(
+async def test_partial_import_preserves_omitted_metadata_in_inactive_warehouse(
     location_session: AsyncSession,
 ) -> None:
     context = await _add_context(location_session)
     repository = SqlAlchemyLocationRepository(location_session)
     projection = _projection(context, code="A01-R01-N01-P01", aisle="01")
-    values = _values(projection, capacity=5, external_id="PARTIAL-1")
+    values = _values(
+        projection,
+        operational_weight_kg=5,
+        external_id="PARTIAL-1",
+    )
     values.update(
         {
             "notes": "Metadato que debe conservarse",
@@ -570,10 +857,17 @@ async def test_partial_import_preserves_omitted_metadata_and_retired_state_when_
     )
     warehouse = await location_session.get(Warehouse, context.warehouse_id)
     assert warehouse is not None
-    warehouse.operational_status = "full"
+    warehouse.operational_status = "inactive"
     await location_session.flush()
-    source = _source_row(projection, capacity=3)
-    source["_provided_fields"] = ["aisle", "rack", "level", "position", "capacity"]
+    source = _source_row(projection, operational_weight_kg=3)
+    source["_provided_fields"] = [
+        "aisle",
+        "rack",
+        "level",
+        "position",
+        "certified_max_weight_kg",
+        "operational_max_weight_kg",
+    ]
 
     job = await repository.create_batch_preview(
         context.warehouse_id,
@@ -597,7 +891,8 @@ async def test_partial_import_preserves_omitted_metadata_and_retired_state_when_
     await repository.publish_batch(job.id, actor_id=context.actor_id)
     persisted = await location_session.get(Location, location.id)
     assert persisted is not None
-    assert persisted.capacity == 3
+    assert persisted.certified_max_weight_kg == Decimal("4")
+    assert persisted.operational_max_weight_kg == Decimal("3")
     assert persisted.notes == "Metadato que debe conservarse"
     assert persisted.barcode == "BAR-PARTIAL-1"
     assert persisted.verification_code == "VERIFY-PARTIAL-1"
@@ -611,7 +906,7 @@ async def test_partial_import_preserves_omitted_metadata_and_retired_state_when_
 async def test_large_preview_response_is_windowed_but_all_rows_are_persisted(
     location_session: AsyncSession,
 ) -> None:
-    context = await _add_context(location_session, warehouse_capacity=5000)
+    context = await _add_context(location_session)
     repository = SqlAlchemyLocationRepository(location_session)
     rows = [
         _source_row(
@@ -620,7 +915,7 @@ async def test_large_preview_response_is_windowed_but_all_rows_are_persisted(
                 code=f"A{number:04}-R01-N01-P01",
                 aisle=f"{number:04}",
             ),
-            capacity=1,
+            operational_weight_kg=1,
             row_number=number + 1,
         )
         for number in range(1, 1001)
@@ -638,9 +933,14 @@ async def test_large_preview_response_is_windowed_but_all_rows_are_persisted(
 
     assert job.total_rows == 1000
     assert len(job.rows) == 100
-    assert await location_session.scalar(
-        select(func.count()).select_from(LocationBatchRow).where(LocationBatchRow.job_id == job.id)
-    ) == 1000
+    assert (
+        await location_session.scalar(
+            select(func.count())
+            .select_from(LocationBatchRow)
+            .where(LocationBatchRow.job_id == job.id)
+        )
+        == 1000
+    )
 
 
 @pytest.mark.asyncio
@@ -656,7 +956,7 @@ async def test_batch_preview_canonicalizes_uuid_values_for_jsonb(
         idempotency_key=f"json-{_suffix()}",
         input_checksum="0" * 64,
         scheme=context.scheme,
-        source_rows=[_source_row(projection, capacity=1)],
+        source_rows=[_source_row(projection, operational_weight_kg=1)],
         actor_id=context.actor_id,
     )
 
@@ -674,7 +974,7 @@ async def test_location_restore_conflict_keeps_original_in_trash(
     original = await locations.create_location(
         context.warehouse_id,
         projection=original_projection,
-        values=_values(original_projection, capacity=1),
+        values=_values(original_projection, operational_weight_kg=1),
         actor_id=context.actor_id,
     )
     await lifecycle.soft_delete(
@@ -692,7 +992,7 @@ async def test_location_restore_conflict_keeps_original_in_trash(
     await locations.create_location(
         context.warehouse_id,
         projection=replacement_projection,
-        values=_values(replacement_projection, capacity=1),
+        values=_values(replacement_projection, operational_weight_kg=1),
         actor_id=context.actor_id,
     )
 
@@ -724,7 +1024,7 @@ async def test_location_lifecycle_scope_rejects_another_company(
     location = await locations.create_location(
         owner.warehouse_id,
         projection=projection,
-        values=_values(projection, capacity=1),
+        values=_values(projection, operational_weight_kg=1),
         actor_id=owner.actor_id,
     )
 
@@ -756,7 +1056,7 @@ async def test_location_id_cannot_be_updated_through_another_company_warehouse(
     location = await repository.create_location(
         owner.warehouse_id,
         projection=owner_projection,
-        values=_values(owner_projection, capacity=1),
+        values=_values(owner_projection, operational_weight_kg=1),
         actor_id=owner.actor_id,
     )
     intruder_projection = _projection(
@@ -770,7 +1070,7 @@ async def test_location_id_cannot_be_updated_through_another_company_warehouse(
             intruder.warehouse_id,
             location.id,
             projection=intruder_projection,
-            values=_values(intruder_projection, capacity=1),
+            values=_values(intruder_projection, operational_weight_kg=1),
             actor_id=intruder.actor_id,
         )
 
@@ -794,7 +1094,7 @@ async def test_real_repository_idempotency_reuses_job_and_rejects_new_payload(
         "idempotency_key": key,
         "input_checksum": "c" * 64,
         "scheme": context.scheme,
-        "source_rows": [_source_row(projection, capacity=1)],
+        "source_rows": [_source_row(projection, operational_weight_kg=1)],
         "actor_id": context.actor_id,
     }
 
@@ -835,7 +1135,7 @@ async def test_concurrent_idempotent_previews_return_one_persisted_job() -> None
                 idempotency_key=key,
                 input_checksum="e" * 64,
                 scheme=context.scheme,
-                source_rows=[_source_row(projection, capacity=1)],
+                source_rows=[_source_row(projection, operational_weight_kg=1)],
                 actor_id=context.actor_id,
             )
             return job.id

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from app.api.v1.schemas.location import LocationCodeSchemeOut
@@ -25,6 +27,19 @@ from app.infrastructure.repositories.location_repository import (
 )
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.mark.asyncio
+async def test_get_location_delegates_to_warehouse_bound_repository() -> None:
+    warehouse_id = uuid.uuid4()
+    location_id = uuid.uuid4()
+    record = SimpleNamespace(id=location_id, warehouse_id=warehouse_id)
+    repository = SimpleNamespace(get_location=AsyncMock(return_value=record))
+
+    result = await LocationUseCases(repository).get_location(warehouse_id, location_id)
+
+    assert result is record
+    repository.get_location.assert_awaited_once_with(warehouse_id, location_id)
 
 
 class RecordingLocationRepository:
@@ -242,7 +257,7 @@ def test_non_physical_update_preserves_exact_legacy_code_and_provenance() -> Non
             "rack": "R01",
             "level": "N01",
             "position": "P01",
-            "capacity": 25,
+            "certified_max_weight_kg": 25,
             "notes": "Solo cambia información operativa",
         },
         generated,
@@ -296,7 +311,7 @@ async def test_generator_cartesian_product_has_stable_order_and_cardinality(
             {"key": "aisle", "values": ["1", "2"]},
             {"key": "rack", "start": "1", "end": "3"},
         ),
-        defaults={"level": "1", "position": "1", "capacity": 5},
+        defaults={"level": "1", "position": "1", "certified_max_weight_kg": 5},
         idempotency_key="generator-order",
         actor_id=uuid.uuid4(),
     )
@@ -346,14 +361,24 @@ async def test_generator_checksum_and_idempotency_are_deterministic(
     first = await use_cases.preview_generator(
         scheme.warehouse_id,
         axes=({"key": "aisle", "start": "1", "end": "2", "step": 1},),
-        defaults={"rack": "1", "level": "1", "position": "1", "capacity": 2},
+        defaults={
+            "rack": "1",
+            "level": "1",
+            "position": "1",
+            "certified_max_weight_kg": 2,
+        },
         idempotency_key="same-request",
         actor_id=actor_id,
     )
     second = await use_cases.preview_generator(
         scheme.warehouse_id,
         axes=({"end": "2", "step": 1, "start": "1", "key": "aisle"},),
-        defaults={"position": "1", "capacity": 2, "level": "1", "rack": "1"},
+        defaults={
+            "position": "1",
+            "certified_max_weight_kg": 2,
+            "level": "1",
+            "rack": "1",
+        },
         idempotency_key="same-request",
         actor_id=actor_id,
     )
@@ -365,35 +390,44 @@ async def test_generator_checksum_and_idempotency_are_deterministic(
         await use_cases.preview_generator(
             scheme.warehouse_id,
             axes=({"key": "aisle", "start": "1", "end": "3", "step": 1},),
-            defaults={"rack": "1", "level": "1", "position": "1", "capacity": 2},
+            defaults={
+                "rack": "1",
+                "level": "1",
+                "position": "1",
+                "certified_max_weight_kg": 2,
+            },
             idempotency_key="same-request",
             actor_id=actor_id,
         )
     assert error.value.code == "location_idempotency_conflict"
 
 
-@pytest.mark.parametrize("capacity", [0, -1, "x", None])
-def test_capacity_must_be_a_positive_integer(capacity: object) -> None:
+@pytest.mark.parametrize("weight", [0, -1, "x", True, "1.0000001"])
+def test_physical_weight_must_be_a_positive_bounded_decimal(weight: object) -> None:
     with pytest.raises(ValidationError) as error:
-        location_module._normalize_operational_values({"capacity": capacity})
+        location_module._normalize_operational_values({"certified_max_weight_kg": weight})
 
-    assert error.value.code == "location_capacity_invalid"
+    assert error.value.code == "location_certified_weight_invalid"
 
 
-@pytest.mark.parametrize("capacity", [1.5, True])
-def test_capacity_rejects_lossy_or_boolean_values(capacity: object) -> None:
+@pytest.mark.parametrize("weight", [1.5, "2.25"])
+def test_physical_weight_accepts_fractional_values(weight: object) -> None:
+    result = location_module._normalize_operational_values({"certified_max_weight_kg": weight})
+
+    assert result["certified_max_weight_kg"] == Decimal(str(weight))
+
+
+def test_operational_weight_requires_a_certified_limit() -> None:
     with pytest.raises(ValidationError) as error:
-        location_module._normalize_operational_values({"capacity": capacity})
+        location_module._normalize_operational_values({"operational_max_weight_kg": "10"})
 
-    assert error.value.code == "location_capacity_invalid"
+    assert error.value.code == "location_capacity_configuration_invalid"
 
 
 @pytest.mark.parametrize("sequence", [1.5, True])
 def test_sequence_rejects_lossy_or_boolean_values(sequence: object) -> None:
     with pytest.raises(ValidationError) as error:
-        location_module._normalize_operational_values(
-            {"capacity": 1, "pick_sequence": sequence}
-        )
+        location_module._normalize_operational_values({"pick_sequence": sequence})
 
     assert error.value.code == "location_sequence_invalid"
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import uuid
 import zipfile
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -39,8 +40,11 @@ async def test_csv_spanish_aliases_are_normalized_and_external_id_is_preserved(
 ) -> None:
     service, repository, scheme = import_service
     content = (
-        "Zona;Pasillo;Estante;Nivel;Posición;Capacidad;ID externo;Notas\n"
-        '  picking ;1;2;3;4;7;LEGACY-004;=HYPERLINK("https://invalid.example")\n'
+        "Zona;Pasillo;Estante;Nivel;Posición;Peso máximo certificado kg;"
+        "Peso máximo operativo kg;Volumen útil certificado m3;"
+        "Volumen útil operativo m3;Modo control capacidad;ID externo;Notas\n"
+        '  picking ;1;2;3;4;1000;900;12.5;10;enforce;LEGACY-004;'
+        '=HYPERLINK("https://invalid.example")\n'
     ).encode()
 
     job = await service.preview_import(
@@ -55,7 +59,11 @@ async def test_csv_spanish_aliases_are_normalized_and_external_id_is_preserved(
     assert job.error_count == 0
     assert row["code"] == "A01-R02-N03-P04"
     assert row["area"] == "PICKING"
-    assert row["capacity"] == 7
+    assert row["certified_max_weight_kg"] == Decimal("1000")
+    assert row["operational_max_weight_kg"] == Decimal("900")
+    assert row["certified_usable_volume_m3"] == Decimal("12.5")
+    assert row["operational_usable_volume_m3"] == Decimal("10")
+    assert row["capacity_enforcement_mode"] == "enforce"
     assert row["external_id"] == "LEGACY-004"
     # Formula-looking text is inert server-side. Any future CSV/XLSX export
     # must still neutralise it before a spreadsheet application opens it.

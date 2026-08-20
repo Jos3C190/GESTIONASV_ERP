@@ -81,6 +81,9 @@ class LocationRepository(Protocol):
         location_type: str | None,
         lifecycle_status: str | None,
         is_active: bool | None,
+        capacity_group_id: uuid.UUID | None,
+        include_descendants: bool,
+        unassigned: bool,
     ) -> tuple[list[LocationRecord], int]: ...
 
     async def location_summary(self, warehouse_id: uuid.UUID) -> dict[str, Any]: ...

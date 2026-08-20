@@ -13,6 +13,7 @@ import uuid
 import zipfile
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any, NoReturn
 
 from app.core.exceptions import ConflictError, ValidationError
@@ -29,9 +30,15 @@ from app.domain.entities.location import (
     normalize_location_component,
     project_location_code,
 )
+from app.domain.entities.warehouse_capacity import (
+    CAPACITY_ENFORCEMENT_MODES,
+    CAPACITY_PROFILES,
+    PhysicalCapacity,
+)
 from app.domain.ports.location_repository import LocationRepository
 
 MAX_BATCH_ROWS = 50_000
+MAX_DECIMAL_PLACES = 6
 MAX_IMPORT_BYTES = 20 * 1024 * 1024
 MAX_XLSX_ENTRIES = 10_000
 MAX_XLSX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
@@ -50,8 +57,28 @@ _HEADER_ALIASES = {
     "position": "position",
     "posicion": "position",
     "bin": "position",
-    "capacity": "capacity",
-    "capacidad": "capacity",
+    "certified_max_weight_kg": "certified_max_weight_kg",
+    "peso_maximo_certificado_kg": "certified_max_weight_kg",
+    "operational_max_weight_kg": "operational_max_weight_kg",
+    "peso_maximo_operativo_kg": "operational_max_weight_kg",
+    "certified_usable_volume_m3": "certified_usable_volume_m3",
+    "volumen_util_certificado_m3": "certified_usable_volume_m3",
+    "operational_usable_volume_m3": "operational_usable_volume_m3",
+    "volumen_util_operativo_m3": "operational_usable_volume_m3",
+    "capacity_profile": "capacity_profile",
+    "perfil_capacidad": "capacity_profile",
+    "capacity_enforcement_mode": "capacity_enforcement_mode",
+    "modo_control_capacidad": "capacity_enforcement_mode",
+    "storage_eligible": "storage_eligible",
+    "apta_para_almacenamiento": "storage_eligible",
+    "usable_length_m": "usable_length_m",
+    "largo_util_m": "usable_length_m",
+    "usable_width_m": "usable_width_m",
+    "ancho_util_m": "usable_width_m",
+    "usable_height_m": "usable_height_m",
+    "alto_util_m": "usable_height_m",
+    "capacity_group_id": "capacity_group_id",
+    "grupo_capacidad_id": "capacity_group_id",
     "notes": "notes",
     "notas": "notes",
     "location_type": "location_type",
@@ -104,6 +131,29 @@ def _strict_int(value: object, *, message: str, code: str) -> int:
     return int(normalized)
 
 
+def _strict_decimal(value: object, *, message: str, code: str) -> Decimal:
+    if isinstance(value, bool) or value in (None, ""):
+        raise ValidationError(message, code=code)
+    try:
+        parsed = Decimal(str(value).strip())
+    except (InvalidOperation, ValueError) as exc:
+        raise ValidationError(message, code=code) from exc
+    if not parsed.is_finite() or parsed.as_tuple().exponent < -MAX_DECIMAL_PLACES:
+        raise ValidationError(message, code=code)
+    return parsed
+
+
+def _strict_bool(value: object, *, message: str, code: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    normalized = _nfkc_text(value).casefold()
+    if normalized in {"1", "true", "si", "sí", "yes"}:
+        return True
+    if normalized in {"0", "false", "no"}:
+        return False
+    raise ValidationError(message, code=code)
+
+
 def _fail_validation(message: str, code: str) -> NoReturn:
     raise ValidationError(message, code=code)
 
@@ -129,14 +179,17 @@ def _validate_xlsx_archive(content: bytes) -> None:
                 )
             uncompressed = sum(entry.file_size for entry in entries)
             compressed = sum(max(entry.compress_size, 1) for entry in entries)
-            if uncompressed > MAX_XLSX_UNCOMPRESSED_BYTES or (
-                uncompressed > MAX_IMPORT_BYTES
-                and uncompressed / compressed > MAX_XLSX_COMPRESSION_RATIO
-            ) or any(
-                entry.file_size > MAX_IMPORT_BYTES
-                and entry.file_size / max(entry.compress_size, 1)
-                > MAX_XLSX_COMPRESSION_RATIO
-                for entry in entries
+            if (
+                uncompressed > MAX_XLSX_UNCOMPRESSED_BYTES
+                or (
+                    uncompressed > MAX_IMPORT_BYTES
+                    and uncompressed / compressed > MAX_XLSX_COMPRESSION_RATIO
+                )
+                or any(
+                    entry.file_size > MAX_IMPORT_BYTES
+                    and entry.file_size / max(entry.compress_size, 1) > MAX_XLSX_COMPRESSION_RATIO
+                    for entry in entries
+                )
             ):
                 _fail_validation(
                     "El contenido descomprimido del XLSX excede el límite seguro.",
@@ -148,26 +201,86 @@ def _validate_xlsx_archive(content: bytes) -> None:
         ) from exc
 
 
-def _normalize_operational_values(values: Mapping[str, Any]) -> dict[str, Any]:
+def _normalize_operational_values(values: Mapping[str, Any]) -> dict[str, Any]:  # noqa: C901
     normalized = dict(values)
-    capacity = _strict_int(
-        values.get("capacity", 1),
-        message="La capacidad debe ser un número entero positivo.",
-        code="location_capacity_invalid",
-    )
-    if capacity <= 0:
-        raise ValidationError(
-            "La capacidad debe ser mayor que cero.", code="location_capacity_invalid"
-        )
-    normalized["capacity"] = capacity
 
     raw_location_type = values.get("location_type", "standard")
     location_type = _nfkc_text(raw_location_type).casefold()
     if location_type not in LOCATION_TYPES:
-        raise ValidationError(
-            "El tipo de ubicación no es válido.", code="location_type_invalid"
-        )
+        raise ValidationError("El tipo de ubicación no es válido.", code="location_type_invalid")
     normalized["location_type"] = location_type
+
+    for name, code in (
+        ("certified_max_weight_kg", "location_certified_weight_invalid"),
+        ("operational_max_weight_kg", "location_operational_weight_invalid"),
+        ("certified_usable_volume_m3", "location_certified_volume_invalid"),
+        ("operational_usable_volume_m3", "location_operational_volume_invalid"),
+        ("usable_length_m", "location_usable_dimensions_invalid"),
+        ("usable_width_m", "location_usable_dimensions_invalid"),
+        ("usable_height_m", "location_usable_dimensions_invalid"),
+    ):
+        raw = values.get(name)
+        normalized[name] = (
+            None
+            if raw in (None, "")
+            else _strict_decimal(
+                raw,
+                message=f"{name} debe ser un número positivo con hasta seis decimales.",
+                code=code,
+            )
+        )
+        if normalized[name] is not None and normalized[name] <= 0:
+            raise ValidationError(f"{name} debe ser mayor que cero.", code=code)
+    profile = _nfkc_text(values.get("capacity_profile", "general_mixed")).casefold()
+    if profile not in CAPACITY_PROFILES:
+        raise ValidationError(
+            "El perfil de capacidad no es válido.", code="capacity_profile_invalid"
+        )
+    normalized["capacity_profile"] = profile
+    enforcement = _nfkc_text(values.get("capacity_enforcement_mode", "disabled")).casefold()
+    if enforcement not in CAPACITY_ENFORCEMENT_MODES:
+        raise ValidationError(
+            "El modo de control de capacidad no es válido.",
+            code="capacity_enforcement_mode_invalid",
+        )
+    normalized["capacity_enforcement_mode"] = enforcement
+    raw_eligible = values.get("storage_eligible")
+    normalized["storage_eligible"] = (
+        location_type not in {"receiving", "quality", "packing", "shipping", "virtual"}
+        if raw_eligible in (None, "")
+        else _strict_bool(
+            raw_eligible,
+            message="storage_eligible debe ser verdadero o falso.",
+            code="location_storage_eligible_invalid",
+        )
+    )
+    raw_group_id = values.get("capacity_group_id")
+    if raw_group_id in (None, ""):
+        normalized["capacity_group_id"] = None
+    else:
+        try:
+            normalized["capacity_group_id"] = uuid.UUID(str(raw_group_id))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise ValidationError(
+                "El grupo de capacidad no es válido.",
+                code="location_capacity_group_invalid",
+            ) from exc
+
+    try:
+        PhysicalCapacity(
+            certified_max_weight_kg=normalized["certified_max_weight_kg"],
+            operational_max_weight_kg=normalized["operational_max_weight_kg"],
+            certified_usable_volume_m3=normalized["certified_usable_volume_m3"],
+            operational_usable_volume_m3=normalized["operational_usable_volume_m3"],
+            capacity_profile=profile,
+            capacity_enforcement_mode=enforcement,
+            storage_eligible=normalized["storage_eligible"],
+            usable_length_m=normalized["usable_length_m"],
+            usable_width_m=normalized["usable_width_m"],
+            usable_height_m=normalized["usable_height_m"],
+        )
+    except ValueError as exc:
+        raise ValidationError(str(exc), code="location_capacity_configuration_invalid") from exc
 
     raw_lifecycle_status = values.get("lifecycle_status", "active")
     lifecycle_status = _nfkc_text(raw_lifecycle_status).casefold()
@@ -344,9 +457,7 @@ def _parse_csv(content: bytes) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         for raw in reader:
             if any(_nfkc_text(value) for value in raw.values()):
-                rows.append(
-                    {target: raw.get(original) for target, original in canonical.items()}
-                )
+                rows.append({target: raw.get(original) for target, original in canonical.items()})
             if len(rows) > MAX_BATCH_ROWS:
                 raise ValidationError(
                     f"El archivo contiene más de {MAX_BATCH_ROWS} filas.",
@@ -371,9 +482,7 @@ def _parse_xlsx(content: bytes) -> list[dict[str, Any]]:  # noqa: C901
             code="location_import_xlsx_unavailable",
         ) from exc
     if not content.startswith(b"PK"):
-        raise ValidationError(
-            "El archivo XLSX no es válido.", code="location_import_xlsx_invalid"
-        )
+        raise ValidationError("El archivo XLSX no es válido.", code="location_import_xlsx_invalid")
     _validate_xlsx_archive(content)
     try:
         workbook = load_workbook(
@@ -486,6 +595,9 @@ class LocationUseCases:
         )
         return projection, code_exists, coordinates_exist
 
+    async def get_location(self, warehouse_id: uuid.UUID, location_id: uuid.UUID) -> LocationRecord:
+        return await self._repository.get_location(warehouse_id, location_id)
+
     async def required_update_permissions(
         self,
         warehouse_id: uuid.UUID,
@@ -494,9 +606,7 @@ class LocationUseCases:
         *,
         scheme_version: int | None = None,
     ) -> tuple[str, ...]:
-        current = await self._repository.get_location(
-            warehouse_id, location_id, for_update=True
-        )
+        current = await self._repository.get_location(warehouse_id, location_id, for_update=True)
         scheme = await self._repository.get_scheme(warehouse_id, scheme_version)
         normalized, _projection = _normalize_physical_values(scheme, values)
         required = {"locations.update"}
@@ -576,9 +686,7 @@ class LocationUseCases:
                 "Los ejes del generador no son válidos.", code="location_axes_invalid"
             )
         if len(keys) != len(set(keys)):
-            raise ValidationError(
-                "No se puede repetir un eje.", code="location_axis_repeated"
-            )
+            raise ValidationError("No se puede repetir un eje.", code="location_axis_repeated")
         expanded = [_expand_axis(axis) for axis in axes]
         total = 1
         for values in expanded:
@@ -700,9 +808,7 @@ class LocationUseCases:
     async def batch_required_permissions(self, job_id: uuid.UUID) -> tuple[str, ...]:
         return await self._repository.batch_required_permissions(job_id)
 
-    async def publish_batch(
-        self, job_id: uuid.UUID, *, actor_id: uuid.UUID
-    ) -> LocationBatchRecord:
+    async def publish_batch(self, job_id: uuid.UUID, *, actor_id: uuid.UUID) -> LocationBatchRecord:
         job = await self._repository.get_batch(job_id)
         if job.conflict_count or job.error_count:
             raise ConflictError(

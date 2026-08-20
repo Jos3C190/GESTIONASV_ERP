@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.api.v1.schemas.capacity import CapacityConfigurationIn, CapacityConfigurationOut
 from app.api.v1.schemas.common import PageMeta
 
 LocationType = Literal[
@@ -26,9 +27,7 @@ LocationType = Literal[
 LocationLifecycleStatus = Literal[
     "draft", "active", "blocked", "blocked_in", "blocked_out", "maintenance", "retired"
 ]
-
-
-class LocationWrite(BaseModel):
+class LocationWrite(CapacityConfigurationIn):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     area: str | None = Field(None, max_length=64)
@@ -36,7 +35,7 @@ class LocationWrite(BaseModel):
     rack: str = Field(min_length=1, max_length=64)
     level: str = Field(min_length=1, max_length=64)
     position: str = Field(min_length=1, max_length=64)
-    capacity: int = Field(default=1, gt=0)
+    capacity_group_id: uuid.UUID | None = None
     notes: str | None = Field(None, max_length=4000)
     location_type: LocationType = "standard"
     lifecycle_status: LocationLifecycleStatus = "active"
@@ -47,7 +46,6 @@ class LocationWrite(BaseModel):
     external_id: str | None = Field(None, max_length=120)
     scheme_version: int | None = Field(None, ge=1)
     expected_updated_at: datetime | None = None
-
 
 class LocationCodePreviewIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -61,7 +59,7 @@ class LocationCodePreviewIn(BaseModel):
     exclude_location_id: uuid.UUID | None = None
 
 
-class LocationOut(BaseModel):
+class LocationOut(CapacityConfigurationOut):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -72,7 +70,7 @@ class LocationOut(BaseModel):
     rack: str
     level: str
     position: str
-    capacity: int
+    capacity_group_id: uuid.UUID | None
     notes: str | None
     location_type: str
     lifecycle_status: str
@@ -96,7 +94,9 @@ class LocationPage(BaseModel):
 
 class LocationSummaryOut(BaseModel):
     total: int
-    total_capacity: int
+    storage_eligible: int
+    capacity_configured: int
+    capacity_incomplete: int
     active: int
     inactive: int
     by_status: dict[str, int]
@@ -169,7 +169,7 @@ class GeneratorAxis(BaseModel):
         return self
 
 
-class BatchDefaults(BaseModel):
+class BatchDefaults(CapacityConfigurationIn):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     area: str | None = Field(None, max_length=64)
@@ -177,7 +177,7 @@ class BatchDefaults(BaseModel):
     rack: str | None = Field(None, max_length=64)
     level: str | None = Field(None, max_length=64)
     position: str | None = Field(None, max_length=64)
-    capacity: int = Field(default=1, gt=0)
+    capacity_group_id: uuid.UUID | None = None
     notes: str | None = Field(None, max_length=4000)
     location_type: LocationType = "standard"
     lifecycle_status: LocationLifecycleStatus = "active"
@@ -186,7 +186,6 @@ class BatchDefaults(BaseModel):
     pick_sequence: int | None = Field(None, ge=0)
     putaway_sequence: int | None = Field(None, ge=0)
     external_id: str | None = Field(None, max_length=120)
-
 
 class GeneratorPreviewIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)

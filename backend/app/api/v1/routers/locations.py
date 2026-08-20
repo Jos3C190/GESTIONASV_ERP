@@ -48,9 +48,7 @@ async def _authorize_warehouse(
     warehouse_id: uuid.UUID,
 ) -> WarehouseLocationScope:
     scope = await use_cases.warehouse_scope(warehouse_id)
-    require_resource_company(
-        request, scope.company_id, not_found_detail="Almacén no encontrado."
-    )
+    require_resource_company(request, scope.company_id, not_found_detail="Almacén no encontrado.")
     await resolve_branch_scope(session, current, scope.company_id, scope.branch_id)
     return scope
 
@@ -100,9 +98,17 @@ async def list_locations(
     location_type: str | None = Query(None, max_length=32),
     lifecycle_status: str | None = Query(None, max_length=24),
     is_active: bool | None = None,
+    capacity_group_id: uuid.UUID | None = Query(None),
+    include_descendants: bool = Query(True),
+    unassigned: bool = Query(False),
 ) -> LocationPage:
     use_cases = _use_cases(session)
     await _authorize_warehouse(request, session, current, use_cases, warehouse_id)
+    if capacity_group_id is not None and unassigned:
+        raise ValidationError(
+            "Seleccione una estructura o las ubicaciones sin estructura, no ambas.",
+            code="location_filter_conflict",
+        )
     items, total = await use_cases.list_locations(
         warehouse_id,
         page=page,
@@ -112,6 +118,9 @@ async def list_locations(
         location_type=location_type,
         lifecycle_status=lifecycle_status,
         is_active=is_active,
+        capacity_group_id=capacity_group_id,
+        include_descendants=include_descendants,
+        unassigned=unassigned,
     )
     return LocationPage(
         items=[LocationOut.model_validate(item) for item in items],
@@ -233,6 +242,23 @@ async def create_location(
         scheme_version=body.scheme_version,
     )
     return LocationOut.model_validate(location)
+
+
+@router.get(
+    "/warehouses/{warehouse_id}/locations/{location_id}",
+    response_model=LocationOut,
+    dependencies=[Depends(require_permission("locations.view"))],
+)
+async def get_location(
+    warehouse_id: uuid.UUID,
+    location_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+) -> LocationOut:
+    use_cases = _use_cases(session)
+    await _authorize_warehouse(request, session, current, use_cases, warehouse_id)
+    return LocationOut.model_validate(await use_cases.get_location(warehouse_id, location_id))
 
 
 @router.patch(

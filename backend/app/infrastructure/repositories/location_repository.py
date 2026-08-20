@@ -8,6 +8,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, or_, select, update
@@ -34,7 +35,15 @@ from app.infrastructure.models.location import (
     LocationCodeAlias,
     LocationCodeScheme,
 )
-from app.infrastructure.models.organization import Branch, Location, Warehouse
+from app.infrastructure.models.organization import (
+    Branch,
+    Location,
+    Warehouse,
+    WarehouseCapacityGroup,
+)
+from app.infrastructure.repositories.capacity_hierarchy_repository import (
+    SqlAlchemyCapacityHierarchyRepository,
+)
 
 _LOCATION_FIELDS = (
     "area",
@@ -42,7 +51,17 @@ _LOCATION_FIELDS = (
     "rack",
     "level",
     "position",
-    "capacity",
+    "capacity_group_id",
+    "certified_max_weight_kg",
+    "operational_max_weight_kg",
+    "certified_usable_volume_m3",
+    "operational_usable_volume_m3",
+    "capacity_profile",
+    "capacity_enforcement_mode",
+    "storage_eligible",
+    "usable_length_m",
+    "usable_width_m",
+    "usable_height_m",
     "notes",
     "location_type",
     "lifecycle_status",
@@ -53,6 +72,59 @@ _LOCATION_FIELDS = (
     "external_id",
 )
 PREVIEW_ROW_LIMIT = 100
+
+
+async def _location_capacity_group_filter_ids(
+    session: AsyncSession,
+    warehouse_id: uuid.UUID,
+    capacity_group_id: uuid.UUID | None,
+    include_descendants: bool,
+    unassigned: bool,
+) -> set[uuid.UUID] | None:
+    if capacity_group_id is not None and unassigned:
+        raise ValidationError(
+            "Seleccione una estructura o las ubicaciones sin estructura, no ambas.",
+            code="location_filter_conflict",
+        )
+    if capacity_group_id is None:
+        return set() if unassigned else None
+    group_rows = list(
+        (
+            await session.execute(
+                select(WarehouseCapacityGroup.id, WarehouseCapacityGroup.parent_id).where(
+                    WarehouseCapacityGroup.warehouse_id == warehouse_id,
+                    WarehouseCapacityGroup.deleted_at.is_(None),
+                )
+            )
+        ).all()
+    )
+    group_ids = {row[0] for row in group_rows}
+    if capacity_group_id not in group_ids:
+        raise NotFoundError(
+            "La estructura no pertenece a este almacén o ya no está disponible.",
+            code="location_capacity_group_not_found",
+        )
+    selected_ids = {capacity_group_id}
+    if not include_descendants:
+        return selected_ids
+    children: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for group_id, parent_id in group_rows:
+        if parent_id is not None:
+            children.setdefault(parent_id, []).append(group_id)
+    pending = list(children.get(capacity_group_id, ()))
+    while pending:
+        child_id = pending.pop()
+        if child_id in selected_ids:
+            continue
+        selected_ids.add(child_id)
+        pending.extend(children.get(child_id, ()))
+    return selected_ids
+
+
+def _location_model_values(values: Mapping[str, Any]) -> dict[str, Any]:
+    """Build the explicit ORM write set for a location."""
+
+    return {name: values.get(name) for name in _LOCATION_FIELDS}
 
 
 @dataclass(slots=True)
@@ -140,7 +212,17 @@ def _location_to_domain(model: Location) -> LocationRecord:
         rack=model.rack,
         level=model.level,
         position=model.position,
-        capacity=model.capacity,
+        capacity_group_id=model.capacity_group_id,
+        certified_max_weight_kg=model.certified_max_weight_kg,
+        operational_max_weight_kg=model.operational_max_weight_kg,
+        certified_usable_volume_m3=model.certified_usable_volume_m3,
+        operational_usable_volume_m3=model.operational_usable_volume_m3,
+        capacity_profile=model.capacity_profile,
+        capacity_enforcement_mode=model.capacity_enforcement_mode,
+        storage_eligible=model.storage_eligible,
+        usable_length_m=model.usable_length_m,
+        usable_width_m=model.usable_width_m,
+        usable_height_m=model.usable_height_m,
         notes=model.notes,
         location_type=model.location_type,
         lifecycle_status=model.lifecycle_status,
@@ -226,7 +308,33 @@ def _audit_state(location: Location) -> dict[str, Any]:
         "rack": location.rack,
         "level": location.level,
         "position": location.position,
-        "capacity": location.capacity,
+        "capacity_group_id": str(location.capacity_group_id)
+        if location.capacity_group_id
+        else None,
+        "certified_max_weight_kg": str(location.certified_max_weight_kg)
+        if location.certified_max_weight_kg is not None
+        else None,
+        "operational_max_weight_kg": str(location.operational_max_weight_kg)
+        if location.operational_max_weight_kg is not None
+        else None,
+        "certified_usable_volume_m3": str(location.certified_usable_volume_m3)
+        if location.certified_usable_volume_m3 is not None
+        else None,
+        "operational_usable_volume_m3": str(location.operational_usable_volume_m3)
+        if location.operational_usable_volume_m3 is not None
+        else None,
+        "capacity_profile": location.capacity_profile,
+        "capacity_enforcement_mode": location.capacity_enforcement_mode,
+        "storage_eligible": location.storage_eligible,
+        "usable_length_m": str(location.usable_length_m)
+        if location.usable_length_m is not None
+        else None,
+        "usable_width_m": str(location.usable_width_m)
+        if location.usable_width_m is not None
+        else None,
+        "usable_height_m": str(location.usable_height_m)
+        if location.usable_height_m is not None
+        else None,
         "location_type": location.location_type,
         "lifecycle_status": location.lifecycle_status,
         "external_id": location.external_id,
@@ -242,18 +350,36 @@ def _json_safe(value: Any) -> Any:
     return json.loads(json.dumps(value, ensure_ascii=False, default=str))
 
 
-def _extend_batch_permissions(
-    required: set[str], operation: str, diff: Mapping[str, Any]
-) -> None:
+_DECIMAL_LOCATION_FIELDS = frozenset(
+    {
+        "certified_max_weight_kg",
+        "operational_max_weight_kg",
+        "certified_usable_volume_m3",
+        "operational_usable_volume_m3",
+        "usable_length_m",
+        "usable_width_m",
+        "usable_height_m",
+    }
+)
+
+
+def _location_values_equal(field: str, incoming: Any, current: Any) -> bool:
+    if field not in _DECIMAL_LOCATION_FIELDS or incoming is None or current is None:
+        return incoming == current
+    try:
+        return Decimal(str(incoming)) == Decimal(str(current))
+    except (ArithmeticError, ValueError):
+        return False
+
+
+def _extend_batch_permissions(required: set[str], operation: str, diff: Mapping[str, Any]) -> None:
     if operation == "create":
         required.add("locations.create")
         return
     if operation != "update":
         return
     required.add("locations.update")
-    if "code" in diff or any(
-        key in diff for key in ("area", "aisle", "rack", "level", "position")
-    ):
+    if "code" in diff or any(key in diff for key in ("area", "aisle", "rack", "level", "position")):
         required.add("locations.recode")
     lifecycle = diff.get("lifecycle_status")
     active_change = diff.get("is_active")
@@ -265,9 +391,7 @@ def _extend_batch_permissions(
         required.add("locations.commission")
 
 
-def _batch_row_has_positive_impact(
-    operation: str, diff: Mapping[str, Any]
-) -> bool:
+def _batch_row_has_positive_impact(operation: str, diff: Mapping[str, Any]) -> bool:
     """Return whether a row expands the warehouse's operational footprint."""
 
     if operation == "create":
@@ -275,19 +399,11 @@ def _batch_row_has_positive_impact(
     if operation != "update":
         return False
     active_change = diff.get("is_active")
-    if (
+    return (
         isinstance(active_change, Mapping)
         and active_change.get("before") is False
         and active_change.get("after") is True
-    ):
-        return True
-    capacity_change = diff.get("capacity")
-    if isinstance(capacity_change, Mapping):
-        before = capacity_change.get("before")
-        after = capacity_change.get("after")
-        if isinstance(before, int) and isinstance(after, int) and after > before:
-            return True
-    return False
+    )
 
 
 class SqlAlchemyLocationRepository:
@@ -305,15 +421,13 @@ class SqlAlchemyLocationRepository:
             Location.warehouse_id == warehouse_id,
             Location.deleted_at.is_(None),
         )
-        alias_statement = select(
-            LocationCodeAlias.alias_code, LocationCodeAlias.location_id
-        ).where(LocationCodeAlias.warehouse_id == warehouse_id)
+        alias_statement = select(LocationCodeAlias.alias_code, LocationCodeAlias.location_id).where(
+            LocationCodeAlias.warehouse_id == warehouse_id
+        )
         if for_update:
             location_statement = location_statement.with_for_update()
             alias_statement = alias_statement.with_for_update()
-        locations = list(
-            (await self._session.execute(location_statement)).scalars()
-        )
+        locations = list((await self._session.execute(location_statement)).scalars())
         aliases = (await self._session.execute(alias_statement)).all()
         by_coordinates: dict[tuple[str, str, str, str, str], Location] = {}
         ambiguous_coordinates: set[tuple[str, str, str, str, str]] = set()
@@ -495,8 +609,7 @@ class SqlAlchemyLocationRepository:
                     select(LocationCodeAlias.id)
                     .where(
                         *alias_conditions,
-                        func.lower(LocationCodeAlias.alias_code)
-                        == projection.code.casefold(),
+                        func.lower(LocationCodeAlias.alias_code) == projection.code.casefold(),
                     )
                     .limit(1)
                 )
@@ -525,10 +638,10 @@ class SqlAlchemyLocationRepository:
         for_update: bool = False,
     ) -> LocationRecord:
         statement = select(Location).where(
-                Location.id == location_id,
-                Location.warehouse_id == warehouse_id,
-                Location.deleted_at.is_(None),
-            )
+            Location.id == location_id,
+            Location.warehouse_id == warehouse_id,
+            Location.deleted_at.is_(None),
+        )
         if for_update:
             await self._session.execute(
                 select(Warehouse.id).where(Warehouse.id == warehouse_id).with_for_update()
@@ -539,23 +652,23 @@ class SqlAlchemyLocationRepository:
             raise NotFoundError("Ubicación no encontrada.", code="location_not_found")
         return _location_to_domain(model)
 
-    async def _check_capacity(
-        self, warehouse: Warehouse, capacity: int, *, exclude_id: uuid.UUID | None = None
+    async def _validate_capacity_group(
+        self, warehouse_id: uuid.UUID, group_id: uuid.UUID | None
     ) -> None:
-        conditions = [
-            Location.warehouse_id == warehouse.id,
-            Location.is_active.is_(True),
-            Location.deleted_at.is_(None),
-        ]
-        if exclude_id:
-            conditions.append(Location.id != exclude_id)
-        current = await self._session.scalar(
-            select(func.coalesce(func.sum(Location.capacity), 0)).where(*conditions)
+        if group_id is None:
+            return
+        exists = await self._session.scalar(
+            select(WarehouseCapacityGroup.id).where(
+                WarehouseCapacityGroup.id == group_id,
+                WarehouseCapacityGroup.warehouse_id == warehouse_id,
+                WarehouseCapacityGroup.is_active.is_(True),
+                WarehouseCapacityGroup.deleted_at.is_(None),
+            )
         )
-        if warehouse.capacity and int(current or 0) + capacity > warehouse.capacity:
+        if exists is None:
             raise ConflictError(
-                "La capacidad acumulada de las ubicaciones supera la capacidad del almacén.",
-                code="warehouse_location_capacity_exceeded",
+                "El grupo de capacidad no pertenece al almacén o no está activo.",
+                code="location_capacity_group_unavailable",
             )
 
     async def create_location(
@@ -571,13 +684,14 @@ class SqlAlchemyLocationRepository:
         )
         if warehouse is None:
             raise NotFoundError("Almacén no encontrado.", code="warehouse_not_found")
-        if not warehouse.is_active or warehouse.operational_status in {"inactive", "full"}:
+        if not warehouse.is_active or warehouse.operational_status == "inactive":
             raise ConflictError(
                 "El almacén no admite nuevas ubicaciones en su estado actual.",
                 code="warehouse_not_commissionable",
             )
-        await self._check_capacity(
-            warehouse, int(values["capacity"]) if values.get("is_active", True) else 0
+        await self._validate_capacity_group(warehouse_id, values.get("capacity_group_id"))
+        await SqlAlchemyCapacityHierarchyRepository(self._session).validate_location_write(
+            warehouse_id, values
         )
         alias_conflict = await self._session.scalar(
             select(LocationCodeAlias.id).where(
@@ -593,7 +707,7 @@ class SqlAlchemyLocationRepository:
         model = Location(
             warehouse_id=warehouse_id,
             code=projection.code,
-            **{name: values.get(name) for name in _LOCATION_FIELDS},
+            **_location_model_values(values),
             code_scheme_id=projection.scheme_id,
             scheme_version=projection.scheme_version,
             code_source=str(values.get("code_source") or "generated"),
@@ -623,7 +737,7 @@ class SqlAlchemyLocationRepository:
             ) from exc
         return _location_to_domain(model)
 
-    async def update_location(  # noqa: C901 - coordinates, aliases, capacity and audit are atomic
+    async def update_location(  # noqa: C901 - coordinates, aliases and audit are atomic
         self,
         warehouse_id: uuid.UUID,
         location_id: uuid.UUID,
@@ -653,21 +767,18 @@ class SqlAlchemyLocationRepository:
                 code="location_update_stale",
             )
         target_active = bool(values.get("is_active", model.is_active))
-        target_capacity = int(values["capacity"])
-        requires_commissionable_warehouse = (
-            (target_active and not model.is_active) or target_capacity > model.capacity
-        )
-        if requires_commissionable_warehouse and (
-            not warehouse.is_active or warehouse.operational_status in {"inactive", "full"}
+        if (
+            target_active
+            and not model.is_active
+            and (not warehouse.is_active or warehouse.operational_status == "inactive")
         ):
             raise ConflictError(
                 "El almacén no admite activar o ampliar ubicaciones en su estado actual.",
                 code="warehouse_not_commissionable",
             )
-        await self._check_capacity(
-            warehouse,
-            target_capacity if target_active else 0,
-            exclude_id=location_id,
+        await self._validate_capacity_group(warehouse_id, values.get("capacity_group_id"))
+        await SqlAlchemyCapacityHierarchyRepository(self._session).validate_location_write(
+            warehouse_id, values, location_id=location_id
         )
         before = _audit_state(model)
         old_code = model.code
@@ -752,6 +863,9 @@ class SqlAlchemyLocationRepository:
         location_type: str | None,
         lifecycle_status: str | None,
         is_active: bool | None,
+        capacity_group_id: uuid.UUID | None,
+        include_descendants: bool,
+        unassigned: bool,
     ) -> tuple[list[LocationRecord], int]:
         conditions: list[Any] = [
             Location.warehouse_id == warehouse_id,
@@ -789,6 +903,17 @@ class SqlAlchemyLocationRepository:
             conditions.append(Location.lifecycle_status == lifecycle_status)
         if is_active is not None:
             conditions.append(Location.is_active.is_(is_active))
+        capacity_group_ids = await _location_capacity_group_filter_ids(
+            self._session,
+            warehouse_id,
+            capacity_group_id,
+            include_descendants,
+            unassigned,
+        )
+        if unassigned:
+            conditions.append(Location.capacity_group_id.is_(None))
+        elif capacity_group_ids is not None:
+            conditions.append(Location.capacity_group_id.in_(capacity_group_ids))
         total = int(
             await self._session.scalar(select(func.count(Location.id)).where(*conditions)) or 0
         )
@@ -817,7 +942,12 @@ class SqlAlchemyLocationRepository:
                     Location.location_type,
                     Location.area,
                     Location.is_active,
-                    Location.capacity,
+                    Location.storage_eligible,
+                    Location.certified_max_weight_kg,
+                    Location.operational_max_weight_kg,
+                    Location.certified_usable_volume_m3,
+                    Location.operational_usable_volume_m3,
+                    Location.capacity_enforcement_mode,
                 ).where(
                     Location.warehouse_id == warehouse_id,
                     Location.deleted_at.is_(None),
@@ -826,13 +956,25 @@ class SqlAlchemyLocationRepository:
         ).all()
         by_status = Counter(row[0] for row in rows)
         by_type = Counter(row[1] for row in rows)
+        capacity_statuses = Counter(
+            (
+                "not_configured"
+                if not row[4] or not any(row[index] is not None for index in range(5, 9))
+                else "available"
+                if all(row[index] is not None for index in range(5, 9))
+                else "incomplete"
+            )
+            for row in rows
+        )
         # Keep the API value stable and machine-readable.  The frontend renders
         # this sentinel as “Sin área”; returning the display label here would
         # create a second option alongside the canonical ``__none__`` filter.
         areas = Counter(row[2] or "__none__" for row in rows)
         return {
             "total": len(rows),
-            "total_capacity": sum(int(row[4]) for row in rows if row[3]),
+            "storage_eligible": sum(1 for row in rows if row[4]),
+            "capacity_configured": capacity_statuses["available"],
+            "capacity_incomplete": capacity_statuses["incomplete"],
             "active": sum(1 for row in rows if row[3]),
             "inactive": sum(1 for row in rows if not row[3]),
             "by_status": dict(sorted(by_status.items())),
@@ -852,9 +994,7 @@ class SqlAlchemyLocationRepository:
         existing_by_external = indexes.by_external.get(external_key) if external_key else None
         existing_by_code = indexes.by_code.get(code_key) if code_key else None
         direct = {
-            item.id: item
-            for item in (existing_by_external, existing_by_code)
-            if item is not None
+            item.id: item for item in (existing_by_external, existing_by_code) if item is not None
         }
         if len(direct) > 1:
             return None, "Los identificadores de la fila apuntan a ubicaciones diferentes."
@@ -866,7 +1006,10 @@ class SqlAlchemyLocationRepository:
         target = next(iter(direct.values()), None)
         if target is not None:
             if coordinate is not None and coordinate.id != target.id:
-                return None, "Los identificadores y las coordenadas apuntan a ubicaciones diferentes."
+                return (
+                    None,
+                    "Los identificadores y las coordenadas apuntan a ubicaciones diferentes.",
+                )
             return target, None
         if coordinate is None:
             return None, None
@@ -925,7 +1068,7 @@ class SqlAlchemyLocationRepository:
         for field in _LOCATION_FIELDS:
             incoming = effective_data.get(field)
             current = getattr(existing, field)
-            if incoming != current:
+            if not _location_values_equal(field, incoming, current):
                 diff[field] = {"before": current, "after": incoming}
         incoming_active = bool(effective_data.get("is_active", True))
         if incoming_active != existing.is_active:
@@ -941,9 +1084,7 @@ class SqlAlchemyLocationRepository:
         indexes: _LocationIndexes,
     ) -> tuple[Counter[str], list[LocationBatchRow], tuple[str, ...], bool]:
         counts: Counter[str] = Counter()
-        required_permissions = {
-            "locations.import" if job.kind == "import" else "locations.bulk"
-        }
+        required_permissions = {"locations.import" if job.kind == "import" else "locations.bulk"}
         seen_codes: set[str] = set()
         seen_external_ids: set[str] = set()
         seen_coordinates: set[tuple[Any, ...]] = set()
@@ -978,9 +1119,7 @@ class SqlAlchemyLocationRepository:
                 operation, diff
             )
             normalized_data = {
-                key: value
-                for key, value in source.items()
-                if key not in {"row_number", "_errors"}
+                key: value for key, value in source.items() if key not in {"row_number", "_errors"}
             }
             if target is not None:
                 provided_fields = set(source.get("_provided_fields") or ())
@@ -1064,8 +1203,7 @@ class SqlAlchemyLocationRepository:
                     has_positive_impact,
                 ) = self._stage_batch_rows(job, source_rows, indexes)
                 if (
-                    not scope.warehouse_active
-                    or scope.operational_status in {"inactive", "full"}
+                    not scope.warehouse_active or scope.operational_status == "inactive"
                 ) and has_positive_impact:
                     raise ConflictError(
                         "El almacén solo admite retiros, reducciones o cambios de metadatos en su estado actual.",
@@ -1188,7 +1326,7 @@ class SqlAlchemyLocationRepository:
         if warehouse is None:
             raise NotFoundError("Almacén no encontrado.", code="warehouse_not_found")
         warehouse_is_commissionable = warehouse.is_active and (
-            warehouse.operational_status not in {"inactive", "full"}
+            warehouse.operational_status != "inactive"
         )
         scheme = await self.get_scheme(job.warehouse_id, job.scheme_version)
         rows = list(
@@ -1205,18 +1343,9 @@ class SqlAlchemyLocationRepository:
             job.warehouse_id, scheme=scheme, for_update=True
         )
         # Revalidate every row under the warehouse lock; previews are advisory,
-        # publication is the authoritative atomic decision.
-        active_capacity = int(
-            await self._session.scalar(
-                select(func.coalesce(func.sum(Location.capacity), 0)).where(
-                    Location.warehouse_id == job.warehouse_id,
-                    Location.is_active.is_(True),
-                    Location.deleted_at.is_(None),
-                )
-            )
-            or 0
-        )
-        capacity_delta = 0
+        # publication is the authoritative atomic decision. Capacity limits of
+        # locations are independent scopes and are never summed as warehouse
+        # structural resistance.
         has_positive_impact = False
         validated_targets: dict[uuid.UUID, Location] = {}
         for row in rows:
@@ -1241,9 +1370,7 @@ class SqlAlchemyLocationRepository:
             has_positive_impact = has_positive_impact or _batch_row_has_positive_impact(
                 operation, current_diff
             )
-            if operation == "create" and row.normalized_data.get("is_active", True):
-                capacity_delta += int(row.normalized_data["capacity"])
-            elif operation in {"update", "unchanged"}:
+            if operation in {"update", "unchanged"}:
                 data = row.normalized_data
                 if existing is None:
                     raise ConflictError(
@@ -1261,27 +1388,36 @@ class SqlAlchemyLocationRepository:
                         code="location_batch_stale_preview",
                     )
                 validated_targets[row.id] = existing
-                if operation == "update":
-                    before_capacity = existing.capacity
-                    before_active = existing.is_active
-                    after_active = bool(row.normalized_data.get("is_active", True))
-                    capacity_delta += (
-                        int(row.normalized_data["capacity"]) if after_active else 0
-                    ) - (int(before_capacity) if before_active else 0)
         if not warehouse_is_commissionable and has_positive_impact:
             raise ConflictError(
                 "El almacén solo admite retiros, reducciones o cambios de metadatos en su estado actual.",
                 code="warehouse_not_commissionable",
             )
-        if (
-            capacity_delta > 0
-            and warehouse.capacity
-            and active_capacity + capacity_delta > warehouse.capacity
-        ):
-            raise ConflictError(
-                "La capacidad acumulada del lote supera la capacidad del almacén.",
-                code="warehouse_location_capacity_exceeded",
+
+        group_ids = {
+            uuid.UUID(str(row.normalized_data["capacity_group_id"]))
+            for row in rows
+            if row.operation in {"create", "update"}
+            and row.normalized_data.get("capacity_group_id")
+        }
+        if group_ids:
+            available_groups = set(
+                (
+                    await self._session.execute(
+                        select(WarehouseCapacityGroup.id).where(
+                            WarehouseCapacityGroup.id.in_(group_ids),
+                            WarehouseCapacityGroup.warehouse_id == job.warehouse_id,
+                            WarehouseCapacityGroup.is_active.is_(True),
+                            WarehouseCapacityGroup.deleted_at.is_(None),
+                        )
+                    )
+                ).scalars()
             )
+            if available_groups != group_ids:
+                raise ConflictError(
+                    "El lote referencia un grupo de capacidad no disponible en el almacén.",
+                    code="location_capacity_group_unavailable",
+                )
 
         scope = await self.get_warehouse_scope(job.warehouse_id)
         try:
@@ -1299,10 +1435,13 @@ class SqlAlchemyLocationRepository:
                         scheme_version=scheme.version,
                     )
                     if row.operation == "create":
+                        await SqlAlchemyCapacityHierarchyRepository(
+                            self._session
+                        ).validate_location_write(job.warehouse_id, data)
                         model = Location(
                             warehouse_id=job.warehouse_id,
                             code=projection.code,
-                            **{name: data.get(name) for name in _LOCATION_FIELDS},
+                            **_location_model_values(data),
                             code_scheme_id=scheme.id,
                             scheme_version=scheme.version,
                             code_source=str(data.get("code_source") or "generated"),
@@ -1310,6 +1449,21 @@ class SqlAlchemyLocationRepository:
                         )
                         self._session.add(model)
                         await self._session.flush()
+                        self._session.add(
+                            AuditLog(
+                                action="CREATE",
+                                user_id=actor_id,
+                                company_id=scope.company_id,
+                                branch_id=scope.branch_id,
+                                resource_type="locations",
+                                resource_id=str(model.id),
+                                after_state=_audit_state(model),
+                                metadata_={
+                                    "correlation_id": str(job.id),
+                                    "batch_row": row.row_number,
+                                },
+                            )
+                        )
                         row.published_location_id = model.id
                     elif row.operation == "update":
                         model = validated_targets.get(row.id)
@@ -1318,6 +1472,10 @@ class SqlAlchemyLocationRepository:
                                 f"La fila {row.row_number} ya no tiene un destino actualizable.",
                                 code="location_batch_stale_preview",
                             )
+                        before_state = _audit_state(model)
+                        await SqlAlchemyCapacityHierarchyRepository(
+                            self._session
+                        ).validate_location_write(job.warehouse_id, data, location_id=model.id)
                         old_code = model.code
                         if old_code.casefold() != projection.code.casefold():
                             old_alias_owner = indexes.aliases.get(old_code.casefold())
@@ -1346,6 +1504,23 @@ class SqlAlchemyLocationRepository:
                         model.scheme_version = scheme.version
                         model.code_source = str(data.get("code_source") or "imported")
                         model.is_active = bool(data.get("is_active", True))
+                        await self._session.flush()
+                        self._session.add(
+                            AuditLog(
+                                action="UPDATE",
+                                user_id=actor_id,
+                                company_id=scope.company_id,
+                                branch_id=scope.branch_id,
+                                resource_type="locations",
+                                resource_id=str(model.id),
+                                before_state=before_state,
+                                after_state=_audit_state(model),
+                                metadata_={
+                                    "correlation_id": str(job.id),
+                                    "batch_row": row.row_number,
+                                },
+                            )
+                        )
                         row.published_location_id = model.id
                     elif row.operation == "unchanged":
                         model = validated_targets.get(row.id)
