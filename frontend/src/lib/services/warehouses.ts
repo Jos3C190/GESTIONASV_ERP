@@ -1,9 +1,4 @@
-import {
-  api,
-  type PageMeta,
-  type WarehouseListSummary,
-  type WarehouseOut
-} from '$lib/api/client';
+import { api, type PageMeta, type WarehouseListSummary, type WarehouseOut } from '$lib/api/client';
 import {
   type Warehouse,
   type WarehouseMovement,
@@ -12,7 +7,18 @@ import {
   type WarehouseType,
   type AccessControlType,
   type CoolingType,
+  type CapacityProfile,
+  type CapacityEnforcementMode,
+  type CapacityStatus
 } from '$lib/features/warehouses/types';
+
+const nullableNumber = (value: unknown): number | null => {
+  if (value == null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const numeric = (value: unknown): number => nullableNumber(value) ?? 0;
 
 /**
  * Maps a backend API warehouse representation to the frontend's domain Warehouse entity.
@@ -35,10 +41,19 @@ export function mapWarehouseOutToWarehouse(w: WarehouseOut): Warehouse {
     length: w.length ?? 0,
     width: w.width ?? 0,
     shelvesTotal: w.shelves_total ?? 0,
-    shelvesOccupied: w.shelves_occupied ?? 0,
-    capacity: w.capacity,
-    used: w.used,
-    products: w.products,
+    shelvesOccupied: w.shelves_occupied ?? null,
+    certifiedMaxWeightKg: nullableNumber(w.certified_max_weight_kg),
+    operationalMaxWeightKg: nullableNumber(w.operational_max_weight_kg),
+    certifiedUsableVolumeM3: nullableNumber(w.certified_usable_volume_m3),
+    operationalUsableVolumeM3: nullableNumber(w.operational_usable_volume_m3),
+    capacityProfile: (w.capacity_profile ?? 'general_mixed') as CapacityProfile,
+    capacityEnforcementMode: (w.capacity_enforcement_mode ?? 'disabled') as CapacityEnforcementMode,
+    capacityStatus: (w.capacity_status ?? 'not_configured') as CapacityStatus,
+    storageEligible: w.storage_eligible === true,
+    usableLengthM: nullableNumber(w.usable_length_m),
+    usableWidthM: nullableNumber(w.usable_width_m),
+    usableHeightM: nullableNumber(w.usable_height_m),
+    products: w.products ?? null,
     manager: w.manager ?? '',
     managerEmployeeId: w.manager_employee_id,
     managerInitials: w.manager_initials ?? '',
@@ -63,7 +78,7 @@ export function mapWarehouseOutToWarehouse(w: WarehouseOut): Warehouse {
       productName: m.product_name,
       quantity: m.quantity,
       operator: m.operator,
-      reference: m.reference,
+      reference: m.reference
     })),
     topProducts: (w.top_products ?? []).map((p): WarehouseProduct => ({
       sku: p.sku,
@@ -73,7 +88,7 @@ export function mapWarehouseOutToWarehouse(w: WarehouseOut): Warehouse {
       unit: p.unit,
       minStock: p.min_stock,
       maxStock: p.max_stock,
-      expiryDate: p.expiry_date,
+      expiryDate: p.expiry_date
     })),
     cameras: w.cameras ?? 0,
     accessControl: (w.access_control ?? 'sin_control') as AccessControlType,
@@ -93,7 +108,7 @@ export function mapWarehouseOutToWarehouse(w: WarehouseOut): Warehouse {
     certifications: w.certifications ?? [],
     images: w.images ?? [],
     createdAt: w.created_at ?? '',
-    updatedAt: w.updated_at ?? null,
+    updatedAt: w.updated_at ?? null
   };
 }
 
@@ -107,7 +122,7 @@ export async function getWarehouses(params?: {
   size?: number;
   search?: string;
   status?: string;
-  sort?: 'capacity' | 'name' | 'movement';
+  sort?: 'name' | 'movement';
   signal?: AbortSignal;
 }): Promise<{ items: Warehouse[]; meta: PageMeta; summary: WarehouseListSummary }> {
   const response = await api.warehouses.list({
@@ -122,7 +137,23 @@ export async function getWarehouses(params?: {
   return {
     items: response.items.map(mapWarehouseOutToWarehouse),
     meta: response.meta,
-    summary: response.summary
+    summary: {
+      total_certified_max_weight_kg: numeric(response.summary.total_certified_max_weight_kg),
+      total_operational_max_weight_kg: numeric(response.summary.total_operational_max_weight_kg),
+      total_certified_usable_volume_m3: numeric(response.summary.total_certified_usable_volume_m3),
+      total_operational_usable_volume_m3: numeric(
+        response.summary.total_operational_usable_volume_m3
+      ),
+      storage_eligible: numeric(response.summary.storage_eligible),
+      capacity_configured: numeric(response.summary.capacity_configured),
+      capacity_incomplete: numeric(response.summary.capacity_incomplete),
+      total_products: numeric(response.summary.total_products),
+      active: numeric(response.summary.active),
+      maintenance: numeric(response.summary.maintenance),
+      inactive: numeric(response.summary.inactive),
+      status_counts: response.summary.status_counts ?? {},
+      branches: response.summary.branches ?? []
+    }
   };
 }
 
@@ -145,8 +176,17 @@ export async function createWarehouse(warehouse: Omit<Warehouse, 'id'>): Promise
     physical_location: warehouse.location,
     branch_id: warehouse.branchId,
     warehouse_category_id: warehouse.categoryId,
-    capacity: warehouse.capacity,
-    area: warehouse.area || null,
+    certified_max_weight_kg: warehouse.certifiedMaxWeightKg,
+    operational_max_weight_kg: warehouse.operationalMaxWeightKg,
+    certified_usable_volume_m3: warehouse.certifiedUsableVolumeM3,
+    operational_usable_volume_m3: warehouse.operationalUsableVolumeM3,
+    capacity_profile: warehouse.capacityProfile,
+    capacity_enforcement_mode: warehouse.capacityEnforcementMode,
+    storage_eligible: warehouse.storageEligible,
+    usable_length_m: warehouse.usableLengthM,
+    usable_width_m: warehouse.usableWidthM,
+    usable_height_m: warehouse.usableHeightM,
+    area: warehouse.area || null
   };
   const res = await api.warehouses.create(payload);
   return mapWarehouseOutToWarehouse(res);
@@ -155,14 +195,31 @@ export async function createWarehouse(warehouse: Omit<Warehouse, 'id'>): Promise
 /**
  * Updates an existing warehouse via API.
  */
-export async function updateWarehouse(id: string, warehouse: Partial<Warehouse>): Promise<Warehouse> {
+export async function updateWarehouse(
+  id: string,
+  warehouse: Partial<Warehouse>
+): Promise<Warehouse> {
   const payload: Record<string, unknown> = {};
   if (warehouse.code !== undefined) payload.code = warehouse.code;
   if (warehouse.name !== undefined) payload.name = warehouse.name;
   if (warehouse.type !== undefined) payload.warehouse_type = warehouse.type;
   if (warehouse.status !== undefined) payload.operational_status = warehouse.status;
   if (warehouse.location !== undefined) payload.physical_location = warehouse.location;
-  if (warehouse.capacity !== undefined) payload.capacity = warehouse.capacity;
+  if (warehouse.certifiedMaxWeightKg !== undefined)
+    payload.certified_max_weight_kg = warehouse.certifiedMaxWeightKg;
+  if (warehouse.operationalMaxWeightKg !== undefined)
+    payload.operational_max_weight_kg = warehouse.operationalMaxWeightKg;
+  if (warehouse.certifiedUsableVolumeM3 !== undefined)
+    payload.certified_usable_volume_m3 = warehouse.certifiedUsableVolumeM3;
+  if (warehouse.operationalUsableVolumeM3 !== undefined)
+    payload.operational_usable_volume_m3 = warehouse.operationalUsableVolumeM3;
+  if (warehouse.capacityProfile !== undefined) payload.capacity_profile = warehouse.capacityProfile;
+  if (warehouse.capacityEnforcementMode !== undefined)
+    payload.capacity_enforcement_mode = warehouse.capacityEnforcementMode;
+  if (warehouse.storageEligible !== undefined) payload.storage_eligible = warehouse.storageEligible;
+  if (warehouse.usableLengthM !== undefined) payload.usable_length_m = warehouse.usableLengthM;
+  if (warehouse.usableWidthM !== undefined) payload.usable_width_m = warehouse.usableWidthM;
+  if (warehouse.usableHeightM !== undefined) payload.usable_height_m = warehouse.usableHeightM;
 
   const res = await api.warehouses.update(id, payload);
   return mapWarehouseOutToWarehouse(res);

@@ -45,15 +45,6 @@
   let fullStars = $derived(branch ? Math.floor(branch.customerRating) : 0);
   let hasHalfStar = $derived(branch ? branch.customerRating % 1 >= 0.5 : false);
 
-  let storageTotal = $derived(
-    branch ? branch.warehousesDetail.reduce((s, w) => s + w.capacity, 0) : 0
-  );
-  let storageUsed = $derived(branch ? branch.warehousesDetail.reduce((s, w) => s + w.used, 0) : 0);
-  let storageAvailable = $derived(storageTotal - storageUsed);
-  let storageOccupancy = $derived(
-    storageTotal > 0 ? Math.round((storageUsed / storageTotal) * 100) : 0
-  );
-
   // === Tab state (con hash sync) ===
   const TABS = [
     { id: 'infraestructura', label: 'Infraestructura', icon: 'building' },
@@ -988,79 +979,26 @@
             </h3>
 
             {#if branch.warehousesDetail.length > 0}
-              <div class="grid grid-cols-4 gap-2.5 mb-4">
-                <div class="rounded-lg border border-border bg-surface-muted/40 p-2.5 text-center">
-                  <p class="text-[9px] font-bold uppercase tracking-wider text-foreground-subtle">
-                    Cap. total
-                  </p>
-                  <p class="font-mono text-base font-bold tabular-nums text-foreground mt-0.5">
-                    {storageTotal}<span class="text-[10px] font-normal text-foreground-muted">
-                      m³</span
-                    >
-                  </p>
-                </div>
-                <div class="rounded-lg border border-border bg-warning/10 p-2.5 text-center">
-                  <p class="text-[9px] font-bold uppercase tracking-wider text-foreground-subtle">
-                    Utilizado
-                  </p>
-                  <p class="font-mono text-base font-bold tabular-nums text-warning mt-0.5">
-                    {storageUsed}<span class="text-[10px] font-normal text-foreground-muted">
-                      m³</span
-                    >
-                  </p>
-                </div>
-                <div class="rounded-lg border border-border bg-success/10 p-2.5 text-center">
-                  <p class="text-[9px] font-bold uppercase tracking-wider text-foreground-subtle">
-                    Disponible
-                  </p>
-                  <p class="font-mono text-base font-bold tabular-nums text-success mt-0.5">
-                    {storageAvailable}<span class="text-[10px] font-normal text-foreground-muted">
-                      m³</span
-                    >
-                  </p>
-                </div>
-                <div class="rounded-lg border border-border bg-primary/10 p-2.5 text-center">
-                  <p class="text-[9px] font-bold uppercase tracking-wider text-foreground-subtle">
-                    Ocupación
-                  </p>
-                  <p class="font-mono text-base font-bold tabular-nums text-primary mt-0.5">
-                    {storageOccupancy}%
-                  </p>
-                </div>
-              </div>
-
-              <div class="mb-4">
-                <div class="h-2.5 w-full overflow-hidden rounded-full bg-surface-muted">
-                  <div
-                    class="h-full rounded-full transition-all duration-500"
-                    style="width: {storageOccupancy}%; background: {storageOccupancy >= 90
-                      ? 'rgb(var(--danger))'
-                      : storageOccupancy >= 70
-                        ? 'rgb(var(--warning))'
-                        : 'rgb(var(--success))'};"
-                  ></div>
-                </div>
-                <p class="mt-1 text-[10.5px] text-foreground-subtle">
-                  {branch.warehousesDetail.length} almacén(es) · {storageUsed} de {storageTotal} m³ ocupados
-                </p>
-              </div>
+              <p class="mb-4 text-xs text-foreground-muted">
+                Los límites se presentan por almacén. La ocupación permanece desconocida hasta
+                medir el peso y volumen de las existencias y reservas.
+              </p>
 
               <div class="overflow-x-auto rounded-lg border border-border">
                 <table class="w-full text-xs">
                   <thead class="bg-surface-muted/50 border-b border-border">
                     <tr>
                       <th class="px-3 py-2 text-left font-semibold text-foreground">Almacén</th>
-                      <th class="px-3 py-2 text-right font-semibold text-foreground">Capacidad</th>
-                      <th class="px-3 py-2 text-right font-semibold text-foreground">Utilizado</th>
-                      <th class="px-3 py-2 text-right font-semibold text-foreground">Disponible</th>
+                      <th class="px-3 py-2 text-right font-semibold text-foreground">Peso operativo</th>
+                      <th class="px-3 py-2 text-right font-semibold text-foreground">Peso certificado</th>
+                      <th class="px-3 py-2 text-right font-semibold text-foreground">Volumen operativo</th>
+                      <th class="px-3 py-2 text-right font-semibold text-foreground">Volumen certificado</th>
                       <th class="px-3 py-2 text-center font-semibold text-foreground">Ocupación</th>
                       <th class="px-3 py-2 text-center font-semibold text-foreground">Estado</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-border">
                     {#each branch.warehousesDetail as w (w.code)}
-                      {@const wAvail = w.capacity - w.used}
-                      {@const wPct = w.capacity > 0 ? Math.round((w.used / w.capacity) * 100) : 0}
                       <tr class="hover:bg-surface-muted/30">
                         <td class="px-3 py-2">
                           <p class="font-medium text-foreground">{w.name}</p>
@@ -1069,33 +1007,19 @@
                           </p>
                         </td>
                         <td class="px-3 py-2 text-right font-mono tabular-nums text-foreground"
-                          >{w.capacity} m³</td
+                          >{w.operationalMaxWeightKg == null ? '—' : `${w.operationalMaxWeightKg.toLocaleString('es-SV')} kg`}</td
                         >
-                        <td class="px-3 py-2 text-right font-mono tabular-nums text-warning"
-                          >{w.used} m³</td
+                        <td class="px-3 py-2 text-right font-mono tabular-nums text-foreground"
+                          >{w.certifiedMaxWeightKg == null ? '—' : `${w.certifiedMaxWeightKg.toLocaleString('es-SV')} kg`}</td
                         >
-                        <td class="px-3 py-2 text-right font-mono tabular-nums text-success"
-                          >{wAvail} m³</td
+                        <td class="px-3 py-2 text-right font-mono tabular-nums text-foreground"
+                          >{w.operationalUsableVolumeM3 == null ? '—' : `${w.operationalUsableVolumeM3.toLocaleString('es-SV')} m³`}</td
                         >
-                        <td class="px-3 py-2">
-                          <div class="flex items-center gap-1.5 justify-center">
-                            <div
-                              class="h-1.5 w-16 overflow-hidden rounded-full bg-surface-muted flex-none"
-                            >
-                              <div
-                                class="h-full rounded-full"
-                                style="width: {wPct}%; background: {wPct >= 90
-                                  ? 'rgb(var(--danger))'
-                                  : wPct >= 70
-                                    ? 'rgb(var(--warning))'
-                                    : 'rgb(var(--success))'};"
-                              ></div>
-                            </div>
-                            <span
-                              class="font-mono text-[10px] tabular-nums text-foreground-muted flex-none"
-                              >{wPct}%</span
-                            >
-                          </div>
+                        <td class="px-3 py-2 text-right font-mono tabular-nums text-foreground"
+                          >{w.certifiedUsableVolumeM3 == null ? '—' : `${w.certifiedUsableVolumeM3.toLocaleString('es-SV')} m³`}</td
+                        >
+                        <td class="px-3 py-2 text-center text-foreground-muted">
+                          Desconocida
                         </td>
                         <td class="px-3 py-2 text-center">
                           {#if w.status === 'active'}
@@ -1103,10 +1027,10 @@
                               class="inline-flex items-center gap-1 rounded-md bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success"
                               ><span class="h-1.5 w-1.5 rounded-full bg-success"></span> Activo</span
                             >
-                          {:else if w.status === 'full'}
+                          {:else if w.status === 'inactive'}
                             <span
-                              class="inline-flex items-center gap-1 rounded-md bg-danger/10 px-1.5 py-0.5 text-[10px] font-medium text-danger"
-                              ><span class="h-1.5 w-1.5 rounded-full bg-danger"></span> Lleno</span
+                              class="inline-flex items-center gap-1 rounded-md bg-surface-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground-muted"
+                              ><span class="h-1.5 w-1.5 rounded-full bg-foreground-subtle"></span> Inactivo</span
                             >
                           {:else}
                             <span
@@ -1117,24 +1041,6 @@
                         </td>
                       </tr>
                     {/each}
-                    <tr class="border-t-2 border-border bg-surface-muted/40 font-semibold">
-                      <td class="px-3 py-2.5 text-foreground"
-                        >Total ({branch.warehousesDetail.length} almacenes)</td
-                      >
-                      <td class="px-3 py-2.5 text-right font-mono tabular-nums text-foreground"
-                        >{storageTotal} m³</td
-                      >
-                      <td class="px-3 py-2.5 text-right font-mono tabular-nums text-warning"
-                        >{storageUsed} m³</td
-                      >
-                      <td class="px-3 py-2.5 text-right font-mono tabular-nums text-success"
-                        >{storageAvailable} m³</td
-                      >
-                      <td class="px-3 py-2.5 text-center font-mono tabular-nums text-primary"
-                        >{storageOccupancy}%</td
-                      >
-                      <td class="px-3 py-2.5"></td>
-                    </tr>
                   </tbody>
                 </table>
               </div>

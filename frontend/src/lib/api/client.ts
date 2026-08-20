@@ -38,12 +38,17 @@ async function parseError(res: Response): Promise<HttpError> {
     const body = (await res.json()) as {
       code?: string;
       message?: string;
-      detail?: string | unknown[];
+      detail?: string | unknown[] | { code?: string; message?: string };
     };
     if (body?.code) code = body.code;
     if (typeof body?.message === 'string' && body.message.trim()) message = body.message;
     else if (typeof body?.detail === 'string' && body.detail.trim()) message = body.detail;
-    else if (Array.isArray(body?.detail))
+    else if (body?.detail && !Array.isArray(body.detail) && typeof body.detail === 'object') {
+      if (typeof body.detail.code === 'string' && body.detail.code.trim()) code = body.detail.code;
+      if (typeof body.detail.message === 'string' && body.detail.message.trim()) {
+        message = body.detail.message;
+      }
+    } else if (Array.isArray(body?.detail))
       message = 'Revise los datos ingresados e intente nuevamente.';
   } catch {
     // keep defaults
@@ -448,7 +453,7 @@ export interface WarehouseOut {
   name: string;
   description?: string | null;
   type: 'general' | 'cold_storage' | 'hazmat' | 'transit' | 'bonded' | 'automated';
-  status: 'active' | 'full' | 'maintenance' | 'inactive';
+  status: 'active' | 'maintenance' | 'inactive';
   location: string;
   branch_id: string;
   branch_name: string;
@@ -458,10 +463,28 @@ export interface WarehouseOut {
   length: number;
   width: number;
   shelves_total: number;
-  shelves_occupied: number;
-  capacity: number;
-  used: number;
-  products: number;
+  shelves_occupied: number | null;
+  certified_max_weight_kg: number | null;
+  operational_max_weight_kg: number | null;
+  certified_usable_volume_m3: number | null;
+  operational_usable_volume_m3: number | null;
+  capacity_profile:
+    'general_mixed' | 'rack' | 'bulk_floor' | 'cold' | 'oversize_manual' | 'transit';
+  capacity_enforcement_mode: 'disabled' | 'observe' | 'enforce';
+  capacity_status:
+    | 'not_configured'
+    | 'incomplete'
+    | 'available'
+    | 'warning'
+    | 'critical'
+    | 'full'
+    | 'over_operational'
+    | 'over_certified';
+  storage_eligible: boolean;
+  usable_length_m: number | null;
+  usable_width_m: number | null;
+  usable_height_m: number | null;
+  products: number | null;
   manager: string;
   manager_employee_id: string | null;
   manager_initials: string;
@@ -521,11 +544,15 @@ export interface WarehouseOut {
 }
 
 export interface WarehouseListSummary {
-  total_capacity: number;
-  total_used: number;
+  total_certified_max_weight_kg: number;
+  total_operational_max_weight_kg: number;
+  total_certified_usable_volume_m3: number;
+  total_operational_usable_volume_m3: number;
+  storage_eligible: number;
+  capacity_configured: number;
+  capacity_incomplete: number;
   total_products: number;
   active: number;
-  full: number;
   maintenance: number;
   inactive: number;
   status_counts: Record<string, number>;
@@ -1072,7 +1099,7 @@ export const api = {
         size?: number;
         search?: string;
         status?: string;
-        sort?: 'capacity' | 'name' | 'movement';
+        sort?: 'name' | 'movement';
         signal?: AbortSignal;
       } = {}
     ) => {

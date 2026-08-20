@@ -12,9 +12,15 @@ export interface WarehouseDetail {
   name: string;
   code: string;
   location: string;
-  capacity: number;
-  used: number;
-  status: 'active' | 'full' | 'maintenance';
+  certifiedMaxWeightKg: number | null;
+  operationalMaxWeightKg: number | null;
+  certifiedUsableVolumeM3: number | null;
+  operationalUsableVolumeM3: number | null;
+  capacityProfile: string;
+  capacityEnforcementMode: 'disabled' | 'observe' | 'enforce';
+  capacityStatus: string;
+  storageEligible: boolean;
+  status: 'active' | 'maintenance' | 'inactive';
   products: number;
 }
 export interface Branch {
