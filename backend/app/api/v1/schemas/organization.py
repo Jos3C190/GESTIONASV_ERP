@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
-from typing import Any
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any, Literal
 
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
+from app.api.v1.schemas.capacity import CapacityConfigurationIn, CapacityConfigurationOut
 from app.api.v1.schemas.common import PageMeta
 
 
@@ -122,11 +124,15 @@ class WarehouseCategoryIn(BaseModel):
 
 
 class WarehouseListSummary(BaseModel):
-    total_capacity: int = 0
-    total_used: int = 0
+    total_certified_max_weight_kg: Decimal = Decimal("0")
+    total_operational_max_weight_kg: Decimal = Decimal("0")
+    total_certified_usable_volume_m3: Decimal = Decimal("0")
+    total_operational_usable_volume_m3: Decimal = Decimal("0")
+    storage_eligible: int = 0
+    capacity_configured: int = 0
+    capacity_incomplete: int = 0
     total_products: int = 0
     active: int = 0
-    full: int = 0
     maintenance: int = 0
     inactive: int = 0
     status_counts: dict[str, int] = Field(default_factory=dict)
@@ -139,7 +145,7 @@ class WarehousePage(BaseModel):
     summary: WarehouseListSummary
 
 
-class WarehouseIn(BaseModel):
+class WarehouseIn(CapacityConfigurationIn):
     branch_id: uuid.UUID
     warehouse_category_id: uuid.UUID
     code: str = Field(min_length=2, max_length=32)
@@ -149,9 +155,7 @@ class WarehouseIn(BaseModel):
         default="general",
         pattern="^(general|cold_storage|hazmat|transit|bonded|automated)$",
     )
-    operational_status: str = Field(
-        default="active", pattern="^(active|inactive|maintenance|full)$"
-    )
+    operational_status: str = Field(default="active", pattern="^(active|inactive|maintenance)$")
     physical_location: str | None = Field(None, max_length=200)
     manager_employee_id: uuid.UUID | None = None
     area: float | None = Field(None, ge=0)
@@ -159,7 +163,6 @@ class WarehouseIn(BaseModel):
     length: float | None = Field(None, ge=0)
     width: float | None = Field(None, ge=0)
     shelves_total: int | None = Field(None, ge=0)
-    capacity: int | None = Field(None, gt=0)
     shifts: list[str] = Field(default_factory=list, max_length=3)
     cameras: int | None = Field(None, ge=0)
     access_control: str | None = Field(
@@ -204,16 +207,55 @@ class WarehouseIn(BaseModel):
         return self
 
 
-class LocationIn(BaseModel):
+CapacityGroupType = Literal[
+    "structural",
+    "rack",
+    "bay",
+    "level",
+    "floor_zone",
+    "cold_chamber",
+    "transit_zone",
+]
+
+
+class WarehouseCapacityGroupIn(CapacityConfigurationIn):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    parent_id: uuid.UUID | None = None
+    code: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=2, max_length=160)
+    group_type: CapacityGroupType = "structural"
+    is_active: bool = True
+
+
+class WarehouseCapacityGroupOut(CapacityConfigurationOut):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    warehouse_id: uuid.UUID
+    parent_id: uuid.UUID | None
+    code: str
+    name: str
+    group_type: CapacityGroupType
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime | None
+    direct_location_count: int = 0
+    subtree_location_count: int = 0
+
+
+class LocationIn(CapacityConfigurationIn):
     warehouse_id: uuid.UUID
     # Kept only so older clients do not fail validation during rollout.  The
     # server ignores it and always projects the code from physical coordinates.
-    code: str | None = Field(None, min_length=1, max_length=120, deprecated=True)
+    code: str | None = Field(
+        None, min_length=1, max_length=120, json_schema_extra={"deprecated": True}
+    )
     aisle: str = Field(min_length=1, max_length=64)
     rack: str = Field(min_length=1, max_length=64)
     level: str = Field(min_length=1, max_length=64)
     position: str = Field(min_length=1, max_length=64)
-    capacity: int = Field(gt=0)
+    capacity_group_id: uuid.UUID | None = None
     notes: str | None = Field(None, max_length=4000)
 
 

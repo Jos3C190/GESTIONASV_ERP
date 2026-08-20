@@ -19,7 +19,7 @@ from app.api.v1.schemas.common import HealthComponent, HealthReport
 from app.core.config import settings
 
 router = APIRouter(prefix="/health", tags=["health"])
-EXPECTED_SCHEMA_REVISION = "0037"
+EXPECTED_SCHEMA_REVISION = "0038"
 
 
 def _now() -> str:

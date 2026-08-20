@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -25,6 +26,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.domain.entities.warehouse_capacity import CapacityStatus, capacity_status_for
 from app.infrastructure.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPKMixin
 
 
@@ -253,7 +255,22 @@ class Warehouse(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     length: Mapped[float | None] = mapped_column(Numeric(12, 2))
     width: Mapped[float | None] = mapped_column(Numeric(12, 2))
     shelves_total: Mapped[int | None] = mapped_column(Integer)
-    capacity: Mapped[int | None] = mapped_column(Integer)
+    certified_max_weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    operational_max_weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    certified_usable_volume_m3: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    operational_usable_volume_m3: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    capacity_profile: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="general_mixed", server_default="general_mixed"
+    )
+    capacity_enforcement_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="disabled", server_default="disabled"
+    )
+    storage_eligible: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    usable_length_m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    usable_width_m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    usable_height_m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
     shifts: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
     cameras: Mapped[int | None] = mapped_column(Integer)
     access_control: Mapped[str | None] = mapped_column(String(32))
@@ -274,7 +291,82 @@ class Warehouse(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     description: Mapped[str | None] = mapped_column(Text)
     images: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default="true")
+
+    @property
+    def capacity_status(self) -> CapacityStatus:
+        return capacity_status_for(self)
+
     __table_args__ = (
+        CheckConstraint(
+            "operational_status IN ('active','inactive','maintenance')",
+            name="ck_warehouses_operational_status",
+        ),
+        CheckConstraint(
+            "capacity_profile IN ('general_mixed','rack','bulk_floor','cold','oversize_manual','transit')",
+            name="ck_warehouses_capacity_profile",
+        ),
+        CheckConstraint(
+            "capacity_enforcement_mode IN ('disabled','observe','enforce')",
+            name="ck_warehouses_capacity_enforcement_mode",
+        ),
+        CheckConstraint(
+            "certified_max_weight_kg IS NULL OR certified_max_weight_kg > 0",
+            name="ck_warehouses_certified_max_weight_kg_positive",
+        ),
+        CheckConstraint(
+            "operational_max_weight_kg IS NULL OR operational_max_weight_kg > 0",
+            name="ck_warehouses_operational_max_weight_kg_positive",
+        ),
+        CheckConstraint(
+            "certified_usable_volume_m3 IS NULL OR certified_usable_volume_m3 > 0",
+            name="ck_warehouses_certified_usable_volume_m3_positive",
+        ),
+        CheckConstraint(
+            "operational_usable_volume_m3 IS NULL OR operational_usable_volume_m3 > 0",
+            name="ck_warehouses_operational_usable_volume_m3_positive",
+        ),
+        CheckConstraint(
+            "operational_max_weight_kg IS NULL OR "
+            "(certified_max_weight_kg IS NOT NULL AND "
+            "operational_max_weight_kg <= certified_max_weight_kg)",
+            name="ck_warehouses_operational_weight_within_certified",
+        ),
+        CheckConstraint(
+            "operational_usable_volume_m3 IS NULL OR "
+            "(certified_usable_volume_m3 IS NOT NULL AND "
+            "operational_usable_volume_m3 <= certified_usable_volume_m3)",
+            name="ck_warehouses_operational_volume_within_certified",
+        ),
+        CheckConstraint(
+            "(usable_length_m IS NULL AND usable_width_m IS NULL AND usable_height_m IS NULL) "
+            "OR (usable_length_m IS NOT NULL AND usable_width_m IS NOT NULL "
+            "AND usable_height_m IS NOT NULL)",
+            name="ck_warehouses_usable_dimensions_complete",
+        ),
+        CheckConstraint(
+            "usable_length_m IS NULL OR usable_length_m > 0",
+            name="ck_warehouses_usable_length_m_positive",
+        ),
+        CheckConstraint(
+            "usable_width_m IS NULL OR usable_width_m > 0",
+            name="ck_warehouses_usable_width_m_positive",
+        ),
+        CheckConstraint(
+            "usable_height_m IS NULL OR usable_height_m > 0",
+            name="ck_warehouses_usable_height_m_positive",
+        ),
+        CheckConstraint(
+            "storage_eligible OR capacity_enforcement_mode = 'disabled'",
+            name="ck_warehouses_nonstorage_capacity_disabled",
+        ),
+        CheckConstraint(
+            "capacity_enforcement_mode <> 'enforce' OR "
+            "(storage_eligible AND certified_max_weight_kg IS NOT NULL "
+            "AND operational_max_weight_kg IS NOT NULL "
+            "AND certified_usable_volume_m3 IS NOT NULL "
+            "AND operational_usable_volume_m3 IS NOT NULL)",
+            name="ck_warehouses_enforce_capacity_complete",
+        ),
         Index(
             "uq_warehouses_branch_name_visible",
             "branch_id",
@@ -382,18 +474,166 @@ class UserBranch(Base):
     )
 
 
+class WarehouseCapacityGroup(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
+    """Warehouse-scoped structural capacity shared by descendant locations."""
+
+    __tablename__ = "warehouse_capacity_groups"
+
+    warehouse_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False
+    )
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    group_type: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="structural", server_default="structural"
+    )
+    certified_max_weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    operational_max_weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    certified_usable_volume_m3: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    operational_usable_volume_m3: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    capacity_profile: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="general_mixed", server_default="general_mixed"
+    )
+    capacity_enforcement_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="disabled", server_default="disabled"
+    )
+    storage_eligible: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    usable_length_m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    usable_width_m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    usable_height_m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+
+    @property
+    def capacity_status(self) -> CapacityStatus:
+        return capacity_status_for(self)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "id", "warehouse_id", name="uq_capacity_groups_identity_warehouse"
+        ),
+        ForeignKeyConstraint(
+            ["parent_id", "warehouse_id"],
+            ["warehouse_capacity_groups.id", "warehouse_capacity_groups.warehouse_id"],
+            name="fk_capacity_groups_parent_warehouse",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "parent_id IS NULL OR parent_id <> id",
+            name="ck_capacity_groups_not_self_parent",
+        ),
+        CheckConstraint(
+            "group_type IN ('structural','rack','bay','level','floor_zone','cold_chamber','transit_zone')",
+            name="ck_capacity_groups_type",
+        ),
+        CheckConstraint(
+            "capacity_profile IN ('general_mixed','rack','bulk_floor','cold','oversize_manual','transit')",
+            name="ck_capacity_groups_capacity_profile",
+        ),
+        CheckConstraint(
+            "capacity_enforcement_mode IN ('disabled','observe','enforce')",
+            name="ck_capacity_groups_capacity_enforcement_mode",
+        ),
+        CheckConstraint(
+            "certified_max_weight_kg IS NULL OR certified_max_weight_kg > 0",
+            name="ck_capacity_groups_certified_max_weight_kg_positive",
+        ),
+        CheckConstraint(
+            "operational_max_weight_kg IS NULL OR operational_max_weight_kg > 0",
+            name="ck_capacity_groups_operational_max_weight_kg_positive",
+        ),
+        CheckConstraint(
+            "certified_usable_volume_m3 IS NULL OR certified_usable_volume_m3 > 0",
+            name="ck_capacity_groups_certified_usable_volume_m3_positive",
+        ),
+        CheckConstraint(
+            "operational_usable_volume_m3 IS NULL OR operational_usable_volume_m3 > 0",
+            name="ck_capacity_groups_operational_usable_volume_m3_positive",
+        ),
+        CheckConstraint(
+            "operational_max_weight_kg IS NULL OR "
+            "(certified_max_weight_kg IS NOT NULL AND "
+            "operational_max_weight_kg <= certified_max_weight_kg)",
+            name="ck_capacity_groups_operational_weight_within_certified",
+        ),
+        CheckConstraint(
+            "operational_usable_volume_m3 IS NULL OR "
+            "(certified_usable_volume_m3 IS NOT NULL AND "
+            "operational_usable_volume_m3 <= certified_usable_volume_m3)",
+            name="ck_capacity_groups_operational_volume_within_certified",
+        ),
+        CheckConstraint(
+            "(usable_length_m IS NULL AND usable_width_m IS NULL AND usable_height_m IS NULL) "
+            "OR (usable_length_m IS NOT NULL AND usable_width_m IS NOT NULL "
+            "AND usable_height_m IS NOT NULL)",
+            name="ck_capacity_groups_usable_dimensions_complete",
+        ),
+        CheckConstraint(
+            "usable_length_m IS NULL OR usable_length_m > 0",
+            name="ck_capacity_groups_usable_length_m_positive",
+        ),
+        CheckConstraint(
+            "usable_width_m IS NULL OR usable_width_m > 0",
+            name="ck_capacity_groups_usable_width_m_positive",
+        ),
+        CheckConstraint(
+            "usable_height_m IS NULL OR usable_height_m > 0",
+            name="ck_capacity_groups_usable_height_m_positive",
+        ),
+        CheckConstraint(
+            "storage_eligible OR capacity_enforcement_mode = 'disabled'",
+            name="ck_capacity_groups_nonstorage_capacity_disabled",
+        ),
+        CheckConstraint(
+            "capacity_enforcement_mode <> 'enforce' OR "
+            "(storage_eligible AND certified_max_weight_kg IS NOT NULL "
+            "AND operational_max_weight_kg IS NOT NULL "
+            "AND certified_usable_volume_m3 IS NOT NULL "
+            "AND operational_usable_volume_m3 IS NOT NULL)",
+            name="ck_capacity_groups_enforce_capacity_complete",
+        ),
+        Index(
+            "uq_capacity_groups_warehouse_code_visible",
+            "warehouse_id",
+            func.lower(code),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index("ix_capacity_groups_warehouse_parent", "warehouse_id", "parent_id"),
+    )
+
+
 class Location(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "locations"
     warehouse_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False
     )
+    capacity_group_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     code: Mapped[str] = mapped_column(String(120), nullable=False)
     area: Mapped[str | None] = mapped_column(String(64))
     aisle: Mapped[str] = mapped_column(String(64), nullable=False)
     rack: Mapped[str] = mapped_column(String(64), nullable=False)
     level: Mapped[str] = mapped_column(String(64), nullable=False)
     position: Mapped[str] = mapped_column(String(64), nullable=False)
-    capacity: Mapped[int] = mapped_column(Integer, nullable=False)
+    certified_max_weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    operational_max_weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    certified_usable_volume_m3: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    operational_usable_volume_m3: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    capacity_profile: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="general_mixed", server_default="general_mixed"
+    )
+    capacity_enforcement_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="disabled", server_default="disabled"
+    )
+    storage_eligible: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    usable_length_m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    usable_width_m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    usable_height_m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
     location_type: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default="standard"
     )
@@ -412,6 +652,11 @@ class Location(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     code_source: Mapped[str] = mapped_column(String(20), nullable=False, server_default="legacy")
     notes: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default="true")
+
+    @property
+    def capacity_status(self) -> CapacityStatus:
+        return capacity_status_for(self)
+
     __table_args__ = (
         UniqueConstraint("id", "warehouse_id", name="uq_locations_identity_warehouse"),
         ForeignKeyConstraint(
@@ -424,6 +669,12 @@ class Location(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             name="fk_locations_scheme_scope_version",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["capacity_group_id", "warehouse_id"],
+            ["warehouse_capacity_groups.id", "warehouse_capacity_groups.warehouse_id"],
+            name="fk_locations_capacity_group_warehouse",
+            ondelete="RESTRICT",
+        ),
         CheckConstraint(
             "(code_scheme_id IS NULL) = (scheme_version IS NULL)",
             name="ck_locations_scheme_reference_complete",
@@ -432,7 +683,72 @@ class Location(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             "(lifecycle_status = 'retired') = (is_active = false)",
             name="ck_locations_lifecycle_active_consistent",
         ),
-        CheckConstraint("capacity > 0", name="ck_locations_capacity_positive"),
+        CheckConstraint(
+            "capacity_profile IN ('general_mixed','rack','bulk_floor','cold','oversize_manual','transit')",
+            name="ck_locations_capacity_profile",
+        ),
+        CheckConstraint(
+            "capacity_enforcement_mode IN ('disabled','observe','enforce')",
+            name="ck_locations_capacity_enforcement_mode",
+        ),
+        CheckConstraint(
+            "certified_max_weight_kg IS NULL OR certified_max_weight_kg > 0",
+            name="ck_locations_certified_max_weight_kg_positive",
+        ),
+        CheckConstraint(
+            "operational_max_weight_kg IS NULL OR operational_max_weight_kg > 0",
+            name="ck_locations_operational_max_weight_kg_positive",
+        ),
+        CheckConstraint(
+            "certified_usable_volume_m3 IS NULL OR certified_usable_volume_m3 > 0",
+            name="ck_locations_certified_usable_volume_m3_positive",
+        ),
+        CheckConstraint(
+            "operational_usable_volume_m3 IS NULL OR operational_usable_volume_m3 > 0",
+            name="ck_locations_operational_usable_volume_m3_positive",
+        ),
+        CheckConstraint(
+            "operational_max_weight_kg IS NULL OR "
+            "(certified_max_weight_kg IS NOT NULL AND "
+            "operational_max_weight_kg <= certified_max_weight_kg)",
+            name="ck_locations_operational_weight_within_certified",
+        ),
+        CheckConstraint(
+            "operational_usable_volume_m3 IS NULL OR "
+            "(certified_usable_volume_m3 IS NOT NULL AND "
+            "operational_usable_volume_m3 <= certified_usable_volume_m3)",
+            name="ck_locations_operational_volume_within_certified",
+        ),
+        CheckConstraint(
+            "(usable_length_m IS NULL AND usable_width_m IS NULL AND usable_height_m IS NULL) "
+            "OR (usable_length_m IS NOT NULL AND usable_width_m IS NOT NULL "
+            "AND usable_height_m IS NOT NULL)",
+            name="ck_locations_usable_dimensions_complete",
+        ),
+        CheckConstraint(
+            "usable_length_m IS NULL OR usable_length_m > 0",
+            name="ck_locations_usable_length_m_positive",
+        ),
+        CheckConstraint(
+            "usable_width_m IS NULL OR usable_width_m > 0",
+            name="ck_locations_usable_width_m_positive",
+        ),
+        CheckConstraint(
+            "usable_height_m IS NULL OR usable_height_m > 0",
+            name="ck_locations_usable_height_m_positive",
+        ),
+        CheckConstraint(
+            "storage_eligible OR capacity_enforcement_mode = 'disabled'",
+            name="ck_locations_nonstorage_capacity_disabled",
+        ),
+        CheckConstraint(
+            "capacity_enforcement_mode <> 'enforce' OR "
+            "(storage_eligible AND certified_max_weight_kg IS NOT NULL "
+            "AND operational_max_weight_kg IS NOT NULL "
+            "AND certified_usable_volume_m3 IS NOT NULL "
+            "AND operational_usable_volume_m3 IS NOT NULL)",
+            name="ck_locations_enforce_capacity_complete",
+        ),
         CheckConstraint(
             "pick_sequence IS NULL OR pick_sequence >= 0",
             name="ck_locations_pick_sequence_nonnegative",
@@ -472,6 +788,11 @@ class Location(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
             sqlite_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "ix_locations_warehouse_capacity_group",
+            "warehouse_id",
+            "capacity_group_id",
         ),
         Index(
             "uq_locations_warehouse_barcode_visible",
