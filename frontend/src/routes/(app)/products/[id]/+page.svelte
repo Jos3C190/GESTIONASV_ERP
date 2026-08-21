@@ -260,7 +260,19 @@
 
       <div class="grid gap-5 lg:grid-cols-2">
         <Card class="p-6">
-          <h3 class="mb-4 text-sm font-semibold text-foreground">Información comercial</h3>
+          <div class="mb-1 flex flex-wrap items-center gap-2">
+            <h3 class="text-sm font-semibold text-foreground">
+              Unidad base y medidas de referencia
+            </h3>
+            <span
+              class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary"
+              >Producto</span
+            >
+          </div>
+          <p class="mb-4 text-xs text-foreground-muted">
+            Estos datos describen una unidad base del producto. No representan necesariamente una
+            caja, saco o paquete completo.
+          </p>
           <dl class="grid gap-4 text-sm sm:grid-cols-2">
             <div>
               <dt class="text-xs text-foreground-muted">SKU</dt>
@@ -275,17 +287,17 @@
               <dd class="mt-1 text-foreground">{product.size || '—'}</dd>
             </div>
             <div>
-              <dt class="text-xs text-foreground-muted">Dimensiones</dt>
+              <dt class="text-xs text-foreground-muted">Dimensiones de la unidad base</dt>
               <dd class="mt-1 text-foreground">{product.dimension_summary || '—'}</dd>
             </div>
             <div>
-              <dt class="text-xs text-foreground-muted">Peso</dt>
+              <dt class="text-xs text-foreground-muted">Peso de la unidad base</dt>
               <dd class="mt-1 text-foreground">
                 {product.weight != null ? `${product.weight} ${product.weight_unit ?? ''}` : '—'}
               </dd>
             </div>
             <div>
-              <dt class="text-xs text-foreground-muted">Volumen</dt>
+              <dt class="text-xs text-foreground-muted">Volumen de la unidad base</dt>
               <dd class="mt-1 text-foreground">
                 {product.volume != null
                   ? `${product.volume} ${product.volume_unit ?? 'm³'}`
@@ -299,7 +311,7 @@
               </div>
             {/if}
             <div class="sm:col-span-2">
-              <dt class="text-xs text-foreground-muted">Presentación</dt>
+              <dt class="text-xs text-foreground-muted">Formato comercial de referencia</dt>
               <dd class="mt-1 text-foreground">{product.presentation || '—'}</dd>
             </div>
           </dl>
@@ -439,7 +451,9 @@
                 ><tr
                   ><th class="px-3 py-2">Imagen</th><th class="px-3 py-2">SKU</th><th
                     class="px-3 py-2">Combinación</th
-                  ><th class="px-3 py-2">Estado</th><th class="px-3 py-2">Identificadores</th><th class="px-3 py-2">Acciones</th></tr
+                  ><th class="px-3 py-2">Estado</th><th class="px-3 py-2">Identificadores</th><th
+                    class="px-3 py-2">Acciones</th
+                  ></tr
                 ></thead
               >
               <tbody class="divide-y divide-border">
@@ -480,7 +494,8 @@
                       <a
                         class="text-xs font-medium text-primary hover:underline"
                         href={`/products/${product.id_product}/variants/${variant.id}/edit`}
-                      >Editar variante</a>
+                        >Editar variante</a
+                      >
                     </td>
                   </tr>
                 {/each}

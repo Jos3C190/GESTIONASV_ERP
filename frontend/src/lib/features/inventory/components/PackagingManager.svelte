@@ -232,9 +232,17 @@
 <div class="space-y-4" aria-busy={loading || saving}>
   <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
     <div>
-      <h3 class="text-sm font-semibold text-foreground">Presentaciones de inventario</h3>
+      <div class="flex flex-wrap items-center gap-2">
+        <h3 class="text-sm font-semibold text-foreground">
+          Empaques y presentaciones de inventario
+        </h3>
+        <span class="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning"
+          >Empaque</span
+        >
+      </div>
       <p class="mt-1 text-xs text-foreground-muted">
-        Define piezas, cajas, sacos o bultos con su cantidad base y medidas físicas.
+        Define el empaque completo con el que se recibe, almacena y mueve el producto. Estas medidas
+        son independientes de las medidas de la unidad base.
       </p>
     </div>
     {#if item && canManage}
@@ -249,6 +257,17 @@
         {formOpen ? 'Cerrar formulario' : 'Nueva presentación'}
       </Button>
     {/if}
+  </div>
+
+  <div
+    class="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-xs text-foreground-muted"
+  >
+    <p class="font-semibold text-warning">Medidas del empaque completo</p>
+    <p class="mt-1">
+      Registre aquí el peso y volumen del saco, caja, paquete o bulto cerrado. Para calcular la
+      capacidad se utiliza esta medida o la medición real de la unidad logística recibida; no se
+      suma con la medida de la unidad base.
+    </p>
   </div>
 
   {#if error}
@@ -339,7 +358,7 @@
             </select>
           </label>
           <label class="text-xs text-foreground-muted"
-            >Cantidad en unidad base
+            >Cantidad base contenida por empaque
             <input
               class={inputClass}
               type="number"
@@ -350,7 +369,7 @@
             />
           </label>
           <label class="text-xs text-foreground-muted"
-            >Peso bruto por presentación (kg)
+            >Peso bruto del empaque completo (kg)
             <input
               class={inputClass}
               type="number"
@@ -360,7 +379,7 @@
             />
           </label>
           <label class="text-xs text-foreground-muted"
-            >Volumen por presentación (m³)
+            >Volumen del empaque completo (m³)
             <input
               class={inputClass}
               type="number"
@@ -370,7 +389,7 @@
             />
           </label>
           <label class="text-xs text-foreground-muted"
-            >Largo exterior (m)
+            >Largo exterior del empaque (m)
             <input
               class={inputClass}
               type="number"
@@ -380,11 +399,11 @@
             />
           </label>
           <label class="text-xs text-foreground-muted"
-            >Ancho exterior (m)
+            >Ancho exterior del empaque (m)
             <input class={inputClass} type="number" min="0.000001" step="any" bind:value={widthM} />
           </label>
           <label class="text-xs text-foreground-muted"
-            >Alto exterior (m)
+            >Alto exterior del empaque (m)
             <input
               class={inputClass}
               type="number"
@@ -406,8 +425,8 @@
           {/if}
         </div>
         <p class="mt-3 text-[11px] text-foreground-muted">
-          Si faltan peso o volumen, la mercancía solo podrá recibirse en cuarentena hasta ser
-          medida.
+          Si faltan peso o volumen del empaque, la mercancía solo podrá recibirse en cuarentena
+          hasta ser medida.
         </p>
         <div class="mt-4 flex justify-end gap-2">
           <Button
@@ -434,8 +453,9 @@
             <tr
               ><th scope="col" class="px-3 py-2">Presentación</th><th scope="col" class="px-3 py-2"
                 >Conversión</th
-              ><th scope="col" class="px-3 py-2">Peso</th><th scope="col" class="px-3 py-2"
-                >Volumen</th
+              ><th scope="col" class="px-3 py-2">Peso del empaque</th><th
+                scope="col"
+                class="px-3 py-2">Volumen del empaque</th
               ><th scope="col" class="px-3 py-2">Versión</th><th scope="col" class="px-3 py-2"
                 >Estado</th
               >{#if canManage}<th scope="col" class="px-3 py-2">Acciones</th>{/if}</tr

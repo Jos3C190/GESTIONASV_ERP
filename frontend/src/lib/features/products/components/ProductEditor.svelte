@@ -125,7 +125,7 @@
   const sections = [
     ['general', 'Identidad del producto'],
     ['classification', 'Clasificación y unidades'],
-    ['identifiers', 'Códigos y presentación'],
+    ['identifiers', 'Códigos y unidad base'],
     ['master', 'Información comercial'],
     ['storage', 'Almacenamiento'],
     ['suppliers', 'Proveedores'],
@@ -700,9 +700,16 @@
         </Card>
 
         <Card id="identifiers" class="scroll-mt-24 p-6">
-          <h2 class="mb-1 text-base font-semibold">Códigos y presentación</h2>
+          <div class="mb-1 flex flex-wrap items-center gap-2">
+            <h2 class="text-base font-semibold">Códigos y medidas de la unidad base</h2>
+            <span
+              class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary"
+              >Producto</span
+            >
+          </div>
           <p class="mb-5 text-sm text-foreground-muted">
-            Referencias internas, dimensiones y descripción comercial.
+            Referencias internas y medidas de una unidad base del producto. Los sacos, cajas y otros
+            empaques se configuran después en Presentaciones de inventario.
           </p>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <FormField
@@ -727,9 +734,19 @@
               Use este campo para tamaños comerciales como S, M o XL. Para combinaciones como color
               o talla use Variantes y atributos.
             </p>
+            <div
+              class="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-xs text-foreground-muted sm:col-span-2 lg:col-span-3"
+            >
+              <p class="font-semibold text-foreground">Medidas de la unidad base</p>
+              <p class="mt-1">
+                Registre aquí la pieza o unidad de referencia del producto. No coloque en este
+                bloque las medidas de una caja, saco o paquete completo; esas medidas pertenecen a
+                la presentación de inventario.
+              </p>
+            </div>
             <FormField
               id="product-dimension-length"
-              label="Largo"
+              label="Largo de la unidad base"
               type="number"
               min="0"
               step="0.001"
@@ -739,7 +756,7 @@
             />
             <FormField
               id="product-dimension-width"
-              label="Ancho"
+              label="Ancho de la unidad base"
               type="number"
               min="0"
               step="0.001"
@@ -748,7 +765,7 @@
             />
             <FormField
               id="product-dimension-height"
-              label="Alto"
+              label="Alto de la unidad base"
               type="number"
               min="0"
               step="0.001"
@@ -764,7 +781,7 @@
             />
             <FormField
               id="product-weight"
-              label="Peso"
+              label="Peso de la unidad base"
               type="number"
               min="0"
               step="0.001"
@@ -781,9 +798,9 @@
             />
             <FormField
               id="product-presentation"
-              label="Presentación"
+              label="Formato comercial de referencia"
               bind:value={form.presentation}
-              placeholder="Ej. Caja de 12 unidades"
+              placeholder="Ej. Saco de 50 lb"
             />
             {#if mode === 'edit'}
               <label
@@ -800,18 +817,19 @@
             >
               <div class="flex flex-wrap gap-x-8 gap-y-2">
                 <div>
-                  <span class="text-foreground-muted">Resumen dimensional</span>
+                  <span class="text-foreground-muted">Resumen dimensional de la unidad base</span>
                   <p class="font-medium text-foreground">{dimensionSummary ?? 'No indicado'}</p>
                 </div>
                 <div>
-                  <span class="text-foreground-muted">Volumen</span>
+                  <span class="text-foreground-muted">Volumen de la unidad base</span>
                   <p class="font-medium text-foreground">
                     {volume != null ? `${volume.toFixed(6)} m³` : 'No calculable'}
                   </p>
                 </div>
               </div>
               <p class="mt-2 text-xs text-foreground-muted">
-                El volumen se calcula automáticamente cuando se completan largo, ancho y alto.
+                El volumen de referencia se calcula automáticamente cuando se completan largo, ancho
+                y alto. El volumen del empaque se registra en la presentación de inventario.
               </p>
             </div>
             <div class="sm:col-span-2 lg:col-span-3">
