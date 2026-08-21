@@ -68,6 +68,37 @@ class InventoryItemOut(BaseModel):
     is_active: bool
 
 
+class InventoryItemStatusSummaryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    stock_status: StockStatus
+    quantity_base: Decimal
+    occupied_weight_kg: Decimal | None
+    occupied_volume_m3: Decimal | None
+    measurement_status: Literal["complete", "incomplete"]
+
+
+class InventoryItemSummaryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    inventory_item_id: uuid.UUID
+    company_id: uuid.UUID
+    product_id: int | None
+    variant_id: uuid.UUID | None
+    base_unit_id: int
+    is_active: bool
+    total_quantity_base: Decimal
+    status_totals: list[InventoryItemStatusSummaryOut]
+    occupied_weight_kg: Decimal | None
+    occupied_volume_m3: Decimal | None
+    measurement_status: Literal["complete", "incomplete"]
+    handling_unit_count: int
+    unmeasured_handling_units: int
+    warehouse_count: int
+    location_count: int
+    lot_count: int
+
+
 class PackagingCreate(StrictModel):
     code: str = Field(..., min_length=1, max_length=60, pattern=r"^[A-Za-z0-9._-]+$")
     name: str = Field(..., min_length=2, max_length=120)

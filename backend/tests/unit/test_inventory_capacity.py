@@ -14,6 +14,7 @@ from app.api.v1.routers.inventory import InventoryBoundaryError, _execute, route
 from app.api.v1.schemas.inventory import (
     CapacityDecisionOut,
     CapacitySummaryOut,
+    InventoryItemSummaryOut,
     MovementConfirmIn,
 )
 from app.application.inventory import InventoryApplicationError, InventoryUseCases
@@ -110,6 +111,84 @@ class _ScalarQueueSession:
 
     async def scalar(self, _statement: object) -> object:
         return self.values.pop(0)
+
+
+class _ResultQueueSession:
+    def __init__(self, *, scalars: list[object], results: list[object]) -> None:
+        self.scalars = list(scalars)
+        self.results = list(results)
+
+    async def scalar(self, _statement: object) -> object:
+        return self.scalars.pop(0)
+
+    async def execute(self, _statement: object) -> object:
+        return self.results.pop(0)
+
+
+class _RowsResult:
+    def __init__(self, rows: list[object]) -> None:
+        self.rows = rows
+
+    def all(self) -> list[object]:
+        return self.rows
+
+
+class _OneResult:
+    def __init__(self, row: object) -> None:
+        self.row = row
+
+    def one(self) -> object:
+        return self.row
+
+
+@pytest.mark.asyncio
+async def test_inventory_item_summary_preserves_unknown_physical_values() -> None:
+    company_id = uuid.uuid4()
+    item_id = uuid.uuid4()
+    item = SimpleNamespace(
+        id=item_id,
+        company_id=company_id,
+        product_id=None,
+        variant_id=uuid.uuid4(),
+        base_unit_id=1,
+        is_active=True,
+    )
+    session = _ResultQueueSession(
+        scalars=[item, 3],
+        results=[
+            _RowsResult(
+                [
+                    ("available", Decimal("10"), Decimal("20"), Decimal("0.5")),
+                    ("quarantine", Decimal("4"), Decimal("0"), Decimal("0")),
+                ]
+            ),
+            _RowsResult([("quarantine", 1)]),
+            _OneResult((2, 3, 1)),
+        ],
+    )
+    repository = SqlAlchemyInventoryRepository(cast(Any, session))
+
+    summary = await repository.inventory_item_summary(company_id=company_id, item_id=item_id)
+
+    assert summary is not None
+    assert summary.total_quantity_base == Decimal("14")
+    assert summary.measurement_status is MeasurementStatus.INCOMPLETE
+    assert summary.occupied_weight_kg is None
+    assert summary.occupied_volume_m3 is None
+    assert summary.handling_unit_count == 3
+    assert summary.unmeasured_handling_units == 1
+    quarantine = next(
+        item for item in summary.status_totals if item.stock_status is StockStatus.QUARANTINE
+    )
+    assert quarantine.occupied_weight_kg is None
+    available = next(
+        item for item in summary.status_totals if item.stock_status is StockStatus.AVAILABLE
+    )
+    assert available.occupied_weight_kg == Decimal("20")
+
+    response = InventoryItemSummaryOut.model_validate(summary)
+    assert response.total_quantity_base == Decimal("14")
+    assert response.occupied_weight_kg is None
 
 
 @pytest.mark.asyncio
@@ -723,6 +802,7 @@ def test_api_exposes_target_lookup_capacity_summary_and_measurement_release_flow
     paths = {route.path for route in router.routes}
 
     assert "/inventory/items/by-target" in paths
+    assert "/inventory/items/{item_id}/summary" in paths
     assert "/inventory/warehouses/{warehouse_id}/capacity-summary" in paths
     assert "/inventory/handling-units/{handling_unit_id}/measurements" in paths
     assert "/inventory/movements/confirm" in paths

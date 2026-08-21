@@ -12,6 +12,7 @@ from app.domain.entities.inventory import (
     CapacityDecision,
     CapacityReservation,
     InventoryItem,
+    InventoryItemSummary,
     PackagingDefinition,
     PackagingType,
     PhysicalMeasures,
@@ -105,6 +106,20 @@ class InventoryUseCases:
                 status_code=404,
             )
         return item
+
+    async def inventory_item_summary(
+        self, *, company_id: uuid.UUID, item_id: uuid.UUID
+    ) -> InventoryItemSummary:
+        summary = await self._repository.inventory_item_summary(
+            company_id=company_id, item_id=item_id
+        )
+        if summary is None:
+            raise InventoryApplicationError(
+                "Identidad inventariable no encontrada.",
+                code="inventory_item_not_found",
+                status_code=404,
+            )
+        return summary
 
     async def create_packaging(
         self,

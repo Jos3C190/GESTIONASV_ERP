@@ -21,6 +21,8 @@ from app.domain.entities.inventory import (
     CapacityUsage,
     Consumption,
     InventoryItem,
+    InventoryItemStatusSummary,
+    InventoryItemSummary,
     InventoryOperationError,
     MeasurementSource,
     MeasurementStatus,
@@ -411,6 +413,131 @@ class SqlAlchemyInventoryRepository:
             )
         )
         return _item_domain(row) if row else None
+
+    async def inventory_item_summary(
+        self, *, company_id: uuid.UUID, item_id: uuid.UUID
+    ) -> InventoryItemSummary | None:
+        item_row = await self._session.scalar(
+            select(InventoryItemModel).where(
+                InventoryItemModel.company_id == company_id,
+                InventoryItemModel.id == item_id,
+            )
+        )
+        if item_row is None:
+            return None
+
+        balance_filters = [
+            InventoryBalanceModel.company_id == company_id,
+            InventoryBalanceModel.inventory_item_id == item_id,
+            InventoryBalanceModel.quantity_base > ZERO,
+        ]
+        balance_rows = (
+            await self._session.execute(
+                select(
+                    InventoryBalanceModel.stock_status,
+                    func.coalesce(func.sum(InventoryBalanceModel.quantity_base), ZERO),
+                    func.coalesce(func.sum(InventoryBalanceModel.occupied_weight_kg), ZERO),
+                    func.coalesce(func.sum(InventoryBalanceModel.occupied_volume_m3), ZERO),
+                )
+                .where(*balance_filters)
+                .group_by(InventoryBalanceModel.stock_status)
+            )
+        ).all()
+        incomplete_rows = (
+            await self._session.execute(
+                select(
+                    InventoryHandlingUnitModel.stock_status,
+                    func.count(InventoryHandlingUnitModel.id),
+                )
+                .where(
+                    InventoryHandlingUnitModel.company_id == company_id,
+                    InventoryHandlingUnitModel.inventory_item_id == item_id,
+                    InventoryHandlingUnitModel.closed_at.is_(None),
+                    InventoryHandlingUnitModel.measurement_status
+                    == MeasurementStatus.INCOMPLETE.value,
+                )
+                .group_by(InventoryHandlingUnitModel.stock_status)
+            )
+        ).all()
+        incomplete_by_status = {
+            StockStatus(status): int(count) for status, count in incomplete_rows
+        }
+
+        totals_by_status = {
+            StockStatus(status): (quantity, weight, volume)
+            for status, quantity, weight, volume in balance_rows
+        }
+        status_totals: list[InventoryItemStatusSummary] = []
+        total_quantity = ZERO
+        total_weight = ZERO
+        total_volume = ZERO
+        has_incomplete_measurements = False
+        for stock_status in StockStatus:
+            quantity, weight, volume = totals_by_status.get(
+                stock_status, (ZERO, ZERO, ZERO)
+            )
+            total_quantity += quantity
+            total_weight += weight
+            total_volume += volume
+            incomplete = incomplete_by_status.get(stock_status, 0) > 0
+            has_incomplete_measurements = has_incomplete_measurements or incomplete
+            status_totals.append(
+                InventoryItemStatusSummary(
+                    stock_status=stock_status,
+                    quantity_base=quantity,
+                    occupied_weight_kg=None if incomplete else weight,
+                    occupied_volume_m3=None if incomplete else volume,
+                    measurement_status=(
+                        MeasurementStatus.INCOMPLETE
+                        if incomplete
+                        else MeasurementStatus.COMPLETE
+                    ),
+                )
+            )
+
+        handling_unit_count = int(
+            await self._session.scalar(
+                select(func.count(InventoryHandlingUnitModel.id)).where(
+                    InventoryHandlingUnitModel.company_id == company_id,
+                    InventoryHandlingUnitModel.inventory_item_id == item_id,
+                    InventoryHandlingUnitModel.closed_at.is_(None),
+                )
+            )
+            or 0
+        )
+        unmeasured_handling_units = sum(incomplete_by_status.values())
+        warehouse_count, location_count, lot_count = (
+            await self._session.execute(
+                select(
+                    func.count(func.distinct(InventoryBalanceModel.warehouse_id)),
+                    func.count(func.distinct(InventoryBalanceModel.location_id)),
+                    func.count(func.distinct(InventoryBalanceModel.lot_code)),
+                ).where(*balance_filters)
+            )
+        ).one()
+
+        return InventoryItemSummary(
+            inventory_item_id=item_row.id,
+            company_id=item_row.company_id,
+            product_id=item_row.product_id,
+            variant_id=item_row.variant_id,
+            base_unit_id=item_row.base_unit_id,
+            is_active=item_row.is_active,
+            total_quantity_base=total_quantity,
+            status_totals=tuple(status_totals),
+            occupied_weight_kg=None if has_incomplete_measurements else total_weight,
+            occupied_volume_m3=None if has_incomplete_measurements else total_volume,
+            measurement_status=(
+                MeasurementStatus.INCOMPLETE
+                if has_incomplete_measurements
+                else MeasurementStatus.COMPLETE
+            ),
+            handling_unit_count=handling_unit_count,
+            unmeasured_handling_units=unmeasured_handling_units,
+            warehouse_count=int(warehouse_count or 0),
+            location_count=int(location_count or 0),
+            lot_count=int(lot_count or 0),
+        )
 
     async def list_packaging(
         self, company_id: uuid.UUID, item_id: uuid.UUID

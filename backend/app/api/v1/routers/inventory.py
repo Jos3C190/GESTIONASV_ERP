@@ -37,6 +37,7 @@ from app.api.v1.schemas.inventory import (
     InventoryBalanceOut,
     InventoryItemCreate,
     InventoryItemOut,
+    InventoryItemSummaryOut,
     MovementConfirmIn,
     MovementOut,
     OperationalOverrideCreate,
@@ -264,6 +265,26 @@ async def get_inventory_item(
     await require_company_wide_scope(session, current, company_id)
     item = await _execute(session, _use_cases(session).get_item(company_id, item_id))
     return InventoryItemOut.model_validate(item)
+
+
+@router.get(
+    "/items/{item_id}/summary",
+    response_model=InventoryItemSummaryOut,
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def get_inventory_item_summary(
+    item_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+) -> InventoryItemSummaryOut:
+    company_id = effective_company_id(request)
+    await require_company_wide_scope(session, current, company_id)
+    summary = await _execute(
+        session,
+        _use_cases(session).inventory_item_summary(company_id=company_id, item_id=item_id),
+    )
+    return InventoryItemSummaryOut.model_validate(summary)
 
 
 @router.get(

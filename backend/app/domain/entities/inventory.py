@@ -308,6 +308,35 @@ class InventoryItem:
 
 
 @dataclass(frozen=True, slots=True)
+class InventoryItemStatusSummary:
+    stock_status: StockStatus
+    quantity_base: Decimal
+    occupied_weight_kg: Decimal | None
+    occupied_volume_m3: Decimal | None
+    measurement_status: MeasurementStatus
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryItemSummary:
+    inventory_item_id: uuid.UUID
+    company_id: uuid.UUID
+    product_id: int | None
+    variant_id: uuid.UUID | None
+    base_unit_id: int
+    is_active: bool
+    total_quantity_base: Decimal
+    status_totals: tuple[InventoryItemStatusSummary, ...]
+    occupied_weight_kg: Decimal | None
+    occupied_volume_m3: Decimal | None
+    measurement_status: MeasurementStatus
+    handling_unit_count: int
+    unmeasured_handling_units: int
+    warehouse_count: int
+    location_count: int
+    lot_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class PackagingDefinition:
     id: uuid.UUID
     company_id: uuid.UUID

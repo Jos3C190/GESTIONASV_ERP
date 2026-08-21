@@ -12,6 +12,7 @@ from app.domain.entities.inventory import (
     CapacityDecision,
     CapacityReservation,
     InventoryItem,
+    InventoryItemSummary,
     PackagingDefinition,
     PackagingType,
     PhysicalMeasures,
@@ -38,6 +39,10 @@ class InventoryRepository(Protocol):
         product_id: int | None,
         variant_id: uuid.UUID | None,
     ) -> InventoryItem | None: ...
+
+    async def inventory_item_summary(
+        self, *, company_id: uuid.UUID, item_id: uuid.UUID
+    ) -> InventoryItemSummary | None: ...
 
     async def list_packaging(
         self, company_id: uuid.UUID, item_id: uuid.UUID
