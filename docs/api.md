@@ -136,13 +136,47 @@ Volume is read-only, expressed in m³, and is `null` until all three dimensions
 are present. Omitting measurement fields on update preserves them; sending
 `null` clears the corresponding measurement.
 
+`GET /api/v1/catalog/products/{id}` also returns the optional `category_name`
+when the referenced category belongs to the same company as the product. The
+numeric `id_category` remains the authoritative relationship; `category_name`
+is left `null` only when the name cannot be resolved within that company.
+
+The product detail also enriches each `supplier_links` entry with the optional
+`supplier_name`, resolved from the commercial supplier record in the same
+company. `supplier_id` remains the stable relationship identifier, and
+`supplier_name` is `null` for historical relations whose supplier is no longer
+visible. The field is additive and does not change supplier permissions or
+create an extra supplier request in the frontend.
+
+### Variant detail and inventory summary
+
+The read-only variant detail page uses the existing variant resource together
+with the inventory identity associated with that variant:
+
+| Method | Endpoint | Permission | Purpose |
+|---|---|---|---|
+| `GET` | `/api/v1/catalog/products/{id}/variants/{variant_id}` | `products:read` | Variant SKU, attributes, identifiers, image and lifecycle |
+| `GET` | `/api/v1/inventory/items/by-target?variant_id={variant_id}` | `inventory:read` | Resolve the inventory identity without mixing it with the parent template |
+| `GET` | `/api/v1/inventory/items/{item_id}/packaging` | `inventory:read` | Read versioned packaging and physical measures |
+| `GET` | `/api/v1/inventory/items/{item_id}/summary` | `inventory:read` | Global stock totals for the variant across all warehouses |
+
+The inventory summary reports quantity by stock status, active handling-unit
+counts, warehouse/location/lot counts, and physical totals. Weight and volume
+are `null` whenever an active handling unit for the variant is incomplete; the
+API never converts an unknown physical measure into zero. Closed handling units
+are excluded from active totals. If no inventory identity exists, the client
+shows an empty state instead of treating the variant as stocked.
+
+The catalogue detail endpoint remains read-only. SKU, lifecycle, identifiers
+and image changes continue through the field-specific `PATCH` endpoint, and
+the UI keeps the edit route separate from the detail route.
+
 ### Deferred product API scope
 
-The API does not expose inventory balances, purchase orders, landed-cost
-allocation, price lists, packaging conversions, fiscal accounting rules or
-compliance documents yet. Variant master data is available, but operational
-inventory, purchasing, sales and pricing endpoints that consume `variant_id`
-remain deferred
+The API does not expose purchase orders, landed-cost allocation, price lists,
+fiscal accounting rules or compliance documents yet. Variant master data and
+the global inventory summary are available, while purchasing, sales and
+pricing endpoints that consume `variant_id` remain deferred
 until their consuming modules exist. The dependency and acceptance matrix is
 documented in [`docs/product-module-future-debt.txt`](product-module-future-debt.txt).
 

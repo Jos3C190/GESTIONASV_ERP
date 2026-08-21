@@ -25,8 +25,10 @@ SKU, canonical attribute combination, lifecycle, identifiers and one primary
 image. The repository reserves SKUs and synchronizes the family graph in one
 transaction. The family graph supports sparse combinations: the catalog can
 declare only the combinations the business actually offers, while preserving
-omitted historical variants as retired for traceability. No inventory, purchase, sales, price or replenishment behavior is
-introduced until those contexts consume `variant_id`.
+omitted historical variants as retired for traceability. Inventory now consumes
+`variant_id` through an exclusive inventory identity, balances and handling
+units; purchase, sales, price and replenishment behavior remains deferred until
+those contexts consume the identifier.
 
 Individual variant maintenance is deliberately separate from the family
 manager. `PATCH /variants/{variant_id}` locks the parent and variant in a
