@@ -130,6 +130,7 @@ export interface ProductSupplier {
   product_id: number;
   supplier_id: number;
   company_id: string;
+  supplier_name?: string | null;
   supplier_product_code?: string | null;
   unit_cost?: number | null;
   currency_code?: string | null;

@@ -8,6 +8,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import PackagingManager from '$lib/features/inventory/components/PackagingManager.svelte';
+  import { supplierDisplayName } from '$lib/features/products/supplier-display';
 
   let product = $state<Product | null>(null);
   let categories = $state<Category[]>([]);
@@ -19,8 +20,12 @@
 
   const statusLabel = (active: boolean) => (active ? 'Activo' : 'Inactivo');
 
-  function categoryName(id: number) {
-    return categories.find((item) => item.id_category === id)?.name ?? 'Sin categoría';
+  function categoryName(currentProduct: Product) {
+    return (
+      currentProduct.category_name ??
+      categories.find((item) => item.id_category === currentProduct.id_category)?.name ??
+      'Categoría no disponible'
+    );
   }
 
   function unitName(id: number) {
@@ -202,7 +207,7 @@
               class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-foreground-muted"
             >
               <span class="font-mono text-xs">{product.sku}</span>
-              <span>{categoryName(product.id_category)}</span>
+              <span>{categoryName(product)}</span>
               {#if product.internal_code}<span>Ref. {product.internal_code}</span>{/if}
             </div>
           </div>
@@ -223,7 +228,7 @@
             Categoría
           </p>
           <p class="mt-2 truncate text-sm font-semibold text-foreground">
-            {categoryName(product.id_category)}
+            {categoryName(product)}
           </p>
           <p class="mt-1 text-xs text-foreground-muted">
             {product.id_sub_category ? 'Subcategoría asignada' : 'Sin subcategoría'}
@@ -476,9 +481,17 @@
                       {/if}
                     </td>
                     <td class="px-3 py-2 font-mono text-foreground"
-                      >{variant.sku}
+                      ><a
+                        class="hover:text-primary hover:underline"
+                        href={`/products/${product.id_product}/variants/${variant.id}`}
+                        >{variant.sku}</a
+                      >
                       <div class="font-sans text-xs text-foreground-muted">
-                        {variant.name_override || variant.display_name}
+                        <a
+                          class="hover:text-primary hover:underline"
+                          href={`/products/${product.id_product}/variants/${variant.id}`}
+                          >{variant.name_override || variant.display_name}</a
+                        >
                       </div></td
                     >
                     <td class="px-3 py-2 text-foreground-muted"
@@ -491,11 +504,20 @@
                       >{variant.identifiers.length || '—'}</td
                     >
                     <td class="whitespace-nowrap px-3 py-2">
-                      <a
-                        class="text-xs font-medium text-primary hover:underline"
-                        href={`/products/${product.id_product}/variants/${variant.id}/edit`}
-                        >Editar variante</a
-                      >
+                      <div class="flex flex-wrap gap-2">
+                        <a
+                          class="text-xs font-medium text-primary hover:underline"
+                          href={`/products/${product.id_product}/variants/${variant.id}`}
+                          >Ver detalle</a
+                        >
+                        {#if permissions.hasPermission('products:variants') || permissions.hasPermission('products:identifiers') || permissions.hasPermission('products:images')}
+                          <a
+                            class="text-xs font-medium text-foreground-muted hover:text-foreground hover:underline"
+                            href={`/products/${product.id_product}/variants/${variant.id}/edit`}
+                            >Editar variante</a
+                          >
+                        {/if}
+                      </div>
                     </td>
                   </tr>
                 {/each}
@@ -529,7 +551,7 @@
               ><tbody class="divide-y divide-border"
                 >{#each product.supplier_links as relation (relation.id)}<tr
                     ><td class="px-3 py-2 text-foreground"
-                      >#{relation.supplier_id}{#if relation.is_preferred}<span class="ml-2"
+                      >{supplierDisplayName(relation)}{#if relation.is_preferred}<span class="ml-2"
                           ><Badge variant="success">Preferido</Badge></span
                         >{/if}</td
                     ><td class="px-3 py-2 text-foreground-muted"

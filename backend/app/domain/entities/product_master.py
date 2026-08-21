@@ -29,6 +29,7 @@ class ProductSupplier:
     product_id: int
     supplier_id: int
     company_id: uuid.UUID
+    supplier_name: str | None = None
     supplier_product_code: str | None = None
     unit_cost: Decimal | None = None
     currency_code: str | None = None

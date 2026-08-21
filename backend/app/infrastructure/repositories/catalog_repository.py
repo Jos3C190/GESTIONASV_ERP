@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, distinct, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import noload, selectinload
+from sqlalchemy.sql import Select
 
 from app.core.exceptions import ConcurrencyError
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit
@@ -208,11 +209,20 @@ def _to_variant(orm: ProductVariantModel, parent_name: str) -> ProductVariant:
 
 
 def _to_product_supplier(orm: ProductSupplierModel) -> ProductSupplier:
+    loaded_supplier = orm.__dict__.get("supplier")
+    supplier_name = None
+    if (
+        loaded_supplier is not None
+        and getattr(loaded_supplier, "company_id", None) == orm.company_id
+        and getattr(loaded_supplier, "deleted_at", None) is None
+    ):
+        supplier_name = getattr(loaded_supplier, "name", None)
     return ProductSupplier(
         id=orm.id,
         product_id=orm.product_id,
         supplier_id=orm.supplier_id,
         company_id=orm.company_id,
+        supplier_name=supplier_name,
         supplier_product_code=orm.supplier_product_code,
         unit_cost=orm.unit_cost,
         currency_code=orm.currency_code,
@@ -310,6 +320,42 @@ def _to_product(
 class SqlAlchemyCatalogRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    def _product_detail_statement(self) -> Select[tuple[ProductModel, str | None]]:
+        """Build the company-scoped product detail query.
+
+        Category names are projected rather than loaded through the ORM
+        relationship because the product/category foreign key is only unique
+        within a company.  The outer join also keeps the product visible when
+        a historical category row is missing, while never resolving a
+        category belonging to another company.
+        """
+        return (
+            select(ProductModel, CategoryModel.name.label("category_name"))
+            .outerjoin(
+                CategoryModel,
+                (CategoryModel.id_category == ProductModel.id_category)
+                & (CategoryModel.company_id == ProductModel.company_id),
+            )
+            .options(
+                selectinload(ProductModel.images),
+                selectinload(ProductModel.identifiers),
+                selectinload(ProductModel.supplier_links).selectinload(
+                    ProductSupplierModel.supplier
+                ),
+                selectinload(ProductModel.variant_attributes).selectinload(
+                    ProductFamilyAttributeModel.values
+                ),
+                selectinload(ProductModel.variants)
+                .selectinload(ProductVariantModel.attribute_values)
+                .options(
+                    selectinload(ProductVariantAttributeValueModel.attribute),
+                    selectinload(ProductVariantAttributeValueModel.value),
+                ),
+                selectinload(ProductModel.variants).selectinload(ProductVariantModel.identifiers),
+                selectinload(ProductModel.variants).selectinload(ProductVariantModel.image),
+            )
+        )
 
     # --- Countries ---
     async def list_countries(self, active_only: bool = True) -> list[Country]:
@@ -670,8 +716,7 @@ class SqlAlchemyCatalogRepository:
         res = await self._session.execute(stmt)
         rows = res.all()
         product_ids = [
-            product.id_product
-            for product, _category_name, _image_count, _variant_count in rows
+            product.id_product for product, _category_name, _image_count, _variant_count in rows
         ]
         covers: dict[int, ProductImage] = {}
         if product_ids:
@@ -697,56 +742,28 @@ class SqlAlchemyCatalogRepository:
         return items, total
 
     async def get_product_by_id(self, company_id: uuid.UUID, product_id: int) -> Product | None:
-        stmt = (
-            select(ProductModel)
-            .where(ProductModel.company_id == company_id, ProductModel.id_product == product_id)
-            .options(
-                selectinload(ProductModel.images),
-                selectinload(ProductModel.identifiers),
-                selectinload(ProductModel.supplier_links),
-                selectinload(ProductModel.variant_attributes).selectinload(
-                    ProductFamilyAttributeModel.values
-                ),
-                selectinload(ProductModel.variants)
-                .selectinload(ProductVariantModel.attribute_values)
-                .options(
-                    selectinload(ProductVariantAttributeValueModel.attribute),
-                    selectinload(ProductVariantAttributeValueModel.value),
-                ),
-                selectinload(ProductModel.variants).selectinload(ProductVariantModel.identifiers),
-                selectinload(ProductModel.variants).selectinload(ProductVariantModel.image),
-            )
+        stmt = self._product_detail_statement().where(
+            ProductModel.company_id == company_id, ProductModel.id_product == product_id
         )
         res = await self._session.execute(stmt)
-        orm = res.scalar_one_or_none()
-        return _to_product(orm) if orm else None
+        row = res.one_or_none()
+        if row is None:
+            return None
+        orm, category_name = row
+        return _to_product(orm, category_name=category_name)
 
     async def get_product_by_uuid(
         self, company_id: uuid.UUID, prod_uuid: uuid.UUID
     ) -> Product | None:
-        stmt = (
-            select(ProductModel)
-            .where(ProductModel.company_id == company_id, ProductModel.uuid == prod_uuid)
-            .options(
-                selectinload(ProductModel.images),
-                selectinload(ProductModel.identifiers),
-                selectinload(ProductModel.supplier_links),
-                selectinload(ProductModel.variant_attributes).selectinload(
-                    ProductFamilyAttributeModel.values
-                ),
-                selectinload(ProductModel.variants)
-                .selectinload(ProductVariantModel.attribute_values)
-                .options(
-                    selectinload(ProductVariantAttributeValueModel.attribute),
-                    selectinload(ProductVariantAttributeValueModel.value),
-                ),
-                selectinload(ProductModel.variants).selectinload(ProductVariantModel.identifiers),
-                selectinload(ProductModel.variants).selectinload(ProductVariantModel.image),
-            )
+        stmt = self._product_detail_statement().where(
+            ProductModel.company_id == company_id, ProductModel.uuid == prod_uuid
         )
         res = await self._session.execute(stmt)
-        orm = res.scalar_one_or_none()
-        return _to_product(orm) if orm else None
+        row = res.one_or_none()
+        if row is None:
+            return None
+        orm, category_name = row
+        return _to_product(orm, category_name=category_name)
 
     async def get_product_by_sku(self, company_id: uuid.UUID, sku: str) -> Product | None:
         stmt = (
@@ -894,7 +911,9 @@ class SqlAlchemyCatalogRepository:
             stmt.options(
                 selectinload(ProductModel.images),
                 selectinload(ProductModel.identifiers),
-                selectinload(ProductModel.supplier_links),
+                selectinload(ProductModel.supplier_links).selectinload(
+                    ProductSupplierModel.supplier
+                ),
             )
         )
         orm = res.scalar_one_or_none()
@@ -959,7 +978,9 @@ class SqlAlchemyCatalogRepository:
             .options(
                 selectinload(ProductModel.images),
                 selectinload(ProductModel.identifiers),
-                selectinload(ProductModel.supplier_links),
+                selectinload(ProductModel.supplier_links).selectinload(
+                    ProductSupplierModel.supplier
+                ),
                 selectinload(ProductModel.variant_attributes).selectinload(
                     ProductFamilyAttributeModel.values
                 ),
