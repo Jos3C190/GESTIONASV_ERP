@@ -8,6 +8,15 @@ export default defineConfig(({ mode }) => ({
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
+    warmup: {
+      // Transform the product screens during startup to avoid a long SSR
+      // transform waterfall on the first navigation in slower environments.
+      ssrFiles: [
+        './src/routes/(app)/+layout.svelte',
+        './src/routes/(app)/products/[id]/+page.svelte',
+        './src/routes/(app)/products/[id]/variants/[variantId]/+page.svelte'
+      ]
+    },
     watch: {
       ignored: ['**/.svelte-kit/**']
     },
