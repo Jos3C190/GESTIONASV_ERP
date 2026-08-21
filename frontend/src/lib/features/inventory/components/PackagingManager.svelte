@@ -20,9 +20,19 @@
     defaultBaseUnitId: number;
     unitOptions: UnitOption[];
     canManage?: boolean;
+    inventoryItem?: InventoryItem | null;
+    inventoryItemResolved?: boolean;
   }
 
-  let { productId, variantId, defaultBaseUnitId, unitOptions, canManage = false }: Props = $props();
+  let {
+    productId,
+    variantId,
+    defaultBaseUnitId,
+    unitOptions,
+    canManage = false,
+    inventoryItem,
+    inventoryItemResolved = false
+  }: Props = $props();
 
   let item = $state<InventoryItem | null>(null);
   let definitions = $state<PackagingDefinition[]>([]);
@@ -92,7 +102,9 @@
       return;
     }
     try {
-      item = await inventoryApi.getItemByTarget({ productId, variantId });
+      item = inventoryItemResolved
+        ? (inventoryItem ?? null)
+        : await inventoryApi.getItemByTarget({ productId, variantId });
       definitions = item ? await inventoryApi.listPackaging(item.id) : [];
       if (item) baseUnitId = item.base_unit_id;
     } catch (err) {
@@ -224,6 +236,8 @@
   $effect(() => {
     void productId;
     void variantId;
+    void inventoryItem;
+    void inventoryItemResolved;
     baseUnitId = defaultBaseUnitId;
     void load();
   });

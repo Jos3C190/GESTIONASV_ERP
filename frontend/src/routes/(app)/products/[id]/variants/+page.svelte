@@ -50,6 +50,7 @@
   let canEditImages = $derived(permissions.hasPermission('products:images'));
   let canUploadImages = $derived(permissions.hasPermission('media.upload'));
   let canEditIdentifiers = $derived(permissions.hasPermission('products:identifiers'));
+  let canEditVariant = $derived(canEditVariants || canEditIdentifiers || canEditImages);
   let dirty = $derived(
     !loading &&
       (initialSnapshot !== JSON.stringify(config) ||
@@ -489,6 +490,7 @@
           canUpload={canUploadImages}
           {canEditImages}
           {canEditIdentifiers}
+          {canEditVariant}
           editable={false}
           stage="all"
         />
@@ -589,6 +591,7 @@
             canUpload={canUploadImages}
             {canEditImages}
             {canEditIdentifiers}
+            {canEditVariant}
             editable={canEditVariants}
             {generationMode}
             stage="attributes"
@@ -664,15 +667,16 @@
             <div class="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 class="text-base font-semibold text-foreground">
-                  {generationMode === 'all' ? 'Revisión de la matriz completa' : 'Revisión de la selección'}
+                  {generationMode === 'all'
+                    ? 'Revisión de la matriz completa'
+                    : 'Revisión de la selección'}
                 </h2>
                 <p class="mt-1 text-sm text-foreground-muted">
                   {#if manualMode}
                     Agregue combinaciones y revise la selección antes de enviarla al servidor. Se
                     guardarán únicamente las {selectedKeys.length} seleccionadas.
                   {:else if generationMode === 'all'}
-                    El servidor validó {candidates.length} combinaciones. Se incluirán todas en la
-                    familia.
+                    El servidor validó {candidates.length} combinaciones. Se incluirán todas en la familia.
                   {:else}
                     El servidor validó {candidates.length} combinaciones posibles. Se guardarán únicamente
                     las {selectedKeys.length} seleccionadas.
@@ -680,7 +684,8 @@
                 </p>
               </div>
               <Badge variant={selectedKeys.length ? 'success' : 'warning'}>
-                {selectedKeys.length} {generationMode === 'all' ? 'incluidas' : 'seleccionadas'}
+                {selectedKeys.length}
+                {generationMode === 'all' ? 'incluidas' : 'seleccionadas'}
               </Badge>
             </div>
             {#if retirementCount > 0}
@@ -717,6 +722,7 @@
             canUpload={canUploadImages}
             {canEditImages}
             {canEditIdentifiers}
+            {canEditVariant}
             editable={canEditVariants}
             stage="variants"
           />

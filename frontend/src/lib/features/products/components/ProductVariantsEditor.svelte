@@ -12,6 +12,7 @@
     canUpload?: boolean;
     canEditImages?: boolean;
     canEditIdentifiers?: boolean;
+    canEditVariant?: boolean;
     editable?: boolean;
     stage?: 'all' | 'attributes' | 'variants';
     generationMode?: 'all' | 'selected';
@@ -26,6 +27,7 @@
     canUpload = true,
     canEditImages = true,
     canEditIdentifiers = true,
+    canEditVariant = true,
     editable = true,
     stage = 'all',
     generationMode = 'all',
@@ -489,10 +491,19 @@
               >
               <td class="whitespace-nowrap px-3 py-2">
                 {#if productId && variant.id}
-                  <a
-                    class="text-xs font-medium text-primary hover:underline"
-                    href={`/products/${productId}/variants/${variant.id}/edit`}>Editar variante</a
-                  >
+                  <div class="flex flex-wrap gap-2">
+                    <a
+                      class="text-xs font-medium text-primary hover:underline"
+                      href={`/products/${productId}/variants/${variant.id}`}>Ver detalle</a
+                    >
+                    {#if canEditVariant}
+                      <a
+                        class="text-xs font-medium text-foreground-muted hover:text-foreground hover:underline"
+                        href={`/products/${productId}/variants/${variant.id}/edit`}
+                        >Editar variante</a
+                      >
+                    {/if}
+                  </div>
                 {:else}
                   <span class="text-xs text-foreground-subtle">—</span>
                 {/if}
