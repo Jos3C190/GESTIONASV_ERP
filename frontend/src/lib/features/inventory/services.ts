@@ -5,6 +5,7 @@ import type {
   CapacitySummary,
   HandlingUnit,
   InventoryItem,
+  InventoryItemSummary,
   PackagingCreateInput,
   PackagingDefinition,
   PhysicalMeasuresInput,
@@ -90,6 +91,22 @@ type RawHandlingUnit = Omit<
   occupied_volume_m3: DecimalValue;
 };
 
+interface RawInventoryItemSummary extends Omit<
+  InventoryItemSummary,
+  'total_quantity_base' | 'status_totals' | 'occupied_weight_kg' | 'occupied_volume_m3'
+> {
+  total_quantity_base: DecimalValue;
+  occupied_weight_kg: DecimalValue;
+  occupied_volume_m3: DecimalValue;
+  status_totals: Array<{
+    stock_status: StockStatus;
+    quantity_base: DecimalValue;
+    occupied_weight_kg: DecimalValue;
+    occupied_volume_m3: DecimalValue;
+    measurement_status: 'complete' | 'incomplete';
+  }>;
+}
+
 function decimal(value: DecimalValue): number | null {
   if (value == null || value === '') return null;
   const parsed = Number(value);
@@ -158,6 +175,21 @@ function handlingUnit(raw: RawHandlingUnit): HandlingUnit {
   };
 }
 
+function inventoryItemSummary(raw: RawInventoryItemSummary): InventoryItemSummary {
+  return {
+    ...raw,
+    total_quantity_base: requiredDecimal(raw.total_quantity_base, 'total_quantity_base'),
+    occupied_weight_kg: decimal(raw.occupied_weight_kg),
+    occupied_volume_m3: decimal(raw.occupied_volume_m3),
+    status_totals: raw.status_totals.map((status) => ({
+      ...status,
+      quantity_base: requiredDecimal(status.quantity_base, 'quantity_base'),
+      occupied_weight_kg: decimal(status.occupied_weight_kg),
+      occupied_volume_m3: decimal(status.occupied_volume_m3)
+    }))
+  };
+}
+
 export const inventoryApi = {
   getItemByTarget: async (target: { productId?: number; variantId?: string }) => {
     const query = new URLSearchParams();
@@ -170,6 +202,11 @@ export const inventoryApi = {
       throw error;
     }
   },
+
+  getItemSummary: async (itemId: string) =>
+    inventoryItemSummary(
+      await apiFetch<RawInventoryItemSummary>(`/inventory/items/${itemId}/summary`)
+    ),
 
   createItem: (body: { product_id?: number; variant_id?: string; base_unit_id: number }) =>
     apiFetch<InventoryItem>('/inventory/items', {

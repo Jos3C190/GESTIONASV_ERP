@@ -200,4 +200,48 @@ describe('inventory service', () => {
       measurement_status: 'incomplete'
     });
   });
+
+  it('normaliza el resumen global de una variante sin convertir medidas desconocidas en cero', async () => {
+    apiMocks.apiFetch.mockResolvedValueOnce({
+      inventory_item_id: 'item-variant-1',
+      company_id: 'company-1',
+      product_id: null,
+      variant_id: 'variant-1',
+      base_unit_id: 1,
+      is_active: true,
+      total_quantity_base: '14.000000',
+      status_totals: [
+        {
+          stock_status: 'available',
+          quantity_base: '10.000000',
+          occupied_weight_kg: '20.000000',
+          occupied_volume_m3: '0.500000',
+          measurement_status: 'complete'
+        },
+        {
+          stock_status: 'quarantine',
+          quantity_base: '4.000000',
+          occupied_weight_kg: null,
+          occupied_volume_m3: null,
+          measurement_status: 'incomplete'
+        }
+      ],
+      occupied_weight_kg: null,
+      occupied_volume_m3: null,
+      measurement_status: 'incomplete',
+      handling_unit_count: 3,
+      unmeasured_handling_units: 1,
+      warehouse_count: 2,
+      location_count: 3,
+      lot_count: 1
+    });
+
+    const result = await inventoryApi.getItemSummary('item-variant-1');
+
+    expect(apiMocks.apiFetch).toHaveBeenCalledWith('/inventory/items/item-variant-1/summary');
+    expect(result.total_quantity_base).toBe(14);
+    expect(result.occupied_weight_kg).toBeNull();
+    expect(result.status_totals[0]!.occupied_weight_kg).toBe(20);
+    expect(result.status_totals[1]!.occupied_volume_m3).toBeNull();
+  });
 });

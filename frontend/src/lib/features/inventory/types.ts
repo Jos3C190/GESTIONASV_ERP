@@ -31,6 +31,33 @@ export interface InventoryItem {
   is_active: boolean;
 }
 
+export interface InventoryItemStatusSummary {
+  stock_status: StockStatus;
+  quantity_base: number;
+  occupied_weight_kg: number | null;
+  occupied_volume_m3: number | null;
+  measurement_status: 'complete' | 'incomplete';
+}
+
+export interface InventoryItemSummary {
+  inventory_item_id: string;
+  company_id: string;
+  product_id: number | null;
+  variant_id: string | null;
+  base_unit_id: number;
+  is_active: boolean;
+  total_quantity_base: number;
+  status_totals: InventoryItemStatusSummary[];
+  occupied_weight_kg: number | null;
+  occupied_volume_m3: number | null;
+  measurement_status: 'complete' | 'incomplete';
+  handling_unit_count: number;
+  unmeasured_handling_units: number;
+  warehouse_count: number;
+  location_count: number;
+  lot_count: number;
+}
+
 export interface PackagingDefinition {
   id: string;
   company_id: string;
