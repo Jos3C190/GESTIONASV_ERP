@@ -29,7 +29,7 @@ from app.api.v1.schemas.catalog import (
     ProductSupplierUpdate,
 )
 from app.application.audit.audit_service import AuditService
-from app.domain.product_master import normalize_identifier
+from app.domain.product_identifiers import validate_identifier_value
 from app.infrastructure.models.catalog import ProductModel
 from app.infrastructure.models.product_master import (
     ProductBrandModel,
@@ -175,12 +175,12 @@ async def create_identifier(product_id: int, payload: ProductIdentifierCreate, r
     company_id = _company(request)
     await require_company_wide_scope(session, current, company_id)
     await _product(session, company_id, product_id, lock=True)
-    normalized = normalize_identifier(payload.value)
+    normalized = validate_identifier_value(payload.identifier_type, payload.value)
     if await session.scalar(select(ProductIdentifierModel).where(ProductIdentifierModel.company_id == company_id, ProductIdentifierModel.identifier_type == payload.identifier_type, ProductIdentifierModel.normalized_value == normalized)):
         raise HTTPException(status_code=409, detail="El identificador ya está registrado en esta empresa.")
     if payload.is_primary:
         await session.execute(update(ProductIdentifierModel).where(ProductIdentifierModel.product_id == product_id, ProductIdentifierModel.identifier_type == payload.identifier_type).values(is_primary=False))
-    item = ProductIdentifierModel(company_id=company_id, product_id=product_id, identifier_type=payload.identifier_type, value=payload.value.strip(), normalized_value=normalized, is_primary=payload.is_primary)
+    item = ProductIdentifierModel(company_id=company_id, product_id=product_id, identifier_type=payload.identifier_type, value=payload.value.strip(), normalized_value=normalized, is_primary=payload.is_primary, is_active=payload.is_active)
     session.add(item)
     await session.flush()
     await audit.record(action="CREATE", user_id=current.id, company_id=company_id, resource_type="product_identifiers", resource_id=str(item.id), after_state={"product_id": product_id, "identifier_type": item.identifier_type, "is_primary": item.is_primary})
@@ -195,18 +195,40 @@ async def update_identifier(product_id: int, identifier_id: uuid.UUID, payload: 
     item = await session.scalar(select(ProductIdentifierModel).where(ProductIdentifierModel.id == identifier_id, ProductIdentifierModel.company_id == company_id, ProductIdentifierModel.product_id == product_id).with_for_update())
     if item is None:
         raise HTTPException(status_code=404, detail="Identificador no encontrado")
+    before_state = {
+        "product_id": product_id,
+        "identifier_type": item.identifier_type,
+        "value": item.value,
+        "is_primary": item.is_primary,
+        "is_active": item.is_active,
+    }
     data = payload.model_dump(exclude_unset=True)
-    if "value" in data:
-        data["value"] = str(data["value"]).strip()
-        data["normalized_value"] = normalize_identifier(data["value"])
-    if data.get("is_primary"):
-        target_type = data.get("identifier_type", item.identifier_type)
+    target_type = str(data.get("identifier_type", item.identifier_type))
+    target_value = str(data.get("value", item.value))
+    try:
+        normalized = validate_identifier_value(target_type, target_value)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    data["identifier_type"] = target_type
+    data["value"] = target_value.strip()
+    data["normalized_value"] = normalized
+    if data.get("is_primary", item.is_primary):
         await session.execute(update(ProductIdentifierModel).where(ProductIdentifierModel.product_id == product_id, ProductIdentifierModel.identifier_type == target_type, ProductIdentifierModel.id != identifier_id).values(is_primary=False))
+    duplicate = await session.scalar(
+        select(ProductIdentifierModel).where(
+            ProductIdentifierModel.company_id == company_id,
+            ProductIdentifierModel.identifier_type == target_type,
+            ProductIdentifierModel.normalized_value == normalized,
+            ProductIdentifierModel.id != identifier_id,
+        )
+    )
+    if duplicate is not None:
+        raise HTTPException(status_code=409, detail="El identificador ya está registrado en esta empresa.")
     for key, value in data.items():
         if hasattr(item, key):
             setattr(item, key, value)
     await session.flush()
-    await audit.record(action="UPDATE", user_id=current.id, company_id=company_id, resource_type="product_identifiers", resource_id=str(item.id), after_state={"product_id": product_id, "identifier_type": item.identifier_type, "is_primary": item.is_primary})
+    await audit.record(action="UPDATE", user_id=current.id, company_id=company_id, resource_type="product_identifiers", resource_id=str(item.id), before_state=before_state, after_state={"product_id": product_id, "identifier_type": item.identifier_type, "value": item.value, "is_primary": item.is_primary, "is_active": item.is_active})
     return _identifier(item)
 
 
@@ -217,8 +239,15 @@ async def delete_identifier(product_id: int, identifier_id: uuid.UUID, request: 
     item = await session.scalar(select(ProductIdentifierModel).where(ProductIdentifierModel.id == identifier_id, ProductIdentifierModel.company_id == company_id, ProductIdentifierModel.product_id == product_id).with_for_update())
     if item is None:
         raise HTTPException(status_code=404, detail="Identificador no encontrado")
+    before_state = {
+        "product_id": product_id,
+        "identifier_type": item.identifier_type,
+        "value": item.value,
+        "is_primary": item.is_primary,
+        "is_active": item.is_active,
+    }
     await session.delete(item)
-    await audit.record(action="DELETE", user_id=current.id, company_id=company_id, resource_type="product_identifiers", resource_id=str(identifier_id), after_state={"product_id": product_id})
+    await audit.record(action="DELETE", user_id=current.id, company_id=company_id, resource_type="product_identifiers", resource_id=str(identifier_id), before_state=before_state, after_state=None)
 
 
 @router.get("/catalog/products/{product_id}/suppliers", response_model=list[ProductSupplierResponse], dependencies=[Depends(require_permission("products:read"))])

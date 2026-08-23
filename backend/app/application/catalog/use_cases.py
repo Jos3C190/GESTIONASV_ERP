@@ -12,6 +12,7 @@ from app.domain.entities.product_image import (
 )
 from app.domain.entities.product_variants import (
     ProductVariantConfigDraft,
+    ProductVariantIdentifierDraft,
     ProductVariantUpdateDraft,
 )
 from app.domain.ports.catalog_repository import CatalogRepository
@@ -239,7 +240,7 @@ class CatalogUseCases:
             raise NotFoundError("Producto no encontrado", code="product_not_found")
         return product
 
-    async def create_product(
+    async def create_product(  # noqa: C901
         self,
         company_id: uuid.UUID,
         category_id: int,
@@ -284,6 +285,7 @@ class CatalogUseCases:
         max_stack_height: object = None,
         handling_notes: str | None = None,
         images: list[ProductImageDraft] | None = None,
+        identifiers: tuple[ProductVariantIdentifierDraft, ...] | None = None,
         variant_config: ProductVariantConfigDraft | None = None,
     ) -> Product:
         # Validate unique SKU
@@ -380,6 +382,7 @@ class CatalogUseCases:
                 handling_notes=handling_notes,
                 is_active=is_active,
                 images=normalized_images,
+                identifiers=identifiers,
                 variant_config=normalized_variants,
             )
         except ValueError as exc:

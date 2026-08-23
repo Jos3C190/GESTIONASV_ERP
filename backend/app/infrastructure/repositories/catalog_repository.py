@@ -19,10 +19,12 @@ from app.domain.entities.product_variants import (
     ProductFamilyAttributeValue,
     ProductVariant,
     ProductVariantConfigDraft,
+    ProductVariantIdentifierDraft,
     ProductVariantImageDraft,
     ProductVariantUpdateDraft,
     ProductVariantValue,
 )
+from app.domain.product_identifiers import validate_identifier_value
 from app.domain.product_variants import normalize_variant_token
 from app.infrastructure.models.catalog import (
     CategoryModel,
@@ -827,6 +829,7 @@ class SqlAlchemyCatalogRepository:
         handling_notes: str | None = None,
         is_active: bool = True,
         images: list[ProductImageDraft] | None = None,
+        identifiers: tuple[ProductVariantIdentifierDraft, ...] | None = None,
         variant_config: ProductVariantConfigDraft | None = None,
     ) -> Product:
         orm = ProductModel(
@@ -897,6 +900,8 @@ class SqlAlchemyCatalogRepository:
         await self._session.flush()
         if images is not None:
             await self._sync_product_images(orm, company_id, images)
+        if identifiers is not None:
+            await self._sync_product_identifiers(orm, company_id, identifiers)
         if variant_config is not None:
             await self._sync_variant_config(orm, company_id, variant_config)
         return await self._get_product_with_images(company_id, orm.id_product)
@@ -926,6 +931,7 @@ class SqlAlchemyCatalogRepository:
             "sale_unit_id": "sale_unit",
         }
         images = kwargs.pop("images", None) if "images" in kwargs else None
+        identifiers = kwargs.pop("identifiers", None) if "identifiers" in kwargs else None
         variant_config = kwargs.pop("variant_config", None) if "variant_config" in kwargs else None
         old_sku = orm.sku
         for key, value in kwargs.items():
@@ -966,6 +972,8 @@ class SqlAlchemyCatalogRepository:
             await self._session.flush()
         if images is not None:
             await self._sync_product_images(orm, company_id, images)
+        if identifiers is not None:
+            await self._sync_product_identifiers(orm, company_id, identifiers)
         if variant_config is not None:
             await self._sync_variant_config(orm, company_id, variant_config)
         return await self._get_product_with_images(company_id, product_id)
@@ -1013,6 +1021,65 @@ class SqlAlchemyCatalogRepository:
         )
         orm.__dict__["variant_attributes"] = list(attributes_result.scalars().all())
         return _to_product(orm)
+
+    async def _sync_product_identifiers(
+        self,
+        product: ProductModel,
+        company_id: uuid.UUID,
+        drafts: tuple[ProductVariantIdentifierDraft, ...],
+    ) -> None:
+        """Replace product identifiers atomically while enforcing company uniqueness."""
+        seen: set[tuple[str, str]] = set()
+        normalized_rows: list[tuple[ProductVariantIdentifierDraft, str]] = []
+        for draft in drafts:
+            normalized = validate_identifier_value(draft.identifier_type, draft.value)
+            key = (draft.identifier_type, normalized)
+            if key in seen:
+                raise ValueError("El producto no puede repetir identificadores.")
+            seen.add(key)
+            normalized_rows.append((draft, normalized))
+        if sum(1 for draft in drafts if draft.is_primary) > len(
+            {draft.identifier_type for draft in drafts if draft.is_primary}
+        ):
+            raise ValueError("Solo puede existir un identificador principal por tipo.")
+
+        if normalized_rows:
+            identifier_pairs = or_(*[
+                (ProductIdentifierModel.identifier_type == draft.identifier_type)
+                & (ProductIdentifierModel.normalized_value == normalized)
+                for draft, normalized in normalized_rows
+            ])
+            existing = (
+                await self._session.execute(
+                    select(ProductIdentifierModel)
+                    .where(
+                        ProductIdentifierModel.company_id == company_id,
+                        identifier_pairs,
+                    )
+                    .with_for_update()
+                )
+            ).scalars().all()
+            if any(item.product_id != product.id_product for item in existing):
+                raise ValueError("El identificador ya está registrado en esta empresa.")
+
+        await self._session.execute(
+            delete(ProductIdentifierModel).where(ProductIdentifierModel.product_id == product.id_product)
+        )
+        await self._session.flush()
+        for draft, normalized in normalized_rows:
+            self._session.add(
+                ProductIdentifierModel(
+                    company_id=company_id,
+                    product_id=product.id_product,
+                    variant_id=None,
+                    identifier_type=draft.identifier_type,
+                    value=draft.value.strip(),
+                    normalized_value=normalized,
+                    is_primary=draft.is_primary,
+                    is_active=draft.is_active,
+                )
+            )
+        await self._session.flush()
 
     async def _sync_product_images(
         self, product: ProductModel, company_id: uuid.UUID, drafts: list[ProductImageDraft]
@@ -1229,7 +1296,7 @@ class SqlAlchemyCatalogRepository:
             identifiers = draft.identifiers or ()
             seen_identifiers: set[tuple[str, str]] = set()
             for identifier in identifiers:
-                normalized = "".join(ch for ch in identifier.value if ch.isalnum()).upper()
+                normalized = validate_identifier_value(identifier.identifier_type, identifier.value)
                 key = (identifier.identifier_type, normalized)
                 if key in seen_identifiers:
                     raise ValueError("La variante no puede repetir identificadores.")
@@ -1272,11 +1339,12 @@ class SqlAlchemyCatalogRepository:
                         product_id=None,
                         variant_id=variant.id,
                         identifier_type=identifier.identifier_type,
-                        value=identifier.value,
-                        normalized_value="".join(
-                            ch for ch in identifier.value if ch.isalnum()
-                        ).upper(),
+                        value=identifier.value.strip(),
+                        normalized_value=validate_identifier_value(
+                            identifier.identifier_type, identifier.value
+                        ),
                         is_primary=identifier.is_primary,
+                        is_active=identifier.is_active,
                     )
                 )
 
@@ -1591,7 +1659,9 @@ class SqlAlchemyCatalogRepository:
                 await self._session.delete(identifier)
             await self._session.flush()
             for identifier_draft in variant_draft.identifiers:
-                normalized = "".join(ch for ch in identifier_draft.value if ch.isalnum()).upper()
+                normalized = validate_identifier_value(
+                    identifier_draft.identifier_type, identifier_draft.value
+                )
                 self._session.add(
                     ProductIdentifierModel(
                         company_id=company_id,
@@ -1601,6 +1671,7 @@ class SqlAlchemyCatalogRepository:
                         value=identifier_draft.value.strip(),
                         normalized_value=normalized,
                         is_primary=identifier_draft.is_primary,
+                        is_active=identifier_draft.is_active,
                     )
                 )
             await self._sync_variant_image(variant, company_id, variant_draft.image)

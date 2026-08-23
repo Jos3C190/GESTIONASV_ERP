@@ -8,6 +8,7 @@ from app.domain.entities.catalog import Category, Country, Product, SubCategory,
 from app.domain.entities.product_image import ProductImageDraft
 from app.domain.entities.product_variants import (
     ProductVariantConfigDraft,
+    ProductVariantIdentifierDraft,
     ProductVariantUpdateDraft,
 )
 
@@ -120,6 +121,7 @@ class CatalogRepository(Protocol):
         description: str | None = None,
         presentation: str | None = None,
         images: list[ProductImageDraft] | None = None,
+        identifiers: tuple[ProductVariantIdentifierDraft, ...] | None = None,
         variant_config: ProductVariantConfigDraft | None = None,
     ) -> Product:
         ...

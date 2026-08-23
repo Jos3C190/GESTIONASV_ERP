@@ -136,6 +136,20 @@ def _image_drafts(images: list[ProductImageInput] | None) -> list[ProductImageDr
     ]
 
 
+def _product_identifier_drafts(payload: ProductCreate | ProductUpdate):
+    if "identifiers" not in payload.model_fields_set or payload.identifiers is None:
+        return None
+    return tuple(
+        ProductVariantIdentifierDraft(
+            identifier_type=identifier.identifier_type,
+            value=identifier.value,
+            is_primary=identifier.is_primary,
+            is_active=identifier.is_active,
+        )
+        for identifier in payload.identifiers
+    )
+
+
 def _gallery_audit_state(product: object) -> list[dict[str, object]]:
     return [
         {
@@ -188,6 +202,7 @@ def _variant_config_drafts(
                         identifier_type=identifier.identifier_type,
                         value=identifier.value,
                         is_primary=identifier.is_primary,
+                        is_active=identifier.is_active,
                     )
                     for identifier in variant.identifiers
                 ),
@@ -233,6 +248,7 @@ def _variant_update_draft(payload: ProductVariantUpdateInput) -> ProductVariantU
                     identifier_type=identifier.identifier_type,
                     value=identifier.value,
                     is_primary=identifier.is_primary,
+                    is_active=identifier.is_active,
                 )
                 for identifier in payload.identifiers
             )
@@ -268,7 +284,13 @@ def _single_variant_audit_state(variant: object) -> dict[str, object]:
             for value in variant.values
         ],
         "identifiers": [
-            {"id": str(identifier.id), "identifier_type": identifier.identifier_type}
+            {
+                "id": str(identifier.id),
+                "identifier_type": identifier.identifier_type,
+                "value": identifier.value,
+                "is_primary": identifier.is_primary,
+                "is_active": identifier.is_active,
+            }
             for identifier in variant.identifiers
         ],
         "image": (
@@ -309,9 +331,31 @@ def _variant_audit_state(product: object) -> list[dict[str, object]]:
                 }
                 for value in variant.values
             ],
+            "identifiers": [
+                {
+                    "id": str(identifier.id),
+                    "identifier_type": identifier.identifier_type,
+                    "value": identifier.value,
+                    "is_primary": identifier.is_primary,
+                    "is_active": identifier.is_active,
+                }
+                for identifier in variant.identifiers
+            ],
             "image_id": str(variant.image.id) if variant.image else None,
         }
         for variant in getattr(product, "variants", ())
+    ]
+
+
+def _product_identifier_audit_state(product: object) -> list[dict[str, object]]:
+    return [
+        {
+            "id": str(identifier.id),
+            "identifier_type": identifier.identifier_type,
+            "is_primary": identifier.is_primary,
+            "is_active": identifier.is_active,
+        }
+        for identifier in getattr(product, "identifiers", ())
     ]
 
 
@@ -1304,6 +1348,8 @@ async def create_product(
     await require_company_wide_scope(session, current, company_id)
     if payload.images is not None:
         await _require_product_images_permission(session, current, company_id)
+    if payload.identifiers is not None:
+        await _require_product_permission(session, current, company_id, "products:identifiers")
     if payload.variant_config is not None:
         await _require_product_permission(session, current, company_id, "products:variants")
         if _variant_config_has_images(payload.variant_config):
@@ -1355,6 +1401,7 @@ async def create_product(
             max_stack_height=payload.max_stack_height,
             handling_notes=payload.handling_notes,
             images=_image_drafts(payload.images),
+            identifiers=_product_identifier_drafts(payload),
             variant_config=_variant_config_drafts(payload.variant_config),
         )
         await audit.record(
@@ -1367,6 +1414,7 @@ async def create_product(
                 "sku": created.sku,
                 "name": created.name,
                 "images": _gallery_audit_state(created),
+                "identifiers": _product_identifier_audit_state(created),
                 "variant_mode": created.variant_mode,
                 "variants": _variant_audit_state(created),
             },
@@ -1426,6 +1474,9 @@ async def update_product(
     if "images" in update_data:
         await _require_product_images_permission(session, current, company_id)
         update_data["images"] = _image_drafts(payload.images)
+    if "identifiers" in update_data:
+        await _require_product_permission(session, current, company_id, "products:identifiers")
+        update_data["identifiers"] = _product_identifier_drafts(payload)
     if "variant_config" in update_data:
         await _require_product_permission(session, current, company_id, "products:variants")
         if _variant_config_has_images(payload.variant_config) or _product_has_variant_images(
@@ -1443,6 +1494,8 @@ async def update_product(
             action=(
                 "UPDATE_VARIANTS"
                 if "variant_config" in update_data
+                else "UPDATE_IDENTIFIERS"
+                if "identifiers" in update_data
                 else "UPDATE_IMAGES"
                 if "images" in update_data
                 else _status_action(before.is_active, updated.is_active)
@@ -1456,6 +1509,7 @@ async def update_product(
                 "name": before.name,
                 "is_active": before.is_active,
                 "images": _gallery_audit_state(before),
+                "identifiers": _product_identifier_audit_state(before),
                 "variants": _variant_audit_state(before),
             },
             after_state={
@@ -1463,6 +1517,7 @@ async def update_product(
                 "name": updated.name,
                 "is_active": updated.is_active,
                 "images": _gallery_audit_state(updated),
+                "identifiers": _product_identifier_audit_state(updated),
                 "variants": _variant_audit_state(updated),
             },
         )
