@@ -10,6 +10,7 @@
   import EditorSectionNav from '$lib/components/editor/EditorSectionNav.svelte';
   import PackagingManager from '$lib/features/inventory/components/PackagingManager.svelte';
   import ProductVariantImageEditor from '$lib/features/products/components/ProductVariantImageEditor.svelte';
+  import ProductIdentifiersEditor from '$lib/features/products/components/ProductIdentifiersEditor.svelte';
   import { company } from '$lib/stores/company.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type {
@@ -30,6 +31,7 @@
     identifier_type: IdentifierType;
     value: string;
     is_primary: boolean;
+    is_active: boolean;
   }
 
   interface FormState {
@@ -110,7 +112,8 @@
         id: identifier.id,
         identifier_type: identifier.identifier_type,
         value: identifier.value,
-        is_primary: identifier.is_primary
+        is_primary: identifier.is_primary,
+        is_active: identifier.is_active
       })),
       image: value.image
         ? {
@@ -192,40 +195,6 @@
     }
     form = { ...form, lifecycle_status: next };
     error = null;
-  }
-
-  function updateIdentifier(index: number, patch: Partial<IdentifierForm>) {
-    if (!canEditIdentifiers) return;
-    const current = form.identifiers[index];
-    if (!current) return;
-    let next = form.identifiers.map((item, itemIndex) =>
-      itemIndex === index ? { ...item, ...patch } : item
-    );
-    if (patch.is_primary) {
-      next = next.map((item, itemIndex) =>
-        item.identifier_type === (patch.identifier_type ?? current.identifier_type) &&
-        itemIndex !== index
-          ? { ...item, is_primary: false }
-          : item
-      );
-    }
-    form = { ...form, identifiers: next };
-  }
-
-  function addIdentifier() {
-    if (!canEditIdentifiers || form.identifiers.length >= 20) return;
-    form = {
-      ...form,
-      identifiers: [
-        ...form.identifiers,
-        { _key: newKey(), identifier_type: 'internal', value: '', is_primary: false }
-      ]
-    };
-  }
-
-  function removeIdentifier(index: number) {
-    if (!canEditIdentifiers) return;
-    form = { ...form, identifiers: form.identifiers.filter((_, itemIndex) => itemIndex !== index) };
   }
 
   function imageSnapshot(image: ProductVariantImageDraft | null) {
@@ -576,20 +545,6 @@
         </Card>
 
         <Card id="identifiers" class="scroll-mt-24 p-6">
-          <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 class="text-base font-semibold text-foreground">Identificadores</h2>
-              <p class="mt-1 text-sm text-foreground-muted">
-                Códigos de escaneo o referencia únicos en la empresa.
-              </p>
-            </div>
-            {#if canEditIdentifiers}<Button
-                size="sm"
-                variant="secondary"
-                onclick={addIdentifier}
-                disabled={form.identifiers.length >= 20}>Agregar identificador</Button
-              >{/if}
-          </div>
           {#if !canEditIdentifiers}<p
               class="mb-4 rounded-lg border border-border bg-surface-muted/20 p-3 text-xs text-foreground-muted"
             >
@@ -597,58 +552,7 @@
                 >products:identifiers</code
               > para modificar estos códigos.
             </p>{/if}
-          {#if form.identifiers.length}
-            <div class="space-y-3">
-              {#each form.identifiers as identifier, index (identifier._key)}<div
-                  class="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-[180px_1fr_auto_auto] md:items-end"
-                >
-                  <label class="text-xs font-medium text-foreground-muted"
-                    >Tipo<select
-                      class="mt-1 w-full rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-foreground"
-                      value={identifier.identifier_type}
-                      disabled={!canEditIdentifiers}
-                      onchange={(event) =>
-                        updateIdentifier(index, {
-                          identifier_type: (event.currentTarget as HTMLSelectElement)
-                            .value as IdentifierType
-                        })}
-                      ><option value="ean">EAN</option><option value="upc">UPC</option><option
-                        value="gtin">GTIN</option
-                      ><option value="internal">Interno</option><option value="other">Otro</option
-                      ></select
-                    ></label
-                  ><label class="text-xs font-medium text-foreground-muted"
-                    >Valor<input
-                      class="mt-1 w-full rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-foreground"
-                      value={identifier.value}
-                      disabled={!canEditIdentifiers}
-                      oninput={(event) =>
-                        updateIdentifier(index, {
-                          value: (event.currentTarget as HTMLInputElement).value
-                        })}
-                    /></label
-                  ><label class="flex items-center gap-2 pb-2 text-xs text-foreground"
-                    ><input
-                      type="checkbox"
-                      checked={identifier.is_primary}
-                      disabled={!canEditIdentifiers}
-                      onchange={(event) =>
-                        updateIdentifier(index, {
-                          is_primary: (event.currentTarget as HTMLInputElement).checked
-                        })}
-                    /> Principal</label
-                  >{#if canEditIdentifiers}<button
-                      type="button"
-                      class="pb-2 text-xs text-danger hover:underline"
-                      onclick={() => removeIdentifier(index)}>Eliminar</button
-                    >{/if}
-                </div>{/each}
-            </div>
-          {:else}<div
-              class="rounded-lg border border-dashed border-border p-8 text-center text-sm text-foreground-muted"
-            >
-              No hay identificadores registrados.
-            </div>{/if}
+          <ProductIdentifiersEditor bind:identifiers={form.identifiers} editable={canEditIdentifiers} />
         </Card>
 
         <Card id="image" class="scroll-mt-24 p-6">

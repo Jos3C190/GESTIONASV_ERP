@@ -8,6 +8,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import PackagingManager from '$lib/features/inventory/components/PackagingManager.svelte';
+  import ProductIdentifiersDisplay from '$lib/features/products/components/ProductIdentifiersDisplay.svelte';
   import { supplierDisplayName } from '$lib/features/products/supplier-display';
 
   let product = $state<Product | null>(null);
@@ -328,6 +329,14 @@
           </p>
         </Card>
       </div>
+
+      <Card class="p-6">
+        <ProductIdentifiersDisplay
+          identifiers={product.identifiers ?? []}
+          title="Identificadores del producto"
+          description="Códigos propios de la unidad base del producto. Las variantes mantienen sus identificadores por separado."
+        />
+      </Card>
 
       <div class="grid gap-5 lg:grid-cols-2">
         <Card class="p-6">

@@ -465,9 +465,10 @@
                         (event.currentTarget as HTMLSelectElement)
                           .value as ProductVariantConfig['variants'][number]['identifiers'][number]['identifier_type']
                       )}
-                    ><option value="ean">EAN</option><option value="upc">UPC</option><option
-                      value="gtin">GTIN</option
-                    ><option value="internal">Interno</option><option value="other">Otro</option
+                      ><option value="ean">EAN</option><option value="upc">UPC</option><option
+                        value="gtin">GTIN</option
+                      ><option value="isbn">ISBN</option><option value="manufacturer">Fabricante</option
+                      ><option value="internal">Interno</option><option value="other">Otro</option
                     ></select
                   ><input
                     class="w-28 rounded-md border border-border bg-surface px-2 py-1.5 text-sm"

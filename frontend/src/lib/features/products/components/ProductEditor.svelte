@@ -6,6 +6,7 @@
   import type {
     Category,
     Product,
+    ProductIdentifierDraft,
     ProductImageDraft,
     ProductSupplierDraft,
     SubCategory,
@@ -19,6 +20,7 @@
   import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
   import EditorSectionNav from '$lib/components/editor/EditorSectionNav.svelte';
   import ProductImagesEditor from './ProductImagesEditor.svelte';
+  import ProductIdentifiersEditor from './ProductIdentifiersEditor.svelte';
   import ProductSuppliersEditor from './ProductSuppliersEditor.svelte';
   import type { DimensionUnit, WeightUnit } from '$lib/features/products/measurements';
   import {
@@ -74,6 +76,7 @@
     handling_notes: string;
     is_active: boolean;
     images: ProductImageDraft[];
+    identifiers: ProductIdentifierDraft[];
     supplier_links: ProductSupplierDraft[];
   };
 
@@ -119,6 +122,7 @@
     handling_notes: '',
     is_active: true,
     images: [],
+    identifiers: [],
     supplier_links: []
   });
 
@@ -149,6 +153,7 @@
   let canManage = $derived(permissions.hasPermission('products:manage'));
   let canEditSuppliers = $derived(permissions.hasPermission('products:suppliers'));
   let canEditImages = $derived(permissions.hasPermission('products:images'));
+  let canEditIdentifiers = $derived(permissions.hasPermission('products:identifiers'));
   let canUploadImages = $derived(permissions.hasPermission('media.upload'));
   let dirty = $derived(!loading && initialSnapshot !== JSON.stringify(form));
   let filteredSubCategories = $derived(
@@ -261,6 +266,13 @@
         position: image.position,
         is_cover: image.is_cover
       })),
+      identifiers: (product.identifiers ?? []).map((identifier) => ({
+        id: identifier.id,
+        identifier_type: identifier.identifier_type,
+        value: identifier.value,
+        is_primary: identifier.is_primary,
+        is_active: identifier.is_active
+      })),
       supplier_links: (product.supplier_links ?? []).map((relation) => ({
         id: relation.id,
         supplier_id: relation.supplier_id,
@@ -340,6 +352,17 @@
     if (!form.category_id) next.category_id = 'Seleccione una categoría.';
     if (!form.purchase_unit) next.purchase_unit = 'Seleccione la unidad de compra.';
     if (!form.sale_unit) next.sale_unit = 'Seleccione la unidad de venta.';
+    if (canEditIdentifiers) {
+      const identifierKeys = form.identifiers.map(
+        (identifier) =>
+          `${identifier.identifier_type}:${identifier.value.replace(/[^0-9A-Za-zX]/g, '').toUpperCase()}`
+      );
+      if (form.identifiers.some((identifier) => !identifier.value.trim())) {
+        next.identifiers = 'Cada identificador debe tener un valor.';
+      } else if (new Set(identifierKeys).size !== identifierKeys.length) {
+        next.identifiers = 'No puede repetir el mismo identificador en el producto.';
+      }
+    }
     const dimensionValues = [form.dimension_length, form.dimension_width, form.dimension_height];
     if (
       dimensionValues.some(
@@ -405,7 +428,7 @@
           ? 'suppliers'
           : next.gallery
             ? 'gallery'
-            : next.dimensions || next.weight
+          : next.identifiers || next.dimensions || next.weight
               ? 'identifiers'
               : next.storage
                 ? 'storage'
@@ -468,6 +491,9 @@
       max_stack_height: form.max_stack_height === '' ? null : Number(form.max_stack_height),
       handling_notes: form.handling_notes.trim(),
       ...(mode === 'edit' ? { is_active: form.is_active } : {}),
+      ...(canEditIdentifiers
+        ? { identifiers: form.identifiers.map(({ id: _id, _key, ...identifier }) => identifier) }
+        : {}),
       ...(canEditImages ? { images: form.images.filter((image) => image.url.trim()) } : {})
     };
     return data;
@@ -734,6 +760,16 @@
               Use este campo para tamaños comerciales como S, M o XL. Para combinaciones como color
               o talla use Variantes y atributos.
             </p>
+            <div class="sm:col-span-2 lg:col-span-3">
+              <ProductIdentifiersEditor bind:identifiers={form.identifiers} editable={canEditIdentifiers} />
+              {#if errors.identifiers}<p class="mt-3 text-xs text-danger" role="alert">{errors.identifiers}</p>{/if}
+              {#if !canEditIdentifiers}
+                <p class="mt-3 text-xs text-foreground-muted">
+                  Puede consultar los identificadores, pero necesita
+                  <code class="rounded bg-surface-muted px-1">products:identifiers</code> para modificarlos.
+                </p>
+              {/if}
+            </div>
             <div
               class="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-xs text-foreground-muted sm:col-span-2 lg:col-span-3"
             >

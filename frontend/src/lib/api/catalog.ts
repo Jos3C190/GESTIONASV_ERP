@@ -10,7 +10,7 @@ import type {
   SubCategory,
   Unit
 } from '$lib/types/catalog';
-import type { ProductIdentifier, ProductSupplier } from '$lib/types/catalog';
+import type { ProductIdentifier, ProductIdentifierDraft, ProductSupplier } from '$lib/types/catalog';
 
 export interface PageResponse<T> {
   items: T[];
@@ -278,6 +278,7 @@ export const catalogApi = {
     max_stack_height?: number | null;
     handling_notes?: string;
     images?: ProductImageDraft[];
+    identifiers?: ProductIdentifierDraft[];
     variant_config?: ProductVariantConfigPayload;
   }) =>
     apiFetch<Product>('/catalog/products', {
@@ -331,6 +332,7 @@ export const catalogApi = {
       max_stack_height: number | null;
       handling_notes: string;
       images: ProductImageDraft[];
+      identifiers: ProductIdentifierDraft[];
       variant_config: ProductVariantConfigPayload;
     }>
   ) =>
@@ -370,6 +372,7 @@ export const catalogApi = {
       identifier_type: ProductIdentifier['identifier_type'];
       value: string;
       is_primary?: boolean;
+      is_active?: boolean;
     }
   ) =>
     apiFetch<ProductIdentifier>(`/catalog/products/${productId}/identifiers`, {

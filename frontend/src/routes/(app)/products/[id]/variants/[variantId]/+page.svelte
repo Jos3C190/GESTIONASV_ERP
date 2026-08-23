@@ -7,6 +7,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import PackagingManager from '$lib/features/inventory/components/PackagingManager.svelte';
+  import ProductIdentifiersDisplay from '$lib/features/products/components/ProductIdentifiersDisplay.svelte';
   import { inventoryApi } from '$lib/features/inventory/services';
   import {
     type InventoryItem,
@@ -414,51 +415,11 @@
         </Card>
 
         <Card class="p-6">
-          <div class="mb-5">
-            <h2 class="text-base font-semibold text-foreground">Identificadores</h2>
-            <p class="mt-1 text-sm text-foreground-muted">
-              Códigos de escaneo y referencias propias de la variante.
-            </p>
-          </div>
-          {#if variant.identifiers.length}
-            <div class="overflow-x-auto rounded-xl border border-border">
-              <table class="w-full min-w-[520px] text-sm">
-                <caption class="sr-only">Identificadores de la variante</caption>
-                <thead
-                  class="border-b border-border bg-surface-muted/30 text-left text-xs text-foreground-muted"
-                >
-                  <tr
-                    ><th scope="col" class="px-3 py-2">Tipo</th><th scope="col" class="px-3 py-2"
-                      >Valor</th
-                    ><th scope="col" class="px-3 py-2">Estado</th></tr
-                  >
-                </thead>
-                <tbody class="divide-y divide-border">
-                  {#each variant.identifiers as identifier (identifier.id)}
-                    <tr>
-                      <td class="px-3 py-2 uppercase text-foreground"
-                        >{identifier.identifier_type}</td
-                      >
-                      <td class="px-3 py-2 font-mono text-foreground">{identifier.value}</td>
-                      <td class="px-3 py-2"
-                        ><Badge variant={identifier.is_active ? 'success' : 'neutral'}
-                          >{identifier.is_active ? 'Activo' : 'Inactivo'}</Badge
-                        >{#if identifier.is_primary}<span class="ml-2 text-xs text-primary"
-                            >Principal</span
-                          >{/if}</td
-                      >
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          {:else}
-            <div
-              class="rounded-xl border border-dashed border-border p-6 text-center text-sm text-foreground-muted"
-            >
-              No hay identificadores registrados.
-            </div>
-          {/if}
+          <ProductIdentifiersDisplay
+            identifiers={variant.identifiers ?? []}
+            title="Identificadores de la variante"
+            description="Códigos propios de esta combinación. No incluye los identificadores del producto padre."
+          />
         </Card>
       </div>
 
