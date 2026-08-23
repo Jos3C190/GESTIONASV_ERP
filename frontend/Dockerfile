@@ -22,7 +22,7 @@ COPY . .
 RUN pnpm exec svelte-kit sync
 EXPOSE 5173
 # Generate .svelte-kit (tsconfig etc.) then start Vite dev server.
-CMD ["sh", "-c", "pnpm exec svelte-kit sync && pnpm dev --host 0.0.0.0 --port 5173 --strictPort"]
+CMD ["sh", "-c", "CI=true pnpm install --frozen-lockfile && pnpm exec svelte-kit sync && pnpm dev --host 0.0.0.0 --port 5173 --strictPort"]
 
 # ---------------- build ----------------
 FROM deps AS build
