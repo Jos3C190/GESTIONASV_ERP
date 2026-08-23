@@ -37,6 +37,14 @@ The product detail includes complete family attributes, variants, identifiers
 and primary variant images. Product lists expose only `variant_mode` and
 `variant_count`.
 
+Products and variants may each own multiple identifiers. `GET /api/v1/catalog/products/{id}`
+returns the product's own `identifiers`; variant responses return only the identifiers
+of that variant. Each identifier has a stable `identifier_type`, readable `value`,
+`is_primary` and `is_active`. SKU, original code and internal code remain separate
+catalog fields. EAN/UPC/GTIN/ISBN values are validated before saving; the frontend
+may render a compatible barcode format (EAN-8/EAN-13, UPC-A, ITF-14 or Code 128)
+and falls back to text for unsupported or historical values.
+
 ### Large-catalogue filters and distribution
 
 | Method | Path | Permission | Description |
@@ -184,8 +192,11 @@ documented in [`docs/product-module-future-debt.txt`](product-module-future-debt
 
 `POST`/`PUT /api/v1/catalog/products` accept the product kind/lifecycle,
 commercial names and descriptions, keywords, origin, brand/manufacturer and
-storage/handling fields. Services cannot carry physical storage data, and
-`is_active` remains a compatibility projection of lifecycle status.
+storage/handling fields. They may also receive an `identifiers` array when the
+caller has `products:identifiers`; an empty array clears product-owned
+identifiers without touching variant identifiers. Services cannot carry
+physical storage data, and `is_active` remains a compatibility projection of
+lifecycle status.
 
 | Method | Endpoint | Permission | Purpose |
 |---|---|---|---|
