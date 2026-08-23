@@ -192,7 +192,7 @@
 
 <div class="p-6 md:p-8">
   {#if loading}
-    <div class="mx-auto max-w-[1280px] space-y-5" aria-busy="true" role="status">
+    <div class="space-y-5" aria-busy="true" role="status">
       <span class="sr-only">Cargando detalle de variante…</span>
       <div class="h-28 rounded-2xl skeleton"></div>
       <div class="grid gap-5 lg:grid-cols-2">
@@ -202,7 +202,7 @@
       <div class="h-64 rounded-2xl skeleton"></div>
     </div>
   {:else if error || !product || !variant}
-    <div class="mx-auto max-w-[1280px]">
+    <div>
       <div
         class="rounded-xl border border-danger/30 bg-danger/10 px-4 py-4 text-sm text-danger"
         role="alert"
@@ -217,71 +217,81 @@
       </div>
     </div>
   {:else}
-    <header class="mx-auto mb-6 max-w-[1280px]">
-      <nav
-        aria-label="Ruta de navegación"
-        class="mb-4 flex flex-wrap items-center gap-2 text-xs text-foreground-muted"
-      >
-        <a class="hover:text-foreground hover:underline" href="/products">Productos</a>
-        <span aria-hidden="true">/</span>
+    <header class="mb-6">
+      <div class="flex items-center gap-3">
         <a
-          class="max-w-52 truncate hover:text-foreground hover:underline"
           href={`/products/${product.id_product}`}
+          class="flex h-8 w-8 items-center justify-center rounded-md text-foreground-muted hover:bg-surface-hover hover:text-foreground"
+          aria-label="Volver al producto"
         >
-          {product.name}
-        </a>
-        <span aria-hidden="true">/</span>
-        <span class="max-w-60 truncate text-foreground" aria-current="page"
-          >{variant.display_name}</span
-        >
-      </nav>
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div class="flex min-w-0 items-start gap-3">
-          <button
-            type="button"
-            class="mt-1 flex h-8 w-8 flex-none items-center justify-center rounded-md text-foreground-muted hover:bg-surface-hover hover:text-foreground"
-            aria-label="Volver al producto"
-            onclick={() => goto(`/products/${product!.id_product}`)}
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            ><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              aria-hidden="true"
+        </a>
+        <div class="min-w-0 flex-1">
+          <h1 class="text-xl font-bold text-foreground">Detalle de la variante</h1>
+          <div
+            class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-foreground-muted"
+          >
+            <span class="min-w-0 truncate">{variant.display_name}</span>
+            <span class="font-mono text-xs">{variant.sku}</span>
+            <Badge variant={statusVariant(variant.lifecycle_status)}
+              >{STATUS_LABEL[variant.lifecycle_status]}</Badge
             >
-              <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
-            </svg>
-          </button>
-          <div class="min-w-0">
-            <p class="text-xs font-medium uppercase tracking-wider text-foreground-subtle">
-              Detalle de variante
-            </p>
-            <div class="mt-1 flex flex-wrap items-center gap-2">
-              <h1 class="text-2xl font-bold text-foreground">{variant.display_name}</h1>
-              <Badge variant={statusVariant(variant.lifecycle_status)}
-                >{STATUS_LABEL[variant.lifecycle_status]}</Badge
-              >
-            </div>
-            <p class="mt-1 font-mono text-sm text-foreground-muted">{variant.sku}</p>
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           {#if canEditVariant}
             <Button
+              variant="secondary"
               size="sm"
               onclick={() => goto(`/products/${product!.id_product}/variants/${variant!.id}/edit`)}
             >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                ><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg
+              >
               Editar variante
             </Button>
           {/if}
           <Button
-            size="sm"
             variant="secondary"
+            size="sm"
             onclick={() => goto(`/products/${product!.id_product}/variants`)}
           >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              ><path d="M4 5h16M4 12h16M4 19h16" /><circle cx="8" cy="5" r="2" /><circle
+                cx="16"
+                cy="12"
+                r="2"
+              /><circle cx="10" cy="19" r="2" /></svg
+            >
             Gestionar variantes
           </Button>
         </div>
@@ -295,7 +305,7 @@
       </div>
     </header>
 
-    <main class="mx-auto max-w-[1280px] space-y-5">
+    <main class="space-y-5">
       <div class="grid gap-5 lg:grid-cols-2">
         <Card class="p-6">
           <div class="mb-5">
