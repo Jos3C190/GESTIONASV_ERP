@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Final
 
 PRODUCT_KINDS: Final[tuple[str, ...]] = ("goods", "service")
@@ -31,11 +30,6 @@ PRODUCT_IDENTIFIER_TYPES: Final[tuple[str, ...]] = (
     "other",
 )
 MAX_PRODUCT_KEYWORDS: Final[int] = 20
-
-
-def normalize_identifier(value: str) -> str:
-    """Normalize identifiers without applying a country-specific tax rule."""
-    return re.sub(r"[\s-]+", "", value.strip()).upper()
 
 
 def normalize_keywords(values: list[str] | tuple[str, ...] | None) -> list[str]:

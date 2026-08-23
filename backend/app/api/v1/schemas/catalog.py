@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.api.v1.schemas.common import ORMOut
 from app.domain.entities.media_image import validate_external_image_url
+from app.domain.product_identifiers import validate_identifier_value
 from app.domain.product_variants import normalize_variant_token
 
 DimensionUnit = Literal["mm", "cm", "m", "in", "ft"]
@@ -237,6 +238,7 @@ class ProductVariantIdentifierInput(BaseModel):
     identifier_type: IdentifierType
     value: str = Field(..., min_length=1, max_length=160)
     is_primary: bool = False
+    is_active: bool = True
 
     @model_validator(mode="after")
     def validate_identifier(self) -> ProductVariantIdentifierInput:
@@ -249,6 +251,23 @@ class ProductVariantIdentifierInput(BaseModel):
             is_primary=self.is_primary,
         )
         return self
+
+
+def _validate_identifier_collection(items: list[ProductVariantIdentifierInput] | None) -> None:
+    if items is None:
+        return
+    seen: set[tuple[str, str]] = set()
+    primary_types: set[str] = set()
+    for item in items:
+        normalized = "".join(character for character in item.value if character.isalnum()).upper()
+        key = (item.identifier_type, normalized)
+        if key in seen:
+            raise ValueError("No se puede repetir el mismo identificador en el alcance.")
+        seen.add(key)
+        if item.is_primary:
+            if item.identifier_type in primary_types:
+                raise ValueError("Solo puede existir un identificador principal por tipo.")
+            primary_types.add(item.identifier_type)
 
 
 class ProductVariantInput(BaseModel):
@@ -268,7 +287,7 @@ class ProductVariantConfigInput(BaseModel):
     variants: list[ProductVariantInput] = Field(..., min_length=1, max_length=500)
 
     @model_validator(mode="after")
-    def validate_attribute_structure(self) -> ProductVariantConfigInput:
+    def validate_attribute_structure(self) -> ProductVariantConfigInput:  # noqa: C901
         attr_codes = [normalize_variant_token(item.code) for item in self.attributes]
         if any(not code for code in attr_codes):
             raise ValueError("Los atributos deben tener un código válido.")
@@ -282,7 +301,17 @@ class ProductVariantConfigInput(BaseModel):
                 raise ValueError("Un atributo no puede repetir valores.")
         expected = set(attr_codes)
         seen_combinations: set[tuple[tuple[str, str], ...]] = set()
+        seen_identifiers: set[tuple[str, str]] = set()
         for variant in self.variants:
+            _validate_identifier_collection(variant.identifiers)
+            for identifier in variant.identifiers:
+                key = (
+                    identifier.identifier_type,
+                    "".join(character for character in identifier.value if character.isalnum()).upper(),
+                )
+                if key in seen_identifiers:
+                    raise ValueError("Una familia no puede repetir identificadores entre variantes.")
+                seen_identifiers.add(key)
             pairs = tuple(
                 sorted(
                     (
@@ -331,6 +360,7 @@ class ProductVariantUpdateInput(BaseModel):
             raise ValueError("El estado de la variante no puede ser nulo.")
         if "identifiers" in self.model_fields_set and self.identifiers is None:
             raise ValueError("Para eliminar identificadores envíe una lista vacía.")
+        _validate_identifier_collection(self.identifiers)
         return self
 
 
@@ -404,10 +434,12 @@ class ProductCreate(BaseModel):
     max_stack_height: Decimal | None = Field(None, gt=0, max_digits=8, decimal_places=2)
     handling_notes: str | None = None
     images: list[ProductImageInput] | None = Field(None, max_length=20)
+    identifiers: list[ProductVariantIdentifierInput] | None = Field(None, max_length=20)
     variant_config: ProductVariantConfigInput | None = None
 
     @model_validator(mode="after")
     def validate_measurement_pairs(self) -> ProductCreate:
+        _validate_identifier_collection(self.identifiers)
         has_dimensions = any(
             value is not None
             for value in (self.dimension_length, self.dimension_width, self.dimension_height)
@@ -498,7 +530,13 @@ class ProductUpdate(BaseModel):
     max_stack_height: Decimal | None = Field(None, gt=0, max_digits=8, decimal_places=2)
     handling_notes: str | None = None
     expected_updated_at: datetime | None = None
+    identifiers: list[ProductVariantIdentifierInput] | None = Field(None, max_length=20)
     variant_config: ProductVariantConfigInput | None = None
+
+    @model_validator(mode="after")
+    def validate_identifiers(self) -> ProductUpdate:
+        _validate_identifier_collection(self.identifiers)
+        return self
 
 
 class ProductResponse(ORMOut):
@@ -628,24 +666,11 @@ class ProductIdentifierCreate(BaseModel):
     identifier_type: IdentifierType
     value: str = Field(..., min_length=1, max_length=160)
     is_primary: bool = False
+    is_active: bool = True
 
     @model_validator(mode="after")
     def validate_identifier(self) -> ProductIdentifierCreate:
-        value = "".join(ch for ch in self.value if ch.isalnum())
-        if self.identifier_type in {"ean", "upc", "gtin"}:
-            lengths = {"ean": {8, 13, 14}, "upc": {12}, "gtin": {8, 12, 13, 14}}
-            if len(value) not in lengths[self.identifier_type] or not value.isdigit():
-                raise ValueError(
-                    f"El identificador {self.identifier_type.upper()} debe tener una longitud válida."
-                )
-            digits = [int(item) for item in value]
-            check = digits.pop()
-            total = sum(
-                digit * (3 if (len(digits) - index) % 2 else 1)
-                for index, digit in enumerate(digits)
-            )
-            if (10 - total % 10) % 10 != check:
-                raise ValueError("El dígito de control del identificador no es válido.")
+        validate_identifier_value(self.identifier_type, self.value)
         return self
 
 

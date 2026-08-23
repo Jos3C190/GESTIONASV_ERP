@@ -4,14 +4,13 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from pydantic import ValidationError
-
 from app.api.v1.schemas.catalog import (
     ProductCreate,
     ProductIdentifierCreate,
     ProductSupplierCreate,
     ProductSupplierReplace,
 )
+from pydantic import ValidationError
 
 
 def _product(**overrides: object) -> ProductCreate:
@@ -47,6 +46,23 @@ def test_identifier_validates_gtin_check_digit() -> None:
     ProductIdentifierCreate(identifier_type="ean", value="4006381333931")
     with pytest.raises(ValidationError, match="dígito"):
         ProductIdentifierCreate(identifier_type="ean", value="4006381333930")
+
+
+def test_product_accepts_multiple_identifiers_and_rejects_duplicates() -> None:
+    product = _product(
+        identifiers=[
+            {"identifier_type": "ean", "value": "4006381333931", "is_primary": True},
+            {"identifier_type": "internal", "value": "HAR-001"},
+        ]
+    )
+    assert len(product.identifiers or []) == 2
+    with pytest.raises(ValidationError, match="repetir"):
+        _product(
+            identifiers=[
+                {"identifier_type": "internal", "value": "HAR-001"},
+                {"identifier_type": "internal", "value": "HAR001"},
+            ]
+        )
 
 
 def test_supplier_terms_require_currency_for_cost_and_coherent_dates() -> None:

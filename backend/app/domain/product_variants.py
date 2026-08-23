@@ -83,6 +83,7 @@ def normalize_variant_update(draft: ProductVariantUpdateDraft) -> ProductVariant
                 identifier_type=identifier.identifier_type,
                 value=identifier.value.strip(),
                 is_primary=identifier.is_primary,
+                is_active=identifier.is_active,
             )
             for identifier in identifiers
         )

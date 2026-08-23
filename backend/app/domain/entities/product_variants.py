@@ -75,6 +75,7 @@ class ProductVariantIdentifierDraft:
     identifier_type: str
     value: str
     is_primary: bool = False
+    is_active: bool = True
 
 
 @dataclass(frozen=True, slots=True)
