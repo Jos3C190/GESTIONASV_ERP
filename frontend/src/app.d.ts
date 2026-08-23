@@ -9,4 +9,23 @@ declare global {
   }
 }
 
+declare module 'jsbarcode' {
+  interface JsBarcodeOptions {
+    format?: string;
+    displayValue?: boolean;
+    margin?: number;
+    height?: number;
+    width?: number;
+    lineColor?: string;
+    background?: string;
+  }
+
+  interface JsBarcode {
+    (element: SVGElement, value: string, options?: JsBarcodeOptions): void;
+  }
+
+  const JsBarcode: JsBarcode;
+  export default JsBarcode;
+}
+
 export {};

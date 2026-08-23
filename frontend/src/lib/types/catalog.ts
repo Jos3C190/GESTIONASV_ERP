@@ -125,6 +125,17 @@ export interface ProductIdentifier {
   is_active: boolean;
 }
 
+export type ProductIdentifierType = ProductIdentifier['identifier_type'];
+
+export interface ProductIdentifierDraft {
+  id?: string;
+  _key?: string;
+  identifier_type: ProductIdentifierType;
+  value: string;
+  is_primary: boolean;
+  is_active: boolean;
+}
+
 export interface ProductSupplier {
   id: string;
   product_id: number;
@@ -211,9 +222,10 @@ export interface ProductVariantDraft {
   lifecycle_status: 'draft' | 'active' | 'blocked' | 'discontinued' | 'retired';
   values: { attribute_code: string; value_code: string }[];
   identifiers: {
-    identifier_type: ProductIdentifier['identifier_type'];
+    identifier_type: ProductIdentifierType;
     value: string;
     is_primary?: boolean;
+    is_active?: boolean;
   }[];
   image?: ProductVariantImageDraft | null;
 }
