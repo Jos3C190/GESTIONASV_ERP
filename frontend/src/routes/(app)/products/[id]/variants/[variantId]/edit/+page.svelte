@@ -1,11 +1,13 @@
 <script lang="ts">
   import { beforeNavigate, goto } from '$app/navigation';
+  import { tick } from 'svelte';
   import { page } from '$app/state';
   import { catalogApi } from '$lib/api/catalog';
   import { HttpError } from '$lib/api/client';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
+  import EditorSectionNav from '$lib/components/editor/EditorSectionNav.svelte';
   import PackagingManager from '$lib/features/inventory/components/PackagingManager.svelte';
   import ProductVariantImageEditor from '$lib/features/products/components/ProductVariantImageEditor.svelte';
   import { company } from '$lib/stores/company.svelte';
@@ -51,6 +53,15 @@
     { value: 'retired', label: 'Retirada' }
   ];
 
+  const sections = [
+    ['identity', 'Identidad de la variante'],
+    ['status', 'Estado operativo'],
+    ['identifiers', 'Identificadores'],
+    ['image', 'Imagen principal'],
+    ['packaging', 'Presentaciones'],
+    ['inherited', 'Datos heredados']
+  ] as const;
+
   let productId = $derived(Number(page.params.id));
   let variantId = $derived((page.params as { variantId?: string }).variantId ?? '');
   let product = $state<Product | null>(null);
@@ -71,6 +82,8 @@
   let conflict = $state(false);
   let pendingTarget = $state<string | null>(null);
   let bypassNavigationGuard = $state(false);
+  let activeSection = $state('identity');
+  let editorHeader: HTMLElement;
   let keySequence = 0;
 
   let canEditVariant = $derived(permissions.hasPermission('products:variants'));
@@ -219,6 +232,27 @@
     return JSON.stringify(image);
   }
 
+  function scrollToSection(id: string, behavior: ScrollBehavior = 'smooth') {
+    const target = document.getElementById(id);
+    const scrollContainer = target?.closest<HTMLElement>('[data-app-scroll-container]');
+    if (!target || !scrollContainer) return;
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const offset = (editorHeader?.offsetHeight ?? 0) + 16;
+    const requestedTop = scrollContainer.scrollTop + targetRect.top - containerRect.top - offset;
+    const maximumTop = Math.max(scrollContainer.scrollHeight - scrollContainer.clientHeight, 0);
+    activeSection = id;
+    scrollContainer.scrollTo({
+      top: Math.min(Math.max(requestedTop, 0), maximumTop),
+      behavior
+    });
+    history.replaceState(
+      history.state,
+      '',
+      `${window.location.pathname}${window.location.search}#${id}`
+    );
+  }
+
   function buildPayload(): ProductVariantUpdateInput | null {
     if (!variant || !baseline) return null;
     const payload: ProductVariantUpdateInput = {
@@ -315,7 +349,13 @@
   });
 
   $effect(() => {
-    if (productId && variantId) void load();
+    if (productId && variantId) {
+      void load().then(async () => {
+        await tick();
+        const initialSection = window.location.hash.slice(1);
+        if (sections.some(([id]) => id === initialSection)) scrollToSection(initialSection, 'auto');
+      });
+    }
   });
 </script>
 
@@ -325,42 +365,40 @@
   >
 </svelte:head>
 
-<div class="p-6 md:p-8">
-  <header class="mx-auto mb-6 flex max-w-[1280px] flex-wrap items-start justify-between gap-4">
-    <div class="flex min-w-0 items-start gap-3">
-      <button
-        type="button"
-        class="mt-1 flex h-8 w-8 flex-none items-center justify-center rounded-md text-foreground-muted hover:bg-surface-hover hover:text-foreground"
-        aria-label="Volver al producto"
-        onclick={() => requestLeave(`/products/${productId}`)}
+<div class="min-h-full bg-background px-6 pb-6 md:px-8 md:pb-8">
+  <header
+    bind:this={editorHeader}
+    class="sticky top-0 z-30 mb-6 flex items-center gap-3 border-b border-border bg-background/95 pb-3 pt-6 backdrop-blur md:pt-8"
+  >
+    <button
+      type="button"
+      class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-foreground-muted hover:bg-surface-hover hover:text-foreground"
+      aria-label="Volver"
+      onclick={() => requestLeave(`/products/${productId}`)}
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        aria-hidden="true"
       >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          aria-hidden="true"
-        >
-          <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
-        </svg>
-      </button>
-      <div class="min-w-0">
-        <p class="text-xs font-medium uppercase tracking-wider text-foreground-subtle">Productos</p>
-        <h1 class="mt-1 text-2xl font-bold text-foreground">Editar variante</h1>
-        <p class="mt-1 text-sm text-foreground-muted">{product?.name ?? 'Variante del producto'}</p>
-      </div>
+        <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+      </svg>
+    </button>
+    <div class="min-w-0 flex-1">
+      <h1 class="text-xl font-bold text-foreground">Editar variante</h1>
+      <p class="text-sm text-foreground-muted">{product?.name ?? 'Variante del producto'}</p>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex shrink-0 items-center gap-2">
       {#if dirty}<span
-          class="rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning"
+          class="hidden rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning sm:inline"
           >Cambios sin guardar</span
         >{/if}
-      <Button
-        variant="secondary"
-        size="sm"
-        onclick={() => requestLeave(`/products/${productId}`)}>Cancelar</Button
+      <Button variant="secondary" size="sm" onclick={() => requestLeave(`/products/${productId}`)}
+        >Cancelar</Button
       >
       <Button
         size="sm"
@@ -377,7 +415,7 @@
 
   {#if pendingTarget}
     <div
-      class="mx-auto mb-5 flex max-w-[1280px] flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm"
+      class="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm"
       role="alert"
     >
       <span class="flex-1">Hay cambios sin guardar. ¿Desea descartarlos?</span>
@@ -389,278 +427,285 @@
   {/if}
 
   {#if loading}
-    <div class="mx-auto max-w-[1280px] space-y-5">
-      <div class="h-24 rounded-2xl skeleton"></div>
-      <div class="h-[520px] rounded-2xl skeleton"></div>
+    <div class="grid gap-4 lg:grid-cols-[220px_1fr]">
+      <div class="h-72 rounded-xl skeleton"></div>
+      <div class="h-[620px] rounded-xl skeleton"></div>
     </div>
   {:else if error && !variant}
     <div
-      class="mx-auto max-w-[1280px] rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+      class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
       role="alert"
     >
       {error}
     </div>
   {:else if variant && product}
-    <main class="mx-auto max-w-[1280px] space-y-5">
-      <Card class="p-5">
-        <div class="flex flex-wrap items-start gap-4">
-          <div
-            class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary"
-            aria-hidden="true"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.7"
-              ><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" /><path
-                d="m4 7.5 8 4.5 8-4.5M12 12v9"
-              /></svg
-            >
-          </div>
-          <div class="min-w-0 flex-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <h2 class="font-semibold text-foreground">{variant.display_name}</h2>
-              <Badge variant="primary">Variante</Badge>
-            </div>
-            <p class="mt-1 font-mono text-xs text-foreground-muted">
-              {product.name} · {product.sku}
-            </p>
-          </div>
-          <div class="text-right">
-            <p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
-              Última actualización
-            </p>
-            <p class="mt-1 text-xs text-foreground-muted">
-              {variant.updated_at ? new Date(variant.updated_at).toLocaleString('es-SV') : '—'}
-            </p>
-          </div>
-        </div>
-        <div class="mt-4 flex flex-wrap gap-2" aria-label="Combinación de atributos">
-          {#each variant.values as value (value.attribute_code)}<span
-              class="rounded-full border border-border bg-surface-muted/30 px-3 py-1.5 text-xs text-foreground-muted"
-              >{value.attribute_code}: <strong class="text-foreground">{value.label}</strong></span
-            >{/each}
-        </div>
-        <p
-          class="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-foreground-muted"
-        >
-          La combinación es parte de la identidad de la variante y no se modifica aquí. Para
-          cambiarla, gestione la familia y retire la combinación anterior conservando su historial.
-        </p>
-      </Card>
-
-      {#if error}<div
-          class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
-          role="alert"
-        >
-          {error}
-        </div>{/if}
-      {#if conflict}<div
-          class="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-foreground"
-        >
-          <span class="flex-1"
-            >La variante cambió mientras la editaba. Sus cambios siguen visibles; recargue para
-            comparar la versión actual.</span
-          ><Button size="sm" variant="secondary" onclick={load}>Recargar datos</Button>
-        </div>{/if}
-
-      <Card class="p-6">
-        <div class="mb-5">
-          <h2 class="text-base font-semibold text-foreground">Identidad de la variante</h2>
-          <p class="mt-1 text-sm text-foreground-muted">
-            Corrija la referencia operativa sin alterar la combinación ni los datos heredados.
-          </p>
-        </div>
-        <div class="grid gap-4 md:grid-cols-2">
-          <label class="text-sm font-medium text-foreground"
-            >SKU <span class="text-danger">*</span><input
-              class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2.5 font-mono text-sm text-foreground"
-              value={form.sku}
-              disabled={!canEditVariant}
-              oninput={(event) =>
-                (form = { ...form, sku: (event.currentTarget as HTMLInputElement).value })}
-            /></label
-          >
-          <label class="text-sm font-medium text-foreground"
-            >Nombre personalizado <span class="font-normal text-foreground-subtle">(opcional)</span
-            ><input
-              class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground"
-              value={form.name_override ?? ''}
-              placeholder={variant.display_name}
-              disabled={!canEditVariant}
-              oninput={(event) =>
-                (form = {
-                  ...form,
-                  name_override: (event.currentTarget as HTMLInputElement).value || null
-                })}
-            /></label
-          >
-        </div>
-        <p class="mt-3 text-xs text-foreground-muted">
-          Nombre mostrado si está vacío: <strong class="text-foreground"
-            >{variant.display_name}</strong
-          >
-        </p>
-      </Card>
-
-      <Card class="p-6">
-        <div class="mb-5">
-          <h2 class="text-base font-semibold text-foreground">Estado operativo</h2>
-          <p class="mt-1 text-sm text-foreground-muted">
-            Una variante activa solo puede operar dentro de un producto padre activo.
-          </p>
-        </div>
-        <label class="block max-w-md text-sm font-medium text-foreground"
-          >Estado<select
-            class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground"
-            value={form.lifecycle_status}
-            disabled={!canEditVariant}
-            onchange={(event) =>
-              setStatus((event.currentTarget as HTMLSelectElement).value as VariantStatus)}
-            >{#each statusOptions as option (option.value)}<option
-                value={option.value}
-                disabled={option.value === 'active' && !parentIsActive}>{option.label}</option
-              >{/each}</select
-          ></label
-        >
-        {#if !parentIsActive}<p class="mt-3 text-xs text-warning">
-            El producto padre no está activo; la variante no puede activarse hasta corregir el
-            estado del padre.
-          </p>{/if}
-      </Card>
-
-      <Card class="p-6">
-        <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 class="text-base font-semibold text-foreground">Identificadores</h2>
-            <p class="mt-1 text-sm text-foreground-muted">
-              Códigos de escaneo o referencia únicos en la empresa.
-            </p>
-          </div>
-          {#if canEditIdentifiers}<Button
-              size="sm"
-              variant="secondary"
-              onclick={addIdentifier}
-              disabled={form.identifiers.length >= 20}>Agregar identificador</Button
-            >{/if}
-        </div>
-        {#if !canEditIdentifiers}<p
-            class="mb-4 rounded-lg border border-border bg-surface-muted/20 p-3 text-xs text-foreground-muted"
-          >
-            Modo lectura: necesita <code class="rounded bg-surface-muted px-1"
-              >products:identifiers</code
-            > para modificar estos códigos.
-          </p>{/if}
-        {#if form.identifiers.length}
-          <div class="space-y-3">
-            {#each form.identifiers as identifier, index (identifier._key)}<div
-                class="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-[180px_1fr_auto_auto] md:items-end"
-              >
-                <label class="text-xs font-medium text-foreground-muted"
-                  >Tipo<select
-                    class="mt-1 w-full rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-foreground"
-                    value={identifier.identifier_type}
-                    disabled={!canEditIdentifiers}
-                    onchange={(event) =>
-                      updateIdentifier(index, {
-                        identifier_type: (event.currentTarget as HTMLSelectElement)
-                          .value as IdentifierType
-                      })}
-                    ><option value="ean">EAN</option><option value="upc">UPC</option><option
-                      value="gtin">GTIN</option
-                    ><option value="internal">Interno</option><option value="other">Otro</option
-                    ></select
-                  ></label
-                ><label class="text-xs font-medium text-foreground-muted"
-                  >Valor<input
-                    class="mt-1 w-full rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-foreground"
-                    value={identifier.value}
-                    disabled={!canEditIdentifiers}
-                    oninput={(event) =>
-                      updateIdentifier(index, {
-                        value: (event.currentTarget as HTMLInputElement).value
-                      })}
-                  /></label
-                ><label class="flex items-center gap-2 pb-2 text-xs text-foreground"
-                  ><input
-                    type="checkbox"
-                    checked={identifier.is_primary}
-                    disabled={!canEditIdentifiers}
-                    onchange={(event) =>
-                      updateIdentifier(index, {
-                        is_primary: (event.currentTarget as HTMLInputElement).checked
-                      })}
-                  /> Principal</label
-                >{#if canEditIdentifiers}<button
-                    type="button"
-                    class="pb-2 text-xs text-danger hover:underline"
-                    onclick={() => removeIdentifier(index)}>Eliminar</button
-                  >{/if}
-              </div>{/each}
-          </div>
-        {:else}<div
-            class="rounded-lg border border-dashed border-border p-8 text-center text-sm text-foreground-muted"
-          >
-            No hay identificadores registrados.
-          </div>{/if}
-      </Card>
-
-      <Card class="p-6">
-        <div class="mb-5">
-          <h2 class="text-base font-semibold text-foreground">Imagen principal</h2>
-          <p class="mt-1 text-sm text-foreground-muted">
-            La imagen pertenece a esta variante; proveedores y datos de compra se heredan del
-            producto padre.
-          </p>
-        </div>
-        <ProductVariantImageEditor
-          id="variant-image"
-          bind:image={form.image}
-          companyId={company.id ?? ''}
-          canUpload={canUploadImages}
-          editable={canEditImages}
-        />
-        {#if !canEditImages}<p class="mt-3 text-xs text-foreground-muted">
-            Modo lectura: necesita <code class="rounded bg-surface-muted px-1">products:images</code
-            > para modificar la imagen.
-          </p>{/if}
-      </Card>
-
-      {#if product.product_kind === 'goods' && permissions.hasPermission('inventory:read')}
-        <Card class="p-6">
-          {#if inventoryUnitsError}
+    <div class="mx-auto grid max-w-[1280px] gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <EditorSectionNav {sections} {activeSection} onselect={scrollToSection} />
+      <main class="min-w-0 space-y-6">
+        <Card class="p-5">
+          <div class="flex flex-wrap items-start gap-4">
             <div
-              class="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger"
-              role="alert"
+              class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary"
+              aria-hidden="true"
             >
-              {inventoryUnitsError}
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                ><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" /><path
+                  d="m4 7.5 8 4.5 8-4.5M12 12v9"
+                /></svg
+              >
             </div>
-          {:else}
-            <PackagingManager
-              variantId={variant.id}
-              defaultBaseUnitId={product.sale_unit}
-              unitOptions={units.map((unit) => ({ id: unit.id_unit, label: unit.name }))}
-              canManage={permissions.hasPermission('inventory:manage_packaging')}
-            />
-          {/if}
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="font-semibold text-foreground">{variant.display_name}</h2>
+                <Badge variant="primary">Variante</Badge>
+              </div>
+              <p class="mt-1 font-mono text-xs text-foreground-muted">
+                {product.name} · {product.sku}
+              </p>
+            </div>
+            <div class="text-right">
+              <p class="text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+                Última actualización
+              </p>
+              <p class="mt-1 text-xs text-foreground-muted">
+                {variant.updated_at ? new Date(variant.updated_at).toLocaleString('es-SV') : '—'}
+              </p>
+            </div>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-2" aria-label="Combinación de atributos">
+            {#each variant.values as value (value.attribute_code)}<span
+                class="rounded-full border border-border bg-surface-muted/30 px-3 py-1.5 text-xs text-foreground-muted"
+                >{value.attribute_code}:
+                <strong class="text-foreground">{value.label}</strong></span
+              >{/each}
+          </div>
+          <p
+            class="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-foreground-muted"
+          >
+            La combinación es parte de la identidad de la variante y no se modifica aquí. Para
+            cambiarla, gestione la familia y retire la combinación anterior conservando su
+            historial.
+          </p>
         </Card>
-      {/if}
 
-      <Card class="p-5"
-        ><div class="flex items-start gap-3">
-          <span class="mt-0.5 text-primary" aria-hidden="true">ⓘ</span>
-          <div>
-            <h2 class="text-sm font-semibold text-foreground">Datos heredados</h2>
+        {#if error}<div
+            class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
+            role="alert"
+          >
+            {error}
+          </div>{/if}
+        {#if conflict}<div
+            class="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-foreground"
+          >
+            <span class="flex-1"
+              >La variante cambió mientras la editaba. Sus cambios siguen visibles; recargue para
+              comparar la versión actual.</span
+            ><Button size="sm" variant="secondary" onclick={load}>Recargar datos</Button>
+          </div>{/if}
+
+        <Card id="identity" class="scroll-mt-24 p-6">
+          <div class="mb-5">
+            <h2 class="text-base font-semibold text-foreground">Identidad de la variante</h2>
             <p class="mt-1 text-sm text-foreground-muted">
-              Categoría, unidades, proveedores, condiciones de compra, dimensiones y almacenamiento
-              se administran desde el producto padre.
+              Corrija la referencia operativa sin alterar la combinación ni los datos heredados.
             </p>
           </div>
-        </div></Card
-      >
-    </main>
+          <div class="grid gap-4 md:grid-cols-2">
+            <label class="text-sm font-medium text-foreground"
+              >SKU <span class="text-danger">*</span><input
+                class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2.5 font-mono text-sm text-foreground"
+                value={form.sku}
+                disabled={!canEditVariant}
+                oninput={(event) =>
+                  (form = { ...form, sku: (event.currentTarget as HTMLInputElement).value })}
+              /></label
+            >
+            <label class="text-sm font-medium text-foreground"
+              >Nombre personalizado <span class="font-normal text-foreground-subtle"
+                >(opcional)</span
+              ><input
+                class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground"
+                value={form.name_override ?? ''}
+                placeholder={variant.display_name}
+                disabled={!canEditVariant}
+                oninput={(event) =>
+                  (form = {
+                    ...form,
+                    name_override: (event.currentTarget as HTMLInputElement).value || null
+                  })}
+              /></label
+            >
+          </div>
+          <p class="mt-3 text-xs text-foreground-muted">
+            Nombre mostrado si está vacío: <strong class="text-foreground"
+              >{variant.display_name}</strong
+            >
+          </p>
+        </Card>
+
+        <Card id="status" class="scroll-mt-24 p-6">
+          <div class="mb-5">
+            <h2 class="text-base font-semibold text-foreground">Estado operativo</h2>
+            <p class="mt-1 text-sm text-foreground-muted">
+              Una variante activa solo puede operar dentro de un producto padre activo.
+            </p>
+          </div>
+          <label class="block max-w-md text-sm font-medium text-foreground"
+            >Estado<select
+              class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground"
+              value={form.lifecycle_status}
+              disabled={!canEditVariant}
+              onchange={(event) =>
+                setStatus((event.currentTarget as HTMLSelectElement).value as VariantStatus)}
+              >{#each statusOptions as option (option.value)}<option
+                  value={option.value}
+                  disabled={option.value === 'active' && !parentIsActive}>{option.label}</option
+                >{/each}</select
+            ></label
+          >
+          {#if !parentIsActive}<p class="mt-3 text-xs text-warning">
+              El producto padre no está activo; la variante no puede activarse hasta corregir el
+              estado del padre.
+            </p>{/if}
+        </Card>
+
+        <Card id="identifiers" class="scroll-mt-24 p-6">
+          <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 class="text-base font-semibold text-foreground">Identificadores</h2>
+              <p class="mt-1 text-sm text-foreground-muted">
+                Códigos de escaneo o referencia únicos en la empresa.
+              </p>
+            </div>
+            {#if canEditIdentifiers}<Button
+                size="sm"
+                variant="secondary"
+                onclick={addIdentifier}
+                disabled={form.identifiers.length >= 20}>Agregar identificador</Button
+              >{/if}
+          </div>
+          {#if !canEditIdentifiers}<p
+              class="mb-4 rounded-lg border border-border bg-surface-muted/20 p-3 text-xs text-foreground-muted"
+            >
+              Modo lectura: necesita <code class="rounded bg-surface-muted px-1"
+                >products:identifiers</code
+              > para modificar estos códigos.
+            </p>{/if}
+          {#if form.identifiers.length}
+            <div class="space-y-3">
+              {#each form.identifiers as identifier, index (identifier._key)}<div
+                  class="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-[180px_1fr_auto_auto] md:items-end"
+                >
+                  <label class="text-xs font-medium text-foreground-muted"
+                    >Tipo<select
+                      class="mt-1 w-full rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-foreground"
+                      value={identifier.identifier_type}
+                      disabled={!canEditIdentifiers}
+                      onchange={(event) =>
+                        updateIdentifier(index, {
+                          identifier_type: (event.currentTarget as HTMLSelectElement)
+                            .value as IdentifierType
+                        })}
+                      ><option value="ean">EAN</option><option value="upc">UPC</option><option
+                        value="gtin">GTIN</option
+                      ><option value="internal">Interno</option><option value="other">Otro</option
+                      ></select
+                    ></label
+                  ><label class="text-xs font-medium text-foreground-muted"
+                    >Valor<input
+                      class="mt-1 w-full rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-foreground"
+                      value={identifier.value}
+                      disabled={!canEditIdentifiers}
+                      oninput={(event) =>
+                        updateIdentifier(index, {
+                          value: (event.currentTarget as HTMLInputElement).value
+                        })}
+                    /></label
+                  ><label class="flex items-center gap-2 pb-2 text-xs text-foreground"
+                    ><input
+                      type="checkbox"
+                      checked={identifier.is_primary}
+                      disabled={!canEditIdentifiers}
+                      onchange={(event) =>
+                        updateIdentifier(index, {
+                          is_primary: (event.currentTarget as HTMLInputElement).checked
+                        })}
+                    /> Principal</label
+                  >{#if canEditIdentifiers}<button
+                      type="button"
+                      class="pb-2 text-xs text-danger hover:underline"
+                      onclick={() => removeIdentifier(index)}>Eliminar</button
+                    >{/if}
+                </div>{/each}
+            </div>
+          {:else}<div
+              class="rounded-lg border border-dashed border-border p-8 text-center text-sm text-foreground-muted"
+            >
+              No hay identificadores registrados.
+            </div>{/if}
+        </Card>
+
+        <Card id="image" class="scroll-mt-24 p-6">
+          <div class="mb-5">
+            <h2 class="text-base font-semibold text-foreground">Imagen principal</h2>
+            <p class="mt-1 text-sm text-foreground-muted">
+              La imagen pertenece a esta variante; proveedores y datos de compra se heredan del
+              producto padre.
+            </p>
+          </div>
+          <ProductVariantImageEditor
+            id="variant-image"
+            bind:image={form.image}
+            companyId={company.id ?? ''}
+            canUpload={canUploadImages}
+            editable={canEditImages}
+          />
+          {#if !canEditImages}<p class="mt-3 text-xs text-foreground-muted">
+              Modo lectura: necesita <code class="rounded bg-surface-muted px-1"
+                >products:images</code
+              > para modificar la imagen.
+            </p>{/if}
+        </Card>
+
+        {#if product.product_kind === 'goods' && permissions.hasPermission('inventory:read')}
+          <Card id="packaging" class="scroll-mt-24 p-6">
+            {#if inventoryUnitsError}
+              <div
+                class="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger"
+                role="alert"
+              >
+                {inventoryUnitsError}
+              </div>
+            {:else}
+              <PackagingManager
+                variantId={variant.id}
+                defaultBaseUnitId={product.sale_unit}
+                unitOptions={units.map((unit) => ({ id: unit.id_unit, label: unit.name }))}
+                canManage={permissions.hasPermission('inventory:manage_packaging')}
+              />
+            {/if}
+          </Card>
+        {/if}
+
+        <Card id="inherited" class="scroll-mt-24 p-5"
+          ><div class="flex items-start gap-3">
+            <span class="mt-0.5 text-primary" aria-hidden="true">ⓘ</span>
+            <div>
+              <h2 class="text-sm font-semibold text-foreground">Datos heredados</h2>
+              <p class="mt-1 text-sm text-foreground-muted">
+                Categoría, unidades, proveedores, condiciones de compra, dimensiones y
+                almacenamiento se administran desde el producto padre.
+              </p>
+            </div>
+          </div></Card
+        >
+      </main>
+    </div>
   {/if}
 </div>
