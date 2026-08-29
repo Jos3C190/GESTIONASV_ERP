@@ -61,7 +61,6 @@
 
   let canCreate = $derived(permissions.hasPermission('locations.create'));
   let canGenerate = $derived(permissions.hasPermission('locations.bulk'));
-  let canImport = $derived(permissions.hasPermission('locations.import'));
   let canManageScheme = $derived(permissions.hasPermission('locations.scheme'));
   let hasFilters = $derived(
     Boolean(
@@ -468,22 +467,6 @@
             Configurar códigos
           </Button>
         {/if}
-        {#if canImport}<Button
-            variant="secondary"
-            size="sm"
-            onclick={() => void goto(`/warehouses/${warehouseId}/locations/import`)}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4" /><path d="M4 19h16" /></svg
-            >
-            Importar
-          </Button>{/if}
         {#if canGenerate}<Button
             variant="secondary"
             size="sm"
@@ -677,7 +660,7 @@
           <p class="mt-2 max-w-md text-sm text-foreground-muted">
             {hasFilters
               ? 'Ajuste los filtros o busque otro identificador.'
-              : 'Cree una ruta individual, genere la matriz del almacén o importe la estructura existente.'}
+              : 'Cree una ruta individual o genere la matriz del almacén.'}
           </p>
           <div class="mt-5 flex flex-col gap-2 sm:flex-row">
             {#if hasFilters}<Button variant="secondary" size="sm" onclick={clearFilters}

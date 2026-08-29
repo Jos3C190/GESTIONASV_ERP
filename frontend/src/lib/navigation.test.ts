@@ -28,7 +28,7 @@ describe('catalog navigation', () => {
     expect(routeTitle('/inventory/units')).toBe('Unidades de medida');
   });
 
-  it('resolves the warehouse structures page title', () => {
+  it('resolves the available warehouse page titles', () => {
     expect(routeTitle('/warehouses/warehouse-1/structures')).toBe(
       'Estructuras y límites compartidos'
     );
@@ -36,10 +36,13 @@ describe('catalog navigation', () => {
     expect(routeTitle('/warehouses/warehouse-1/locations/generate')).toBe(
       'Generar ubicaciones por rangos'
     );
-    expect(routeTitle('/warehouses/warehouse-1/locations/import')).toBe('Importar ubicaciones');
     expect(routeTitle('/warehouses/warehouse-1/locations/location-1/edit')).toBe(
       'Editar ubicación'
     );
+  });
+
+  it('does not expose a dedicated title for the hidden location import route', () => {
+    expect(routeTitle('/warehouses/warehouse-1/locations/import')).toBe('Almacenes');
   });
 
   it('exposes the lifecycle trash with its dedicated permission and title', () => {

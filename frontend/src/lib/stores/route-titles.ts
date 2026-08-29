@@ -31,9 +31,6 @@ export function routeTitle(pathname: string): string {
   if (/^\/warehouses\/[^/]+\/locations\/generate\/?$/.test(pathname)) {
     return 'Generar ubicaciones por rangos';
   }
-  if (/^\/warehouses\/[^/]+\/locations\/import\/?$/.test(pathname)) {
-    return 'Importar ubicaciones';
-  }
   if (/^\/warehouses\/[^/]+\/locations\/[^/]+\/edit\/?$/.test(pathname)) {
     return 'Editar ubicación';
   }
