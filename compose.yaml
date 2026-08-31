@@ -24,6 +24,107 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # ---------------- Local document object storage ----------------
+  rustfs-permissions:
+    image: alpine:3.22
+    user: root
+    command: ["sh", "-c", "chown -R 10001:10001 /data /logs"]
+    volumes:
+      - rustfs-data:/data
+      - rustfs-logs:/logs
+    restart: "no"
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0-rc.4
+    user: "10001:10001"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    command: ["/data"]
+    env_file:
+      - ./object-storage/rustfs.env
+    environment:
+      RUSTFS_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:-}
+      RUSTFS_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:-}
+    volumes:
+      - rustfs-data:/data
+      - rustfs-logs:/logs
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    depends_on:
+      rustfs-permissions:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "sh", "-ec", "curl -fsS http://127.0.0.1:9000/health && curl -fsS http://127.0.0.1:9001/rustfs/console/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav:stable
+    env_file:
+      - ./antivirus/clamav.env
+    volumes:
+      - clamav-db:/var/lib/clamav
+    expose:
+      - "3310"
+    restart: unless-stopped
+
+  storage-init:
+    build:
+      context: ./backend
+      target: dev
+    command: ["python", "-m", "app.infrastructure.storage_bootstrap"]
+    environment: &document-storage-environment
+      OBJECT_STORAGE_ENABLED: "true"
+      OBJECT_STORAGE_INTERNAL_ENDPOINT: http://rustfs:9000
+      OBJECT_STORAGE_PUBLIC_ENDPOINT: ${OBJECT_STORAGE_PUBLIC_ENDPOINT:-http://localhost:9000}
+      OBJECT_STORAGE_REGION: ${OBJECT_STORAGE_REGION:-us-east-1}
+      OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-erp-documents}
+      OBJECT_STORAGE_CORS_ORIGINS: ${OBJECT_STORAGE_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      OBJECT_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:-}
+      OBJECT_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:-}
+      OBJECT_STORAGE_UPLOAD_TTL_SECONDS: ${OBJECT_STORAGE_UPLOAD_TTL_SECONDS:-600}
+      OBJECT_STORAGE_DOWNLOAD_TTL_SECONDS: ${OBJECT_STORAGE_DOWNLOAD_TTL_SECONDS:-300}
+      DOCUMENT_MAX_BYTES: ${DOCUMENT_MAX_BYTES:-52428800}
+      DOCUMENT_MAX_PENDING_PER_USER: ${DOCUMENT_MAX_PENDING_PER_USER:-20}
+      DOCUMENT_PENDING_RETENTION_HOURS: ${DOCUMENT_PENDING_RETENTION_HOURS:-24}
+      DOCUMENT_QUARANTINE_RETENTION_DAYS: ${DOCUMENT_QUARANTINE_RETENTION_DAYS:-7}
+      DOCUMENT_DELETION_RETENTION_DAYS: ${DOCUMENT_DELETION_RETENTION_DAYS:-30}
+      DOCUMENT_SCAN_STALE_MINUTES: ${DOCUMENT_SCAN_STALE_MINUTES:-15}
+      DOCUMENT_MAINTENANCE_INTERVAL_SECONDS: ${DOCUMENT_MAINTENANCE_INTERVAL_SECONDS:-3600}
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+      CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-120}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    restart: "no"
+
+  migrate:
+    build:
+      context: ./backend
+      target: dev
+    command: ["uv", "run", "alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - backend-cache:/root/.cache/uv
+    restart: "no"
+
   # ---------------- Backend (FastAPI) ----------------
   backend:
     build:
@@ -60,10 +161,17 @@ services:
       CLOUDINARY_UPLOAD_FOLDER: ${CLOUDINARY_UPLOAD_FOLDER:-erp-system}
       MEDIA_MAX_IMAGE_BYTES: ${MEDIA_MAX_IMAGE_BYTES:-10485760}
       MEDIA_SIGNATURE_TTL_SECONDS: ${MEDIA_SIGNATURE_TTL_SECONDS:-300}
+      <<: *document-storage-environment
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
     depends_on:
       db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+      clamav:
         condition: service_healthy
     ports:
       - "8000:8000"
@@ -76,6 +184,29 @@ services:
       timeout: 5s
       retries: 6
       start_period: 20s
+    restart: unless-stopped
+
+  document-maintenance:
+    build:
+      context: ./backend
+      target: dev
+    command: ["python", "-m", "app.infrastructure.document_maintenance"]
+    environment:
+      <<: *document-storage-environment
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      backend:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - backend-cache:/root/.cache/uv
     restart: unless-stopped
 
   # ---------------- One-shot database bootstrap ----------------
@@ -196,6 +327,9 @@ services:
 
 volumes:
   pgdata:
+  rustfs-data:
+  rustfs-logs:
+  clamav-db:
   redis-data:
   backend-cache:
   frontend-node-modules:

@@ -65,6 +65,8 @@ logs/
 
 # ===== Local uploads =====
 backend/uploads/
+backups/documents/
+object-storage/backups/
 
 # ===== Database dumps =====
 *.dump

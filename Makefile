@@ -3,7 +3,8 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help up down restart logs ps build seed reset-db test test-backend test-frontend \
-        test-unit test-integration test-e2e lint fmt clean setup db-shell backend-shell frontend-shell security-scan
+        test-unit test-integration test-e2e lint fmt clean setup db-shell backend-shell frontend-shell \
+        security-scan storage-backup storage-restore
 
 COMPOSE := docker compose
 COMPOSE_PROD := $(COMPOSE) -f compose.yaml -f compose.prod.yaml --profile prod
@@ -80,6 +81,17 @@ backend-shell: ## Open shell in the backend container
 
 frontend-shell: ## Open shell in the frontend container
 	$(COMPOSE) exec frontend sh
+
+storage-backup: ## Export the local document bucket under object-storage/backups
+	mkdir -p object-storage/backups
+	$(COMPOSE) run --rm -v "$(CURDIR)/object-storage/backups:/backup" backend \
+		python -m app.infrastructure.storage_backup export /backup
+
+storage-restore: ## Restore BACKUP_DIR from object-storage/backups (set STORAGE_RESTORE_FORCE=true to overwrite)
+	@test -n "$(BACKUP_DIR)" || (echo "Usage: make storage-restore BACKUP_DIR=YYYYMMDDTHHMMSSZ" && exit 2)
+	$(COMPOSE) run --rm -e STORAGE_RESTORE_FORCE=$(STORAGE_RESTORE_FORCE) \
+		-v "$(CURDIR)/object-storage/backups:/backup" backend \
+		python -m app.infrastructure.storage_backup restore /backup/$(BACKUP_DIR)
 
 prod-up: ## Start the prod profile (with nginx)
 	$(COMPOSE_PROD) up -d --build

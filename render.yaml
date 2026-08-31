@@ -33,6 +33,8 @@ services:
         value: "2"
       - key: RUN_MIGRATIONS_ON_STARTUP
         value: "false"
+      - key: OBJECT_STORAGE_ENABLED
+        value: "false"
       # --- Auth ---
       - key: JWT_SECRET_KEY
         generateValue: true

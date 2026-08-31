@@ -27,7 +27,32 @@ else
   info ".env already exists — leaving it untouched."
 fi
 
-log "Building and starting the database, backend, seed job and frontend..."
+random_hex() {
+  local bytes="$1"
+  od -An -N"$bytes" -tx1 /dev/urandom | tr -d ' \n'
+}
+
+ensure_secret() {
+  local key="$1"
+  local marker="$2"
+  local bytes="$3"
+  local value
+  value=$(grep -E "^${key}=" .env 2>/dev/null | tail -n 1 | cut -d= -f2- || true)
+  if [[ -z "$value" || "$value" == "$marker" ]]; then
+    if grep -qE "^${key}=" .env; then
+      sed -i.bak "s|^${key}=.*|${key}=$(random_hex "$bytes")|" .env
+      rm -f .env.bak
+    else
+      printf '\n%s=%s\n' "$key" "$(random_hex "$bytes")" >> .env
+    fi
+    log "Generated local secret: $key"
+  fi
+}
+
+ensure_secret "OBJECT_STORAGE_ACCESS_KEY" "CHANGE_ME_GENERATE_LOCAL_ACCESS_KEY" 16
+ensure_secret "OBJECT_STORAGE_SECRET_KEY" "CHANGE_ME_GENERATE_LOCAL_SECRET_KEY" 32
+
+log "Building and starting PostgreSQL, RustFS, ClamAV, backend, seed job and frontend..."
 docker compose up -d --build
 
 log "Waiting for PostgreSQL..."
@@ -44,10 +69,10 @@ for i in $(seq 1 60); do
   fi
 done
 
-log "Waiting for the backend and automatic Alembic migrations..."
+log "Waiting for the backend, migration 0041, RustFS and ClamAV..."
 for i in $(seq 1 90); do
-  if curl -sf http://localhost:8000/health/live >/dev/null 2>&1; then
-    log "Backend is healthy."
+  if curl -sf http://localhost:8000/health/ready 2>/dev/null | grep -q '"status":"ok"'; then
+    log "Backend, database schema, RustFS and ClamAV are healthy."
     break
   fi
   sleep 2
@@ -89,6 +114,7 @@ log "================ ERP System is ready ================"
 info "Frontend:  http://localhost:5173"
 info "Backend:   http://localhost:8000"
 info "API docs:  http://localhost:8000/docs"
+info "RustFS:    http://localhost:9001"
 info "Username:  ${SUPER_ADMIN_USERNAME:-superadmin}"
 info "Password:  the SUPER_ADMIN_PASSWORD value from .env"
 echo

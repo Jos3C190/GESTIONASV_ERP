@@ -8,6 +8,18 @@
 # at deploy time and is explicitly out of scope for the phase-0 boilerplate.
 
 services:
+  rustfs-permissions:
+    profiles: [local-document-storage]
+
+  rustfs:
+    profiles: [local-document-storage]
+
+  clamav:
+    profiles: [local-document-storage]
+
+  storage-init:
+    profiles: [local-document-storage]
+
   db:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -25,11 +37,24 @@ services:
       DEBUG: "false"
       LOG_LEVEL: WARNING
       SECURE_COOKIES: "true"
+      OBJECT_STORAGE_ENABLED: "false"
+    depends_on: !override
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     ports: !reset []
     # Let Nginx (or your reverse proxy) expose 8000.
     expose:
       - "8000"
+
+  migrate:
+    build:
+      target: prod
+
+  document-maintenance:
+    profiles: [local-document-storage]
 
   seed:
     build:
