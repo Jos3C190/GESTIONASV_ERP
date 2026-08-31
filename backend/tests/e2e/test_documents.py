@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from app.domain.ports.malware_scanner import ScanResult
 from app.domain.ports.object_storage import PresignedUpload, StoredObjectInfo
 from app.infrastructure.db.session import async_session_factory
 from app.infrastructure.models.audit import AuditLog
+from app.infrastructure.models.document_derivative import DocumentDerivativeModel
 from sqlalchemy import select
 
 from tests.e2e.conftest import get_test_company_id, seed_user
@@ -74,6 +76,21 @@ class E2EObjectStorage:
 
     async def delete(self, key: str) -> None:
         self.objects.pop(key, None)
+
+    async def upload_from(
+        self,
+        key: str,
+        source: Path,
+        *,
+        content_type: str,
+        metadata: dict[str, str],
+    ) -> StoredObjectInfo:
+        payload = source.read_bytes()
+        self.objects[key] = payload
+        self.declarations[key] = (content_type, metadata)
+        return StoredObjectInfo(
+            size_bytes=len(payload), content_type=content_type, etag="e2e-etag", metadata=metadata
+        )
 
     async def health(self) -> bool:
         return True
@@ -226,3 +243,104 @@ async def test_malware_cannot_be_downloaded(e2e_client, monkeypatch: pytest.Monk
         f"/api/v1/documents/{document_id}/download-url", headers=headers
     )
     assert download.status_code == 409
+
+
+async def test_pdf_is_immediately_available_then_exposes_explicit_ocr_variant(
+    e2e_client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = b"%PDF-1.7\nscanned document"
+    storage = _enable_fake_services(e2e_client, monkeypatch, E2EScanner(ScanResult(clean=True)))
+    monkeypatch.setattr(settings, "OCR_ENABLED", True)
+    headers = await _headers(e2e_client, superuser=True)
+    initiated = await e2e_client.post(
+        "/api/v1/documents/uploads",
+        headers=headers,
+        json={
+            "file_name": "escaneado.pdf",
+            "content_type": "application/pdf",
+            "size_bytes": len(payload),
+            "checksum_sha256": hashlib.sha256(payload).hexdigest(),
+        },
+    )
+    assert initiated.status_code == 201
+    document_id = initiated.json()["document_id"]
+    storage.put(document_id, payload)
+
+    completed = await e2e_client.post(f"/api/v1/documents/{document_id}/complete", headers=headers)
+    assert completed.status_code == 200
+    assert completed.json()["status"] == "active"
+    assert completed.json()["ocr_status"] == "pending"
+    assert completed.json()["ocr_available"] is False
+
+    original = await e2e_client.post(
+        f"/api/v1/documents/{document_id}/download-url", headers=headers
+    )
+    pending = await e2e_client.post(
+        f"/api/v1/documents/{document_id}/download-url?variant=ocr", headers=headers
+    )
+    assert original.status_code == 200
+    assert pending.status_code == 409
+    assert pending.json()["code"] == "document_ocr_not_ready"
+
+    async with async_session_factory() as session:
+        derivative = (
+            await session.execute(
+                select(DocumentDerivativeModel).where(
+                    DocumentDerivativeModel.document_id == uuid.UUID(document_id)
+                )
+            )
+        ).scalar_one()
+        derivative.status = "ready"
+        derivative.size_bytes = len(payload)
+        derivative.checksum_sha256 = hashlib.sha256(payload).hexdigest()
+        derivative.etag = "ocr-e2e-etag"
+        derivative.completed_at = datetime.now(UTC)
+        await session.commit()
+
+    detail = await e2e_client.get(f"/api/v1/documents/{document_id}", headers=headers)
+    ocr_download = await e2e_client.post(
+        f"/api/v1/documents/{document_id}/download-url?variant=ocr", headers=headers
+    )
+    assert detail.status_code == 200
+    assert detail.json()["ocr_status"] == "ready"
+    assert detail.json()["ocr_available"] is True
+    assert ocr_download.status_code == 200
+
+
+async def test_superadmin_can_retry_failed_ocr(e2e_client, monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = b"%PDF-1.7\nretry OCR"
+    storage = _enable_fake_services(e2e_client, monkeypatch, E2EScanner(ScanResult(clean=True)))
+    monkeypatch.setattr(settings, "OCR_ENABLED", True)
+    headers = await _headers(e2e_client, superuser=True)
+    initiated = await e2e_client.post(
+        "/api/v1/documents/uploads",
+        headers=headers,
+        json={
+            "file_name": "retry.pdf",
+            "content_type": "application/pdf",
+            "size_bytes": len(payload),
+            "checksum_sha256": hashlib.sha256(payload).hexdigest(),
+        },
+    )
+    document_id = initiated.json()["document_id"]
+    storage.put(document_id, payload)
+    completed = await e2e_client.post(f"/api/v1/documents/{document_id}/complete", headers=headers)
+    assert completed.status_code == 200
+
+    async with async_session_factory() as session:
+        derivative = (
+            await session.execute(
+                select(DocumentDerivativeModel).where(
+                    DocumentDerivativeModel.document_id == uuid.UUID(document_id)
+                )
+            )
+        ).scalar_one()
+        derivative.status = "failed"
+        derivative.failure_code = "ocr_timeout"
+        derivative.attempts = 3
+        await session.commit()
+
+    retried = await e2e_client.post(f"/api/v1/documents/{document_id}/ocr/retry", headers=headers)
+    assert retried.status_code == 202
+    assert retried.json()["ocr_status"] == "pending"
+    assert retried.json()["ocr_failure_code"] is None

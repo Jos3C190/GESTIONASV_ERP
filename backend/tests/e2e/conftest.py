@@ -21,12 +21,10 @@ async def e2e_client() -> AsyncIterator[AsyncClient]:
     and after each test for isolation. Also resets rate limiters."""
     from app.infrastructure.db.session import async_session_factory, dispose_engine
     from app.main import create_app
-    from app.middlewares.rate_limit import _login_limiter, _refresh_limiter, _reset_limiter
+    from app.middlewares.rate_limit import _rate_limit_store
 
     # Reset rate limiters so tests don't interfere with each other.
-    _login_limiter._buckets.clear()
-    _refresh_limiter._buckets.clear()
-    _reset_limiter._buckets.clear()
+    _rate_limit_store.clear_fallback()
 
     # Clean auth tables before yielding.
     async with async_session_factory() as session:
