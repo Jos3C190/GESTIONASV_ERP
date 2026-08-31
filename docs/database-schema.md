@@ -316,6 +316,15 @@ inventory application command. Unknown measurements remain
 explicit; they do not contribute a fabricated zero and normal receipt is blocked
 until the stock is measured or placed in controlled quarantine.
 
+## 14. Document storage (revision 0041)
+
+`document_assets` stores tenant-scoped metadata for immutable private objects. It records the
+normalized display name, declared and detected MIME, size, SHA-256, private bucket/key, ETag,
+scan state and audited soft-delete fields. The supported states are `pending_upload`,
+`pending_scan`, `scanning`, `active`, `quarantined` and `rejected`; only `active` is downloadable.
+The unique `(bucket, object_key)` constraint and company/status/date indexes support safe lookup,
+maintenance and retention without exposing storage coordinates through the API.
+
 ## 12. Product master enrichment (revisions 0035–0036)
 
 Revisions `0035` and `0036` extend the product master without embedding

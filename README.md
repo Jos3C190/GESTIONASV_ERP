@@ -39,7 +39,7 @@ gráficos, y 17 módulos futuros como mockups en el sidebar.
 | Backend     | Python 3.12, FastAPI (async), SQLAlchemy 2.0 async, Alembic, Pydantic v2, asyncpg, structlog, Argon2id, PyJWT |
 | Frontend    | SvelteKit (Svelte 5 runes), TypeScript strict, TailwindCSS, Vitest, design system Geist (Vercel) |
 | Database    | PostgreSQL 16 |
-| Infra       | Docker, Docker Compose v2, Nginx (prod profile), Redis (optional profile) |
+| Infra       | Docker Compose v2, RustFS (documentos), ClamAV, Nginx y Redis opcional |
 | Tooling     | `uv` (backend deps), `pnpm` (frontend deps), `make` |
 
 ---
@@ -69,9 +69,9 @@ solamente cuando la base queda lista.
 `make setup` hace todo automáticamente:
 
 1. Copia `.env.example` → `.env`
-2. Construye y levanta la base, backend, trabajo de semilla y frontend
+2. Genera credenciales locales y levanta PostgreSQL, RustFS, ClamAV, backend y frontend
 3. Espera a que Postgres esté healthy
-4. Ejecuta migraciones Alembic automáticamente (al arrancar el backend)
+4. Ejecuta migraciones Alembic en una tarea separada antes de arrancar el backend
 5. Siembra RBAC, superadministrador y el contexto operativo de Grupo Lorena
 6. Muestra las URLs y credenciales
 
@@ -94,6 +94,7 @@ o eliminar medios desde la aplicación.
 | Backend (FastAPI) | http://localhost:8000 |
 | Swagger docs      | http://localhost:8000/docs |
 | ReDoc docs        | http://localhost:8000/redoc |
+| RustFS console    | http://localhost:9001 |
 | Postgres          | localhost:5432 |
 
 ### Credenciales semilla
@@ -124,6 +125,8 @@ make seed            # ejecutar solo si el bootstrap todavía no fue completado
 # FORCE_SEED=true make seed  # reconciliación explícita (puede restaurar canónicos)
 make reset-db        # wipe + migrar (destructivo)
 make clean           # remover todo (contenedores, volúmenes, imágenes)
+make storage-backup  # respaldar objetos y manifiesto con checksums
+# make storage-restore BACKUP_DIR=<timestamp>
 make lint            # lint backend + frontend
 make prod-up         # levantar perfil producción (con Nginx)
 ```
@@ -188,6 +191,9 @@ erp-system/
 - CORS restrictivo (nunca `*` con credenciales)
 - Bitácora append-only (sin endpoints de UPDATE/DELETE)
 - Ver `docs/architecture.md` para el mapeo OWASP A01-A10 completo
+- Ver `object-storage/README.md` para RustFS, persistencia y respaldos
+- Ver `antivirus/README.md` para ClamAV, límites y diagnóstico
+- Ver `docs/document-storage.md` para el flujo documental completo
 
 ---
 
@@ -224,6 +230,8 @@ make test-frontend     # vitest
 
 ## Documentación
 
+- `object-storage/README.md` — configuración y operación local de RustFS
+- `antivirus/README.md` — configuración y operación de ClamAV
 - `docs/architecture.md` — capas, ADRs, OWASP
 - `docs/database-schema.md` — diagrama ER (Mermaid)
 - `docs/rbac-model.md` — motor de permisos

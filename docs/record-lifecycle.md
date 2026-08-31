@@ -51,6 +51,7 @@ estado operativo existente en cada módulo.
 | Unidades personalizadas | Configuración por empresa | Sí | Unidades estándar y unidades usadas están protegidas |
 | Productos | Sí | Sí | Conservación obligatoria cuando exista historia transaccional |
 | Proveedores/contactos | Sí | Sí | Proveedor sin contactos para eliminar; contactos independientes |
+| Documentos | No | Sí | Descarga solo en estado activo; purga física a los 30 días |
 | Asignaciones empleado/departamento–sucursal | Finalizar/reactivar | No | Se preserva el historial |
 | Bitácora, geografía, tokens y tablas transaccionales | No | No | Inmutables, técnicos o históricos |
 
