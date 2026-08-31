@@ -20,6 +20,9 @@ services:
   storage-init:
     profiles: [local-document-storage]
 
+  redis:
+    profiles: [local-document-processing]
+
   db:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -38,6 +41,8 @@ services:
       LOG_LEVEL: WARNING
       SECURE_COOKIES: "true"
       OBJECT_STORAGE_ENABLED: "false"
+      REDIS_ENABLED: "false"
+      OCR_ENABLED: "false"
     depends_on: !override
       db:
         condition: service_healthy
@@ -55,6 +60,12 @@ services:
 
   document-maintenance:
     profiles: [local-document-storage]
+
+  ocr-worker:
+    profiles: [local-document-processing]
+    depends_on: !override
+      redis:
+        condition: service_healthy
 
   seed:
     build:

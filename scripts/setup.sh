@@ -51,8 +51,9 @@ ensure_secret() {
 
 ensure_secret "OBJECT_STORAGE_ACCESS_KEY" "CHANGE_ME_GENERATE_LOCAL_ACCESS_KEY" 16
 ensure_secret "OBJECT_STORAGE_SECRET_KEY" "CHANGE_ME_GENERATE_LOCAL_SECRET_KEY" 32
+ensure_secret "REDIS_PASSWORD" "CHANGE_ME_GENERATE_LOCAL_REDIS_PASSWORD" 32
 
-log "Building and starting PostgreSQL, RustFS, ClamAV, backend, seed job and frontend..."
+log "Building and starting PostgreSQL, RustFS, ClamAV, Redis, OCR worker, backend, seed job and frontend..."
 docker compose up -d --build
 
 log "Waiting for PostgreSQL..."
@@ -69,15 +70,15 @@ for i in $(seq 1 60); do
   fi
 done
 
-log "Waiting for the backend, migration 0041, RustFS and ClamAV..."
-for i in $(seq 1 90); do
+log "Waiting for the backend, migration 0042, RustFS, ClamAV, Redis and OCR worker..."
+for i in $(seq 1 150); do
   if curl -sf http://localhost:8000/health/ready 2>/dev/null | grep -q '"status":"ok"'; then
-    log "Backend, database schema, RustFS and ClamAV are healthy."
+    log "Backend, database schema, RustFS, ClamAV, Redis and OCR worker are healthy."
     break
   fi
   sleep 2
-  if [[ $i -eq 90 ]]; then
-    err "Backend did not become healthy. Run 'docker compose logs backend'."
+  if [[ $i -eq 150 ]]; then
+    err "The document-processing stack did not become healthy. Run 'docker compose logs backend redis ocr-worker'."
     exit 1
   fi
 done
@@ -115,6 +116,7 @@ info "Frontend:  http://localhost:5173"
 info "Backend:   http://localhost:8000"
 info "API docs:  http://localhost:8000/docs"
 info "RustFS:    http://localhost:9001"
+info "Redis:     127.0.0.1:6379 (password in .env)"
 info "Username:  ${SUPER_ADMIN_USERNAME:-superadmin}"
 info "Password:  the SUPER_ADMIN_PASSWORD value from .env"
 echo

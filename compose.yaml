@@ -1,7 +1,23 @@
 # =============================================================
 # ERP System — docker compose (development base)
-# Phase 0: db + backend + frontend with hot reload + healthchecks.
+# Local development stack with durable document processing.
 # =============================================================
+
+x-redis-ocr-environment: &redis-ocr-environment
+  REDIS_ENABLED: "true"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+  REDIS_CONNECT_TIMEOUT_SECONDS: ${REDIS_CONNECT_TIMEOUT_SECONDS:-0.2}
+  OCR_ENABLED: "true"
+  OCR_LANGUAGES: ${OCR_LANGUAGES:-spa+eng}
+  OCR_JOB_TIMEOUT_SECONDS: ${OCR_JOB_TIMEOUT_SECONDS:-900}
+  OCR_TESSERACT_TIMEOUT_SECONDS: ${OCR_TESSERACT_TIMEOUT_SECONDS:-120}
+  OCR_MAX_PAGES: ${OCR_MAX_PAGES:-300}
+  OCR_MAX_OUTPUT_BYTES: ${OCR_MAX_OUTPUT_BYTES:-104857600}
+  OCR_SKIP_BIG_MPIX: ${OCR_SKIP_BIG_MPIX:-50}
+  OCR_MAX_ATTEMPTS: ${OCR_MAX_ATTEMPTS:-3}
+  OCR_STALE_MINUTES: ${OCR_STALE_MINUTES:-20}
+  OCR_RECONCILE_SECONDS: ${OCR_RECONCILE_SECONDS:-15}
 
 services:
   # ---------------- Postgres ----------------
@@ -22,6 +38,30 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    restart: unless-stopped
+
+  # ---------------- Redis: ARQ queue + distributed rate limiting ----------------
+  redis:
+    image: redis:7.4.5-alpine
+    command:
+      - sh
+      - -ec
+      - exec redis-server /usr/local/etc/redis/redis.conf --requirepass "$$REDIS_PASSWORD"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
     restart: unless-stopped
 
   # ---------------- Local document object storage ----------------
@@ -161,7 +201,7 @@ services:
       CLOUDINARY_UPLOAD_FOLDER: ${CLOUDINARY_UPLOAD_FOLDER:-erp-system}
       MEDIA_MAX_IMAGE_BYTES: ${MEDIA_MAX_IMAGE_BYTES:-10485760}
       MEDIA_SIGNATURE_TTL_SECONDS: ${MEDIA_SIGNATURE_TTL_SECONDS:-300}
-      <<: *document-storage-environment
+      <<: [*document-storage-environment, *redis-ocr-environment]
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -172,6 +212,8 @@ services:
       storage-init:
         condition: service_completed_successfully
       clamav:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "8000:8000"
@@ -186,13 +228,53 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # ---------------- Asynchronous searchable-PDF worker ----------------
+  ocr-worker:
+    build:
+      context: ./backend
+      target: ocr
+    environment:
+      <<: [*document-storage-environment, *redis-ocr-environment]
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+      clamav:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    cpus: 2.0
+    mem_limit: 2g
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    healthcheck:
+      test: ["CMD", "uv", "run", "arq", "app.infrastructure.ocr_worker.WorkerSettings", "--check"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
   document-maintenance:
     build:
       context: ./backend
       target: dev
     command: ["python", "-m", "app.infrastructure.document_maintenance"]
     environment:
-      <<: *document-storage-environment
+      <<: [*document-storage-environment, *redis-ocr-environment]
       DATABASE_URL: ${DATABASE_URL}
       DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
       ENVIRONMENT: ${ENVIRONMENT:-development}
@@ -278,22 +360,6 @@ services:
       timeout: 5s
       retries: 6
       start_period: 25s
-    restart: unless-stopped
-
-  # ---------------- Redis (optional, used from phase 1+) ----------------
-  redis:
-    profiles: [redis]
-    image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis-data:/data
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
     restart: unless-stopped
 
   # ---------------- Security Scanners (optional, profile: security) ----------------

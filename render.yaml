@@ -35,6 +35,10 @@ services:
         value: "false"
       - key: OBJECT_STORAGE_ENABLED
         value: "false"
+      - key: REDIS_ENABLED
+        value: "false"
+      - key: OCR_ENABLED
+        value: "false"
       # --- Auth ---
       - key: JWT_SECRET_KEY
         generateValue: true
