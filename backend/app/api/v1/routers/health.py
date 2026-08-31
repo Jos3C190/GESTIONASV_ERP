@@ -21,9 +21,10 @@ from app.api.v1.schemas.common import HealthComponent, HealthReport
 from app.core.config import settings
 from app.infrastructure.malware_scanner import ClamAVScanner
 from app.infrastructure.object_storage import S3ObjectStorage
+from app.infrastructure.redis_client import get_redis_client, redis_health
 
 router = APIRouter(prefix="/health", tags=["health"])
-EXPECTED_SCHEMA_REVISION = "0041"
+EXPECTED_SCHEMA_REVISION = "0042"
 
 
 def _now() -> str:
@@ -94,6 +95,43 @@ async def ready(session: SessionDep) -> HealthReport:
             [
                 HealthComponent(name="rustfs", status="disabled"),
                 HealthComponent(name="clamav", status="disabled"),
+            ]
+        )
+
+    if settings.REDIS_ENABLED:
+        redis_ok = await redis_health()
+        components.append(
+            HealthComponent(
+                name="redis",
+                status="ok" if redis_ok else "down",
+                detail=None
+                if redis_ok
+                else "Redis is unavailable; rate limits use memory fallback",
+            )
+        )
+        external_ok = external_ok and redis_ok
+        if settings.OCR_ENABLED:
+            worker_ok = False
+            if redis_ok:
+                try:
+                    worker_ok = bool(await get_redis_client().exists("erp:ocr:health"))
+                except Exception:
+                    worker_ok = False
+            components.append(
+                HealthComponent(
+                    name="ocr_worker",
+                    status="ok" if worker_ok else "down",
+                    detail=None if worker_ok else "OCR worker heartbeat is unavailable",
+                )
+            )
+            external_ok = external_ok and worker_ok
+        else:
+            components.append(HealthComponent(name="ocr_worker", status="disabled"))
+    else:
+        components.extend(
+            [
+                HealthComponent(name="redis", status="disabled"),
+                HealthComponent(name="ocr_worker", status="disabled"),
             ]
         )
 

@@ -193,6 +193,38 @@ class S3ObjectStorage:
                 "No se pudo eliminar el objeto almacenado.", code="document_storage_unavailable"
             ) from exc
 
+    async def upload_from(
+        self,
+        key: str,
+        source: Path,
+        *,
+        content_type: str,
+        metadata: dict[str, str],
+    ) -> StoredObjectInfo:
+        def _upload() -> dict[str, Any]:
+            client = self._client(self._settings.OBJECT_STORAGE_INTERNAL_ENDPOINT)
+            client.upload_file(
+                str(source),
+                self._bucket,
+                key,
+                ExtraArgs={"ContentType": content_type, "Metadata": metadata},
+            )
+            return client.head_object(Bucket=self._bucket, Key=key)
+
+        try:
+            response = await asyncio.to_thread(_upload)
+        except Exception as exc:
+            raise InfrastructureError(
+                "No se pudo guardar el documento procesado.",
+                code="document_storage_unavailable",
+            ) from exc
+        return StoredObjectInfo(
+            size_bytes=int(response["ContentLength"]),
+            content_type=response.get("ContentType"),
+            etag=str(response.get("ETag", "")).strip('"') or None,
+            metadata={str(k): str(v) for k, v in response.get("Metadata", {}).items()},
+        )
+
     async def health(self) -> bool:
         try:
             client = self._client(self._settings.OBJECT_STORAGE_INTERNAL_ENDPOINT)

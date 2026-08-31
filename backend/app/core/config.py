@@ -70,8 +70,21 @@ class Settings(BaseSettings):
     )
     CORS_ORIGIN_REGEX: str | None = r"https://.*\.vercel\.app"
 
-    # --- Redis (optional) ---
+    # --- Redis / background processing ---
+    REDIS_ENABLED: bool = False
     REDIS_URL: str | None = None
+    REDIS_PASSWORD: str | None = Field(default=None, repr=False)
+    REDIS_CONNECT_TIMEOUT_SECONDS: float = Field(default=0.2, ge=0.05, le=5)
+    OCR_ENABLED: bool = False
+    OCR_LANGUAGES: str = "spa+eng"
+    OCR_JOB_TIMEOUT_SECONDS: int = Field(default=900, ge=60, le=3600)
+    OCR_TESSERACT_TIMEOUT_SECONDS: int = Field(default=120, ge=10, le=600)
+    OCR_MAX_PAGES: int = Field(default=300, ge=1, le=2000)
+    OCR_MAX_OUTPUT_BYTES: int = Field(default=100 * 1024 * 1024, ge=1024, le=200 * 1024 * 1024)
+    OCR_SKIP_BIG_MPIX: int = Field(default=50, ge=1, le=500)
+    OCR_MAX_ATTEMPTS: int = Field(default=3, ge=1, le=10)
+    OCR_STALE_MINUTES: int = Field(default=20, ge=5, le=1440)
+    OCR_RECONCILE_SECONDS: int = Field(default=15, ge=5, le=60)
 
     # --- Media / Cloudinary ---
     UPLOADS_DIR: str = "/app/uploads"
@@ -155,6 +168,10 @@ class Settings(BaseSettings):
                 "OBJECT_STORAGE_ACCESS_KEY y OBJECT_STORAGE_SECRET_KEY son obligatorios "
                 "cuando OBJECT_STORAGE_ENABLED=true."
             )
+        if self.REDIS_ENABLED and not self.REDIS_URL:
+            raise ValueError("REDIS_URL es obligatorio cuando REDIS_ENABLED=true.")
+        if self.OCR_ENABLED and not self.REDIS_ENABLED:
+            raise ValueError("OCR_ENABLED requiere REDIS_ENABLED=true.")
         return self
 
 

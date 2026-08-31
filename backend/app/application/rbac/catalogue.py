@@ -43,6 +43,7 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("documents:download", "Descargar documentos", "documents"),
     PermissionSpec("documents:delete", "Enviar documentos a la papelera", "documents"),
     PermissionSpec("documents:restore", "Restaurar documentos", "documents"),
+    PermissionSpec("documents:process", "Procesar documentos y reintentar OCR", "documents"),
     PermissionSpec("departments:manage", "Gestionar departamentos", "employees"),
     PermissionSpec("departments:delete", "Eliminar departamentos lógicamente", "employees"),
     PermissionSpec("departments:restore", "Restaurar departamentos eliminados", "employees"),
@@ -70,10 +71,14 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("units:manage_global", "Administrar el catálogo global de unidades", "units"),
     PermissionSpec("suppliers:read", "Ver proveedores", "suppliers"),
     PermissionSpec("suppliers:manage", "Gestionar proveedores y contactos", "suppliers"),
-    PermissionSpec("suppliers:images", "Gestionar imágenes de proveedores y contactos", "suppliers"),
+    PermissionSpec(
+        "suppliers:images", "Gestionar imágenes de proveedores y contactos", "suppliers"
+    ),
     PermissionSpec("suppliers:tax_identifiers", "Gestionar identificadores fiscales", "suppliers"),
     PermissionSpec("suppliers:addresses", "Gestionar direcciones de proveedores", "suppliers"),
-    PermissionSpec("suppliers:bank_accounts", "Gestionar cuentas bancarias enmascaradas", "suppliers"),
+    PermissionSpec(
+        "suppliers:bank_accounts", "Gestionar cuentas bancarias enmascaradas", "suppliers"
+    ),
     PermissionSpec("suppliers:delete", "Eliminar proveedores y contactos", "suppliers"),
     PermissionSpec("suppliers:restore", "Restaurar proveedores y contactos", "suppliers"),
     # --- roles ---

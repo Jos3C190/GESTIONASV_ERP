@@ -27,6 +27,7 @@ from app.core.config import settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.domain.entities.user import User
 from app.domain.ports.audit_repository import AuditRepository
+from app.domain.ports.document_derivative_repository import DocumentDerivativeRepository
 from app.domain.ports.document_repository import DocumentRepository
 from app.domain.ports.malware_scanner import MalwareScanner
 from app.domain.ports.object_storage import ObjectStorage
@@ -40,6 +41,7 @@ from app.infrastructure.malware_scanner import ClamAVScanner
 from app.infrastructure.object_storage import S3ObjectStorage
 from app.infrastructure.repositories import (
     JwtTokenService,
+    SqlAlchemyDocumentDerivativeRepository,
     SqlAlchemyDocumentRepository,
     SqlAlchemyPermissionRepository,
     SqlAlchemyRefreshTokenRepository,
@@ -86,6 +88,10 @@ def get_document_repository(session: SessionDep) -> DocumentRepository:
     return SqlAlchemyDocumentRepository(session)
 
 
+def get_document_derivative_repository(session: SessionDep) -> DocumentDerivativeRepository:
+    return SqlAlchemyDocumentDerivativeRepository(session)
+
+
 def get_object_storage() -> ObjectStorage:
     return S3ObjectStorage(settings)
 
@@ -101,8 +107,11 @@ def get_document_service(
     storage: Annotated[ObjectStorage, Depends(get_object_storage)],
     scanner: Annotated[MalwareScanner, Depends(get_malware_scanner)],
     audit: Annotated[AuditService, Depends(get_audit_service)],
+    derivatives: Annotated[
+        DocumentDerivativeRepository, Depends(get_document_derivative_repository)
+    ],
 ) -> DocumentService:
-    return DocumentService(repository, storage, scanner, audit, settings)
+    return DocumentService(repository, storage, scanner, audit, settings, derivatives)
 
 
 def get_token_service() -> TokenService:

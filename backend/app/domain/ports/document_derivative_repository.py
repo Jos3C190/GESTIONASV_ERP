@@ -1,0 +1,29 @@
+from __future__ import annotations
+
+import uuid
+from collections.abc import Sequence
+from datetime import datetime
+from typing import Protocol
+
+from app.domain.entities.document_derivative import DocumentDerivative
+
+
+class DocumentDerivativeRepository(Protocol):
+    async def ensure_ocr(
+        self,
+        *,
+        derivative_id: uuid.UUID,
+        company_id: uuid.UUID,
+        document_id: uuid.UUID,
+        bucket: str,
+        object_key: str,
+    ) -> DocumentDerivative: ...
+
+    async def get(self, derivative_id: uuid.UUID) -> DocumentDerivative | None: ...
+    async def get_ocr(self, document_id: uuid.UUID) -> DocumentDerivative | None: ...
+    async def list_ocr(self, document_ids: Sequence[uuid.UUID]) -> Sequence[DocumentDerivative]: ...
+    async def list_pending_ids(self, limit: int) -> Sequence[uuid.UUID]: ...
+    async def claim(self, derivative_id: uuid.UUID, now: datetime) -> DocumentDerivative | None: ...
+    async def save(self, derivative: DocumentDerivative) -> DocumentDerivative: ...
+    async def reset_for_retry(self, derivative_id: uuid.UUID) -> DocumentDerivative | None: ...
+    async def reset_stale(self, before: datetime) -> int: ...

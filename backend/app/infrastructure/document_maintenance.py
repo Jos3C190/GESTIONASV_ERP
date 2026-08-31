@@ -4,14 +4,17 @@ import asyncio
 import signal
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import and_, or_, select, text, update
+from sqlalchemy.engine import CursorResult
 
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.infrastructure.db.session import session_scope
 from app.infrastructure.models.audit import AuditLog
 from app.infrastructure.models.document import DocumentAssetModel
+from app.infrastructure.models.document_derivative import DocumentDerivativeModel
 from app.infrastructure.object_storage import S3ObjectStorage
 
 log = get_logger(__name__)
@@ -47,6 +50,21 @@ async def run_once() -> None:
             document.status = "pending_scan"
             document.failure_code = "document_scan_interrupted"
 
+        stale_ocr_before = now - timedelta(minutes=settings.OCR_STALE_MINUTES)
+        stale_ocr = cast(
+            CursorResult[Any],
+            await session.execute(
+                update(DocumentDerivativeModel)
+                .where(
+                    DocumentDerivativeModel.status == "processing",
+                    DocumentDerivativeModel.started_at < stale_ocr_before,
+                )
+                .values(
+                    status="pending", failure_code="ocr_processing_interrupted", started_at=None
+                )
+            ),
+        )
+
         pending_before = now - timedelta(hours=settings.DOCUMENT_PENDING_RETENTION_HOURS)
         quarantine_before = now - timedelta(days=settings.DOCUMENT_QUARANTINE_RETENTION_DAYS)
         deletion_before = now - timedelta(days=settings.DOCUMENT_DELETION_RETENTION_DAYS)
@@ -56,18 +74,17 @@ async def run_once() -> None:
                     select(DocumentAssetModel)
                     .where(
                         or_(
-                            (
-                                DocumentAssetModel.status.in_(("pending_upload", "pending_scan"))
-                                & (DocumentAssetModel.created_at < pending_before)
+                            and_(
+                                DocumentAssetModel.status.in_(("pending_upload", "pending_scan")),
+                                DocumentAssetModel.created_at < pending_before,
                             ),
-                            (
-                                DocumentAssetModel.status
-                                == "quarantined"
-                                & (DocumentAssetModel.scanned_at < quarantine_before)
+                            and_(
+                                DocumentAssetModel.status == "quarantined",
+                                DocumentAssetModel.scanned_at < quarantine_before,
                             ),
-                            (
-                                DocumentAssetModel.status
-                                == "rejected" & DocumentAssetModel.object_deleted_at.is_(None)
+                            and_(
+                                DocumentAssetModel.status == "rejected",
+                                DocumentAssetModel.object_deleted_at.is_(None),
                             ),
                             DocumentAssetModel.deleted_at < deletion_before,
                         )
@@ -81,6 +98,21 @@ async def run_once() -> None:
         )
         for document in candidates:
             try:
+                derivatives = (
+                    (
+                        await session.execute(
+                            select(DocumentDerivativeModel).where(
+                                DocumentDerivativeModel.document_id == document.id
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                for derivative in derivatives:
+                    if derivative.object_deleted_at is None:
+                        await storage.delete(derivative.object_key)
+                        derivative.object_deleted_at = now
                 if document.object_deleted_at is None:
                     await storage.delete(document.object_key)
                     document.object_deleted_at = now
@@ -120,6 +152,7 @@ async def run_once() -> None:
         log.info(
             "document_maintenance_completed",
             stale_scans=len(stale),
+            stale_ocr=int(stale_ocr.rowcount or 0),
             purge_candidates=len(candidates),
         )
 

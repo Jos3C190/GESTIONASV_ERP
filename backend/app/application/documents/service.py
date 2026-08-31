@@ -19,6 +19,8 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.domain.entities.document import DocumentAsset
+from app.domain.entities.document_derivative import DocumentDerivative
+from app.domain.ports.document_derivative_repository import DocumentDerivativeRepository
 from app.domain.ports.document_repository import DocumentRepository
 from app.domain.ports.malware_scanner import MalwareScanner, ScanResult
 from app.domain.ports.object_storage import ObjectStorage, StoredObjectInfo
@@ -283,12 +285,61 @@ class DocumentService:
         scanner: MalwareScanner,
         audit: AuditService,
         settings: Settings,
+        derivatives: DocumentDerivativeRepository | None = None,
     ) -> None:
         self._repository = repository
         self._storage = storage
         self._scanner = scanner
         self._audit = audit
         self._settings = settings
+        self._derivatives = derivatives
+
+    @staticmethod
+    def _attach_ocr(
+        document: DocumentAsset, derivative: DocumentDerivative | None
+    ) -> DocumentAsset:
+        if derivative is None:
+            document.ocr_status = None
+            document.ocr_available = False
+            document.ocr_failure_code = None
+            document.ocr_completed_at = None
+            return document
+        document.ocr_status = derivative.status
+        document.ocr_available = derivative.status == "ready"
+        document.ocr_failure_code = derivative.failure_code
+        document.ocr_completed_at = derivative.completed_at
+        return document
+
+    async def _ensure_ocr(self, document: DocumentAsset, actor_id: uuid.UUID) -> DocumentAsset:
+        if (
+            not self._settings.OCR_ENABLED
+            or document.extension != ".pdf"
+            or self._derivatives is None
+        ):
+            return self._attach_ocr(document, None)
+        existing = await self._derivatives.get_ocr(document.id)
+        derivative_id = uuid.uuid4()
+        derivative = await self._derivatives.ensure_ocr(
+            derivative_id=derivative_id,
+            company_id=document.company_id,
+            document_id=document.id,
+            bucket=document.bucket,
+            object_key=(
+                f"companies/{document.company_id}/documents/{document.id}/"
+                f"derivatives/ocr/{derivative_id}.pdf"
+            ),
+        )
+        if existing is None:
+            await self._audit.record(
+                action="DOCUMENT_OCR_QUEUED",
+                user_id=actor_id,
+                company_id=document.company_id,
+                resource_type="documents",
+                resource_id=str(document.id),
+                after_state={"derivative_id": str(derivative.id), "ocr_status": "pending"},
+                required=True,
+            )
+        return self._attach_ocr(document, derivative)
 
     def _ensure_enabled(self) -> None:
         if not self._settings.OBJECT_STORAGE_ENABLED:
@@ -356,7 +407,8 @@ class DocumentService:
         document = await self._repository.get(document_id)
         if document is None or document.company_id != company_id:
             raise NotFoundError("Documento no encontrado.", code="document_not_found")
-        return document
+        derivative = await self._derivatives.get_ocr(document.id) if self._derivatives else None
+        return self._attach_ocr(document, derivative)
 
     async def list(
         self,
@@ -371,7 +423,12 @@ class DocumentService:
         items, total = await self._repository.list(
             company_id, page=page, size=size, search=search, status=status
         )
-        return list(items), total
+        documents = list(items)
+        if self._derivatives and documents:
+            derivatives = await self._derivatives.list_ocr([item.id for item in documents])
+            by_document = {item.document_id: item for item in derivatives}
+            documents = [self._attach_ocr(item, by_document.get(item.id)) for item in documents]
+        return documents, total
 
     async def _reject_and_delete(
         self, document: DocumentAsset, code: str, *, scan_finished: bool = False
@@ -443,7 +500,7 @@ class DocumentService:
     ) -> DocumentAsset:
         document = await self.get(company_id, document_id)
         if document.status == "active":
-            return document
+            return await self._ensure_ocr(document, actor_id)
         _ensure_completable(document)
         info = await self._storage.head(document.object_key)
         if info is None:
@@ -487,10 +544,15 @@ class DocumentService:
             after_state={"filename": document.original_filename, "status": "active"},
             required=True,
         )
-        return saved
+        return await self._ensure_ocr(saved, actor_id)
 
     async def download_url(
-        self, company_id: uuid.UUID, document_id: uuid.UUID, actor_id: uuid.UUID
+        self,
+        company_id: uuid.UUID,
+        document_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        *,
+        variant: str = "original",
     ) -> tuple[str, datetime]:
         document = await self.get(company_id, document_id)
         if document.status != "active":
@@ -500,17 +562,66 @@ class DocumentService:
         expires_at = datetime.now(UTC) + timedelta(
             seconds=self._settings.OBJECT_STORAGE_DOWNLOAD_TTL_SECONDS
         )
+        object_key = document.object_key
+        filename = document.original_filename
+        content_type = document.detected_content_type or document.declared_content_type
+        action = "DOCUMENT_DOWNLOAD_URL_ISSUED"
+        if variant == "ocr":
+            derivative = await self._derivatives.get_ocr(document.id) if self._derivatives else None
+            if derivative is None or derivative.status != "ready":
+                raise ConflictError(
+                    "La versión OCR todavía no está disponible.", code="document_ocr_not_ready"
+                )
+            object_key = derivative.object_key
+            filename = f"{Path(document.original_filename).stem}-ocr.pdf"
+            content_type = derivative.content_type
+            action = "DOCUMENT_OCR_DOWNLOAD_URL_ISSUED"
         url = await self._storage.presign_download(
-            document.object_key,
-            filename=document.original_filename,
-            content_type=document.detected_content_type or document.declared_content_type,
+            object_key,
+            filename=filename,
+            content_type=content_type,
             expires_seconds=self._settings.OBJECT_STORAGE_DOWNLOAD_TTL_SECONDS,
         )
         await self._audit.record(
-            action="DOCUMENT_DOWNLOAD_URL_ISSUED",
+            action=action,
             user_id=actor_id,
             company_id=company_id,
             resource_type="documents",
             resource_id=str(document.id),
         )
         return url, expires_at
+
+    async def retry_ocr(
+        self, company_id: uuid.UUID, document_id: uuid.UUID, actor_id: uuid.UUID
+    ) -> DocumentAsset:
+        if not self._settings.OCR_ENABLED or self._derivatives is None:
+            raise InfrastructureError(
+                "El procesamiento OCR no está configurado.",
+                code="document_processing_unavailable",
+            )
+        document = await self.get(company_id, document_id)
+        if document.status != "active" or document.extension != ".pdf":
+            raise ConflictError(
+                "El documento no admite procesamiento OCR.", code="document_ocr_not_available"
+            )
+        derivative = await self._derivatives.get_ocr(document.id)
+        if derivative is None:
+            raise ConflictError(
+                "El documento no tiene un trabajo OCR.", code="document_ocr_not_available"
+            )
+        reset = await self._derivatives.reset_for_retry(derivative.id)
+        if reset is None:
+            raise ConflictError(
+                "El trabajo OCR no se puede reintentar en su estado actual.",
+                code="document_ocr_retry_not_allowed",
+            )
+        await self._audit.record(
+            action="DOCUMENT_OCR_RETRY_REQUESTED",
+            user_id=actor_id,
+            company_id=company_id,
+            resource_type="documents",
+            resource_id=str(document.id),
+            after_state={"derivative_id": str(reset.id), "ocr_status": reset.status},
+            required=True,
+        )
+        return self._attach_ocr(document, reset)

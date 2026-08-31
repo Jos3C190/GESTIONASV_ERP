@@ -31,3 +31,7 @@ class DocumentAsset:
     deletion_reason: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    ocr_status: str | None = None
+    ocr_available: bool = False
+    ocr_failure_code: str | None = None
+    ocr_completed_at: datetime | None = None

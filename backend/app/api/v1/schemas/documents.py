@@ -11,6 +11,8 @@ from app.api.v1.schemas.common import PageMeta
 DocumentStatus = Literal[
     "pending_upload", "pending_scan", "scanning", "active", "quarantined", "rejected"
 ]
+OcrStatus = Literal["pending", "processing", "ready", "failed", "skipped"]
+DownloadVariant = Literal["original", "ocr"]
 
 
 class InitiateDocumentIn(BaseModel):
@@ -40,6 +42,10 @@ class DocumentOut(BaseModel):
     uploaded_by: uuid.UUID | None
     created_at: datetime | None
     updated_at: datetime | None
+    ocr_status: OcrStatus | None = None
+    ocr_available: bool = False
+    ocr_failure_code: str | None = None
+    ocr_completed_at: datetime | None = None
 
 
 class InitiateDocumentOut(BaseModel):

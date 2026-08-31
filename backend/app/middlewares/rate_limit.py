@@ -1,76 +1,49 @@
-"""Rate limiting middleware — in-memory sliding window per IP.
+"""Distributed rate limiting with an in-memory availability fallback."""
 
-Phase 6 implementation: a lightweight in-memory rate limiter for sensitive
-endpoints (login, refresh, password-reset). For production with multiple
-workers or instances, replace the InMemoryStore with a Redis-backed store
-(documented in docs/architecture.md).
-
-The limiter is applied as a FastAPI dependency on specific routes, not as a
-global middleware, so it only affects the configured endpoints.
-"""
 from __future__ import annotations
-
-import time
-from collections import defaultdict
-from dataclasses import dataclass, field
 
 from fastapi import Request
 
+from app.core.config import settings
 from app.core.exceptions import RateLimitError
+from app.infrastructure.rate_limiter import (
+    FallbackRateLimitStore,
+    InMemoryRateLimitStore,
+    RedisRateLimitStore,
+    parse_rate_limit,
+)
+from app.infrastructure.redis_client import get_redis_client
 
 
-@dataclass
-class _Window:
-    hits: list[float] = field(default_factory=list)
+def _store() -> FallbackRateLimitStore:
+    primary = None
+    if settings.REDIS_ENABLED and settings.REDIS_URL:
+        primary = RedisRateLimitStore(get_redis_client())
+    return FallbackRateLimitStore(primary, InMemoryRateLimitStore())
 
 
-class InMemoryRateLimiter:
-    """Sliding window rate limiter. Thread-safe enough for async single-process.
-
-    For multi-worker uvicorn, each worker has its own counter — the effective
-    limit is multiplied by the number of workers. This is acceptable for the
-    boilerplate; use Redis for precise distributed limiting.
-    """
-
-    def __init__(self, max_requests: int, window_seconds: int) -> None:
-        self._max = max_requests
-        self._window = window_seconds
-        self._buckets: dict[str, _Window] = defaultdict(_Window)
-
-    def check(self, key: str) -> None:
-        """Raise RateLimitError if key has exceeded the limit. Otherwise record."""
-        now = time.monotonic()
-        cutoff = now - self._window
-        w = self._buckets[key]
-        # Prune old hits
-        w.hits = [t for t in w.hits if t > cutoff]
-        if len(w.hits) >= self._max:
-            raise RateLimitError(
-                "Demasiados intentos. Espere antes de intentar nuevamente.",
-                code="rate_limited",
-            )
-        w.hits.append(now)
+_rate_limit_store = _store()
 
 
-# Pre-configured limiters for sensitive endpoints.
-_login_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60)
-_refresh_limiter = InMemoryRateLimiter(max_requests=30, window_seconds=60)
-_reset_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=60)
-
-
-def rate_limit_login(request: Request) -> None:
-    """Dependency: rate-limit login attempts per IP (10/min)."""
+async def _check(request: Request, operation: str, configured_limit: str) -> None:
+    limit, window_seconds = parse_rate_limit(configured_limit)
     ip = request.client.host if request.client else "unknown"
-    _login_limiter.check(f"login:{ip}")
+    allowed = await _rate_limit_store.allow(
+        f"{operation}:{ip}", limit=limit, window_seconds=window_seconds
+    )
+    if not allowed:
+        raise RateLimitError(
+            "Demasiados intentos. Espere antes de intentar nuevamente.", code="rate_limited"
+        )
 
 
-def rate_limit_refresh(request: Request) -> None:
-    """Dependency: rate-limit refresh attempts per IP (30/min)."""
-    ip = request.client.host if request.client else "unknown"
-    _refresh_limiter.check(f"refresh:{ip}")
+async def rate_limit_login(request: Request) -> None:
+    await _check(request, "login", settings.LOGIN_RATE_LIMIT)
 
 
-def rate_limit_reset(request: Request) -> None:
-    """Dependency: rate-limit password reset per IP (5/min)."""
-    ip = request.client.host if request.client else "unknown"
-    _reset_limiter.check(f"reset:{ip}")
+async def rate_limit_refresh(request: Request) -> None:
+    await _check(request, "refresh", settings.REFRESH_RATE_LIMIT)
+
+
+async def rate_limit_reset(request: Request) -> None:
+    await _check(request, "reset", settings.RESET_RATE_LIMIT)

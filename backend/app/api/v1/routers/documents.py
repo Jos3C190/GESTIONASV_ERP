@@ -13,8 +13,10 @@ from app.api.v1.schemas.documents import (
     DocumentsPage,
     DocumentStatus,
     DownloadUrlOut,
+    DownloadVariant,
     InitiateDocumentIn,
     InitiateDocumentOut,
+    OcrStatus,
 )
 from app.application.documents import DocumentService, InitiateDocumentInput
 from app.domain.entities.document import DocumentAsset
@@ -38,6 +40,10 @@ def _out(document: DocumentAsset) -> DocumentOut:
         uploaded_by=document.uploaded_by,
         created_at=document.created_at,
         updated_at=document.updated_at,
+        ocr_status=cast(OcrStatus | None, document.ocr_status),
+        ocr_available=document.ocr_available,
+        ocr_failure_code=document.ocr_failure_code,
+        ocr_completed_at=document.ocr_completed_at,
     )
 
 
@@ -130,11 +136,27 @@ async def create_download_url(
     request: Request,
     current: CurrentUser,
     service: Annotated[DocumentService, Depends(get_document_service)],
+    variant: DownloadVariant = Query("original"),
 ) -> DownloadUrlOut:
     url, expires_at = await service.download_url(
-        effective_company_id(request), document_id, current.id
+        effective_company_id(request), document_id, current.id, variant=variant
     )
     return DownloadUrlOut(url=url, expires_at=expires_at)
+
+
+@router.post(
+    "/{document_id}/ocr/retry",
+    response_model=DocumentOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_permission("documents:process"))],
+)
+async def retry_ocr(
+    document_id: uuid.UUID,
+    request: Request,
+    current: CurrentUser,
+    service: Annotated[DocumentService, Depends(get_document_service)],
+) -> DocumentOut:
+    return _out(await service.retry_ocr(effective_company_id(request), document_id, current.id))
 
 
 @router.get(

@@ -35,9 +35,16 @@ dependencies = [
     "faker>=25.0,<37",
     "openpyxl>=3.1.5,<4",
     "boto3>=1.40,<2",
+    # ARQ 0.28 currently requires redis-py < 6; it remains compatible with Redis 7.4 server.
+    "redis>=5.3,<6",
+    "arq>=0.28,<0.29",
 ]
 
 [project.optional-dependencies]
+ocr = [
+    "ocrmypdf>=17.11,<18",
+    "pikepdf>=10,<11",
+]
 dev = [
     "pytest>=8.2,<9",
     "pytest-asyncio>=0.23,<0.25",
