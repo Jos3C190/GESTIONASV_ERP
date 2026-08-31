@@ -3,6 +3,7 @@
 The root test fixture rebuilds, migrates and seeds that database once per
 suite. Development data is never used by setup, execution or cleanup.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -29,6 +30,7 @@ async def e2e_client() -> AsyncIterator[AsyncClient]:
 
     # Clean auth tables before yielding.
     async with async_session_factory() as session:
+        await session.execute(text("DELETE FROM document_assets"))
         await session.execute(text("DELETE FROM refresh_tokens"))
         await session.execute(text("DELETE FROM password_reset_tokens"))
         await session.execute(text("DELETE FROM users"))
@@ -41,6 +43,7 @@ async def e2e_client() -> AsyncIterator[AsyncClient]:
 
     # Cleanup after test.
     async with async_session_factory() as session:
+        await session.execute(text("DELETE FROM document_assets"))
         await session.execute(text("DELETE FROM refresh_tokens"))
         await session.execute(text("DELETE FROM password_reset_tokens"))
         await session.execute(text("DELETE FROM users"))

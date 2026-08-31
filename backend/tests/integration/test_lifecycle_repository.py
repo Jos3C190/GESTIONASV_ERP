@@ -15,6 +15,7 @@ import pytest
 from app.core.exceptions import ConflictError, NotFoundError
 from app.infrastructure.db.session import async_session_factory, dispose_engine
 from app.infrastructure.models.auth import PasswordResetToken, RefreshToken
+from app.infrastructure.models.document import DocumentAssetModel
 from app.infrastructure.models.employee import (
     Department,
     DepartmentBranchAssignment,
@@ -30,6 +31,7 @@ from app.infrastructure.models.organization import (
     WarehouseCategory,
 )
 from app.infrastructure.models.user import User
+from app.infrastructure.repositories.document_repository import SqlAlchemyDocumentRepository
 from app.infrastructure.repositories.lifecycle_repository import (
     SqlAlchemyLifecycleRepository,
 )
@@ -211,6 +213,81 @@ async def test_tenant_isolation_visibility_restore_and_idempotency(
     assert restored.operation_applied is True
     assert repeated_restore.operation_applied is False
     assert await session.scalar(select(Department).where(Department.id == department.id))
+
+
+async def test_documents_are_paginated_tenant_scoped_and_restorable(
+    lifecycle_session: AsyncSession,
+) -> None:
+    session = lifecycle_session
+    actor = await _add_user(session, username="document_manager")
+    company_a = await _add_company(session, label="Documentos A")
+    company_b = await _add_company(session, label="Documentos B")
+    documents = [
+        DocumentAssetModel(
+            id=uuid.uuid4(),
+            company_id=company_a.id,
+            original_filename=f"contrato-{index}.pdf",
+            extension=".pdf",
+            declared_content_type="application/pdf",
+            detected_content_type="application/pdf",
+            size_bytes=100 + index,
+            checksum_sha256=f"{index + 1:064x}",
+            bucket="erp-documents",
+            object_key=f"companies/{company_a.id}/documents/{uuid.uuid4()}",
+            status="active",
+            upload_expires_at=datetime.now(UTC) + timedelta(minutes=10),
+            uploaded_by=actor.id,
+        )
+        for index in range(3)
+    ]
+    session.add_all(documents)
+    await session.flush()
+    repository = SqlAlchemyDocumentRepository(session)
+    lifecycle = SqlAlchemyLifecycleRepository(session)
+
+    first_page, total = await repository.list(
+        company_a.id, page=1, size=2, search="contrato", status="active"
+    )
+    other_company, other_total = await repository.list(
+        company_b.id, page=1, size=20, search=None, status=None
+    )
+    assert total == 3
+    assert len(first_page) == 2
+    assert other_company == []
+    assert other_total == 0
+
+    with pytest.raises(NotFoundError):
+        await lifecycle.soft_delete(
+            "documents",
+            str(documents[0].id),
+            company_id=company_b.id,
+            actor_id=actor.id,
+            reason="Cruce de empresa",
+        )
+
+    deleted = await lifecycle.soft_delete(
+        "documents",
+        str(documents[0].id),
+        company_id=company_a.id,
+        actor_id=actor.id,
+        reason="Documento reemplazado",
+    )
+    assert deleted.operation_applied is True
+    assert await repository.get(documents[0].id) is None
+    trash, trash_total = await lifecycle.list_deleted(
+        company_a.id, page=1, size=20, resource="documents"
+    )
+    assert trash_total == 1
+    assert trash[0].record_id == str(documents[0].id)
+
+    restored = await lifecycle.restore(
+        "documents",
+        str(documents[0].id),
+        company_id=company_a.id,
+        actor_id=actor.id,
+    )
+    assert restored.operation_applied is True
+    assert await repository.get(documents[0].id) is not None
 
 
 async def test_only_active_assignments_block_branch_deletion(
