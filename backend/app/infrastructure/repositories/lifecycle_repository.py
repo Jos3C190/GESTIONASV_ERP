@@ -22,6 +22,7 @@ from app.infrastructure.models.catalog import (
     SubCategoryModel,
     UnitModel,
 )
+from app.infrastructure.models.document import DocumentAssetModel
 from app.infrastructure.models.employee import (
     Department,
     DepartmentBranchAssignment,
@@ -76,6 +77,7 @@ RESOURCE_POLICIES: dict[str, ResourcePolicy] = {
     "supplier_contacts": ResourcePolicy(
         SupplierContactModel, "id_supplier_contact", ("full_name",), "supplier_contact"
     ),
+    "documents": ResourcePolicy(DocumentAssetModel, "id", ("original_filename",), "company"),
 }
 
 

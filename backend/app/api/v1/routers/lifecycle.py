@@ -42,6 +42,7 @@ RESOURCE_PERMISSIONS: dict[str, tuple[str, str]] = {
     "products": ("products:delete", "products:restore"),
     "suppliers": ("suppliers:delete", "suppliers:restore"),
     "supplier_contacts": ("suppliers:delete", "suppliers:restore"),
+    "documents": ("documents:delete", "documents:restore"),
 }
 
 

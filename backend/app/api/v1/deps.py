@@ -20,19 +20,27 @@ from app.application.auth.get_current_user import GetCurrentUserUseCase
 from app.application.auth.logout import LogoutUseCase
 from app.application.auth.refresh_token import RefreshTokenUseCase
 from app.application.auth.register_user import RegisterUserUseCase
+from app.application.documents import DocumentService
 from app.application.password_policy import PasswordPolicy
 from app.application.rbac.check_permission import CheckPermissionUseCase
+from app.core.config import settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.domain.entities.user import User
 from app.domain.ports.audit_repository import AuditRepository
+from app.domain.ports.document_repository import DocumentRepository
+from app.domain.ports.malware_scanner import MalwareScanner
+from app.domain.ports.object_storage import ObjectStorage
 from app.domain.ports.permission_repository import PermissionRepository
 from app.domain.ports.refresh_token_repository import RefreshTokenRepository
 from app.domain.ports.role_repository import RoleRepository
 from app.domain.ports.token_service import TokenService
 from app.domain.ports.user_repository import UserRepository
 from app.infrastructure.db.session import get_async_session
+from app.infrastructure.malware_scanner import ClamAVScanner
+from app.infrastructure.object_storage import S3ObjectStorage
 from app.infrastructure.repositories import (
     JwtTokenService,
+    SqlAlchemyDocumentRepository,
     SqlAlchemyPermissionRepository,
     SqlAlchemyRefreshTokenRepository,
     SqlAlchemyRoleRepository,
@@ -72,6 +80,29 @@ def get_audit_service(
     audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
 ) -> AuditService:
     return AuditService(audit_repo)
+
+
+def get_document_repository(session: SessionDep) -> DocumentRepository:
+    return SqlAlchemyDocumentRepository(session)
+
+
+def get_object_storage() -> ObjectStorage:
+    return S3ObjectStorage(settings)
+
+
+def get_malware_scanner() -> MalwareScanner:
+    return ClamAVScanner(
+        settings.CLAMAV_HOST, settings.CLAMAV_PORT, settings.CLAMAV_TIMEOUT_SECONDS
+    )
+
+
+def get_document_service(
+    repository: Annotated[DocumentRepository, Depends(get_document_repository)],
+    storage: Annotated[ObjectStorage, Depends(get_object_storage)],
+    scanner: Annotated[MalwareScanner, Depends(get_malware_scanner)],
+    audit: Annotated[AuditService, Depends(get_audit_service)],
+) -> DocumentService:
+    return DocumentService(repository, storage, scanner, audit, settings)
 
 
 def get_token_service() -> TokenService:
@@ -215,6 +246,7 @@ __all__ = [
     "get_check_permission_use_case",
     "get_current_user",
     "get_current_user_use_case",
+    "get_document_service",
     "get_logout_use_case",
     "get_password_policy",
     "get_permission_repository",

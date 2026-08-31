@@ -4,12 +4,13 @@ Pydantic-settings v2 with strict typing. The single source of truth for the
 process-wide configuration. Never read os.environ directly elsewhere — go
 through `settings`.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, computed_field, field_validator
+from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -82,6 +83,28 @@ class Settings(BaseSettings):
     MEDIA_SIGNATURE_TTL_SECONDS: int = 300
     SUPPLIER_DATA_ENCRYPTION_KEY: str | None = Field(default=None, repr=False)
 
+    # --- Generic documents / S3-compatible object storage ---
+    OBJECT_STORAGE_ENABLED: bool = False
+    OBJECT_STORAGE_INTERNAL_ENDPOINT: str = "http://rustfs:9000"
+    OBJECT_STORAGE_PUBLIC_ENDPOINT: str = "http://localhost:9000"
+    OBJECT_STORAGE_REGION: str = "us-east-1"
+    OBJECT_STORAGE_BUCKET: str = "erp-documents"
+    OBJECT_STORAGE_CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+    OBJECT_STORAGE_ACCESS_KEY: str | None = None
+    OBJECT_STORAGE_SECRET_KEY: str | None = Field(default=None, repr=False)
+    OBJECT_STORAGE_UPLOAD_TTL_SECONDS: int = Field(default=600, ge=60, le=3600)
+    OBJECT_STORAGE_DOWNLOAD_TTL_SECONDS: int = Field(default=300, ge=30, le=3600)
+    DOCUMENT_MAX_BYTES: int = Field(default=50 * 1024 * 1024, ge=1, le=50 * 1024 * 1024)
+    DOCUMENT_MAX_PENDING_PER_USER: int = Field(default=20, ge=1, le=100)
+    DOCUMENT_PENDING_RETENTION_HOURS: int = Field(default=24, ge=1, le=168)
+    DOCUMENT_QUARANTINE_RETENTION_DAYS: int = Field(default=7, ge=1, le=365)
+    DOCUMENT_DELETION_RETENTION_DAYS: int = Field(default=30, ge=1, le=3650)
+    DOCUMENT_SCAN_STALE_MINUTES: int = Field(default=15, ge=5, le=1440)
+    DOCUMENT_MAINTENANCE_INTERVAL_SECONDS: int = Field(default=3600, ge=60, le=86400)
+    CLAMAV_HOST: str = "clamav"
+    CLAMAV_PORT: int = Field(default=3310, ge=1, le=65535)
+    CLAMAV_TIMEOUT_SECONDS: int = Field(default=120, ge=5, le=600)
+
     # --- Convenient computed fields ---
 
     @computed_field  # type: ignore[misc]
@@ -99,12 +122,22 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
+    @computed_field  # type: ignore[misc]
+    @property
+    def object_storage_cors_origin_list(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.OBJECT_STORAGE_CORS_ORIGINS.split(",")
+            if origin.strip()
+        ]
+
     @field_validator("JWT_SECRET_KEY")
     @classmethod
     def _secret_not_default(cls, v: str) -> str:
-        if v in {"CHANGE_ME", "", "CHANGE_ME_USE_openssl_rand_hex_64"} and cls.model_fields.get(
-            "ENVIRONMENT"
-        ) is None:
+        if (
+            v in {"CHANGE_ME", "", "CHANGE_ME_USE_openssl_rand_hex_64"}
+            and cls.model_fields.get("ENVIRONMENT") is None
+        ):
             return v
         return v
 
@@ -112,6 +145,17 @@ class Settings(BaseSettings):
     @classmethod
     def _upper(cls, v: str) -> str:
         return v.upper()
+
+    @model_validator(mode="after")
+    def _validate_document_storage(self) -> Settings:
+        if self.OBJECT_STORAGE_ENABLED and not (
+            self.OBJECT_STORAGE_ACCESS_KEY and self.OBJECT_STORAGE_SECRET_KEY
+        ):
+            raise ValueError(
+                "OBJECT_STORAGE_ACCESS_KEY y OBJECT_STORAGE_SECRET_KEY son obligatorios "
+                "cuando OBJECT_STORAGE_ENABLED=true."
+            )
+        return self
 
 
 @lru_cache(maxsize=1)
