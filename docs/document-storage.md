@@ -17,19 +17,25 @@ Los archivos de infraestructura están separados a nivel del proyecto:
 - [`object-storage/`](../object-storage/) contiene la configuración no secreta y la guía de
   operación de RustFS;
 - [`antivirus/`](../antivirus/) contiene los límites de ClamAV y su guía de operación.
+- [`redis/`](../redis/) contiene la configuración AOF/noeviction y la guía de la cola local;
+- [`ocr/`](../ocr/) documenta el worker OCRmyPDF y su operación.
 
 El código de integración permanece dentro de `backend/app/` para respetar la arquitectura
 hexagonal. Las credenciales nunca se guardan en esas carpetas: pertenecen al `.env` local.
 
 `make setup` genera credenciales diferentes para cada instalación, crea el bucket privado
-`erp-documents`, aplica CORS para el frontend local, ejecuta Alembic `0041` y levanta:
+`erp-documents`, aplica CORS para el frontend local, ejecuta Alembic `0042` y levanta:
 
 - RustFS en `127.0.0.1:9000`, con consola en `127.0.0.1:9001`;
 - ClamAV solo en la red interna de Compose;
 - un inicializador idempotente del bucket;
 - mantenimiento documental horario.
+- Redis autenticado con AOF para la cola ARQ y el rate limiting distribuido;
+- un worker OCRmyPDF sin puertos públicos, con Tesseract en español e inglés.
 
-`/health/ready` y `/health` muestran `rustfs` y `clamav`. `/health/live` no realiza I/O.
+`/health/ready` y `/health` muestran `rustfs`, `clamav`, `redis` y `ocr_worker`. Una caída de
+Redis degrada la salud, activa el rate limiter en memoria y deja el trabajo durable pendiente en
+PostgreSQL; el proceso web continúa sirviendo. `/health/live` no realiza I/O.
 Fuera del Compose local, `OBJECT_STORAGE_ENABLED` es `false` por defecto. La API responde
 `503 document_storage_unavailable` hasta configurar un proveedor real y un antivirus.
 
@@ -47,6 +53,10 @@ Las claves privadas y el nombre del bucket nunca aparecen en respuestas.
    `POST /api/v1/documents/{id}/download-url` (`documents:download`).
 5. Listado y detalle usan `documents:read`. Eliminación y restauración reutilizan
    `/api/v1/lifecycle/documents/{id}` con `documents:delete` y `documents:restore`.
+6. Para PDF activo, el backend crea idempotentemente un derivado OCR `pending`; esto nunca retrasa
+   la activación ni la descarga del original.
+7. `POST /api/v1/documents/{id}/download-url?variant=ocr` descarga la copia buscable sólo cuando
+   está `ready`. `POST /api/v1/documents/{id}/ocr/retry` requiere `documents:process`.
 
 Los permisos nuevos se asignan automáticamente solo al rol global `SUPER_ADMIN`. Un
 administrador puede concederlos manualmente a otros roles. Todo cruce de empresa devuelve `404`.
@@ -54,6 +64,12 @@ administrador puede concederlos manualmente a otros roles. Todo cruce de empresa
 Si ClamAV no responde, el archivo permanece en `pending_scan` y `complete` se puede reintentar.
 Un hallazgo queda en `quarantined` sin descarga. La toma atómica del estado `scanning` impide
 escaneos concurrentes duplicados.
+
+El original es siempre la evidencia canónica y la variante predeterminada. OCRmyPDF usa
+`--skip-text`, rotación y corrección de inclinación. Rechaza PDF cifrado, firmado o con más de 300
+páginas; el resultado se valida, se escanea otra vez con ClamAV y se guarda bajo una clave privada
+inmutable distinta. Los fallos temporales tienen tres intentos y los trabajos abandonados vuelven
+a `pending` después de 20 minutos.
 
 ## Seguridad y retención
 
@@ -68,6 +84,7 @@ El mantenimiento:
 - devuelve escaneos interrumpidos por más de 15 minutos a `pending_scan`;
 - elimina el objeto en cuarentena después de 7 días y conserva su tombstone auditable;
 - purga objeto y fila tras 30 días en papelera;
+- elimina todos los objetos derivados antes que el original durante una purga;
 - reintenta objetos rechazados cuya eliminación inmediata haya fallado.
 
 No se usa versionado, Object Lock ni lifecycle del proveedor. Las claves son inmutables y la
@@ -81,7 +98,8 @@ make storage-restore BACKUP_DIR=20260830T231500Z
 STORAGE_RESTORE_FORCE=true make storage-restore BACKUP_DIR=20260830T231500Z
 ```
 
-Cada respaldo se guarda en `object-storage/backups/<timestamp>` con objetos y `manifest.json`
+Cada respaldo se guarda en `object-storage/backups/<timestamp>` con objetos originales, derivados
+OCR y `manifest.json`
 (tamaño, ETag, metadatos y SHA-256). La restauración verifica checksums y no sobrescribe claves
 existentes, salvo la opción explícita. El respaldo documental debe conservarse junto al dump de
 PostgreSQL tomado en el mismo punto lógico; uno sin el otro no representa un respaldo consistente.

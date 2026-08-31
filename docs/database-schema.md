@@ -316,7 +316,7 @@ inventory application command. Unknown measurements remain
 explicit; they do not contribute a fabricated zero and normal receipt is blocked
 until the stock is measured or placed in controlled quarantine.
 
-## 14. Document storage (revision 0041)
+## 14. Document storage and OCR (revisions 0041–0042)
 
 `document_assets` stores tenant-scoped metadata for immutable private objects. It records the
 normalized display name, declared and detected MIME, size, SHA-256, private bucket/key, ETag,
@@ -324,6 +324,13 @@ scan state and audited soft-delete fields. The supported states are `pending_upl
 `pending_scan`, `scanning`, `active`, `quarantined` and `rejected`; only `active` is downloadable.
 The unique `(bucket, object_key)` constraint and company/status/date indexes support safe lookup,
 maintenance and retention without exposing storage coordinates through the API.
+
+`document_derivatives` records immutable generated objects without changing the canonical
+document. Revision `0042` initially supports one `ocr_pdf` per document with states `pending`,
+`processing`, `ready`, `failed` and `skipped`; it stores size, SHA-256, ETag, attempts, failure
+code and processing timestamps. The unique `(document_id, kind)` constraint makes creation
+idempotent, while company/status/date indexes support tenant isolation, reconciliation and stale
+job recovery. PostgreSQL—not Redis—is the durable source of processing state.
 
 ## 12. Product master enrichment (revisions 0035–0036)
 

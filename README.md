@@ -1,4 +1,3 @@
-# ERP System — Boilerplate Empresarial
 
 ![banner](docs/images/banner-readme.png)
 
@@ -39,7 +38,7 @@ gráficos, y 17 módulos futuros como mockups en el sidebar.
 | Backend     | Python 3.12, FastAPI (async), SQLAlchemy 2.0 async, Alembic, Pydantic v2, asyncpg, structlog, Argon2id, PyJWT |
 | Frontend    | SvelteKit (Svelte 5 runes), TypeScript strict, TailwindCSS, Vitest, design system Geist (Vercel) |
 | Database    | PostgreSQL 16 |
-| Infra       | Docker Compose v2, RustFS (documentos), ClamAV, Nginx y Redis opcional |
+| Infra       | Docker Compose v2, RustFS, ClamAV, Redis/ARQ, OCRmyPDF y Nginx |
 | Tooling     | `uv` (backend deps), `pnpm` (frontend deps), `make` |
 
 ---
@@ -69,7 +68,7 @@ solamente cuando la base queda lista.
 `make setup` hace todo automáticamente:
 
 1. Copia `.env.example` → `.env`
-2. Genera credenciales locales y levanta PostgreSQL, RustFS, ClamAV, backend y frontend
+2. Genera credenciales locales y levanta PostgreSQL, RustFS, ClamAV, Redis, OCR worker, backend y frontend
 3. Espera a que Postgres esté healthy
 4. Ejecuta migraciones Alembic en una tarea separada antes de arrancar el backend
 5. Siembra RBAC, superadministrador y el contexto operativo de Grupo Lorena
@@ -95,6 +94,7 @@ o eliminar medios desde la aplicación.
 | Swagger docs      | http://localhost:8000/docs |
 | ReDoc docs        | http://localhost:8000/redoc |
 | RustFS console    | http://localhost:9001 |
+| Redis             | 127.0.0.1:6379 (contraseña en `.env`) |
 | Postgres          | localhost:5432 |
 
 ### Credenciales semilla
@@ -193,6 +193,7 @@ erp-system/
 - Ver `docs/architecture.md` para el mapeo OWASP A01-A10 completo
 - Ver `object-storage/README.md` para RustFS, persistencia y respaldos
 - Ver `antivirus/README.md` para ClamAV, límites y diagnóstico
+- Ver `redis/README.md` y `ocr/README.md` para la cola y el procesamiento buscable
 - Ver `docs/document-storage.md` para el flujo documental completo
 
 ---
@@ -232,6 +233,8 @@ make test-frontend     # vitest
 
 - `object-storage/README.md` — configuración y operación local de RustFS
 - `antivirus/README.md` — configuración y operación de ClamAV
+- `redis/README.md` — persistencia y operación de Redis/ARQ
+- `ocr/README.md` — flujo y operación del worker OCRmyPDF
 - `docs/architecture.md` — capas, ADRs, OWASP
 - `docs/database-schema.md` — diagrama ER (Mermaid)
 - `docs/rbac-model.md` — motor de permisos

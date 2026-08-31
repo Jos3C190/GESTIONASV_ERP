@@ -1,0 +1,322 @@
+IDEAS DE GESTIÓN DOCUMENTAL POR MÓDULO
+======================================
+
+Este documento reúne ideas para futuras funciones documentales del ERP.
+Su contenido es una referencia de planificación y no implica que las
+asociaciones con estos módulos ya estén implementadas.
+
+
+MÓDULO DE EMPLEADOS
+===================
+
+Expediente personal
+-------------------
+- CV.
+- Ficha del empleado.
+- Solicitud de empleo.
+- DUI, NIT, pasaporte o permiso de trabajo.
+- Fotografía del documento de identidad.
+- Referencias personales y laborales.
+- Constancias de antecedentes, cuando corresponda.
+- Contactos de emergencia.
+
+Formación y experiencia
+-----------------------
+- Títulos académicos.
+- Diplomas.
+- Certificaciones profesionales.
+- Constancias de cursos y capacitaciones.
+- Licencias profesionales.
+- Cartas de recomendación.
+- Historial de capacitaciones internas.
+
+Relación laboral
+----------------
+- Contrato laboral.
+- Adendas o modificaciones del contrato.
+- Descripción y perfil del puesto.
+- Acuerdo de confidencialidad.
+- Carta de oferta.
+- Acuse de recibo del reglamento interno.
+- Autorizaciones y consentimientos.
+- Actas de entrega de uniforme, herramientas o equipo.
+- Cartas de ascenso, traslado o cambio salarial.
+
+Seguimiento
+-----------
+- Evaluaciones de desempeño.
+- Planes de mejora.
+- Reconocimientos.
+- Amonestaciones y actas disciplinarias.
+- Permisos y licencias.
+- Incapacidades.
+- Accidentes laborales.
+- Constancias médicas, con acceso especialmente restringido.
+
+Finalización laboral
+--------------------
+- Carta de renuncia.
+- Notificación de despido.
+- Finiquito.
+- Solvencia de equipos y activos.
+- Entrevista de salida.
+- Constancia laboral.
+
+Funciones sugeridas
+-------------------
+- Expediente documental por empleado.
+- Documentos visibles solo para Recursos Humanos, jefatura o empleado.
+- Alertas por vencimiento de documentos y certificaciones.
+- Confirmación de lectura de políticas.
+- Historial de versiones de contratos.
+- Generación automática de ficha y constancia laboral.
+
+
+MÓDULO DE SUCURSALES
+====================
+
+Información legal y administrativa
+----------------------------------
+- Contratos de arrendamiento.
+- Adendas de arrendamiento.
+- Escrituras o documentos de propiedad.
+- Permisos municipales.
+- Licencias de funcionamiento.
+- Matrículas o registros comerciales.
+- Pólizas de seguros.
+- Avalúos.
+- Solvencias municipales.
+
+Servicios
+---------
+- Contratos de energía eléctrica.
+- Contratos de agua.
+- Contratos de internet y telefonía.
+- Seguridad privada.
+- Limpieza.
+- Recolección de desechos.
+- Fumigación.
+- Mantenimiento de aires acondicionados.
+- Mantenimiento de elevadores o plantas eléctricas.
+- Contratos de vigilancia y monitoreo.
+
+Infraestructura y seguridad
+---------------------------
+- Planos arquitectónicos.
+- Planos eléctricos e hidráulicos.
+- Mapas de evacuación.
+- Planes de emergencia.
+- Certificaciones de bomberos.
+- Inspecciones de seguridad.
+- Estudios de riesgos.
+- Fotografías de inspecciones.
+- Informes de daños.
+- Cotizaciones y órdenes de reparación.
+
+Operación
+---------
+- Inventario de mobiliario.
+- Actas de apertura y cierre.
+- Actas de entrega de instalaciones.
+- Manuales de equipos instalados.
+- Bitácoras de mantenimiento.
+- Informes de consumo de servicios.
+- Documentos de responsables de la sucursal.
+
+Funciones sugeridas
+-------------------
+- Expediente completo por sucursal.
+- Calendario de vencimientos de contratos, permisos y pólizas.
+- Alertas anticipadas para renovación.
+- Historial de inspecciones y reparaciones.
+- Control de proveedores responsables de cada servicio.
+- Comparación de costos de servicios entre sucursales.
+
+
+MÓDULO DE ALMACÉN
+=================
+
+Permisos y certificaciones
+--------------------------
+- Licencias de operación.
+- Certificaciones sanitarias.
+- Certificaciones de buenas prácticas.
+- Certificaciones de seguridad industrial.
+- Certificados de fumigación.
+- Inspecciones de bomberos.
+- Certificados de calibración de equipos.
+- Certificados de control de plagas.
+
+Infraestructura
+---------------
+- Mapas del almacén.
+- Distribución de estanterías.
+- Planos de zonas de carga y descarga.
+- Mapas de rutas de evacuación.
+- Identificación de zonas restringidas.
+- Planos eléctricos.
+- Capacidad máxima de almacenamiento.
+- Estudios de carga de estanterías.
+- Fotografías de instalaciones.
+
+Procedimientos
+--------------
+- Manual de recepción de mercadería.
+- Procedimiento de despacho.
+- Procedimiento de devoluciones.
+- Procedimiento de conteo físico.
+- Procedimiento de productos dañados.
+- Procedimiento de cuarentena.
+- Procedimiento para mercancía vencida.
+- Manual de cadena de frío.
+- Protocolos de limpieza.
+- Plan de emergencias.
+
+Operación y control
+-------------------
+- Actas de inventario físico.
+- Reportes de diferencias.
+- Informes de productos dañados.
+- Actas de destrucción o descarte.
+- Reportes de accidentes.
+- Bitácoras de temperatura y humedad.
+- Inspecciones de estanterías.
+- Reportes de mantenimiento.
+- Evidencias de limpieza y fumigación.
+- Informes de auditoría.
+
+Equipos
+-------
+- Manuales de montacargas.
+- Pólizas y documentación de vehículos internos.
+- Registros de mantenimiento.
+- Certificados de calibración de básculas.
+- Actas de entrega de equipos.
+- Garantías de maquinaria.
+
+Funciones sugeridas
+-------------------
+- Documentos específicos por almacén y zona.
+- Alertas de vencimiento de certificaciones.
+- Historial de inspecciones.
+- Evidencias fotográficas vinculadas a una inspección.
+- Registro de temperatura y humedad con documentos adjuntos.
+- Aprobación de actas de destrucción o ajustes de inventario.
+
+
+MÓDULO DE PRODUCTOS
+===================
+
+Información comercial y técnica
+--------------------------------
+- Ficha técnica.
+- Especificaciones.
+- Manual de usuario.
+- Manual de instalación.
+- Manual de mantenimiento.
+- Guía rápida.
+- Catálogo del fabricante.
+- Tabla comparativa.
+- Lista de accesorios compatibles.
+- Diagramas y planos técnicos.
+
+Calidad y seguridad
+-------------------
+- Certificado de calidad.
+- Certificado de análisis.
+- Hoja de datos de seguridad.
+- Certificación sanitaria.
+- Certificación eléctrica.
+- Certificado de origen.
+- Registro sanitario.
+- Informe de pruebas de laboratorio.
+- Declaración de conformidad.
+- Certificaciones ISO u otras normas.
+- Reportes de control de calidad.
+
+Garantía y soporte
+------------------
+- Documento de garantía.
+- Condiciones de garantía.
+- Procedimiento para reclamos.
+- Centros de servicio autorizados.
+- Lista de repuestos.
+- Manual de diagnóstico.
+- Boletines técnicos.
+- Avisos de retiro o recall.
+- Historial de cambios del fabricante.
+
+Empaque y comercialización
+--------------------------
+- Diseño aprobado de etiqueta.
+- Instrucciones de etiquetado.
+- Especificaciones del empaque.
+- Dimensiones y peso logístico.
+- Código de barras.
+- Hoja de contenido del paquete.
+- Material promocional.
+- Documentos por idioma o mercado.
+
+Funciones sugeridas
+-------------------
+- Documentos por producto o variante.
+- Versiones diferentes por idioma.
+- Documento principal por categoría.
+- Fecha de vigencia y vencimiento.
+- Visibilidad interna o pública.
+- Descarga de manuales desde ventas o soporte.
+- Alertas por certificaciones próximas a vencer.
+- Registro estructurado de duración y condiciones de garantía.
+- Sustitución controlada de documentos obsoletos.
+- Relación entre productos compatibles y sus manuales.
+
+
+INFORMACIÓN COMÚN PARA TODOS LOS MÓDULOS
+========================================
+
+Metadatos sugeridos para cada documento
+---------------------------------------
+- Tipo de documento.
+- Entidad relacionada.
+- Título y descripción.
+- Número o código oficial.
+- Fecha de emisión.
+- Fecha de vencimiento.
+- Institución o persona emisora.
+- Versión.
+- Estado: borrador, vigente, vencido o reemplazado.
+- Nivel de confidencialidad.
+- Etiquetas.
+- Usuario responsable.
+- Documento que reemplaza.
+- Observaciones.
+
+Funciones transversales sugeridas
+---------------------------------
+- Alertas de vencimiento.
+- Flujos de aprobación.
+- Historial de versiones.
+- Firma o aceptación.
+- Plantillas documentales.
+- Búsqueda y filtros.
+- Vista previa.
+- Auditoría de operaciones.
+- Permisos diferenciados por tipo documental.
+- Descarga mediante URL temporal.
+- Eliminación lógica, restauración y retención.
+- Clasificación por empresa y módulo.
+- Registro del responsable de mantener actualizado el documento.
+
+
+CONSIDERACIONES
+===============
+
+- Los documentos médicos, de identidad, salariales y disciplinarios de empleados
+  deben tener permisos especialmente restrictivos.
+- Las imágenes de catálogo o producto deben continuar en Cloudinary; RustFS se
+  utilizará para documentos y anexos.
+- Cuando un dato sea necesario para cálculos o reglas del ERP, debe almacenarse
+  también de forma estructurada. Por ejemplo, la duración y fecha de vencimiento
+  de una garantía no deberían existir únicamente dentro de un PDF.
+- Los documentos con vigencia deben permitir alertas y reemplazo controlado sin
+  perder la trazabilidad de versiones anteriores.

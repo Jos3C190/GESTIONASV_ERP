@@ -15,9 +15,9 @@ adaptador de infraestructura del backend.
 
 | Variable | Valor | Propósito |
 |---|---:|---|
-| `CLAMD_CONF_StreamMaxLength` | `55M` | Permite transmitir un documento de hasta 50 MiB con margen. |
-| `CLAMD_CONF_MaxFileSize` | `55M` | Límite máximo por archivo. |
-| `CLAMD_CONF_MaxScanSize` | `200M` | Límite total al inspeccionar contenedores y archivos comprimidos. |
+| `CLAMD_CONF_StreamMaxLength` | `110M` | Permite transmitir el original de 50 MiB o el derivado OCR de 100 MiB con margen. |
+| `CLAMD_CONF_MaxFileSize` | `110M` | Límite máximo por archivo procesado. |
+| `CLAMD_CONF_MaxScanSize` | `300M` | Límite total al inspeccionar contenedores y archivos comprimidos. |
 | `FRESHCLAM_CHECKS` | `4` | Actualiza las firmas cuatro veces al día. |
 
 El puerto `3310` solo se expone dentro de la red de Docker Compose; no se publica al host. Las
@@ -34,6 +34,9 @@ docker compose logs --tail=100 clamav
 `GET /health/ready` informa el componente `clamav`. Si el servicio no responde, el backend falla
 cerrado: conserva el documento en `pending_scan`, no permite descargarlo y deja que la operación
 `complete` sea reintentada.
+
+El worker OCR vuelve a escanear el PDF resultante antes de subirlo. Si ClamAV no responde, el
+trabajo se reintenta y nunca publica un derivado sin escaneo limpio.
 
 Cuando se detecta malware, el documento pasa a `quarantined`, se registra la auditoría y nunca se
 genera una URL de descarga. La tarea de mantenimiento elimina físicamente el objeto después del

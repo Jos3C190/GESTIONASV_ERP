@@ -246,3 +246,15 @@ state (`not_configured`, `incomplete`, `available`, `warning`, `critical`,
 `full`, `over_operational`, `over_certified`). A known certified-limit breach
 is reported as `over_certified` ahead of any operational override or generic
 full state because no operational authorisation can relax that safety boundary.
+
+### ADR-008 — Durable OCR state outside the queue
+
+Revision `0042` keeps OCR job state and derivative metadata in PostgreSQL. Redis is a delivery
+mechanism for ARQ, not the system of record: a reconciler republishes pending rows after an outage
+or restart and an atomic transition prevents duplicate processing. Authentication rate limits use
+an atomic Redis sliding window but fail over to bounded process memory when Redis is unavailable.
+
+OCRmyPDF runs only in a dedicated non-root worker. It downloads an already clean PDF from the
+private object store, verifies its checksum and safety limits, generates a new immutable object,
+scans that output with ClamAV and then marks the derivative ready. The original is never modified,
+remains immediately downloadable and is the default/canonical evidence.
