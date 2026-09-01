@@ -63,6 +63,10 @@ uploads/
 *.log
 logs/
 
+# ===== Generated security reports =====
+reports/*-report.json
+reports/*-report.html
+
 # ===== Local uploads =====
 backend/uploads/
 backups/documents/
