@@ -9,7 +9,9 @@ authors = [{ name = "ERP Team" }]
 
 dependencies = [
     # Web framework
-    "fastapi>=0.115,<0.117",
+    "fastapi>=0.141.1,<0.142",
+    # Security floor: form parsing, Range responses, and StaticFiles fixes.
+    "starlette>=1.4.0,<1.5",
     "uvicorn[standard]>=0.30,<0.33",
     # Async DB stack
     "sqlalchemy[asyncio]>=2.0.30,<2.1",
@@ -23,7 +25,7 @@ dependencies = [
     # Security
     "argon2-cffi>=23.1,<24",
     "pyjwt[crypto]>=2.8,<3",
-    "cryptography>=42,<46",
+    "cryptography>=50.0.1,<51",
     # Logging
     "structlog>=24.1,<26",
     # HTTP / middleware helpers

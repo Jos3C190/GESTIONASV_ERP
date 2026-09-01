@@ -7,7 +7,7 @@ The Argon2 parameters are read from settings so they can be tuned per env.
 from __future__ import annotations
 
 import hmac
-from typing import Any
+from typing import cast
 
 from argon2 import PasswordHasher, Type
 from argon2.exceptions import Argon2Error, InvalidHash, VerificationError, VerifyMismatchError
@@ -30,7 +30,7 @@ def hash_password(plain: str) -> str:
     """Hash a password using Argon2id. Raises ValueError on empty input."""
     if not plain:
         raise ValueError("password must not be empty")
-    return _hasher.hash(plain)
+    return cast(str, _hasher.hash(plain))
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -38,7 +38,7 @@ def verify_password(plain: str, hashed: str) -> bool:
     if not plain or not hashed:
         return False
     try:
-        return _hasher.verify(hashed, plain)
+        return cast(bool, _hasher.verify(hashed, plain))
     except VerifyMismatchError:
         return False
     except (VerificationError, InvalidHash, Argon2Error) as exc:
@@ -48,7 +48,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def needs_rehash(hashed: str) -> bool:
     """True if `hashed` was produced with weaker params than current."""
-    return _hasher.check_needs_rehash(hashed)
+    return cast(bool, _hasher.check_needs_rehash(hashed))
 
 
 def constant_time_eq(a: str, b: str) -> bool:
@@ -63,10 +63,10 @@ def mask_token(token: str | None, keep: int = 4) -> str:
     return token[:keep] + "..." + token[-2:]
 
 
-__all__: dict[str, Any] = {
-    "hash_password": hash_password,
-    "verify_password": verify_password,
-    "needs_rehash": needs_rehash,
-    "constant_time_eq": constant_time_eq,
-    "mask_token": mask_token,
-}
+__all__ = [
+    "constant_time_eq",
+    "hash_password",
+    "mask_token",
+    "needs_rehash",
+    "verify_password",
+]
