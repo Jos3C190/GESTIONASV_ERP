@@ -2,6 +2,7 @@
 
 Client messages are generic; details go to logs only (OWASP A05).
 """
+
 from __future__ import annotations
 
 from fastapi import FastAPI, Request
@@ -18,21 +19,25 @@ def _payload(code: str, message: str, status_code: int) -> JSONResponse:
 
 
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+    route = getattr(request.scope.get("route"), "path", "unmatched")
     log.warning(
         "app_error",
         code=exc.code,
         message=exc.message,
-        path=request.url.path,
+        route=route,
         method=request.method,
     )
     return _payload(exc.code, exc.message, exc.status_code)
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    log.exception("unhandled_exception", path=request.url.path, method=request.method)
+    route = getattr(request.scope.get("route"), "path", "unmatched")
+    log.exception("unhandled_exception", route=route, method=request.method)
     return _payload("internal_error", "Error interno del servidor.", 500)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    app.add_exception_handler(AppError, app_error_handler)
+    # FastAPI accepts subclass-specific handlers at runtime; Starlette's type
+    # alias is intentionally wider and loses that generic relationship.
+    app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, unhandled_exception_handler)

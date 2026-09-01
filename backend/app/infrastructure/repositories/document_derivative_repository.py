@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -132,6 +132,17 @@ class SqlAlchemyDocumentDerivativeRepository:
                 )
             ).all()
         )
+
+    async def pending_summary(self) -> tuple[int, datetime | None]:
+        count, oldest = (
+            await self._session.execute(
+                select(
+                    func.count(DocumentDerivativeModel.id),
+                    func.min(DocumentDerivativeModel.created_at),
+                ).where(DocumentDerivativeModel.status == "pending")
+            )
+        ).one()
+        return int(count), oldest
 
     async def claim(self, derivative_id: uuid.UUID, now: datetime) -> DocumentDerivative | None:
         model = (

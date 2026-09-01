@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from urllib.request import Request, urlopen
 
 from fastapi import APIRouter, status
 from sqlalchemy import text
@@ -21,14 +22,43 @@ from app.api.v1.schemas.common import HealthComponent, HealthReport
 from app.core.config import settings
 from app.infrastructure.malware_scanner import ClamAVScanner
 from app.infrastructure.object_storage import S3ObjectStorage
+from app.infrastructure.observability import record_gauge
 from app.infrastructure.redis_client import get_redis_client, redis_health
 
 router = APIRouter(prefix="/health", tags=["health"])
 EXPECTED_SCHEMA_REVISION = "0042"
+HTTP_OK_MIN = 200
+HTTP_REDIRECTION_MIN = 300
 
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+async def _observability_health() -> tuple[str, str | None]:
+    if not settings.OBSERVABILITY_ENABLED:
+        return "disabled", None
+    if not settings.OBSERVABILITY_HEALTH_URL:
+        return "configured", "OTLP export is configured; no health URL was provided"
+
+    def _check() -> bool:
+        request = Request(  # noqa: S310 - URL is operator-controlled configuration
+            settings.OBSERVABILITY_HEALTH_URL or "", method="GET"
+        )
+        with urlopen(  # noqa: S310 - URL is operator-controlled configuration
+            request, timeout=settings.OBSERVABILITY_HEALTH_TIMEOUT_SECONDS
+        ) as response:
+            return HTTP_OK_MIN <= int(response.status) < HTTP_REDIRECTION_MIN
+
+    try:
+        available = await asyncio.to_thread(_check)
+    except Exception:
+        available = False
+    return (
+        ("ok", None)
+        if available
+        else ("down", "OpenTelemetry Collector is unavailable; exports are buffered or dropped")
+    )
 
 
 @router.get("/live", summary="Liveness probe", status_code=status.HTTP_200_OK)
@@ -135,7 +165,23 @@ async def ready(session: SessionDep) -> HealthReport:
             ]
         )
 
-    overall = "ok" if db_status == "ok" and schema_status == "ok" and external_ok else "degraded"
+    collector_status, collector_detail = await _observability_health()
+    components.append(
+        HealthComponent(name="otel_collector", status=collector_status, detail=collector_detail)
+    )
+    collector_ok = collector_status in {"ok", "configured", "disabled"}
+
+    overall = (
+        "ok"
+        if db_status == "ok" and schema_status == "ok" and external_ok and collector_ok
+        else "degraded"
+    )
+    for component in components:
+        record_gauge(
+            "erp.component.health",
+            1 if component.status in {"ok", "configured", "disabled"} else 0,
+            attributes={"component": component.name},
+        )
     return HealthReport(
         status=overall,
         version=settings.APP_NAME,

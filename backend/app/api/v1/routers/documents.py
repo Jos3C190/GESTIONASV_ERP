@@ -20,6 +20,7 @@ from app.api.v1.schemas.documents import (
 )
 from app.application.documents import DocumentService, InitiateDocumentInput
 from app.domain.entities.document import DocumentAsset
+from app.infrastructure.observability import record_counter
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -140,6 +141,10 @@ async def create_download_url(
 ) -> DownloadUrlOut:
     url, expires_at = await service.download_url(
         effective_company_id(request), document_id, current.id, variant=variant
+    )
+    record_counter(
+        "erp.documents.downloads",
+        attributes={"variant": str(variant), "status": "issued"},
     )
     return DownloadUrlOut(url=url, expires_at=expires_at)
 

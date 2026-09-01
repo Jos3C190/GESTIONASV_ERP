@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.document import DocumentAsset
 from app.infrastructure.models.document import DocumentAssetModel
+from app.infrastructure.observability import record_counter
 
 
 def _to_domain(model: DocumentAssetModel) -> DocumentAsset:
@@ -75,6 +76,7 @@ class SqlAlchemyDocumentRepository:
         _copy_to_model(document, model)
         self._session.add(model)
         await self._session.flush()
+        record_counter("erp.documents.events", attributes={"status": "upload_initiated"})
         return _to_domain(model)
 
     async def get(
@@ -90,8 +92,15 @@ class SqlAlchemyDocumentRepository:
         model = await self._session.get(DocumentAssetModel, document.id)
         if model is None:
             raise LookupError("Document not found")
+        previous_status = model.status
         _copy_to_model(document, model)
         await self._session.flush()
+        if previous_status != model.status and model.status in {
+            "active",
+            "quarantined",
+            "rejected",
+        }:
+            record_counter("erp.documents.events", attributes={"status": model.status})
         return _to_domain(model)
 
     async def list(

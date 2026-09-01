@@ -11,6 +11,7 @@ from redis.asyncio import Redis
 
 from app.core.logging import get_logger
 from app.domain.ports.rate_limiter import RateLimitStore
+from app.infrastructure.observability import observed_operation, record_counter
 
 log = get_logger(__name__)
 
@@ -71,8 +72,14 @@ class RedisRateLimitStore:
             str(limit),
             f"{now_ms}:{uuid.uuid4().hex}",
         )
-        result = await cast(Awaitable[Any], evaluation)
-        return bool(result)
+        with observed_operation("redis", "rate_limit"):
+            result = await cast(Awaitable[Any], evaluation)
+            allowed = bool(result)
+            record_counter(
+                "erp.rate_limit.decisions",
+                attributes={"store": "redis", "result": "allowed" if allowed else "blocked"},
+            )
+            return allowed
 
     async def health(self) -> bool:
         return bool(await self._client.ping())
@@ -108,7 +115,12 @@ class FallbackRateLimitStore:
                 return await self._primary.allow(key, limit=limit, window_seconds=window_seconds)
             except Exception as exc:
                 log.warning("redis_rate_limit_fallback", error=str(exc)[:200])
-        return await self._fallback.allow(key, limit=limit, window_seconds=window_seconds)
+        allowed = await self._fallback.allow(key, limit=limit, window_seconds=window_seconds)
+        record_counter(
+            "erp.rate_limit.decisions",
+            attributes={"store": "memory", "result": "allowed" if allowed else "blocked"},
+        )
+        return allowed
 
     async def health(self) -> bool:
         if self._primary is None:

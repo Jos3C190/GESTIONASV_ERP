@@ -38,6 +38,15 @@ dependencies = [
     # ARQ 0.28 currently requires redis-py < 6; it remains compatible with Redis 7.4 server.
     "redis>=5.3,<6",
     "arq>=0.28,<0.29",
+    # Vendor-neutral observability. Versions follow one compatible release train.
+    "opentelemetry-api==1.44.0",
+    "opentelemetry-sdk==1.44.0",
+    "opentelemetry-exporter-otlp-proto-http==1.44.0",
+    "opentelemetry-instrumentation-fastapi==0.65b0",
+    "opentelemetry-instrumentation-sqlalchemy==0.65b0",
+    "opentelemetry-instrumentation-asyncpg==0.65b0",
+    "opentelemetry-instrumentation-redis==0.65b0",
+    "opentelemetry-instrumentation-logging==0.65b0",
 ]
 
 [project.optional-dependencies]

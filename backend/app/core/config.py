@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        env_ignore_empty=True,
         case_sensitive=False,
         extra="ignore",
     )
@@ -118,24 +119,38 @@ class Settings(BaseSettings):
     CLAMAV_PORT: int = Field(default=3310, ge=1, le=65535)
     CLAMAV_TIMEOUT_SECONDS: int = Field(default=120, ge=5, le=600)
 
+    # --- Vendor-neutral observability (OpenTelemetry/OTLP) ---
+    OBSERVABILITY_ENABLED: bool = False
+    OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
+    OTEL_EXPORTER_OTLP_HEADERS: str | None = Field(default=None, repr=False)
+    OTEL_EXPORTER_OTLP_TIMEOUT_SECONDS: float = Field(default=3.0, ge=0.1, le=30)
+    OTEL_METRIC_EXPORT_INTERVAL_SECONDS: int = Field(default=15, ge=5, le=300)
+    OTEL_SERVICE_NAMESPACE: str = "erp"
+    OTEL_TRACE_SAMPLE_RATIO: float | None = Field(default=None, ge=0, le=1)
+    OTEL_EXPORTER_OTLP_INSECURE: bool = False
+    OBSERVABILITY_HEALTH_URL: str | None = None
+    OBSERVABILITY_HEALTH_TIMEOUT_SECONDS: float = Field(default=0.5, ge=0.1, le=5)
+    GRAFANA_ADMIN_USER: str = "admin"
+    GRAFANA_ADMIN_PASSWORD: str | None = Field(default=None, repr=False)
+
     # --- Convenient computed fields ---
 
-    @computed_field  # type: ignore[misc]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT == "production"
 
-    @computed_field  # type: ignore[misc]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def is_test(self) -> bool:
         return self.ENVIRONMENT == "test"
 
-    @computed_field  # type: ignore[misc]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
-    @computed_field  # type: ignore[misc]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def object_storage_cors_origin_list(self) -> list[str]:
         return [
@@ -143,6 +158,13 @@ class Settings(BaseSettings):
             for origin in self.OBJECT_STORAGE_CORS_ORIGINS.split(",")
             if origin.strip()
         ]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def otel_trace_sample_ratio(self) -> float:
+        if self.OTEL_TRACE_SAMPLE_RATIO is not None:
+            return self.OTEL_TRACE_SAMPLE_RATIO
+        return 1.0 if self.ENVIRONMENT in {"development", "test"} else 0.1
 
     @field_validator("JWT_SECRET_KEY")
     @classmethod
@@ -172,6 +194,21 @@ class Settings(BaseSettings):
             raise ValueError("REDIS_URL es obligatorio cuando REDIS_ENABLED=true.")
         if self.OCR_ENABLED and not self.REDIS_ENABLED:
             raise ValueError("OCR_ENABLED requiere REDIS_ENABLED=true.")
+        if self.OBSERVABILITY_ENABLED and not self.OTEL_EXPORTER_OTLP_ENDPOINT:
+            raise ValueError(
+                "OTEL_EXPORTER_OTLP_ENDPOINT es obligatorio cuando OBSERVABILITY_ENABLED=true."
+            )
+        if self.OBSERVABILITY_ENABLED and self.OTEL_EXPORTER_OTLP_ENDPOINT:
+            endpoint = self.OTEL_EXPORTER_OTLP_ENDPOINT.lower()
+            if (
+                self.ENVIRONMENT in {"staging", "production"}
+                and endpoint.startswith("http://")
+                and not self.OTEL_EXPORTER_OTLP_INSECURE
+            ):
+                raise ValueError(
+                    "OTLP por HTTP en staging/production requiere "
+                    "OTEL_EXPORTER_OTLP_INSECURE=true; se recomienda HTTPS."
+                )
         return self
 
 

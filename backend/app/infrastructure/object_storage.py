@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
 import boto3
@@ -12,6 +12,7 @@ from botocore.exceptions import ClientError
 from app.core.config import Settings
 from app.core.exceptions import InfrastructureError, ValidationError
 from app.domain.ports.object_storage import PresignedUpload, StoredObjectInfo
+from app.infrastructure.observability import observe_async
 
 
 class S3ObjectStorage:
@@ -32,6 +33,7 @@ class S3ObjectStorage:
     def _bucket(self) -> str:
         return str(self._settings.OBJECT_STORAGE_BUCKET)
 
+    @observe_async("rustfs", "ensure_bucket")
     async def ensure_bucket(self) -> None:
         def _ensure() -> None:
             client = self._client(self._settings.OBJECT_STORAGE_INTERNAL_ENDPOINT)
@@ -74,6 +76,7 @@ class S3ObjectStorage:
                 code="document_storage_initialization_failed",
             ) from exc
 
+    @observe_async("rustfs", "presign_upload")
     async def presign_upload(
         self,
         key: str,
@@ -106,6 +109,7 @@ class S3ObjectStorage:
         headers.update({f"x-amz-meta-{name}": value for name, value in metadata.items()})
         return PresignedUpload(url=str(url), headers=headers)
 
+    @observe_async("rustfs", "presign_download")
     async def presign_download(
         self,
         key: str,
@@ -136,6 +140,7 @@ class S3ObjectStorage:
                 code="document_storage_unavailable",
             ) from exc
 
+    @observe_async("rustfs", "head")
     async def head(self, key: str) -> StoredObjectInfo | None:
         try:
             client = self._client(self._settings.OBJECT_STORAGE_INTERNAL_ENDPOINT)
@@ -160,6 +165,7 @@ class S3ObjectStorage:
             metadata={str(k): str(v) for k, v in response.get("Metadata", {}).items()},
         )
 
+    @observe_async("rustfs", "download")
     async def download_to(self, key: str, destination: Path, max_bytes: int) -> None:
         def _download() -> None:
             client = self._client(self._settings.OBJECT_STORAGE_INTERNAL_ENDPOINT)
@@ -184,6 +190,7 @@ class S3ObjectStorage:
                 "No se pudo leer el documento almacenado.", code="document_storage_unavailable"
             ) from exc
 
+    @observe_async("rustfs", "delete")
     async def delete(self, key: str) -> None:
         try:
             client = self._client(self._settings.OBJECT_STORAGE_INTERNAL_ENDPOINT)
@@ -193,6 +200,7 @@ class S3ObjectStorage:
                 "No se pudo eliminar el objeto almacenado.", code="document_storage_unavailable"
             ) from exc
 
+    @observe_async("rustfs", "upload")
     async def upload_from(
         self,
         key: str,
@@ -209,7 +217,7 @@ class S3ObjectStorage:
                 key,
                 ExtraArgs={"ContentType": content_type, "Metadata": metadata},
             )
-            return client.head_object(Bucket=self._bucket, Key=key)
+            return cast(dict[str, Any], client.head_object(Bucket=self._bucket, Key=key))
 
         try:
             response = await asyncio.to_thread(_upload)
@@ -225,6 +233,7 @@ class S3ObjectStorage:
             metadata={str(k): str(v) for k, v in response.get("Metadata", {}).items()},
         )
 
+    @observe_async("rustfs", "health")
     async def health(self) -> bool:
         try:
             client = self._client(self._settings.OBJECT_STORAGE_INTERNAL_ENDPOINT)

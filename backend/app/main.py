@@ -9,6 +9,7 @@ Startup:
 Shutdown:
 - dispose the DB engine pool
 """
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -22,6 +23,7 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.infrastructure.db.session import dispose_engine
+from app.infrastructure.observability import initialize_observability, shutdown_observability
 from app.middlewares import RequestContextMiddleware, SecurityHeadersMiddleware
 
 log = get_logger(__name__)
@@ -47,9 +49,7 @@ async def _run_migrations() -> None:
 
     log = get_logger(__name__)
 
-    sync_url = settings.DATABASE_URL_SYNC or re.sub(
-        r"\+asyncpg://", "://", settings.DATABASE_URL
-    )
+    sync_url = settings.DATABASE_URL_SYNC or re.sub(r"\+asyncpg://", "://", settings.DATABASE_URL)
     masked = sync_url.replace(settings.POSTGRES_PASSWORD, "***")
     log.info("migrations_start", url=masked)
 
@@ -70,6 +70,7 @@ async def _run_migrations() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
+    initialize_observability("erp-backend", app=app)
     log.info("startup", environment=settings.ENVIRONMENT, debug=settings.DEBUG)
     if settings.RUN_MIGRATIONS_ON_STARTUP:
         try:
@@ -80,6 +81,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
     log.info("shutdown")
     await dispose_engine()
+    shutdown_observability()
 
 
 def create_app() -> FastAPI | CORSMiddleware:
@@ -110,6 +112,10 @@ def create_app() -> FastAPI | CORSMiddleware:
     # Exception handlers
     register_exception_handlers(app)
 
+    # Instrument before Starlette builds its middleware stack. Lifespan calls
+    # the same idempotent initializer again to reattach the OTLP log handler.
+    initialize_observability("erp-backend", app=app)
+
     # Root welcome (kept minimal — full API is under /health and /api/v1/*)
     @app.get("/", tags=["root"], include_in_schema=False)
     async def root() -> dict[str, str]:
@@ -135,8 +141,10 @@ def create_app() -> FastAPI | CORSMiddleware:
             "X-Requested-With",
             "X-Company-ID",
             "X-Branch-ID",
+            "traceparent",
+            "tracestate",
         ],
-        expose_headers=["X-Request-Id"],
+        expose_headers=["X-Request-ID", "X-Trace-ID"],
     )
     # Keep FastAPI's testing/dependency-override contract available on the
     # outer ASGI wrapper. The inner application reads the same dictionary,

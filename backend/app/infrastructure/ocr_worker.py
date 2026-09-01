@@ -24,6 +24,16 @@ from app.infrastructure.malware_scanner import ClamAVScanner
 from app.infrastructure.models.audit import AuditLog
 from app.infrastructure.models.document import DocumentAssetModel
 from app.infrastructure.object_storage import S3ObjectStorage
+from app.infrastructure.observability import (
+    extracted_trace_context,
+    initialize_observability,
+    inject_trace_context,
+    operation_span,
+    record_counter,
+    record_gauge,
+    record_histogram,
+    shutdown_observability,
+)
 from app.infrastructure.repositories.document_derivative_repository import (
     SqlAlchemyDocumentDerivativeRepository,
 )
@@ -286,55 +296,90 @@ async def _generate_derivative(
     return info, checksum
 
 
-async def process_ocr(ctx: dict[str, Any], derivative_id_text: str) -> None:
+async def process_ocr(
+    ctx: dict[str, Any], derivative_id_text: str, trace_carrier: dict[str, str] | None = None
+) -> None:
     derivative_id = uuid.UUID(derivative_id_text)
-    try:
-        async with session_scope() as session:
-            repository = SqlAlchemyDocumentDerivativeRepository(session)
-            derivative = await repository.claim(derivative_id, datetime.now(UTC))
-        if derivative is None:
-            return
-        document = _validate_document(await _load_document(derivative.document_id))
-        info, checksum = await _generate_derivative(ctx, derivative, document)
-        await _mark_ready(
-            derivative.id, size_bytes=info.size_bytes, checksum=checksum, etag=info.etag
-        )
-    except PermanentOcrError as exc:
-        await _mark_permanent(derivative_id, exc.code)
-    except (InfrastructureError, ValidationError, TransientOcrError, OSError) as exc:
-        code = getattr(exc, "code", "ocr_processing_failed")
-        retry = await _mark_transient(derivative_id, str(code))
-        if retry:
-            derivative_attempt = 1
+    started = asyncio.get_running_loop().time()
+    with (
+        extracted_trace_context(trace_carrier),
+        operation_span("ocr.process", operation="process"),
+    ):
+        try:
             async with session_scope() as session:
-                current = await SqlAlchemyDocumentDerivativeRepository(session).get(derivative_id)
-                if current is not None:
-                    derivative_attempt = max(current.attempts, 1)
-            raise Retry(defer=min(30 * (2 ** (derivative_attempt - 1)), 600)) from exc
+                repository = SqlAlchemyDocumentDerivativeRepository(session)
+                derivative = await repository.claim(derivative_id, datetime.now(UTC))
+            if derivative is None:
+                return
+            document = _validate_document(await _load_document(derivative.document_id))
+            info, checksum = await _generate_derivative(ctx, derivative, document)
+            await _mark_ready(
+                derivative.id, size_bytes=info.size_bytes, checksum=checksum, etag=info.etag
+            )
+            record_counter("erp.ocr.jobs", attributes={"status": "ready"})
+        except PermanentOcrError as exc:
+            await _mark_permanent(derivative_id, exc.code)
+            record_counter("erp.ocr.jobs", attributes={"status": "skipped"})
+        except (InfrastructureError, ValidationError, TransientOcrError, OSError) as exc:
+            code = getattr(exc, "code", "ocr_processing_failed")
+            retry = await _mark_transient(derivative_id, str(code))
+            record_counter("erp.ocr.jobs", attributes={"status": "retry" if retry else "failed"})
+            if retry:
+                derivative_attempt = 1
+                async with session_scope() as session:
+                    current = await SqlAlchemyDocumentDerivativeRepository(session).get(
+                        derivative_id
+                    )
+                    if current is not None:
+                        derivative_attempt = max(current.attempts, 1)
+                raise Retry(defer=min(30 * (2 ** (derivative_attempt - 1)), 600)) from exc
+        finally:
+            record_histogram(
+                "erp.ocr.duration",
+                (asyncio.get_running_loop().time() - started) * 1000,
+                attributes={"operation": "process"},
+            )
 
 
 async def reconcile_ocr(ctx: dict[str, Any]) -> None:
     if not settings.OCR_ENABLED:
         return
-    stale_before = datetime.now(UTC) - timedelta(minutes=settings.OCR_STALE_MINUTES)
-    async with session_scope() as session:
-        repository = SqlAlchemyDocumentDerivativeRepository(session)
-        reset = await repository.reset_stale(stale_before)
-        pending = await repository.list_pending_ids(limit=20)
-    for derivative_id in pending:
-        await ctx["redis"].enqueue_job(
-            "process_ocr", str(derivative_id), _job_id=f"ocr:{derivative_id}"
-        )
+    now = datetime.now(UTC)
+    stale_before = now - timedelta(minutes=settings.OCR_STALE_MINUTES)
+    with operation_span("ocr.reconcile", operation="reconcile"):
+        async with session_scope() as session:
+            repository = SqlAlchemyDocumentDerivativeRepository(session)
+            reset = await repository.reset_stale(stale_before)
+            pending_count, oldest_pending = await repository.pending_summary()
+            pending = await repository.list_pending_ids(limit=20)
+        for derivative_id in pending:
+            await ctx["redis"].enqueue_job(
+                "process_ocr",
+                str(derivative_id),
+                inject_trace_context(),
+                _job_id=f"ocr:{derivative_id}",
+            )
+            record_counter("erp.ocr.jobs", attributes={"status": "enqueued"})
+    pending_age = max(0.0, (now - oldest_pending).total_seconds()) if oldest_pending else 0.0
+    record_gauge("erp.ocr.pending", pending_count)
+    record_gauge("erp.ocr.pending.age", pending_age)
+    if reset:
+        record_counter("erp.ocr.jobs", value=reset, attributes={"status": "stale_reset"})
     if reset or pending:
         log.info("ocr_reconciled", stale_reset=reset, pending_enqueued=len(pending))
 
 
 async def startup(ctx: dict[str, Any]) -> None:
     configure_logging()
+    initialize_observability("erp-ocr-worker")
     ctx["storage"] = S3ObjectStorage(settings)
     ctx["scanner"] = ClamAVScanner(
         settings.CLAMAV_HOST, settings.CLAMAV_PORT, settings.CLAMAV_TIMEOUT_SECONDS
     )
+
+
+async def shutdown(_ctx: dict[str, Any]) -> None:
+    shutdown_observability()
 
 
 _reconcile_seconds = set(range(0, 60, settings.OCR_RECONCILE_SECONDS))
@@ -347,6 +392,7 @@ class WorkerSettings:
     ]
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL or "redis://localhost:6379/0")
     on_startup = startup
+    on_shutdown = shutdown
     max_jobs = 1
     max_tries = settings.OCR_MAX_ATTEMPTS
     job_timeout = settings.OCR_JOB_TIMEOUT_SECONDS + 60
