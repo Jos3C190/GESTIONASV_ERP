@@ -30,3 +30,7 @@ reinterpretar como bloqueo un CVE que Debian todavía no ha clasificado. No se u
 
 Una excepción futura deberá registrar el ID del hallazgo, su justificación, el
 responsable y una fecha de expiración. Esta remediación no incorpora excepciones.
+
+Los contenedores Trivy eliminan todas las capacidades Linux y recuperan únicamente
+`DAC_OVERRIDE`. Esta capacidad limitada permite escribir los JSON en el directorio
+enlazado `reports/` cuando pertenece al usuario del runner de GitHub Actions.

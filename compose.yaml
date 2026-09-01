@@ -564,6 +564,9 @@ services:
     profiles: [security, security-deep]
     image: aquasec/trivy:0.74.0
     cap_drop: [ALL]
+    # GitHub's Linux runner owns the bind-mounted reports directory. Trivy
+    # runs as root, but needs this single capability after dropping all others.
+    cap_add: [DAC_OVERRIDE]
     security_opt: [no-new-privileges:true]
     command:
       - fs
@@ -595,6 +598,7 @@ services:
     profiles: [security, security-deep]
     image: aquasec/trivy:0.74.0
     cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
     security_opt: [no-new-privileges:true]
     command:
       - image
@@ -622,6 +626,7 @@ services:
     profiles: [security, security-deep]
     image: aquasec/trivy:0.74.0
     cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
     security_opt: [no-new-privileges:true]
     command:
       - image
@@ -649,6 +654,7 @@ services:
     profiles: [security, security-deep]
     image: aquasec/trivy:0.74.0
     cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
     security_opt: [no-new-privileges:true]
     command:
       - image
@@ -676,6 +682,7 @@ services:
     profiles: [security, security-deep]
     image: aquasec/trivy:0.74.0
     cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
     security_opt: [no-new-privileges:true]
     command:
       - image
@@ -703,6 +710,7 @@ services:
     profiles: [security, security-deep]
     image: aquasec/trivy:0.74.0
     cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
     security_opt: [no-new-privileges:true]
     command:
       - image
@@ -730,6 +738,7 @@ services:
     profiles: [security, security-deep]
     image: aquasec/trivy:0.74.0
     cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
     security_opt: [no-new-privileges:true]
     command:
       - image
