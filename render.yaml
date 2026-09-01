@@ -12,6 +12,8 @@ services:
     plan: free
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
+    # The Dockerfile keeps its production backend stage last because Render
+    # builds without an explicit target.
     buildFilter:
       paths:
         - backend/**
