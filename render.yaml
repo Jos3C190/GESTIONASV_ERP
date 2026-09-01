@@ -39,6 +39,12 @@ services:
         value: "false"
       - key: OCR_ENABLED
         value: "false"
+      - key: OBSERVABILITY_ENABLED
+        value: "false"
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_HEADERS
+        sync: false
       # --- Auth ---
       - key: JWT_SECRET_KEY
         generateValue: true

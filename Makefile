@@ -4,7 +4,8 @@
 .DEFAULT_GOAL := help
 .PHONY: help up down restart logs ps build seed reset-db test test-backend test-frontend \
         test-unit test-integration test-e2e lint fmt clean setup db-shell backend-shell frontend-shell \
-        security-scan storage-backup storage-restore
+        security-scan storage-backup storage-restore observability-status observability-logs \
+        observability-validate observability-restart
 
 COMPOSE := docker compose
 COMPOSE_PROD := $(COMPOSE) -f compose.yaml -f compose.prod.yaml --profile prod
@@ -72,6 +73,26 @@ fmt: ## Format code (backend + frontend)
 
 clean: ## Remove all containers, volumes, and build cache (DESTRUCTIVE)
 	$(COMPOSE) down -v --rmi local --remove-orphans
+
+observability-status: ## Show health of the local telemetry stack
+	$(COMPOSE) ps grafana prometheus alertmanager otel-collector loki tempo
+
+observability-logs: ## Tail logs from the local telemetry stack
+	$(COMPOSE) logs -f --tail=200 grafana prometheus alertmanager otel-collector loki tempo
+
+observability-validate: ## Validate Compose and observability configuration files
+	$(COMPOSE) config --quiet
+	$(COMPOSE) run --rm --no-deps otel-collector validate --config=/etc/otelcol/config.yaml
+	$(COMPOSE) run --rm --no-deps --entrypoint /bin/promtool prometheus check config /etc/prometheus/prometheus.yml
+	$(COMPOSE) run --rm --no-deps --entrypoint /bin/promtool prometheus check rules /etc/prometheus/rules/erp-alerts.yml
+	$(COMPOSE) run --rm --no-deps --entrypoint /bin/amtool alertmanager check-config /etc/alertmanager/alertmanager.yml
+	$(COMPOSE) run --rm --no-deps loki "-verify-config" "-config.file=/etc/loki/loki.yaml"
+	$(COMPOSE) run --rm --no-deps tempo "-config.file=/etc/tempo/tempo.yaml" "-config.verify=true"
+	$(COMPOSE) run --rm --no-deps -v "$(CURDIR)/observability:/observability:ro" backend \
+		python -c "import glob,json; [json.load(open(path, encoding='utf-8')) for path in glob.glob('/observability/grafana/dashboards/*.json')]"
+
+observability-restart: ## Restart the telemetry stack without touching ERP data
+	$(COMPOSE) restart grafana prometheus alertmanager otel-collector loki tempo
 
 db-shell: ## Open psql in the db container
 	$(COMPOSE) exec db psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)

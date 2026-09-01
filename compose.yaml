@@ -19,6 +19,18 @@ x-redis-ocr-environment: &redis-ocr-environment
   OCR_STALE_MINUTES: ${OCR_STALE_MINUTES:-20}
   OCR_RECONCILE_SECONDS: ${OCR_RECONCILE_SECONDS:-15}
 
+x-observability-environment: &observability-environment
+  OBSERVABILITY_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+  OTEL_EXPORTER_OTLP_TIMEOUT_SECONDS: ${OTEL_EXPORTER_OTLP_TIMEOUT_SECONDS:-3}
+  OTEL_METRIC_EXPORT_INTERVAL_SECONDS: ${OTEL_METRIC_EXPORT_INTERVAL_SECONDS:-15}
+  OTEL_SERVICE_NAMESPACE: ${OTEL_SERVICE_NAMESPACE:-erp}
+  OTEL_TRACE_SAMPLE_RATIO: ${OTEL_TRACE_SAMPLE_RATIO:-1.0}
+  OTEL_EXPORTER_OTLP_INSECURE: "true"
+  OBSERVABILITY_HEALTH_URL: http://otel-collector:13133/
+  OBSERVABILITY_HEALTH_TIMEOUT_SECONDS: ${OBSERVABILITY_HEALTH_TIMEOUT_SECONDS:-0.5}
+
 services:
   # ---------------- Postgres ----------------
   db:
@@ -69,6 +81,9 @@ services:
     image: alpine:3.22
     user: root
     command: ["sh", "-c", "chown -R 10001:10001 /data /logs"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
     volumes:
       - rustfs-data:/data
       - rustfs-logs:/logs
@@ -87,6 +102,14 @@ services:
     environment:
       RUSTFS_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:-}
       RUSTFS_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:-}
+      RUSTFS_OBS_ENDPOINT: http://otel-collector:4318
+      RUSTFS_OBS_TRACES_EXPORT_ENABLED: "true"
+      RUSTFS_OBS_METRICS_EXPORT_ENABLED: "true"
+      RUSTFS_OBS_LOGS_EXPORT_ENABLED: "true"
+      RUSTFS_OBS_SAMPLE_RATIO: ${OTEL_TRACE_SAMPLE_RATIO:-1.0}
+      RUSTFS_OBS_METER_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL_SECONDS:-15}
+      RUSTFS_OBS_SERVICE_NAME: rustfs
+      RUSTFS_OBS_ENVIRONMENT: ${ENVIRONMENT:-development}
     volumes:
       - rustfs-data:/data
       - rustfs-logs:/logs
@@ -201,7 +224,7 @@ services:
       CLOUDINARY_UPLOAD_FOLDER: ${CLOUDINARY_UPLOAD_FOLDER:-erp-system}
       MEDIA_MAX_IMAGE_BYTES: ${MEDIA_MAX_IMAGE_BYTES:-10485760}
       MEDIA_SIGNATURE_TTL_SECONDS: ${MEDIA_SIGNATURE_TTL_SECONDS:-300}
-      <<: [*document-storage-environment, *redis-ocr-environment]
+      <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -234,7 +257,7 @@ services:
       context: ./backend
       target: ocr
     environment:
-      <<: [*document-storage-environment, *redis-ocr-environment]
+      <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
       DATABASE_URL: ${DATABASE_URL}
       DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
       ENVIRONMENT: ${ENVIRONMENT:-development}
@@ -274,7 +297,7 @@ services:
       target: dev
     command: ["python", "-m", "app.infrastructure.document_maintenance"]
     environment:
-      <<: [*document-storage-environment, *redis-ocr-environment]
+      <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
       DATABASE_URL: ${DATABASE_URL}
       DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
       ENVIRONMENT: ${ENVIRONMENT:-development}
@@ -362,6 +385,170 @@ services:
       start_period: 25s
     restart: unless-stopped
 
+  # ---------------- Local observability (OpenTelemetry + Grafana) ----------------
+  loki:
+    image: grafana/loki:3.7.4
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./observability/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    expose: ["3100"]
+    healthcheck:
+      test: ["CMD", "/usr/bin/loki", "-verify-config", "-config.file=/etc/loki/loki.yaml"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    cpus: 0.5
+    mem_limit: 512m
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.10.7
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    expose: ["3200", "4317", "4318"]
+    healthcheck:
+      test: ["CMD", "/tempo", "-config.file=/etc/tempo/tempo.yaml", "-config.verify=true"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    cpus: 0.5
+    mem_limit: 512m
+    restart: unless-stopped
+
+  otel-queue-permissions:
+    image: alpine:3.22
+    user: root
+    command: ["sh", "-c", "chown -R 10001:10001 /storage"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - otel-queue-data:/storage
+    restart: "no"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.159.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+      - otel-queue-data:/var/lib/otelcol/storage
+    expose: ["4318", "8888", "8889", "13133"]
+    depends_on:
+      otel-queue-permissions:
+        condition: service_completed_successfully
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol/config.yaml"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 10s
+    cpus: 0.5
+    mem_limit: 512m
+    restart: unless-stopped
+
+  alertmanager:
+    image: quay.io/prometheus/alertmanager:v0.32.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:9093/-/ready >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    cpus: 0.5
+    mem_limit: 512m
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=1GB
+      - --web.enable-lifecycle
+      - --web.enable-remote-write-receiver
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      alertmanager:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:9090/-/ready >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    cpus: 0.5
+    mem_limit: 512m
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.1.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/api/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    cpus: 0.5
+    mem_limit: 512m
+    restart: unless-stopped
+
   # ---------------- Security Scanners (optional, profile: security) ----------------
   security-zap:
     profiles: [security]
@@ -397,5 +584,11 @@ volumes:
   rustfs-logs:
   clamav-db:
   redis-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  tempo-data:
+  alertmanager-data:
+  otel-queue-data:
   backend-cache:
   frontend-node-modules:

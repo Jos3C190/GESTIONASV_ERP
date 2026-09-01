@@ -52,8 +52,12 @@ ensure_secret() {
 ensure_secret "OBJECT_STORAGE_ACCESS_KEY" "CHANGE_ME_GENERATE_LOCAL_ACCESS_KEY" 16
 ensure_secret "OBJECT_STORAGE_SECRET_KEY" "CHANGE_ME_GENERATE_LOCAL_SECRET_KEY" 32
 ensure_secret "REDIS_PASSWORD" "CHANGE_ME_GENERATE_LOCAL_REDIS_PASSWORD" 32
+ensure_secret "GRAFANA_ADMIN_PASSWORD" "CHANGE_ME_GENERATE_LOCAL_GRAFANA_PASSWORD" 32
 
-log "Building and starting PostgreSQL, RustFS, ClamAV, Redis, OCR worker, backend, seed job and frontend..."
+grafana_user=$(grep -E '^GRAFANA_ADMIN_USER=' .env 2>/dev/null | tail -n 1 | cut -d= -f2- | tr -d '\r' || true)
+grafana_user=${grafana_user:-admin}
+
+log "Building and starting ERP services and the local observability stack..."
 docker compose up -d --build
 
 log "Waiting for PostgreSQL..."
@@ -70,15 +74,31 @@ for i in $(seq 1 60); do
   fi
 done
 
-log "Waiting for the backend, migration 0042, RustFS, ClamAV, Redis and OCR worker..."
+log "Waiting for the backend, migration 0042, document services and OpenTelemetry..."
 for i in $(seq 1 150); do
   if curl -sf http://localhost:8000/health/ready 2>/dev/null | grep -q '"status":"ok"'; then
-    log "Backend, database schema, RustFS, ClamAV, Redis and OCR worker are healthy."
+    log "Backend, schema, RustFS, ClamAV, Redis, OCR worker and Collector are healthy."
     break
   fi
   sleep 2
   if [[ $i -eq 150 ]]; then
     err "The document-processing stack did not become healthy. Run 'docker compose logs backend redis ocr-worker'."
+    exit 1
+  fi
+done
+
+log "Waiting for Grafana, Prometheus and Alertmanager..."
+for i in $(seq 1 90); do
+  if curl -sf http://localhost:3000/api/health 2>/dev/null | grep -q '"database"'; then
+    if curl -sf http://localhost:9090/-/ready >/dev/null 2>&1 && \
+       curl -sf http://localhost:9093/-/ready >/dev/null 2>&1; then
+      log "Observability interfaces are healthy."
+      break
+    fi
+  fi
+  sleep 2
+  if [[ $i -eq 90 ]]; then
+    err "The observability stack did not become healthy. Run 'make observability-logs'."
     exit 1
   fi
 done
@@ -117,6 +137,9 @@ info "Backend:   http://localhost:8000"
 info "API docs:  http://localhost:8000/docs"
 info "RustFS:    http://localhost:9001"
 info "Redis:     127.0.0.1:6379 (password in .env)"
+info "Grafana:   http://localhost:3000 (user: $grafana_user)"
+info "Prometheus:http://localhost:9090"
+info "Alerts:    http://localhost:9093"
 info "Username:  ${SUPER_ADMIN_USERNAME:-superadmin}"
 info "Password:  the SUPER_ADMIN_PASSWORD value from .env"
 echo

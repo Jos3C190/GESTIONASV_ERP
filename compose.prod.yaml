@@ -43,6 +43,12 @@ services:
       OBJECT_STORAGE_ENABLED: "false"
       REDIS_ENABLED: "false"
       OCR_ENABLED: "false"
+      OBSERVABILITY_ENABLED: ${OBSERVABILITY_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-false}
+      OTEL_TRACE_SAMPLE_RATIO: ${OTEL_TRACE_SAMPLE_RATIO:-0.1}
+      OBSERVABILITY_HEALTH_URL: ${OBSERVABILITY_HEALTH_URL:-}
     depends_on: !override
       db:
         condition: service_healthy
@@ -60,12 +66,38 @@ services:
 
   document-maintenance:
     profiles: [local-document-storage]
+    depends_on: !override
+      backend:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
 
   ocr-worker:
     profiles: [local-document-processing]
     depends_on: !override
       redis:
         condition: service_healthy
+
+  loki:
+    profiles: [local-observability]
+
+  tempo:
+    profiles: [local-observability]
+
+  otel-collector:
+    profiles: [local-observability]
+
+  otel-queue-permissions:
+    profiles: [local-observability]
+
+  alertmanager:
+    profiles: [local-observability]
+
+  prometheus:
+    profiles: [local-observability]
+
+  grafana:
+    profiles: [local-observability]
 
   seed:
     build:

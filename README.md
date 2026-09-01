@@ -38,7 +38,7 @@ gráficos, y 17 módulos futuros como mockups en el sidebar.
 | Backend     | Python 3.12, FastAPI (async), SQLAlchemy 2.0 async, Alembic, Pydantic v2, asyncpg, structlog, Argon2id, PyJWT |
 | Frontend    | SvelteKit (Svelte 5 runes), TypeScript strict, TailwindCSS, Vitest, design system Geist (Vercel) |
 | Database    | PostgreSQL 16 |
-| Infra       | Docker Compose v2, RustFS, ClamAV, Redis/ARQ, OCRmyPDF y Nginx |
+| Infra       | Docker Compose v2, RustFS, ClamAV, Redis/ARQ, OCRmyPDF, OpenTelemetry, Grafana, Prometheus, Loki, Tempo y Nginx |
 | Tooling     | `uv` (backend deps), `pnpm` (frontend deps), `make` |
 
 ---
@@ -68,11 +68,14 @@ solamente cuando la base queda lista.
 `make setup` hace todo automáticamente:
 
 1. Copia `.env.example` → `.env`
-2. Genera credenciales locales y levanta PostgreSQL, RustFS, ClamAV, Redis, OCR worker, backend y frontend
+2. Genera credenciales locales y levanta PostgreSQL, procesamiento documental, backend, frontend y observabilidad
 3. Espera a que Postgres esté healthy
 4. Ejecuta migraciones Alembic en una tarea separada antes de arrancar el backend
 5. Siembra RBAC, superadministrador y el contexto operativo de Grupo Lorena
-6. Muestra las URLs y credenciales
+6. Verifica Grafana, Prometheus y Alertmanager y muestra sus URLs sin revelar contraseñas
+
+La guía de métricas, trazas, logs, alertas, privacidad y operación está en
+[`observability/README.md`](observability/README.md).
 
 La semilla oficial crea una sola empresa: **Grupo Lorena**, con sucursales,
 departamentos, empleados, usuarios operativos, categorías, almacenes y

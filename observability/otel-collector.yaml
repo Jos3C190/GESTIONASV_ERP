@@ -1,0 +1,117 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  file_storage:
+    directory: /var/lib/otelcol/storage
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 384
+    spike_limit_mib: 96
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+  attributes/privacy:
+    actions:
+      - key: http.request.header.authorization
+        action: delete
+      - key: http.request.header.cookie
+        action: delete
+      - key: http.response.header.set-cookie
+        action: delete
+      - key: url.query
+        action: delete
+      - key: db.statement.parameters
+        action: delete
+      - key: messaging.message.body
+        action: delete
+      - pattern: (?i).*(password|passwd|secret|token|authorization|cookie|credential|signature|object[_-]?key|document[_-]?path|x-amz-|aws_access).*
+        action: delete
+  transform/privacy:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - replace_all_patterns(attributes, "value", "(?i)([a-z][a-z0-9+.-]*://[^:/\\s]+:[^@\\s]+@|bearer\\s+[a-z0-9._~+/-]+|x-amz-signature=[^&\\s]+|(password|secret|token|authorization|cookie)=[^&\\s]+|companies/[0-9a-f-]+/documents/[0-9a-f-]+/[^\\s]+)", "[REDACTED]")
+          - delete_key(attributes, "url.path") where resource.attributes["service.name"] == "rustfs"
+          - delete_key(attributes, "http.target") where resource.attributes["service.name"] == "rustfs"
+          - truncate_all(attributes, 4096)
+    metric_statements:
+      - context: datapoint
+        statements:
+          - replace_all_patterns(attributes, "value", "(?i)([a-z][a-z0-9+.-]*://[^:/\\s]+:[^@\\s]+@|bearer\\s+[a-z0-9._~+/-]+|x-amz-signature=[^&\\s]+|(password|secret|token|authorization|cookie)=[^&\\s]+|companies/[0-9a-f-]+/documents/[0-9a-f-]+/[^\\s]+)", "[REDACTED]")
+          - truncate_all(attributes, 4096)
+  transform/log_privacy:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - replace_pattern(log.body, "(?i)(password|passwd|secret|token|authorization|cookie)=([^&\\s]+)", "$1=[REDACTED]") where IsString(log.body)
+          - replace_pattern(log.body, "(?i)[a-z][a-z0-9+.-]*://[^:/\\s]+:[^@\\s]+@", "[REDACTED]@") where IsString(log.body)
+          - replace_pattern(log.body, "(?i)x-amz-signature=[^&\\s]+", "x-amz-signature=[REDACTED]") where IsString(log.body)
+          - replace_pattern(log.body, "companies/[0-9a-f-]+/documents/[0-9a-f-]+/[^\\s]+", "[DOCUMENT_PATH_REDACTED]") where IsString(log.body)
+          - replace_all_patterns(log.attributes, "value", "(?i)([a-z][a-z0-9+.-]*://[^:/\\s]+:[^@\\s]+@|bearer\\s+[a-z0-9._~+/-]+|x-amz-signature=[^&\\s]+|(password|secret|token|authorization|cookie)=[^&\\s]+|companies/[0-9a-f-]+/documents/[0-9a-f-]+/[^\\s]+)", "[REDACTED]")
+          - truncate_all(log.attributes, 4096)
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: erp
+    enable_open_metrics: true
+    resource_to_telemetry_conversion:
+      enabled: true
+  otlp_http/tempo:
+    endpoint: http://tempo:4318
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      storage: file_storage
+      queue_size: 5000
+    retry_on_failure:
+      enabled: true
+      max_elapsed_time: 10m
+  otlp_http/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      storage: file_storage
+      queue_size: 5000
+    retry_on_failure:
+      enabled: true
+      max_elapsed_time: 10m
+
+service:
+  extensions: [health_check, file_storage]
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/privacy, transform/privacy, batch]
+      exporters: [prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/privacy, transform/privacy, batch]
+      exporters: [otlp_http/tempo]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/privacy, transform/log_privacy, batch]
+      exporters: [otlp_http/loki]

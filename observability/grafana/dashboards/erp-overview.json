@@ -1,0 +1,12 @@
+{
+  "uid": "erp-overview", "title": "ERP — Resumen", "tags": ["erp", "overview"],
+  "schemaVersion": 41, "editable": false, "refresh": "15s", "time": {"from": "now-1h", "to": "now"},
+  "panels": [
+    {"id": 1, "type": "stat", "title": "Solicitudes / s", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum(rate(erp_erp_http_server_requests_total[5m]))", "refId": "A"}], "gridPos": {"x": 0, "y": 0, "w": 6, "h": 5}},
+    {"id": 2, "type": "stat", "title": "Errores 5xx", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum(rate(erp_erp_http_server_requests_total{status=~\"5..\"}[5m]))", "refId": "A"}], "gridPos": {"x": 6, "y": 0, "w": 6, "h": 5}},
+    {"id": 3, "type": "stat", "title": "Componentes disponibles", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "min(erp_erp_component_health{service_name=\"erp-backend\"})", "refId": "A"}], "gridPos": {"x": 12, "y": 0, "w": 6, "h": 5}},
+    {"id": 4, "type": "stat", "title": "Backend observado", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "count(erp_erp_process_starts_total{service_name=\"erp-backend\"})", "refId": "A"}], "gridPos": {"x": 18, "y": 0, "w": 6, "h": 5}},
+    {"id": 5, "type": "timeseries", "title": "Tráfico por ruta", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum by (route) (rate(erp_erp_http_server_requests_total[5m]))", "legendFormat": "{{route}}", "refId": "A"}], "gridPos": {"x": 0, "y": 5, "w": 12, "h": 8}},
+    {"id": 6, "type": "timeseries", "title": "Latencia p95", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(erp_erp_http_server_duration_bucket[5m])))", "refId": "A"}], "gridPos": {"x": 12, "y": 5, "w": 12, "h": 8}}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "uid": "erp-api-db", "title": "ERP — API y PostgreSQL", "tags": ["erp", "api", "database"],
+  "schemaVersion": 41, "editable": false, "refresh": "15s", "time": {"from": "now-3h", "to": "now"},
+  "panels": [
+    {"id": 1, "type": "timeseries", "title": "Respuestas HTTP", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum by (method, route, status) (rate(erp_erp_http_server_requests_total[5m]))", "legendFormat": "{{method}} {{route}} {{status}}", "refId": "A"}], "gridPos": {"x": 0, "y": 0, "w": 14, "h": 9}},
+    {"id": 2, "type": "timeseries", "title": "Operaciones SQL", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum by (operation, result) (rate(erp_erp_postgresql_operations_total[5m]))", "legendFormat": "{{operation}} {{result}}", "refId": "A"}], "gridPos": {"x": 14, "y": 0, "w": 10, "h": 9}},
+    {"id": 3, "type": "timeseries", "title": "Pool PostgreSQL", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "erp_erp_postgresql_pool_checked_out", "legendFormat": "en uso", "refId": "A"}, {"expr": "erp_erp_postgresql_pool_size", "legendFormat": "base", "refId": "B"}, {"expr": "erp_erp_postgresql_pool_overflow", "legendFormat": "overflow", "refId": "C"}], "gridPos": {"x": 0, "y": 9, "w": 10, "h": 8}},
+    {"id": 4, "type": "timeseries", "title": "Latencia SQL p95", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "histogram_quantile(0.95, sum by (le, operation) (rate(erp_erp_postgresql_duration_bucket[5m])))", "legendFormat": "{{operation}}", "refId": "A"}], "gridPos": {"x": 10, "y": 9, "w": 14, "h": 8}},
+    {"id": 5, "type": "logs", "title": "Logs API", "datasource": {"uid": "loki"}, "targets": [{"expr": "{service_name=\"erp-backend\"}", "refId": "A"}], "gridPos": {"x": 0, "y": 17, "w": 24, "h": 10}}
+  ]
+}

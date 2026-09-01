@@ -1,0 +1,75 @@
+groups:
+  - name: erp-availability
+    rules:
+      - alert: ERPBackendAbsent
+        expr: absent(erp_erp_process_starts_total{service_name="erp-backend"})
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "No se reciben métricas del backend ERP"}
+      - alert: ERPHttpErrorRateHigh
+        expr: sum(rate(erp_erp_http_server_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(erp_erp_http_server_requests_total[5m])), 0.01) > 0.05 and sum(rate(erp_erp_http_server_requests_total[5m])) > 0.1
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "La tasa HTTP 5xx supera 5%"}
+      - alert: ERPHttpLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(erp_erp_http_server_duration_bucket[10m]))) > 1000
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "La latencia HTTP p95 supera 1 segundo"}
+      - alert: ERPExternalDependencyDown
+        expr: increase(erp_erp_external_operations_total{result="error",service=~"rustfs|clamav|redis"}[5m]) > 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Una dependencia documental está fallando"}
+      - alert: ERPPostgreSQLDown
+        expr: erp_erp_component_health{component="database",service_name="erp-backend"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "PostgreSQL no está disponible para el ERP"}
+      - alert: ERPRedisDown
+        expr: erp_erp_component_health{component="redis",service_name="erp-backend"} == 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Redis no está disponible; se usa el fallback local"}
+      - alert: ERPRustFSDown
+        expr: erp_erp_component_health{component="rustfs",service_name="erp-backend"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "RustFS no está disponible"}
+      - alert: ERPClamAVDown
+        expr: erp_erp_component_health{component="clamav",service_name="erp-backend"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "ClamAV no está disponible"}
+      - alert: ERPOtelCollectorDown
+        expr: erp_erp_component_health{component="otel_collector",service_name="erp-backend"} == 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "El Collector OTLP no está disponible"}
+      - alert: ERPRateLimitMemoryFallback
+        expr: increase(erp_erp_rate_limit_decisions_total{store="memory"}[5m]) > 0
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: "El rate limiter usa memoria por caída de Redis"}
+      - alert: ERPOcrFailuresIncreasing
+        expr: increase(erp_erp_ocr_jobs_total{status=~"failed|retry"}[15m]) > 2
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Aumentaron los fallos o reintentos OCR"}
+      - alert: ERPOcrPendingTooOld
+        expr: erp_erp_ocr_pending_age{service_name="erp-ocr-worker"} > 1200
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Hay trabajos OCR pendientes por más de 20 minutos"}
+  - name: observability-stack
+    rules:
+      - alert: ObservabilityTargetDown
+        expr: up{job=~"otel-collector|prometheus|grafana|loki|tempo|alertmanager"} == 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Un componente de observabilidad no responde"}
+      - alert: OpenTelemetryExporterFailures
+        expr: increase(otelcol_exporter_send_failed_spans_total[5m]) + increase(otelcol_exporter_send_failed_log_records_total[5m]) > 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "El Collector no puede exportar telemetría"}

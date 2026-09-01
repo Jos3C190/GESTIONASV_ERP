@@ -1,0 +1,11 @@
+{
+  "uid": "erp-documents", "title": "ERP — Documentos", "tags": ["erp", "documents"],
+  "schemaVersion": 41, "editable": false, "refresh": "15s", "time": {"from": "now-6h", "to": "now"},
+  "panels": [
+    {"id": 1, "type": "timeseries", "title": "RustFS y ClamAV — operaciones", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum by (service, operation, result) (rate(erp_erp_external_operations_total{service=~\"rustfs|clamav\"}[5m]))", "legendFormat": "{{service}} {{operation}} {{result}}", "refId": "A"}], "gridPos": {"x": 0, "y": 0, "w": 14, "h": 9}},
+    {"id": 2, "type": "timeseries", "title": "Latencia de dependencias", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "histogram_quantile(0.95, sum by (le, service) (rate(erp_erp_external_duration_bucket{service=~\"rustfs|clamav\"}[5m])))", "legendFormat": "{{service}}", "refId": "A"}], "gridPos": {"x": 14, "y": 0, "w": 10, "h": 9}},
+    {"id": 3, "type": "timeseries", "title": "Cargas y estados documentales", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum by (status) (increase(erp_erp_documents_events_total[1h]))", "legendFormat": "{{status}}", "refId": "A"}], "gridPos": {"x": 0, "y": 9, "w": 12, "h": 8}},
+    {"id": 4, "type": "timeseries", "title": "Escaneos ClamAV", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum by (result) (increase(erp_erp_clamav_scans_total[1h]))", "legendFormat": "{{result}}", "refId": "A"}], "gridPos": {"x": 12, "y": 9, "w": 12, "h": 8}},
+    {"id": 5, "type": "logs", "title": "Eventos documentales", "datasource": {"uid": "loki"}, "targets": [{"expr": "{service_name=\"erp-backend\"} |~ \"DOCUMENT_|document_|clamav|rustfs\"", "refId": "A"}], "gridPos": {"x": 0, "y": 17, "w": 24, "h": 10}}
+  ]
+}

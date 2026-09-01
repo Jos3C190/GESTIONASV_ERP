@@ -1,0 +1,10 @@
+{
+  "uid": "erp-observability", "title": "ERP — Stack de observabilidad", "tags": ["erp", "observability"],
+  "schemaVersion": 41, "editable": false, "refresh": "15s", "time": {"from": "now-3h", "to": "now"},
+  "panels": [
+    {"id": 1, "type": "stat", "title": "Targets activos", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum(up)", "refId": "A"}], "gridPos": {"x": 0, "y": 0, "w": 6, "h": 5}},
+    {"id": 2, "type": "stat", "title": "Targets caídos", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum(up == 0)", "refId": "A"}], "gridPos": {"x": 6, "y": 0, "w": 6, "h": 5}},
+    {"id": 3, "type": "timeseries", "title": "Collector — recepción", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum by (signal) (rate(otelcol_receiver_accepted_spans_total[5m]) or rate(otelcol_receiver_accepted_log_records_total[5m]) or rate(otelcol_receiver_accepted_metric_points_total[5m]))", "refId": "A"}], "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}},
+    {"id": 4, "type": "table", "title": "Estado de targets", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "up", "format": "table", "instant": true, "refId": "A"}], "gridPos": {"x": 0, "y": 8, "w": 24, "h": 9}}
+  ]
+}
