@@ -21,9 +21,9 @@ run_frontend() {
 
 run_lint() {
   echo "[lint] Backend (ruff)..."
-  docker compose exec -T backend uv run ruff check app tests || true
+  docker compose exec -T backend uv run --frozen ruff check app tests
   echo "[lint] Frontend (svelte-check)..."
-  docker compose exec -T frontend pnpm check || true
+  docker compose exec -T frontend pnpm check
 }
 
 case "$TARGET" in

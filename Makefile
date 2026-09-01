@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help up down restart logs ps build seed reset-db test test-backend test-frontend \
         test-unit test-integration test-e2e lint fmt clean setup db-shell backend-shell frontend-shell \
-        security-scan storage-backup storage-restore observability-status observability-logs \
+        security-scan security-scan-images security-scan-deep storage-backup storage-restore observability-status observability-logs \
         observability-validate observability-restart
 
 COMPOSE := docker compose
@@ -63,6 +63,9 @@ lint: ## Lint backend and frontend
 
 security-scan: ## Run automated Red Team security scan (OWASP ZAP Baseline + Trivy)
 	@bash ./scripts/security-scan.sh baseline
+
+security-scan-images: ## Build and scan project-owned backend images with Trivy
+	@bash ./scripts/security-scan-images.sh
 
 security-scan-deep: ## Run deep Red Team security scan (OWASP ZAP OpenAPI DAST + Pytest Fuzzing + Trivy)
 	@bash ./scripts/security-scan.sh deep

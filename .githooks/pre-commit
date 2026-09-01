@@ -2,21 +2,24 @@
 # ==============================================================================
 # Git Pre-Commit Hook — Pruebas de Seguridad Rápidas en Backend (Pytest)
 # ==============================================================================
-set -e
+set -Eeuo pipefail
 
 echo "======================================================================"
 echo " 🔒 Git Pre-Commit: Validando pruebas de seguridad en Backend..."
 echo "======================================================================"
 
 # Ejecutar tests de límites de seguridad en backend
-if command -v docker >/dev/null 2>&1; then
-    docker compose exec -T backend pytest tests/integration/api/test_security_bounds.py -v
-    
-    if command -v powershell.exe >/dev/null 2>&1; then
-        powershell.exe -ExecutionPolicy Bypass -File "./scripts/notify.ps1" -Title "ERP Security - Pre-Commit" -Message "Pruebas adversariales de seguridad aprobadas (6/6 passed)." 2>/dev/null || true
+if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker es obligatorio para ejecutar el control pre-commit." >&2
+    exit 1
+fi
+
+docker compose exec -T backend uv run --frozen pytest tests/integration/api/test_security_bounds.py -v
+
+if command -v powershell.exe >/dev/null 2>&1; then
+    if ! powershell.exe -ExecutionPolicy Bypass -File "./scripts/notify.ps1" -Title "ERP Security - Pre-Commit" -Message "Pruebas adversariales de seguridad aprobadas." 2>/dev/null; then
+        echo "Aviso: no se pudo mostrar la notificacion local." >&2
     fi
-else
-    echo "⚠️ Docker no está disponible, omitiendo pre-commit scan."
 fi
 
 echo "✅ Pre-Commit de seguridad validado con éxito."

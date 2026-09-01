@@ -2,50 +2,75 @@ param (
     [switch]$Deep
 )
 
-# ==============================================================================
-# Script de Auditoria de Seguridad Automatizada (Red Team) - Windows PowerShell
-# ==============================================================================
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+$script:ScanFailed = $false
 
-Write-Host "======================================================================" -ForegroundColor Cyan
-Write-Host " ERP System - Iniciando Auditoria de Seguridad (Red Team Scan)" -ForegroundColor Cyan
-if ($Deep) {
-    Write-Host " MODO PROFUNDO ACTIVO (DAST OpenAPI + Fuzzing + Tests Backend)" -ForegroundColor Red
-}
-Write-Host "======================================================================" -ForegroundColor Cyan
+function Invoke-SecurityStep {
+    param(
+        [Parameter(Mandatory)][string]$Label,
+        [Parameter(Mandatory)][scriptblock]$Action
+    )
 
-# Crear carpeta de reportes si no existe
-New-Item -ItemType Directory -Force -Path "reports" | Out-Null
-
-Write-Host "--> 1. Ejecutando pruebas adversariales de seguridad en Backend (Pytest)..." -ForegroundColor Yellow
-docker compose exec -T backend pytest tests/integration/api/test_security_bounds.py -v
-
-if ($LASTEXITCODE -ne 0) {
-    & "$PSScriptRoot/notify.ps1" -Title "Auditoria de Seguridad Fallida" -Message "Se encontraron fallos en las pruebas de seguridad del backend."
-    exit $LASTEXITCODE
+    Write-Host "--> $Label" -ForegroundColor Yellow
+    & $Action
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "    FAILED ($LASTEXITCODE): $Label" -ForegroundColor Red
+        $script:ScanFailed = $true
+    } else {
+        Write-Host "    OK: $Label" -ForegroundColor Green
+    }
 }
 
-if ($Deep) {
-    Write-Host "--> 2. Iniciando escaneo DAST Activo Profundo (OWASP ZAP OpenAPI Scan)..." -ForegroundColor Yellow
-    docker compose --profile security-deep run --rm security-zap-deep
-} else {
-    Write-Host "--> 2. Iniciando escaneo DAST Baseline con OWASP ZAP..." -ForegroundColor Yellow
-    docker compose --profile security run --rm security-zap
-}
+$rootDirectory = Split-Path -Parent $PSScriptRoot
+Push-Location $rootDirectory
+try {
+    New-Item -ItemType Directory -Force -Path "reports" | Out-Null
+    $mode = if ($Deep) { "deep" } else { "baseline" }
 
-Write-Host "--> 3. Iniciando escaneo de vulnerabilidades en dependencias con Trivy..." -ForegroundColor Yellow
-docker compose --profile security run --rm security-trivy
+    Write-Host "======================================================================" -ForegroundColor Cyan
+    Write-Host " ERP System - Auditoria de Seguridad" -ForegroundColor Cyan
+    Write-Host " Modo: $mode" -ForegroundColor Cyan
+    Write-Host "======================================================================" -ForegroundColor Cyan
 
-Write-Host "======================================================================" -ForegroundColor Green
-Write-Host " Escaneo completado con exito." -ForegroundColor Green
-Write-Host " Reportes generados en:" -ForegroundColor Green
-if ($Deep) {
-    Write-Host "    - .\reports\security-deep-report.json  (DAST OpenAPI Active Scan)" -ForegroundColor Green
-    Write-Host "    - .\reports\security-deep-report.html  (DAST visual profundo)" -ForegroundColor Green
-    & "$PSScriptRoot/notify.ps1" -Title "Auditoria de Seguridad Aprobada" -Message "Escaneo profundo completado con exito: 0 vulnerabilidades criticas."
-} else {
-    Write-Host "    - .\reports\security-report.json       (DAST Baseline)" -ForegroundColor Green
-    Write-Host "    - .\reports\security-report.html       (DAST visual)" -ForegroundColor Green
-    & "$PSScriptRoot/notify.ps1" -Title "Auditoria de Seguridad Aprobada" -Message "Escaneo baseline completado con exito: 0 vulnerabilidades criticas."
+    Invoke-SecurityStep "Pruebas adversariales del backend" {
+        docker compose exec -T backend uv run --frozen pytest tests/integration/api/test_security_bounds.py -v
+    }
+
+    if ($Deep) {
+        Invoke-SecurityStep "OWASP ZAP OpenAPI activo" {
+            docker compose --profile security-deep run --rm security-zap-deep
+        }
+    } else {
+        Invoke-SecurityStep "OWASP ZAP baseline" {
+            docker compose --profile security run --rm security-zap
+        }
+    }
+
+    Invoke-SecurityStep "Trivy filesystem y lockfiles" {
+        docker compose --profile security run --rm security-trivy
+    }
+
+    Invoke-SecurityStep "Construccion y escaneo Trivy de imagenes propias" {
+        $powerShellExecutable = (Get-Process -Id $PID).Path
+        & $powerShellExecutable -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot/security-scan-images.ps1"
+    }
+
+    Write-Host "======================================================================" -ForegroundColor Cyan
+    Write-Host " Reportes locales: .\reports\" -ForegroundColor Cyan
+
+    if ($script:ScanFailed) {
+        Write-Host " Auditoria FALLIDA: revise los pasos y reportes anteriores." -ForegroundColor Red
+        if (Test-Path "$PSScriptRoot/notify.ps1") {
+            & "$PSScriptRoot/notify.ps1" -Title "Auditoria de Seguridad Fallida" -Message "Uno o mas controles de seguridad fallaron."
+        }
+        exit 1
+    }
+
+    Write-Host " Auditoria aprobada: todos los controles finalizaron correctamente." -ForegroundColor Green
+    if (Test-Path "$PSScriptRoot/notify.ps1") {
+        & "$PSScriptRoot/notify.ps1" -Title "Auditoria de Seguridad Aprobada" -Message "Los controles Pytest, ZAP y Trivy finalizaron correctamente."
+    }
+} finally {
+    Pop-Location
 }
-Write-Host "    - .\reports\trivy-report.json           (SCA - Codigo y Dependencias)" -ForegroundColor Green
-Write-Host "======================================================================" -ForegroundColor Green

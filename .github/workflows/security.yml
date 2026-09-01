@@ -1,0 +1,51 @@
+name: Security gate
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trivy:
+    name: Dependencies and runtime images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate frozen dependency lock
+        run: docker build --target prod -t erp-security-lock-check:local backend
+
+      - name: Scan repository and project images
+        shell: bash
+        run: |
+          set +e
+          mkdir -p reports
+          docker compose --profile security run --rm security-trivy
+          filesystem_status=$?
+          bash scripts/security-scan-images.sh
+          images_status=$?
+          if [[ $filesystem_status -ne 0 || $images_status -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-reports
+          path: |
+            reports/trivy-report.json
+            reports/trivy-*-report.json
+          if-no-files-found: warn
+          retention-days: 14

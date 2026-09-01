@@ -562,11 +562,196 @@ services:
 
   security-trivy:
     profiles: [security, security-deep]
-    image: aquasec/trivy:latest
-    command: fs --format json --output /reports/trivy-report.json /src
+    image: aquasec/trivy:0.74.0
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command:
+      - fs
+      - --scanners
+      - vuln
+      - --include-dev-deps
+      - --vuln-severity-source
+      - ghsa,nvd
+      - --severity
+      - HIGH,CRITICAL
+      - --exit-code
+      - "1"
+      - --format
+      - json
+      - --output
+      - /reports/trivy-report.json
+      - /src
     volumes:
-      - .:/src:ro
+      # Vulnerability scanning consumes manifests/lockfiles; mounting only these
+      # keeps Windows bind-mount traversal deterministic without reducing scope.
+      - ./backend/pyproject.toml:/src/backend/pyproject.toml:ro
+      - ./backend/uv.lock:/src/backend/uv.lock:ro
+      - ./frontend/package.json:/src/frontend/package.json:ro
+      - ./frontend/pnpm-lock.yaml:/src/frontend/pnpm-lock.yaml:ro
       - ./reports:/reports:rw
+      - trivy-cache:/root/.cache/trivy
+
+  security-trivy-backend-dev:
+    profiles: [security, security-deep]
+    image: aquasec/trivy:0.74.0
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command:
+      - image
+      - --scanners
+      - vuln
+      - --pkg-types
+      - library
+      - --vuln-severity-source
+      - ghsa,nvd
+      - --severity
+      - HIGH,CRITICAL
+      - --exit-code
+      - "1"
+      - --format
+      - json
+      - --output
+      - /reports/trivy-backend-dev-report.json
+      - erp-security-backend-dev:local
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./reports:/reports:rw
+      - trivy-cache:/root/.cache/trivy
+
+  security-trivy-backend-prod:
+    profiles: [security, security-deep]
+    image: aquasec/trivy:0.74.0
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command:
+      - image
+      - --scanners
+      - vuln
+      - --pkg-types
+      - library
+      - --vuln-severity-source
+      - ghsa,nvd
+      - --severity
+      - HIGH,CRITICAL
+      - --exit-code
+      - "1"
+      - --format
+      - json
+      - --output
+      - /reports/trivy-backend-prod-report.json
+      - erp-security-backend-prod:local
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./reports:/reports:rw
+      - trivy-cache:/root/.cache/trivy
+
+  security-trivy-ocr:
+    profiles: [security, security-deep]
+    image: aquasec/trivy:0.74.0
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command:
+      - image
+      - --scanners
+      - vuln
+      - --pkg-types
+      - library
+      - --vuln-severity-source
+      - ghsa,nvd
+      - --severity
+      - HIGH,CRITICAL
+      - --exit-code
+      - "1"
+      - --format
+      - json
+      - --output
+      - /reports/trivy-ocr-report.json
+      - erp-security-ocr:local
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./reports:/reports:rw
+      - trivy-cache:/root/.cache/trivy
+
+  security-trivy-backend-dev-os:
+    profiles: [security, security-deep]
+    image: aquasec/trivy:0.74.0
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command:
+      - image
+      - --scanners
+      - vuln
+      - --pkg-types
+      - os
+      - --vuln-severity-source
+      - debian
+      - --severity
+      - HIGH,CRITICAL
+      - --exit-code
+      - "1"
+      - --format
+      - json
+      - --output
+      - /reports/trivy-backend-dev-os-report.json
+      - erp-security-backend-dev:local
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./reports:/reports:rw
+      - trivy-cache:/root/.cache/trivy
+
+  security-trivy-backend-prod-os:
+    profiles: [security, security-deep]
+    image: aquasec/trivy:0.74.0
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command:
+      - image
+      - --scanners
+      - vuln
+      - --pkg-types
+      - os
+      - --vuln-severity-source
+      - debian
+      - --severity
+      - HIGH,CRITICAL
+      - --exit-code
+      - "1"
+      - --format
+      - json
+      - --output
+      - /reports/trivy-backend-prod-os-report.json
+      - erp-security-backend-prod:local
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./reports:/reports:rw
+      - trivy-cache:/root/.cache/trivy
+
+  security-trivy-ocr-os:
+    profiles: [security, security-deep]
+    image: aquasec/trivy:0.74.0
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command:
+      - image
+      - --scanners
+      - vuln
+      - --pkg-types
+      - os
+      - --vuln-severity-source
+      - debian
+      - --severity
+      - HIGH,CRITICAL
+      - --exit-code
+      - "1"
+      - --format
+      - json
+      - --output
+      - /reports/trivy-ocr-os-report.json
+      - erp-security-ocr:local
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./reports:/reports:rw
+      - trivy-cache:/root/.cache/trivy
 
   security-zap-deep:
     profiles: [security-deep]
@@ -590,5 +775,6 @@ volumes:
   tempo-data:
   alertmanager-data:
   otel-queue-data:
+  trivy-cache:
   backend-cache:
   frontend-node-modules:
