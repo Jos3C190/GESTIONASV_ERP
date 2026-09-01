@@ -5,6 +5,7 @@ to a no-op so the app boots even without Postgres. We assert on the parts of
 the API that have no DB dependency (root, /health/live, security headers, CORS,
 error handling).
 """
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -16,6 +17,7 @@ from httpx import ASGITransport, AsyncClient
 @pytest.fixture
 async def app_client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
     """Boot the app with migrations disabled so it works without a DB."""
+
     async def _noop_migrations() -> None:
         return None
 
@@ -48,6 +50,7 @@ async def test_health_live(app_client: AsyncClient) -> None:
     assert body["status"] == "ok"
     names = {c["name"] for c in body["components"]}
     assert "process" in names
+    assert r.headers.get("x-request-id")
 
 
 async def test_security_headers_present(app_client: AsyncClient) -> None:
@@ -65,11 +68,14 @@ async def test_cors_preflight(app_client: AsyncClient) -> None:
         headers={
             "Origin": "http://localhost:5173",
             "Access-Control-Request-Method": "GET",
-            "Access-Control-Request-Headers": "Content-Type",
+            "Access-Control-Request-Headers": "Content-Type,traceparent,tracestate",
         },
     )
     assert r.status_code in (200, 204)
     assert r.headers.get("access-control-allow-origin") in ("http://localhost:5173", "*")
+    allowed = r.headers.get("access-control-allow-headers", "").lower()
+    assert "traceparent" in allowed
+    assert "tracestate" in allowed
 
 
 async def test_cors_headers_are_present_on_auth_errors(app_client: AsyncClient) -> None:

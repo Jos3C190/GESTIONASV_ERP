@@ -4,6 +4,7 @@ Pure unit runs remain database-free. Whenever integration or E2E tests are
 collected, the suite rebuilds a dedicated ``erp_db_test`` database, migrates it
 and loads the canonical seed. Validation must never mutate development data.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -16,8 +17,13 @@ from httpx import ASGITransport, AsyncClient
 
 # Assignment is intentional: Compose injects the development DSN and using
 # ``setdefault`` here would silently make E2E tests mutate it.
-os.environ.setdefault("ENVIRONMENT", "test")
-os.environ.setdefault("DEBUG", "false")
+os.environ["ENVIRONMENT"] = "test"
+os.environ["DEBUG"] = "false"
+os.environ["OBSERVABILITY_ENABLED"] = "false"
+# The application container enables Redis/OCR for local development.  In-process
+# E2E clients must not share that durable rate-limit state across test cases.
+os.environ["REDIS_ENABLED"] = "false"
+os.environ["OCR_ENABLED"] = "false"
 TEST_DATABASE_URL = os.environ.get(
     "DATABASE_URL_TEST",
     "postgresql+asyncpg://erp_admin:change_me_in_production_please@db:5432/erp_db_test",
