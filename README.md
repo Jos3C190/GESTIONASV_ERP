@@ -29,6 +29,10 @@ gráficos, y 17 módulos futuros como mockups en el sidebar.
 | :---: | :---: |
 | ![branches-light](docs/images/branches-light.png) | ![branches-dark](docs/images/branches-dark.png) |
 
+<br>
+
+![GestionaSV ERP Branding](docs/images/gestiona-sv-branding.png)
+
 ---
 
 ## Stack
