@@ -5,8 +5,50 @@
  * prepared for the Branches module and future Fleet/Logistics modules.
  */
 
+import * as publicEnv from '$env/static/public';
+
 let mapsPromise: Promise<void> | null = null;
 let leafletPromise: Promise<any> | null = null;
+
+export type CartoBasemapTheme = 'light' | 'dark';
+
+const publicMapEnv = publicEnv as Record<string, string | undefined>;
+const configuredCartoApiKey = publicMapEnv.PUBLIC_CARTO_BASEMAP_API_KEY?.trim() ?? '';
+
+export const configuredGoogleMapsApiKey = publicMapEnv.PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? '';
+
+export const CARTO_BASEMAP_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>';
+
+export function isCartoBasemapConfigured(apiKey = configuredCartoApiKey): boolean {
+  return apiKey.trim().length > 0;
+}
+
+export function cartoBasemapUrl(
+  currentTheme: CartoBasemapTheme,
+  apiKey = configuredCartoApiKey
+): string {
+  const normalizedKey = apiKey.trim();
+  if (!normalizedKey) {
+    throw new Error('PUBLIC_CARTO_BASEMAP_API_KEY is required');
+  }
+
+  const style = currentTheme === 'dark' ? 'dark_all' : 'light_all';
+  return `https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}{r}.png?key=${encodeURIComponent(normalizedKey)}`;
+}
+
+export function cartoTileLayerOptions(): {
+  attribution: string;
+  subdomains: string;
+  maxZoom: number;
+} {
+  return {
+    attribution: CARTO_BASEMAP_ATTRIBUTION,
+    subdomains: 'abcd',
+    maxZoom: 20
+  };
+}
+
 type MapsSdk = {
   maps: {
     DirectionsService: new () => {

@@ -6,7 +6,12 @@
 
   import { onMount } from 'svelte';
   import type { Branch } from '$lib/features/branches/types';
-  import { loadLeaflet } from '$lib/services/maps';
+  import {
+    cartoBasemapUrl,
+    cartoTileLayerOptions,
+    isCartoBasemapConfigured,
+    loadLeaflet
+  } from '$lib/services/maps';
   import { theme } from '$lib/stores/theme.svelte';
 
   interface Props {
@@ -23,6 +28,7 @@
   let markerInstance: any = null;
   let popupTimer: ReturnType<typeof setTimeout> | null = null;
   let destroyed = false;
+  let mapError = $state(false);
 
   let markerColor = $derived.by(() => {
     if (branch.status === 'active') return '#10B981';
@@ -32,27 +38,26 @@
 
   async function initMap() {
     if (!containerEl || destroyed) return;
+    if (!isCartoBasemapConfigured()) {
+      mapError = true;
+      return;
+    }
     try {
+      mapError = false;
       const L = await loadLeaflet();
       if (!containerEl || destroyed) return;
 
-      const tileUrl =
-        theme.current === 'dark'
-          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-          : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+      const tileUrl = cartoBasemapUrl(theme.current);
 
       mapInstance = L.map(containerEl, {
         center: [branch.lat, branch.lng],
         zoom: 15,
         zoomControl: true,
-        attributionControl: false,
+        attributionControl: true,
         scrollWheelZoom: false
       });
 
-      tileLayerInstance = L.tileLayer(tileUrl, {
-        subdomains: 'abcd',
-        maxZoom: 19
-      }).addTo(mapInstance);
+      tileLayerInstance = L.tileLayer(tileUrl, cartoTileLayerOptions()).addTo(mapInstance);
 
       const size = 36;
 
@@ -101,6 +106,7 @@
         if (!destroyed && markerInstance && mapInstance) markerInstance.openPopup();
       }, 300);
     } catch (err) {
+      mapError = true;
       console.error('Error al cargar mapa:', err);
     }
   }
@@ -108,11 +114,7 @@
   $effect(() => {
     const currentTheme = theme.current;
     if (mapInstance && tileLayerInstance) {
-      const newUrl =
-        currentTheme === 'dark'
-          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-          : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-      tileLayerInstance.setUrl(newUrl);
+      tileLayerInstance.setUrl(cartoBasemapUrl(currentTheme));
     }
   });
 
@@ -143,6 +145,13 @@
   style={fillHeight ? '' : `height: ${height}px`}
 >
   <div bind:this={containerEl} class="h-full w-full"></div>
+  {#if mapError}
+    <div class="absolute inset-0 grid place-items-center bg-surface-muted p-6 text-center">
+      <p class="text-sm text-foreground-muted">
+        El mapa no está disponible porque el proveedor CARTO aún no está configurado.
+      </p>
+    </div>
+  {/if}
 </div>
 
 <style>

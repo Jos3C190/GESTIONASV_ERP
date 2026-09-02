@@ -1,11 +1,14 @@
 /** @type {import('@sveltejs/kit').Config} */
-import adapter from '@sveltejs/adapter-auto';
+import autoAdapter from '@sveltejs/adapter-auto';
+import nodeAdapter from '@sveltejs/adapter-node';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+
+const adapter = process.env.SVELTE_ADAPTER === 'node' ? nodeAdapter() : autoAdapter();
 
 const config = {
   preprocess: vitePreprocess(),
   kit: {
-    adapter: adapter(),
+    adapter,
     alias: {
       $lib: './src/lib',
       '$lib/*': './src/lib/*'

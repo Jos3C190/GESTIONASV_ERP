@@ -28,8 +28,11 @@ CMD ["sh", "-c", "CI=true pnpm install --frozen-lockfile && pnpm exec svelte-kit
 FROM deps AS build
 COPY . .
 ARG PUBLIC_API_URL=http://localhost:8000
+ARG PUBLIC_CARTO_BASEMAP_API_KEY=
 ENV PUBLIC_API_URL=$PUBLIC_API_URL
 ENV VITE_API_URL=$PUBLIC_API_URL
+ENV PUBLIC_CARTO_BASEMAP_API_KEY=$PUBLIC_CARTO_BASEMAP_API_KEY
+ENV SVELTE_ADAPTER=node
 RUN pnpm exec svelte-kit sync && pnpm build
 
 # ---------------- prod ----------------
@@ -39,7 +42,7 @@ COPY --from=build /app/build ./build
 COPY --from=build /app/package.json ./
 COPY --from=build /app/pnpm-lock.yaml* ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --prod || pnpm install --prod
+    pnpm install --frozen-lockfile --prod --ignore-scripts
 EXPOSE 3000
 # SvelteKit's node adapter reads PORT, ORIGIN, BODY_SIZE_LIMIT from env.
 ENV PORT=3000

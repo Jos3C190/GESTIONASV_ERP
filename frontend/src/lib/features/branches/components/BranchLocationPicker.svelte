@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { loadLeaflet } from '$lib/services/maps';
+  import {
+    cartoBasemapUrl,
+    cartoTileLayerOptions,
+    isCartoBasemapConfigured,
+    loadLeaflet
+  } from '$lib/services/maps';
   import { theme } from '$lib/stores/theme.svelte';
 
   interface Position {
@@ -41,12 +46,6 @@
     };
   }
 
-  function tileUrl(currentTheme: 'light' | 'dark') {
-    return currentTheme === 'dark'
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-  }
-
   function emitPosition(lat: number, lng: number) {
     onpositionchange?.({
       latitude: Number(lat.toFixed(6)),
@@ -56,6 +55,10 @@
 
   async function initializeMap() {
     if (!containerEl) return;
+    if (!isCartoBasemapConfigured()) {
+      loadError = true;
+      return;
+    }
     try {
       const L = await loadLeaflet();
       if (!mounted || !containerEl) return;
@@ -65,7 +68,7 @@
         center: [position.latitude, position.longitude],
         zoom: 15,
         zoomControl: true,
-        attributionControl: false,
+        attributionControl: true,
         scrollWheelZoom: false,
         preferCanvas: true,
         zoomAnimation: true,
@@ -74,9 +77,8 @@
         inertia: true
       });
 
-      tileLayer = L.tileLayer(tileUrl(theme.current), {
-        subdomains: 'abcd',
-        maxZoom: 19,
+      tileLayer = L.tileLayer(cartoBasemapUrl(theme.current), {
+        ...cartoTileLayerOptions(),
         updateWhenIdle: true,
         keepBuffer: 3
       }).addTo(mapInstance);
@@ -116,7 +118,7 @@
 
   $effect(() => {
     const currentTheme = theme.current;
-    tileLayer?.setUrl(tileUrl(currentTheme));
+    tileLayer?.setUrl(cartoBasemapUrl(currentTheme));
   });
 
   $effect(() => {

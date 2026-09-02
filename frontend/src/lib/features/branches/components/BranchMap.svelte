@@ -9,7 +9,14 @@
 
   import { onMount, untrack } from 'svelte';
   import type { Branch } from '$lib/features/branches/types';
-  import { loadGoogleMapsScript, loadLeaflet } from '$lib/services/maps';
+  import {
+    cartoBasemapUrl,
+    cartoTileLayerOptions,
+    configuredGoogleMapsApiKey,
+    isCartoBasemapConfigured,
+    loadGoogleMapsScript,
+    loadLeaflet
+  } from '$lib/services/maps';
   import { theme } from '$lib/stores/theme.svelte';
 
   interface Props {
@@ -20,7 +27,7 @@
 
   let { branches, selectedId, onSelect }: Props = $props();
 
-  const apiKey = (import.meta.env.PUBLIC_GOOGLE_MAPS_API_KEY as string | undefined) ?? '';
+  const apiKey = configuredGoogleMapsApiKey;
 
   let containerEl: HTMLDivElement | null = $state(null);
   let mapInstance = $state<any>(null);
@@ -30,6 +37,7 @@
   let popupTimer: ReturnType<typeof setTimeout> | null = null;
   let destroyed = false;
   let useGoogleMaps = $state(Boolean(apiKey));
+  let mapError = $state(false);
 
   function escapeHtml(value: string | number | null | undefined): string {
     return String(value ?? '').replace(
@@ -61,30 +69,29 @@
 
   async function initLeafletMap() {
     if (!containerEl || destroyed) return;
+    if (!isCartoBasemapConfigured()) {
+      mapError = true;
+      return;
+    }
     try {
+      mapError = false;
       const L = await loadLeaflet();
       if (!containerEl || destroyed) return;
 
-      // CartoDB Positron (light grey) for light mode, Dark Matter for dark mode
-      const tileUrl =
-        theme.current === 'dark'
-          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-          : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+      const tileUrl = cartoBasemapUrl(theme.current);
 
       mapInstance = L.map(containerEl, {
         center: [center.lat, center.lng],
         zoom: center.zoom,
         zoomControl: true,
-        attributionControl: false
+        attributionControl: true
       });
 
-      tileLayerInstance = L.tileLayer(tileUrl, {
-        subdomains: 'abcd',
-        maxZoom: 19
-      }).addTo(mapInstance);
+      tileLayerInstance = L.tileLayer(tileUrl, cartoTileLayerOptions()).addTo(mapInstance);
 
       renderLeafletMarkers(L);
     } catch (err) {
+      mapError = true;
       console.error('Error al cargar Leaflet / CartoDB:', err);
     }
   }
@@ -93,11 +100,7 @@
   $effect(() => {
     const currentTheme = theme.current;
     if (mapInstance && tileLayerInstance) {
-      const newUrl =
-        currentTheme === 'dark'
-          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-          : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-      tileLayerInstance.setUrl(newUrl);
+      tileLayerInstance.setUrl(cartoBasemapUrl(currentTheme));
     }
   });
 
@@ -368,6 +371,13 @@
   class="relative h-full w-full overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-sm"
 >
   <div bind:this={containerEl} class="h-full w-full min-h-0"></div>
+  {#if mapError}
+    <div class="absolute inset-0 grid place-items-center bg-surface-muted p-6 text-center">
+      <p class="max-w-sm text-sm text-foreground-muted">
+        El mapa no está disponible porque el proveedor CARTO aún no está configurado.
+      </p>
+    </div>
+  {/if}
 </div>
 
 <style>

@@ -110,6 +110,7 @@ services:
       target: prod
       args:
         PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+        PUBLIC_CARTO_BASEMAP_API_KEY: ${PUBLIC_CARTO_BASEMAP_API_KEY:-}
     environment:
       ORIGIN: ${PUBLIC_ORIGIN:-https://localhost}
       BODY_SIZE_LIMIT: "1500000"
