@@ -36,6 +36,7 @@
     '/roles',
     '/departments',
     '/audit-log',
+    '/documents',
     '/branches',
     '/warehouses',
     '/warehouse-categories',

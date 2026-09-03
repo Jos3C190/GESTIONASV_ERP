@@ -286,6 +286,135 @@ export interface EmployeeOut {
   updated_at: string | null;
 }
 
+export type DocumentTechnicalStatus =
+  'pending_upload' | 'pending_scan' | 'scanning' | 'active' | 'quarantined' | 'rejected';
+export type DocumentRecordStatus =
+  | 'processing'
+  | 'active'
+  | 'current'
+  | 'expiring'
+  | 'expired'
+  | 'replaced'
+  | 'quarantined'
+  | 'rejected'
+  | 'deleted';
+export type DocumentOcrStatus = 'pending' | 'processing' | 'ready' | 'failed' | 'skipped';
+export type DocumentFolderParent = 'root' | 'general' | 'employees' | 'employee';
+export type DocumentFolderKind = 'module' | 'employee' | 'category';
+
+export interface DocumentBreadcrumbOut {
+  label: string;
+  href: string;
+}
+
+export interface DocumentFolderOut {
+  id: string;
+  kind: DocumentFolderKind;
+  name: string;
+  module: 'general' | 'employees';
+  parent_id: string | null;
+  employee_id: string | null;
+  category_id: string | null;
+  employee_code: string | null;
+  employee_status: string | null;
+  document_count: number;
+  active_count: number;
+  expiring_count: number;
+  expired_count: number;
+  latest_document_at: string | null;
+  can_upload: boolean;
+}
+
+export interface DocumentFoldersPage {
+  items: DocumentFolderOut[];
+  meta: PageMeta;
+  breadcrumbs: DocumentBreadcrumbOut[];
+}
+
+export interface DocumentCategoryOut {
+  id: string;
+  company_id: string;
+  module: 'general' | 'employees';
+  code: string;
+  name: string;
+  group_name: string;
+  description: string | null;
+  sort_order: number;
+  is_active: boolean;
+  document_count: number;
+}
+
+export interface DocumentRecordOut {
+  id: string;
+  company_id: string;
+  module: 'general' | 'employees';
+  owner_type: string | null;
+  owner_id: string | null;
+  owner_label: string | null;
+  owner_deleted: boolean;
+  category_id: string;
+  category_name: string | null;
+  category_group: string | null;
+  title: string;
+  description: string | null;
+  reference_code: string | null;
+  issuer: string | null;
+  issued_on: string | null;
+  expires_on: string | null;
+  confidentiality: 'internal' | 'restricted';
+  tags: string[];
+  version_group_id: string;
+  version_number: number;
+  is_current: boolean;
+  replaces_document_id: string | null;
+  business_status: DocumentRecordStatus;
+  original_filename: string;
+  extension: string;
+  content_type: string;
+  size_bytes: number;
+  checksum_sha256: string;
+  technical_status: DocumentTechnicalStatus;
+  failure_code: string | null;
+  upload_expires_at: string | null;
+  scanned_at: string | null;
+  uploaded_by: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  ocr_status: DocumentOcrStatus | null;
+  ocr_available: boolean;
+  ocr_failure_code: string | null;
+  ocr_completed_at: string | null;
+}
+
+export interface DocumentUploadTicket {
+  document_id: string;
+  upload_url: string;
+  method: 'PUT';
+  required_headers: Record<string, string>;
+  expires_at: string;
+}
+
+export interface DocumentMetadataInput {
+  category_id?: string;
+  title?: string;
+  description?: string;
+  reference_code?: string;
+  issuer?: string;
+  issued_on?: string;
+  expires_on?: string;
+  confidentiality?: 'internal' | 'restricted';
+  tags?: string[];
+}
+
+export interface DocumentUploadInput extends DocumentMetadataInput {
+  file_name: string;
+  content_type: string;
+  size_bytes: number;
+  checksum_sha256: string;
+}
+
 export interface EmployeeBranchAssignmentOut {
   id: string;
   employee_id: string;
@@ -594,6 +723,269 @@ export interface DashboardSummary {
 }
 
 export const api = {
+  documents: {
+    initiate: (data: DocumentUploadInput) =>
+      apiFetch<DocumentUploadTicket>('/documents/library/uploads', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+    initiateEmployee: (employeeId: string, data: DocumentUploadInput) =>
+      apiFetch<DocumentUploadTicket>(`/employees/${employeeId}/documents/uploads`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+    uploadDirect: async (
+      ticket: DocumentUploadTicket,
+      file: File,
+      onProgress?: (progress: number) => void
+    ): Promise<void> => {
+      // XHR is used only for progress reporting; the signed URL remains the
+      // sole destination and no application token is sent to object storage.
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open(ticket.method, ticket.upload_url);
+        for (const [key, value] of Object.entries(ticket.required_headers))
+          xhr.setRequestHeader(key, value);
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else
+            reject(
+              new HttpError(
+                'document_upload_failed',
+                'No se pudo cargar el archivo al almacenamiento.',
+                xhr.status
+              )
+            );
+        };
+        xhr.onerror = () =>
+          reject(
+            new HttpError(
+              'document_upload_failed',
+              'No se pudo cargar el archivo al almacenamiento.',
+              0
+            )
+          );
+        xhr.send(file);
+      });
+    },
+    complete: (id: string, employeeId?: string) =>
+      apiFetch<DocumentRecordOut>(
+        employeeId
+          ? `/employees/${employeeId}/documents/${id}/complete`
+          : `/documents/library/${id}/complete`,
+        { method: 'POST' }
+      ),
+    list: (
+      params: {
+        page?: number;
+        size?: number;
+        module?: 'general' | 'employees';
+        category_id?: string;
+        search?: string;
+        status?: string;
+        confidentiality?: 'internal' | 'restricted';
+        expires_within_days?: number;
+        include_versions?: boolean;
+        signal?: AbortSignal;
+      } = {}
+    ) => {
+      const sp = new URLSearchParams({
+        page: String(params.page ?? 1),
+        size: String(params.size ?? 24)
+      });
+      if (params.module) sp.set('module', params.module);
+      if (params.category_id) sp.set('category_id', params.category_id);
+      if (params.search) sp.set('search', params.search);
+      if (params.status) sp.set('status', params.status);
+      if (params.confidentiality) sp.set('confidentiality', params.confidentiality);
+      if (params.expires_within_days !== undefined)
+        sp.set('expires_within_days', String(params.expires_within_days));
+      if (params.include_versions) sp.set('include_versions', 'true');
+      return apiFetch<Page<DocumentRecordOut>>(`/documents/library?${sp}`, {
+        signal: params.signal
+      });
+    },
+    folders: (
+      params: {
+        parent?: DocumentFolderParent;
+        employee_id?: string;
+        search?: string;
+        page?: number;
+        size?: number;
+        signal?: AbortSignal;
+      } = {}
+    ) => {
+      const sp = new URLSearchParams({
+        parent: params.parent ?? 'root',
+        page: String(params.page ?? 1),
+        size: String(params.size ?? 24)
+      });
+      if (params.employee_id) sp.set('employee_id', params.employee_id);
+      if (params.search) sp.set('search', params.search);
+      return apiFetch<DocumentFoldersPage>(`/documents/library/folders?${sp}`, {
+        signal: params.signal
+      });
+    },
+    employeeList: (
+      employeeId: string,
+      params: {
+        page?: number;
+        size?: number;
+        category_id?: string;
+        search?: string;
+        status?: string;
+        confidentiality?: 'internal' | 'restricted';
+        expires_within_days?: number;
+        include_versions?: boolean;
+        signal?: AbortSignal;
+      } = {}
+    ) => {
+      const sp = new URLSearchParams({
+        page: String(params.page ?? 1),
+        size: String(params.size ?? 24)
+      });
+      if (params.category_id) sp.set('category_id', params.category_id);
+      if (params.search) sp.set('search', params.search);
+      if (params.status) sp.set('status', params.status);
+      if (params.confidentiality) sp.set('confidentiality', params.confidentiality);
+      if (params.expires_within_days !== undefined)
+        sp.set('expires_within_days', String(params.expires_within_days));
+      if (params.include_versions) sp.set('include_versions', 'true');
+      return apiFetch<Page<DocumentRecordOut>>(`/employees/${employeeId}/documents?${sp}`, {
+        signal: params.signal
+      });
+    },
+    categories: (module?: 'general' | 'employees', signal?: AbortSignal) =>
+      apiFetch<DocumentCategoryOut[]>(
+        `/documents/library/categories${module ? `?module=${module}` : ''}`,
+        { signal }
+      ),
+    manageCategories: {
+      list: (
+        params: {
+          module?: 'general' | 'employees';
+          includeInactive?: boolean;
+          group?: string;
+          signal?: AbortSignal;
+        } = {}
+      ) => {
+        const query = new URLSearchParams();
+        if (params.module) query.set('module', params.module);
+        if (params.includeInactive) query.set('include_inactive', 'true');
+        if (params.group) query.set('group', params.group);
+        return apiFetch<DocumentCategoryOut[]>(
+          `/document-categories${query.toString() ? `?${query}` : ''}`,
+          { signal: params.signal }
+        );
+      },
+      create: (data: {
+        module: 'general' | 'employees';
+        code: string;
+        name: string;
+        group_name?: string;
+        description?: string;
+        sort_order?: number;
+      }) =>
+        apiFetch<DocumentCategoryOut>('/document-categories', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        }),
+      update: (
+        id: string,
+        data: {
+          name?: string;
+          group_name?: string;
+          description?: string;
+          sort_order?: number;
+          is_active?: boolean;
+        }
+      ) =>
+        apiFetch<DocumentCategoryOut>(`/document-categories/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(data)
+        }),
+      activate: (id: string) =>
+        apiFetch<DocumentCategoryOut>(`/document-categories/${id}/activate`, { method: 'POST' }),
+      deactivate: (id: string) =>
+        apiFetch<DocumentCategoryOut>(`/document-categories/${id}/deactivate`, { method: 'POST' })
+    },
+    createCategory: (data: {
+      module: 'general' | 'employees';
+      code: string;
+      name: string;
+      group_name?: string;
+      description?: string;
+      sort_order?: number;
+    }) =>
+      apiFetch<DocumentCategoryOut>('/documents/library/categories', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+    updateCategory: (
+      id: string,
+      data: {
+        name?: string;
+        group_name?: string;
+        description?: string;
+        sort_order?: number;
+        is_active?: boolean;
+      }
+    ) =>
+      apiFetch<DocumentCategoryOut>(`/documents/library/categories/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+      }),
+    get: (id: string) => apiFetch<DocumentRecordOut>(`/documents/library/${id}`),
+    getEmployee: (employeeId: string, id: string) =>
+      apiFetch<DocumentRecordOut>(`/employees/${employeeId}/documents/${id}`),
+    update: (id: string, data: DocumentMetadataInput) =>
+      apiFetch<DocumentRecordOut>(`/documents/${id}/metadata`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+      }),
+    updateEmployee: (employeeId: string, id: string, data: DocumentMetadataInput) =>
+      apiFetch<DocumentRecordOut>(`/employees/${employeeId}/documents/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+      }),
+    versions: (id: string, employeeId?: string) =>
+      apiFetch<DocumentRecordOut[]>(
+        employeeId
+          ? `/employees/${employeeId}/documents/${id}/versions`
+          : `/documents/library/${id}/versions`
+      ),
+    downloadUrl: (id: string, variant: 'original' | 'ocr' = 'original', employeeId?: string) =>
+      apiFetch<{ url: string; expires_at: string }>(
+        employeeId
+          ? `/employees/${employeeId}/documents/${id}/download-url?variant=${variant}`
+          : `/documents/library/${id}/download-url?variant=${variant}`,
+        { method: 'POST' }
+      ),
+    previewUrl: (id: string, employeeId?: string, variant: 'original' | 'ocr' = 'original') =>
+      apiFetch<{ url: string; expires_at: string }>(
+        employeeId
+          ? `/employees/${employeeId}/documents/${id}/preview-url?variant=${variant}`
+          : `/documents/library/${id}/preview-url?variant=${variant}`,
+        { method: 'POST' }
+      ),
+    retryOcr: (id: string, employeeId?: string) =>
+      apiFetch<DocumentRecordOut>(
+        employeeId
+          ? `/employees/${employeeId}/documents/${id}/ocr/retry`
+          : `/documents/${id}/ocr/retry`,
+        { method: 'POST' }
+      ),
+    replace: (id: string, data: DocumentUploadInput, employeeId?: string) =>
+      apiFetch<DocumentUploadTicket>(
+        employeeId
+          ? `/employees/${employeeId}/documents/${id}/replace`
+          : `/documents/library/${id}/replace`,
+        { method: 'POST', body: JSON.stringify(data) }
+      )
+  },
   media: {
     uploadImage: async (
       file: File,

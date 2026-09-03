@@ -20,6 +20,7 @@
       | 'variants'
       | 'custom';
     variant?: 'default' | 'danger';
+    disabled?: boolean;
     onClick: () => void;
   }
 
@@ -72,6 +73,7 @@
   function handleItemClick(e: MouseEvent, item: KebabItem) {
     e.preventDefault();
     e.stopPropagation();
+    if (item.disabled) return;
     closeMenu();
     item.onClick();
   }
@@ -182,8 +184,9 @@
     {#each items as item (item.id)}
       <button
         type="button"
+        disabled={item.disabled}
         onclick={(e) => handleItemClick(e, item)}
-        class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors {item.variant ===
+        class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 {item.variant ===
         'danger'
           ? 'text-danger hover:bg-danger/10'
           : 'text-foreground hover:bg-surface-hover'}"

@@ -43,8 +43,8 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'ui-monospace', 'monospace']
+        sans: ['Geist Sans', 'Geist', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['Geist Mono', 'Geist', 'JetBrains Mono', 'ui-monospace', 'monospace']
       },
       borderRadius: {
         xl: '0.75rem',

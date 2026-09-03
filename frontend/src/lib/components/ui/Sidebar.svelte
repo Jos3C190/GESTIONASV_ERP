@@ -17,14 +17,17 @@
   let switchingBranch = $state(false);
   let branchError = $state<string | null>(null);
 
-
   function isVisible(item: NavItem): boolean {
+    if (item.requiredPermissions?.length) {
+      return permissions.hasAnyPermission(item.requiredPermissions);
+    }
     if (!item.requiredPermission) return true;
     return permissions.hasPermission(item.requiredPermission);
   }
 
   function isActive(route: string): boolean {
-    return page.url.pathname === route;
+    return page.url.pathname === route ||
+      (route === '/documents' && page.url.pathname.startsWith('/documents/'));
   }
 
   function handleClick() {
@@ -50,21 +53,40 @@
 </script>
 
 <aside
-  class="flex h-full flex-col border-r border-border bg-surface transition-all duration-200 {collapsed ? 'w-[52px]' : 'w-60'}"
+  class="flex h-full flex-col border-r border-border bg-surface transition-all duration-200 {collapsed
+    ? 'w-[52px]'
+    : 'w-60'}"
   role="navigation"
   aria-label="Navegación principal"
 >
   <!-- Sucursal operativa: la empresa se cambia desde la barra superior. -->
   <div class="relative flex min-h-14 flex-none items-center border-b border-border px-3 py-2">
     {#if collapsed}
-      <div class="mx-auto flex h-7 w-7 flex-none items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary" title={branch.label}>
+      <div
+        class="mx-auto flex h-7 w-7 flex-none items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary"
+        title={branch.label}
+      >
         {branch.active?.name.slice(0, 1).toUpperCase() ?? 'T'}
       </div>
     {:else}
       <div class="w-full min-w-0">
-        <label for="operational-branch" class="mb-1 block truncate text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">Sucursal operativa</label>
+        <label
+          for="operational-branch"
+          class="mb-1 block truncate text-[10px] font-semibold uppercase tracking-wide text-foreground-muted"
+          >Sucursal operativa</label
+        >
         <div class="relative">
-          <svg class="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-primary" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/></svg>
+          <svg
+            class="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-primary"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+            ><path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h.01M15 10h.01M9 14h.01M15 14h.01" /></svg
+          >
           <select
             id="operational-branch"
             value={branch.id ?? '__all__'}
@@ -77,9 +99,20 @@
               <option value={item.id}>{item.name}</option>
             {/each}
           </select>
-          <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-foreground-muted" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          <svg
+            class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-foreground-muted"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg
+          >
         </div>
-        {#if branchError}<p class="mt-1 truncate text-[10px] text-danger" title={branchError}>{branchError}</p>{/if}
+        {#if branchError}<p class="mt-1 truncate text-[10px] text-danger" title={branchError}>
+            {branchError}
+          </p>{/if}
       </div>
     {/if}
   </div>
@@ -91,21 +124,46 @@
         {#if collapsed}
           {#if gi > 0}<div class="mx-1 my-2 border-t border-border"></div>{/if}
         {:else}
-          <p class="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-foreground-muted/90">{group.label}</p>
+          <p
+            class="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-foreground-muted/90"
+          >
+            {group.label}
+          </p>
         {/if}
         {#each group.items as item (item.route)}
           {#if isVisible(item)}
             <a
               href={item.route}
               onclick={handleClick}
-              class="group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors duration-150 {isActive(item.route) ? 'bg-surface-hover font-medium text-foreground' : 'text-foreground/80 hover:bg-surface-hover/70 hover:text-foreground'} {collapsed ? 'justify-center' : ''}"
+              class="group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors duration-150 {isActive(
+                item.route
+              )
+                ? 'bg-surface-hover font-medium text-foreground'
+                : 'text-foreground/80 hover:bg-surface-hover/70 hover:text-foreground'} {collapsed
+                ? 'justify-center'
+                : ''}"
               title={collapsed ? item.label : ''}
               aria-current={isActive(item.route) ? 'page' : undefined}
             >
               {#if isActive(item.route) && !collapsed}
-                <div class="absolute left-0 top-1/2 h-4 -translate-y-1/2 w-0.5 rounded-r bg-foreground"></div>
+                <div
+                  class="absolute left-0 top-1/2 h-4 -translate-y-1/2 w-0.5 rounded-r bg-foreground"
+                ></div>
               {/if}
-              <svg class="flex-none {isActive(item.route) ? 'text-foreground' : 'text-foreground-muted group-hover:text-foreground'}" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <svg
+                class="flex-none {isActive(item.route)
+                  ? 'text-foreground'
+                  : 'text-foreground-muted group-hover:text-foreground'}"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.85"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
                 <path d={item.icon} />
               </svg>
               {#if !collapsed}
@@ -125,12 +183,18 @@
   {#if !collapsed}
     <div class="flex-none border-t border-border px-3 py-2.5">
       <div class="flex items-center gap-2.5 rounded-md px-1.5 py-1">
-        <div class="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-foreground/10 text-xs font-semibold text-foreground">
+        <div
+          class="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-foreground/10 text-xs font-semibold text-foreground"
+        >
           {session.user?.username?.[0]?.toUpperCase() ?? '?'}
         </div>
         <div class="min-w-0 flex-1">
-          <p class="truncate text-xs font-semibold text-foreground">{session.user?.username ?? '...'}</p>
-          <p class="truncate text-[11px] font-medium text-foreground-muted">{session.user?.is_superuser ? 'Super Admin' : 'Usuario'}</p>
+          <p class="truncate text-xs font-semibold text-foreground">
+            {session.user?.username ?? '...'}
+          </p>
+          <p class="truncate text-[11px] font-medium text-foreground-muted">
+            {session.user?.is_superuser ? 'Super Admin' : 'Usuario'}
+          </p>
         </div>
       </div>
     </div>

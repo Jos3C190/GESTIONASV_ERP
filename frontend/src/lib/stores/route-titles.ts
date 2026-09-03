@@ -12,6 +12,7 @@ const TITLES: Record<string, string> = {
   '/warehouses': 'Almacenes',
   '/warehouse-categories': 'Categorías de almacén',
   '/audit-log': 'Bitácora',
+  '/documents': 'Documentos',
   '/suppliers': 'Proveedores',
   '/products': 'Productos',
   '/inventory/categories': 'Categorías de productos',
@@ -36,6 +37,7 @@ export function routeTitle(pathname: string): string {
   }
   // Sub-rutas de empleados (crear / editar / detalle) -> "Empleados"
   if (pathname.startsWith('/employees')) return TITLES['/employees'] ?? 'Empleados';
+  if (pathname.startsWith('/documents')) return TITLES['/documents'] ?? 'Documentos';
   // Sub-rutas de sucursales (detalle) -> "Sucursales"
   if (pathname.startsWith('/branches')) return TITLES['/branches'] ?? 'Sucursales';
   // Sub-rutas de almacenes (detalle) -> "Almacenes"

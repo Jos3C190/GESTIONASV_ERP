@@ -18,6 +18,7 @@
   import FormField from '$lib/components/ui/FormField.svelte';
   import { confirmation } from '$lib/stores/confirmation.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
+  import EmployeeDocumentsPanel from '$lib/features/employees/components/EmployeeDocumentsPanel.svelte';
 
   let emp = $state<EmployeeOut | null>(null);
   let departments = $state<DepartmentOut[]>([]);
@@ -31,8 +32,15 @@
   let fPrimary = $state(true);
   let fShift = $state('');
   let assignmentError = $state<string | null>(null);
+  let activeTab = $state<'summary' | 'documents' | 'assignments'>('summary');
 
   let empId = $derived(page.params.id);
+  let canViewEmployeeDocuments = $derived(permissions.hasPermission('employee_documents:read'));
+
+  $effect(() => {
+    const canView = canViewEmployeeDocuments;
+    if (!canView && activeTab === 'documents') activeTab = 'summary';
+  });
 
   async function loadData() {
     if (!empId) return;
@@ -269,103 +277,148 @@
       </div>
     </Card>
 
-    <!-- Grid de datos -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-      <Card class="p-6">
-        <h3 class="mb-4 text-sm font-semibold text-foreground">Datos laborales</h3>
-        <dl class="space-y-3 text-sm">
-          <div class="flex justify-between">
-            <dt class="text-foreground-muted">Departamento</dt>
-            <dd class="text-foreground text-right">{deptName(emp.department_id)}</dd>
-          </div>
-          <div class="flex justify-between">
-            <dt class="text-foreground-muted">Cargo</dt>
-            <dd class="text-foreground text-right">{emp.position ?? '—'}</dd>
-          </div>
-          <div class="flex justify-between">
-            <dt class="text-foreground-muted">Fecha contratación</dt>
-            <dd class="text-foreground text-right">{fmtDate(emp.hire_date)}</dd>
-          </div>
-          <div class="flex justify-between">
-            <dt class="text-foreground-muted">Fecha terminación</dt>
-            <dd class="text-foreground text-right">{fmtDate(emp.termination_date)}</dd>
-          </div>
-          <div class="flex justify-between">
-            <dt class="text-foreground-muted">Estado</dt>
-            <dd class="text-foreground text-right">{emp.status}</dd>
-          </div>
-        </dl>
-      </Card>
-
-      <Card class="p-6">
-        <h3 class="mb-4 text-sm font-semibold text-foreground">Datos personales</h3>
-        <dl class="space-y-3 text-sm">
-          <div class="flex justify-between">
-            <dt class="text-foreground-muted">Documento</dt>
-            <dd class="text-foreground text-right">{emp.document_id ?? '—'}</dd>
-          </div>
-          <div class="flex justify-between">
-            <dt class="text-foreground-muted">Fecha nacimiento</dt>
-            <dd class="text-foreground text-right">{fmtDate(emp.birth_date)}</dd>
-          </div>
-          <div class="flex justify-between">
-            <dt class="text-foreground-muted">Teléfono</dt>
-            <dd class="text-foreground text-right">{emp.phone ?? '—'}</dd>
-          </div>
-          <div>
-            <dt class="text-foreground-muted">Dirección</dt>
-            <dd class="text-foreground mt-1">{emp.address ?? '—'}</dd>
-          </div>
-        </dl>
-      </Card>
+    <div
+      class="mb-5 flex gap-1 overflow-x-auto border-b border-border"
+      role="tablist"
+      aria-label="Secciones del empleado"
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === 'summary'}
+        class="border-b-2 px-4 py-2.5 text-sm font-medium {activeTab === 'summary'
+          ? 'border-primary text-foreground'
+          : 'border-transparent text-foreground-muted hover:text-foreground'}"
+        onclick={() => (activeTab = 'summary')}>Resumen</button
+      >
+      {#if canViewEmployeeDocuments}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'documents'}
+          class="border-b-2 px-4 py-2.5 text-sm font-medium {activeTab === 'documents'
+            ? 'border-primary text-foreground'
+            : 'border-transparent text-foreground-muted hover:text-foreground'}"
+          onclick={() => (activeTab = 'documents')}>Documentos</button
+        >
+      {/if}
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === 'assignments'}
+        class="border-b-2 px-4 py-2.5 text-sm font-medium {activeTab === 'assignments'
+          ? 'border-primary text-foreground'
+          : 'border-transparent text-foreground-muted hover:text-foreground'}"
+        onclick={() => (activeTab = 'assignments')}
+        >Asignaciones <span class="ml-1 text-xs text-foreground-subtle">{assignments.length}</span
+        ></button
+      >
     </div>
 
-    <Card class="mt-5 p-6">
-      <div class="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <h3 class="text-sm font-semibold text-foreground">Asignaciones a sucursales</h3>
-          <p class="mt-1 text-xs text-foreground-muted">
-            Historial operativo y sucursal principal.
-          </p>
-        </div>
-        <Button
-          size="sm"
-          onclick={() => {
-            assignmentError = null;
-            fBranchId = '';
-            showAssignmentModal = true;
-          }}>Asignar sucursal</Button
-        >
-      </div>
-      {#if assignments.length === 0}
-        <p class="rounded-lg bg-surface-muted p-4 text-sm text-foreground-muted">
-          Este empleado todavía no tiene sucursales asignadas.
-        </p>
-      {:else}
-        <div class="divide-y divide-border rounded-lg border border-border">
-          {#each assignments as item (item.id)}
-            <div class="flex flex-wrap items-center justify-between gap-3 p-3">
-              <div>
-                <p class="text-sm font-medium text-foreground">
-                  {branchName(item.branch_id)}
-                  {item.is_primary ? '· Principal' : ''}
-                </p>
-                <p class="text-xs text-foreground-muted">
-                  Desde {fmtDate(item.assigned_from)}{item.assigned_until
-                    ? ` hasta ${fmtDate(item.assigned_until)}`
-                    : ''}{item.shift ? ` · Turno ${item.shift}` : ''}
-                </p>
-              </div>
-              {#if item.is_active}<Button
-                  variant="ghost"
-                  size="sm"
-                  onclick={() => endAssignment(item.id)}>Finalizar</Button
-                >{:else}<span class="text-xs text-foreground-subtle">Finalizada</span>{/if}
+    {#if activeTab === 'summary'}
+      <!-- Grid de datos -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <Card class="p-6">
+          <h3 class="mb-4 text-sm font-semibold text-foreground">Datos laborales</h3>
+          <dl class="space-y-3 text-sm">
+            <div class="flex justify-between">
+              <dt class="text-foreground-muted">Departamento</dt>
+              <dd class="text-foreground text-right">{deptName(emp.department_id)}</dd>
             </div>
-          {/each}
+            <div class="flex justify-between">
+              <dt class="text-foreground-muted">Cargo</dt>
+              <dd class="text-foreground text-right">{emp.position ?? '—'}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-foreground-muted">Fecha contratación</dt>
+              <dd class="text-foreground text-right">{fmtDate(emp.hire_date)}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-foreground-muted">Fecha terminación</dt>
+              <dd class="text-foreground text-right">{fmtDate(emp.termination_date)}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-foreground-muted">Estado</dt>
+              <dd class="text-foreground text-right">{emp.status}</dd>
+            </div>
+          </dl>
+        </Card>
+
+        <Card class="p-6">
+          <h3 class="mb-4 text-sm font-semibold text-foreground">Datos personales</h3>
+          <dl class="space-y-3 text-sm">
+            <div class="flex justify-between">
+              <dt class="text-foreground-muted">Documento</dt>
+              <dd class="text-foreground text-right">{emp.document_id ?? '—'}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-foreground-muted">Fecha nacimiento</dt>
+              <dd class="text-foreground text-right">{fmtDate(emp.birth_date)}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-foreground-muted">Teléfono</dt>
+              <dd class="text-foreground text-right">{emp.phone ?? '—'}</dd>
+            </div>
+            <div>
+              <dt class="text-foreground-muted">Dirección</dt>
+              <dd class="text-foreground mt-1">{emp.address ?? '—'}</dd>
+            </div>
+          </dl>
+        </Card>
+      </div>
+    {:else if activeTab === 'assignments'}
+      <Card class="mt-5 p-6">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-semibold text-foreground">Asignaciones a sucursales</h3>
+            <p class="mt-1 text-xs text-foreground-muted">
+              Historial operativo y sucursal principal.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onclick={() => {
+              assignmentError = null;
+              fBranchId = '';
+              showAssignmentModal = true;
+            }}>Asignar sucursal</Button
+          >
         </div>
-      {/if}
-    </Card>
+        {#if assignments.length === 0}
+          <p class="rounded-lg bg-surface-muted p-4 text-sm text-foreground-muted">
+            Este empleado todavía no tiene sucursales asignadas.
+          </p>
+        {:else}
+          <div class="divide-y divide-border rounded-lg border border-border">
+            {#each assignments as item (item.id)}
+              <div class="flex flex-wrap items-center justify-between gap-3 p-3">
+                <div>
+                  <p class="text-sm font-medium text-foreground">
+                    {branchName(item.branch_id)}
+                    {item.is_primary ? '· Principal' : ''}
+                  </p>
+                  <p class="text-xs text-foreground-muted">
+                    Desde {fmtDate(item.assigned_from)}{item.assigned_until
+                      ? ` hasta ${fmtDate(item.assigned_until)}`
+                      : ''}{item.shift ? ` · Turno ${item.shift}` : ''}
+                  </p>
+                </div>
+                {#if item.is_active}<Button
+                    variant="ghost"
+                    size="sm"
+                    onclick={() => endAssignment(item.id)}>Finalizar</Button
+                  >{:else}<span class="text-xs text-foreground-subtle">Finalizada</span>{/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </Card>
+    {:else}
+      <EmployeeDocumentsPanel
+        employeeId={emp.id}
+        employeeName={`${emp.first_name} ${emp.last_name}`}
+      />
+    {/if}
   {/if}
 </div>
 

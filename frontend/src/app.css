@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Geist is bundled locally so the document library keeps the same metrics
+ * and hierarchy when the network is unavailable. The SIL OFL license is
+ * included next to the font assets in ``static/fonts``. */
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('/fonts/geist-sans-variable.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/geist-mono-variable.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 /*
  * Design tokens — "Geist" inspired (Vercel).
  * Clean monochrome palette with blue accent. Pure white surfaces, subtle
