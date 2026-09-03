@@ -40,10 +40,45 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("media.delete", "Eliminar imágenes", "media"),
     PermissionSpec("documents:read", "Consultar documentos", "documents"),
     PermissionSpec("documents:upload", "Cargar documentos", "documents"),
+    PermissionSpec("documents:update", "Editar metadatos documentales", "documents"),
     PermissionSpec("documents:download", "Descargar documentos", "documents"),
     PermissionSpec("documents:delete", "Enviar documentos a la papelera", "documents"),
     PermissionSpec("documents:restore", "Restaurar documentos", "documents"),
     PermissionSpec("documents:process", "Procesar documentos y reintentar OCR", "documents"),
+    PermissionSpec(
+        "documents:categories", "Gestionar categorías documentales generales", "documents"
+    ),
+    PermissionSpec(
+        "employee_documents:read", "Consultar expedientes documentales de empleados", "documents"
+    ),
+    PermissionSpec(
+        "employee_documents:upload", "Cargar documentos al expediente de empleados", "documents"
+    ),
+    PermissionSpec(
+        "employee_documents:update", "Editar metadatos del expediente de empleados", "documents"
+    ),
+    PermissionSpec(
+        "employee_documents:download",
+        "Descargar documentos del expediente de empleados",
+        "documents",
+    ),
+    PermissionSpec(
+        "employee_documents:delete", "Enviar documentos del expediente a la papelera", "documents"
+    ),
+    PermissionSpec(
+        "employee_documents:restore", "Restaurar documentos del expediente", "documents"
+    ),
+    PermissionSpec("employee_documents:process", "Procesar documentos del expediente", "documents"),
+    PermissionSpec(
+        "employee_documents:restricted",
+        "Consultar documentos restringidos del expediente",
+        "documents",
+    ),
+    PermissionSpec(
+        "employee_documents:manage_categories",
+        "Gestionar categorías del expediente de empleados",
+        "documents",
+    ),
     PermissionSpec("departments:manage", "Gestionar departamentos", "employees"),
     PermissionSpec("departments:delete", "Eliminar departamentos lógicamente", "employees"),
     PermissionSpec("departments:restore", "Restaurar departamentos eliminados", "employees"),
@@ -221,6 +256,15 @@ BASE_ROLES: tuple[tuple[str, str, bool, tuple[str, ...]], ...] = (
             "employees:create",
             "employees:update",
             "employees:delete",
+            "employee_documents:read",
+            "employee_documents:upload",
+            "employee_documents:update",
+            "employee_documents:download",
+            "employee_documents:delete",
+            "employee_documents:restore",
+            "employee_documents:process",
+            "employee_documents:restricted",
+            "employee_documents:manage_categories",
             "media.upload",
             "media.delete",
             "departments:manage",

@@ -14,7 +14,9 @@ from app.api.v1.routers import (
     catalog,
     dashboard,
     departments,
+    document_categories,
     documents,
+    employee_documents,
     employees,
     health,
     inventory,
@@ -39,6 +41,8 @@ api_router.include_router(roles.router, prefix="/api/v1")
 api_router.include_router(roles.me_router, prefix="/api/v1")
 api_router.include_router(departments.router, prefix="/api/v1")
 api_router.include_router(documents.router, prefix="/api/v1")
+api_router.include_router(document_categories.router, prefix="/api/v1")
+api_router.include_router(employee_documents.router, prefix="/api/v1")
 api_router.include_router(employees.router, prefix="/api/v1")
 api_router.include_router(workforce.router, prefix="/api/v1")
 api_router.include_router(audit_logs.router, prefix="/api/v1")

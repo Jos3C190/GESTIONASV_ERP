@@ -26,7 +26,7 @@ from app.infrastructure.observability import record_gauge
 from app.infrastructure.redis_client import get_redis_client, redis_health
 
 router = APIRouter(prefix="/health", tags=["health"])
-EXPECTED_SCHEMA_REVISION = "0042"
+EXPECTED_SCHEMA_REVISION = "0043"
 HTTP_OK_MIN = 200
 HTTP_REDIRECTION_MIN = 300
 

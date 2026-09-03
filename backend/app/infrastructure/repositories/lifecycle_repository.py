@@ -23,6 +23,7 @@ from app.infrastructure.models.catalog import (
     UnitModel,
 )
 from app.infrastructure.models.document import DocumentAssetModel
+from app.infrastructure.models.document_record import DocumentRecordModel
 from app.infrastructure.models.employee import (
     Department,
     DepartmentBranchAssignment,
@@ -245,6 +246,7 @@ class SqlAlchemyLifecycleRepository:
         allow_global: bool,
     ) -> list[str]:
         blockers: list[str] = []
+        checks: tuple[tuple[type[Any], Any, str], ...]
         if resource == "companies":
             checks = (
                 (Branch, Branch.company_id == record.id, "sucursales"),
@@ -521,11 +523,13 @@ class SqlAlchemyLifecycleRepository:
         )
 
     @staticmethod
-    def _deleted_scope_statement(
+    def _deleted_scope_statement(  # noqa: C901
         policy: ResourcePolicy,
         company_id: uuid.UUID,
         *,
         include_all_companies: bool,
+        document_module: str | None = None,
+        include_restricted: bool = True,
     ) -> Any:
         """Build the tenant-safe base SELECT used by trash queries."""
 
@@ -555,6 +559,19 @@ class SqlAlchemyLifecycleRepository:
         elif policy.scope == "user":
             stmt = stmt.join(UserCompany, UserCompany.user_id == policy.model.id).where(
                 UserCompany.company_id == company_id
+            )
+        if policy.model is DocumentAssetModel and (
+            document_module is not None or not include_restricted
+        ):
+            stmt = stmt.join(DocumentRecordModel, DocumentRecordModel.id == DocumentAssetModel.id)
+            if document_module is not None:
+                stmt = stmt.where(DocumentRecordModel.module == document_module)
+        if not include_restricted and policy.model is DocumentAssetModel:
+            stmt = stmt.where(
+                or_(
+                    DocumentRecordModel.module != "employees",
+                    DocumentRecordModel.confidentiality != "restricted",
+                )
             )
         return stmt.execution_options(include_deleted=True)
 
@@ -598,6 +615,8 @@ class SqlAlchemyLifecycleRepository:
         search: str | None = None,
         include_global: bool = False,
         include_all_companies: bool = False,
+        document_module: str | None = None,
+        include_restricted: bool = True,
     ) -> tuple[list[DeletedRecord], int]:
         resources = [resource] if resource else list(RESOURCE_POLICIES)
         items: list[DeletedRecord] = []
@@ -613,6 +632,8 @@ class SqlAlchemyLifecycleRepository:
                 policy,
                 company_id,
                 include_all_companies=include_all_companies,
+                document_module=document_module,
+                include_restricted=include_restricted,
             )
             stmt = self._with_deleted_search(stmt, policy, search)
             count_stmt = (
@@ -648,6 +669,8 @@ class SqlAlchemyLifecycleRepository:
                 policy,
                 company_id,
                 include_all_companies=include_all_companies,
+                document_module=document_module,
+                include_restricted=include_restricted,
             )
             stmt = self._with_deleted_search(stmt, policy, search)
             count_stmt = (

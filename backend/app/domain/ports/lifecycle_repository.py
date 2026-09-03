@@ -31,6 +31,8 @@ class LifecycleRepository(Protocol):
         search: str | None = None,
         include_global: bool = False,
         include_all_companies: bool = False,
+        document_module: str | None = None,
+        include_restricted: bool = True,
     ) -> tuple[list[DeletedRecord], int]: ...
 
     async def soft_delete(

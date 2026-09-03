@@ -60,6 +60,16 @@ class E2EObjectStorage:
     ) -> str:
         return f"http://object-storage.test/download/{uuid.uuid4()}?filename={filename}"
 
+    async def presign_preview(
+        self,
+        key: str,
+        *,
+        filename: str,
+        content_type: str,
+        expires_seconds: int,
+    ) -> str:
+        return f"http://object-storage.test/preview/{uuid.uuid4()}?filename={filename}"
+
     async def head(self, key: str) -> StoredObjectInfo | None:
         if key not in self.objects:
             return None
@@ -278,9 +288,14 @@ async def test_pdf_is_immediately_available_then_exposes_explicit_ocr_variant(
     pending = await e2e_client.post(
         f"/api/v1/documents/{document_id}/download-url?variant=ocr", headers=headers
     )
+    pending_preview = await e2e_client.post(
+        f"/api/v1/documents/{document_id}/preview-url?variant=ocr", headers=headers
+    )
     assert original.status_code == 200
     assert pending.status_code == 409
     assert pending.json()["code"] == "document_ocr_not_ready"
+    assert pending_preview.status_code == 409
+    assert pending_preview.json()["code"] == "document_ocr_not_ready"
 
     async with async_session_factory() as session:
         derivative = (
@@ -301,10 +316,14 @@ async def test_pdf_is_immediately_available_then_exposes_explicit_ocr_variant(
     ocr_download = await e2e_client.post(
         f"/api/v1/documents/{document_id}/download-url?variant=ocr", headers=headers
     )
+    ocr_preview = await e2e_client.post(
+        f"/api/v1/documents/{document_id}/preview-url?variant=ocr", headers=headers
+    )
     assert detail.status_code == 200
     assert detail.json()["ocr_status"] == "ready"
     assert detail.json()["ocr_available"] is True
     assert ocr_download.status_code == 200
+    assert ocr_preview.status_code == 200
 
 
 async def test_superadmin_can_retry_failed_ocr(e2e_client, monkeypatch: pytest.MonkeyPatch) -> None:

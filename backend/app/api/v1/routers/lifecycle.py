@@ -6,6 +6,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy import select
 
 from app.api.v1.company_access import request_company_id, require_company_wide_scope
 from app.api.v1.deps import (
@@ -20,6 +21,7 @@ from app.application.audit.audit_service import AuditService
 from app.application.lifecycle import LifecycleService
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.exceptions import AuthorizationError, NotFoundError
+from app.infrastructure.models.document_record import DocumentRecordModel
 from app.infrastructure.repositories import SqlAlchemyLifecycleRepository
 
 router = APIRouter(prefix="/lifecycle", tags=["lifecycle"])
@@ -57,6 +59,7 @@ async def _require_resource_permission(
     current: CurrentUser,
     company_id: uuid.UUID,
     checker: CheckPermissionUseCase,
+    document_module: str | None = None,
 ) -> None:
     codes = RESOURCE_PERMISSIONS.get(resource)
     if codes is None:
@@ -65,7 +68,14 @@ async def _require_resource_permission(
         )
     if current.is_superuser:
         return
-    result = await checker.execute(current.id, company_id, codes[action_index])
+    required_code = codes[action_index]
+    if resource == "documents" and document_module == "employees":
+        employee_code = ("employee_documents:delete", "employee_documents:restore")[action_index]
+        result = await checker.execute(current.id, company_id, employee_code)
+        if not result.allowed:
+            result = await checker.execute(current.id, company_id, required_code)
+    else:
+        result = await checker.execute(current.id, company_id, required_code)
     if not result.allowed:
         raise AuthorizationError(
             "No tiene permiso para administrar el ciclo de vida de este registro.",
@@ -111,7 +121,7 @@ async def _operation_company_context(
     "/trash",
     response_model=DeletedRecordsPage,
 )
-async def list_trash(
+async def list_trash(  # noqa: C901
     request: Request,
     session: SessionDep,
     current: CurrentUser,
@@ -122,6 +132,8 @@ async def list_trash(
     search: str | None = Query(None, max_length=120),
 ) -> DeletedRecordsPage:
     include_all_companies = resource == "companies"
+    document_module: str | None = None
+    include_restricted = current.is_superuser
     if include_all_companies:
         if not current.is_superuser:
             raise AuthorizationError(
@@ -136,6 +148,31 @@ async def list_trash(
                 code="permission_trash_superuser_required",
             )
         company_id = uuid.UUID(int=0)
+    elif resource == "documents":
+        company_id = request_company_id(request)
+        await require_company_wide_scope(session, current, company_id)
+        if not current.is_superuser:
+            lifecycle_allowed = (
+                await checker.execute(current.id, company_id, "lifecycle:read")
+            ).allowed
+            general_allowed = (
+                await checker.execute(current.id, company_id, "documents:restore")
+            ).allowed
+            employee_allowed = (
+                await checker.execute(current.id, company_id, "employee_documents:restore")
+            ).allowed
+            if not lifecycle_allowed and not general_allowed and not employee_allowed:
+                raise AuthorizationError(
+                    "No tiene permiso para consultar los documentos en la papelera.",
+                    code="lifecycle_forbidden",
+                )
+            if not general_allowed and not lifecycle_allowed:
+                document_module = "employees"
+            elif not employee_allowed and not lifecycle_allowed:
+                document_module = "general"
+            include_restricted = (
+                await checker.execute(current.id, company_id, "employee_documents:restricted")
+            ).allowed
     else:
         company_id = request_company_id(request)
         await require_company_wide_scope(session, current, company_id)
@@ -154,6 +191,8 @@ async def list_trash(
         search=search,
         include_global=current.is_superuser,
         include_all_companies=include_all_companies,
+        document_module=document_module,
+        include_restricted=include_restricted,
     )
     return DeletedRecordsPage(
         items=[DeletedRecordOut.model_validate(item, from_attributes=True) for item in items],
@@ -184,8 +223,26 @@ async def soft_delete_record(
         session=session,
         current=current,
     )
+    document_module: str | None = None
+    if resource == "documents":
+        try:
+            document_uuid = uuid.UUID(record_id)
+        except ValueError:
+            document_uuid = None
+        if document_uuid is not None:
+            document = await session.scalar(
+                select(DocumentRecordModel)
+                .where(DocumentRecordModel.id == document_uuid)
+                .execution_options(include_deleted=True)
+            )
+            document_module = document.module if document is not None else None
     await _require_resource_permission(
-        resource, 0, current=current, company_id=company_id, checker=checker
+        resource,
+        0,
+        current=current,
+        company_id=company_id,
+        checker=checker,
+        document_module=document_module,
     )
     deleted = await _service(session).delete(
         resource,
@@ -238,8 +295,26 @@ async def restore_record(
         session=session,
         current=current,
     )
+    document_module: str | None = None
+    if resource == "documents":
+        try:
+            document_uuid = uuid.UUID(record_id)
+        except ValueError:
+            document_uuid = None
+        if document_uuid is not None:
+            document = await session.scalar(
+                select(DocumentRecordModel)
+                .where(DocumentRecordModel.id == document_uuid)
+                .execution_options(include_deleted=True)
+            )
+            document_module = document.module if document is not None else None
     await _require_resource_permission(
-        resource, 1, current=current, company_id=company_id, checker=checker
+        resource,
+        1,
+        current=current,
+        company_id=company_id,
+        checker=checker,
+        document_module=document_module,
     )
     restored = await _service(session).restore(
         resource,

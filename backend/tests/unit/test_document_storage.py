@@ -121,6 +121,16 @@ class FakeObjectStorage:
     ) -> str:
         return f"http://storage.local/erp-documents/{key}?download={filename}"
 
+    async def presign_preview(
+        self,
+        key: str,
+        *,
+        filename: str,
+        content_type: str,
+        expires_seconds: int,
+    ) -> str:
+        return f"http://storage.local/erp-documents/{key}?preview={filename}"
+
     async def head(self, key: str) -> StoredObjectInfo | None:
         payload = self.payloads.get(key)
         declaration = self.declarations.get(key)

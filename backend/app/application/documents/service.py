@@ -341,6 +341,16 @@ class DocumentService:
             )
         return self._attach_ocr(document, derivative)
 
+    async def enrich(self, document: DocumentAsset) -> DocumentAsset:
+        """Attach the current OCR projection to an already loaded asset.
+
+        Record repositories intentionally know nothing about OCR derivatives;
+        this small public adapter keeps that concern in the document service
+        and avoids exposing storage keys to the API layer.
+        """
+        derivative = await self._derivatives.get_ocr(document.id) if self._derivatives else None
+        return self._attach_ocr(document, derivative)
+
     def _ensure_enabled(self) -> None:
         if not self._settings.OBJECT_STORAGE_ENABLED:
             raise InfrastructureError(
@@ -407,8 +417,7 @@ class DocumentService:
         document = await self._repository.get(document_id)
         if document is None or document.company_id != company_id:
             raise NotFoundError("Documento no encontrado.", code="document_not_found")
-        derivative = await self._derivatives.get_ocr(document.id) if self._derivatives else None
-        return self._attach_ocr(document, derivative)
+        return await self.enrich(document)
 
     async def list(
         self,
@@ -577,6 +586,57 @@ class DocumentService:
             content_type = derivative.content_type
             action = "DOCUMENT_OCR_DOWNLOAD_URL_ISSUED"
         url = await self._storage.presign_download(
+            object_key,
+            filename=filename,
+            content_type=content_type,
+            expires_seconds=self._settings.OBJECT_STORAGE_DOWNLOAD_TTL_SECONDS,
+        )
+        await self._audit.record(
+            action=action,
+            user_id=actor_id,
+            company_id=company_id,
+            resource_type="documents",
+            resource_id=str(document.id),
+        )
+        return url, expires_at
+
+    async def preview_url(
+        self,
+        company_id: uuid.UUID,
+        document_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        *,
+        variant: str = "original",
+    ) -> tuple[str, datetime]:
+        document = await self.get(company_id, document_id)
+        if document.status != "active" or document.extension != ".pdf":
+            raise ConflictError(
+                "Solo los PDF activos pueden previsualizarse.",
+                code="document_preview_not_available",
+            )
+        expires_at = datetime.now(UTC) + timedelta(
+            seconds=self._settings.OBJECT_STORAGE_DOWNLOAD_TTL_SECONDS
+        )
+        object_key = document.object_key
+        filename = document.original_filename
+        content_type = document.detected_content_type or "application/pdf"
+        action = "DOCUMENT_PREVIEW_URL_ISSUED"
+        if variant == "ocr":
+            derivative = await self._derivatives.get_ocr(document.id) if self._derivatives else None
+            if derivative is None or derivative.status != "ready":
+                raise ConflictError(
+                    "La versión OCR todavía no está disponible.", code="document_ocr_not_ready"
+                )
+            object_key = derivative.object_key
+            filename = f"{Path(document.original_filename).stem}-ocr.pdf"
+            content_type = derivative.content_type
+            action = "DOCUMENT_OCR_PREVIEW_URL_ISSUED"
+        elif variant != "original":
+            raise ConflictError(
+                "La variante de vista previa no es válida.",
+                code="document_preview_not_available",
+            )
+        url = await self._storage.presign_preview(
             object_key,
             filename=filename,
             content_type=content_type,

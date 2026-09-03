@@ -45,6 +45,7 @@ from app.application.locations.use_cases import LocationUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.exceptions import AuthorizationError
 from app.domain.entities.warehouse_capacity import occupancy_without_inventory
+from app.infrastructure.document_categories import ensure_default_document_categories
 from app.infrastructure.media_assets import attach_media_by_url
 from app.infrastructure.models.audit import AuditLog
 from app.infrastructure.models.employee import Employee, EmployeeBranchAssignment
@@ -547,6 +548,7 @@ async def create_company(body: CompanyIn, request: Request, session: SessionDep)
     await _validate_address(session, body.department_id, body.municipality_id, body.district_id)
     created = await _create(session, Company, body, user_id=_actor_id(request))
     company_id = uuid.UUID(created["id"])
+    await ensure_default_document_categories(session, company_id, _actor_id(request))
     await attach_media_by_url(
         session,
         secure_url=body.logo,

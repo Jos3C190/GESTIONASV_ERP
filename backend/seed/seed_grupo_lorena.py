@@ -886,6 +886,7 @@ def _schedule(branch: BranchSeed) -> list[dict[str, str | None]]:
 
 async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed transaction atomic
     from app.core.security import hash_password
+    from app.infrastructure.document_categories import ensure_default_document_categories
     from app.infrastructure.models.audit import AuditLog
     from app.infrastructure.models.employee import (
         Department,
@@ -985,9 +986,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
 
         headquarters_district, headquarters_municipality = geography["San Miguel"]
         company = await session.scalar(
-            select(Company)
-            .where(Company.id == COMPANY_ID)
-            .execution_options(include_deleted=True)
+            select(Company).where(Company.id == COMPANY_ID).execution_options(include_deleted=True)
         )
         company_created = company is None
         if company is None:
@@ -1025,6 +1024,11 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
         )
         company.is_active = True
         await session.flush()
+        # The seed creates the canonical company after Alembic has already
+        # run.  Bootstrap the document catalogue here as well as in the API
+        # company-creation path so a fresh local/test database can accept
+        # document uploads immediately.
+        await ensure_default_document_categories(session, company.id, superadmin_id)
         for role in roles.values():
             if not role.is_system:
                 role.company_id = company.id
@@ -1491,7 +1495,9 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                             Location.warehouse_id == warehouse.id,
                             func.lower(Location.code) == location_code.casefold(),
                         )
-                        .order_by(Location.deleted_at.asc().nullsfirst(), Location.created_at.desc())
+                        .order_by(
+                            Location.deleted_at.asc().nullsfirst(), Location.created_at.desc()
+                        )
                         .limit(1)
                         .execution_options(include_deleted=True)
                     )
@@ -1529,9 +1535,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     location.operational_max_weight_kg = 8_000 if storage_eligible else None
                     location.certified_usable_volume_m3 = 75 if storage_eligible else None
                     location.operational_usable_volume_m3 = 60 if storage_eligible else None
-                    location.capacity_profile = (
-                        "general_mixed" if storage_eligible else "transit"
-                    )
+                    location.capacity_profile = "general_mixed" if storage_eligible else "transit"
                     location.capacity_enforcement_mode = (
                         "enforce" if storage_eligible else "disabled"
                     )

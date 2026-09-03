@@ -20,7 +20,7 @@ from app.application.auth.get_current_user import GetCurrentUserUseCase
 from app.application.auth.logout import LogoutUseCase
 from app.application.auth.refresh_token import RefreshTokenUseCase
 from app.application.auth.register_user import RegisterUserUseCase
-from app.application.documents import DocumentService
+from app.application.documents import DocumentRecordService, DocumentService
 from app.application.password_policy import PasswordPolicy
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.config import settings
@@ -28,7 +28,9 @@ from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.domain.entities.user import User
 from app.domain.ports.audit_repository import AuditRepository
 from app.domain.ports.document_derivative_repository import DocumentDerivativeRepository
+from app.domain.ports.document_record_repository import DocumentRecordRepository
 from app.domain.ports.document_repository import DocumentRepository
+from app.domain.ports.employee_repository import EmployeeRepository
 from app.domain.ports.malware_scanner import MalwareScanner
 from app.domain.ports.object_storage import ObjectStorage
 from app.domain.ports.permission_repository import PermissionRepository
@@ -42,6 +44,7 @@ from app.infrastructure.object_storage import S3ObjectStorage
 from app.infrastructure.repositories import (
     JwtTokenService,
     SqlAlchemyDocumentDerivativeRepository,
+    SqlAlchemyDocumentRecordRepository,
     SqlAlchemyDocumentRepository,
     SqlAlchemyPermissionRepository,
     SqlAlchemyRefreshTokenRepository,
@@ -92,6 +95,16 @@ def get_document_derivative_repository(session: SessionDep) -> DocumentDerivativ
     return SqlAlchemyDocumentDerivativeRepository(session)
 
 
+def get_document_record_repository(session: SessionDep) -> DocumentRecordRepository:
+    return SqlAlchemyDocumentRecordRepository(session)
+
+
+def get_employee_repository(session: SessionDep) -> EmployeeRepository:
+    from app.infrastructure.repositories import SqlAlchemyEmployeeRepository
+
+    return SqlAlchemyEmployeeRepository(session)
+
+
 def get_object_storage() -> ObjectStorage:
     return S3ObjectStorage(settings)
 
@@ -112,6 +125,15 @@ def get_document_service(
     ],
 ) -> DocumentService:
     return DocumentService(repository, storage, scanner, audit, settings, derivatives)
+
+
+def get_document_record_service(
+    documents: Annotated[DocumentService, Depends(get_document_service)],
+    records: Annotated[DocumentRecordRepository, Depends(get_document_record_repository)],
+    employees: Annotated[EmployeeRepository, Depends(get_employee_repository)],
+    audit: Annotated[AuditService, Depends(get_audit_service)],
+) -> DocumentRecordService:
+    return DocumentRecordService(documents, records, employees, audit)
 
 
 def get_token_service() -> TokenService:
@@ -248,6 +270,67 @@ def require_permission(required_code: str):
     return _checker
 
 
+def require_any_permission(*required_codes: str):
+    """Authorize a request when at least one of the supplied permissions exists.
+
+    This is used by the shared document library: an employee expediente is
+    visible to the HR permission family while the central library uses the
+    generic ``documents:*`` family.  The tenant context is still resolved and
+    validated exactly once, just like :func:`require_permission`.
+    """
+    if not required_codes:
+        raise ValueError("At least one permission is required")
+
+    async def _checker(
+        request: Request,
+        session: SessionDep,
+        current: CurrentUser,
+        checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
+    ) -> User:
+        raw_company = request.headers.get("X-Company-ID")
+        try:
+            if raw_company:
+                company_id = uuid.UUID(raw_company)
+            else:
+                from app.infrastructure.models.organization import UserCompany
+
+                membership = await session.scalar(
+                    select(UserCompany)
+                    .where(UserCompany.user_id == current.id)
+                    .order_by(UserCompany.is_default.desc(), UserCompany.company_id)
+                    .limit(1)
+                )
+                if membership is None:
+                    raise AuthorizationError(
+                        "Seleccione una empresa para continuar.", code="company_context_required"
+                    )
+                company_id = membership.company_id
+        except ValueError as exc:
+            raise AuthorizationError(
+                "El contexto de empresa no es válido.", code="invalid_company_context"
+            ) from exc
+        allowed = False
+        granted_codes: list[str] = []
+        for code in required_codes:
+            result = await checker.execute(current.id, company_id, code)
+            if result.allowed:
+                allowed = True
+                granted_codes.append(code)
+        if not allowed:
+            raise AuthorizationError(
+                f"Se requiere uno de estos permisos: {', '.join(required_codes)}", code="forbidden"
+            )
+        from app.api.v1.company_access import authorize_request_company
+
+        await authorize_request_company(request, session, current, company_id)
+        # Routers that serve more than one document module use this small
+        # request-local capability set to filter modules before pagination.
+        request.state.granted_permission_codes = tuple(granted_codes)
+        return current
+
+    return _checker
+
+
 __all__ = [
     "CurrentUser",
     "SessionDep",
@@ -255,7 +338,10 @@ __all__ = [
     "get_check_permission_use_case",
     "get_current_user",
     "get_current_user_use_case",
+    "get_document_record_repository",
+    "get_document_record_service",
     "get_document_service",
+    "get_employee_repository",
     "get_logout_use_case",
     "get_password_policy",
     "get_permission_repository",
@@ -265,5 +351,6 @@ __all__ = [
     "get_role_repository",
     "get_token_service",
     "get_user_repository",
+    "require_any_permission",
     "require_permission",
 ]

@@ -140,6 +140,43 @@ class S3ObjectStorage:
                 code="document_storage_unavailable",
             ) from exc
 
+    @observe_async("rustfs", "presign_preview")
+    async def presign_preview(
+        self,
+        key: str,
+        *,
+        filename: str,
+        content_type: str,
+        expires_seconds: int,
+    ) -> str:
+        """Issue a short-lived inline URL for browser previews.
+
+        The object key never leaves this adapter.  Only PDFs are requested by
+        the application, but the content type is kept explicit for defense in
+        depth and correct browser handling.
+        """
+        try:
+            client = self._client(self._settings.OBJECT_STORAGE_PUBLIC_ENDPOINT)
+            disposition = f"inline; filename*=UTF-8''{quote(filename, safe='')}"
+            url = await asyncio.to_thread(
+                client.generate_presigned_url,
+                "get_object",
+                Params={
+                    "Bucket": self._bucket,
+                    "Key": key,
+                    "ResponseContentDisposition": disposition,
+                    "ResponseContentType": content_type,
+                },
+                ExpiresIn=expires_seconds,
+                HttpMethod="GET",
+            )
+            return str(url)
+        except Exception as exc:
+            raise InfrastructureError(
+                "No se pudo autorizar la vista previa documental.",
+                code="document_storage_unavailable",
+            ) from exc
+
     @observe_async("rustfs", "head")
     async def head(self, key: str) -> StoredObjectInfo | None:
         try:

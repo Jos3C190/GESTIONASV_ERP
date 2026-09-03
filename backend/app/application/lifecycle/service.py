@@ -24,7 +24,43 @@ class LifecycleService:
         search: str | None = None,
         include_global: bool = False,
         include_all_companies: bool = False,
+        document_module: str | None = None,
+        include_restricted: bool = True,
     ) -> tuple[list[DeletedRecord], int]:
+        if document_module is not None:
+            if include_restricted:
+                return await self._repository.list_deleted(
+                    company_id,
+                    page=page,
+                    size=size,
+                    resource=resource,
+                    search=search,
+                    include_global=include_global,
+                    include_all_companies=include_all_companies,
+                    document_module=document_module,
+                )
+            return await self._repository.list_deleted(
+                company_id,
+                page=page,
+                size=size,
+                resource=resource,
+                search=search,
+                include_global=include_global,
+                include_all_companies=include_all_companies,
+                document_module=document_module,
+                include_restricted=include_restricted,
+            )
+        if not include_restricted:
+            return await self._repository.list_deleted(
+                company_id,
+                page=page,
+                size=size,
+                resource=resource,
+                search=search,
+                include_global=include_global,
+                include_all_companies=include_all_companies,
+                include_restricted=False,
+            )
         return await self._repository.list_deleted(
             company_id,
             page=page,

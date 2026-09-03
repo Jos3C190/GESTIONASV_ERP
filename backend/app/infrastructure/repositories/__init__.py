@@ -12,6 +12,9 @@ from app.infrastructure.repositories.department_repository import (
 from app.infrastructure.repositories.document_derivative_repository import (
     SqlAlchemyDocumentDerivativeRepository,
 )
+from app.infrastructure.repositories.document_record_repository import (
+    SqlAlchemyDocumentRecordRepository,
+)
 from app.infrastructure.repositories.document_repository import SqlAlchemyDocumentRepository
 from app.infrastructure.repositories.employee_repository import (
     SqlAlchemyEmployeeRepository,
@@ -45,6 +48,7 @@ __all__ = [
     "SqlAlchemyCatalogRepository",
     "SqlAlchemyDepartmentRepository",
     "SqlAlchemyDocumentDerivativeRepository",
+    "SqlAlchemyDocumentRecordRepository",
     "SqlAlchemyDocumentRepository",
     "SqlAlchemyEmployeeRepository",
     "SqlAlchemyInventoryRepository",
