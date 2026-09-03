@@ -188,9 +188,12 @@ Ver `src/app.css` y `tailwind.config.js` para los valores exactos de cada token.
 
 ### 4.1 Fuentes
 
-- **Inter** (o Geist Sans si está disponible): todo texto de UI.
-- **JetBrains Mono** (o Geist Mono): todos los números (KPIs, tablas,
-  ejes de gráficos, IDs, códigos).
+- **Geist Sans**: todo texto de interfaz. Los archivos variables se sirven
+  desde `frontend/static/fonts` para que la métrica no dependa de un CDN.
+- **Geist Mono**: todos los números (KPIs, tablas, ejes de gráficos, IDs y
+  códigos).
+- `system-ui` queda como fallback accesible si el navegador no puede cargar
+  las fuentes locales. La licencia SIL OFL se conserva junto a los archivos.
 
 ### 4.2 Escala tipográfica
 

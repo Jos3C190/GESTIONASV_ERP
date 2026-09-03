@@ -189,6 +189,8 @@ El bucket y las claves privadas nunca forman parte del contrato HTTP.
 | `POST` | `/api/v1/documents/uploads` | `documents:upload` | Autorizar un PUT directo del original |
 | `POST` | `/api/v1/documents/{id}/complete` | `documents:upload` | Validar, escanear y activar el original |
 | `GET` | `/api/v1/documents[/{id}]` | `documents:read` | Listar o consultar metadatos y estado OCR |
+| `POST` | `/api/v1/documents/library/{id}/preview-url` | `documents:download` | Emitir una URL privada inline para abrir un PDF en el visor del navegador |
+| `POST` | `/api/v1/employees/{employee_id}/documents/{id}/preview-url` | `employee_documents:download` | Emitir una URL inline para un PDF del expediente del empleado |
 | `POST` | `/api/v1/documents/{id}/download-url?variant=original|ocr` | `documents:download` | Emitir una descarga privada; original por defecto |
 | `POST` | `/api/v1/documents/{id}/ocr/retry` | `documents:process` | Reintentar un OCR fallido; responde `202` |
 
