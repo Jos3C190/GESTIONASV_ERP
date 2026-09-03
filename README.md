@@ -18,8 +18,11 @@
 
 Sistema ERP modular construido con **FastAPI + SvelteKit 5 + PostgreSQL 16**.
 Autenticación JWT con rotación de refresh tokens, RBAC dinámico administrable,
-bitácora append-only, gestión de empleados y departamentos, dashboard con
-gráficos, y 17 módulos futuros como mockups en el sidebar.
+bitácora append-only, gestión de empleados y departamentos, catálogo de
+productos y proveedores, inventario operativo, biblioteca documental con RustFS,
+ClamAV y OCRmyPDF, además de observabilidad local con OpenTelemetry y Grafana.
+La navegación contiene 15 entradas funcionales y 14 módulos futuros preparados
+como mockups en el sidebar.
 
 ---
 
@@ -180,7 +183,7 @@ erp-system/
 │   │       ├── components/ui/  # Button, Card, Modal, Badge, Avatar, Sidebar
 │   │       ├── features/dashboard/  # KpiCard, AreaChart, DonutChart, etc.
 │   │       ├── stores/       # session, theme, permissions, search
-│   │       └── navigation.ts # sidebar metadata (6 implementados + 17 mockups)
+│   │       └── navigation.ts # sidebar metadata (15 implementados + 14 mockups)
 │   └── tests/                # vitest + testing-library
 └── nginx/                    # reverse proxy para prod
 ```
@@ -208,11 +211,13 @@ erp-system/
 ## Testing
 
 ```bash
-make test              # 153 backend + 6 frontend = 159 tests
+make test              # 473 backend + 114 frontend = 587 tests
 make test-backend      # pytest con coverage
 make test-frontend     # vitest
 ```
 
+- **Backend**: 473 pruebas — 341 unitarias, 41 de integración y 91 E2E
+- **Frontend**: 114 pruebas unitarias y de componentes con Vitest
 - **Unit**: casos de uso con repositorios in-memory (sin DB)
 - **Integration**: repositorios contra Postgres real
 - **E2e**: flujos completos via httpx contra la app FastAPI
@@ -228,11 +233,20 @@ make test-frontend     # vitest
 | Autenticación | ✅ Login/JWT/refresh/lockout |
 | Usuarios | ✅ CRUD completo + filtros |
 | Roles y permisos | ✅ RBAC dinámico + matriz |
+| Documentos | ✅ Biblioteca virtual, cargas, RustFS, ClamAV, OCR y expedientes de empleados |
 | Empleados | ✅ CRUD + departamentos |
 | Departamentos | ✅ Jerarquía con anti-ciclos |
+| Proveedores | ✅ CRUD, contactos, imágenes y datos maestros |
+| Productos | ✅ Catálogo, variantes, identificadores, imágenes y relaciones |
+| Categorías de productos | ✅ Gestión por empresa |
+| Unidades de medida | ✅ Gestión por empresa |
+| Almacenes | ✅ CRUD, capacidad, estructuras y ubicaciones |
+| Categorías de almacén | ✅ CRUD y aislamiento por empresa |
+| Sucursales | ✅ CRUD, perfiles, galería y coordenadas |
 | Bitácora | ✅ Append-only + paginación |
+| Papelera | ✅ Ciclo de vida y restauración transversal |
 | Sidebar + tema | ✅ Geist design, claro/oscuro |
-| Clientes, Proveedores, Productos, Compras, Ventas, Inventario, etc. (17) | Mockup en sidebar |
+| Clientes, Cotizaciones de compra, Órdenes de compra, Compras, Retaceo, Asignación de precios, Inventario, Traslados, Cotizaciones de venta, Ventas, Devoluciones, Flota y conductores, Kardex y Configuración (14) | Mockup en sidebar |
 
 ---
 
