@@ -66,6 +66,10 @@ from app.infrastructure.models.product_variant import (
     ProductVariantImageModel,
     ProductVariantModel,
 )
+from app.infrastructure.models.purchase_request import (
+    PurchaseRequestDetailModel,
+    PurchaseRequestModel,
+)
 from app.infrastructure.models.rbac import (
     Permission,
     Role,
@@ -134,6 +138,8 @@ __all__: list[str] = [
     "ProductVariantAttributeValueModel",
     "ProductVariantImageModel",
     "ProductVariantModel",
+    "PurchaseRequestDetailModel",
+    "PurchaseRequestModel",
     "RefreshToken",
     "Role",
     "RolePermission",
