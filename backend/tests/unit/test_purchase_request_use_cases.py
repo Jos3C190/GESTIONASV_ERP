@@ -300,6 +300,22 @@ async def test_submit_then_approve_follows_workflow() -> None:
 
 
 @pytest.mark.asyncio
+async def test_submit_then_reject_and_draft_cancel_follow_workflow() -> None:
+    repository = FakePurchaseRequestRepository()
+    use_cases, request = await _create(repository)
+
+    submitted = await use_cases.submit_request(repository.company_id, request.id)
+    rejected = await use_cases.reject_request(repository.company_id, request.id)
+
+    assert submitted.status is PurchaseRequestStatus.SUBMITTED
+    assert rejected.status is PurchaseRequestStatus.REJECTED
+
+    _other_use_cases, cancellable = await _create(repository)
+    cancelled = await use_cases.cancel_request(repository.company_id, cancellable.id)
+    assert cancelled.status is PurchaseRequestStatus.CANCELLED
+
+
+@pytest.mark.asyncio
 async def test_illegal_transition_is_business_rule_error() -> None:
     repository = FakePurchaseRequestRepository()
     use_cases, request = await _create(repository)

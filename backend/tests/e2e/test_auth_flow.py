@@ -3,6 +3,7 @@
 Requires the dev stack to be running (`make up`). Uses the real DB with
 per-test cleanup (see e2e/conftest.py).
 """
+
 from __future__ import annotations
 
 import pytest
@@ -29,18 +30,14 @@ async def test_login_me_refresh_logout_flow(e2e_client) -> None:
     assert refresh
 
     # 2) /me with the access token
-    r = await e2e_client.get(
-        "/api/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
-    )
+    r = await e2e_client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {access}"})
     assert r.status_code == 200
     me = r.json()
     assert me["username"] == "alice"
     assert me["email"] == "alice@example.com"
 
     # 3) Refresh -> new access + rotated refresh
-    r = await e2e_client.post(
-        "/api/v1/auth/refresh", json={"refresh_token": refresh}
-    )
+    r = await e2e_client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
     assert r.status_code == 200, r.text
     new_body = r.json()
     new_access = new_body["access_token"]
@@ -49,16 +46,12 @@ async def test_login_me_refresh_logout_flow(e2e_client) -> None:
     assert new_refresh != refresh
 
     # 4) Reusing the OLD refresh token triggers reuse protection (401)
-    r = await e2e_client.post(
-        "/api/v1/auth/refresh", json={"refresh_token": refresh}
-    )
+    r = await e2e_client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
     assert r.status_code == 401
     assert r.json()["code"] == "session_revoked"
 
     # 5) The new refresh token was revoked by the reuse protection cascade
-    r = await e2e_client.post(
-        "/api/v1/auth/refresh", json={"refresh_token": new_refresh}
-    )
+    r = await e2e_client.post("/api/v1/auth/refresh", json={"refresh_token": new_refresh})
     assert r.status_code == 401
 
     # 6) Logout with a fresh login
@@ -67,9 +60,7 @@ async def test_login_me_refresh_logout_flow(e2e_client) -> None:
         json={"login": "alice", "password": "Strong!Passw0rd2026"},
     )
     refresh2 = r.json()["refresh_token"]
-    r = await e2e_client.post(
-        "/api/v1/auth/logout", json={"refresh_token": refresh2}
-    )
+    r = await e2e_client.post("/api/v1/auth/logout", json={"refresh_token": refresh2})
     assert r.status_code == 200
     assert r.json()["code"] == "logout_ok"
 
@@ -93,9 +84,7 @@ async def test_me_without_token_returns_401(e2e_client) -> None:
 
 
 async def test_me_with_invalid_token_returns_401(e2e_client) -> None:
-    r = await e2e_client.get(
-        "/api/v1/auth/me", headers={"Authorization": "Bearer not-a-jwt"}
-    )
+    r = await e2e_client.get("/api/v1/auth/me", headers={"Authorization": "Bearer not-a-jwt"})
     assert r.status_code == 401
 
 

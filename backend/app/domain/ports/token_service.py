@@ -3,11 +3,12 @@
 Abstracts the cryptographic details so the application layer stays testable
 without touching PyJWT or hashing directly.
 """
+
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Protocol
 
 
@@ -23,6 +24,12 @@ class AccessTokenPayload:
 
 class TokenService(Protocol):
     """Issues and verifies short-lived access tokens (JWT)."""
+
+    @property
+    def refresh_ttl(self) -> timedelta: ...
+
+    @property
+    def access_ttl(self) -> timedelta: ...
 
     def issue_access_token(
         self, *, user_id: uuid.UUID, username: str, is_superuser: bool

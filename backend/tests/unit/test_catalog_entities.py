@@ -21,12 +21,8 @@ def test_country_dataclass():
 def test_category_and_subcategory():
     u = uuid.uuid4()
     company_id = uuid.uuid4()
-    cat = Category(
-        id=10, company_id=company_id, uuid=u, name="Panadería", description="Harinas"
-    )
-    sub = SubCategory(
-        id=1, company_id=company_id, category_id=10, name="Harinas Suaves"
-    )
+    cat = Category(id=10, company_id=company_id, uuid=u, name="Panadería", description="Harinas")
+    sub = SubCategory(id=1, company_id=company_id, category_id=10, name="Harinas Suaves")
 
     assert cat.id == 10
     assert cat.uuid == u

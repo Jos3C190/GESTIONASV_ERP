@@ -151,7 +151,24 @@ def _actor_id(request: Request) -> uuid.UUID:
     user = getattr(request.state, "user", None)
     if user is None:
         raise HTTPException(status_code=401, detail="No autenticado.")
-    return user.id
+    user_id = getattr(user, "id", None)
+    if not isinstance(user_id, uuid.UUID):
+        raise HTTPException(status_code=401, detail="No autenticado.")
+    return user_id
+
+
+async def _branch_or_404(session: AsyncSession, branch_id: uuid.UUID) -> Branch:
+    branch = await session.get(Branch, branch_id)
+    if branch is None:
+        raise HTTPException(404, "Sucursal no encontrada.")
+    return branch
+
+
+async def _warehouse_or_404(session: AsyncSession, warehouse_id: uuid.UUID) -> Warehouse:
+    warehouse = await session.get(Warehouse, warehouse_id)
+    if warehouse is None:
+        raise HTTPException(404, "Almacén no encontrado.")
+    return warehouse
 
 
 async def _create(
@@ -364,35 +381,41 @@ async def _branches_out(session: AsyncSession, branches: list[Branch]) -> list[d
         if manager_ids
         else {}
     )
-    warehouse_counts = dict(
-        (
-            await session.execute(
-                select(Warehouse.branch_id, func.count(Warehouse.id))
-                .where(Warehouse.branch_id.in_(branch_ids))
-                .group_by(Warehouse.branch_id)
+    warehouse_count_rows = (
+        await session.execute(
+            select(Warehouse.branch_id, func.count(Warehouse.id))
+            .where(Warehouse.branch_id.in_(branch_ids))
+            .group_by(Warehouse.branch_id)
+        )
+    ).all()
+    warehouse_counts: dict[uuid.UUID, int] = {
+        branch_id: int(count) for branch_id, count in warehouse_count_rows if branch_id is not None
+    }
+    employee_count_rows = (
+        await session.execute(
+            select(
+                EmployeeBranchAssignment.branch_id,
+                func.count(EmployeeBranchAssignment.id),
             )
-        ).all()
-    )
-    employee_counts = dict(
-        (
-            await session.execute(
-                select(
-                    EmployeeBranchAssignment.branch_id,
-                    func.count(EmployeeBranchAssignment.id),
-                )
-                .where(
-                    EmployeeBranchAssignment.branch_id.in_(branch_ids),
-                    EmployeeBranchAssignment.is_active.is_(True),
-                )
-                .group_by(EmployeeBranchAssignment.branch_id)
+            .where(
+                EmployeeBranchAssignment.branch_id.in_(branch_ids),
+                EmployeeBranchAssignment.is_active.is_(True),
             )
-        ).all()
-    )
+            .group_by(EmployeeBranchAssignment.branch_id)
+        )
+    ).all()
+    employee_counts: dict[uuid.UUID, int] = {
+        branch_id: int(count) for branch_id, count in employee_count_rows if branch_id is not None
+    }
     output: list[dict[str, Any]] = []
     for branch in branches:
         data = _dump(branch)
         district = districts.get(branch.district_id)
-        manager = managers.get(branch.manager_employee_id)
+        manager = (
+            managers.get(branch.manager_employee_id)
+            if branch.manager_employee_id is not None
+            else None
+        )
         data.update(
             {
                 "city": district.name if district else "",
@@ -450,7 +473,11 @@ async def _warehouses_out(
     for warehouse in warehouses:
         data = _dump(warehouse)
         branch = branches.get(warehouse.branch_id)
-        manager = managers.get(warehouse.manager_employee_id)
+        manager = (
+            managers.get(warehouse.manager_employee_id)
+            if warehouse.manager_employee_id is not None
+            else None
+        )
         data.update(
             {
                 "type": warehouse.warehouse_type,
@@ -704,7 +731,7 @@ async def create_branch(
             owner_type="branch",
             owner_id=branch_id,
         )
-    return await _branch_out(session, await session.get(Branch, branch_id))
+    return await _branch_out(session, await _branch_or_404(session, branch_id))
 
 
 @router.patch(
@@ -765,7 +792,7 @@ async def update_branch(
             owner_type="branch",
             owner_id=record_id,
         )
-    return await _branch_out(session, await session.get(Branch, record_id))
+    return await _branch_out(session, await _branch_or_404(session, record_id))
 
 
 @router.post(
@@ -1194,7 +1221,7 @@ async def list_warehouse_capacity_groups(
     warehouse = await session.get(Warehouse, warehouse_id)
     if warehouse is None:
         raise HTTPException(404, "Almacén no encontrado.")
-    branch = await session.get(Branch, warehouse.branch_id)
+    branch = await _branch_or_404(session, warehouse.branch_id)
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
     rows = list(
         (
@@ -1230,7 +1257,7 @@ async def warehouse_capacity_configuration_diagnostics(
     warehouse = await session.get(Warehouse, warehouse_id)
     if warehouse is None:
         raise HTTPException(404, "Almacén no encontrado.")
-    branch = await session.get(Branch, warehouse.branch_id)
+    branch = await _branch_or_404(session, warehouse.branch_id)
     require_resource_company(request, branch.company_id, not_found_detail="Almacén no encontrado.")
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
     result = await SqlAlchemyCapacityHierarchyRepository(session).diagnostics(warehouse_id)
@@ -1255,7 +1282,7 @@ async def create_warehouse_capacity_group(
     )
     if warehouse is None:
         raise HTTPException(404, "Almacén no encontrado.")
-    branch = await session.get(Branch, warehouse.branch_id)
+    branch = await _branch_or_404(session, warehouse.branch_id)
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
     await _validate_capacity_group_parent(
         session,
@@ -1317,7 +1344,7 @@ async def update_warehouse_capacity_group(
     )
     if warehouse is None or group is None:
         raise HTTPException(404, "Grupo de capacidad no encontrado.")
-    branch = await session.get(Branch, warehouse.branch_id)
+    branch = await _branch_or_404(session, warehouse.branch_id)
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
     await _validate_capacity_group_parent(
         session,
@@ -1374,7 +1401,7 @@ async def get_warehouse(
     warehouse = await session.get(Warehouse, record_id)
     if warehouse is None:
         raise HTTPException(404, "Almacén no encontrado.")
-    branch = await session.get(Branch, warehouse.branch_id)
+    branch = await _branch_or_404(session, warehouse.branch_id)
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
     return await _warehouse_out(session, warehouse)
 
@@ -1418,7 +1445,7 @@ async def create_warehouse(
         company_id=branch.company_id,
         branch_id=branch.id,
     )
-    warehouse = await session.get(Warehouse, uuid.UUID(created["id"]))
+    warehouse = await _warehouse_or_404(session, uuid.UUID(created["id"]))
     for image in body.images:
         await attach_media_by_url(
             session,
@@ -1445,7 +1472,7 @@ async def update_warehouse(
     )
     if existing is None:
         raise HTTPException(404, "Almacén no encontrado.")
-    current_branch = await session.get(Branch, existing.branch_id)
+    current_branch = await _branch_or_404(session, existing.branch_id)
     await resolve_branch_scope(session, current, current_branch.company_id, current_branch.id)
     branch = await _require_active(session, Branch, body.branch_id, "La sucursal")
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
@@ -1516,7 +1543,7 @@ async def update_warehouse(
             owner_type="warehouse",
             owner_id=record_id,
         )
-    return await _warehouse_out(session, await session.get(Warehouse, record_id))
+    return await _warehouse_out(session, await _warehouse_or_404(session, record_id))
 
 
 @router.post(
@@ -1531,7 +1558,7 @@ async def deactivate_warehouse(
     )
     if warehouse is None:
         raise HTTPException(404, "Almacén no encontrado.")
-    branch = await session.get(Branch, warehouse.branch_id)
+    branch = await _branch_or_404(session, warehouse.branch_id)
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
     active_location = await session.scalar(
         select(Location.id)
@@ -1566,7 +1593,7 @@ async def activate_warehouse(
     warehouse = await session.get(Warehouse, record_id)
     if warehouse is None:
         raise HTTPException(404, "Almacén no encontrado.")
-    branch = await session.get(Branch, warehouse.branch_id)
+    branch = await _branch_or_404(session, warehouse.branch_id)
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
     return await _update(
         session,
@@ -1587,7 +1614,7 @@ async def list_locations(
     warehouse = await session.get(Warehouse, warehouse_id)
     if warehouse is None:
         raise HTTPException(404, "Almacén no encontrado.")
-    branch = await session.get(Branch, warehouse.branch_id)
+    branch = await _branch_or_404(session, warehouse.branch_id)
     require_resource_company(request, branch.company_id, not_found_detail="Almacén no encontrado.")
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
     stmt = select(Location).where(
@@ -1608,7 +1635,7 @@ async def create_location(
     body: LocationIn, request: Request, session: SessionDep, current: CurrentUser
 ) -> dict[str, Any]:
     warehouse = await _require_active(session, Warehouse, body.warehouse_id, "El almacén")
-    branch = await session.get(Branch, warehouse.branch_id)
+    branch = await _branch_or_404(session, warehouse.branch_id)
     require_resource_company(request, branch.company_id, not_found_detail="Almacén no encontrado.")
     await resolve_branch_scope(session, current, branch.company_id, branch.id)
     record = await LocationUseCases(SqlAlchemyLocationRepository(session)).create_location(
@@ -1633,8 +1660,8 @@ async def update_location(
     existing = await session.get(Location, record_id)
     if existing is None:
         raise HTTPException(404, "Ubicación no encontrada.")
-    current_warehouse = await session.get(Warehouse, existing.warehouse_id)
-    current_branch = await session.get(Branch, current_warehouse.branch_id)
+    current_warehouse = await _warehouse_or_404(session, existing.warehouse_id)
+    current_branch = await _branch_or_404(session, current_warehouse.branch_id)
     require_resource_company(
         request, current_branch.company_id, not_found_detail="Ubicación no encontrada."
     )
@@ -1705,12 +1732,14 @@ async def deactivate_location(
     warehouse = await session.scalar(
         select(Warehouse).where(Warehouse.id == location.warehouse_id).with_for_update()
     )
+    if warehouse is None:
+        raise HTTPException(404, "Almacén no encontrado.")
     location = await session.scalar(
         select(Location)
         .where(Location.id == record_id, Location.deleted_at.is_(None))
         .with_for_update()
     )
-    branch = await session.get(Branch, warehouse.branch_id)
+    branch = await _branch_or_404(session, warehouse.branch_id)
     require_resource_company(
         request, branch.company_id, not_found_detail="Ubicación no encontrada."
     )
@@ -1745,12 +1774,14 @@ async def activate_location(
     warehouse = await session.scalar(
         select(Warehouse).where(Warehouse.id == location.warehouse_id).with_for_update()
     )
+    if warehouse is None:
+        raise HTTPException(404, "Almacén no encontrado.")
     location = await session.scalar(
         select(Location)
         .where(Location.id == record_id, Location.deleted_at.is_(None))
         .with_for_update()
     )
-    branch = await session.get(Branch, warehouse.branch_id)
+    branch = await _branch_or_404(session, warehouse.branch_id)
     require_resource_company(
         request, branch.company_id, not_found_detail="Ubicación no encontrada."
     )

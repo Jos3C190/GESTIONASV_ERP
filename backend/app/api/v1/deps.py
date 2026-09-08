@@ -7,6 +7,7 @@ override a single dependency to swap a real repo for an in-memory fake.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -155,9 +156,7 @@ def get_password_policy() -> PasswordPolicy:
 
 # -------- use case providers --------
 def get_purchase_request_use_cases(
-    repository: Annotated[
-        PurchaseRequestRepository, Depends(get_purchase_request_repository)
-    ],
+    repository: Annotated[PurchaseRequestRepository, Depends(get_purchase_request_repository)],
 ) -> PurchaseRequestUseCases:
     return PurchaseRequestUseCases(repository)
 
@@ -227,7 +226,7 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 # -------- require_permission dependency --------
-def require_permission(required_code: str):
+def require_permission(required_code: str) -> Callable[..., Awaitable[User]]:
     """FastAPI dependency factory. Usage:
 
         @router.post("/users", dependencies=[Depends(require_permission("users:create"))])
@@ -287,7 +286,7 @@ def require_permission(required_code: str):
     return _checker
 
 
-def require_any_permission(*required_codes: str):
+def require_any_permission(*required_codes: str) -> Callable[..., Awaitable[User]]:
     """Authorize a request when at least one of the supplied permissions exists.
 
     This is used by the shared document library: an employee expediente is

@@ -3,6 +3,7 @@
 Demonstrates the opt-in marker pattern. The conftest `db_session` fixture will
 be added in Phase 1 once we have real repositories.
 """
+
 from __future__ import annotations
 
 import pytest

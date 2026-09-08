@@ -21,7 +21,9 @@ class CapacityConfiguration:
     enforcement_mode: str = "disabled"
 
     def value(self, metric: CapacityMetricName, kind: CapacityLimitKind) -> Decimal | None:
-        return getattr(self, f"{kind}_{metric}")
+        if metric == "weight":
+            return self.certified_weight if kind == "certified" else self.operational_weight
+        return self.certified_volume if kind == "certified" else self.operational_volume
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +51,9 @@ class CapacityUsageSnapshot:
     incomplete_measurements: bool = False
 
     def projected(self, metric: CapacityMetricName) -> Decimal:
-        return getattr(self, f"occupied_{metric}") + getattr(self, f"reserved_{metric}")
+        if metric == "weight":
+            return self.occupied_weight + self.reserved_weight
+        return self.occupied_volume + self.reserved_volume
 
 
 _LIMITS: tuple[tuple[CapacityMetricName, CapacityLimitKind], ...] = (

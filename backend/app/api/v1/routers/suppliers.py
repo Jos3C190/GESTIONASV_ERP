@@ -63,7 +63,9 @@ async def _require_supplier_images_permission(
         raise AuthorizationError("Permiso requerido: suppliers:images", code="forbidden")
 
 
-async def _supplier_for_user(session: SessionDep, current: CurrentUser, supplier: Supplier) -> Supplier:
+async def _supplier_for_user(
+    session: SessionDep, current: CurrentUser, supplier: Supplier
+) -> Supplier:
     if current.is_superuser:
         return supplier
     permissions = await SqlAlchemyRoleRepository(session).get_effective_permissions_for_user(
@@ -170,7 +172,9 @@ async def list_suppliers(
     dependencies=[Depends(require_permission("suppliers:read"))],
     summary="Obtener indicadores de proveedores",
 )
-async def supplier_stats(request: Request, session: SessionDep, current: CurrentUser):
+async def supplier_stats(
+    request: Request, session: SessionDep, current: CurrentUser
+) -> dict[str, int]:
     company_id = request_company_id(request)
     await require_company_access(session, current, company_id, require_active=True)
     row = (
@@ -205,7 +209,7 @@ async def get_supplier(
     company_id = request_company_id(request)
     await require_company_access(session, current, company_id)
     supplier = await use_cases.get_supplier(company_id, supplier_id)
-    return await _supplier_for_user(session, current, supplier)
+    return SupplierResponse.model_validate(await _supplier_for_user(session, current, supplier))
 
 
 @router.post(
@@ -258,7 +262,7 @@ async def create_supplier(
             **_supplier_audit_state(created),
         },
     )
-    return await _supplier_for_user(session, current, created)
+    return SupplierResponse.model_validate(await _supplier_for_user(session, current, created))
 
 
 @router.put(
@@ -304,7 +308,7 @@ async def update_supplier(
             **_supplier_audit_state(updated),
         },
     )
-    return await _supplier_for_user(session, current, updated)
+    return SupplierResponse.model_validate(await _supplier_for_user(session, current, updated))
 
 
 # --- Supplier Contacts ---
@@ -348,7 +352,7 @@ async def add_contact(
             "avatar_image": _image_audit_state(created.avatar_image),
         },
     )
-    return created
+    return SupplierContactResponse.model_validate(created)
 
 
 @router.put(
@@ -402,7 +406,7 @@ async def update_contact(
             "avatar_image": _image_audit_state(updated.avatar_image),
         },
     )
-    return updated
+    return SupplierContactResponse.model_validate(updated)
 
 
 @router.post(

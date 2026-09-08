@@ -1,4 +1,5 @@
 """Domain entities: Role, Permission."""
+
 from __future__ import annotations
 
 import uuid

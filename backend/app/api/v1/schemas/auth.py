@@ -1,4 +1,5 @@
 """Auth DTOs (login, token, user out)."""
+
 from __future__ import annotations
 
 import uuid

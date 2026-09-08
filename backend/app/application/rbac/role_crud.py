@@ -141,7 +141,9 @@ class ListRolesUseCase:
     def __init__(self, roles: RoleRepository) -> None:
         self._roles = roles
 
-    async def execute(self, company_id: uuid.UUID, *, load_permissions: bool = False) -> Sequence[Role]:
+    async def execute(
+        self, company_id: uuid.UUID, *, load_permissions: bool = False
+    ) -> Sequence[Role]:
         return await self._roles.list_all(company_id, load_permissions=load_permissions)
 
     async def execute_page(

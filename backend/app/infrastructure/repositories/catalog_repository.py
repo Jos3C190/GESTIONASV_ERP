@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import delete, distinct, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import noload, selectinload
 from sqlalchemy.sql import Select
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.exceptions import ConcurrencyError
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit
@@ -141,7 +143,7 @@ def _to_product_identifier(orm: ProductIdentifierModel) -> ProductIdentifier:
     )
 
 
-def _to_variant_image(orm: ProductVariantImageModel, variant_id: uuid.UUID):
+def _to_variant_image(orm: ProductVariantImageModel, variant_id: uuid.UUID) -> ProductImage:
     return ProductImage(
         id=orm.id,
         product_id=None,
@@ -323,7 +325,7 @@ class SqlAlchemyCatalogRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    def _product_detail_statement(self) -> Select[tuple[ProductModel, str | None]]:
+    def _product_detail_statement(self) -> Select[tuple[ProductModel, str]]:
         """Build the company-scoped product detail query.
 
         Category names are projected rather than loaded through the ORM
@@ -553,7 +555,7 @@ class SqlAlchemyCatalogRepository:
         return _to_unit(row[0], row[1], int(row[2] or 0)) if row else None
 
     async def get_unit_by_code(self, company_id: uuid.UUID | None, code: str) -> Unit | None:
-        scope = UnitModel.owner_company_id.is_(None)
+        scope: ColumnElement[bool] = UnitModel.owner_company_id.is_(None)
         if company_id is not None:
             scope = or_(
                 UnitModel.owner_company_id.is_(None), UnitModel.owner_company_id == company_id
@@ -907,7 +909,7 @@ class SqlAlchemyCatalogRepository:
         return await self._get_product_with_images(company_id, orm.id_product)
 
     async def update_product(
-        self, company_id: uuid.UUID, product_id: int, **kwargs
+        self, company_id: uuid.UUID, product_id: int, **kwargs: object
     ) -> Product | None:
         stmt = select(ProductModel).where(
             ProductModel.company_id == company_id, ProductModel.id_product == product_id
@@ -930,9 +932,24 @@ class SqlAlchemyCatalogRepository:
             "purchase_unit_id": "purchase_unit",
             "sale_unit_id": "sale_unit",
         }
-        images = kwargs.pop("images", None) if "images" in kwargs else None
-        identifiers = kwargs.pop("identifiers", None) if "identifiers" in kwargs else None
-        variant_config = kwargs.pop("variant_config", None) if "variant_config" in kwargs else None
+        images = (
+            cast(list[ProductImageDraft] | None, kwargs.pop("images"))
+            if "images" in kwargs
+            else None
+        )
+        identifiers = (
+            cast(
+                tuple[ProductVariantIdentifierDraft, ...] | None,
+                kwargs.pop("identifiers"),
+            )
+            if "identifiers" in kwargs
+            else None
+        )
+        variant_config = (
+            cast(ProductVariantConfigDraft | None, kwargs.pop("variant_config"))
+            if "variant_config" in kwargs
+            else None
+        )
         old_sku = orm.sku
         for key, value in kwargs.items():
             orm_field = field_map.get(key, key)
@@ -1044,26 +1061,34 @@ class SqlAlchemyCatalogRepository:
             raise ValueError("Solo puede existir un identificador principal por tipo.")
 
         if normalized_rows:
-            identifier_pairs = or_(*[
-                (ProductIdentifierModel.identifier_type == draft.identifier_type)
-                & (ProductIdentifierModel.normalized_value == normalized)
-                for draft, normalized in normalized_rows
-            ])
+            identifier_pairs = or_(
+                *[
+                    (ProductIdentifierModel.identifier_type == draft.identifier_type)
+                    & (ProductIdentifierModel.normalized_value == normalized)
+                    for draft, normalized in normalized_rows
+                ]
+            )
             existing = (
-                await self._session.execute(
-                    select(ProductIdentifierModel)
-                    .where(
-                        ProductIdentifierModel.company_id == company_id,
-                        identifier_pairs,
+                (
+                    await self._session.execute(
+                        select(ProductIdentifierModel)
+                        .where(
+                            ProductIdentifierModel.company_id == company_id,
+                            identifier_pairs,
+                        )
+                        .with_for_update()
                     )
-                    .with_for_update()
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             if any(item.product_id != product.id_product for item in existing):
                 raise ValueError("El identificador ya está registrado en esta empresa.")
 
         await self._session.execute(
-            delete(ProductIdentifierModel).where(ProductIdentifierModel.product_id == product.id_product)
+            delete(ProductIdentifierModel).where(
+                ProductIdentifierModel.product_id == product.id_product
+            )
         )
         await self._session.flush()
         for draft, normalized in normalized_rows:
@@ -1285,6 +1310,8 @@ class SqlAlchemyCatalogRepository:
 
         if "lifecycle_status" in fields:
             lifecycle_status = draft.lifecycle_status
+            if lifecycle_status is None:
+                raise ValueError("El estado de ciclo de vida de la variante es obligatorio.")
             if lifecycle_status == "active" and parent.lifecycle_status != "active":
                 raise ValueError(
                     "No se puede activar una variante si el producto padre no está activo."

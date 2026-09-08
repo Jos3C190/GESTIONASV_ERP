@@ -14,7 +14,7 @@ import zipfile
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 
 from app.core.exceptions import ConflictError, ValidationError
 from app.domain.entities.location import (
@@ -33,6 +33,8 @@ from app.domain.entities.location import (
 from app.domain.entities.warehouse_capacity import (
     CAPACITY_ENFORCEMENT_MODES,
     CAPACITY_PROFILES,
+    CapacityEnforcementMode,
+    CapacityProfile,
     PhysicalCapacity,
 )
 from app.domain.ports.location_repository import LocationRepository
@@ -138,7 +140,8 @@ def _strict_decimal(value: object, *, message: str, code: str) -> Decimal:
         parsed = Decimal(str(value).strip())
     except (InvalidOperation, ValueError) as exc:
         raise ValidationError(message, code=code) from exc
-    if not parsed.is_finite() or parsed.as_tuple().exponent < -MAX_DECIMAL_PLACES:
+    exponent = parsed.as_tuple().exponent
+    if not parsed.is_finite() or not isinstance(exponent, int) or exponent < -MAX_DECIMAL_PLACES:
         raise ValidationError(message, code=code)
     return parsed
 
@@ -236,6 +239,7 @@ def _normalize_operational_values(values: Mapping[str, Any]) -> dict[str, Any]: 
         raise ValidationError(
             "El perfil de capacidad no es válido.", code="capacity_profile_invalid"
         )
+    profile = cast(CapacityProfile, profile)
     normalized["capacity_profile"] = profile
     enforcement = _nfkc_text(values.get("capacity_enforcement_mode", "disabled")).casefold()
     if enforcement not in CAPACITY_ENFORCEMENT_MODES:
@@ -243,6 +247,7 @@ def _normalize_operational_values(values: Mapping[str, Any]) -> dict[str, Any]: 
             "El modo de control de capacidad no es válido.",
             code="capacity_enforcement_mode_invalid",
         )
+    enforcement = cast(CapacityEnforcementMode, enforcement)
     normalized["capacity_enforcement_mode"] = enforcement
     raw_eligible = values.get("storage_eligible")
     normalized["storage_eligible"] = (

@@ -3,9 +3,8 @@
 import uuid
 
 import pytest
-from pydantic import ValidationError
-
 from app.api.v1.schemas.organization import BranchIn
+from pydantic import ValidationError
 
 
 def _branch_payload(**overrides: object) -> dict[str, object]:

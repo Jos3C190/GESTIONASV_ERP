@@ -141,9 +141,7 @@ class PurchaseRequestUseCases:
             )
         return saved
 
-    async def submit_request(
-        self, company_id: uuid.UUID, request_id: uuid.UUID
-    ) -> PurchaseRequest:
+    async def submit_request(self, company_id: uuid.UUID, request_id: uuid.UUID) -> PurchaseRequest:
         return await self._transition(company_id, request_id, PurchaseRequestStatus.SUBMITTED)
 
     async def approve_request(
@@ -151,14 +149,10 @@ class PurchaseRequestUseCases:
     ) -> PurchaseRequest:
         return await self._transition(company_id, request_id, PurchaseRequestStatus.APPROVED)
 
-    async def reject_request(
-        self, company_id: uuid.UUID, request_id: uuid.UUID
-    ) -> PurchaseRequest:
+    async def reject_request(self, company_id: uuid.UUID, request_id: uuid.UUID) -> PurchaseRequest:
         return await self._transition(company_id, request_id, PurchaseRequestStatus.REJECTED)
 
-    async def cancel_request(
-        self, company_id: uuid.UUID, request_id: uuid.UUID
-    ) -> PurchaseRequest:
+    async def cancel_request(self, company_id: uuid.UUID, request_id: uuid.UUID) -> PurchaseRequest:
         return await self._transition(company_id, request_id, PurchaseRequestStatus.CANCELLED)
 
     async def _get_for_update(
@@ -208,9 +202,7 @@ class PurchaseRequestUseCases:
                 "Sucursal no encontrada o no disponible.",
                 code="purchase_request_branch_not_found",
             )
-        if not await self._repository.is_warehouse_available(
-            company_id, branch_id, warehouse_id
-        ):
+        if not await self._repository.is_warehouse_available(company_id, branch_id, warehouse_id):
             raise NotFoundError(
                 "Almacén no encontrado o no disponible para la sucursal seleccionada.",
                 code="purchase_request_warehouse_not_found",
@@ -238,8 +230,7 @@ class PurchaseRequestUseCases:
         details: list[PurchaseRequestDetail] = []
         for line in lines:
             reference = await self._repository.get_product_reference(company_id, line.product_id)
-            self._validate_product_reference(line.product_id, reference)
-            assert reference is not None
+            reference = self._validate_product_reference(line.product_id, reference)
             try:
                 details.append(
                     PurchaseRequestDetail(
@@ -263,7 +254,7 @@ class PurchaseRequestUseCases:
     def _validate_product_reference(
         product_id: int,
         reference: PurchaseProductReference | None,
-    ) -> None:
+    ) -> PurchaseProductReference:
         if reference is None:
             raise NotFoundError(
                 f"Producto {product_id} no encontrado.",
@@ -283,6 +274,7 @@ class PurchaseRequestUseCases:
                 f"La unidad de compra del producto {product_id} no está habilitada para la empresa.",
                 code="purchase_request_purchase_unit_unavailable",
             )
+        return reference
 
     @staticmethod
     def _build_request(

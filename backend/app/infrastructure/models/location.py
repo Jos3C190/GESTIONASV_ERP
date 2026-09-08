@@ -68,13 +68,9 @@ class LocationCodeAlias(UUIDPKMixin, TimestampMixin, Base):
     warehouse_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False
     )
-    location_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), nullable=False
-    )
+    location_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     alias_code: Mapped[str] = mapped_column(String(120), nullable=False)
-    code_scheme_id: Mapped[uuid.UUID | None] = mapped_column(
-        PGUUID(as_uuid=True)
-    )
+    code_scheme_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     scheme_version: Mapped[int | None] = mapped_column(Integer)
     reason: Mapped[str] = mapped_column(String(32), nullable=False, server_default="recode")
     created_by: Mapped[uuid.UUID | None] = mapped_column(
@@ -122,9 +118,7 @@ class LocationBatchJob(UUIDPKMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="preview")
     idempotency_key: Mapped[str] = mapped_column(String(120), nullable=False)
     input_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
-    code_scheme_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), nullable=False
-    )
+    code_scheme_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     scheme_version: Mapped[int] = mapped_column(Integer, nullable=False)
     total_rows: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     create_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
@@ -172,12 +166,16 @@ class LocationBatchRow(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "location_batch_rows"
 
     job_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("location_batch_jobs.id", ondelete="CASCADE"), nullable=False
+        PGUUID(as_uuid=True),
+        ForeignKey("location_batch_jobs.id", ondelete="CASCADE"),
+        nullable=False,
     )
     row_number: Mapped[int] = mapped_column(Integer, nullable=False)
     operation: Mapped[str] = mapped_column(String(16), nullable=False)
     code: Mapped[str | None] = mapped_column(String(120))
-    normalized_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    normalized_data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
     diff: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     errors: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
     published_location_id: Mapped[uuid.UUID | None] = mapped_column(

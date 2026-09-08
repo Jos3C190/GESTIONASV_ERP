@@ -1,4 +1,5 @@
 """Use case: GetUser — fetch a single user by id."""
+
 from __future__ import annotations
 
 import uuid

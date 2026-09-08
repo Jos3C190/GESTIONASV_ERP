@@ -15,6 +15,25 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+async def _cleanup_e2e_state(session: AsyncSession) -> None:
+    """Remove test-owned rows in foreign-key dependency order.
+
+    E2E tests intentionally create users and exercise workflows that leave
+    durable records behind. The two author columns with ``ON DELETE
+    RESTRICT`` must be removed before ``users``; deleting only auth tables
+    makes the fixture order-dependent and can prevent every following E2E
+    test from starting.
+    """
+
+    await session.execute(text("DELETE FROM purchase_request_details"))
+    await session.execute(text("DELETE FROM purchase_requests"))
+    await session.execute(text("DELETE FROM location_batch_jobs"))
+    await session.execute(text("DELETE FROM document_assets"))
+    await session.execute(text("DELETE FROM refresh_tokens"))
+    await session.execute(text("DELETE FROM password_reset_tokens"))
+    await session.execute(text("DELETE FROM users"))
+
+
 @pytest.fixture
 async def e2e_client() -> AsyncIterator[AsyncClient]:
     """Boot the real app with a real DB connection. Cleans auth tables before
@@ -26,12 +45,11 @@ async def e2e_client() -> AsyncIterator[AsyncClient]:
     # Reset rate limiters so tests don't interfere with each other.
     _rate_limit_store.clear_fallback()
 
-    # Clean auth tables before yielding.
+    # Clean all test-owned records before yielding. This must run before
+    # users because purchase requests and location batch jobs retain their
+    # authors with RESTRICT foreign keys.
     async with async_session_factory() as session:
-        await session.execute(text("DELETE FROM document_assets"))
-        await session.execute(text("DELETE FROM refresh_tokens"))
-        await session.execute(text("DELETE FROM password_reset_tokens"))
-        await session.execute(text("DELETE FROM users"))
+        await _cleanup_e2e_state(session)
         await session.commit()
 
     app = create_app()
@@ -39,12 +57,10 @@ async def e2e_client() -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
         yield ac
 
-    # Cleanup after test.
+    # Cleanup after test as well, so a failed assertion cannot leak state into
+    # the next fixture invocation.
     async with async_session_factory() as session:
-        await session.execute(text("DELETE FROM document_assets"))
-        await session.execute(text("DELETE FROM refresh_tokens"))
-        await session.execute(text("DELETE FROM password_reset_tokens"))
-        await session.execute(text("DELETE FROM users"))
+        await _cleanup_e2e_state(session)
         await session.commit()
     await dispose_engine()
 

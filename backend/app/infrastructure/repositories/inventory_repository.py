@@ -473,9 +473,7 @@ class SqlAlchemyInventoryRepository:
         total_volume = ZERO
         has_incomplete_measurements = False
         for stock_status in StockStatus:
-            quantity, weight, volume = totals_by_status.get(
-                stock_status, (ZERO, ZERO, ZERO)
-            )
+            quantity, weight, volume = totals_by_status.get(stock_status, (ZERO, ZERO, ZERO))
             total_quantity += quantity
             total_weight += weight
             total_volume += volume
@@ -488,9 +486,7 @@ class SqlAlchemyInventoryRepository:
                     occupied_weight_kg=None if incomplete else weight,
                     occupied_volume_m3=None if incomplete else volume,
                     measurement_status=(
-                        MeasurementStatus.INCOMPLETE
-                        if incomplete
-                        else MeasurementStatus.COMPLETE
+                        MeasurementStatus.INCOMPLETE if incomplete else MeasurementStatus.COMPLETE
                     ),
                 )
             )

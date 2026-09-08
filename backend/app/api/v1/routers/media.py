@@ -10,6 +10,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import or_, select
@@ -71,7 +72,11 @@ async def create_upload_signature(
         else f"{settings.CLOUDINARY_UPLOAD_FOLDER.strip('/')}/{settings.ENVIRONMENT}/staged/users/{current.id}/company_logo"
     )
     public_id = uuid.uuid4().hex
-    params = {"folder": folder, "public_id": public_id, "timestamp": timestamp}
+    params: dict[str, str | int | bool] = {
+        "folder": folder,
+        "public_id": public_id,
+        "timestamp": timestamp,
+    }
     return UploadSignatureOut(
         cloud_name=cloud_name,
         api_key=api_key,
@@ -141,13 +146,17 @@ def _destroy_asset(url: str, fields: dict[str, str]) -> dict[str, object]:
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310
-        return json.loads(response.read().decode())
+        return cast(dict[str, object], json.loads(response.read().decode()))
 
 
 async def _destroy_public_id(public_id: str) -> None:
     cloud_name, api_key, api_secret = _credentials()
     timestamp = int(time.time())
-    params = {"invalidate": True, "public_id": public_id, "timestamp": timestamp}
+    params: dict[str, str | int | bool] = {
+        "invalidate": True,
+        "public_id": public_id,
+        "timestamp": timestamp,
+    }
     fields = {
         **{
             key: str(value).lower() if isinstance(value, bool) else str(value)

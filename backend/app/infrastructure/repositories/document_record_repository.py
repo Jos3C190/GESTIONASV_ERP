@@ -431,9 +431,7 @@ class SqlAlchemyDocumentRecordRepository:
                     EmployeeBranchAssignment.assigned_until.is_(None),
                 )
             )
-            conditions.append(
-                or_(DocumentRecordModel.module != "employees", employee_branch_match)
-            )
+            conditions.append(or_(DocumentRecordModel.module != "employees", employee_branch_match))
         return conditions
 
     @staticmethod
@@ -509,9 +507,7 @@ class SqlAlchemyDocumentRecordRepository:
                 .where(*conditions, DocumentRecordModel.module.in_(allowed))
                 .group_by(DocumentRecordModel.module)
             )
-            rows = {
-                row.module: row for row in (await self._session.execute(grouped)).all()
-            }
+            rows = {row.module: row for row in (await self._session.execute(grouped)).all()}
             labels = {
                 "general": "General",
                 "employees": "Empleados",
@@ -574,12 +570,16 @@ class SqlAlchemyDocumentRecordRepository:
                 )
             count_statement = select(func.count()).select_from(statement.order_by(None).subquery())
             total = int(await self._session.scalar(count_statement) or 0)
-            statement = statement.order_by(
-                Employee.last_name,
-                Employee.first_name,
-                Employee.employee_code,
-                Employee.id,
-            ).offset((page - 1) * size).limit(size)
+            statement = (
+                statement.order_by(
+                    Employee.last_name,
+                    Employee.first_name,
+                    Employee.employee_code,
+                    Employee.id,
+                )
+                .offset((page - 1) * size)
+                .limit(size)
+            )
             employee_rows = (await self._session.execute(statement)).all()
             folders = []
             for result_row in employee_rows:
@@ -630,19 +630,16 @@ class SqlAlchemyDocumentRecordRepository:
             branch_id=branch_id,
             current_only=False,
         )
-        historical_category_exists = (
-            exists(
-                select(1)
-                .select_from(DocumentRecordModel)
-                .join(DocumentAssetModel, DocumentAssetModel.id == DocumentRecordModel.id)
-                .where(
-                    *historical_conditions,
-                    DocumentRecordModel.module == module,
-                    DocumentRecordModel.category_id == DocumentCategoryModel.id,
-                )
+        historical_category_exists = exists(
+            select(1)
+            .select_from(DocumentRecordModel)
+            .join(DocumentAssetModel, DocumentAssetModel.id == DocumentRecordModel.id)
+            .where(
+                *historical_conditions,
+                DocumentRecordModel.module == module,
+                DocumentRecordModel.category_id == DocumentCategoryModel.id,
             )
-            .correlate(DocumentCategoryModel)
-        )
+        ).correlate(DocumentCategoryModel)
         statement = (
             select(DocumentCategoryModel, aggregate)
             .outerjoin(aggregate, aggregate.c.category_id == DocumentCategoryModel.id)
@@ -667,11 +664,15 @@ class SqlAlchemyDocumentRecordRepository:
             )
         count_statement = select(func.count()).select_from(statement.order_by(None).subquery())
         total = int(await self._session.scalar(count_statement) or 0)
-        statement = statement.order_by(
-            DocumentCategoryModel.sort_order,
-            DocumentCategoryModel.name,
-            DocumentCategoryModel.id,
-        ).offset((page - 1) * size).limit(size)
+        statement = (
+            statement.order_by(
+                DocumentCategoryModel.sort_order,
+                DocumentCategoryModel.name,
+                DocumentCategoryModel.id,
+            )
+            .offset((page - 1) * size)
+            .limit(size)
+        )
         category_rows = (await self._session.execute(statement)).all()
         folders = []
         for result_row in category_rows:
@@ -682,9 +683,7 @@ class SqlAlchemyDocumentRecordRepository:
                     kind="category",
                     name=category.name,
                     module=module,
-                    parent_id=(
-                        f"employee:{employee_id}" if employee_id is not None else module
-                    ),
+                    parent_id=(f"employee:{employee_id}" if employee_id is not None else module),
                     row=result_row,
                     employee_id=str(employee_id) if employee_id is not None else None,
                     category_id=str(category.id),
@@ -813,9 +812,7 @@ class SqlAlchemyDocumentRecordRepository:
                     EmployeeBranchAssignment.assigned_until.is_(None),
                 )
             )
-            conditions.append(
-                or_(DocumentRecordModel.module != "employees", employee_branch_match)
-            )
+            conditions.append(or_(DocumentRecordModel.module != "employees", employee_branch_match))
         return int(
             await self._session.scalar(
                 select(func.count(DocumentRecordModel.id))

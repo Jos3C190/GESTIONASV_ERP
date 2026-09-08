@@ -1,4 +1,5 @@
 """Employee/Department DTOs."""
+
 from __future__ import annotations
 
 import uuid
@@ -45,6 +46,7 @@ class EmployeeOut(ORMOut):
 
 class EmployeeStatsOut(BaseModel):
     """Aggregate employee counts — computed via a single SQL GROUP BY query."""
+
     total: int
     active: int
     inactive: int

@@ -1,4 +1,5 @@
 """Domain entities (re-export barrel)."""
+
 from app.domain.entities.audit import AuditLog
 from app.domain.entities.auth import RefreshToken
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit

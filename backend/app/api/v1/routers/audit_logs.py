@@ -201,9 +201,7 @@ async def get_audit_log(
         raise NotFoundError("Evento de auditoría no encontrado.", code="audit_log_not_found")
     if log.company_id is None:
         if not current.is_superuser:
-            raise NotFoundError(
-                "Evento de auditoría no encontrado.", code="audit_log_not_found"
-            )
+            raise NotFoundError("Evento de auditoría no encontrado.", code="audit_log_not_found")
     else:
         await resolve_branch_scope(session, current, log.company_id, log.branch_id)
     return _to_output(log)

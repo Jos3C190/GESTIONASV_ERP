@@ -18,12 +18,18 @@ def normalize_identifier(value: str) -> str:
 def _valid_gtin_check_digit(value: str) -> bool:
     digits = [int(character) for character in value]
     check = digits.pop()
-    total = sum(digit * (3 if (len(digits) - index) % 2 else 1) for index, digit in enumerate(digits))
+    total = sum(
+        digit * (3 if (len(digits) - index) % 2 else 1) for index, digit in enumerate(digits)
+    )
     return (10 - total % 10) % 10 == check
 
 
 def _valid_isbn10(value: str) -> bool:
-    if len(value) != ISBN10_LENGTH or not value[:9].isdigit() or not (value[-1].isdigit() or value[-1] == "X"):
+    if (
+        len(value) != ISBN10_LENGTH
+        or not value[:9].isdigit()
+        or not (value[-1].isdigit() or value[-1] == "X")
+    ):
         return False
     total = sum((10 - index) * int(character) for index, character in enumerate(value[:9]))
     total += 10 if value[-1] == "X" else int(value[-1])
@@ -40,7 +46,9 @@ def validate_identifier_value(identifier_type: str, value: str) -> str:
     if identifier_type in {"ean", "upc", "gtin"}:
         lengths = {"ean": {8, 13, 14}, "upc": {12}, "gtin": {8, 12, 13, 14}}
         if not normalized.isdigit() or len(normalized) not in lengths[identifier_type]:
-            raise ValueError(f"El identificador {identifier_type.upper()} debe tener una longitud válida.")
+            raise ValueError(
+                f"El identificador {identifier_type.upper()} debe tener una longitud válida."
+            )
         if not _valid_gtin_check_digit(normalized):
             raise ValueError("El dígito de control del identificador no es válido.")
     elif identifier_type == "isbn":

@@ -50,7 +50,8 @@ def decimal_value(value: object, *, field: str) -> Decimal | None:
         raise ValueError(f"{field} debe ser un número válido.") from exc
     if not decimal.is_finite() or decimal < 0:
         raise ValueError(f"{field} debe ser un número no negativo.")
-    if decimal.as_tuple().exponent < -MAX_DECIMAL_PLACES:
+    exponent = decimal.as_tuple().exponent
+    if not isinstance(exponent, int) or exponent < -MAX_DECIMAL_PLACES:
         raise ValueError(f"{field} admite como máximo tres decimales.")
     return decimal
 

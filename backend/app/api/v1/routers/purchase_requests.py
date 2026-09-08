@@ -69,13 +69,6 @@ def _purchase_request_audit_state(item: PurchaseRequest) -> dict[str, object]:
     }
 
 
-def _audit_request_metadata(request: Request) -> dict[str, str | None]:
-    return {
-        "ip_address": request.client.host if request.client else None,
-        "user_agent": request.headers.get("user-agent"),
-    }
-
-
 async def _visible_request(
     *,
     request: Request,
@@ -182,8 +175,9 @@ async def create_purchase_request(
         resource_type="purchase_requests",
         resource_id=str(created.id),
         after_state=_purchase_request_audit_state(created),
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
         required=True,
-        **_audit_request_metadata(request),
     )
     return PurchaseRequestResponse.model_validate(created)
 
@@ -231,8 +225,9 @@ async def update_purchase_request(
         resource_id=str(updated.id),
         before_state=_purchase_request_audit_state(before),
         after_state=_purchase_request_audit_state(updated),
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
         required=True,
-        **_audit_request_metadata(request),
     )
     return PurchaseRequestResponse.model_validate(updated)
 
@@ -270,8 +265,9 @@ async def _transition_purchase_request(
         resource_id=str(updated.id),
         before_state=_purchase_request_audit_state(before),
         after_state=_purchase_request_audit_state(updated),
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
         required=True,
-        **_audit_request_metadata(request),
     )
     return PurchaseRequestResponse.model_validate(updated)
 

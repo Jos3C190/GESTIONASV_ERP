@@ -1,4 +1,5 @@
 """Use case for an authenticated user changing their own password."""
+
 from __future__ import annotations
 
 import uuid
@@ -32,9 +33,7 @@ class ChangePasswordUseCase:
 
     async def execute(self, inp: ChangePasswordInput) -> User:
         user = await self._users.get_by_id(inp.user_id)
-        if user is None or not verify_password(
-            inp.current_password, user.password_hash
-        ):
+        if user is None or not verify_password(inp.current_password, user.password_hash):
             raise AuthenticationError(
                 "La contraseña actual es incorrecta.",
                 code="current_password_invalid",
@@ -50,8 +49,6 @@ class ChangePasswordUseCase:
                 "La nueva contraseña debe ser diferente.",
                 code="password_unchanged",
             )
-        updated = await self._users.update(
-            user.with_password_hash(hash_password(inp.new_password))
-        )
+        updated = await self._users.update(user.with_password_hash(hash_password(inp.new_password)))
         await self._sessions.revoke_all_for_user(user.id)
         return updated

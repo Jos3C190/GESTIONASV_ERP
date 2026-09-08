@@ -5,8 +5,10 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from sqlalchemy import func, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.employee import Department as DomainDept
@@ -87,7 +89,7 @@ class SqlAlchemyDepartmentRepository:
     async def get_ancestor_chain(self, dept_id: uuid.UUID) -> Sequence[DomainDept]:
         """Walk up the parent chain until root. Used for cycle detection."""
         chain: list[DomainDept] = []
-        current_id = dept_id
+        current_id: uuid.UUID | None = dept_id
         seen: set[uuid.UUID] = set()
         while current_id is not None and current_id not in seen:
             seen.add(current_id)
@@ -133,7 +135,7 @@ class SqlAlchemyDepartmentRepository:
             .values(deleted_at=datetime.now(UTC), deletion_reason="Eliminado desde Departamentos")
         )
         result = await self._session.execute(stmt)
-        return (result.rowcount or 0) > 0
+        return (cast(CursorResult[Any], result).rowcount or 0) > 0
 
     async def has_employees(self, dept_id: uuid.UUID) -> bool:
         stmt = select(func.count(ORMEmployee.id)).where(

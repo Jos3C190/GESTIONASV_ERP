@@ -75,7 +75,9 @@ class InMemoryRoleRepository:
     def register_perms(self, perms: list[Permission]) -> None:
         self._all_perms = perms
 
-    async def get_by_id(self, company_id: uuid.UUID, role_id: uuid.UUID, *, load_permissions: bool = False) -> Role | None:
+    async def get_by_id(
+        self, company_id: uuid.UUID, role_id: uuid.UUID, *, load_permissions: bool = False
+    ) -> Role | None:
         r = self._roles_by_id.get(role_id)
         if r is None or r.company_id not in {None, company_id}:
             return None
@@ -93,13 +95,17 @@ class InMemoryRoleRepository:
             )
         return r
 
-    async def get_by_name(self, company_id: uuid.UUID, name: str, *, load_permissions: bool = False) -> Role | None:
+    async def get_by_name(
+        self, company_id: uuid.UUID, name: str, *, load_permissions: bool = False
+    ) -> Role | None:
         for r in self._roles_by_id.values():
             if r.name == name and r.company_id in {None, company_id}:
                 return await self.get_by_id(company_id, r.id, load_permissions=load_permissions)
         return None
 
-    async def list_all(self, company_id: uuid.UUID, *, load_permissions: bool = False) -> Sequence[Role]:
+    async def list_all(
+        self, company_id: uuid.UUID, *, load_permissions: bool = False
+    ) -> Sequence[Role]:
         if not load_permissions:
             return [r for r in self._roles_by_id.values() if r.company_id in {None, company_id}]
         out = []
@@ -171,17 +177,27 @@ class InMemoryRoleRepository:
         return True
 
     async def is_assigned(self, company_id: uuid.UUID, role_id: uuid.UUID) -> bool:
-        return any(role_id in roles for (user_id, cid), roles in self._user_roles.items() if cid == company_id)
+        return any(
+            role_id in roles
+            for (user_id, cid), roles in self._user_roles.items()
+            if cid == company_id
+        )
 
-    async def set_permissions(self, company_id: uuid.UUID, role_id: uuid.UUID, permission_ids: set[uuid.UUID]) -> None:
+    async def set_permissions(
+        self, company_id: uuid.UUID, role_id: uuid.UUID, permission_ids: set[uuid.UUID]
+    ) -> None:
         # Convert ids back to Permission objects using the catalog we keep.
         all_perms = {p.id: p for p in self._all_perms}
         self._role_perms[role_id] = [all_perms[pid] for pid in permission_ids if pid in all_perms]
 
-    async def get_permissions_for_role(self, company_id: uuid.UUID, role_id: uuid.UUID) -> Sequence[Permission]:
+    async def get_permissions_for_role(
+        self, company_id: uuid.UUID, role_id: uuid.UUID
+    ) -> Sequence[Permission]:
         return list(self._role_perms.get(role_id, []))
 
-    async def get_effective_permissions_for_user(self, user_id: uuid.UUID, company_id: uuid.UUID) -> Sequence[Permission]:
+    async def get_effective_permissions_for_user(
+        self, user_id: uuid.UUID, company_id: uuid.UUID
+    ) -> Sequence[Permission]:
         role_ids = self._user_roles.get((user_id, company_id), set())
         seen: dict[uuid.UUID, Permission] = {}
         for rid in role_ids:
@@ -218,12 +234,16 @@ class InMemoryRoleRepository:
         )
         return True
 
-    async def revoke_role_from_user(self, user_id: uuid.UUID, company_id: uuid.UUID, role_id: uuid.UUID) -> bool:
+    async def revoke_role_from_user(
+        self, user_id: uuid.UUID, company_id: uuid.UUID, role_id: uuid.UUID
+    ) -> bool:
         roles = self._user_roles.get((user_id, company_id), set())
         if role_id not in roles:
             return False
         roles.discard(role_id)
         return True
 
-    async def list_user_role_assignments(self, user_id: uuid.UUID, company_id: uuid.UUID) -> Sequence[UserRoleAssignment]:
+    async def list_user_role_assignments(
+        self, user_id: uuid.UUID, company_id: uuid.UUID
+    ) -> Sequence[UserRoleAssignment]:
         return [a for a in self._assignments if a.user_id == user_id and a.company_id == company_id]

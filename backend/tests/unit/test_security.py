@@ -1,8 +1,8 @@
 """Security helpers tests (Argon2 hashing + masking)."""
+
 from __future__ import annotations
 
 import pytest
-
 from app.core.security import (
     constant_time_eq,
     hash_password,
@@ -24,7 +24,7 @@ def test_verify_rejects_wrong_password() -> None:
 
 
 def test_hash_rejects_empty() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="password must not be empty"):
         hash_password("")
 
 

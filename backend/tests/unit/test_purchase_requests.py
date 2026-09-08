@@ -17,13 +17,15 @@ from app.domain.entities.purchase_request import (
 def _detail(
     request_id: uuid.UUID,
     *,
+    product_id: int = 1,
+    unit_id: int = 1,
     quantity: Decimal = Decimal("2.500000"),
 ) -> PurchaseRequestDetail:
     return PurchaseRequestDetail(
         id=uuid.uuid4(),
         purchase_request_id=request_id,
-        product_id=1,
-        unit_id=1,
+        product_id=product_id,
+        unit_id=unit_id,
         quantity=quantity,
     )
 
@@ -105,6 +107,22 @@ def test_allows_cancellation_before_approval(status: PurchaseRequestStatus) -> N
 def test_detail_requires_positive_finite_quantity(quantity: Decimal) -> None:
     with pytest.raises(ValueError, match="mayor que cero"):
         _detail(uuid.uuid4(), quantity=quantity)
+
+
+@pytest.mark.parametrize(
+    ("product_id", "unit_id", "message"),
+    [
+        (0, 1, "producto"),
+        (-1, 1, "producto"),
+        (1, 0, "unidad"),
+        (1, -1, "unidad"),
+    ],
+)
+def test_detail_requires_positive_product_and_unit_ids(
+    product_id: int, unit_id: int, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        _detail(uuid.uuid4(), product_id=product_id, unit_id=unit_id)
 
 
 def test_request_requires_at_least_one_detail() -> None:

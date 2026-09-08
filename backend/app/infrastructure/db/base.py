@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import DateTime, ForeignKey, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -20,8 +19,6 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
     """Declarative base. All ORM models subclass this."""
-
-    metadata: Any  # type: ignore[assignment]
 
 
 class UUIDPKMixin:

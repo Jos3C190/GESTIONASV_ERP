@@ -17,7 +17,9 @@ def test_fixed_units_are_independent_and_volume_is_normalized_to_cubic_metres() 
     assert tuple(WEIGHT_UNITS) == ("mg", "g", "kg", "t", "oz", "lb")
     assert calculate_volume(Decimal("20"), Decimal("30"), Decimal("10"), "cm") == Decimal("0.006")
     assert calculate_volume(Decimal("1"), Decimal("1"), Decimal("1"), "m") == Decimal("1")
-    assert calculate_volume(Decimal("1"), Decimal("1"), Decimal("1"), "mm") == Decimal("0.000000001")
+    assert calculate_volume(Decimal("1"), Decimal("1"), Decimal("1"), "mm") == Decimal(
+        "0.000000001"
+    )
 
 
 def test_incomplete_dimensions_are_valid_but_volume_is_not_calculable() -> None:

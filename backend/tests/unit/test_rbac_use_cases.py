@@ -1,4 +1,5 @@
 """Unit tests for RBAC use cases (in-memory fakes)."""
+
 from __future__ import annotations
 
 import uuid
@@ -39,7 +40,9 @@ from tests.unit.rbac_fakes import (
 COMPANY_ID = uuid.uuid4()
 
 
-def _make_user(*, superuser=False, active=True, uid=None, username="alice", email="alice@example.com") -> User:
+def _make_user(
+    *, superuser=False, active=True, uid=None, username="alice", email="alice@example.com"
+) -> User:
     return User(
         id=uid or uuid.uuid4(),
         username=username,
@@ -151,7 +154,9 @@ async def test_effective_permissions_union_of_roles() -> None:
 async def test_create_role_success() -> None:
     roles = InMemoryRoleRepository()
     uc = CreateRoleUseCase(roles)
-    r = await uc.execute(CreateRoleInput(company_id=COMPANY_ID, name="NEW_ROLE", description="test"))
+    r = await uc.execute(
+        CreateRoleInput(company_id=COMPANY_ID, name="NEW_ROLE", description="test")
+    )
     assert r.name == "NEW_ROLE"
     assert r.is_system is False
 
@@ -183,21 +188,29 @@ async def test_list_roles_page_applies_limit_and_search() -> None:
 
 async def test_update_role_success() -> None:
     roles = InMemoryRoleRepository()
-    created = await CreateRoleUseCase(roles).execute(CreateRoleInput(company_id=COMPANY_ID, name="OLD"))
+    created = await CreateRoleUseCase(roles).execute(
+        CreateRoleInput(company_id=COMPANY_ID, name="OLD")
+    )
     uc = UpdateRoleUseCase(roles)
-    updated = await uc.execute(UpdateRoleInput(company_id=COMPANY_ID, role_id=created.id, name="NEW"))
+    updated = await uc.execute(
+        UpdateRoleInput(company_id=COMPANY_ID, role_id=created.id, name="NEW")
+    )
     assert updated.name == "NEW"
 
 
 async def test_update_role_not_found() -> None:
     roles = InMemoryRoleRepository()
     with pytest.raises(NotFoundError):
-        await UpdateRoleUseCase(roles).execute(UpdateRoleInput(company_id=COMPANY_ID, role_id=uuid.uuid4(), name="X"))
+        await UpdateRoleUseCase(roles).execute(
+            UpdateRoleInput(company_id=COMPANY_ID, role_id=uuid.uuid4(), name="X")
+        )
 
 
 async def test_delete_role_success() -> None:
     roles = InMemoryRoleRepository()
-    created = await CreateRoleUseCase(roles).execute(CreateRoleInput(company_id=COMPANY_ID, name="DEL"))
+    created = await CreateRoleUseCase(roles).execute(
+        CreateRoleInput(company_id=COMPANY_ID, name="DEL")
+    )
     ok = await DeleteRoleUseCase(roles).execute(COMPANY_ID, created.id)
     assert ok is True
 
@@ -218,7 +231,9 @@ async def test_set_role_permissions() -> None:
     role = await CreateRoleUseCase(roles).execute(CreateRoleInput(company_id=COMPANY_ID, name="R"))
     uc = SetRolePermissionsUseCase(roles, perms)
     updated = await uc.execute(
-        SetRolePermissionsInput(company_id=COMPANY_ID, role_id=role.id, permission_codes=("users:read", "users:create"))
+        SetRolePermissionsInput(
+            company_id=COMPANY_ID, role_id=role.id, permission_codes=("users:read", "users:create")
+        )
     )
     assert len(updated.permissions) == 2
 
@@ -230,7 +245,11 @@ async def test_set_role_permissions_rejects_unknown_code() -> None:
     role = await CreateRoleUseCase(roles).execute(CreateRoleInput(company_id=COMPANY_ID, name="R"))
     uc = SetRolePermissionsUseCase(roles, perms)
     with pytest.raises(BusinessRuleError):
-        await uc.execute(SetRolePermissionsInput(company_id=COMPANY_ID, role_id=role.id, permission_codes=("unknown:perm",)))
+        await uc.execute(
+            SetRolePermissionsInput(
+                company_id=COMPANY_ID, role_id=role.id, permission_codes=("unknown:perm",)
+            )
+        )
 
 
 # ---------------- Role assignment ----------------
@@ -244,7 +263,9 @@ async def test_assign_role_success() -> None:
     actor = await users.add(_make_user(username="admin", email="admin@e.com", superuser=True))
     uc = AssignRoleUseCase(users, roles)
     created = await uc.execute(
-        AssignRoleInput(user_id=user.id, company_id=COMPANY_ID, role_id=role.id, assigned_by=actor.id)
+        AssignRoleInput(
+            user_id=user.id, company_id=COMPANY_ID, role_id=role.id, assigned_by=actor.id
+        )
     )
     assert created is True
 
@@ -256,8 +277,16 @@ async def test_assign_role_idempotent() -> None:
     role = await CreateRoleUseCase(roles).execute(CreateRoleInput(company_id=COMPANY_ID, name="R"))
     actor = await users.add(_make_user(username="admin", email="a@e.com"))
     uc = AssignRoleUseCase(users, roles)
-    await uc.execute(AssignRoleInput(user_id=user.id, company_id=COMPANY_ID, role_id=role.id, assigned_by=actor.id))
-    created = await uc.execute(AssignRoleInput(user_id=user.id, company_id=COMPANY_ID, role_id=role.id, assigned_by=actor.id))
+    await uc.execute(
+        AssignRoleInput(
+            user_id=user.id, company_id=COMPANY_ID, role_id=role.id, assigned_by=actor.id
+        )
+    )
+    created = await uc.execute(
+        AssignRoleInput(
+            user_id=user.id, company_id=COMPANY_ID, role_id=role.id, assigned_by=actor.id
+        )
+    )
     assert created is False
 
 
@@ -268,7 +297,11 @@ async def test_assign_superadmin_to_self_forbidden() -> None:
     role = await roles.add(Role(id=uuid.uuid4(), name="SUPER_ADMIN", is_system=True))
     uc = AssignRoleUseCase(users, roles)
     with pytest.raises(BusinessRuleError) as exc:
-        await uc.execute(AssignRoleInput(user_id=admin.id, company_id=COMPANY_ID, role_id=role.id, assigned_by=admin.id))
+        await uc.execute(
+            AssignRoleInput(
+                user_id=admin.id, company_id=COMPANY_ID, role_id=role.id, assigned_by=admin.id
+            )
+        )
     assert exc.value.code == "self_superadmin_assign_forbidden"
 
 
@@ -277,16 +310,24 @@ async def test_revoke_role_success() -> None:
     roles = InMemoryRoleRepository()
     user = await users.add(_make_user())
     role = await CreateRoleUseCase(roles).execute(CreateRoleInput(company_id=COMPANY_ID, name="R"))
-    fallback_role = await CreateRoleUseCase(roles).execute(CreateRoleInput(company_id=COMPANY_ID, name="FALLBACK"))
+    fallback_role = await CreateRoleUseCase(roles).execute(
+        CreateRoleInput(company_id=COMPANY_ID, name="FALLBACK")
+    )
     actor = await users.add(_make_user(username="admin", email="a@e.com"))
     await AssignRoleUseCase(users, roles).execute(
-        AssignRoleInput(user_id=user.id, company_id=COMPANY_ID, role_id=role.id, assigned_by=actor.id)
+        AssignRoleInput(
+            user_id=user.id, company_id=COMPANY_ID, role_id=role.id, assigned_by=actor.id
+        )
     )
     await AssignRoleUseCase(users, roles).execute(
-        AssignRoleInput(user_id=user.id, company_id=COMPANY_ID, role_id=fallback_role.id, assigned_by=actor.id)
+        AssignRoleInput(
+            user_id=user.id, company_id=COMPANY_ID, role_id=fallback_role.id, assigned_by=actor.id
+        )
     )
     uc = RevokeRoleUseCase(users, roles)
-    ok = await uc.execute(RevokeRoleInput(user_id=user.id, company_id=COMPANY_ID, role_id=role.id, actor_id=actor.id))
+    ok = await uc.execute(
+        RevokeRoleInput(user_id=user.id, company_id=COMPANY_ID, role_id=role.id, actor_id=actor.id)
+    )
     assert ok is True
 
 
@@ -295,13 +336,19 @@ async def test_revoke_last_role_forbidden() -> None:
     roles = InMemoryRoleRepository()
     user = await users.add(_make_user())
     actor = await users.add(_make_user(username="admin", email="a@e.com"))
-    role = await CreateRoleUseCase(roles).execute(CreateRoleInput(company_id=COMPANY_ID, name="ONLY"))
+    role = await CreateRoleUseCase(roles).execute(
+        CreateRoleInput(company_id=COMPANY_ID, name="ONLY")
+    )
     await AssignRoleUseCase(users, roles).execute(
-        AssignRoleInput(user_id=user.id, company_id=COMPANY_ID, role_id=role.id, assigned_by=actor.id)
+        AssignRoleInput(
+            user_id=user.id, company_id=COMPANY_ID, role_id=role.id, assigned_by=actor.id
+        )
     )
     with pytest.raises(BusinessRuleError) as exc:
         await RevokeRoleUseCase(users, roles).execute(
-            RevokeRoleInput(user_id=user.id, company_id=COMPANY_ID, role_id=role.id, actor_id=actor.id)
+            RevokeRoleInput(
+                user_id=user.id, company_id=COMPANY_ID, role_id=role.id, actor_id=actor.id
+            )
         )
     assert exc.value.code == "user_requires_role"
 
@@ -313,7 +360,11 @@ async def test_revoke_superadmin_from_self_forbidden() -> None:
     role = await roles.add(Role(id=uuid.uuid4(), name="SUPER_ADMIN", is_system=True))
     uc = RevokeRoleUseCase(users, roles)
     with pytest.raises(BusinessRuleError) as exc:
-        await uc.execute(RevokeRoleInput(user_id=admin.id, company_id=COMPANY_ID, role_id=role.id, actor_id=admin.id))
+        await uc.execute(
+            RevokeRoleInput(
+                user_id=admin.id, company_id=COMPANY_ID, role_id=role.id, actor_id=admin.id
+            )
+        )
     assert exc.value.code == "self_superadmin_revoke_forbidden"
 
 
@@ -324,5 +375,7 @@ async def test_revoke_role_not_assigned() -> None:
     role = await CreateRoleUseCase(roles).execute(CreateRoleInput(company_id=COMPANY_ID, name="R"))
     actor = await users.add(_make_user(username="admin", email="a@e.com"))
     uc = RevokeRoleUseCase(users, roles)
-    ok = await uc.execute(RevokeRoleInput(user_id=user.id, company_id=COMPANY_ID, role_id=role.id, actor_id=actor.id))
+    ok = await uc.execute(
+        RevokeRoleInput(user_id=user.id, company_id=COMPANY_ID, role_id=role.id, actor_id=actor.id)
+    )
     assert ok is False

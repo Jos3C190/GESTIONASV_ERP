@@ -27,6 +27,8 @@ LocationType = Literal[
 LocationLifecycleStatus = Literal[
     "draft", "active", "blocked", "blocked_in", "blocked_out", "maintenance", "retired"
 ]
+
+
 class LocationWrite(CapacityConfigurationIn):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -46,6 +48,7 @@ class LocationWrite(CapacityConfigurationIn):
     external_id: str | None = Field(None, max_length=120)
     scheme_version: int | None = Field(None, ge=1)
     expected_updated_at: datetime | None = None
+
 
 class LocationCodePreviewIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -186,6 +189,7 @@ class BatchDefaults(CapacityConfigurationIn):
     pick_sequence: int | None = Field(None, ge=0)
     putaway_sequence: int | None = Field(None, ge=0)
     external_id: str | None = Field(None, max_length=120)
+
 
 class GeneratorPreviewIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)

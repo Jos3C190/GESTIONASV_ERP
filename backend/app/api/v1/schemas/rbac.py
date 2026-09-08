@@ -17,7 +17,7 @@ class PermissionOut(ORMOut):
     description: str | None = None
     module: str | None = None
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def is_protected(self) -> bool:
         """Standard catalogue permissions cannot be renamed or deleted."""

@@ -3,11 +3,12 @@
 If a revoked/expired refresh token is presented, we treat it as a possible
 theft signal and revoke ALL the user's sessions (defense per OWASP A07).
 """
+
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.exceptions import AuthenticationError
 from app.core.logging import get_logger
@@ -85,10 +86,10 @@ class RefreshTokenUseCase:
             token_hash=self._tokens.hash_refresh_token(raw_new),
             user_agent=inp.user_agent,
             ip_address=inp.ip_address,
-            expires_at=datetime.now(timezone.utc) + self._tokens.refresh_ttl,
+            expires_at=datetime.now(UTC) + self._tokens.refresh_ttl,
             revoked_at=None,
             rotated_from=stored.id,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         await self._sessions.add(new_domain)
 

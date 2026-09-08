@@ -51,15 +51,11 @@ def _out(context: OperationalContext) -> OperationalContextOut:
     )
 
 
-@router.get(
-    "/operational-contexts/{company_id}", response_model=OperationalContextOut
-)
+@router.get("/operational-contexts/{company_id}", response_model=OperationalContextOut)
 async def get_operational_context(
     company_id: uuid.UUID, session: SessionDep, current: CurrentUser
 ) -> OperationalContextOut:
-    context = await GetOperationalContext(
-        SqlAlchemyOperationalContextRepository(session)
-    ).execute(
+    context = await GetOperationalContext(SqlAlchemyOperationalContextRepository(session)).execute(
         user_id=current.id,
         company_id=company_id,
         is_superuser=current.is_superuser,
@@ -110,9 +106,7 @@ async def get_user_branch_access(
     target = await session.get(ORMUser, user_id)
     if target is None:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
-    context = await GetOperationalContext(
-        SqlAlchemyOperationalContextRepository(session)
-    ).execute(
+    context = await GetOperationalContext(SqlAlchemyOperationalContextRepository(session)).execute(
         user_id=user_id,
         company_id=company_id,
         is_superuser=target.is_superuser,
@@ -144,9 +138,9 @@ async def replace_user_branch_access(
             detail="Los superadministradores siempre tienen acceso a todas las sucursales.",
         )
 
-    previous = await GetOperationalContext(
-        SqlAlchemyOperationalContextRepository(session)
-    ).execute(user_id=user_id, company_id=company_id, is_superuser=False)
+    previous = await GetOperationalContext(SqlAlchemyOperationalContextRepository(session)).execute(
+        user_id=user_id, company_id=company_id, is_superuser=False
+    )
     context = await ReplaceUserBranchAccess(
         SqlAlchemyOperationalContextRepository(session)
     ).execute(
@@ -166,16 +160,12 @@ async def replace_user_branch_access(
         before_state={
             "access_all_branches": previous.access_all_branches,
             "branch_ids": [str(branch.id) for branch in previous.branches],
-            "default_branch_id": str(previous.last_branch_id)
-            if previous.last_branch_id
-            else None,
+            "default_branch_id": str(previous.last_branch_id) if previous.last_branch_id else None,
         },
         after_state={
             "access_all_branches": context.access_all_branches,
             "branch_ids": [str(branch.id) for branch in context.branches],
-            "default_branch_id": str(context.last_branch_id)
-            if context.last_branch_id
-            else None,
+            "default_branch_id": str(context.last_branch_id) if context.last_branch_id else None,
         },
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),

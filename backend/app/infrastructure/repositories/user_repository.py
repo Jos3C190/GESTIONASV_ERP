@@ -9,8 +9,10 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from sqlalchemy import func, or_, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.user import User as DomainUser
@@ -210,7 +212,7 @@ class SqlAlchemyUserRepository:
             .values(is_active=False)
         )
         result = await self._session.execute(stmt)
-        changed = (result.rowcount or 0) > 0
+        changed = (cast(CursorResult[Any], result).rowcount or 0) > 0
         if changed:
             await self._revoke_auth_credentials(user_id, revoked_at=revoked_at)
         return changed

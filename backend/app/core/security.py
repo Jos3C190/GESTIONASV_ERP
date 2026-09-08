@@ -4,10 +4,10 @@ Phase 0 keeps only the Argon2 hasher facade and a constant-time compare helper.
 JWT issuance/verification, password policy, and token rotation arrive in Phase 1.
 The Argon2 parameters are read from settings so they can be tuned per env.
 """
+
 from __future__ import annotations
 
 import hmac
-from typing import cast
 
 from argon2 import PasswordHasher, Type
 from argon2.exceptions import Argon2Error, InvalidHash, VerificationError, VerifyMismatchError
@@ -30,7 +30,7 @@ def hash_password(plain: str) -> str:
     """Hash a password using Argon2id. Raises ValueError on empty input."""
     if not plain:
         raise ValueError("password must not be empty")
-    return cast(str, _hasher.hash(plain))
+    return _hasher.hash(plain)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -38,7 +38,7 @@ def verify_password(plain: str, hashed: str) -> bool:
     if not plain or not hashed:
         return False
     try:
-        return cast(bool, _hasher.verify(hashed, plain))
+        return _hasher.verify(hashed, plain)
     except VerifyMismatchError:
         return False
     except (VerificationError, InvalidHash, Argon2Error) as exc:
@@ -48,7 +48,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def needs_rehash(hashed: str) -> bool:
     """True if `hashed` was produced with weaker params than current."""
-    return cast(bool, _hasher.check_needs_rehash(hashed))
+    return _hasher.check_needs_rehash(hashed)
 
 
 def constant_time_eq(a: str, b: str) -> bool:

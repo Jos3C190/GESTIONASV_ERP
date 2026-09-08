@@ -107,9 +107,7 @@ class SqlAlchemyPurchaseRequestRepository:
         # The transaction-scoped advisory lock serializes allocation per tenant.
         # The UNIQUE(company_id, code) constraint remains the final DB guard.
         lock_name = f"purchase_requests:{company_id}"
-        await self._session.execute(
-            select(func.pg_advisory_xact_lock(func.hashtext(lock_name)))
-        )
+        await self._session.execute(select(func.pg_advisory_xact_lock(func.hashtext(lock_name))))
         last_number = await self._session.scalar(
             select(
                 func.coalesce(

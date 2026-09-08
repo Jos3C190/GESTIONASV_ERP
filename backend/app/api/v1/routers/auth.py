@@ -4,10 +4,10 @@ Login and refresh are rate-limited per IP (OWASP A07). Refresh tokens are
 issued as httpOnly Secure SameSite=Strict cookies AND echoed in the body
 once for clients that can't store cookies. Logout is idempotent.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Cookie, Depends, Request, Response, status
-from fastapi.responses import JSONResponse
 
 from app.api.v1.deps import (
     CurrentUser,
@@ -38,6 +38,7 @@ from app.application.auth.refresh_token import (
 )
 from app.application.password_policy import PasswordPolicy
 from app.core.config import settings
+from app.core.exceptions import AuthenticationError
 from app.domain.ports.refresh_token_repository import RefreshTokenRepository
 from app.domain.ports.user_repository import UserRepository
 from app.middlewares.rate_limit import rate_limit_login, rate_limit_refresh
@@ -132,9 +133,9 @@ async def refresh(
 ) -> TokenResponse:
     raw = (body.refresh_token if body and body.refresh_token else None) or refresh_cookie
     if not raw:
-        return JSONResponse(
-            status_code=401,
-            content={"code": "token_invalid", "message": "Refresh token requerido."},
+        raise AuthenticationError(
+            "Refresh token requerido.",
+            code="token_invalid",
         )
     result = await use_case.execute(
         RefreshInput(

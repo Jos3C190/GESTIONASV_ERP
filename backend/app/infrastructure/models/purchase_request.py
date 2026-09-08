@@ -42,9 +42,7 @@ class PurchaseRequestModel(UUIDPKMixin, TimestampMixin, Base):
     request_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    required_date: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    required_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     justification: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="draft")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -5,8 +5,10 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.rbac import Permission as DomainPermission
@@ -95,7 +97,7 @@ class SqlAlchemyPermissionRepository:
                 deletion_reason="Eliminado desde Roles y permisos",
             )
         )
-        return (result.rowcount or 0) > 0
+        return (cast(CursorResult[Any], result).rowcount or 0) > 0
 
     async def bulk_add(self, permissions: Sequence[DomainPermission]) -> int:
         if not permissions:

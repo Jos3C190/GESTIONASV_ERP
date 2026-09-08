@@ -1,4 +1,5 @@
 """E2E: employees + departments CRUD, hierarchy, cycle detection, link/unlink."""
+
 from __future__ import annotations
 
 import uuid
@@ -35,7 +36,11 @@ async def test_create_department(e2e_client) -> None:
     r = await e2e_client.post(
         "/api/v1/departments",
         headers=headers,
-        json={"company_id": headers["X-Company-ID"], "name": f"IT_{uuid.uuid4().hex[:6]}", "description": "Tech"},
+        json={
+            "company_id": headers["X-Company-ID"],
+            "name": f"IT_{uuid.uuid4().hex[:6]}",
+            "description": "Tech",
+        },
     )
     assert r.status_code == 201
     assert r.json()["name"].startswith("IT_")
@@ -44,7 +49,9 @@ async def test_create_department(e2e_client) -> None:
 async def test_list_departments(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     await e2e_client.post(
-        "/api/v1/departments", headers=headers, json={"company_id": headers["X-Company-ID"], "name": f"HR_{uuid.uuid4().hex[:6]}"}
+        "/api/v1/departments",
+        headers=headers,
+        json={"company_id": headers["X-Company-ID"], "name": f"HR_{uuid.uuid4().hex[:6]}"},
     )
     r = await e2e_client.get(
         f"/api/v1/departments?company_id={headers['X-Company-ID']}&size=1&page=1&search=HR_",
@@ -61,13 +68,19 @@ async def test_list_departments(e2e_client) -> None:
 async def test_create_department_hierarchy(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     parent = await e2e_client.post(
-        "/api/v1/departments", headers=headers, json={"company_id": headers["X-Company-ID"], "name": f"P_{uuid.uuid4().hex[:6]}"}
+        "/api/v1/departments",
+        headers=headers,
+        json={"company_id": headers["X-Company-ID"], "name": f"P_{uuid.uuid4().hex[:6]}"},
     )
     pid = parent.json()["id"]
     child = await e2e_client.post(
         "/api/v1/departments",
         headers=headers,
-        json={"company_id": headers["X-Company-ID"], "name": f"C_{uuid.uuid4().hex[:6]}", "parent_department_id": pid},
+        json={
+            "company_id": headers["X-Company-ID"],
+            "name": f"C_{uuid.uuid4().hex[:6]}",
+            "parent_department_id": pid,
+        },
     )
     assert child.status_code == 201
     assert child.json()["parent_department_id"] == pid
@@ -76,12 +89,18 @@ async def test_create_department_hierarchy(e2e_client) -> None:
 async def test_update_department_cycle_detection(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     a = await e2e_client.post(
-        "/api/v1/departments", headers=headers, json={"company_id": headers["X-Company-ID"], "name": f"A_{uuid.uuid4().hex[:6]}"}
+        "/api/v1/departments",
+        headers=headers,
+        json={"company_id": headers["X-Company-ID"], "name": f"A_{uuid.uuid4().hex[:6]}"},
     )
     b = await e2e_client.post(
         "/api/v1/departments",
         headers=headers,
-        json={"company_id": headers["X-Company-ID"], "name": f"B_{uuid.uuid4().hex[:6]}", "parent_department_id": a.json()["id"]},
+        json={
+            "company_id": headers["X-Company-ID"],
+            "name": f"B_{uuid.uuid4().hex[:6]}",
+            "parent_department_id": a.json()["id"],
+        },
     )
     # Try to set A's parent to B -> would create cycle A->B->A
     r = await e2e_client.patch(
@@ -96,7 +115,9 @@ async def test_update_department_cycle_detection(e2e_client) -> None:
 async def test_update_department_self_parent(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     d = await e2e_client.post(
-        "/api/v1/departments", headers=headers, json={"company_id": headers["X-Company-ID"], "name": f"S_{uuid.uuid4().hex[:6]}"}
+        "/api/v1/departments",
+        headers=headers,
+        json={"company_id": headers["X-Company-ID"], "name": f"S_{uuid.uuid4().hex[:6]}"},
     )
     r = await e2e_client.patch(
         f"/api/v1/departments/{d.json()['id']}",
@@ -110,7 +131,9 @@ async def test_update_department_self_parent(e2e_client) -> None:
 async def test_delete_department_with_employees_blocked(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     d = await e2e_client.post(
-        "/api/v1/departments", headers=headers, json={"company_id": headers["X-Company-ID"], "name": f"DEL_{uuid.uuid4().hex[:6]}"}
+        "/api/v1/departments",
+        headers=headers,
+        json={"company_id": headers["X-Company-ID"], "name": f"DEL_{uuid.uuid4().hex[:6]}"},
     )
     did = d.json()["id"]
     await e2e_client.post(
@@ -137,7 +160,9 @@ async def test_delete_department_with_employees_blocked(e2e_client) -> None:
 async def test_delete_empty_department(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     d = await e2e_client.post(
-        "/api/v1/departments", headers=headers, json={"company_id": headers["X-Company-ID"], "name": f"EMPTY_{uuid.uuid4().hex[:6]}"}
+        "/api/v1/departments",
+        headers=headers,
+        json={"company_id": headers["X-Company-ID"], "name": f"EMPTY_{uuid.uuid4().hex[:6]}"},
     )
     r = await e2e_client.request(
         "DELETE",
@@ -175,12 +200,22 @@ async def test_create_employee_duplicate_code(e2e_client) -> None:
     await e2e_client.post(
         "/api/v1/employees",
         headers=headers,
-        json={"company_id": headers["X-Company-ID"], "employee_code": code, "first_name": "Alpha", "last_name": "Beta"},
+        json={
+            "company_id": headers["X-Company-ID"],
+            "employee_code": code,
+            "first_name": "Alpha",
+            "last_name": "Beta",
+        },
     )
     r = await e2e_client.post(
         "/api/v1/employees",
         headers=headers,
-        json={"company_id": headers["X-Company-ID"], "employee_code": code, "first_name": "Gamma", "last_name": "Delta"},
+        json={
+            "company_id": headers["X-Company-ID"],
+            "employee_code": code,
+            "first_name": "Gamma",
+            "last_name": "Delta",
+        },
     )
     assert r.status_code == 409
     assert r.json()["code"] == "employee_code_taken"
@@ -199,7 +234,9 @@ async def test_list_employees_paginated(e2e_client) -> None:
                 "last_name": "Test",
             },
         )
-    r = await e2e_client.get(f"/api/v1/employees?company_id={headers['X-Company-ID']}&page=1&size=2", headers=headers)
+    r = await e2e_client.get(
+        f"/api/v1/employees?company_id={headers['X-Company-ID']}&page=1&size=2", headers=headers
+    )
     assert r.status_code == 200
     body = r.json()
     assert len(body["items"]) <= 2
@@ -218,7 +255,9 @@ async def test_list_employees_search(e2e_client) -> None:
             "last_name": "Searchable",
         },
     )
-    r = await e2e_client.get(f"/api/v1/employees?company_id={headers['X-Company-ID']}&search=UniqueName", headers=headers)
+    r = await e2e_client.get(
+        f"/api/v1/employees?company_id={headers['X-Company-ID']}&search=UniqueName", headers=headers
+    )
     assert r.status_code == 200
     items = r.json()["items"]
     assert any("UniqueName" in e["first_name"] for e in items)
@@ -305,7 +344,9 @@ async def test_delete_employee(e2e_client) -> None:
     )
     assert r.status_code == 200
     # Verify it no longer appears in list
-    r = await e2e_client.get(f"/api/v1/employees?company_id={headers['X-Company-ID']}", headers=headers)
+    r = await e2e_client.get(
+        f"/api/v1/employees?company_id={headers['X-Company-ID']}", headers=headers
+    )
     assert all(e["id"] != emp.json()["id"] for e in r.json()["items"])
 
 

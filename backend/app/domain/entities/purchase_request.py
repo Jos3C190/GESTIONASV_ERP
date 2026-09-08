@@ -27,9 +27,7 @@ class PurchaseRequestStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
-PURCHASE_REQUEST_TRANSITIONS: dict[
-    PurchaseRequestStatus, frozenset[PurchaseRequestStatus]
-] = {
+PURCHASE_REQUEST_TRANSITIONS: dict[PurchaseRequestStatus, frozenset[PurchaseRequestStatus]] = {
     PurchaseRequestStatus.DRAFT: frozenset(
         {PurchaseRequestStatus.SUBMITTED, PurchaseRequestStatus.CANCELLED}
     ),
@@ -94,6 +92,10 @@ class PurchaseRequestDetail:
     updated_at: datetime | None = None
 
     def __post_init__(self) -> None:
+        if self.product_id <= 0:
+            raise ValueError("El producto del detalle debe ser válido.")
+        if self.unit_id <= 0:
+            raise ValueError("La unidad del detalle debe ser válida.")
         if not self.quantity.is_finite() or self.quantity <= 0:
             raise ValueError("La cantidad solicitada debe ser mayor que cero.")
 

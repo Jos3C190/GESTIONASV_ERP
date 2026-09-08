@@ -512,9 +512,7 @@ class DocumentRecordService:
         variant: str = "original",
     ) -> tuple[str, datetime]:
         await self.get(company_id, document_id)
-        return await self._documents.preview_url(
-            company_id, document_id, actor_id, variant=variant
-        )
+        return await self._documents.preview_url(company_id, document_id, actor_id, variant=variant)
 
 
 __all__ = ["DocumentMetadataInput", "DocumentRecordService", "DocumentRecordUpload"]

@@ -1,9 +1,10 @@
 """Domain entity: RefreshToken (session)."""
+
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,8 +23,8 @@ class RefreshToken:
     def is_active(self) -> bool:
         if self.revoked_at is not None:
             return False
-        return self.expires_at > datetime.now(timezone.utc)
+        return self.expires_at > datetime.now(UTC)
 
     @property
     def is_expired(self) -> bool:
-        return self.expires_at <= datetime.now(timezone.utc)
+        return self.expires_at <= datetime.now(UTC)

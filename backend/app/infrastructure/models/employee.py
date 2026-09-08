@@ -14,7 +14,6 @@ from app.infrastructure.db.base import Base, SoftDeleteMixin, TimestampMixin, UU
 
 class Department(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "departments"
-    __table_args__ = ({"comment": "Departments (self-referencing hierarchy)."},)
 
     company_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),
@@ -47,7 +46,6 @@ class Department(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
 
 class Employee(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "employees"
-    __table_args__ = ({"comment": "Employee profiles (optionally linked to a user account)."},)
 
     company_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),

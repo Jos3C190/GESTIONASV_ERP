@@ -1,4 +1,5 @@
 """Employee/Department use cases barrel."""
+
 from app.application.employees.department_crud import (
     CreateDepartmentInput,
     CreateDepartmentUseCase,

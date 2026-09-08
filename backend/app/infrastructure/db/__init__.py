@@ -1,4 +1,5 @@
 """Database infrastructure: engine, session factory, declarative base."""
+
 from app.infrastructure.db.base import Base
 from app.infrastructure.db.session import (
     async_engine,

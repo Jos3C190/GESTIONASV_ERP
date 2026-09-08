@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
@@ -58,14 +58,14 @@ class CategoryModel(TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "categories"
 
     id_category: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    uuid: Mapped[uuid.UUID] = mapped_column(
+    uuid: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         nullable=False,
         unique=True,
         index=True,
         server_default=text("gen_random_uuid()"),
     )
-    company_id: Mapped[uuid.UUID] = mapped_column(
+    company_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
@@ -97,7 +97,7 @@ class SubCategoryModel(TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "sub_categories"
 
     id_sub_category: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    company_id: Mapped[uuid.UUID] = mapped_column(
+    company_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
@@ -136,7 +136,7 @@ class UnitModel(TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "units"
 
     id_unit: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    owner_company_id: Mapped[uuid.UUID | None] = mapped_column(
+    owner_company_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=True,
@@ -190,7 +190,7 @@ class CompanyUnitModel(TimestampMixin, Base):
     __tablename__ = "company_units"
     __table_args__ = (Index("ix_company_units_company_enabled", "company_id", "is_enabled"),)
 
-    company_id: Mapped[uuid.UUID] = mapped_column(
+    company_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), primary_key=True
     )
     unit_id: Mapped[int] = mapped_column(
@@ -207,14 +207,14 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "products"
 
     id_product: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    uuid: Mapped[uuid.UUID] = mapped_column(
+    uuid: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         nullable=False,
         unique=True,
         index=True,
         server_default=text("gen_random_uuid()"),
     )
-    company_id: Mapped[uuid.UUID] = mapped_column(
+    company_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
@@ -248,7 +248,9 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     presentation: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
     product_kind: Mapped[str] = mapped_column(String(16), nullable=False, server_default="goods")
-    lifecycle_status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="active"
+    )
     can_purchase: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     can_sell: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     sales_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -257,21 +259,31 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
     sales_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     purchase_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    keywords: Mapped[list[str]] = mapped_column(ARRAY(String(80)), nullable=False, server_default=text("ARRAY[]::varchar[]"))
-    origin_country_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("countries.id_country", ondelete="RESTRICT"), nullable=True)
-    brand_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
-    manufacturer_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    keywords: Mapped[list[str]] = mapped_column(
+        ARRAY(String(80)), nullable=False, server_default=text("ARRAY[]::varchar[]")
+    )
+    origin_country_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("countries.id_country", ondelete="RESTRICT"), nullable=True
+    )
+    brand_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    manufacturer_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     storage_condition: Mapped[str | None] = mapped_column(String(20), nullable=True)
     storage_temperature_min_c: Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)
     storage_temperature_max_c: Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)
-    storage_humidity_max_percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    storage_humidity_max_percent: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 2), nullable=True
+    )
     is_fragile: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     keep_dry: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
-    keep_upright: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    keep_upright: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     stackable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     max_stack_height: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
     handling_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    variant_mode: Mapped[str] = mapped_column(String(16), nullable=False, server_default="standalone")
+    variant_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="standalone"
+    )
     purchase_unit: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     sale_unit: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -344,14 +356,36 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint("product_kind IN ('goods','service')", name="ck_products_product_kind"),
-        CheckConstraint("variant_mode IN ('standalone','template')", name="ck_products_variant_mode"),
-        CheckConstraint("lifecycle_status IN ('draft','active','blocked','discontinued','retired')", name="ck_products_lifecycle_status"),
-        CheckConstraint("is_active = (lifecycle_status = 'active')", name="ck_products_active_matches_lifecycle"),
-        CheckConstraint("storage_condition IS NULL OR storage_condition IN ('ambient','cool','refrigerated','frozen','dry','other')", name="ck_products_storage_condition"),
-        CheckConstraint("storage_temperature_min_c IS NULL OR storage_temperature_max_c IS NULL OR storage_temperature_min_c <= storage_temperature_max_c", name="ck_products_storage_temperature_range"),
-        CheckConstraint("storage_humidity_max_percent IS NULL OR (storage_humidity_max_percent >= 0 AND storage_humidity_max_percent <= 100)", name="ck_products_storage_humidity_range"),
-        CheckConstraint("max_stack_height IS NULL OR max_stack_height > 0", name="ck_products_stack_height_positive"),
-        CheckConstraint("product_kind = 'goods' OR (storage_condition IS NULL AND storage_temperature_min_c IS NULL AND storage_temperature_max_c IS NULL AND storage_humidity_max_percent IS NULL AND is_fragile = false AND keep_dry = false AND keep_upright = false AND max_stack_height IS NULL AND handling_notes IS NULL)", name="ck_products_service_no_storage"),
+        CheckConstraint(
+            "variant_mode IN ('standalone','template')", name="ck_products_variant_mode"
+        ),
+        CheckConstraint(
+            "lifecycle_status IN ('draft','active','blocked','discontinued','retired')",
+            name="ck_products_lifecycle_status",
+        ),
+        CheckConstraint(
+            "is_active = (lifecycle_status = 'active')", name="ck_products_active_matches_lifecycle"
+        ),
+        CheckConstraint(
+            "storage_condition IS NULL OR storage_condition IN ('ambient','cool','refrigerated','frozen','dry','other')",
+            name="ck_products_storage_condition",
+        ),
+        CheckConstraint(
+            "storage_temperature_min_c IS NULL OR storage_temperature_max_c IS NULL OR storage_temperature_min_c <= storage_temperature_max_c",
+            name="ck_products_storage_temperature_range",
+        ),
+        CheckConstraint(
+            "storage_humidity_max_percent IS NULL OR (storage_humidity_max_percent >= 0 AND storage_humidity_max_percent <= 100)",
+            name="ck_products_storage_humidity_range",
+        ),
+        CheckConstraint(
+            "max_stack_height IS NULL OR max_stack_height > 0",
+            name="ck_products_stack_height_positive",
+        ),
+        CheckConstraint(
+            "product_kind = 'goods' OR (storage_condition IS NULL AND storage_temperature_min_c IS NULL AND storage_temperature_max_c IS NULL AND storage_humidity_max_percent IS NULL AND is_fragile = false AND keep_dry = false AND keep_upright = false AND max_stack_height IS NULL AND handling_notes IS NULL)",
+            name="ck_products_service_no_storage",
+        ),
     )
 
     category: Mapped[CategoryModel] = relationship("CategoryModel", back_populates="products")
@@ -366,10 +400,16 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
         lazy="selectin",
     )
     identifiers: Mapped[list[ProductIdentifierModel]] = relationship(
-        "ProductIdentifierModel", back_populates="product", cascade="all, delete-orphan", order_by="ProductIdentifierModel.identifier_type"
+        "ProductIdentifierModel",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductIdentifierModel.identifier_type",
     )
     supplier_links: Mapped[list[ProductSupplierModel]] = relationship(
-        "ProductSupplierModel", back_populates="product", cascade="all, delete-orphan", overlaps="supplier,product_links"
+        "ProductSupplierModel",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        overlaps="supplier,product_links",
     )
     variants: Mapped[list[ProductVariantModel]] = relationship(
         "ProductVariantModel",
@@ -385,5 +425,9 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
         order_by="ProductFamilyAttributeModel.position",
         lazy="selectin",
     )
-    brand: Mapped[ProductBrandModel | None] = relationship("ProductBrandModel", foreign_keys=[brand_id], viewonly=True)
-    manufacturer: Mapped[ProductManufacturerModel | None] = relationship("ProductManufacturerModel", foreign_keys=[manufacturer_id], viewonly=True)
+    brand: Mapped[ProductBrandModel | None] = relationship(
+        "ProductBrandModel", foreign_keys=[brand_id], viewonly=True
+    )
+    manufacturer: Mapped[ProductManufacturerModel | None] = relationship(
+        "ProductManufacturerModel", foreign_keys=[manufacturer_id], viewonly=True
+    )

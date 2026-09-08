@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -132,36 +132,45 @@ class SqlAlchemyLifecycleRepository:
         self, policy: ResourcePolicy, record: Any
     ) -> uuid.UUID | None:
         if policy.scope == "self":
-            return record.id
+            return cast(uuid.UUID | None, record.id)
         if policy.scope == "company":
-            return record.company_id
+            return cast(uuid.UUID | None, record.company_id)
         if policy.scope == "warehouse":
-            return await self._session.scalar(
-                select(Branch.company_id)
-                .join(Warehouse, Warehouse.branch_id == Branch.id)
-                .where(Warehouse.id == record.id)
-                .execution_options(include_deleted=True)
+            return cast(
+                uuid.UUID | None,
+                await self._session.scalar(
+                    select(Branch.company_id)
+                    .join(Warehouse, Warehouse.branch_id == Branch.id)
+                    .where(Warehouse.id == record.id)
+                    .execution_options(include_deleted=True)
+                ),
             )
         if policy.scope == "location":
-            return await self._session.scalar(
-                select(Branch.company_id)
-                .join(Warehouse, Warehouse.branch_id == Branch.id)
-                .join(Location, Location.warehouse_id == Warehouse.id)
-                .where(Location.id == record.id)
-                .execution_options(include_deleted=True)
+            return cast(
+                uuid.UUID | None,
+                await self._session.scalar(
+                    select(Branch.company_id)
+                    .join(Warehouse, Warehouse.branch_id == Branch.id)
+                    .join(Location, Location.warehouse_id == Warehouse.id)
+                    .where(Location.id == record.id)
+                    .execution_options(include_deleted=True)
+                ),
             )
         if policy.scope == "supplier_contact":
-            return await self._session.scalar(
-                select(SupplierModel.company_id)
-                .join(
-                    SupplierContactModel,
-                    SupplierContactModel.id_supplier == SupplierModel.id_supplier,
-                )
-                .where(SupplierContactModel.id_supplier_contact == record.id_supplier_contact)
-                .execution_options(include_deleted=True)
+            return cast(
+                uuid.UUID | None,
+                await self._session.scalar(
+                    select(SupplierModel.company_id)
+                    .join(
+                        SupplierContactModel,
+                        SupplierContactModel.id_supplier == SupplierModel.id_supplier,
+                    )
+                    .where(SupplierContactModel.id_supplier_contact == record.id_supplier_contact)
+                    .execution_options(include_deleted=True)
+                ),
             )
         if policy.scope == "unit":
-            return record.owner_company_id
+            return cast(uuid.UUID | None, record.owner_company_id)
         if policy.scope == "global":
             return None
         return None
@@ -267,7 +276,7 @@ class SqlAlchemyLifecycleRepository:
                 if await self._exists(model, condition):
                     blockers.append(label)
         elif resource == "branches":
-            checks = (
+            branch_checks = (
                 (Warehouse, Warehouse.branch_id == record.id, "almacenes"),
                 (
                     EmployeeBranchAssignment,
@@ -297,8 +306,8 @@ class SqlAlchemyLifecycleRepository:
                     "accesos administrativos",
                 ),
             )
-            for model, condition, label in checks:
-                if await self._exists(model, condition):
+            for branch_model, condition, label in branch_checks:
+                if await self._exists(branch_model, condition):
                     blockers.append(label)
         elif resource == "warehouse_categories" and await self._exists(
             Warehouse, Warehouse.warehouse_category_id == record.id
@@ -600,9 +609,9 @@ class SqlAlchemyLifecycleRepository:
         if policy.scope == "global":
             return None
         if policy.scope == "self":
-            return record.id
+            return cast(uuid.UUID | None, record.id)
         if policy.scope == "unit":
-            return record.owner_company_id
+            return cast(uuid.UUID | None, record.owner_company_id)
         return requested_company_id
 
     async def list_deleted(

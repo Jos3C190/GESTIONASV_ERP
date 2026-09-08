@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
+from typing import cast
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.domain.entities.media_image import SingleImageDraft, normalize_single_image_draft
@@ -99,7 +101,7 @@ class SupplierUseCases:
                 code="supplier_required_field",
             )
         if "country_id" in kwargs and kwargs["country_id"] is not None:
-            country = await self._catalog_repo.get_country_by_id(kwargs["country_id"])
+            country = await self._catalog_repo.get_country_by_id(cast(int, kwargs["country_id"]))
             if not country:
                 raise NotFoundError("País especificado no encontrado", code="country_not_found")
 
@@ -152,7 +154,11 @@ class SupplierUseCases:
     ) -> SupplierContact:
         if "image" in changes:
             changes["image"] = self._normalize_image(changes["image"])
-        contact = await self._supplier_repo.update_contact(
+        update_contact = cast(
+            Callable[..., Awaitable[SupplierContact | None]],
+            self._supplier_repo.update_contact,
+        )
+        contact = await update_contact(
             company_id,
             contact_id=contact_id,
             **changes,
@@ -172,7 +178,9 @@ class SupplierUseCases:
         if image is None:
             return None
         if not isinstance(image, SingleImageDraft):
-            raise ValidationError("La imagen del proveedor no es válida.", code="supplier_image_invalid")
+            raise ValidationError(
+                "La imagen del proveedor no es válida.", code="supplier_image_invalid"
+            )
         try:
             return normalize_single_image_draft(image)
         except ValueError as exc:

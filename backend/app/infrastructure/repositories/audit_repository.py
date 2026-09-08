@@ -68,11 +68,9 @@ class SqlAlchemyAuditRepository:
         orm = result.scalar_one_or_none()
         return _to_domain(orm) if orm is not None else None
 
-    async def list(
-        self,
+    @staticmethod
+    def _build_conditions(
         *,
-        limit: int = 50,
-        offset: int = 0,
         user_id: uuid.UUID | None = None,
         company_id: uuid.UUID | None = None,
         branch_id: uuid.UUID | None = None,
@@ -82,8 +80,7 @@ class SqlAlchemyAuditRepository:
         status: str | None = None,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
-    ) -> tuple[Sequence[DomainLog], bool]:
-        """Paginated by offset/limit over (created_at DESC, id DESC)."""
+    ) -> list[Any]:
         conditions: list[Any] = []
         if user_id is not None:
             conditions.append(ORMLog.user_id == user_id)
@@ -103,6 +100,35 @@ class SqlAlchemyAuditRepository:
             conditions.append(ORMLog.created_at >= start_date)
         if end_date is not None:
             conditions.append(ORMLog.created_at <= end_date)
+        return conditions
+
+    async def list(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        user_id: uuid.UUID | None = None,
+        company_id: uuid.UUID | None = None,
+        branch_id: uuid.UUID | None = None,
+        action: str | None = None,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        status: str | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> tuple[Sequence[DomainLog], bool]:
+        """Paginated by offset/limit over (created_at DESC, id DESC)."""
+        conditions = self._build_conditions(
+            user_id=user_id,
+            company_id=company_id,
+            branch_id=branch_id,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+        )
 
         stmt = select(ORMLog)
         if conditions:
@@ -126,25 +152,17 @@ class SqlAlchemyAuditRepository:
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ) -> int:
-        conditions: list[Any] = []
-        if user_id is not None:
-            conditions.append(ORMLog.user_id == user_id)
-        if company_id is not None:
-            conditions.append(ORMLog.company_id == company_id)
-        if branch_id is not None:
-            conditions.append(ORMLog.branch_id == branch_id)
-        if action is not None:
-            conditions.append(ORMLog.action == action)
-        if resource_type is not None:
-            conditions.append(ORMLog.resource_type == resource_type)
-        if resource_id is not None:
-            conditions.append(ORMLog.resource_id == resource_id)
-        if status is not None:
-            conditions.append(ORMLog.status == status)
-        if start_date is not None:
-            conditions.append(ORMLog.created_at >= start_date)
-        if end_date is not None:
-            conditions.append(ORMLog.created_at <= end_date)
+        conditions = self._build_conditions(
+            user_id=user_id,
+            company_id=company_id,
+            branch_id=branch_id,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+        )
 
         stmt = select(func.count(ORMLog.id))
         if conditions:

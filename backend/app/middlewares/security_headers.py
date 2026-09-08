@@ -3,6 +3,7 @@
 Adds a conservative set of security headers to every response. HSTS is only
 emitted in production because dev runs on plain HTTP.
 """
+
 from __future__ import annotations
 
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -45,7 +46,9 @@ class SecurityHeadersMiddleware:
             assert isinstance(message, dict)
             if message.get("type") == "http.response.start":
                 raw = message.get("headers", [])
-                existing = {k.decode().lower() for k, _ in (raw or []) if isinstance(k, bytes | bytearray)}
+                existing = {
+                    k.decode().lower() for k, _ in (raw or []) if isinstance(k, bytes | bytearray)
+                }
                 for k, v in headers.items():
                     lk = k.lower()
                     if lk not in existing:

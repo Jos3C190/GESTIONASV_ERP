@@ -90,7 +90,7 @@ class RolePermission(Base):
     permission_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True
     )
-    conditions: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=None)
+    conditions: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

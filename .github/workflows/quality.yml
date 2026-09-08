@@ -1,0 +1,79 @@
+name: ERP quality gate
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Tests and static quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare isolated test environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          python - <<'PY'
+          import base64
+          import secrets
+          from pathlib import Path
+
+          key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("=")
+          path = Path(".env")
+          text = path.read_text()
+          replacements = {
+              "SUPPLIER_DATA_ENCRYPTION_KEY=CHANGE_ME_GENERATE_A_32_BYTE_BASE64URL_KEY": f"SUPPLIER_DATA_ENCRYPTION_KEY={key}",
+              "OBJECT_STORAGE_ACCESS_KEY=CHANGE_ME_GENERATE_LOCAL_ACCESS_KEY": f"OBJECT_STORAGE_ACCESS_KEY={secrets.token_hex(16)}",
+              "OBJECT_STORAGE_SECRET_KEY=CHANGE_ME_GENERATE_LOCAL_SECRET_KEY": f"OBJECT_STORAGE_SECRET_KEY={secrets.token_hex(32)}",
+              "REDIS_PASSWORD=CHANGE_ME_GENERATE_LOCAL_REDIS_PASSWORD": f"REDIS_PASSWORD={secrets.token_hex(32)}",
+              "GRAFANA_ADMIN_PASSWORD=CHANGE_ME_GENERATE_LOCAL_GRAFANA_PASSWORD": f"GRAFANA_ADMIN_PASSWORD={secrets.token_hex(32)}",
+              "JWT_SECRET_KEY=CHANGE_ME_USE_openssl_rand_hex_64": f"JWT_SECRET_KEY={secrets.token_hex(64)}",
+          }
+          for source, target in replacements.items():
+              text = text.replace(source, target)
+          path.write_text(text)
+          PY
+
+      - name: Start ERP services
+        run: docker compose up -d --build
+      - name: Wait for ERP readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 120); do
+            if curl -fsS http://localhost:8000/health/ready >/dev/null && curl -fsS http://localhost:5173/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          exit 1
+
+      - name: Show service status
+        if: always()
+        run: docker compose ps
+
+      - name: Run complete quality gate
+        run: bash ./scripts/run-tests.sh all
+
+      - name: Collect service logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=300 backend migrate seed ocr-worker frontend
+
+      - name: Stop services
+        if: always()
+        run: docker compose down -v --remove-orphans

@@ -2,6 +2,7 @@
 known-leaked passwords. Phase 1 uses a small embedded deny-list; phase 6+
 can swap in a real HIBP integration without changing the interface.
 """
+
 from __future__ import annotations
 
 import re

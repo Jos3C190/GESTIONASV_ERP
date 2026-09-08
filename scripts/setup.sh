@@ -32,18 +32,36 @@ random_hex() {
   od -An -N"$bytes" -tx1 /dev/urandom | tr -d ' \n'
 }
 
+random_base64url() {
+  local bytes="$1"
+
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 "$bytes" | tr '+/' '-_' | tr -d '=\r\n'
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import base64,secrets,sys; print(base64.urlsafe_b64encode(secrets.token_bytes(int(sys.argv[1]))).decode().rstrip("="), end="")' "$bytes"
+  elif command -v node >/dev/null 2>&1; then
+    node --input-type=module -e 'import { randomBytes } from "node:crypto"; process.stdout.write(randomBytes(Number(process.argv[1])).toString("base64url"));' "$bytes"
+  else
+    err "No secure random generator (openssl, python3 or node) is available."
+    return 1
+  fi
+}
+
 ensure_secret() {
   local key="$1"
   local marker="$2"
   local bytes="$3"
+  local generator="${4:-random_hex}"
   local value
+  local generated
   value=$(grep -E "^${key}=" .env 2>/dev/null | tail -n 1 | cut -d= -f2- || true)
   if [[ -z "$value" || "$value" == "$marker" ]]; then
+    generated=$($generator "$bytes")
     if grep -qE "^${key}=" .env; then
-      sed -i.bak "s|^${key}=.*|${key}=$(random_hex "$bytes")|" .env
+      sed -i.bak "s|^${key}=.*|${key}=${generated}|" .env
       rm -f .env.bak
     else
-      printf '\n%s=%s\n' "$key" "$(random_hex "$bytes")" >> .env
+      printf '\n%s=%s\n' "$key" "$generated" >> .env
     fi
     log "Generated local secret: $key"
   fi
@@ -52,6 +70,7 @@ ensure_secret() {
 ensure_secret "OBJECT_STORAGE_ACCESS_KEY" "CHANGE_ME_GENERATE_LOCAL_ACCESS_KEY" 16
 ensure_secret "OBJECT_STORAGE_SECRET_KEY" "CHANGE_ME_GENERATE_LOCAL_SECRET_KEY" 32
 ensure_secret "REDIS_PASSWORD" "CHANGE_ME_GENERATE_LOCAL_REDIS_PASSWORD" 32
+ensure_secret "SUPPLIER_DATA_ENCRYPTION_KEY" "CHANGE_ME_GENERATE_A_32_BYTE_BASE64URL_KEY" 32 random_base64url
 ensure_secret "GRAFANA_ADMIN_PASSWORD" "CHANGE_ME_GENERATE_LOCAL_GRAFANA_PASSWORD" 32
 
 grafana_user=$(grep -E '^GRAFANA_ADMIN_USER=' .env 2>/dev/null | tail -n 1 | cut -d= -f2- | tr -d '\r' || true)

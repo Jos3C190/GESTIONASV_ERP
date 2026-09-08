@@ -43,7 +43,7 @@ async def test_csv_spanish_aliases_are_normalized_and_external_id_is_preserved(
         "Zona;Pasillo;Estante;Nivel;Posición;Peso máximo certificado kg;"
         "Peso máximo operativo kg;Volumen útil certificado m3;"
         "Volumen útil operativo m3;Modo control capacidad;ID externo;Notas\n"
-        '  picking ;1;2;3;4;1000;900;12.5;10;enforce;LEGACY-004;'
+        "  picking ;1;2;3;4;1000;900;12.5;10;enforce;LEGACY-004;"
         '=HYPERLINK("https://invalid.example")\n'
     ).encode()
 

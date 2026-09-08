@@ -1,7 +1,6 @@
 """E2E: audit log — entries created on login, read-only, cursor pagination."""
-from __future__ import annotations
 
-import uuid
+from __future__ import annotations
 
 import pytest
 
@@ -42,12 +41,8 @@ async def test_failed_login_creates_audit_entry(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     await seed_user(username="audituser", email="audituser@e.com")
     # Failed login
-    await e2e_client.post(
-        "/api/v1/auth/login", json={"login": "audituser", "password": "wrong"}
-    )
-    r = await e2e_client.get(
-        "/api/v1/audit-logs?limit=10&action=LOGIN_FAILED", headers=headers
-    )
+    await e2e_client.post("/api/v1/auth/login", json={"login": "audituser", "password": "wrong"})
+    r = await e2e_client.get("/api/v1/audit-logs?limit=10&action=LOGIN_FAILED", headers=headers)
     assert r.status_code == 200
     items = r.json()["items"]
     assert len(items) >= 1
@@ -98,9 +93,7 @@ async def test_audit_logs_filter_by_user(e2e_client) -> None:
     await e2e_client.post(
         "/api/v1/auth/login", json={"login": "filtered", "password": "Strong!Passw0rd2026"}
     )
-    r = await e2e_client.get(
-        f"/api/v1/audit-logs?limit=10&user_id={uid}", headers=headers
-    )
+    r = await e2e_client.get(f"/api/v1/audit-logs?limit=10&user_id={uid}", headers=headers)
     assert r.status_code == 200
     items = r.json()["items"]
     assert all(i["user_id"] == uid for i in items)

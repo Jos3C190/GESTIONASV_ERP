@@ -1,4 +1,5 @@
 """Use cases: Employee CRUD + link/unlink user account."""
+
 from __future__ import annotations
 
 import uuid
@@ -34,25 +35,21 @@ class CreateEmployeeInput:
 
 
 class CreateEmployeeUseCase:
-    def __init__(
-        self, employees: EmployeeRepository, departments: DepartmentRepository
-    ) -> None:
+    def __init__(self, employees: EmployeeRepository, departments: DepartmentRepository) -> None:
         self._employees = employees
         self._departments = departments
 
     async def execute(self, inp: CreateEmployeeInput) -> Employee:
         if await self._employees.get_by_code(inp.company_id, inp.employee_code):
-            raise ConflictError(
-                "El código de empleado ya existe.", code="employee_code_taken"
-            )
+            raise ConflictError("El código de empleado ya existe.", code="employee_code_taken")
         if inp.department_id is not None:
             dept = await self._departments.get_by_id(inp.department_id)
             if dept is None:
-                raise ConflictError(
-                    "Departamento no encontrado.", code="dept_not_found"
-                )
+                raise ConflictError("Departamento no encontrado.", code="dept_not_found")
             if dept.company_id != inp.company_id:
-                raise ConflictError("El departamento pertenece a otra empresa.", code="dept_company_mismatch")
+                raise ConflictError(
+                    "El departamento pertenece a otra empresa.", code="dept_company_mismatch"
+                )
         emp = Employee(
             id=uuid.uuid4(),
             company_id=inp.company_id,
@@ -93,9 +90,7 @@ class UpdateEmployeeInput:
 
 
 class UpdateEmployeeUseCase:
-    def __init__(
-        self, employees: EmployeeRepository, departments: DepartmentRepository
-    ) -> None:
+    def __init__(self, employees: EmployeeRepository, departments: DepartmentRepository) -> None:
         self._employees = employees
         self._departments = departments
 
@@ -124,7 +119,9 @@ class UpdateEmployeeUseCase:
             department_id=new_dept,
             position=inp.position if inp.position is not None else emp.position,
             hire_date=inp.hire_date if inp.hire_date is not None else emp.hire_date,
-            termination_date=inp.termination_date if inp.termination_date is not None else emp.termination_date,
+            termination_date=inp.termination_date
+            if inp.termination_date is not None
+            else emp.termination_date,
             status=inp.status if inp.status is not None else emp.status,
             photo_url=inp.photo_url if inp.photo_url is not None else emp.photo_url,
             created_at=emp.created_at,
@@ -222,9 +219,7 @@ class LinkUserUseCase:
         if emp is None:
             raise NotFoundError("Empleado no encontrado.", code="employee_not_found")
         if emp.user_id is not None:
-            raise ConflictError(
-                "El empleado ya tiene una cuenta vinculada.", code="already_linked"
-            )
+            raise ConflictError("El empleado ya tiene una cuenta vinculada.", code="already_linked")
         ok = await self._employees.link_to_user(inp.emp_id, inp.user_id)
         log.info("employee_linked", emp_id=str(inp.emp_id), user_id=str(inp.user_id))
         return ok

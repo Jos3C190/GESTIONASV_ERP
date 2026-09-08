@@ -1,4 +1,5 @@
 """Use case: Logout — revoke the presented refresh token."""
+
 from __future__ import annotations
 
 import uuid

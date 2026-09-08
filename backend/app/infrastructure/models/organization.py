@@ -135,11 +135,11 @@ class Branch(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     opened_at: Mapped[date | None] = mapped_column(Date)
     description: Mapped[str | None] = mapped_column(Text)
-    schedule: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    schedule: Mapped[list[object]] = mapped_column(JSONB, nullable=False, server_default="[]")
     zone: Mapped[str | None] = mapped_column(String(120))
-    services: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
-    facilities: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
-    images: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    services: Mapped[list[object]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    facilities: Mapped[list[object]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    images: Mapped[list[object]] = mapped_column(JSONB, nullable=False, server_default="[]")
     area: Mapped[float | None] = mapped_column(Numeric(12, 2))
     area_built: Mapped[float | None] = mapped_column(Numeric(12, 2))
     area_unbuilt: Mapped[float | None] = mapped_column(Numeric(12, 2))
@@ -152,7 +152,7 @@ class Branch(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     bathrooms: Mapped[int | None] = mapped_column(Integer)
     accesses: Mapped[int | None] = mapped_column(Integer)
     emergency_exits: Mapped[int | None] = mapped_column(Integer)
-    accessibility: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    accessibility: Mapped[list[object]] = mapped_column(JSONB, nullable=False, server_default="[]")
     construction_type: Mapped[str | None] = mapped_column(String(32))
     construction_year: Mapped[int | None] = mapped_column(Integer)
     building_condition: Mapped[str | None] = mapped_column(String(20))
@@ -164,7 +164,7 @@ class Branch(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     cctv_cameras: Mapped[int | None] = mapped_column(Integer)
     access_control: Mapped[str | None] = mapped_column(String(32))
     has_alarm: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    fire_system: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    fire_system: Mapped[list[object]] = mapped_column(JSONB, nullable=False, server_default="[]")
     has_backup_generator: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
@@ -271,11 +271,11 @@ class Warehouse(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     usable_length_m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
     usable_width_m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
     usable_height_m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
-    shifts: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    shifts: Mapped[list[object]] = mapped_column(JSONB, nullable=False, server_default="[]")
     cameras: Mapped[int | None] = mapped_column(Integer)
     access_control: Mapped[str | None] = mapped_column(String(32))
     has_alarm: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    fire_system: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    fire_system: Mapped[list[object]] = mapped_column(JSONB, nullable=False, server_default="[]")
     last_security_audit: Mapped[date | None] = mapped_column(Date)
     temperature_range: Mapped[str | None] = mapped_column(String(64))
     humidity_range: Mapped[str | None] = mapped_column(String(64))
@@ -287,9 +287,9 @@ class Warehouse(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     sanitary_permit: Mapped[str | None] = mapped_column(String(120))
     sanitary_permit_expiry: Mapped[date | None] = mapped_column(Date)
     last_inspection: Mapped[date | None] = mapped_column(Date)
-    certifications: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    certifications: Mapped[list[object]] = mapped_column(JSONB, nullable=False, server_default="[]")
     description: Mapped[str | None] = mapped_column(Text)
-    images: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    images: Mapped[list[object]] = mapped_column(JSONB, nullable=False, server_default="[]")
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default="true")
 
     @property
@@ -511,9 +511,7 @@ class WarehouseCapacityGroup(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base)
         return capacity_status_for(self)
 
     __table_args__ = (
-        UniqueConstraint(
-            "id", "warehouse_id", name="uq_capacity_groups_identity_warehouse"
-        ),
+        UniqueConstraint("id", "warehouse_id", name="uq_capacity_groups_identity_warehouse"),
         ForeignKeyConstraint(
             ["parent_id", "warehouse_id"],
             ["warehouse_capacity_groups.id", "warehouse_capacity_groups.warehouse_id"],
@@ -645,9 +643,7 @@ class Location(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     pick_sequence: Mapped[int | None] = mapped_column(Integer)
     putaway_sequence: Mapped[int | None] = mapped_column(Integer)
     external_id: Mapped[str | None] = mapped_column(String(120))
-    code_scheme_id: Mapped[uuid.UUID | None] = mapped_column(
-        PGUUID(as_uuid=True)
-    )
+    code_scheme_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     scheme_version: Mapped[int | None] = mapped_column(Integer)
     code_source: Mapped[str] = mapped_column(String(20), nullable=False, server_default="legacy")
     notes: Mapped[str | None] = mapped_column(Text)

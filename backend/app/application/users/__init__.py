@@ -1,4 +1,5 @@
 """User management use cases barrel."""
+
 from app.application.users.admin_actions import (
     DeactivateUserUseCase,
     ForcePasswordResetInput,
@@ -17,15 +18,15 @@ from app.application.users.update_user import (
 )
 
 __all__ = [
-    "ListUsersUseCase",
+    "DeactivateUserUseCase",
+    "ForcePasswordResetInput",
+    "ForcePasswordResetUseCase",
+    "GetUserResult",
+    "GetUserUseCase",
     "ListUsersInput",
     "ListUsersResult",
-    "GetUserUseCase",
-    "GetUserResult",
-    "UpdateUserUseCase",
-    "UpdateUserInput",
-    "ForcePasswordResetUseCase",
-    "ForcePasswordResetInput",
+    "ListUsersUseCase",
     "UnlockAccountUseCase",
-    "DeactivateUserUseCase",
+    "UpdateUserInput",
+    "UpdateUserUseCase",
 ]

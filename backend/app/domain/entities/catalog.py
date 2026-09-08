@@ -1,10 +1,11 @@
 """Domain entities: Country, Category, SubCategory, Unit, Product."""
+
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
 
 from app.domain.entities.product_image import ProductImage
 from app.domain.entities.product_master import ProductIdentifier, ProductSupplier
@@ -27,8 +28,8 @@ class Country:
 @dataclass(frozen=True, slots=True)
 class Category:
     id: int
-    uuid: uuid.UUID
-    company_id: uuid.UUID
+    uuid: UUID
+    company_id: UUID
     name: str
     description: str | None = None
     is_active: bool = True
@@ -39,7 +40,7 @@ class Category:
 @dataclass(frozen=True, slots=True)
 class SubCategory:
     id: int
-    company_id: uuid.UUID
+    company_id: UUID
     category_id: int
     name: str
     description: str | None = None
@@ -55,7 +56,7 @@ class Unit:
     type: str
     code: str
     symbol: str
-    owner_company_id: uuid.UUID | None = None
+    owner_company_id: UUID | None = None
     description: str | None = None
     is_standard: bool = True
     is_enabled: bool = True
@@ -71,8 +72,8 @@ class Unit:
 @dataclass(frozen=True, slots=True)
 class Product:
     id: int
-    uuid: uuid.UUID
-    company_id: uuid.UUID
+    uuid: UUID
+    company_id: UUID
     category_id: int
     sub_category_id: int | None
     sku: str
@@ -104,8 +105,8 @@ class Product:
     internal_notes: str | None = None
     keywords: tuple[str, ...] = ()
     origin_country_id: int | None = None
-    brand_id: uuid.UUID | None = None
-    manufacturer_id: uuid.UUID | None = None
+    brand_id: UUID | None = None
+    manufacturer_id: UUID | None = None
     storage_condition: str | None = None
     storage_temperature_min_c: Decimal | None = None
     storage_temperature_max_c: Decimal | None = None
@@ -135,12 +136,16 @@ class Product:
 
     @property
     def dimension_summary(self) -> str | None:
-        return format_dimension_summary(
-            self.dimension_length,
-            self.dimension_width,
-            self.dimension_height,
-            self.dimension_unit,
-        ) or self.dimensions_legacy or self.dimensions
+        return (
+            format_dimension_summary(
+                self.dimension_length,
+                self.dimension_width,
+                self.dimension_height,
+                self.dimension_unit,
+            )
+            or self.dimensions_legacy
+            or self.dimensions
+        )
 
     @property
     def volume(self) -> Decimal | None:

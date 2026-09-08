@@ -365,9 +365,9 @@ _DECIMAL_LOCATION_FIELDS = frozenset(
 
 def _location_values_equal(field: str, incoming: Any, current: Any) -> bool:
     if field not in _DECIMAL_LOCATION_FIELDS or incoming is None or current is None:
-        return incoming == current
+        return bool(incoming == current)
     try:
-        return Decimal(str(incoming)) == Decimal(str(current))
+        return bool(Decimal(str(incoming)) == Decimal(str(current)))
     except (ArithmeticError, ValueError):
         return False
 
@@ -1466,20 +1466,22 @@ class SqlAlchemyLocationRepository:
                         )
                         row.published_location_id = model.id
                     elif row.operation == "update":
-                        model = validated_targets.get(row.id)
-                        if model is None:
+                        update_model = validated_targets.get(row.id)
+                        if update_model is None:
                             raise ConflictError(
                                 f"La fila {row.row_number} ya no tiene un destino actualizable.",
                                 code="location_batch_stale_preview",
                             )
-                        before_state = _audit_state(model)
+                        before_state = _audit_state(update_model)
                         await SqlAlchemyCapacityHierarchyRepository(
                             self._session
-                        ).validate_location_write(job.warehouse_id, data, location_id=model.id)
-                        old_code = model.code
+                        ).validate_location_write(
+                            job.warehouse_id, data, location_id=update_model.id
+                        )
+                        old_code = update_model.code
                         if old_code.casefold() != projection.code.casefold():
                             old_alias_owner = indexes.aliases.get(old_code.casefold())
-                            if old_alias_owner is not None and old_alias_owner != model.id:
+                            if old_alias_owner is not None and old_alias_owner != update_model.id:
                                 raise ConflictError(
                                     f"La fila {row.row_number} usa el alias de otra ubicación.",
                                     code="location_batch_stale_preview",
@@ -1488,22 +1490,22 @@ class SqlAlchemyLocationRepository:
                                 self._session.add(
                                     LocationCodeAlias(
                                         warehouse_id=job.warehouse_id,
-                                        location_id=model.id,
+                                        location_id=update_model.id,
                                         alias_code=old_code,
-                                        code_scheme_id=model.code_scheme_id,
-                                        scheme_version=model.scheme_version,
+                                        code_scheme_id=scheme.id,
+                                        scheme_version=scheme.version,
                                         reason="bulk_recode",
                                         created_by=actor_id,
                                     )
                                 )
-                                indexes.aliases[old_code.casefold()] = model.id
-                        model.code = projection.code
+                                indexes.aliases[old_code.casefold()] = update_model.id
+                        update_model.code = projection.code
                         for name in _LOCATION_FIELDS:
-                            setattr(model, name, data.get(name))
-                        model.code_scheme_id = scheme.id
-                        model.scheme_version = scheme.version
-                        model.code_source = str(data.get("code_source") or "imported")
-                        model.is_active = bool(data.get("is_active", True))
+                            setattr(update_model, name, data.get(name))
+                        update_model.code_scheme_id = scheme.id
+                        update_model.scheme_version = scheme.version
+                        update_model.code_source = str(data.get("code_source") or "imported")
+                        update_model.is_active = bool(data.get("is_active", True))
                         await self._session.flush()
                         self._session.add(
                             AuditLog(
@@ -1512,19 +1514,19 @@ class SqlAlchemyLocationRepository:
                                 company_id=scope.company_id,
                                 branch_id=scope.branch_id,
                                 resource_type="locations",
-                                resource_id=str(model.id),
+                                resource_id=str(update_model.id),
                                 before_state=before_state,
-                                after_state=_audit_state(model),
+                                after_state=_audit_state(update_model),
                                 metadata_={
                                     "correlation_id": str(job.id),
                                     "batch_row": row.row_number,
                                 },
                             )
                         )
-                        row.published_location_id = model.id
+                        row.published_location_id = update_model.id
                     elif row.operation == "unchanged":
-                        model = validated_targets.get(row.id)
-                        row.published_location_id = model.id if model else None
+                        unchanged_model = validated_targets.get(row.id)
+                        row.published_location_id = unchanged_model.id if unchanged_model else None
                 job.status = "published"
                 job.published_by = actor_id
                 job.published_at = datetime.now(UTC)

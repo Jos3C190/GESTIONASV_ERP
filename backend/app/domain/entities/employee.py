@@ -1,4 +1,5 @@
 """Domain entities: Department, Employee."""
+
 from __future__ import annotations
 
 import uuid

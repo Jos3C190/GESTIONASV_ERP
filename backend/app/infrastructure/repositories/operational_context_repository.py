@@ -23,17 +23,12 @@ class SqlAlchemyOperationalContextRepository:
         if membership is None and not is_superuser:
             return None
 
-        access_all = is_superuser or bool(
-            membership and membership.access_all_branches
-        )
-        stmt = select(Branch).where(
-            Branch.company_id == company_id, Branch.is_active.is_(True)
-        )
+        access_all = is_superuser or bool(membership and membership.access_all_branches)
+        stmt = select(Branch).where(Branch.company_id == company_id, Branch.is_active.is_(True))
         if not access_all:
             stmt = stmt.join(
                 UserBranch,
-                (UserBranch.branch_id == Branch.id)
-                & (UserBranch.company_id == Branch.company_id),
+                (UserBranch.branch_id == Branch.id) & (UserBranch.company_id == Branch.company_id),
             ).where(
                 UserBranch.user_id == user_id,
                 UserBranch.company_id == company_id,
@@ -141,26 +136,24 @@ class SqlAlchemyOperationalContextRepository:
         await self._session.flush()
 
         for branch_id in branch_ids:
-            assignment = existing.get(branch_id)
-            if assignment is None:
-                assignment = UserBranch(
+            branch_assignment = existing.get(branch_id)
+            if branch_assignment is None:
+                branch_assignment = UserBranch(
                     user_id=user_id,
                     company_id=company_id,
                     branch_id=branch_id,
                 )
-                self._session.add(assignment)
-            assignment.assigned_by = assigned_by
-            assignment.assigned_at = now
-            assignment.revoked_at = None
-            assignment.is_active = True
-            assignment.is_default = branch_id == default_branch_id
+                self._session.add(branch_assignment)
+            branch_assignment.assigned_by = assigned_by
+            branch_assignment.assigned_at = now
+            branch_assignment.revoked_at = None
+            branch_assignment.is_active = True
+            branch_assignment.is_default = branch_id == default_branch_id
 
         membership.access_all_branches = access_all_branches
         membership.last_branch_id = default_branch_id
         await self._session.flush()
-        context = await self.get_context(
-            user_id=user_id, company_id=company_id, is_superuser=False
-        )
+        context = await self.get_context(user_id=user_id, company_id=company_id, is_superuser=False)
         if context is None:  # pragma: no cover - guarded by membership above
             raise LookupError("No se pudo resolver el alcance actualizado.")
         return context
