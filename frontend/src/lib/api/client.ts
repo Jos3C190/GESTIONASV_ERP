@@ -919,7 +919,14 @@ export const api = {
           method: 'POST',
           body: JSON.stringify({ parent_id: folderId })
         }),
-      tree: (signal?: AbortSignal) =>
+      moveBatch: (
+        items: Array<{ entry_id: string; kind: 'folder' | 'file' }>,
+        parentId: string | null
+      ) =>
+        apiFetch<GeneralEntryOut[]>('/documents/general/move', {
+          method: 'POST',
+          body: JSON.stringify({ items, parent_id: parentId })
+        }),      tree: (signal?: AbortSignal) =>
         apiFetch<GeneralFolderTreeOut>('/documents/general/folders/tree', { signal }),
       trash: {
         list: (

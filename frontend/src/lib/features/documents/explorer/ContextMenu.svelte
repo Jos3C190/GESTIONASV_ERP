@@ -74,6 +74,7 @@
 <div
   bind:this={menuElement}
   data-explorer-context-menu
+  id={`explorer-menu-${item.id}`}
   role="menu"
   tabindex="-1"
   aria-label="Acciones del elemento"
@@ -140,7 +141,7 @@
     min-height: 40px;
     width: 100%;
     align-items: center;
-    border-radius: 0.625rem;
+    border-radius: var(--explorer-radius-md);
     padding: 0 0.75rem;
     text-align: left;
     font-size: 0.8125rem;

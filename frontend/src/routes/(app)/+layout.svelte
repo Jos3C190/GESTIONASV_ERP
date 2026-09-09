@@ -24,6 +24,7 @@
 
   let sidebarCollapsed = $state(false);
   let mobileOpen = $state(false);
+  let mobileMenuButton = $state<HTMLButtonElement | null>(null);
   let loading = $state(false);
   let searchInput = $state(globalSearch.query);
   let contextLoading = $state(!branch.ready);
@@ -65,8 +66,40 @@
     }
   }
 
+  function openMobile() {
+    mobileOpen = true;
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('#mobile-navigation-panel button')?.focus());
+  }
+
   function closeMobile() {
     mobileOpen = false;
+    requestAnimationFrame(() => mobileMenuButton?.focus());
+  }
+
+  function handleMobileKeydown(event: KeyboardEvent) {
+    if (!mobileOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeMobile();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const panel = document.querySelector<HTMLElement>('#mobile-navigation-panel');
+    const focusable = Array.from(panel?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? []);
+    if (!focusable.length) {
+      event.preventDefault();
+      panel?.focus();
+      return;
+    }
+    const first = focusable[0]!;
+    const last = focusable.at(-1)!;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   function onSearchInput(e: Event) {
@@ -125,13 +158,15 @@
   });
 </script>
 
+<svelte:window onkeydown={handleMobileKeydown} />
+
 <div class="fixed inset-0 flex overflow-hidden bg-surface">
-  <div class="hidden md:flex">
+  <div class="hidden md:flex" data-app-global-chrome>
     <Sidebar collapsed={sidebarCollapsed} />
   </div>
 
   {#if mobileOpen}
-    <div class="fixed inset-0 z-40 md:hidden">
+    <div id="mobile-navigation-panel" class="fixed inset-0 z-40 md:hidden" data-app-global-chrome role="dialog" aria-modal="true" aria-label="Navegación principal" tabindex="-1">
       <div class="absolute inset-0 bg-black/50" onclick={closeMobile} role="presentation"></div>
       <div class="absolute left-0 top-0 h-full animate-slide-in">
         <Sidebar onNavigate={closeMobile} />
@@ -140,16 +175,19 @@
   {/if}
 
   <div class="flex flex-1 flex-col overflow-hidden">
-    <header
+    <header data-app-global-chrome
       class="flex h-14 flex-none items-center justify-between gap-3 border-b border-border bg-surface px-4 md:px-6"
     >
       <!-- Left: menu + collapse + breadcrumb + search -->
       <div class="flex flex-1 items-center gap-2">
         <button
           type="button"
-          onclick={() => (mobileOpen = true)}
+          bind:this={mobileMenuButton}
+          onclick={openMobile}
           class="flex h-8 w-8 flex-none items-center justify-center rounded-md text-foreground-muted hover:bg-surface-hover hover:text-foreground md:hidden"
           aria-label="Abrir menú"
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-navigation-panel"
         >
           <svg
             width="18"
@@ -213,6 +251,7 @@
               value={searchInput}
               oninput={onSearchInput}
               placeholder="Buscar..."
+              aria-label="Buscar en la aplicación"
               class="h-8 w-full rounded-md border border-border bg-surface-muted pl-8 pr-3 text-[13px] text-foreground placeholder:text-foreground-subtle focus:border-primary focus:bg-surface focus:shadow-glow focus:outline-none"
             />
           </div>

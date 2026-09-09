@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Item from './Item.svelte';
   import type { ExplorerItem } from './types';
 
@@ -21,6 +22,8 @@
     onrootdragover: (event: DragEvent) => void;
     onrootdrop: (event: DragEvent) => void;
     onkeydown: (item: ExplorerItem, event: KeyboardEvent) => void;
+    contextItemId: string | null;
+    focusedItemId: string | null;
   }
 
   let {
@@ -41,40 +44,87 @@
     ondrop,
     onrootdragover,
     onrootdrop,
-    onkeydown
+    onkeydown,
+    contextItemId,
+    focusedItemId
   }: Props = $props();
+
+  const MIN_TILE_WIDTH = 168;
+  const GRID_GAP = 16;
+
+  let gridElement = $state<HTMLDivElement | undefined>(undefined);
+  let gridColumns = $state(1);
+
+  const rows = $derived.by(() => {
+    const result: ExplorerItem[][] = [];
+    for (let index = 0; index < items.length; index += gridColumns) {
+      result.push(items.slice(index, index + gridColumns));
+    }
+    return result;
+  });
+
+  onMount(() => {
+    const updateColumns = (width: number) => {
+      gridColumns = Math.max(1, Math.floor((width + GRID_GAP) / (MIN_TILE_WIDTH + GRID_GAP)));
+    };
+    if (!gridElement) return;
+    updateColumns(gridElement.getBoundingClientRect().width);
+    const observer = new ResizeObserver(([entry]) => updateColumns(entry?.contentRect.width ?? 0));
+    observer.observe(gridElement);
+    return () => observer.disconnect();
+  });
 </script>
 
 <div
-  class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 {rootDropActive ? 'explorer-root-drop-target' : ''}"
-  role="list"
+  bind:this={gridElement}
+  class="explorer-grid {rootDropActive ? 'explorer-root-drop-target' : ''}"
+  role="grid"
+  tabindex="-1"
+  aria-multiselectable="true"
+  aria-colcount={gridColumns}
   aria-label="Contenido de la carpeta"
+  aria-rowcount={rows.length}
   ondragover={onrootdragover}
   ondrop={onrootdrop}
 >
-  {#each items as item (item.id)}
-    <div class="overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-sm">
-      <Item
-        {item}
-        selected={selectedIds.has(item.id)}
-        dropTarget={dropTargetId === item.id}
-        compact
-        {canRename}
-        {canMove}
-        {canDelete}
-        {canRestore}
-        {onselect}
-        {onopen}
-        {oncontextmenu}
-        {ondragstart}
-        {ondragend}
-        {ondragover}
-        {ondrop}
-        {onkeydown}
-      />
+  {#each rows as row, rowIndex (row[0]?.id ?? rowIndex)}
+    <div
+      role="row"
+      aria-rowindex={rowIndex + 1}
+      class="explorer-grid-row"
+      style={`--explorer-grid-columns: ${gridColumns}`}
+    >
+      {#each row as item, index (item.id)}
+        <Item
+          {item}
+          selected={selectedIds.has(item.id)}
+          dropTarget={dropTargetId === item.id}
+          compact
+          {canRename}
+          {canMove}
+          {canDelete}
+          {canRestore}
+          tabIndex={focusedItemId ? (focusedItemId === item.id ? 0 : -1) : index === 0 && rowIndex === 0 ? 0 : -1}
+          position={rowIndex * gridColumns + index + 1}
+          setSize={items.length}
+          semantics="gridcell"
+          {onselect}
+          {onopen}
+          {oncontextmenu}
+          {ondragstart}
+          {ondragend}
+          {ondragover}
+          {ondrop}
+          {onkeydown}
+          contextOpen={contextItemId === item.id}
+        />
+      {/each}
     </div>
   {/each}
 </div>
+
 <style>
+  .explorer-grid { display: grid; gap: var(--explorer-space-3); }
+  .explorer-grid-row { display: grid; grid-template-columns: repeat(var(--explorer-grid-columns), minmax(0, 1fr)); gap: var(--explorer-space-3); }
   .explorer-root-drop-target { outline: 2px dashed rgb(var(--primary) / 0.55); outline-offset: 3px; }
 </style>

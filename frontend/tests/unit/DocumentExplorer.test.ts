@@ -10,6 +10,7 @@ import {
   keyboardAction,
   canExplorerAction
 } from '../../src/lib/features/documents/explorer/interaction';
+import { gridNavigationIndex } from '../../src/lib/features/documents/explorer/grid-navigation';
 
 describe('document explorer query', () => {
   it('parses and serializes the URL contract', () => {
@@ -84,5 +85,17 @@ describe('document explorer interactions', () => {
     );
     expect(canExplorerAction('move', () => false)).toBe(false);
     expect(canExplorerAction('upload', (code) => code === 'documents:upload')).toBe(true);
+  });
+  it('moves through the visible grid row with horizontal arrows', () => {
+    const layout = [
+      { index: 0, left: 0, top: 0, width: 180, height: 150 },
+      { index: 1, left: 192, top: 0, width: 180, height: 150 },
+      { index: 2, left: 384, top: 0, width: 180, height: 150 },
+      { index: 3, left: 0, top: 162, width: 180, height: 150 }
+    ];
+    expect(gridNavigationIndex(layout, 1, 'ArrowLeft')).toBe(0);
+    expect(gridNavigationIndex(layout, 1, 'ArrowRight')).toBe(2);
+    expect(gridNavigationIndex(layout, 0, 'ArrowLeft')).toBe(0);
+    expect(gridNavigationIndex(layout, 2, 'ArrowRight')).toBe(2);
   });
 });
