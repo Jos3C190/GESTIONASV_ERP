@@ -14,6 +14,10 @@ from app.infrastructure.models.catalog import (
 )
 from app.infrastructure.models.document import DocumentAssetModel
 from app.infrastructure.models.document_derivative import DocumentDerivativeModel
+from app.infrastructure.models.document_general_entry import (
+    DocumentGeneralDeletionBatchModel,
+    DocumentGeneralEntryModel,
+)
 from app.infrastructure.models.document_record import DocumentCategoryModel, DocumentRecordModel
 from app.infrastructure.models.employee import (
     Department,
@@ -106,6 +110,8 @@ __all__: list[str] = [
     "DocumentAssetModel",
     "DocumentCategoryModel",
     "DocumentDerivativeModel",
+    "DocumentGeneralDeletionBatchModel",
+    "DocumentGeneralEntryModel",
     "DocumentRecordModel",
     "Employee",
     "EmployeeBranchAssignment",

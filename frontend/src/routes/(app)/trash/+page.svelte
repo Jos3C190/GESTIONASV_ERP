@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { api, HttpError, type DeletedRecordOut, type PageMeta } from '$lib/api/client';
+  import {
+    api,
+    HttpError,
+    type DeletedRecordOut,
+    type GeneralDeletionBatchOut,
+    type PageMeta
+  } from '$lib/api/client';
   import { confirmation } from '$lib/stores/confirmation.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { search as globalSearch } from '$lib/stores/search.svelte';
@@ -63,11 +69,18 @@
   let success = $state<string | null>(null);
   let controller: AbortController | null = null;
   let requestSequence = 0;
+  let generalFolderBatches = $state<GeneralDeletionBatchOut[]>([]);
+  let generalFolderTrashLoading = $state(false);
+  let generalFolderTrashError = $state<string | null>(null);
+  let generalFolderTrashController: AbortController | null = null;
+  let generalFolderTrashSequence = 0;
 
   $effect(() => {
     const canReadAdministrativeTrash = permissions.hasPermission('lifecycle:read');
-    const canRestoreDocuments =
-      permissions.hasAnyPermission(['documents:restore', 'employee_documents:restore']);
+    const canRestoreDocuments = permissions.hasAnyPermission([
+      'documents:restore',
+      'employee_documents:restore'
+    ]);
     if (!canReadAdministrativeTrash && canRestoreDocuments && !selectedResource) {
       selectedResource = 'documents';
     }
@@ -107,6 +120,55 @@
     }
   }
 
+  async function loadGeneralFolderTrash(query: string, allowed: boolean) {
+    generalFolderTrashController?.abort();
+    const sequence = ++generalFolderTrashSequence;
+    if (!allowed) {
+      generalFolderBatches = [];
+      generalFolderTrashLoading = false;
+      return;
+    }
+    generalFolderTrashController = new AbortController();
+    generalFolderTrashLoading = true;
+    generalFolderTrashError = null;
+    try {
+      const result = await api.documents.general.trash.list({
+        search: query || undefined,
+        page: 1,
+        size: 100,
+        signal: generalFolderTrashController.signal
+      });
+      if (sequence !== generalFolderTrashSequence) return;
+      generalFolderBatches = result.items;
+    } catch (cause) {
+      if (sequence !== generalFolderTrashSequence) return;
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      generalFolderTrashError =
+        cause instanceof HttpError
+          ? cause.message
+          : 'No se pudo cargar la Papelera de carpetas generales.';
+    } finally {
+      if (sequence === generalFolderTrashSequence) generalFolderTrashLoading = false;
+    }
+  }
+
+  function restoreGeneralFolderBatch(batch: GeneralDeletionBatchOut) {
+    confirmation.request({
+      kind: 'restore',
+      title: 'Restaurar carpeta y contenido',
+      description:
+        'Se restaurará la carpeta y todo su contenido como un único árbol. Los conflictos de nombres impedirán una restauración parcial.',
+      resourceName: batch.label,
+      confirmLabel: 'Restaurar árbol',
+      execute: async () => {
+        await api.documents.general.trash.restore(batch.id);
+        await clearPrivateQueryCache();
+        success = `${batch.label} fue restaurada correctamente.`;
+        await loadGeneralFolderTrash(globalSearch.query, true);
+        await load(globalSearch.query, selectedResource, currentPage);
+      }
+    });
+  }
   function restoreRecord(record: DeletedRecordOut) {
     confirmation.request({
       kind: 'restore',
@@ -138,6 +200,12 @@
     currentPage = 1;
   }
 
+  $effect(() => {
+    const query = globalSearch.query;
+    const allowed = permissions.hasPermission('documents:manage_folders');
+    void loadGeneralFolderTrash(query, allowed);
+    return () => generalFolderTrashController?.abort();
+  });
   $effect(() => {
     const query = globalSearch.query;
     const resource = selectedResource;
@@ -180,6 +248,71 @@
       {error}
     </div>{/if}
 
+  {#if permissions.hasPermission('documents:manage_folders') && (generalFolderTrashLoading || generalFolderTrashError || generalFolderBatches.length > 0)}
+    <section class="mb-5 overflow-hidden rounded-2xl border border-border bg-surface-elevated">
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4"
+      >
+        <div>
+          <h2 class="text-sm font-semibold text-foreground">Carpetas generales eliminadas</h2>
+          <p class="mt-1 text-xs text-foreground-muted">
+            Cada lote conserva su árbol completo para restaurarlo de forma atómica.
+          </p>
+        </div>
+        {#if !generalFolderTrashLoading}<span class="text-xs text-foreground-muted"
+            >{generalFolderBatches.length} lote(s)</span
+          >{/if}
+      </div>
+      {#if generalFolderTrashError}
+        <div
+          class="m-4 rounded-xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger"
+          role="alert"
+        >
+          {generalFolderTrashError}
+        </div>
+      {:else if generalFolderTrashLoading}
+        <div class="grid gap-3 p-5">
+          {#each Array(2) as _}<div class="h-14 rounded-xl skeleton"></div>{/each}
+        </div>
+      {:else}
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[700px] text-left text-sm">
+            <thead
+              class="border-b border-border bg-surface-muted/70 text-[11px] uppercase tracking-wide text-foreground-muted"
+            >
+              <tr>
+                <th class="px-5 py-3 font-semibold">Carpeta raíz</th>
+                <th class="px-5 py-3 font-semibold">Elementos</th>
+                <th class="px-5 py-3 font-semibold">Eliminada</th>
+                <th class="w-32 px-5 py-3 text-right font-semibold">Acción</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border">
+              {#each generalFolderBatches as batch (batch.id)}
+                <tr class="transition-colors hover:bg-surface-hover/60">
+                  <td class="px-5 py-4">
+                    <p class="font-medium text-foreground">{batch.label}</p>
+                    <p class="mt-0.5 font-mono text-[11px] text-foreground-subtle">{batch.id}</p>
+                  </td>
+                  <td class="px-5 py-4 text-foreground-muted">{batch.entry_count}</td>
+                  <td class="whitespace-nowrap px-5 py-4 text-foreground-muted">
+                    {formatDate(batch.created_at)}
+                  </td>
+                  <td class="px-5 py-4 text-right">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onclick={() => restoreGeneralFolderBatch(batch)}>Restaurar</Button
+                    >
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/if}
+    </section>
+  {/if}
   <section class="overflow-hidden rounded-2xl border border-border bg-surface-elevated">
     {#if loading}
       <div class="grid gap-3 p-5">

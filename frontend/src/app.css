@@ -29,6 +29,38 @@
  */
 :root,
 [data-theme='light'] {
+  /* Explorer rhythm — shared density and corner language */
+  --explorer-space-3xs: 0.125rem;
+  --explorer-space-0: 0.25rem;
+  --explorer-space-1: 0.5rem;
+  --explorer-space-2: 0.75rem;
+  --explorer-space-3: 1rem;
+  --explorer-space-4: 1.25rem;
+  --explorer-space-5: 1.5rem;
+  --explorer-radius-xs: 0.35rem;
+  --explorer-radius-sm: 0.5rem;
+  --explorer-radius-md: 0.75rem;
+  --explorer-radius-lg: 1rem;
+  --explorer-control-height: 2.75rem;
+  --document-folder-back: 232 164 56;
+  --document-folder-front: 255 189 84;
+  --document-folder-highlight: 255 215 134;
+  --document-file-generic: 100 116 139;
+  --document-file-generic-dark: 71 85 105;
+  --document-file-pdf: 185 45 40;
+  --document-file-pdf-dark: 132 28 26;
+  --document-file-doc: 11 107 138;
+  --document-file-doc-dark: 7 74 98;
+  --document-file-sheet: 8 122 67;
+  --document-file-sheet-dark: 5 84 46;
+  --document-file-slides: 169 75 25;
+  --document-file-slides-dark: 118 48 14;
+  --document-file-archive: 101 68 168;
+  --document-file-archive-dark: 70 45 120;
+  --document-file-text: 69 90 100;
+  --document-file-text-dark: 45 60 68;
+  --document-file-image: 35 89 166;
+  --document-file-image-dark: 22 61 118;
   /* Surfaces — pure white, near-white */
   --surface: 255 255 255;
   --surface-elevated: 255 255 255;
@@ -40,7 +72,7 @@
   /* Text — Geist gray 900/1000 */
   --foreground: 17 17 17;
   --foreground-muted: 102 102 102;
-  --foreground-subtle: 153 153 153;
+  --foreground-subtle: 116 116 116;
   /* Primary — Geist blue 600 (#0070F3) */
   --primary: 0 112 243;
   --primary-hover: 0 90 200;
@@ -50,12 +82,12 @@
   --accent: 0 168 150;
   --accent-foreground: 255 255 255;
   /* Semantic */
-  --danger: 239 68 68;
+  --danger: 220 38 38;
   --danger-foreground: 255 255 255;
   --danger-glow: 239 68 68;
-  --success: 0 168 107;
+  --success: 0 112 80;
   --success-foreground: 255 255 255;
-  --warning: 237 151 39;
+  --warning: 180 100 0;
   --warning-foreground: 255 255 255;
   /* Gradients — subtle, single-hue */
   --gradient-primary: linear-gradient(135deg, rgb(0 112 243) 0%, rgb(0 90 200) 100%);
@@ -75,6 +107,38 @@
 }
 
 [data-theme='dark'] {
+  /* Explorer rhythm — shared density and corner language */
+  --explorer-space-3xs: 0.125rem;
+  --explorer-space-0: 0.25rem;
+  --explorer-space-1: 0.5rem;
+  --explorer-space-2: 0.75rem;
+  --explorer-space-3: 1rem;
+  --explorer-space-4: 1.25rem;
+  --explorer-space-5: 1.5rem;
+  --explorer-radius-xs: 0.35rem;
+  --explorer-radius-sm: 0.5rem;
+  --explorer-radius-md: 0.75rem;
+  --explorer-radius-lg: 1rem;
+  --explorer-control-height: 2.75rem;
+  --document-folder-back: 232 164 56;
+  --document-folder-front: 255 189 84;
+  --document-folder-highlight: 255 215 134;
+  --document-file-generic: 100 116 139;
+  --document-file-generic-dark: 71 85 105;
+  --document-file-pdf: 185 45 40;
+  --document-file-pdf-dark: 132 28 26;
+  --document-file-doc: 11 107 138;
+  --document-file-doc-dark: 7 74 98;
+  --document-file-sheet: 8 122 67;
+  --document-file-sheet-dark: 5 84 46;
+  --document-file-slides: 169 75 25;
+  --document-file-slides-dark: 118 48 14;
+  --document-file-archive: 101 68 168;
+  --document-file-archive-dark: 70 45 120;
+  --document-file-text: 69 90 100;
+  --document-file-text-dark: 45 60 68;
+  --document-file-image: 35 89 166;
+  --document-file-image-dark: 22 61 118;
   /* Surfaces — true black (#000) and layered grays (Geist dark) */
   --surface: 0 0 0;
   --surface-elevated: 10 10 10;
@@ -86,7 +150,7 @@
   /* Text — Geist gray 900/1000 inverted */
   --foreground: 250 250 250;
   --foreground-muted: 153 153 153;
-  --foreground-subtle: 102 102 102;
+  --foreground-subtle: 153 153 153;
   /* Primary — Geist blue 500 in dark */
   --primary: 0 168 243;
   --primary-hover: 0 140 210;
@@ -131,10 +195,15 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Native select fallback: keep menus readable in both color schemes. */
+[data-theme='light'] select { color-scheme: light; }
+[data-theme='dark'] select { color-scheme: dark; }
+select option,
+select optgroup { color: rgb(var(--foreground)); background-color: rgb(var(--surface-elevated)); }
 /* Focus ring — Geist blue glow */
 :focus-visible {
   outline: none;
-  box-shadow: var(--shadow-glow);
+  box-shadow: 0 0 0 2px rgb(var(--surface)), 0 0 0 4px rgb(var(--primary));
   border-radius: 0.375rem;
 }
 
@@ -148,6 +217,7 @@ body {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+  button:active { transform: none !important; }
 }
 
 /* Scrollbars — thin, Geist style */
@@ -273,9 +343,9 @@ body {
   border: 1px solid rgb(var(--primary) / 0.15);
 }
 
-/* View Transitions API — Super Fluid 1s Theme Expansion */
+/* View Transitions API — quick, purposeful theme feedback */
 ::view-transition-group(root) {
-  animation-duration: 1s;
+  animation-duration: 360ms;
   animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -286,7 +356,7 @@ body {
 }
 
 ::view-transition-new(root) {
-  animation: reveal-theme 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: reveal-theme 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 ::view-transition-old(root),
@@ -297,7 +367,7 @@ body {
 }
 
 [data-theme='dark']::view-transition-new(root) {
-  animation: reveal-theme 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: reveal-theme 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes reveal-theme {
@@ -307,4 +377,10 @@ body {
   to {
     clip-path: circle(150% at calc(100% - 140px) 28px);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none !important; }
 }

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import Modal from './Modal.svelte';
 
@@ -15,5 +15,29 @@ describe('Modal', () => {
 
     expect(screen.getByRole('region', { name: 'Nueva ubicación' })).toBeVisible();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+  it('aísla el chrome global y cierra un modal real con Escape', async () => {
+    const chrome = document.createElement('header');
+    chrome.dataset.appGlobalChrome = 'true';
+    document.body.append(chrome);
+    const onclose = vi.fn();
+    const trigger = document.createElement('button');
+    trigger.textContent = 'Abrir';
+    document.body.append(trigger);
+    trigger.focus();
+
+    const view = render(Modal, { props: { open: true, title: 'Confirmar acción', onclose } });
+    await waitFor(() => expect(chrome).toHaveAttribute('aria-hidden', 'true'));
+    expect(chrome).toHaveProperty('inert', true);
+    expect(screen.getByRole('dialog', { name: 'Confirmar acción' })).toBeVisible();
+
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onclose).toHaveBeenCalledTimes(1);
+
+    view.unmount();
+    expect(chrome).not.toHaveAttribute('aria-hidden');
+    expect(chrome).toHaveProperty('inert', false);
+    trigger.remove();
+    chrome.remove();
   });
 });

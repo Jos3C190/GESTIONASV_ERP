@@ -1,8 +1,20 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import DocumentFolderView from '$lib/features/documents/components/DocumentFolderView.svelte';
 
-  let categoryId = $derived(page.params.categoryId);
+  $effect(() => {
+    const categoryId = page.params.categoryId;
+    if (categoryId) {
+      void goto('/documents/general?category=' + encodeURIComponent(categoryId), {
+        replaceState: true,
+        noScroll: true
+      });
+    }
+  });
 </script>
 
-<DocumentFolderView scope="category" {categoryId} categoryModule="general" />
+<svelte:head><title>Documentos generales · GestionaSV</title></svelte:head>
+
+<div class="flex min-h-72 items-center justify-center text-sm text-foreground-muted" role="status">
+  Aplicando filtro de categoría…
+</div>

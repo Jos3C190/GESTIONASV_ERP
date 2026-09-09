@@ -415,6 +415,55 @@ export interface DocumentUploadInput extends DocumentMetadataInput {
   checksum_sha256: string;
 }
 
+export interface GeneralEntryOut {
+  id: string;
+  company_id?: string;
+  kind: 'folder' | 'file';
+  name: string;
+  parent_id: string | null;
+  document_id: string | null;
+  updated_at: string | null;
+  deleted_at?: string | null;
+  title?: string | null;
+  original_filename?: string | null;
+  extension?: string | null;
+  content_type?: string | null;
+  size_bytes?: number | null;
+  technical_status?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
+  business_status?: string | null;
+  version_number?: number | null;
+  is_current?: boolean | null;
+}
+
+export type GeneralFolderOut = GeneralEntryOut;
+export type GeneralFileOut = GeneralEntryOut;
+
+export interface GeneralExplorerPage {
+  items: GeneralEntryOut[];
+  breadcrumbs: DocumentBreadcrumbOut[];
+  meta: PageMeta;
+}
+
+export interface GeneralFolderTreeOut {
+  items: GeneralEntryOut[];
+}
+
+export interface GeneralDeletionBatchOut {
+  id: string;
+  company_id: string;
+  root_folder_id: string;
+  label: string;
+  entry_count: number;
+  created_at: string;
+  actor_id: string | null;
+}
+
+export interface GeneralDeletionBatchPage {
+  items: GeneralDeletionBatchOut[];
+  meta: PageMeta;
+}
 export interface EmployeeBranchAssignmentOut {
   id: string;
   employee_id: string;
@@ -729,6 +778,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data)
       }),
+    initiateGeneral: (folderId: string | null, data: DocumentUploadInput) =>
+      apiFetch<DocumentUploadTicket>('/documents/library/uploads', {
+        method: 'POST',
+        body: JSON.stringify({ ...data, folder_id: folderId })
+      }),
     initiateEmployee: (employeeId: string, data: DocumentUploadInput) =>
       apiFetch<DocumentUploadTicket>(`/employees/${employeeId}/documents/uploads`, {
         method: 'POST',
@@ -807,6 +861,91 @@ export const api = {
       return apiFetch<Page<DocumentRecordOut>>(`/documents/library?${sp}`, {
         signal: params.signal
       });
+    },
+    general: {
+      list: (
+        params: {
+          folder_id?: string | null;
+          search?: string;
+          category_id?: string;
+          status?: string;
+          sort?: 'name' | 'updated' | 'size';
+          page?: number;
+          size?: number;
+          signal?: AbortSignal;
+        } = {}
+      ) => {
+        const sp = new URLSearchParams({
+          page: String(params.page ?? 1),
+          size: String(params.size ?? 50)
+        });
+        if (params.folder_id) sp.set('folder_id', params.folder_id);
+        if (params.search) sp.set('search', params.search);
+        if (params.category_id) sp.set('category_id', params.category_id);
+        if (params.status) sp.set('status', params.status);
+        if (params.sort) sp.set('sort', params.sort === 'updated' ? 'updated_at' : params.sort);
+        return apiFetch<GeneralExplorerPage>('/documents/general?' + sp.toString(), {
+          signal: params.signal
+        });
+      },
+      createFolder: (data: { name: string; parent_id?: string | null }) =>
+        apiFetch<GeneralFolderOut>('/documents/general/folders', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        }),
+      renameFolder: (id: string, name: string) =>
+        apiFetch<GeneralFolderOut>('/documents/general/folders/' + id, {
+          method: 'PATCH',
+          body: JSON.stringify({ name })
+        }),
+      moveFolder: (id: string, parentId: string | null) =>
+        apiFetch<GeneralFolderOut>('/documents/general/folders/' + id + '/move', {
+          method: 'POST',
+          body: JSON.stringify({ parent_id: parentId })
+        }),
+      deleteFolder: (id: string) =>
+        apiFetch<{ batch_id: string }>('/documents/general/folders/' + id, { method: 'DELETE' }),
+      restoreFolder: (id: string) =>
+        apiFetch<GeneralFolderOut>('/documents/general/folders/' + id + '/restore', {
+          method: 'POST'
+        }),
+      renameFile: (id: string, name: string) =>
+        apiFetch<GeneralFileOut>('/documents/general/files/' + id + '/name', {
+          method: 'PATCH',
+          body: JSON.stringify({ name })
+        }),
+      moveFile: (id: string, folderId: string | null) =>
+        apiFetch<GeneralFileOut>('/documents/general/files/' + id + '/move', {
+          method: 'POST',
+          body: JSON.stringify({ parent_id: folderId })
+        }),
+      moveBatch: (
+        items: Array<{ entry_id: string; kind: 'folder' | 'file' }>,
+        parentId: string | null
+      ) =>
+        apiFetch<GeneralEntryOut[]>('/documents/general/move', {
+          method: 'POST',
+          body: JSON.stringify({ items, parent_id: parentId })
+        }),      tree: (signal?: AbortSignal) =>
+        apiFetch<GeneralFolderTreeOut>('/documents/general/folders/tree', { signal }),
+      trash: {
+        list: (
+          params: { search?: string; page?: number; size?: number; signal?: AbortSignal } = {}
+        ) => {
+          const sp = new URLSearchParams({
+            page: String(params.page ?? 1),
+            size: String(params.size ?? 20)
+          });
+          if (params.search) sp.set('search', params.search);
+          return apiFetch<GeneralDeletionBatchPage>('/documents/general/trash?' + sp.toString(), {
+            signal: params.signal
+          });
+        },
+        restore: (batchId: string) =>
+          apiFetch<GeneralFolderOut>('/documents/general/trash/' + batchId + '/restore', {
+            method: 'POST'
+          })
+      }
     },
     folders: (
       params: {

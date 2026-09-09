@@ -12,6 +12,8 @@
   }
 
   let { open, title, onclose, children, footer, size = 'md', inline = false }: Props = $props();
+  let dialogEl = $state<HTMLDivElement | null>(null);
+  let returnFocus = $state<HTMLElement | null>(null);
 
   let sizes: Record<string, string> = {
     sm: 'max-w-md',
@@ -19,16 +21,76 @@
     lg: 'max-w-2xl'
   };
 
+  function focusableElements(): HTMLElement[] {
+    if (!dialogEl) return [];
+    return Array.from(
+      dialogEl.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+    );
+  }
+
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && open) {
+    if (!open || inline) return;
+    if (e.key === 'Escape') {
       e.preventDefault();
       onclose?.();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const focusable = focusableElements();
+    if (!focusable.length) {
+      e.preventDefault();
+      dialogEl?.focus();
+      return;
+    }
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
     }
   }
+
+  $effect(() => {
+    if (inline) return;
+    if (open) {
+      returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      requestAnimationFrame(() => {
+        const first = dialogEl?.querySelector<HTMLElement>('[autofocus], input, button, [tabindex]:not([tabindex="-1"])');
+        (first ?? dialogEl)?.focus();
+      });
+    } else if (returnFocus) {
+      const focusTarget = returnFocus;
+      returnFocus = null;
+      requestAnimationFrame(() => focusTarget.focus());
+    }
+  });
 
   function handleBackdropClick(e: MouseEvent) {
     if (e.target === e.currentTarget) onclose?.();
   }
+
+  function setGlobalChromeInert(next: boolean) {
+    if (typeof document === 'undefined') return;
+    const elements = Array.from(document.querySelectorAll<HTMLElement>('[data-app-global-chrome]'));
+    for (const element of elements) {
+      element.inert = next;
+      if (next) element.setAttribute('aria-hidden', 'true');
+      else element.removeAttribute('aria-hidden');
+    }
+  }
+
+  $effect(() => {
+    if (inline) return;
+    if (open) {
+      setGlobalChromeInert(true);
+      return () => setGlobalChromeInert(false);
+    }
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -47,16 +109,17 @@
         ? 'rounded-2xl border border-border bg-surface-elevated shadow-soft'
         : `${sizes[size]} animate-fade-scale rounded-3xl border border-border bg-surface-elevated shadow-floating`}"
       role={inline ? 'region' : 'dialog'}
+      bind:this={dialogEl}
       aria-modal={inline ? undefined : 'true'}
-      aria-label={title}
+      aria-labelledby="modal-title"
       tabindex="-1"
     >
       <div class="flex items-center justify-between border-b border-border px-6 py-4">
-        <h2 class="text-lg font-bold text-foreground">{title}</h2>
+        <h2 id="modal-title" class="text-lg font-bold text-foreground">{title}</h2>
         <button
           type="button"
           onclick={() => onclose?.()}
-          class="flex h-8 w-8 items-center justify-center rounded-lg text-foreground-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+          class="flex h-11 w-11 items-center justify-center rounded-lg text-foreground-muted transition-colors hover:bg-surface-hover hover:text-foreground"
           aria-label="Cerrar"
         >
           <svg

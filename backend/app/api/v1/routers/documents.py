@@ -17,6 +17,7 @@ from app.api.v1.deps import (
     SessionDep,
     get_audit_service,
     get_check_permission_use_case,
+    get_document_general_service,
     get_document_record_service,
     get_document_service,
     get_employee_repository,
@@ -49,6 +50,7 @@ from app.api.v1.schemas.documents import (
 from app.api.v1.schemas.lifecycle import DeletedRecordOut, SoftDeleteRequest
 from app.application.audit.audit_service import AuditService
 from app.application.documents import (
+    DocumentGeneralService,
     DocumentMetadataInput,
     DocumentRecordService,
     DocumentService,
@@ -527,9 +529,11 @@ async def initiate_library_upload(
     session: SessionDep,
     current: CurrentUser,
     record_service: Annotated[DocumentRecordService, Depends(get_document_record_service)],
+    general_service: Annotated[DocumentGeneralService, Depends(get_document_general_service)],
 ) -> InitiateDocumentOut:
     company_id = effective_company_id(request)
     await require_company_wide_scope(session, current, company_id)
+    await general_service.validate_file_parent(company_id, body.folder_id)
     upload = await record_service.initiate_general(
         InitiateDocumentInput(
             company_id=company_id,
@@ -540,6 +544,13 @@ async def initiate_library_upload(
             checksum_sha256=body.checksum_sha256,
         ),
         _metadata(body),
+    )
+    await general_service.attach_file(
+        company_id,
+        current.id,
+        upload.ticket.document.id,
+        body.title or body.file_name,
+        body.folder_id,
     )
     return InitiateDocumentOut(
         document_id=upload.ticket.document.id,

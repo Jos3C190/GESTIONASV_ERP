@@ -11,8 +11,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
     UV_LINK_MODE=copy \
-    UV_PROJECT_ENVIRONMENT=/app/.venv \
-    PATH="/app/.venv/bin:$PATH"
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
@@ -38,7 +38,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen
 EXPOSE 8000
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Keep the development watcher scoped to application code. Running Uvicorn
+# through `uv run` on every reload can update `/app/.venv`, which is inside the
+# bind mount and causes watchfiles to reload the server continuously.
+CMD ["/opt/venv/bin/python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "app"]
 
 # ---------------- OCR worker ----------------
 FROM base AS ocr
@@ -67,7 +70,11 @@ RUN groupadd --system --gid 1001 erp && \
     chown -R erp:erp /app
 USER erp
 
-CMD ["uv", "run", "arq", "app.infrastructure.ocr_worker.WorkerSettings"]
+# The OCR image already contains its frozen environment in /opt/venv.
+# Running through uv run at container startup makes uv revalidate the bind-mounted
+# project and rewrite the editable-install metadata, which is not writable by
+# the non-root worker user in CI. Invoke the installed worker directly.
+CMD ["/opt/venv/bin/arq", "app.infrastructure.ocr_worker.WorkerSettings"]
 
 # ---------------- prod (default/Render target) ----------------
 # Keep this stage last: Render builds the Dockerfile without an explicit target.

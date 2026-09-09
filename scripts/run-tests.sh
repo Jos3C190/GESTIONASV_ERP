@@ -42,8 +42,12 @@ run_frontend_quality() {
 }
 
 run_ocr() {
-  echo "[tests] OCR worker..."
-  docker compose exec -T ocr-worker pytest -q -ra tests/unit/test_ocr_worker.py
+  echo "[tests] OCR worker logic..."
+  # The runtime OCR image intentionally excludes dev tools and runs as a
+  # non-root user. Execute the worker tests in the backend dev image, which
+  # provides pytest and installs the locked OCR extra without mutating the
+  # worker's production environment.
+  docker compose exec -T backend uv run --frozen --extra ocr pytest -q -ra tests/unit/test_ocr_worker.py
 }
 
 run_lint() {
