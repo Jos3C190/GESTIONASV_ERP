@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import uuid
+from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import desc, distinct, func, or_, select
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.v1.company_access import (
     request_company_id,
@@ -20,6 +22,7 @@ from app.api.v1.schemas.catalog import (
     CategoryUpdate,
     CountryResponse,
     ProductCreate,
+    ProductDistributionItem,
     ProductDistributionResponse,
     ProductImageInput,
     ProductResponse,
@@ -43,6 +46,7 @@ from app.domain.entities.product_image import ProductImageDraft
 from app.domain.entities.product_variants import (
     ProductFamilyAttributeDraft,
     ProductFamilyAttributeValueDraft,
+    ProductVariant,
     ProductVariantConfigDraft,
     ProductVariantDraft,
     ProductVariantIdentifierDraft,
@@ -63,7 +67,7 @@ def _product_scope_conditions(
     sub_category_id: int | None,
     search: str | None,
     active_only: bool,
-):
+) -> list[ColumnElement[bool]]:
     conditions = [ProductModel.company_id == company_id, ProductModel.deleted_at.is_(None)]
     if category_id is not None:
         conditions.append(ProductModel.id_category == category_id)
@@ -93,6 +97,10 @@ def _status_action(before_active: bool, after_active: bool) -> str:
 def _get_catalog_use_cases(session: SessionDep) -> CatalogUseCases:
     repo = SqlAlchemyCatalogRepository(session)
     return CatalogUseCases(repo)
+
+
+def _optional_payload_value(payload: object, name: str, default: object) -> object:
+    return cast(object, getattr(payload, name, default))
 
 
 async def _require_product_images_permission(
@@ -136,7 +144,9 @@ def _image_drafts(images: list[ProductImageInput] | None) -> list[ProductImageDr
     ]
 
 
-def _product_identifier_drafts(payload: ProductCreate | ProductUpdate):
+def _product_identifier_drafts(
+    payload: ProductCreate | ProductUpdate,
+) -> tuple[ProductVariantIdentifierDraft, ...] | None:
     if "identifiers" not in payload.model_fields_set or payload.identifiers is None:
         return None
     return tuple(
@@ -268,7 +278,7 @@ def _variant_update_draft(payload: ProductVariantUpdateInput) -> ProductVariantU
     )
 
 
-def _single_variant_audit_state(variant: object) -> dict[str, object]:
+def _single_variant_audit_state(variant: ProductVariant) -> dict[str, object]:
     return {
         "id": str(variant.id),
         "sku": variant.sku,
@@ -371,7 +381,10 @@ async def list_countries(
     active_only: bool = Query(True),
     use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
 ) -> list[CountryResponse]:
-    return await use_cases.list_countries(active_only=active_only)
+    return [
+        CountryResponse.model_validate(country)
+        for country in await use_cases.list_countries(active_only=active_only)
+    ]
 
 
 @router.get(
@@ -385,7 +398,7 @@ async def get_country(
     country_id: int,
     use_cases: CatalogUseCases = Depends(_get_catalog_use_cases),
 ) -> CountryResponse:
-    return await use_cases.get_country(country_id)
+    return CountryResponse.model_validate(await use_cases.get_country(country_id))
 
 
 # --- Categories ---
@@ -413,8 +426,11 @@ async def category_options(
     if q and q.strip():
         conditions.append(CategoryModel.name.ilike(f"%{q.strip()}%"))
     total = int(
-        (await session.execute(select(func.count()).select_from(CategoryModel).where(*conditions)))
-        .scalar_one()
+        (
+            await session.execute(
+                select(func.count()).select_from(CategoryModel).where(*conditions)
+            )
+        ).scalar_one()
     )
     rows = (
         await session.execute(
@@ -448,7 +464,10 @@ async def list_categories(
 ) -> list[CategoryResponse]:
     company_id = request_company_id(request)
     await require_company_access(session, current, company_id)
-    return await use_cases.list_categories(company_id, active_only=active_only)
+    return [
+        CategoryResponse.model_validate(category)
+        for category in await use_cases.list_categories(company_id, active_only=active_only)
+    ]
 
 
 @router.post(
@@ -468,34 +487,42 @@ async def create_category(
 ) -> CategoryResponse:
     company_id = request_company_id(request)
     await require_company_wide_scope(session, current, company_id)
+    lifecycle_status = _optional_payload_value(payload, "lifecycle_status", "active")
+    product_kind = _optional_payload_value(payload, "product_kind", "goods")
     if (
-        payload.lifecycle_status != "active"
-        or payload.product_kind != "goods"
+        lifecycle_status != "active"
+        or product_kind != "goods"
         or any(
             value not in (None, False, "", [])
             for value in (
-                payload.sales_name,
-                payload.internal_name,
-                payload.document_name,
-                payload.sales_description,
-                payload.purchase_description,
-                payload.internal_notes,
-                payload.keywords,
-                payload.origin_country_id,
-                payload.brand_id,
-                payload.manufacturer_id,
-                payload.storage_condition,
-                payload.storage_temperature_min_c,
-                payload.storage_temperature_max_c,
-                payload.storage_humidity_max_percent,
-                payload.max_stack_height,
-                payload.handling_notes,
+                _optional_payload_value(payload, "sales_name", None),
+                _optional_payload_value(payload, "internal_name", None),
+                _optional_payload_value(payload, "document_name", None),
+                _optional_payload_value(payload, "sales_description", None),
+                _optional_payload_value(payload, "purchase_description", None),
+                _optional_payload_value(payload, "internal_notes", None),
+                _optional_payload_value(payload, "keywords", None),
+                _optional_payload_value(payload, "origin_country_id", None),
+                _optional_payload_value(payload, "brand_id", None),
+                _optional_payload_value(payload, "manufacturer_id", None),
+                _optional_payload_value(payload, "storage_condition", None),
+                _optional_payload_value(payload, "storage_temperature_min_c", None),
+                _optional_payload_value(payload, "storage_temperature_max_c", None),
+                _optional_payload_value(payload, "storage_humidity_max_percent", None),
+                _optional_payload_value(payload, "max_stack_height", None),
+                _optional_payload_value(payload, "handling_notes", None),
             )
         )
-        or any((payload.is_fragile, payload.keep_dry, payload.keep_upright))
+        or any(
+            (
+                _optional_payload_value(payload, "is_fragile", False),
+                _optional_payload_value(payload, "keep_dry", False),
+                _optional_payload_value(payload, "keep_upright", False),
+            )
+        )
     ):
         await _require_product_permission(session, current, company_id, "products:master_data")
-    if payload.lifecycle_status != "active":
+    if lifecycle_status != "active":
         await _require_product_permission(session, current, company_id, "products:lifecycle")
     created = await use_cases.create_category(
         company_id, name=payload.name, description=payload.description
@@ -508,7 +535,7 @@ async def create_category(
         resource_id=str(created.id),
         after_state={"name": created.name},
     )
-    return created
+    return CategoryResponse.model_validate(created)
 
 
 @router.put(
@@ -542,7 +569,7 @@ async def update_category(
         before_state={"name": before.name, "is_active": before.is_active},
         after_state={"name": updated.name, "is_active": updated.is_active},
     )
-    return updated
+    return CategoryResponse.model_validate(updated)
 
 
 # --- SubCategories ---
@@ -584,7 +611,11 @@ async def sub_category_options(
     )
     rows = (
         await session.execute(
-            select(SubCategoryModel.id_sub_category, SubCategoryModel.name, SubCategoryModel.id_category)
+            select(
+                SubCategoryModel.id_sub_category,
+                SubCategoryModel.name,
+                SubCategoryModel.id_category,
+            )
             .where(*conditions)
             .order_by(SubCategoryModel.name, SubCategoryModel.id_sub_category)
             .offset((page - 1) * size)
@@ -620,9 +651,12 @@ async def list_sub_categories(
 ) -> list[SubCategoryResponse]:
     company_id = request_company_id(request)
     await require_company_access(session, current, company_id)
-    return await use_cases.list_sub_categories(
-        company_id, category_id=category_id, active_only=active_only
-    )
+    return [
+        SubCategoryResponse.model_validate(sub_category)
+        for sub_category in await use_cases.list_sub_categories(
+            company_id, category_id=category_id, active_only=active_only
+        )
+    ]
 
 
 @router.post(
@@ -656,7 +690,7 @@ async def create_sub_category(
         resource_id=str(created.id),
         after_state={"category_id": created.category_id, "name": created.name},
     )
-    return created
+    return SubCategoryResponse.model_validate(created)
 
 
 @router.put(
@@ -698,7 +732,7 @@ async def update_sub_category(
             "is_active": updated.is_active,
         },
     )
-    return updated
+    return SubCategoryResponse.model_validate(updated)
 
 
 # --- Units ---
@@ -718,7 +752,10 @@ async def list_units(
 ) -> list[UnitResponse]:
     company_id = request_company_id(request)
     await require_company_access(session, current, company_id)
-    return await use_cases.list_units(company_id, active_only=active_only)
+    return [
+        UnitResponse.model_validate(unit)
+        for unit in await use_cases.list_units(company_id, active_only=active_only)
+    ]
 
 
 @router.get(
@@ -734,7 +771,10 @@ async def list_global_units(
 ) -> list[UnitResponse]:
     if not current.is_superuser:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso reservado al superadministrador.")
-    return await use_cases.list_global_units(active_only=active_only)
+    return [
+        UnitResponse.model_validate(unit)
+        for unit in await use_cases.list_global_units(active_only=active_only)
+    ]
 
 
 @router.post(
@@ -767,7 +807,7 @@ async def create_global_unit(
         resource_id=str(created.id),
         after_state={"code": created.code, "name": created.name},
     )
-    return created
+    return UnitResponse.model_validate(created)
 
 
 @router.put(
@@ -794,7 +834,7 @@ async def update_global_unit(
         resource_id=str(unit_id),
         after_state={"code": updated.code, "name": updated.name, "version": updated.version},
     )
-    return updated
+    return UnitResponse.model_validate(updated)
 
 
 @router.post(
@@ -830,7 +870,7 @@ async def create_unit(
         resource_id=str(created.id),
         after_state={"code": created.code, "name": created.name},
     )
-    return created
+    return UnitResponse.model_validate(created)
 
 
 @router.put(
@@ -868,7 +908,7 @@ async def update_unit(
         before_state={"code": before.code, "name": before.name, "version": before.version},
         after_state={"code": updated.code, "name": updated.name, "version": updated.version},
     )
-    return updated
+    return UnitResponse.model_validate(updated)
 
 
 async def _configure_unit(
@@ -904,7 +944,7 @@ async def _configure_unit(
             "version": updated.version,
         },
     )
-    return updated
+    return UnitResponse.model_validate(updated)
 
 
 @router.post(
@@ -989,7 +1029,9 @@ async def list_products(
     dependencies=[Depends(require_permission("products:read"))],
     summary="Obtener indicadores de productos",
 )
-async def product_stats(request: Request, session: SessionDep, current: CurrentUser):
+async def product_stats(
+    request: Request, session: SessionDep, current: CurrentUser
+) -> dict[str, int]:
     company_id = request_company_id(request)
     await require_company_access(session, current, company_id, require_active=True)
     row = (
@@ -1039,8 +1081,9 @@ async def product_distribution(
         active_only=active_only,
     )
     scope_total = int(
-        (await session.execute(select(func.count()).select_from(ProductModel).where(*conditions)))
-        .scalar_one()
+        (
+            await session.execute(select(func.count()).select_from(ProductModel).where(*conditions))
+        ).scalar_one()
     )
 
     category_count = func.count(ProductModel.id_product)
@@ -1058,14 +1101,16 @@ async def product_distribution(
             .limit(6)
         )
     ).all()
-    category_items = [
-        {"id": int(row.id_category), "label": row.name, "value": int(row.value), "filterable": True}
+    category_items: list[ProductDistributionItem] = [
+        ProductDistributionItem(
+            id=int(row.id_category), label=row.name, value=int(row.value), filterable=True
+        )
         for row in category_rows
     ]
-    category_other = scope_total - sum(item["value"] for item in category_items)
+    category_other = scope_total - sum(item.value for item in category_items)
     if category_other > 0:
         category_items.append(
-            {"id": None, "label": "Otros", "value": category_other, "filterable": False}
+            ProductDistributionItem(label="Otros", value=category_other, filterable=False)
         )
 
     sub_count = func.count(ProductModel.id_product)
@@ -1096,14 +1141,14 @@ async def product_distribution(
             .limit(6)
         )
     ).all()
-    sub_items = [
-        {
-            "id": int(row.id_sub_category),
-            "parent_id": int(row.id_category),
-            "label": row.name,
-            "value": int(row.value),
-            "filterable": True,
-        }
+    sub_items: list[ProductDistributionItem] = [
+        ProductDistributionItem(
+            id=int(row.id_sub_category),
+            parent_id=int(row.id_category),
+            label=row.name,
+            value=int(row.value),
+            filterable=True,
+        )
         for row in sub_rows
     ]
     sub_none = int(
@@ -1115,14 +1160,12 @@ async def product_distribution(
             )
         ).scalar_one()
     )
-    sub_other = scope_total - sum(item["value"] for item in sub_items) - sub_none
+    sub_other = scope_total - sum(item.value for item in sub_items) - sub_none
     if sub_other > 0:
-        sub_items.append(
-            {"id": None, "label": "Otros", "value": sub_other, "filterable": False}
-        )
+        sub_items.append(ProductDistributionItem(label="Otros", value=sub_other, filterable=False))
     if sub_none > 0:
         sub_items.append(
-            {"id": None, "label": "Sin subcategoría", "value": sub_none, "filterable": False}
+            ProductDistributionItem(label="Sin subcategoría", value=sub_none, filterable=False)
         )
 
     return ProductDistributionResponse(
@@ -1146,7 +1189,7 @@ async def get_product(
 ) -> ProductResponse:
     company_id = request_company_id(request)
     await require_company_access(session, current, company_id)
-    return await use_cases.get_product(company_id, product_id)
+    return ProductResponse.model_validate(await use_cases.get_product(company_id, product_id))
 
 
 @router.get(
@@ -1305,11 +1348,14 @@ async def replace_product_variant_config(
         await _require_product_images_permission(session, current, company_id)
     if _variant_config_has_identifiers(payload) or _product_has_variant_identifiers(before):
         await _require_product_permission(session, current, company_id, "products:identifiers")
+    variant_config = _variant_config_drafts(payload)
+    if variant_config is None:
+        raise HTTPException(status_code=422, detail="La configuración de variantes es obligatoria.")
     async with session.begin_nested():
         updated = await use_cases.replace_variant_config(
             company_id,
             product_id,
-            _variant_config_drafts(payload),
+            variant_config,
         )
         await audit.record(
             action="UPDATE_VARIANTS",
@@ -1326,7 +1372,7 @@ async def replace_product_variant_config(
                 "variants": _variant_audit_state(updated),
             },
         )
-    return updated
+    return ProductResponse.model_validate(updated)
 
 
 @router.post(
@@ -1419,7 +1465,7 @@ async def create_product(
                 "variants": _variant_audit_state(created),
             },
         )
-    return created
+    return ProductResponse.model_validate(created)
 
 
 @router.put(
@@ -1521,4 +1567,4 @@ async def update_product(
                 "variants": _variant_audit_state(updated),
             },
         )
-    return updated
+    return ProductResponse.model_validate(updated)

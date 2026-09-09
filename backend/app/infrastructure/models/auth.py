@@ -1,4 +1,5 @@
 """ORM models: RefreshToken, PasswordResetToken."""
+
 from __future__ import annotations
 
 import uuid
@@ -31,7 +32,9 @@ class RefreshToken(UUIDPKMixin, Base):
     user_agent: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True, default=None)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
     rotated_from: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=True, default=None
     )
@@ -61,7 +64,9 @@ class PasswordResetToken(UUIDPKMixin, Base):
     )
     token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

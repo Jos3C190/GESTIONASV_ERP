@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import cast
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +22,12 @@ from app.infrastructure.models.supplier import SupplierContactModel, SupplierMod
 from app.infrastructure.models.supplier_image import SupplierContactImageModel, SupplierImageModel
 
 _UNSET = object()
+
+
+def _required_asset_id(image: SingleImageDraft) -> uuid.UUID:
+    if image.media_asset_id is None:
+        raise ValueError("Una imagen Cloudinary debe referenciar su asset cargado.")
+    return image.media_asset_id
 
 
 def _to_image(orm: SupplierImageModel | SupplierContactImageModel | None) -> SingleImage | None:
@@ -52,62 +59,76 @@ def _to_supplier_contact(orm: SupplierContactModel) -> SupplierContact:
     )
 
 
-def _to_supplier(orm: SupplierModel, *, include_details: bool = True, include_bank_accounts: bool = True) -> Supplier:
+def _to_supplier(
+    orm: SupplierModel, *, include_details: bool = True, include_bank_accounts: bool = True
+) -> Supplier:
     contacts = (
         tuple(_to_supplier_contact(c) for c in orm.contacts)
         if hasattr(orm, "contacts") and orm.contacts
         else ()
     )
-    tax_identifiers = tuple(
-        SupplierTaxIdentifier(
-            id=item.id,
-            supplier_id=item.supplier_id,
-            country_id=item.country_id,
-            identifier_type=item.identifier_type,
-            value=item.value,
-            normalized_value=item.normalized_value,
-            is_primary=item.is_primary,
-            is_verified=item.is_verified,
-            verified_at=item.verified_at,
-            valid_from=item.valid_from,
-            valid_until=item.valid_until,
+    tax_identifiers = (
+        tuple(
+            SupplierTaxIdentifier(
+                id=item.id,
+                supplier_id=item.supplier_id,
+                country_id=item.country_id,
+                identifier_type=item.identifier_type,
+                value=item.value,
+                normalized_value=item.normalized_value,
+                is_primary=item.is_primary,
+                is_verified=item.is_verified,
+                verified_at=item.verified_at,
+                valid_from=item.valid_from,
+                valid_until=item.valid_until,
+            )
+            for item in getattr(orm, "tax_identifiers", ())
         )
-        for item in getattr(orm, "tax_identifiers", ())
-    ) if include_details else ()
-    addresses = tuple(
-        SupplierAddress(
-            id=item.id,
-            supplier_id=item.supplier_id,
-            address_type=item.address_type,
-            line1=item.line1,
-            line2=item.line2,
-            country_id=item.country_id,
-            state_region=item.state_region,
-            city=item.city,
-            postal_code=item.postal_code,
-            phone=item.phone,
-            email=item.email,
-            is_primary=item.is_primary,
+        if include_details
+        else ()
+    )
+    addresses = (
+        tuple(
+            SupplierAddress(
+                id=item.id,
+                supplier_id=item.supplier_id,
+                address_type=item.address_type,
+                line1=item.line1,
+                line2=item.line2,
+                country_id=item.country_id,
+                state_region=item.state_region,
+                city=item.city,
+                postal_code=item.postal_code,
+                phone=item.phone,
+                email=item.email,
+                is_primary=item.is_primary,
+            )
+            for item in getattr(orm, "addresses", ())
         )
-        for item in getattr(orm, "addresses", ())
-    ) if include_details else ()
-    bank_accounts = tuple(
-        SupplierBankAccount(
-            id=item.id,
-            supplier_id=item.supplier_id,
-            bank_name=item.bank_name,
-            account_holder=item.account_holder,
-            country_id=item.country_id,
-            currency_code=item.currency_code,
-            account_type=item.account_type,
-            last_four=item.last_four,
-            is_primary=item.is_primary,
-            is_verified=item.is_verified,
-            status=item.status,
-            verified_at=item.verified_at,
+        if include_details
+        else ()
+    )
+    bank_accounts = (
+        tuple(
+            SupplierBankAccount(
+                id=item.id,
+                supplier_id=item.supplier_id,
+                bank_name=item.bank_name,
+                account_holder=item.account_holder,
+                country_id=item.country_id,
+                currency_code=item.currency_code,
+                account_type=item.account_type,
+                last_four=item.last_four,
+                is_primary=item.is_primary,
+                is_verified=item.is_verified,
+                status=item.status,
+                verified_at=item.verified_at,
+            )
+            for item in getattr(orm, "bank_accounts", ())
         )
-        for item in getattr(orm, "bank_accounts", ())
-    ) if include_bank_accounts else ()
+        if include_bank_accounts
+        else ()
+    )
     return Supplier(
         id=orm.id_supplier,
         uuid=orm.uuid,
@@ -186,7 +207,10 @@ class SqlAlchemySupplierRepository:
             .limit(limit)
         )
         res = await self._session.execute(stmt)
-        items = [_to_supplier(s, include_details=False, include_bank_accounts=False) for s in res.scalars().all()]
+        items = [
+            _to_supplier(s, include_details=False, include_bank_accounts=False)
+            for s in res.scalars().all()
+        ]
         return items, total
 
     async def get_supplier_by_id(self, company_id: uuid.UUID, supplier_id: int) -> Supplier | None:
@@ -270,7 +294,7 @@ class SqlAlchemySupplierRepository:
         return await self._get_supplier_with_media(company_id, orm.id_supplier)
 
     async def update_supplier(
-        self, company_id: uuid.UUID, supplier_id: int, **kwargs
+        self, company_id: uuid.UUID, supplier_id: int, **kwargs: object
     ) -> Supplier | None:
         stmt = (
             select(SupplierModel)
@@ -288,7 +312,7 @@ class SqlAlchemySupplierRepository:
         if not orm:
             return None
         image_provided = "image" in kwargs
-        image = kwargs.pop("image", None)
+        image = cast(SingleImageDraft | None, kwargs.pop("image", None))
         for key, value in kwargs.items():
             if hasattr(orm, key):
                 setattr(orm, key, value)
@@ -443,7 +467,9 @@ class SqlAlchemySupplierRepository:
             )
         )
         if asset is None:
-            raise ValueError("El asset Cloudinary no existe, no pertenece a la empresa o no está disponible.")
+            raise ValueError(
+                "El asset Cloudinary no existe, no pertenece a la empresa o no está disponible."
+            )
         if asset.owner_id not in (None, owner_id) or asset.owner_type not in (None, owner_type):
             raise ValueError("El asset Cloudinary ya está asociado a otro recurso.")
         asset.status = "active"
@@ -459,7 +485,9 @@ class SqlAlchemySupplierRepository:
     ) -> None:
         existing = (
             await self._session.execute(
-                select(SupplierImageModel).where(SupplierImageModel.supplier_id == supplier.id_supplier)
+                select(SupplierImageModel).where(
+                    SupplierImageModel.supplier_id == supplier.id_supplier
+                )
             )
         ).scalar_one_or_none()
         if (
@@ -470,7 +498,7 @@ class SqlAlchemySupplierRepository:
         ):
             asset = await self._claim_asset(
                 company_id=company_id,
-                asset_id=image.media_asset_id,
+                asset_id=_required_asset_id(image),
                 purpose="supplier_logo",
                 owner_type="supplier",
                 owner_id=supplier.uuid,
@@ -488,7 +516,7 @@ class SqlAlchemySupplierRepository:
         if image.source_type == "cloudinary":
             asset = await self._claim_asset(
                 company_id=company_id,
-                asset_id=image.media_asset_id,
+                asset_id=_required_asset_id(image),
                 purpose="supplier_logo",
                 owner_type="supplier",
                 owner_id=supplier.uuid,
@@ -524,12 +552,13 @@ class SqlAlchemySupplierRepository:
             existing is not None
             and image is not None
             and image is not _UNSET
+            and isinstance(image, SingleImageDraft)
             and image.source_type == "cloudinary"
             and image.media_asset_id == existing.media_asset_id
         ):
             asset = await self._claim_asset(
                 company_id=company_id,
-                asset_id=image.media_asset_id,
+                asset_id=_required_asset_id(image),
                 purpose="supplier_contact_avatar",
                 owner_type="supplier_contact",
                 owner_id=contact.uuid,
@@ -544,10 +573,12 @@ class SqlAlchemySupplierRepository:
             await self._session.flush()
         if image is None or image is _UNSET:
             return
+        if not isinstance(image, SingleImageDraft):
+            raise TypeError("El valor de imagen no es válido.")
         if image.source_type == "cloudinary":
             asset = await self._claim_asset(
                 company_id=company_id,
-                asset_id=image.media_asset_id,
+                asset_id=_required_asset_id(image),
                 purpose="supplier_contact_avatar",
                 owner_type="supplier_contact",
                 owner_id=contact.uuid,

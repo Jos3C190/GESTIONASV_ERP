@@ -1,16 +1,17 @@
 """Unit tests for RefreshTokenUseCase (rotation + reuse detection)."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
-
 from app.application.auth.authenticate_user import AuthenticateUserUseCase, LoginInput
 from app.application.auth.refresh_token import RefreshInput, RefreshTokenUseCase
 from app.core.exceptions import AuthenticationError
 from app.core.security import hash_password
 from app.domain.entities.user import User
+
 from tests.unit.fakes import (
     FakeTokenService,
     InMemoryRefreshTokenRepository,
@@ -26,9 +27,9 @@ async def _login(users, sessions, tokens) -> str:
         email="bob@example.com",
         password_hash=hash_password("Strong!Passw0rd2026"),
         is_active=True,
-        password_changed_at=datetime.now(timezone.utc),
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        password_changed_at=datetime.now(UTC),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     await users.add(user)
     result = await uc.execute(LoginInput(login="bob", password="Strong!Passw0rd2026"))
@@ -93,9 +94,9 @@ async def test_refresh_expired_token_triggers_reuse_protection() -> None:
         email="exp@example.com",
         password_hash=hash_password("Strong!Passw0rd2026"),
         is_active=True,
-        password_changed_at=datetime.now(timezone.utc),
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        password_changed_at=datetime.now(UTC),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     await users.add(user)
     raw = tokens.generate_refresh_token()
@@ -108,10 +109,10 @@ async def test_refresh_expired_token_triggers_reuse_protection() -> None:
             token_hash=tokens.hash_refresh_token(raw),
             user_agent=None,
             ip_address=None,
-            expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+            expires_at=datetime.now(UTC) - timedelta(seconds=1),
             revoked_at=None,
             rotated_from=None,
-            created_at=datetime.now(timezone.utc) - timedelta(days=1),
+            created_at=datetime.now(UTC) - timedelta(days=1),
         )
     )
     uc = RefreshTokenUseCase(users, sessions, tokens)

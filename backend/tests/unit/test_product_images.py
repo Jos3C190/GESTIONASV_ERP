@@ -12,7 +12,9 @@ from app.domain.entities.product_image import (
 from pydantic import ValidationError
 
 
-def _external(position: int = 0, *, cover: bool = False, url: str | None = None) -> ProductImageDraft:
+def _external(
+    position: int = 0, *, cover: bool = False, url: str | None = None
+) -> ProductImageDraft:
     return ProductImageDraft(
         id=None,
         source_type="external",
@@ -34,9 +36,16 @@ def test_gallery_normalizes_positions_and_promotes_first_cover() -> None:
 
 def test_gallery_rejects_duplicate_positions_urls_and_multiple_covers() -> None:
     with pytest.raises(ValueError, match="repetir posición"):
-        normalize_product_image_drafts([_external(0), _external(0, url="https://cdn.example.com/other.webp")])
+        normalize_product_image_drafts(
+            [_external(0), _external(0, url="https://cdn.example.com/other.webp")]
+        )
     with pytest.raises(ValueError, match="repetir URLs"):
-        normalize_product_image_drafts([_external(0, url="https://cdn.example.com/a.webp"), _external(1, url="https://cdn.example.com/a.webp")])
+        normalize_product_image_drafts(
+            [
+                _external(0, url="https://cdn.example.com/a.webp"),
+                _external(1, url="https://cdn.example.com/a.webp"),
+            ]
+        )
     with pytest.raises(ValueError, match="solo puede tener una portada"):
         normalize_product_image_drafts([_external(0, cover=True), _external(1, cover=True)])
 

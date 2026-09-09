@@ -9,14 +9,18 @@ strict transactional append with ``required=True``.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
-from typing import Any
+from collections.abc import Mapping
+from datetime import UTC, date, datetime
 
 from app.core.logging import get_logger
 from app.domain.entities.audit import AuditLog
 from app.domain.ports.audit_repository import AuditRepository
 
 log = get_logger(__name__)
+
+
+def _isoformat_or_none(value: object) -> str | None:
+    return value.isoformat() if isinstance(value, date | datetime) else None
 
 
 class AuditService:
@@ -32,12 +36,12 @@ class AuditService:
         branch_id: uuid.UUID | None = None,
         resource_type: str | None = None,
         resource_id: str | None = None,
-        before_state: dict[str, Any] | None = None,
-        after_state: dict[str, Any] | None = None,
+        before_state: Mapping[str, object] | None = None,
+        after_state: Mapping[str, object] | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
         status: str = "success",
-        metadata: dict[str, Any] | None = None,
+        metadata: Mapping[str, object] | None = None,
         required: bool = False,
     ) -> None:
         """Append an audit entry, optionally as a transactional requirement.
@@ -54,12 +58,12 @@ class AuditService:
                 action=action,
                 resource_type=resource_type,
                 resource_id=resource_id,
-                before_state=before_state,
-                after_state=after_state,
+                before_state=dict(before_state) if before_state is not None else None,
+                after_state=dict(after_state) if after_state is not None else None,
                 ip_address=ip_address,
                 user_agent=user_agent,
                 status=status,
-                metadata=metadata,
+                metadata=dict(metadata) if metadata is not None else None,
                 created_at=datetime.now(UTC),
             )
             await self._repo.add(entry)
@@ -69,7 +73,7 @@ class AuditService:
                 raise
 
 
-def user_to_audit_state(user: object) -> dict[str, Any]:
+def user_to_audit_state(user: object) -> dict[str, object]:
     """Serialize a User domain entity to a JSON-safe dict for audit before/after."""
     return {
         "id": str(getattr(user, "id", "")),
@@ -80,7 +84,7 @@ def user_to_audit_state(user: object) -> dict[str, Any]:
     }
 
 
-def employee_to_audit_state(emp: object) -> dict[str, Any]:
+def employee_to_audit_state(emp: object) -> dict[str, object]:
     return {
         "id": str(getattr(emp, "id", "")),
         "company_id": str(getattr(emp, "company_id", "")),
@@ -89,29 +93,19 @@ def employee_to_audit_state(emp: object) -> dict[str, Any]:
         "first_name": getattr(emp, "first_name", None),
         "last_name": getattr(emp, "last_name", None),
         "document_id": getattr(emp, "document_id", None),
-        "birth_date": (
-            getattr(emp, "birth_date", None).isoformat()
-            if getattr(emp, "birth_date", None)
-            else None
-        ),
+        "birth_date": _isoformat_or_none(getattr(emp, "birth_date", None)),
         "phone": getattr(emp, "phone", None),
         "address": getattr(emp, "address", None),
         "department_id": str(getattr(emp, "department_id", "")) or None,
         "position": getattr(emp, "position", None),
-        "hire_date": (
-            getattr(emp, "hire_date", None).isoformat() if getattr(emp, "hire_date", None) else None
-        ),
-        "termination_date": (
-            getattr(emp, "termination_date", None).isoformat()
-            if getattr(emp, "termination_date", None)
-            else None
-        ),
+        "hire_date": _isoformat_or_none(getattr(emp, "hire_date", None)),
+        "termination_date": _isoformat_or_none(getattr(emp, "termination_date", None)),
         "status": str(getattr(emp, "status", "")),
         "photo_url": getattr(emp, "photo_url", None),
     }
 
 
-def department_to_audit_state(department: object) -> dict[str, Any]:
+def department_to_audit_state(department: object) -> dict[str, object]:
     return {
         "id": str(getattr(department, "id", "")),
         "company_id": str(getattr(department, "company_id", "")),
@@ -123,7 +117,7 @@ def department_to_audit_state(department: object) -> dict[str, Any]:
     }
 
 
-def role_to_audit_state(role: object) -> dict[str, Any]:
+def role_to_audit_state(role: object) -> dict[str, object]:
     return {
         "id": str(getattr(role, "id", "")),
         "name": getattr(role, "name", None),

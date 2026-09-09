@@ -120,9 +120,7 @@ def _validate_and_normalize_draft(
     )
 
 
-def _validate_image_source(
-    source_type: str, url: str, media_asset_id: uuid.UUID | None
-) -> None:
+def _validate_image_source(source_type: str, url: str, media_asset_id: uuid.UUID | None) -> None:
     if source_type not in {"cloudinary", "external"}:
         raise ValueError("El origen de imagen no es válido.")
     if source_type == "external":

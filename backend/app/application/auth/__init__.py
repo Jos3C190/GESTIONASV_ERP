@@ -1,4 +1,5 @@
 """Auth use cases barrel."""
+
 from app.application.auth.authenticate_user import (
     AuthenticateUserUseCase,
     LoginInput,
@@ -21,15 +22,15 @@ from app.application.auth.register_user import (
 
 __all__ = [
     "AuthenticateUserUseCase",
+    "GetCurrentUserResult",
+    "GetCurrentUserUseCase",
     "LoginInput",
     "LoginResult",
-    "RefreshTokenUseCase",
+    "LogoutInput",
+    "LogoutUseCase",
     "RefreshInput",
     "RefreshResult",
-    "LogoutUseCase",
-    "LogoutInput",
-    "GetCurrentUserUseCase",
-    "GetCurrentUserResult",
-    "RegisterUserUseCase",
+    "RefreshTokenUseCase",
     "RegisterUserInput",
+    "RegisterUserUseCase",
 ]

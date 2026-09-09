@@ -401,9 +401,7 @@ async def preview_capacity(
             packaging_id=body.packaging_definition_id,
             quantity_base=body.quantity_base,
             stock_status=body.stock_status,
-            actual_measures=(
-                body.actual_measures.to_domain() if body.actual_measures else None
-            ),
+            actual_measures=(body.actual_measures.to_domain() if body.actual_measures else None),
             override_id=body.operational_override_id,
             exclude_reservation_id=body.exclude_reservation_id,
         ),
@@ -436,9 +434,7 @@ async def reserve_capacity(
             packaging_id=body.packaging_definition_id,
             quantity_base=body.quantity_base,
             stock_status=body.stock_status,
-            actual_measures=(
-                body.actual_measures.to_domain() if body.actual_measures else None
-            ),
+            actual_measures=(body.actual_measures.to_domain() if body.actual_measures else None),
             duration_minutes=body.duration_minutes,
             actor_id=current.id,
             override_id=body.operational_override_id,
@@ -481,7 +477,9 @@ async def change_reservation_status(
     company_id, _warehouse_id = await _authorize_location(
         request, session, current, persisted.location_id
     )
-    require_resource_company(request, persisted.company_id, not_found_detail="Reserva no encontrada.")
+    require_resource_company(
+        request, persisted.company_id, not_found_detail="Reserva no encontrada."
+    )
     reservation = await _execute(
         session,
         _use_cases(session).change_reservation_status(
@@ -492,9 +490,7 @@ async def change_reservation_status(
         ),
     )
     response = CapacityReservationOut.model_validate(reservation)
-    audit_action = (
-        "EXPIRE" if reservation.status.value == "expired" else body.action.upper()
-    )
+    audit_action = "EXPIRE" if reservation.status.value == "expired" else body.action.upper()
     await audit.record(
         action=audit_action,
         user_id=current.id,
@@ -608,9 +604,7 @@ async def verify_handling_unit_measurements(
     audit: AuditService = Depends(get_audit_service),
 ) -> HandlingUnitOut:
     persisted = await session.scalar(
-        select(InventoryHandlingUnitModel).where(
-            InventoryHandlingUnitModel.id == handling_unit_id
-        )
+        select(InventoryHandlingUnitModel).where(InventoryHandlingUnitModel.id == handling_unit_id)
     )
     if persisted is None:
         raise HTTPException(404, "Unidad logística no encontrada.")

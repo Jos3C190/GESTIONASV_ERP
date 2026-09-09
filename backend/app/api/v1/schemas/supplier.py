@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, cast
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -28,7 +28,7 @@ class SupplierImageInput(BaseModel):
                 alt_text=self.alt_text,
             )
         )
-        self.source_type = normalized.source_type
+        self.source_type = cast(Literal["cloudinary", "external"], normalized.source_type)
         self.url = normalized.url
         self.alt_text = normalized.alt_text
         return self
@@ -82,7 +82,9 @@ class SupplierCreate(BaseModel):
     website: str | None = Field(None, max_length=200)
     legal_name: str | None = Field(None, max_length=240)
     supplier_group_id: UUID | None = None
-    supplier_status: Literal["pending_review", "approved", "on_hold", "suspended", "rejected", "retired"] = "approved"
+    supplier_status: Literal[
+        "pending_review", "approved", "on_hold", "suspended", "rejected", "retired"
+    ] = "approved"
     hold_reason: str | None = Field(None, max_length=500)
     hold_from: datetime | None = None
     hold_until: datetime | None = None
@@ -109,7 +111,9 @@ class SupplierUpdate(BaseModel):
     is_active: bool | None = None
     legal_name: str | None = Field(None, max_length=240)
     supplier_group_id: UUID | None = None
-    supplier_status: Literal["pending_review", "approved", "on_hold", "suspended", "rejected", "retired"] | None = None
+    supplier_status: (
+        Literal["pending_review", "approved", "on_hold", "suspended", "rejected", "retired"] | None
+    ) = None
     hold_reason: str | None = Field(None, max_length=500)
     hold_from: datetime | None = None
     hold_until: datetime | None = None
@@ -216,9 +220,18 @@ class SupplierAddressCreate(BaseModel):
     is_primary: bool = False
 
 
-class SupplierAddressUpdate(SupplierAddressCreate):
-    address_type: Literal["fiscal", "billing", "delivery", "return", "office", "other"] | None = None
+class SupplierAddressUpdate(BaseModel):
+    address_type: Literal["fiscal", "billing", "delivery", "return", "office", "other"] | None = (
+        None
+    )
     line1: str | None = Field(None, min_length=1, max_length=240)
+    line2: str | None = Field(None, max_length=240)
+    country_id: int | None = None
+    state_region: str | None = Field(None, max_length=120)
+    city: str | None = Field(None, max_length=120)
+    postal_code: str | None = Field(None, max_length=32)
+    phone: str | None = Field(None, max_length=50)
+    email: str | None = Field(None, max_length=150)
     is_primary: bool | None = None
 
 

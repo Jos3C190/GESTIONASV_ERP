@@ -1,19 +1,20 @@
 """Unit tests for AuthenticateUserUseCase (no DB, in-memory fakes)."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-
 from app.application.auth.authenticate_user import (
+    MAX_FAILED_ATTEMPTS,
     AuthenticateUserUseCase,
     LoginInput,
-    MAX_FAILED_ATTEMPTS,
 )
 from app.core.exceptions import AuthenticationError
 from app.core.security import hash_password
 from app.domain.entities.user import User
+
 from tests.unit.fakes import (
     FakeTokenService,
     InMemoryRefreshTokenRepository,
@@ -31,9 +32,9 @@ def _make_user(*, active=True, locked_until=None, failed=0, password="Strong!Pas
         is_superuser=False,
         failed_login_attempts=failed,
         locked_until=locked_until,
-        password_changed_at=datetime.now(timezone.utc),
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        password_changed_at=datetime.now(UTC),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -95,9 +96,7 @@ async def test_login_locked_account_raises_specific_code(auth_setup) -> None:
     from datetime import timedelta
 
     users, _, _, uc = auth_setup
-    await users.add(
-        _make_user(locked_until=datetime.now(timezone.utc) + timedelta(minutes=5))
-    )
+    await users.add(_make_user(locked_until=datetime.now(UTC) + timedelta(minutes=5)))
     with pytest.raises(AuthenticationError) as exc:
         await uc.execute(LoginInput(login="alice", password="Strong!Passw0rd2026"))
     assert exc.value.code == "account_locked"
@@ -123,9 +122,7 @@ async def test_successful_login_resets_counters(auth_setup) -> None:
     users, _, _, uc = auth_setup
     user = await users.add(_make_user(failed=3))
 
-    result = await uc.execute(
-        LoginInput(login="alice", password="Strong!Passw0rd2026")
-    )
+    result = await uc.execute(LoginInput(login="alice", password="Strong!Passw0rd2026"))
     assert result.username == "alice"
     updated = await users.get_by_id(user.id)
     assert updated.failed_login_attempts == 0

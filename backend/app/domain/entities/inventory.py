@@ -116,9 +116,7 @@ class PhysicalMeasures:
         assert self.length_m is not None
         assert self.width_m is not None
         assert self.height_m is not None
-        return _canonical_physical_quantity(
-            self.length_m * self.width_m * self.height_m
-        )
+        return _canonical_physical_quantity(self.length_m * self.width_m * self.height_m)
 
     @property
     def is_complete(self) -> bool:
@@ -138,10 +136,7 @@ class PhysicalMeasures:
             self.height_m,
             self.volume_m3,
         )
-        if any(
-            value is not None and (not value.is_finite() or value <= ZERO)
-            for value in values
-        ):
+        if any(value is not None and (not value.is_finite() or value <= ZERO) for value in values):
             raise ValueError("Las medidas físicas deben ser mayores que cero.")
         supplied_dimensions = [
             self.length_m is not None,
@@ -175,9 +170,7 @@ def calculate_consumption(
     assert volume is not None
     packaging_count = quantity_base / base_quantity
     return Consumption(
-        weight_kg=_canonical_physical_quantity(
-            measures.gross_weight_kg * packaging_count
-        ),
+        weight_kg=_canonical_physical_quantity(measures.gross_weight_kg * packaging_count),
         volume_m3=_canonical_physical_quantity(volume * packaging_count),
     )
 
@@ -253,12 +246,8 @@ def evaluate_capacity(
     has_operational_override: bool = False,
 ) -> CapacityDecision:
     """Evaluate the projected state; certified limits can never be overridden."""
-    projected_weight = (
-        usage.occupied_weight_kg + usage.reserved_weight_kg + incoming.weight_kg
-    )
-    projected_volume = (
-        usage.occupied_volume_m3 + usage.reserved_volume_m3 + incoming.volume_m3
-    )
+    projected_weight = usage.occupied_weight_kg + usage.reserved_weight_kg + incoming.weight_kg
+    projected_volume = usage.occupied_volume_m3 + usage.reserved_volume_m3 + incoming.volume_m3
     weight_pct = _percent(projected_weight, limit.operational_weight_kg)
     volume_pct = _percent(projected_volume, limit.operational_volume_m3)
     comparable = [("weight", weight_pct), ("volume", volume_pct)]
@@ -266,12 +255,8 @@ def evaluate_capacity(
     limiting = max(available, key=lambda entry: entry[1])[0] if available else None
 
     code: str | None = None
-    if (
-        limit.certified_weight_kg is not None
-        and projected_weight > limit.certified_weight_kg
-    ) or (
-        limit.certified_volume_m3 is not None
-        and projected_volume > limit.certified_volume_m3
+    if (limit.certified_weight_kg is not None and projected_weight > limit.certified_weight_kg) or (
+        limit.certified_volume_m3 is not None and projected_volume > limit.certified_volume_m3
     ):
         code = "certified_capacity_exceeded"
     elif limit.enforcement_mode == "enforce" and not has_operational_override:

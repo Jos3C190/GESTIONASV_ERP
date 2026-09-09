@@ -35,7 +35,9 @@ class CurrencyModel(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
 
     __table_args__ = (
-        CheckConstraint("code = upper(code) AND char_length(code) = 3", name="ck_currencies_iso_code"),
+        CheckConstraint(
+            "code = upper(code) AND char_length(code) = 3", name="ck_currencies_iso_code"
+        ),
         CheckConstraint("decimal_places BETWEEN 0 AND 6", name="ck_currencies_decimal_places"),
         Index("ix_currencies_active_code", "is_active", "code"),
     )
@@ -57,7 +59,9 @@ class SupplierGroupModel(UUIDPKMixin, TimestampMixin, Base):
         UniqueConstraint("company_id", "code", name="uq_supplier_groups_company_code"),
         Index("ix_supplier_groups_company_active", "company_id", "is_active"),
     )
-    suppliers = relationship("SupplierModel", back_populates="supplier_group", overlaps="payment_terms,suppliers")
+    suppliers = relationship(
+        "SupplierModel", back_populates="supplier_group", overlaps="payment_terms,suppliers"
+    )
 
 
 class PaymentTermsModel(UUIDPKMixin, TimestampMixin, Base):
@@ -70,18 +74,26 @@ class PaymentTermsModel(UUIDPKMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     net_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     discount_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    discount_percent: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, server_default="0")
+    discount_percent: Mapped[float] = mapped_column(
+        Numeric(5, 2), nullable=False, server_default="0"
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
 
     __table_args__ = (
         UniqueConstraint("company_id", "id", name="uq_payment_terms_company_id"),
         UniqueConstraint("company_id", "code", name="uq_payment_terms_company_code"),
         CheckConstraint("net_days >= 0", name="ck_payment_terms_net_days"),
-        CheckConstraint("discount_days BETWEEN 0 AND net_days", name="ck_payment_terms_discount_days"),
-        CheckConstraint("discount_percent BETWEEN 0 AND 100", name="ck_payment_terms_discount_percent"),
+        CheckConstraint(
+            "discount_days BETWEEN 0 AND net_days", name="ck_payment_terms_discount_days"
+        ),
+        CheckConstraint(
+            "discount_percent BETWEEN 0 AND 100", name="ck_payment_terms_discount_percent"
+        ),
         Index("ix_payment_terms_company_active", "company_id", "is_active"),
     )
-    suppliers = relationship("SupplierModel", back_populates="payment_terms", overlaps="supplier_group,suppliers")
+    suppliers = relationship(
+        "SupplierModel", back_populates="payment_terms", overlaps="supplier_group,suppliers"
+    )
 
 
 class SupplierTaxIdentifierModel(UUIDPKMixin, TimestampMixin, Base):
@@ -104,14 +116,23 @@ class SupplierTaxIdentifierModel(UUIDPKMixin, TimestampMixin, Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "supplier_id", "country_id", "identifier_type", "normalized_value",
+            "supplier_id",
+            "country_id",
+            "identifier_type",
+            "normalized_value",
             name="uq_supplier_tax_identifier_value",
         ),
         CheckConstraint(
             "valid_until IS NULL OR valid_from IS NULL OR valid_until >= valid_from",
             name="ck_supplier_tax_identifier_dates",
         ),
-        Index("uq_supplier_tax_identifiers_primary_country", "supplier_id", "country_id", unique=True, postgresql_where=text("is_primary = true")),
+        Index(
+            "uq_supplier_tax_identifiers_primary_country",
+            "supplier_id",
+            "country_id",
+            unique=True,
+            postgresql_where=text("is_primary = true"),
+        ),
     )
     supplier = relationship("SupplierModel", back_populates="tax_identifiers")
     country = relationship("CountryModel")
@@ -141,7 +162,13 @@ class SupplierAddressModel(UUIDPKMixin, TimestampMixin, Base):
             "address_type IN ('fiscal', 'billing', 'delivery', 'return', 'office', 'other')",
             name="ck_supplier_addresses_type",
         ),
-        Index("uq_supplier_addresses_primary_type", "supplier_id", "address_type", unique=True, postgresql_where=text("is_primary = true")),
+        Index(
+            "uq_supplier_addresses_primary_type",
+            "supplier_id",
+            "address_type",
+            unique=True,
+            postgresql_where=text("is_primary = true"),
+        ),
     )
     supplier = relationship("SupplierModel", back_populates="addresses")
     country = relationship("CountryModel")
@@ -164,7 +191,9 @@ class SupplierBankAccountModel(UUIDPKMixin, TimestampMixin, Base):
     account_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     account_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     iban_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
-    encryption_key_version: Mapped[str] = mapped_column(String(32), nullable=False, server_default="v1")
+    encryption_key_version: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="v1"
+    )
     last_four: Mapped[str] = mapped_column(String(4), nullable=False)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
@@ -173,8 +202,15 @@ class SupplierBankAccountModel(UUIDPKMixin, TimestampMixin, Base):
 
     __table_args__ = (
         CheckConstraint("char_length(last_four) = 4", name="ck_supplier_bank_last_four"),
-        CheckConstraint("status IN ('active', 'blocked', 'closed')", name="ck_supplier_bank_status"),
-        Index("uq_supplier_bank_accounts_primary", "supplier_id", unique=True, postgresql_where=text("is_primary = true")),
+        CheckConstraint(
+            "status IN ('active', 'blocked', 'closed')", name="ck_supplier_bank_status"
+        ),
+        Index(
+            "uq_supplier_bank_accounts_primary",
+            "supplier_id",
+            unique=True,
+            postgresql_where=text("is_primary = true"),
+        ),
     )
     supplier = relationship("SupplierModel", back_populates="bank_accounts")
     country = relationship("CountryModel")

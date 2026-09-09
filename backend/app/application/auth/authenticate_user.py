@@ -7,16 +7,18 @@ an increasing backoff window. Successful login resets counters.
 Returns generic errors so the caller cannot distinguish "user not found"
 from "wrong password" (anti-enumeration).
 """
+
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from app.core.exceptions import AuthenticationError, BusinessRuleError
+from app.core.exceptions import AuthenticationError
 from app.core.logging import get_logger
 from app.core.security import needs_rehash, verify_password
 from app.domain.entities.auth import RefreshToken
+from app.domain.entities.user import User
 from app.domain.ports.refresh_token_repository import RefreshTokenRepository
 from app.domain.ports.token_service import TokenService
 from app.domain.ports.user_repository import UserRepository
@@ -88,7 +90,7 @@ class AuthenticateUserUseCase:
             is_active=user.is_active,
             is_superuser=user.is_superuser,
             mfa_enabled=user.mfa_enabled,
-            last_login_at=datetime.now(timezone.utc),
+            last_login_at=datetime.now(UTC),
             failed_login_attempts=0,
             locked_until=None,
             password_changed_at=user.password_changed_at,
@@ -117,10 +119,10 @@ class AuthenticateUserUseCase:
             token_hash=self._tokens.hash_refresh_token(raw_refresh),
             user_agent=inp.user_agent,
             ip_address=inp.ip_address,
-            expires_at=datetime.now(timezone.utc) + self._tokens.refresh_ttl,
+            expires_at=datetime.now(UTC) + self._tokens.refresh_ttl,
             revoked_at=None,
             rotated_from=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         stored = await self._sessions.add(refresh_domain)
 
@@ -134,7 +136,7 @@ class AuthenticateUserUseCase:
             username=updated.username,
         )
 
-    async def _register_failed_attempt(self, user: object) -> None:
+    async def _register_failed_attempt(self, user: User) -> None:
         """Increment failed counter and lock if threshold reached."""
         attempts = getattr(user, "failed_login_attempts", 0) + 1
         locked_until = None
@@ -142,27 +144,27 @@ class AuthenticateUserUseCase:
             # Exponential backoff capped at MAX_LOCKOUT_MINUTES.
             factor = min(2 ** (attempts - MAX_FAILED_ATTEMPTS), MAX_LOCKOUT_MINUTES)
             minutes = min(BASE_LOCKOUT_MINUTES * factor, MAX_LOCKOUT_MINUTES)
-            locked_until = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+            locked_until = datetime.now(UTC) + timedelta(minutes=minutes)
             log.warning(
                 "account_locked_after_failures",
-                user_id=str(getattr(user, "id")),
+                user_id=str(user.id),
                 attempts=attempts,
                 locked_minutes=minutes,
             )
-        updated = user.__class__(  # type: ignore[misc]
-            id=getattr(user, "id"),
-            username=getattr(user, "username"),
-            email=getattr(user, "email"),
-            password_hash=getattr(user, "password_hash"),
-            is_active=getattr(user, "is_active"),
-            is_superuser=getattr(user, "is_superuser"),
-            mfa_enabled=getattr(user, "mfa_enabled"),
-            last_login_at=getattr(user, "last_login_at"),
+        updated = User(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            password_hash=user.password_hash,
+            is_active=user.is_active,
+            is_superuser=user.is_superuser,
+            mfa_enabled=user.mfa_enabled,
+            last_login_at=user.last_login_at,
             failed_login_attempts=attempts,
             locked_until=locked_until,
-            password_changed_at=getattr(user, "password_changed_at"),
-            created_at=getattr(user, "created_at"),
-            updated_at=getattr(user, "updated_at"),
-            deleted_at=getattr(user, "deleted_at"),
+            password_changed_at=user.password_changed_at,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            deleted_at=user.deleted_at,
         )
         await self._users.update(updated)

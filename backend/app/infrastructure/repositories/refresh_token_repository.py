@@ -1,11 +1,14 @@
 """SQLAlchemy RefreshTokenRepository."""
+
 from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any, cast
 
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.auth import RefreshToken as DomainToken
@@ -53,19 +56,19 @@ class SqlAlchemyRefreshTokenRepository:
         stmt = (
             update(ORMToken)
             .where(ORMToken.id == token_id, ORMToken.revoked_at.is_(None))
-            .values(revoked_at=datetime.now(timezone.utc))
+            .values(revoked_at=datetime.now(UTC))
         )
         result = await self._session.execute(stmt)
-        return (result.rowcount or 0) > 0
+        return (cast(CursorResult[Any], result).rowcount or 0) > 0
 
     async def revoke_all_for_user(self, user_id: uuid.UUID) -> int:
         stmt = (
             update(ORMToken)
             .where(ORMToken.user_id == user_id, ORMToken.revoked_at.is_(None))
-            .values(revoked_at=datetime.now(timezone.utc))
+            .values(revoked_at=datetime.now(UTC))
         )
         result = await self._session.execute(stmt)
-        return int(result.rowcount or 0)
+        return int(cast(CursorResult[Any], result).rowcount or 0)
 
     async def list_active_for_user(self, user_id: uuid.UUID) -> Sequence[DomainToken]:
         stmt = (

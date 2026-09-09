@@ -66,13 +66,13 @@ class InventoryUseCases:
     ) -> Sequence[PackagingDefinition]:
         if await self._repository.get_item(company_id, item_id) is None:
             raise InventoryApplicationError(
-                "Identidad inventariable no encontrada.", code="inventory_item_not_found", status_code=404
+                "Identidad inventariable no encontrada.",
+                code="inventory_item_not_found",
+                status_code=404,
             )
         return await self._repository.list_packaging(company_id, item_id)
 
-    async def get_item(
-        self, company_id: uuid.UUID, item_id: uuid.UUID
-    ) -> InventoryItem:
+    async def get_item(self, company_id: uuid.UUID, item_id: uuid.UUID) -> InventoryItem:
         item = await self._repository.get_item(company_id, item_id)
         if item is None:
             raise InventoryApplicationError(
@@ -193,9 +193,7 @@ class InventoryUseCases:
         try:
             measures.validate()
         except ValueError as exc:
-            raise InventoryApplicationError(
-                str(exc), code="invalid_physical_measures"
-            ) from exc
+            raise InventoryApplicationError(str(exc), code="invalid_physical_measures") from exc
         if not measures.is_complete:
             raise InventoryApplicationError(
                 "La verificación requiere peso y volumen completos.",
@@ -255,9 +253,7 @@ class InventoryUseCases:
                     "Una salida requiere origen y no admite ubicación de destino.",
                     code="invalid_movement_endpoints",
                 )
-            if movement_type in {"putaway", "transfer"} and (
-                not source or not destination
-            ):
+            if movement_type in {"putaway", "transfer"} and (not source or not destination):
                 raise InventoryApplicationError(
                     "El traslado requiere ubicaciones de origen y destino.",
                     code="invalid_movement_endpoints",

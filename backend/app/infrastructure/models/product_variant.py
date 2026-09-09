@@ -47,13 +47,21 @@ class ProductFamilyAttributeModel(UUIDPKMixin, TimestampMixin, Base):
             name="fk_product_family_attributes_product_company",
         ),
         UniqueConstraint("company_id", "id", name="uq_product_family_attributes_company_id"),
-        UniqueConstraint("company_id", "product_id", "id", name="uq_product_family_attributes_scope_id"),
-        UniqueConstraint("company_id", "product_id", "code", name="uq_product_family_attributes_code"),
-        CheckConstraint("position >= 0 AND position < 5", name="ck_product_family_attributes_position"),
+        UniqueConstraint(
+            "company_id", "product_id", "id", name="uq_product_family_attributes_scope_id"
+        ),
+        UniqueConstraint(
+            "company_id", "product_id", "code", name="uq_product_family_attributes_code"
+        ),
+        CheckConstraint(
+            "position >= 0 AND position < 5", name="ck_product_family_attributes_position"
+        ),
         Index("ix_product_family_attributes_product", "company_id", "product_id", "is_active"),
     )
 
-    product: Mapped[ProductModel] = relationship("ProductModel", back_populates="variant_attributes")
+    product: Mapped[ProductModel] = relationship(
+        "ProductModel", back_populates="variant_attributes"
+    )
     values: Mapped[list[ProductFamilyAttributeValueModel]] = relationship(
         "ProductFamilyAttributeValueModel",
         back_populates="attribute",
@@ -67,7 +75,9 @@ class ProductFamilyAttributeValueModel(UUIDPKMixin, TimestampMixin, Base):
 
     company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
     product_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    attribute_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False, index=True
+    )
     code: Mapped[str] = mapped_column(String(60), nullable=False)
     label: Mapped[str] = mapped_column(String(120), nullable=False)
     normalized_label: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -77,14 +87,30 @@ class ProductFamilyAttributeValueModel(UUIDPKMixin, TimestampMixin, Base):
     __table_args__ = (
         ForeignKeyConstraint(
             ["company_id", "product_id", "attribute_id"],
-            ["product_family_attributes.company_id", "product_family_attributes.product_id", "product_family_attributes.id"],
+            [
+                "product_family_attributes.company_id",
+                "product_family_attributes.product_id",
+                "product_family_attributes.id",
+            ],
             ondelete="CASCADE",
             name="fk_product_family_values_attribute_scope",
         ),
-        UniqueConstraint("company_id", "attribute_id", "id", name="uq_product_family_values_attribute_id"),
-        UniqueConstraint("company_id", "product_id", "attribute_id", "id", name="uq_product_family_values_scope_id"),
-        UniqueConstraint("company_id", "attribute_id", "code", name="uq_product_family_values_code"),
-        UniqueConstraint("company_id", "attribute_id", "normalized_label", name="uq_product_family_values_label"),
+        UniqueConstraint(
+            "company_id", "attribute_id", "id", name="uq_product_family_values_attribute_id"
+        ),
+        UniqueConstraint(
+            "company_id",
+            "product_id",
+            "attribute_id",
+            "id",
+            name="uq_product_family_values_scope_id",
+        ),
+        UniqueConstraint(
+            "company_id", "attribute_id", "code", name="uq_product_family_values_code"
+        ),
+        UniqueConstraint(
+            "company_id", "attribute_id", "normalized_label", name="uq_product_family_values_label"
+        ),
         CheckConstraint("position >= 0", name="ck_product_family_values_position"),
         Index("ix_product_family_values_attribute", "company_id", "attribute_id", "is_active"),
     )
@@ -114,9 +140,17 @@ class ProductVariantModel(UUIDPKMixin, TimestampMixin, Base):
         ),
         UniqueConstraint("company_id", "id", name="uq_product_variants_company_id"),
         UniqueConstraint("company_id", "product_id", "id", name="uq_product_variants_scope_id"),
-        UniqueConstraint("company_id", "product_id", "combination_key", name="uq_product_variants_combination"),
-        CheckConstraint("lifecycle_status IN ('draft','active','blocked','discontinued','retired')", name="ck_product_variants_lifecycle_status"),
-        CheckConstraint("is_active = (lifecycle_status = 'active')", name="ck_product_variants_active_matches_lifecycle"),
+        UniqueConstraint(
+            "company_id", "product_id", "combination_key", name="uq_product_variants_combination"
+        ),
+        CheckConstraint(
+            "lifecycle_status IN ('draft','active','blocked','discontinued','retired')",
+            name="ck_product_variants_lifecycle_status",
+        ),
+        CheckConstraint(
+            "is_active = (lifecycle_status = 'active')",
+            name="ck_product_variants_active_matches_lifecycle",
+        ),
         Index("ix_product_variants_product_status", "company_id", "product_id", "lifecycle_status"),
     )
 
@@ -127,10 +161,16 @@ class ProductVariantModel(UUIDPKMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
     )
     identifiers: Mapped[list[ProductIdentifierModel]] = relationship(
-        "ProductIdentifierModel", back_populates="variant", cascade="all, delete-orphan"
+        "ProductIdentifierModel",
+        back_populates="variant",
+        cascade="all, delete-orphan",
+        overlaps="identifiers,product",
     )
     image: Mapped[ProductVariantImageModel | None] = relationship(
-        "ProductVariantImageModel", back_populates="variant", uselist=False, cascade="all, delete-orphan"
+        "ProductVariantImageModel",
+        back_populates="variant",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
 
 
@@ -152,43 +192,73 @@ class ProductVariantAttributeValueModel(Base):
         ),
         ForeignKeyConstraint(
             ["company_id", "product_id", "attribute_id"],
-            ["product_family_attributes.company_id", "product_family_attributes.product_id", "product_family_attributes.id"],
+            [
+                "product_family_attributes.company_id",
+                "product_family_attributes.product_id",
+                "product_family_attributes.id",
+            ],
             ondelete="CASCADE",
             name="fk_product_variant_values_attribute_scope",
         ),
         ForeignKeyConstraint(
             ["company_id", "product_id", "attribute_id", "value_id"],
-            ["product_family_attribute_values.company_id", "product_family_attribute_values.product_id", "product_family_attribute_values.attribute_id", "product_family_attribute_values.id"],
+            [
+                "product_family_attribute_values.company_id",
+                "product_family_attribute_values.product_id",
+                "product_family_attribute_values.attribute_id",
+                "product_family_attribute_values.id",
+            ],
             ondelete="RESTRICT",
             name="fk_product_variant_values_value_scope",
         ),
         # One value per attribute and no duplicate value in a combination.
-        PrimaryKeyConstraint("variant_id", "attribute_id", name="pk_product_variant_attribute_values"),
-        UniqueConstraint("company_id", "product_id", "variant_id", "value_id", name="uq_product_variant_values_value"),
+        PrimaryKeyConstraint(
+            "variant_id", "attribute_id", name="pk_product_variant_attribute_values"
+        ),
+        UniqueConstraint(
+            "company_id",
+            "product_id",
+            "variant_id",
+            "value_id",
+            name="uq_product_variant_values_value",
+        ),
     )
 
     variant: Mapped[ProductVariantModel] = relationship(
         "ProductVariantModel", back_populates="attribute_values"
     )
-    attribute: Mapped[ProductFamilyAttributeModel] = relationship("ProductFamilyAttributeModel")
-    value: Mapped[ProductFamilyAttributeValueModel] = relationship("ProductFamilyAttributeValueModel")
+    attribute: Mapped[ProductFamilyAttributeModel] = relationship(
+        "ProductFamilyAttributeModel", overlaps="attribute_values,variant"
+    )
+    value: Mapped[ProductFamilyAttributeValueModel] = relationship(
+        "ProductFamilyAttributeValueModel", overlaps="attribute,attribute_values,variant"
+    )
 
 
 class ProductVariantImageModel(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "product_variant_images"
 
     variant_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("product_variants.id", ondelete="CASCADE"), nullable=False, unique=True
+        PGUUID(as_uuid=True),
+        ForeignKey("product_variants.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
     )
     media_asset_id: Mapped[uuid.UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("media_assets.id", ondelete="RESTRICT"), nullable=True, unique=True
+        PGUUID(as_uuid=True),
+        ForeignKey("media_assets.id", ondelete="RESTRICT"),
+        nullable=True,
+        unique=True,
     )
     source_type: Mapped[str] = mapped_column(String(16), nullable=False)
     url: Mapped[str] = mapped_column(Text, nullable=False)
     alt_text: Mapped[str | None] = mapped_column(String(160), nullable=True)
 
     __table_args__ = (
-        CheckConstraint("source_type IN ('cloudinary', 'external')", name="ck_product_variant_images_source_type"),
+        CheckConstraint(
+            "source_type IN ('cloudinary', 'external')",
+            name="ck_product_variant_images_source_type",
+        ),
         CheckConstraint(
             "(source_type = 'external' AND media_asset_id IS NULL) OR "
             "(source_type = 'cloudinary' AND media_asset_id IS NOT NULL)",
@@ -196,7 +266,9 @@ class ProductVariantImageModel(UUIDPKMixin, TimestampMixin, Base):
         ),
     )
 
-    variant: Mapped[ProductVariantModel] = relationship("ProductVariantModel", back_populates="image")
+    variant: Mapped[ProductVariantModel] = relationship(
+        "ProductVariantModel", back_populates="image"
+    )
     media_asset: Mapped[MediaAsset | None] = relationship("MediaAsset")
 
 
@@ -221,7 +293,12 @@ class ProductSkuRegistryModel(UUIDPKMixin, Base):
             ondelete="CASCADE",
             name="fk_product_sku_registry_variant_company",
         ),
-        UniqueConstraint("company_id", "normalized_sku", name="uq_product_sku_registry_company_sku"),
-        CheckConstraint("(product_id IS NOT NULL) <> (variant_id IS NOT NULL)", name="ck_product_sku_registry_target"),
+        UniqueConstraint(
+            "company_id", "normalized_sku", name="uq_product_sku_registry_company_sku"
+        ),
+        CheckConstraint(
+            "(product_id IS NOT NULL) <> (variant_id IS NOT NULL)",
+            name="ck_product_sku_registry_target",
+        ),
         Index("ix_product_sku_registry_product", "company_id", "product_id"),
     )

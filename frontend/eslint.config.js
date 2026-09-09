@@ -15,6 +15,7 @@ export default [
     ignores: [
       '.pnpm-store/**',
       '.svelte-kit/**',
+      '.vercel/**',
       'build/**',
       'coverage/**',
       'node_modules/**',

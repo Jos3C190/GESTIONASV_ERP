@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import cast
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,30 +35,45 @@ class SupplierMasterRepository:
             )
         )
 
-    async def list_tax_identifiers(self, company_id: uuid.UUID, supplier_id: int) -> list[SupplierTaxIdentifierModel]:
+    async def list_tax_identifiers(
+        self, company_id: uuid.UUID, supplier_id: int
+    ) -> list[SupplierTaxIdentifierModel]:
         return list(
             (
                 await self.session.scalars(
                     select(SupplierTaxIdentifierModel)
                     .join(SupplierModel)
-                    .where(SupplierModel.company_id == company_id, SupplierModel.id_supplier == supplier_id)
-                    .order_by(SupplierTaxIdentifierModel.country_id, SupplierTaxIdentifierModel.identifier_type)
+                    .where(
+                        SupplierModel.company_id == company_id,
+                        SupplierModel.id_supplier == supplier_id,
+                    )
+                    .order_by(
+                        SupplierTaxIdentifierModel.country_id,
+                        SupplierTaxIdentifierModel.identifier_type,
+                    )
                 )
             ).all()
         )
 
-    async def get_tax_identifier(self, company_id: uuid.UUID, supplier_id: int, item_id: uuid.UUID) -> SupplierTaxIdentifierModel | None:
-        return await self.session.scalar(
-            select(SupplierTaxIdentifierModel)
-            .join(SupplierModel)
-            .where(
-                SupplierModel.company_id == company_id,
-                SupplierTaxIdentifierModel.supplier_id == supplier_id,
-                SupplierTaxIdentifierModel.id == item_id,
-            )
+    async def get_tax_identifier(
+        self, company_id: uuid.UUID, supplier_id: int, item_id: uuid.UUID
+    ) -> SupplierTaxIdentifierModel | None:
+        return cast(
+            SupplierTaxIdentifierModel | None,
+            await self.session.scalar(
+                select(SupplierTaxIdentifierModel)
+                .join(SupplierModel)
+                .where(
+                    SupplierModel.company_id == company_id,
+                    SupplierTaxIdentifierModel.supplier_id == supplier_id,
+                    SupplierTaxIdentifierModel.id == item_id,
+                )
+            ),
         )
 
-    async def save_tax_identifier(self, item: SupplierTaxIdentifierModel, *, primary: bool) -> SupplierTaxIdentifierModel:
+    async def save_tax_identifier(
+        self, item: SupplierTaxIdentifierModel, *, primary: bool
+    ) -> SupplierTaxIdentifierModel:
         if primary:
             await self.session.execute(
                 update(SupplierTaxIdentifierModel)
@@ -76,30 +92,51 @@ class SupplierMasterRepository:
         await self.session.delete(item)
         await self.session.flush()
 
-    async def list_addresses(self, company_id: uuid.UUID, supplier_id: int) -> list[SupplierAddressModel]:
+    async def list_addresses(
+        self, company_id: uuid.UUID, supplier_id: int
+    ) -> list[SupplierAddressModel]:
         return list(
             (
                 await self.session.scalars(
                     select(SupplierAddressModel)
                     .join(SupplierModel)
-                    .where(SupplierModel.company_id == company_id, SupplierAddressModel.supplier_id == supplier_id)
-                    .order_by(SupplierAddressModel.address_type, SupplierAddressModel.is_primary.desc())
+                    .where(
+                        SupplierModel.company_id == company_id,
+                        SupplierAddressModel.supplier_id == supplier_id,
+                    )
+                    .order_by(
+                        SupplierAddressModel.address_type, SupplierAddressModel.is_primary.desc()
+                    )
                 )
             ).all()
         )
 
-    async def get_address(self, company_id: uuid.UUID, supplier_id: int, item_id: uuid.UUID) -> SupplierAddressModel | None:
-        return await self.session.scalar(
-            select(SupplierAddressModel)
-            .join(SupplierModel)
-            .where(SupplierModel.company_id == company_id, SupplierAddressModel.supplier_id == supplier_id, SupplierAddressModel.id == item_id)
+    async def get_address(
+        self, company_id: uuid.UUID, supplier_id: int, item_id: uuid.UUID
+    ) -> SupplierAddressModel | None:
+        return cast(
+            SupplierAddressModel | None,
+            await self.session.scalar(
+                select(SupplierAddressModel)
+                .join(SupplierModel)
+                .where(
+                    SupplierModel.company_id == company_id,
+                    SupplierAddressModel.supplier_id == supplier_id,
+                    SupplierAddressModel.id == item_id,
+                )
+            ),
         )
 
-    async def save_address(self, item: SupplierAddressModel, *, primary: bool) -> SupplierAddressModel:
+    async def save_address(
+        self, item: SupplierAddressModel, *, primary: bool
+    ) -> SupplierAddressModel:
         if primary:
             await self.session.execute(
                 update(SupplierAddressModel)
-                .where(SupplierAddressModel.supplier_id == item.supplier_id, SupplierAddressModel.address_type == item.address_type)
+                .where(
+                    SupplierAddressModel.supplier_id == item.supplier_id,
+                    SupplierAddressModel.address_type == item.address_type,
+                )
                 .values(is_primary=False)
             )
         item.is_primary = primary
@@ -111,26 +148,45 @@ class SupplierMasterRepository:
         await self.session.delete(item)
         await self.session.flush()
 
-    async def list_bank_accounts(self, company_id: uuid.UUID, supplier_id: int) -> list[SupplierBankAccountModel]:
+    async def list_bank_accounts(
+        self, company_id: uuid.UUID, supplier_id: int
+    ) -> list[SupplierBankAccountModel]:
         return list(
             (
                 await self.session.scalars(
                     select(SupplierBankAccountModel)
                     .join(SupplierModel)
-                    .where(SupplierModel.company_id == company_id, SupplierBankAccountModel.supplier_id == supplier_id)
-                    .order_by(SupplierBankAccountModel.is_primary.desc(), SupplierBankAccountModel.created_at)
+                    .where(
+                        SupplierModel.company_id == company_id,
+                        SupplierBankAccountModel.supplier_id == supplier_id,
+                    )
+                    .order_by(
+                        SupplierBankAccountModel.is_primary.desc(),
+                        SupplierBankAccountModel.created_at,
+                    )
                 )
             ).all()
         )
 
-    async def get_bank_account(self, company_id: uuid.UUID, supplier_id: int, item_id: uuid.UUID) -> SupplierBankAccountModel | None:
-        return await self.session.scalar(
-            select(SupplierBankAccountModel)
-            .join(SupplierModel)
-            .where(SupplierModel.company_id == company_id, SupplierBankAccountModel.supplier_id == supplier_id, SupplierBankAccountModel.id == item_id)
+    async def get_bank_account(
+        self, company_id: uuid.UUID, supplier_id: int, item_id: uuid.UUID
+    ) -> SupplierBankAccountModel | None:
+        return cast(
+            SupplierBankAccountModel | None,
+            await self.session.scalar(
+                select(SupplierBankAccountModel)
+                .join(SupplierModel)
+                .where(
+                    SupplierModel.company_id == company_id,
+                    SupplierBankAccountModel.supplier_id == supplier_id,
+                    SupplierBankAccountModel.id == item_id,
+                )
+            ),
         )
 
-    async def save_bank_account(self, item: SupplierBankAccountModel, *, primary: bool) -> SupplierBankAccountModel:
+    async def save_bank_account(
+        self, item: SupplierBankAccountModel, *, primary: bool
+    ) -> SupplierBankAccountModel:
         if primary:
             await self.session.execute(
                 update(SupplierBankAccountModel)
@@ -147,19 +203,61 @@ class SupplierMasterRepository:
         await self.session.flush()
 
     async def list_groups(self, company_id: uuid.UUID) -> list[SupplierGroupModel]:
-        return list((await self.session.scalars(select(SupplierGroupModel).where(SupplierGroupModel.company_id == company_id).order_by(SupplierGroupModel.name))).all())
+        return list(
+            (
+                await self.session.scalars(
+                    select(SupplierGroupModel)
+                    .where(SupplierGroupModel.company_id == company_id)
+                    .order_by(SupplierGroupModel.name)
+                )
+            ).all()
+        )
 
-    async def get_group(self, company_id: uuid.UUID, item_id: uuid.UUID) -> SupplierGroupModel | None:
-        return await self.session.scalar(select(SupplierGroupModel).where(SupplierGroupModel.company_id == company_id, SupplierGroupModel.id == item_id))
+    async def get_group(
+        self, company_id: uuid.UUID, item_id: uuid.UUID
+    ) -> SupplierGroupModel | None:
+        return cast(
+            SupplierGroupModel | None,
+            await self.session.scalar(
+                select(SupplierGroupModel).where(
+                    SupplierGroupModel.company_id == company_id, SupplierGroupModel.id == item_id
+                )
+            ),
+        )
 
     async def list_payment_terms(self, company_id: uuid.UUID) -> list[PaymentTermsModel]:
-        return list((await self.session.scalars(select(PaymentTermsModel).where(PaymentTermsModel.company_id == company_id).order_by(PaymentTermsModel.net_days, PaymentTermsModel.name))).all())
+        return list(
+            (
+                await self.session.scalars(
+                    select(PaymentTermsModel)
+                    .where(PaymentTermsModel.company_id == company_id)
+                    .order_by(PaymentTermsModel.net_days, PaymentTermsModel.name)
+                )
+            ).all()
+        )
 
-    async def get_payment_terms(self, company_id: uuid.UUID, item_id: uuid.UUID) -> PaymentTermsModel | None:
-        return await self.session.scalar(select(PaymentTermsModel).where(PaymentTermsModel.company_id == company_id, PaymentTermsModel.id == item_id))
+    async def get_payment_terms(
+        self, company_id: uuid.UUID, item_id: uuid.UUID
+    ) -> PaymentTermsModel | None:
+        return cast(
+            PaymentTermsModel | None,
+            await self.session.scalar(
+                select(PaymentTermsModel).where(
+                    PaymentTermsModel.company_id == company_id, PaymentTermsModel.id == item_id
+                )
+            ),
+        )
 
     async def list_currencies(self) -> list[CurrencyModel]:
-        return list((await self.session.scalars(select(CurrencyModel).where(CurrencyModel.is_active.is_(True)).order_by(CurrencyModel.code))).all())
+        return list(
+            (
+                await self.session.scalars(
+                    select(CurrencyModel)
+                    .where(CurrencyModel.is_active.is_(True))
+                    .order_by(CurrencyModel.code)
+                )
+            ).all()
+        )
 
     @staticmethod
     def normalize_tax_value(value: str) -> str:

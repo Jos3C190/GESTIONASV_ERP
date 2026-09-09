@@ -1,4 +1,5 @@
 """Audit use cases barrel."""
+
 from app.application.audit.audit_service import (
     AuditService,
     employee_to_audit_state,
@@ -8,7 +9,7 @@ from app.application.audit.audit_service import (
 
 __all__ = [
     "AuditService",
-    "user_to_audit_state",
     "employee_to_audit_state",
     "role_to_audit_state",
+    "user_to_audit_state",
 ]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import cast
 
 from app.core.exceptions import ConcurrencyError, ConflictError, NotFoundError, ValidationError
 from app.domain.entities.catalog import Category, Country, Product, SubCategory, Unit
@@ -11,6 +12,7 @@ from app.domain.entities.product_image import (
     normalize_product_image_drafts,
 )
 from app.domain.entities.product_variants import (
+    ProductVariant,
     ProductVariantConfigDraft,
     ProductVariantIdentifierDraft,
     ProductVariantUpdateDraft,
@@ -36,7 +38,9 @@ class CatalogUseCases:
         return country
 
     # --- Categories ---
-    async def list_categories(self, company_id: uuid.UUID, active_only: bool = True) -> list[Category]:
+    async def list_categories(
+        self, company_id: uuid.UUID, active_only: bool = True
+    ) -> list[Category]:
         return await self._repo.list_categories(company_id, active_only=active_only)
 
     async def get_category(self, company_id: uuid.UUID, category_id: int) -> Category:
@@ -45,22 +49,30 @@ class CatalogUseCases:
             raise NotFoundError("Categoría no encontrada", code="category_not_found")
         return category
 
-    async def create_category(self, company_id: uuid.UUID, name: str, description: str | None = None) -> Category:
+    async def create_category(
+        self, company_id: uuid.UUID, name: str, description: str | None = None
+    ) -> Category:
         return await self._repo.create_category(company_id, name=name, description=description)
 
     async def update_category(
         self, company_id: uuid.UUID, category_id: int, **changes: object
     ) -> Category:
         if changes.get("name") is None and "name" in changes:
-            raise ValidationError("El nombre de la categoría es obligatorio.", code="category_name_required")
+            raise ValidationError(
+                "El nombre de la categoría es obligatorio.", code="category_name_required"
+            )
         category = await self._repo.update_category(company_id, category_id, **changes)
         if not category:
             raise NotFoundError("Categoría no encontrada", code="category_not_found")
         return category
 
     # --- SubCategories ---
-    async def list_sub_categories(self, company_id: uuid.UUID, category_id: int | None = None, active_only: bool = True) -> list[SubCategory]:
-        return await self._repo.list_sub_categories(company_id, category_id=category_id, active_only=active_only)
+    async def list_sub_categories(
+        self, company_id: uuid.UUID, category_id: int | None = None, active_only: bool = True
+    ) -> list[SubCategory]:
+        return await self._repo.list_sub_categories(
+            company_id, category_id=category_id, active_only=active_only
+        )
 
     async def get_sub_category(self, company_id: uuid.UUID, sub_category_id: int) -> SubCategory:
         sub_category = await self._repo.get_sub_category_by_id(company_id, sub_category_id)
@@ -68,15 +80,21 @@ class CatalogUseCases:
             raise NotFoundError("SubcategorÃ­a no encontrada", code="sub_category_not_found")
         return sub_category
 
-    async def create_sub_category(self, company_id: uuid.UUID, category_id: int, name: str, description: str | None = None) -> SubCategory:
+    async def create_sub_category(
+        self, company_id: uuid.UUID, category_id: int, name: str, description: str | None = None
+    ) -> SubCategory:
         await self.get_category(company_id, category_id)
-        return await self._repo.create_sub_category(company_id, category_id=category_id, name=name, description=description)
+        return await self._repo.create_sub_category(
+            company_id, category_id=category_id, name=name, description=description
+        )
 
     async def update_sub_category(
         self, company_id: uuid.UUID, sub_category_id: int, **changes: object
     ) -> SubCategory:
         if changes.get("name") is None and "name" in changes:
-            raise ValidationError("El nombre de la subcategoría es obligatorio.", code="subcategory_name_required")
+            raise ValidationError(
+                "El nombre de la subcategoría es obligatorio.", code="subcategory_name_required"
+            )
         sub = await self._repo.update_sub_category(company_id, sub_category_id, **changes)
         if not sub:
             raise NotFoundError("Subcategoría no encontrada", code="sub_category_not_found")
@@ -89,10 +107,14 @@ class CatalogUseCases:
     async def list_global_units(self, active_only: bool = False) -> list[Unit]:
         return await self._repo.list_global_units(active_only=active_only)
 
-    async def get_unit(self, company_id: uuid.UUID, unit_id: int, *, require_enabled: bool = False) -> Unit:
+    async def get_unit(
+        self, company_id: uuid.UUID, unit_id: int, *, require_enabled: bool = False
+    ) -> Unit:
         unit = await self._repo.get_unit_by_id(company_id, unit_id, require_enabled=require_enabled)
         if not unit:
-            raise NotFoundError("Unidad de medida no disponible para esta empresa", code="unit_not_available")
+            raise NotFoundError(
+                "Unidad de medida no disponible para esta empresa", code="unit_not_available"
+            )
         return unit
 
     async def create_unit(
@@ -199,7 +221,9 @@ class CatalogUseCases:
             raise NotFoundError("Producto no encontrado", code="product_not_found")
         return product
 
-    async def get_variant(self, company_id: uuid.UUID, product_id: int, variant_id: uuid.UUID):
+    async def get_variant(
+        self, company_id: uuid.UUID, product_id: int, variant_id: uuid.UUID
+    ) -> ProductVariant:
         variant = await self._repo.get_variant(company_id, product_id, variant_id)
         if not variant:
             raise NotFoundError("Variante no encontrada", code="product_variant_not_found")
@@ -211,7 +235,7 @@ class CatalogUseCases:
         product_id: int,
         variant_id: uuid.UUID,
         draft: ProductVariantUpdateDraft,
-    ):
+    ) -> ProductVariant | None:
         try:
             return await self._repo.update_variant(
                 company_id,
@@ -228,11 +252,17 @@ class CatalogUseCases:
         product_id: int,
         variant_config: ProductVariantConfigDraft,
     ) -> Product:
+        normalized = self._normalize_variant_config(variant_config)
+        if normalized is None:
+            raise ValidationError(
+                "La configuración de variantes es obligatoria.",
+                code="product_variants_invalid",
+            )
         try:
             product = await self._repo.replace_variant_config(
                 company_id,
                 product_id,
-                self._normalize_variant_config(variant_config),
+                normalized,
             )
         except ValueError as exc:
             raise ValidationError(str(exc), code="product_variants_invalid") from exc
@@ -331,10 +361,27 @@ class CatalogUseCases:
             normalized_keywords = normalize_keywords(keywords)
         except ValueError as exc:
             raise ValidationError(str(exc), code="product_keywords_invalid") from exc
-        if (product_kind == "service" and any(
-            value is not None for value in (storage_condition, storage_temperature_min_c, storage_temperature_max_c, storage_humidity_max_percent, max_stack_height, handling_notes)
-        )) or (product_kind == "service" and (not stackable or any((is_fragile, keep_dry, keep_upright)))):
-            raise ValidationError("Los datos de almacenamiento solo aplican a bienes físicos.", code="product_service_storage_invalid")
+        if (
+            product_kind == "service"
+            and any(
+                value is not None
+                for value in (
+                    storage_condition,
+                    storage_temperature_min_c,
+                    storage_temperature_max_c,
+                    storage_humidity_max_percent,
+                    max_stack_height,
+                    handling_notes,
+                )
+            )
+        ) or (
+            product_kind == "service"
+            and (not stackable or any((is_fragile, keep_dry, keep_upright)))
+        ):
+            raise ValidationError(
+                "Los datos de almacenamiento solo aplican a bienes físicos.",
+                code="product_service_storage_invalid",
+            )
         is_active = lifecycle_status in ("active",)
         try:
             return await self._repo.create_product(
@@ -388,21 +435,30 @@ class CatalogUseCases:
         except ValueError as exc:
             raise ValidationError(str(exc), code="product_variants_invalid") from exc
 
-    async def update_product(self, company_id: uuid.UUID, product_id: int, **changes: object) -> Product:  # noqa: C901
-        changes = dict(changes)
-        current = await self.get_product(company_id, product_id)
-        images_provided, normalized_images = self._extract_images(changes)
-        variants_provided = "variant_config" in changes
-        normalized_variants = self._normalize_variant_config(changes.pop("variant_config", None)) if variants_provided else None
+    @staticmethod
+    def _validate_update_required_fields(changes: dict[str, object]) -> None:
         required = ("category_id", "sku", "name", "purchase_unit_id", "sale_unit_id")
         if any(field in changes and changes[field] is None for field in required):
-            raise ValidationError("No se puede vaciar un campo obligatorio del producto.", code="product_required_field")
+            raise ValidationError(
+                "No se puede vaciar un campo obligatorio del producto.",
+                code="product_required_field",
+            )
 
-        category_id = int(changes.get("category_id", current.category_id))
+    async def _validate_update_references(
+        self,
+        company_id: uuid.UUID,
+        product_id: int,
+        current: Product,
+        changes: dict[str, object],
+    ) -> None:
+        self._validate_update_required_fields(changes)
+        category_id = int(cast(int | str, changes.get("category_id", current.category_id)))
         await self.get_category(company_id, category_id)
         sub_category_id = changes.get("sub_category_id", current.sub_category_id)
         if sub_category_id is not None:
-            sub = await self._repo.get_sub_category_by_id(company_id, int(sub_category_id))
+            sub = await self._repo.get_sub_category_by_id(
+                company_id, int(cast(int | str, sub_category_id))
+            )
             if not sub:
                 raise NotFoundError("Subcategoría no encontrada", code="sub_category_not_found")
             if sub.category_id != category_id:
@@ -410,26 +466,57 @@ class CatalogUseCases:
                     "La subcategoría no pertenece a la categoría seleccionada.",
                     code="subcategory_category_mismatch",
                 )
-        for field, code in (("purchase_unit_id", "purchase_unit_not_found"), ("sale_unit_id", "sale_unit_not_found")):
-            unit_id = int(changes.get(field, getattr(current, field)))
+        for field, code in (
+            ("purchase_unit_id", "purchase_unit_not_found"),
+            ("sale_unit_id", "sale_unit_not_found"),
+        ):
+            unit_id = int(cast(int | str, changes.get(field, getattr(current, field))))
             if await self._repo.get_unit_by_id(company_id, unit_id, require_enabled=True) is None:
                 raise NotFoundError("Unidad de medida no encontrada", code=code)
         if "sku" in changes:
             duplicate = await self._repo.get_product_by_sku(company_id, str(changes["sku"]))
             if duplicate and duplicate.id != product_id:
-                raise ConflictError("El SKU ya está registrado en esta empresa.", code="sku_already_exists")
+                raise ConflictError(
+                    "El SKU ya está registrado en esta empresa.", code="sku_already_exists"
+                )
 
-        changes = self._validate_measurement_changes(current, changes)
+    @staticmethod
+    def _normalize_update_keywords(changes: dict[str, object]) -> None:
+        if "keywords" not in changes:
+            return
+        try:
+            changes["keywords"] = normalize_keywords(
+                cast(list[str] | tuple[str, ...] | None, changes["keywords"])
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="product_keywords_invalid") from exc
 
-        if "keywords" in changes:
-            try:
-                changes["keywords"] = normalize_keywords(changes["keywords"])
-            except ValueError as exc:
-                raise ValidationError(str(exc), code="product_keywords_invalid") from exc
-        effective_kind = str(changes.get("product_kind", current.product_kind))
-        storage_keys = ("storage_condition", "storage_temperature_min_c", "storage_temperature_max_c", "storage_humidity_max_percent", "max_stack_height", "handling_notes", "is_fragile", "keep_dry", "keep_upright")
-        if effective_kind == "service" and (changes.get("stackable", current.stackable) is False or any(changes.get(key, getattr(current, key)) not in (None, False) for key in storage_keys)):
-            raise ValidationError("Los datos de almacenamiento solo aplican a bienes físicos.", code="product_service_storage_invalid")
+    @staticmethod
+    def _validate_update_storage(current: Product, changes: dict[str, object]) -> None:
+        if str(changes.get("product_kind", current.product_kind)) != "service":
+            return
+        storage_keys = (
+            "storage_condition",
+            "storage_temperature_min_c",
+            "storage_temperature_max_c",
+            "storage_humidity_max_percent",
+            "max_stack_height",
+            "handling_notes",
+            "is_fragile",
+            "keep_dry",
+            "keep_upright",
+        )
+        invalid_storage = changes.get("stackable", current.stackable) is False or any(
+            changes.get(key, getattr(current, key)) not in (None, False) for key in storage_keys
+        )
+        if invalid_storage:
+            raise ValidationError(
+                "Los datos de almacenamiento solo aplican a bienes físicos.",
+                code="product_service_storage_invalid",
+            )
+
+    @staticmethod
+    def _apply_lifecycle_update(current: Product, changes: dict[str, object]) -> None:
         if "lifecycle_status" in changes:
             if current.lifecycle_status == "retired" and changes["lifecycle_status"] == "active":
                 raise ConflictError(
@@ -437,13 +524,35 @@ class CatalogUseCases:
                     code="product_retired_immutable",
                 )
             changes["is_active"] = changes["lifecycle_status"] == "active"
-        elif "is_active" in changes and changes["is_active"] is not None:
-            if current.lifecycle_status == "retired" and changes["is_active"]:
-                raise ConflictError(
-                    "Un producto retirado no puede reactivarse; cree una nueva ficha.",
-                    code="product_retired_immutable",
-                )
-            changes["lifecycle_status"] = "active" if changes["is_active"] else "blocked"
+            return
+        if "is_active" not in changes or changes["is_active"] is None:
+            return
+        if current.lifecycle_status == "retired" and changes["is_active"]:
+            raise ConflictError(
+                "Un producto retirado no puede reactivarse; cree una nueva ficha.",
+                code="product_retired_immutable",
+            )
+        changes["lifecycle_status"] = "active" if changes["is_active"] else "blocked"
+
+    async def update_product(
+        self, company_id: uuid.UUID, product_id: int, **changes: object
+    ) -> Product:
+        changes = dict(changes)
+        current = await self.get_product(company_id, product_id)
+        images_provided, normalized_images = self._extract_images(changes)
+        variants_provided = "variant_config" in changes
+        normalized_variants = (
+            self._normalize_variant_config(
+                cast(ProductVariantConfigDraft | None, changes.pop("variant_config", None))
+            )
+            if variants_provided
+            else None
+        )
+        await self._validate_update_references(company_id, product_id, current, changes)
+        changes = self._validate_measurement_changes(current, changes)
+        self._normalize_update_keywords(changes)
+        self._validate_update_storage(current, changes)
+        self._apply_lifecycle_update(current, changes)
 
         repository_changes = dict(changes)
         if images_provided:
@@ -459,7 +568,9 @@ class CatalogUseCases:
         return product
 
     @staticmethod
-    def _validate_measurement_changes(current: Product, changes: dict[str, object]) -> dict[str, object]:
+    def _validate_measurement_changes(
+        current: Product, changes: dict[str, object]
+    ) -> dict[str, object]:
         measurement_fields = {
             "dimension_length",
             "dimension_width",
@@ -473,21 +584,34 @@ class CatalogUseCases:
         if changes.get("weight", object()) is None and "weight_unit" not in changes:
             changes["weight_unit"] = None
         dimension_names = ("dimension_length", "dimension_width", "dimension_height")
-        if all(changes.get(field, object()) is None for field in dimension_names) and "dimension_unit" not in changes:
+        if (
+            all(changes.get(field, object()) is None for field in dimension_names)
+            and "dimension_unit" not in changes
+        ):
             changes["dimension_unit"] = None
         effective = {
             field: changes[field] if field in changes else getattr(current, field)
             for field in measurement_fields
         }
         try:
-            length, width, height, product_weight = validate_measurements(**effective)
+            length, width, height, product_weight = validate_measurements(
+                dimension_length=effective["dimension_length"],
+                dimension_width=effective["dimension_width"],
+                dimension_height=effective["dimension_height"],
+                dimension_unit=cast(str | None, effective["dimension_unit"]),
+                weight=effective["weight"],
+                weight_unit=cast(str | None, effective["weight_unit"]),
+            )
         except ValueError as exc:
             raise ValidationError(str(exc), code="product_measurements_invalid") from exc
         # Explicitly clearing a measurement also clears its paired unit. This
         # keeps PATCH semantics ergonomic while preserving strict DB checks.
         if product_weight is None and "weight_unit" not in changes:
             changes["weight_unit"] = None
-        if not any(value is not None for value in (length, width, height)) and "dimension_unit" not in changes:
+        if (
+            not any(value is not None for value in (length, width, height))
+            and "dimension_unit" not in changes
+        ):
             changes["dimension_unit"] = None
         for field, value in (
             ("dimension_length", length),
@@ -510,15 +634,21 @@ class CatalogUseCases:
     def _normalize_images(images: object) -> list[ProductImageDraft]:
         if images is None:
             return []
-        if not isinstance(images, list) or any(not isinstance(image, ProductImageDraft) for image in images):
-            raise ValidationError("La galería de imágenes no es válida.", code="product_images_invalid")
+        if not isinstance(images, list) or any(
+            not isinstance(image, ProductImageDraft) for image in images
+        ):
+            raise ValidationError(
+                "La galería de imágenes no es válida.", code="product_images_invalid"
+            )
         try:
             return normalize_product_image_drafts(images)
         except ValueError as exc:
             raise ValidationError(str(exc), code="product_images_invalid") from exc
 
     @staticmethod
-    def _normalize_variant_config(config: ProductVariantConfigDraft | None) -> ProductVariantConfigDraft | None:
+    def _normalize_variant_config(
+        config: ProductVariantConfigDraft | None,
+    ) -> ProductVariantConfigDraft | None:
         if config is None:
             return None
         try:

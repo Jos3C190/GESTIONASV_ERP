@@ -3,11 +3,12 @@
 Pure Python, no framework deps. The ORM model lives in infrastructure; this
 entity is what use cases operate on. Repositories convert between the two.
 """
+
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
 
 
@@ -45,7 +46,7 @@ class User:
     def is_locked(self) -> bool:
         if self.locked_until is None:
             return False
-        return self.locked_until > datetime.now(timezone.utc)
+        return self.locked_until > datetime.now(UTC)
 
     @property
     def status(self) -> UserStatus:
@@ -57,7 +58,7 @@ class User:
             return UserStatus.LOCKED
         return UserStatus.ACTIVE
 
-    def with_password_hash(self, new_hash: str) -> "User":
+    def with_password_hash(self, new_hash: str) -> User:
         """Return a copy with an updated password hash (for rehash on verify)."""
         return User(
             id=self.id,
@@ -70,7 +71,7 @@ class User:
             last_login_at=self.last_login_at,
             failed_login_attempts=self.failed_login_attempts,
             locked_until=self.locked_until,
-            password_changed_at=datetime.now(timezone.utc),
+            password_changed_at=datetime.now(UTC),
             created_at=self.created_at,
             updated_at=self.updated_at,
             deleted_at=self.deleted_at,

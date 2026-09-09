@@ -30,9 +30,13 @@ def _key() -> bytes:
     try:
         key = base64.urlsafe_b64decode(raw.encode("ascii"))
     except (ValueError, UnicodeEncodeError, binascii.Error) as exc:
-        raise EncryptionConfigurationError("La clave de datos de proveedores no es base64 válida") from exc
+        raise EncryptionConfigurationError(
+            "La clave de datos de proveedores no es base64 válida"
+        ) from exc
     if len(key) not in (16, 24, 32):
-        raise EncryptionConfigurationError("La clave de datos de proveedores debe tener 16, 24 o 32 bytes")
+        raise EncryptionConfigurationError(
+            "La clave de datos de proveedores debe tener 16, 24 o 32 bytes"
+        )
     return key
 
 

@@ -7,6 +7,7 @@ override a single dependency to swap a real repo for an in-memory fake.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -22,6 +23,7 @@ from app.application.auth.refresh_token import RefreshTokenUseCase
 from app.application.auth.register_user import RegisterUserUseCase
 from app.application.documents import DocumentRecordService, DocumentService
 from app.application.password_policy import PasswordPolicy
+from app.application.purchase_requests import PurchaseRequestUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.config import settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
@@ -34,6 +36,7 @@ from app.domain.ports.employee_repository import EmployeeRepository
 from app.domain.ports.malware_scanner import MalwareScanner
 from app.domain.ports.object_storage import ObjectStorage
 from app.domain.ports.permission_repository import PermissionRepository
+from app.domain.ports.purchase_request_repository import PurchaseRequestRepository
 from app.domain.ports.refresh_token_repository import RefreshTokenRepository
 from app.domain.ports.role_repository import RoleRepository
 from app.domain.ports.token_service import TokenService
@@ -50,6 +53,9 @@ from app.infrastructure.repositories import (
     SqlAlchemyRefreshTokenRepository,
     SqlAlchemyRoleRepository,
     SqlAlchemyUserRepository,
+)
+from app.infrastructure.repositories.purchase_request_repository import (
+    SqlAlchemyPurchaseRequestRepository,
 )
 
 # Type aliases used widely in routers.
@@ -73,6 +79,10 @@ def get_role_repository(session: SessionDep) -> RoleRepository:
 
 def get_permission_repository(session: SessionDep) -> PermissionRepository:
     return SqlAlchemyPermissionRepository(session)
+
+
+def get_purchase_request_repository(session: SessionDep) -> PurchaseRequestRepository:
+    return SqlAlchemyPurchaseRequestRepository(session)
 
 
 def get_audit_repository(session: SessionDep) -> AuditRepository:
@@ -145,6 +155,12 @@ def get_password_policy() -> PasswordPolicy:
 
 
 # -------- use case providers --------
+def get_purchase_request_use_cases(
+    repository: Annotated[PurchaseRequestRepository, Depends(get_purchase_request_repository)],
+) -> PurchaseRequestUseCases:
+    return PurchaseRequestUseCases(repository)
+
+
 def get_authenticate_user_use_case(
     users: Annotated[UserRepository, Depends(get_user_repository)],
     sessions: Annotated[RefreshTokenRepository, Depends(get_refresh_token_repository)],
@@ -210,7 +226,7 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 # -------- require_permission dependency --------
-def require_permission(required_code: str):
+def require_permission(required_code: str) -> Callable[..., Awaitable[User]]:
     """FastAPI dependency factory. Usage:
 
         @router.post("/users", dependencies=[Depends(require_permission("users:create"))])
@@ -270,7 +286,7 @@ def require_permission(required_code: str):
     return _checker
 
 
-def require_any_permission(*required_codes: str):
+def require_any_permission(*required_codes: str) -> Callable[..., Awaitable[User]]:
     """Authorize a request when at least one of the supplied permissions exists.
 
     This is used by the shared document library: an employee expediente is
@@ -345,6 +361,8 @@ __all__ = [
     "get_logout_use_case",
     "get_password_policy",
     "get_permission_repository",
+    "get_purchase_request_repository",
+    "get_purchase_request_use_cases",
     "get_refresh_token_repository",
     "get_refresh_token_use_case",
     "get_register_user_use_case",

@@ -38,9 +38,7 @@ class FakeOperationalContextRepository:
         **_: object,
     ) -> OperationalContext:
         assert self.context is not None
-        branches = tuple(
-            branch for branch in self.context.branches if branch.id in branch_ids
-        )
+        branches = tuple(branch for branch in self.context.branches if branch.id in branch_ids)
         self.context = OperationalContext(
             company_id=company_id,
             access_all_branches=access_all_branches,

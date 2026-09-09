@@ -1,4 +1,5 @@
 """Unit tests for the application exception hierarchy mapping."""
+
 from __future__ import annotations
 
 from app.core.exceptions import (

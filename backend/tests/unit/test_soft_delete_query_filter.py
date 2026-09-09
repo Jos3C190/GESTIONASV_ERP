@@ -74,9 +74,7 @@ def test_global_filter_also_applies_to_primary_key_lookups_expressed_as_selects(
         )
         session.commit()
 
-        hidden = session.scalar(
-            select(FilterTestRecord).where(FilterTestRecord.id == deleted_id)
-        )
+        hidden = session.scalar(select(FilterTestRecord).where(FilterTestRecord.id == deleted_id))
         recoverable = session.scalar(
             select(FilterTestRecord)
             .where(FilterTestRecord.id == deleted_id)

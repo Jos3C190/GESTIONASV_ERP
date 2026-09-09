@@ -5,6 +5,7 @@ Business rules:
 - Cannot delete a department that still has employees (reassign first).
 - Cannot set a department as its own parent.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -45,7 +46,10 @@ class CreateDepartmentUseCase:
                     "Departamento padre no encontrado.", code="parent_not_found"
                 )
             if parent.company_id != inp.company_id:
-                raise BusinessRuleError("El departamento padre pertenece a otra empresa.", code="parent_company_mismatch")
+                raise BusinessRuleError(
+                    "El departamento padre pertenece a otra empresa.",
+                    code="parent_company_mismatch",
+                )
 
         dept = Department(
             id=uuid.uuid4(),
@@ -77,7 +81,11 @@ class UpdateDepartmentUseCase:
             raise NotFoundError("Departamento no encontrado.", code="dept_not_found")
 
         new_name = inp.name if inp.name is not None else dept.name
-        new_parent = inp.parent_department_id if inp.parent_department_id is not None else dept.parent_department_id
+        new_parent = (
+            inp.parent_department_id
+            if inp.parent_department_id is not None
+            else dept.parent_department_id
+        )
 
         # Name uniqueness
         if new_name != dept.name:

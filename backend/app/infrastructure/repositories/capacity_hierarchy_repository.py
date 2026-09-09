@@ -15,6 +15,8 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.domain.entities.capacity_hierarchy import (
     CapacityConfiguration,
     CapacityHierarchyIssue,
+    CapacityLimitKind,
+    CapacityMetricName,
     CapacityUsageSnapshot,
     capacity_configuration,
     compare_child_to_parent,
@@ -283,10 +285,10 @@ class SqlAlchemyCapacityHierarchyRepository:
 
     @staticmethod
     def _has_configured_limit(configuration: CapacityConfiguration) -> bool:
+        metrics: tuple[CapacityMetricName, ...] = ("weight", "volume")
+        kinds: tuple[CapacityLimitKind, ...] = ("certified", "operational")
         return any(
-            configuration.value(metric, kind) is not None
-            for metric in ("weight", "volume")
-            for kind in ("certified", "operational")
+            configuration.value(metric, kind) is not None for metric in metrics for kind in kinds
         )
 
     @classmethod
@@ -623,7 +625,7 @@ class SqlAlchemyCapacityHierarchyRepository:
                     parent_scope_id=str(parent.id),
                 )
             )
-        parent_resources: list[tuple[str, object, list[object]]] = [
+        parent_resources: list[tuple[str, Warehouse | WarehouseCapacityGroup, list[object]]] = [
             (
                 "warehouse",
                 warehouse,
@@ -640,13 +642,13 @@ class SqlAlchemyCapacityHierarchyRepository:
             )
             for group in groups
         )
-        for scope_type, parent, children in parent_resources:
+        for scope_type, parent_resource, children in parent_resources:
             issues.extend(
                 nominal_allocation_issues(
-                    parent=capacity_configuration(parent),
+                    parent=capacity_configuration(parent_resource),
                     children=tuple(capacity_configuration(child) for child in children),
                     scope_type=scope_type,
-                    scope_id=str(parent.id),
+                    scope_id=str(parent_resource.id),
                 )
             )
         return {

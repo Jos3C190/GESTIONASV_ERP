@@ -10,9 +10,12 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from sqlalchemy import delete, exists, func, insert, or_, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.domain.entities.rbac import Permission as DomainPermission
 from app.domain.entities.rbac import Role as DomainRole
@@ -54,7 +57,7 @@ class SqlAlchemyRoleRepository:
         self._session = session
 
     @staticmethod
-    def _scope(company_id: uuid.UUID):
+    def _scope(company_id: uuid.UUID) -> ColumnElement[bool]:
         return or_(ORMRole.company_id == company_id, ORMRole.company_id.is_(None))
 
     async def get_by_id(
@@ -212,7 +215,7 @@ class SqlAlchemyRoleRepository:
             )
         )
         result = await self._session.execute(stmt)
-        return (result.rowcount or 0) > 0
+        return (cast(CursorResult[Any], result).rowcount or 0) > 0
 
     async def is_assigned(self, company_id: uuid.UUID, role_id: uuid.UUID) -> bool:
         stmt = (
@@ -291,7 +294,10 @@ class SqlAlchemyRoleRepository:
         roles_by_user: dict[uuid.UUID, list[DomainRole]] = {user_id: [] for user_id in user_ids}
         for user_id, role in result.all():
             roles_by_user[user_id].append(_role_to_domain(role))
-        return roles_by_user
+        result_by_user: dict[uuid.UUID, Sequence[DomainRole]] = {}
+        for user_id, roles in roles_by_user.items():
+            result_by_user[user_id] = tuple(roles)
+        return result_by_user
 
     async def assign_role_to_user(
         self, user_id: uuid.UUID, company_id: uuid.UUID, role_id: uuid.UUID, assigned_by: uuid.UUID
@@ -322,7 +328,7 @@ class SqlAlchemyRoleRepository:
             UserRole.role_id == role_id,
         )
         result = await self._session.execute(stmt)
-        return (result.rowcount or 0) > 0
+        return (cast(CursorResult[Any], result).rowcount or 0) > 0
 
     async def list_user_role_assignments(
         self, user_id: uuid.UUID, company_id: uuid.UUID

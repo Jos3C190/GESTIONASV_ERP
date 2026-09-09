@@ -1,4 +1,5 @@
 """RBAC use cases barrel."""
+
 from app.application.rbac.check_permission import (
     CheckPermissionUseCase,
     GetEffectivePermissionsUseCase,

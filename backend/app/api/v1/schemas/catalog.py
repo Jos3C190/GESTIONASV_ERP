@@ -7,6 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 from urllib.parse import urlparse
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -49,8 +50,8 @@ class CategoryUpdate(BaseModel):
 
 class CategoryResponse(ORMOut):
     id: int = Field(..., serialization_alias="id_category")
-    uuid: uuid.UUID
-    company_id: uuid.UUID
+    uuid: UUID
+    company_id: UUID
     name: str
     description: str | None = None
     is_active: bool
@@ -307,10 +308,14 @@ class ProductVariantConfigInput(BaseModel):
             for identifier in variant.identifiers:
                 key = (
                     identifier.identifier_type,
-                    "".join(character for character in identifier.value if character.isalnum()).upper(),
+                    "".join(
+                        character for character in identifier.value if character.isalnum()
+                    ).upper(),
                 )
                 if key in seen_identifiers:
-                    raise ValueError("Una familia no puede repetir identificadores entre variantes.")
+                    raise ValueError(
+                        "Una familia no puede repetir identificadores entre variantes."
+                    )
                 seen_identifiers.add(key)
             pairs = tuple(
                 sorted(
@@ -541,8 +546,8 @@ class ProductUpdate(BaseModel):
 
 class ProductResponse(ORMOut):
     id: int = Field(..., serialization_alias="id_product")
-    uuid: uuid.UUID
-    company_id: uuid.UUID
+    uuid: UUID
+    company_id: UUID
     category_id: int = Field(..., serialization_alias="id_category")
     category_name: str | None = None
     sub_category_id: int | None = Field(None, serialization_alias="id_sub_category")
@@ -578,8 +583,8 @@ class ProductResponse(ORMOut):
     internal_notes: str | None = None
     keywords: list[str] = Field(default_factory=list)
     origin_country_id: int | None = None
-    brand_id: uuid.UUID | None = None
-    manufacturer_id: uuid.UUID | None = None
+    brand_id: UUID | None = None
+    manufacturer_id: UUID | None = None
     storage_condition: StorageCondition | None = None
     storage_temperature_min_c: Decimal | None = None
     storage_temperature_max_c: Decimal | None = None
@@ -706,8 +711,29 @@ class ProductSupplierCreate(BaseModel):
         return self
 
 
-class ProductSupplierUpdate(ProductSupplierCreate):
+class ProductSupplierUpdate(BaseModel):
     supplier_id: int | None = None
+    supplier_product_code: str | None = Field(None, max_length=120)
+    unit_cost: Decimal | None = Field(None, ge=0, max_digits=14, decimal_places=4)
+    currency_code: str | None = Field(None, min_length=3, max_length=3, pattern=r"^[A-Za-z]{3}$")
+    minimum_order_qty: Decimal | None = Field(None, gt=0, max_digits=14, decimal_places=4)
+    order_multiple: Decimal | None = Field(None, gt=0, max_digits=14, decimal_places=4)
+    lead_time_days: int | None = Field(None, ge=0)
+    is_preferred: bool | None = None
+    status: Literal["active", "inactive"] | None = None
+    valid_from: date | None = None
+    valid_until: date | None = None
+    notes: str | None = None
+
+    @model_validator(mode="after")
+    def validate_supplier_terms(self) -> ProductSupplierUpdate:
+        if self.unit_cost is not None and not self.currency_code:
+            raise ValueError("La moneda es obligatoria cuando se informa un costo.")
+        if self.valid_from and self.valid_until and self.valid_until < self.valid_from:
+            raise ValueError("La vigencia final no puede ser anterior a la inicial.")
+        if self.is_preferred and self.status != "active":
+            raise ValueError("Una relación inactiva no puede ser preferida.")
+        return self
 
 
 class ProductSupplierReplace(BaseModel):
@@ -743,8 +769,11 @@ class ProductManufacturerCreate(BaseModel):
     website: str | None = Field(None, max_length=2048)
 
 
-class ProductManufacturerUpdate(ProductManufacturerCreate):
+class ProductManufacturerUpdate(BaseModel):
     legal_name: str | None = Field(None, min_length=2, max_length=240)
+    commercial_name: str | None = Field(None, max_length=200)
+    country_id: int | None = None
+    website: str | None = Field(None, max_length=2048)
     is_active: bool | None = None
 
 

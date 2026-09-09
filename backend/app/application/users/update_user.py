@@ -5,6 +5,7 @@ Enforces critical business rules (OWASP A01 / A04):
 - Cannot demote/remove the last active superadmin (prevent admin lockout of
   the whole system).
 """
+
 from __future__ import annotations
 
 import uuid

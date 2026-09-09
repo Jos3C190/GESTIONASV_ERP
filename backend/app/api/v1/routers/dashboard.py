@@ -88,20 +88,26 @@ async def get_dashboard_summary(
         Employee.deleted_at.is_(None),
         Employee.status == "activo",
     )
-    team_stmt = select(
-        Employee.id,
-        Employee.first_name,
-        Employee.last_name,
-        Employee.document_id,
-        Employee.department_id,
-        Employee.position,
-        Employee.hire_date,
-        Department.name,
-    ).outerjoin(Department, Employee.department_id == Department.id).where(
-        Employee.company_id == company_id,
-        Employee.deleted_at.is_(None),
-        Employee.status == "activo",
-    ).order_by(Employee.created_at.desc()).limit(8)
+    team_stmt = (
+        select(
+            Employee.id,
+            Employee.first_name,
+            Employee.last_name,
+            Employee.document_id,
+            Employee.department_id,
+            Employee.position,
+            Employee.hire_date,
+            Department.name,
+        )
+        .outerjoin(Department, Employee.department_id == Department.id)
+        .where(
+            Employee.company_id == company_id,
+            Employee.deleted_at.is_(None),
+            Employee.status == "activo",
+        )
+        .order_by(Employee.created_at.desc())
+        .limit(8)
+    )
     if branch_id is not None:
         employee_stmt = employee_stmt.join(EmployeeBranchAssignment).where(
             EmployeeBranchAssignment.branch_id == branch_id,
@@ -232,20 +238,20 @@ async def get_dashboard_summary(
         )
     now = datetime.now(UTC)
     recent_users = []
-    for row in recent_rows:
-        name = _person_name(row.first_name, row.last_name, row.username)
-        if row.locked_until and row.locked_until > now:
+    for recent_row in recent_rows:
+        name = _person_name(recent_row.first_name, recent_row.last_name, recent_row.username)
+        if recent_row.locked_until and recent_row.locked_until > now:
             user_status = "locked"
         else:
-            user_status = "active" if row.is_active else "inactive"
+            user_status = "active" if recent_row.is_active else "inactive"
         recent_users.append(
             RecentUserOut(
-                id=row.id,
+                id=recent_row.id,
                 name=name,
                 initials=_initials(name),
-                department=row.name or "Sin departamento",
+                department=recent_row.name or "Sin departamento",
                 status=user_status,
-                created_at=row.created_at,
+                created_at=recent_row.created_at,
             )
         )
     counts = (
@@ -266,8 +272,7 @@ async def get_dashboard_summary(
         branches=1 if branch_id else len(context.branches),
         onboarding_progress=onboarding_progress,
         department_distribution=[
-            DepartmentDistributionOut(label=name, value=int(count))
-            for name, count in distribution
+            DepartmentDistributionOut(label=name, value=int(count)) for name, count in distribution
         ],
         activity_series=[
             ActivitySeriesPointOut(

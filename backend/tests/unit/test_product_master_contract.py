@@ -69,7 +69,9 @@ def test_supplier_terms_require_currency_for_cost_and_coherent_dates() -> None:
     with pytest.raises(ValidationError, match="moneda"):
         ProductSupplierCreate(supplier_id=1, unit_cost=Decimal("2"))
     with pytest.raises(ValidationError, match="vigencia"):
-        ProductSupplierCreate(supplier_id=1, valid_from=date(2026, 2, 1), valid_until=date(2026, 1, 1))
+        ProductSupplierCreate(
+            supplier_id=1, valid_from=date(2026, 2, 1), valid_until=date(2026, 1, 1)
+        )
 
 
 def test_supplier_replace_payload_supports_empty_set() -> None:

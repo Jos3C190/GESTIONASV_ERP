@@ -95,8 +95,12 @@ async def test_categories_are_isolated_by_company_and_reject_cross_assignment(
         second_body = second_list.json()
         assert first_body["meta"]["size"] == 1
         assert second_body["meta"]["size"] == 1
-        assert [item["id"] for item in first_body["items"] if item["name"] == category_name] == [created_ids[0]]
-        assert [item["id"] for item in second_body["items"] if item["name"] == category_name] == [created_ids[1]]
+        assert [item["id"] for item in first_body["items"] if item["name"] == category_name] == [
+            created_ids[0]
+        ]
+        assert [item["id"] for item in second_body["items"] if item["name"] == category_name] == [
+            created_ids[1]
+        ]
 
         branches = await e2e_client.get(
             f"/api/v1/branches?company_id={first_company_id}",
@@ -158,9 +162,7 @@ async def test_user_cannot_list_categories_from_an_unassigned_company(e2e_client
             )
         ).scalar_one()
         forbidden_id = (
-            await session.execute(
-                select(Company.id).where(Company.id != assigned_id).limit(1)
-            )
+            await session.execute(select(Company.id).where(Company.id != assigned_id).limit(1))
         ).scalar_one()
 
     response = await e2e_client.get(

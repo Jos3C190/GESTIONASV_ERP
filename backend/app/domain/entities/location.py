@@ -67,9 +67,8 @@ class CodeSegment:
                 code="location_scheme_width_invalid",
             )
         normalized_label = unicodedata.normalize("NFKC", self.label).strip()
-        if (
-            not 1 <= len(normalized_label) <= MAX_SEGMENT_LABEL_LENGTH
-            or _CONTROL_CHARACTERS.search(normalized_label)
+        if not 1 <= len(normalized_label) <= MAX_SEGMENT_LABEL_LENGTH or _CONTROL_CHARACTERS.search(
+            normalized_label
         ):
             raise ValidationError(
                 "La etiqueta del segmento no es válida.",
@@ -129,8 +128,7 @@ class LocationCodeScheme:
                 code="location_scheme_separator_invalid",
             )
         if any(
-            normalized_separator
-            in unicodedata.normalize("NFKC", segment.prefix).strip().upper()
+            normalized_separator in unicodedata.normalize("NFKC", segment.prefix).strip().upper()
             for segment in self.segments
         ):
             raise ValidationError(

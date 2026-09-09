@@ -1,4 +1,5 @@
 """Unit tests for PasswordPolicy."""
+
 from app.application.password_policy import PasswordPolicy
 
 

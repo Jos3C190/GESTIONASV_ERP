@@ -4,6 +4,7 @@ These are domain/app errors. The API layer (api/v1/exception_handlers.py) maps
 them to HTTP responses with generic client messages and detailed internal logs.
 Never leak DB details or stack traces to the client.
 """
+
 from __future__ import annotations
 
 

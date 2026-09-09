@@ -8,6 +8,7 @@ This is called by the `require_permission` FastAPI dependency on every
 protected request — keep it cheap. A Redis cache hook is the documented
 Phase 6+ optimisation.
 """
+
 from __future__ import annotations
 
 import uuid

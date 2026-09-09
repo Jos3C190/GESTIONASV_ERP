@@ -116,6 +116,16 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     ),
     PermissionSpec("suppliers:delete", "Eliminar proveedores y contactos", "suppliers"),
     PermissionSpec("suppliers:restore", "Restaurar proveedores y contactos", "suppliers"),
+    # --- purchase requests ---
+    PermissionSpec("purchase_requests:read", "Ver solicitudes de compra", "purchase_requests"),
+    PermissionSpec(
+        "purchase_requests:manage",
+        "Crear, editar, enviar y cancelar solicitudes",
+        "purchase_requests",
+    ),
+    PermissionSpec(
+        "purchase_requests:approve", "Aprobar o rechazar solicitudes", "purchase_requests"
+    ),
     # --- roles ---
     PermissionSpec("roles:read", "Ver roles", "roles"),
     PermissionSpec("roles:create", "Crear roles", "roles"),

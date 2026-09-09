@@ -3,17 +3,18 @@
 Validates the password policy, hashes with Argon2, and ensures username/email
 uniqueness. Phase 1b will add permission checks at the API layer.
 """
+
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
 
+from app.application.password_policy import PasswordPolicy
 from app.core.exceptions import BusinessRuleError, ConflictError
 from app.core.logging import get_logger
 from app.core.security import hash_password
 from app.domain.entities.user import User
 from app.domain.ports.user_repository import UserRepository
-from app.application.password_policy import PasswordPolicy
 
 log = get_logger(__name__)
 

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
@@ -44,14 +44,14 @@ class SupplierModel(TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "suppliers"
 
     id_supplier: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    uuid: Mapped[uuid.UUID] = mapped_column(
+    uuid: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         nullable=False,
         unique=True,
         index=True,
         server_default=text("gen_random_uuid()"),
     )
-    company_id: Mapped[uuid.UUID] = mapped_column(
+    company_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
@@ -68,14 +68,24 @@ class SupplierModel(TimestampMixin, SoftDeleteMixin, Base):
     website: Mapped[str | None] = mapped_column(String(200), nullable=True, default=None)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     legal_name: Mapped[str | None] = mapped_column(String(240), nullable=True, default=None)
-    supplier_group_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
-    supplier_status: Mapped[str] = mapped_column(String(24), nullable=False, server_default="approved")
+    supplier_group_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    supplier_status: Mapped[str] = mapped_column(
+        String(24), nullable=False, server_default="approved"
+    )
     hold_reason: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
-    hold_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
-    hold_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
-    default_currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True, default=None)
-    payment_terms_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
-    default_payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, default=None)
+    hold_from: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+    hold_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+    default_currency_code: Mapped[str | None] = mapped_column(
+        String(3), nullable=True, default=None
+    )
+    payment_terms_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    default_payment_method: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, default=None
+    )
     external_reference: Mapped[str | None] = mapped_column(String(120), nullable=True, default=None)
     __table_args__ = (
         Index(
@@ -136,7 +146,10 @@ class SupplierModel(TimestampMixin, SoftDeleteMixin, Base):
         "SupplierBankAccountModel", back_populates="supplier", cascade="all, delete-orphan"
     )
     product_links: Mapped[list[ProductSupplierModel]] = relationship(
-        "ProductSupplierModel", back_populates="supplier", cascade="all, delete-orphan", overlaps="product,supplier_links"
+        "ProductSupplierModel",
+        back_populates="supplier",
+        cascade="all, delete-orphan",
+        overlaps="product,supplier_links",
     )
 
 
@@ -147,8 +160,12 @@ class SupplierContactModel(TimestampMixin, SoftDeleteMixin, Base):
     )
 
     id_supplier_contact: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), nullable=False, unique=True, index=True, server_default=text("gen_random_uuid()")
+    uuid: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=False,
+        unique=True,
+        index=True,
+        server_default=text("gen_random_uuid()"),
     )
     id_supplier: Mapped[int] = mapped_column(
         Integer, ForeignKey("suppliers.id_supplier", ondelete="CASCADE"), nullable=False, index=True

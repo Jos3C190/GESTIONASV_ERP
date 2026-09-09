@@ -1,4 +1,5 @@
 """Port: EmployeeRepository."""
+
 from __future__ import annotations
 
 import uuid
@@ -12,11 +13,12 @@ from app.domain.entities.employee import Employee
 @dataclass(frozen=True, slots=True)
 class EmployeeStats:
     """Aggregate counts computed directly in the database."""
+
     total: int
     active: int
     inactive: int
-    on_leave: int       # vacaciones
-    terminated: int     # baja
+    on_leave: int  # vacaciones
+    terminated: int  # baja
     linked_to_user: int
 
 

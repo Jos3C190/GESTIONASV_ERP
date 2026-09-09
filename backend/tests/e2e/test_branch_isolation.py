@@ -60,9 +60,7 @@ async def test_restricted_user_cannot_cross_branch_boundary(e2e_client) -> None:
     forbidden_branch_id = branches[1]["id"]
 
     roles_response = await e2e_client.get("/api/v1/roles/catalogue", headers=admin_headers)
-    administrator = next(
-        role for role in roles_response.json() if role["name"] == "ADMINISTRADOR"
-    )
+    administrator = next(role for role in roles_response.json() if role["name"] == "ADMINISTRADOR")
     suffix = uuid.uuid4().hex[:8]
     created_user = await e2e_client.post(
         "/api/v1/users",

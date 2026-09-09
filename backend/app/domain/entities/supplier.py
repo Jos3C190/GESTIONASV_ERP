@@ -1,9 +1,10 @@
 """Domain entities: Supplier, SupplierContact."""
+
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from datetime import datetime
+from uuid import UUID
 
 from app.domain.entities.media_image import SingleImage
 
@@ -13,7 +14,7 @@ class SupplierContact:
     id: int
     supplier_id: int
     full_name: str
-    uuid: uuid.UUID | None = None
+    uuid: UUID | None = None
     phone: str | None = None
     email: str | None = None
     is_active: bool = True
@@ -25,8 +26,8 @@ class SupplierContact:
 @dataclass(frozen=True, slots=True)
 class Supplier:
     id: int
-    uuid: uuid.UUID
-    company_id: uuid.UUID
+    uuid: UUID
+    company_id: UUID
     code: str
     name: str
     country_id: int
@@ -36,13 +37,13 @@ class Supplier:
     website: str | None = None
     is_active: bool = True
     legal_name: str | None = None
-    supplier_group_id: uuid.UUID | None = None
+    supplier_group_id: UUID | None = None
     supplier_status: str = "approved"
     hold_reason: str | None = None
     hold_from: datetime | None = None
     hold_until: datetime | None = None
     default_currency_code: str | None = None
-    payment_terms_id: uuid.UUID | None = None
+    payment_terms_id: UUID | None = None
     default_payment_method: str | None = None
     external_reference: str | None = None
     logo_image: SingleImage | None = None
@@ -56,7 +57,7 @@ class Supplier:
 
 @dataclass(frozen=True, slots=True)
 class SupplierTaxIdentifier:
-    id: uuid.UUID
+    id: UUID
     supplier_id: int
     country_id: int
     identifier_type: str
@@ -71,7 +72,7 @@ class SupplierTaxIdentifier:
 
 @dataclass(frozen=True, slots=True)
 class SupplierAddress:
-    id: uuid.UUID
+    id: UUID
     supplier_id: int
     address_type: str
     line1: str
@@ -87,7 +88,7 @@ class SupplierAddress:
 
 @dataclass(frozen=True, slots=True)
 class SupplierBankAccount:
-    id: uuid.UUID
+    id: UUID
     supplier_id: int
     bank_name: str
     account_holder: str

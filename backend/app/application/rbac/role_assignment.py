@@ -1,11 +1,14 @@
 """Use cases: assign/revoke roles to/from users."""
+
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.core.logging import get_logger
+from app.domain.entities.rbac import Role
 from app.domain.ports.role_repository import RoleRepository
 from app.domain.ports.user_repository import UserRepository
 
@@ -83,9 +86,10 @@ class RevokeRoleUseCase:
             )
 
         assigned_roles = await self._roles.get_roles_for_user(inp.user_id, inp.company_id)
-        if any(assigned.id == inp.role_id for assigned in assigned_roles) and len(
-            assigned_roles
-        ) <= 1:
+        if (
+            any(assigned.id == inp.role_id for assigned in assigned_roles)
+            and len(assigned_roles) <= 1
+        ):
             raise BusinessRuleError(
                 "El usuario debe conservar al menos un rol.",
                 code="user_requires_role",
@@ -106,5 +110,5 @@ class GetUserRolesUseCase:
     def __init__(self, roles: RoleRepository) -> None:
         self._roles = roles
 
-    async def execute(self, user_id: uuid.UUID, company_id: uuid.UUID):
+    async def execute(self, user_id: uuid.UUID, company_id: uuid.UUID) -> Sequence[Role]:
         return await self._roles.get_roles_for_user(user_id, company_id)

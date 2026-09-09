@@ -2,6 +2,7 @@
 
 Requires the dev stack running. Uses the real DB with per-test cleanup.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -14,9 +15,7 @@ pytestmark = pytest.mark.e2e
 
 
 async def _login_as(e2e_client, username: str, password: str) -> dict:
-    r = await e2e_client.post(
-        "/api/v1/auth/login", json={"login": username, "password": password}
-    )
+    r = await e2e_client.post("/api/v1/auth/login", json={"login": username, "password": password})
     assert r.status_code == 200, r.text
     company_id = await get_test_company_id()
     return {
@@ -125,9 +124,7 @@ async def test_administrator_can_list_users_but_not_delete_roles(e2e_client) -> 
     )
     assert r.status_code == 200
     # Cannot delete roles (no roles:delete permission)
-    r = await e2e_client.delete(
-        f"/api/v1/roles/{admin_role['id']}", headers=admin_headers
-    )
+    r = await e2e_client.delete(f"/api/v1/roles/{admin_role['id']}", headers=admin_headers)
     assert r.status_code == 403
 
 
@@ -165,18 +162,14 @@ async def test_create_role(e2e_client) -> None:
 
 async def test_create_role_duplicate(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
-    r = await e2e_client.post(
-        "/api/v1/roles", headers=headers, json={"name": "ADMINISTRADOR"}
-    )
+    r = await e2e_client.post("/api/v1/roles", headers=headers, json={"name": "ADMINISTRADOR"})
     assert r.status_code == 409
 
 
 async def test_delete_non_system_role(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     unique = f"DEL_{uuid.uuid4().hex[:8]}"
-    create = await e2e_client.post(
-        "/api/v1/roles", headers=headers, json={"name": unique}
-    )
+    create = await e2e_client.post("/api/v1/roles", headers=headers, json={"name": unique})
     rid = create.json()["id"]
     r = await e2e_client.request(
         "DELETE",
@@ -204,9 +197,7 @@ async def test_delete_system_role_forbidden(e2e_client) -> None:
 async def test_set_role_permissions(e2e_client) -> None:
     headers = await _login_superadmin(e2e_client)
     unique = f"PERM_{uuid.uuid4().hex[:8]}"
-    create = await e2e_client.post(
-        "/api/v1/roles", headers=headers, json={"name": unique}
-    )
+    create = await e2e_client.post("/api/v1/roles", headers=headers, json={"name": unique})
     rid = create.json()["id"]
     r = await e2e_client.put(
         f"/api/v1/roles/{rid}/permissions",
@@ -241,9 +232,7 @@ async def test_assign_and_revoke_role(e2e_client) -> None:
         json={"user_id": uid, "role_id": fallback_role["id"]},
     )
     # Verify assignment
-    r = await e2e_client.get(
-        f"/api/v1/roles/users/{uid}/roles", headers=headers
-    )
+    r = await e2e_client.get(f"/api/v1/roles/users/{uid}/roles", headers=headers)
     assert any(r["name"] == "EMPLEADO" for r in r.json())
     # Revoke
     r = await e2e_client.post(
@@ -254,9 +243,7 @@ async def test_assign_and_revoke_role(e2e_client) -> None:
     assert r.status_code == 200
     assert r.json()["code"] == "role_revoked"
     # Verify revoked
-    r = await e2e_client.get(
-        f"/api/v1/roles/users/{uid}/roles", headers=headers
-    )
+    r = await e2e_client.get(f"/api/v1/roles/users/{uid}/roles", headers=headers)
     assert not any(r["name"] == "EMPLEADO" for r in r.json())
 
 

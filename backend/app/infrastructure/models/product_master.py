@@ -29,15 +29,22 @@ from app.infrastructure.db.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.infrastructure.models.catalog import ProductModel
-    from app.infrastructure.models.supplier import SupplierModel
     from app.infrastructure.models.product_variant import ProductVariantModel
+    from app.infrastructure.models.supplier import SupplierModel
 
 
 class ProductBrandModel(TimestampMixin, Base):
     __tablename__ = "product_brands"
 
-    id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     code: Mapped[str] = mapped_column(String(60), nullable=False)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     normalized_name: Mapped[str] = mapped_column(String(160), nullable=False)
@@ -51,45 +58,99 @@ class ProductBrandModel(TimestampMixin, Base):
 class ProductManufacturerModel(TimestampMixin, Base):
     __tablename__ = "product_manufacturers"
 
-    id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     legal_name: Mapped[str] = mapped_column(String(240), nullable=False)
     commercial_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    country_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("countries.id_country", ondelete="RESTRICT"), nullable=True)
+    country_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("countries.id_country", ondelete="RESTRICT"), nullable=True
+    )
     website: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    __table_args__ = (Index("ix_product_manufacturers_company_name", "company_id", func.lower(legal_name)),)
+    __table_args__ = (
+        Index("ix_product_manufacturers_company_name", "company_id", func.lower(legal_name)),
+    )
 
 
 class ProductIdentifierModel(TimestampMixin, Base):
     __tablename__ = "product_identifiers"
 
-    id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
     company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
     product_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    variant_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True, index=True)
+    variant_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True, index=True
+    )
     identifier_type: Mapped[str] = mapped_column(String(24), nullable=False)
     value: Mapped[str] = mapped_column(String(160), nullable=False)
     normalized_value: Mapped[str] = mapped_column(String(160), nullable=False)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     __table_args__ = (
-        ForeignKeyConstraint(["company_id", "product_id"], ["products.company_id", "products.id_product"], ondelete="CASCADE", name="fk_product_identifiers_product_company"),
-        ForeignKeyConstraint(["company_id", "variant_id"], ["product_variants.company_id", "product_variants.id"], ondelete="CASCADE", name="fk_product_identifiers_variant_company"),
-        UniqueConstraint("company_id", "identifier_type", "normalized_value", name="uq_product_identifiers_company_value"),
-        Index("uq_product_identifiers_primary", "product_id", "identifier_type", unique=True, postgresql_where=text("is_primary = true")),
-        Index("uq_product_identifiers_variant_primary", "variant_id", "identifier_type", unique=True, postgresql_where=text("is_primary = true AND variant_id IS NOT NULL")),
-        CheckConstraint("identifier_type IN ('ean','upc','gtin','isbn','manufacturer','internal','other')", name="ck_product_identifiers_type"),
-        CheckConstraint("(product_id IS NOT NULL) <> (variant_id IS NOT NULL)", name="ck_product_identifiers_exact_target"),
+        ForeignKeyConstraint(
+            ["company_id", "product_id"],
+            ["products.company_id", "products.id_product"],
+            ondelete="CASCADE",
+            name="fk_product_identifiers_product_company",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "variant_id"],
+            ["product_variants.company_id", "product_variants.id"],
+            ondelete="CASCADE",
+            name="fk_product_identifiers_variant_company",
+        ),
+        UniqueConstraint(
+            "company_id",
+            "identifier_type",
+            "normalized_value",
+            name="uq_product_identifiers_company_value",
+        ),
+        Index(
+            "uq_product_identifiers_primary",
+            "product_id",
+            "identifier_type",
+            unique=True,
+            postgresql_where=text("is_primary = true"),
+        ),
+        Index(
+            "uq_product_identifiers_variant_primary",
+            "variant_id",
+            "identifier_type",
+            unique=True,
+            postgresql_where=text("is_primary = true AND variant_id IS NOT NULL"),
+        ),
+        CheckConstraint(
+            "identifier_type IN ('ean','upc','gtin','isbn','manufacturer','internal','other')",
+            name="ck_product_identifiers_type",
+        ),
+        CheckConstraint(
+            "(product_id IS NOT NULL) <> (variant_id IS NOT NULL)",
+            name="ck_product_identifiers_exact_target",
+        ),
     )
-    product: Mapped[ProductModel | None] = relationship("ProductModel", back_populates="identifiers")
-    variant: Mapped[ProductVariantModel | None] = relationship("ProductVariantModel", back_populates="identifiers")
+    product: Mapped[ProductModel | None] = relationship(
+        "ProductModel", back_populates="identifiers"
+    )
+    variant: Mapped[ProductVariantModel | None] = relationship(
+        "ProductVariantModel", back_populates="identifiers", overlaps="identifiers,product"
+    )
 
 
 class ProductSupplierModel(TimestampMixin, Base):
     __tablename__ = "product_suppliers"
 
-    id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
     company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
     product_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     supplier_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
@@ -105,16 +166,51 @@ class ProductSupplierModel(TimestampMixin, Base):
     valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     __table_args__ = (
-        ForeignKeyConstraint(["company_id", "product_id"], ["products.company_id", "products.id_product"], ondelete="CASCADE", name="fk_product_suppliers_product_company"),
-        ForeignKeyConstraint(["company_id", "supplier_id"], ["suppliers.company_id", "suppliers.id_supplier"], ondelete="RESTRICT", name="fk_product_suppliers_supplier_company"),
-        UniqueConstraint("company_id", "product_id", "supplier_id", name="uq_product_suppliers_pair"),
-        Index("uq_product_suppliers_preferred", "product_id", unique=True, postgresql_where=text("is_preferred = true AND status = 'active'")),
+        ForeignKeyConstraint(
+            ["company_id", "product_id"],
+            ["products.company_id", "products.id_product"],
+            ondelete="CASCADE",
+            name="fk_product_suppliers_product_company",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "supplier_id"],
+            ["suppliers.company_id", "suppliers.id_supplier"],
+            ondelete="RESTRICT",
+            name="fk_product_suppliers_supplier_company",
+        ),
+        UniqueConstraint(
+            "company_id", "product_id", "supplier_id", name="uq_product_suppliers_pair"
+        ),
+        Index(
+            "uq_product_suppliers_preferred",
+            "product_id",
+            unique=True,
+            postgresql_where=text("is_preferred = true AND status = 'active'"),
+        ),
         CheckConstraint("status IN ('active','inactive')", name="ck_product_suppliers_status"),
-        CheckConstraint("unit_cost IS NULL OR unit_cost >= 0", name="ck_product_suppliers_cost_nonnegative"),
-        CheckConstraint("minimum_order_qty IS NULL OR minimum_order_qty > 0", name="ck_product_suppliers_moq_positive"),
-        CheckConstraint("order_multiple IS NULL OR order_multiple > 0", name="ck_product_suppliers_multiple_positive"),
-        CheckConstraint("lead_time_days IS NULL OR lead_time_days >= 0", name="ck_product_suppliers_lead_time_nonnegative"),
-        CheckConstraint("valid_until IS NULL OR valid_from IS NULL OR valid_until >= valid_from", name="ck_product_suppliers_date_range"),
+        CheckConstraint(
+            "unit_cost IS NULL OR unit_cost >= 0", name="ck_product_suppliers_cost_nonnegative"
+        ),
+        CheckConstraint(
+            "minimum_order_qty IS NULL OR minimum_order_qty > 0",
+            name="ck_product_suppliers_moq_positive",
+        ),
+        CheckConstraint(
+            "order_multiple IS NULL OR order_multiple > 0",
+            name="ck_product_suppliers_multiple_positive",
+        ),
+        CheckConstraint(
+            "lead_time_days IS NULL OR lead_time_days >= 0",
+            name="ck_product_suppliers_lead_time_nonnegative",
+        ),
+        CheckConstraint(
+            "valid_until IS NULL OR valid_from IS NULL OR valid_until >= valid_from",
+            name="ck_product_suppliers_date_range",
+        ),
     )
-    product: Mapped[ProductModel] = relationship("ProductModel", back_populates="supplier_links", overlaps="supplier,product_links")
-    supplier: Mapped[SupplierModel] = relationship("SupplierModel", back_populates="product_links", overlaps="product,supplier_links")
+    product: Mapped[ProductModel] = relationship(
+        "ProductModel", back_populates="supplier_links", overlaps="supplier,product_links"
+    )
+    supplier: Mapped[SupplierModel] = relationship(
+        "SupplierModel", back_populates="product_links", overlaps="product,supplier_links"
+    )

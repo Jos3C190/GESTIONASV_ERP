@@ -11,9 +11,17 @@ const serviceMocks = vi.hoisted(() => ({
 const capacityGroupMocks = vi.hoisted(() => ({
   listCapacityGroups: vi.fn()
 }));
+const warehouseMocks = vi.hoisted(() => ({
+  getWarehouse: vi.fn()
+}));
+const inventoryMocks = vi.hoisted(() => ({
+  getCapacitySummary: vi.fn()
+}));
 
 vi.mock('../services', () => serviceMocks);
 vi.mock('../../warehouses/capacity-groups.service', () => capacityGroupMocks);
+vi.mock('$lib/services/warehouses', () => warehouseMocks);
+vi.mock('../../inventory/services', () => ({ inventoryApi: inventoryMocks }));
 
 const legacyLocation: LocationOut = {
   id: 'location-legacy',
@@ -55,6 +63,12 @@ const legacyLocation: LocationOut = {
 describe('LocationFormModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    warehouseMocks.getWarehouse.mockResolvedValue({
+      code: 'WH-1',
+      operationalMaxWeightKg: 1000,
+      operationalUsableVolumeM3: 100
+    });
+    inventoryMocks.getCapacitySummary.mockResolvedValue(null);
     capacityGroupMocks.listCapacityGroups.mockResolvedValue([]);
     serviceMocks.previewLocationCode.mockResolvedValue({
       code: 'AREC-RR01-N01-P01',

@@ -47,7 +47,7 @@ class SupplierRepository(Protocol):
         self,
         company_id: uuid.UUID,
         supplier_id: int,
-        **kwargs,
+        **kwargs: object,
     ) -> Supplier | None: ...
 
     # Supplier Contacts

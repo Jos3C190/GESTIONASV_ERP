@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, Self
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, model_validator
@@ -36,7 +36,7 @@ class EmployeeBranchAssignmentIn(BaseModel):
     shift: str | None = Field(None, max_length=32)
 
     @model_validator(mode="after")
-    def dates(self):
+    def dates(self) -> Self:
         if self.assigned_until and self.assigned_until < self.assigned_from:
             raise ValueError("La fecha final no puede ser anterior a la inicial.")
         return self
@@ -63,7 +63,7 @@ def dump(obj: Any) -> dict[str, Any]:
 
 async def validate_employee_branch(
     session: SessionDep, current: CurrentUser, employee_id: uuid.UUID, branch_id: uuid.UUID
-):
+) -> tuple[Employee, Branch]:
     employee, branch = (
         await session.get(Employee, employee_id),
         await session.get(Branch, branch_id),
@@ -101,7 +101,7 @@ async def validate_employee_branch(
 )
 async def list_employee_assignments(
     employee_id: uuid.UUID, session: SessionDep, current: CurrentUser
-):
+) -> list[dict[str, Any]]:
     employee = await session.get(Employee, employee_id)
     if employee is None:
         raise HTTPException(404, "Empleado no encontrado.")
@@ -111,16 +111,10 @@ async def list_employee_assignments(
     )
     if not context.access_all_branches:
         stmt = stmt.where(
-            EmployeeBranchAssignment.branch_id.in_(
-                {branch.id for branch in context.branches}
-            )
+            EmployeeBranchAssignment.branch_id.in_({branch.id for branch in context.branches})
         )
     rows = (
-        (
-            await session.execute(
-                stmt.order_by(EmployeeBranchAssignment.assigned_from.desc())
-            )
-        )
+        (await session.execute(stmt.order_by(EmployeeBranchAssignment.assigned_from.desc())))
         .scalars()
         .all()
     )
@@ -138,7 +132,7 @@ async def assign_employee(
     session: SessionDep,
     current: CurrentUser,
     audit: AuditService = Depends(get_audit_service),
-):
+) -> dict[str, Any]:
     employee, _branch = await validate_employee_branch(
         session, current, body.employee_id, body.branch_id
     )
@@ -187,11 +181,13 @@ async def end_employee_assignment(
     session: SessionDep,
     current: CurrentUser,
     audit: AuditService = Depends(get_audit_service),
-):
+) -> dict[str, Any]:
     obj = await session.get(EmployeeBranchAssignment, assignment_id)
     if obj is None:
         raise HTTPException(404, "Asignación no encontrada.")
     employee = await session.get(Employee, obj.employee_id)
+    if employee is None:
+        raise HTTPException(404, "Empleado no encontrado.")
     await require_company_access(session, current, employee.company_id, require_active=True)
     await resolve_branch_scope(session, current, employee.company_id, obj.branch_id)
     before = dump(obj)
@@ -219,7 +215,7 @@ async def end_employee_assignment(
 )
 async def list_department_assignments(
     department_id: uuid.UUID, session: SessionDep, current: CurrentUser
-):
+) -> list[dict[str, Any]]:
     dept = await session.get(Department, department_id)
     if dept is None:
         raise HTTPException(404, "Departamento no encontrado.")
@@ -229,17 +225,9 @@ async def list_department_assignments(
     )
     if not context.access_all_branches:
         stmt = stmt.where(
-            DepartmentBranchAssignment.branch_id.in_(
-                {branch.id for branch in context.branches}
-            )
+            DepartmentBranchAssignment.branch_id.in_({branch.id for branch in context.branches})
         )
-    rows = (
-        (
-            await session.execute(stmt)
-        )
-        .scalars()
-        .all()
-    )
+    rows = (await session.execute(stmt)).scalars().all()
     return [dump(x) for x in rows]
 
 
@@ -254,7 +242,7 @@ async def enable_department(
     session: SessionDep,
     current: CurrentUser,
     audit: AuditService = Depends(get_audit_service),
-):
+) -> dict[str, Any]:
     dept, branch = (
         await session.get(Department, body.department_id),
         await session.get(Branch, body.branch_id),
@@ -318,11 +306,13 @@ async def disable_department(
     session: SessionDep,
     current: CurrentUser,
     audit: AuditService = Depends(get_audit_service),
-):
+) -> dict[str, Any]:
     obj = await session.get(DepartmentBranchAssignment, assignment_id)
     if obj is None:
         raise HTTPException(404, "Asignación no encontrada.")
     dept = await session.get(Department, obj.department_id)
+    if dept is None:
+        raise HTTPException(404, "Departamento no encontrado.")
     await require_company_access(session, current, dept.company_id, require_active=True)
     await resolve_branch_scope(session, current, dept.company_id, obj.branch_id)
     active_employee = await session.scalar(

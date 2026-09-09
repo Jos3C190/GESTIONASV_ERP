@@ -28,4 +28,6 @@ class MediaAsset(UUIDPKMixin, TimestampMixin, Base):
     uploaded_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
-    __table_args__ = (UniqueConstraint("provider", "public_id", name="uq_media_provider_public_id"),)
+    __table_args__ = (
+        UniqueConstraint("provider", "public_id", name="uq_media_provider_public_id"),
+    )

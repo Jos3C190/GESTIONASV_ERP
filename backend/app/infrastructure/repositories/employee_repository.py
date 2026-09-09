@@ -5,8 +5,10 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from sqlalchemy import func, or_, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.employee import Employee as DomainEmp
@@ -172,7 +174,7 @@ class SqlAlchemyEmployeeRepository:
             )
         )
         result = await self._session.execute(stmt)
-        return (result.rowcount or 0) > 0
+        return (cast(CursorResult[Any], result).rowcount or 0) > 0
 
     async def link_to_user(self, emp_id: uuid.UUID, user_id: uuid.UUID) -> bool:
         stmt = (
@@ -181,7 +183,7 @@ class SqlAlchemyEmployeeRepository:
             .values(user_id=user_id)
         )
         result = await self._session.execute(stmt)
-        return (result.rowcount or 0) > 0
+        return (cast(CursorResult[Any], result).rowcount or 0) > 0
 
     async def get_stats(
         self,
