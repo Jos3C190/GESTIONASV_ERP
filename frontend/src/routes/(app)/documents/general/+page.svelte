@@ -1,5 +1,5 @@
 <script lang="ts">
-  import DocumentFolderView from '$lib/features/documents/components/DocumentFolderView.svelte';
+  import DocumentExplorerView from '$lib/features/documents/explorer/DocumentExplorerView.svelte';
 </script>
 
-<DocumentFolderView scope="general" />
+<DocumentExplorerView />

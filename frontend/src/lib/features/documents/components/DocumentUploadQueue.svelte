@@ -11,6 +11,7 @@
   interface Props {
     categories: DocumentCategoryOut[];
     employeeId?: string;
+    folderId?: string | null;
     initialCategoryId?: string;
     replaceDocumentId?: string;
     disabled?: boolean;
@@ -50,6 +51,7 @@
   let {
     categories,
     employeeId,
+    folderId,
     initialCategoryId,
     replaceDocumentId,
     disabled = false,
@@ -224,7 +226,9 @@
         ? await api.documents.replace(replaceDocumentId, input, employeeId)
         : employeeId
           ? await api.documents.initiateEmployee(employeeId, input)
-          : await api.documents.initiate(input);
+          : folderId !== undefined
+            ? await api.documents.initiateGeneral(folderId ?? null, input)
+            : await api.documents.initiate(input);
       setItem(item.id, { state: 'uploading' });
       await api.documents.uploadDirect(ticket, item.file, (progress) =>
         setItem(item.id, { progress })
@@ -358,6 +362,7 @@
       id="document-files"
       bind:this={fileInput}
       class="sr-only"
+      aria-label="Seleccionar documentos para cargar"
       type="file"
       multiple
       accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.odt,.ods"
@@ -421,6 +426,11 @@
           </div>
           {#if item.state === 'uploading'}<div
               class="mt-2 h-1 overflow-hidden rounded-full bg-border"
+              role="progressbar"
+              aria-label="Progreso de carga"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={item.progress}
             >
               <div
                 class="h-full rounded-full bg-primary transition-all"
