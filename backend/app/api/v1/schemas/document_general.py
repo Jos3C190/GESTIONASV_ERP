@@ -32,6 +32,14 @@ class GeneralEntryMoveIn(BaseModel):
     parent_id: uuid.UUID | None = None
 
 
+class GeneralBatchMoveItemIn(BaseModel):
+    entry_id: uuid.UUID
+    kind: Literal["folder", "file"]
+
+
+class GeneralBatchMoveIn(BaseModel):
+    parent_id: uuid.UUID | None = None
+    items: list[GeneralBatchMoveItemIn] = Field(min_length=1, max_length=200)
 class GeneralEntryOut(BaseModel):
     id: uuid.UUID
     company_id: uuid.UUID
@@ -96,6 +104,8 @@ __all__ = [
     "GeneralDeletionBatchOut",
     "GeneralDeletionBatchPage",
     "GeneralDeletionOut",
+    "GeneralBatchMoveIn",
+    "GeneralBatchMoveItemIn",
     "GeneralEntryMoveIn",
     "GeneralEntryOut",
     "GeneralFolderCreateIn",

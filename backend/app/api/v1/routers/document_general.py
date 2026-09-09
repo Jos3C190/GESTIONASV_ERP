@@ -15,6 +15,7 @@ from app.api.v1.deps import (
 from app.api.v1.schemas.common import PageMeta
 from app.api.v1.schemas.document_general import (
     GeneralBreadcrumbOut,
+    GeneralBatchMoveIn,
     GeneralContentsPage,
     GeneralDeletionBatchOut,
     GeneralDeletionBatchPage,
@@ -165,6 +166,28 @@ async def move_general_folder(
     company_id = await _scope(request, session, current)
     return _out(await service.move_folder(company_id, current.id, folder_id, body.parent_id))
 
+
+@router.post(
+    "/move",
+    response_model=list[GeneralEntryOut],
+    dependencies=[Depends(require_permission("documents:manage_folders"))],
+)
+async def move_general_batch(
+    body: GeneralBatchMoveIn,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    service: Annotated[DocumentGeneralService, Depends(get_document_general_service)],
+) -> list[GeneralEntryOut]:
+    company_id = await _scope(request, session, current)
+    async with session.begin_nested():
+        entries = await service.move_batch(
+            company_id,
+            current.id,
+            [(item.entry_id, item.kind) for item in body.items],
+            body.parent_id,
+        )
+    return [_out(entry) for entry in entries]
 
 @router.delete(
     "/folders/{folder_id}",

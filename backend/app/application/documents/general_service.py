@@ -374,6 +374,75 @@ class DocumentGeneralService:
         )
         return saved
 
+    async def move_batch(
+        self,
+        company_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        items: Sequence[tuple[uuid.UUID, str]],
+        new_parent_id: uuid.UUID | None,
+    ) -> Sequence[DocumentGeneralEntry]:
+        """Move a selected set as one validated database transaction.
+
+        All target, cycle, depth and sibling rules are checked before the first
+        row is changed. The request session then flushes every update together;
+        an unexpected persistence error rolls back the complete batch.
+        """
+        if not items:
+            raise ValidationError("Debe seleccionar al menos un elemento.", code="document_general_empty_move")
+        entry_ids = [entry_id for entry_id, _ in items]
+        if len(set(entry_ids)) != len(entry_ids):
+            raise ValidationError("No se puede mover un elemento más de una vez.", code="document_general_duplicate_move")
+
+        target = await self._active_parent(company_id, new_parent_id)
+        entries: list[DocumentGeneralEntry] = []
+        for entry_id, expected_kind in items:
+            entry = await self._repository.get(company_id, entry_id)
+            if entry is None or entry.kind != expected_kind:
+                raise NotFoundError("Uno de los elementos seleccionados ya no existe.", code="document_general_entry_not_found")
+            entries.append(entry)
+
+        moving_ids = {entry.id for entry in entries}
+        moving_folders = [entry for entry in entries if entry.kind == "folder"]
+        if target is not None and target.id in moving_ids:
+            raise ValidationError("Una carpeta no puede moverse dentro de sí misma.", code="document_general_cycle")
+        for folder in moving_folders:
+            descendants = await self._repository.descendants(company_id, folder.id)
+            if target is not None and target.id in {item.id for item in descendants}:
+                raise ValidationError("El movimiento crea un ciclo.", code="document_general_cycle")
+            await self._ensure_depth(company_id, new_parent_id, moving_id=folder.id)
+
+        tree = list(await self._repository.list_tree(company_id))
+        occupied_names = {
+            entry.normalized_name
+            for entry in tree
+            if entry.id not in moving_ids and entry.parent_id == new_parent_id and entry.deleted_at is None
+        }
+        incoming_names: set[str] = set()
+        for entry in entries:
+            if entry.normalized_name in occupied_names or entry.normalized_name in incoming_names:
+                raise ConflictError(
+                    "Ya existe una entrada con ese nombre en la carpeta de destino.",
+                    code="document_general_duplicate_name",
+                )
+            incoming_names.add(entry.normalized_name)
+
+        before = {entry.id: self._state(entry) for entry in entries}
+        for entry in entries:
+            entry.parent_id = new_parent_id
+            entry.updated_by = actor_id
+        saved_entries = [await self._repository.save(entry) for entry in entries]
+        for saved in saved_entries:
+            await self._audit.record(
+                action="GENERAL_FOLDER_MOVED" if saved.kind == "folder" else "GENERAL_FILE_MOVED",
+                user_id=actor_id,
+                company_id=company_id,
+                resource_type="document_general_entries",
+                resource_id=str(saved.id),
+                before_state={"old_parent_id": before[saved.id]["parent_id"]},
+                after_state={"new_parent_id": str(new_parent_id) if new_parent_id else None},
+                required=True,
+            )
+        return saved_entries
     async def delete_folder(
         self, company_id: uuid.UUID, actor_id: uuid.UUID, folder_id: uuid.UUID
     ) -> uuid.UUID:
