@@ -1,9 +1,9 @@
+from app.application.documents.general_service import DocumentGeneralService, GeneralContents
 from app.application.documents.record_service import (
     DocumentMetadataInput,
     DocumentRecordService,
     DocumentRecordUpload,
 )
-from app.application.documents.general_service import DocumentGeneralService, GeneralContents
 from app.application.documents.service import (
     ALLOWED_DOCUMENT_TYPES,
     DocumentService,
@@ -13,12 +13,12 @@ from app.application.documents.service import (
 
 __all__ = [
     "ALLOWED_DOCUMENT_TYPES",
+    "DocumentGeneralService",
     "DocumentMetadataInput",
     "DocumentRecordService",
     "DocumentRecordUpload",
-    "DocumentGeneralService",
-    "GeneralContents",
     "DocumentService",
+    "GeneralContents",
     "InitiateDocumentInput",
     "UploadTicket",
 ]

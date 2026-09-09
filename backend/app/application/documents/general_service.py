@@ -4,6 +4,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TypedDict
 
 from app.application.audit.audit_service import AuditService
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -14,6 +15,12 @@ from app.domain.entities.document_general_entry import (
     normalize_general_entry_name,
 )
 from app.domain.ports.document_general_repository import DocumentGeneralRepository
+
+
+class GeneralBreadcrumb(TypedDict):
+    id: uuid.UUID | None
+    label: str
+    href: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +99,9 @@ class DocumentGeneralService:
             return
         moving_depth = depths.get(moving_id, 0)
         subtree = await self._repository.descendants(company_id, moving_id)
-        max_relative = max((depths.get(item.id, moving_depth) - moving_depth for item in subtree), default=0)
+        max_relative = max(
+            (depths.get(item.id, moving_depth) - moving_depth for item in subtree), default=0
+        )
         if parent_depth + 2 + max_relative > self._max_depth:
             raise ValidationError(
                 "La profundidad máxima de carpetas es 20 niveles.",
@@ -158,8 +167,8 @@ class DocumentGeneralService:
 
     async def breadcrumbs(
         self, company_id: uuid.UUID, folder_id: uuid.UUID | None
-    ) -> list[dict[str, object]]:
-        breadcrumbs: list[dict[str, object]] = [
+    ) -> list[GeneralBreadcrumb]:
+        breadcrumbs: list[GeneralBreadcrumb] = [
             {"id": None, "label": "General", "href": "/documents/general"}
         ]
         if folder_id is None:
@@ -220,9 +229,7 @@ class DocumentGeneralService:
         if entry is None or entry.kind != "folder":
             raise NotFoundError("Carpeta no encontrada.", code="document_general_folder_not_found")
         display, normalized = self._name(name)
-        await self._ensure_sibling(
-            company_id, entry.parent_id, normalized, exclude_id=entry.id
-        )
+        await self._ensure_sibling(company_id, entry.parent_id, normalized, exclude_id=entry.id)
         before = self._state(entry)
         entry.name = display
         entry.normalized_name = normalized
@@ -252,7 +259,9 @@ class DocumentGeneralService:
             raise NotFoundError("Carpeta no encontrada.", code="document_general_folder_not_found")
         target = await self._active_parent(company_id, new_parent_id)
         if target is not None and target.id == entry.id:
-            raise ValidationError("Una carpeta no puede ser su propia madre.", code="document_general_cycle")
+            raise ValidationError(
+                "Una carpeta no puede ser su propia madre.", code="document_general_cycle"
+            )
         descendants = await self._repository.descendants(company_id, entry.id)
         if target is not None and target.id in {item.id for item in descendants}:
             raise ValidationError("El movimiento crea un ciclo.", code="document_general_cycle")
@@ -324,9 +333,7 @@ class DocumentGeneralService:
         if entry is None or entry.kind != "file":
             raise NotFoundError("Archivo no encontrado.", code="document_general_file_not_found")
         display, normalized = self._name(name)
-        await self._ensure_sibling(
-            company_id, entry.parent_id, normalized, exclude_id=entry.id
-        )
+        await self._ensure_sibling(company_id, entry.parent_id, normalized, exclude_id=entry.id)
         before = self._state(entry)
         entry.name = display
         entry.normalized_name = normalized
@@ -374,6 +381,77 @@ class DocumentGeneralService:
         )
         return saved
 
+    async def _load_batch_entries(
+        self,
+        company_id: uuid.UUID,
+        items: Sequence[tuple[uuid.UUID, str]],
+    ) -> list[DocumentGeneralEntry]:
+        entry_ids = [entry_id for entry_id, _ in items]
+        if len(set(entry_ids)) != len(entry_ids):
+            raise ValidationError(
+                "No se puede mover un elemento más de una vez.",
+                code="document_general_duplicate_move",
+            )
+
+        entries: list[DocumentGeneralEntry] = []
+        for entry_id, expected_kind in items:
+            entry = await self._repository.get(company_id, entry_id)
+            if entry is None or entry.kind != expected_kind:
+                raise NotFoundError(
+                    "Uno de los elementos seleccionados ya no existe.",
+                    code="document_general_entry_not_found",
+                )
+            entries.append(entry)
+        return entries
+
+    async def _validate_batch_target(
+        self,
+        company_id: uuid.UUID,
+        entries: Sequence[DocumentGeneralEntry],
+        target: DocumentGeneralEntry | None,
+        new_parent_id: uuid.UUID | None,
+    ) -> set[uuid.UUID]:
+        moving_ids = {entry.id for entry in entries}
+        if target is not None and target.id in moving_ids:
+            raise ValidationError(
+                "Una carpeta no puede moverse dentro de sí misma.",
+                code="document_general_cycle",
+            )
+
+        for folder in (entry for entry in entries if entry.kind == "folder"):
+            descendants = await self._repository.descendants(company_id, folder.id)
+            if target is not None and target.id in {item.id for item in descendants}:
+                raise ValidationError(
+                    "El movimiento crea un ciclo.",
+                    code="document_general_cycle",
+                )
+            await self._ensure_depth(company_id, new_parent_id, moving_id=folder.id)
+        return moving_ids
+
+    async def _validate_batch_names(
+        self,
+        company_id: uuid.UUID,
+        entries: Sequence[DocumentGeneralEntry],
+        moving_ids: set[uuid.UUID],
+        new_parent_id: uuid.UUID | None,
+    ) -> None:
+        tree = list(await self._repository.list_tree(company_id))
+        occupied_names = {
+            entry.normalized_name
+            for entry in tree
+            if entry.id not in moving_ids
+            and entry.parent_id == new_parent_id
+            and entry.deleted_at is None
+        }
+        incoming_names: set[str] = set()
+        for entry in entries:
+            if entry.normalized_name in occupied_names or entry.normalized_name in incoming_names:
+                raise ConflictError(
+                    "Ya existe una entrada con ese nombre en la carpeta de destino.",
+                    code="document_general_duplicate_name",
+                )
+            incoming_names.add(entry.normalized_name)
+
     async def move_batch(
         self,
         company_id: uuid.UUID,
@@ -388,43 +466,15 @@ class DocumentGeneralService:
         an unexpected persistence error rolls back the complete batch.
         """
         if not items:
-            raise ValidationError("Debe seleccionar al menos un elemento.", code="document_general_empty_move")
-        entry_ids = [entry_id for entry_id, _ in items]
-        if len(set(entry_ids)) != len(entry_ids):
-            raise ValidationError("No se puede mover un elemento más de una vez.", code="document_general_duplicate_move")
+            raise ValidationError(
+                "Debe seleccionar al menos un elemento.",
+                code="document_general_empty_move",
+            )
 
         target = await self._active_parent(company_id, new_parent_id)
-        entries: list[DocumentGeneralEntry] = []
-        for entry_id, expected_kind in items:
-            entry = await self._repository.get(company_id, entry_id)
-            if entry is None or entry.kind != expected_kind:
-                raise NotFoundError("Uno de los elementos seleccionados ya no existe.", code="document_general_entry_not_found")
-            entries.append(entry)
-
-        moving_ids = {entry.id for entry in entries}
-        moving_folders = [entry for entry in entries if entry.kind == "folder"]
-        if target is not None and target.id in moving_ids:
-            raise ValidationError("Una carpeta no puede moverse dentro de sí misma.", code="document_general_cycle")
-        for folder in moving_folders:
-            descendants = await self._repository.descendants(company_id, folder.id)
-            if target is not None and target.id in {item.id for item in descendants}:
-                raise ValidationError("El movimiento crea un ciclo.", code="document_general_cycle")
-            await self._ensure_depth(company_id, new_parent_id, moving_id=folder.id)
-
-        tree = list(await self._repository.list_tree(company_id))
-        occupied_names = {
-            entry.normalized_name
-            for entry in tree
-            if entry.id not in moving_ids and entry.parent_id == new_parent_id and entry.deleted_at is None
-        }
-        incoming_names: set[str] = set()
-        for entry in entries:
-            if entry.normalized_name in occupied_names or entry.normalized_name in incoming_names:
-                raise ConflictError(
-                    "Ya existe una entrada con ese nombre en la carpeta de destino.",
-                    code="document_general_duplicate_name",
-                )
-            incoming_names.add(entry.normalized_name)
+        entries = await self._load_batch_entries(company_id, items)
+        moving_ids = await self._validate_batch_target(company_id, entries, target, new_parent_id)
+        await self._validate_batch_names(company_id, entries, moving_ids, new_parent_id)
 
         before = {entry.id: self._state(entry) for entry in entries}
         for entry in entries:
@@ -443,6 +493,7 @@ class DocumentGeneralService:
                 required=True,
             )
         return saved_entries
+
     async def delete_folder(
         self, company_id: uuid.UUID, actor_id: uuid.UUID, folder_id: uuid.UUID
     ) -> uuid.UUID:
@@ -491,15 +542,14 @@ class DocumentGeneralService:
         ]
         batch_ids = {item.id for item in entries}
         roots = [
-            item
-            for item in entries
-            if item.kind == "folder" and item.parent_id not in batch_ids
+            item for item in entries if item.kind == "folder" and item.parent_id not in batch_ids
         ]
         if not roots:
             raise NotFoundError(
                 "Lote de carpetas no encontrado.", code="document_general_deletion_batch_not_found"
             )
         return await self.restore_folder(company_id, actor_id, roots[0].id)
+
     async def restore_folder(
         self, company_id: uuid.UUID, actor_id: uuid.UUID, folder_id: uuid.UUID
     ) -> DocumentGeneralEntry:
@@ -534,7 +584,9 @@ class DocumentGeneralService:
         await self._repository.restore_batch(company_id, entry.deletion_batch_id, actor_id)
         restored = await self._repository.get(company_id, folder_id)
         if restored is None:
-            raise ConflictError("No se pudo restaurar la carpeta.", code="document_general_restore_failed")
+            raise ConflictError(
+                "No se pudo restaurar la carpeta.", code="document_general_restore_failed"
+            )
         await self._audit.record(
             action="GENERAL_FOLDER_RESTORED",
             user_id=actor_id,

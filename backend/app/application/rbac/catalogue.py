@@ -45,7 +45,9 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("documents:delete", "Enviar documentos a la papelera", "documents"),
     PermissionSpec("documents:restore", "Restaurar documentos", "documents"),
     PermissionSpec("documents:process", "Procesar documentos y reintentar OCR", "documents"),
-    PermissionSpec("documents:manage_folders", "Gestionar carpetas del espacio general", "documents"),
+    PermissionSpec(
+        "documents:manage_folders", "Gestionar carpetas del espacio general", "documents"
+    ),
     PermissionSpec(
         "documents:categories", "Gestionar categorías documentales generales", "documents"
     ),

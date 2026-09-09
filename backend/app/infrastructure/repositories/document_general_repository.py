@@ -245,7 +245,9 @@ class SqlAlchemyDocumentGeneralRepository:
                 ),
             )
             .outerjoin(DocumentAssetModel, DocumentAssetModel.id == DocumentRecordModel.id)
-            .outerjoin(DocumentCategoryModel, DocumentCategoryModel.id == DocumentRecordModel.category_id)
+            .outerjoin(
+                DocumentCategoryModel, DocumentCategoryModel.id == DocumentRecordModel.category_id
+            )
             .where(*conditions)
         )
         count_statement = (
@@ -273,7 +275,9 @@ class SqlAlchemyDocumentGeneralRepository:
         statement = statement.order_by(order_column.desc() if descending else order_column.asc())
         statement = statement.offset((page - 1) * size).limit(size)
         rows = (await self._session.execute(statement)).all()
-        return [_to_domain(entry, record, asset, category) for entry, record, asset, category in rows], total
+        return [
+            _to_domain(entry, record, asset, category) for entry, record, asset, category in rows
+        ], total
 
     async def list_tree(
         self, company_id: uuid.UUID, *, include_deleted: bool = False
@@ -351,8 +355,10 @@ class SqlAlchemyDocumentGeneralRepository:
                 for entry in batch_entries
                 if entry.kind == "folder" and entry.parent_id not in ids
             ]
-            root = roots[0] if roots else next(
-                (entry for entry in batch_entries if entry.kind == "folder"), None
+            root = (
+                roots[0]
+                if roots
+                else next((entry for entry in batch_entries if entry.kind == "folder"), None)
             )
             if root is None:
                 continue
@@ -374,9 +380,8 @@ class SqlAlchemyDocumentGeneralRepository:
         total = len(result)
         start = (page - 1) * size
         return result[start : start + size], total
-    async def create_deletion_batch(
-        self, company_id: uuid.UUID, actor_id: uuid.UUID
-    ) -> uuid.UUID:
+
+    async def create_deletion_batch(self, company_id: uuid.UUID, actor_id: uuid.UUID) -> uuid.UUID:
         batch = DocumentGeneralDeletionBatchModel(company_id=company_id, actor_id=actor_id)
         self._session.add(batch)
         await self._session.flush()

@@ -36,6 +36,7 @@ def clean_general_entry_name(value: str) -> str:
         raise ValueError("El nombre no puede contener separadores de ruta.")
     return cleaned
 
+
 @dataclass(frozen=True, slots=True)
 class GeneralDeletionBatch:
     id: uuid.UUID

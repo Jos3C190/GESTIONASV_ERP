@@ -209,8 +209,8 @@ async def initiate_employee_document(
     )
     if body.folder_id is not None:
         raise AuthorizationError(
-            'Las cargas de empleados no admiten folder_id.',
-            code='employee_folder_not_allowed',
+            "Las cargas de empleados no admiten folder_id.",
+            code="employee_folder_not_allowed",
         )
     await _ensure_restricted_allowed(
         body.confidentiality, current=current, checker=checker, company_id=company_id

@@ -14,8 +14,8 @@ from app.api.v1.deps import (
 )
 from app.api.v1.schemas.common import PageMeta
 from app.api.v1.schemas.document_general import (
-    GeneralBreadcrumbOut,
     GeneralBatchMoveIn,
+    GeneralBreadcrumbOut,
     GeneralContentsPage,
     GeneralDeletionBatchOut,
     GeneralDeletionBatchPage,
@@ -189,6 +189,7 @@ async def move_general_batch(
         )
     return [_out(entry) for entry in entries]
 
+
 @router.delete(
     "/folders/{folder_id}",
     response_model=GeneralDeletionOut,
@@ -271,9 +272,7 @@ async def list_general_trash(
     size: int = Query(20, ge=1, le=100),
 ) -> GeneralDeletionBatchPage:
     company_id = await _scope(request, session, current)
-    batches, total = await service.deletion_batches(
-        company_id, search=search, page=page, size=size
-    )
+    batches, total = await service.deletion_batches(company_id, search=search, page=page, size=size)
     return GeneralDeletionBatchPage(
         items=[
             GeneralDeletionBatchOut(
@@ -310,6 +309,7 @@ async def restore_general_trash_batch(
 ) -> GeneralEntryOut:
     company_id = await _scope(request, session, current)
     return _out(await service.restore_deletion_batch(company_id, current.id, batch_id))
+
 
 @router.get(
     "/folders/tree",

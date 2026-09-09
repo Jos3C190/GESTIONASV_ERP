@@ -59,7 +59,6 @@
 
   const canFolder = $derived(canExplorerAction('create-folder', permissions.hasPermission));
   const canMove = $derived(canExplorerAction('move', permissions.hasPermission));
-  const canRename = $derived(canExplorerAction('rename', permissions.hasPermission));
   const canRenameFiles = $derived(permissions.hasPermission('documents:update'));
   const canDeleteFiles = $derived(canExplorerAction('delete', permissions.hasPermission));
   const canDelete = $derived(canFolder || canDeleteFiles);
