@@ -284,7 +284,7 @@ services:
     tmpfs:
       - /tmp:size=1g,mode=1777
     healthcheck:
-      test: ["CMD", "uv", "run", "arq", "app.infrastructure.ocr_worker.WorkerSettings", "--check"]
+      test: ["CMD", "/opt/venv/bin/arq", "app.infrastructure.ocr_worker.WorkerSettings", "--check"]
       interval: 20s
       timeout: 10s
       retries: 6

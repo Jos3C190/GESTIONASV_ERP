@@ -70,7 +70,11 @@ RUN groupadd --system --gid 1001 erp && \
     chown -R erp:erp /app
 USER erp
 
-CMD ["uv", "run", "arq", "app.infrastructure.ocr_worker.WorkerSettings"]
+# The OCR image already contains its frozen environment in /opt/venv.
+# Running through uv run at container startup makes uv revalidate the bind-mounted
+# project and rewrite the editable-install metadata, which is not writable by
+# the non-root worker user in CI. Invoke the installed worker directly.
+CMD ["/opt/venv/bin/arq", "app.infrastructure.ocr_worker.WorkerSettings"]
 
 # ---------------- prod (default/Render target) ----------------
 # Keep this stage last: Render builds the Dockerfile without an explicit target.
