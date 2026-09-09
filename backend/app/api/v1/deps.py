@@ -21,7 +21,7 @@ from app.application.auth.get_current_user import GetCurrentUserUseCase
 from app.application.auth.logout import LogoutUseCase
 from app.application.auth.refresh_token import RefreshTokenUseCase
 from app.application.auth.register_user import RegisterUserUseCase
-from app.application.documents import DocumentRecordService, DocumentService
+from app.application.documents import DocumentGeneralService, DocumentRecordService, DocumentService
 from app.application.password_policy import PasswordPolicy
 from app.application.purchase_requests import PurchaseRequestUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
@@ -30,6 +30,7 @@ from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.domain.entities.user import User
 from app.domain.ports.audit_repository import AuditRepository
 from app.domain.ports.document_derivative_repository import DocumentDerivativeRepository
+from app.domain.ports.document_general_repository import DocumentGeneralRepository
 from app.domain.ports.document_record_repository import DocumentRecordRepository
 from app.domain.ports.document_repository import DocumentRepository
 from app.domain.ports.employee_repository import EmployeeRepository
@@ -47,6 +48,7 @@ from app.infrastructure.object_storage import S3ObjectStorage
 from app.infrastructure.repositories import (
     JwtTokenService,
     SqlAlchemyDocumentDerivativeRepository,
+    SqlAlchemyDocumentGeneralRepository,
     SqlAlchemyDocumentRecordRepository,
     SqlAlchemyDocumentRepository,
     SqlAlchemyPermissionRepository,
@@ -144,6 +146,17 @@ def get_document_record_service(
     audit: Annotated[AuditService, Depends(get_audit_service)],
 ) -> DocumentRecordService:
     return DocumentRecordService(documents, records, employees, audit)
+
+
+def get_document_general_repository(session: SessionDep) -> DocumentGeneralRepository:
+    return SqlAlchemyDocumentGeneralRepository(session)
+
+
+def get_document_general_service(
+    repository: Annotated[DocumentGeneralRepository, Depends(get_document_general_repository)],
+    audit: Annotated[AuditService, Depends(get_audit_service)],
+) -> DocumentGeneralService:
+    return DocumentGeneralService(repository, audit, max_depth=settings.DOCUMENT_GENERAL_MAX_DEPTH)
 
 
 def get_token_service() -> TokenService:
@@ -355,6 +368,8 @@ __all__ = [
     "get_current_user",
     "get_current_user_use_case",
     "get_document_record_repository",
+    "get_document_general_repository",
+    "get_document_general_service",
     "get_document_record_service",
     "get_document_service",
     "get_employee_repository",

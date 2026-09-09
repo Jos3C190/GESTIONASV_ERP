@@ -115,6 +115,7 @@ class Settings(BaseSettings):
     DOCUMENT_DELETION_RETENTION_DAYS: int = Field(default=30, ge=1, le=3650)
     DOCUMENT_SCAN_STALE_MINUTES: int = Field(default=15, ge=5, le=1440)
     DOCUMENT_MAINTENANCE_INTERVAL_SECONDS: int = Field(default=3600, ge=60, le=86400)
+    DOCUMENT_GENERAL_MAX_DEPTH: int = Field(default=20, ge=1, le=100)
     CLAMAV_HOST: str = "clamav"
     CLAMAV_PORT: int = Field(default=3310, ge=1, le=65535)
     CLAMAV_TIMEOUT_SECONDS: int = Field(default=120, ge=5, le=600)

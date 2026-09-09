@@ -47,6 +47,7 @@ class InitiateDocumentIn(BaseModel):
     content_type: str = Field(min_length=3, max_length=160)
     size_bytes: int = Field(gt=0)
     checksum_sha256: str = Field(min_length=64, max_length=64)
+    folder_id: uuid.UUID | None = None
 
     @field_validator("checksum_sha256")
     @classmethod
