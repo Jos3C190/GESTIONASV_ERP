@@ -8,6 +8,7 @@ from typing import Any, cast
 
 from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.engine import CursorResult
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
@@ -15,6 +16,10 @@ from app.infrastructure.db.session import session_scope
 from app.infrastructure.models.audit import AuditLog
 from app.infrastructure.models.document import DocumentAssetModel
 from app.infrastructure.models.document_derivative import DocumentDerivativeModel
+from app.infrastructure.models.document_general_import import (
+    DocumentGeneralImportItemModel,
+    DocumentGeneralImportModel,
+)
 from app.infrastructure.object_storage import S3ObjectStorage
 from app.infrastructure.observability import (
     initialize_observability,
@@ -27,11 +32,12 @@ from app.infrastructure.observability import (
 log = get_logger(__name__)
 
 
-def _record_item_metrics(*, stale_scans: int, stale_ocr: int, purged: int, failures: int) -> None:
+def _record_item_metrics(*, stale_scans: int, stale_ocr: int, purged: int, expired_imports: int, failures: int) -> None:
     outcomes = {
         "document_scan_reset": stale_scans,
         "ocr_reset": stale_ocr,
         "purged": purged,
+        "expired_imports": expired_imports,
         "failed": failures,
     }
     for item_status, count in outcomes.items():
@@ -41,6 +47,51 @@ def _record_item_metrics(*, stale_scans: int, stale_ocr: int, purged: int, failu
                 value=count,
                 attributes={"status": item_status},
             )
+
+
+async def _expire_imports(session: AsyncSession, now: datetime) -> int:
+    rows = (
+        await session.execute(
+            select(DocumentGeneralImportModel)
+            .where(
+                DocumentGeneralImportModel.expires_at.is_not(None),
+                DocumentGeneralImportModel.expires_at <= now,
+                DocumentGeneralImportModel.status.in_(("preparing", "ready", "running")),
+            )
+            .with_for_update(skip_locked=True)
+            .limit(100)
+        )
+    ).scalars().all()
+    for row in rows:
+        pending_items = (
+            await session.execute(
+                select(DocumentGeneralImportItemModel).where(
+                    DocumentGeneralImportItemModel.import_id == row.id,
+                    DocumentGeneralImportItemModel.status.in_(("ready", "authorized")),
+                )
+            )
+        ).scalars().all()
+        for item in pending_items:
+            item.status = "cancelled"
+            item.failure_code = "document_import_expired"
+            item.failure_message = "La sesión de importación expiró antes de completar este archivo."
+        row.status = "expired"
+        row.completed_at = now
+        session.add(
+            AuditLog(
+                action="GENERAL_FOLDER_IMPORT_EXPIRED",
+                user_id=row.actor_id,
+                company_id=row.company_id,
+                resource_type="document_general_imports",
+                resource_id=str(row.id),
+                after_state={
+                    "status": "expired",
+                    "cancelled_files": len(pending_items),
+                    "root_entry_id": str(row.root_entry_id) if row.root_entry_id else None,
+                },
+            )
+        )
+    return len(rows)
 
 
 async def run_once() -> None:
@@ -72,6 +123,7 @@ async def _run_once_impl() -> None:
         )
         if not acquired:
             return
+        expired_imports = await _expire_imports(session, now)
         stale_scan = now - timedelta(minutes=settings.DOCUMENT_SCAN_STALE_MINUTES)
         stale = (
             (
@@ -199,6 +251,7 @@ async def _run_once_impl() -> None:
             stale_scans=len(stale),
             stale_ocr=int(stale_ocr.rowcount or 0),
             purged=purged,
+            expired_imports=expired_imports,
             failures=failures,
         )
         log.info(
@@ -206,6 +259,7 @@ async def _run_once_impl() -> None:
             stale_scans=len(stale),
             stale_ocr=int(stale_ocr.rowcount or 0),
             purge_candidates=len(candidates),
+            expired_imports=expired_imports,
         )
 
 

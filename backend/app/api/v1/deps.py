@@ -21,7 +21,12 @@ from app.application.auth.get_current_user import GetCurrentUserUseCase
 from app.application.auth.logout import LogoutUseCase
 from app.application.auth.refresh_token import RefreshTokenUseCase
 from app.application.auth.register_user import RegisterUserUseCase
-from app.application.documents import DocumentGeneralService, DocumentRecordService, DocumentService
+from app.application.documents import (
+    DocumentGeneralImportService,
+    DocumentGeneralService,
+    DocumentRecordService,
+    DocumentService,
+)
 from app.application.password_policy import PasswordPolicy
 from app.application.purchase_requests import PurchaseRequestUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
@@ -30,6 +35,7 @@ from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.domain.entities.user import User
 from app.domain.ports.audit_repository import AuditRepository
 from app.domain.ports.document_derivative_repository import DocumentDerivativeRepository
+from app.domain.ports.document_general_import_repository import DocumentGeneralImportRepository
 from app.domain.ports.document_general_repository import DocumentGeneralRepository
 from app.domain.ports.document_record_repository import DocumentRecordRepository
 from app.domain.ports.document_repository import DocumentRepository
@@ -48,6 +54,7 @@ from app.infrastructure.object_storage import S3ObjectStorage
 from app.infrastructure.repositories import (
     JwtTokenService,
     SqlAlchemyDocumentDerivativeRepository,
+    SqlAlchemyDocumentGeneralImportRepository,
     SqlAlchemyDocumentGeneralRepository,
     SqlAlchemyDocumentRecordRepository,
     SqlAlchemyDocumentRepository,
@@ -157,6 +164,19 @@ def get_document_general_service(
     audit: Annotated[AuditService, Depends(get_audit_service)],
 ) -> DocumentGeneralService:
     return DocumentGeneralService(repository, audit, max_depth=settings.DOCUMENT_GENERAL_MAX_DEPTH)
+
+def get_document_general_import_repository(session: SessionDep) -> DocumentGeneralImportRepository:
+    return SqlAlchemyDocumentGeneralImportRepository(session)
+
+
+def get_document_general_import_service(
+    imports: Annotated[DocumentGeneralImportRepository, Depends(get_document_general_import_repository)],
+    entries: Annotated[DocumentGeneralRepository, Depends(get_document_general_repository)],
+    general: Annotated[DocumentGeneralService, Depends(get_document_general_service)],
+    records: Annotated[DocumentRecordService, Depends(get_document_record_service)],
+    audit: Annotated[AuditService, Depends(get_audit_service)],
+) -> DocumentGeneralImportService:
+    return DocumentGeneralImportService(imports, entries, general, records, audit, settings)
 
 
 def get_token_service() -> TokenService:
