@@ -450,6 +450,58 @@ export interface GeneralFolderTreeOut {
   items: GeneralEntryOut[];
 }
 
+export interface GeneralImportManifestItemInput {
+  kind: 'folder' | 'file';
+  relative_path: string;
+  size_bytes?: number;
+  content_type?: string;
+}
+
+export type GeneralImportItemStatus = 'ready' | 'authorized' | 'completed' | 'skipped' | 'failed_retryable' | 'failed_permanent' | 'cancelled';
+
+export interface GeneralImportItemOut {
+  id: string;
+  kind: 'folder' | 'file';
+  source_path: string;
+  source_name: string;
+  resolved_path: string;
+  resolved_name: string;
+  parent_folder_id: string | null;
+  entry_id: string | null;
+  document_id: string | null;
+  size_bytes: number | null;
+  content_type: string | null;
+  extension: string | null;
+  status: GeneralImportItemStatus;
+  failure_code: string | null;
+  failure_message: string | null;
+  attempts: number;
+}
+
+export interface GeneralImportOut {
+  id: string;
+  parent_id: string | null;
+  root_entry_id: string | null;
+  status: 'preparing' | 'ready' | 'running' | 'completed' | 'partial' | 'cancelled' | 'expired';
+  total_files: number;
+  total_folders: number;
+  total_entries: number;
+  total_bytes: number;
+  completed_files: number;
+  skipped_files: number;
+  failed_files: number;
+  created_at: string | null;
+  updated_at: string | null;
+  completed_at: string | null;
+  expires_at: string | null;
+  items: GeneralImportItemOut[];
+  meta?: PageMeta | null;
+}
+
+export interface GeneralImportTicketOut {
+  item: GeneralImportItemOut;
+  ticket: DocumentUploadTicket;
+}
 export interface GeneralDeletionBatchOut {
   id: string;
   company_id: string;
@@ -926,7 +978,31 @@ export const api = {
         apiFetch<GeneralEntryOut[]>('/documents/general/move', {
           method: 'POST',
           body: JSON.stringify({ items, parent_id: parentId })
-        }),      tree: (signal?: AbortSignal) =>
+        }),
+      prepareImport: (data: {
+        parent_id: string | null;
+        metadata: DocumentMetadataInput;
+        items: GeneralImportManifestItemInput[];
+      }) =>
+        apiFetch<GeneralImportOut>('/documents/general/imports', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        }),
+      getImport: (id: string, params: { page?: number; size?: number; signal?: AbortSignal } = {}) => {
+        const sp = new URLSearchParams({ page: String(params.page ?? 1), size: String(params.size ?? 200) });
+        return apiFetch<GeneralImportOut>('/documents/general/imports/' + id + '?' + sp, { signal: params.signal });
+      },
+      authorizeImportItem: (importId: string, itemId: string, checksum_sha256: string) =>
+        apiFetch<GeneralImportTicketOut>('/documents/general/imports/' + importId + '/items/' + itemId + '/ticket', {
+          method: 'POST',
+          body: JSON.stringify({ checksum_sha256 })
+        }),
+      completeImportItem: (importId: string, itemId: string) =>
+        apiFetch<GeneralImportItemOut>('/documents/general/imports/' + importId + '/items/' + itemId + '/complete', {
+          method: 'POST'
+        }),
+      cancelImport: (id: string) =>
+        apiFetch<GeneralImportOut>('/documents/general/imports/' + id + '/cancel', { method: 'POST' }),      tree: (signal?: AbortSignal) =>
         apiFetch<GeneralFolderTreeOut>('/documents/general/folders/tree', { signal }),
       trash: {
         list: (

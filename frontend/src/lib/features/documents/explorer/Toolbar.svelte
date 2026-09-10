@@ -13,6 +13,7 @@
     categories: DocumentCategoryOut[];
     canCreateFolder: boolean;
     canUpload: boolean;
+    canImportFolder: boolean;
     onsearch: (value: string) => void;
     oncategory: (value: string) => void;
     onstatus: (value: ExplorerStatus) => void;
@@ -20,6 +21,7 @@
     onview: (value: ExplorerView) => void;
     oncreatefolder: () => void;
     onupload: () => void;
+    onimportfolder: () => void;
   }
 
   let {
@@ -31,13 +33,15 @@
     categories,
     canCreateFolder,
     canUpload,
+    canImportFolder,
     onsearch,
     oncategory,
     onstatus,
     onsort,
     onview,
     oncreatefolder,
-    onupload
+    onupload,
+    onimportfolder
   }: Props = $props();
 
   let searchValue = $state('');
@@ -130,6 +134,12 @@
             <path d="M12 16V4M7.5 8.5 12 4l4.5 4.5M5 19.5h14" />
           </svg>
           Cargar
+        </Button>
+      {/if}
+      {#if canImportFolder}
+        <Button variant="secondary" size="sm" class="min-h-10" onclick={onimportfolder}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /><path d="M12 10v6M9.5 13.5h5" /></svg>
+          Importar carpeta
         </Button>
       {/if}
     </div>

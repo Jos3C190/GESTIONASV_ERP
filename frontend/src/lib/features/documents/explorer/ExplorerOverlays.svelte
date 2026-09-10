@@ -2,6 +2,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import DocumentUploadQueue from '$lib/features/documents/components/DocumentUploadQueue.svelte';
+  import DocumentFolderImportDialog from '$lib/features/documents/import/DocumentFolderImportDialog.svelte';
   import type { DocumentCategoryOut } from '$lib/api/client';
   import ContextMenu from './ContextMenu.svelte';
   import MoveDialog from './MoveDialog.svelte';
@@ -28,6 +29,8 @@
     createSaving: boolean;
     createAttempted: boolean;
     uploadOpen: boolean;
+    folderImportOpen: boolean;
+    folderImportBusy: boolean;
     folderId: string | null;
     folders: FolderOption[];
     categories: DocumentCategoryOut[];
@@ -55,6 +58,9 @@
     oncreate: () => void | Promise<void>;
     onuploadclose: () => void;
     onuploadfinished: () => void | Promise<void>;
+    onfolderimportclose: () => void;
+    onfolderimportbusy: (busy: boolean) => void;
+    onfolderimportfinished: (rootEntryId: string | null) => void | Promise<void>;
   }
 
   let {
@@ -67,6 +73,8 @@
     createSaving,
     createAttempted,
     uploadOpen,
+    folderImportOpen,
+    folderImportBusy,
     folderId,
     folders,
     categories,
@@ -93,7 +101,10 @@
     oncreateAttempted,
     oncreate,
     onuploadclose,
-    onuploadfinished
+    onuploadfinished,
+    onfolderimportclose,
+    onfolderimportbusy,
+    onfolderimportfinished
   }: Props = $props();
 </script>
 
@@ -196,6 +207,20 @@
         {folderId}
         onclose={onuploadclose}
         onfinished={onuploadfinished}
+      />
+    {/snippet}
+  </Modal>
+{/if}
+
+{#if folderImportOpen}
+  <Modal open={true} title="Importar carpeta" size="lg" onclose={onfolderimportclose} preventClose={folderImportBusy} mobileFullScreen>
+    {#snippet children()}
+      <DocumentFolderImportDialog
+        {categories}
+        parentId={folderId}
+        onclose={onfolderimportclose}
+        onfinished={onfolderimportfinished}
+        onbusychange={onfolderimportbusy}
       />
     {/snippet}
   </Modal>

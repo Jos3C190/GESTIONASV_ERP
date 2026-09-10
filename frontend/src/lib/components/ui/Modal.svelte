@@ -9,9 +9,11 @@
     footer?: Snippet;
     size?: 'sm' | 'md' | 'lg';
     inline?: boolean;
+    preventClose?: boolean;
+    mobileFullScreen?: boolean;
   }
 
-  let { open, title, onclose, children, footer, size = 'md', inline = false }: Props = $props();
+  let { open, title, onclose, children, footer, size = 'md', inline = false, preventClose = false, mobileFullScreen = false }: Props = $props();
   let dialogEl = $state<HTMLDivElement | null>(null);
   let returnFocus = $state<HTMLElement | null>(null);
 
@@ -34,7 +36,7 @@
     if (!open || inline) return;
     if (e.key === 'Escape') {
       e.preventDefault();
-      onclose?.();
+      if (!preventClose) onclose?.();
       return;
     }
     if (e.key !== 'Tab') return;
@@ -71,7 +73,7 @@
   });
 
   function handleBackdropClick(e: MouseEvent) {
-    if (e.target === e.currentTarget) onclose?.();
+    if (e.target === e.currentTarget && !preventClose) onclose?.();
   }
 
   function setGlobalChromeInert(next: boolean) {
@@ -101,6 +103,7 @@
       ? 'w-full'
       : 'fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto p-4 pt-16'}
     style={inline ? undefined : 'background: rgb(2 6 23 / 0.6); backdrop-filter: blur(8px);'}
+    class:modal-mobile-backdrop={mobileFullScreen}
     role="presentation"
     onclick={inline ? undefined : handleBackdropClick}
   >
@@ -108,6 +111,7 @@
       class="w-full {inline
         ? 'rounded-2xl border border-border bg-surface-elevated shadow-soft'
         : `${sizes[size]} animate-fade-scale rounded-3xl border border-border bg-surface-elevated shadow-floating`}"
+      class:modal-mobile-fullscreen={mobileFullScreen}
       role={inline ? 'region' : 'dialog'}
       bind:this={dialogEl}
       aria-modal={inline ? undefined : 'true'}
@@ -118,8 +122,10 @@
         <h2 id="modal-title" class="text-lg font-bold text-foreground">{title}</h2>
         <button
           type="button"
-          onclick={() => onclose?.()}
-          class="flex h-11 w-11 items-center justify-center rounded-lg text-foreground-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+          onclick={() => { if (!preventClose) onclose?.(); }}
+          disabled={preventClose}
+          aria-disabled={preventClose}
+          class="flex h-11 w-11 items-center justify-center rounded-lg text-foreground-muted transition-colors hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Cerrar"
         >
           <svg
@@ -149,3 +155,19 @@
     </div>
   </div>
 {/if}
+<style>
+  @media (max-width: 640px) {
+    .modal-mobile-backdrop { padding: 0; }
+    .modal-mobile-fullscreen {
+      display: flex;
+      min-height: 100dvh;
+      max-height: 100dvh;
+      flex-direction: column;
+      border-radius: 0;
+    }
+    .modal-mobile-fullscreen > div:nth-child(2) {
+      flex: 1 1 auto;
+      overflow-y: auto;
+    }
+  }
+</style>

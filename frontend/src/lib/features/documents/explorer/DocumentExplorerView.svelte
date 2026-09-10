@@ -37,6 +37,8 @@
   let success = $state<string | null>(null);
   let successTimer: ReturnType<typeof setTimeout> | undefined;
   let uploadOpen = $state(false);
+  let folderImportOpen = $state(false);
+  let folderImportBusy = $state(false);
   let createOpen = $state(false);
   let createName = $state('');
   let createSaving = $state(false);
@@ -64,11 +66,12 @@
   const canDelete = $derived(canFolder || canDeleteFiles);
   const canRestore = $derived(canExplorerAction('restore', permissions.hasPermission));
   const canUpload = $derived(canExplorerAction('upload', permissions.hasPermission));
+  const canImportFolder = $derived(canUpload && canFolder);
   const hasActiveFilters = $derived(Boolean(query.search || query.category || query.status));
   const activeCategoryLabel = $derived(categories.find((category) => category.id === query.category)?.name ?? 'Categoría');
   const activeStatusLabel = $derived(({ active: 'Activos', processing: 'Procesando', deleted: 'En papelera' } as Record<string, string>)[query.status] ?? query.status);
   const selectedItems = $derived(items.filter((item) => selectedIds.has(item.id)));
-  const modalOpen = $derived(uploadOpen || createOpen || Boolean(deleteConfirmItem || renameItem || moveItem));
+  const modalOpen = $derived(uploadOpen || folderImportOpen || createOpen || Boolean(deleteConfirmItem || renameItem || moveItem));
   const selectedItem = $derived(selectedItems.length === 1 ? selectedItems[0] : null);
 
   function updateQuery(changes: Partial<ExplorerQuery>) {
@@ -591,6 +594,7 @@
     {categories}
     canCreateFolder={canFolder}
     {canUpload}
+    {canImportFolder}
     onsearch={(value) => updateQuery({ search: value, page: 1 })}
     oncategory={(value) => updateQuery({ category: value, page: 1 })}
     onstatus={(value) => updateQuery({ status: value, page: 1 })}
@@ -598,6 +602,7 @@
     onview={(value) => updateQuery({ view: value })}
     oncreatefolder={openCreateFolder}
     onupload={() => (uploadOpen = true)}
+    onimportfolder={() => (folderImportOpen = true)}
   />
 
   {#if hasActiveFilters}
@@ -780,6 +785,8 @@
   {createSaving}
   {createAttempted}
   {uploadOpen}
+  {folderImportOpen}
+  {folderImportBusy}
   folderId={query.folder || null}
   {folders}
   {categories}
@@ -810,6 +817,14 @@
     uploadOpen = false;
     success = 'Documentos cargados correctamente.';
     void load(query);
+  }}
+  onfolderimportbusy={(busy) => (folderImportBusy = busy)}
+  onfolderimportclose={() => { if (!folderImportBusy) folderImportOpen = false; }}
+  onfolderimportfinished={(rootEntryId) => {
+    folderImportOpen = false;
+    success = 'Carpeta importada correctamente.';
+    void load(query);
+    if (rootEntryId) void goto('/documents/general?folder=' + rootEntryId);
   }}
 />
 

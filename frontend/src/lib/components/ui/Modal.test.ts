@@ -40,4 +40,12 @@ describe('Modal', () => {
     trigger.remove();
     chrome.remove();
   });
+  it('bloquea el cierre mientras una operación está activa', async () => {
+    const onclose = vi.fn();
+    render(Modal, { props: { open: true, title: 'Importando carpeta', onclose, preventClose: true } });
+
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onclose).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeDisabled();
+  });
 });
