@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import tempfile
 import unicodedata
@@ -9,6 +10,9 @@ import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
+
+from defusedxml import ElementTree as DefusedElementTree
+from defusedxml.common import DefusedXmlException
 
 from app.application.audit.audit_service import AuditService
 from app.core.config import Settings
@@ -32,19 +36,29 @@ ALLOWED_DOCUMENT_TYPES: dict[str, frozenset[str]] = {
     ".docx": frozenset({"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}),
     ".xls": frozenset({"application/vnd.ms-excel", "application/octet-stream"}),
     ".xlsx": frozenset({"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),
+    ".ppt": frozenset({"application/vnd.ms-powerpoint", "application/octet-stream"}),
+    ".pptx": frozenset({"application/vnd.openxmlformats-officedocument.presentationml.presentation"}),
     ".csv": frozenset({"text/csv", "application/csv", "text/plain"}),
     ".txt": frozenset({"text/plain"}),
+    ".md": frozenset({"text/markdown", "text/plain"}),
+    ".json": frozenset({"application/json"}),
+    ".xml": frozenset({"application/xml", "text/xml"}),
+    ".rtf": frozenset({"application/rtf", "text/rtf"}),
     ".odt": frozenset({"application/vnd.oasis.opendocument.text"}),
     ".ods": frozenset({"application/vnd.oasis.opendocument.spreadsheet"}),
+    ".odp": frozenset({"application/vnd.oasis.opendocument.presentation"}),
     ".jpg": frozenset({"image/jpeg"}),
     ".jpeg": frozenset({"image/jpeg"}),
     ".png": frozenset({"image/png"}),
     ".webp": frozenset({"image/webp"}),
     ".gif": frozenset({"image/gif"}),
     ".svg": frozenset({"image/svg+xml"}),
+    ".tif": frozenset({"image/tiff"}),
+    ".tiff": frozenset({"image/tiff"}),
 }
-ZIP_EXTENSIONS = frozenset({".docx", ".xlsx", ".odt", ".ods"})
-IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"})
+ZIP_EXTENSIONS = frozenset({".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp"})
+IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".tif", ".tiff"})
+TEXT_EXTENSIONS = frozenset({".csv", ".txt", ".md"})
 IMAGE_CONTENT_TYPES = {
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
@@ -52,11 +66,14 @@ IMAGE_CONTENT_TYPES = {
     ".webp": "image/webp",
     ".gif": "image/gif",
     ".svg": "image/svg+xml",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
 }
 OLE_SIGNATURE = bytes.fromhex("D0CF11E0A1B11AE1")
 OLE_STREAM_MARKERS = {
     ".doc": ("WordDocument".encode("utf-16le"),),
     ".xls": ("Workbook".encode("utf-16le"), "Book".encode("utf-16le")),
+    ".ppt": ("PowerPoint Document".encode("utf-16le"),),
 }
 MAX_ZIP_ENTRIES = 10_000
 MAX_ZIP_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
@@ -71,6 +88,12 @@ GIF_MIN_BYTES = 10
 SVG_MIN_BYTES = 20
 RIFF_HEADER_BYTES = 8
 RIFF_PAYLOAD_MIN_BYTES = 4
+TIFF_MIN_BYTES = 8
+TIFF_CLASSIC_MAGIC = 42
+TIFF_BIG_MAGIC = 43
+TIFF_BIG_HEADER_BYTES = 16
+TIFF_BIG_OFFSET_SIZE = 8
+TIFF_BIG_RESERVED = 0
 SVG_FORBIDDEN_PATTERNS = (
     r"<\s*script\b",
     r"<\s*(?:foreignobject|iframe|object|embed)\b",
@@ -84,12 +107,23 @@ SVG_FORBIDDEN_PATTERNS = (
 DETECTED_CONTENT_TYPES = {
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".odt": "application/vnd.oasis.opendocument.text",
     ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+    ".odp": "application/vnd.oasis.opendocument.presentation",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".rtf": "application/rtf",
+    ".md": "text/markdown",
+    ".json": "application/json",
+    ".xml": "application/xml",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
     ".png": "image/png",
     ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".svg": "image/svg+xml",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
 }
 
 
@@ -186,16 +220,28 @@ def _validate_zip_structure(
     extension: str,
     names: set[str],
     embedded_mimetype: bytes | None,
+    content_types_payload: bytes | None = None,
     *,
     compressed: int,
     uncompressed: int,
 ) -> str:
-    if extension in {".docx", ".xlsx"} and "[Content_Types].xml" not in names:
+    if extension in {".docx", ".xlsx", ".pptx"} and "[Content_Types].xml" not in names:
         raise ValidationError("El documento Office no es válido.", code="document_type_invalid")
-    required_prefix = (extension == ".docx" and "word/") or (extension == ".xlsx" and "xl/")
+    required_prefix = (
+        extension == ".docx" and "word/"
+    ) or (
+        extension == ".xlsx" and "xl/"
+    ) or (
+        extension == ".pptx" and "ppt/"
+    )
     if required_prefix and not any(name.startswith(required_prefix) for name in names):
         raise ValidationError("El documento Office no es válido.", code="document_type_invalid")
-    if extension in {".odt", ".ods"} and (
+    if extension == ".pptx" and (
+        content_types_payload is None
+        or b"presentationml.presentation" not in content_types_payload
+    ):
+        raise ValidationError("El documento PowerPoint no es válido.", code="document_type_invalid")
+    if extension in {".odt", ".ods", ".odp"} and (
         "mimetype" not in names or embedded_mimetype != DETECTED_CONTENT_TYPES[extension].encode()
     ):
         raise ValidationError(
@@ -210,6 +256,7 @@ def _validate_zip_structure(
 
 def _validate_zip(path: Path, extension: str) -> str:
     embedded_mimetype: bytes | None = None
+    content_types_payload: bytes | None = None
     try:
         with zipfile.ZipFile(path) as archive:
             entries = archive.infolist()
@@ -231,8 +278,10 @@ def _validate_zip(path: Path, extension: str) -> str:
                         code="document_archive_too_large",
                     )
                 names.add(entry.filename)
-            if extension in {".odt", ".ods"} and "mimetype" in names:
+            if extension in {".odt", ".ods", ".odp"} and "mimetype" in names:
                 embedded_mimetype = archive.read("mimetype").strip()
+            if extension == ".pptx" and "[Content_Types].xml" in names:
+                content_types_payload = archive.read("[Content_Types].xml")
     except (zipfile.BadZipFile, OSError) as exc:
         raise ValidationError(
             "El documento comprimido no es válido.", code="document_archive_invalid"
@@ -241,6 +290,7 @@ def _validate_zip(path: Path, extension: str) -> str:
         extension,
         names,
         embedded_mimetype,
+        content_types_payload,
         compressed=compressed,
         uncompressed=uncompressed,
     )
@@ -254,13 +304,94 @@ def _validate_ole_container(path: Path, extension: str) -> str:
         while chunk := source.read(1024 * 1024):
             window = previous + chunk
             if any(marker in window for marker in markers):
-                return "application/msword" if extension == ".doc" else "application/vnd.ms-excel"
+                return {
+                    ".doc": "application/msword",
+                    ".xls": "application/vnd.ms-excel",
+                    ".ppt": "application/vnd.ms-powerpoint",
+                }[extension]
             previous = window[-overlap:]
     raise ValidationError(
         "El contenido no corresponde al tipo de documento Office declarado.",
         code="document_type_invalid",
     )
 
+
+def _validate_rtf(path: Path) -> str:
+    try:
+        with path.open("rb") as source:
+            prefix = source.read(64).lstrip(b"\xef\xbb\xbf \t\r\n")
+            source.seek(-1, 2)
+            trailing = source.read(1)
+    except OSError as exc:
+        raise ValidationError("El RTF no se puede leer.", code="document_type_invalid") from exc
+    if not prefix.startswith(b"{\\rtf") or trailing != b"}":
+        raise ValidationError("El contenido no corresponde a un RTF válido.", code="document_type_invalid")
+    return DETECTED_CONTENT_TYPES[".rtf"]
+
+
+def _validate_tiff(path: Path) -> bool:
+    valid = False
+    try:
+        size = path.stat().st_size
+        with path.open("rb") as source:
+            header = source.read(TIFF_BIG_HEADER_BYTES)
+            if len(header) >= TIFF_MIN_BYTES:
+                byte_order = header[:2]
+                if byte_order in {b"II", b"MM"}:
+                    endian = "little" if byte_order == b"II" else "big"
+                    magic = int.from_bytes(header[2:4], endian)
+                    valid_header = False
+                    if magic == TIFF_CLASSIC_MAGIC:
+                        ifd_offset = int.from_bytes(header[4:8], endian)
+                        count_size = 2
+                        entry_size = 12
+                        valid_header = True
+                    elif magic == TIFF_BIG_MAGIC and len(header) >= TIFF_BIG_HEADER_BYTES:
+                        valid_header = (
+                            int.from_bytes(header[4:6], endian) == TIFF_BIG_OFFSET_SIZE
+                            and int.from_bytes(header[6:8], endian) == TIFF_BIG_RESERVED
+                        )
+                        ifd_offset = int.from_bytes(header[8:16], endian)
+                        count_size = 8
+                        entry_size = 20
+                    else:
+                        ifd_offset = 0
+                        count_size = 0
+                        entry_size = 0
+                    if valid_header and ifd_offset >= TIFF_MIN_BYTES and ifd_offset + count_size <= size:
+                        source.seek(ifd_offset)
+                        count_bytes = source.read(count_size)
+                        if len(count_bytes) == count_size:
+                            entry_count = int.from_bytes(count_bytes, endian)
+                            valid = (
+                                entry_count > 0
+                                and ifd_offset + count_size + entry_count * entry_size <= size
+                            )
+    except OSError:
+        valid = False
+    return valid
+
+def _validate_text_document(path: Path, extension: str) -> str:
+    try:
+        if extension == ".json":
+            with path.open(encoding="utf-8-sig") as source:
+                json.load(source)
+        elif extension == ".xml":
+            DefusedElementTree.parse(path)
+        else:
+            path.read_text(encoding="utf-8-sig")
+    except (DefusedElementTree.ParseError, DefusedXmlException, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValidationError(
+            f"El contenido no corresponde a un archivo {extension.lstrip('.').upper()} válido.",
+            code="document_encoding_invalid" if extension in TEXT_EXTENSIONS else "document_type_invalid",
+        ) from exc
+    if extension == ".md":
+        return "text/markdown"
+    if extension == ".json":
+        return "application/json"
+    if extension == ".xml":
+        return "application/xml"
+    return "text/csv" if extension == ".csv" else "text/plain"
 
 def _validate_svg(path: Path) -> str:
     try:
@@ -318,6 +449,8 @@ def _validate_raster_image(path: Path, extension: str) -> str:
             and int.from_bytes(header[6:8], "little") > 0
             and int.from_bytes(header[8:10], "little") > 0
         )
+    elif extension in {".tif", ".tiff"}:
+        valid = _validate_tiff(path)
     else:
         riff_size = (
             int.from_bytes(header[4:8], "little") if len(header) >= RIFF_HEADER_BYTES else 0
@@ -352,7 +485,7 @@ def inspect_document(path: Path, extension: str) -> tuple[str, str]:
         if not header.startswith(b"%PDF-"):
             raise ValidationError("El contenido no es un PDF válido.", code="document_type_invalid")
         detected = "application/pdf"
-    elif extension in {".doc", ".xls"}:
+    elif extension in {".doc", ".xls", ".ppt"}:
         if not header.startswith(OLE_SIGNATURE):
             raise ValidationError(
                 "El contenido no corresponde a un documento Office clásico.",
@@ -365,15 +498,10 @@ def inspect_document(path: Path, extension: str) -> tuple[str, str]:
         detected = _validate_zip(path, extension)
     elif extension in IMAGE_EXTENSIONS:
         detected = _validate_image(path, extension)
+    elif extension in {".rtf", ".json", ".xml"} or extension in TEXT_EXTENSIONS:
+        detected = _validate_rtf(path) if extension == ".rtf" else _validate_text_document(path, extension)
     else:
-        try:
-            path.read_text(encoding="utf-8-sig")
-        except UnicodeDecodeError as exc:
-            raise ValidationError(
-                "Los archivos CSV y TXT deben usar codificación UTF-8.",
-                code="document_encoding_invalid",
-            ) from exc
-        detected = "text/csv" if extension == ".csv" else "text/plain"
+        raise ValidationError("El formato del documento no está permitido.", code="document_type_invalid")
     return detected, checksum.hexdigest()
 
 

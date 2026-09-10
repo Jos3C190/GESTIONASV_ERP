@@ -36,6 +36,7 @@ dependencies = [
     "typer>=0.12,<1",
     "faker>=25.0,<37",
     "openpyxl>=3.1.5,<4",
+    "defusedxml>=0.7.1,<1",
     "boto3>=1.40,<2",
     # ARQ 0.28 currently requires redis-py < 6; it remains compatible with Redis 7.4 server.
     "redis>=5.3,<6",

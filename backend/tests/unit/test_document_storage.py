@@ -339,6 +339,111 @@ def test_inspects_supported_images(
     assert checksum == hashlib.sha256(payload).hexdigest()
 
 
+@pytest.mark.parametrize(
+    ("extension", "content_type"),
+    [
+        (".ppt", "application/vnd.ms-powerpoint"),
+        (".pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+        (".odp", "application/vnd.oasis.opendocument.presentation"),
+        (".rtf", "application/rtf"),
+        (".tif", "image/tiff"),
+        (".tiff", "image/tiff"),
+        (".md", "text/markdown"),
+        (".json", "application/json"),
+        (".xml", "application/xml"),
+    ],
+)
+def test_accepts_new_document_declarations(extension: str, content_type: str) -> None:
+    filename = f"archivo{extension}"
+    assert validate_declaration(
+        filename=filename,
+        content_type=content_type,
+        size_bytes=1024,
+        checksum_sha256="a" * 64,
+        max_bytes=50 * 1024 * 1024,
+    ) == (filename, extension, content_type)
+
+
+def test_inspects_new_document_formats(tmp_path: Path) -> None:
+    pptx = tmp_path / "presentacion.pptx"
+    with zipfile.ZipFile(pptx, "w") as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            b"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        )
+        archive.writestr("ppt/presentation.xml", b"presentation")
+    ppt = tmp_path / "presentacion.ppt"
+    ppt.write_bytes(bytes.fromhex("D0CF11E0A1B11AE1") + b"padding" + "PowerPoint Document".encode("utf-16le"))
+    odp = tmp_path / "presentacion.odp"
+    with zipfile.ZipFile(odp, "w") as archive:
+        archive.writestr("mimetype", "application/vnd.oasis.opendocument.presentation")
+        archive.writestr("content.xml", "<office:document-content/>")
+    rtf = tmp_path / "nota.rtf"
+    rtf.write_bytes(b"{\\rtf1\\ansi Nota empresarial}")
+    tiff = tmp_path / "escaneo.tiff"
+    tiff.write_bytes(b"II*\x00\x08\x00\x00\x00" + b"\x01\x00" + b"\x00" * 12 + b"\x00" * 4)
+    markdown = tmp_path / "readme.md"
+    markdown.write_text("# Documento", encoding="utf-8")
+    json_file = tmp_path / "datos.json"
+    json_file.write_text('{"estado":"activo"}', encoding="utf-8")
+    xml = tmp_path / "datos.xml"
+    xml.write_text("<root><item /></root>", encoding="utf-8")
+
+    expected = {
+        pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ppt: "application/vnd.ms-powerpoint",
+        odp: "application/vnd.oasis.opendocument.presentation",
+        rtf: "application/rtf",
+        tiff: "image/tiff",
+        markdown: "text/markdown",
+        json_file: "application/json",
+        xml: "application/xml",
+    }
+    for path, content_type in expected.items():
+        detected, _checksum = inspect_document(path, path.suffix)
+        assert detected == content_type
+
+
+def test_rejects_invalid_new_document_payloads(tmp_path: Path) -> None:
+    invalid_pptx = tmp_path / "falso.pptx"
+    with zipfile.ZipFile(invalid_pptx, "w") as archive:
+        archive.writestr("[Content_Types].xml", b"application/pdf")
+        archive.writestr("ppt/presentation.xml", b"presentation")
+    with pytest.raises(ValidationError, match="PowerPoint"):
+        inspect_document(invalid_pptx, ".pptx")
+
+    invalid_tiff = tmp_path / "falso.tiff"
+    invalid_tiff.write_bytes(b"not a tiff")
+    with pytest.raises(ValidationError, match="imagen válida"):
+        inspect_document(invalid_tiff, ".tiff")
+
+    invalid_json = tmp_path / "falso.json"
+    invalid_json.write_text("{invalid", encoding="utf-8")
+    with pytest.raises(ValidationError, match="JSON"):
+        inspect_document(invalid_json, ".json")
+
+    unsafe_xml = tmp_path / "unsafe.xml"
+    unsafe_xml.write_text(
+        '<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError, match="XML"):
+        inspect_document(unsafe_xml, ".xml")
+
+
+def test_rejects_pptx_macros(tmp_path: Path) -> None:
+    macro = tmp_path / "macro.pptx"
+    with zipfile.ZipFile(macro, "w") as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            b"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        )
+        archive.writestr("ppt/presentation.xml", b"presentation")
+        archive.writestr("ppt/vbaProject.bin", b"macro")
+    with pytest.raises(ValidationError, match="macros"):
+        inspect_document(macro, ".pptx")
+
+
 def test_rejects_zip_traversal_and_macros(tmp_path: Path) -> None:
     traversal = tmp_path / "traversal.docx"
     with zipfile.ZipFile(traversal, "w") as archive:
