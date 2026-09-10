@@ -15,7 +15,7 @@ const GROUPS: Record<Exclude<DocumentFileTone, 'file'>, ReadonlySet<string>> = {
   slides: new Set(['ppt', 'pptx', 'odp']),
   archive: new Set(['zip', 'rar', '7z', 'tar', 'gz']),
   text: new Set(['txt', 'md', 'json', 'xml', 'yaml', 'yml']),
-  image: new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'])
+  image: new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'])
 };
 
 export function normalizeDocumentExtension(extension: string | undefined): string {

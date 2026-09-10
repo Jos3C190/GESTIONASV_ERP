@@ -2,6 +2,7 @@
   import type { DocumentRecordOut } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
   import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
+  import { isBrowserPreviewable } from '$lib/features/documents/open-document';
 
   interface Props {
     documents: DocumentRecordOut[];
@@ -106,8 +107,7 @@
     const items: KebabItem[] = [];
     if (
       allowed(canDownload, canDownloadDocument, document) &&
-      document.extension === '.pdf' &&
-      document.technical_status === 'active' &&
+      isBrowserPreviewable(document.extension, document.technical_status) &&
       onopenbrowser
     ) {
       const opening = openingDocumentId === document.id;

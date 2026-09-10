@@ -242,6 +242,103 @@ def test_validates_declared_type_checksum_and_exact_size_limit() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("extension", "content_type", "payload"),
+    [
+        (".jpg", "image/jpeg", b"\xff\xd8\xff\xe0JFIF\x00\xff\xd9"),
+        (".jpeg", "image/jpeg", b"\xff\xd8\xff\xe0JFIF\x00\xff\xd9"),
+        (
+            ".png",
+            "image/png",
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01",
+        ),
+        (".webp", "image/webp", b"RIFF\x0c\x00\x00\x00WEBPVP8 \x00\x00\x00\x00"),
+        (".gif", "image/gif", b"GIF89a\x01\x00\x01\x00\x00\x00\x00\x00"),
+        (
+            ".svg",
+            "image/svg+xml",
+            b'<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>',
+        ),
+    ],
+)
+def test_accepts_supported_image_declarations(
+    extension: str, content_type: str, payload: bytes
+) -> None:
+    filename = f"imagen{extension}"
+    assert validate_declaration(
+        filename=filename,
+        content_type=content_type,
+        size_bytes=len(payload),
+        checksum_sha256="a" * 64,
+        max_bytes=50 * 1024 * 1024,
+    ) == (filename, extension, content_type)
+
+
+@pytest.mark.parametrize(
+    ("extension", "payload"),
+    [
+        (".jpg", b"not a jpeg"),
+        (".png", b"not a png"),
+        (".webp", b"RIFF\x04\x00\x00\x00WEBP"),
+        (".gif", b"GIF89a\x00\x00\x00\x00"),
+    ],
+)
+def test_rejects_invalid_image_payloads(tmp_path: Path, extension: str, payload: bytes) -> None:
+    path = tmp_path / f"invalid{extension}"
+    path.write_bytes(payload)
+    with pytest.raises(ValidationError, match="imagen válida"):
+        inspect_document(path, extension)
+
+
+def test_rejects_image_mime_mismatch() -> None:
+    with pytest.raises(ValidationError, match="MIME"):
+        validate_declaration(
+            filename="imagen.png",
+            content_type="image/jpeg",
+            size_bytes=1,
+            checksum_sha256="a" * 64,
+            max_bytes=50 * 1024 * 1024,
+        )
+
+
+def test_rejects_unsafe_svg_payload(tmp_path: Path) -> None:
+    path = tmp_path / "unsafe.svg"
+    path.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError, match="SVG"):
+        inspect_document(path, ".svg")
+
+
+@pytest.mark.parametrize(
+    ("extension", "content_type", "payload"),
+    [
+        (".jpg", "image/jpeg", b"\xff\xd8\xff\xe0JFIF\x00\xff\xd9"),
+        (
+            ".png",
+            "image/png",
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01",
+        ),
+        (".webp", "image/webp", b"RIFF\x0c\x00\x00\x00WEBPVP8 \x00\x00\x00\x00"),
+        (".gif", "image/gif", b"GIF89a\x01\x00\x01\x00\x00\x00\x00\x00"),
+        (
+            ".svg",
+            "image/svg+xml",
+            b'<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>',
+        ),
+    ],
+)
+def test_inspects_supported_images(
+    tmp_path: Path, extension: str, content_type: str, payload: bytes
+) -> None:
+    path = tmp_path / f"image{extension}"
+    path.write_bytes(payload)
+    detected, checksum = inspect_document(path, extension)
+    assert detected == content_type
+    assert checksum == hashlib.sha256(payload).hexdigest()
+
+
 def test_rejects_zip_traversal_and_macros(tmp_path: Path) -> None:
     traversal = tmp_path / "traversal.docx"
     with zipfile.ZipFile(traversal, "w") as archive:
@@ -341,6 +438,33 @@ async def test_clean_document_flow_is_idempotent_and_downloadable() -> None:
         "DOCUMENT_ACTIVATED",
         "DOCUMENT_DOWNLOAD_URL_ISSUED",
     ]
+
+
+@pytest.mark.asyncio
+async def test_clean_image_flow_runs_validation_and_antivirus() -> None:
+    service, _repository, storage, scanner, _audit = make_service()
+    company_id, actor_id = uuid.uuid4(), uuid.uuid4()
+    payload = b"\xff\xd8\xff\xe0JFIF\x00\xff\xd9"
+    ticket = await service.initiate(
+        InitiateDocumentInput(
+            company_id=company_id,
+            actor_id=actor_id,
+            filename="evidencia.jpg",
+            content_type="image/jpeg",
+            size_bytes=len(payload),
+            checksum_sha256=hashlib.sha256(payload).hexdigest(),
+        )
+    )
+    document = ticket.document
+    storage.payloads[document.object_key] = payload
+
+    completed = await service.complete(company_id, document.id, actor_id)
+
+    assert completed.status == "active"
+    assert completed.detected_content_type == "image/jpeg"
+    assert scanner.calls == 1
+    preview_url, _expires = await service.preview_url(company_id, document.id, actor_id)
+    assert "preview=evidencia.jpg" in preview_url
 
 
 @pytest.mark.asyncio

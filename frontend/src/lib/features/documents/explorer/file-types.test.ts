@@ -10,6 +10,10 @@ describe('document file types', () => {
     ['.zip', 'archive'],
     ['.txt', 'text'],
     ['.png', 'image'],
+    ['.jpg', 'image'],
+    ['.webp', 'image'],
+    ['.gif', 'image'],
+    ['.svg', 'image'],
     ['.bin', 'file']
   ] as const)('maps %s to the %s artwork tone', (extension, tone) => {
     expect(documentFileTone(extension)).toBe(tone);

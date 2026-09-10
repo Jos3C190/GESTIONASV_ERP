@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import type { DocumentRecordOut } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
+  import { isBrowserPreviewable } from '$lib/features/documents/open-document';
 
   interface Props {
     document: DocumentRecordOut;
@@ -256,7 +257,7 @@
           class="min-h-11"
           onclick={() => ondownload?.(document)}>Descargar</Button
         >{/if}
-      {#if onopenbrowser && document.extension === '.pdf' && document.technical_status === 'active'}<Button
+      {#if onopenbrowser && isBrowserPreviewable(document.extension, document.technical_status)}<Button
           variant="ghost"
           size="sm"
           class="min-h-11"

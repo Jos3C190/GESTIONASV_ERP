@@ -1,5 +1,19 @@
 import { api } from '$lib/api/client';
 
+const BROWSER_PREVIEW_EXTENSIONS = new Set([
+  '.pdf',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.gif',
+  '.svg'
+]);
+
+export function isBrowserPreviewable(extension: string, technicalStatus: string): boolean {
+  return technicalStatus === 'active' && BROWSER_PREVIEW_EXTENSIONS.has(extension.toLowerCase());
+}
+
 /** Error raised when the browser refuses to create the document tab. */
 export class DocumentBrowserOpenError extends Error {
   readonly code = 'document_popup_blocked';

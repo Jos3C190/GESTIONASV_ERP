@@ -7,6 +7,12 @@
   } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
   import FormField from '$lib/components/ui/FormField.svelte';
+  import {
+    DOCUMENT_ACCEPT,
+    DOCUMENT_MAX_BYTES,
+    documentContentType,
+    isSupportedDocumentFile
+  } from '$lib/features/documents/document-upload';
 
   interface Props {
     categories: DocumentCategoryOut[];
@@ -85,9 +91,6 @@
     }
   });
 
-  const allowed = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'odt', 'ods']);
-  const maxBytes = 50 * 1024 * 1024;
-
   function currentMetadata(): MetadataDraft {
     return {
       categoryId,
@@ -114,8 +117,7 @@
       selected = selected.slice(0, Math.max(0, queueLimit - queue.length));
     }
     const invalid = selected.find((file) => {
-      const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
-      return file.size < 1 || file.size > maxBytes || !allowed.has(extension);
+      return !isSupportedDocumentFile(file, DOCUMENT_MAX_BYTES);
     });
     if (invalid) {
       error = `«${invalid.name}» no es válido. Use documentos permitidos de hasta 50 MB.`;
@@ -217,7 +219,7 @@
       setItem(item.id, { state: 'authorizing' });
       const input = {
         file_name: item.file.name,
-        content_type: item.file.type || 'application/octet-stream',
+        content_type: documentContentType(item.file),
         size_bytes: item.file.size,
         checksum_sha256: sha,
         ...metadata(item.metadata)
@@ -350,7 +352,7 @@
       </svg>
       <span class="mt-2 text-sm font-medium text-foreground">Agregar documentos</span>
       <span class="mt-1 text-xs text-foreground-subtle"
-        >Arrastre aquí o seleccione PDF, Word, Excel, CSV, TXT, ODT u ODS · máximo 50 MB</span
+        >Arrastre aquí o seleccione PDF, Word, Excel, CSV, TXT, ODT, ODS o imágenes JPG, PNG, WEBP, GIF y SVG · máximo 50 MB</span
       >
       <span class="mt-2 text-[11px] text-foreground-muted"
         >{replaceDocumentId
@@ -365,7 +367,7 @@
       aria-label="Seleccionar documentos para cargar"
       type="file"
       multiple
-      accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.odt,.ods"
+      accept={DOCUMENT_ACCEPT}
       onchange={chooseFiles}
     />
   </div>

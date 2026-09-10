@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import tempfile
 import unicodedata
 import uuid
@@ -35,8 +36,23 @@ ALLOWED_DOCUMENT_TYPES: dict[str, frozenset[str]] = {
     ".txt": frozenset({"text/plain"}),
     ".odt": frozenset({"application/vnd.oasis.opendocument.text"}),
     ".ods": frozenset({"application/vnd.oasis.opendocument.spreadsheet"}),
+    ".jpg": frozenset({"image/jpeg"}),
+    ".jpeg": frozenset({"image/jpeg"}),
+    ".png": frozenset({"image/png"}),
+    ".webp": frozenset({"image/webp"}),
+    ".gif": frozenset({"image/gif"}),
+    ".svg": frozenset({"image/svg+xml"}),
 }
 ZIP_EXTENSIONS = frozenset({".docx", ".xlsx", ".odt", ".ods"})
+IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"})
+IMAGE_CONTENT_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".svg": "image/svg+xml",
+}
 OLE_SIGNATURE = bytes.fromhex("D0CF11E0A1B11AE1")
 OLE_STREAM_MARKERS = {
     ".doc": ("WordDocument".encode("utf-16le"),),
@@ -48,11 +64,32 @@ MAX_ZIP_RATIO = 100
 MAX_FILENAME_CHARS = 255
 MIN_PRINTABLE_CODEPOINT = 32
 SHA256_HEX_CHARS = 64
+JPEG_MIN_BYTES = 5
+PNG_MIN_BYTES = 24
+WEBP_MIN_BYTES = 20
+GIF_MIN_BYTES = 10
+SVG_MIN_BYTES = 20
+RIFF_HEADER_BYTES = 8
+RIFF_PAYLOAD_MIN_BYTES = 4
+SVG_FORBIDDEN_PATTERNS = (
+    r"<\s*script\b",
+    r"<\s*(?:foreignobject|iframe|object|embed)\b",
+    r"<!\s*(?:doctype|entity)",
+    r"\bon[a-z][\w:-]*\s*=",
+    r"\b(?:java|vb)script\s*:",
+    r"\b(?:href|xlink:href|src)\s*=\s*['\"]\s*(?:https?:|//|data:|javascript:)",
+    r"@import\b",
+    r"url\(\s*(?:https?:|//|data:|javascript:)",
+)
 DETECTED_CONTENT_TYPES = {
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ".odt": "application/vnd.oasis.opendocument.text",
     ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
 }
 
 
@@ -225,6 +262,85 @@ def _validate_ole_container(path: Path, extension: str) -> str:
     )
 
 
+def _validate_svg(path: Path) -> str:
+    try:
+        if path.stat().st_size < SVG_MIN_BYTES:
+            raise ValidationError("El SVG no es válido o seguro.", code="document_svg_invalid")
+        content = path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValidationError(
+            "El SVG debe usar codificación UTF-8.", code="document_svg_invalid"
+        ) from exc
+    except OSError as exc:
+        raise ValidationError("El SVG no se puede leer.", code="document_svg_invalid") from exc
+    has_svg_root = bool(
+        re.search(r"<\s*svg(?:\s|>)", content, flags=re.IGNORECASE)
+        and re.search(r"</\s*svg\s*>", content, flags=re.IGNORECASE)
+    )
+    has_unsafe_content = any(
+        re.search(pattern, content, flags=re.IGNORECASE) for pattern in SVG_FORBIDDEN_PATTERNS
+    )
+    if not has_svg_root or has_unsafe_content:
+        raise ValidationError("El SVG no es válido o seguro.", code="document_svg_invalid")
+    return IMAGE_CONTENT_TYPES[".svg"]
+
+
+def _validate_raster_image(path: Path, extension: str) -> str:
+    try:
+        size = path.stat().st_size
+        with path.open("rb") as source:
+            header = source.read(32)
+            source.seek(max(0, size - 2))
+            trailer = source.read(2)
+    except OSError as exc:
+        raise ValidationError(
+            "La imagen no se puede leer.", code="document_type_invalid"
+        ) from exc
+
+    if extension in {".jpg", ".jpeg"}:
+        valid = (
+            size >= JPEG_MIN_BYTES
+            and header.startswith(b"\xff\xd8\xff")
+            and trailer == b"\xff\xd9"
+        )
+    elif extension == ".png":
+        valid = (
+            size >= PNG_MIN_BYTES
+            and header.startswith(b"\x89PNG\r\n\x1a\n")
+            and header[12:16] == b"IHDR"
+            and int.from_bytes(header[16:20], "big") > 0
+            and int.from_bytes(header[20:24], "big") > 0
+        )
+    elif extension == ".gif":
+        valid = (
+            size >= GIF_MIN_BYTES
+            and header[:6] in {b"GIF87a", b"GIF89a"}
+            and int.from_bytes(header[6:8], "little") > 0
+            and int.from_bytes(header[8:10], "little") > 0
+        )
+    else:
+        riff_size = (
+            int.from_bytes(header[4:8], "little") if len(header) >= RIFF_HEADER_BYTES else 0
+        )
+        valid = (
+            size >= WEBP_MIN_BYTES
+            and header.startswith(b"RIFF")
+            and header[8:12] == b"WEBP"
+            and RIFF_PAYLOAD_MIN_BYTES <= riff_size <= size - RIFF_HEADER_BYTES
+        )
+
+    if not valid:
+        raise ValidationError(
+            "El contenido no corresponde a una imagen válida.", code="document_type_invalid"
+        )
+    return IMAGE_CONTENT_TYPES[extension]
+
+
+def _validate_image(path: Path, extension: str) -> str:
+    """Validate supported image signatures and static SVG markup."""
+    return _validate_svg(path) if extension == ".svg" else _validate_raster_image(path, extension)
+
+
 def inspect_document(path: Path, extension: str) -> tuple[str, str]:
     checksum = hashlib.sha256()
     with path.open("rb") as source:
@@ -247,6 +363,8 @@ def inspect_document(path: Path, extension: str) -> tuple[str, str]:
         if not header.startswith(b"PK"):
             raise ValidationError("El documento Office no es válido.", code="document_type_invalid")
         detected = _validate_zip(path, extension)
+    elif extension in IMAGE_EXTENSIONS:
+        detected = _validate_image(path, extension)
     else:
         try:
             path.read_text(encoding="utf-8-sig")
@@ -609,9 +727,11 @@ class DocumentService:
         variant: str = "original",
     ) -> tuple[str, datetime]:
         document = await self.get(company_id, document_id)
-        if document.status != "active" or document.extension != ".pdf":
+        if document.status != "active" or (
+            document.extension != ".pdf" and document.extension not in IMAGE_EXTENSIONS
+        ):
             raise ConflictError(
-                "Solo los PDF activos pueden previsualizarse.",
+                "Solo los PDF e imágenes activas pueden previsualizarse.",
                 code="document_preview_not_available",
             )
         expires_at = datetime.now(UTC) + timedelta(
@@ -619,9 +739,14 @@ class DocumentService:
         )
         object_key = document.object_key
         filename = document.original_filename
-        content_type = document.detected_content_type or "application/pdf"
+        content_type = document.detected_content_type or document.declared_content_type
         action = "DOCUMENT_PREVIEW_URL_ISSUED"
         if variant == "ocr":
+            if document.extension != ".pdf":
+                raise ConflictError(
+                    "Solo los PDF admiten vista previa OCR.",
+                    code="document_preview_not_available",
+                )
             derivative = await self._derivatives.get_ocr(document.id) if self._derivatives else None
             if derivative is None or derivative.status != "ready":
                 raise ConflictError(

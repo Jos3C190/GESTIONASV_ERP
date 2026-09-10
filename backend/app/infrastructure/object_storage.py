@@ -151,9 +151,9 @@ class S3ObjectStorage:
     ) -> str:
         """Issue a short-lived inline URL for browser previews.
 
-        The object key never leaves this adapter.  Only PDFs are requested by
-        the application, but the content type is kept explicit for defense in
-        depth and correct browser handling.
+        The object key never leaves this adapter.  PDFs and supported images
+        are requested by the application, with the content type kept explicit
+        for defense in depth and correct browser handling.
         """
         try:
             client = self._client(self._settings.OBJECT_STORAGE_PUBLIC_ENDPOINT)

@@ -1,4 +1,5 @@
 import type { ExplorerDocument } from './types';
+import { isBrowserPreviewable } from '$lib/features/documents/open-document';
 
 export type ExplorerAction = 'open' | 'select' | 'rename' | 'move' | 'delete' | 'restore';
 export function canDropIntoFolder(
@@ -30,10 +31,9 @@ export function keyboardAction(
   return 'none';
 }
 
-export function documentOpenAction(document: ExplorerDocument): 'open-pdf' | 'download' {
-  return document.extension.toLowerCase() === '.pdf' && document.technical_status === 'active'
-    ? 'open-pdf'
-    : 'download';
+export function documentOpenAction(document: ExplorerDocument): 'open-pdf' | 'open-image' | 'download' {
+  if (!isBrowserPreviewable(document.extension, document.technical_status)) return 'download';
+  return document.extension.toLowerCase() === '.pdf' ? 'open-pdf' : 'open-image';
 }
 
 export function canExplorerAction(

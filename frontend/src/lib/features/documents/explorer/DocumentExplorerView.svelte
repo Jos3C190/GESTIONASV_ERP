@@ -154,7 +154,7 @@
 
   async function openFile(item: Extract<ExplorerItem, { kind: 'file' }>) {
     try {
-      if (documentOpenAction(item.document) === 'open-pdf') {
+      if (documentOpenAction(item.document) !== 'download') {
         await openDocumentInBrowser(item.document.id);
       } else {
         const result = await api.documents.downloadUrl(item.document.id);
