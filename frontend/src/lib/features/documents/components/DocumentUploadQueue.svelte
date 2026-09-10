@@ -352,7 +352,8 @@
       </svg>
       <span class="mt-2 text-sm font-medium text-foreground">Agregar documentos</span>
       <span class="mt-1 text-xs text-foreground-subtle"
-        >Arrastre aquí o seleccione PDF, Word, Excel, CSV, TXT, ODT, ODS o imágenes JPG, PNG, WEBP, GIF y SVG · máximo 50 MB</span
+        >Arrastre aquí o seleccione PDF, Word, Excel, PowerPoint, OpenDocument, RTF, CSV, TXT, MD,
+        JSON, XML o imágenes JPG, PNG, WEBP, GIF, SVG y TIFF · máximo 50 MB</span
       >
       <span class="mt-2 text-[11px] text-foreground-muted"
         >{replaceDocumentId

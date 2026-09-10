@@ -1,12 +1,5 @@
 export type DocumentFileTone =
-  | 'pdf'
-  | 'doc'
-  | 'sheet'
-  | 'slides'
-  | 'archive'
-  | 'text'
-  | 'image'
-  | 'file';
+  'pdf' | 'doc' | 'sheet' | 'slides' | 'archive' | 'text' | 'image' | 'file';
 
 const GROUPS: Record<Exclude<DocumentFileTone, 'file'>, ReadonlySet<string>> = {
   pdf: new Set(['pdf']),
@@ -15,7 +8,7 @@ const GROUPS: Record<Exclude<DocumentFileTone, 'file'>, ReadonlySet<string>> = {
   slides: new Set(['ppt', 'pptx', 'odp']),
   archive: new Set(['zip', 'rar', '7z', 'tar', 'gz']),
   text: new Set(['txt', 'md', 'json', 'xml', 'yaml', 'yml']),
-  image: new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'])
+  image: new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'tif', 'tiff'])
 };
 
 export function normalizeDocumentExtension(extension: string | undefined): string {
@@ -36,6 +29,9 @@ export function documentFileLabel(extension: string | undefined): string {
   const normalized = normalizeDocumentExtension(extension);
   if (normalized === 'docx') return 'DOC';
   if (normalized === 'xlsx') return 'XLS';
-  if (normalized === 'pptx') return 'PPT';
+  if (normalized === 'ppt' || normalized === 'pptx') return 'PPT';
+  if (normalized === 'odp') return 'ODP';
+  if (normalized === 'rtf') return 'RTF';
+  if (normalized === 'tif' || normalized === 'tiff') return 'TIF';
   return normalized.slice(0, 4).toUpperCase() || 'FILE';
 }

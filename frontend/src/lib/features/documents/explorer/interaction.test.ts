@@ -23,6 +23,20 @@ describe('document opening actions', () => {
     expect(documentOpenAction({ ...baseDocument, extension: '.pdf' })).toBe('open-pdf');
   });
 
+  it.each(['.ppt', '.pptx', '.odp', '.rtf', '.tif', '.tiff', '.md', '.json', '.xml'])(
+    'downloads active %s files because they have no browser preview',
+    (extension) => {
+      expect(documentOpenAction({ ...baseDocument, extension })).toBe('download');
+    }
+  );
+
+  it.each(['.ppt', '.pptx', '.odp', '.rtf', '.tif', '.tiff', '.md', '.json', '.xml'])(
+    'downloads active %s files because they have no browser preview',
+    (extension) => {
+      expect(documentOpenAction({ ...baseDocument, extension })).toBe('download');
+    }
+  );
+
   it('downloads inactive images instead of previewing them', () => {
     expect(
       documentOpenAction({ ...baseDocument, extension: '.png', technical_status: 'quarantined' })
