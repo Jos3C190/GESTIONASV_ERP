@@ -373,7 +373,9 @@ def test_inspects_new_document_formats(tmp_path: Path) -> None:
         )
         archive.writestr("ppt/presentation.xml", b"presentation")
     ppt = tmp_path / "presentacion.ppt"
-    ppt.write_bytes(bytes.fromhex("D0CF11E0A1B11AE1") + b"padding" + "PowerPoint Document".encode("utf-16le"))
+    ppt.write_bytes(
+        bytes.fromhex("D0CF11E0A1B11AE1") + b"padding" + "PowerPoint Document".encode("utf-16le")
+    )
     odp = tmp_path / "presentacion.odp"
     with zipfile.ZipFile(odp, "w") as archive:
         archive.writestr("mimetype", "application/vnd.oasis.opendocument.presentation")

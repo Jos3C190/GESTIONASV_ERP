@@ -32,7 +32,9 @@ from app.infrastructure.observability import (
 log = get_logger(__name__)
 
 
-def _record_item_metrics(*, stale_scans: int, stale_ocr: int, purged: int, expired_imports: int, failures: int) -> None:
+def _record_item_metrics(
+    *, stale_scans: int, stale_ocr: int, purged: int, expired_imports: int, failures: int
+) -> None:
     outcomes = {
         "document_scan_reset": stale_scans,
         "ocr_reset": stale_ocr,
@@ -51,30 +53,40 @@ def _record_item_metrics(*, stale_scans: int, stale_ocr: int, purged: int, expir
 
 async def _expire_imports(session: AsyncSession, now: datetime) -> int:
     rows = (
-        await session.execute(
-            select(DocumentGeneralImportModel)
-            .where(
-                DocumentGeneralImportModel.expires_at.is_not(None),
-                DocumentGeneralImportModel.expires_at <= now,
-                DocumentGeneralImportModel.status.in_(("preparing", "ready", "running")),
+        (
+            await session.execute(
+                select(DocumentGeneralImportModel)
+                .where(
+                    DocumentGeneralImportModel.expires_at.is_not(None),
+                    DocumentGeneralImportModel.expires_at <= now,
+                    DocumentGeneralImportModel.status.in_(("preparing", "ready", "running")),
+                )
+                .with_for_update(skip_locked=True)
+                .limit(100)
             )
-            .with_for_update(skip_locked=True)
-            .limit(100)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for row in rows:
         pending_items = (
-            await session.execute(
-                select(DocumentGeneralImportItemModel).where(
-                    DocumentGeneralImportItemModel.import_id == row.id,
-                    DocumentGeneralImportItemModel.status.in_(("ready", "authorized")),
+            (
+                await session.execute(
+                    select(DocumentGeneralImportItemModel).where(
+                        DocumentGeneralImportItemModel.import_id == row.id,
+                        DocumentGeneralImportItemModel.status.in_(("ready", "authorized")),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for item in pending_items:
             item.status = "cancelled"
             item.failure_code = "document_import_expired"
-            item.failure_message = "La sesión de importación expiró antes de completar este archivo."
+            item.failure_message = (
+                "La sesión de importación expiró antes de completar este archivo."
+            )
         row.status = "expired"
         row.completed_at = now
         session.add(

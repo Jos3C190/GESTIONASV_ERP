@@ -103,7 +103,6 @@ class GeneralFolderTreeOut(BaseModel):
     items: list[GeneralEntryOut]
 
 
-
 class GeneralImportManifestItemIn(BaseModel):
     kind: Literal["folder", "file"]
     relative_path: str = Field(min_length=1, max_length=2000)
@@ -118,8 +117,13 @@ class GeneralImportPrepareIn(BaseModel):
 
 
 GeneralImportItemStatus = Literal[
-    "ready", "authorized", "completed", "skipped", "failed_retryable",
-    "failed_permanent", "cancelled"
+    "ready",
+    "authorized",
+    "completed",
+    "skipped",
+    "failed_retryable",
+    "failed_permanent",
+    "cancelled",
 ]
 
 
@@ -169,6 +173,7 @@ class GeneralImportTicketIn(BaseModel):
 class GeneralImportTicketOut(BaseModel):
     item: GeneralImportItemOut
     ticket: InitiateDocumentOut
+
 
 __all__ = [
     "GeneralBatchMoveIn",

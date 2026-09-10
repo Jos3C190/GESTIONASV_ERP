@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -22,6 +23,10 @@ from app.api.v1.schemas.document_general import (
 )
 from app.api.v1.schemas.documents import InitiateDocumentOut
 from app.application.documents.general_import_service import DocumentGeneralImportService
+from app.domain.entities.document_general_import import (
+    DocumentGeneralImport,
+    DocumentGeneralImportItem,
+)
 
 router = APIRouter(
     prefix="/documents/general/imports",
@@ -39,28 +44,55 @@ async def _company(request: Request, session: SessionDep, current: CurrentUser) 
     return company_id
 
 
-def _item(item: object) -> GeneralImportItemOut:
+def _item(item: DocumentGeneralImportItem) -> GeneralImportItemOut:
     value = item
     return GeneralImportItemOut(
-        id=value.id, kind=value.kind, source_path=value.source_path, source_name=value.source_name,
-        resolved_path=value.resolved_path, resolved_name=value.resolved_name,
-        parent_folder_id=value.parent_folder_id, entry_id=value.entry_id, document_id=value.document_id,
-        size_bytes=value.size_bytes, content_type=value.content_type, extension=value.extension,
-        status=value.status, failure_code=value.failure_code, failure_message=value.failure_message,
+        id=value.id,
+        kind=value.kind,
+        source_path=value.source_path,
+        source_name=value.source_name,
+        resolved_path=value.resolved_path,
+        resolved_name=value.resolved_name,
+        parent_folder_id=value.parent_folder_id,
+        entry_id=value.entry_id,
+        document_id=value.document_id,
+        size_bytes=value.size_bytes,
+        content_type=value.content_type,
+        extension=value.extension,
+        status=value.status,
+        failure_code=value.failure_code,
+        failure_message=value.failure_message,
         attempts=value.attempts,
     )
 
 
-def _out(import_row: object, items: list[object], total: int, page: int, size: int) -> GeneralImportOut:
+def _out(
+    import_row: DocumentGeneralImport,
+    items: Sequence[DocumentGeneralImportItem],
+    total: int,
+    page: int,
+    size: int,
+) -> GeneralImportOut:
     return GeneralImportOut(
-        id=import_row.id, parent_id=import_row.parent_id, root_entry_id=import_row.root_entry_id,
-        status=import_row.status, total_files=import_row.total_files, total_folders=import_row.total_folders,
-        total_entries=import_row.total_entries, total_bytes=import_row.total_bytes,
-        completed_files=import_row.completed_files, skipped_files=import_row.skipped_files,
-        failed_files=import_row.failed_files, created_at=import_row.created_at,
-        updated_at=import_row.updated_at, completed_at=import_row.completed_at,
-        expires_at=import_row.expires_at, items=[_item(item) for item in items],
-        meta=PageMeta(page=page, size=size, total=total, pages=(total + size - 1) // size if total else 1),
+        id=import_row.id,
+        parent_id=import_row.parent_id,
+        root_entry_id=import_row.root_entry_id,
+        status=import_row.status,
+        total_files=import_row.total_files,
+        total_folders=import_row.total_folders,
+        total_entries=import_row.total_entries,
+        total_bytes=import_row.total_bytes,
+        completed_files=import_row.completed_files,
+        skipped_files=import_row.skipped_files,
+        failed_files=import_row.failed_files,
+        created_at=import_row.created_at,
+        updated_at=import_row.updated_at,
+        completed_at=import_row.completed_at,
+        expires_at=import_row.expires_at,
+        items=[_item(item) for item in items],
+        meta=PageMeta(
+            page=page, size=size, total=total, pages=(total + size - 1) // size if total else 1
+        ),
     )
 
 
@@ -75,7 +107,10 @@ async def prepare_import(
     company_id = await _company(request, session, current)
     metadata = body.metadata.model_dump(mode="json", exclude_none=True)
     import_row, items = await service.prepare(
-        company_id, current.id, body.parent_id, metadata,
+        company_id,
+        current.id,
+        body.parent_id,
+        metadata,
         [item.model_dump() for item in body.items],
     )
     return _out(import_row, list(items), len(items), 1, len(items))

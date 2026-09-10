@@ -10,6 +10,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
+from typing import Literal
 
 from defusedxml import ElementTree as DefusedElementTree
 from defusedxml.common import DefusedXmlException
@@ -37,7 +38,9 @@ ALLOWED_DOCUMENT_TYPES: dict[str, frozenset[str]] = {
     ".xls": frozenset({"application/vnd.ms-excel", "application/octet-stream"}),
     ".xlsx": frozenset({"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),
     ".ppt": frozenset({"application/vnd.ms-powerpoint", "application/octet-stream"}),
-    ".pptx": frozenset({"application/vnd.openxmlformats-officedocument.presentationml.presentation"}),
+    ".pptx": frozenset(
+        {"application/vnd.openxmlformats-officedocument.presentationml.presentation"}
+    ),
     ".csv": frozenset({"text/csv", "application/csv", "text/plain"}),
     ".txt": frozenset({"text/plain"}),
     ".md": frozenset({"text/markdown", "text/plain"}),
@@ -228,17 +231,14 @@ def _validate_zip_structure(
     if extension in {".docx", ".xlsx", ".pptx"} and "[Content_Types].xml" not in names:
         raise ValidationError("El documento Office no es válido.", code="document_type_invalid")
     required_prefix = (
-        extension == ".docx" and "word/"
-    ) or (
-        extension == ".xlsx" and "xl/"
-    ) or (
-        extension == ".pptx" and "ppt/"
+        (extension == ".docx" and "word/")
+        or (extension == ".xlsx" and "xl/")
+        or (extension == ".pptx" and "ppt/")
     )
     if required_prefix and not any(name.startswith(required_prefix) for name in names):
         raise ValidationError("El documento Office no es válido.", code="document_type_invalid")
     if extension == ".pptx" and (
-        content_types_payload is None
-        or b"presentationml.presentation" not in content_types_payload
+        content_types_payload is None or b"presentationml.presentation" not in content_types_payload
     ):
         raise ValidationError("El documento PowerPoint no es válido.", code="document_type_invalid")
     if extension in {".odt", ".ods", ".odp"} and (
@@ -325,7 +325,9 @@ def _validate_rtf(path: Path) -> str:
     except OSError as exc:
         raise ValidationError("El RTF no se puede leer.", code="document_type_invalid") from exc
     if not prefix.startswith(b"{\\rtf") or trailing != b"}":
-        raise ValidationError("El contenido no corresponde a un RTF válido.", code="document_type_invalid")
+        raise ValidationError(
+            "El contenido no corresponde a un RTF válido.", code="document_type_invalid"
+        )
     return DETECTED_CONTENT_TYPES[".rtf"]
 
 
@@ -338,7 +340,7 @@ def _validate_tiff(path: Path) -> bool:
             if len(header) >= TIFF_MIN_BYTES:
                 byte_order = header[:2]
                 if byte_order in {b"II", b"MM"}:
-                    endian = "little" if byte_order == b"II" else "big"
+                    endian: Literal["little", "big"] = "little" if byte_order == b"II" else "big"
                     magic = int.from_bytes(header[2:4], endian)
                     valid_header = False
                     if magic == TIFF_CLASSIC_MAGIC:
@@ -358,7 +360,11 @@ def _validate_tiff(path: Path) -> bool:
                         ifd_offset = 0
                         count_size = 0
                         entry_size = 0
-                    if valid_header and ifd_offset >= TIFF_MIN_BYTES and ifd_offset + count_size <= size:
+                    if (
+                        valid_header
+                        and ifd_offset >= TIFF_MIN_BYTES
+                        and ifd_offset + count_size <= size
+                    ):
                         source.seek(ifd_offset)
                         count_bytes = source.read(count_size)
                         if len(count_bytes) == count_size:
@@ -371,6 +377,7 @@ def _validate_tiff(path: Path) -> bool:
         valid = False
     return valid
 
+
 def _validate_text_document(path: Path, extension: str) -> str:
     try:
         if extension == ".json":
@@ -380,10 +387,18 @@ def _validate_text_document(path: Path, extension: str) -> str:
             DefusedElementTree.parse(path)
         else:
             path.read_text(encoding="utf-8-sig")
-    except (DefusedElementTree.ParseError, DefusedXmlException, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (
+        DefusedElementTree.ParseError,
+        DefusedXmlException,
+        OSError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+    ) as exc:
         raise ValidationError(
             f"El contenido no corresponde a un archivo {extension.lstrip('.').upper()} válido.",
-            code="document_encoding_invalid" if extension in TEXT_EXTENSIONS else "document_type_invalid",
+            code="document_encoding_invalid"
+            if extension in TEXT_EXTENSIONS
+            else "document_type_invalid",
         ) from exc
     if extension == ".md":
         return "text/markdown"
@@ -392,6 +407,7 @@ def _validate_text_document(path: Path, extension: str) -> str:
     if extension == ".xml":
         return "application/xml"
     return "text/csv" if extension == ".csv" else "text/plain"
+
 
 def _validate_svg(path: Path) -> str:
     try:
@@ -424,15 +440,11 @@ def _validate_raster_image(path: Path, extension: str) -> str:
             source.seek(max(0, size - 2))
             trailer = source.read(2)
     except OSError as exc:
-        raise ValidationError(
-            "La imagen no se puede leer.", code="document_type_invalid"
-        ) from exc
+        raise ValidationError("La imagen no se puede leer.", code="document_type_invalid") from exc
 
     if extension in {".jpg", ".jpeg"}:
         valid = (
-            size >= JPEG_MIN_BYTES
-            and header.startswith(b"\xff\xd8\xff")
-            and trailer == b"\xff\xd9"
+            size >= JPEG_MIN_BYTES and header.startswith(b"\xff\xd8\xff") and trailer == b"\xff\xd9"
         )
     elif extension == ".png":
         valid = (
@@ -452,9 +464,7 @@ def _validate_raster_image(path: Path, extension: str) -> str:
     elif extension in {".tif", ".tiff"}:
         valid = _validate_tiff(path)
     else:
-        riff_size = (
-            int.from_bytes(header[4:8], "little") if len(header) >= RIFF_HEADER_BYTES else 0
-        )
+        riff_size = int.from_bytes(header[4:8], "little") if len(header) >= RIFF_HEADER_BYTES else 0
         valid = (
             size >= WEBP_MIN_BYTES
             and header.startswith(b"RIFF")
@@ -499,9 +509,13 @@ def inspect_document(path: Path, extension: str) -> tuple[str, str]:
     elif extension in IMAGE_EXTENSIONS:
         detected = _validate_image(path, extension)
     elif extension in {".rtf", ".json", ".xml"} or extension in TEXT_EXTENSIONS:
-        detected = _validate_rtf(path) if extension == ".rtf" else _validate_text_document(path, extension)
+        detected = (
+            _validate_rtf(path) if extension == ".rtf" else _validate_text_document(path, extension)
+        )
     else:
-        raise ValidationError("El formato del documento no está permitido.", code="document_type_invalid")
+        raise ValidationError(
+            "El formato del documento no está permitido.", code="document_type_invalid"
+        )
     return detected, checksum.hexdigest()
 
 

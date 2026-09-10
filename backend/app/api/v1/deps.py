@@ -165,12 +165,15 @@ def get_document_general_service(
 ) -> DocumentGeneralService:
     return DocumentGeneralService(repository, audit, max_depth=settings.DOCUMENT_GENERAL_MAX_DEPTH)
 
+
 def get_document_general_import_repository(session: SessionDep) -> DocumentGeneralImportRepository:
     return SqlAlchemyDocumentGeneralImportRepository(session)
 
 
 def get_document_general_import_service(
-    imports: Annotated[DocumentGeneralImportRepository, Depends(get_document_general_import_repository)],
+    imports: Annotated[
+        DocumentGeneralImportRepository, Depends(get_document_general_import_repository)
+    ],
     entries: Annotated[DocumentGeneralRepository, Depends(get_document_general_repository)],
     general: Annotated[DocumentGeneralService, Depends(get_document_general_service)],
     records: Annotated[DocumentRecordService, Depends(get_document_record_service)],

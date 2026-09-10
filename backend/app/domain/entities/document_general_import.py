@@ -7,9 +7,20 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
-GeneralImportStatus = Literal["preparing", "ready", "running", "completed", "partial", "cancelled", "expired"]
+GeneralImportStatus = Literal[
+    "preparing", "ready", "running", "completed", "partial", "cancelled", "expired"
+]
 GeneralImportItemKind = Literal["folder", "file"]
-GeneralImportItemStatus = Literal["ready", "authorized", "completed", "skipped", "failed_retryable", "failed_permanent", "cancelled"]
+GeneralImportItemStatus = Literal[
+    "ready",
+    "authorized",
+    "completed",
+    "skipped",
+    "failed_retryable",
+    "failed_permanent",
+    "cancelled",
+]
+
 
 @dataclass(slots=True)
 class DocumentGeneralImport:
@@ -31,6 +42,7 @@ class DocumentGeneralImport:
     updated_at: datetime | None = None
     completed_at: datetime | None = None
     expires_at: datetime | None = None
+
 
 @dataclass(slots=True)
 class DocumentGeneralImportItem:
@@ -54,4 +66,11 @@ class DocumentGeneralImportItem:
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-__all__ = ["DocumentGeneralImport", "DocumentGeneralImportItem", "GeneralImportItemKind", "GeneralImportItemStatus", "GeneralImportStatus"]
+
+__all__ = [
+    "DocumentGeneralImport",
+    "DocumentGeneralImportItem",
+    "GeneralImportItemKind",
+    "GeneralImportItemStatus",
+    "GeneralImportStatus",
+]
