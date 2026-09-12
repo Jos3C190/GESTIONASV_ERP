@@ -310,6 +310,7 @@ def _quotation_for_detail(
 ) -> PurchaseQuotation:
     quotation_id = uuid.uuid4()
     link_id = uuid.uuid4()
+    quotation_detail_id = uuid.uuid4()
     return PurchaseQuotation(
         id=quotation_id,
         company_id=graph.company.id,
@@ -328,10 +329,21 @@ def _quotation_for_detail(
                     PurchaseQuotationRequestDetail(
                         id=uuid.uuid4(),
                         purchase_quotation_request_id=link_id,
+                        purchase_quotation_detail_id=quotation_detail_id,
                         purchase_request_detail_id=request_detail.id,
                         quantity=request_detail.quantity,
                     ),
                 ),
+            ),
+        ),
+        details=(
+            PurchaseQuotationDetail(
+                id=quotation_detail_id,
+                purchase_quotation_id=quotation_id,
+                product_id=request_detail.product_id,
+                unit_id=request_detail.unit_id,
+                quantity=request_detail.quantity,
+                unit_price=Decimal("0"),
             ),
         ),
     )
@@ -353,7 +365,7 @@ def _received_version(
         request_links=quotation.request_links,
         details=(
             PurchaseQuotationDetail(
-                id=uuid.uuid4(),
+                id=quotation.details[0].id,
                 purchase_quotation_id=quotation.id,
                 product_id=request_detail.product_id,
                 unit_id=request_detail.unit_id,
@@ -427,6 +439,7 @@ async def test_repository_resolves_tenant_scoped_supplier_currency_and_coverage(
     assert reference is not None
     assert len(reference.details) == 2
     assert coverage[0].purchase_request_detail_id == request.details[0].id
+    assert coverage[0].purchase_quotation_detail_id == saved.details[0].id
     assert await repository.is_expense_type_active(graph.company.id, graph.expense_type.id)
     assert not await repository.is_expense_type_active(uuid.uuid4(), graph.expense_type.id)
 
@@ -506,6 +519,7 @@ async def test_repository_lists_only_comparable_quotes_for_requested_purchase_re
         currency=draft.currency,
         created_by_id=draft.created_by_id,
         request_links=draft.request_links,
+        details=draft.details,
         status=PurchaseQuotationStatus.DRAFT,
     )
     await repository.add_quotation(draft)

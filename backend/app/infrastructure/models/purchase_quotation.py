@@ -212,6 +212,9 @@ class PurchaseQuotationRequestDetailModel(UUIDPKMixin, TimestampMixin, Base):
     purchase_quotation_request_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), nullable=False
     )
+    purchase_quotation_detail_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False
+    )
     purchase_request_detail_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), nullable=False
     )
@@ -227,6 +230,12 @@ class PurchaseQuotationRequestDetailModel(UUIDPKMixin, TimestampMixin, Base):
             ["purchase_quotation_request_id", "company_id"],
             ["purchase_quotation_requests.id", "purchase_quotation_requests.company_id"],
             name="fk_purchase_quotation_request_details_link_company",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["purchase_quotation_detail_id", "company_id"],
+            ["purchase_quotation_details.id", "purchase_quotation_details.company_id"],
+            name="fk_purchase_quotation_request_details_quotation_detail_company",
             ondelete="CASCADE",
         ),
         ForeignKeyConstraint(
@@ -247,6 +256,10 @@ class PurchaseQuotationRequestDetailModel(UUIDPKMixin, TimestampMixin, Base):
         Index(
             "ix_purchase_quotation_request_details_request_detail",
             "purchase_request_detail_id",
+        ),
+        Index(
+            "ix_purchase_quotation_request_details_quotation_detail",
+            "purchase_quotation_detail_id",
         ),
     )
 
@@ -302,6 +315,11 @@ class PurchaseQuotationDetailModel(UUIDPKMixin, TimestampMixin, Base):
             ["company_units.company_id", "company_units.unit_id"],
             name="fk_purchase_quotation_details_unit_company",
             ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "id",
+            "company_id",
+            name="uq_purchase_quotation_details_id_company_id",
         ),
         CheckConstraint("quantity > 0", name="ck_purchase_quotation_details_quantity_positive"),
         CheckConstraint("unit_price >= 0", name="ck_purchase_quotation_details_unit_price"),

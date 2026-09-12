@@ -135,7 +135,11 @@ class PurchaseQuotationUseCases:
         normalized_currency = currency.strip().upper()
         await self._validate_currency(normalized_currency)
         quotation_id = uuid.uuid4()
-        request_links = await self._build_request_links(company_id, quotation_id, requests)
+        request_links, quotation_details = await self._build_request_links(
+            company_id,
+            quotation_id,
+            requests,
+        )
         code = await self._repository.allocate_next_code(company_id)
         quotation = self._build_quotation(
             quotation_id=quotation_id,
@@ -145,6 +149,7 @@ class PurchaseQuotationUseCases:
             currency=normalized_currency,
             created_by_id=created_by_id,
             request_links=request_links,
+            details=quotation_details,
             notes=notes,
         )
         return await self._repository.add_quotation(quotation)
@@ -302,7 +307,7 @@ class PurchaseQuotationUseCases:
         company_id: uuid.UUID,
         quotation_id: uuid.UUID,
         requests: tuple[PurchaseQuotationRequestDraft, ...],
-    ) -> tuple[PurchaseQuotationRequest, ...]:
+    ) -> tuple[tuple[PurchaseQuotationRequest, ...], tuple[PurchaseQuotationDetail, ...]]:
         if not requests:
             raise ValidationError(
                 "La cotización debe vincular al menos una solicitud de compra.",
@@ -315,6 +320,8 @@ class PurchaseQuotationUseCases:
                 code="purchase_quotation_duplicate_request",
             )
         links: list[PurchaseQuotationRequest] = []
+        quotation_detail_ids: dict[tuple[int, int], uuid.UUID] = {}
+        quotation_detail_quantities: dict[tuple[int, int], Decimal] = {}
         for draft in requests:
             reference = await self._repository.get_request_reference(
                 company_id,
@@ -322,14 +329,35 @@ class PurchaseQuotationUseCases:
             )
             reference = self._require_request(reference)
             self._ensure_request_quotable(reference)
-            links.append(self._build_request_link(quotation_id, reference, draft))
-        return tuple(links)
+            links.append(
+                self._build_request_link(
+                    quotation_id,
+                    reference,
+                    draft,
+                    quotation_detail_ids,
+                    quotation_detail_quantities,
+                )
+            )
+        details = tuple(
+            PurchaseQuotationDetail(
+                id=quotation_detail_ids[key],
+                purchase_quotation_id=quotation_id,
+                product_id=key[0],
+                unit_id=key[1],
+                quantity=quantity,
+                unit_price=Decimal("0"),
+            )
+            for key, quantity in quotation_detail_quantities.items()
+        )
+        return tuple(links), details
 
     @staticmethod
     def _build_request_link(
         quotation_id: uuid.UUID,
         reference: PurchaseQuotationRequestReference,
         draft: PurchaseQuotationRequestDraft,
+        quotation_detail_ids: dict[tuple[int, int], uuid.UUID],
+        quotation_detail_quantities: dict[tuple[int, int], Decimal],
     ) -> PurchaseQuotationRequest:
         if not draft.lines:
             raise ValidationError(
@@ -357,6 +385,11 @@ class PurchaseQuotationUseCases:
                     "La cantidad solicitada para cotizar supera la cantidad de la solicitud.",
                     code="purchase_quotation_request_quantity_exceeded",
                 )
+            key = (source.product_id, source.unit_id)
+            purchase_quotation_detail_id = quotation_detail_ids.setdefault(key, uuid.uuid4())
+            quotation_detail_quantities[key] = (
+                quotation_detail_quantities.get(key, Decimal("0")) + line.quantity
+            )
             try:
                 details.append(
                     PurchaseQuotationRequestDetail(
@@ -364,6 +397,7 @@ class PurchaseQuotationUseCases:
                         purchase_quotation_request_id=link_id,
                         purchase_request_detail_id=source.id,
                         quantity=line.quantity,
+                        purchase_quotation_detail_id=purchase_quotation_detail_id,
                     )
                 )
             except ValueError as exc:
@@ -396,25 +430,44 @@ class PurchaseQuotationUseCases:
                 "Un producto y unidad no pueden repetirse en la respuesta.",
                 code="purchase_quotation_duplicate_response_detail",
             )
-        details: list[PurchaseQuotationDetail] = []
-        for line in lines:
-            maximum = allowed.get((line.product_id, line.unit_id))
-            if maximum is None:
+        for key in keys:
+            if key not in allowed:
                 raise ValidationError(
                     "La respuesta contiene un producto o unidad fuera del alcance solicitado.",
                     code="purchase_quotation_response_out_of_scope",
                 )
+        if set(keys) != set(allowed):
+            raise ValidationError(
+                "La respuesta debe incluir todos los productos y unidades solicitados al proveedor.",
+                code="purchase_quotation_response_incomplete",
+            )
+        details: list[PurchaseQuotationDetail] = []
+        for line in lines:
+            purchase_quotation_detail_id, maximum = allowed[(line.product_id, line.unit_id)]
             if line.quantity > maximum:
                 raise ValidationError(
                     "La cantidad cotizada supera la cantidad solicitada al proveedor.",
                     code="purchase_quotation_response_quantity_exceeded",
                 )
-            details.append(self._build_response_detail(quotation_id, line))
+            if line.quantity < maximum:
+                raise ValidationError(
+                    "La cantidad cotizada debe coincidir con la solicitada; "
+                    "use available_quantity para disponibilidad parcial.",
+                    code="purchase_quotation_response_quantity_incomplete",
+                )
+            details.append(
+                self._build_response_detail(
+                    quotation_id,
+                    purchase_quotation_detail_id,
+                    line,
+                )
+            )
         return tuple(details)
 
     def _build_response_detail(
         self,
         quotation_id: uuid.UUID,
+        purchase_quotation_detail_id: uuid.UUID,
         line: PurchaseQuotationResponseLineDraft,
     ) -> PurchaseQuotationDetail:
         subtotal = self._money(line.quantity * line.unit_price)
@@ -423,7 +476,7 @@ class PurchaseQuotationUseCases:
         total = self._money(discounted_base + tax_amount)
         try:
             return PurchaseQuotationDetail(
-                id=uuid.uuid4(),
+                id=purchase_quotation_detail_id,
                 purchase_quotation_id=quotation_id,
                 product_id=line.product_id,
                 unit_id=line.unit_id,
@@ -573,6 +626,7 @@ class PurchaseQuotationUseCases:
         currency: str,
         created_by_id: uuid.UUID,
         request_links: tuple[PurchaseQuotationRequest, ...],
+        details: tuple[PurchaseQuotationDetail, ...],
         notes: str | None,
     ) -> PurchaseQuotation:
         try:
@@ -585,6 +639,7 @@ class PurchaseQuotationUseCases:
                 currency=currency,
                 created_by_id=created_by_id,
                 request_links=request_links,
+                details=details,
                 notes=notes,
             )
         except ValueError as exc:
@@ -642,11 +697,21 @@ class PurchaseQuotationUseCases:
     @staticmethod
     def _aggregate_coverage(
         coverage: tuple[PurchaseQuotationCoverageReference, ...],
-    ) -> dict[tuple[int, int], Decimal]:
-        aggregated: dict[tuple[int, int], Decimal] = {}
+    ) -> dict[tuple[int, int], tuple[uuid.UUID, Decimal]]:
+        aggregated: dict[tuple[int, int], tuple[uuid.UUID, Decimal]] = {}
         for item in coverage:
             key = (item.product_id, item.unit_id)
-            aggregated[key] = aggregated.get(key, Decimal("0")) + item.quantity
+            current = aggregated.get(key)
+            if current is None:
+                aggregated[key] = (item.purchase_quotation_detail_id, item.quantity)
+                continue
+            purchase_quotation_detail_id, quantity = current
+            if purchase_quotation_detail_id != item.purchase_quotation_detail_id:
+                raise ValidationError(
+                    "La trazabilidad de la cotización contiene detalles incompatibles.",
+                    code="purchase_quotation_traceability_invalid",
+                )
+            aggregated[key] = (purchase_quotation_detail_id, quantity + item.quantity)
         return aggregated
 
     @staticmethod

@@ -163,9 +163,12 @@ async def _create_requested(
             ),
         ),
     )
+    quotation_detail_id = quotation.request_links[0].details[0].purchase_quotation_detail_id
+    assert quotation_detail_id is not None
     repository.coverage[(company_id, quotation.id)] = (
         PurchaseQuotationCoverageReference(
             purchase_request_id=request_id,
+            purchase_quotation_detail_id=quotation_detail_id,
             purchase_request_detail_id=request_detail_id,
             product_id=11,
             unit_id=3,
@@ -202,6 +205,10 @@ async def test_create_draft_validates_scope_and_normalizes_currency() -> None:
     assert quotation.currency == "USD"
     assert quotation.status is PurchaseQuotationStatus.DRAFT
     assert quotation.request_links[0].details[0].quantity == Decimal("2")
+    assert len(quotation.details) == 1
+    trace = quotation.request_links[0].details[0]
+    assert trace.purchase_quotation_detail_id == quotation.details[0].id
+    assert quotation.details[0].quantity == Decimal("2")
 
 
 @pytest.mark.asyncio
@@ -412,7 +419,7 @@ async def test_record_response_rejects_out_of_scope_product() -> None:
 
 
 @pytest.mark.asyncio
-async def test_record_response_rejects_inactive_expense_type() -> None:
+async def test_record_response_rejects_reducing_scope_quantity() -> None:
     repository, company_id, request_id, request_detail_id, _ = _setup_repository()
     requested = await _create_requested(repository, company_id, request_id, request_detail_id)
 
@@ -426,6 +433,53 @@ async def test_record_response_rejects_inactive_expense_type() -> None:
                     product_id=11,
                     unit_id=3,
                     quantity=Decimal("1"),
+                    unit_price=Decimal("1"),
+                    available_quantity=Decimal("1"),
+                ),
+            ),
+        )
+    assert exc_info.value.code == "purchase_quotation_response_quantity_incomplete"
+
+
+@pytest.mark.asyncio
+async def test_record_response_accepts_partial_available_quantity() -> None:
+    repository, company_id, request_id, request_detail_id, _ = _setup_repository()
+    requested = await _create_requested(repository, company_id, request_id, request_detail_id)
+
+    received = await PurchaseQuotationUseCases(repository).record_response(
+        company_id=company_id,
+        quotation_id=requested.id,
+        quotation_date=datetime.now(UTC),
+        lines=(
+            PurchaseQuotationResponseLineDraft(
+                product_id=11,
+                unit_id=3,
+                quantity=Decimal("5"),
+                unit_price=Decimal("1"),
+                available_quantity=Decimal("1"),
+            ),
+        ),
+    )
+
+    assert received.details[0].quantity == Decimal("5")
+    assert received.details[0].available_quantity == Decimal("1")
+
+
+@pytest.mark.asyncio
+async def test_record_response_rejects_inactive_expense_type() -> None:
+    repository, company_id, request_id, request_detail_id, _ = _setup_repository()
+    requested = await _create_requested(repository, company_id, request_id, request_detail_id)
+
+    with pytest.raises(ValidationError) as exc_info:
+        await PurchaseQuotationUseCases(repository).record_response(
+            company_id=company_id,
+            quotation_id=requested.id,
+            quotation_date=datetime.now(UTC),
+            lines=(
+                PurchaseQuotationResponseLineDraft(
+                    product_id=11,
+                    unit_id=3,
+                    quantity=Decimal("5"),
                     unit_price=Decimal("1"),
                 ),
             ),
@@ -453,7 +507,7 @@ async def test_start_evaluation_and_select_offer_follow_workflow() -> None:
             PurchaseQuotationResponseLineDraft(
                 product_id=11,
                 unit_id=3,
-                quantity=Decimal("1"),
+                quantity=Decimal("5"),
                 unit_price=Decimal("20"),
             ),
         ),
@@ -481,7 +535,7 @@ async def test_select_offer_rejects_expired_quote() -> None:
             PurchaseQuotationResponseLineDraft(
                 product_id=11,
                 unit_id=3,
-                quantity=Decimal("1"),
+                quantity=Decimal("5"),
                 unit_price=Decimal("20"),
             ),
         ),

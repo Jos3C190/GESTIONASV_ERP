@@ -109,6 +109,7 @@ class PurchaseQuotationRequestDetail:
     purchase_quotation_request_id: uuid.UUID
     purchase_request_detail_id: uuid.UUID
     quantity: Decimal
+    purchase_quotation_detail_id: uuid.UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

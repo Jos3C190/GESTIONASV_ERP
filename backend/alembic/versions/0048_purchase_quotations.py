@@ -229,6 +229,7 @@ def upgrade() -> None:
         ),
         sa.Column("company_id", UUID(as_uuid=True), nullable=False),
         sa.Column("purchase_quotation_request_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("purchase_quotation_detail_id", UUID(as_uuid=True), nullable=False),
         sa.Column("purchase_request_detail_id", UUID(as_uuid=True), nullable=False),
         sa.Column("quantity", sa.Numeric(18, 6), nullable=False),
         sa.Column(
@@ -269,6 +270,11 @@ def upgrade() -> None:
         "ix_purchase_quotation_request_details_request_detail",
         "purchase_quotation_request_details",
         ["purchase_request_detail_id"],
+    )
+    op.create_index(
+        "ix_purchase_quotation_request_details_quotation_detail",
+        "purchase_quotation_request_details",
+        ["purchase_quotation_detail_id"],
     )
 
     op.create_table(
@@ -323,6 +329,11 @@ def upgrade() -> None:
             name="fk_purchase_quotation_details_unit_company",
             ondelete="RESTRICT",
         ),
+        sa.UniqueConstraint(
+            "id",
+            "company_id",
+            name="uq_purchase_quotation_details_id_company_id",
+        ),
         sa.CheckConstraint(
             "quantity > 0",
             name="ck_purchase_quotation_details_quantity_positive",
@@ -357,6 +368,15 @@ def upgrade() -> None:
         "ix_purchase_quotation_details_company_product",
         "purchase_quotation_details",
         ["company_id", "product_id"],
+    )
+
+    op.create_foreign_key(
+        "fk_purchase_quotation_request_details_quotation_detail_company",
+        "purchase_quotation_request_details",
+        "purchase_quotation_details",
+        ["purchase_quotation_detail_id", "company_id"],
+        ["id", "company_id"],
+        ondelete="CASCADE",
     )
 
     op.create_table(
@@ -410,8 +430,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("purchase_quotation_expenses")
-    op.drop_table("purchase_quotation_details")
     op.drop_table("purchase_quotation_request_details")
+    op.drop_table("purchase_quotation_details")
     op.drop_table("purchase_quotation_requests")
     op.drop_table("purchase_quotations")
     op.drop_table("expense_types")

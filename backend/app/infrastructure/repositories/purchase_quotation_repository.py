@@ -55,6 +55,7 @@ def _to_request_detail(
         purchase_quotation_request_id=model.purchase_quotation_request_id,
         purchase_request_detail_id=model.purchase_request_detail_id,
         quantity=model.quantity,
+        purchase_quotation_detail_id=model.purchase_quotation_detail_id,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
@@ -283,6 +284,7 @@ class SqlAlchemyPurchaseQuotationRepository:
         result = await self._session.execute(
             select(
                 PurchaseQuotationRequestModel.purchase_request_id,
+                PurchaseQuotationRequestDetailModel.purchase_quotation_detail_id,
                 PurchaseQuotationRequestDetailModel.purchase_request_detail_id,
                 PurchaseRequestDetailModel.product_id,
                 PurchaseRequestDetailModel.unit_id,
@@ -314,6 +316,7 @@ class SqlAlchemyPurchaseQuotationRepository:
         return tuple(
             PurchaseQuotationCoverageReference(
                 purchase_request_id=row.purchase_request_id,
+                purchase_quotation_detail_id=row.purchase_quotation_detail_id,
                 purchase_request_detail_id=row.purchase_request_detail_id,
                 product_id=row.product_id,
                 unit_id=row.unit_id,
@@ -371,9 +374,24 @@ class SqlAlchemyPurchaseQuotationRepository:
         model.total = quotation.total
         model.status = quotation.status.value
         model.notes = quotation.notes
-        model.details = [
-            self._detail_model(quotation.company_id, detail) for detail in quotation.details
-        ]
+        persisted_details = {detail.id: detail for detail in model.details}
+        incoming_ids = {detail.id for detail in quotation.details}
+        if incoming_ids != set(persisted_details):
+            raise ValueError("La respuesta debe conservar los detalles originales de la RFQ.")
+        for detail in quotation.details:
+            persisted = persisted_details[detail.id]
+            persisted.product_id = detail.product_id
+            persisted.unit_id = detail.unit_id
+            persisted.quantity = detail.quantity
+            persisted.unit_price = detail.unit_price
+            persisted.discount = detail.discount
+            persisted.subtotal = detail.subtotal
+            persisted.tax_rate = detail.tax_rate
+            persisted.tax_amount = detail.tax_amount
+            persisted.total = detail.total
+            persisted.delivery_days = detail.delivery_days
+            persisted.available_quantity = detail.available_quantity
+            persisted.notes = detail.notes
         model.expenses = [
             self._expense_model(quotation.company_id, expense) for expense in quotation.expenses
         ]
@@ -465,7 +483,7 @@ class SqlAlchemyPurchaseQuotationRepository:
         result = await self._session.execute(
             select(
                 PurchaseQuotationRequestDetailModel.purchase_request_detail_id,
-                PurchaseQuotationDetailModel.quantity,
+                PurchaseQuotationRequestDetailModel.quantity,
             )
             .join(
                 PurchaseQuotationRequestModel,
@@ -485,22 +503,12 @@ class SqlAlchemyPurchaseQuotationRepository:
                 ),
             )
             .join(
-                PurchaseRequestDetailModel,
-                and_(
-                    PurchaseRequestDetailModel.id
-                    == PurchaseQuotationRequestDetailModel.purchase_request_detail_id,
-                    PurchaseRequestDetailModel.company_id
-                    == PurchaseQuotationRequestDetailModel.company_id,
-                ),
-            )
-            .join(
                 PurchaseQuotationDetailModel,
                 and_(
-                    PurchaseQuotationDetailModel.purchase_quotation_id == PurchaseQuotationModel.id,
-                    PurchaseQuotationDetailModel.company_id == PurchaseQuotationModel.company_id,
-                    PurchaseQuotationDetailModel.product_id
-                    == PurchaseRequestDetailModel.product_id,
-                    PurchaseQuotationDetailModel.unit_id == PurchaseRequestDetailModel.unit_id,
+                    PurchaseQuotationDetailModel.id
+                    == PurchaseQuotationRequestDetailModel.purchase_quotation_detail_id,
+                    PurchaseQuotationDetailModel.company_id
+                    == PurchaseQuotationRequestDetailModel.company_id,
                 ),
             )
             .where(
@@ -555,6 +563,7 @@ class SqlAlchemyPurchaseQuotationRepository:
                     id=detail.id,
                     company_id=company_id,
                     purchase_quotation_request_id=detail.purchase_quotation_request_id,
+                    purchase_quotation_detail_id=detail.purchase_quotation_detail_id,
                     purchase_request_detail_id=detail.purchase_request_detail_id,
                     quantity=detail.quantity,
                 )

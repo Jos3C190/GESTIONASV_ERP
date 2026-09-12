@@ -77,6 +77,7 @@ class PurchaseQuotationRecordResponse(BaseModel):
 class PurchaseQuotationRequestDetailResponse(ORMOut):
     id: uuid.UUID
     purchase_quotation_request_id: uuid.UUID
+    purchase_quotation_detail_id: uuid.UUID
     purchase_request_detail_id: uuid.UUID
     quantity: Decimal
     created_at: datetime | None = None

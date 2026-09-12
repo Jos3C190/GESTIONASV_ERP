@@ -36,6 +36,7 @@ class PurchaseQuotationRequestReference:
 @dataclass(frozen=True, slots=True)
 class PurchaseQuotationCoverageReference:
     purchase_request_id: uuid.UUID
+    purchase_quotation_detail_id: uuid.UUID
     purchase_request_detail_id: uuid.UUID
     product_id: int
     unit_id: int

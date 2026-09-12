@@ -213,6 +213,10 @@ async def test_purchase_quotation_workflow_comparison_and_audit(
     quotation_id = created["id"]
     assert created["status"] == "draft"
     assert created["code"].startswith("COT-")
+    assert len(created["details"]) == 1
+    trace = created["request_links"][0]["details"][0]
+    assert trace["purchase_quotation_detail_id"] == created["details"][0]["id"]
+    draft_detail_id = created["details"][0]["id"]
 
     listed = await quotation_client.get("/api/v1/purchase-quotations", headers=headers)
     assert listed.status_code == 200, listed.text
@@ -248,6 +252,7 @@ async def test_purchase_quotation_workflow_comparison_and_audit(
     received = response.json()
     assert received["status"] == "received"
     assert Decimal(received["total"]) > Decimal("0")
+    assert received["details"][0]["id"] == draft_detail_id
 
     request_after_quote = await quotation_client.get(
         f"/api/v1/purchase-requests/{purchase_request['id']}",
