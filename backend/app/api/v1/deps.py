@@ -28,6 +28,7 @@ from app.application.documents import (
     DocumentService,
 )
 from app.application.password_policy import PasswordPolicy
+from app.application.purchase_quotations import PurchaseQuotationUseCases
 from app.application.purchase_requests import PurchaseRequestUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.config import settings
@@ -43,6 +44,7 @@ from app.domain.ports.employee_repository import EmployeeRepository
 from app.domain.ports.malware_scanner import MalwareScanner
 from app.domain.ports.object_storage import ObjectStorage
 from app.domain.ports.permission_repository import PermissionRepository
+from app.domain.ports.purchase_quotation_repository import PurchaseQuotationRepository
 from app.domain.ports.purchase_request_repository import PurchaseRequestRepository
 from app.domain.ports.refresh_token_repository import RefreshTokenRepository
 from app.domain.ports.role_repository import RoleRepository
@@ -62,6 +64,9 @@ from app.infrastructure.repositories import (
     SqlAlchemyRefreshTokenRepository,
     SqlAlchemyRoleRepository,
     SqlAlchemyUserRepository,
+)
+from app.infrastructure.repositories.purchase_quotation_repository import (
+    SqlAlchemyPurchaseQuotationRepository,
 )
 from app.infrastructure.repositories.purchase_request_repository import (
     SqlAlchemyPurchaseRequestRepository,
@@ -88,6 +93,10 @@ def get_role_repository(session: SessionDep) -> RoleRepository:
 
 def get_permission_repository(session: SessionDep) -> PermissionRepository:
     return SqlAlchemyPermissionRepository(session)
+
+
+def get_purchase_quotation_repository(session: SessionDep) -> PurchaseQuotationRepository:
+    return SqlAlchemyPurchaseQuotationRepository(session)
 
 
 def get_purchase_request_repository(session: SessionDep) -> PurchaseRequestRepository:
@@ -191,6 +200,12 @@ def get_password_policy() -> PasswordPolicy:
 
 
 # -------- use case providers --------
+def get_purchase_quotation_use_cases(
+    repository: Annotated[PurchaseQuotationRepository, Depends(get_purchase_quotation_repository)],
+) -> PurchaseQuotationUseCases:
+    return PurchaseQuotationUseCases(repository)
+
+
 def get_purchase_request_use_cases(
     repository: Annotated[PurchaseRequestRepository, Depends(get_purchase_request_repository)],
 ) -> PurchaseRequestUseCases:
@@ -399,6 +414,8 @@ __all__ = [
     "get_logout_use_case",
     "get_password_policy",
     "get_permission_repository",
+    "get_purchase_quotation_repository",
+    "get_purchase_quotation_use_cases",
     "get_purchase_request_repository",
     "get_purchase_request_use_cases",
     "get_refresh_token_repository",

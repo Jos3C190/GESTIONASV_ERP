@@ -74,6 +74,14 @@ from app.infrastructure.models.product_variant import (
     ProductVariantImageModel,
     ProductVariantModel,
 )
+from app.infrastructure.models.purchase_quotation import (
+    ExpenseTypeModel,
+    PurchaseQuotationDetailModel,
+    PurchaseQuotationExpenseModel,
+    PurchaseQuotationModel,
+    PurchaseQuotationRequestDetailModel,
+    PurchaseQuotationRequestModel,
+)
 from app.infrastructure.models.purchase_request import (
     PurchaseRequestDetailModel,
     PurchaseRequestModel,
@@ -121,6 +129,7 @@ __all__: list[str] = [
     "DocumentRecordModel",
     "Employee",
     "EmployeeBranchAssignment",
+    "ExpenseTypeModel",
     "GeographicDepartment",
     "InventoryBalanceModel",
     "InventoryHandlingUnitModel",
@@ -150,6 +159,11 @@ __all__: list[str] = [
     "ProductVariantAttributeValueModel",
     "ProductVariantImageModel",
     "ProductVariantModel",
+    "PurchaseQuotationDetailModel",
+    "PurchaseQuotationExpenseModel",
+    "PurchaseQuotationModel",
+    "PurchaseQuotationRequestDetailModel",
+    "PurchaseQuotationRequestModel",
     "PurchaseRequestDetailModel",
     "PurchaseRequestModel",
     "RefreshToken",

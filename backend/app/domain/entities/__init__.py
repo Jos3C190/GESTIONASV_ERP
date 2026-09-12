@@ -6,6 +6,15 @@ from app.domain.entities.catalog import Category, Country, Product, SubCategory,
 from app.domain.entities.document_folder import DocumentFolder
 from app.domain.entities.employee import Department, Employee, EmployeeStatus
 from app.domain.entities.media_image import SingleImage, SingleImageDraft
+from app.domain.entities.purchase_quotation import (
+    ExpenseType,
+    PurchaseQuotation,
+    PurchaseQuotationDetail,
+    PurchaseQuotationExpense,
+    PurchaseQuotationRequest,
+    PurchaseQuotationRequestDetail,
+    PurchaseQuotationStatus,
+)
 from app.domain.entities.purchase_request import (
     PurchaseRequest,
     PurchaseRequestDetail,
@@ -29,8 +38,15 @@ __all__ = [
     "DocumentFolder",
     "Employee",
     "EmployeeStatus",
+    "ExpenseType",
     "Permission",
     "Product",
+    "PurchaseQuotation",
+    "PurchaseQuotationDetail",
+    "PurchaseQuotationExpense",
+    "PurchaseQuotationRequest",
+    "PurchaseQuotationRequestDetail",
+    "PurchaseQuotationStatus",
     "PurchaseRequest",
     "PurchaseRequestDetail",
     "PurchaseRequestStatus",
