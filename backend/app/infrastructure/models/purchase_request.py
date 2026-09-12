@@ -99,6 +99,11 @@ class PurchaseRequestDetailModel(UUIDPKMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "company_id",
+            name="uq_purchase_request_details_id_company_id",
+        ),
         ForeignKeyConstraint(
             ["purchase_request_id", "company_id"],
             ["purchase_requests.id", "purchase_requests.company_id"],

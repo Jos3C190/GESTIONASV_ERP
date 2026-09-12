@@ -129,6 +129,20 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec(
         "purchase_requests:approve", "Aprobar o rechazar solicitudes", "purchase_requests"
     ),
+    # --- purchase quotations ---
+    PermissionSpec(
+        "purchase_quotations:read",
+        "Ver solicitudes de cotización, ofertas y comparativas",
+        "purchase_quotations",
+    ),
+    PermissionSpec(
+        "purchase_quotations:manage",
+        "Crear, enviar, registrar y evaluar cotizaciones",
+        "purchase_quotations",
+    ),
+    PermissionSpec(
+        "purchase_quotations:select", "Seleccionar la oferta ganadora", "purchase_quotations"
+    ),
     # --- roles ---
     PermissionSpec("roles:read", "Ver roles", "roles"),
     PermissionSpec("roles:create", "Crear roles", "roles"),

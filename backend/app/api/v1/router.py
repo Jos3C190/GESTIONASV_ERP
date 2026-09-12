@@ -28,6 +28,7 @@ from app.api.v1.routers import (
     operational_context,
     organization,
     product_master,
+    purchase_quotations,
     purchase_requests,
     roles,
     supplier_master,
@@ -59,6 +60,7 @@ api_router.include_router(dashboard.router, prefix="/api/v1")
 api_router.include_router(media.router, prefix="/api/v1")
 api_router.include_router(catalog.router, prefix="/api/v1")
 api_router.include_router(product_master.router, prefix="/api/v1")
+api_router.include_router(purchase_quotations.router, prefix="/api/v1")
 api_router.include_router(purchase_requests.router, prefix="/api/v1")
 api_router.include_router(supplier_master.router, prefix="/api/v1")
 api_router.include_router(suppliers.router, prefix="/api/v1")
