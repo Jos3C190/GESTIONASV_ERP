@@ -129,6 +129,19 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec(
         "purchase_requests:approve", "Aprobar o rechazar solicitudes", "purchase_requests"
     ),
+    # --- purchase orders ---
+    PermissionSpec("purchase_orders:read", "Ver órdenes de compra", "purchase_orders"),
+    PermissionSpec(
+        "purchase_orders:manage",
+        "Crear, editar, enviar a aprobación y cancelar órdenes de compra",
+        "purchase_orders",
+    ),
+    PermissionSpec(
+        "purchase_orders:approve",
+        "Aprobar órdenes de compra",
+        "purchase_orders",
+    ),
+    PermissionSpec("purchase_orders:send", "Enviar órdenes de compra aprobadas", "purchase_orders"),
     # --- purchase quotations ---
     PermissionSpec(
         "purchase_quotations:read",

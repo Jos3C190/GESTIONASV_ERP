@@ -42,5 +42,6 @@ class DocumentAssetModel(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             "status IN ('pending_upload','pending_scan','scanning','active','quarantined','rejected')",
             name="ck_document_assets_status",
         ),
+        UniqueConstraint("id", "company_id", name="uq_document_assets_id_company_id"),
         UniqueConstraint("bucket", "object_key", name="uq_document_assets_bucket_key"),
     )
