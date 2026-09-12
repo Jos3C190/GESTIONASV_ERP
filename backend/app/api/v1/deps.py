@@ -28,6 +28,10 @@ from app.application.documents import (
     DocumentService,
 )
 from app.application.password_policy import PasswordPolicy
+from app.application.purchase_orders import PurchaseOrderUseCases
+from app.application.purchase_orders.expense_documents import (
+    PurchaseOrderExpenseDocumentService,
+)
 from app.application.purchase_quotations import PurchaseQuotationUseCases
 from app.application.purchase_requests import PurchaseRequestUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
@@ -44,6 +48,10 @@ from app.domain.ports.employee_repository import EmployeeRepository
 from app.domain.ports.malware_scanner import MalwareScanner
 from app.domain.ports.object_storage import ObjectStorage
 from app.domain.ports.permission_repository import PermissionRepository
+from app.domain.ports.purchase_order_expense_document_repository import (
+    PurchaseOrderExpenseDocumentRepository,
+)
+from app.domain.ports.purchase_order_repository import PurchaseOrderRepository
 from app.domain.ports.purchase_quotation_repository import PurchaseQuotationRepository
 from app.domain.ports.purchase_request_repository import PurchaseRequestRepository
 from app.domain.ports.refresh_token_repository import RefreshTokenRepository
@@ -64,6 +72,12 @@ from app.infrastructure.repositories import (
     SqlAlchemyRefreshTokenRepository,
     SqlAlchemyRoleRepository,
     SqlAlchemyUserRepository,
+)
+from app.infrastructure.repositories.purchase_order_expense_document_repository import (
+    SqlAlchemyPurchaseOrderExpenseDocumentRepository,
+)
+from app.infrastructure.repositories.purchase_order_repository import (
+    SqlAlchemyPurchaseOrderRepository,
 )
 from app.infrastructure.repositories.purchase_quotation_repository import (
     SqlAlchemyPurchaseQuotationRepository,
@@ -93,6 +107,16 @@ def get_role_repository(session: SessionDep) -> RoleRepository:
 
 def get_permission_repository(session: SessionDep) -> PermissionRepository:
     return SqlAlchemyPermissionRepository(session)
+
+
+def get_purchase_order_repository(session: SessionDep) -> PurchaseOrderRepository:
+    return SqlAlchemyPurchaseOrderRepository(session)
+
+
+def get_purchase_order_expense_document_repository(
+    session: SessionDep,
+) -> PurchaseOrderExpenseDocumentRepository:
+    return SqlAlchemyPurchaseOrderExpenseDocumentRepository(session)
 
 
 def get_purchase_quotation_repository(session: SessionDep) -> PurchaseQuotationRepository:
@@ -155,6 +179,17 @@ def get_document_service(
     return DocumentService(repository, storage, scanner, audit, settings, derivatives)
 
 
+def get_purchase_order_expense_document_service(
+    repository: Annotated[
+        PurchaseOrderExpenseDocumentRepository,
+        Depends(get_purchase_order_expense_document_repository),
+    ],
+    documents: Annotated[DocumentService, Depends(get_document_service)],
+    audit: Annotated[AuditService, Depends(get_audit_service)],
+) -> PurchaseOrderExpenseDocumentService:
+    return PurchaseOrderExpenseDocumentService(repository, documents, audit)
+
+
 def get_document_record_service(
     documents: Annotated[DocumentService, Depends(get_document_service)],
     records: Annotated[DocumentRecordRepository, Depends(get_document_record_repository)],
@@ -200,6 +235,12 @@ def get_password_policy() -> PasswordPolicy:
 
 
 # -------- use case providers --------
+def get_purchase_order_use_cases(
+    repository: Annotated[PurchaseOrderRepository, Depends(get_purchase_order_repository)],
+) -> PurchaseOrderUseCases:
+    return PurchaseOrderUseCases(repository)
+
+
 def get_purchase_quotation_use_cases(
     repository: Annotated[PurchaseQuotationRepository, Depends(get_purchase_quotation_repository)],
 ) -> PurchaseQuotationUseCases:
@@ -414,6 +455,10 @@ __all__ = [
     "get_logout_use_case",
     "get_password_policy",
     "get_permission_repository",
+    "get_purchase_order_expense_document_repository",
+    "get_purchase_order_expense_document_service",
+    "get_purchase_order_repository",
+    "get_purchase_order_use_cases",
     "get_purchase_quotation_repository",
     "get_purchase_quotation_use_cases",
     "get_purchase_request_repository",

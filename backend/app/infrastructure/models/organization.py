@@ -367,6 +367,11 @@ class Warehouse(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             "AND operational_usable_volume_m3 IS NOT NULL)",
             name="ck_warehouses_enforce_capacity_complete",
         ),
+        UniqueConstraint(
+            "id",
+            "branch_id",
+            name="uq_warehouses_id_branch_id",
+        ),
         Index(
             "uq_warehouses_branch_name_visible",
             "branch_id",

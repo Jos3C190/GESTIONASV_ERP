@@ -74,6 +74,11 @@ from app.infrastructure.models.product_variant import (
     ProductVariantImageModel,
     ProductVariantModel,
 )
+from app.infrastructure.models.purchase_order import (
+    PurchaseOrderDetailModel,
+    PurchaseOrderExpenseModel,
+    PurchaseOrderModel,
+)
 from app.infrastructure.models.purchase_quotation import (
     ExpenseTypeModel,
     PurchaseQuotationDetailModel,
@@ -159,6 +164,9 @@ __all__: list[str] = [
     "ProductVariantAttributeValueModel",
     "ProductVariantImageModel",
     "ProductVariantModel",
+    "PurchaseOrderDetailModel",
+    "PurchaseOrderExpenseModel",
+    "PurchaseOrderModel",
     "PurchaseQuotationDetailModel",
     "PurchaseQuotationExpenseModel",
     "PurchaseQuotationModel",
