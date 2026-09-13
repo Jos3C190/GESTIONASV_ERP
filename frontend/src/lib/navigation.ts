@@ -176,9 +176,9 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Cotizaciones de compra',
         icon: ICONS.purchaseQuotes,
-        route: '/placeholder?module=Cotizaciones de compra',
-        implemented: false,
-        module: 'Cotizaciones de compra'
+        route: '/purchase-quotations',
+        implemented: true,
+        requiredPermission: 'purchase_quotations:read'
       },
       {
         label: 'Órdenes de compra',
