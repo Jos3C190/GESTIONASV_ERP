@@ -20,6 +20,7 @@ from app.api.v1.routers import (
     documents,
     employee_documents,
     employees,
+    expense_types,
     health,
     inventory,
     lifecycle,
@@ -61,6 +62,7 @@ api_router.include_router(dashboard.router, prefix="/api/v1")
 api_router.include_router(media.router, prefix="/api/v1")
 api_router.include_router(catalog.router, prefix="/api/v1")
 api_router.include_router(product_master.router, prefix="/api/v1")
+api_router.include_router(expense_types.router, prefix="/api/v1")
 api_router.include_router(purchase_orders.router, prefix="/api/v1")
 api_router.include_router(purchase_quotations.router, prefix="/api/v1")
 api_router.include_router(purchase_requests.router, prefix="/api/v1")

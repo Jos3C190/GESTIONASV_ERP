@@ -46,7 +46,12 @@ from app.infrastructure.models.organization import (
     Warehouse,
     WarehouseCategory,
 )
-from app.infrastructure.models.purchase_quotation import ExpenseTypeModel
+from app.infrastructure.models.purchase_quotation import (
+    ExpenseTypeModel,
+    PurchaseQuotationDetailModel,
+    PurchaseQuotationRequestDetailModel,
+    PurchaseQuotationRequestModel,
+)
 from app.infrastructure.models.supplier import SupplierModel
 from app.infrastructure.models.supplier_master_data import CurrencyModel
 from app.infrastructure.models.user import User
@@ -385,6 +390,7 @@ async def _build_order(
             PurchaseOrderDetail(
                 id=uuid.uuid4(),
                 purchase_order_id=order_id,
+                purchase_quotation_detail_id=quotation.details[0].id,
                 product_id=graph.product.id_product,
                 quantity=quantity,
                 unit_id=graph.unit.id_unit,
@@ -423,6 +429,7 @@ async def test_repository_persists_tenant_scoped_order_and_resolves_references(
 
     assert loaded is not None
     assert loaded.code == saved.code
+    assert loaded.details[0].purchase_quotation_detail_id == quotation.details[0].id
     assert hidden is None
     assert quotation_reference is not None
     assert quotation_reference.status is PurchaseQuotationStatus.SELECTED
@@ -446,6 +453,30 @@ async def test_repository_persists_tenant_scoped_order_and_resolves_references(
         graph.expense_type.id,
     )
     assert await repository.allocate_next_code(graph.company.id) == "OC-00002"
+
+
+@pytest.mark.asyncio
+async def test_repository_lists_only_active_expense_types_for_company(
+    order_session: AsyncSession,
+) -> None:
+    graph = await _build_graph(order_session)
+    inactive = ExpenseTypeModel(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        name=f"Inactive expense {uuid.uuid4().hex[:8]}",
+        description="No debe aparecer en opciones activas.",
+        is_active=False,
+    )
+    order_session.add(inactive)
+    await order_session.flush()
+
+    repository = SqlAlchemyPurchaseOrderRepository(order_session)
+    items = await repository.list_active_expense_types(graph.company.id)
+
+    assert [(item.id, item.name, item.description) for item in items] == [
+        (graph.expense_type.id, graph.expense_type.name, graph.expense_type.description)
+    ]
+    assert await repository.list_active_expense_types(uuid.uuid4()) == ()
 
 
 @pytest.mark.asyncio
@@ -502,6 +533,120 @@ async def test_repository_replaces_draft_and_tracks_reserved_quantities(
     assert cancelled is not None
     quantities = await repository.get_ordered_quantities(graph.company.id, quotation.id)
     assert quantities[detail_id] == Decimal("3")
+
+
+@pytest.mark.asyncio
+async def test_ordered_quantities_do_not_conflate_same_product_and_unit_details(
+    order_session: AsyncSession,
+) -> None:
+    graph = await _build_graph(order_session)
+    request = await _persist_request(order_session, graph, quantity=Decimal("6"))
+    quotation = await _persist_selected_quotation(order_session, graph, (request,))
+    duplicate_detail = PurchaseQuotationDetailModel(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        purchase_quotation_id=quotation.id,
+        product_id=graph.product.id_product,
+        unit_id=graph.unit.id_unit,
+        quantity=Decimal("6"),
+        available_quantity=Decimal("6"),
+        unit_price=Decimal("10"),
+        subtotal=Decimal("60"),
+        total=Decimal("60"),
+    )
+    order_session.add(duplicate_detail)
+    await order_session.flush()
+
+    repository = SqlAlchemyPurchaseOrderRepository(order_session)
+    await repository.add_order(
+        await _build_order(
+            repository,
+            graph,
+            quotation,
+            quantity=Decimal("2"),
+        )
+    )
+
+    quantities = await repository.get_ordered_quantities(
+        graph.company.id,
+        quotation.id,
+    )
+
+    assert quantities == {quotation.details[0].id: Decimal("2")}
+
+
+@pytest.mark.asyncio
+async def test_request_coverage_uses_explicit_quotation_detail_identity(
+    order_session: AsyncSession,
+) -> None:
+    graph = await _build_graph(order_session)
+    first_request = await _persist_request(order_session, graph, quantity=Decimal("2"))
+    second_request = await _persist_request(order_session, graph, quantity=Decimal("2"))
+    quotation = await _persist_selected_quotation(
+        order_session,
+        graph,
+        (first_request,),
+    )
+    second_quotation_detail = PurchaseQuotationDetailModel(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        purchase_quotation_id=quotation.id,
+        product_id=graph.product.id_product,
+        unit_id=graph.unit.id_unit,
+        quantity=Decimal("2"),
+        available_quantity=Decimal("2"),
+        unit_price=Decimal("10"),
+        subtotal=Decimal("20"),
+        total=Decimal("20"),
+    )
+    second_link = PurchaseQuotationRequestModel(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        purchase_quotation_id=quotation.id,
+        purchase_request_id=second_request.id,
+    )
+    order_session.add_all([second_quotation_detail, second_link])
+    await order_session.flush()
+    order_session.add(
+        PurchaseQuotationRequestDetailModel(
+            id=uuid.uuid4(),
+            company_id=graph.company.id,
+            purchase_quotation_request_id=second_link.id,
+            purchase_quotation_detail_id=second_quotation_detail.id,
+            purchase_request_detail_id=second_request.details[0].id,
+            quantity=Decimal("2"),
+        )
+    )
+    await order_session.flush()
+
+    order_repository = SqlAlchemyPurchaseOrderRepository(order_session)
+    request_repository = SqlAlchemyPurchaseRequestRepository(order_session)
+    sent_order = await _build_order(
+        order_repository,
+        graph,
+        quotation,
+        quantity=Decimal("2"),
+        status=PurchaseOrderStatus.SENT,
+    )
+    await order_repository.add_order(sent_order)
+    await order_repository.advance_purchase_request_order_statuses(
+        graph.company.id,
+        quotation.id,
+    )
+
+    first_after = await request_repository.get_request(
+        graph.company.id,
+        first_request.id,
+    )
+    second_after = await request_repository.get_request(
+        graph.company.id,
+        second_request.id,
+    )
+
+    assert first_after is not None
+    assert first_after.status is PurchaseRequestStatus.COMPLETED
+    assert second_after is not None
+    assert second_after.status is PurchaseRequestStatus.QUOTED
 
 
 @pytest.mark.asyncio

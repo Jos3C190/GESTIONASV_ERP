@@ -321,16 +321,27 @@ async def test_purchase_order_workflow_request_status_and_audit(
         headers=headers,
     )
     assert fetched.status_code == 200, fetched.text
-    assert fetched.json()["purchase_quotation_id"] == quotation["id"]
+    fetched_order = fetched.json()
+    assert fetched_order["purchase_quotation_id"] == quotation["id"]
+    fetched_details = fetched_order["details"]
+    assert isinstance(fetched_details, list)
+    fetched_detail = fetched_details[0]
+    assert isinstance(fetched_detail, dict)
+    source_detail_id = fetched_detail["purchase_quotation_detail_id"]
+    assert source_detail_id == quotation["details"][0]["id"]
 
-    update_payload = _order_payload(
-        quotation=quotation,
-        branch_id=branch_id,
-        warehouse_id=warehouse_id,
-        quantity="4.000000",
-        notes="Cantidad final",
-    )
-    update_payload.pop("purchase_quotation_id")
+    update_payload = {
+        "branch_id": fetched_order["branch_id"],
+        "warehouse_id": fetched_order["warehouse_id"],
+        "expected_date": fetched_order["expected_date"],
+        "lines": [
+            {
+                "purchase_quotation_detail_id": source_detail_id,
+                "quantity": "4.000000",
+            }
+        ],
+        "notes": "Cantidad final",
+    }
     updated = await purchase_order_client.put(
         f"/api/v1/purchase-orders/{order_id}",
         headers=headers,
@@ -379,8 +390,14 @@ async def test_purchase_order_workflow_request_status_and_audit(
         },
     )
     assert audit.status_code == 200, audit.text
-    actions = {item["action"] for item in audit.json()["items"]}
+    audit_items = audit.json()["items"]
+    actions = {item["action"] for item in audit_items}
     assert {"CREATE", "UPDATE", "SUBMIT", "APPROVE", "SEND"}.issubset(actions)
+    update_audit = next(item for item in audit_items if item["action"] == "UPDATE")
+    assert (
+        update_audit["after_state"]["details"][0]["purchase_quotation_detail_id"]
+        == source_detail_id
+    )
 
 
 async def test_purchase_order_requires_rbac_permission(
