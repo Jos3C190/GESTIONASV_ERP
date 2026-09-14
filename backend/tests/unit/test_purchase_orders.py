@@ -34,6 +34,7 @@ def _detail(order_id: uuid.UUID) -> PurchaseOrderDetail:
     return PurchaseOrderDetail(
         id=uuid.uuid4(),
         purchase_order_id=order_id,
+        purchase_quotation_detail_id=uuid.uuid4(),
         product_id=10,
         quantity=Decimal("5"),
         unit_id=2,
@@ -106,6 +107,7 @@ def test_purchase_order_detail_validates_commercial_values() -> None:
         PurchaseOrderDetail(
             id=uuid.uuid4(),
             purchase_order_id=order_id,
+            purchase_quotation_detail_id=uuid.uuid4(),
             product_id=1,
             quantity=Decimal("0"),
             unit_id=1,
@@ -115,6 +117,7 @@ def test_purchase_order_detail_validates_commercial_values() -> None:
         PurchaseOrderDetail(
             id=uuid.uuid4(),
             purchase_order_id=order_id,
+            purchase_quotation_detail_id=uuid.uuid4(),
             product_id=1,
             quantity=Decimal("1"),
             unit_id=1,
@@ -124,6 +127,7 @@ def test_purchase_order_detail_validates_commercial_values() -> None:
         PurchaseOrderDetail(
             id=uuid.uuid4(),
             purchase_order_id=order_id,
+            purchase_quotation_detail_id=uuid.uuid4(),
             product_id=1,
             quantity=Decimal("1"),
             unit_id=1,
@@ -137,6 +141,7 @@ def test_purchase_order_detail_rejects_discount_above_subtotal() -> None:
         PurchaseOrderDetail(
             id=uuid.uuid4(),
             purchase_order_id=uuid.uuid4(),
+            purchase_quotation_detail_id=uuid.uuid4(),
             product_id=1,
             quantity=Decimal("1"),
             unit_id=1,
