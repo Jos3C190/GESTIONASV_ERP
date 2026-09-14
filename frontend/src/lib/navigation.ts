@@ -183,9 +183,9 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Órdenes de compra',
         icon: ICONS.purchaseOrders,
-        route: '/placeholder?module=Órdenes de compra',
-        implemented: false,
-        module: 'Órdenes de compra'
+        route: '/purchase-orders',
+        implemented: true,
+        requiredPermission: 'purchase_orders:read'
       },
       {
         label: 'Compras',
