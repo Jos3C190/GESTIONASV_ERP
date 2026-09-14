@@ -161,6 +161,9 @@ class PurchaseOrderDetailModel(UUIDPKMixin, TimestampMixin, Base):
 
     company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     purchase_order_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    purchase_quotation_detail_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False
+    )
     product_id: Mapped[int] = mapped_column(Integer, nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     unit_id: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -193,6 +196,12 @@ class PurchaseOrderDetailModel(UUIDPKMixin, TimestampMixin, Base):
             ["purchase_orders.id", "purchase_orders.company_id"],
             name="fk_purchase_order_details_order_company",
             ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["purchase_quotation_detail_id", "company_id"],
+            ["purchase_quotation_details.id", "purchase_quotation_details.company_id"],
+            name="fk_purchase_order_details_quotation_detail_company",
+            ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(
             ["company_id", "product_id"],
@@ -234,6 +243,11 @@ class PurchaseOrderDetailModel(UUIDPKMixin, TimestampMixin, Base):
             "ix_purchase_order_details_company_product",
             "company_id",
             "product_id",
+        ),
+        Index(
+            "ix_purchase_order_details_company_quotation_detail",
+            "company_id",
+            "purchase_quotation_detail_id",
         ),
     )
 

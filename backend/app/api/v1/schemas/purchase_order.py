@@ -54,6 +54,7 @@ class PurchaseOrderUpdate(BaseModel):
 class PurchaseOrderDetailResponse(ORMOut):
     id: uuid.UUID
     purchase_order_id: uuid.UUID
+    purchase_quotation_detail_id: uuid.UUID
     product_id: int
     quantity: Decimal
     unit_id: int

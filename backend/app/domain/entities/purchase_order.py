@@ -87,6 +87,7 @@ def _ensure_timezone_aware(value: datetime, label: str) -> None:
 class PurchaseOrderDetail:
     id: uuid.UUID
     purchase_order_id: uuid.UUID
+    purchase_quotation_detail_id: uuid.UUID
     product_id: int
     quantity: Decimal
     unit_id: int

@@ -19,6 +19,7 @@ from app.domain.entities.purchase_order import (
 from app.domain.entities.purchase_quotation import PurchaseQuotationStatus
 from app.domain.ports.purchase_order_repository import (
     PurchaseOrderDestinationReference,
+    PurchaseOrderExpenseTypeReference,
     PurchaseOrderQuotationDetailReference,
     PurchaseOrderQuotationReference,
     PurchaseOrderRepository,
@@ -60,6 +61,12 @@ class PurchaseOrderUseCases:
             skip=skip,
             limit=limit,
         )
+
+    async def list_active_expense_types(
+        self,
+        company_id: uuid.UUID,
+    ) -> tuple[PurchaseOrderExpenseTypeReference, ...]:
+        return await self._repository.list_active_expense_types(company_id)
 
     async def get_order(
         self,
@@ -347,6 +354,7 @@ class PurchaseOrderUseCases:
             return PurchaseOrderDetail(
                 id=uuid.uuid4(),
                 purchase_order_id=order_id,
+                purchase_quotation_detail_id=source.id,
                 product_id=source.product_id,
                 quantity=quantity,
                 unit_id=source.unit_id,

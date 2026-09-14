@@ -93,6 +93,7 @@ def _order_audit_state(item: PurchaseOrder) -> dict[str, object]:
         "details": [
             {
                 "id": str(detail.id),
+                "purchase_quotation_detail_id": str(detail.purchase_quotation_detail_id),
                 "product_id": detail.product_id,
                 "unit_id": detail.unit_id,
                 "quantity": str(detail.quantity),
