@@ -113,6 +113,35 @@ describe('PurchaseQuotationWorkflowActions', () => {
     expect(screen.queryByRole('button', { name: 'Rechazar oferta' })).not.toBeInTheDocument();
   });
 
+  it('offers purchase-order creation for a selected quotation when permitted', () => {
+    mocks.hasPermission.mockImplementation((code: string) => code === 'purchase_orders:manage');
+
+    render(PurchaseQuotationWorkflowActions, {
+      props: {
+        quotation: { ...baseQuotation, status: 'selected' },
+        onupdated: vi.fn()
+      }
+    });
+
+    expect(screen.getByRole('link', { name: 'Crear orden de compra' })).toHaveAttribute(
+      'href',
+      `/purchase-orders/new?quotation_id=${baseQuotation.id}`
+    );
+  });
+
+  it('hides purchase-order creation without purchase-order manage permission', () => {
+    mocks.hasPermission.mockReturnValue(false);
+
+    render(PurchaseQuotationWorkflowActions, {
+      props: {
+        quotation: { ...baseQuotation, status: 'selected' },
+        onupdated: vi.fn()
+      }
+    });
+
+    expect(screen.queryByRole('link', { name: 'Crear orden de compra' })).not.toBeInTheDocument();
+  });
+
   it('surfaces transition errors without changing the quotation', async () => {
     const onupdated = vi.fn();
     mocks.cancel.mockRejectedValue(new Error('Transición no permitida'));

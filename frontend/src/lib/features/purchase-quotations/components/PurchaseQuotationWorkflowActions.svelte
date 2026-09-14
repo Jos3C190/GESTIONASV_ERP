@@ -20,11 +20,13 @@
 
   let canManage = $derived(permissions.hasPermission('purchase_quotations:manage'));
   let canSelect = $derived(permissions.hasPermission('purchase_quotations:select'));
+  let canCreatePurchaseOrder = $derived(permissions.hasPermission('purchase_orders:manage'));
   let hasActions = $derived(
     (quotation.status === 'draft' && canManage) ||
       (quotation.status === 'requested' && canManage) ||
       (quotation.status === 'received' && (canManage || canSelect)) ||
-      (quotation.status === 'under_evaluation' && (canManage || canSelect))
+      (quotation.status === 'under_evaluation' && (canManage || canSelect)) ||
+      (quotation.status === 'selected' && canCreatePurchaseOrder)
   );
 
   function errorMessage(cause: unknown): string {
@@ -72,7 +74,7 @@
       <div>
         <h2 class="font-semibold text-foreground">Acciones</h2>
         <p class="mt-1 text-sm text-foreground-muted">
-          Ejecuta únicamente las transiciones disponibles para el estado actual.
+          Ejecuta únicamente las acciones disponibles para el estado actual.
         </p>
       </div>
 
@@ -131,6 +133,13 @@
               {pending === 'select' ? 'Seleccionando…' : 'Seleccionar oferta'}
             </Button>
           {/if}
+        {:else if quotation.status === 'selected' && canCreatePurchaseOrder}
+          <a
+            href={`/purchase-orders/new?quotation_id=${quotation.id}`}
+            class="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            Crear orden de compra
+          </a>
         {/if}
       </div>
     </div>
