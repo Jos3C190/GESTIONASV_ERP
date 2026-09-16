@@ -20,6 +20,7 @@ from app.domain.entities.purchase_quotation import PurchaseQuotationStatus
 from app.domain.entities.purchase_request import PurchaseRequestStatus
 from app.domain.ports.purchase_order_repository import (
     PurchaseOrderDestinationReference,
+    PurchaseOrderExpenseTypeReference,
     PurchaseOrderQuotationDetailReference,
     PurchaseOrderQuotationReference,
 )
@@ -50,6 +51,7 @@ def _to_detail(model: PurchaseOrderDetailModel) -> PurchaseOrderDetail:
     return PurchaseOrderDetail(
         id=model.id,
         purchase_order_id=model.purchase_order_id,
+        purchase_quotation_detail_id=model.purchase_quotation_detail_id,
         product_id=model.product_id,
         quantity=model.quantity,
         unit_id=model.unit_id,
@@ -241,6 +243,31 @@ class SqlAlchemyPurchaseOrderRepository:
             warehouse_storage_eligible=warehouse.storage_eligible,
         )
 
+    async def list_active_expense_types(
+        self,
+        company_id: uuid.UUID,
+    ) -> tuple[PurchaseOrderExpenseTypeReference, ...]:
+        result = await self._session.execute(
+            select(
+                ExpenseTypeModel.id,
+                ExpenseTypeModel.name,
+                ExpenseTypeModel.description,
+            )
+            .where(
+                ExpenseTypeModel.company_id == company_id,
+                ExpenseTypeModel.is_active.is_(True),
+            )
+            .order_by(func.lower(ExpenseTypeModel.name), ExpenseTypeModel.id)
+        )
+        return tuple(
+            PurchaseOrderExpenseTypeReference(
+                id=expense_type_id,
+                name=name,
+                description=description,
+            )
+            for expense_type_id, name, description in result.all()
+        )
+
     async def is_expense_type_active(
         self,
         company_id: uuid.UUID,
@@ -265,37 +292,37 @@ class SqlAlchemyPurchaseOrderRepository:
         exclude_order_id: uuid.UUID | None = None,
     ) -> dict[uuid.UUID, Decimal]:
         conditions = [
-            PurchaseQuotationDetailModel.company_id == company_id,
-            PurchaseQuotationDetailModel.purchase_quotation_id == quotation_id,
+            PurchaseOrderDetailModel.company_id == company_id,
             PurchaseOrderModel.company_id == company_id,
+            PurchaseOrderModel.purchase_quotation_id == quotation_id,
             PurchaseOrderModel.status != PurchaseOrderStatus.CANCELLED.value,
         ]
         if exclude_order_id is not None:
             conditions.append(PurchaseOrderModel.id != exclude_order_id)
         result = await self._session.execute(
             select(
-                PurchaseQuotationDetailModel.id,
+                PurchaseOrderDetailModel.purchase_quotation_detail_id,
                 func.sum(PurchaseOrderDetailModel.quantity),
             )
             .join(
                 PurchaseOrderModel,
                 and_(
-                    PurchaseOrderModel.company_id == PurchaseQuotationDetailModel.company_id,
-                    PurchaseOrderModel.purchase_quotation_id
-                    == PurchaseQuotationDetailModel.purchase_quotation_id,
+                    PurchaseOrderModel.company_id == PurchaseOrderDetailModel.company_id,
+                    PurchaseOrderModel.id == PurchaseOrderDetailModel.purchase_order_id,
                 ),
             )
             .join(
-                PurchaseOrderDetailModel,
+                PurchaseQuotationDetailModel,
                 and_(
-                    PurchaseOrderDetailModel.company_id == PurchaseOrderModel.company_id,
-                    PurchaseOrderDetailModel.purchase_order_id == PurchaseOrderModel.id,
-                    PurchaseOrderDetailModel.product_id == PurchaseQuotationDetailModel.product_id,
-                    PurchaseOrderDetailModel.unit_id == PurchaseQuotationDetailModel.unit_id,
+                    PurchaseQuotationDetailModel.company_id == PurchaseOrderDetailModel.company_id,
+                    PurchaseQuotationDetailModel.id
+                    == PurchaseOrderDetailModel.purchase_quotation_detail_id,
+                    PurchaseQuotationDetailModel.purchase_quotation_id
+                    == PurchaseOrderModel.purchase_quotation_id,
                 ),
             )
             .where(*conditions)
-            .group_by(PurchaseQuotationDetailModel.id)
+            .group_by(PurchaseOrderDetailModel.purchase_quotation_detail_id)
         )
         quantities: dict[uuid.UUID, Decimal] = {}
         for detail_id, quantity in result.all():
@@ -470,32 +497,33 @@ class SqlAlchemyPurchaseOrderRepository:
 
         ordered_result = await self._session.execute(
             select(
-                PurchaseQuotationDetailModel.id,
+                PurchaseOrderDetailModel.purchase_quotation_detail_id,
                 func.sum(PurchaseOrderDetailModel.quantity),
             )
             .join(
                 PurchaseOrderModel,
                 and_(
-                    PurchaseOrderModel.company_id == PurchaseQuotationDetailModel.company_id,
-                    PurchaseOrderModel.purchase_quotation_id
-                    == PurchaseQuotationDetailModel.purchase_quotation_id,
+                    PurchaseOrderModel.company_id == PurchaseOrderDetailModel.company_id,
+                    PurchaseOrderModel.id == PurchaseOrderDetailModel.purchase_order_id,
                 ),
             )
             .join(
-                PurchaseOrderDetailModel,
+                PurchaseQuotationDetailModel,
                 and_(
-                    PurchaseOrderDetailModel.company_id == PurchaseOrderModel.company_id,
-                    PurchaseOrderDetailModel.purchase_order_id == PurchaseOrderModel.id,
-                    PurchaseOrderDetailModel.product_id == PurchaseQuotationDetailModel.product_id,
-                    PurchaseOrderDetailModel.unit_id == PurchaseQuotationDetailModel.unit_id,
+                    PurchaseQuotationDetailModel.company_id == PurchaseOrderDetailModel.company_id,
+                    PurchaseQuotationDetailModel.id
+                    == PurchaseOrderDetailModel.purchase_quotation_detail_id,
+                    PurchaseQuotationDetailModel.purchase_quotation_id
+                    == PurchaseOrderModel.purchase_quotation_id,
                 ),
             )
             .where(
-                PurchaseQuotationDetailModel.company_id == company_id,
-                PurchaseQuotationDetailModel.id.in_(quotation_detail_ids),
+                PurchaseOrderDetailModel.company_id == company_id,
+                PurchaseOrderDetailModel.purchase_quotation_detail_id.in_(quotation_detail_ids),
+                PurchaseOrderModel.company_id == company_id,
                 PurchaseOrderModel.status.in_(COMMITTED_ORDER_STATUS_VALUES),
             )
-            .group_by(PurchaseQuotationDetailModel.id)
+            .group_by(PurchaseOrderDetailModel.purchase_quotation_detail_id)
         )
         ordered: dict[uuid.UUID, Decimal] = {}
         for detail_id, quantity in ordered_result.all():
@@ -577,6 +605,7 @@ class SqlAlchemyPurchaseOrderRepository:
             id=detail.id,
             company_id=company_id,
             purchase_order_id=detail.purchase_order_id,
+            purchase_quotation_detail_id=detail.purchase_quotation_detail_id,
             product_id=detail.product_id,
             quantity=detail.quantity,
             unit_id=detail.unit_id,

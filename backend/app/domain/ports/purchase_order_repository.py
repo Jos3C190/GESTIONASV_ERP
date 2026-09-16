@@ -46,6 +46,13 @@ class PurchaseOrderDestinationReference:
     warehouse_storage_eligible: bool
 
 
+@dataclass(frozen=True, slots=True)
+class PurchaseOrderExpenseTypeReference:
+    id: uuid.UUID
+    name: str
+    description: str | None = None
+
+
 class PurchaseOrderRepository(Protocol):
     async def list_orders(
         self,
@@ -83,6 +90,11 @@ class PurchaseOrderRepository(Protocol):
         branch_id: uuid.UUID,
         warehouse_id: uuid.UUID,
     ) -> PurchaseOrderDestinationReference | None: ...
+
+    async def list_active_expense_types(
+        self,
+        company_id: uuid.UUID,
+    ) -> tuple[PurchaseOrderExpenseTypeReference, ...]: ...
 
     async def is_expense_type_active(
         self,
