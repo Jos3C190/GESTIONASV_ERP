@@ -34,6 +34,7 @@ from app.application.purchase_orders.expense_documents import (
 )
 from app.application.purchase_quotations import PurchaseQuotationUseCases
 from app.application.purchase_requests import PurchaseRequestUseCases
+from app.application.purchases import PurchaseUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.config import settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
@@ -53,6 +54,7 @@ from app.domain.ports.purchase_order_expense_document_repository import (
 )
 from app.domain.ports.purchase_order_repository import PurchaseOrderRepository
 from app.domain.ports.purchase_quotation_repository import PurchaseQuotationRepository
+from app.domain.ports.purchase_repository import PurchaseRepository
 from app.domain.ports.purchase_request_repository import PurchaseRequestRepository
 from app.domain.ports.refresh_token_repository import RefreshTokenRepository
 from app.domain.ports.role_repository import RoleRepository
@@ -82,6 +84,7 @@ from app.infrastructure.repositories.purchase_order_repository import (
 from app.infrastructure.repositories.purchase_quotation_repository import (
     SqlAlchemyPurchaseQuotationRepository,
 )
+from app.infrastructure.repositories.purchase_repository import SqlAlchemyPurchaseRepository
 from app.infrastructure.repositories.purchase_request_repository import (
     SqlAlchemyPurchaseRequestRepository,
 )
@@ -111,6 +114,10 @@ def get_permission_repository(session: SessionDep) -> PermissionRepository:
 
 def get_purchase_order_repository(session: SessionDep) -> PurchaseOrderRepository:
     return SqlAlchemyPurchaseOrderRepository(session)
+
+
+def get_purchase_repository(session: SessionDep) -> PurchaseRepository:
+    return SqlAlchemyPurchaseRepository(session)
 
 
 def get_purchase_order_expense_document_repository(
@@ -239,6 +246,13 @@ def get_purchase_order_use_cases(
     repository: Annotated[PurchaseOrderRepository, Depends(get_purchase_order_repository)],
 ) -> PurchaseOrderUseCases:
     return PurchaseOrderUseCases(repository)
+
+
+def get_purchase_use_cases(
+    repository: Annotated[PurchaseRepository, Depends(get_purchase_repository)],
+    orders: Annotated[PurchaseOrderRepository, Depends(get_purchase_order_repository)],
+) -> PurchaseUseCases:
+    return PurchaseUseCases(repository, orders)
 
 
 def get_purchase_quotation_use_cases(
@@ -461,8 +475,10 @@ __all__ = [
     "get_purchase_order_use_cases",
     "get_purchase_quotation_repository",
     "get_purchase_quotation_use_cases",
+    "get_purchase_repository",
     "get_purchase_request_repository",
     "get_purchase_request_use_cases",
+    "get_purchase_use_cases",
     "get_refresh_token_repository",
     "get_refresh_token_use_case",
     "get_register_user_use_case",
