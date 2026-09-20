@@ -74,6 +74,7 @@ from app.infrastructure.models.product_variant import (
     ProductVariantImageModel,
     ProductVariantModel,
 )
+from app.infrastructure.models.purchase import PurchaseDetailModel, PurchaseModel
 from app.infrastructure.models.purchase_order import (
     PurchaseOrderDetailModel,
     PurchaseOrderExpenseModel,
@@ -164,6 +165,8 @@ __all__: list[str] = [
     "ProductVariantAttributeValueModel",
     "ProductVariantImageModel",
     "ProductVariantModel",
+    "PurchaseDetailModel",
+    "PurchaseModel",
     "PurchaseOrderDetailModel",
     "PurchaseOrderExpenseModel",
     "PurchaseOrderModel",

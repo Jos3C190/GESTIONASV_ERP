@@ -16,6 +16,7 @@ from app.infrastructure.db.session import async_session_factory
 from app.infrastructure.models.audit import AuditLog
 from app.infrastructure.models.catalog import CompanyUnitModel, ProductModel
 from app.infrastructure.models.organization import Branch, Warehouse
+from app.infrastructure.models.purchase import PurchaseDetailModel, PurchaseModel
 from app.infrastructure.models.purchase_order import PurchaseOrderModel
 from app.infrastructure.models.purchase_quotation import (
     ExpenseTypeModel,
@@ -41,6 +42,8 @@ async def purchase_order_client(e2e_client: AsyncClient) -> AsyncIterator[AsyncC
         yield e2e_client
     finally:
         async with async_session_factory() as session:
+            await session.execute(delete(PurchaseDetailModel))
+            await session.execute(delete(PurchaseModel))
             await session.execute(delete(PurchaseOrderModel))
             await session.execute(delete(PurchaseQuotationModel))
             await session.execute(delete(PurchaseRequestModel))
@@ -528,6 +531,347 @@ async def test_purchase_order_cancel_before_send_is_audited(
     assert audit.status_code == 200, audit.text
     actions = {item["action"] for item in audit.json()["items"]}
     assert {"CREATE", "CANCEL"}.issubset(actions)
+
+
+async def _sent_order(
+    client: AsyncClient,
+    *,
+    headers: dict[str, str],
+    branch_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_id: int,
+    supplier_id: int,
+    currency: str,
+    quantity: str = "4.000000",
+) -> dict[str, object]:
+    purchase_request = await _approved_purchase_request(
+        client,
+        headers=headers,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+    )
+    quotation = await _selected_quotation(
+        client,
+        headers=headers,
+        purchase_request=purchase_request,
+        supplier_id=supplier_id,
+        currency=currency,
+    )
+    created = await client.post(
+        "/api/v1/purchase-orders",
+        headers=headers,
+        json=_order_payload(
+            quotation=quotation,
+            branch_id=branch_id,
+            warehouse_id=warehouse_id,
+            quantity=quantity,
+            notes="Orden para validar recepciones",
+        ),
+    )
+    assert created.status_code == 201, created.text
+    order_id = created.json()["id"]
+
+    submitted = await client.post(
+        f"/api/v1/purchase-orders/{order_id}/submit",
+        headers=headers,
+    )
+    assert submitted.status_code == 200, submitted.text
+    approved = await client.post(
+        f"/api/v1/purchase-orders/{order_id}/approve",
+        headers=headers,
+    )
+    assert approved.status_code == 200, approved.text
+    sent = await client.post(
+        f"/api/v1/purchase-orders/{order_id}/send",
+        headers=headers,
+    )
+    assert sent.status_code == 200, sent.text
+    assert sent.json()["status"] == "sent"
+    return sent.json()
+
+
+async def test_purchase_receiving_partial_then_complete_workflow_and_audit(
+    purchase_order_client: AsyncClient,
+) -> None:
+    company_id, branch_id, warehouse_id, product_id, supplier_id, currency = await _reference_ids()
+    headers = await _headers(
+        purchase_order_client,
+        company_id=company_id,
+        username="purchase-receiving-workflow",
+        is_superuser=True,
+    )
+    order = await _sent_order(
+        purchase_order_client,
+        headers=headers,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        supplier_id=supplier_id,
+        currency=currency,
+    )
+    order_id = order["id"]
+    order_details = order["details"]
+    assert isinstance(order_details, list)
+    order_detail = order_details[0]
+    assert isinstance(order_detail, dict)
+    order_detail_id = order_detail["id"]
+
+    receivable = await purchase_order_client.get(
+        f"/api/v1/purchase-orders/{order_id}/receivable",
+        headers=headers,
+    )
+    assert receivable.status_code == 200, receivable.text
+    first_line = receivable.json()["lines"][0]
+    assert Decimal(first_line["quantity_ordered"]) == Decimal("4")
+    assert Decimal(first_line["quantity_received"]) == Decimal("0")
+    assert Decimal(first_line["quantity_pending"]) == Decimal("4")
+
+    first = await purchase_order_client.post(
+        "/api/v1/purchases",
+        headers=headers,
+        json={
+            "purchase_order_id": order_id,
+            "supplier_invoice_number": "FAC-E2E-001",
+            "supplier_invoice_date": datetime.now(UTC).date().isoformat(),
+            "lines": [
+                {
+                    "purchase_order_detail_id": order_detail_id,
+                    "quantity_received": "2.000000",
+                }
+            ],
+            "notes": "Primera recepción parcial",
+        },
+    )
+    assert first.status_code == 201, first.text
+    first_purchase = first.json()
+    first_purchase_id = first_purchase["id"]
+    assert first_purchase["status"] == "draft"
+    assert first_purchase["purchase_order_id"] == order_id
+    assert first_purchase["branch_id"] == str(branch_id)
+    assert first_purchase["warehouse_id"] == str(warehouse_id)
+    assert first_purchase["details"][0]["purchase_order_detail_id"] == order_detail_id
+    assert Decimal(first_purchase["subtotal"]) == Decimal("25")
+    assert Decimal(first_purchase["tax"]) == Decimal("3.25")
+    assert Decimal(first_purchase["total"]) == Decimal("28.25")
+
+    received_first = await purchase_order_client.post(
+        f"/api/v1/purchases/{first_purchase_id}/receive",
+        headers=headers,
+    )
+    assert received_first.status_code == 200, received_first.text
+    assert received_first.json()["status"] == "received"
+
+    order_after_first = await purchase_order_client.get(
+        f"/api/v1/purchase-orders/{order_id}",
+        headers=headers,
+    )
+    assert order_after_first.status_code == 200, order_after_first.text
+    assert order_after_first.json()["status"] == "partially_received"
+
+    receivable_after_first = await purchase_order_client.get(
+        f"/api/v1/purchase-orders/{order_id}/receivable",
+        headers=headers,
+    )
+    assert receivable_after_first.status_code == 200, receivable_after_first.text
+    line_after_first = receivable_after_first.json()["lines"][0]
+    assert Decimal(line_after_first["quantity_received"]) == Decimal("2")
+    assert Decimal(line_after_first["quantity_pending"]) == Decimal("2")
+
+    immutable = await purchase_order_client.put(
+        f"/api/v1/purchases/{first_purchase_id}",
+        headers=headers,
+        json={
+            "supplier_invoice_number": "FAC-E2E-001",
+            "supplier_invoice_date": datetime.now(UTC).date().isoformat(),
+            "lines": [
+                {
+                    "purchase_order_detail_id": order_detail_id,
+                    "quantity_received": "2.000000",
+                }
+            ],
+            "notes": "No debe poder modificarse",
+        },
+    )
+    assert immutable.status_code == 422
+    assert immutable.json()["code"] == "purchase_not_editable"
+
+    verified = await purchase_order_client.post(
+        f"/api/v1/purchases/{first_purchase_id}/verify",
+        headers=headers,
+    )
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["status"] == "verified"
+
+    closed = await purchase_order_client.post(
+        f"/api/v1/purchases/{first_purchase_id}/close",
+        headers=headers,
+    )
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["status"] == "closed"
+
+    second = await purchase_order_client.post(
+        "/api/v1/purchases",
+        headers=headers,
+        json={
+            "purchase_order_id": order_id,
+            "supplier_invoice_number": "FAC-E2E-002",
+            "lines": [
+                {
+                    "purchase_order_detail_id": order_detail_id,
+                    "quantity_received": "2.000000",
+                }
+            ],
+            "notes": "Recepción final",
+        },
+    )
+    assert second.status_code == 201, second.text
+    second_purchase_id = second.json()["id"]
+
+    received_second = await purchase_order_client.post(
+        f"/api/v1/purchases/{second_purchase_id}/receive",
+        headers=headers,
+    )
+    assert received_second.status_code == 200, received_second.text
+
+    completed_order = await purchase_order_client.get(
+        f"/api/v1/purchase-orders/{order_id}",
+        headers=headers,
+    )
+    assert completed_order.status_code == 200, completed_order.text
+    assert completed_order.json()["status"] == "received"
+
+    listed = await purchase_order_client.get(
+        "/api/v1/purchases",
+        headers=headers,
+        params={"branch_id": str(branch_id), "purchase_order_id": order_id},
+    )
+    assert listed.status_code == 200, listed.text
+    listed_ids = {item["id"] for item in listed.json()["items"]}
+    assert {first_purchase_id, second_purchase_id}.issubset(listed_ids)
+
+    audit = await purchase_order_client.get(
+        "/api/v1/audit-logs",
+        headers=headers,
+        params={
+            "company_id": str(company_id),
+            "branch_id": str(branch_id),
+            "resource_type": "purchases",
+            "resource_id": first_purchase_id,
+            "size": 50,
+        },
+    )
+    assert audit.status_code == 200, audit.text
+    audit_items = audit.json()["items"]
+    actions = {item["action"] for item in audit_items}
+    assert {"CREATE", "RECEIVE", "VERIFY", "CLOSE"}.issubset(actions)
+    assert all(item["branch_id"] == str(branch_id) for item in audit_items)
+
+
+async def test_purchase_receiving_rechecks_stale_draft_and_prevents_over_receipt(
+    purchase_order_client: AsyncClient,
+) -> None:
+    company_id, branch_id, warehouse_id, product_id, supplier_id, currency = await _reference_ids()
+    headers = await _headers(
+        purchase_order_client,
+        company_id=company_id,
+        username="purchase-receiving-stale-draft",
+        is_superuser=True,
+    )
+    order = await _sent_order(
+        purchase_order_client,
+        headers=headers,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        supplier_id=supplier_id,
+        currency=currency,
+    )
+    order_id = order["id"]
+    order_details = order["details"]
+    assert isinstance(order_details, list)
+    order_detail = order_details[0]
+    assert isinstance(order_detail, dict)
+    order_detail_id = order_detail["id"]
+
+    draft_ids: list[str] = []
+    for suffix in ("A", "B"):
+        draft = await purchase_order_client.post(
+            "/api/v1/purchases",
+            headers=headers,
+            json={
+                "purchase_order_id": order_id,
+                "supplier_invoice_number": f"FAC-STALE-{suffix}",
+                "lines": [
+                    {
+                        "purchase_order_detail_id": order_detail_id,
+                        "quantity_received": "3.000000",
+                    }
+                ],
+            },
+        )
+        assert draft.status_code == 201, draft.text
+        draft_ids.append(draft.json()["id"])
+
+    first_received = await purchase_order_client.post(
+        f"/api/v1/purchases/{draft_ids[0]}/receive",
+        headers=headers,
+    )
+    assert first_received.status_code == 200, first_received.text
+
+    stale_receive = await purchase_order_client.post(
+        f"/api/v1/purchases/{draft_ids[1]}/receive",
+        headers=headers,
+    )
+    assert stale_receive.status_code == 422
+    assert stale_receive.json()["code"] == "purchase_quantity_exceeded"
+
+    stale_after = await purchase_order_client.get(
+        f"/api/v1/purchases/{draft_ids[1]}",
+        headers=headers,
+    )
+    assert stale_after.status_code == 200, stale_after.text
+    assert stale_after.json()["status"] == "draft"
+
+    order_after = await purchase_order_client.get(
+        f"/api/v1/purchase-orders/{order_id}",
+        headers=headers,
+    )
+    assert order_after.status_code == 200, order_after.text
+    assert order_after.json()["status"] == "partially_received"
+
+    receivable = await purchase_order_client.get(
+        f"/api/v1/purchase-orders/{order_id}/receivable",
+        headers=headers,
+    )
+    assert receivable.status_code == 200, receivable.text
+    line = receivable.json()["lines"][0]
+    assert Decimal(line["quantity_received"]) == Decimal("3")
+    assert Decimal(line["quantity_pending"]) == Decimal("1")
+
+
+async def test_purchase_receiving_requires_rbac_permission(
+    purchase_order_client: AsyncClient,
+) -> None:
+    (
+        company_id,
+        _branch_id,
+        _warehouse_id,
+        _product_id,
+        _supplier_id,
+        _currency,
+    ) = await _reference_ids()
+    headers = await _headers(
+        purchase_order_client,
+        company_id=company_id,
+        username="purchase-receiving-no-role",
+        is_superuser=False,
+    )
+
+    response = await purchase_order_client.get("/api/v1/purchases", headers=headers)
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "forbidden"
 
 
 class PurchaseOrderE2EObjectStorage:

@@ -6,6 +6,7 @@ from app.domain.entities.catalog import Category, Country, Product, SubCategory,
 from app.domain.entities.document_folder import DocumentFolder
 from app.domain.entities.employee import Department, Employee, EmployeeStatus
 from app.domain.entities.media_image import SingleImage, SingleImageDraft
+from app.domain.entities.purchase import Purchase, PurchaseDetail, PurchaseStatus
 from app.domain.entities.purchase_order import (
     PurchaseOrder,
     PurchaseOrderDetail,
@@ -47,6 +48,8 @@ __all__ = [
     "ExpenseType",
     "Permission",
     "Product",
+    "Purchase",
+    "PurchaseDetail",
     "PurchaseOrder",
     "PurchaseOrderDetail",
     "PurchaseOrderExpense",
@@ -60,6 +63,7 @@ __all__ = [
     "PurchaseRequest",
     "PurchaseRequestDetail",
     "PurchaseRequestStatus",
+    "PurchaseStatus",
     "RefreshToken",
     "Role",
     "SingleImage",
