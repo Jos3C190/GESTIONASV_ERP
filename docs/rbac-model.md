@@ -43,6 +43,24 @@ Permission codes follow the format `recurso:accion`.
 | roles | `roles:assign` | Assign roles to users |
 | roles | `roles:revoke` | Revoke roles from users |
 | roles | `permissions:manage` | Modify role/permission mappings |
+| purchase_requests | `purchase_requests:read` | Ver solicitudes de compra |
+| purchase_requests | `purchase_requests:manage` | Crear, editar, enviar y cancelar solicitudes |
+| purchase_requests | `purchase_requests:approve` | Aprobar o rechazar solicitudes |
+| purchase_quotations | `purchase_quotations:read` | Ver solicitudes de cotización, ofertas y comparativas |
+| purchase_quotations | `purchase_quotations:manage` | Crear, enviar, registrar y evaluar cotizaciones |
+| purchase_quotations | `purchase_quotations:select` | Seleccionar la oferta ganadora |
+| purchase_orders | `purchase_orders:read` | Ver órdenes de compra |
+| purchase_orders | `purchase_orders:manage` | Crear, editar, enviar a aprobación y cancelar órdenes de compra |
+| purchase_orders | `purchase_orders:approve` | Aprobar órdenes de compra |
+| purchase_orders | `purchase_orders:send` | Enviar órdenes de compra aprobadas |
+| purchases | `purchases:read` | Ver compras y recepciones |
+| purchases | `purchases:manage` | Crear, editar y cancelar borradores de recepción |
+| purchases | `purchases:receive` | Confirmar recepciones de órdenes de compra |
+| purchases | `purchases:verify` | Verificar y cerrar recepciones de compra |
+| retaceos | `retaceos:read` | Ver retaceos y costos landed |
+| retaceos | `retaceos:manage` | Crear, editar y cancelar retaceos |
+| retaceos | `retaceos:calculate` | Calcular distribución de costos de retaceo |
+| retaceos | `retaceos:verify` | Verificar y cerrar retaceos |
 | audit | `audit_log:read` | Read audit log |
 | auth | `auth:refresh` | Refresh tokens (system-granted) |
 

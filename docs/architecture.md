@@ -27,8 +27,9 @@ transaction. The family graph supports sparse combinations: the catalog can
 declare only the combinations the business actually offers, while preserving
 omitted historical variants as retired for traceability. Inventory now consumes
 `variant_id` through an exclusive inventory identity, balances and handling
-units; purchase, sales, price and replenishment behavior remains deferred until
-those contexts consume the identifier.
+units. The purchasing transaction flow is implemented, but variant-level
+purchasing behavior remains deferred until that context consumes `variant_id`;
+sales, price and replenishment behavior remain deferred as well.
 
 Individual variant maintenance is deliberately separate from the family
 manager. `PATCH /variants/{variant_id}` locks the parent and variant in a
@@ -194,23 +195,29 @@ return only leading groups plus informational remainder buckets. Chart
 failures are isolated from the product table, and asynchronous selections are
 guarded against stale responses.
 
-### ADR-005 — Deferred product-domain capabilities
+### ADR-005 — Product-domain capability boundaries
 
 The product master remains a stable reference aggregate. Inventory balances,
 purchase transactions, retaceo, price assignment, packaging conversions,
 variants, fiscal accounting and compliance documents are separate bounded
-capabilities and are not represented by placeholder columns. Each capability
-must arrive with its own transaction model, permissions, audit events,
-tenant-scoped constraints and consuming UI. The activation gates and future
-debt register live in `docs/product-module-future-debt.txt`.
+capabilities and are not represented by placeholder columns.
+
+Purchase transactions and the current Retaceo capability are now implemented
+as separate transactional capabilities with their own transaction models,
+permissions, audit events, tenant-scoped constraints and consuming UI.
+Automatic publication from Purchases to Inventory/Kardex remains pending.
+
+The activation gates and future debt register live in
+`docs/product-module-future-debt.txt`.
 
 ### ADR-006 — Product master and procurement reference data
 
-Revisions `0035` and `0036` add stable product reference data before inventory
-and purchasing transactions exist. Lifecycle, names, descriptions, keywords,
-storage constraints, identifiers and current supplier terms are useful to
-catalogue, receiving preparation and future purchasing without pretending that
-stock or price history already exists. Supplier links use company-composite
+Revisions `0035` and `0036` added stable product reference data before inventory
+and purchasing transaction capabilities were implemented. Lifecycle, names,
+descriptions, keywords, storage constraints, identifiers and current supplier
+terms remain useful to catalogue, receiving preparation and purchasing without
+pretending that stock or price history belongs to the product master. Supplier
+links use company-composite
 foreign keys and row locks for preferred-supplier changes. Historical price
 curves, MOQ conversions and replenishment rules remain deferred until their
 consuming modules exist.
