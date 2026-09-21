@@ -3,36 +3,30 @@
   import { HttpError } from '$lib/api/client';
   import { catalogApi } from '$lib/api/catalog';
   import { purchaseOrdersApi } from '$lib/api/purchase-orders';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
+  import { purchasesApi } from '$lib/api/purchases';
   import { suppliersApi } from '$lib/api/suppliers';
-  import PurchaseOrderExpenseDocuments from '$lib/features/purchase-orders/components/PurchaseOrderExpenseDocuments.svelte';
-  import PurchaseOrderReceivingAction from '$lib/features/purchase-orders/components/PurchaseOrderReceivingAction.svelte';
-  import PurchaseOrderWorkflowActions from '$lib/features/purchase-orders/components/PurchaseOrderWorkflowActions.svelte';
+  import PurchaseWorkflowActions from '$lib/features/purchases/components/PurchaseWorkflowActions.svelte';
   import { getWarehouse } from '$lib/services/warehouses';
   import { branch } from '$lib/stores/branch.svelte';
-  import type { PurchaseOrder, PurchaseOrderStatus } from '$lib/types/purchase-order';
+  import type { Purchase, PurchaseStatus } from '$lib/types/purchase';
 
   let { id }: { id: string } = $props();
 
-  const STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
+  const STATUS_LABELS: Record<PurchaseStatus, string> = {
     draft: 'Borrador',
-    pending_approval: 'Pendiente de aprobación',
-    approved: 'Aprobada',
-    sent: 'Enviada',
-    partially_received: 'Parcialmente recibida',
     received: 'Recibida',
+    verified: 'Verificada',
     cancelled: 'Cancelada',
     closed: 'Cerrada'
   };
 
-  let item = $state<PurchaseOrder | null>(null);
+  let item = $state<Purchase | null>(null);
   let supplierLabel = $state('');
   let branchLabel = $state('');
   let warehouseLabel = $state('');
-  let quotationLabel = $state('');
+  let orderLabel = $state('');
   let productLabels = $state<Map<number, string>>(new Map());
   let unitLabels = $state<Map<number, string>>(new Map());
-  let expenseTypeLabels = $state<Map<string, string>>(new Map());
   let loading = $state(true);
   let error = $state<string | null>(null);
   let requestSequence = 0;
@@ -40,11 +34,18 @@
   function errorMessage(cause: unknown): string {
     if (cause instanceof HttpError) return cause.message;
     if (cause instanceof Error && cause.message.trim()) return cause.message;
-    return 'No se pudo cargar la orden de compra.';
+
+    return 'No se pudo cargar la compra.';
   }
 
   function formatDate(value: string | null): string {
     if (!value) return '—';
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split('-');
+      return `${day}/${month}/${year}`;
+    }
+
     return new Intl.DateTimeFormat('es-SV', {
       day: '2-digit',
       month: '2-digit',
@@ -56,6 +57,7 @@
   function formatMoney(value: string, currency: string): string {
     const amount = Number(value);
     if (!Number.isFinite(amount)) return value;
+
     return new Intl.NumberFormat('es-SV', {
       style: 'currency',
       currency
@@ -65,6 +67,7 @@
   function formatQuantity(value: string): string {
     const quantity = Number(value);
     if (!Number.isFinite(quantity)) return value;
+
     return new Intl.NumberFormat('es-SV', {
       maximumFractionDigits: 6
     }).format(quantity);
@@ -78,11 +81,7 @@
     return unitLabels.get(id) ?? `Unidad #${id}`;
   }
 
-  function expenseTypeLabel(id: string): string {
-    return expenseTypeLabels.get(id) ?? id;
-  }
-
-  function handleWorkflowUpdated(updated: PurchaseOrder) {
+  function handleUpdated(updated: Purchase) {
     item = updated;
   }
 
@@ -92,39 +91,42 @@
     error = null;
 
     try {
-      const order = await purchaseOrdersApi.get(currentId);
+      const purchase = await purchasesApi.get(currentId);
       if (sequence !== requestSequence) return;
 
-      item = order;
+      item = purchase;
 
-      const productIds = [...new Set(order.details.map((detail) => detail.product_id))];
-      const [supplier, quotation, warehouse, units, products, expenseTypes] = await Promise.all([
-        suppliersApi.getSupplier(order.supplier_id).catch(() => null),
-        purchaseQuotationsApi.get(order.purchase_quotation_id).catch(() => null),
-        getWarehouse(order.warehouse_id).catch(() => null),
+      const productIds = [...new Set(purchase.details.map((detail) => detail.product_id))];
+
+      const [supplier, order, warehouse, units, products] = await Promise.all([
+        suppliersApi.getSupplier(purchase.supplier_id).catch(() => null),
+        purchaseOrdersApi.get(purchase.purchase_order_id).catch(() => null),
+        getWarehouse(purchase.warehouse_id).catch(() => null),
         catalogApi.listUnits(false).catch(() => []),
         Promise.all(
           productIds.map((productId) => catalogApi.getProduct(productId).catch(() => null))
-        ),
-        purchaseOrdersApi.listExpenseTypes().catch(() => [])
+        )
       ]);
 
       if (sequence !== requestSequence) return;
 
       supplierLabel = supplier?.code
         ? `${supplier.code} — ${supplier.name}`
-        : (supplier?.name ?? `Proveedor #${order.supplier_id}`);
+        : (supplier?.name ?? `Proveedor #${purchase.supplier_id}`);
 
-      const currentBranch = branch.branches.find((candidate) => candidate.id === order.branch_id);
+      const currentBranch = branch.branches.find(
+        (candidate) => candidate.id === purchase.branch_id
+      );
+
       branchLabel = currentBranch
         ? `${currentBranch.code ? `${currentBranch.code} — ` : ''}${currentBranch.name}`
-        : `Sucursal ${order.branch_id}`;
+        : `Sucursal ${purchase.branch_id}`;
 
       warehouseLabel = warehouse
         ? `${warehouse.code ? `${warehouse.code} — ` : ''}${warehouse.name}`
-        : `Almacén ${order.warehouse_id}`;
+        : `Almacén ${purchase.warehouse_id}`;
 
-      quotationLabel = quotation?.code ?? order.purchase_quotation_id;
+      orderLabel = order?.code ?? purchase.purchase_order_id;
 
       const nextUnitLabels = new Map<number, string>();
       for (const unit of units) {
@@ -139,22 +141,16 @@
         }
       }
       productLabels = nextProductLabels;
-
-      const nextExpenseTypeLabels = new Map<string, string>();
-      for (const expenseType of expenseTypes) {
-        nextExpenseTypeLabels.set(expenseType.id, expenseType.name);
-      }
-      expenseTypeLabels = nextExpenseTypeLabels;
     } catch (cause: unknown) {
       if (sequence !== requestSequence) return;
+
       item = null;
       supplierLabel = '';
       branchLabel = '';
       warehouseLabel = '';
-      quotationLabel = '';
+      orderLabel = '';
       productLabels = new Map();
       unitLabels = new Map();
-      expenseTypeLabels = new Map();
       error = errorMessage(cause);
     } finally {
       if (sequence === requestSequence) loading = false;
@@ -173,8 +169,8 @@
 
 <section class="space-y-5">
   <div>
-    <a href="/purchase-orders" class="text-sm font-medium text-primary hover:underline">
-      ← Volver a órdenes de compra
+    <a href="/purchases" class="text-sm font-medium text-primary hover:underline">
+      ← Volver a compras
     </a>
   </div>
 
@@ -189,7 +185,7 @@
       </div>
     </div>
   {:else if loading}
-    <div class="space-y-4">
+    <div class="space-y-4" aria-label="Cargando detalle de compra">
       <div class="skeleton h-9 w-56 rounded"></div>
       <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {#each Array(4) as _}
@@ -201,12 +197,15 @@
   {:else if item}
     <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <p class="text-sm font-medium text-primary">Orden de compra</p>
-        <h1 class="text-2xl font-semibold tracking-tight text-foreground">{item.code}</h1>
+        <p class="text-sm font-medium text-primary">Compra / recepción</p>
+        <h1 class="text-2xl font-semibold tracking-tight text-foreground">
+          {item.code}
+        </h1>
         <p class="mt-1 text-sm text-foreground-muted">
           {supplierLabel || `Proveedor #${item.supplier_id}`}
         </p>
       </div>
+
       <span
         class="inline-flex w-fit rounded-full border border-border bg-surface-muted px-3 py-1.5 text-sm font-medium text-foreground"
       >
@@ -214,9 +213,7 @@
       </span>
     </header>
 
-    <PurchaseOrderWorkflowActions order={item} onupdated={handleWorkflowUpdated} />
-
-    <PurchaseOrderReceivingAction order={item} />
+    <PurchaseWorkflowActions purchase={item} onupdated={handleUpdated} />
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <article class="rounded-xl border border-border bg-surface p-4">
@@ -242,116 +239,75 @@
 
       <article class="rounded-xl border border-border bg-surface p-4">
         <p class="text-xs font-medium uppercase tracking-wide text-foreground-muted">
-          Cotización origen
+          Orden origen
         </p>
         <a
-          href={`/purchase-quotations/${item.purchase_quotation_id}`}
+          href={`/purchase-orders/${item.purchase_order_id}`}
           class="mt-2 inline-block font-medium text-primary hover:underline"
         >
-          {quotationLabel || item.purchase_quotation_id}
+          {orderLabel || item.purchase_order_id}
         </a>
       </article>
     </div>
 
     <div class="grid gap-5 xl:grid-cols-[2fr_1fr]">
-      <div class="space-y-5">
-        <article class="rounded-xl border border-border bg-surface">
-          <div class="border-b border-border px-4 py-3">
-            <h2 class="font-semibold text-foreground">Líneas ordenadas</h2>
-          </div>
+      <article class="rounded-xl border border-border bg-surface">
+        <div class="border-b border-border px-4 py-3">
+          <h2 class="font-semibold text-foreground">Detalle recibido</h2>
+        </div>
 
-          {#if item.details.length === 0}
-            <p class="p-4 text-sm text-foreground-muted">No hay líneas en la orden.</p>
-          {:else}
-            <div class="overflow-x-auto">
-              <table class="min-w-full divide-y divide-border text-sm">
-                <thead
-                  class="bg-surface-muted text-left text-xs uppercase tracking-wide text-foreground-muted"
-                >
-                  <tr>
-                    <th class="px-4 py-3 font-medium">Producto</th>
-                    <th class="px-4 py-3 font-medium">Unidad</th>
-                    <th class="px-4 py-3 font-medium">Cantidad</th>
-                    <th class="px-4 py-3 font-medium">Precio unit.</th>
-                    <th class="px-4 py-3 font-medium">Subtotal</th>
-                    <th class="px-4 py-3 font-medium">Impuesto</th>
-                    <th class="px-4 py-3 font-medium">Total</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-border">
-                  {#each item.details as detail (detail.id)}
-                    <tr class="text-foreground">
-                      <td class="min-w-56 px-4 py-3 font-medium">
-                        {productLabel(detail.product_id)}
-                      </td>
-                      <td class="whitespace-nowrap px-4 py-3 text-foreground-muted">
-                        {unitLabel(detail.unit_id)}
-                      </td>
-                      <td class="whitespace-nowrap px-4 py-3">
-                        {formatQuantity(detail.quantity)}
-                      </td>
-                      <td class="whitespace-nowrap px-4 py-3">
-                        {formatMoney(detail.unit_price, item.currency)}
-                      </td>
-                      <td class="whitespace-nowrap px-4 py-3">
-                        {formatMoney(detail.subtotal, item.currency)}
-                      </td>
-                      <td class="whitespace-nowrap px-4 py-3">
-                        {formatMoney(detail.tax_amount, item.currency)}
-                      </td>
-                      <td class="whitespace-nowrap px-4 py-3 font-medium">
-                        {formatMoney(detail.total, item.currency)}
-                      </td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          {/if}
-        </article>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-border text-sm">
+            <thead
+              class="bg-surface-muted text-left text-xs uppercase tracking-wide text-foreground-muted"
+            >
+              <tr>
+                <th class="px-4 py-3 font-medium">Producto</th>
+                <th class="px-4 py-3 font-medium">Unidad</th>
+                <th class="px-4 py-3 font-medium">Ordenado</th>
+                <th class="px-4 py-3 font-medium">Recibido</th>
+                <th class="px-4 py-3 font-medium">Precio unit.</th>
+                <th class="px-4 py-3 font-medium">Total</th>
+              </tr>
+            </thead>
 
-        <article class="rounded-xl border border-border bg-surface">
-          <div class="border-b border-border px-4 py-3">
-            <h2 class="font-semibold text-foreground">Gastos adicionales</h2>
-          </div>
+            <tbody class="divide-y divide-border">
+              {#each item.details as detail (detail.id)}
+                <tr class="text-foreground">
+                  <td class="min-w-56 px-4 py-3 font-medium">
+                    {productLabel(detail.product_id)}
+                  </td>
 
-          {#if item.expenses.length === 0}
-            <p class="p-4 text-sm text-foreground-muted">
-              Esta orden no tiene gastos adicionales registrados.
-            </p>
-          {:else}
-            <ul class="divide-y divide-border">
-              {#each item.expenses as expense (expense.id)}
-                <li class="space-y-3 px-4 py-3 text-sm">
-                  <div class="flex items-start justify-between gap-4">
-                    <div>
-                      <p class="font-medium text-foreground">
-                        {expense.description ?? 'Gasto adicional'}
-                      </p>
-                      <p class="mt-1 text-xs text-foreground-muted">
-                        Tipo de gasto: {expenseTypeLabel(expense.expense_type_id)}
-                      </p>
-                    </div>
-                    <span class="whitespace-nowrap font-medium text-foreground">
-                      {formatMoney(expense.amount, item.currency)}
-                    </span>
-                  </div>
+                  <td class="whitespace-nowrap px-4 py-3 text-foreground-muted">
+                    {unitLabel(detail.unit_id)}
+                  </td>
 
-                  <PurchaseOrderExpenseDocuments
-                    orderId={item.id}
-                    {expense}
-                    orderStatus={item.status}
-                  />
-                </li>
+                  <td class="whitespace-nowrap px-4 py-3">
+                    {formatQuantity(detail.quantity_ordered)}
+                  </td>
+
+                  <td class="whitespace-nowrap px-4 py-3 font-medium">
+                    {formatQuantity(detail.quantity_received)}
+                  </td>
+
+                  <td class="whitespace-nowrap px-4 py-3">
+                    {formatMoney(detail.unit_price, item.currency)}
+                  </td>
+
+                  <td class="whitespace-nowrap px-4 py-3 font-medium">
+                    {formatMoney(detail.total, item.currency)}
+                  </td>
+                </tr>
               {/each}
-            </ul>
-          {/if}
-        </article>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      </article>
 
       <aside class="space-y-5">
         <article class="rounded-xl border border-border bg-surface p-4">
           <h2 class="font-semibold text-foreground">Totales</h2>
+
           <dl class="mt-4 space-y-3 text-sm">
             <div class="flex justify-between gap-4">
               <dt class="text-foreground-muted">Subtotal</dt>
@@ -359,22 +315,21 @@
                 {formatMoney(item.subtotal, item.currency)}
               </dd>
             </div>
+
             <div class="flex justify-between gap-4">
               <dt class="text-foreground-muted">Descuento</dt>
               <dd class="font-medium text-foreground">
                 {formatMoney(item.discount, item.currency)}
               </dd>
             </div>
+
             <div class="flex justify-between gap-4">
               <dt class="text-foreground-muted">Impuestos</dt>
-              <dd class="font-medium text-foreground">{formatMoney(item.tax, item.currency)}</dd>
-            </div>
-            <div class="flex justify-between gap-4">
-              <dt class="text-foreground-muted">Gastos adicionales</dt>
               <dd class="font-medium text-foreground">
-                {formatMoney(item.additional_expenses, item.currency)}
+                {formatMoney(item.tax, item.currency)}
               </dd>
             </div>
+
             <div class="flex justify-between gap-4 border-t border-border pt-3">
               <dt class="font-semibold text-foreground">Total</dt>
               <dd class="font-semibold text-foreground">
@@ -385,24 +340,34 @@
         </article>
 
         <article class="rounded-xl border border-border bg-surface p-4">
-          <h2 class="font-semibold text-foreground">Condiciones</h2>
+          <h2 class="font-semibold text-foreground">Documento proveedor</h2>
+
           <dl class="mt-4 space-y-3 text-sm">
             <div>
-              <dt class="text-foreground-muted">Fecha de orden</dt>
-              <dd class="mt-1 font-medium text-foreground">{formatDate(item.order_date)}</dd>
+              <dt class="text-foreground-muted">Fecha de registro</dt>
+              <dd class="mt-1 font-medium text-foreground">
+                {formatDate(item.purchase_date)}
+              </dd>
             </div>
+
             <div>
-              <dt class="text-foreground-muted">Fecha esperada</dt>
-              <dd class="mt-1 font-medium text-foreground">{formatDate(item.expected_date)}</dd>
+              <dt class="text-foreground-muted">Factura</dt>
+              <dd class="mt-1 font-medium text-foreground">
+                {item.supplier_invoice_number ?? '—'}
+              </dd>
             </div>
+
+            <div>
+              <dt class="text-foreground-muted">Fecha factura</dt>
+              <dd class="mt-1 font-medium text-foreground">
+                {formatDate(item.supplier_invoice_date)}
+              </dd>
+            </div>
+
             <div>
               <dt class="text-foreground-muted">Moneda</dt>
-              <dd class="mt-1 font-medium text-foreground">{item.currency}</dd>
-            </div>
-            <div>
-              <dt class="text-foreground-muted">Términos de pago</dt>
-              <dd class="mt-1 whitespace-pre-wrap text-foreground">
-                {item.payment_terms ?? '—'}
+              <dd class="mt-1 font-medium text-foreground">
+                {item.currency}
               </dd>
             </div>
           </dl>
@@ -411,7 +376,9 @@
         {#if item.notes}
           <article class="rounded-xl border border-border bg-surface p-4">
             <h2 class="font-semibold text-foreground">Notas</h2>
-            <p class="mt-3 whitespace-pre-wrap text-sm text-foreground-muted">{item.notes}</p>
+            <p class="mt-3 whitespace-pre-wrap text-sm text-foreground-muted">
+              {item.notes}
+            </p>
           </article>
         {/if}
       </aside>
