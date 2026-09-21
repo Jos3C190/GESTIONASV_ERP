@@ -190,9 +190,9 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Compras',
         icon: ICONS.purchases,
-        route: '/placeholder?module=Compras',
-        implemented: false,
-        module: 'Compras'
+        route: '/purchases',
+        implemented: true,
+        requiredPermission: 'purchases:read'
       },
       {
         label: 'Retaceo',
