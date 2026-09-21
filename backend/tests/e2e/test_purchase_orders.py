@@ -23,6 +23,7 @@ from app.infrastructure.models.purchase_quotation import (
     PurchaseQuotationModel,
 )
 from app.infrastructure.models.purchase_request import PurchaseRequestModel
+from app.infrastructure.models.retaceo import RetaceoDetailModel, RetaceoModel
 from app.infrastructure.models.supplier import SupplierModel
 from app.infrastructure.models.supplier_master_data import CurrencyModel
 from httpx import AsyncClient
@@ -42,6 +43,8 @@ async def purchase_order_client(e2e_client: AsyncClient) -> AsyncIterator[AsyncC
         yield e2e_client
     finally:
         async with async_session_factory() as session:
+            await session.execute(delete(RetaceoDetailModel))
+            await session.execute(delete(RetaceoModel))
             await session.execute(delete(PurchaseDetailModel))
             await session.execute(delete(PurchaseModel))
             await session.execute(delete(PurchaseOrderModel))
@@ -869,6 +872,190 @@ async def test_purchase_receiving_requires_rbac_permission(
     )
 
     response = await purchase_order_client.get("/api/v1/purchases", headers=headers)
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "forbidden"
+
+
+async def test_retaceo_workflow_uses_purchase_details_and_audits(
+    purchase_order_client: AsyncClient,
+) -> None:
+    company_id, branch_id, warehouse_id, product_id, supplier_id, currency = await _reference_ids()
+    headers = await _headers(
+        purchase_order_client,
+        company_id=company_id,
+        username="retaceo-workflow",
+        is_superuser=True,
+    )
+    order = await _sent_order(
+        purchase_order_client,
+        headers=headers,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        supplier_id=supplier_id,
+        currency=currency,
+        quantity="2.000000",
+    )
+    order_details = order["details"]
+    assert isinstance(order_details, list)
+    order_detail = order_details[0]
+    assert isinstance(order_detail, dict)
+
+    purchase_response = await purchase_order_client.post(
+        "/api/v1/purchases",
+        headers=headers,
+        json={
+            "purchase_order_id": order["id"],
+            "supplier_invoice_number": "FAC-RET-001",
+            "lines": [
+                {
+                    "purchase_order_detail_id": order_detail["id"],
+                    "quantity_received": "2.000000",
+                }
+            ],
+        },
+    )
+    assert purchase_response.status_code == 201, purchase_response.text
+    purchase = purchase_response.json()
+    purchase_id = purchase["id"]
+
+    received = await purchase_order_client.post(
+        f"/api/v1/purchases/{purchase_id}/receive",
+        headers=headers,
+    )
+    assert received.status_code == 200, received.text
+    assert received.json()["status"] == "received"
+
+    created = await purchase_order_client.post(
+        "/api/v1/retaceos",
+        headers=headers,
+        json={
+            "purchase_id": purchase_id,
+            "total_freight": "5.000000",
+            "total_expenses": "2.000000",
+            "total_dai": "3.000000",
+            "import_vat": "13.000000",
+            "notes": "Retaceo E2E",
+        },
+    )
+    assert created.status_code == 201, created.text
+    retaceo = created.json()
+    retaceo_id = retaceo["id"]
+    purchase_detail = purchase["details"][0]
+    expected_fob = Decimal(purchase_detail["subtotal"]) - Decimal(purchase_detail["discount"])
+
+    assert retaceo["status"] == "draft"
+    assert retaceo["purchase_id"] == purchase_id
+    assert retaceo["branch_id"] == str(branch_id)
+    assert retaceo["details"][0]["purchase_detail_id"] == purchase_detail["id"]
+    assert Decimal(retaceo["total_fob"]) == expected_fob
+    assert Decimal(retaceo["total_cost"]) == expected_fob + Decimal("10")
+    assert Decimal(retaceo["import_vat"]) == Decimal("13")
+    assert Decimal(retaceo["freight_percentage"]) == Decimal("20")
+    assert Decimal(retaceo["expense_percentage"]) == Decimal("8")
+    assert Decimal(retaceo["dai_percentage"]) == Decimal("12")
+
+    updated = await purchase_order_client.put(
+        f"/api/v1/retaceos/{retaceo_id}",
+        headers=headers,
+        json={
+            "total_freight": "6.000000",
+            "total_expenses": "2.000000",
+            "total_dai": "3.000000",
+            "import_vat": "13.000000",
+            "notes": "Retaceo ajustado",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert Decimal(updated.json()["total_cost"]) == expected_fob + Decimal("11")
+
+    calculated = await purchase_order_client.post(
+        f"/api/v1/retaceos/{retaceo_id}/calculate",
+        headers=headers,
+    )
+    assert calculated.status_code == 200, calculated.text
+    assert calculated.json()["status"] == "calculated"
+
+    immutable = await purchase_order_client.put(
+        f"/api/v1/retaceos/{retaceo_id}",
+        headers=headers,
+        json={
+            "total_freight": "1.000000",
+            "total_expenses": "1.000000",
+            "total_dai": "1.000000",
+            "import_vat": "1.000000",
+        },
+    )
+    assert immutable.status_code == 422
+    assert immutable.json()["code"] == "retaceo_not_editable"
+
+    verified = await purchase_order_client.post(
+        f"/api/v1/retaceos/{retaceo_id}/verify",
+        headers=headers,
+    )
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["status"] == "verified"
+
+    closed = await purchase_order_client.post(
+        f"/api/v1/retaceos/{retaceo_id}/close",
+        headers=headers,
+    )
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["status"] == "closed"
+
+    fetched = await purchase_order_client.get(
+        f"/api/v1/retaceos/{retaceo_id}",
+        headers=headers,
+    )
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["status"] == "closed"
+
+    listed = await purchase_order_client.get(
+        "/api/v1/retaceos",
+        headers=headers,
+        params={"purchase_id": purchase_id, "branch_id": str(branch_id)},
+    )
+    assert listed.status_code == 200, listed.text
+    assert retaceo_id in {item["id"] for item in listed.json()["items"]}
+
+    audit = await purchase_order_client.get(
+        "/api/v1/audit-logs",
+        headers=headers,
+        params={
+            "company_id": str(company_id),
+            "branch_id": str(branch_id),
+            "resource_type": "retaceos",
+            "resource_id": retaceo_id,
+            "size": 50,
+        },
+    )
+    assert audit.status_code == 200, audit.text
+    audit_items = audit.json()["items"]
+    actions = {item["action"] for item in audit_items}
+    assert {"CREATE", "UPDATE", "CALCULATE", "VERIFY", "CLOSE"}.issubset(actions)
+    assert all(item["branch_id"] == str(branch_id) for item in audit_items)
+
+
+async def test_retaceo_requires_rbac_permission(
+    purchase_order_client: AsyncClient,
+) -> None:
+    (
+        company_id,
+        _branch_id,
+        _warehouse_id,
+        _product_id,
+        _supplier_id,
+        _currency,
+    ) = await _reference_ids()
+    headers = await _headers(
+        purchase_order_client,
+        company_id=company_id,
+        username="retaceo-no-role",
+        is_superuser=False,
+    )
+
+    response = await purchase_order_client.get("/api/v1/retaceos", headers=headers)
 
     assert response.status_code == 403
     assert response.json()["code"] == "forbidden"

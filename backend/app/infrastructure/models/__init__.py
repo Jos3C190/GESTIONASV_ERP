@@ -98,6 +98,7 @@ from app.infrastructure.models.rbac import (
     RolePermission,
     UserRole,
 )
+from app.infrastructure.models.retaceo import RetaceoDetailModel, RetaceoModel
 from app.infrastructure.models.supplier import SupplierContactModel, SupplierModel
 from app.infrastructure.models.supplier_image import SupplierContactImageModel, SupplierImageModel
 from app.infrastructure.models.supplier_master_data import (
@@ -178,6 +179,8 @@ __all__: list[str] = [
     "PurchaseRequestDetailModel",
     "PurchaseRequestModel",
     "RefreshToken",
+    "RetaceoDetailModel",
+    "RetaceoModel",
     "Role",
     "RolePermission",
     "SubCategoryModel",
