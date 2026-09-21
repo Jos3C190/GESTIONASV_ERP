@@ -28,6 +28,11 @@ from app.domain.entities.purchase_request import (
     PurchaseRequestStatus,
 )
 from app.domain.entities.rbac import Permission, Role, UserRoleAssignment
+from app.domain.entities.retaceo import (
+    Retaceo,
+    RetaceoDetail,
+    RetaceoStatus,
+)
 from app.domain.entities.supplier import (
     Supplier,
     SupplierAddress,
@@ -65,6 +70,9 @@ __all__ = [
     "PurchaseRequestStatus",
     "PurchaseStatus",
     "RefreshToken",
+    "Retaceo",
+    "RetaceoDetail",
+    "RetaceoStatus",
     "Role",
     "SingleImage",
     "SingleImageDraft",

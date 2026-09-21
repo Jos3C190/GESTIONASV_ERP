@@ -36,6 +36,7 @@ from app.application.purchase_quotations import PurchaseQuotationUseCases
 from app.application.purchase_requests import PurchaseRequestUseCases
 from app.application.purchases import PurchaseUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
+from app.application.retaceos import RetaceoUseCases
 from app.core.config import settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.domain.entities.user import User
@@ -57,6 +58,7 @@ from app.domain.ports.purchase_quotation_repository import PurchaseQuotationRepo
 from app.domain.ports.purchase_repository import PurchaseRepository
 from app.domain.ports.purchase_request_repository import PurchaseRequestRepository
 from app.domain.ports.refresh_token_repository import RefreshTokenRepository
+from app.domain.ports.retaceo_repository import RetaceoRepository
 from app.domain.ports.role_repository import RoleRepository
 from app.domain.ports.token_service import TokenService
 from app.domain.ports.user_repository import UserRepository
@@ -88,6 +90,7 @@ from app.infrastructure.repositories.purchase_repository import SqlAlchemyPurcha
 from app.infrastructure.repositories.purchase_request_repository import (
     SqlAlchemyPurchaseRequestRepository,
 )
+from app.infrastructure.repositories.retaceo_repository import SqlAlchemyRetaceoRepository
 
 # Type aliases used widely in routers.
 SessionDep = Annotated[AsyncSession, Depends(get_async_session)]
@@ -118,6 +121,10 @@ def get_purchase_order_repository(session: SessionDep) -> PurchaseOrderRepositor
 
 def get_purchase_repository(session: SessionDep) -> PurchaseRepository:
     return SqlAlchemyPurchaseRepository(session)
+
+
+def get_retaceo_repository(session: SessionDep) -> RetaceoRepository:
+    return SqlAlchemyRetaceoRepository(session)
 
 
 def get_purchase_order_expense_document_repository(
@@ -253,6 +260,13 @@ def get_purchase_use_cases(
     orders: Annotated[PurchaseOrderRepository, Depends(get_purchase_order_repository)],
 ) -> PurchaseUseCases:
     return PurchaseUseCases(repository, orders)
+
+
+def get_retaceo_use_cases(
+    repository: Annotated[RetaceoRepository, Depends(get_retaceo_repository)],
+    purchases: Annotated[PurchaseRepository, Depends(get_purchase_repository)],
+) -> RetaceoUseCases:
+    return RetaceoUseCases(repository, purchases)
 
 
 def get_purchase_quotation_use_cases(
@@ -482,6 +496,8 @@ __all__ = [
     "get_refresh_token_repository",
     "get_refresh_token_use_case",
     "get_register_user_use_case",
+    "get_retaceo_repository",
+    "get_retaceo_use_cases",
     "get_role_repository",
     "get_token_service",
     "get_user_repository",

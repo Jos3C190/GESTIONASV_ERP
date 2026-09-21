@@ -138,6 +138,15 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     ),
     PermissionSpec("purchases:receive", "Confirmar recepciones de órdenes de compra", "purchases"),
     PermissionSpec("purchases:verify", "Verificar y cerrar recepciones de compra", "purchases"),
+    # --- retaceo ---
+    PermissionSpec("retaceos:read", "Ver retaceos y costos landed", "retaceos"),
+    PermissionSpec("retaceos:manage", "Crear, editar y cancelar retaceos", "retaceos"),
+    PermissionSpec(
+        "retaceos:calculate",
+        "Calcular distribución de costos de retaceo",
+        "retaceos",
+    ),
+    PermissionSpec("retaceos:verify", "Verificar y cerrar retaceos", "retaceos"),
     # --- purchase orders ---
     PermissionSpec("purchase_orders:read", "Ver órdenes de compra", "purchase_orders"),
     PermissionSpec(

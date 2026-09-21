@@ -33,6 +33,7 @@ from app.api.v1.routers import (
     purchase_quotations,
     purchase_requests,
     purchases,
+    retaceos,
     roles,
     supplier_master,
     suppliers,
@@ -67,6 +68,7 @@ api_router.include_router(expense_types.router, prefix="/api/v1")
 api_router.include_router(purchase_orders.router, prefix="/api/v1")
 api_router.include_router(purchases.order_router, prefix="/api/v1")
 api_router.include_router(purchases.router, prefix="/api/v1")
+api_router.include_router(retaceos.router, prefix="/api/v1")
 api_router.include_router(purchase_quotations.router, prefix="/api/v1")
 api_router.include_router(purchase_requests.router, prefix="/api/v1")
 api_router.include_router(supplier_master.router, prefix="/api/v1")
