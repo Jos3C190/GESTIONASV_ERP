@@ -183,6 +183,47 @@ describe('PurchaseDetail', () => {
     expect(document.body.textContent).toContain('113');
   });
 
+  it('exposes retaceo creation for eligible purchases with manage permission', async () => {
+    mocks.hasPermission.mockImplementation((code: string) => code === 'retaceos:manage');
+    mocks.get.mockResolvedValue({
+      ...purchase,
+      status: 'received'
+    });
+
+    render(PurchaseDetail, {
+      props: { id: purchase.id }
+    });
+
+    const link = await screen.findByRole('link', { name: 'Crear retaceo' });
+
+    expect(link).toHaveAttribute('href', `/retaceos/new?purchase_id=${purchase.id}`);
+  });
+
+  it('does not expose retaceo creation for a draft purchase', async () => {
+    mocks.hasPermission.mockImplementation((code: string) => code === 'retaceos:manage');
+
+    render(PurchaseDetail, {
+      props: { id: purchase.id }
+    });
+
+    expect(await screen.findByText('COM-0001')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Crear retaceo' })).not.toBeInTheDocument();
+  });
+
+  it('does not expose retaceo creation without retaceos:manage', async () => {
+    mocks.get.mockResolvedValue({
+      ...purchase,
+      status: 'received'
+    });
+
+    render(PurchaseDetail, {
+      props: { id: purchase.id }
+    });
+
+    expect(await screen.findByText('COM-0001')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Crear retaceo' })).not.toBeInTheDocument();
+  });
+
   it('renders an error and retries the purchase request', async () => {
     mocks.get.mockRejectedValueOnce(new Error('No disponible')).mockResolvedValueOnce(purchase);
 

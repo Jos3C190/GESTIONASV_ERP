@@ -197,9 +197,9 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Retaceo',
         icon: ICONS.retazeo,
-        route: '/placeholder?module=Retaceo',
-        implemented: false,
-        module: 'Retaceo'
+        route: '/retaceos',
+        implemented: true,
+        requiredPermission: 'retaceos:read'
       },
       {
         label: 'Asignación de precios',

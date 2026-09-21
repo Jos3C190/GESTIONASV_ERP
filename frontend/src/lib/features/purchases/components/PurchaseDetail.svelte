@@ -8,6 +8,7 @@
   import PurchaseWorkflowActions from '$lib/features/purchases/components/PurchaseWorkflowActions.svelte';
   import { getWarehouse } from '$lib/services/warehouses';
   import { branch } from '$lib/stores/branch.svelte';
+  import { permissions } from '$lib/stores/permissions.svelte';
   import type { Purchase, PurchaseStatus } from '$lib/types/purchase';
 
   let { id }: { id: string } = $props();
@@ -30,6 +31,13 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let requestSequence = 0;
+
+  let canManageRetaceo = $derived(permissions.hasPermission('retaceos:manage'));
+  let canCreateRetaceo = $derived(
+    canManageRetaceo &&
+      item !== null &&
+      (item.status === 'received' || item.status === 'verified' || item.status === 'closed')
+  );
 
   function errorMessage(cause: unknown): string {
     if (cause instanceof HttpError) return cause.message;
@@ -214,6 +222,29 @@
     </header>
 
     <PurchaseWorkflowActions purchase={item} onupdated={handleUpdated} />
+
+    {#if canCreateRetaceo}
+      <section
+        class="rounded-xl border border-border bg-surface p-4"
+        aria-label="Retaceo de compra"
+      >
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 class="font-semibold text-foreground">Retaceo</h2>
+            <p class="mt-1 text-sm text-foreground-muted">
+              Registra los costos de importación asociados a esta compra.
+            </p>
+          </div>
+
+          <a
+            href={`/retaceos/new?purchase_id=${item.id}`}
+            class="inline-flex h-9 items-center justify-center rounded-lg bg-foreground px-3.5 text-sm font-medium text-surface transition-all duration-150 hover:bg-foreground-muted"
+          >
+            Crear retaceo
+          </a>
+        </div>
+      </section>
+    {/if}
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <article class="rounded-xl border border-border bg-surface p-4">
