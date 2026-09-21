@@ -90,17 +90,24 @@ PUR-001 | Cotizaciones, órdenes y recepción de compras
 -------------------------------------------------------
 Prioridad: alta
 Módulo dependiente: Compras
-Problema que resuelve: La relación producto-proveedor no tiene documentos que
-representen solicitud, aprobación, compra o recepción.
+Problema que resuelve: La relación producto-proveedor necesita documentos que
+representen solicitud, cotización, selección, aprobación, compra y recepción.
 Datos requeridos: solicitud, cotización, proveedor, líneas, precios, moneda,
 impuestos, fechas, aprobaciones, recepción parcial y diferencias.
-Reglas de negocio: estados explícitos, separación de funciones, recepción
-parcial idempotente y relación con el proveedor preferido sin obligarlo.
+Reglas de negocio: estados explícitos, permisos por acción, aislamiento por
+empresa y sucursal, trazabilidad exacta entre líneas y control de cantidades
+pendientes de recibir.
 Riesgos: compras sin autorización, cantidades duplicadas y recepción falsa.
 Criterio de activación: proveedores y productos con relaciones activas.
-Criterio de aceptación: una orden aprobada puede recibirse parcial o
-completamente y deja trazabilidad hasta el inventario.
-Estado: bloqueada
+Criterio de aceptación: una solicitud puede avanzar por cotización, selección,
+orden y recepción conservando la trazabilidad de sus líneas; una orden puede
+recibirse parcialmente y no se permiten cantidades superiores a lo pendiente.
+Estado: implementada parcialmente. El flujo solicitud -> cotización -> selección
+-> orden -> recepción está implementado con estados, permisos, auditoría,
+aislamiento por empresa y sucursal y trazabilidad exacta entre documentos.
+La recepción parcial y el bloqueo de sobre-recepción también están
+implementados. Permanece pendiente la publicación automática de las recepciones
+hacia Inventario/Kardex.
 
 PUR-002 | Historial de costos y ofertas por proveedor
 ------------------------------------------------------
@@ -136,17 +143,26 @@ RET-001 | Retaceo y costo landed
 ---------------------------------
 Prioridad: alta
 Módulo dependiente: Compras internacionales y Retaceo
-Problema que resuelve: El costo del producto importado no incluye gastos
-logísticos, aduanales ni seguros.
-Datos requeridos: embarque, factura, transporte, seguro, aranceles, impuestos,
-gastos portuarios, base de distribución y líneas afectadas.
-Reglas de negocio: documentos inmutables después del cierre; distribución
-reproducible y configurable por valor, peso, volumen o cantidad.
-Riesgos: costo unitario incorrecto y márgenes falsos.
-Criterio de activación: compras internacionales y documentos de importación.
-Criterio de aceptación: el costo landed se reconcilia con el total del
-embarque y queda auditado por producto.
-Estado: bloqueada
+Problema que resuelve: El costo de una compra puede requerir distribuir gastos
+adicionales para obtener un costo landed reproducible por línea.
+Datos requeridos: compra, líneas recibidas, FOB, flete, gastos, DAI, IVA de
+importación, moneda y base de distribución.
+Reglas de negocio: el Retaceo parte de una compra real; el FOB se deriva de
+cada detalle de compra; flete, gastos y DAI se distribuyen proporcionalmente
+por FOB; el IVA de importación se conserva separado del costo landed.
+Riesgos: costo unitario incorrecto, distribuciones no reproducibles y pérdida
+de trazabilidad con la compra origen.
+Criterio de activación: compras recibidas disponibles para retacear.
+Criterio de aceptación: un Retaceo conserva trazabilidad hasta cada detalle de
+compra y calcula costos totales y unitarios reproducibles con precisión de seis
+decimales.
+Estado: implementada parcialmente. El Retaceo actual parte de una compra real,
+deriva el FOB de sus líneas y distribuye proporcionalmente flete, gastos y DAI.
+Los costos total y unitario utilizan precisión de seis decimales; el IVA de
+importación se almacena por separado. El flujo cuenta con estados, permisos,
+auditoría y aislamiento por empresa y sucursal. Permanecen pendientes un alcance
+más amplio de embarques e importación, bases configurables por peso, volumen o
+cantidad y la integración automática con Inventario/Kardex.
 
 PRC-001 | Listas y reglas de precios
 -------------------------------------

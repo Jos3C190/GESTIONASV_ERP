@@ -197,14 +197,110 @@ El bucket y las claves privadas nunca forman parte del contrato HTTP.
 Solicitar `variant=ocr` antes de `ready` responde `409 document_ocr_not_ready`. La activación y
 descarga original no esperan al worker OCR.
 
-### Deferred product API scope
+### Purchase Requests
 
-The API does not expose purchase orders, landed-cost allocation, price lists,
-fiscal accounting rules or compliance documents yet. Variant master data and
-the global inventory summary are available, while purchasing, sales and
-pricing endpoints that consume `variant_id` remain deferred
-until their consuming modules exist. The dependency and acceptance matrix is
-documented in [`docs/product-module-future-debt.txt`](product-module-future-debt.txt).
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/purchase-requests` | `purchase_requests:read` | Listar solicitudes de compra |
+| `GET` | `/api/v1/purchase-requests/{request_id}` | `purchase_requests:read` | Obtener una solicitud de compra |
+| `POST` | `/api/v1/purchase-requests` | `purchase_requests:manage` | Crear una solicitud en borrador |
+| `PUT` | `/api/v1/purchase-requests/{request_id}` | `purchase_requests:manage` | Actualizar una solicitud en borrador |
+| `POST` | `/api/v1/purchase-requests/{request_id}/submit` | `purchase_requests:manage` | Enviar a aprobación |
+| `POST` | `/api/v1/purchase-requests/{request_id}/approve` | `purchase_requests:approve` | Aprobar solicitud |
+| `POST` | `/api/v1/purchase-requests/{request_id}/reject` | `purchase_requests:approve` | Rechazar solicitud |
+| `POST` | `/api/v1/purchase-requests/{request_id}/cancel` | `purchase_requests:manage` | Cancelar solicitud |
+
+### Purchase Quotations
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/purchase-quotations` | `purchase_quotations:read` | Listar cotizaciones de compra |
+| `GET` | `/api/v1/purchase-quotations/comparison/{purchase_request_id}` | `purchase_quotations:read` | Comparar ofertas para una solicitud de compra |
+| `GET` | `/api/v1/purchase-quotations/{quotation_id}` | `purchase_quotations:read` | Obtener una cotización de compra |
+| `POST` | `/api/v1/purchase-quotations` | `purchase_quotations:manage` | Crear borrador de solicitud de cotización |
+| `PUT` | `/api/v1/purchase-quotations/{quotation_id}/response` | `purchase_quotations:manage` | Registrar o actualizar la respuesta del proveedor |
+| `POST` | `/api/v1/purchase-quotations/{quotation_id}/send` | `purchase_quotations:manage` | Enviar solicitud de cotización al proveedor |
+| `POST` | `/api/v1/purchase-quotations/{quotation_id}/evaluate` | `purchase_quotations:manage` | Pasar la cotización a evaluación |
+| `POST` | `/api/v1/purchase-quotations/{quotation_id}/select` | `purchase_quotations:select` | Seleccionar la oferta |
+| `POST` | `/api/v1/purchase-quotations/{quotation_id}/reject` | `purchase_quotations:manage` | Rechazar la oferta |
+| `POST` | `/api/v1/purchase-quotations/{quotation_id}/cancel` | `purchase_quotations:manage` | Cancelar la solicitud de cotización |
+
+### Purchase Orders
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/purchase-orders` | `purchase_orders:read` | Listar órdenes de compra |
+| `GET` | `/api/v1/purchase-orders/{order_id}` | `purchase_orders:read` | Obtener una orden de compra |
+| `POST` | `/api/v1/purchase-orders` | `purchase_orders:manage` | Crear una orden desde una cotización seleccionada |
+| `PUT` | `/api/v1/purchase-orders/{order_id}` | `purchase_orders:manage` | Editar una orden en borrador |
+| `POST` | `/api/v1/purchase-orders/{order_id}/submit` | `purchase_orders:manage` | Enviar la orden a aprobación |
+| `POST` | `/api/v1/purchase-orders/{order_id}/approve` | `purchase_orders:approve` | Aprobar la orden |
+| `POST` | `/api/v1/purchase-orders/{order_id}/send` | `purchase_orders:send` | Enviar la orden aprobada al proveedor |
+| `POST` | `/api/v1/purchase-orders/{order_id}/cancel` | `purchase_orders:manage` | Cancelar la orden antes de su envío |
+| `POST` | `/api/v1/purchase-orders/{order_id}/expenses/{expense_id}/documents/uploads` | `purchase_orders:manage` | Iniciar carga de documento para un gasto |
+| `POST` | `/api/v1/purchase-orders/{order_id}/expenses/{expense_id}/documents/{document_id}/complete` | `purchase_orders:manage` | Completar el documento de gasto |
+| `GET` | `/api/v1/purchase-orders/{order_id}/expenses/{expense_id}/documents` | `purchase_orders:read` | Listar documentos de un gasto |
+| `POST` | `/api/v1/purchase-orders/{order_id}/expenses/{expense_id}/documents/{document_id}/download-url` | `purchase_orders:read` | Generar URL temporal de descarga |
+
+### Purchases / Receiving
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/purchases` | `purchases:read` | Listar compras y recepciones |
+| `GET` | `/api/v1/purchases/{purchase_id}` | `purchases:read` | Obtener una compra o recepción |
+| `GET` | `/api/v1/purchase-orders/{order_id}/receivable` | `purchases:read` | Consultar cantidades pendientes de recibir de una orden |
+| `POST` | `/api/v1/purchases` | `purchases:manage` | Crear un borrador de recepción desde una orden de compra |
+| `PUT` | `/api/v1/purchases/{purchase_id}` | `purchases:manage` | Editar una recepción mientras permanezca en borrador |
+| `POST` | `/api/v1/purchases/{purchase_id}/receive` | `purchases:receive` | Confirmar la recepción |
+| `POST` | `/api/v1/purchases/{purchase_id}/verify` | `purchases:verify` | Verificar la recepción |
+| `POST` | `/api/v1/purchases/{purchase_id}/cancel` | `purchases:manage` | Cancelar un borrador de recepción |
+| `POST` | `/api/v1/purchases/{purchase_id}/close` | `purchases:verify` | Cerrar una recepción verificada |
+
+Reglas principales:
+
+- Toda compra o recepción se crea a partir de una orden de compra enviada o parcialmente recibida.
+- Se permite recepción parcial; la orden pasa a `partially_received` mientras existan cantidades pendientes.
+- La API bloquea cantidades que excedan lo pendiente de recibir en la orden.
+- Cada detalle conserva la trazabilidad exacta mediante `purchase_order_detail_id`.
+- Una compra confirmada como recibida ya no puede editarse como borrador.
+
+### Retaceo
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/retaceos` | `retaceos:read` | Listar retaceos |
+| `GET` | `/api/v1/retaceos/{retaceo_id}` | `retaceos:read` | Obtener un retaceo |
+| `POST` | `/api/v1/retaceos` | `retaceos:manage` | Crear un borrador de retaceo desde una compra |
+| `PUT` | `/api/v1/retaceos/{retaceo_id}` | `retaceos:manage` | Editar un retaceo en borrador |
+| `POST` | `/api/v1/retaceos/{retaceo_id}/calculate` | `retaceos:calculate` | Congelar el cálculo del retaceo |
+| `POST` | `/api/v1/retaceos/{retaceo_id}/verify` | `retaceos:verify` | Verificar un retaceo calculado |
+| `POST` | `/api/v1/retaceos/{retaceo_id}/cancel` | `retaceos:manage` | Cancelar un retaceo |
+| `POST` | `/api/v1/retaceos/{retaceo_id}/close` | `retaceos:verify` | Cerrar un retaceo verificado |
+
+Reglas principales:
+
+- El Retaceo pertenece a una compra real, no directamente a una orden de compra.
+- La compra debe estar en estado `received`, `verified` o `closed`.
+- Se permiten múltiples Retaceos asociados a una misma compra.
+- El FOB de cada línea se deriva de `subtotal - discount` del detalle de compra.
+- Flete, gastos y DAI se distribuyen proporcionalmente según el FOB de cada línea.
+- El IVA de importación (`import_vat`) se almacena y muestra por separado y no forma parte del landed cost (`total_cost`).
+- El flujo es `draft -> calculated -> verified -> closed`; desde `draft` o `calculated` también puede pasar a `cancelled`.
+- El Retaceo actual no genera movimientos de Inventario ni Kardex.
+
+### Remaining deferred product API scope
+
+Price lists, fiscal accounting rules and compliance documents are not exposed
+by the API yet. Variant master data and the global inventory summary are
+available.
+
+The purchasing transaction flow is implemented for product-level lines, but
+purchasing endpoints do not yet consume `variant_id`. Sales and pricing
+endpoints that consume `variant_id` also remain deferred until their consuming
+modules exist.
+
+The dependency and acceptance matrix is documented in
+[`docs/product-module-future-debt.txt`](product-module-future-debt.txt).
 
 ### Product master and sourcing
 

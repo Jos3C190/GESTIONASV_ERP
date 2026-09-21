@@ -284,13 +284,80 @@ are never discarded. New writes use only structured fields. Volume is derived
 at read time in cubic metres from all three dimensions and is never stored as
 a user-editable value.
 
-## 11. Deferred product-domain data
+## 11. Product-domain transactional boundaries
 
 Inventory identity, versioned packaging conversions, lightweight handling units,
 lots, expiry, movements, balances and capacity reservations are implemented by
-revision `0040`. Purchasing documents, landed-cost allocation, price history,
-replenishment policies, serial tracking and full regulatory compatibility remain
-separate concerns and are not inferred from the physical-capacity model.
+revision `0040`.
+
+The purchasing document flow and the current Retaceo landed-cost allocation are
+also implemented, but remain separate transactional capabilities from the
+physical-capacity model. Price history, replenishment policies, serial tracking
+and broader regulatory compatibility remain separate concerns.
+
+### Purchasing flow migrations
+
+The implemented purchasing and Retaceo flow is represented by these Alembic
+revisions:
+
+- `0044_purchase_requests.py`
+- `0045_reconcile_purchase_request_permissions.py`
+- `0048_purchase_quotations.py`
+- `0049_reconcile_purchase_quotation_permissions.py`
+- `0050_purchase_orders.py`
+- `0051_reconcile_purchase_order_permissions.py`
+- `0052_purchase_order_expense_documents.py`
+- `0053_purchase_order_detail_traceability.py`
+- `0054_purchases.py`
+- `0055_reconcile_purchase_permissions.py`
+- `0056_retaceos.py`
+
+### Purchasing flow tables
+
+The main tables introduced for the purchasing and Retaceo flow are:
+
+- `purchase_requests`
+- `purchase_request_details`
+- `purchase_quotations`
+- `purchase_quotation_requests`
+- `purchase_quotation_request_details`
+- `purchase_quotation_details`
+- `purchase_quotation_expenses`
+- `expense_types`
+- `purchase_orders`
+- `purchase_order_details`
+- `purchase_order_expenses`
+- `purchase_order_expense_documents`
+- `purchases`
+- `purchase_details`
+- `retaceos`
+- `retaceo_details`
+
+### Purchasing line traceability
+
+The purchasing flow preserves exact line-level traceability across each
+transactional stage:
+
+```text
+Purchase Request Detail
+    -> Purchase Quotation Request Detail
+    -> Purchase Quotation Detail
+    -> Purchase Order Detail
+    -> Purchase Detail
+    -> Retaceo Detail
+```
+
+The persisted references that maintain this chain are:
+
+- `purchase_quotation_request_details.purchase_request_detail_id`
+- `purchase_quotation_request_details.purchase_quotation_detail_id`
+- `purchase_order_details.purchase_quotation_detail_id`
+- `purchase_details.purchase_order_detail_id`
+- `retaceo_details.purchase_detail_id`
+
+These foreign-key relationships preserve company-scoped ownership and prevent
+the transactional documents from losing the exact source line that originated
+each downstream detail.
 
 ## 13. Physical capacity and inventory (revisions 0039–0040)
 
