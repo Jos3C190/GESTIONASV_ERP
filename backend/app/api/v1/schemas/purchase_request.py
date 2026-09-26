@@ -57,7 +57,9 @@ class PurchaseRequestResponse(ORMOut):
     company_id: uuid.UUID
     code: str
     branch_id: uuid.UUID
+    branch_name: str | None = None
     warehouse_id: uuid.UUID
+    warehouse_name: str | None = None
     requested_by_id: uuid.UUID
     request_date: datetime
     required_date: datetime | None = None

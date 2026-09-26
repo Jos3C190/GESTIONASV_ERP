@@ -43,6 +43,8 @@ def _to_entity(model: PurchaseRequestModel) -> PurchaseRequest:
         code=model.code,
         branch_id=model.branch_id,
         warehouse_id=model.warehouse_id,
+        branch_name=model.branch.name if model.branch is not None else None,
+        warehouse_name=model.warehouse.name if model.warehouse is not None else None,
         requested_by_id=model.requested_by_id,
         request_date=model.request_date,
         required_date=model.required_date,
@@ -79,7 +81,11 @@ class SqlAlchemyPurchaseRequestRepository:
         )
         result = await self._session.execute(
             select(PurchaseRequestModel)
-            .options(selectinload(PurchaseRequestModel.details))
+            .options(
+                selectinload(PurchaseRequestModel.details),
+                selectinload(PurchaseRequestModel.branch),
+                selectinload(PurchaseRequestModel.warehouse),
+            )
             .where(*conditions)
             .order_by(PurchaseRequestModel.request_date.desc(), PurchaseRequestModel.code.desc())
             .offset(skip)
@@ -261,7 +267,11 @@ class SqlAlchemyPurchaseRequestRepository:
     ) -> PurchaseRequestModel | None:
         statement = (
             select(PurchaseRequestModel)
-            .options(selectinload(PurchaseRequestModel.details))
+            .options(
+                selectinload(PurchaseRequestModel.details),
+                selectinload(PurchaseRequestModel.branch),
+                selectinload(PurchaseRequestModel.warehouse),
+            )
             .where(
                 PurchaseRequestModel.company_id == company_id,
                 PurchaseRequestModel.id == request_id,

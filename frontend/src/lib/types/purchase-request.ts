@@ -42,7 +42,9 @@ export interface PurchaseRequest {
   company_id: string;
   code: string;
   branch_id: string;
+  branch_name?: string | null;
   warehouse_id: string;
+  warehouse_name?: string | null;
   requested_by_id: string;
   request_date: string;
   required_date: string | null;

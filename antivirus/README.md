@@ -52,3 +52,4 @@ docker compose exec -e RUN_DOCUMENT_STORAGE_INTEGRATION=true \
   -e OBJECT_STORAGE_TEST_PUBLIC_ENDPOINT=http://rustfs:9000 \
   backend pytest -q tests/integration/test_document_services_optional.py
 ```
+ 

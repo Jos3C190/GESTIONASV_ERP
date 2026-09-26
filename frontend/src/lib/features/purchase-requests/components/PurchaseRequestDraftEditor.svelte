@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
+  import PurchaseRequestProductPicker from '$lib/features/purchase-requests/components/PurchaseRequestProductPicker.svelte';
   import { HttpError } from '$lib/api/client';
   import { catalogApi } from '$lib/api/catalog';
   import { purchaseRequestsApi } from '$lib/api/purchase-requests';
@@ -18,6 +19,7 @@
 
   interface DraftLine {
     productId: string;
+    productSearch: string;
     quantity: string;
     description: string;
     notes: string;
@@ -33,6 +35,10 @@
   let lines = $state<DraftLine[]>([]);
   let warehouses = $state<Warehouse[]>([]);
   let products = $state<Product[]>([]);
+  let productCurrentPage = $state(1);
+  let productPages = $state(1);
+  let loadingMoreProducts = $state(false);
+  let productPageError = $state<string | null>(null);
   let loading = $state(true);
   let saving = $state(false);
   let editable = $state(true);
@@ -50,6 +56,7 @@
     notes = item.notes ?? '';
     lines = item.details.map((detail) => ({
       productId: String(detail.product_id),
+      productSearch: '',
       quantity: detail.quantity,
       description: detail.description ?? '',
       notes: detail.notes ?? ''
@@ -78,9 +85,11 @@
     loading = true;
     editable = true;
     error = null;
+    loadingMoreProducts = false;
+    productPageError = null;
 
     try {
-      const [item, productPage] = await Promise.all([
+      const [item, productPageResponse] = await Promise.all([
         purchaseRequestsApi.get(id),
         catalogApi.listProducts({
           active_only: true,
@@ -91,7 +100,9 @@
 
       if (currentGeneration !== generation) return;
 
-      products = productPage.items.filter((product) => product.can_purchase !== false);
+      products = productPageResponse.items.filter((product) => product.can_purchase !== false);
+      productCurrentPage = productPageResponse.meta.page;
+      productPages = productPageResponse.meta.pages;
       fromRequest(item);
 
       if (item.status !== 'draft') {
@@ -113,6 +124,45 @@
             : 'No se pudo cargar la solicitud de compra.';
     } finally {
       if (currentGeneration === generation) loading = false;
+    }
+  }
+
+  async function loadMoreProducts() {
+    if (loadingMoreProducts || productCurrentPage >= productPages) return;
+
+    const currentGeneration = generation;
+    loadingMoreProducts = true;
+    productPageError = null;
+
+    try {
+      const nextPage = await catalogApi.listProducts({
+        active_only: true,
+        page: productCurrentPage + 1,
+        size: 100
+      });
+
+      if (currentGeneration !== generation) return;
+
+      const knownProductIds = new Set(products.map((product) => product.id_product));
+      products = [
+        ...products,
+        ...nextPage.items.filter(
+          (product) => product.can_purchase !== false && !knownProductIds.has(product.id_product)
+        )
+      ];
+      productCurrentPage = nextPage.meta.page;
+      productPages = nextPage.meta.pages;
+    } catch (err: unknown) {
+      if (currentGeneration !== generation) return;
+
+      productPageError =
+        err instanceof HttpError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'No se pudieron cargar más productos.';
+    } finally {
+      if (currentGeneration === generation) loadingMoreProducts = false;
     }
   }
 
@@ -148,6 +198,7 @@
       ...lines,
       {
         productId: '',
+        productSearch: '',
         quantity: '1',
         description: '',
         notes: ''
@@ -180,6 +231,24 @@
     return Object.keys(next).length === 0;
   }
 
+  function focusFirstInvalidField() {
+    const firstError = Object.keys(validation)[0];
+    if (!firstError) return;
+
+    const inputId =
+      firstError === 'branchId'
+        ? 'purchase-request-edit-branch'
+        : firstError === 'warehouseId'
+          ? 'purchase-request-edit-warehouse'
+          : firstError === 'justification'
+            ? 'purchase-request-edit-justification'
+            : firstError.startsWith('product-')
+              ? `purchase-request-edit-product-${firstError.slice('product-'.length)}-search`
+              : `purchase-request-edit-${firstError}`;
+
+    window.requestAnimationFrame(() => document.getElementById(inputId)?.focus());
+  }
+
   function detailPayload(): PurchaseRequestDetailInput[] {
     return lines.map((line) => ({
       product_id: Number(line.productId),
@@ -190,7 +259,11 @@
   }
 
   async function submit() {
-    if (!canManage || !editable || saving || !validate()) return;
+    if (!canManage || !editable || saving) return;
+    if (!validate()) {
+      focusFirstInvalidField();
+      return;
+    }
 
     saving = true;
     error = null;
@@ -246,7 +319,7 @@
 
   {#if !canManage}
     <div
-      class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
+      class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-foreground"
       role="alert"
     >
       No tienes permiso para gestionar solicitudes de compra.
@@ -258,7 +331,7 @@
     </div>
   {:else if !editable}
     <div
-      class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
+      class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-foreground"
       role="alert"
     >
       {error ?? 'La solicitud no puede editarse.'}
@@ -266,7 +339,7 @@
   {:else}
     {#if error}
       <div
-        class="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+        class="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-foreground"
         role="alert"
       >
         {error}
@@ -294,9 +367,13 @@
             <select
               id="purchase-request-edit-branch"
               aria-label="Sucursal"
+              aria-invalid={validation.branchId ? 'true' : undefined}
+              aria-describedby={validation.branchId
+                ? 'purchase-request-edit-branch-error'
+                : undefined}
               value={branchId}
               onchange={changeBranch}
-              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <option value="">Selecciona una sucursal</option>
               {#each branch.branches.filter((item) => item.is_active) as item}
@@ -304,7 +381,9 @@
               {/each}
             </select>
             {#if validation.branchId}
-              <p class="mt-1 text-xs text-danger">{validation.branchId}</p>
+              <p id="purchase-request-edit-branch-error" class="mt-1 text-xs text-danger">
+                {validation.branchId}
+              </p>
             {/if}
           </div>
 
@@ -318,8 +397,12 @@
             <select
               id="purchase-request-edit-warehouse"
               aria-label="Almacén"
+              aria-invalid={validation.warehouseId ? 'true' : undefined}
+              aria-describedby={validation.warehouseId
+                ? 'purchase-request-edit-warehouse-error'
+                : undefined}
               bind:value={warehouseId}
-              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <option value="">Selecciona un almacén</option>
               {#each warehouses as warehouse}
@@ -327,7 +410,9 @@
               {/each}
             </select>
             {#if validation.warehouseId}
-              <p class="mt-1 text-xs text-danger">{validation.warehouseId}</p>
+              <p id="purchase-request-edit-warehouse-error" class="mt-1 text-xs text-danger">
+                {validation.warehouseId}
+              </p>
             {/if}
           </div>
 
@@ -343,7 +428,7 @@
               aria-label="Fecha requerida"
               type="date"
               bind:value={requiredDate}
-              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
           </div>
 
@@ -357,12 +442,18 @@
             <input
               id="purchase-request-edit-justification"
               aria-label="Justificación"
+              aria-invalid={validation.justification ? 'true' : undefined}
+              aria-describedby={validation.justification
+                ? 'purchase-request-edit-justification-error'
+                : undefined}
               bind:value={justification}
               maxlength="4000"
-              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
             {#if validation.justification}
-              <p class="mt-1 text-xs text-danger">{validation.justification}</p>
+              <p id="purchase-request-edit-justification-error" class="mt-1 text-xs text-danger">
+                {validation.justification}
+              </p>
             {/if}
           </div>
         </div>
@@ -380,7 +471,7 @@
             bind:value={notes}
             maxlength="4000"
             rows="3"
-            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           ></textarea>
         </div>
       </Card>
@@ -405,30 +496,23 @@
         <div class="divide-y divide-border">
           {#each lines as line, index (index)}
             <div class="grid gap-3 p-4 lg:grid-cols-[2fr_1fr_2fr_2fr_auto] lg:items-start">
-              <div>
-                <label
-                  for={`purchase-request-edit-product-${index}`}
-                  class="mb-1 block text-sm font-medium text-foreground"
-                >
-                  Producto {index + 1} <span class="text-danger">*</span>
-                </label>
-                <select
-                  id={`purchase-request-edit-product-${index}`}
-                  aria-label={`Producto ${index + 1}`}
-                  bind:value={line.productId}
-                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                >
-                  <option value="">Selecciona un producto</option>
-                  {#each products as product}
-                    <option value={String(product.id_product)}
-                      >{product.sku} — {product.name}</option
-                    >
-                  {/each}
-                </select>
-                {#if validation[`product-${index}`]}
-                  <p class="mt-1 text-xs text-danger">{validation[`product-${index}`]}</p>
-                {/if}
-              </div>
+              <PurchaseRequestProductPicker
+                id={`purchase-request-edit-product-${index}`}
+                label={`Producto ${index + 1}`}
+                {products}
+                bind:value={line.productId}
+                bind:query={line.productSearch}
+                hasMoreProducts={productCurrentPage < productPages}
+                {loadingMoreProducts}
+                loadMoreError={productPageError}
+                onloadmore={loadMoreProducts}
+                error={validation[`product-${index}`]}
+                onselect={() => {
+                  const nextValidation = { ...validation };
+                  delete nextValidation[`product-${index}`];
+                  validation = nextValidation;
+                }}
+              />
 
               <div>
                 <label
@@ -440,6 +524,10 @@
                 <input
                   id={`purchase-request-edit-quantity-${index}`}
                   aria-label={`Cantidad ${index + 1}`}
+                  aria-invalid={validation[`quantity-${index}`] ? 'true' : undefined}
+                  aria-describedby={validation[`quantity-${index}`]
+                    ? `purchase-request-edit-quantity-${index}-error`
+                    : undefined}
                   type="number"
                   min="0.000001"
                   step="0.000001"
@@ -448,10 +536,15 @@
                     updateLine(index, {
                       quantity: (event.currentTarget as HTMLInputElement).value
                     })}
-                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
                 {#if validation[`quantity-${index}`]}
-                  <p class="mt-1 text-xs text-danger">{validation[`quantity-${index}`]}</p>
+                  <p
+                    id={`purchase-request-edit-quantity-${index}-error`}
+                    class="mt-1 text-xs text-danger"
+                  >
+                    {validation[`quantity-${index}`]}
+                  </p>
                 {/if}
               </div>
 
@@ -471,7 +564,7 @@
                     updateLine(index, {
                       description: (event.currentTarget as HTMLInputElement).value
                     })}
-                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
               </div>
 
@@ -491,7 +584,7 @@
                     updateLine(index, {
                       notes: (event.currentTarget as HTMLInputElement).value
                     })}
-                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
               </div>
 

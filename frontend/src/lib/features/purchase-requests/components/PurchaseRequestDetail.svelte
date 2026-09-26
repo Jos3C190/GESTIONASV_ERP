@@ -138,11 +138,11 @@
           </div>
           <div>
             <dt class="text-xs text-foreground-muted">Sucursal</dt>
-            <dd class="mt-1 break-all font-mono text-xs text-foreground">{item.branch_id}</dd>
+            <dd class="mt-1 text-sm font-medium text-foreground">{item.branch_name ?? '—'}</dd>
           </div>
           <div>
             <dt class="text-xs text-foreground-muted">Almacén</dt>
-            <dd class="mt-1 break-all font-mono text-xs text-foreground">{item.warehouse_id}</dd>
+            <dd class="mt-1 text-sm font-medium text-foreground">{item.warehouse_name ?? '—'}</dd>
           </div>
         </dl>
       </Card>

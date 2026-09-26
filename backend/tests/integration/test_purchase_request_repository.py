@@ -355,10 +355,15 @@ async def test_repository_persists_and_hides_request_from_other_tenant(
 
     assert loaded is not None
     assert loaded.code == saved.code
+    assert loaded.branch_name == graph.branch.name
+    assert loaded.warehouse_name == graph.warehouse.name
     assert loaded.details[0].unit_id == graph.unit.id_unit
     assert hidden is None
     assert total >= 1
     assert saved.id in {item.id for item in items}
+    listed = next(item for item in items if item.id == saved.id)
+    assert listed.branch_name == graph.branch.name
+    assert listed.warehouse_name == graph.warehouse.name
 
 
 @pytest.mark.asyncio

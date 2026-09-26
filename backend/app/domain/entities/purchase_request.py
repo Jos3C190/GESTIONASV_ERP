@@ -114,6 +114,8 @@ class PurchaseRequest:
     status: PurchaseRequestStatus = PurchaseRequestStatus.DRAFT
     required_date: datetime | None = None
     notes: str | None = None
+    branch_name: str | None = None
+    warehouse_name: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
