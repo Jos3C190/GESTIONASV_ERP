@@ -163,6 +163,14 @@ describe('PurchaseQuotationEditor', () => {
     );
   });
 
+  it('preselects the purchase request when opened from its detail page', async () => {
+    render(PurchaseQuotationEditor, { props: { initialRequestId: request.id } });
+
+    expect(await screen.findByText('SC-0001')).toBeInTheDocument();
+    expect(screen.getByText('Producto #10')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Quitar solicitud' })).toBeInTheDocument();
+  });
+
   it('requires at least one linked request', async () => {
     render(PurchaseQuotationEditor);
 

@@ -170,7 +170,7 @@
         aria-label="Estado"
         value={statusFilter}
         onchange={handleStatusChange}
-        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <option value="">Todos los estados</option>
         {#each STATUS_OPTIONS as option}
@@ -186,7 +186,7 @@
         value={supplierFilter}
         onchange={handleSupplierChange}
         disabled={suppliers.length === 0}
-        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
       >
         <option value="">Todos los proveedores</option>
         {#each suppliers as supplier (supplier.id_supplier)}
@@ -211,7 +211,12 @@
     </div>
   {:else if loading}
     <div class="overflow-hidden rounded-xl border border-border bg-surface">
-      <div class="space-y-3 p-4" aria-label="Cargando órdenes de compra">
+      <div
+        class="space-y-3 p-4"
+        role="status"
+        aria-live="polite"
+        aria-label="Cargando órdenes de compra"
+      >
         {#each Array(5) as _}
           <div class="grid grid-cols-6 gap-3">
             <div class="skeleton h-5 rounded"></div>

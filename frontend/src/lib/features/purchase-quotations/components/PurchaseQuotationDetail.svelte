@@ -1,5 +1,6 @@
 <script lang="ts">
   import Button from '$lib/components/ui/Button.svelte';
+  import { catalogApi } from '$lib/api/catalog';
   import PurchaseQuotationWorkflowActions from '$lib/features/purchase-quotations/components/PurchaseQuotationWorkflowActions.svelte';
   import { HttpError } from '$lib/api/client';
   import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
@@ -22,6 +23,7 @@
 
   let item = $state<PurchaseQuotation | null>(null);
   let supplier = $state<Supplier | null>(null);
+  let productNames = $state<Map<number, string>>(new Map());
   let loading = $state(true);
   let error = $state<string | null>(null);
   let requestSequence = 0;
@@ -59,6 +61,10 @@
     }).format(quantity);
   }
 
+  function productName(id: number): string | null {
+    return productNames.get(id) ?? null;
+  }
+
   async function load(currentId: string) {
     const sequence = ++requestSequence;
     loading = true;
@@ -70,15 +76,27 @@
 
       item = quotation;
 
-      try {
-        supplier = await suppliersApi.getSupplier(quotation.supplier_id);
-      } catch {
-        supplier = null;
+      const productIds = [...new Set(quotation.details.map((detail) => detail.product_id))];
+      const [nextSupplier, products] = await Promise.all([
+        suppliersApi.getSupplier(quotation.supplier_id).catch(() => null),
+        Promise.all(
+          productIds.map((productId) => catalogApi.getProduct(productId).catch(() => null))
+        )
+      ]);
+
+      if (sequence !== requestSequence) return;
+
+      supplier = nextSupplier;
+      const nextProductNames = new Map<number, string>();
+      for (const product of products) {
+        if (product?.name.trim()) nextProductNames.set(product.id_product, product.name.trim());
       }
+      productNames = nextProductNames;
     } catch (cause: unknown) {
       if (sequence !== requestSequence) return;
       item = null;
       supplier = null;
+      productNames = new Map();
       error = errorMessage(cause);
     } finally {
       if (sequence === requestSequence) loading = false;
@@ -240,7 +258,14 @@
                   {#each item.details as detail (detail.id)}
                     <tr class="text-foreground">
                       <td class="px-4 py-3">
-                        <span class="font-medium">Producto #{detail.product_id}</span>
+                        <span class="font-medium">
+                          Producto #{detail.product_id}
+                          {#if productName(detail.product_id)}
+                            <span class="font-normal text-foreground-muted">
+                              — {productName(detail.product_id)}
+                            </span>
+                          {/if}
+                        </span>
                         <span class="block text-xs text-foreground-muted"
                           >Unidad #{detail.unit_id}</span
                         >

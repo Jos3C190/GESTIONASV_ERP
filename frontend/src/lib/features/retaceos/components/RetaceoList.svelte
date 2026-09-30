@@ -112,6 +112,12 @@
     retry();
   }
 
+  function showAllBranches() {
+    if (!branch.accessAllBranches) return;
+    branch.select(null);
+    page = 1;
+  }
+
   $effect(() => {
     const ready = branch.ready;
     const currentBranchId = branch.id;
@@ -140,6 +146,7 @@
     <p class="text-sm text-foreground-muted">
       {total}
       {total === 1 ? 'retaceo' : 'retaceos'}
+      <span class="text-foreground-subtle">· {branch.label}</span>
     </p>
   </header>
 
@@ -151,7 +158,7 @@
         aria-label="Estado"
         value={statusFilter}
         onchange={handleStatusChange}
-        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <option value="">Todos los estados</option>
 
@@ -174,10 +181,9 @@
     </div>
   {:else if loading}
     <div class="overflow-hidden rounded-xl border border-border bg-surface">
-      <div class="space-y-3 p-4" aria-label="Cargando retaceos">
+      <div class="space-y-3 p-4" role="status" aria-live="polite" aria-label="Cargando retaceos">
         {#each Array(5) as _}
           <div class="grid grid-cols-6 gap-3">
-            <div class="skeleton h-5 rounded"></div>
             <div class="skeleton h-5 rounded"></div>
             <div class="skeleton h-5 rounded"></div>
             <div class="skeleton h-5 rounded"></div>
@@ -203,12 +209,19 @@
 
       <p class="mt-1 max-w-md text-sm text-foreground-muted">
         Los retaceos se generan desde compras recibidas, verificadas o cerradas. Ajusta el filtro si
-        esperabas encontrar un registro existente.
+        esperabas encontrar un registro en {branch.label}.
       </p>
 
-      <Button class="mt-4" size="sm" variant="secondary" onclick={emptyAction}>
-        {statusFilter ? 'Limpiar filtro' : 'Actualizar'}
-      </Button>
+      <div class="mt-4 flex flex-wrap justify-center gap-2">
+        {#if branch.accessAllBranches && branch.id}
+          <Button size="sm" variant="secondary" onclick={showAllBranches}>
+            Ver todas las sucursales
+          </Button>
+        {/if}
+        <Button size="sm" variant="secondary" onclick={emptyAction}>
+          {statusFilter ? 'Limpiar filtro' : 'Actualizar'}
+        </Button>
+      </div>
     </div>
   {:else}
     <div class="overflow-x-auto rounded-xl border border-border bg-surface">

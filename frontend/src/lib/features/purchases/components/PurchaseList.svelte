@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { page as currentPage } from '$app/state';
   import Button from '$lib/components/ui/Button.svelte';
   import { HttpError } from '$lib/api/client';
   import { purchasesApi } from '$lib/api/purchases';
   import { suppliersApi } from '$lib/api/suppliers';
+  import { branch } from '$lib/stores/branch.svelte';
   import type { Purchase, PurchaseStatus } from '$lib/types/purchase';
   import type { Supplier } from '$lib/types/supplier';
 
@@ -14,9 +16,15 @@
     { value: 'closed', label: 'Cerrada' }
   ];
 
+  function parseStatus(value: string | null): PurchaseStatus | '' {
+    return STATUS_OPTIONS.some((option) => option.value === value) ? (value as PurchaseStatus) : '';
+  }
+
   let items = $state<Purchase[]>([]);
   let suppliers = $state<Supplier[]>([]);
-  let statusFilter = $state<PurchaseStatus | ''>('');
+  let statusFilter = $state<PurchaseStatus | ''>(
+    parseStatus(currentPage.url.searchParams.get('status'))
+  );
   let supplierFilter = $state('');
   let page = $state(1);
   let total = $state(0);
@@ -93,7 +101,8 @@
   async function loadPurchases(
     currentStatus: PurchaseStatus | '',
     currentSupplier: string,
-    currentPage: number
+    currentPageNumber: number,
+    currentBranchId: string | null = branch.id
   ) {
     const sequence = ++requestSequence;
     loading = true;
@@ -103,8 +112,9 @@
       const response = await purchasesApi.list({
         status: currentStatus || undefined,
         supplier_id: currentSupplier ? Number(currentSupplier) : undefined,
-        page: currentPage,
-        size: 20
+        page: currentPageNumber,
+        size: 20,
+        ...(currentBranchId ? { branch_id: currentBranchId } : {})
       });
 
       if (sequence !== requestSequence) return;
@@ -139,6 +149,12 @@
     retry();
   }
 
+  function showAllBranches() {
+    if (!branch.accessAllBranches) return;
+    branch.select(null);
+    page = 1;
+  }
+
   $effect(() => {
     void loadSuppliers();
   });
@@ -147,8 +163,9 @@
     const currentStatus = statusFilter;
     const currentSupplier = supplierFilter;
     const currentPage = page;
+    const currentBranchId = branch.id;
 
-    void loadPurchases(currentStatus, currentSupplier, currentPage);
+    void loadPurchases(currentStatus, currentSupplier, currentPage, currentBranchId);
   });
 </script>
 
@@ -165,6 +182,7 @@
     <p class="text-sm text-foreground-muted">
       {total}
       {total === 1 ? 'compra' : 'compras'}
+      <span class="text-foreground-subtle">· {branch.label}</span>
     </p>
   </header>
 
@@ -175,7 +193,7 @@
         aria-label="Estado"
         value={statusFilter}
         onchange={handleStatusChange}
-        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <option value="">Todos los estados</option>
         {#each STATUS_OPTIONS as option}
@@ -191,7 +209,7 @@
         value={supplierFilter}
         onchange={handleSupplierChange}
         disabled={suppliers.length === 0}
-        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
       >
         <option value="">Todos los proveedores</option>
         {#each suppliers as supplier (supplier.id_supplier)}
@@ -219,7 +237,7 @@
     </div>
   {:else if loading}
     <div class="overflow-hidden rounded-xl border border-border bg-surface">
-      <div class="space-y-3 p-4" aria-label="Cargando compras">
+      <div class="space-y-3 p-4" role="status" aria-live="polite" aria-label="Cargando compras">
         {#each Array(5) as _}
           <div class="grid grid-cols-6 gap-3">
             <div class="skeleton h-5 rounded"></div>
@@ -246,12 +264,19 @@
       <h2 class="font-medium text-foreground">No hay compras para mostrar</h2>
       <p class="mt-1 max-w-md text-sm text-foreground-muted">
         Las compras se generan al registrar recepciones sobre órdenes enviadas. Ajusta los filtros
-        si esperabas encontrar una recepción existente.
+        si esperabas encontrar una recepción en {branch.label}.
       </p>
 
-      <Button class="mt-4" size="sm" variant="secondary" onclick={emptyAction}>
-        {statusFilter || supplierFilter ? 'Limpiar filtros' : 'Actualizar'}
-      </Button>
+      <div class="mt-4 flex flex-wrap justify-center gap-2">
+        {#if branch.accessAllBranches && branch.id}
+          <Button size="sm" variant="secondary" onclick={showAllBranches}>
+            Ver todas las sucursales
+          </Button>
+        {/if}
+        <Button size="sm" variant="secondary" onclick={emptyAction}>
+          {statusFilter || supplierFilter ? 'Limpiar filtros' : 'Actualizar'}
+        </Button>
+      </div>
     </div>
   {:else}
     <div class="overflow-x-auto rounded-xl border border-border bg-surface">

@@ -19,6 +19,11 @@
 
   let canManage = $derived(permissions.hasPermission('purchase_requests:manage'));
   let canApprove = $derived(permissions.hasPermission('purchase_requests:approve'));
+  let canCreateQuotation = $derived(
+    ['approved', 'partially_quoted', 'quoted'].includes(item.status) &&
+      permissions.hasPermission('purchase_requests:read') &&
+      permissions.hasPermission('purchase_quotations:manage')
+  );
 
   async function runAction(action: WorkflowAction) {
     if (processing) return;
@@ -53,6 +58,15 @@
   {/if}
 
   <div class="flex flex-wrap items-center gap-2">
+    {#if canCreateQuotation}
+      <Button
+        size="sm"
+        onclick={() => goto(`/purchase-quotations/new?requestId=${encodeURIComponent(item.id)}`)}
+      >
+        Preparar cotización
+      </Button>
+    {/if}
+
     {#if item.status === 'draft' && canManage}
       <Button
         size="sm"

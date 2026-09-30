@@ -4,6 +4,7 @@
   import { HttpError } from '$lib/api/client';
   import { purchasesApi } from '$lib/api/purchases';
   import { retaceosApi } from '$lib/api/retaceos';
+  import CustomsReferencePanel from '$lib/features/retaceos/components/CustomsReferencePanel.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type { Retaceo } from '$lib/types/retaceo';
 
@@ -234,6 +235,8 @@
         </div>
       </div>
     </article>
+
+    <CustomsReferencePanel />
 
     <form
       class="space-y-5"

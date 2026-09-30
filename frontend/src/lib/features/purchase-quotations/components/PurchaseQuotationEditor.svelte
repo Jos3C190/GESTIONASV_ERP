@@ -2,10 +2,12 @@
   import { goto } from '$app/navigation';
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
+  import { catalogApi } from '$lib/api/catalog';
   import { HttpError } from '$lib/api/client';
   import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
   import { purchaseRequestsApi } from '$lib/api/purchase-requests';
   import { suppliersApi } from '$lib/api/suppliers';
+  import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type { PurchaseRequest, PurchaseRequestStatus } from '$lib/types/purchase-request';
   import type { Currency, Supplier } from '$lib/types/supplier';
@@ -27,6 +29,12 @@
     lines: DraftLine[];
   }
 
+  interface Props {
+    initialRequestId?: string;
+  }
+
+  let { initialRequestId }: Props = $props();
+
   const QUOTABLE_STATUSES: PurchaseRequestStatus[] = ['approved', 'partially_quoted', 'quoted'];
 
   const REQUEST_STATUS_LABELS: Partial<Record<PurchaseRequestStatus, string>> = {
@@ -38,6 +46,9 @@
   let suppliers = $state<Supplier[]>([]);
   let currencies = $state<Currency[]>([]);
   let availableRequests = $state<PurchaseRequest[]>([]);
+  let productNames = $state<Map<number, string>>(new Map());
+  let productNamesLoading = $state<Set<number>>(new Set());
+  let productNamesUnavailable = $state<Set<number>>(new Set());
   let supplierId = $state('');
   let currency = $state('');
   let notes = $state('');
@@ -47,6 +58,7 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
   let validation = $state<Record<string, string>>({});
+  let requestNotice = $state<string | null>(null);
   let loadGeneration = 0;
 
   let canManage = $derived(permissions.hasPermission('purchase_quotations:manage'));
@@ -66,10 +78,14 @@
     return REQUEST_STATUS_LABELS[status] ?? status;
   }
 
-  async function loadOptions() {
+  async function loadOptions(
+    requestId: string | undefined = initialRequestId,
+    branchId: string | null = branch.id
+  ) {
     const generation = ++loadGeneration;
     loadingOptions = true;
     error = null;
+    requestNotice = null;
 
     try {
       const requestPagesPromise = Promise.all(
@@ -77,7 +93,8 @@
           purchaseRequestsApi.list({
             status,
             page: 1,
-            size: 100
+            size: 100,
+            ...(branchId ? { branch_id: branchId } : {})
           })
         )
       );
@@ -105,6 +122,16 @@
       }
       availableRequests = [...requestMap.values()];
 
+      if (requestId) {
+        const requestedItem = availableRequests.find((request) => request.id === requestId);
+        if (requestedItem) {
+          addRequest(requestId);
+        } else {
+          requestNotice =
+            'La solicitud vinculada no está disponible en este contexto o ya no está lista para cotizar.';
+        }
+      }
+
       if (!suppliers.some((supplier) => String(supplier.id_supplier) === supplierId)) {
         supplierId = suppliers[0] ? String(suppliers[0].id_supplier) : '';
       }
@@ -121,8 +148,10 @@
   }
 
   $effect(() => {
+    const requestId = initialRequestId;
+    const branchId = branch.id;
     if (canManage) {
-      void loadOptions();
+      void loadOptions(requestId, branchId);
     } else {
       loadingOptions = false;
     }
@@ -140,9 +169,11 @@
     requestToAdd = (event.currentTarget as HTMLSelectElement).value;
   }
 
-  function addRequest() {
-    const request = availableRequests.find((item) => item.id === requestToAdd);
+  function addRequest(requestId = requestToAdd) {
+    const request = availableRequests.find((item) => item.id === requestId);
     if (!request || linkedRequests.some((linked) => linked.requestId === request.id)) return;
+
+    void loadProductNames(request.details.map((detail) => detail.product_id));
 
     linkedRequests = [
       ...linkedRequests,
@@ -164,6 +195,43 @@
 
     requestToAdd = '';
     validation = {};
+  }
+
+  async function loadProductNames(productIds: number[]) {
+    const pendingIds = new Set(productNamesLoading);
+    const unavailableIds = new Set(productNamesUnavailable);
+    const missingIds = [...new Set(productIds)].filter(
+      (id) => !productNames.has(id) && !pendingIds.has(id) && !unavailableIds.has(id)
+    );
+
+    if (missingIds.length === 0) return;
+
+    for (const id of missingIds) pendingIds.add(id);
+    productNamesLoading = pendingIds;
+
+    const results = await Promise.all(
+      missingIds.map(async (id) => ({
+        id,
+        product: await catalogApi.getProduct(id).catch(() => null)
+      }))
+    );
+
+    const nextNames = new Map(productNames);
+    const nextLoading = new Set(productNamesLoading);
+    const nextUnavailable = new Set(productNamesUnavailable);
+
+    for (const { id, product } of results) {
+      nextLoading.delete(id);
+      if (product?.name.trim()) {
+        nextNames.set(id, product.name.trim());
+      } else {
+        nextUnavailable.add(id);
+      }
+    }
+
+    productNames = nextNames;
+    productNamesLoading = nextLoading;
+    productNamesUnavailable = nextUnavailable;
   }
 
   function removeRequest(requestIndex: number) {
@@ -286,10 +354,19 @@
       >
         <div class="flex flex-wrap items-center justify-between gap-3">
           <span>{error}</span>
-          <Button type="button" size="sm" variant="secondary" onclick={loadOptions}>
+          <Button type="button" size="sm" variant="secondary" onclick={() => loadOptions()}>
             Reintentar carga
           </Button>
         </div>
+      </div>
+    {/if}
+
+    {#if requestNotice}
+      <div
+        class="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-foreground-muted"
+        role="status"
+      >
+        {requestNotice}
       </div>
     {/if}
 
@@ -415,7 +492,7 @@
           <Button
             type="button"
             variant="secondary"
-            onclick={addRequest}
+            onclick={() => addRequest()}
             disabled={!requestToAdd || linkedRequests.length >= 100}
           >
             Agregar solicitud
@@ -487,6 +564,15 @@
                       >
                         <span class="block font-medium text-foreground">
                           Producto #{line.productId}
+                          {#if productNames.has(line.productId)}
+                            <span class="font-normal text-foreground-muted">
+                              — {productNames.get(line.productId)}
+                            </span>
+                          {:else if productNamesLoading.has(line.productId)}
+                            <span class="font-normal text-foreground-muted">— Cargando nombre…</span>
+                          {:else if productNamesUnavailable.has(line.productId)}
+                            <span class="font-normal text-foreground-subtle">— Nombre no disponible</span>
+                          {/if}
                         </span>
                         <span class="mt-1 block text-xs text-foreground-muted">
                           Unidad #{line.unitId} · solicitado {line.sourceQuantity}
