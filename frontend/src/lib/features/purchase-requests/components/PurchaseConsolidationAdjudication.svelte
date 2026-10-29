@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { api, HttpError } from '$lib/api/client';
@@ -6,6 +7,7 @@
   import { suppliersApi } from '$lib/api/suppliers';
   import { permissions } from '$lib/stores/permissions.svelte';
   import PurchaseConsolidationAwardLineView from './PurchaseConsolidationAwardLine.svelte';
+  import PurchaseConsolidationSupplierMatrix from './PurchaseConsolidationSupplierMatrix.svelte';
   import { formatQuantity } from '../adjudication-formatters';
   import type {
     PurchaseConsolidationAwardBoard,
@@ -15,7 +17,10 @@
     PurchaseConsolidationStatus
   } from '$lib/types/purchase-consolidation';
 
-  let { consolidationId, status }: { consolidationId: string; status: PurchaseConsolidationStatus } = $props();
+  let {
+    consolidationId,
+    status
+  }: { consolidationId: string; status: PurchaseConsolidationStatus } = $props();
 
   let board = $state<PurchaseConsolidationAwardBoard | null>(null);
   let supplierNames = $state<Record<number, string>>({});
@@ -25,13 +30,26 @@
   let error = $state<string | null>(null);
   let success = $state<{ targetId: string; message: string } | null>(null);
   let generation = 0;
+  let comparisonView = $state<'products' | 'matrix'>('products');
+  let matrixQuery = $state('');
+  let matrixSupplier = $state<number | null>(null);
+
+  async function inspectOffer(lineId: string, offerId: string) {
+    comparisonView = 'products';
+    await tick();
+    const target = document.getElementById(`award-offer-${lineId}-${offerId}`);
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView?.({ block: 'start' });
+  }
 
   const canRead = $derived(
     permissions.hasPermission('purchase_requests:read') &&
       permissions.hasPermission('purchase_quotations:read')
   );
   const canAward = $derived(
-    status !== 'closed' && status !== 'cancelled' && permissions.hasPermission('purchase_quotations:select')
+    status !== 'closed' &&
+      status !== 'cancelled' &&
+      permissions.hasPermission('purchase_quotations:select')
   );
   const canCreateOrders = $derived(permissions.hasPermission('purchase_orders:manage'));
 
@@ -237,7 +255,7 @@
           </div>
           {#if canAward}
             <span
-              class="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
+              class="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-foreground"
               >Decisión manual</span
             >
           {/if}
@@ -254,7 +272,10 @@
           </div>
         {/if}
         {#if status === 'closed'}
-          <p class="mt-4 rounded-lg border border-success/25 bg-success/5 px-3 py-2.5 text-sm text-foreground-muted" role="status">
+          <p
+            class="mt-4 rounded-lg border border-success/25 bg-success/5 px-3 py-2.5 text-sm text-foreground-muted"
+            role="status"
+          >
             Consolidación cerrada. Las decisiones registradas se muestran en modo de consulta.
           </p>
         {/if}
@@ -289,7 +310,7 @@
         {/if}
       </div>
 
-      {#if error}
+      {#if error && board}
         <div
           class="flex flex-wrap items-center justify-between gap-3 border-b border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger"
           role="alert"
@@ -310,8 +331,11 @@
           <div class="skeleton h-20 rounded-lg"></div>
         </div>
       {:else if !board}
-        <div class="flex flex-wrap items-center justify-between gap-3 p-4">
-          <p class="text-sm text-foreground-muted">No fue posible cargar la comparación.</p>
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 border-danger/30 bg-danger/5 p-4"
+          role="alert"
+        >
+          <p class="text-sm text-foreground">{error ?? 'No fue posible cargar la comparación.'}</p>
           <Button
             size="sm"
             variant="secondary"
@@ -324,7 +348,36 @@
           Este consolidado todavía no tiene productos.
         </p>
       {:else}
-        <div class="divide-y divide-border">
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5"
+        >
+          <div
+            role="group"
+            aria-label="Vista de comparación"
+            class="inline-flex rounded-lg border border-border bg-surface-muted p-1"
+          >
+            {#each [{ id: 'products', label: 'Por producto' }, { id: 'matrix', label: 'Matriz de proveedores' }] as view}
+              <button
+                type="button"
+                aria-pressed={comparisonView === view.id}
+                onclick={() => (comparisonView = view.id as 'products' | 'matrix')}
+                class={`min-h-11 rounded-md px-3 py-2 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${comparisonView === view.id ? 'bg-foreground text-surface' : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'}`}
+                >{view.label}</button
+              >
+            {/each}
+          </div>
+        </div>
+        {#if comparisonView === 'matrix'}
+          <PurchaseConsolidationSupplierMatrix
+            {board}
+            {supplierNames}
+            bind:query={matrixQuery}
+            bind:requestedSupplier={matrixSupplier}
+            onInspect={inspectOffer}
+            onRefresh={() => void load()}
+          />
+        {/if}
+        <div class="divide-y divide-border" hidden={comparisonView !== 'products'}>
           {#each board.lines as line (line.id)}
             <PurchaseConsolidationAwardLineView
               {line}

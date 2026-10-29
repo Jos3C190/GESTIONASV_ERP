@@ -142,9 +142,11 @@ sus pendientes antiguos para hacer una pantalla artificialmente limpia.
   5% = 100 y FOB neto 1900; no se aplicaron cargos de importación supuestos ni se
   reescribió su costo histórico. Su ejecución real requiere los importes documentados
   que faltan, conforme al informe del bloque 1.
-- Matriz global de recomendaciones por proveedor, devolución ampliada de Gerencia
-  y abastecimiento automático por mínimos permanecen como mejoras posteriores
-  C03/C04/A01 del plan; la continuidad de los traslados existentes sí fue probada.
+- Al cerrar este bloque, C03/C04/A01 permanecían posteriores. Después Rodrigo
+  autorizó exclusivamente la matriz visual de proveedores, implementada sin
+  recomendación automática; véase [matriz manual](matriz-proveedores-manual-2026-10-29.md).
+  La devolución ampliada de Gerencia y el abastecimiento por mínimos siguen
+  posteriores; la continuidad de los traslados existentes sí fue probada.
 - Un saldo legado sin vínculo a recepción se conserva identificado como tal. No
   se le inventa proveedor, lote o compra. El ejemplo nuevo tiene su propia trazabilidad.
 - Los PDF/XLSX son reportes internos. No se afirma compatibilidad certificada con

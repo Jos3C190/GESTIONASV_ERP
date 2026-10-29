@@ -123,6 +123,12 @@ la valoración, cambia a la cuenta administrativa.
 
 La aceptación y sus límites quedan en
 [el informe del bloque 6](bloque-06-aceptacion-final-2026-10-29.md).
-La matriz global de comparación de proveedores, la revisión ampliada de Gerencia
-y el abastecimiento automático por mínimos siguen como mejoras posteriores.
-No forman parte del recorrido principal que debes explicar ahora.
+La comparación ahora incluye **Matriz de proveedores** dentro del consolidado:
+productos en filas y proveedores con respuestas recibidas en columnas. Puedes
+mostrar precios, cantidades y condiciones, pulsar **Ver oferta** y adjudicar
+manualmente con un motivo. Las distintas versiones siguen visibles con su estado;
+los importes conservan su moneda y cantidad cotizada.
+
+La recomendación automática, la revisión ampliada de Gerencia y el abastecimiento
+automático por mínimos siguen fuera de esta ampliación. Puedes completar el
+recorrido principal usando la elección manual que ya teníamos.

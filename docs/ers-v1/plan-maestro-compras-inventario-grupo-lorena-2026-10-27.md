@@ -103,7 +103,7 @@ estos estados sustituye la aceptación integrada con datos de demostración.
 | --- | --- | --- | --- |
 | C01 | RFQ por proveedor con varios productos y cantidades consolidadas | Base: editor multiselección, versiones, documento imprimible y cantidades de origen; demostrar varios productos en una RFQ | Base / mejora posterior |
 | C02 | Registrar oferta manual, disponibilidad, precio, descuento, impuesto, vigencia, pago y adjunto original | Base; aclarar descuento monetario/porcentaje ligado al error FOB; cargos adicionales y revisión de condiciones se conservan como mejora posterior | 1 / base |
-| C03 | Comparación comparable por producto y matriz de proveedores; recomendación aplicable y elección manual justificada | Parcial: adjudicación manual/dividida existente; matriz global y recomendación consolidadas quedan registradas para mejora posterior | Base / mejora posterior |
+| C03 | Comparación comparable por producto y matriz de proveedores; recomendación aplicable y elección manual justificada | Matriz global de respuestas recibidas del consolidado implementada el 29/10: productos × proveedores, versiones/monedas/condiciones y acceso a adjudicación manual. Recomendación automática excluida por indicación de Rodrigo | Matriz manual / mejora posterior |
 | C04 | Revisión de orden, devolución con observaciones e historial de versión aprobada | Parcial: aprobación/envío existentes; devolución y revisión aprobada equivalente pendientes | Base / mejora posterior |
 | C05 | Seguimiento y accesos directos que reduzcan saltos entre documentos | Base de enlaces y atajos; reunir contexto, estado y siguiente acción reutilizando pantallas | Base / mejora posterior |
 | R01 | Resolver el FOB cero sin inventar importes ni borrar historial | Confirmado: descuento 5%=100 y FOB 1900. Regularización manual documentada implementada y probada con rollback; aplicación real pendiente de cargos/comprobantes | 1 |
@@ -131,7 +131,7 @@ estos estados sustituye la aceptación integrada con datos de demostración.
 | A03 | Venta, entrega, devolución y ajuste documentado | Regresión aprobada en 6: venta sin descuento físico, entrega, devolución a costo original, ajustes autorizados/rollback y permisos de comprobantes | Continuidad / 6 |
 
 El mapa, las consultas de inventario y el Kardex están en el cierre actual. Las
-recomendaciones de compras, la matriz y las versiones de Gerencia permanecen
+recomendaciones de compras y las versiones de Gerencia permanecen
 registradas como mejoras de la base anterior a recepción. No se intercalan como
 bloque que retrase el ingreso, la valoración o la presentación del Kardex.
 
@@ -274,7 +274,9 @@ en [aceptación final](bloque-06-aceptacion-final-2026-10-29.md) y recorrido pr�
 [guion de exposición](guion-exposicion-corto-grupo-lorena.md).
 La preparación de los datos que Rodrigo elija mostrar y su ensayo con las dos
 cuentas se hacen en la aplicación; esta aceptación no modifica sus compras reales.
-Las mejoras C03/C04 y A01 siguen en la etapa posterior descrita en la matriz.
+Después del bloque 6, Rodrigo autorizó únicamente la matriz de proveedores de C03,
+sin recomendación automática ni otras ampliaciones. Detalle en
+[matriz manual](matriz-proveedores-manual-2026-10-29.md). C04/A01 siguen posteriores.
 
 Actualización del bloque 4, 28/10/2026: implementadas las consultas conectadas,
 el mapa esquemático, la reubicación con motivo y el saldo inicial individual.
