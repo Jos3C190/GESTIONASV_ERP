@@ -31,7 +31,7 @@ def _ids() -> dict[str, uuid.UUID]:
 def _purchase(
     ids: dict[str, uuid.UUID],
     *,
-    status: PurchaseStatus = PurchaseStatus.RECEIVED,
+    status: PurchaseStatus = PurchaseStatus.VERIFIED,
     zero_fob: bool = False,
 ) -> Purchase:
     first_subtotal = Decimal("0") if zero_fob else Decimal("30000")
@@ -94,6 +94,9 @@ def _purchase(
 class FakePurchaseRepository:
     def __init__(self, purchase: Purchase | None) -> None:
         self.purchase = purchase
+
+    async def get_purchase(self, company_id: uuid.UUID, purchase_id: uuid.UUID) -> Purchase | None:
+        return await self.get_purchase_for_update(company_id, purchase_id)
 
     async def get_purchase_for_update(
         self,
@@ -183,6 +186,7 @@ async def _create(
     purchase: Purchase,
 ) -> Retaceo:
     return await RetaceoUseCases(repository, FakePurchaseRepository(purchase)).create_draft(
+        manual_entry=False,  # Historical policy remains covered explicitly.
         company_id=purchase.company_id,
         created_by_id=uuid.uuid4(),
         purchase_id=purchase.id,
@@ -196,7 +200,7 @@ async def _create(
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "status",
-    [PurchaseStatus.RECEIVED, PurchaseStatus.VERIFIED, PurchaseStatus.CLOSED],
+    [PurchaseStatus.VERIFIED, PurchaseStatus.CLOSED],
 )
 async def test_create_draft_accepts_immutable_purchase_states(status: PurchaseStatus) -> None:
     ids = _ids()
@@ -242,6 +246,17 @@ async def test_create_draft_rejects_non_immutable_purchase(status: PurchaseStatu
 
 
 @pytest.mark.asyncio
+async def test_create_draft_rejects_unverified_receipt() -> None:
+    ids = _ids()
+    purchase = _purchase(ids, status=PurchaseStatus.RECEIVED)
+
+    with pytest.raises(BusinessRuleError) as exc_info:
+        await _create(FakeRetaceoRepository(), purchase)
+
+    assert exc_info.value.code == "retaceo_purchase_not_eligible"
+
+
+@pytest.mark.asyncio
 async def test_create_draft_rejects_zero_total_fob() -> None:
     ids = _ids()
     purchase = _purchase(ids, zero_fob=True)
@@ -263,6 +278,7 @@ async def test_create_draft_rejects_invalid_import_vat() -> None:
 
     with pytest.raises(ValidationError) as exc_info:
         await use_cases.create_draft(
+            manual_entry=False,
             company_id=ids["company"],
             created_by_id=ids["user"],
             purchase_id=ids["purchase"],

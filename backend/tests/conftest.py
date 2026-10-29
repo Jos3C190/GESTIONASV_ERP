@@ -39,10 +39,9 @@ os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
 os.environ.setdefault("SUPER_ADMIN_PASSWORD", "TestOnly!SuperAdmin2026")
 
 
-def _has_database_tests(request: pytest.FixtureRequest) -> bool:
+def _has_integration_tests(request: pytest.FixtureRequest) -> bool:
     return any(
         item.get_closest_marker("integration") is not None
-        or item.get_closest_marker("e2e") is not None
         for item in request.session.items
     )
 
@@ -94,8 +93,15 @@ def _prepare_postgres_database() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def _isolated_database(request: pytest.FixtureRequest):
-    """Prepare PostgreSQL only when the collected tests actually need it."""
-    if _has_database_tests(request):
+    """Prepare PostgreSQL once for integration tests that share a rolled-back fixture."""
+    if _has_integration_tests(request):
+        _prepare_postgres_database()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_e2e_database(request: pytest.FixtureRequest):
+    """Give every stateful API workflow a fresh schema and canonical seed."""
+    if request.node.get_closest_marker("e2e") is not None:
         _prepare_postgres_database()
 
 

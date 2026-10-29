@@ -7,7 +7,9 @@ from decimal import Decimal
 import pytest
 from app.api.v1.schemas.purchase_quotation import (
     PurchaseQuotationCreate,
+    PurchaseQuotationDocumentInitiate,
     PurchaseQuotationRecordResponse,
+    PurchaseQuotationResponseLineInput,
 )
 from app.application.rbac.catalogue import ALL_PERMISSION_CODES
 from app.main import create_app
@@ -87,6 +89,49 @@ def test_purchase_quotation_response_schema_rejects_invalid_amounts() -> None:
         PurchaseQuotationRecordResponse.model_validate(raw)
 
 
+def test_purchase_quotation_response_schema_accepts_partial_and_legacy_quantity() -> None:
+    canonical = PurchaseQuotationResponseLineInput.model_validate(
+        {
+            "product_id": 1,
+            "unit_id": 1,
+            "offered_quantity": "1.25",
+            "unit_price": "10",
+        }
+    )
+    legacy = PurchaseQuotationResponseLineInput.model_validate(
+        {"product_id": 1, "unit_id": 1, "quantity": "2", "unit_price": "10"}
+    )
+    no_offer = PurchaseQuotationRecordResponse.model_validate(
+        {"quotation_date": datetime.now(UTC).isoformat(), "lines": []}
+    )
+
+    assert canonical.offered_quantity == Decimal("1.25")
+    assert legacy.offered_quantity == Decimal("2")
+    assert no_offer.lines == ()
+
+
+def test_purchase_quotation_document_schema_validates_checksum_and_file_metadata() -> None:
+    payload = PurchaseQuotationDocumentInitiate.model_validate(
+        {
+            "file_name": "oferta.pdf",
+            "content_type": "application/pdf",
+            "size_bytes": 4096,
+            "checksum_sha256": "a" * 64,
+        }
+    )
+
+    assert payload.file_name == "oferta.pdf"
+    with pytest.raises(PydanticValidationError):
+        PurchaseQuotationDocumentInitiate.model_validate(
+            {
+                "file_name": "oferta.pdf",
+                "content_type": "application/pdf",
+                "size_bytes": 4096,
+                "checksum_sha256": "not-a-sha256",
+            }
+        )
+
+
 def test_purchase_quotation_permissions_are_registered() -> None:
     assert {
         "purchase_quotations:read",
@@ -102,7 +147,21 @@ def test_purchase_quotation_routes_are_registered_in_openapi() -> None:
 
     assert {"get", "post"}.issubset(paths["/api/v1/purchase-quotations"])
     assert "get" in paths["/api/v1/purchase-quotations/{quotation_id}"]
+    assert {"get", "post"}.issubset(
+        paths["/api/v1/purchase-consolidations/{consolidation_id}/purchase-quotations"]
+    )
     assert "get" in paths["/api/v1/purchase-quotations/comparison/{purchase_request_id}"]
     assert "put" in paths["/api/v1/purchase-quotations/{quotation_id}/response"]
+    assert "get" in paths["/api/v1/purchase-quotations/{quotation_id}/documents"]
+    assert "delete" in paths[
+        "/api/v1/purchase-quotations/{quotation_id}/documents/{document_id}"
+    ]
+    assert "post" in paths["/api/v1/purchase-quotations/{quotation_id}/documents/uploads"]
+    assert "post" in paths[
+        "/api/v1/purchase-quotations/{quotation_id}/documents/{document_id}/complete"
+    ]
+    assert "post" in paths[
+        "/api/v1/purchase-quotations/{quotation_id}/documents/{document_id}/download-url"
+    ]
     for action in ("send", "evaluate", "select", "reject", "cancel"):
         assert "post" in paths[f"/api/v1/purchase-quotations/{{quotation_id}}/{action}"]

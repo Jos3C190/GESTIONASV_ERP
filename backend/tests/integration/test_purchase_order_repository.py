@@ -7,6 +7,12 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
+from app.domain.entities.purchase import (
+    Purchase,
+    PurchaseDetail,
+    PurchaseStatus,
+    PurchaseVerificationLine,
+)
 from app.domain.entities.purchase_order import (
     PurchaseOrder,
     PurchaseOrderDetail,
@@ -36,25 +42,32 @@ from app.infrastructure.models.catalog import (
 )
 from app.infrastructure.models.document import DocumentAssetModel
 from app.infrastructure.models.employee import Employee
+from app.infrastructure.models.inventory import InventoryBalanceModel, InventoryItemModel
 from app.infrastructure.models.organization import (
     Branch,
     Company,
     District,
     GeographicDepartment,
+    Location,
     Municipality,
     UserCompany,
     Warehouse,
     WarehouseCategory,
 )
+from app.infrastructure.models.purchase import PurchaseModel
 from app.infrastructure.models.purchase_quotation import (
     ExpenseTypeModel,
     PurchaseQuotationDetailModel,
     PurchaseQuotationRequestDetailModel,
     PurchaseQuotationRequestModel,
 )
+from app.infrastructure.models.retaceo import RetaceoModel
 from app.infrastructure.models.supplier import SupplierModel
 from app.infrastructure.models.supplier_master_data import CurrencyModel
 from app.infrastructure.models.user import User
+from app.infrastructure.repositories.purchase_inventory_gateway import (
+    SqlAlchemyPurchaseInventoryGateway,
+)
 from app.infrastructure.repositories.purchase_order_expense_document_repository import (
     SqlAlchemyPurchaseOrderExpenseDocumentRepository,
 )
@@ -67,6 +80,7 @@ from app.infrastructure.repositories.purchase_quotation_repository import (
 from app.infrastructure.repositories.purchase_request_repository import (
     SqlAlchemyPurchaseRequestRepository,
 )
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -83,6 +97,57 @@ class PurchaseOrderTestGraph:
     supplier: SupplierModel
     currency: CurrencyModel
     expense_type: ExpenseTypeModel
+
+
+@pytest.mark.asyncio
+async def test_actual_expense_closure_uses_only_closed_retaceos_of_same_company_and_order(
+    order_session: AsyncSession,
+) -> None:
+    graph = await _build_graph(order_session)
+    request = await _persist_request(order_session, graph, quantity=Decimal("4"))
+    quotation = await _persist_selected_quotation(order_session, graph, (request,))
+    repository = SqlAlchemyPurchaseOrderRepository(order_session)
+    order = await repository.add_order(
+        await _build_order(repository, graph, quotation, quantity=Decimal("4"))
+    )
+    purchase = PurchaseModel(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        code="COM-CLOSURE",
+        purchase_order_id=order.id,
+        supplier_id=graph.supplier.id_supplier,
+        branch_id=graph.branch.id,
+        warehouse_id=graph.warehouse.id,
+        created_by_id=graph.user.id,
+        currency=graph.currency.code,
+        status="received",
+    )
+    order_session.add(purchase)
+    await order_session.flush()
+    retaceo = RetaceoModel(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        purchase_id=purchase.id,
+        code="RET-CLOSURE",
+        branch_id=graph.branch.id,
+        created_by_id=graph.user.id,
+        currency=graph.currency.code,
+        total_fob=Decimal("10"),
+        total_cost=Decimal("10"),
+    )
+    order_session.add(retaceo)
+    for status in ("draft", "calculated", "verified", "cancelled"):
+        retaceo.status = status
+        await order_session.flush()
+        assert await repository.get_actual_expense_closure(graph.company.id, order.id) is None
+    retaceo.status = "closed"
+    await order_session.flush()
+    closure = await repository.get_actual_expense_closure(graph.company.id, order.id)
+    assert closure is not None
+    assert closure.retaceo_id == retaceo.id
+    assert closure.retaceo_code == "RET-CLOSURE"
+    assert await repository.get_actual_expense_closure(uuid.uuid4(), order.id) is None
+    assert await repository.get_actual_expense_closure(graph.company.id, uuid.uuid4()) is None
 
 
 @pytest.fixture
@@ -152,6 +217,7 @@ async def _build_graph(session: AsyncSession) -> PurchaseOrderTestGraph:
     await session.flush()
     warehouse = Warehouse(
         id=uuid.uuid4(),
+        company_id=company.id,
         branch_id=branch.id,
         warehouse_category_id=warehouse_category.id,
         name=f"Order warehouse {suffix}",
@@ -453,6 +519,150 @@ async def test_repository_persists_tenant_scoped_order_and_resolves_references(
         graph.expense_type.id,
     )
     assert await repository.allocate_next_code(graph.company.id) == "OC-00002"
+
+
+@pytest.mark.asyncio
+async def test_repository_accepts_company_level_mother_warehouse_destination(
+    order_session: AsyncSession,
+) -> None:
+    graph = await _build_graph(order_session)
+    mother = Warehouse(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        branch_id=None,
+        warehouse_category_id=graph.warehouse.warehouse_category_id,
+        name=f"Mother warehouse {uuid.uuid4().hex[:8]}",
+        code=f"MW-{uuid.uuid4().hex[:8]}",
+        is_central=True,
+        operational_status="active",
+        capacity_enforcement_mode="disabled",
+        storage_eligible=True,
+        is_active=True,
+    )
+    order_session.add(mother)
+    await order_session.flush()
+
+    request = await _persist_request(order_session, graph, quantity=Decimal("4"))
+    quotation = await _persist_selected_quotation(order_session, graph, (request,))
+    repository = SqlAlchemyPurchaseOrderRepository(order_session)
+    order = await _build_order(repository, graph, quotation, quantity=Decimal("2"))
+    saved_order = await repository.add_order(replace(order, branch_id=None, warehouse_id=mother.id))
+    destination = await repository.get_destination_reference(
+        graph.company.id,
+        None,
+        mother.id,
+    )
+
+    assert saved_order.branch_id is None
+    assert saved_order.warehouse_id == mother.id
+    assert destination is not None
+    assert destination.branch_id is None
+    assert destination.branch_is_active is None
+    assert destination.warehouse_is_central is True
+    assert destination.warehouse_storage_eligible is True
+
+
+@pytest.mark.asyncio
+async def test_verified_receipt_posts_into_company_level_mother_warehouse(
+    order_session: AsyncSession,
+) -> None:
+    graph = await _build_graph(order_session)
+    mother = Warehouse(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        branch_id=None,
+        warehouse_category_id=graph.warehouse.warehouse_category_id,
+        name=f"Receipt mother {uuid.uuid4().hex[:8]}",
+        code=f"RM-{uuid.uuid4().hex[:8]}",
+        is_central=True,
+        operational_status="active",
+        capacity_enforcement_mode="disabled",
+        storage_eligible=True,
+        is_active=True,
+    )
+    location = Location(
+        id=uuid.uuid4(),
+        warehouse_id=mother.id,
+        code=f"RCV-{uuid.uuid4().hex[:8]}",
+        aisle="",
+        rack="",
+        level="",
+        position="",
+        location_type="receiving",
+        lifecycle_status="active",
+        capacity_enforcement_mode="disabled",
+        storage_eligible=True,
+        code_source="legacy",
+        is_active=True,
+    )
+    item = InventoryItemModel(
+        company_id=graph.company.id,
+        product_id=graph.product.id_product,
+        variant_id=None,
+        base_unit_id=graph.unit.id_unit,
+        is_active=True,
+    )
+    order_session.add(mother)
+    await order_session.flush()
+    order_session.add_all([location, item])
+    await order_session.flush()
+
+    purchase_id = uuid.uuid4()
+    purchase_detail_id = uuid.uuid4()
+    purchase = Purchase(
+        id=purchase_id,
+        company_id=graph.company.id,
+        code=f"RCPT-{uuid.uuid4().hex[:8]}",
+        purchase_order_id=uuid.uuid4(),
+        supplier_id=graph.supplier.id_supplier,
+        branch_id=None,
+        warehouse_id=mother.id,
+        created_by_id=graph.user.id,
+        purchase_date=datetime.now(UTC),
+        currency=graph.currency.code,
+        details=(
+            PurchaseDetail(
+                id=purchase_detail_id,
+                purchase_id=purchase_id,
+                purchase_order_detail_id=uuid.uuid4(),
+                product_id=graph.product.id_product,
+                quantity_ordered=Decimal("2"),
+                quantity_received=Decimal("2"),
+                unit_id=graph.unit.id_unit,
+                unit_price=Decimal("10"),
+                subtotal=Decimal("20"),
+                total=Decimal("20"),
+            ),
+        ),
+        subtotal=Decimal("20"),
+        total=Decimal("20"),
+        status=PurchaseStatus.RECEIVED,
+    )
+
+    movement_id = await SqlAlchemyPurchaseInventoryGateway(order_session).post_verified_receipt(
+        purchase=purchase,
+        lines=(
+            PurchaseVerificationLine(
+                purchase_detail_id=purchase_detail_id,
+                quantity_accepted=Decimal("2"),
+                inventory_location_id=location.id,
+            ),
+        ),
+        actor_id=graph.user.id,
+    )
+    balance = await order_session.scalar(
+        select(InventoryBalanceModel).where(
+            InventoryBalanceModel.company_id == graph.company.id,
+            InventoryBalanceModel.warehouse_id == mother.id,
+            InventoryBalanceModel.location_id == location.id,
+            InventoryBalanceModel.inventory_item_id == item.id,
+            InventoryBalanceModel.stock_status == "quarantine",
+        )
+    )
+
+    assert movement_id is not None
+    assert balance is not None
+    assert balance.quantity_base == Decimal("2")
 
 
 @pytest.mark.asyncio

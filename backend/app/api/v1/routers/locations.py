@@ -7,7 +7,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile, status
 
-from app.api.v1.company_access import require_resource_company, resolve_branch_scope
+from app.api.v1.company_access import (
+    authorize_warehouse_assignment,
+    require_resource_company,
+    resolve_branch_scope,
+)
 from app.api.v1.deps import (
     CurrentUser,
     SessionDep,
@@ -50,6 +54,7 @@ async def _authorize_warehouse(
     scope = await use_cases.warehouse_scope(warehouse_id)
     require_resource_company(request, scope.company_id, not_found_detail="Almacén no encontrado.")
     await resolve_branch_scope(session, current, scope.company_id, scope.branch_id)
+    await authorize_warehouse_assignment(session, current, scope.company_id, warehouse_id)
     return scope
 
 
@@ -63,6 +68,7 @@ async def _authorize_batch(
     scope = await use_cases.batch_scope(job_id)
     require_resource_company(request, scope.company_id, not_found_detail="Lote no encontrado.")
     await resolve_branch_scope(session, current, scope.company_id, scope.branch_id)
+    await authorize_warehouse_assignment(session, current, scope.company_id, scope.warehouse_id)
     return scope
 
 

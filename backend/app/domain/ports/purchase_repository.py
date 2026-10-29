@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Protocol
 
 from app.domain.entities.purchase import Purchase, PurchaseStatus
+from app.domain.entities.purchase_conversion import PurchaseValuationConversion
 from app.domain.entities.purchase_order import PurchaseOrder, PurchaseOrderStatus
 
 
@@ -75,4 +76,14 @@ class PurchaseRepository(Protocol):
         company_id: uuid.UUID,
         purchase_id: uuid.UUID,
         status: PurchaseStatus,
+    ) -> Purchase | None: ...
+
+    async def complete_verification(
+        self,
+        company_id: uuid.UUID,
+        purchase_id: uuid.UUID,
+        *,
+        accepted_quantities: dict[uuid.UUID, tuple[Decimal, uuid.UUID | None]],
+        inventory_movement_id: uuid.UUID | None,
+        valuation_conversion: PurchaseValuationConversion | None = None,
     ) -> Purchase | None: ...

@@ -32,6 +32,7 @@ MONEY_QUANTUM = Decimal("0.000001")
 class PurchaseOrderLineDraft:
     purchase_quotation_detail_id: uuid.UUID
     quantity: Decimal
+    purchase_consolidation_award_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,13 +50,23 @@ class PurchaseOrderUseCases:
         self,
         company_id: uuid.UUID,
         *,
+        branch_id: uuid.UUID | None = None,
         status: PurchaseOrderStatus | None = None,
         supplier_id: int | None = None,
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[list[PurchaseOrder], int]:
+        if branch_id is None:
+            return await self._repository.list_orders(
+                company_id,
+                status=status,
+                supplier_id=supplier_id,
+                skip=skip,
+                limit=limit,
+            )
         return await self._repository.list_orders(
             company_id,
+            branch_id=branch_id,
             status=status,
             supplier_id=supplier_id,
             skip=skip,
@@ -68,12 +79,78 @@ class PurchaseOrderUseCases:
     ) -> tuple[PurchaseOrderExpenseTypeReference, ...]:
         return await self._repository.list_active_expense_types(company_id)
 
+    async def list_expense_type_catalog(
+        self,
+        company_id: uuid.UUID,
+    ) -> tuple[PurchaseOrderExpenseTypeReference, ...]:
+        return await self._repository.list_expense_type_catalog(company_id)
+
+    async def create_expense_type(
+        self,
+        company_id: uuid.UUID,
+        *,
+        name: str,
+        description: str | None,
+    ) -> PurchaseOrderExpenseTypeReference:
+        normalized_name = name.strip()
+        if not normalized_name:
+            raise ValidationError("El nombre del tipo de gasto es obligatorio.")
+        normalized_description = description.strip() if description else None
+        return await self._repository.create_expense_type(
+            company_id,
+            normalized_name,
+            normalized_description or None,
+        )
+
+    async def update_expense_type(
+        self,
+        company_id: uuid.UUID,
+        expense_type_id: uuid.UUID,
+        *,
+        name: str,
+        description: str | None,
+        is_active: bool,
+    ) -> PurchaseOrderExpenseTypeReference:
+        current = await self._repository.get_expense_type(company_id, expense_type_id)
+        if current is None:
+            raise NotFoundError("Tipo de gasto no encontrado.", code="expense_type_not_found")
+
+        normalized_name = name.strip()
+        if not normalized_name:
+            raise ValidationError("El nombre del tipo de gasto es obligatorio.")
+        if current.usage_count and normalized_name.casefold() != current.name.casefold():
+            raise BusinessRuleError(
+                "No se puede cambiar el nombre de un tipo de gasto usado; desactívalo para conservar su historial.",
+                code="expense_type_in_use",
+            )
+
+        normalized_description = description.strip() if description else None
+        updated = await self._repository.update_expense_type(
+            company_id,
+            expense_type_id,
+            name=normalized_name,
+            description=normalized_description or None,
+            is_active=is_active,
+        )
+        if updated is None:
+            raise NotFoundError("Tipo de gasto no encontrado.", code="expense_type_not_found")
+        return updated
+
     async def get_order(
         self,
         company_id: uuid.UUID,
         order_id: uuid.UUID,
+        *,
+        branch_id: uuid.UUID | None = None,
     ) -> PurchaseOrder:
-        order = await self._repository.get_order(company_id, order_id)
+        if branch_id is None:
+            order = await self._repository.get_order(company_id, order_id)
+        else:
+            order = await self._repository.get_order(
+                company_id,
+                order_id,
+                branch_id=branch_id,
+            )
         if order is None:
             raise NotFoundError(
                 "Orden de compra no encontrada.",
@@ -87,9 +164,10 @@ class PurchaseOrderUseCases:
         company_id: uuid.UUID,
         created_by_id: uuid.UUID,
         purchase_quotation_id: uuid.UUID,
-        branch_id: uuid.UUID,
+        branch_id: uuid.UUID | None,
         warehouse_id: uuid.UUID,
         lines: tuple[PurchaseOrderLineDraft, ...],
+        quotation_branch_id: uuid.UUID | None = None,
         expected_date: datetime | None = None,
         expenses: tuple[PurchaseOrderExpenseDraft, ...] = (),
         notes: str | None = None,
@@ -97,6 +175,7 @@ class PurchaseOrderUseCases:
         quotation = await self._get_selected_quotation_for_update(
             company_id,
             purchase_quotation_id,
+            branch_id=quotation_branch_id,
         )
         await self._validate_destination(company_id, branch_id, warehouse_id)
         ordered = await self._repository.get_ordered_quantities(
@@ -123,14 +202,129 @@ class PurchaseOrderUseCases:
         )
         return await self._repository.add_order(order)
 
+    async def create_draft_from_consolidation_awards(
+        self,
+        *,
+        company_id: uuid.UUID,
+        created_by_id: uuid.UUID,
+        consolidation_id: uuid.UUID,
+        purchase_quotation_id: uuid.UUID,
+        branch_id: uuid.UUID | None,
+        warehouse_id: uuid.UUID,
+        expected_date: datetime | None = None,
+        expenses: tuple[PurchaseOrderExpenseDraft, ...] = (),
+        notes: str | None = None,
+    ) -> PurchaseOrder:
+        consolidation_status = await self._repository.get_consolidation_status_for_update(
+            company_id, consolidation_id
+        )
+        if consolidation_status is None:
+            raise NotFoundError(
+                "Consolidado de compra no encontrado.",
+                code="purchase_consolidation_not_found",
+            )
+        if consolidation_status == "cancelled":
+            raise BusinessRuleError(
+                "No se puede crear una orden desde un consolidado cancelado.",
+                code="purchase_order_consolidation_cancelled",
+            )
+
+        quotation = await self._get_quotation_reference_for_update(
+            company_id, purchase_quotation_id
+        )
+        if quotation.consolidation_id != consolidation_id:
+            raise BusinessRuleError(
+                "La cotización no pertenece al consolidado indicado.",
+                code="purchase_order_consolidation_quotation_mismatch",
+            )
+        if quotation.status not in {
+            PurchaseQuotationStatus.UNDER_EVALUATION,
+            PurchaseQuotationStatus.SELECTED,
+        }:
+            raise BusinessRuleError(
+                "La oferta debe estar en evaluación para convertir sus adjudicaciones en orden.",
+                code="purchase_order_consolidation_quotation_unavailable",
+            )
+        if not quotation.details:
+            raise BusinessRuleError(
+                "La oferta no contiene productos para ordenar.",
+                code="purchase_order_quotation_without_details",
+            )
+
+        await self._validate_destination(company_id, branch_id, warehouse_id, require_central=True)
+        awards = await self._repository.list_active_awards_for_quotation_for_update(
+            company_id, consolidation_id, purchase_quotation_id
+        )
+        if not awards:
+            raise BusinessRuleError(
+                "Esta cotización todavía no tiene cantidades adjudicadas.",
+                code="purchase_order_without_awards",
+            )
+
+        ordered = await self._repository.get_ordered_award_quantities(
+            company_id, tuple(award.id for award in awards)
+        )
+        source_by_id = {detail.id: detail for detail in quotation.details}
+        order_id = uuid.uuid4()
+        details: list[PurchaseOrderDetail] = []
+        for award in awards:
+            source = source_by_id.get(award.purchase_quotation_detail_id)
+            if source is None or award.supplier_id != quotation.supplier_id:
+                raise BusinessRuleError(
+                    "La adjudicación ya no coincide con la oferta del proveedor.",
+                    code="purchase_order_award_source_invalid",
+                )
+            already_ordered = ordered.get(award.id, Decimal("0"))
+            remaining = award.quantity - already_ordered
+            if remaining < 0:
+                raise BusinessRuleError(
+                    "La cantidad de órdenes existentes supera la adjudicación.",
+                    code="purchase_order_award_quantity_exceeded",
+                )
+            if remaining == 0:
+                continue
+            details.append(
+                self._build_detail(
+                    order_id,
+                    source,
+                    remaining,
+                    purchase_consolidation_award_id=award.id,
+                )
+            )
+
+        if not details:
+            raise BusinessRuleError(
+                "Todas las cantidades adjudicadas de esta oferta ya están en órdenes de compra.",
+                code="purchase_order_awards_already_ordered",
+            )
+
+        expense_entities = await self._build_expenses(company_id, order_id, expenses)
+        code = await self._repository.allocate_next_code(company_id)
+        order = self._build_order(
+            order_id=order_id,
+            company_id=company_id,
+            code=code,
+            created_by_id=created_by_id,
+            quotation=quotation,
+            branch_id=branch_id,
+            warehouse_id=warehouse_id,
+            order_date=datetime.now(UTC),
+            expected_date=expected_date,
+            details=tuple(details),
+            expenses=expense_entities,
+            notes=notes,
+        )
+        return await self._repository.add_order(order)
+
     async def update_draft(
         self,
         *,
         company_id: uuid.UUID,
         order_id: uuid.UUID,
-        branch_id: uuid.UUID,
+        branch_id: uuid.UUID | None,
         warehouse_id: uuid.UUID,
         lines: tuple[PurchaseOrderLineDraft, ...],
+        quotation_branch_id: uuid.UUID | None = None,
         expected_date: datetime | None = None,
         expenses: tuple[PurchaseOrderExpenseDraft, ...] = (),
         notes: str | None = None,
@@ -141,17 +335,39 @@ class PurchaseOrderUseCases:
                 "Solo una orden en borrador puede modificarse.",
                 code="purchase_order_not_editable",
             )
-        quotation = await self._get_selected_quotation_for_update(
-            company_id,
-            current.purchase_quotation_id,
+        is_awarded_order = any(
+            detail.purchase_consolidation_award_id is not None for detail in current.details
         )
-        await self._validate_destination(company_id, branch_id, warehouse_id)
-        ordered = await self._repository.get_ordered_quantities(
-            company_id,
-            current.purchase_quotation_id,
-            exclude_order_id=current.id,
-        )
-        details = self._build_details(current.id, quotation, lines, ordered)
+        if is_awarded_order:
+            quotation = await self._get_quotation_reference_for_update(
+                company_id,
+                current.purchase_quotation_id,
+            )
+            if quotation.consolidation_id is None:
+                raise BusinessRuleError(
+                    "La orden adjudicada ya no conserva su consolidado de origen.",
+                    code="purchase_order_award_source_invalid",
+                )
+        else:
+            quotation = await self._get_selected_quotation_for_update(
+                company_id,
+                current.purchase_quotation_id,
+                branch_id=quotation_branch_id,
+            )
+        if is_awarded_order:
+            await self._validate_destination(
+                company_id, branch_id, warehouse_id, require_central=True
+            )
+            self._ensure_awarded_order_lines_unchanged(current, lines)
+            details = current.details
+        else:
+            await self._validate_destination(company_id, branch_id, warehouse_id)
+            ordered = await self._repository.get_ordered_quantities(
+                company_id,
+                current.purchase_quotation_id,
+                exclude_order_id=current.id,
+            )
+            details = self._build_details(current.id, quotation, lines, ordered)
         expense_entities = await self._build_expenses(
             company_id,
             current.id,
@@ -233,15 +449,16 @@ class PurchaseOrderUseCases:
         self,
         company_id: uuid.UUID,
         quotation_id: uuid.UUID,
+        *,
+        branch_id: uuid.UUID | None = None,
     ) -> PurchaseOrderQuotationReference:
-        reference = await self._repository.get_quotation_reference_for_update(
-            company_id,
-            quotation_id,
+        reference = await self._get_quotation_reference_for_update(
+            company_id, quotation_id, branch_id=branch_id
         )
-        if reference is None:
-            raise NotFoundError(
-                "Cotización de compra no encontrada.",
-                code="purchase_order_quotation_not_found",
+        if reference.consolidation_id is not None:
+            raise BusinessRuleError(
+                "Las ofertas de un consolidado deben ordenarse desde sus cantidades adjudicadas.",
+                code="purchase_order_consolidation_requires_award",
             )
         if reference.status is not PurchaseQuotationStatus.SELECTED:
             raise BusinessRuleError(
@@ -255,11 +472,64 @@ class PurchaseOrderUseCases:
             )
         return reference
 
+    async def _get_quotation_reference_for_update(
+        self,
+        company_id: uuid.UUID,
+        quotation_id: uuid.UUID,
+        *,
+        branch_id: uuid.UUID | None = None,
+    ) -> PurchaseOrderQuotationReference:
+        if branch_id is None:
+            reference = await self._repository.get_quotation_reference_for_update(
+                company_id, quotation_id
+            )
+        else:
+            reference = await self._repository.get_quotation_reference_for_update(
+                company_id, quotation_id, branch_id=branch_id
+            )
+        if reference is None:
+            raise NotFoundError(
+                "Cotización de compra no encontrada.",
+                code="purchase_order_quotation_not_found",
+            )
+        return reference
+
+    @staticmethod
+    def _ensure_awarded_order_lines_unchanged(
+        current: PurchaseOrder,
+        lines: tuple[PurchaseOrderLineDraft, ...],
+    ) -> None:
+        expected = {
+            (detail.purchase_quotation_detail_id, detail.purchase_consolidation_award_id): detail.quantity
+            for detail in current.details
+        }
+        received: dict[tuple[uuid.UUID, uuid.UUID | None], Decimal] = {}
+        for line in lines:
+            if line.purchase_consolidation_award_id is None:
+                raise BusinessRuleError(
+                    "Las líneas adjudicadas no se pueden quitar ni reemplazar desde la orden.",
+                    code="purchase_order_awarded_lines_locked",
+                )
+            key = (line.purchase_quotation_detail_id, line.purchase_consolidation_award_id)
+            if key in received:
+                raise ValidationError(
+                    "La misma adjudicación no puede repetirse en una orden.",
+                    code="purchase_order_duplicate_award",
+                )
+            received[key] = line.quantity
+        if received != expected:
+            raise BusinessRuleError(
+                "Las cantidades adjudicadas están protegidas. Para modificarlas, cancela la orden y corrige la adjudicación.",
+                code="purchase_order_awarded_lines_locked",
+            )
+
     async def _validate_destination(
         self,
         company_id: uuid.UUID,
-        branch_id: uuid.UUID,
+        branch_id: uuid.UUID | None,
         warehouse_id: uuid.UUID,
+        *,
+        require_central: bool = False,
     ) -> None:
         destination = await self._repository.get_destination_reference(
             company_id,
@@ -272,10 +542,18 @@ class PurchaseOrderUseCases:
                 code="purchase_order_destination_invalid",
             )
         self._ensure_destination_available(destination)
+        if require_central and not destination.warehouse_is_central:
+            raise BusinessRuleError(
+                "Las órdenes de un consolidado deben recibirse en una bodega madre activa.",
+                code="purchase_order_central_warehouse_required",
+            )
 
     @staticmethod
     def _ensure_destination_available(destination: PurchaseOrderDestinationReference) -> None:
-        if not destination.branch_is_active or destination.branch_operational_status != "active":
+        if destination.branch_id is not None and (
+            not destination.branch_is_active
+            or destination.branch_operational_status != "active"
+        ):
             raise BusinessRuleError(
                 "La sucursal de destino no está operativa.",
                 code="purchase_order_branch_unavailable",
@@ -311,6 +589,11 @@ class PurchaseOrderUseCases:
         sources = {detail.id: detail for detail in quotation.details}
         details: list[PurchaseOrderDetail] = []
         for line in lines:
+            if line.purchase_consolidation_award_id is not None:
+                raise ValidationError(
+                    "Una orden normal no puede incluir una adjudicación de consolidado.",
+                    code="purchase_order_award_reference_invalid",
+                )
             source = sources.get(line.purchase_quotation_detail_id)
             if source is None:
                 raise ValidationError(
@@ -342,6 +625,8 @@ class PurchaseOrderUseCases:
         order_id: uuid.UUID,
         source: PurchaseOrderQuotationDetailReference,
         quantity: Decimal,
+        *,
+        purchase_consolidation_award_id: uuid.UUID | None = None,
     ) -> PurchaseOrderDetail:
         subtotal = self._money(quantity * source.unit_price)
         discount = Decimal("0")
@@ -365,6 +650,7 @@ class PurchaseOrderUseCases:
                 tax_amount=tax_amount,
                 total=total,
                 notes=source.notes,
+                purchase_consolidation_award_id=purchase_consolidation_award_id,
             )
         except ValueError as exc:
             raise ValidationError(
@@ -413,7 +699,7 @@ class PurchaseOrderUseCases:
         code: str,
         created_by_id: uuid.UUID,
         quotation: PurchaseOrderQuotationReference,
-        branch_id: uuid.UUID,
+        branch_id: uuid.UUID | None,
         warehouse_id: uuid.UUID,
         order_date: datetime,
         expected_date: datetime | None,

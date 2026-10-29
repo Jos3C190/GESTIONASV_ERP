@@ -20,6 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -79,6 +80,11 @@ class PurchaseQuotationModel(UUIDPKMixin, TimestampMixin, Base):
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="draft")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    consolidation_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    consolidation_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -104,6 +110,20 @@ class PurchaseQuotationModel(UUIDPKMixin, TimestampMixin, Base):
         lazy="selectin",
         order_by="PurchaseQuotationExpenseModel.created_at",
     )
+    snapshots: Mapped[list[PurchaseQuotationLineSnapshotModel]] = relationship(
+        "PurchaseQuotationLineSnapshotModel",
+        back_populates="purchase_quotation",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="PurchaseQuotationLineSnapshotModel.created_at",
+    )
+    documents: Mapped[list[PurchaseQuotationDocumentModel]] = relationship(
+        "PurchaseQuotationDocumentModel",
+        back_populates="purchase_quotation",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="PurchaseQuotationDocumentModel.created_at",
+    )
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -112,11 +132,30 @@ class PurchaseQuotationModel(UUIDPKMixin, TimestampMixin, Base):
             name="fk_purchase_quotations_supplier_company",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["consolidation_id", "company_id"],
+            ["purchase_consolidations.id", "purchase_consolidations.company_id"],
+            name="fk_purchase_quotations_consolidation_company",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint("id", "company_id", name="uq_purchase_quotations_id_company_id"),
         UniqueConstraint("company_id", "code", name="uq_purchase_quotations_company_code"),
+        UniqueConstraint(
+            "company_id",
+            "consolidation_id",
+            "supplier_id",
+            "version_number",
+            name="uq_purchase_quotations_consolidation_supplier_version",
+        ),
+        CheckConstraint("version_number > 0", name="ck_purchase_quotations_version_positive"),
+        CheckConstraint(
+            "(consolidation_id IS NULL AND consolidation_code IS NULL AND version_number = 1) OR "
+            "(consolidation_id IS NOT NULL AND consolidation_code IS NOT NULL)",
+            name="ck_purchase_quotations_consolidation_version",
+        ),
         CheckConstraint(
             "status IN "
-            "('draft','requested','received','under_evaluation','selected','rejected',"
+            "('draft','requested','received','under_evaluation','selected','not_selected','rejected',"
             "'expired','cancelled')",
             name="ck_purchase_quotations_status",
         ),
@@ -151,6 +190,12 @@ class PurchaseQuotationModel(UUIDPKMixin, TimestampMixin, Base):
             "company_id",
             "supplier_id",
             "quotation_date",
+        ),
+        Index(
+            "ix_purchase_quotations_consolidation_supplier",
+            "company_id",
+            "consolidation_id",
+            "supplier_id",
         ),
     )
 
@@ -272,6 +317,7 @@ class PurchaseQuotationDetailModel(UUIDPKMixin, TimestampMixin, Base):
     product_id: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_id: Mapped[int] = mapped_column(Integer, nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    offered_quantity: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     discount: Mapped[Decimal] = mapped_column(
         Numeric(18, 6), nullable=False, default=Decimal("0"), server_default="0"
@@ -322,6 +368,10 @@ class PurchaseQuotationDetailModel(UUIDPKMixin, TimestampMixin, Base):
             name="uq_purchase_quotation_details_id_company_id",
         ),
         CheckConstraint("quantity > 0", name="ck_purchase_quotation_details_quantity_positive"),
+        CheckConstraint(
+            "offered_quantity IS NULL OR (offered_quantity >= 0 AND offered_quantity <= quantity)",
+            name="ck_purchase_quotation_details_offered_quantity",
+        ),
         CheckConstraint("unit_price >= 0", name="ck_purchase_quotation_details_unit_price"),
         CheckConstraint(
             "discount >= 0 AND subtotal >= 0 AND tax_amount >= 0 AND total >= 0",
@@ -341,13 +391,117 @@ class PurchaseQuotationDetailModel(UUIDPKMixin, TimestampMixin, Base):
         ),
         CheckConstraint(
             "available_quantity IS NULL OR "
-            "(available_quantity >= 0 AND available_quantity <= quantity)",
+            "(available_quantity >= 0 AND available_quantity <= "
+            "coalesce(offered_quantity, quantity))",
             name="ck_purchase_quotation_details_available_quantity",
         ),
         Index(
             "ix_purchase_quotation_details_company_product",
             "company_id",
             "product_id",
+        ),
+    )
+
+
+class PurchaseQuotationLineSnapshotModel(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "purchase_quotation_line_snapshots"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    purchase_quotation_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    purchase_quotation_detail_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False
+    )
+    consolidation_line_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    product_sku: Mapped[str] = mapped_column(String(80), nullable=False)
+    product_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    unit_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    branch_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    central_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    source_snapshot: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+
+    purchase_quotation: Mapped[PurchaseQuotationModel] = relationship(
+        "PurchaseQuotationModel",
+        back_populates="snapshots",
+    )
+    purchase_quotation_detail: Mapped[PurchaseQuotationDetailModel] = relationship(
+        "PurchaseQuotationDetailModel",
+        lazy="joined",
+        viewonly=True,
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["purchase_quotation_id", "company_id"],
+            ["purchase_quotations.id", "purchase_quotations.company_id"],
+            name="fk_purchase_quotation_line_snapshots_quotation_company",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["purchase_quotation_detail_id", "company_id"],
+            ["purchase_quotation_details.id", "purchase_quotation_details.company_id"],
+            name="fk_purchase_quotation_line_snapshots_detail_company",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "purchase_quotation_detail_id",
+            name="uq_purchase_quotation_line_snapshots_detail",
+        ),
+        CheckConstraint(
+            "branch_quantity >= 0 AND central_quantity >= 0",
+            name="ck_purchase_quotation_line_snapshots_quantities_nonnegative",
+        ),
+        Index(
+            "ix_purchase_quotation_line_snapshots_quotation",
+            "company_id",
+            "purchase_quotation_id",
+        ),
+    )
+
+
+class PurchaseQuotationDocumentModel(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "purchase_quotation_documents"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
+    )
+    purchase_quotation_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    document_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_type: Mapped[str] = mapped_column(String(160), nullable=False)
+    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    purchase_quotation: Mapped[PurchaseQuotationModel] = relationship(
+        "PurchaseQuotationModel",
+        back_populates="documents",
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["purchase_quotation_id", "company_id"],
+            ["purchase_quotations.id", "purchase_quotations.company_id"],
+            name="fk_purchase_quotation_documents_quotation_company",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["document_id", "company_id"],
+            ["document_assets.id", "document_assets.company_id"],
+            name="fk_purchase_quotation_documents_asset_company",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("document_id", name="uq_purchase_quotation_documents_document"),
+        Index(
+            "ix_purchase_quotation_documents_quotation",
+            "company_id",
+            "purchase_quotation_id",
+            "created_at",
+        ),
+        Index(
+            "ix_purchase_quotation_documents_active",
+            "company_id",
+            "purchase_quotation_id",
+            "deleted_at",
+            "created_at",
         ),
     )
 

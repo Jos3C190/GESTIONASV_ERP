@@ -14,6 +14,12 @@ from app.application.purchase_quotations.use_cases import (
     PurchaseQuotationUseCases,
 )
 from app.core.exceptions import BusinessRuleError, NotFoundError, ValidationError
+from app.domain.entities.purchase_consolidation import (
+    ConsolidationLine,
+    ConsolidationSource,
+    PurchaseConsolidation,
+    PurchaseConsolidationStatus,
+)
 from app.domain.entities.purchase_quotation import (
     PurchaseQuotation,
     PurchaseQuotationDetail,
@@ -43,6 +49,7 @@ class FakePurchaseQuotationRepository:
         self.advanced: list[tuple[uuid.UUID, tuple[uuid.UUID, ...]]] = []
         self.comparable: dict[tuple[uuid.UUID, uuid.UUID], list[PurchaseQuotation]] = {}
         self.next_number = 1
+        self.consolidation_versions: dict[tuple[uuid.UUID, uuid.UUID, int], int] = {}
 
     async def list_quotations(self, company_id, *, status=None, supplier_id=None, skip=0, limit=50):
         values = [
@@ -64,6 +71,18 @@ class FakePurchaseQuotationRepository:
         code = f"COT-{self.next_number:05d}"
         self.next_number += 1
         return code
+
+    async def allocate_next_consolidation_version(self, company_id, consolidation_id, supplier_id):
+        key = (company_id, consolidation_id, supplier_id)
+        self.consolidation_versions[key] = self.consolidation_versions.get(key, 0) + 1
+        return self.consolidation_versions[key]
+
+    async def list_consolidation_quotations(self, company_id, consolidation_id):
+        return tuple(
+            quotation
+            for (tenant, _), quotation in self.quotations.items()
+            if tenant == company_id and quotation.consolidation_id == consolidation_id
+        )
 
     async def get_supplier_reference(self, company_id, supplier_id):
         return self.suppliers.get((company_id, supplier_id))
@@ -137,6 +156,68 @@ def _setup_repository() -> tuple[
     )
     repository.active_expense_types.add((company_id, expense_type_id))
     return repository, company_id, request_id, request_detail_id, expense_type_id
+
+
+def _consolidation(
+    company_id: uuid.UUID,
+    request_id: uuid.UUID,
+    request_detail_id: uuid.UUID,
+) -> PurchaseConsolidation:
+    today = datetime.now(UTC).date()
+    branch_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    line_id = uuid.uuid4()
+    source = ConsolidationSource(
+        id=uuid.uuid4(),
+        purchase_request_id=request_id,
+        purchase_request_detail_id=request_detail_id,
+        request_code="SCR-00042",
+        branch_id=branch_id,
+        branch_name="Sucursal Centro",
+        warehouse_id=warehouse_id,
+        warehouse_name="Bodega Centro",
+        requester_name="Ana",
+        required_date=datetime.now(UTC) + timedelta(days=7),
+        requested_quantity=Decimal("5"),
+        included_quantity=Decimal("3"),
+    )
+    branch_and_central = ConsolidationLine(
+        id=line_id,
+        product_id=11,
+        product_sku="PRD-00011",
+        product_name="Harina",
+        unit_id=3,
+        unit_name="Kilogramo (kg)",
+        central_quantity=Decimal("2"),
+        central_reason="Reserva central",
+        sources=(source,),
+    )
+    central_only = ConsolidationLine(
+        id=uuid.uuid4(),
+        product_id=12,
+        product_sku="PRD-00012",
+        product_name="Azúcar",
+        unit_id=3,
+        unit_name="Kilogramo (kg)",
+        central_quantity=Decimal("4"),
+        central_reason="Consumo central",
+        sources=(),
+    )
+    return PurchaseConsolidation(
+        id=uuid.uuid4(),
+        company_id=company_id,
+        code="CD-00042",
+        period_start=today,
+        period_end=today + timedelta(days=7),
+        status=PurchaseConsolidationStatus.DRAFT,
+        created_by_id=uuid.uuid4(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        central_warehouse_id=uuid.uuid4(),
+        central_warehouse_name="Bodega Central",
+        notes=None,
+        lines=(branch_and_central, central_only),
+    )
 
 
 async def _create_requested(
@@ -324,6 +405,131 @@ async def test_create_draft_requires_approved_request() -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_from_consolidation_freezes_scope_and_allocates_supplier_version() -> None:
+    repository, company_id, request_id, request_detail_id, _ = _setup_repository()
+    consolidation = _consolidation(company_id, request_id, request_detail_id)
+    use_cases = PurchaseQuotationUseCases(repository)
+
+    first = await use_cases.create_from_consolidation(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        consolidation=consolidation,
+        supplier_id=7,
+        currency="usd",
+        line_ids=(consolidation.lines[0].id,),
+        notes="Entregar cotización esta semana",
+    )
+    second = await use_cases.create_from_consolidation(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        consolidation=consolidation,
+        supplier_id=7,
+        currency="USD",
+        line_ids=(consolidation.lines[0].id,),
+    )
+
+    assert first.status is PurchaseQuotationStatus.DRAFT
+    assert first.consolidation_id == consolidation.id
+    assert first.consolidation_code == "CD-00042"
+    assert first.version_number == 1
+    assert second.version_number == 2
+    assert first.details[0].quantity == Decimal("5")
+    assert first.request_links[0].details[0].quantity == Decimal("3")
+    assert first.snapshots[0].branch_quantity == Decimal("3")
+    assert first.snapshots[0].central_quantity == Decimal("2")
+    assert first.snapshots[0].sources[0].request_code == "SCR-00042"
+    assert first.notes == "Entregar cotización esta semana"
+    assert len(await use_cases.list_consolidation_quotations(company_id, consolidation.id)) == 2
+
+
+@pytest.mark.asyncio
+async def test_create_from_consolidation_supports_central_only_demand() -> None:
+    repository, company_id, request_id, request_detail_id, _ = _setup_repository()
+    consolidation = _consolidation(company_id, request_id, request_detail_id)
+
+    quotation = await PurchaseQuotationUseCases(repository).create_from_consolidation(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        consolidation=consolidation,
+        supplier_id=7,
+        currency="USD",
+        line_ids=(consolidation.lines[1].id,),
+    )
+
+    assert quotation.request_links == ()
+    assert quotation.details[0].quantity == Decimal("4")
+    assert quotation.snapshots[0].branch_quantity == Decimal("0")
+    assert quotation.snapshots[0].central_quantity == Decimal("4")
+    assert quotation.snapshots[0].sources == ()
+
+
+@pytest.mark.asyncio
+async def test_consolidation_offer_does_not_change_source_request_quotation_status() -> None:
+    repository, company_id, request_id, request_detail_id, _ = _setup_repository()
+    consolidation = _consolidation(company_id, request_id, request_detail_id)
+    use_cases = PurchaseQuotationUseCases(repository)
+    quotation = await use_cases.create_from_consolidation(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        consolidation=consolidation,
+        supplier_id=7,
+        currency="USD",
+        line_ids=(consolidation.lines[0].id,),
+    )
+    requested = await use_cases.send_request(company_id, quotation.id)
+
+    await use_cases.record_response(
+        company_id=company_id,
+        quotation_id=requested.id,
+        quotation_date=datetime.now(UTC),
+        lines=(
+            PurchaseQuotationResponseLineDraft(
+                product_id=11,
+                unit_id=3,
+                offered_quantity=Decimal("1"),
+                unit_price=Decimal("2"),
+            ),
+        ),
+    )
+
+    assert repository.advanced == []
+
+
+@pytest.mark.asyncio
+async def test_consolidation_offer_must_wait_for_line_level_adjudication() -> None:
+    repository, company_id, request_id, request_detail_id, _ = _setup_repository()
+    consolidation = _consolidation(company_id, request_id, request_detail_id)
+    use_cases = PurchaseQuotationUseCases(repository)
+    quotation = await use_cases.create_from_consolidation(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        consolidation=consolidation,
+        supplier_id=7,
+        currency="USD",
+        line_ids=(consolidation.lines[0].id,),
+    )
+    requested = await use_cases.send_request(company_id, quotation.id)
+    received = await use_cases.record_response(
+        company_id=company_id,
+        quotation_id=requested.id,
+        quotation_date=datetime.now(UTC),
+        lines=(
+            PurchaseQuotationResponseLineDraft(
+                product_id=11,
+                unit_id=3,
+                offered_quantity=Decimal("5"),
+                unit_price=Decimal("2"),
+            ),
+        ),
+    )
+    evaluating = await use_cases.start_evaluation(company_id, received.id)
+
+    with pytest.raises(BusinessRuleError) as exc_info:
+        await use_cases.select_offer(company_id, evaluating.id)
+    assert exc_info.value.code == "purchase_quotation_requires_line_adjudication"
+
+
+@pytest.mark.asyncio
 async def test_create_draft_rejects_excess_request_quantity() -> None:
     repository, company_id, request_id, request_detail_id, _ = _setup_repository()
 
@@ -373,7 +579,7 @@ async def test_record_response_calculates_totals_and_advances_requests() -> None
             PurchaseQuotationResponseLineDraft(
                 product_id=11,
                 unit_id=3,
-                quantity=Decimal("5"),
+                offered_quantity=Decimal("5"),
                 unit_price=Decimal("10"),
                 discount=Decimal("5"),
                 tax_rate=Decimal("13"),
@@ -410,7 +616,7 @@ async def test_record_response_rejects_out_of_scope_product() -> None:
                 PurchaseQuotationResponseLineDraft(
                     product_id=999,
                     unit_id=3,
-                    quantity=Decimal("1"),
+                    offered_quantity=Decimal("1"),
                     unit_price=Decimal("1"),
                 ),
             ),
@@ -419,7 +625,7 @@ async def test_record_response_rejects_out_of_scope_product() -> None:
 
 
 @pytest.mark.asyncio
-async def test_record_response_rejects_reducing_scope_quantity() -> None:
+async def test_record_response_rejects_offer_above_requested_quantity() -> None:
     repository, company_id, request_id, request_detail_id, _ = _setup_repository()
     requested = await _create_requested(repository, company_id, request_id, request_detail_id)
 
@@ -432,13 +638,12 @@ async def test_record_response_rejects_reducing_scope_quantity() -> None:
                 PurchaseQuotationResponseLineDraft(
                     product_id=11,
                     unit_id=3,
-                    quantity=Decimal("1"),
+                    offered_quantity=Decimal("6"),
                     unit_price=Decimal("1"),
-                    available_quantity=Decimal("1"),
                 ),
             ),
         )
-    assert exc_info.value.code == "purchase_quotation_response_quantity_incomplete"
+    assert exc_info.value.code == "purchase_quotation_response_quantity_exceeded"
 
 
 @pytest.mark.asyncio
@@ -454,7 +659,7 @@ async def test_record_response_accepts_partial_available_quantity() -> None:
             PurchaseQuotationResponseLineDraft(
                 product_id=11,
                 unit_id=3,
-                quantity=Decimal("5"),
+                offered_quantity=Decimal("2"),
                 unit_price=Decimal("1"),
                 available_quantity=Decimal("1"),
             ),
@@ -462,7 +667,35 @@ async def test_record_response_accepts_partial_available_quantity() -> None:
     )
 
     assert received.details[0].quantity == Decimal("5")
+    assert received.details[0].offered_quantity == Decimal("2")
     assert received.details[0].available_quantity == Decimal("1")
+    assert received.details[0].subtotal == Decimal("2.000000")
+
+
+@pytest.mark.asyncio
+async def test_record_response_allows_no_offer_but_cannot_select_it() -> None:
+    repository, company_id, request_id, request_detail_id, _ = _setup_repository()
+    requested = await _create_requested(repository, company_id, request_id, request_detail_id)
+
+    received = await PurchaseQuotationUseCases(repository).record_response(
+        company_id=company_id,
+        quotation_id=requested.id,
+        quotation_date=datetime.now(UTC),
+        lines=(),
+        notes="No manejamos este producto actualmente.",
+    )
+    evaluating = await PurchaseQuotationUseCases(repository).start_evaluation(
+        company_id,
+        received.id,
+    )
+
+    assert received.details[0].quantity == Decimal("5")
+    assert received.details[0].offered_quantity == Decimal("0")
+    assert received.details[0].total == Decimal("0.000000")
+    assert received.response_notes == "No manejamos este producto actualmente."
+    with pytest.raises(BusinessRuleError) as exc_info:
+        await PurchaseQuotationUseCases(repository).select_offer(company_id, evaluating.id)
+    assert exc_info.value.code == "purchase_quotation_offer_empty"
 
 
 @pytest.mark.asyncio
@@ -479,7 +712,7 @@ async def test_record_response_rejects_inactive_expense_type() -> None:
                 PurchaseQuotationResponseLineDraft(
                     product_id=11,
                     unit_id=3,
-                    quantity=Decimal("5"),
+                    offered_quantity=Decimal("5"),
                     unit_price=Decimal("1"),
                 ),
             ),
@@ -507,7 +740,7 @@ async def test_start_evaluation_and_select_offer_follow_workflow() -> None:
             PurchaseQuotationResponseLineDraft(
                 product_id=11,
                 unit_id=3,
-                quantity=Decimal("5"),
+                offered_quantity=Decimal("5"),
                 unit_price=Decimal("20"),
             ),
         ),
@@ -535,7 +768,7 @@ async def test_select_offer_rejects_expired_quote() -> None:
             PurchaseQuotationResponseLineDraft(
                 product_id=11,
                 unit_id=3,
-                quantity=Decimal("5"),
+                offered_quantity=Decimal("5"),
                 unit_price=Decimal("20"),
             ),
         ),
@@ -556,6 +789,7 @@ def _comparison_quote(
     currency: str = "USD",
     delivery_days: int | None = None,
     valid_until: datetime | None = None,
+    offered_quantity: Decimal | None = None,
 ) -> PurchaseQuotation:
     quotation_id = uuid.uuid4()
     link_id = uuid.uuid4()
@@ -595,6 +829,7 @@ def _comparison_quote(
                 unit_price=Decimal(total),
                 subtotal=Decimal(total),
                 total=Decimal(total),
+                offered_quantity=offered_quantity,
             ),
         ),
         subtotal=Decimal(total),
@@ -688,3 +923,42 @@ async def test_compare_offers_excludes_expired_quotes() -> None:
     )
 
     assert [row.code for row in rows] == ["COT-00002"]
+
+
+@pytest.mark.asyncio
+async def test_compare_offers_excludes_quotes_with_no_offered_lines() -> None:
+    repository, company_id, request_id, request_detail_id, _ = _setup_repository()
+    offered = _comparison_quote(
+        company_id=company_id,
+        request_id=request_id,
+        supplier_id=1,
+        code="COT-00001",
+        total="100",
+    )
+    no_offer = _comparison_quote(
+        company_id=company_id,
+        request_id=request_id,
+        supplier_id=2,
+        code="COT-00002",
+        total="0",
+        offered_quantity=Decimal("0"),
+    )
+    consolidation = _consolidation(company_id, request_id, request_detail_id)
+    consolidation_quote = await PurchaseQuotationUseCases(repository).create_from_consolidation(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        consolidation=consolidation,
+        supplier_id=7,
+        currency="USD",
+        line_ids=(consolidation.lines[0].id,),
+    )
+    consolidation_quote = replace(
+        consolidation_quote,
+        status=PurchaseQuotationStatus.RECEIVED,
+        total=Decimal("80"),
+    )
+    repository.comparable[(company_id, request_id)] = [offered, no_offer, consolidation_quote]
+
+    rows = await PurchaseQuotationUseCases(repository).compare_offers(company_id, request_id)
+
+    assert [row.code for row in rows] == ["COT-00001"]

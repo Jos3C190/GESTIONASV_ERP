@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
+    Date,
+    DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -14,6 +18,10 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
+)
+from sqlalchemy import (
+    text as sa_text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -23,6 +31,15 @@ from app.infrastructure.db.base import Base, TimestampMixin, UUIDPKMixin
 
 class RetaceoModel(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "retaceos"
+    manual_entry: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
+
+    origin_country: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    import_invoice_number: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    import_invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    import_policy_number: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    import_policy_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),
@@ -31,7 +48,7 @@ class RetaceoModel(UUIDPKMixin, TimestampMixin, Base):
     )
     code: Mapped[str] = mapped_column(String(32), nullable=False)
     purchase_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     created_by_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),
@@ -58,6 +75,8 @@ class RetaceoModel(UUIDPKMixin, TimestampMixin, Base):
     total_cost: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="draft")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    applied_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
 
     details: Mapped[list[RetaceoDetailModel]] = relationship(
         "RetaceoDetailModel",
@@ -66,8 +85,19 @@ class RetaceoModel(UUIDPKMixin, TimestampMixin, Base):
         lazy="selectin",
         order_by="RetaceoDetailModel.created_at",
     )
+    costs: Mapped[list[RetaceoCostModel]] = relationship(
+        "RetaceoCostModel",
+        back_populates="retaceo",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="RetaceoCostModel.created_at",
+    )
 
     __table_args__ = (
+        CheckConstraint(
+            "(applied_at IS NULL AND applied_by IS NULL) OR (applied_at IS NOT NULL AND applied_by IS NOT NULL AND status IN ('verified', 'closed'))",
+            name="ck_retaceos_application",
+        ),
         ForeignKeyConstraint(
             ["purchase_id", "company_id"],
             ["purchases.id", "purchases.company_id"],
@@ -178,4 +208,137 @@ class RetaceoDetailModel(UUIDPKMixin, TimestampMixin, Base):
             "company_id",
             "purchase_detail_id",
         ),
+    )
+
+
+class RetaceoCostModel(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "retaceo_costs"
+    incurred_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    retaceo_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    source_purchase_order_expense_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    expense_type_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    classification: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+
+    retaceo: Mapped[RetaceoModel] = relationship("RetaceoModel", back_populates="costs")
+    allocations: Mapped[list[RetaceoCostAllocationModel]] = relationship(
+        "RetaceoCostAllocationModel",
+        back_populates="cost",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="RetaceoCostAllocationModel.created_at",
+    )
+    documents: Mapped[list[RetaceoCostDocumentModel]] = relationship(
+        "RetaceoCostDocumentModel",
+        back_populates="cost",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="RetaceoCostDocumentModel.created_at",
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["retaceo_id", "company_id"],
+            ["retaceos.id", "retaceos.company_id"],
+            name="fk_retaceo_costs_retaceo_company",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["source_purchase_order_expense_id", "company_id"],
+            ["purchase_order_expenses.id", "purchase_order_expenses.company_id"],
+            name="fk_retaceo_costs_source_expense_company",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["expense_type_id", "company_id"],
+            ["expense_types.id", "expense_types.company_id"],
+            name="fk_retaceo_costs_expense_type_company",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("id", "company_id", name="uq_retaceo_costs_id_company"),
+        CheckConstraint(
+            "classification IN ('freight','expense','dai','import_vat')",
+            name="ck_retaceo_costs_classification",
+        ),
+        CheckConstraint("amount > 0", name="ck_retaceo_costs_amount_positive"),
+        CheckConstraint("length(trim(title)) > 0", name="ck_retaceo_costs_title_nonempty"),
+        Index("ix_retaceo_costs_retaceo_created", "retaceo_id", "created_at"),
+        Index(
+            "uq_retaceo_costs_source_expense",
+            "retaceo_id",
+            "source_purchase_order_expense_id",
+            unique=True,
+            postgresql_where=sa_text("source_purchase_order_expense_id IS NOT NULL"),
+        ),
+    )
+
+
+class RetaceoCostAllocationModel(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "retaceo_cost_allocations"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    retaceo_cost_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    purchase_detail_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+
+    cost: Mapped[RetaceoCostModel] = relationship("RetaceoCostModel", back_populates="allocations")
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["retaceo_cost_id", "company_id"],
+            ["retaceo_costs.id", "retaceo_costs.company_id"],
+            name="fk_retaceo_cost_allocations_cost_company",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["purchase_detail_id", "company_id"],
+            ["purchase_details.id", "purchase_details.company_id"],
+            name="fk_retaceo_cost_allocations_purchase_detail_company",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("amount >= 0", name="ck_retaceo_cost_allocations_amount_nonnegative"),
+        UniqueConstraint(
+            "retaceo_cost_id",
+            "purchase_detail_id",
+            name="uq_retaceo_cost_allocations_cost_detail",
+        ),
+        Index("ix_retaceo_cost_allocations_detail", "company_id", "purchase_detail_id"),
+    )
+
+
+class RetaceoCostDocumentModel(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "retaceo_cost_documents"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    retaceo_cost_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    document_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_type: Mapped[str] = mapped_column(String(160), nullable=False)
+    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    cost: Mapped[RetaceoCostModel] = relationship("RetaceoCostModel", back_populates="documents")
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["retaceo_cost_id", "company_id"],
+            ["retaceo_costs.id", "retaceo_costs.company_id"],
+            name="fk_retaceo_cost_documents_cost_company",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["document_id", "company_id"],
+            ["document_assets.id", "document_assets.company_id"],
+            name="fk_retaceo_cost_documents_asset_company",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("retaceo_cost_id", "document_id", name="uq_retaceo_cost_documents_asset"),
+        Index("ix_retaceo_cost_documents_cost", "company_id", "retaceo_cost_id", "created_at"),
     )

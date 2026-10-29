@@ -345,6 +345,7 @@ async def ensure_item_and_packaging(session, use_cases: InventoryUseCases, stock
             code=stock.packaging_code,
             name=stock.packaging_name,
             packaging_type=stock.packaging_type,
+            packaging_unit_id=1,
             base_quantity=stock.base_quantity,
             measures=stock.measures,
             stackable=stock.stackable,

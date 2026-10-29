@@ -103,6 +103,7 @@ class PackagingCreate(StrictModel):
     code: str = Field(..., min_length=1, max_length=60, pattern=r"^[A-Za-z0-9._-]+$")
     name: str = Field(..., min_length=2, max_length=120)
     packaging_type: PackagingType
+    packaging_unit_id: int = Field(..., gt=0)
     base_quantity: Decimal = Field(..., gt=0, max_digits=18, decimal_places=6)
     measures: PhysicalMeasuresIn = Field(
         default_factory=PhysicalMeasuresIn,
@@ -126,6 +127,7 @@ class PackagingOut(BaseModel):
     code: str
     name: str
     packaging_type: PackagingType
+    packaging_unit_id: int | None
     version: int
     base_quantity: Decimal
     gross_weight_kg: Decimal | None
@@ -227,6 +229,20 @@ class MovementLineIn(StrictModel):
         description="Medidas totales de la unidad logística recibida.",
     )
     capacity_override_id: uuid.UUID | None = None
+    valuation_kind: (
+        Literal[
+            "receipt",
+            "issue",
+            "adjustment_in",
+            "adjustment_out",
+            "customer_return",
+            "supplier_return",
+        ]
+        | None
+    ) = None
+    valuation_value: Decimal | None = Field(None, ge=0, max_digits=24, decimal_places=6)
+    valuation_currency: str | None = Field(None, pattern=r"^[A-Z]{3}$")
+    valuation_original_entry_id: uuid.UUID | None = None
 
 
 class MovementConfirmIn(StrictModel):
@@ -244,6 +260,27 @@ class MovementConfirmIn(StrictModel):
         seen_handling_units: set[uuid.UUID] = set()
         seen_new_codes: set[str] = set()
         for line in self.lines:
+            financial_fields = (
+                line.valuation_kind,
+                line.valuation_value,
+                line.valuation_currency,
+                line.valuation_original_entry_id,
+            )
+            if transfer and any(value is not None for value in financial_fields):
+                raise ValueError("Un traslado dentro de la empresa no modifica el costo.")
+            if line.valuation_kind == "customer_return":
+                if (
+                    not inbound
+                    or line.valuation_original_entry_id is None
+                    or line.valuation_value is not None
+                ):
+                    raise ValueError(
+                        "La devolución de cliente requiere entrada y salida original, sin costo manual."
+                    )
+            elif line.valuation_original_entry_id is not None:
+                raise ValueError("La salida original solo corresponde a una devolución de cliente.")
+            if outbound and line.valuation_value is not None:
+                raise ValueError("El sistema determina el costo de salida según el promedio.")
             if inbound and (
                 line.from_location_id is not None
                 or line.to_location_id is None
@@ -296,6 +333,8 @@ class MovementLineOut(BaseModel):
     occupied_volume_m3: Decimal | None
     measurement_status: MeasurementStatus
     lot_code: str | None
+    receipt_lot_code: str | None = None
+    receipt_lot_header_code: str | None = None
     expiry_date: date | None
 
 
@@ -308,6 +347,72 @@ class MovementOut(BaseModel):
     reservation_id: uuid.UUID | None
     posted_at: datetime
     lines: list[MovementLineOut]
+
+
+class HandlingUnitSplitPrepareIn(StrictModel):
+    idempotency_key: str = Field(..., min_length=8, max_length=120)
+    split_quantity_base: Decimal = Field(..., gt=0, max_digits=18, decimal_places=6)
+    destination_location_id: uuid.UUID
+
+
+class HandlingUnitSplitPrepareOut(BaseModel):
+    idempotency_key: str
+    source_reference: str
+    quarantine_movement: MovementOut
+    split_movement: MovementOut
+    remainder_handling_unit_id: uuid.UUID
+    remainder_handling_unit_code: str
+    remainder_quantity_base: Decimal
+    split_handling_unit_id: uuid.UUID
+    split_handling_unit_code: str
+    split_quantity_base: Decimal
+    stock_status: StockStatus
+    measurement_status: MeasurementStatus
+
+
+class InventoryMovementHistoryOut(BaseModel):
+    id: uuid.UUID
+    movement_id: uuid.UUID
+    line_number: int
+    company_id: uuid.UUID
+    movement_type: str
+    source_reference: str | None
+    purchase_code: str | None
+    purchase_order_code: str | None
+    posted_at: datetime
+    posted_by: uuid.UUID | None
+    operator: str | None
+    inventory_item_id: uuid.UUID
+    product_id: int | None
+    variant_id: uuid.UUID | None
+    base_unit_id: int
+    base_unit_name: str | None
+    base_unit_symbol: str | None
+    product_sku: str | None
+    product_name: str | None
+    handling_unit_id: uuid.UUID | None
+    handling_unit_code: str | None
+    from_warehouse_id: uuid.UUID | None
+    from_warehouse_code: str | None
+    from_warehouse_name: str | None
+    from_location_id: uuid.UUID | None
+    from_location_code: str | None
+    from_stock_status: StockStatus | None
+    to_warehouse_id: uuid.UUID | None
+    to_warehouse_code: str | None
+    to_warehouse_name: str | None
+    to_location_id: uuid.UUID | None
+    to_location_code: str | None
+    to_stock_status: StockStatus | None
+    quantity_base: Decimal
+    occupied_weight_kg: Decimal | None
+    occupied_volume_m3: Decimal | None
+    measurement_status: MeasurementStatus
+    lot_code: str | None
+    receipt_lot_code: str | None = None
+    receipt_lot_header_code: str | None = None
+    expiry_date: date | None
+    packaging_snapshot: dict[str, object] | None
 
 
 class HandlingUnitMeasurementVerify(StrictModel):
@@ -328,6 +433,7 @@ class HandlingUnitOut(BaseModel):
     location_id: uuid.UUID
     inventory_item_id: uuid.UUID
     packaging_definition_id: uuid.UUID | None
+    origin_handling_unit_id: uuid.UUID | None = None
     code: str
     lot_code: str | None
     expiry_date: date | None
@@ -345,6 +451,87 @@ class HandlingUnitOut(BaseModel):
     closed_at: datetime | None
     created_at: datetime | None
     updated_at: datetime | None
+    receipt_lot_id: uuid.UUID | None = None
+    receipt_lot_code: str | None = None
+    receipt_lot_header_code: str | None = None
+    received_at: datetime | None = None
+    purchase_code: str | None = None
+    product_sku: str | None = None
+    product_name: str | None = None
+    product_id: int | None = None
+    base_unit_id: int | None = None
+    base_unit_symbol: str | None = None
+    base_unit_name: str | None = None
+    packaging_name: str | None = None
+    packaging_base_quantity: Decimal | None = None
+    release_requirements: list[str] = Field(default_factory=list)
+
+
+class TransferHandlingUnitOut(HandlingUnitOut):
+    """Handling unit with the identity and routing data needed by transfers."""
+
+    product_id: int | None
+    product_sku: str | None
+    product_name: str | None
+    base_unit_id: int
+    base_unit_name: str | None
+    base_unit_symbol: str | None
+    warehouse_code: str | None
+    warehouse_name: str
+    branch_id: uuid.UUID | None
+    branch_name: str | None
+    location_code: str
+    source_reference: str | None
+    origin_handling_unit_code: str | None = None
+
+
+class HandlingUnitTraceEventOut(BaseModel):
+    movement_id: uuid.UUID
+    movement_type: str
+    source_reference: str | None
+    posted_at: datetime
+    posted_by: uuid.UUID | None
+    operator: str | None
+    from_warehouse_code: str | None
+    from_warehouse_name: str | None
+    from_location_code: str | None
+    from_stock_status: StockStatus | None
+    to_warehouse_code: str | None
+    to_warehouse_name: str | None
+    to_location_code: str | None
+    to_stock_status: StockStatus | None
+    quantity_base: Decimal
+
+
+class HandlingUnitTraceRequestOut(BaseModel):
+    request_code: str
+    branch_name: str
+    requested_at: datetime
+    required_date: datetime | None
+
+
+class HandlingUnitTraceOriginOut(BaseModel):
+    supplier_code: str | None
+    supplier_name: str | None
+    purchase_code: str | None
+    purchase_order_code: str | None
+    received_at: datetime | None
+    purchase_date: datetime | None
+    consolidation_code: str | None
+    requests: list[HandlingUnitTraceRequestOut]
+
+
+class HandlingUnitTraceOut(BaseModel):
+    handling_unit: HandlingUnitOut
+    product_sku: str | None
+    product_name: str | None
+    base_unit_name: str | None
+    base_unit_symbol: str | None
+    warehouse_code: str
+    warehouse_name: str
+    location_code: str
+    origin: HandlingUnitTraceOriginOut
+    movements: list[HandlingUnitTraceEventOut]
 
 
 class InventoryBalanceOut(BaseModel):

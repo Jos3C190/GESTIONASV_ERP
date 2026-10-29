@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -30,7 +30,15 @@ from app.infrastructure.models.organization import (
     Warehouse,
     WarehouseCategory,
 )
+from app.infrastructure.models.purchase_consolidation import (
+    PurchaseConsolidationLineModel,
+    PurchaseConsolidationModel,
+    PurchaseConsolidationSourceModel,
+)
 from app.infrastructure.models.user import User
+from app.infrastructure.repositories.purchase_consolidation_repository import (
+    SqlAlchemyPurchaseConsolidationRepository,
+)
 from app.infrastructure.repositories.purchase_request_repository import (
     SqlAlchemyPurchaseRequestRepository,
 )
@@ -133,6 +141,7 @@ async def _build_test_graph(session: AsyncSession) -> PurchaseRequestTestGraph:
 
     warehouse = Warehouse(
         id=uuid.uuid4(),
+        company_id=company.id,
         branch_id=branch.id,
         warehouse_category_id=warehouse_category.id,
         name=f"Purchase warehouse {suffix}",
@@ -252,6 +261,8 @@ async def _persist_request(
     user_id: uuid.UUID,
     product_id: int,
     unit_id: int,
+    request_date: datetime | None = None,
+    status: PurchaseRequestStatus = PurchaseRequestStatus.DRAFT,
 ) -> PurchaseRequest:
     request_id = uuid.uuid4()
     code = await repository.allocate_next_code(company_id)
@@ -262,7 +273,7 @@ async def _persist_request(
         branch_id=branch_id,
         warehouse_id=warehouse_id,
         requested_by_id=user_id,
-        request_date=datetime.now(UTC),
+        request_date=request_date or datetime.now(UTC),
         justification="Prueba de integración de compras",
         details=(
             PurchaseRequestDetail(
@@ -273,6 +284,7 @@ async def _persist_request(
                 quantity=Decimal("3.000000"),
             ),
         ),
+        status=status,
     )
     return await repository.add_request(request)
 
@@ -364,6 +376,253 @@ async def test_repository_persists_and_hides_request_from_other_tenant(
     listed = next(item for item in items if item.id == saved.id)
     assert listed.branch_name == graph.branch.name
     assert listed.warehouse_name == graph.warehouse.name
+
+
+@pytest.mark.asyncio
+async def test_purchase_work_filters_include_full_el_salvador_calendar_day(
+    purchase_session: AsyncSession,
+) -> None:
+    graph = await _build_test_graph(purchase_session)
+    requests = SqlAlchemyPurchaseRequestRepository(purchase_session)
+    work_items = SqlAlchemyPurchaseConsolidationRepository(purchase_session)
+
+    previous_local_day = await _persist_request(
+        requests,
+        company_id=graph.company.id,
+        branch_id=graph.branch.id,
+        warehouse_id=graph.warehouse.id,
+        user_id=graph.user.id,
+        product_id=graph.product.id_product,
+        unit_id=graph.unit.id_unit,
+        request_date=datetime(2026, 10, 4, 5, 30, tzinfo=UTC),
+        status=PurchaseRequestStatus.APPROVED,
+    )
+    last_minute_local_day = await _persist_request(
+        requests,
+        company_id=graph.company.id,
+        branch_id=graph.branch.id,
+        warehouse_id=graph.warehouse.id,
+        user_id=graph.user.id,
+        product_id=graph.product.id_product,
+        unit_id=graph.unit.id_unit,
+        request_date=datetime(2026, 10, 5, 5, 30, tzinfo=UTC),
+        status=PurchaseRequestStatus.APPROVED,
+    )
+    next_local_day = await _persist_request(
+        requests,
+        company_id=graph.company.id,
+        branch_id=graph.branch.id,
+        warehouse_id=graph.warehouse.id,
+        user_id=graph.user.id,
+        product_id=graph.product.id_product,
+        unit_id=graph.unit.id_unit,
+        request_date=datetime(2026, 10, 5, 6, 0, tzinfo=UTC),
+        status=PurchaseRequestStatus.APPROVED,
+    )
+
+    selected_date = date(2026, 10, 4)
+    listed, listed_total = await work_items.list_work_items(
+        graph.company.id,
+        item_type="individual",
+        status=None,
+        query=None,
+        branch_id=graph.branch.id,
+        warehouse_id=graph.warehouse.id,
+        category_id=None,
+        date_from=selected_date,
+        date_to=selected_date,
+        consolidation_id=None,
+        skip=0,
+        limit=20,
+    )
+    eligible, eligible_total = await work_items.list_approved_requests(
+        graph.company.id,
+        branch_id=graph.branch.id,
+        warehouse_id=graph.warehouse.id,
+        date_from=selected_date,
+        date_to=selected_date,
+        query=None,
+        skip=0,
+        limit=20,
+    )
+
+    assert listed_total == 1
+    assert [item.code for item in listed] == [last_minute_local_day.code]
+    assert eligible_total == 1
+    assert [item["code"] for item in eligible] == [last_minute_local_day.code]
+    assert previous_local_day.code not in {item.code for item in listed}
+    assert next_local_day.code not in {item.code for item in listed}
+
+
+@pytest.mark.asyncio
+async def test_eligible_requests_excludes_linked_sources_without_hiding_other_approved_requests(
+    purchase_session: AsyncSession,
+) -> None:
+    graph = await _build_test_graph(purchase_session)
+    requests = SqlAlchemyPurchaseRequestRepository(purchase_session)
+    work_items = SqlAlchemyPurchaseConsolidationRepository(purchase_session)
+    request_date = datetime(2026, 10, 5, 12, 0, tzinfo=UTC)
+
+    linked_request = await _persist_request(
+        requests,
+        company_id=graph.company.id,
+        branch_id=graph.branch.id,
+        warehouse_id=graph.warehouse.id,
+        user_id=graph.user.id,
+        product_id=graph.product.id_product,
+        unit_id=graph.unit.id_unit,
+        request_date=request_date,
+        status=PurchaseRequestStatus.APPROVED,
+    )
+    available_request = await _persist_request(
+        requests,
+        company_id=graph.company.id,
+        branch_id=graph.branch.id,
+        warehouse_id=graph.warehouse.id,
+        user_id=graph.user.id,
+        product_id=graph.product.id_product,
+        unit_id=graph.unit.id_unit,
+        request_date=request_date,
+        status=PurchaseRequestStatus.APPROVED,
+    )
+
+    consolidation = PurchaseConsolidationModel(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        code=f"CD-{uuid.uuid4().hex[:8]}",
+        period_start=date(2026, 10, 1),
+        period_end=date(2026, 10, 31),
+        status="draft",
+        created_by_id=graph.user.id,
+    )
+    line = PurchaseConsolidationLineModel(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        consolidation_id=consolidation.id,
+        product_id=graph.product.id_product,
+        unit_id=graph.unit.id_unit,
+        central_quantity=Decimal("0"),
+    )
+    source = PurchaseConsolidationSourceModel(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        consolidation_line_id=line.id,
+        purchase_request_id=linked_request.id,
+        purchase_request_detail_id=linked_request.details[0].id,
+        requested_quantity=linked_request.details[0].quantity,
+        included_quantity=linked_request.details[0].quantity,
+    )
+    purchase_session.add_all([consolidation, line, source])
+    await purchase_session.flush()
+
+    eligible, total = await work_items.list_approved_requests(
+        graph.company.id,
+        branch_id=None,
+        warehouse_id=None,
+        date_from=date(2026, 10, 5),
+        date_to=date(2026, 10, 5),
+        query=None,
+        skip=0,
+        limit=20,
+    )
+
+    assert total == 1
+    assert [item["id"] for item in eligible] == [available_request.id]
+
+
+@pytest.mark.asyncio
+async def test_selected_request_resolution_distinguishes_linked_eligible_and_changed_status(
+    purchase_session: AsyncSession,
+) -> None:
+    graph = await _build_test_graph(purchase_session)
+    requests = SqlAlchemyPurchaseRequestRepository(purchase_session)
+    work_items = SqlAlchemyPurchaseConsolidationRepository(purchase_session)
+    request_date = datetime(2026, 10, 5, 12, 0, tzinfo=UTC)
+
+    linked_request = await _persist_request(
+        requests,
+        company_id=graph.company.id,
+        branch_id=graph.branch.id,
+        warehouse_id=graph.warehouse.id,
+        user_id=graph.user.id,
+        product_id=graph.product.id_product,
+        unit_id=graph.unit.id_unit,
+        request_date=request_date,
+        status=PurchaseRequestStatus.APPROVED,
+    )
+    eligible_request = await _persist_request(
+        requests,
+        company_id=graph.company.id,
+        branch_id=graph.branch.id,
+        warehouse_id=graph.warehouse.id,
+        user_id=graph.user.id,
+        product_id=graph.product.id_product,
+        unit_id=graph.unit.id_unit,
+        request_date=request_date,
+        status=PurchaseRequestStatus.APPROVED,
+    )
+    changed_request = await _persist_request(
+        requests,
+        company_id=graph.company.id,
+        branch_id=graph.branch.id,
+        warehouse_id=graph.warehouse.id,
+        user_id=graph.user.id,
+        product_id=graph.product.id_product,
+        unit_id=graph.unit.id_unit,
+        request_date=request_date,
+        status=PurchaseRequestStatus.DRAFT,
+    )
+    consolidation = PurchaseConsolidationModel(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        code=f"CD-{uuid.uuid4().hex[:8]}",
+        period_start=date(2026, 10, 1),
+        period_end=date(2026, 10, 31),
+        status="draft",
+        created_by_id=graph.user.id,
+    )
+    line = PurchaseConsolidationLineModel(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        consolidation_id=consolidation.id,
+        product_id=graph.product.id_product,
+        unit_id=graph.unit.id_unit,
+        central_quantity=Decimal("0"),
+    )
+    source_values = {
+        "company_id": graph.company.id,
+        "consolidation_line_id": line.id,
+        "purchase_request_id": linked_request.id,
+        "purchase_request_detail_id": linked_request.details[0].id,
+        "requested_quantity": linked_request.details[0].quantity,
+        "included_quantity": linked_request.details[0].quantity,
+    }
+    # A request can have multiple source rows in the same consolidation. The
+    # diagnostic result must show that destination only once.
+    purchase_session.add_all([
+        consolidation,
+        line,
+        PurchaseConsolidationSourceModel(id=uuid.uuid4(), **source_values),
+        PurchaseConsolidationSourceModel(id=uuid.uuid4(), **source_values),
+    ])
+    await purchase_session.flush()
+
+    resolutions = await work_items.resolve_selected_requests(
+        graph.company.id,
+        (linked_request.id, eligible_request.id, changed_request.id, uuid.uuid4()),
+    )
+    by_id = {item["id"]: item for item in resolutions}
+
+    assert len(resolutions) == 3
+    assert by_id[linked_request.id]["eligibility"] == "already_consolidated"
+    assert by_id[linked_request.id]["code"] == linked_request.code
+    assert by_id[linked_request.id]["consolidations"] == ({
+        "id": consolidation.id,
+        "code": consolidation.code,
+        "status": "draft",
+    },)
+    assert by_id[eligible_request.id]["eligibility"] == "eligible"
+    assert by_id[changed_request.id]["eligibility"] == "not_eligible"
 
 
 @pytest.mark.asyncio

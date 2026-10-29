@@ -3,23 +3,29 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
+from http import HTTPStatus
 
-from app.core.exceptions import BusinessRuleError, NotFoundError, ValidationError
+from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError, ValidationError
+from app.domain.entities.inventory import InventoryOperationError
 from app.domain.entities.purchase import (
     Purchase,
     PurchaseDetail,
+    PurchaseInventoryWorkflow,
     PurchaseStatus,
     PurchaseTransitionError,
+    PurchaseVerificationLine,
     ensure_purchase_transition,
 )
+from app.domain.entities.purchase_conversion import PurchaseValuationConversion
 from app.domain.entities.purchase_order import (
     PurchaseOrder,
     PurchaseOrderDetail,
     PurchaseOrderStatus,
 )
+from app.domain.ports.purchase_inventory import PurchaseInventoryGateway, PurchaseReceiptReadiness
 from app.domain.ports.purchase_repository import (
     PurchaseOrderReceivingRepository,
     PurchaseRepository,
@@ -52,13 +58,28 @@ class PurchaseReceivableLine:
 
 
 class PurchaseUseCases:
+    async def receipt_readiness(
+        self, company_id: uuid.UUID, purchase_id: uuid.UUID
+    ) -> PurchaseReceiptReadiness:
+        purchase = await self.get_purchase(company_id, purchase_id)
+        if self._inventory is None:
+            raise RuntimeError("La integración de inventario no está configurada.")
+        return await self._inventory.receipt_readiness(purchase)
+
     def __init__(
         self,
         repository: PurchaseRepository,
         order_repository: PurchaseOrderReceivingRepository,
+        inventory: PurchaseInventoryGateway | None = None,
     ) -> None:
         self._repository = repository
         self._orders = order_repository
+        self._inventory = inventory
+
+    async def valuation_currency(self, company_id: uuid.UUID) -> str | None:
+        if self._inventory is None:
+            raise RuntimeError("La integración de inventario no está configurada.")
+        return await self._inventory.valuation_currency(company_id)
 
     async def list_purchases(
         self,
@@ -146,6 +167,7 @@ class PurchaseUseCases:
             supplier_invoice_number=supplier_invoice_number,
             supplier_invoice_date=supplier_invoice_date,
             notes=notes,
+            inventory_workflow=PurchaseInventoryWorkflow.AFTER_PLACEMENT,
         )
         return await self._repository.add_purchase(purchase)
 
@@ -185,6 +207,7 @@ class PurchaseUseCases:
             supplier_invoice_date=supplier_invoice_date,
             notes=notes,
             created_at=current.created_at,
+            inventory_workflow=current.inventory_workflow,
         )
         saved = await self._repository.replace_draft(replacement)
         if saved is None:
@@ -239,12 +262,92 @@ class PurchaseUseCases:
         self,
         company_id: uuid.UUID,
         purchase_id: uuid.UUID,
+        *,
+        lines: tuple[PurchaseVerificationLine, ...],
+        actor_id: uuid.UUID,
+        valuation_conversion: PurchaseValuationConversion | None = None,
     ) -> Purchase:
-        return await self._transition_purchase(
+        current = await self._get_purchase_for_update(company_id, purchase_id)
+        if current.status is not PurchaseStatus.RECEIVED:
+            raise BusinessRuleError(
+                "Solo una recepción pendiente de verificación puede verificarse.",
+                code="purchase_not_verifiable",
+            )
+        try:
+            ensure_purchase_transition(current.status, PurchaseStatus.VERIFIED)
+        except PurchaseTransitionError as exc:
+            raise BusinessRuleError(str(exc), code="purchase_invalid_transition") from exc
+
+        quantities = self._normalize_verification_lines(current, lines)
+        if valuation_conversion is not None and not any(
+            line.quantity_accepted > 0 for line in lines
+        ):
+            raise ValidationError(
+                "Una recepción totalmente rechazada no requiere tipo de cambio.",
+                code="purchase_valuation_conversion_unnecessary",
+            )
+        current = replace(current, valuation_conversion=valuation_conversion)
+        if self._inventory is None:
+            raise RuntimeError("La integración de recepción con inventario no está configurada.")
+        order = await self._get_order_for_update(company_id, current.purchase_order_id)
+        previously_received = await self._repository.get_received_quantities(
+            company_id,
+            order.id,
+            exclude_purchase_id=current.id,
+        )
+        accepted_after = dict(previously_received)
+        for detail in current.details:
+            accepted_after[detail.purchase_order_detail_id] = (
+                accepted_after.get(detail.purchase_order_detail_id, Decimal("0"))
+                + quantities[detail.id][0]
+            )
+
+        # Keep each accepted split intact so Inventory creates a separate
+        # handling unit for every physical package/lot entered by the operator.
+        movement_id = await self._post_verified_inventory(current, lines, actor_id)
+
+        saved = await self._repository.complete_verification(
             company_id,
             purchase_id,
-            PurchaseStatus.VERIFIED,
+            accepted_quantities=quantities,
+            inventory_movement_id=movement_id,
+            valuation_conversion=valuation_conversion,
         )
+        if saved is None:
+            raise NotFoundError("Compra no encontrada.", code="purchase_not_found")
+
+        target_order_status = self._receipt_order_status(order, accepted_after)
+        if target_order_status is not order.status:
+            updated_order = await self._orders.update_status(
+                company_id,
+                order.id,
+                target_order_status,
+            )
+            if updated_order is None:
+                raise RuntimeError(
+                    "La orden de compra bloqueada desapareció durante la verificación."
+                )
+        return saved
+
+    async def _post_verified_inventory(
+        self,
+        purchase: Purchase,
+        lines: tuple[PurchaseVerificationLine, ...],
+        actor_id: uuid.UUID,
+    ) -> uuid.UUID | None:
+        assert self._inventory is not None
+        try:
+            return await self._inventory.post_verified_receipt(
+                purchase=purchase,
+                lines=lines,
+                actor_id=actor_id,
+            )
+        except InventoryOperationError as exc:
+            if exc.status_code == HTTPStatus.NOT_FOUND:
+                raise NotFoundError(exc.message, code=exc.code) from exc
+            if exc.status_code == HTTPStatus.CONFLICT:
+                raise ConflictError(exc.message, code=exc.code) from exc
+            raise ValidationError(exc.message, code=exc.code) from exc
 
     async def cancel_purchase(
         self,
@@ -406,6 +509,7 @@ class PurchaseUseCases:
         supplier_invoice_date: date | None,
         notes: str | None,
         created_at: datetime | None = None,
+        inventory_workflow: PurchaseInventoryWorkflow = PurchaseInventoryWorkflow.LEGACY,
     ) -> Purchase:
         subtotal = self._money(sum((detail.subtotal for detail in details), Decimal("0")))
         discount = self._money(sum((detail.discount for detail in details), Decimal("0")))
@@ -431,6 +535,7 @@ class PurchaseUseCases:
                 tax=tax,
                 total=total,
                 status=PurchaseStatus.DRAFT,
+                inventory_workflow=inventory_workflow,
                 notes=notes,
                 created_at=created_at,
             )
@@ -468,7 +573,72 @@ class PurchaseUseCases:
         )
         if fully_received:
             return PurchaseOrderStatus.RECEIVED
+        if not any(received.get(detail.id, Decimal("0")) > 0 for detail in order.details):
+            return PurchaseOrderStatus.SENT
         return PurchaseOrderStatus.PARTIALLY_RECEIVED
+
+    @staticmethod
+    def _normalize_verification_lines(
+        purchase: Purchase,
+        lines: tuple[PurchaseVerificationLine, ...],
+    ) -> dict[uuid.UUID, tuple[Decimal, uuid.UUID | None]]:
+        detail_ids = {detail.id for detail in purchase.details}
+        submitted_ids = {line.purchase_detail_id for line in lines}
+        if not lines or not detail_ids.issubset(submitted_ids):
+            raise ValidationError(
+                "La verificación debe incluir al menos una parte por cada línea recibida.",
+                code="purchase_verification_lines_invalid",
+            )
+        if submitted_ids - detail_ids:
+            raise ValidationError(
+                "La parte indicada no pertenece a esta recepción.",
+                code="purchase_order_detail_invalid",
+            )
+        details = {detail.id: detail for detail in purchase.details}
+        split_quantities: dict[uuid.UUID, list[PurchaseVerificationLine]] = {
+            detail_id: [] for detail_id in detail_ids
+        }
+        for line in lines:
+            quantity = line.quantity_accepted
+            if not quantity.is_finite() or quantity < 0:
+                raise ValidationError(
+                    "La cantidad aceptada debe ser cero o mayor.",
+                    code="purchase_accepted_quantity_invalid",
+                )
+            if quantity > 0 and line.inventory_location_id is None:
+                raise ValidationError(
+                    "Cada cantidad aceptada requiere una ubicación de destino.",
+                    code="purchase_receipt_location_required",
+                )
+            if quantity == 0 and line.inventory_location_id is not None:
+                raise ValidationError(
+                    "Una línea sin cantidad aceptada no debe tener ubicación.",
+                    code="purchase_receipt_location_not_allowed",
+                )
+            split_quantities[line.purchase_detail_id].append(line)
+
+        quantities: dict[uuid.UUID, tuple[Decimal, uuid.UUID | None]] = {}
+        for detail_id, parts in split_quantities.items():
+            received_detail = details[detail_id]
+            accepted = sum((part.quantity_accepted for part in parts), Decimal("0"))
+            if accepted > received_detail.quantity_received:
+                raise ValidationError(
+                    "La suma aceptada no puede superar la cantidad contada.",
+                    code="purchase_accepted_quantity_exceeded",
+                )
+            positive_locations = {
+                part.inventory_location_id for part in parts if part.quantity_accepted > 0
+            }
+            if len(positive_locations) > 1:
+                raise ValidationError(
+                    "Divide la cantidad en unidades distintas, pero asígnalas a la misma ubicación. Después podrás trasladar las unidades por separado.",
+                    code="purchase_receipt_split_location_mismatch",
+                )
+            quantities[detail_id] = (
+                accepted,
+                next(iter(positive_locations)) if positive_locations else None,
+            )
+        return quantities
 
     async def _transition_purchase(
         self,

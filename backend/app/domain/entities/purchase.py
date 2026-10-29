@@ -8,6 +8,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
+from app.domain.entities.purchase_conversion import PurchaseValuationConversion
+
 ISO_CURRENCY_CODE_LENGTH = 3
 
 
@@ -19,6 +21,12 @@ class PurchaseStatus(StrEnum):
     VERIFIED = "verified"
     CANCELLED = "cancelled"
     CLOSED = "closed"
+
+
+class PurchaseInventoryWorkflow(StrEnum):
+    LEGACY = "receipt_before_retaceo"
+    AFTER_RETACEO = "retaceo_before_inventory"
+    AFTER_PLACEMENT = "placement_before_inventory"
 
 
 PURCHASE_TRANSITIONS: dict[PurchaseStatus, frozenset[PurchaseStatus]] = {
@@ -74,6 +82,8 @@ class PurchaseDetail:
     tax_rate: Decimal = Decimal("0")
     tax_amount: Decimal = Decimal("0")
     total: Decimal = Decimal("0")
+    quantity_accepted: Decimal | None = None
+    inventory_location_id: uuid.UUID | None = None
     notes: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -87,6 +97,14 @@ class PurchaseDetail:
         _ensure_positive(self.quantity_received, "La cantidad recibida")
         if self.quantity_received > self.quantity_ordered:
             raise ValueError("La cantidad recibida no puede superar la cantidad ordenada.")
+        if self.quantity_accepted is not None:
+            _ensure_nonnegative(self.quantity_accepted, "La cantidad aceptada")
+            if self.quantity_accepted > self.quantity_received:
+                raise ValueError("La cantidad aceptada no puede superar la cantidad contada.")
+            if self.quantity_accepted > 0 and self.inventory_location_id is None:
+                raise ValueError("La cantidad aceptada requiere una ubicación de inventario.")
+            if self.quantity_accepted == 0 and self.inventory_location_id is not None:
+                raise ValueError("Una línea sin cantidad aceptada no debe tener ubicación.")
         _ensure_nonnegative(self.unit_price, "El precio unitario")
         _ensure_nonnegative(self.discount, "El descuento")
         _ensure_nonnegative(self.subtotal, "El subtotal")
@@ -98,6 +116,19 @@ class PurchaseDetail:
         if self.discount > self.subtotal:
             raise ValueError("El descuento no puede superar el subtotal.")
 
+    @property
+    def quantity_rejected(self) -> Decimal | None:
+        if self.quantity_accepted is None:
+            return None
+        return self.quantity_received - self.quantity_accepted
+
+
+@dataclass(frozen=True, slots=True)
+class PurchaseVerificationLine:
+    purchase_detail_id: uuid.UUID
+    quantity_accepted: Decimal
+    inventory_location_id: uuid.UUID | None
+
 
 @dataclass(frozen=True, slots=True)
 class Purchase:
@@ -106,7 +137,7 @@ class Purchase:
     code: str
     purchase_order_id: uuid.UUID
     supplier_id: int
-    branch_id: uuid.UUID
+    branch_id: uuid.UUID | None
     warehouse_id: uuid.UUID
     created_by_id: uuid.UUID
     purchase_date: datetime
@@ -119,9 +150,12 @@ class Purchase:
     tax: Decimal = Decimal("0")
     total: Decimal = Decimal("0")
     status: PurchaseStatus = PurchaseStatus.DRAFT
+    inventory_movement_id: uuid.UUID | None = None
     notes: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    valuation_conversion: PurchaseValuationConversion | None = None
+    inventory_workflow: PurchaseInventoryWorkflow = PurchaseInventoryWorkflow.LEGACY
 
     def __post_init__(self) -> None:
         if not self.code.strip():

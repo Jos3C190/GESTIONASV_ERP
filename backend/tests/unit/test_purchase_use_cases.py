@@ -9,8 +9,14 @@ from decimal import Decimal
 
 import pytest
 from app.application.purchases import PurchaseLineDraft, PurchaseUseCases
-from app.core.exceptions import BusinessRuleError
-from app.domain.entities.purchase import Purchase, PurchaseDetail, PurchaseStatus
+from app.core.exceptions import BusinessRuleError, ConflictError, ValidationError
+from app.domain.entities.inventory import InventoryOperationError
+from app.domain.entities.purchase import (
+    Purchase,
+    PurchaseDetail,
+    PurchaseStatus,
+    PurchaseVerificationLine,
+)
 from app.domain.entities.purchase_order import (
     PurchaseOrder,
     PurchaseOrderDetail,
@@ -103,7 +109,29 @@ class FakePurchaseRepository:
         *,
         exclude_purchase_id: uuid.UUID | None = None,
     ) -> dict[uuid.UUID, Decimal]:
-        return dict(self.received)
+        quantities = dict(self.received)
+        for purchase in self.items.values():
+            if (
+                purchase.company_id != company_id
+                or purchase.purchase_order_id != purchase_order_id
+                or purchase.id == exclude_purchase_id
+            ):
+                continue
+            for detail in purchase.details:
+                if purchase.status is PurchaseStatus.RECEIVED:
+                    quantity = detail.quantity_received
+                elif purchase.status in {PurchaseStatus.VERIFIED, PurchaseStatus.CLOSED}:
+                    quantity = (
+                        detail.quantity_accepted
+                        if detail.quantity_accepted is not None
+                        else detail.quantity_received
+                    )
+                else:
+                    continue
+                quantities[detail.purchase_order_detail_id] = (
+                    quantities.get(detail.purchase_order_detail_id, Decimal("0")) + quantity
+                )
+        return quantities
 
     async def add_purchase(self, purchase: Purchase) -> Purchase:
         self.items[purchase.id] = purchase
@@ -127,6 +155,57 @@ class FakePurchaseRepository:
         updated = replace(item, status=status)
         self.items[purchase_id] = updated
         return updated
+
+    async def complete_verification(
+        self,
+        company_id: uuid.UUID,
+        purchase_id: uuid.UUID,
+        *,
+        accepted_quantities: dict[uuid.UUID, tuple[Decimal, uuid.UUID | None]],
+        inventory_movement_id: uuid.UUID | None,
+        valuation_conversion=None,
+    ) -> Purchase | None:
+        item = await self.get_purchase(company_id, purchase_id)
+        if item is None or {detail.id for detail in item.details} != set(accepted_quantities):
+            return None
+        details = tuple(
+            replace(
+                detail,
+                quantity_accepted=accepted_quantities[detail.id][0],
+                inventory_location_id=accepted_quantities[detail.id][1],
+            )
+            for detail in item.details
+        )
+        updated = replace(
+            item,
+            details=details,
+            inventory_movement_id=inventory_movement_id,
+            valuation_conversion=valuation_conversion,
+            status=PurchaseStatus.VERIFIED,
+        )
+        self.items[purchase_id] = updated
+        return updated
+
+
+class FakePurchaseInventoryGateway:
+    def __init__(self, movement_id: uuid.UUID | None) -> None:
+        self.movement_id = movement_id
+        self.calls: list[dict[str, object]] = []
+
+    async def valuation_currency(self, company_id: uuid.UUID) -> str | None:
+        return "USD"
+
+    async def post_verified_receipt(
+        self,
+        *,
+        purchase: Purchase,
+        lines: tuple[PurchaseVerificationLine, ...],
+        actor_id: uuid.UUID,
+    ) -> uuid.UUID | None:
+        self.calls.append({"purchase": purchase, "lines": lines, "actor_id": actor_id})
+        if not any(line.quantity_accepted > 0 for line in lines):
+            return None
+        return self.movement_id
 
 
 class FakeOrderRepository:
@@ -296,6 +375,43 @@ async def test_receive_purchase_rechecks_pending_before_mutating_status() -> Non
     assert orders.order.status is PurchaseOrderStatus.SENT
 
 
+@pytest.mark.asyncio
+async def test_full_receipt_prevents_confirming_other_drafts_or_creating_another_receipt() -> None:
+    ids = _ids()
+    purchases = FakePurchaseRepository()
+    original = _purchase(ids, received=Decimal("5"))
+    other_draft = replace(_purchase(ids, received=Decimal("5")), code="COM-00002")
+    purchases.items[original.id] = original
+    purchases.items[other_draft.id] = other_draft
+    orders = FakeOrderRepository(_order(ids))
+    use_cases = PurchaseUseCases(purchases, orders)
+
+    await use_cases.receive_purchase(ids["company"], original.id)
+    assert orders.order.status is PurchaseOrderStatus.RECEIVED
+
+    with pytest.raises(BusinessRuleError) as duplicate:
+        await use_cases.receive_purchase(ids["company"], original.id)
+    assert duplicate.value.code == "purchase_not_receivable"
+
+    with pytest.raises(BusinessRuleError) as other:
+        await use_cases.receive_purchase(ids["company"], other_draft.id)
+    assert other.value.code == "purchase_order_not_receivable"
+
+    with pytest.raises(BusinessRuleError) as new_receipt:
+        await use_cases.create_draft(
+            company_id=ids["company"],
+            created_by_id=ids["user"],
+            purchase_order_id=ids["order"],
+            lines=(PurchaseLineDraft(ids["order_detail"], Decimal("5")),),
+        )
+    assert new_receipt.value.code == "purchase_order_not_receivable"
+    assert len(purchases.items) == 2
+    assert purchases.items[other_draft.id].status is PurchaseStatus.DRAFT
+    assert await purchases.get_received_quantities(ids["company"], ids["order"]) == {
+        ids["order_detail"]: Decimal("5")
+    }
+
+
 class MissingOnUpdateOrderRepository(FakeOrderRepository):
     async def update_status(
         self,
@@ -317,3 +433,213 @@ async def test_receive_purchase_raises_unexpected_error_if_locked_order_update_d
 
     with pytest.raises(RuntimeError, match="bloqueada desapareció"):
         await use_cases.receive_purchase(ids["company"], purchase.id)
+
+
+@pytest.mark.asyncio
+async def test_verify_purchase_posts_only_accepted_quantities_and_tracks_movement() -> None:
+    ids = _ids()
+    purchase = _purchase(ids, received=Decimal("2"), status=PurchaseStatus.RECEIVED)
+    purchases = FakePurchaseRepository()
+    purchases.items[purchase.id] = purchase
+    orders = FakeOrderRepository(_order(ids))
+    location_id = uuid.uuid4()
+    movement_id = uuid.uuid4()
+    inventory = FakePurchaseInventoryGateway(movement_id)
+    use_cases = PurchaseUseCases(purchases, orders, inventory)
+
+    verified = await use_cases.verify_purchase(
+        ids["company"],
+        purchase.id,
+        lines=(
+            PurchaseVerificationLine(
+                purchase_detail_id=purchase.details[0].id,
+                quantity_accepted=Decimal("1.25"),
+                inventory_location_id=location_id,
+            ),
+        ),
+        actor_id=ids["user"],
+    )
+
+    assert verified.status is PurchaseStatus.VERIFIED
+    assert verified.details[0].quantity_accepted == Decimal("1.25")
+    assert verified.details[0].quantity_rejected == Decimal("0.75")
+    assert verified.details[0].inventory_location_id == location_id
+    assert verified.inventory_movement_id == movement_id
+    posted_lines = inventory.calls[0]["lines"]
+    assert posted_lines == (
+        PurchaseVerificationLine(
+            purchase_detail_id=purchase.details[0].id,
+            quantity_accepted=Decimal("1.25"),
+            inventory_location_id=location_id,
+        ),
+    )
+    assert orders.order.status is PurchaseOrderStatus.PARTIALLY_RECEIVED
+
+
+@pytest.mark.asyncio
+async def test_verify_purchase_keeps_receipt_splits_as_separate_inventory_units() -> None:
+    ids = _ids()
+    purchase = _purchase(ids, received=Decimal("2"), status=PurchaseStatus.RECEIVED)
+    purchases = FakePurchaseRepository()
+    purchases.items[purchase.id] = purchase
+    orders = FakeOrderRepository(_order(ids))
+    location_id = uuid.uuid4()
+    inventory = FakePurchaseInventoryGateway(uuid.uuid4())
+    use_cases = PurchaseUseCases(purchases, orders, inventory)
+    split_lines = (
+        PurchaseVerificationLine(purchase.details[0].id, Decimal("1.25"), location_id),
+        PurchaseVerificationLine(purchase.details[0].id, Decimal("0.5"), location_id),
+    )
+
+    verified = await use_cases.verify_purchase(
+        ids["company"],
+        purchase.id,
+        lines=split_lines,
+        actor_id=ids["user"],
+    )
+
+    assert inventory.calls[0]["lines"] == split_lines
+    assert verified.details[0].quantity_accepted == Decimal("1.75")
+    assert verified.details[0].quantity_rejected == Decimal("0.25")
+    assert verified.details[0].inventory_location_id == location_id
+
+
+@pytest.mark.asyncio
+async def test_verify_purchase_requires_receipt_splits_to_share_a_location() -> None:
+    ids = _ids()
+    purchase = _purchase(ids, received=Decimal("2"), status=PurchaseStatus.RECEIVED)
+    purchases = FakePurchaseRepository()
+    purchases.items[purchase.id] = purchase
+    inventory = FakePurchaseInventoryGateway(uuid.uuid4())
+    use_cases = PurchaseUseCases(
+        purchases,
+        FakeOrderRepository(_order(ids)),
+        inventory,
+    )
+
+    with pytest.raises(ValidationError) as error:
+        await use_cases.verify_purchase(
+            ids["company"],
+            purchase.id,
+            lines=(
+                PurchaseVerificationLine(purchase.details[0].id, Decimal("1"), uuid.uuid4()),
+                PurchaseVerificationLine(purchase.details[0].id, Decimal("1"), uuid.uuid4()),
+            ),
+            actor_id=ids["user"],
+        )
+
+    assert error.value.code == "purchase_receipt_split_location_mismatch"
+    assert inventory.calls == []
+
+
+@pytest.mark.asyncio
+async def test_verify_purchase_with_zero_accepted_quantity_creates_no_movement() -> None:
+    ids = _ids()
+    purchase = _purchase(ids, received=Decimal("2"), status=PurchaseStatus.RECEIVED)
+    purchases = FakePurchaseRepository()
+    purchases.items[purchase.id] = purchase
+    orders = FakeOrderRepository(_order(ids))
+    inventory = FakePurchaseInventoryGateway(None)
+    use_cases = PurchaseUseCases(purchases, orders, inventory)
+
+    verified = await use_cases.verify_purchase(
+        ids["company"],
+        purchase.id,
+        lines=(
+            PurchaseVerificationLine(
+                purchase_detail_id=purchase.details[0].id,
+                quantity_accepted=Decimal("0"),
+                inventory_location_id=None,
+            ),
+        ),
+        actor_id=ids["user"],
+    )
+
+    assert verified.status is PurchaseStatus.VERIFIED
+    assert verified.details[0].quantity_accepted == Decimal("0")
+    assert verified.details[0].inventory_location_id is None
+    assert verified.inventory_movement_id is None
+    assert orders.order.status is PurchaseOrderStatus.SENT
+
+    # Rejected units are not counted against the order; the full amount remains receivable.
+    next_draft = await use_cases.create_draft(
+        company_id=ids["company"],
+        created_by_id=ids["user"],
+        purchase_order_id=ids["order"],
+        lines=(PurchaseLineDraft(ids["order_detail"], Decimal("5")),),
+    )
+    assert next_draft.details[0].quantity_received == Decimal("5")
+
+
+@pytest.mark.asyncio
+async def test_verify_purchase_requires_location_for_accepted_quantity() -> None:
+    ids = _ids()
+    purchase = _purchase(ids, received=Decimal("2"), status=PurchaseStatus.RECEIVED)
+    purchases = FakePurchaseRepository()
+    purchases.items[purchase.id] = purchase
+    inventory = FakePurchaseInventoryGateway(uuid.uuid4())
+    use_cases = PurchaseUseCases(purchases, FakeOrderRepository(_order(ids)), inventory)
+
+    with pytest.raises(ValidationError) as exc_info:
+        await use_cases.verify_purchase(
+            ids["company"],
+            purchase.id,
+            lines=(
+                PurchaseVerificationLine(
+                    purchase_detail_id=purchase.details[0].id,
+                    quantity_accepted=Decimal("1"),
+                    inventory_location_id=None,
+                ),
+            ),
+            actor_id=ids["user"],
+        )
+
+    assert exc_info.value.code == "purchase_receipt_location_required"
+    assert inventory.calls == []
+
+
+@pytest.mark.asyncio
+async def test_inventory_rejection_leaves_purchase_unverified_and_order_unchanged() -> None:
+    ids = _ids()
+    purchase = _purchase(ids, received=Decimal("2"), status=PurchaseStatus.RECEIVED)
+    purchases = FakePurchaseRepository()
+    purchases.items[purchase.id] = purchase
+    orders = FakeOrderRepository(_order(ids))
+
+    class RejectingInventoryGateway(FakePurchaseInventoryGateway):
+        async def post_verified_receipt(
+            self,
+            *,
+            purchase: Purchase,
+            lines: tuple[PurchaseVerificationLine, ...],
+            actor_id: uuid.UUID,
+        ) -> uuid.UUID | None:
+            self.calls.append({"purchase": purchase, "lines": lines, "actor_id": actor_id})
+            raise InventoryOperationError(
+                "La ubicación debe estar activa y pertenecer al almacén de esta compra.",
+                code="purchase_receipt_location_invalid",
+                status_code=409,
+            )
+
+    inventory = RejectingInventoryGateway(None)
+    use_cases = PurchaseUseCases(purchases, orders, inventory)
+
+    with pytest.raises(ConflictError) as error:
+        await use_cases.verify_purchase(
+            ids["company"],
+            purchase.id,
+            lines=(
+                PurchaseVerificationLine(
+                    purchase_detail_id=purchase.details[0].id,
+                    quantity_accepted=Decimal("1"),
+                    inventory_location_id=uuid.uuid4(),
+                ),
+            ),
+            actor_id=ids["user"],
+        )
+
+    assert error.value.code == "purchase_receipt_location_invalid"
+    assert inventory.calls
+    assert purchases.items[purchase.id].status is PurchaseStatus.RECEIVED
+    assert purchases.items[purchase.id].details[0].quantity_accepted is None
+    assert orders.order.status is PurchaseOrderStatus.SENT

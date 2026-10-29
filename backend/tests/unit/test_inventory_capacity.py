@@ -7,13 +7,14 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from app.api.v1.routers.inventory import InventoryBoundaryError, _execute, router
 from app.api.v1.schemas.inventory import (
     CapacityDecisionOut,
     CapacitySummaryOut,
+    HandlingUnitTraceOut,
     InventoryItemSummaryOut,
     MovementConfirmIn,
 )
@@ -48,6 +49,7 @@ from app.infrastructure.repositories.inventory_repository import (
     _physical_from_handling_unit,
 )
 from pydantic import ValidationError
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 
 pytestmark = pytest.mark.unit
@@ -211,6 +213,7 @@ async def test_repository_resolves_multiple_packaging_units_from_requested_quant
         code="BOX5",
         name="Caja de cinco",
         packaging_type=PackagingType.BOX.value,
+        packaging_unit_id=1,
         version=1,
         base_quantity=Decimal("5"),
         gross_weight_kg=Decimal("2"),
@@ -260,6 +263,7 @@ async def test_repository_treats_receipt_measurement_as_whole_hu_total() -> None
         code="BOX5",
         name="Caja de cinco",
         packaging_type=PackagingType.BOX.value,
+        packaging_unit_id=1,
         version=1,
         base_quantity=Decimal("5"),
         gross_weight_kg=Decimal("2"),
@@ -467,6 +471,9 @@ class _VerifySession:
         self.values = [row, row]
         self.flush_count = 0
 
+    async def execute(self, _statement: object) -> Any:
+        return SimpleNamespace(mappings=lambda: SimpleNamespace(all=lambda: []))
+
     async def scalar(self, _statement: object) -> object:
         return self.values.pop(0)
 
@@ -483,7 +490,10 @@ async def test_verifying_multi_pack_hu_uses_measured_total_without_multiplicatio
         warehouse_id=uuid.uuid4(),
         location_id=uuid.uuid4(),
         inventory_item_id=uuid.uuid4(),
-        packaging_definition_id=uuid.uuid4(),
+        inventory_lot_id=None,
+        inventory_lot_detail_id=None,
+        packaging_definition_id=None,
+        origin_handling_unit_id=None,
         code="HU-MULTI-001",
         lot_code=None,
         expiry_date=None,
@@ -511,6 +521,7 @@ async def test_verifying_multi_pack_hu_uses_measured_total_without_multiplicatio
     repository = SqlAlchemyInventoryRepository(cast(Any, session))
     repository._location_context = AsyncMock()  # type: ignore[method-assign]
     repository._balance = AsyncMock(return_value=balance)  # type: ignore[method-assign]
+    repository._handling_unit_release_metadata = AsyncMock(return_value=({}, {}, {}, {}))  # type: ignore[method-assign]
 
     result = await repository.verify_handling_unit_measurements(
         company_id=row.company_id,
@@ -725,6 +736,71 @@ def test_idempotency_advisory_lock_is_scoped_by_company_and_key() -> None:
     assert first != _advisory_lock_key("inventory-movement", uuid.uuid4(), "retry-0001")
 
 
+@pytest.mark.asyncio
+async def test_quarantine_release_retry_reuses_existing_movement_without_writing_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    company_id = uuid.uuid4()
+    handling_unit_id = uuid.uuid4()
+    idempotency_key = str(uuid.uuid4())
+    source_reference = f"quarantine-release:{handling_unit_id}:{idempotency_key}"
+    lines = [
+        {
+            "inventory_item_id": uuid.uuid4(),
+            "handling_unit_id": handling_unit_id,
+            "from_location_id": uuid.uuid4(),
+            "to_location_id": uuid.uuid4(),
+            "from_stock_status": "quarantine",
+            "to_stock_status": "available",
+            "quantity_base": Decimal("1"),
+        }
+    ]
+    movement_id = uuid.uuid4()
+    existing = SimpleNamespace(
+        id=movement_id,
+        request_fingerprint=SqlAlchemyInventoryRepository._fingerprint(
+            "putaway", source_reference, lines, None
+        ),
+    )
+    session = SimpleNamespace(
+        execute=AsyncMock(return_value=None),
+        scalar=AsyncMock(return_value=existing),
+        add=Mock(side_effect=AssertionError("El reintento no debe crear otro movimiento.")),
+        flush=AsyncMock(side_effect=AssertionError("El reintento no debe guardar otra vez.")),
+    )
+    repository = SqlAlchemyInventoryRepository(cast(Any, session))
+    persisted_payload = {"id": movement_id, "movement_type": "putaway"}
+    movement_dict = AsyncMock(return_value=persisted_payload)
+    monkeypatch.setattr(repository, "_movement_dict", movement_dict)
+
+    first_retry = await repository.post_movement(
+        company_id=company_id,
+        idempotency_key=idempotency_key,
+        movement_type="putaway",
+        source_reference=source_reference,
+        lines=lines,
+        actor_id=uuid.uuid4(),
+    )
+    second_retry = await repository.post_movement(
+        company_id=company_id,
+        idempotency_key=idempotency_key,
+        movement_type="putaway",
+        source_reference=source_reference,
+        lines=lines,
+        actor_id=uuid.uuid4(),
+    )
+
+    assert first_retry == persisted_payload
+    assert second_retry == persisted_payload
+    assert session.scalar.await_count == 2
+    # Execute also acquires the company valuation lock and authorizes persisted scopes.
+    # The replay must still avoid movement/audit writes.
+    assert session.execute.await_count >= 2
+    assert session.add.call_count == 0
+    assert session.flush.await_count == 0
+    assert movement_dict.await_count == 2
+
+
 def test_capacity_summary_contract_accepts_unknown_physical_totals() -> None:
     summary = CapacitySummaryOut.model_validate(
         {
@@ -805,8 +881,217 @@ def test_api_exposes_target_lookup_capacity_summary_and_measurement_release_flow
     assert "/inventory/items/{item_id}/summary" in paths
     assert "/inventory/warehouses/{warehouse_id}/capacity-summary" in paths
     assert "/inventory/handling-units/{handling_unit_id}/measurements" in paths
+    assert "/inventory/handling-units/{handling_unit_id}/traceability" in paths
     assert "/inventory/movements/confirm" in paths
     assert all("open-pick" not in path for path in paths)
+
+
+def test_handling_unit_traceability_contract_keeps_purchase_and_movement_origin() -> None:
+    payload = {
+        "handling_unit": {
+            "id": uuid.uuid4(),
+            "company_id": uuid.uuid4(),
+            "warehouse_id": uuid.uuid4(),
+            "location_id": uuid.uuid4(),
+            "inventory_item_id": uuid.uuid4(),
+            "packaging_definition_id": None,
+            "code": "HU-2026-001",
+            "lot_code": "LOTE-A",
+            "expiry_date": None,
+            "quantity_base": "12.500000",
+            "actual_gross_weight_kg": None,
+            "actual_length_m": None,
+            "actual_width_m": None,
+            "actual_height_m": None,
+            "actual_volume_m3": None,
+            "occupied_weight_kg": None,
+            "occupied_volume_m3": None,
+            "stock_status": "quarantine",
+            "measurement_status": "incomplete",
+            "measurement_source": "receipt",
+            "closed_at": None,
+            "created_at": None,
+            "updated_at": None,
+        },
+        "product_sku": "PRD-001",
+        "product_name": "Producto trazable",
+        "base_unit_name": "Caja",
+        "base_unit_symbol": "cj",
+        "warehouse_code": "BOD-CENTRAL",
+        "warehouse_name": "Bodega madre",
+        "location_code": "REC-01",
+        "origin": {
+            "supplier_code": "PROV-01",
+            "supplier_name": "Proveedor",
+            "purchase_code": "COMP-001",
+            "purchase_order_code": "OC-001",
+            "received_at": datetime.now(UTC),
+            "purchase_date": datetime.now(UTC),
+            "consolidation_code": "CD-001",
+            "requests": [
+                {
+                    "request_code": "SCR-001",
+                    "branch_name": "Sucursal Centro",
+                    "requested_at": datetime.now(UTC),
+                    "required_date": None,
+                }
+            ],
+        },
+        "movements": [
+            {
+                "movement_id": uuid.uuid4(),
+                "movement_type": "receipt",
+                "source_reference": "purchase-receipt:purchase-id",
+                "posted_at": datetime.now(UTC),
+                "posted_by": None,
+                "operator": None,
+                "from_warehouse_code": None,
+                "from_warehouse_name": None,
+                "from_location_code": None,
+                "from_stock_status": None,
+                "to_warehouse_code": "BOD-CENTRAL",
+                "to_warehouse_name": "Bodega madre",
+                "to_location_code": "REC-01",
+                "to_stock_status": "quarantine",
+                "quantity_base": "12.500000",
+            }
+        ],
+    }
+
+    response = HandlingUnitTraceOut.model_validate(payload)
+
+    assert response.handling_unit.code == "HU-2026-001"
+    assert response.origin.requests[0].request_code == "SCR-001"
+    assert response.movements[0].movement_type == "receipt"
+
+
+@pytest.mark.asyncio
+async def test_handling_unit_traceability_repository_builds_tenant_scoped_queries() -> None:
+    company_id = uuid.uuid4()
+    handling_unit_id = uuid.uuid4()
+    now = datetime.now(UTC)
+    unit = SimpleNamespace(
+        id=handling_unit_id,
+        company_id=company_id,
+        warehouse_id=uuid.uuid4(),
+        location_id=uuid.uuid4(),
+        inventory_item_id=uuid.uuid4(),
+        inventory_lot_id=None,
+        inventory_lot_detail_id=None,
+        packaging_definition_id=None,
+        origin_handling_unit_id=None,
+        code="HU-TRACE-001",
+        lot_code="LOTE-01",
+        expiry_date=None,
+        quantity_base=Decimal("5"),
+        actual_gross_weight_kg=None,
+        actual_length_m=None,
+        actual_width_m=None,
+        actual_height_m=None,
+        actual_volume_m3=None,
+        occupied_weight_kg=Decimal("0"),
+        occupied_volume_m3=Decimal("0"),
+        stock_status="available",
+        measurement_status="complete",
+        measurement_source="receipt",
+        closed_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+    class UnitRow:
+        target_product_id = 7
+        product_sku = "PRD-007"
+        product_name = "Producto trazable"
+        variant_sku = None
+        variant_name = None
+        base_unit_name = "Caja"
+        base_unit_symbol = "cj"
+        warehouse_code = "BOD-CENTRAL"
+        warehouse_name = "Bodega madre"
+        location_code = "REC-01"
+        receipt_lot_code = "LOTE-01"
+        receipt_lot_header_code = None
+        receipt_received_at = now
+
+        def __getitem__(self, index: int) -> Any:
+            if index == 0:
+                return unit
+            raise IndexError(index)
+
+    class QueryResult:
+        def __init__(self, *, row: Any = None, rows: list[dict[str, Any]] | None = None) -> None:
+            self.row = row
+            self.rows = rows or []
+
+        def one_or_none(self) -> Any:
+            return self.row
+
+        def mappings(self) -> QueryResult:
+            return self
+
+        def all(self) -> list[dict[str, Any]]:
+            return self.rows
+
+    result_rows = [
+        QueryResult(row=UnitRow()),
+        QueryResult(
+            rows=[
+                {
+                    "movement_id": uuid.uuid4(),
+                    "movement_type": "receipt",
+                    "source_reference": "purchase-receipt:source",
+                    "posted_at": now,
+                    "posted_by": None,
+                    "operator": "recepcion",
+                    "from_warehouse_code": None,
+                    "from_warehouse_name": None,
+                    "from_location_code": None,
+                    "from_stock_status": None,
+                    "to_warehouse_code": "BOD-CENTRAL",
+                    "to_warehouse_name": "Bodega madre",
+                    "to_location_code": "REC-01",
+                    "to_stock_status": "quarantine",
+                    "quantity_base": Decimal("5"),
+                }
+            ]
+        ),
+        QueryResult(
+            rows=[
+                {
+                    "purchase_code": "COMP-001",
+                    "purchase_date": now,
+                    "purchase_order_code": "OC-001",
+                    "supplier_code": "PROV-01",
+                    "supplier_name": "Proveedor",
+                    "received_at": now,
+                    "consolidation_code": "CD-001",
+                    "request_id": uuid.uuid4(),
+                    "request_code": "SCR-001",
+                    "requested_at": now,
+                    "required_date": None,
+                    "branch_name": "Sucursal Centro",
+                }
+            ]
+        ),
+    ]
+
+    async def execute(statement: Any) -> QueryResult:
+        statement.compile(dialect=postgresql.dialect())
+        return result_rows.pop(0)
+
+    session = SimpleNamespace(execute=AsyncMock(side_effect=execute))
+    trace = await SqlAlchemyInventoryRepository(cast(Any, session)).get_handling_unit_traceability(
+        company_id=company_id,
+        handling_unit_id=handling_unit_id,
+    )
+
+    assert trace is not None
+    assert trace["handling_unit"]["code"] == "HU-TRACE-001"
+    assert trace["origin"]["supplier_code"] == "PROV-01"
+    assert trace["origin"]["requests"][0]["branch_name"] == "Sucursal Centro"
+    assert trace["movements"][0]["movement_type"] == "receipt"
+    assert session.execute.await_count == 3
 
 
 def test_inventory_model_is_lightweight_and_reservation_is_tenant_bound() -> None:

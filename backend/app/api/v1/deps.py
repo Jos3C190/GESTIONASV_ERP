@@ -27,16 +27,23 @@ from app.application.documents import (
     DocumentRecordService,
     DocumentService,
 )
+from app.application.inventory import InventoryUseCases
 from app.application.password_policy import PasswordPolicy
+from app.application.purchase_consolidations import (
+    PurchaseConsolidationAdjudicationUseCases,
+    PurchaseConsolidationUseCases,
+)
 from app.application.purchase_orders import PurchaseOrderUseCases
 from app.application.purchase_orders.expense_documents import (
     PurchaseOrderExpenseDocumentService,
 )
 from app.application.purchase_quotations import PurchaseQuotationUseCases
+from app.application.purchase_quotations.documents import PurchaseQuotationDocumentService
 from app.application.purchase_requests import PurchaseRequestUseCases
 from app.application.purchases import PurchaseUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.application.retaceos import RetaceoUseCases
+from app.application.retaceos.cost_documents import RetaceoCostDocumentService
 from app.core.config import settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.domain.entities.user import User
@@ -47,13 +54,19 @@ from app.domain.ports.document_general_repository import DocumentGeneralReposito
 from app.domain.ports.document_record_repository import DocumentRecordRepository
 from app.domain.ports.document_repository import DocumentRepository
 from app.domain.ports.employee_repository import EmployeeRepository
+from app.domain.ports.inventory_repository import InventoryRepository
 from app.domain.ports.malware_scanner import MalwareScanner
 from app.domain.ports.object_storage import ObjectStorage
 from app.domain.ports.permission_repository import PermissionRepository
+from app.domain.ports.purchase_consolidation_repository import PurchaseConsolidationRepository
+from app.domain.ports.purchase_inventory import PurchaseInventoryGateway
 from app.domain.ports.purchase_order_expense_document_repository import (
     PurchaseOrderExpenseDocumentRepository,
 )
 from app.domain.ports.purchase_order_repository import PurchaseOrderRepository
+from app.domain.ports.purchase_quotation_document_repository import (
+    PurchaseQuotationDocumentRepository,
+)
 from app.domain.ports.purchase_quotation_repository import PurchaseQuotationRepository
 from app.domain.ports.purchase_repository import PurchaseRepository
 from app.domain.ports.purchase_request_repository import PurchaseRequestRepository
@@ -77,11 +90,21 @@ from app.infrastructure.repositories import (
     SqlAlchemyRoleRepository,
     SqlAlchemyUserRepository,
 )
+from app.infrastructure.repositories.inventory_repository import SqlAlchemyInventoryRepository
+from app.infrastructure.repositories.purchase_consolidation_repository import (
+    SqlAlchemyPurchaseConsolidationRepository,
+)
+from app.infrastructure.repositories.purchase_inventory_gateway import (
+    SqlAlchemyPurchaseInventoryGateway,
+)
 from app.infrastructure.repositories.purchase_order_expense_document_repository import (
     SqlAlchemyPurchaseOrderExpenseDocumentRepository,
 )
 from app.infrastructure.repositories.purchase_order_repository import (
     SqlAlchemyPurchaseOrderRepository,
+)
+from app.infrastructure.repositories.purchase_quotation_document_repository import (
+    SqlAlchemyPurchaseQuotationDocumentRepository,
 )
 from app.infrastructure.repositories.purchase_quotation_repository import (
     SqlAlchemyPurchaseQuotationRepository,
@@ -139,6 +162,29 @@ def get_purchase_quotation_repository(session: SessionDep) -> PurchaseQuotationR
 
 def get_purchase_request_repository(session: SessionDep) -> PurchaseRequestRepository:
     return SqlAlchemyPurchaseRequestRepository(session)
+
+
+def get_purchase_consolidation_repository(session: SessionDep) -> PurchaseConsolidationRepository:
+    return SqlAlchemyPurchaseConsolidationRepository(session)
+
+
+def get_inventory_repository(session: SessionDep) -> InventoryRepository:
+    return SqlAlchemyInventoryRepository(session)
+
+
+def get_inventory_use_cases(
+    repository: Annotated[InventoryRepository, Depends(get_inventory_repository)],
+) -> InventoryUseCases:
+    return InventoryUseCases(repository)
+
+
+def get_inventory_kardex_read_use_cases(session: SessionDep):
+    from app.application.inventory.kardex_read import InventoryKardexReadUseCases
+    from app.infrastructure.repositories.inventory_kardex_read_repository import (
+        SqlAlchemyInventoryKardexReadRepository,
+    )
+
+    return InventoryKardexReadUseCases(SqlAlchemyInventoryKardexReadRepository(session))
 
 
 def get_audit_repository(session: SessionDep) -> AuditRepository:
@@ -204,6 +250,31 @@ def get_purchase_order_expense_document_service(
     return PurchaseOrderExpenseDocumentService(repository, documents, audit)
 
 
+def get_purchase_quotation_document_repository(
+    session: SessionDep,
+) -> PurchaseQuotationDocumentRepository:
+    return SqlAlchemyPurchaseQuotationDocumentRepository(session)
+
+
+def get_purchase_quotation_document_service(
+    repository: Annotated[
+        PurchaseQuotationDocumentRepository,
+        Depends(get_purchase_quotation_document_repository),
+    ],
+    documents: Annotated[DocumentService, Depends(get_document_service)],
+    audit: Annotated[AuditService, Depends(get_audit_service)],
+) -> PurchaseQuotationDocumentService:
+    return PurchaseQuotationDocumentService(repository, documents, audit)
+
+
+def get_retaceo_cost_document_service(
+    repository: Annotated[RetaceoRepository, Depends(get_retaceo_repository)],
+    documents: Annotated[DocumentService, Depends(get_document_service)],
+    audit: Annotated[AuditService, Depends(get_audit_service)],
+) -> RetaceoCostDocumentService:
+    return RetaceoCostDocumentService(repository, documents, audit)
+
+
 def get_document_record_service(
     documents: Annotated[DocumentService, Depends(get_document_service)],
     records: Annotated[DocumentRecordRepository, Depends(get_document_record_repository)],
@@ -258,15 +329,33 @@ def get_purchase_order_use_cases(
 def get_purchase_use_cases(
     repository: Annotated[PurchaseRepository, Depends(get_purchase_repository)],
     orders: Annotated[PurchaseOrderRepository, Depends(get_purchase_order_repository)],
+    session: SessionDep,
 ) -> PurchaseUseCases:
-    return PurchaseUseCases(repository, orders)
+    inventory: PurchaseInventoryGateway = SqlAlchemyPurchaseInventoryGateway(session)
+    return PurchaseUseCases(repository, orders, inventory)
 
 
 def get_retaceo_use_cases(
+    session: SessionDep,
     repository: Annotated[RetaceoRepository, Depends(get_retaceo_repository)],
     purchases: Annotated[PurchaseRepository, Depends(get_purchase_repository)],
+    orders: Annotated[PurchaseOrderRepository, Depends(get_purchase_order_repository)],
+    expense_documents: Annotated[
+        PurchaseOrderExpenseDocumentRepository,
+        Depends(get_purchase_order_expense_document_repository),
+    ],
 ) -> RetaceoUseCases:
-    return RetaceoUseCases(repository, purchases)
+    from app.infrastructure.repositories.inventory_valuation_repository import (
+        SqlAlchemyInventoryValuationRepository,
+    )
+
+    return RetaceoUseCases(
+        repository,
+        purchases,
+        orders,
+        expense_documents,
+        SqlAlchemyInventoryValuationRepository(session),
+    )
 
 
 def get_purchase_quotation_use_cases(
@@ -279,6 +368,64 @@ def get_purchase_request_use_cases(
     repository: Annotated[PurchaseRequestRepository, Depends(get_purchase_request_repository)],
 ) -> PurchaseRequestUseCases:
     return PurchaseRequestUseCases(repository)
+
+
+def get_purchase_consolidation_use_cases(
+    repository: Annotated[
+        PurchaseConsolidationRepository, Depends(get_purchase_consolidation_repository)
+    ],
+    request_repository: Annotated[
+        PurchaseRequestRepository, Depends(get_purchase_request_repository)
+    ],
+    quotation_repository: Annotated[
+        PurchaseQuotationRepository, Depends(get_purchase_quotation_repository)
+    ],
+) -> PurchaseConsolidationUseCases:
+    return PurchaseConsolidationUseCases(repository, request_repository, quotation_repository)
+
+
+def get_purchase_consolidation_adjudication_use_cases(
+    consolidation_repository: Annotated[
+        PurchaseConsolidationRepository, Depends(get_purchase_consolidation_repository)
+    ],
+    quotation_repository: Annotated[
+        PurchaseQuotationRepository, Depends(get_purchase_quotation_repository)
+    ],
+    purchase_order_repository: Annotated[
+        PurchaseOrderRepository, Depends(get_purchase_order_repository)
+    ],
+) -> PurchaseConsolidationAdjudicationUseCases:
+    return PurchaseConsolidationAdjudicationUseCases(
+        consolidation_repository, quotation_repository, purchase_order_repository
+    )
+
+
+def get_sales_service(
+    session: SessionDep, audit: Annotated[AuditService, Depends(get_audit_service)]
+):
+    from app.application.sales.service import SalesService
+
+    return SalesService(session, audit)
+
+
+def get_sales_delivery_service(
+    session: SessionDep,
+    audit: Annotated[AuditService, Depends(get_audit_service)],
+    inventory: Annotated[InventoryUseCases, Depends(get_inventory_use_cases)],
+):
+    from app.application.sales.deliveries import SalesDeliveryService
+
+    return SalesDeliveryService(session, audit, inventory)
+
+
+def get_sales_return_service(
+    session: SessionDep,
+    audit: Annotated[AuditService, Depends(get_audit_service)],
+    inventory: Annotated[InventoryUseCases, Depends(get_inventory_use_cases)],
+):
+    from app.application.sales.returns import SalesReturnService
+
+    return SalesReturnService(session, audit, inventory)
 
 
 def get_authenticate_user_use_case(
@@ -483,6 +630,8 @@ __all__ = [
     "get_logout_use_case",
     "get_password_policy",
     "get_permission_repository",
+    "get_purchase_consolidation_repository",
+    "get_purchase_consolidation_use_cases",
     "get_purchase_order_expense_document_repository",
     "get_purchase_order_expense_document_service",
     "get_purchase_order_repository",
@@ -496,6 +645,7 @@ __all__ = [
     "get_refresh_token_repository",
     "get_refresh_token_use_case",
     "get_register_user_use_case",
+    "get_retaceo_cost_document_service",
     "get_retaceo_repository",
     "get_retaceo_use_cases",
     "get_role_repository",

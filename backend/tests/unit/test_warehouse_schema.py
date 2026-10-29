@@ -35,6 +35,7 @@ def test_accepts_complete_operational_data():
     warehouse = WarehouseIn.model_validate(
         warehouse_payload(
             warehouse_type="cold_storage",
+            is_central=True,
             shifts=["mañana", "noche"],
             access_control="biometrico",
             cooling="refrigeracion",
@@ -46,6 +47,36 @@ def test_accepts_complete_operational_data():
     )
 
     assert warehouse.shifts == ["mañana", "noche"]
+    assert warehouse.is_central is True
+
+
+def test_warehouse_defaults_to_not_central():
+    warehouse = WarehouseIn.model_validate(warehouse_payload())
+
+    assert warehouse.is_central is False
+
+
+def test_accepts_central_warehouse_assigned_to_a_branch():
+    warehouse = WarehouseIn.model_validate(
+        warehouse_payload(is_central=True, manager_employee_id=None)
+    )
+
+    assert warehouse.branch_id is not None
+    assert warehouse.is_central is True
+
+
+def test_requires_branch_for_every_warehouse():
+    with pytest.raises(ValidationError, match="Todo almacén debe pertenecer a una sucursal"):
+        WarehouseIn.model_validate(warehouse_payload(branch_id=None))
+
+
+def test_central_flag_does_not_remove_warehouse_branch_assignment():
+    branch_id = uuid.uuid4()
+    warehouse = WarehouseIn.model_validate(
+        warehouse_payload(branch_id=branch_id, is_central=True)
+    )
+
+    assert warehouse.branch_id == branch_id
 
 
 @pytest.mark.parametrize("shifts", [["mañana", "mañana"], ["madrugada"]])

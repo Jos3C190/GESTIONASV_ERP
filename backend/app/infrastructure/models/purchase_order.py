@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -33,8 +35,10 @@ class PurchaseOrderModel(UUIDPKMixin, TimestampMixin, Base):
     )
     code: Mapped[str] = mapped_column(String(32), nullable=False)
     supplier_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    warehouse_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    warehouse_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False
+    )
     purchase_quotation_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     created_by_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
@@ -91,12 +95,6 @@ class PurchaseOrderModel(UUIDPKMixin, TimestampMixin, Base):
             ["branch_id", "company_id"],
             ["branches.id", "branches.company_id"],
             name="fk_purchase_orders_branch_company",
-            ondelete="RESTRICT",
-        ),
-        ForeignKeyConstraint(
-            ["warehouse_id", "branch_id"],
-            ["warehouses.id", "warehouses.branch_id"],
-            name="fk_purchase_orders_warehouse_branch",
             ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(
@@ -164,6 +162,9 @@ class PurchaseOrderDetailModel(UUIDPKMixin, TimestampMixin, Base):
     purchase_quotation_detail_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), nullable=False
     )
+    purchase_consolidation_award_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
     product_id: Mapped[int] = mapped_column(Integer, nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     unit_id: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -201,6 +202,12 @@ class PurchaseOrderDetailModel(UUIDPKMixin, TimestampMixin, Base):
             ["purchase_quotation_detail_id", "company_id"],
             ["purchase_quotation_details.id", "purchase_quotation_details.company_id"],
             name="fk_purchase_order_details_quotation_detail_company",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["purchase_consolidation_award_id", "company_id"],
+            ["purchase_consolidation_awards.id", "purchase_consolidation_awards.company_id"],
+            name="fk_purchase_order_details_consolidation_award_company",
             ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(
@@ -249,11 +256,21 @@ class PurchaseOrderDetailModel(UUIDPKMixin, TimestampMixin, Base):
             "company_id",
             "purchase_quotation_detail_id",
         ),
+        Index(
+            "ix_purchase_order_details_company_award",
+            "company_id",
+            "purchase_consolidation_award_id",
+        ),
     )
 
 
 class PurchaseOrderExpenseModel(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "purchase_order_expenses"
+    is_actual: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
+    incurred_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    reference: Mapped[str | None] = mapped_column(String(240), nullable=True)
 
     company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     purchase_order_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
@@ -267,6 +284,7 @@ class PurchaseOrderExpenseModel(UUIDPKMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
+        CheckConstraint("NOT is_actual OR (incurred_on IS NOT NULL AND description IS NOT NULL AND reference IS NOT NULL AND length(trim(description)) > 0 AND length(trim(reference)) > 0)", name="ck_order_actual_expense_documented"),
         ForeignKeyConstraint(
             ["purchase_order_id", "company_id"],
             ["purchase_orders.id", "purchase_orders.company_id"],

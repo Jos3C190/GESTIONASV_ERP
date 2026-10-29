@@ -16,6 +16,28 @@ class _Response:
         return None
 
 
+@pytest.mark.parametrize(
+    ("actual", "expected", "status", "detail"),
+    [
+        (frozenset({"0083"}), frozenset({"0083"}), "ok", None),
+        (
+            frozenset({"0078"}),
+            frozenset({"0083"}),
+            "outdated",
+            "Expected 0083; found 0078",
+        ),
+        (None, frozenset({"0083"}), "unknown", "Schema version could not be verified"),
+    ],
+)
+def test_schema_revision_status(
+    actual: frozenset[str] | None,
+    expected: frozenset[str],
+    status: str,
+    detail: str | None,
+) -> None:
+    assert health_module._schema_revision_status(actual, expected) == (status, detail)
+
+
 @pytest.mark.asyncio
 async def test_collector_health_states(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(health_module.settings, "OBSERVABILITY_ENABLED", False)

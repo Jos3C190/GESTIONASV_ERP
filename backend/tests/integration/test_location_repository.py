@@ -160,6 +160,7 @@ async def _add_context(
     await session.flush()
     warehouse = Warehouse(
         id=uuid.uuid4(),
+        company_id=company.id,
         branch_id=branch.id,
         warehouse_category_id=category.id,
         name=f"Warehouse {suffix}",

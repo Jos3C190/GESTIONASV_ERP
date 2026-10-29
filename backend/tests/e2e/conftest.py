@@ -1,8 +1,4 @@
-"""E2E fixtures for the real FastAPI app and isolated ``erp_db_test``.
-
-The root test fixture rebuilds, migrates and seeds that database once per
-suite. Development data is never used by setup, execution or cleanup.
-"""
+"""E2E fixtures for the real FastAPI app and per-test disposable ``erp_db_test``."""
 
 from __future__ import annotations
 
@@ -11,58 +7,28 @@ from collections.abc import AsyncIterator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def _cleanup_e2e_state(session: AsyncSession) -> None:
-    """Remove test-owned rows in foreign-key dependency order.
-
-    E2E tests intentionally create users and exercise workflows that leave
-    durable records behind. The two author columns with ``ON DELETE
-    RESTRICT`` must be removed before ``users``; deleting only auth tables
-    makes the fixture order-dependent and can prevent every following E2E
-    test from starting.
-    """
-
-    await session.execute(text("DELETE FROM purchase_request_details"))
-    await session.execute(text("DELETE FROM purchase_requests"))
-    await session.execute(text("DELETE FROM location_batch_jobs"))
-    await session.execute(text("DELETE FROM document_assets"))
-    await session.execute(text("DELETE FROM refresh_tokens"))
-    await session.execute(text("DELETE FROM password_reset_tokens"))
-    await session.execute(text("DELETE FROM users"))
-
-
 @pytest.fixture
-async def e2e_client() -> AsyncIterator[AsyncClient]:
-    """Boot the real app with a real DB connection. Cleans auth tables before
-    and after each test for isolation. Also resets rate limiters."""
-    from app.infrastructure.db.session import async_session_factory, dispose_engine
+async def e2e_client(_isolated_e2e_database) -> AsyncIterator[AsyncClient]:
+    """Boot the real app against the per-test disposable DB and reset rate limits."""
+    from app.infrastructure.db.session import dispose_engine
     from app.main import create_app
     from app.middlewares.rate_limit import _rate_limit_store
 
     # Reset rate limiters so tests don't interfere with each other.
     _rate_limit_store.clear_fallback()
 
-    # Clean all test-owned records before yielding. This must run before
-    # users because purchase requests and location batch jobs retain their
-    # authors with RESTRICT foreign keys.
-    async with async_session_factory() as session:
-        await _cleanup_e2e_state(session)
-        await session.commit()
-
     app = create_app()
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
-        yield ac
-
-    # Cleanup after test as well, so a failed assertion cannot leak state into
-    # the next fixture invocation.
-    async with async_session_factory() as session:
-        await _cleanup_e2e_state(session)
-        await session.commit()
-    await dispose_engine()
+    try:
+        async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
+            yield ac
+    finally:
+        # The next E2E test rebuilds the disposable schema; release all pooled
+        # connections first so asyncpg connections never cross event loops.
+        await dispose_engine()
 
 
 async def seed_user(

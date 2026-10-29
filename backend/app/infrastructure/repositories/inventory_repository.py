@@ -5,13 +5,16 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.domain.entities.inventory import (
     ZERO,
@@ -29,6 +32,7 @@ from app.domain.entities.inventory import (
     PackagingDefinition,
     PackagingType,
     PhysicalMeasures,
+    ProductStockSnapshot,
     ReservationStatus,
     StockStatus,
     calculate_consumption,
@@ -36,9 +40,13 @@ from app.domain.entities.inventory import (
     evaluate_capacity,
     require_quarantine_for_incomplete_measures,
 )
+from app.domain.entities.inventory_release import (
+    ReleaseRequirement,
+    handling_unit_release_requirements,
+)
 from app.domain.entities.warehouse_capacity import capacity_status_for
 from app.infrastructure.models.audit import AuditLog
-from app.infrastructure.models.catalog import CompanyUnitModel, ProductModel
+from app.infrastructure.models.catalog import CompanyUnitModel, ProductModel, UnitModel
 from app.infrastructure.models.inventory import (
     CapacityOperationalOverrideModel,
     CapacityReservationModel,
@@ -49,6 +57,10 @@ from app.infrastructure.models.inventory import (
     InventoryMovementModel,
     InventoryPackagingModel,
 )
+from app.infrastructure.models.inventory_label_confirmation import (
+    InventoryLabelConfirmationModel,
+)
+from app.infrastructure.models.inventory_lot import InventoryLotDetailModel, InventoryLotModel
 from app.infrastructure.models.organization import (
     Branch,
     Location,
@@ -56,6 +68,17 @@ from app.infrastructure.models.organization import (
     WarehouseCapacityGroup,
 )
 from app.infrastructure.models.product_variant import ProductVariantModel
+from app.infrastructure.models.purchase import PurchaseDetailModel, PurchaseModel
+from app.infrastructure.models.purchase_consolidation import (
+    PurchaseConsolidationAwardModel,
+    PurchaseConsolidationModel,
+    PurchaseConsolidationSourceModel,
+)
+from app.infrastructure.models.purchase_order import PurchaseOrderDetailModel, PurchaseOrderModel
+from app.infrastructure.models.purchase_request import PurchaseRequestModel
+from app.infrastructure.models.supplier import SupplierModel
+from app.infrastructure.models.user import User
+from app.infrastructure.repositories.retaceo_readiness import purchase_retaceo_readiness_error
 
 
 def _decimal(value: Decimal | int | float | None) -> Decimal | None:
@@ -74,6 +97,31 @@ def _stock_status_value(value: Any) -> str | None:
     raise InventoryOperationError(
         "El estado de inventario no es válido.", code="invalid_stock_status"
     )
+
+
+def _require_labelled_split_in_quarantine(
+    *,
+    label_confirmation_required: bool,
+    from_status: str | None,
+    movement_type: str,
+    to_status: str | None,
+) -> None:
+    is_quarantine_putaway = (
+        from_status == StockStatus.QUARANTINE.value
+        and movement_type == "putaway"
+        and to_status == StockStatus.QUARANTINE.value
+    )
+    is_partial_transfer_receipt = (
+        from_status == StockStatus.IN_TRANSIT.value
+        and movement_type == "transfer"
+        and to_status == StockStatus.QUARANTINE.value
+    )
+    if label_confirmation_required and not (is_quarantine_putaway or is_partial_transfer_receipt):
+        raise InventoryOperationError(
+            "Fraccione la unidad nueva durante la ubicación en cuarentena; cada parte requiere medidas y etiqueta propias.",
+            code="labelled_handling_unit_split_requires_quarantine_putaway",
+            status_code=409,
+        )
 
 
 def _capacity_metric_payload(
@@ -153,6 +201,7 @@ def _packaging_domain(row: InventoryPackagingModel) -> PackagingDefinition:
         code=row.code,
         name=row.name,
         packaging_type=PackagingType(row.packaging_type),
+        packaging_unit_id=row.packaging_unit_id,
         version=row.version,
         base_quantity=row.base_quantity,
         measures=PhysicalMeasures(
@@ -292,6 +341,66 @@ def _physical_from_handling_unit(
         snapshot=row.packaging_snapshot,
         source=source,
     )
+
+
+def _movement_history_filters(
+    *,
+    warehouse_id: uuid.UUID,
+    period_from: date | None,
+    period_to: date | None,
+    query: str | None,
+    lot_code: str | None,
+    source_reference: str | None,
+    direction: str | None,
+) -> list[Any]:
+    filters = []
+    local_tz = ZoneInfo("America/El_Salvador")
+    if period_from:
+        filters.append(
+            InventoryMovementModel.posted_at
+            >= datetime.combine(period_from, datetime.min.time(), tzinfo=local_tz)
+        )
+    if period_to:
+        filters.append(
+            InventoryMovementModel.posted_at
+            <= datetime.combine(period_to, datetime.max.time(), tzinfo=local_tz)
+        )
+    for value, columns in (
+        (
+            query,
+            (
+                ProductModel.name,
+                ProductModel.sku,
+                ProductVariantModel.name_override,
+                ProductVariantModel.sku,
+                InventoryHandlingUnitModel.code,
+            ),
+        ),
+        (
+            lot_code,
+            (
+                InventoryMovementLineModel.lot_code,
+                InventoryLotDetailModel.code,
+                InventoryLotModel.code,
+            ),
+        ),
+        (source_reference, (InventoryMovementModel.source_reference,)),
+    ):
+        if value and value.strip():
+            filters.append(
+                or_(*[column.icontains(value.strip(), autoescape=True) for column in columns])
+            )
+    origin = InventoryMovementLineModel.from_warehouse_id
+    destination = InventoryMovementLineModel.to_warehouse_id
+    if direction == "incoming":
+        filters.extend([destination == warehouse_id, or_(origin.is_(None), origin != warehouse_id)])
+    elif direction == "outgoing":
+        filters.extend(
+            [origin == warehouse_id, or_(destination.is_(None), destination != warehouse_id)]
+        )
+    elif direction == "internal":
+        filters.extend([origin == warehouse_id, destination == warehouse_id])
+    return filters
 
 
 class SqlAlchemyInventoryRepository:
@@ -453,6 +562,7 @@ class SqlAlchemyInventoryRepository:
                     InventoryHandlingUnitModel.company_id == company_id,
                     InventoryHandlingUnitModel.inventory_item_id == item_id,
                     InventoryHandlingUnitModel.closed_at.is_(None),
+                    InventoryHandlingUnitModel.inventory_posted_at.is_not(None),
                     InventoryHandlingUnitModel.measurement_status
                     == MeasurementStatus.INCOMPLETE.value,
                 )
@@ -497,6 +607,7 @@ class SqlAlchemyInventoryRepository:
                     InventoryHandlingUnitModel.company_id == company_id,
                     InventoryHandlingUnitModel.inventory_item_id == item_id,
                     InventoryHandlingUnitModel.closed_at.is_(None),
+                    InventoryHandlingUnitModel.inventory_posted_at.is_not(None),
                 )
             )
             or 0
@@ -561,6 +672,7 @@ class SqlAlchemyInventoryRepository:
         code: str,
         name: str,
         packaging_type: PackagingType,
+        packaging_unit_id: int,
         base_quantity: Decimal,
         measures: PhysicalMeasures,
         stackable: bool,
@@ -581,6 +693,24 @@ class SqlAlchemyInventoryRepository:
                 "Identidad inventariable no encontrada.",
                 code="inventory_item_not_found",
                 status_code=404,
+            )
+
+        unit_enabled = await self._session.scalar(
+            select(CompanyUnitModel.unit_id).where(
+                CompanyUnitModel.company_id == company_id,
+                CompanyUnitModel.unit_id == packaging_unit_id,
+                CompanyUnitModel.is_enabled.is_(True),
+            )
+        )
+        if unit_enabled is None:
+            raise InventoryOperationError(
+                "La unidad de empaque debe estar habilitada para la empresa.",
+                code="packaging_unit_not_enabled",
+            )
+        if packaging_unit_id == item.base_unit_id and base_quantity != Decimal("1"):
+            raise InventoryOperationError(
+                "Si la unidad de empaque es la unidad base, la equivalencia debe ser 1 a 1.",
+                code="packaging_unit_base_conversion_invalid",
             )
 
         version = 1
@@ -625,9 +755,25 @@ class SqlAlchemyInventoryRepository:
                 status_code=409,
             )
 
+        if await self._session.scalar(
+            select(InventoryPackagingModel.id).where(
+                InventoryPackagingModel.company_id == company_id,
+                InventoryPackagingModel.inventory_item_id == item_id,
+                InventoryPackagingModel.packaging_unit_id == packaging_unit_id,
+                InventoryPackagingModel.is_current.is_(True),
+                InventoryPackagingModel.is_active.is_(True),
+            )
+        ):
+            raise InventoryOperationError(
+                "Ya existe una equivalencia vigente para esa unidad de compra. Cree una nueva versión de esa presentación o desactive la anterior.",
+                code="packaging_unit_conversion_exists",
+                status_code=409,
+            )
+
         row = InventoryPackagingModel(
             company_id=company_id,
             inventory_item_id=item_id,
+            packaging_unit_id=packaging_unit_id,
             code=code,
             name=name,
             packaging_type=packaging_type.value,
@@ -678,10 +824,9 @@ class SqlAlchemyInventoryRepository:
     ) -> _LocationContext:
         discovered = (
             await self._session.execute(
-                select(Location, Warehouse, Branch.company_id)
+                select(Location, Warehouse, Warehouse.company_id)
                 .join(Warehouse, Warehouse.id == Location.warehouse_id)
-                .join(Branch, Branch.id == Warehouse.branch_id)
-                .where(Location.id == location_id, Branch.company_id == company_id)
+                .where(Location.id == location_id, Warehouse.company_id == company_id)
             )
         ).one_or_none()
         if discovered is None:
@@ -807,6 +952,7 @@ class SqlAlchemyInventoryRepository:
                 "code": packaging.code,
                 "version": packaging.version,
                 "packaging_type": packaging.packaging_type,
+                "packaging_unit_id": packaging.packaging_unit_id,
                 "base_quantity": str(packaging.base_quantity),
                 "gross_weight_kg": (
                     str(packaging.gross_weight_kg)
@@ -1283,7 +1429,9 @@ class SqlAlchemyInventoryRepository:
             "warehouse_id": row.warehouse_id,
             "location_id": row.location_id,
             "inventory_item_id": row.inventory_item_id,
+            "receipt_lot_id": row.inventory_lot_id,
             "packaging_definition_id": row.packaging_definition_id,
+            "origin_handling_unit_id": row.origin_handling_unit_id,
             "code": row.code,
             "lot_code": row.lot_code,
             "expiry_date": row.expiry_date,
@@ -1313,6 +1461,12 @@ class SqlAlchemyInventoryRepository:
         actor_id: uuid.UUID,
     ) -> dict[str, Any]:
         del actor_id  # The API appends the required audit record transactionally.
+        from app.infrastructure.repositories.inventory_valuation_repository import (
+            SqlAlchemyInventoryValuationRepository,
+        )
+
+        # Keep the mutation order aligned with movements: company, physical scope, unit.
+        await SqlAlchemyInventoryValuationRepository(self._session).lock(company_id)
         measures.validate()
         if not measures.is_complete:
             raise InventoryOperationError(
@@ -1356,34 +1510,35 @@ class SqlAlchemyInventoryRepository:
         consumption = calculate_measured_consumption(measures)
         assert consumption is not None
 
-        balance = await self._balance(
-            company_id=company_id,
-            warehouse_id=row.warehouse_id,
-            location_id=row.location_id,
-            item_id=row.inventory_item_id,
-            stock_status=row.stock_status,
-            lot_code=row.lot_code,
-            expiry_date=row.expiry_date,
-            lock=True,
-        )
-        if balance is None:
-            raise InventoryOperationError(
-                "No existe el saldo asociado a la unidad logística.",
-                code="inventory_projection_inconsistent",
-                status_code=409,
+        if getattr(row, "inventory_posted_at", True) is not None:
+            balance = await self._balance(
+                company_id=company_id,
+                warehouse_id=row.warehouse_id,
+                location_id=row.location_id,
+                item_id=row.inventory_item_id,
+                stock_status=row.stock_status,
+                lot_code=row.lot_code,
+                expiry_date=row.expiry_date,
+                lock=True,
             )
-        delta_weight = consumption.weight_kg - row.occupied_weight_kg
-        delta_volume = consumption.volume_m3 - row.occupied_volume_m3
-        projected_weight = balance.occupied_weight_kg + delta_weight
-        projected_volume = balance.occupied_volume_m3 + delta_volume
-        if projected_weight < ZERO or projected_volume < ZERO:
-            raise InventoryOperationError(
-                "La medición produciría una proyección física inválida.",
-                code="inventory_projection_inconsistent",
-                status_code=409,
-            )
-        balance.occupied_weight_kg = projected_weight
-        balance.occupied_volume_m3 = projected_volume
+            if balance is None:
+                raise InventoryOperationError(
+                    "No existe el saldo asociado a la unidad logística.",
+                    code="inventory_projection_inconsistent",
+                    status_code=409,
+                )
+            delta_weight = consumption.weight_kg - row.occupied_weight_kg
+            delta_volume = consumption.volume_m3 - row.occupied_volume_m3
+            projected_weight = balance.occupied_weight_kg + delta_weight
+            projected_volume = balance.occupied_volume_m3 + delta_volume
+            if projected_weight < ZERO or projected_volume < ZERO:
+                raise InventoryOperationError(
+                    "La medición produciría una proyección física inválida.",
+                    code="inventory_projection_inconsistent",
+                    status_code=409,
+                )
+            balance.occupied_weight_kg = projected_weight
+            balance.occupied_volume_m3 = projected_volume
         row.actual_gross_weight_kg = measures.gross_weight_kg
         row.actual_length_m = measures.length_m
         row.actual_width_m = measures.width_m
@@ -1394,7 +1549,10 @@ class SqlAlchemyInventoryRepository:
         row.measurement_status = MeasurementStatus.VERIFIED.value
         row.measurement_source = source
         await self._session.flush()
-        return self._handling_unit_dict(row)
+        enriched = await self._handling_units_with_release_metadata(
+            company_id=company_id, rows=[row]
+        )
+        return enriched[0]
 
     async def list_handling_units(
         self,
@@ -1409,6 +1567,7 @@ class SqlAlchemyInventoryRepository:
         filters = [
             InventoryHandlingUnitModel.company_id == company_id,
             InventoryHandlingUnitModel.warehouse_id == warehouse_id,
+            InventoryHandlingUnitModel.inventory_posted_at.is_not(None),
         ]
         if location_id is not None:
             filters.append(InventoryHandlingUnitModel.location_id == location_id)
@@ -1427,7 +1586,565 @@ class SqlAlchemyInventoryRepository:
                 )
             ).all()
         )
-        return [self._handling_unit_dict(row) for row in rows]
+        return await self._handling_units_with_release_metadata(company_id=company_id, rows=rows)
+
+    async def _handling_units_with_release_metadata(
+        self,
+        *,
+        company_id: uuid.UUID,
+        rows: list[InventoryHandlingUnitModel],
+    ) -> list[dict[str, Any]]:
+        # Resolve identity in one batch, including legacy HUs without a receipt lot.
+        identities = {}
+        packaging = {}
+        if rows:
+            product_id = func.coalesce(
+                InventoryItemModel.product_id, ProductVariantModel.product_id
+            )
+            identity_rows = (
+                (
+                    await self._session.execute(
+                        select(
+                            InventoryItemModel.id,
+                            product_id.label("product_id"),
+                            InventoryItemModel.base_unit_id.label("base_unit_id"),
+                            func.coalesce(
+                                ProductVariantModel.name_override, ProductModel.name
+                            ).label("product_name"),
+                            func.coalesce(ProductVariantModel.sku, ProductModel.sku).label(
+                                "product_sku"
+                            ),
+                            UnitModel.name.label("base_unit_name"),
+                            UnitModel.symbol.label("base_unit_symbol"),
+                        )
+                        .select_from(InventoryItemModel)
+                        .outerjoin(
+                            ProductVariantModel,
+                            and_(
+                                ProductVariantModel.id == InventoryItemModel.variant_id,
+                                ProductVariantModel.company_id == company_id,
+                            ),
+                        )
+                        .outerjoin(
+                            ProductModel,
+                            and_(
+                                ProductModel.id_product == product_id,
+                                ProductModel.company_id == company_id,
+                            ),
+                        )
+                        .outerjoin(UnitModel, UnitModel.id_unit == InventoryItemModel.base_unit_id)
+                        .where(
+                            InventoryItemModel.company_id == company_id,
+                            InventoryItemModel.id.in_({row.inventory_item_id for row in rows}),
+                        )
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            identities = {row["id"]: dict(row) for row in identity_rows}
+            packaging_ids = {
+                row.packaging_definition_id for row in rows if row.packaging_definition_id
+            }
+            if packaging_ids:
+                definitions = (
+                    await self._session.scalars(
+                        select(InventoryPackagingModel).where(
+                            InventoryPackagingModel.company_id == company_id,
+                            InventoryPackagingModel.id.in_(packaging_ids),
+                        )
+                    )
+                ).all()
+                packaging = {definition.id: definition for definition in definitions}
+        (
+            release_reasons_by_unit,
+            lots_by_id,
+            purchase_codes,
+            detail_codes,
+        ) = await self._handling_unit_release_metadata(company_id=company_id, rows=rows)
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            unit_data = self._handling_unit_dict(row)
+            identity = identities.get(row.inventory_item_id, {})
+            unit_data.update({key: value for key, value in identity.items() if key != "id"})
+            definition = packaging.get(row.packaging_definition_id)
+            if definition is not None:
+                unit_data["packaging_name"] = definition.name
+                unit_data["packaging_base_quantity"] = definition.base_quantity
+            receipt_lot = lots_by_id.get(row.inventory_lot_id) if row.inventory_lot_id else None
+            if receipt_lot is not None:
+                unit_data["receipt_lot_header_code"] = receipt_lot.code
+                unit_data["received_at"] = receipt_lot.received_at
+                unit_data["purchase_code"] = purchase_codes.get(receipt_lot.purchase_id)
+            unit_data["receipt_lot_code"] = detail_codes.get(row.inventory_lot_detail_id)
+            if row.id in release_reasons_by_unit:
+                unit_data["release_requirements"] = release_reasons_by_unit[row.id]
+            result.append(unit_data)
+        return result
+
+    async def _handling_unit_release_metadata(
+        self,
+        *,
+        company_id: uuid.UUID,
+        rows: list[InventoryHandlingUnitModel],
+    ) -> tuple[
+        dict[uuid.UUID, list[str]],
+        dict[uuid.UUID, InventoryLotModel],
+        dict[uuid.UUID, str],
+        dict[uuid.UUID, str],
+    ]:
+        release_units = [
+            row
+            for row in rows
+            if row.stock_status == StockStatus.QUARANTINE.value and row.closed_at is None
+        ]
+        lots_by_id: dict[uuid.UUID, InventoryLotModel] = {}
+        lot_ids = {row.inventory_lot_id for row in rows if row.inventory_lot_id}
+        release_lot_ids = {row.inventory_lot_id for row in release_units if row.inventory_lot_id}
+        if lot_ids:
+            lots = list(
+                (
+                    await self._session.scalars(
+                        select(InventoryLotModel).where(
+                            InventoryLotModel.company_id == company_id,
+                            InventoryLotModel.id.in_(lot_ids),
+                        )
+                    )
+                ).all()
+            )
+            lots_by_id = {lot.id: lot for lot in lots}
+
+        purchase_ids = {lot.purchase_id for lot in lots_by_id.values()}
+        purchase_codes: dict[uuid.UUID, str] = {}
+        if purchase_ids:
+            purchase_rows = (
+                await self._session.execute(
+                    select(PurchaseModel.id, PurchaseModel.code).where(
+                        PurchaseModel.company_id == company_id,
+                        PurchaseModel.id.in_(purchase_ids),
+                    )
+                )
+            ).all()
+            purchase_codes = dict(purchase_rows)
+
+        detail_ids = {row.inventory_lot_detail_id for row in rows if row.inventory_lot_detail_id}
+        detail_codes: dict[uuid.UUID, str] = {}
+        if detail_ids:
+            detail_codes = dict(
+                (
+                    await self._session.execute(
+                        select(InventoryLotDetailModel.id, InventoryLotDetailModel.code).where(
+                            InventoryLotDetailModel.company_id == company_id,
+                            InventoryLotDetailModel.id.in_(detail_ids),
+                        )
+                    )
+                ).all()
+            )
+
+        label_confirmed_ids: set[uuid.UUID] = set()
+        if release_units:
+            label_confirmed_ids = set(
+                (
+                    await self._session.scalars(
+                        select(InventoryLabelConfirmationModel.handling_unit_id)
+                        .join(
+                            InventoryHandlingUnitModel,
+                            and_(
+                                InventoryHandlingUnitModel.company_id
+                                == InventoryLabelConfirmationModel.company_id,
+                                InventoryHandlingUnitModel.id
+                                == InventoryLabelConfirmationModel.handling_unit_id,
+                                InventoryHandlingUnitModel.code
+                                == InventoryLabelConfirmationModel.handling_unit_code,
+                                InventoryHandlingUnitModel.label_revision
+                                == InventoryLabelConfirmationModel.label_revision,
+                                InventoryHandlingUnitModel.quantity_base
+                                == InventoryLabelConfirmationModel.quantity_base,
+                            ),
+                        )
+                        .where(
+                            InventoryLabelConfirmationModel.company_id == company_id,
+                            InventoryHandlingUnitModel.id.in_([unit.id for unit in release_units]),
+                        )
+                    )
+                ).all()
+            )
+
+        retaceo_error_by_purchase: dict[uuid.UUID, str | None] = {}
+        today = datetime.now(UTC).astimezone(ZoneInfo("America/El_Salvador")).date()
+        release_purchase_ids = {
+            lots_by_id[lot_id].purchase_id for lot_id in release_lot_ids if lot_id in lots_by_id
+        }
+        for lot in lots_by_id.values():
+            if (
+                lot.purchase_id not in release_purchase_ids
+                or lot.purchase_id in retaceo_error_by_purchase
+            ):
+                continue
+            retaceo_error_by_purchase[lot.purchase_id] = await purchase_retaceo_readiness_error(
+                self._session,
+                company_id=company_id,
+                purchase_id=lot.purchase_id,
+                received_at=lot.received_at,
+            )
+
+        release_reasons_by_unit: dict[uuid.UUID, list[str]] = {}
+        for unit in release_units:
+            lot = lots_by_id.get(unit.inventory_lot_id) if unit.inventory_lot_id else None
+            reasons = handling_unit_release_requirements(
+                is_partial=False,
+                measurement_status=unit.measurement_status,
+                measurement_source=unit.measurement_source,
+                expiry_date=unit.expiry_date,
+                today=today,
+                label_confirmation_required=bool(lot and lot.label_confirmation_required),
+                label_confirmed=unit.id in label_confirmed_ids,
+                retaceo_readiness_error=(
+                    retaceo_error_by_purchase.get(lot.purchase_id) if lot else None
+                ),
+            )
+            release_reasons_by_unit[unit.id] = [reason.value for reason in reasons]
+        return release_reasons_by_unit, lots_by_id, purchase_codes, detail_codes
+
+    async def get_handling_unit_traceability(
+        self,
+        *,
+        company_id: uuid.UUID,
+        handling_unit_id: uuid.UUID,
+    ) -> dict[str, Any] | None:
+        product_id = func.coalesce(InventoryItemModel.product_id, ProductVariantModel.product_id)
+        unit_row = (
+            await self._session.execute(
+                select(
+                    InventoryHandlingUnitModel,
+                    product_id.label("target_product_id"),
+                    ProductModel.sku.label("product_sku"),
+                    ProductModel.name.label("product_name"),
+                    ProductVariantModel.sku.label("variant_sku"),
+                    ProductVariantModel.name_override.label("variant_name"),
+                    UnitModel.name.label("base_unit_name"),
+                    UnitModel.symbol.label("base_unit_symbol"),
+                    Warehouse.code.label("warehouse_code"),
+                    Warehouse.name.label("warehouse_name"),
+                    Location.code.label("location_code"),
+                    InventoryLotDetailModel.code.label("receipt_lot_code"),
+                    InventoryLotModel.code.label("receipt_lot_header_code"),
+                    InventoryLotModel.received_at.label("receipt_received_at"),
+                )
+                .join(
+                    InventoryItemModel,
+                    and_(
+                        InventoryItemModel.id == InventoryHandlingUnitModel.inventory_item_id,
+                        InventoryItemModel.company_id == InventoryHandlingUnitModel.company_id,
+                    ),
+                )
+                .outerjoin(
+                    ProductVariantModel,
+                    and_(
+                        ProductVariantModel.id == InventoryItemModel.variant_id,
+                        ProductVariantModel.company_id == InventoryItemModel.company_id,
+                    ),
+                )
+                .outerjoin(
+                    ProductModel,
+                    and_(
+                        ProductModel.company_id == InventoryItemModel.company_id,
+                        ProductModel.id_product == product_id,
+                    ),
+                )
+                .join(UnitModel, UnitModel.id_unit == InventoryItemModel.base_unit_id)
+                .join(
+                    Warehouse,
+                    and_(
+                        Warehouse.id == InventoryHandlingUnitModel.warehouse_id,
+                        Warehouse.company_id == company_id,
+                    ),
+                )
+                .join(Location, Location.id == InventoryHandlingUnitModel.location_id)
+                .outerjoin(
+                    InventoryLotModel,
+                    and_(
+                        InventoryLotModel.company_id == InventoryHandlingUnitModel.company_id,
+                        InventoryLotModel.id == InventoryHandlingUnitModel.inventory_lot_id,
+                    ),
+                )
+                .outerjoin(
+                    InventoryLotDetailModel,
+                    and_(
+                        InventoryLotDetailModel.company_id == InventoryHandlingUnitModel.company_id,
+                        InventoryLotDetailModel.id
+                        == InventoryHandlingUnitModel.inventory_lot_detail_id,
+                        InventoryLotDetailModel.inventory_lot_id
+                        == InventoryHandlingUnitModel.inventory_lot_id,
+                        InventoryLotDetailModel.inventory_item_id
+                        == InventoryHandlingUnitModel.inventory_item_id,
+                    ),
+                )
+                .where(
+                    InventoryHandlingUnitModel.company_id == company_id,
+                    InventoryHandlingUnitModel.id == handling_unit_id,
+                )
+            )
+        ).one_or_none()
+        if unit_row is None:
+            return None
+
+        handling_unit = unit_row[0]
+        target_product_id = unit_row.target_product_id
+        trace_unit_ids = [handling_unit.id]
+        seen_unit_ids = {handling_unit.id}
+        parent_unit = handling_unit
+        while parent_unit.origin_handling_unit_id is not None:
+            parent_id = parent_unit.origin_handling_unit_id
+            if parent_id in seen_unit_ids:
+                break
+            parent_unit = await self._session.scalar(
+                select(InventoryHandlingUnitModel).where(
+                    InventoryHandlingUnitModel.company_id == company_id,
+                    InventoryHandlingUnitModel.id == parent_id,
+                )
+            )
+            if parent_unit is None:
+                break
+            trace_unit_ids.append(parent_unit.id)
+            seen_unit_ids.add(parent_unit.id)
+        from_location = aliased(Location)
+        to_location = aliased(Location)
+        from_warehouse = aliased(Warehouse)
+        to_warehouse = aliased(Warehouse)
+
+        movement_rows = (
+            (
+                await self._session.execute(
+                    select(
+                        InventoryMovementModel.id.label("movement_id"),
+                        InventoryMovementModel.movement_type,
+                        InventoryMovementModel.source_reference,
+                        InventoryMovementModel.posted_at,
+                        InventoryMovementModel.posted_by,
+                        User.username.label("operator"),
+                        InventoryMovementLineModel.from_stock_status,
+                        InventoryMovementLineModel.to_stock_status,
+                        InventoryMovementLineModel.quantity_base,
+                        from_warehouse.code.label("from_warehouse_code"),
+                        from_warehouse.name.label("from_warehouse_name"),
+                        from_location.code.label("from_location_code"),
+                        to_warehouse.code.label("to_warehouse_code"),
+                        to_warehouse.name.label("to_warehouse_name"),
+                        to_location.code.label("to_location_code"),
+                    )
+                    .select_from(InventoryMovementLineModel)
+                    .join(
+                        InventoryMovementModel,
+                        and_(
+                            InventoryMovementModel.id == InventoryMovementLineModel.movement_id,
+                            InventoryMovementModel.company_id
+                            == InventoryMovementLineModel.company_id,
+                        ),
+                    )
+                    .outerjoin(User, User.id == InventoryMovementModel.posted_by)
+                    .outerjoin(
+                        from_warehouse,
+                        and_(
+                            from_warehouse.id == InventoryMovementLineModel.from_warehouse_id,
+                            from_warehouse.company_id == company_id,
+                        ),
+                    )
+                    .outerjoin(
+                        from_location,
+                        from_location.id == InventoryMovementLineModel.from_location_id,
+                    )
+                    .outerjoin(
+                        to_warehouse,
+                        and_(
+                            to_warehouse.id == InventoryMovementLineModel.to_warehouse_id,
+                            to_warehouse.company_id == company_id,
+                        ),
+                    )
+                    .outerjoin(
+                        to_location, to_location.id == InventoryMovementLineModel.to_location_id
+                    )
+                    .where(
+                        InventoryMovementLineModel.company_id == company_id,
+                        InventoryMovementLineModel.handling_unit_id.in_(trace_unit_ids),
+                    )
+                    .order_by(
+                        InventoryMovementModel.posted_at,
+                        InventoryMovementLineModel.line_number,
+                    )
+                )
+            )
+            .mappings()
+            .all()
+        )
+
+        purchase_rows = (
+            (
+                await self._session.execute(
+                    select(
+                        PurchaseModel.code.label("purchase_code"),
+                        PurchaseModel.purchase_date,
+                        PurchaseOrderModel.code.label("purchase_order_code"),
+                        SupplierModel.code.label("supplier_code"),
+                        SupplierModel.name.label("supplier_name"),
+                        InventoryMovementModel.posted_at.label("received_at"),
+                        PurchaseConsolidationModel.code.label("consolidation_code"),
+                        PurchaseRequestModel.id.label("request_id"),
+                        PurchaseRequestModel.code.label("request_code"),
+                        PurchaseRequestModel.request_date.label("requested_at"),
+                        PurchaseRequestModel.required_date,
+                        Branch.name.label("branch_name"),
+                    )
+                    .select_from(InventoryMovementLineModel)
+                    .join(
+                        InventoryMovementModel,
+                        and_(
+                            InventoryMovementModel.id == InventoryMovementLineModel.movement_id,
+                            InventoryMovementModel.company_id
+                            == InventoryMovementLineModel.company_id,
+                        ),
+                    )
+                    .join(
+                        PurchaseModel,
+                        and_(
+                            PurchaseModel.company_id == company_id,
+                            PurchaseModel.inventory_movement_id == InventoryMovementModel.id,
+                        ),
+                    )
+                    .join(
+                        PurchaseOrderModel,
+                        and_(
+                            PurchaseOrderModel.company_id == PurchaseModel.company_id,
+                            PurchaseOrderModel.id == PurchaseModel.purchase_order_id,
+                        ),
+                    )
+                    .join(
+                        SupplierModel,
+                        and_(
+                            SupplierModel.company_id == PurchaseModel.company_id,
+                            SupplierModel.id_supplier == PurchaseModel.supplier_id,
+                        ),
+                    )
+                    .join(
+                        PurchaseDetailModel,
+                        and_(
+                            PurchaseDetailModel.company_id == PurchaseModel.company_id,
+                            PurchaseDetailModel.purchase_id == PurchaseModel.id,
+                            PurchaseDetailModel.product_id == target_product_id,
+                        ),
+                    )
+                    .join(
+                        PurchaseOrderDetailModel,
+                        and_(
+                            PurchaseOrderDetailModel.company_id == PurchaseOrderModel.company_id,
+                            PurchaseOrderDetailModel.id
+                            == PurchaseDetailModel.purchase_order_detail_id,
+                        ),
+                    )
+                    .outerjoin(
+                        PurchaseConsolidationAwardModel,
+                        and_(
+                            PurchaseConsolidationAwardModel.company_id
+                            == PurchaseOrderDetailModel.company_id,
+                            PurchaseConsolidationAwardModel.id
+                            == PurchaseOrderDetailModel.purchase_consolidation_award_id,
+                        ),
+                    )
+                    .outerjoin(
+                        PurchaseConsolidationModel,
+                        and_(
+                            PurchaseConsolidationModel.company_id
+                            == PurchaseConsolidationAwardModel.company_id,
+                            PurchaseConsolidationModel.id
+                            == PurchaseConsolidationAwardModel.consolidation_id,
+                        ),
+                    )
+                    .outerjoin(
+                        PurchaseConsolidationSourceModel,
+                        and_(
+                            PurchaseConsolidationSourceModel.company_id
+                            == PurchaseConsolidationAwardModel.company_id,
+                            PurchaseConsolidationSourceModel.consolidation_line_id
+                            == PurchaseConsolidationAwardModel.consolidation_line_id,
+                            PurchaseConsolidationSourceModel.included_quantity > ZERO,
+                        ),
+                    )
+                    .outerjoin(
+                        PurchaseRequestModel,
+                        and_(
+                            PurchaseRequestModel.company_id
+                            == PurchaseConsolidationSourceModel.company_id,
+                            PurchaseRequestModel.id
+                            == PurchaseConsolidationSourceModel.purchase_request_id,
+                        ),
+                    )
+                    .outerjoin(
+                        Branch,
+                        and_(
+                            Branch.company_id == PurchaseRequestModel.company_id,
+                            Branch.id == PurchaseRequestModel.branch_id,
+                        ),
+                    )
+                    .where(
+                        InventoryMovementLineModel.company_id == company_id,
+                        InventoryMovementLineModel.handling_unit_id.in_(trace_unit_ids),
+                        InventoryMovementModel.movement_type == "receipt",
+                    )
+                    .order_by(PurchaseRequestModel.request_date)
+                )
+            )
+            .mappings()
+            .all()
+        )
+
+        requests: list[dict[str, Any]] = []
+        seen_request_ids: set[uuid.UUID] = set()
+        for row in purchase_rows:
+            request_id = row["request_id"]
+            if request_id is not None and request_id not in seen_request_ids:
+                seen_request_ids.add(request_id)
+                requests.append(
+                    {
+                        "request_code": row["request_code"],
+                        "branch_name": row["branch_name"],
+                        "requested_at": row["requested_at"],
+                        "required_date": row["required_date"],
+                    }
+                )
+
+        origin_row = purchase_rows[0] if purchase_rows else None
+        unit = self._handling_unit_dict(handling_unit)
+        unit.update(
+            {
+                "receipt_lot_code": unit_row.receipt_lot_code,
+                "receipt_lot_header_code": unit_row.receipt_lot_header_code,
+                "received_at": unit_row.receipt_received_at,
+                "product_sku": unit_row.variant_sku or unit_row.product_sku,
+                "product_name": unit_row.variant_name or unit_row.product_name,
+                "base_unit_symbol": unit_row.base_unit_symbol,
+            }
+        )
+        return {
+            "handling_unit": unit,
+            "product_sku": unit_row.variant_sku or unit_row.product_sku,
+            "product_name": unit_row.variant_name or unit_row.product_name,
+            "base_unit_name": unit_row.base_unit_name,
+            "base_unit_symbol": unit_row.base_unit_symbol,
+            "warehouse_code": unit_row.warehouse_code,
+            "warehouse_name": unit_row.warehouse_name,
+            "location_code": unit_row.location_code,
+            "origin": {
+                "supplier_code": origin_row["supplier_code"] if origin_row else None,
+                "supplier_name": origin_row["supplier_name"] if origin_row else None,
+                "purchase_code": origin_row["purchase_code"] if origin_row else None,
+                "purchase_order_code": origin_row["purchase_order_code"] if origin_row else None,
+                "received_at": origin_row["received_at"] if origin_row else None,
+                "purchase_date": origin_row["purchase_date"] if origin_row else None,
+                "consolidation_code": origin_row["consolidation_code"] if origin_row else None,
+                "requests": requests,
+            },
+            "movements": [dict(row) for row in movement_rows],
+        }
 
     async def list_balances(  # noqa: C901
         self,
@@ -1472,6 +2189,7 @@ class SqlAlchemyInventoryRepository:
             InventoryHandlingUnitModel.company_id == company_id,
             InventoryHandlingUnitModel.warehouse_id == warehouse_id,
             InventoryHandlingUnitModel.closed_at.is_(None),
+            InventoryHandlingUnitModel.inventory_posted_at.is_not(None),
             InventoryHandlingUnitModel.measurement_status == "incomplete",
         ]
         if location_id is not None:
@@ -1532,6 +2250,398 @@ class SqlAlchemyInventoryRepository:
                 }
             )
         return result
+
+    async def product_stock_snapshot(
+        self,
+        *,
+        company_id: uuid.UUID,
+        warehouse_id: uuid.UUID,
+        product_ids: Sequence[int],
+    ) -> list[ProductStockSnapshot]:
+        """Read current inventory balances without treating capacity holds as stock reservations."""
+        product_ids = tuple(
+            dict.fromkeys(product_id for product_id in product_ids if product_id > 0)
+        )
+        if not product_ids:
+            return []
+
+        unit_name = func.coalesce(CompanyUnitModel.alias, UnitModel.name)
+
+        def status_total(stock_status: str) -> Any:
+            return func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            InventoryBalanceModel.stock_status == stock_status,
+                            InventoryBalanceModel.quantity_base,
+                        ),
+                        else_=ZERO,
+                    )
+                ),
+                ZERO,
+            )
+
+        rows = (
+            await self._session.execute(
+                select(
+                    ProductModel.id_product,
+                    InventoryItemModel.id,
+                    InventoryItemModel.base_unit_id,
+                    unit_name.label("base_unit_name"),
+                    InventoryItemModel.is_active,
+                    status_total(StockStatus.AVAILABLE.value).label("available_quantity"),
+                    status_total(StockStatus.IN_TRANSIT.value).label("in_transit_quantity"),
+                    status_total(StockStatus.QUARANTINE.value).label("quarantine_quantity"),
+                    status_total(StockStatus.BLOCKED.value).label("blocked_quantity"),
+                    status_total(StockStatus.DAMAGED.value).label("damaged_quantity"),
+                )
+                .select_from(ProductModel)
+                .outerjoin(
+                    InventoryItemModel,
+                    and_(
+                        InventoryItemModel.company_id == company_id,
+                        InventoryItemModel.product_id == ProductModel.id_product,
+                    ),
+                )
+                .outerjoin(
+                    InventoryBalanceModel,
+                    and_(
+                        InventoryBalanceModel.company_id == company_id,
+                        InventoryBalanceModel.inventory_item_id == InventoryItemModel.id,
+                        InventoryBalanceModel.warehouse_id == warehouse_id,
+                    ),
+                )
+                .outerjoin(UnitModel, UnitModel.id_unit == InventoryItemModel.base_unit_id)
+                .outerjoin(
+                    CompanyUnitModel,
+                    and_(
+                        CompanyUnitModel.company_id == company_id,
+                        CompanyUnitModel.unit_id == InventoryItemModel.base_unit_id,
+                    ),
+                )
+                .where(
+                    ProductModel.company_id == company_id,
+                    ProductModel.id_product.in_(product_ids),
+                )
+                .group_by(
+                    ProductModel.id_product,
+                    InventoryItemModel.id,
+                    InventoryItemModel.base_unit_id,
+                    CompanyUnitModel.alias,
+                    UnitModel.name,
+                    InventoryItemModel.is_active,
+                )
+                .order_by(ProductModel.id_product)
+            )
+        ).all()
+        return [
+            ProductStockSnapshot(
+                product_id=int(row.id_product),
+                inventory_item_id=row.id,
+                base_unit_id=row.base_unit_id,
+                base_unit_name=row.base_unit_name,
+                is_active=row.is_active,
+                available_quantity=row.available_quantity or ZERO,
+                in_transit_quantity=row.in_transit_quantity or ZERO,
+                quarantine_quantity=row.quarantine_quantity or ZERO,
+                blocked_quantity=row.blocked_quantity or ZERO,
+                damaged_quantity=row.damaged_quantity or ZERO,
+            )
+            for row in rows
+        ]
+
+    async def list_movements(
+        self,
+        *,
+        company_id: uuid.UUID,
+        warehouse_id: uuid.UUID,
+        limit: int,
+        movement_type: str | None = None,
+        offset: int = 0,
+        period_from: date | None = None,
+        period_to: date | None = None,
+        query: str | None = None,
+        lot_code: str | None = None,
+        source_reference: str | None = None,
+        direction: str | None = None,
+    ) -> list[dict[str, Any]]:
+        from_location = aliased(Location)
+        to_location = aliased(Location)
+        from_warehouse = aliased(Warehouse)
+        to_warehouse = aliased(Warehouse)
+        filters = _movement_history_filters(
+            warehouse_id=warehouse_id,
+            period_from=period_from,
+            period_to=period_to,
+            query=query,
+            lot_code=lot_code,
+            source_reference=source_reference,
+            direction=direction,
+        )
+        rows = (
+            (
+                await self._session.execute(
+                    select(
+                        InventoryMovementLineModel.id.label("id"),
+                        InventoryMovementModel.id.label("movement_id"),
+                        InventoryMovementLineModel.line_number,
+                        InventoryMovementModel.company_id,
+                        InventoryMovementModel.movement_type,
+                        InventoryMovementModel.source_reference,
+                        InventoryMovementModel.posted_at,
+                        InventoryMovementModel.posted_by,
+                        User.username.label("operator"),
+                        InventoryMovementLineModel.inventory_item_id,
+                        InventoryItemModel.product_id,
+                        InventoryItemModel.variant_id,
+                        InventoryItemModel.base_unit_id,
+                        UnitModel.name.label("base_unit_name"),
+                        UnitModel.symbol.label("base_unit_symbol"),
+                        ProductVariantModel.sku.label("variant_sku"),
+                        ProductModel.sku.label("product_sku"),
+                        ProductVariantModel.name_override.label("variant_name"),
+                        ProductModel.name.label("product_name"),
+                        InventoryMovementLineModel.handling_unit_id,
+                        InventoryHandlingUnitModel.code.label("handling_unit_code"),
+                        InventoryMovementLineModel.from_warehouse_id,
+                        from_warehouse.code.label("from_warehouse_code"),
+                        from_warehouse.name.label("from_warehouse_name"),
+                        InventoryMovementLineModel.from_location_id,
+                        from_location.code.label("from_location_code"),
+                        InventoryMovementLineModel.from_stock_status,
+                        InventoryMovementLineModel.to_warehouse_id,
+                        to_warehouse.code.label("to_warehouse_code"),
+                        to_warehouse.name.label("to_warehouse_name"),
+                        InventoryMovementLineModel.to_location_id,
+                        to_location.code.label("to_location_code"),
+                        InventoryMovementLineModel.to_stock_status,
+                        InventoryMovementLineModel.quantity_base,
+                        InventoryMovementLineModel.occupied_weight_kg,
+                        InventoryMovementLineModel.occupied_volume_m3,
+                        InventoryMovementLineModel.measurement_status,
+                        InventoryMovementLineModel.lot_code,
+                        InventoryLotDetailModel.code.label("receipt_lot_code"),
+                        InventoryLotModel.code.label("receipt_lot_header_code"),
+                        InventoryMovementLineModel.expiry_date,
+                        InventoryMovementLineModel.packaging_snapshot,
+                    )
+                    .join(
+                        InventoryMovementModel,
+                        and_(
+                            InventoryMovementModel.id == InventoryMovementLineModel.movement_id,
+                            InventoryMovementModel.company_id
+                            == InventoryMovementLineModel.company_id,
+                        ),
+                    )
+                    .join(
+                        InventoryItemModel,
+                        and_(
+                            InventoryItemModel.id == InventoryMovementLineModel.inventory_item_id,
+                            InventoryItemModel.company_id == InventoryMovementLineModel.company_id,
+                        ),
+                    )
+                    .outerjoin(
+                        ProductVariantModel,
+                        and_(
+                            ProductVariantModel.id == InventoryItemModel.variant_id,
+                            ProductVariantModel.company_id == InventoryItemModel.company_id,
+                        ),
+                    )
+                    .outerjoin(
+                        ProductModel,
+                        and_(
+                            ProductModel.company_id == InventoryItemModel.company_id,
+                            ProductModel.id_product
+                            == func.coalesce(
+                                InventoryItemModel.product_id,
+                                ProductVariantModel.product_id,
+                            ),
+                        ),
+                    )
+                    .outerjoin(UnitModel, UnitModel.id_unit == InventoryItemModel.base_unit_id)
+                    .outerjoin(User, User.id == InventoryMovementModel.posted_by)
+                    .outerjoin(
+                        InventoryHandlingUnitModel,
+                        and_(
+                            InventoryHandlingUnitModel.id
+                            == InventoryMovementLineModel.handling_unit_id,
+                            InventoryHandlingUnitModel.company_id
+                            == InventoryMovementLineModel.company_id,
+                        ),
+                    )
+                    .outerjoin(
+                        InventoryLotDetailModel,
+                        and_(
+                            InventoryLotDetailModel.company_id
+                            == InventoryMovementLineModel.company_id,
+                            InventoryLotDetailModel.id
+                            == func.coalesce(
+                                InventoryMovementLineModel.inventory_lot_detail_id,
+                                InventoryHandlingUnitModel.inventory_lot_detail_id,
+                            ),
+                        ),
+                    )
+                    .outerjoin(
+                        InventoryLotModel,
+                        and_(
+                            InventoryLotModel.company_id == InventoryHandlingUnitModel.company_id,
+                            InventoryLotModel.id == InventoryHandlingUnitModel.inventory_lot_id,
+                        ),
+                    )
+                    .outerjoin(
+                        from_location,
+                        from_location.id == InventoryMovementLineModel.from_location_id,
+                    )
+                    .outerjoin(
+                        from_warehouse,
+                        and_(
+                            from_warehouse.id == InventoryMovementLineModel.from_warehouse_id,
+                            from_warehouse.company_id == InventoryMovementModel.company_id,
+                        ),
+                    )
+                    .outerjoin(
+                        to_location,
+                        to_location.id == InventoryMovementLineModel.to_location_id,
+                    )
+                    .outerjoin(
+                        to_warehouse,
+                        and_(
+                            to_warehouse.id == InventoryMovementLineModel.to_warehouse_id,
+                            to_warehouse.company_id == InventoryMovementModel.company_id,
+                        ),
+                    )
+                    .where(
+                        InventoryMovementModel.company_id == company_id,
+                        or_(
+                            InventoryMovementLineModel.from_warehouse_id == warehouse_id,
+                            InventoryMovementLineModel.to_warehouse_id == warehouse_id,
+                        ),
+                        *(
+                            [InventoryMovementModel.movement_type == movement_type]
+                            if movement_type is not None
+                            else []
+                        ),
+                        *filters,
+                    )
+                    .order_by(
+                        InventoryMovementModel.posted_at.desc(),
+                        InventoryMovementModel.id.desc(),
+                        InventoryMovementLineModel.line_number.desc(),
+                    )
+                    .limit(limit)
+                    .offset(offset)
+                )
+            )
+            .mappings()
+            .all()
+        )
+        handling_unit_ids = {
+            row["handling_unit_id"] for row in rows if row["handling_unit_id"] is not None
+        }
+        purchase_by_handling_unit: dict[uuid.UUID, tuple[str | None, str | None]] = {}
+        if handling_unit_ids:
+            purchase_rows = (
+                (
+                    await self._session.execute(
+                        select(
+                            InventoryMovementLineModel.handling_unit_id,
+                            PurchaseModel.code.label("purchase_code"),
+                            PurchaseOrderModel.code.label("purchase_order_code"),
+                        )
+                        .join(
+                            InventoryMovementModel,
+                            and_(
+                                InventoryMovementModel.id == InventoryMovementLineModel.movement_id,
+                                InventoryMovementModel.company_id
+                                == InventoryMovementLineModel.company_id,
+                            ),
+                        )
+                        .join(
+                            PurchaseModel,
+                            and_(
+                                PurchaseModel.company_id == InventoryMovementModel.company_id,
+                                PurchaseModel.inventory_movement_id == InventoryMovementModel.id,
+                            ),
+                        )
+                        .outerjoin(
+                            PurchaseOrderModel,
+                            and_(
+                                PurchaseOrderModel.id == PurchaseModel.purchase_order_id,
+                                PurchaseOrderModel.company_id == PurchaseModel.company_id,
+                            ),
+                        )
+                        .where(
+                            InventoryMovementModel.company_id == company_id,
+                            InventoryMovementModel.movement_type == "receipt",
+                            InventoryMovementLineModel.handling_unit_id.in_(handling_unit_ids),
+                        )
+                        .order_by(InventoryMovementModel.posted_at.desc())
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            for purchase_row in purchase_rows:
+                purchase_by_handling_unit.setdefault(
+                    purchase_row["handling_unit_id"],
+                    (purchase_row["purchase_code"], purchase_row["purchase_order_code"]),
+                )
+
+        return [
+            {
+                "id": row["id"],
+                "movement_id": row["movement_id"],
+                "line_number": row["line_number"],
+                "company_id": row["company_id"],
+                "movement_type": row["movement_type"],
+                "source_reference": row["source_reference"],
+                "purchase_code": purchase_by_handling_unit.get(
+                    row["handling_unit_id"], (None, None)
+                )[0],
+                "purchase_order_code": purchase_by_handling_unit.get(
+                    row["handling_unit_id"], (None, None)
+                )[1],
+                "posted_at": row["posted_at"],
+                "posted_by": row["posted_by"],
+                "operator": row["operator"],
+                "inventory_item_id": row["inventory_item_id"],
+                "product_id": row["product_id"],
+                "variant_id": row["variant_id"],
+                "base_unit_id": row["base_unit_id"],
+                "base_unit_name": row["base_unit_name"],
+                "base_unit_symbol": row["base_unit_symbol"],
+                "product_sku": row["variant_sku"] or row["product_sku"],
+                "product_name": row["variant_name"] or row["product_name"],
+                "handling_unit_id": row["handling_unit_id"],
+                "handling_unit_code": row["handling_unit_code"],
+                "from_warehouse_id": row["from_warehouse_id"],
+                "from_warehouse_code": row["from_warehouse_code"],
+                "from_warehouse_name": row["from_warehouse_name"],
+                "from_location_id": row["from_location_id"],
+                "from_location_code": row["from_location_code"],
+                "from_stock_status": row["from_stock_status"],
+                "to_warehouse_id": row["to_warehouse_id"],
+                "to_warehouse_code": row["to_warehouse_code"],
+                "to_warehouse_name": row["to_warehouse_name"],
+                "to_location_id": row["to_location_id"],
+                "to_location_code": row["to_location_code"],
+                "to_stock_status": row["to_stock_status"],
+                "quantity_base": row["quantity_base"],
+                "occupied_weight_kg": (
+                    row["occupied_weight_kg"] if row["measurement_status"] != "incomplete" else None
+                ),
+                "occupied_volume_m3": (
+                    row["occupied_volume_m3"] if row["measurement_status"] != "incomplete" else None
+                ),
+                "measurement_status": row["measurement_status"],
+                "lot_code": row["lot_code"],
+                "receipt_lot_code": row["receipt_lot_code"],
+                "receipt_lot_header_code": row["receipt_lot_header_code"],
+                "expiry_date": row["expiry_date"],
+                "packaging_snapshot": row["packaging_snapshot"],
+            }
+            for row in rows
+        ]
 
     async def _balance(
         self,
@@ -1635,7 +2745,16 @@ class SqlAlchemyInventoryRepository:
                 "movement_type": movement_type,
                 "source_reference": source_reference,
                 "reservation_id": str(reservation_id) if reservation_id else None,
-                "lines": lines,
+                # Adding optional financial fields must not invalidate retries
+                # of physical commands posted before valuation was introduced.
+                "lines": [
+                    {
+                        key: value
+                        for key, value in line.items()
+                        if not (key.startswith("valuation_") and value is None)
+                    }
+                    for line in lines
+                ],
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -1695,7 +2814,16 @@ class SqlAlchemyInventoryRepository:
         lines: list[dict[str, Any]],
         actor_id: uuid.UUID,
         reservation_id: uuid.UUID | None = None,
+        receipt_placement: bool = False,
     ) -> dict[str, Any]:
+        from app.infrastructure.repositories.inventory_valuation_repository import (
+            SqlAlchemyInventoryValuationRepository,
+        )
+
+        valuation = SqlAlchemyInventoryValuationRepository(self._session)
+        # Includes companies awaiting their opening balance: receiving and
+        # cutover must never observe different physical snapshots.
+        await valuation.lock(company_id)
         fingerprint = self._fingerprint(movement_type, source_reference, lines, reservation_id)
         advisory_key = _advisory_lock_key("inventory-movement", company_id, idempotency_key)
         # The repository is PostgreSQL-specific.  A transaction-scoped advisory
@@ -1776,6 +2904,27 @@ class SqlAlchemyInventoryRepository:
         ):
             contexts[location_id] = await self._location_context(company_id, location_id, lock=True)
 
+        handling_units_by_id: dict[uuid.UUID, InventoryHandlingUnitModel] = {}
+        handling_unit_ids = sorted(
+            {
+                line["handling_unit_id"]
+                for line in lines
+                if line.get("handling_unit_id") is not None
+            },
+            key=str,
+        )
+        for handling_unit_id in handling_unit_ids:
+            row = await self._session.scalar(
+                select(InventoryHandlingUnitModel)
+                .where(
+                    InventoryHandlingUnitModel.company_id == company_id,
+                    InventoryHandlingUnitModel.id == handling_unit_id,
+                )
+                .with_for_update()
+            )
+            if row is not None:
+                handling_units_by_id[handling_unit_id] = row
+
         now = datetime.now(UTC)
         movement = InventoryMovementModel(
             company_id=company_id,
@@ -1799,6 +2948,10 @@ class SqlAlchemyInventoryRepository:
             from_status = _stock_status_value(data.get("from_stock_status"))
             to_status = _stock_status_value(data.get("to_stock_status"))
             handling_unit: InventoryHandlingUnitModel | None = None
+            source_handling_unit: InventoryHandlingUnitModel | None = None
+            is_partial_split = False
+            is_partial_adjustment_out = False
+            unmeasured_transfer_receipt = False
             physical: _ResolvedPhysical | None = None
             packaging_snapshot: dict[str, Any] | None = None
             lot_code = data.get("lot_code")
@@ -1808,25 +2961,37 @@ class SqlAlchemyInventoryRepository:
             )
 
             handling_unit_id = data.get("handling_unit_id")
+            pending_receipt_unit: InventoryHandlingUnitModel | None = None
             if handling_unit_id is not None:
-                handling_unit = await self._session.scalar(
-                    select(InventoryHandlingUnitModel)
-                    .where(
-                        InventoryHandlingUnitModel.company_id == company_id,
-                        InventoryHandlingUnitModel.id == handling_unit_id,
-                    )
-                    .with_for_update()
-                )
+                handling_unit = handling_units_by_id.get(handling_unit_id)
                 if handling_unit is None or handling_unit.closed_at is not None:
                     raise InventoryOperationError(
                         "Unidad logística no encontrada o cerrada.",
                         code="handling_unit_not_available",
                         status_code=404,
                     )
+                if getattr(handling_unit, "inventory_posted_at", True) is None:
+                    if (
+                        not receipt_placement
+                        or movement_type != "receipt"
+                        or from_location_id is not None
+                        or from_status is not None
+                        or handling_unit.inventory_item_id != item_id
+                        or quantity != handling_unit.quantity_base
+                    ):
+                        raise InventoryOperationError(
+                            "La unidad está en preparación; confirme su ingreso desde la cola de ubicación.",
+                            code="handling_unit_entry_pending",
+                            status_code=409,
+                        )
+                    pending_receipt_unit = handling_unit
+                    handling_unit = None
+            if handling_unit is not None:
+                source_handling_unit = handling_unit
                 if (
                     handling_unit.inventory_item_id != item_id
                     or handling_unit.location_id != from_location_id
-                    or handling_unit.quantity_base != quantity
+                    or quantity > handling_unit.quantity_base
                     or handling_unit.stock_status != from_status
                 ):
                     raise InventoryOperationError(
@@ -1834,12 +2999,217 @@ class SqlAlchemyInventoryRepository:
                         code="handling_unit_mismatch",
                         status_code=409,
                     )
-                weight = handling_unit.occupied_weight_kg
-                volume = handling_unit.occupied_volume_m3
                 lot_code = handling_unit.lot_code
                 expiry_date = handling_unit.expiry_date
                 packaging_snapshot = handling_unit.packaging_snapshot
-                physical = _physical_from_handling_unit(handling_unit)
+                is_partial_split = quantity < handling_unit.quantity_base
+                is_partial_adjustment_out = (
+                    is_partial_split
+                    and movement_type == "adjustment_out"
+                    and to_location_id is None
+                    and to_status is None
+                )
+                if (
+                    is_partial_split
+                    and not is_partial_adjustment_out
+                    and handling_unit.inventory_lot_id is not None
+                ):
+                    label_confirmation_required = await self._session.scalar(
+                        select(InventoryLotModel.label_confirmation_required).where(
+                            InventoryLotModel.company_id == company_id,
+                            InventoryLotModel.id == handling_unit.inventory_lot_id,
+                        )
+                    )
+                    _require_labelled_split_in_quarantine(
+                        label_confirmation_required=bool(label_confirmation_required),
+                        from_status=from_status,
+                        movement_type=movement_type,
+                        to_status=to_status,
+                    )
+                unmeasured_transfer_receipt = (
+                    from_status == StockStatus.IN_TRANSIT.value
+                    and to_status == StockStatus.QUARANTINE.value
+                    and (
+                        is_partial_split
+                        or handling_unit.measurement_source
+                        == MeasurementSource.SPLIT_ESTIMATE.value
+                    )
+                )
+                if is_partial_split:
+                    quarantine_putaway_split = (
+                        movement_type == "putaway"
+                        and from_status == StockStatus.QUARANTINE.value
+                        and to_status == StockStatus.QUARANTINE.value
+                    )
+                    if is_partial_adjustment_out:
+                        pass
+                    elif (movement_type != "transfer" and not quarantine_putaway_split) or (
+                        to_location_id is None
+                    ):
+                        raise InventoryOperationError(
+                            "Solo un traslado o una ubicación en cuarentena puede fraccionar una unidad logística.",
+                            code="partial_handling_unit_transfer_only",
+                        )
+                    if quarantine_putaway_split:
+                        destination_context = contexts[to_location_id]
+                        if destination_context.warehouse.id != handling_unit.warehouse_id:
+                            raise InventoryOperationError(
+                                "Una ubicación agrupada debe permanecer dentro de la misma bodega.",
+                                code="putaway_split_warehouse_mismatch",
+                                status_code=409,
+                            )
+                        if not destination_context.location.storage_eligible:
+                            raise InventoryOperationError(
+                                "El destino no está habilitado para almacenar esta unidad.",
+                                code="location_not_storage_eligible",
+                                status_code=409,
+                            )
+                    if handling_unit.measurement_status == MeasurementStatus.INCOMPLETE.value:
+                        raise InventoryOperationError(
+                            "Verifique las medidas físicas antes de fraccionar esta unidad.",
+                            code="handling_unit_measurements_required",
+                        )
+                    source_quantity = handling_unit.quantity_base
+                    source_weight = handling_unit.occupied_weight_kg
+                    source_volume = handling_unit.occupied_volume_m3
+                    weight = (source_weight * quantity / source_quantity).quantize(
+                        Decimal("0.000001"), rounding=ROUND_HALF_UP
+                    )
+                    volume = (source_volume * quantity / source_quantity).quantize(
+                        Decimal("0.000001"), rounding=ROUND_HALF_UP
+                    )
+                    if weight <= ZERO or volume <= ZERO:
+                        raise InventoryOperationError(
+                            "La cantidad es demasiado pequeña para conservar sus medidas físicas.",
+                            code="partial_handling_unit_precision",
+                        )
+                    if (
+                        handling_unit.measurement_source == MeasurementSource.SPLIT_ESTIMATE.value
+                        and to_status == StockStatus.AVAILABLE.value
+                    ):
+                        raise InventoryOperationError(
+                            "La sucursal debe verificar las medidas del fraccionamiento antes de liberar el inventario.",
+                            code="split_estimate_requires_verification",
+                            status_code=409,
+                        )
+                    split_snapshot = dict(handling_unit.packaging_snapshot or {})
+                    for physical_key in (
+                        "gross_weight_kg",
+                        "length_m",
+                        "width_m",
+                        "height_m",
+                        "volume_m3",
+                    ):
+                        split_snapshot.pop(physical_key, None)
+                    packaging_snapshot = split_snapshot or None
+                    physical = _ResolvedPhysical(
+                        packaging=None,
+                        measures=PhysicalMeasures(
+                            gross_weight_kg=weight,
+                            length_m=None,
+                            width_m=None,
+                            height_m=None,
+                            volume_m3=volume,
+                        ),
+                        consumption=Consumption(weight_kg=weight, volume_m3=volume),
+                        snapshot=packaging_snapshot,
+                        source=MeasurementSource.SPLIT_ESTIMATE,
+                    )
+                else:
+                    weight = handling_unit.occupied_weight_kg
+                    volume = handling_unit.occupied_volume_m3
+                    physical = _physical_from_handling_unit(handling_unit)
+                    if (
+                        handling_unit.measurement_source == MeasurementSource.SPLIT_ESTIMATE.value
+                        and to_status == StockStatus.AVAILABLE.value
+                    ):
+                        raise InventoryOperationError(
+                            "La sucursal debe verificar las medidas del fraccionamiento antes de liberar el inventario.",
+                            code="split_estimate_requires_verification",
+                            status_code=409,
+                        )
+                if (
+                    from_status == StockStatus.QUARANTINE.value
+                    and to_status == StockStatus.AVAILABLE.value
+                ):
+                    if movement_type not in {"putaway", "transfer"}:
+                        raise InventoryOperationError(
+                            "La liberación de cuarentena debe registrarse como movimiento de bodega.",
+                            code="quarantine_release_requires_putaway",
+                        )
+                    label_confirmation_required = False
+                    label_confirmed = False
+                    receipt_lot = None
+                    if handling_unit.inventory_lot_id is not None:
+                        receipt_lot = await self._session.scalar(
+                            select(InventoryLotModel).where(
+                                InventoryLotModel.company_id == company_id,
+                                InventoryLotModel.id == handling_unit.inventory_lot_id,
+                            )
+                        )
+                        label_confirmation_required = bool(
+                            receipt_lot and receipt_lot.label_confirmation_required
+                        )
+                        if label_confirmation_required:
+                            label_confirmed_id = await self._session.scalar(
+                                select(InventoryLabelConfirmationModel.id).where(
+                                    InventoryLabelConfirmationModel.company_id == company_id,
+                                    InventoryLabelConfirmationModel.handling_unit_id
+                                    == handling_unit.id,
+                                    InventoryLabelConfirmationModel.handling_unit_code
+                                    == handling_unit.code,
+                                    InventoryLabelConfirmationModel.label_revision
+                                    == handling_unit.label_revision,
+                                    InventoryLabelConfirmationModel.quantity_base
+                                    == handling_unit.quantity_base,
+                                )
+                            )
+                            label_confirmed = label_confirmed_id is not None
+                    readiness_error = None
+                    if receipt_lot is not None:
+                        readiness_error = await purchase_retaceo_readiness_error(
+                            self._session,
+                            company_id=company_id,
+                            purchase_id=receipt_lot.purchase_id,
+                            received_at=receipt_lot.received_at,
+                        )
+                    today = datetime.now(UTC).astimezone(ZoneInfo("America/El_Salvador")).date()
+                    requirements = handling_unit_release_requirements(
+                        is_partial=False,
+                        measurement_status=handling_unit.measurement_status,
+                        measurement_source=handling_unit.measurement_source,
+                        expiry_date=expiry_date,
+                        today=today,
+                        label_confirmation_required=label_confirmation_required,
+                        label_confirmed=label_confirmed,
+                        retaceo_readiness_error=readiness_error,
+                    )
+                    if requirements:
+                        requirement = requirements[0]
+                        errors = {
+                            ReleaseRequirement.MEASUREMENT: (
+                                "Verifique las medidas físicas antes de liberar esta unidad.",
+                                "quarantine_release_measurements_required",
+                            ),
+                            ReleaseRequirement.EXPIRY: (
+                                "Un lote vencido no puede liberarse como disponible.",
+                                "expired_lot_requires_quarantine",
+                            ),
+                            ReleaseRequirement.LABEL: (
+                                "Confirme la etiqueta colocada en esta unidad antes de liberarla.",
+                                "handling_unit_label_confirmation_required",
+                            ),
+                            ReleaseRequirement.RETACEO: (
+                                "Verifique y cierre el retaceo exigible antes de liberar esta unidad.",
+                                "inventory_label_retaceo_not_final",
+                            ),
+                            ReleaseRequirement.RETACEO_COST: (
+                                "Aplique el retaceo verificado al costo del inventario antes de liberar.",
+                                "inventory_label_retaceo_cost_unapplied",
+                            ),
+                        }
+                        message, code = errors[requirement]
+                        raise InventoryOperationError(message, code=code, status_code=409)
             else:
                 if from_location_id is not None:
                     raise InventoryOperationError(
@@ -1886,7 +3256,10 @@ class SqlAlchemyInventoryRepository:
                         code="invalid_movement_endpoints",
                     )
                 source = contexts[from_location_id]
-                if handling_unit is not None and source.warehouse.id != handling_unit.warehouse_id:
+                if (
+                    source_handling_unit is not None
+                    and source.warehouse.id != source_handling_unit.warehouse_id
+                ):
                     raise InventoryOperationError(
                         "El almacén de origen no coincide con la unidad logística.",
                         code="handling_unit_mismatch",
@@ -1933,6 +3306,8 @@ class SqlAlchemyInventoryRepository:
                         status_code=409,
                     )
                 destination = contexts[to_location_id]
+                destination_weight = ZERO if unmeasured_transfer_receipt else weight
+                destination_volume = ZERO if unmeasured_transfer_receipt else volume
                 await self._change_balance(
                     company_id=company_id,
                     warehouse_id=destination.warehouse.id,
@@ -1942,20 +3317,88 @@ class SqlAlchemyInventoryRepository:
                     lot_code=lot_code,
                     expiry_date=expiry_date,
                     quantity=quantity,
-                    weight=weight,
-                    volume=volume,
+                    weight=destination_weight,
+                    volume=destination_volume,
                 )
 
-            if handling_unit is None:
+            if is_partial_split:
+                assert source_handling_unit is not None
+                remaining_quantity = source_handling_unit.quantity_base - quantity
+                remaining_weight = source_handling_unit.occupied_weight_kg - weight
+                remaining_volume = source_handling_unit.occupied_volume_m3 - volume
+                if (
+                    remaining_quantity <= ZERO
+                    or remaining_weight <= ZERO
+                    or remaining_volume <= ZERO
+                ):
+                    raise InventoryOperationError(
+                        "El fraccionamiento dejaría un remanente físico inválido.",
+                        code="partial_handling_unit_precision",
+                    )
+                source_handling_unit.quantity_base = remaining_quantity
+                source_handling_unit.label_revision += 1
+                source_handling_unit.occupied_weight_kg = remaining_weight
+                source_handling_unit.occupied_volume_m3 = remaining_volume
+                source_handling_unit.actual_gross_weight_kg = None
+                source_handling_unit.actual_length_m = None
+                source_handling_unit.actual_width_m = None
+                source_handling_unit.actual_height_m = None
+                source_handling_unit.actual_volume_m3 = None
+                source_handling_unit.packaging_snapshot = packaging_snapshot
+                source_handling_unit.measurement_status = MeasurementStatus.COMPLETE.value
+                source_handling_unit.measurement_source = MeasurementSource.SPLIT_ESTIMATE.value
+                if is_partial_adjustment_out:
+                    # A documented partial loss changes the quantity represented by
+                    # this same physical unit. Keep its identity, invalidate the old
+                    # label revision, and require the normal label review before use.
+                    handling_unit = source_handling_unit
+                else:
+                    assert to_location_id is not None
+                    assert to_status is not None
+                    destination = contexts[to_location_id]
+                    handling_unit = InventoryHandlingUnitModel(
+                        company_id=company_id,
+                        warehouse_id=destination.warehouse.id,
+                        location_id=to_location_id,
+                        inventory_item_id=item_id,
+                        inventory_lot_id=source_handling_unit.inventory_lot_id,
+                        inventory_lot_detail_id=source_handling_unit.inventory_lot_detail_id,
+                        packaging_definition_id=source_handling_unit.packaging_definition_id,
+                        origin_handling_unit_id=source_handling_unit.id,
+                        code=f"HU-{uuid.uuid4().hex[:16].upper()}",
+                        lot_code=lot_code,
+                        expiry_date=expiry_date,
+                        quantity_base=quantity,
+                        packaging_snapshot=packaging_snapshot,
+                        actual_gross_weight_kg=None,
+                        actual_length_m=None,
+                        actual_width_m=None,
+                        actual_height_m=None,
+                        actual_volume_m3=None,
+                        occupied_weight_kg=(ZERO if unmeasured_transfer_receipt else weight),
+                        occupied_volume_m3=(ZERO if unmeasured_transfer_receipt else volume),
+                        stock_status=to_status,
+                        measurement_status=(
+                            MeasurementStatus.INCOMPLETE.value
+                            if unmeasured_transfer_receipt
+                            else MeasurementStatus.COMPLETE.value
+                        ),
+                        measurement_source=MeasurementSource.SPLIT_ESTIMATE.value,
+                    )
+                    self._session.add(handling_unit)
+                    await self._session.flush()
+            elif handling_unit is None:
                 assert to_location_id is not None
                 assert physical is not None
                 assert to_status is not None
                 destination = contexts[to_location_id]
-                handling_unit = InventoryHandlingUnitModel(
+                handling_unit = pending_receipt_unit or InventoryHandlingUnitModel(
                     company_id=company_id,
                     warehouse_id=destination.warehouse.id,
                     location_id=to_location_id,
                     inventory_item_id=item_id,
+                    inventory_lot_id=data.get("inventory_lot_id"),
+                    inventory_lot_detail_id=data.get("inventory_lot_detail_id"),
                     packaging_definition_id=data.get("packaging_definition_id"),
                     code=(
                         str(data["handling_unit_code"]).strip().upper()
@@ -2001,6 +3444,11 @@ class SqlAlchemyInventoryRepository:
                     ),
                     measurement_source=physical.source.value,
                 )
+                if pending_receipt_unit is not None:
+                    handling_unit.warehouse_id = destination.warehouse.id
+                    handling_unit.location_id = to_location_id
+                    handling_unit.stock_status = to_status
+                    handling_unit.inventory_posted_at = now
                 self._session.add(handling_unit)
                 await self._session.flush()
             elif to_location_id is None:
@@ -2011,6 +3459,10 @@ class SqlAlchemyInventoryRepository:
                 handling_unit.warehouse_id = destination.warehouse.id
                 handling_unit.location_id = to_location_id
                 handling_unit.stock_status = to_status
+                if unmeasured_transfer_receipt:
+                    handling_unit.occupied_weight_kg = ZERO
+                    handling_unit.occupied_volume_m3 = ZERO
+                    handling_unit.measurement_status = MeasurementStatus.INCOMPLETE.value
 
             movement_line = InventoryMovementLineModel(
                 company_id=company_id,
@@ -2018,6 +3470,7 @@ class SqlAlchemyInventoryRepository:
                 line_number=line_number,
                 inventory_item_id=item_id,
                 handling_unit_id=handling_unit.id,
+                inventory_lot_detail_id=handling_unit.inventory_lot_detail_id,
                 operational_override_id=line_override_id,
                 lot_code=lot_code,
                 expiry_date=expiry_date,
@@ -2030,13 +3483,20 @@ class SqlAlchemyInventoryRepository:
                 from_stock_status=from_status,
                 to_stock_status=to_status,
                 quantity_base=quantity,
-                occupied_weight_kg=weight,
-                occupied_volume_m3=volume,
+                occupied_weight_kg=(ZERO if unmeasured_transfer_receipt else weight),
+                occupied_volume_m3=(ZERO if unmeasured_transfer_receipt else volume),
                 measurement_status=handling_unit.measurement_status,
                 packaging_snapshot=packaging_snapshot,
             )
             self._session.add(movement_line)
             await self._session.flush()
+            await valuation.post_physical_line(
+                movement_line,
+                data,
+                movement_type=movement_type,
+                reference=source_reference,
+                actor_id=actor_id,
+            )
 
         if reservation is not None:
             reservation.status = "consumed"
@@ -2068,6 +3528,7 @@ class SqlAlchemyInventoryRepository:
             InventoryHandlingUnitModel.company_id == company_id,
             InventoryHandlingUnitModel.warehouse_id == warehouse_id,
             InventoryHandlingUnitModel.closed_at.is_(None),
+            InventoryHandlingUnitModel.inventory_posted_at.is_not(None),
             InventoryHandlingUnitModel.measurement_status == "incomplete",
         ]
         if location_ids is not None:
@@ -2171,9 +3632,9 @@ class SqlAlchemyInventoryRepository:
     ) -> dict[str, Any]:
         warehouse_row = (
             await self._session.execute(
-                select(Warehouse, Branch.company_id)
-                .join(Branch, Branch.id == Warehouse.branch_id)
-                .where(Warehouse.id == warehouse_id, Branch.company_id == company_id)
+                select(Warehouse, Warehouse.company_id).where(
+                    Warehouse.id == warehouse_id, Warehouse.company_id == company_id
+                )
             )
         ).one_or_none()
         if warehouse_row is None:

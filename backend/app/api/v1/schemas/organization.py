@@ -35,14 +35,19 @@ class CompanyIn(AddressIn):
     description: str | None = Field(None, max_length=4000)
 
 
-class BranchIn(AddressIn):
+class BranchIn(BaseModel):
     company_id: uuid.UUID
-    code: str = Field(min_length=2, max_length=32)
+    is_headquarters: bool = False
+    code: str | None = Field(None, min_length=2, max_length=32)
     name: str = Field(min_length=2, max_length=200)
+    address: str | None = Field(None, min_length=3, max_length=1000)
+    department_id: uuid.UUID | None = None
+    municipality_id: uuid.UUID | None = None
+    district_id: uuid.UUID | None = None
     phone: str | None = Field(None, max_length=32)
     email: EmailStr | None = None
-    latitude: float = Field(ge=-90, le=90)
-    longitude: float = Field(ge=-180, le=180)
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
     operational_status: str = Field(default="active", pattern="^(active|inactive|maintenance)$")
     manager_employee_id: uuid.UUID | None = None
     opened_at: date | None = None
@@ -96,25 +101,55 @@ class BranchIn(AddressIn):
 
     @model_validator(mode="after")
     def validate_areas(self) -> BranchIn:
-        if self.area is not None and self.area_built is not None and self.area_built > self.area:
-            raise ValueError("El área construida no puede superar el área total.")
-        if (
-            self.area is not None
-            and self.area_built is not None
-            and self.area_unbuilt is not None
-            and self.area_built + self.area_unbuilt > self.area
-        ):
-            raise ValueError("La suma de áreas construida y libre no puede superar el área total.")
-        days = [str(item.get("day", "")).strip() for item in self.schedule]
-        if len(days) != len(set(days)):
-            raise ValueError("No puede repetir días en el horario.")
-        for item in self.schedule:
-            opening, closing = item.get("open"), item.get("close")
-            if bool(opening) != bool(closing):
-                raise ValueError("Cada horario debe incluir apertura y cierre.")
-            if opening and closing and opening >= closing:
-                raise ValueError("La hora de apertura debe ser anterior al cierre.")
+        _validate_branch_location(self)
+        _validate_branch_area_totals(self)
+        _validate_branch_schedule(self)
         return self
+
+
+def _validate_branch_location(branch: BranchIn) -> None:
+    if branch.is_headquarters:
+        if (branch.latitude is None) != (branch.longitude is None):
+            raise ValueError("Indique ambas coordenadas o deje ambas vacías.")
+        return
+    if branch.code is None:
+        raise ValueError("El código es obligatorio para una sucursal operativa.")
+    if any(
+        value is None
+        for value in (
+            branch.address,
+            branch.department_id,
+            branch.municipality_id,
+            branch.district_id,
+        )
+    ):
+        raise ValueError("La dirección y ubicación geográfica son obligatorias.")
+    if branch.latitude is None or branch.longitude is None:
+        raise ValueError("Las coordenadas son obligatorias para una sucursal operativa.")
+
+
+def _validate_branch_area_totals(branch: BranchIn) -> None:
+    if branch.area is not None and branch.area_built is not None and branch.area_built > branch.area:
+        raise ValueError("El área construida no puede superar el área total.")
+    if (
+        branch.area is not None
+        and branch.area_built is not None
+        and branch.area_unbuilt is not None
+        and branch.area_built + branch.area_unbuilt > branch.area
+    ):
+        raise ValueError("La suma de áreas construida y libre no puede superar el área total.")
+
+
+def _validate_branch_schedule(branch: BranchIn) -> None:
+    days = [str(item.get("day", "")).strip() for item in branch.schedule]
+    if len(days) != len(set(days)):
+        raise ValueError("No puede repetir días en el horario.")
+    for item in branch.schedule:
+        opening, closing = item.get("open"), item.get("close")
+        if bool(opening) != bool(closing):
+            raise ValueError("Cada horario debe incluir apertura y cierre.")
+        if opening and closing and opening >= closing:
+            raise ValueError("La hora de apertura debe ser anterior al cierre.")
 
 
 class WarehouseCategoryIn(BaseModel):
@@ -146,11 +181,13 @@ class WarehousePage(BaseModel):
 
 
 class WarehouseIn(CapacityConfigurationIn):
-    branch_id: uuid.UUID
+    company_id: uuid.UUID | None = None
+    branch_id: uuid.UUID | None = None
     warehouse_category_id: uuid.UUID
     code: str = Field(min_length=2, max_length=32)
     name: str = Field(min_length=2, max_length=200)
     description: str | None = Field(None, max_length=4000)
+    is_central: bool = False
     warehouse_type: str = Field(
         default="general",
         pattern="^(general|cold_storage|hazmat|transit|bonded|automated)$",
@@ -189,6 +226,8 @@ class WarehouseIn(CapacityConfigurationIn):
 
     @model_validator(mode="after")
     def validate_operational_data(self) -> WarehouseIn:
+        if self.branch_id is None:
+            raise ValueError("Todo almacén debe pertenecer a una sucursal, incluida la bodega central.")
         allowed_shifts = {"mañana", "tarde", "noche"}
         if len(set(self.shifts)) != len(self.shifts):
             raise ValueError("Los turnos del almacén no pueden repetirse.")

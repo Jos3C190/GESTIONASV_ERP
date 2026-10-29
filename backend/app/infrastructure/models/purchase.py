@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -20,6 +21,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,8 +37,10 @@ class PurchaseModel(UUIDPKMixin, TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(32), nullable=False)
     purchase_order_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     supplier_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    warehouse_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    warehouse_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False
+    )
     created_by_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -45,8 +49,15 @@ class PurchaseModel(UUIDPKMixin, TimestampMixin, Base):
     )
     supplier_invoice_number: Mapped[str | None] = mapped_column(String(80), nullable=True)
     supplier_invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    inventory_movement_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
     currency: Mapped[str] = mapped_column(
         String(3), ForeignKey("currencies.code", ondelete="RESTRICT"), nullable=False
+    )
+    valuation_conversion: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    inventory_workflow: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="placement_before_inventory"
     )
     subtotal: Mapped[Decimal] = mapped_column(
         Numeric(18, 6), nullable=False, default=Decimal("0"), server_default="0"
@@ -72,6 +83,10 @@ class PurchaseModel(UUIDPKMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "inventory_workflow IN ('receipt_before_retaceo', 'retaceo_before_inventory', 'placement_before_inventory')",
+            name="ck_purchase_inventory_workflow",
+        ),
         ForeignKeyConstraint(
             ["purchase_order_id", "company_id"],
             ["purchase_orders.id", "purchase_orders.company_id"],
@@ -91,13 +106,16 @@ class PurchaseModel(UUIDPKMixin, TimestampMixin, Base):
             ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(
-            ["warehouse_id", "branch_id"],
-            ["warehouses.id", "warehouses.branch_id"],
-            name="fk_purchases_warehouse_branch",
+            ["company_id", "inventory_movement_id"],
+            ["inventory_movements.company_id", "inventory_movements.id"],
+            name="fk_purchases_inventory_movement_company",
             ondelete="RESTRICT",
         ),
         UniqueConstraint("id", "company_id", name="uq_purchases_id_company_id"),
         UniqueConstraint("company_id", "code", name="uq_purchases_company_code"),
+        UniqueConstraint(
+            "company_id", "inventory_movement_id", name="uq_purchases_inventory_movement"
+        ),
         CheckConstraint(
             "status IN ('draft','received','verified','cancelled','closed')",
             name="ck_purchases_status",
@@ -105,6 +123,15 @@ class PurchaseModel(UUIDPKMixin, TimestampMixin, Base):
         CheckConstraint(
             "char_length(currency) = 3 AND currency = upper(currency)",
             name="ck_purchases_currency",
+        ),
+        CheckConstraint(
+            "valuation_conversion IS NULL OR ("
+            "jsonb_typeof(valuation_conversion) = 'object' AND "
+            "valuation_conversion ?& ARRAY['currency','rate','effective_date','reference'] AND "
+            "(valuation_conversion->>'currency') ~ '^[A-Z]{3}$' AND "
+            "(valuation_conversion->>'rate')::numeric > 0 AND "
+            "char_length(btrim(valuation_conversion->>'reference')) BETWEEN 3 AND 500)",
+            name="ck_purchase_valuation_conversion",
         ),
         CheckConstraint(
             "subtotal >= 0 AND discount >= 0 AND tax >= 0 AND total >= 0",
@@ -133,6 +160,10 @@ class PurchaseDetailModel(UUIDPKMixin, TimestampMixin, Base):
     product_id: Mapped[int] = mapped_column(Integer, nullable=False)
     quantity_ordered: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     quantity_received: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    quantity_accepted: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
+    inventory_location_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
+    )
     unit_id: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     discount: Mapped[Decimal] = mapped_column(
@@ -190,6 +221,16 @@ class PurchaseDetailModel(UUIDPKMixin, TimestampMixin, Base):
         CheckConstraint(
             "quantity_received <= quantity_ordered",
             name="ck_purchase_details_received_within_ordered",
+        ),
+        CheckConstraint(
+            "quantity_accepted IS NULL OR (quantity_accepted >= 0 AND quantity_accepted <= quantity_received)",
+            name="ck_purchase_details_accepted_within_counted",
+        ),
+        CheckConstraint(
+            "quantity_accepted IS NULL OR "
+            "(quantity_accepted = 0 AND inventory_location_id IS NULL) OR "
+            "(quantity_accepted > 0 AND inventory_location_id IS NOT NULL)",
+            name="ck_purchase_details_accepted_location_required",
         ),
         CheckConstraint("unit_price >= 0", name="ck_purchase_details_unit_price"),
         CheckConstraint(

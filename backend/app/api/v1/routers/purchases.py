@@ -6,7 +6,11 @@ import uuid
 
 from fastapi import APIRouter, Depends, Query, Request, status
 
-from app.api.v1.company_access import request_company_id, resolve_branch_scope
+from app.api.v1.company_access import (
+    request_company_id,
+    resolve_branch_scope,
+    resolve_document_warehouse_scope,
+)
 from app.api.v1.deps import (
     CurrentUser,
     SessionDep,
@@ -19,15 +23,18 @@ from app.api.v1.schemas.common import Page, PageMeta
 from app.api.v1.schemas.purchase import (
     PurchaseCreate,
     PurchaseLineInput,
+    PurchaseReceiptReadinessResponse,
     PurchaseReceivableLineResponse,
     PurchaseReceivableResponse,
     PurchaseResponse,
     PurchaseUpdate,
+    PurchaseValuationContext,
+    PurchaseVerify,
 )
 from app.application.audit.audit_service import AuditService
 from app.application.purchase_orders import PurchaseOrderUseCases
 from app.application.purchases import PurchaseLineDraft, PurchaseUseCases
-from app.domain.entities.purchase import Purchase, PurchaseStatus
+from app.domain.entities.purchase import Purchase, PurchaseStatus, PurchaseVerificationLine
 
 router = APIRouter(prefix="/purchases", tags=["purchases"])
 order_router = APIRouter(prefix="/purchase-orders", tags=["purchase-orders"])
@@ -49,7 +56,7 @@ def _purchase_audit_state(item: Purchase) -> dict[str, object]:
         "code": item.code,
         "purchase_order_id": str(item.purchase_order_id),
         "supplier_id": item.supplier_id,
-        "branch_id": str(item.branch_id),
+        "branch_id": str(item.branch_id) if item.branch_id is not None else None,
         "warehouse_id": str(item.warehouse_id),
         "created_by_id": str(item.created_by_id),
         "purchase_date": item.purchase_date.isoformat(),
@@ -58,6 +65,12 @@ def _purchase_audit_state(item: Purchase) -> dict[str, object]:
             item.supplier_invoice_date.isoformat() if item.supplier_invoice_date else None
         ),
         "currency": item.currency,
+        "valuation_conversion": item.valuation_conversion.to_dict()
+        if item.valuation_conversion
+        else None,
+        "inventory_movement_id": (
+            str(item.inventory_movement_id) if item.inventory_movement_id else None
+        ),
         "subtotal": str(item.subtotal),
         "discount": str(item.discount),
         "tax": str(item.tax),
@@ -72,6 +85,15 @@ def _purchase_audit_state(item: Purchase) -> dict[str, object]:
                 "unit_id": detail.unit_id,
                 "quantity_ordered": str(detail.quantity_ordered),
                 "quantity_received": str(detail.quantity_received),
+                "quantity_accepted": (
+                    str(detail.quantity_accepted) if detail.quantity_accepted is not None else None
+                ),
+                "quantity_rejected": (
+                    str(detail.quantity_rejected) if detail.quantity_rejected is not None else None
+                ),
+                "inventory_location_id": (
+                    str(detail.inventory_location_id) if detail.inventory_location_id else None
+                ),
                 "unit_price": str(detail.unit_price),
                 "discount": str(detail.discount),
                 "subtotal": str(detail.subtotal),
@@ -119,7 +141,13 @@ async def _visible_purchase(
 ) -> tuple[uuid.UUID, Purchase]:
     company_id = request_company_id(request)
     item = await use_cases.get_purchase(company_id, purchase_id)
-    await resolve_branch_scope(session, current, company_id, item.branch_id)
+    await resolve_document_warehouse_scope(
+        session,
+        current,
+        company_id,
+        document_branch_id=item.branch_id,
+        warehouse_id=item.warehouse_id,
+    )
     return company_id, item
 
 
@@ -202,7 +230,13 @@ async def create_purchase(
 ) -> PurchaseResponse:
     company_id = request_company_id(request)
     order = await order_use_cases.get_order(company_id, payload.purchase_order_id)
-    await resolve_branch_scope(session, current, company_id, order.branch_id)
+    await resolve_document_warehouse_scope(
+        session,
+        current,
+        company_id,
+        document_branch_id=order.branch_id,
+        warehouse_id=order.warehouse_id,
+    )
     created = await use_cases.create_draft(
         company_id=company_id,
         created_by_id=current.id,
@@ -285,8 +319,6 @@ async def _transition_purchase(
     )
     if action == "RECEIVE":
         updated = await use_cases.receive_purchase(company_id, purchase_id)
-    elif action == "VERIFY":
-        updated = await use_cases.verify_purchase(company_id, purchase_id)
     elif action == "CANCEL":
         updated = await use_cases.cancel_purchase(company_id, purchase_id)
     elif action == "CLOSE":
@@ -331,30 +363,116 @@ async def receive_purchase(
     )
 
 
+@router.get(
+    "/{purchase_id}/valuation-context",
+    response_model=PurchaseValuationContext,
+    dependencies=[
+        Depends(require_permission("purchases:verify")),
+        Depends(require_permission("inventory:receive")),
+    ],
+)
+async def purchase_valuation_context(
+    purchase_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: PurchaseUseCases = Depends(get_purchase_use_cases),
+) -> PurchaseValuationContext:
+    company_id, item = await _visible_purchase(
+        purchase_id=purchase_id,
+        request=request,
+        session=session,
+        current=current,
+        use_cases=use_cases,
+    )
+
+    return PurchaseValuationContext(
+        receipt_currency=item.currency,
+        valuation_currency=await use_cases.valuation_currency(company_id),
+    )
+
+
+@router.get(
+    "/{purchase_id}/receiving-readiness",
+    response_model=PurchaseReceiptReadinessResponse,
+    dependencies=[Depends(require_permission("purchases:read"))],
+)
+async def receiving_readiness(
+    purchase_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: PurchaseUseCases = Depends(get_purchase_use_cases),
+) -> PurchaseReceiptReadinessResponse:
+    company_id, _ = await _visible_purchase(
+        purchase_id=purchase_id,
+        request=request,
+        session=session,
+        current=current,
+        use_cases=use_cases,
+    )
+    return PurchaseReceiptReadinessResponse.model_validate(
+        await use_cases.receipt_readiness(company_id, purchase_id)
+    )
+
+
 @router.post(
     "/{purchase_id}/verify",
     response_model=PurchaseResponse,
     status_code=status.HTTP_200_OK,
-    summary="Verificar recepción de compra",
-    dependencies=[Depends(require_permission("purchases:verify"))],
+    summary="Verificar recepción y registrar cantidades aceptadas en inventario",
+    dependencies=[
+        Depends(require_permission("purchases:verify")),
+        Depends(require_permission("inventory:receive")),
+        Depends(require_permission("locations.view")),
+    ],
 )
 async def verify_purchase(
     purchase_id: uuid.UUID,
+    payload: PurchaseVerify,
     request: Request,
     session: SessionDep,
     current: CurrentUser,
     use_cases: PurchaseUseCases = Depends(get_purchase_use_cases),
     audit: AuditService = Depends(get_audit_service),
 ) -> PurchaseResponse:
-    return await _transition_purchase(
-        action="VERIFY",
+    company_id, before = await _visible_purchase(
         purchase_id=purchase_id,
         request=request,
         session=session,
         current=current,
         use_cases=use_cases,
-        audit=audit,
     )
+    lines = tuple(
+        PurchaseVerificationLine(
+            purchase_detail_id=line.purchase_detail_id,
+            quantity_accepted=line.quantity_accepted,
+            inventory_location_id=line.inventory_location_id,
+        )
+        for line in payload.lines
+    )
+    # Inventory movement, accepted quantities, order state, and audit state must
+    # either all persist or all roll back if any part of verification fails.
+    async with session.begin_nested():
+        updated = await use_cases.verify_purchase(
+            company_id,
+            purchase_id,
+            lines=lines,
+            actor_id=current.id,
+            valuation_conversion=payload.valuation_conversion.to_domain()
+            if payload.valuation_conversion
+            else None,
+        )
+        await _audit_change(
+            action="VERIFY",
+            request=request,
+            current=current,
+            audit=audit,
+            company_id=company_id,
+            item=updated,
+            before=before,
+        )
+    return PurchaseResponse.model_validate(updated)
 
 
 @router.post(
@@ -426,7 +544,13 @@ async def get_purchase_order_receivable(
 ) -> PurchaseReceivableResponse:
     company_id = request_company_id(request)
     order = await order_use_cases.get_order(company_id, order_id)
-    await resolve_branch_scope(session, current, company_id, order.branch_id)
+    await resolve_document_warehouse_scope(
+        session,
+        current,
+        company_id,
+        document_branch_id=order.branch_id,
+        warehouse_id=order.warehouse_id,
+    )
     lines = await use_cases.get_receivable_lines(company_id, order_id)
     return PurchaseReceivableResponse(
         purchase_order_id=order.id,

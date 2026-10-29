@@ -3,9 +3,27 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
-from app.domain.entities.retaceo import Retaceo, RetaceoStatus
+from app.domain.entities.retaceo import Retaceo, RetaceoCostDocument, RetaceoStatus
+
+
+@dataclass(frozen=True, slots=True)
+class RetaceoCostReference:
+    retaceo_id: uuid.UUID
+    cost_id: uuid.UUID
+    status: RetaceoStatus
+    is_active: bool
+
+
+@dataclass(frozen=True, slots=True)
+class RetaceoCostDocumentReference:
+    retaceo_id: uuid.UUID
+    cost_id: uuid.UUID
+    status: RetaceoStatus
+    document: RetaceoCostDocument
 
 
 class RetaceoRepository(Protocol):
@@ -44,3 +62,52 @@ class RetaceoRepository(Protocol):
         retaceo_id: uuid.UUID,
         status: RetaceoStatus,
     ) -> Retaceo | None: ...
+
+    async def get_cost_reference(
+        self,
+        company_id: uuid.UUID,
+        retaceo_id: uuid.UUID,
+        cost_id: uuid.UUID,
+    ) -> RetaceoCostReference | None: ...
+
+    async def add_cost_document(
+        self,
+        attachment: RetaceoCostDocument,
+        company_id: uuid.UUID,
+    ) -> RetaceoCostDocument: ...
+
+    async def get_cost_document(
+        self,
+        company_id: uuid.UUID,
+        retaceo_id: uuid.UUID,
+        cost_id: uuid.UUID,
+        document_id: uuid.UUID,
+    ) -> RetaceoCostDocumentReference | None: ...
+
+    async def list_cost_documents(
+        self,
+        company_id: uuid.UUID,
+        retaceo_id: uuid.UUID,
+        cost_id: uuid.UUID,
+    ) -> tuple[RetaceoCostDocument, ...]: ...
+
+    async def mark_cost_document_uploaded(
+        self,
+        company_id: uuid.UUID,
+        retaceo_id: uuid.UUID,
+        cost_id: uuid.UUID,
+        document_id: uuid.UUID,
+        *,
+        file_type: str,
+        uploaded_at: datetime,
+    ) -> RetaceoCostDocument | None: ...
+
+    async def soft_delete_cost_document(
+        self,
+        company_id: uuid.UUID,
+        retaceo_id: uuid.UUID,
+        cost_id: uuid.UUID,
+        document_id: uuid.UUID,
+        *,
+        deleted_at: datetime,
+    ) -> RetaceoCostDocument | None: ...

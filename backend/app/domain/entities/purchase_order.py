@@ -98,6 +98,7 @@ class PurchaseOrderDetail:
     tax_amount: Decimal = Decimal("0")
     total: Decimal = Decimal("0")
     notes: str | None = None
+    purchase_consolidation_award_id: uuid.UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -139,7 +140,7 @@ class PurchaseOrder:
     company_id: uuid.UUID
     code: str
     supplier_id: int
-    branch_id: uuid.UUID
+    branch_id: uuid.UUID | None
     warehouse_id: uuid.UUID
     purchase_quotation_id: uuid.UUID
     created_by_id: uuid.UUID
