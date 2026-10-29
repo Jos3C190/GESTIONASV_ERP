@@ -119,6 +119,11 @@ class TransferTrackOut(TrackedTransferOut):
     device_found: bool
     route: TransferRouteOut | None = None
     trail: list[LngLat] = []
+    #: Whether the driven path was snapped to the street network.
+    trail_matched: bool = False
+    #: Route still ahead of the vehicle (planned or recalculated).
+    remaining_route: list[LngLat] = []
+    rerouted: bool = False
     position: TransferPositionOut | None = None
     progress: float = 0
     remaining_m: float | None = None

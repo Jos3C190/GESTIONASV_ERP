@@ -20,6 +20,7 @@ from app.api.v1.schemas.tracking import (
     TrackedTransferOut,
     TrackingEventOut,
     TrackingSnapshotOut,
+    TransferRouteOut,
     TransferTrackOut,
 )
 from app.application.tracking import (
@@ -33,7 +34,13 @@ from app.application.tracking import (
     to_geofence,
     traccar_call,
 )
-from app.application.tracking.transfers import build_transfer_progress, plan_route
+from app.application.tracking.transfers import (
+    build_transfer_progress,
+    match_trail,
+    plan_route,
+    raw_trail,
+    resolve_active_route,
+)
 from app.core.config import settings
 from app.infrastructure.models.inventory_transfer import (
     InventoryTransferModel,
@@ -352,12 +359,40 @@ async def get_transfer_track(
                     await _call(f"/api/positions?{urlencode({'deviceId': device['id']})}") or []
                 )
                 positions = latest[-1:]
+    trail, trail_matched = await match_trail(
+        settings.OSRM_URL, str(transfer_id), raw_trail(positions)
+    )
+    active_route, rerouted, deviation = route, False, None
+    if positions:
+        vehicle_at = raw_trail(positions)[-1]
+        active_route, rerouted, deviation = await resolve_active_route(
+            settings.OSRM_URL, str(transfer_id), route, destination_point, vehicle_at
+        )
     data.update(
         build_transfer_progress(
             route=route,
             destination=destination_point,
             positions=positions,
             now=datetime.now(UTC),
-        )
+            trail=trail,
+            active_route=active_route,
+            rerouted=rerouted,
+            deviation_m=deviation,
+        ),
+        trail_matched=trail_matched,
     )
     return TransferTrackOut.model_validate(data)
+
+
+@router.get("/route", response_model=TransferRouteOut)
+async def get_driving_route(
+    current: CurrentUser,
+    from_lng: float = Query(ge=-180, le=180),
+    from_lat: float = Query(ge=-90, le=90),
+    to_lng: float = Query(ge=-180, le=180),
+    to_lat: float = Query(ge=-90, le=90),
+) -> TransferRouteOut:
+    """Driving route between two points (used by the demo view and future planners)."""
+    del current  # solo requiere sesión iniciada
+    route = await plan_route(settings.OSRM_URL, (from_lng, from_lat), (to_lng, to_lat))
+    return TransferRouteOut.model_validate(route)
