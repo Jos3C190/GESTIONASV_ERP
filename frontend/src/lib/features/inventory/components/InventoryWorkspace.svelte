@@ -7,7 +7,7 @@
   import { getWarehouse, getWarehouses } from '$lib/services/warehouses';
   import type { Warehouse } from '$lib/features/warehouses/types';
   import Button from '$lib/components/ui/Button.svelte';
-  import HandlingUnitsPanel from './HandlingUnitsPanel.svelte';
+  import InventoryConsultation from './InventoryConsultation.svelte';
   import WarehouseReceiptQueue from './WarehouseReceiptQueue.svelte';
   import WarehousePreparationQueue from './WarehousePreparationQueue.svelte';
   import WarehouseMovementsPanel from './WarehouseMovementsPanel.svelte';
@@ -403,15 +403,17 @@
         {/if}
         {#if !permissions.hasPermission('inventory:warehouse_receipts') || activeSection === 'stock'}
           {#key `${contextKey}:${selected.id}:${inventoryRevision}`}
-            <HandlingUnitsPanel
+            <InventoryConsultation
               warehouseId={selected.id}
+              warehouseName={selected.name}
               {contextKey}
+              canOpen={permissions.hasPermission('inventory:valuation') && canVerify}
+              canReadPurchases={permissions.hasPermission('purchases:read')}
               {canVerify}
               {canRelease}
               canReadRetaceos={permissions.hasPermission('retaceos:read')}
               canVerifyRetaceos={permissions.hasPermission('retaceos:verify')}
               canTransfer={permissions.hasPermission('inventory:move')}
-              canPrepareSplit={permissions.hasPermission('inventory:move')}
             />
           {/key}
         {/if}
