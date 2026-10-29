@@ -64,6 +64,10 @@ const ICONS = {
   returns: 'M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6',
   fleet:
     'M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1',
+  drivers:
+    'M14 8a3 3 0 11-6 0 3 3 0 016 0z M5 19a6 6 0 0112 0 M17 3h4v18h-2 M17 7h1 M17 11h1',
+  tracking:
+    'M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1116 0z M15 10a3 3 0 11-6 0 3 3 0 016 0z',
   kardex:
     'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
   settings:
@@ -301,11 +305,25 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Logística',
     items: [
       {
-        label: 'Flota y conductores',
+        label: 'Flota',
         icon: ICONS.fleet,
-        route: '/placeholder?module=Flota y conductores',
+        route: '/fleet',
         implemented: false,
-        module: 'Flota y conductores'
+        module: 'Flota'
+      },
+      {
+        label: 'Conductores',
+        icon: ICONS.drivers,
+        route: '/placeholder?module=Conductores',
+        implemented: false,
+        module: 'Conductores'
+      },
+      {
+        label: 'Seguimiento',
+        icon: ICONS.tracking,
+        route: '/placeholder?module=Seguimiento',
+        implemented: false,
+        module: 'Seguimiento'
       },
       {
         label: 'Kardex',

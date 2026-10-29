@@ -27,6 +27,7 @@ const TITLES: Record<string, string> = {
   '/purchase-consolidations': 'Consolidados de compra',
   '/expense-types': 'Tipos de gasto',
   '/trash': 'Papelera',
+  '/fleet': 'Flota',
   '/placeholder': 'Módulo'
 };
 

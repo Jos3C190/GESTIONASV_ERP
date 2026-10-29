@@ -26,6 +26,10 @@
   }
 
   function isActive(route: string): boolean {
+    if (route.startsWith('/placeholder?module=')) {
+      const module = new URLSearchParams(route.split('?')[1]).get('module');
+      return page.url.pathname === '/placeholder' && page.url.searchParams.get('module') === module;
+    }
     return page.url.pathname === route ||
       (route === '/documents' && page.url.pathname.startsWith('/documents/'));
   }
