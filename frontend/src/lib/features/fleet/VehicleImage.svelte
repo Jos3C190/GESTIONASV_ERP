@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { company } from '$lib/stores/company.svelte';
+  import BrandedVehicle from './BrandedVehicle.svelte';
   import FleetIcon from './FleetIcon.svelte';
   import { vehicleImage, type FleetVehicle } from './mock-data';
   let { vehicle, large = false }: { vehicle: FleetVehicle; large?: boolean } = $props();
@@ -14,12 +16,11 @@
       <FleetIcon name="truck" size={64} /><span>{vehicle.model}</span>
     </div>
   {:else}
-    <img
+    <BrandedVehicle
       src={vehicleImage(vehicle)}
       alt={`${vehicle.model}, vehículo ${vehicle.id}`}
-      width="720"
-      height="440"
-      loading="lazy"
+      kind={vehicle.kind}
+      logo={company.active?.logo ?? null}
       onerror={() => (failed = true)}
     />
   {/if}
@@ -32,11 +33,6 @@
     align-items: center;
     justify-content: center;
     padding: 0 12px;
-  }
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
   }
   .large {
     height: 185px;
