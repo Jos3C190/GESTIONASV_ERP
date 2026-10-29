@@ -28,6 +28,7 @@ const TITLES: Record<string, string> = {
   '/expense-types': 'Tipos de gasto',
   '/trash': 'Papelera',
   '/fleet': 'Flota',
+  '/tracking': 'Seguimiento',
   '/placeholder': 'Módulo'
 };
 

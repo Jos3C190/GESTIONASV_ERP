@@ -321,7 +321,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Seguimiento',
         icon: ICONS.tracking,
-        route: '/placeholder?module=Seguimiento',
+        route: '/tracking',
         implemented: false,
         module: 'Seguimiento'
       },

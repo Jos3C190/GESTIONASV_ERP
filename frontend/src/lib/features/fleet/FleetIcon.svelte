@@ -28,7 +28,11 @@
     zoomOut: 'M21 21l-5-5 M18 10a8 8 0 11-16 0 8 8 0 0116 0 M7 10h6',
     fit: 'M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5',
     upload: 'M12 16V4 M7 9l5-5 5 5 M4 20h16',
-    trash: 'M4 7h16 M9 7V4h6v3 M6 7l1 14h10l1-14'
+    trash: 'M4 7h16 M9 7V4h6v3 M6 7l1 14h10l1-14',
+    navigation: 'M12 3l7 18-7-4-7 4z',
+    battery: 'M3 7h15v10H3z M21 11v2',
+    power: 'M12 3v9 M6.5 7a8 8 0 1011 0',
+    crosshair: 'M12 2v4 M12 18v4 M2 12h4 M18 12h4 M19 12a7 7 0 11-14 0 7 7 0 0114 0'
   };
   let {
     name,

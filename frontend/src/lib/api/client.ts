@@ -820,6 +820,31 @@ export interface WarehouseCategoryOut {
   is_active: boolean;
 }
 
+export interface TrackedPositionOut {
+  latitude: number;
+  longitude: number;
+  speed_kmh: number;
+  course: number;
+  fix_time: string | null;
+  address: string | null;
+  ignition: boolean | null;
+  battery_level: number | null;
+}
+
+export interface TrackedDeviceOut {
+  id: number;
+  unique_id: string;
+  name: string;
+  status: 'online' | 'offline' | 'unknown';
+  last_update: string | null;
+  position: TrackedPositionOut | null;
+}
+
+export interface TrackingSnapshotOut {
+  configured: boolean;
+  devices: TrackedDeviceOut[];
+}
+
 export interface DashboardSummary {
   active_users: number;
   employees: number;
@@ -1685,6 +1710,13 @@ export const api = {
       if (company.id) sp.set('company_id', company.id);
       if (branch.id) sp.set('branch_id', branch.id);
       return apiFetch<DashboardSummary>(`/dashboard/summary?${sp.toString()}`, { signal });
+    }
+  },
+  tracking: {
+    positions: (signal?: AbortSignal) => {
+      const sp = new URLSearchParams();
+      if (company.id) sp.set('company_id', company.id);
+      return apiFetch<TrackingSnapshotOut>(`/tracking/positions?${sp.toString()}`, { signal });
     }
   },
   branches: {
