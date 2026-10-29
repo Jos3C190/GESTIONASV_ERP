@@ -1,0 +1,45 @@
+6.4 MÓDULO DE SUCURSALES
+
+                                                                                       6.4.1 Descripción
+
+El módulo de Sucursales permite administrar las diferentes sedes o establecimientos físicos
+pertenecientes a una empresa. Cada sucursal representa una unidad operativa desde donde se
+ejecutan los procesos comerciales, administrativos y logísticos del Mini ERP.
+
+Las sucursales constituyen el punto de operación para los módulos de Compras, Ventas,
+Inventario, Traslados, Facturación y Reportes. Una empresa puede poseer una o varias
+sucursales, mientras que cada sucursal pertenece exclusivamente a una empresa.
+
+La información geográfica de las sucursales se complementa mediante los catálogos nacionales
+de departamentos, municipios y distritos, los cuales son de solo lectura.
+
+                                                                                          6.4.2 Objetivos
+
+Objetivo General
+
+Administrar la estructura organizacional de las empresas mediante el registro y mantenimiento
+de sus sucursales.
+
+Objetivos Específicos
+
+    •   Registrar sucursales por empresa.
+    •   Administrar la información de contacto de cada sucursal.
+    •   Definir la ubicación geográfica de las sucursales.
+    •   Activar o desactivar sucursales.
+    •   Asociar almacenes a cada sucursal.
+    •   Servir como punto de referencia para las operaciones del ERP.
+
+                                                                              6.4.3 Modelo de Datos
+
+Tabla branches
+
+ Campo                Tipo         Descripción
+ id_branch            int          Identificador único
+ id_company           int          Empresa a la que pertenece
+ name                 string       Nombre de la sucursal
+ address              string       Dirección
+ id_department        int          Departamento
+ id_municipality      int          Municipio
+ id_district          int          Distrito
+
+                                                                                                                27

@@ -1,0 +1,45 @@
+Ejemplo:
+
+Orden OC-001
+     │
+    ├── Compra C-001
+     │      └── Recepción parcial
+     │
+     └── Compra C-002
+           └── Recepción restante
+
+
+El detalle conservará además la referencia al detalle original de la orden:
+
+purchase_order_details
+          ↓
+purchase_details
+
+
+                                                         6.8.24 Estados de Orden de Compra
+
+Se manejarán inicialmente los siguientes estados:
+
+ Estado                   Descripción
+ draft                    En elaboración
+ pending_approval         Pendiente de aprobación
+ approved                 Aprobada
+ sent                     Enviada al proveedor
+ partially_received       Recibida parcialmente
+ received                 Recibida completamente
+ cancelled                Cancelada
+ closed                   Cerrada
+Los estados partially_received y received deberán actualizarse de acuerdo con las cantidades
+realmente recibidas.
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                  78

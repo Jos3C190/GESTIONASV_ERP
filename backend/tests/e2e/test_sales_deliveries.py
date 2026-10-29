@@ -18,6 +18,32 @@ pytestmark = pytest.mark.e2e
 PASSWORD = "Strong!Passw0rd2026"
 
 
+async def _seed_receipt(company_id, actor_id, payload):
+    """Build pre-existing stock for sales tests, outside the public receipt API.
+
+    Purchase receipts now require their purchase/retaceo/placement documents.
+    The complete public path is covered by test_inventory_final_acceptance;
+    this fixture only establishes the independent delivery/return scenarios.
+    """
+    from app.api.v1.schemas.inventory import MovementConfirmIn, MovementOut
+    from app.application.inventory import InventoryUseCases
+    from app.infrastructure.db.session import async_session_factory
+    from app.infrastructure.repositories.inventory_repository import SqlAlchemyInventoryRepository
+
+    command = MovementConfirmIn.model_validate(payload)
+    async with async_session_factory() as session:
+        result = await InventoryUseCases(SqlAlchemyInventoryRepository(session)).post_movement(
+            company_id=company_id,
+            actor_id=actor_id,
+            movement_type=command.movement_type,
+            idempotency_key=command.idempotency_key,
+            source_reference=command.source_reference,
+            lines=[line.model_dump() for line in command.lines],
+        )
+        await session.commit()
+        return MovementOut.model_validate(result).model_dump(mode="json")
+
+
 async def _login(client, username: str, company_id: uuid.UUID) -> dict[str, str]:
     response = await client.post(
         "/api/v1/auth/login", json={"login": username, "password": PASSWORD}
@@ -242,10 +268,10 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
         (location_a.id, "quarantine", "1", "B07-HU-A-Q"),
         (location_b.id, "available", "7", "B07-HU-B-7"),
     ]
-    receipt = await e2e_client.post(
-        "/api/v1/inventory/movements/confirm",
-        headers=headers,
-        json={
+    receipt = await _seed_receipt(
+        company_id,
+        actor_id,
+        {
             "idempotency_key": f"b07-receipt-{uuid.uuid4()}",
             "movement_type": "receipt",
             "source_reference": "B07 automation: opening test stock",
@@ -262,8 +288,7 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
             ],
         },
     )
-    assert receipt.status_code == 201, receipt.text
-    receipt_units = [line["handling_unit_id"] for line in receipt.json()["lines"]]
+    receipt_units = [line["handling_unit_id"] for line in receipt["lines"]]
     assert len(receipt_units) == len(receipt_lines)
     hu_a3, hu_a2, hu_quarantine, hu_branch_b = receipt_units
 
@@ -324,7 +349,7 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
                     "unit_id": base_unit_id,
                     "quantity": "3",
                     "unit_price": "20",
-                }
+                },
             ],
         },
     )
@@ -768,9 +793,7 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
         )
         assert candidate_response.status_code == 200, candidate_response.text
         assert {
-            unit["handling_unit_id"]
-            for line in candidate_response.json()
-            for unit in line["units"]
+            unit["handling_unit_id"] for line in candidate_response.json() for unit in line["units"]
         } == {hu_branch_b}
         prepared = await e2e_client.post(
             f"/api/v1/sales/{competitor_sale_id}/deliveries",
@@ -828,8 +851,14 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
                     select(SalesDeliveryAllocationModel)
                     .join(
                         SalesDeliveryLineModel,
-                        (SalesDeliveryLineModel.company_id == SalesDeliveryAllocationModel.company_id)
-                        & (SalesDeliveryLineModel.id == SalesDeliveryAllocationModel.delivery_line_id),
+                        (
+                            SalesDeliveryLineModel.company_id
+                            == SalesDeliveryAllocationModel.company_id
+                        )
+                        & (
+                            SalesDeliveryLineModel.id
+                            == SalesDeliveryAllocationModel.delivery_line_id
+                        ),
                     )
                     .join(
                         SalesDeliveryModel,
@@ -851,10 +880,10 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
 
     # B08: raise the current average after the original delivery. A customer
     # return must still use the exact cost of its delivery allocation.
-    cost_shift = await e2e_client.post(
-        "/api/v1/inventory/movements/confirm",
-        headers=headers,
-        json={
+    await _seed_receipt(
+        company_id,
+        actor_id,
+        {
             "idempotency_key": f"b08-newer-average-{uuid.uuid4()}",
             "movement_type": "receipt",
             "source_reference": "B08 fictitious demonstration: later receipt at USD 25",
@@ -873,7 +902,6 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
             ],
         },
     )
-    assert cost_shift.status_code == 201, cost_shift.text
     assert await _physical_value(company_id, inventory_item_id) == (
         Decimal("3.000000"),
         Decimal("60.000000"),
@@ -1096,9 +1124,13 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
         Decimal("3.250000"),
         Decimal("62.500000"),
     )
-    accepted_event = next(event for event in accepted_line["events"] if event["decision"] == "accepted")
+    accepted_event = next(
+        event for event in accepted_line["events"] if event["decision"] == "accepted"
+    )
     async with async_session_factory() as session:
-        returned_entry = await session.get(InventoryValuationEntryModel, uuid.UUID(accepted_event["valuation_entry_id"]))
+        returned_entry = await session.get(
+            InventoryValuationEntryModel, uuid.UUID(accepted_event["valuation_entry_id"])
+        )
         assert returned_entry is not None
         assert returned_entry.kind == "customer_return"
         assert returned_entry.original_entry_id == first_source_valuation_entry_id
@@ -1191,19 +1223,26 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
         persisted_failed_return = await session.get(SalesReturnModel, uuid.UUID(multi_return_id))
         assert persisted_failed_return is not None
         assert persisted_failed_return.status == "received"
-        assert await session.scalar(
-            select(func.count(SalesReturnEventModel.id)).where(
-                SalesReturnEventModel.company_id == company_id,
-                SalesReturnEventModel.return_id == uuid.UUID(multi_return_id),
+        assert (
+            await session.scalar(
+                select(func.count(SalesReturnEventModel.id)).where(
+                    SalesReturnEventModel.company_id == company_id,
+                    SalesReturnEventModel.return_id == uuid.UUID(multi_return_id),
+                )
             )
-        ) == 0
-        assert await session.scalar(
-            select(func.count(InventoryMovementModel.id)).where(
-                InventoryMovementModel.company_id == company_id,
-                InventoryMovementModel.idempotency_key.like("return:%"),
-                InventoryMovementModel.source_reference == f"customer-return:{multi_received.json()['code']}",
+            == 0
+        )
+        assert (
+            await session.scalar(
+                select(func.count(InventoryMovementModel.id)).where(
+                    InventoryMovementModel.company_id == company_id,
+                    InventoryMovementModel.idempotency_key.like("return:%"),
+                    InventoryMovementModel.source_reference
+                    == f"customer-return:{multi_received.json()['code']}",
+                )
             )
-        ) == 0
+            == 0
+        )
 
     successful_multi_resolve = await e2e_client.post(
         f"/api/v1/sales/returns/{multi_return_id}/resolve",
@@ -1269,8 +1308,16 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
     race_created = await e2e_client.post(
         f"/api/v1/sales/{sale_id}/returns",
         headers={**headers, "Idempotency-Key": f"b08-race-create-{uuid.uuid4()}"},
-        json={"lines": [{"delivery_allocation_id": first_source["delivery_allocation_id"],
-                         "quantity_base": "0.1", "reason": "Aceptación concurrente B08", "declared_condition": "resalable"}]},
+        json={
+            "lines": [
+                {
+                    "delivery_allocation_id": first_source["delivery_allocation_id"],
+                    "quantity_base": "0.1",
+                    "reason": "Aceptación concurrente B08",
+                    "declared_condition": "resalable",
+                }
+            ]
+        },
     )
     assert race_created.status_code == 201, race_created.text
     race_id = race_created.json()["id"]
@@ -1279,14 +1326,28 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
         headers={**headers, "Idempotency-Key": f"b08-race-receive-{uuid.uuid4()}"},
     )
     assert race_received.status_code == 200, race_received.text
-    race_payload = {"lines": [{"return_line_id": race_received.json()["lines"][0]["id"],
-        "decision": "accepted", "quantity_base": "0.1", "condition": "resalable", "reason": "Revisión concurrente B08"}]}
+    race_payload = {
+        "lines": [
+            {
+                "return_line_id": race_received.json()["lines"][0]["id"],
+                "decision": "accepted",
+                "quantity_base": "0.1",
+                "condition": "resalable",
+                "reason": "Revisión concurrente B08",
+            }
+        ]
+    }
     before_race = await _physical_value(company_id, inventory_item_id)
-    race_results = await asyncio.gather(*[
-        e2e_client.post(f"/api/v1/sales/returns/{race_id}/resolve",
-                       headers={**headers, "Idempotency-Key": f"b08-race-resolve-{uuid.uuid4()}"}, json=race_payload)
-        for _ in range(2)
-    ])
+    race_results = await asyncio.gather(
+        *[
+            e2e_client.post(
+                f"/api/v1/sales/returns/{race_id}/resolve",
+                headers={**headers, "Idempotency-Key": f"b08-race-resolve-{uuid.uuid4()}"},
+                json=race_payload,
+            )
+            for _ in range(2)
+        ]
+    )
     assert sorted(result.status_code for result in race_results) == [200, 422]
     after_race = await _physical_value(company_id, inventory_item_id)
     assert after_race == (before_race[0] + Decimal("0.1"), before_race[1] + Decimal("1"))
@@ -1294,35 +1355,71 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
     assert len(race_read.json()["lines"][0]["events"]) == 1
 
     from tests.e2e.test_inventory_block4_closure import _branch_profile_headers
-    branch_permissions = ("sales:read", "sales_returns:read", "sales_returns:manage", "sales_returns:receive", "sales_returns:resolve")
-    branch_reader = await _branch_profile_headers(e2e_client, company_id=company_id, branch_id=branch_a.id,
-        username=f"b08-own-branch-{uuid.uuid4().hex[:8]}", permissions=branch_permissions)
-    other_branch_reader = await _branch_profile_headers(e2e_client, company_id=company_id, branch_id=branch_b.id,
-        username=f"b08-other-branch-{uuid.uuid4().hex[:8]}", permissions=branch_permissions)
+
+    branch_permissions = (
+        "sales:read",
+        "sales_returns:read",
+        "sales_returns:manage",
+        "sales_returns:receive",
+        "sales_returns:resolve",
+    )
+    branch_reader = await _branch_profile_headers(
+        e2e_client,
+        company_id=company_id,
+        branch_id=branch_a.id,
+        username=f"b08-own-branch-{uuid.uuid4().hex[:8]}",
+        permissions=branch_permissions,
+    )
+    other_branch_reader = await _branch_profile_headers(
+        e2e_client,
+        company_id=company_id,
+        branch_id=branch_b.id,
+        username=f"b08-other-branch-{uuid.uuid4().hex[:8]}",
+        permissions=branch_permissions,
+    )
     own_read = await e2e_client.get(f"/api/v1/sales/returns/{race_id}", headers=branch_reader)
     assert own_read.status_code == 200, own_read.text
-    for private_field in ("inventory_value", "average_unit_cost", "applied_total_cost", "applied_unit_cost"):
+    for private_field in (
+        "inventory_value",
+        "average_unit_cost",
+        "applied_total_cost",
+        "applied_unit_cost",
+    ):
         assert private_field not in own_read.text
-    foreign_read = await e2e_client.get(f"/api/v1/sales/returns/{race_id}", headers=other_branch_reader)
+    foreign_read = await e2e_client.get(
+        f"/api/v1/sales/returns/{race_id}", headers=other_branch_reader
+    )
     assert foreign_read.status_code == 403, foreign_read.text
-    foreign_replay = await e2e_client.post(f"/api/v1/sales/returns/{race_id}/resolve",
-        headers={**other_branch_reader, "Idempotency-Key": "b08-forbidden-branch-replay"}, json=race_payload)
+    foreign_replay = await e2e_client.post(
+        f"/api/v1/sales/returns/{race_id}/resolve",
+        headers={**other_branch_reader, "Idempotency-Key": "b08-forbidden-branch-replay"},
+        json=race_payload,
+    )
     assert foreign_replay.status_code == 403, foreign_replay.text
     foreign_list = await e2e_client.get("/api/v1/sales/returns", headers=other_branch_reader)
     assert foreign_list.status_code == 200, foreign_list.text
     assert all(row["id"] != race_id for row in foreign_list.json())
 
     from app.infrastructure.models.organization import Company
+
     async with async_session_factory() as session:
         original_company = await session.get(Company, company_id)
-        other_company = Company(name=f"B08 otra empresa {uuid.uuid4().hex[:8]}", commercial_name="Otra empresa B08",
+        other_company = Company(
+            name=f"B08 otra empresa {uuid.uuid4().hex[:8]}",
+            commercial_name="Otra empresa B08",
             nit=uuid.uuid4().hex,
-            nrc=uuid.uuid4().hex, address="Demostración aislada B08", department_id=original_company.department_id,
-            municipality_id=original_company.municipality_id, district_id=original_company.district_id)
+            nrc=uuid.uuid4().hex,
+            address="Demostración aislada B08",
+            department_id=original_company.department_id,
+            municipality_id=original_company.municipality_id,
+            district_id=original_company.district_id,
+        )
         session.add(other_company)
         await session.commit()
         other_company_id = other_company.id
-    foreign_company = await e2e_client.get(f"/api/v1/sales/returns/{race_id}",
-        headers={**headers, "X-Company-ID": str(other_company_id)})
+    foreign_company = await e2e_client.get(
+        f"/api/v1/sales/returns/{race_id}",
+        headers={**headers, "X-Company-ID": str(other_company_id)},
+    )
     assert foreign_company.status_code == 404, foreign_company.text
     assert await _physical_value(company_id, inventory_item_id) == after_race

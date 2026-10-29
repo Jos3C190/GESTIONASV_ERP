@@ -8,11 +8,13 @@
   let {
     path,
     code,
-    formats = ['pdf', 'xlsx']
+    formats = ['pdf', 'xlsx'],
+    description = 'Exporta los datos guardados del documento.'
   }: {
     path: string;
     code: string;
     formats?: ('pdf' | 'xlsx')[];
+    description?: string;
   } = $props();
   let busy = $state<string | null>(null);
   let error = $state('');
@@ -79,7 +81,7 @@
       </span>
     {/each}
   </div>
-  <p class="text-xs text-foreground-muted">Exporta los datos guardados del documento.</p>
+  <p class="text-xs text-foreground-muted">{description}</p>
   <p role="status" class="text-xs text-foreground-muted">{busy ? 'Preparando reporte…' : notice}</p>
   {#if error}<p
       role="alert"

@@ -1,0 +1,1 @@
+SELECT datname FROM pg_database WHERE datname = 'erp_ers_b02_rehearsal_20261018';

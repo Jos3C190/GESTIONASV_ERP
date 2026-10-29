@@ -1,0 +1,41 @@
+APUNTES DE CLASE / SISTEMA ERP
+SESIÓN 23 · 12 OCT 2026
+Inventario y compras · Explicación, requisitos y decisiones pendientes
+6
+5. Ubicación física y confirmación de cantidades
+CLASE. El ingeniero propone una pantalla sencilla con tres entradas: ubicación, producto y cantidad. El
+bodeguero escanea la ubicación, escanea uno de los productos y escribe cuántas unidades dejará allí. Al
+confirmar, se registra la colocación.
+Precisión frente a apuntes anteriores: en esta sesión se aclara que no es necesario escanear cada unidad. Se
+escanea un producto y se digita la cantidad del grupo que se coloca.
+Caso de ubicación parcial
+Se llevan 20 unidades etiquetadas. En el primer lugar caben 12: se confirma ubicación A, producto y
+cantidad 12. Las otras 8 se colocan y confirman en la ubicación B. El sistema debe mostrar ambos destinos
+y un total de 20 unidades ubicadas.
+Es preferible mantener los productos juntos cuando sea posible, pero el sistema debe admitir varios
+destinos. Una ubicación puede ser un rack, un anaquel o un espacio de piso identificado. El ingeniero
+también contempla introducir manualmente la nomenclatura cuando corresponda.
+Cómo mantener el lote al escanear
+POR DEFINIR. Un código de barras que solo identifica el producto no permite distinguir dos lotes del
+mismo producto. El ingeniero no detalla cómo resolver esa selección en la pantalla de tres campos.
+PROPUESTA. Abrir el trabajo desde una recepción/lote previamente seleccionado y mantener ese contexto
+durante el escaneo. Si existen varios lotes posibles, exigir selección explícita o una identificación adicional.
+No asignar un lote arbitrario por coincidencia del producto.
+Validaciones para incorporar
+• Ubicación existente y válida para el almacén con el que se está trabajando.
+ 
+• Producto y lote pertenecientes al trabajo de recepción seleccionado.
+ 
+• Cantidad mayor que cero, con la unidad y precisión permitidas para ese producto.
+ 
+• Cantidad colocada no superior al saldo pendiente de ubicar de esa línea/lote.
+ 
+• Una confirmación repetida no debe duplicar el ingreso.
+ 
+• Si se aplica control de capacidad o compatibilidad, impedir la confirmación hasta disponer de un destino
+ permitido.
+La existencia de una ubicación válida es CLASE. El detalle de estas validaciones es PROPUESTA. Capacidad
+y compatibilidad todavía requieren criterios y unidades definidos.
+La sugerencia de colocar productos de mayor movimiento cerca de la salida es una recomendación
+operativa del ingeniero. No se solicita un algoritmo automático de asignación de espacios.
+Base del TXT: líneas 51-55 y 69.

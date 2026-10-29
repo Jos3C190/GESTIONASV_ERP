@@ -24,14 +24,30 @@ from app.infrastructure.models.inventory import (
 )
 from app.infrastructure.models.inventory_lot import InventoryLotDetailModel, InventoryLotModel
 from app.infrastructure.models.inventory_valuation import (
-    InventoryCostAverageModel,
     InventoryValuationEntryModel,
 )
 from app.infrastructure.models.organization import Location, Warehouse
 from app.infrastructure.models.product_variant import ProductVariantModel
+from app.infrastructure.models.user import User
+from app.infrastructure.repositories.inventory_kardex_context import (
+    InventoryKardexContextRepository,
+)
 from app.infrastructure.repositories.inventory_valuation_repository import (
     SqlAlchemyInventoryValuationRepository,
 )
+
+
+def _reference_matches(column, value):
+    for code, prefix in (
+        ("TR-", "inventory_transfer"),
+        ("AJ-", "adjustment"),
+        ("DEV-", "customer-return"),
+    ):
+        if value.startswith(code):
+            return column.startswith(f"{prefix}:{value}:", autoescape=True) | (
+                column == f"{prefix}:{value}"
+            )
+    return column == value
 
 
 def _physical_projection(company_id: uuid.UUID, warehouse_id: uuid.UUID):
@@ -59,6 +75,8 @@ def _physical_projection(company_id: uuid.UUID, warehouse_id: uuid.UUID):
             movement.movement_type.label("movement_type"),
             movement.source_reference.label("source_reference"),
             movement.posted_at.label("posted_at"),
+            movement.posted_by.label("posted_by"),
+            User.username.label("operator"),
             line.line_number.label("line_number"),
             line.inventory_item_id.label("inventory_item_id"),
             func.coalesce(ProductVariantModel.name_override, ProductModel.name).label(
@@ -117,6 +135,7 @@ def _physical_projection(company_id: uuid.UUID, warehouse_id: uuid.UUID):
             ),
         )
         .outerjoin(UnitModel, UnitModel.id_unit == InventoryItemModel.base_unit_id)
+        .outerjoin(User, User.id == movement.posted_by)
         .outerjoin(
             InventoryHandlingUnitModel,
             and_(
@@ -164,6 +183,11 @@ def _physical_projection(company_id: uuid.UUID, warehouse_id: uuid.UUID):
 class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def context(self, company_id, item_id=None, warehouse_id=None):
+        return await InventoryKardexContextRepository(self.session).context(
+            company_id, item_id, warehouse_id
+        )
 
     async def get_warehouse_scope(
         self, *, warehouse_id: uuid.UUID
@@ -347,8 +371,12 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
             count_query = count_query.where(ordered.c.movement_type == movement_type)
             page_query = page_query.where(ordered.c.movement_type == movement_type)
         if source_reference:
-            count_query = count_query.where(ordered.c.source_reference == source_reference)
-            page_query = page_query.where(ordered.c.source_reference == source_reference)
+            count_query = count_query.where(
+                _reference_matches(ordered.c.source_reference, source_reference)
+            )
+            page_query = page_query.where(
+                _reference_matches(ordered.c.source_reference, source_reference)
+            )
         total = int(await self.session.scalar(count_query) or 0)
         raw_rows = (
             (
@@ -442,6 +470,7 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
         raw_rows: list[Any],
         access_all_branches: bool,
         accessible_branch_ids: set[uuid.UUID],
+        accessible_warehouse_ids: set[uuid.UUID] | None = None,
     ) -> tuple[set[uuid.UUID], dict[uuid.UUID, uuid.UUID]]:
         handling_unit_ids = {row["handling_unit_id"] for row in raw_rows if row["handling_unit_id"]}
         unit_warehouse_by_id: dict[uuid.UUID, uuid.UUID] = {}
@@ -483,7 +512,11 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
             authorized.update(
                 endpoint_warehouse_id
                 for endpoint_warehouse_id, branch_id in endpoint_scopes
-                if access_all_branches or branch_id in accessible_branch_ids
+                if (access_all_branches or branch_id in accessible_branch_ids)
+                and (
+                    accessible_warehouse_ids is None
+                    or endpoint_warehouse_id in accessible_warehouse_ids
+                )
             )
         return authorized, unit_warehouse_by_id
 
@@ -529,7 +562,7 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
         return items
 
     async def _physical_kardex_totals(
-        self, *, period: Any, movement_type: str | None
+        self, *, period: Any, movement_type: str | None, source_reference: str | None = None
     ) -> tuple[Decimal, Decimal]:
         totals_query = select(
             func.coalesce(func.sum(period.c.incoming_quantity), 0).label("incoming_quantity"),
@@ -537,6 +570,10 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
         ).select_from(period)
         if movement_type:
             totals_query = totals_query.where(period.c.movement_type == movement_type)
+        if source_reference:
+            totals_query = totals_query.where(
+                _reference_matches(period.c.source_reference, source_reference)
+            )
         totals = (await self.session.execute(totals_query)).one()
         return (
             Decimal(str(totals.incoming_quantity or 0)),
@@ -558,6 +595,7 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
         page_size: int,
         access_all_branches: bool,
         accessible_branch_ids: set[uuid.UUID],
+        accessible_warehouse_ids: set[uuid.UUID] | None = None,
     ) -> dict[str, Any] | None:
         item_exists = await self.session.scalar(
             select(InventoryItemModel.id).where(
@@ -567,6 +605,10 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
         )
         if item_exists is None:
             return None
+        if source_reference:
+            source_reference = await InventoryKardexContextRepository(
+                self.session
+            ).source_reference(company_id, source_reference)
         valuation = SqlAlchemyInventoryValuationRepository(self.session)
         await valuation.lock(company_id)
         setting = await valuation.settings(company_id)
@@ -599,6 +641,7 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
             raw_rows=raw_rows,
             access_all_branches=access_all_branches,
             accessible_branch_ids=accessible_branch_ids,
+            accessible_warehouse_ids=accessible_warehouse_ids,
         )
         items = self._physical_kardex_items(
             raw_rows=raw_rows,
@@ -608,8 +651,9 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
             unit_warehouse_by_id=unit_warehouse_by_id,
         )
         incoming_quantity, outgoing_quantity = await self._physical_kardex_totals(
-            period=period, movement_type=movement_type
+            period=period, movement_type=movement_type, source_reference=source_reference
         )
+        await InventoryKardexContextRepository(self.session).enrich(company_id, items)
         return {
             "opening_known": opening_known,
             "opening_quantity": opening,
@@ -624,109 +668,26 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
         }
 
     async def reconciliation(
-        self, *, company_id: uuid.UUID, page: int, page_size: int
+        self,
+        *,
+        company_id: uuid.UUID,
+        page: int,
+        page_size: int,
+        as_of: date | None = None,
+        query: str = "",
+        difference_only: bool = False,
     ) -> dict[str, Any]:
-        valuation = SqlAlchemyInventoryValuationRepository(self.session)
-        await valuation.lock(company_id)
-        setting = await valuation.settings(company_id)
-        physical = (
-            select(
-                InventoryBalanceModel.inventory_item_id.label("inventory_item_id"),
-                func.sum(InventoryBalanceModel.quantity_base).label("physical_quantity"),
-            )
-            .where(InventoryBalanceModel.company_id == company_id)
-            .group_by(InventoryBalanceModel.inventory_item_id)
-            .subquery("physical_totals")
+        from app.infrastructure.repositories.inventory_reconciliation import reconciliation
+
+        return await reconciliation(
+            self.session,
+            company_id=company_id,
+            page=page,
+            page_size=page_size,
+            as_of=as_of,
+            query=query,
+            difference_only=difference_only,
         )
-        values = (
-            select(
-                InventoryCostAverageModel.inventory_item_id.label("inventory_item_id"),
-                InventoryCostAverageModel.quantity_base.label("valued_quantity"),
-                InventoryCostAverageModel.inventory_value.label("inventory_value"),
-                InventoryCostAverageModel.average_unit_cost.label("average_unit_cost"),
-            )
-            .where(InventoryCostAverageModel.company_id == company_id)
-            .subquery("value_totals")
-        )
-        item_count = int(
-            await self.session.scalar(
-                select(func.count())
-                .select_from(InventoryItemModel)
-                .where(InventoryItemModel.company_id == company_id)
-            )
-            or 0
-        )
-        product_id = func.coalesce(InventoryItemModel.product_id, ProductVariantModel.product_id)
-        rows = (
-            await self.session.execute(
-                select(
-                    InventoryItemModel.id,
-                    func.coalesce(ProductVariantModel.name_override, ProductModel.name),
-                    func.coalesce(ProductVariantModel.sku, ProductModel.sku),
-                    UnitModel.symbol,
-                    func.coalesce(physical.c.physical_quantity, ZERO),
-                    values.c.valued_quantity,
-                    values.c.inventory_value,
-                    values.c.average_unit_cost,
-                )
-                .outerjoin(
-                    ProductVariantModel,
-                    and_(
-                        ProductVariantModel.company_id == company_id,
-                        ProductVariantModel.id == InventoryItemModel.variant_id,
-                    ),
-                )
-                .outerjoin(
-                    ProductModel,
-                    and_(
-                        ProductModel.company_id == company_id, ProductModel.id_product == product_id
-                    ),
-                )
-                .join(UnitModel, UnitModel.id_unit == InventoryItemModel.base_unit_id)
-                .outerjoin(physical, physical.c.inventory_item_id == InventoryItemModel.id)
-                .outerjoin(values, values.c.inventory_item_id == InventoryItemModel.id)
-                .where(InventoryItemModel.company_id == company_id)
-                .order_by(
-                    func.coalesce(ProductVariantModel.name_override, ProductModel.name),
-                    InventoryItemModel.id,
-                )
-                .offset((page - 1) * page_size)
-                .limit(page_size)
-            )
-        ).all()
-        items = []
-        for row in rows:
-            physical_quantity = Decimal(str(row[4] or 0))
-            valued_quantity = (
-                Decimal(str(row[5])) if setting is not None and row[5] is not None else None
-            )
-            items.append(
-                {
-                    "inventory_item_id": row[0],
-                    "product_name": row[1] or "Producto sin nombre",
-                    "sku": row[2],
-                    "base_unit_symbol": row[3] or "unidad base",
-                    "physical_quantity": physical_quantity,
-                    "valued_quantity": valued_quantity,
-                    "quantity_difference": physical_quantity - valued_quantity
-                    if valued_quantity is not None
-                    else None,
-                    "inventory_value": Decimal(str(row[6]))
-                    if setting is not None and row[6] is not None
-                    else None,
-                    "average_unit_cost": Decimal(str(row[7]))
-                    if setting is not None and row[7] is not None
-                    else None,
-                }
-            )
-        return {
-            "valuation_enabled": setting is not None,
-            "currency": setting.currency if setting is not None else None,
-            "items": items,
-            "page": page,
-            "page_size": page_size,
-            "total": item_count,
-        }
 
     async def valued_kardex(
         self,
@@ -833,6 +794,7 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
         entry_payloads = [
             {field: getattr(row, field) for field in entry_fields} for row in entry_rows
         ]
+        await InventoryKardexContextRepository(self.session).enrich(company_id, entry_payloads)
         return {
             "setting": {
                 "company_id": setting.company_id,

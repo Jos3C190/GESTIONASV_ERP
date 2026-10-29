@@ -1,0 +1,1703 @@
+{
+  "properties": "<openpyxl.packaging.core.DocumentProperties object>\nParameters:\ncreator='Jaime Guevara', title=None, description=None, subject=None, identifier=None, language=None, created=datetime.datetime(2025, 9, 17, 22, 0, 2), modified=datetime.datetime(2026, 9, 10, 22, 8), lastModifiedBy='Jaime Guevara', category=None, contentStatus=None, version=None, revision=None, keywords=None, lastPrinted=None",
+  "calculation": "<openpyxl.workbook.properties.CalcProperties object>\nParameters:\ncalcId=191029, calcMode=None, fullCalcOnLoad=True, refMode=None, iterate=None, iterateCount=None, iterateDelta=None, fullPrecision=None, calcCompleted=None, calcOnSave=None, concurrentCalc=None, concurrentManualCount=None, forceFullCalc=None",
+  "defined_names": {},
+  "sheets": [
+    {
+      "sheet": "Retaceo",
+      "dimensions": "A1:K26",
+      "state": "visible",
+      "merges": [
+        "B2:D11",
+        "F9:I9",
+        "H5:I5",
+        "F5:G5"
+      ],
+      "tables": [],
+      "validations": [],
+      "protection": "<openpyxl.worksheet.protection.SheetProtection object>\nParameters:\nselectLockedCells=False, selectUnlockedCells=False, algorithmName=None, sheet=False, objects=False, insertRows=True, insertHyperlinks=True, autoFilter=True, scenarios=False, formatColumns=True, deleteColumns=True, insertColumns=True, pivotTables=True, deleteRows=True, formatCells=True, saltValue=None, formatRows=True, sort=True, spinCount=None, password=None, hashValue=None",
+      "hidden_rows": [],
+      "hidden_columns": [],
+      "print_area": "",
+      "cells": [
+        {
+          "cell": "B2",
+          "type": "s",
+          "value": "RETACEO\nEs la actividad de distribuir proporcionalmente todos los gastos incurridos en el proceso de importación de una mercadería o materia prima y asignarlos al costo total del producto o insumo y el cual servirá como referencia en la introducción de los inventarios de la empresa que los importa.\nPara determinar cuál será el costo que vamos a utilizar para efectos de inventario, es necesario tomar en cuenta los siguientes documentos.",
+          "cached": "RETACEO\nEs la actividad de distribuir proporcionalmente todos los gastos incurridos en el proceso de importación de una mercadería o materia prima y asignarlos al costo total del producto o insumo y el cual servirá como referencia en la introducción de los inventarios de la empresa que los importa.\nPara determinar cuál será el costo que vamos a utilizar para efectos de inventario, es necesario tomar en cuenta los siguientes documentos.",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F2",
+          "type": "s",
+          "value": "Codigo Retaceo",
+          "cached": "Codigo Retaceo",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G2",
+          "type": "s",
+          "value": "RTC-00233",
+          "cached": "RTC-00233",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H2",
+          "type": "s",
+          "value": "Proveedor",
+          "cached": "Proveedor",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I2",
+          "type": "s",
+          "value": "Damlier",
+          "cached": "Damlier",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F3",
+          "type": "s",
+          "value": "Fecha",
+          "cached": "Fecha",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G3",
+          "type": "d",
+          "value": "2025-09-17 00:00:00",
+          "cached": "2025-09-17 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H3",
+          "type": "s",
+          "value": "Pais Origen",
+          "cached": "Pais Origen",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I3",
+          "type": "s",
+          "value": "Alemania",
+          "cached": "Alemania",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F5",
+          "type": "s",
+          "value": "Factura Importacion",
+          "cached": "Factura Importacion",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H5",
+          "type": "s",
+          "value": "Poliza Importacion",
+          "cached": "Poliza Importacion",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F6",
+          "type": "s",
+          "value": "No.",
+          "cached": "No.",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G6",
+          "type": "n",
+          "value": 122,
+          "cached": 122,
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H6",
+          "type": "s",
+          "value": "No.",
+          "cached": "No.",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I6",
+          "type": "n",
+          "value": 6778,
+          "cached": 6778,
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F7",
+          "type": "s",
+          "value": "Fecha",
+          "cached": "Fecha",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G7",
+          "type": "d",
+          "value": "2025-07-01 00:00:00",
+          "cached": "2025-07-01 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H7",
+          "type": "s",
+          "value": "Fecha",
+          "cached": "Fecha",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I7",
+          "type": "d",
+          "value": "2025-09-12 00:00:00",
+          "cached": "2025-09-12 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F9",
+          "type": "s",
+          "value": "Detalles",
+          "cached": "Detalles",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F10",
+          "type": "s",
+          "value": "FOB",
+          "cached": "FOB",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G10",
+          "type": "n",
+          "value": 55780,
+          "cached": 55780,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H10",
+          "type": "s",
+          "value": "Gastos",
+          "cached": "Gastos",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I10",
+          "type": "n",
+          "value": 1500,
+          "cached": 1500,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F11",
+          "type": "s",
+          "value": "Flete",
+          "cached": "Flete",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G11",
+          "type": "n",
+          "value": 5125,
+          "cached": 5125,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H11",
+          "type": "s",
+          "value": "DAI",
+          "cached": "DAI",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I11",
+          "type": "n",
+          "value": 8927,
+          "cached": 8927,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B14",
+          "type": "s",
+          "value": "Codigo",
+          "cached": "Codigo",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C14",
+          "type": "s",
+          "value": "Descripcion",
+          "cached": "Descripcion",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D14",
+          "type": "s",
+          "value": "Cantidad",
+          "cached": "Cantidad",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "E14",
+          "type": "s",
+          "value": "Costo FOB",
+          "cached": "Costo FOB",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F14",
+          "type": "f",
+          "value": "=\"Flete \"&TEXT(IF(E19>0,F19/E19,0),\"0.00%\")",
+          "cached": "Flete 9.19%",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G14",
+          "type": "f",
+          "value": "=\"Gastos \"&TEXT(IF(E19>0,G19/E19,0),\"0.00%\")",
+          "cached": "Gastos 2.69%",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H14",
+          "type": "f",
+          "value": "=\"DAI \"&TEXT(IF(E19>0,H19/E19,0),\"0.00%\")",
+          "cached": "DAI 16.00%",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I14",
+          "type": "s",
+          "value": "Costo Unitario",
+          "cached": "Costo Unitario",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B15",
+          "type": "s",
+          "value": "655-SERT",
+          "cached": "655-SERT",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C15",
+          "type": "s",
+          "value": "Prensadora",
+          "cached": "Prensadora",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D15",
+          "type": "n",
+          "value": 1,
+          "cached": 1,
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "E15",
+          "type": "n",
+          "value": 50000,
+          "cached": 50000,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F15",
+          "type": "f",
+          "value": "=$E15*IF($G$10>0,$G$11/$G$10,0)",
+          "cached": 4593.940480458946,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G15",
+          "type": "f",
+          "value": "=$E15*IF($G$10>0,$I$10/$G$10,0)",
+          "cached": 1344.5679455001793,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H15",
+          "type": "f",
+          "value": "=$E15*IF($G$10>0,$I$11/$G$10,0)",
+          "cached": 8001.972032986733,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I15",
+          "type": "f",
+          "value": "=SUM(E15:H15)",
+          "cached": 63940.48045894586,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B16",
+          "type": "s",
+          "value": "76sg-TOY",
+          "cached": "76sg-TOY",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C16",
+          "type": "s",
+          "value": "Camion",
+          "cached": "Camion",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D16",
+          "type": "n",
+          "value": 1,
+          "cached": 1,
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "E16",
+          "type": "n",
+          "value": 5780,
+          "cached": 5780,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F16",
+          "type": "f",
+          "value": "=$E16*IF($G$10>0,$G$11/$G$10,0)",
+          "cached": 531.0595195410542,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G16",
+          "type": "f",
+          "value": "=$E16*IF($G$10>0,$I$10/$G$10,0)",
+          "cached": 155.43205449982074,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H16",
+          "type": "f",
+          "value": "=$E16*IF($G$10>0,$I$11/$G$10,0)",
+          "cached": 925.0279670132663,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I16",
+          "type": "f",
+          "value": "=SUM(E16:H16)",
+          "cached": 7391.519541054142,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F17",
+          "type": "f",
+          "value": "=$E17*IF($G$10>0,$G$11/$G$10,0)",
+          "cached": 0,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G17",
+          "type": "f",
+          "value": "=$E17*IF($G$10>0,$I$10/$G$10,0)",
+          "cached": 0,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H17",
+          "type": "f",
+          "value": "=$E17*IF($G$10>0,$I$11/$G$10,0)",
+          "cached": 0,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I17",
+          "type": "f",
+          "value": "=SUM(E17:H17)",
+          "cached": 0,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F18",
+          "type": "f",
+          "value": "=$E18*IF($G$10>0,$G$11/$G$10,0)",
+          "cached": 0,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G18",
+          "type": "f",
+          "value": "=$E18*IF($G$10>0,$I$10/$G$10,0)",
+          "cached": 0,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H18",
+          "type": "f",
+          "value": "=$E18*IF($G$10>0,$I$11/$G$10,0)",
+          "cached": 0,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I18",
+          "type": "f",
+          "value": "=SUM(E18:H18)",
+          "cached": 0,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C19",
+          "type": "s",
+          "value": "Total",
+          "cached": "Total",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D19",
+          "type": "f",
+          "value": "=SUM(D15:D18)",
+          "cached": 2,
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "E19",
+          "type": "f",
+          "value": "=SUM(E15:E18)",
+          "cached": 55780,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F19",
+          "type": "f",
+          "value": "=SUM(F15:F18)",
+          "cached": 5125,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G19",
+          "type": "f",
+          "value": "=SUM(G15:G18)",
+          "cached": 1500,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H19",
+          "type": "f",
+          "value": "=SUM(H15:H18)",
+          "cached": 8927,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I19",
+          "type": "f",
+          "value": "=SUM(I15:I18)",
+          "cached": 71332,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        }
+      ]
+    },
+    {
+      "sheet": "Datos",
+      "dimensions": "A1:P29",
+      "state": "visible",
+      "merges": [
+        "K21:N21",
+        "K4:N4",
+        "F4:I4",
+        "F21:I21"
+      ],
+      "tables": [
+        "Table1"
+      ],
+      "validations": [],
+      "protection": "<openpyxl.worksheet.protection.SheetProtection object>\nParameters:\nselectLockedCells=False, selectUnlockedCells=False, algorithmName=None, sheet=False, objects=False, insertRows=True, insertHyperlinks=True, autoFilter=True, scenarios=False, formatColumns=True, deleteColumns=True, insertColumns=True, pivotTables=True, deleteRows=True, formatCells=True, saltValue=None, formatRows=True, sort=True, spinCount=None, password=None, hashValue=None",
+      "hidden_rows": [],
+      "hidden_columns": [],
+      "print_area": "",
+      "cells": [
+        {
+          "cell": "C2",
+          "type": "s",
+          "value": "Bitacora de pedido",
+          "cached": "Bitacora de pedido",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F2",
+          "type": "s",
+          "value": "IVA",
+          "cached": "IVA",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G2",
+          "type": "n",
+          "value": 0.15,
+          "cached": 0.15,
+          "format": "0%",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H2",
+          "type": "s",
+          "value": "CIF",
+          "cached": "CIF",
+          "format": "mm-dd-yy",
+          "comment": "[Threaded comment]\n\nYour version of Excel allows you to read this threaded comment; however, any edits to it will get removed if the file is opened in a newer version of Excel. Learn more: https://go.microsoft.com/fwlink/?linkid=870924\n\nComment:\n    Cost, Insurance, and Freight",
+          "hyperlink": null
+        },
+        {
+          "cell": "I2",
+          "type": "f",
+          "value": "=SUM(D4:D6)",
+          "cached": 62155,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B3",
+          "type": "s",
+          "value": "Fecha",
+          "cached": "Fecha",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C3",
+          "type": "s",
+          "value": "Item",
+          "cached": "Item",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D3",
+          "type": "s",
+          "value": "Valor",
+          "cached": "Valor",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B4",
+          "type": "d",
+          "value": "2025-07-01 00:00:00",
+          "cached": "2025-07-01 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C4",
+          "type": "s",
+          "value": "Desembolso para compra (FOB - Free On Board)",
+          "cached": "Desembolso para compra (FOB - Free On Board)",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D4",
+          "type": "n",
+          "value": 55780,
+          "cached": 55780,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F4",
+          "type": "s",
+          "value": "Banco",
+          "cached": "Banco",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K4",
+          "type": "s",
+          "value": "Pedidos en transito",
+          "cached": "Pedidos en transito",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B5",
+          "type": "d",
+          "value": "2025-07-02 00:00:00",
+          "cached": "2025-07-02 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C5",
+          "type": "s",
+          "value": "Seguro",
+          "cached": "Seguro",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D5",
+          "type": "n",
+          "value": 1250,
+          "cached": 1250,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H5",
+          "type": "d",
+          "value": "2025-07-01 00:00:00",
+          "cached": "2025-07-01 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I5",
+          "type": "n",
+          "value": 55780,
+          "cached": 55780,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K5",
+          "type": "d",
+          "value": "2025-07-01 00:00:00",
+          "cached": "2025-07-01 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L5",
+          "type": "n",
+          "value": 55780,
+          "cached": 55780,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B6",
+          "type": "d",
+          "value": "2025-07-03 00:00:00",
+          "cached": "2025-07-03 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C6",
+          "type": "s",
+          "value": "Flete maritimo",
+          "cached": "Flete maritimo",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D6",
+          "type": "n",
+          "value": 5125,
+          "cached": 5125,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H6",
+          "type": "d",
+          "value": "2025-07-02 00:00:00",
+          "cached": "2025-07-02 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I6",
+          "type": "n",
+          "value": 1250,
+          "cached": 1250,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K6",
+          "type": "d",
+          "value": "2025-07-02 00:00:00",
+          "cached": "2025-07-02 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L6",
+          "type": "n",
+          "value": 1250,
+          "cached": 1250,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B7",
+          "type": "d",
+          "value": "2025-07-04 00:00:00",
+          "cached": "2025-07-04 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C7",
+          "type": "s",
+          "value": " Derecho Arancelarios de Importación (DAI)",
+          "cached": " Derecho Arancelarios de Importación (DAI)",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D7",
+          "type": "n",
+          "value": 8927,
+          "cached": 8927,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H7",
+          "type": "d",
+          "value": "2025-07-03 00:00:00",
+          "cached": "2025-07-03 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I7",
+          "type": "n",
+          "value": 5125,
+          "cached": 5125,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K7",
+          "type": "d",
+          "value": "2025-07-03 00:00:00",
+          "cached": "2025-07-03 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L7",
+          "type": "n",
+          "value": 5125,
+          "cached": 5125,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B8",
+          "type": "d",
+          "value": "2025-07-05 00:00:00",
+          "cached": "2025-07-05 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C8",
+          "type": "s",
+          "value": "IVA importacion",
+          "cached": "IVA importacion",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D8",
+          "type": "f",
+          "value": "=D4*G2",
+          "cached": 8367,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H8",
+          "type": "d",
+          "value": "2025-07-04 00:00:00",
+          "cached": "2025-07-04 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I8",
+          "type": "n",
+          "value": 8927,
+          "cached": 8927,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K8",
+          "type": "d",
+          "value": "2025-07-04 00:00:00",
+          "cached": "2025-07-04 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L8",
+          "type": "n",
+          "value": 8927,
+          "cached": 8927,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B9",
+          "type": "d",
+          "value": "2025-07-06 00:00:00",
+          "cached": "2025-07-06 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C9",
+          "type": "s",
+          "value": "Honorarios aduanales",
+          "cached": "Honorarios aduanales",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D9",
+          "type": "n",
+          "value": 250,
+          "cached": 250,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H9",
+          "type": "d",
+          "value": "2025-07-06 00:00:00",
+          "cached": "2025-07-06 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I9",
+          "type": "n",
+          "value": 250,
+          "cached": 250,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K9",
+          "type": "d",
+          "value": "2025-07-06 00:00:00",
+          "cached": "2025-07-06 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L9",
+          "type": "n",
+          "value": 250,
+          "cached": 250,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B10",
+          "type": "d",
+          "value": "2025-07-07 00:00:00",
+          "cached": "2025-07-07 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C10",
+          "type": "s",
+          "value": "Fotocopias",
+          "cached": "Fotocopias",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D10",
+          "type": "n",
+          "value": 5,
+          "cached": 5,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H10",
+          "type": "d",
+          "value": "2025-07-07 00:00:00",
+          "cached": "2025-07-07 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I10",
+          "type": "n",
+          "value": 5,
+          "cached": 5,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K10",
+          "type": "d",
+          "value": "2025-07-07 00:00:00",
+          "cached": "2025-07-07 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L10",
+          "type": "n",
+          "value": 5,
+          "cached": 5,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B11",
+          "type": "d",
+          "value": "2025-07-08 00:00:00",
+          "cached": "2025-07-08 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C11",
+          "type": "s",
+          "value": "Gasolina",
+          "cached": "Gasolina",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D11",
+          "type": "n",
+          "value": 40,
+          "cached": 40,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H11",
+          "type": "d",
+          "value": "2025-07-08 00:00:00",
+          "cached": "2025-07-08 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I11",
+          "type": "n",
+          "value": 40,
+          "cached": 40,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K11",
+          "type": "d",
+          "value": "2025-07-08 00:00:00",
+          "cached": "2025-07-08 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L11",
+          "type": "n",
+          "value": 40,
+          "cached": 40,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B12",
+          "type": "d",
+          "value": "2025-07-09 00:00:00",
+          "cached": "2025-07-09 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C12",
+          "type": "s",
+          "value": "Viaticos",
+          "cached": "Viaticos",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D12",
+          "type": "n",
+          "value": 90,
+          "cached": 90,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H12",
+          "type": "d",
+          "value": "2025-07-09 00:00:00",
+          "cached": "2025-07-09 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I12",
+          "type": "n",
+          "value": 90,
+          "cached": 90,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K12",
+          "type": "d",
+          "value": "2025-07-09 00:00:00",
+          "cached": "2025-07-09 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L12",
+          "type": "n",
+          "value": 90,
+          "cached": 90,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B13",
+          "type": "d",
+          "value": "2025-09-11 00:00:00",
+          "cached": "2025-09-11 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C13",
+          "type": "s",
+          "value": "Almacenamiento",
+          "cached": "Almacenamiento",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D13",
+          "type": "n",
+          "value": 300,
+          "cached": 300,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H13",
+          "type": "d",
+          "value": "2025-09-11 00:00:00",
+          "cached": "2025-09-11 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I13",
+          "type": "n",
+          "value": 300,
+          "cached": 300,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K13",
+          "type": "d",
+          "value": "2025-09-11 00:00:00",
+          "cached": "2025-09-11 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L13",
+          "type": "n",
+          "value": 300,
+          "cached": 300,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B14",
+          "type": "d",
+          "value": "2025-09-11 00:00:00",
+          "cached": "2025-09-11 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C14",
+          "type": "s",
+          "value": "Custodia",
+          "cached": "Custodia",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D14",
+          "type": "n",
+          "value": 50,
+          "cached": 50,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H14",
+          "type": "d",
+          "value": "2025-09-11 00:00:00",
+          "cached": "2025-09-11 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I14",
+          "type": "n",
+          "value": 50,
+          "cached": 50,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K14",
+          "type": "d",
+          "value": "2025-09-11 00:00:00",
+          "cached": "2025-09-11 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L14",
+          "type": "n",
+          "value": 50,
+          "cached": 50,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B15",
+          "type": "d",
+          "value": "2025-09-12 00:00:00",
+          "cached": "2025-09-12 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C15",
+          "type": "s",
+          "value": "Transporte",
+          "cached": "Transporte",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D15",
+          "type": "n",
+          "value": 500,
+          "cached": 500,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H15",
+          "type": "d",
+          "value": "2025-09-12 00:00:00",
+          "cached": "2025-09-12 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I15",
+          "type": "n",
+          "value": 500,
+          "cached": 500,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K15",
+          "type": "d",
+          "value": "2025-09-12 00:00:00",
+          "cached": "2025-09-12 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L15",
+          "type": "n",
+          "value": 500,
+          "cached": 500,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B16",
+          "type": "d",
+          "value": "2025-09-17 00:00:00",
+          "cached": "2025-09-17 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C16",
+          "type": "s",
+          "value": "Descarga",
+          "cached": "Descarga",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D16",
+          "type": "n",
+          "value": 120,
+          "cached": 120,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H16",
+          "type": "d",
+          "value": "2025-09-17 00:00:00",
+          "cached": "2025-09-17 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I16",
+          "type": "n",
+          "value": 120,
+          "cached": 120,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K16",
+          "type": "d",
+          "value": "2025-09-17 00:00:00",
+          "cached": "2025-09-17 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L16",
+          "type": "n",
+          "value": 120,
+          "cached": 120,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B17",
+          "type": "d",
+          "value": "2025-09-17 00:00:00",
+          "cached": "2025-09-17 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C17",
+          "type": "s",
+          "value": "Recarga",
+          "cached": "Recarga",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D17",
+          "type": "n",
+          "value": 120,
+          "cached": 120,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H17",
+          "type": "d",
+          "value": "2025-09-17 00:00:00",
+          "cached": "2025-09-17 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I17",
+          "type": "n",
+          "value": 120,
+          "cached": 120,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K17",
+          "type": "d",
+          "value": "2025-09-17 00:00:00",
+          "cached": "2025-09-17 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L17",
+          "type": "n",
+          "value": 120,
+          "cached": 120,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "B18",
+          "type": "d",
+          "value": "2025-09-17 00:00:00",
+          "cached": "2025-09-17 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "C18",
+          "type": "s",
+          "value": "Otros",
+          "cached": "Otros",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "D18",
+          "type": "n",
+          "value": 25,
+          "cached": 25,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "H18",
+          "type": "d",
+          "value": "2025-09-17 00:00:00",
+          "cached": "2025-09-17 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "I18",
+          "type": "n",
+          "value": 25,
+          "cached": 25,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K18",
+          "type": "d",
+          "value": "2025-09-17 00:00:00",
+          "cached": "2025-09-17 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L18",
+          "type": "n",
+          "value": 25,
+          "cached": 25,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F21",
+          "type": "s",
+          "value": "IVA Credito Fiscal",
+          "cached": "IVA Credito Fiscal",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K21",
+          "type": "s",
+          "value": "Inventario",
+          "cached": "Inventario",
+          "format": "General",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "F22",
+          "type": "d",
+          "value": "2025-07-05 00:00:00",
+          "cached": "2025-07-05 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "G22",
+          "type": "n",
+          "value": 8367,
+          "cached": 8367,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "K22",
+          "type": "d",
+          "value": "2025-09-17 00:00:00",
+          "cached": "2025-09-17 00:00:00",
+          "format": "mm-dd-yy",
+          "comment": null,
+          "hyperlink": null
+        },
+        {
+          "cell": "L22",
+          "type": "f",
+          "value": "=SUM(L5:L18)",
+          "cached": 72582,
+          "format": "_(\"$\"* #,##0.00_);_(\"$\"* \\(#,##0.00\\);_(\"$\"* \"-\"??_);_(@_)",
+          "comment": null,
+          "hyperlink": null
+        }
+      ]
+    }
+  ]
+}

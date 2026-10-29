@@ -1,0 +1,39 @@
+.consolidation-field-label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.375rem;
+  color: rgb(var(--foreground-muted));
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.consolidation-field-control {
+  width: 100%;
+  min-width: 0;
+  height: 2.25rem;
+  border: 1px solid rgb(var(--border));
+  border-radius: 0.375rem;
+  background: rgb(var(--surface));
+  padding: 0 0.75rem;
+  color: rgb(var(--foreground));
+  font-size: 0.875rem;
+}
+
+.consolidation-field-control:focus-visible {
+  border-color: rgb(var(--primary));
+  outline: 2px solid rgb(var(--primary));
+  outline-offset: 2px;
+}
+
+.consolidation-field-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+textarea.consolidation-field-control {
+  height: auto;
+  min-height: 4.5rem;
+  padding-block: 0.5rem;
+  resize: vertical;
+}

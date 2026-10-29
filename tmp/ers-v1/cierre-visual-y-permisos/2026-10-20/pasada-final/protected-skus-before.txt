@@ -1,0 +1,5 @@
+DATABASE=erp_db
+ERS-REVIEW-DD6BBF85|Artículo demostración integral ERS-REVIEW-DD6BBF85|physical=12.000000|valued=12.000000|value=160.000000|movement_lines=15|handling_units=5|valuation_entries=5
+ERS-INC-EE8FE228|Artículo demostración integral ERS-INC-EE8FE228|physical=4.000000|valued=4.000000|value=40.000000|movement_lines=5|handling_units=3|valuation_entries=2
+ERS-LATE-B1B55D6D|Artículo demostración integral ERS-LATE-B1B55D6D|physical=5.000000|valued=5.000000|value=60.000000|movement_lines=9|handling_units=3|valuation_entries=4
+ERS-UI-F767BABC|Artículo demostración integral ERS-UI-F767BABC|physical=0.000000|valued=0.000000|value=0.000000|movement_lines=8|handling_units=2|valuation_entries=3

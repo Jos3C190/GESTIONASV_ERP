@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { listLocations } from '$lib/features/locations/services';
   import type { LocationOut } from '$lib/features/locations/types';
@@ -72,6 +73,10 @@
     void warehouseId;
     void loadLocations(true);
   });
+  async function focusControl(id: string) {
+    await tick();
+    document.getElementById(id)?.focus();
+  }
   function review(event: SubmitEvent) {
     event.preventDefault();
     error = '';
@@ -100,6 +105,7 @@
         lot_code: lot.trim() || null,
         expiry_date: expiry || null
       };
+      void focusControl('opening-review-heading');
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Revisa los datos.';
     }
@@ -129,11 +135,11 @@
   aria-label="Registrar saldo inicial"
 >
   <h3 class="text-lg font-semibold">Registrar saldo inicial</h3>
-  <p class="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
-    Para incorporar existencias contadas al iniciar un producto en el sistema. Solo se admite antes
-    de cualquier movimiento o unidad en preparación de ese producto en la empresa. Para cambios
-    posteriores utiliza un ajuste documentado.
-  </p>
+  {#if !reviewed}<p class="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
+      Para incorporar existencias contadas al iniciar un producto en el sistema. Solo se admite
+      antes de cualquier movimiento o unidad en preparación de ese producto en la empresa. Para
+      cambios posteriores utiliza un ajuste documentado.
+    </p>{/if}
   {#if success}<div
       role="status"
       class="mt-4 rounded-lg border border-success/30 bg-success/10 p-4"
@@ -148,9 +154,8 @@
         >{/if}
     </div>
   {:else}<form class="mt-5 space-y-4" onsubmit={review}>
-      <fieldset disabled={saving || reviewed !== null} class="space-y-4">
+      <fieldset disabled={saving || reviewed !== null} hidden={reviewed !== null} class="space-y-4">
         <div>
-          <p class="mb-1 text-sm font-medium">Producto</p>
           <AdjustmentProductPicker
             id="opening-product"
             {warehouseId}
@@ -158,6 +163,7 @@
             selected={item}
             onselect={(value) => (item = value)}
             searchItems={workspaceApi.searchItems}
+            purpose="el saldo inicial"
           />
         </div>
         {#if locationError}<p
@@ -172,7 +178,8 @@
         <label class="block text-sm font-medium"
           >Ubicación de almacenamiento<select
             class={workspaceField}
-            bind:value={location}
+            value={location}
+            onchange={(event) => (location = event.currentTarget.value)}
             required
             disabled={loading}
             ><option value=""
@@ -187,6 +194,20 @@
             disabled={loading}
             onclick={() => loadLocations()}>Cargar más ubicaciones</Button
           >{/if}
+        {#if !loading && !locationError && !locations.length && locationPage >= locationPages}<div
+            class="rounded-lg border border-warning/30 bg-warning/5 p-4 text-sm"
+          >
+            <p>
+              No hay ubicaciones de almacenamiento habilitadas. Revisa los espacios de la bodega
+              antes de registrar el saldo inicial.
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              class="mt-3"
+              onclick={() => loadLocations(true)}>Volver a consultar ubicaciones</Button
+            >
+          </div>{/if}
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="text-sm font-medium"
             >Cantidad ({item?.base_unit_symbol ?? 'unidad base'})<input
@@ -256,23 +277,84 @@
           ></textarea></label
         >
       </fieldset>
-      <div class="rounded-lg bg-surface-muted/50 p-4">
-        <p class="text-sm text-foreground-muted">
-          Valor inicial en la moneda configurada para valoración
-        </p>
-        <p class="mt-1 text-xl font-semibold tabular-nums">
-          {total === null
-            ? 'Completa cantidad y costo'
-            : Number(total).toLocaleString('es-SV', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 6
-              })}
-        </p>
-      </div>
-      {#if reviewed}<div class="rounded-lg border border-warning/30 bg-warning/5 p-4">
-          <p class="text-sm">
-            Confirma que el conteo, la ubicación y el costo están revisados. La confirmación crea
-            una entrada histórica; volver a abrir esta pantalla no permite repetirla.
+      {#if !reviewed}<div class="rounded-lg bg-surface-muted/50 p-4">
+          <p class="text-sm text-foreground-muted">
+            Valor inicial en la moneda configurada para valoración
+          </p>
+          <p class="mt-1 text-xl font-semibold tabular-nums">
+            {total === null
+              ? 'Completa cantidad y costo'
+              : Number(total).toLocaleString('es-SV', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 6
+                })}
+          </p>
+        </div>{/if}
+      {#if reviewed}<div
+          role="region"
+          aria-labelledby="opening-review-heading"
+          class="rounded-lg border border-warning/30 bg-warning/5 p-4"
+        >
+          <h4
+            id="opening-review-heading"
+            tabindex="-1"
+            class="rounded font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            Revisa antes de registrar
+          </h4>
+          <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div class="col-span-2">
+              <dt class="text-foreground-muted">Producto</dt>
+              <dd class="mt-1 font-semibold">{item?.product_name}</dd>
+              <dd class="font-mono text-xs text-foreground-muted">{item?.sku}</dd>
+            </div>
+            <div class="col-span-2">
+              <dt class="text-foreground-muted">Bodega y ubicación</dt>
+              <dd class="mt-1 break-words">
+                {warehouseName} · {locations.find((row) => row.id === location)?.code}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-foreground-muted">Cantidad</dt>
+              <dd class="mt-1 font-semibold tabular-nums">{quantity} {item?.base_unit_symbol}</dd>
+            </div>
+            <div>
+              <dt class="text-foreground-muted">Costo unitario</dt>
+              <dd class="mt-1 tabular-nums">{cost}</dd>
+            </div>
+            <div>
+              <dt class="text-foreground-muted">Valor inicial</dt>
+              <dd class="mt-1 text-xl font-semibold tabular-nums">
+                {Number(total).toLocaleString('es-SV', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 6
+                })}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-foreground-muted">Fecha</dt>
+              <dd class="mt-1">{date.split('-').reverse().join('/')}</dd>
+            </div>
+            <div class="col-span-2">
+              <dt class="text-foreground-muted">Peso y volumen totales</dt>
+              <dd class="mt-1">{weight} kg · {volume} m³</dd>
+            </div>
+            {#if lot || expiry}<div class="col-span-2">
+                <dt class="text-foreground-muted">Lote y vencimiento</dt>
+                <dd class="mt-1 break-words">
+                  {lot || 'Sin lote de fabricante'} · {expiry
+                    ? expiry.split('-').reverse().join('/')
+                    : 'Sin vencimiento'}
+                </dd>
+              </div>{/if}
+            <div class="col-span-2">
+              <dt class="text-foreground-muted">Documento y motivo</dt>
+              <dd class="mt-1 break-words">{reference} · {reason}</dd>
+            </div>
+          </dl>
+          <p class="mt-4 text-sm text-foreground-muted">
+            Importes en la moneda configurada para valoración. La confirmación crea una entrada
+            histórica y actualiza las existencias.
           </p>
           <div class="mt-4 flex flex-wrap gap-3">
             <Button type="button" disabled={saving} onclick={register}
@@ -281,10 +363,16 @@
               type="button"
               variant="secondary"
               disabled={saving}
-              onclick={() => (reviewed = null)}>Volver a revisar</Button
+              onclick={() => {
+                reviewed = null;
+                error = '';
+                void focusControl('opening-product');
+              }}>Volver a revisar</Button
             >
           </div>
-        </div>{:else}<Button type="submit" disabled={loading}>Revisar saldo inicial</Button>{/if}
+        </div>{:else}<Button type="submit" disabled={loading || !locations.length}
+          >Revisar saldo inicial</Button
+        >{/if}
       {#if error}<p
           role="alert"
           class="rounded-lg border border-danger/30 bg-danger/10 p-4 text-sm"

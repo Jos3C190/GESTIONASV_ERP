@@ -68,6 +68,10 @@ class ValuationOverviewOut(StrictModel):
 
 
 class ValuationEntryOut(ORMOut):
+    applied_unit_cost: Decimal | None = None
+    receipt_lot_code: str | None = None
+    document_reference: str | None = None
+    operator: str | None = None
     id: uuid.UUID
     inventory_item_id: uuid.UUID
     sequence: int

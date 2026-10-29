@@ -9,6 +9,8 @@ export interface KardexItemOption {
 }
 
 export interface PhysicalKardexRow {
+  document_reference?: string | null;
+  operator?: string | null;
   id: string;
   movement_id: string;
   movement_type: string;
@@ -46,6 +48,7 @@ export interface PhysicalKardexRow {
 }
 
 export interface PhysicalKardex {
+  context?: KardexContext | null;
   warehouse_id: string;
   inventory_item_id: string;
   period_from: string;
@@ -68,7 +71,7 @@ export interface ReconciliationRow {
   product_name: string;
   sku: string | null;
   base_unit_symbol: string;
-  physical_quantity: string;
+  physical_quantity: string | null;
   valued_quantity: string | null;
   quantity_difference: string | null;
   inventory_value: string | null;
@@ -76,6 +79,14 @@ export interface ReconciliationRow {
 }
 
 export interface Reconciliation {
+  context?: KardexContext | null;
+  as_of?: string | null;
+  generated_at?: string | null;
+  balance_known?: boolean;
+  inventory_value?: string | null;
+  reconciled_items?: number;
+  discrepant_items?: number;
+  unvalued_items?: number;
   valuation_enabled: boolean;
   currency: string | null;
   items: ReconciliationRow[];
@@ -101,6 +112,10 @@ export interface ValuationCostBreakdown {
 }
 
 export interface ValuedKardexEntry {
+  applied_unit_cost?: string | null;
+  receipt_lot_code?: string | null;
+  document_reference?: string | null;
+  operator?: string | null;
   id: string;
   sequence: number;
   kind: string;
@@ -123,6 +138,7 @@ export interface ValuedKardexEntry {
 }
 
 export interface ValuedKardex {
+  context?: KardexContext | null;
   inventory_item_id: string;
   setting: { currency: string; opened_at: string; opening_reference: string } | null;
   period_from: string;
@@ -171,15 +187,42 @@ export const kardexApi = {
     page?: number;
     page_size?: number;
   }) => apiFetch<PhysicalKardex>(`/inventory/kardex/physical?${params(filters)}`),
-  reconciliation: (page = 1, pageSize = 50) =>
+  reconciliation: (
+    page = 1,
+    pageSize = 50,
+    filters: { as_of?: string; q?: string; difference_only?: boolean } = {}
+  ) =>
     apiFetch<Reconciliation>(
-      `/inventory/kardex/reconciliation?${params({ page, page_size: pageSize })}`
+      `/inventory/kardex/reconciliation?${params({ page, page_size: pageSize, ...filters, difference_only: filters.difference_only ? 'true' : undefined })}`
     ),
   valued: (itemId: string, period: KardexPeriod) =>
     apiFetch<ValuedKardex>(
       `/inventory/kardex/valuation?${params({ inventory_item_id: itemId, ...period })}`
     )
 };
+
+export interface KardexContext {
+  company_name: string;
+  nit: string | null;
+  nrc: string | null;
+  product_name?: string | null;
+  sku?: string | null;
+  base_unit_symbol?: string | null;
+  warehouse_name?: string | null;
+  warehouse_code?: string | null;
+  branch_name?: string | null;
+}
+
+export function kardexReportPath(
+  kind: 'physical' | 'valuation' | 'reconciliation',
+  filters: Record<string, string | number | undefined | boolean>
+) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters))
+    if (value !== undefined && value !== '' && key !== 'page' && key !== 'page_size')
+      query.set(key, String(value));
+  return `/inventory/kardex/${kind}/export?${query}`;
+}
 
 export function physicalKardexHref(warehouseId: string, inventoryItemId: string): string {
   return `/inventory/kardex?${params({

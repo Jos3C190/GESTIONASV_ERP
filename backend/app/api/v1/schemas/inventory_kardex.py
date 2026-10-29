@@ -16,11 +16,25 @@ class KardexItemOptionOut(StrictModel):
     last_movement_at: datetime | None = None
 
 
+class KardexContextOut(StrictModel):
+    company_name: str
+    nit: str | None
+    nrc: str | None
+    product_name: str | None = None
+    sku: str | None = None
+    base_unit_symbol: str | None = None
+    warehouse_name: str | None = None
+    warehouse_code: str | None = None
+    branch_name: str | None = None
+
+
 class PhysicalKardexRowOut(StrictModel):
     id: uuid.UUID
     movement_id: uuid.UUID
     movement_type: str
     source_reference: str | None
+    document_reference: str | None = None
+    operator: str | None = None
     posted_at: datetime
     product_name: str
     product_sku: str | None
@@ -54,6 +68,7 @@ class PhysicalKardexRowOut(StrictModel):
 
 
 class PhysicalKardexOut(StrictModel):
+    context: KardexContextOut | None = None
     warehouse_id: uuid.UUID
     inventory_item_id: uuid.UUID
     period_from: date
@@ -76,7 +91,7 @@ class KardexReconciliationRowOut(StrictModel):
     product_name: str
     sku: str | None
     base_unit_symbol: str
-    physical_quantity: Decimal
+    physical_quantity: Decimal | None
     valued_quantity: Decimal | None
     quantity_difference: Decimal | None
     inventory_value: Decimal | None
@@ -84,6 +99,14 @@ class KardexReconciliationRowOut(StrictModel):
 
 
 class KardexReconciliationOut(StrictModel):
+    context: KardexContextOut | None = None
+    as_of: date | None = None
+    generated_at: datetime | None = None
+    balance_known: bool = True
+    inventory_value: Decimal | None = None
+    reconciled_items: int = 0
+    discrepant_items: int = 0
+    unvalued_items: int = 0
     valuation_enabled: bool
     currency: str | None
     items: list[KardexReconciliationRowOut]
@@ -93,6 +116,7 @@ class KardexReconciliationOut(StrictModel):
 
 
 class ValuedKardexOut(StrictModel):
+    context: KardexContextOut | None = None
     inventory_item_id: uuid.UUID
     setting: ValuationSettingOut | None
     period_from: date

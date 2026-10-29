@@ -3,10 +3,41 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const apiFetchMock = vi.hoisted(() => vi.fn());
 vi.mock('$lib/api/client', () => ({ apiFetch: apiFetchMock }));
 
-import { kardexApi } from './kardex';
+import { kardexApi, kardexReportPath } from './kardex';
 
 describe('kardexApi', () => {
   beforeEach(() => apiFetchMock.mockReset());
+
+  it('exports applied filters without limiting the file to the visible page', () => {
+    const url = new URL(
+      kardexReportPath('physical', {
+        inventory_item_id: 'item-9',
+        source_reference: 'COM-00027',
+        lot_code: 'LOTE A/1',
+        page: 3,
+        page_size: 25
+      }),
+      'http://test.local'
+    );
+    expect(url.pathname).toBe('/inventory/kardex/physical/export');
+    expect(url.searchParams.get('source_reference')).toBe('COM-00027');
+    expect(url.searchParams.get('lot_code')).toBe('LOTE A/1');
+    expect(url.searchParams.has('page')).toBe(false);
+    expect(url.searchParams.has('page_size')).toBe(false);
+  });
+
+  it('sends reconciliation cut, literal product query, and differences filter', async () => {
+    apiFetchMock.mockResolvedValue({ items: [], total: 0 });
+    await kardexApi.reconciliation(2, 50, {
+      as_of: '2026-10-28',
+      q: 'Azúcar %',
+      difference_only: true
+    });
+    const url = new URL(apiFetchMock.mock.calls[0]?.[0] as string, 'http://test.local');
+    expect(url.searchParams.get('as_of')).toBe('2026-10-28');
+    expect(url.searchParams.get('q')).toBe('Azúcar %');
+    expect(url.searchParams.get('difference_only')).toBe('true');
+  });
 
   it('encodes physical filters and keeps pagination in the server query', async () => {
     apiFetchMock.mockResolvedValue({ items: [], total: 0 });

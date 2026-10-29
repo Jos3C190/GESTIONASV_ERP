@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -223,12 +223,15 @@ class SqlAlchemyInventoryWorkspaceRepository:
                     "actual_measures": {
                         "gross_weight_kg": command["gross_weight_kg"],
                         "volume_m3": command["volume_m3"],
+                        "length_m": None,
+                        "width_m": None,
+                        "height_m": None,
                     },
                     "lot_code": command.get("lot_code"),
                     "expiry_date": command.get("expiry_date"),
                     "valuation_kind": "opening",
                     "valuation_value": (command["quantity_base"] * command["unit_cost"]).quantize(
-                        Decimal("0.000001")
+                        Decimal("0.000001"), rounding=ROUND_HALF_UP
                     ),
                     "operational_date": command["operational_date"],
                     "accounting_date": command["operational_date"],

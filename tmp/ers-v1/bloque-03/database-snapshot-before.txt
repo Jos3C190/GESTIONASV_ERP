@@ -1,0 +1,47 @@
+                jsonb_pretty                
+--------------------------------------------
+ {                                         +
+     "branches": 8,                        +
+     "companies": 1,                       +
+     "purchases": 17,                      +
+     "warehouses": 8,                      +
+     "handling_units": {                   +
+         "rows": 25,                       +
+         "open_rows": 25,                  +
+         "open_quantity": 2892.000000      +
+     },                                    +
+     "inventory_lots": {                   +
+         "rows": 1,                        +
+         "label_confirmation_required": 1  +
+     },                                    +
+     "schema_revision": "0085",            +
+     "inventory_balances": {               +
+         "rows": 27,                       +
+         "quantity": 2892.000000           +
+     },                                    +
+     "inventory_movements": 65,            +
+     "inventory_lot_details": {            +
+         "rows": 1,                        +
+         "accepted_quantity_base": 9.000000+
+     },                                    +
+     "inventory_label_prints": 8,          +
+     "inventory_cost_averages": {          +
+         "rows": 6,                        +
+         "value": 47.500000,               +
+         "quantity": 2892.000000           +
+     },                                    +
+     "inventory_movement_lines": {         +
+         "rows": 71,                       +
+         "quantity": 11963.200000          +
+     },                                    +
+     "inventory_valuation_entries": {      +
+         "rows": 6,                        +
+         "quantity": 2892.000000,          +
+         "source_value": 47.500000,        +
+         "inventory_delta": 47.500000      +
+     },                                    +
+     "inventory_valuation_settings": 1,    +
+     "inventory_retaceo_applications": 0   +
+ }
+(1 row)
+

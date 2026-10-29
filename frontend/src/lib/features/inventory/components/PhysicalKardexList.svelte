@@ -36,10 +36,13 @@
         <div>
           <p class="text-sm font-medium text-foreground">{formatKardexDateTime(row.posted_at)}</p>
           <p class="mt-1 break-all font-mono text-xs text-foreground-muted">
-            {row.source_reference ?? 'Sin documento de origen'}
+            {row.document_reference ?? row.source_reference ?? 'Sin documento de origen'}
           </p>
         </div>
         <Badge>{movementTypeLabel(row.movement_type).label}</Badge>
+        {#if row.operator}<p class="mt-1 text-xs text-foreground-muted">
+            Registró: {row.operator}
+          </p>{/if}
       </header>
 
       <div class="grid grid-cols-2 gap-3 rounded-lg bg-surface-muted/50 p-3 text-sm">
@@ -125,8 +128,11 @@
           >
           <td class="px-3 py-3">
             <Badge>{movementTypeLabel(row.movement_type).label}</Badge>
+            {#if row.operator}<p class="mt-1 text-xs text-foreground-muted">
+                Registró: {row.operator}
+              </p>{/if}
             <p class="mt-2 break-all font-mono text-xs text-foreground-muted">
-              {row.source_reference ?? 'Sin documento de origen'}
+              {row.document_reference ?? row.source_reference ?? 'Sin documento de origen'}
             </p>
             {#if row.lot_code}<p class="mt-1 text-xs text-foreground-muted">
                 Lote fabricante {row.lot_code}

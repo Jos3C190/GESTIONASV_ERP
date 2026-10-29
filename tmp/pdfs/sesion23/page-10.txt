@@ -1,0 +1,35 @@
+APUNTES DE CLASE / SISTEMA ERP
+SESIÓN 23 · 12 OCT 2026
+Inventario y compras · Explicación, requisitos y decisiones pendientes
+10
+9. Traslados, ventas y separación de procesos
+CLASE. El ingeniero anuncia completar primero traslados, después ventas y finalmente afinar el sistema. El
+objetivo es continuar desde las compras hasta registrar salidas de inventario dentro del mini ERP.
+Cambio de ubicación dentro del almacén
+La persona mueve físicamente un producto de un sitio a otro. El sistema reduce la cantidad en la ubicación
+de origen y la aumenta en destino. Debe mantener el producto y su lote identificados.
+PROPUESTA. Registrar ambos lados con un mismo identificador de operación. El total del almacén y de la
+empresa debe permanecer igual. Este movimiento no debe parecer una compra ni generar un nuevo lote
+de recepción.
+Traslado entre almacenes
+El almacén que envía registra una salida y el que recibe registra una entrada. La clase no detalla el tiempo
+que transcurre entre despacho y recepción, ni el tratamiento de faltantes durante el transporte.
+POR DEFINIR. Acordar si existirá estado «en tránsito», quién confirma la recepción, cómo se documentan
+diferencias y cómo se conserva el valor durante ese lapso. No asumir que una recepción en destino crea
+nuevas unidades para toda la empresa.
+Si se confirma un único promedio por producto para toda la empresa, el traslado interno debe conservar el
+valor global. Si se elige otro alcance, será necesario definir expresamente la valoración entre almacenes. Es
+una decisión de diseño pendiente.
+Ventas
+Una venta produce una salida. Bajo promedio se utiliza el costo vigente para valorarla, aunque el personal
+retire físicamente unidades de los lotes más antiguos. El precio de venta y los descuentos comerciales no
+sustituyen el costo de inventario.
+PROPUESTA. Vincular cada salida con documento comercial, producto, cantidad, lote(s), ubicación(es) y
+costo registrado. Una salida puede necesitar cantidades de más de un lote o lugar.
+Bodega, exhibición y presentación del producto
+El ingeniero comenta que la manipulación varía según el negocio: exhibición, vitrinas, producto en caja,
+unidades sueltas o paquetes. También menciona dificultades de adhesivos en productos refrigerados.
+Esos ejemplos explican por qué el sistema debe acompañar la operación física. La sesión no define un
+módulo de exhibición, conversiones entre cajas y unidades, ni una integración obligatoria con códigos de
+fabricantes. Esas reglas deben acordarse según el negocio.
+Base del TXT: líneas 49-53, 61, 83, 227-229 y 245.

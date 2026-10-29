@@ -1,0 +1,44 @@
+Ejemplo:
+
+Orden de compra OC-00025
+       │
+       └── Gasto: Flete $500
+                 │
+                ├── factura_flete.pdf
+                 └── comprobante.png
+
+
+No se almacenará un purchase_id en esta tabla, debido a que el gasto pertenece a la orden de
+compra.
+
+La compra posterior podrá acceder a estos documentos mediante la relación:
+
+purchases
+   ↓
+purchase_orders
+   ↓
+purchase_order_expenses
+   ↓
+purchase_order_expense_documents
+
+
+Esto evita duplicar los documentos.
+
+                                                                               6.8.21 Tabla purchases
+
+Representa la compra o recepción real de mercancías.
+
+La orden de compra representa lo que se decidió adquirir, mientras que purchases representa
+lo que realmente fue recibido y registrado.
+
+ Campo                             Tipo          Clave     Descripción
+ id_purchase                       int            PK       Identificador
+ uuid                              string                  Identificador universal
+ purchase_code                     string                  Código de compra
+ id_purchase_order                 int           FK        Orden de compra origen
+ id_supplier                       int           FK        Proveedor
+ id_branch                         int           FK        Sucursal
+ id_warehouse                      int           FK        Almacén
+
+
+                                                                                                                   75

@@ -1,0 +1,85 @@
+{
+  "ok": true,
+  "username": "rodrigo.molina.bodega",
+  "path": "/inventory",
+  "requests": [
+    {
+      "path": "/api/v1/auth/login",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me/permissions",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me/permissions",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/geographic-departments",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/companies/accessible",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/operational-contexts/0a7303f6-64a5-428c-a829-c2b09966fefd",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me/permissions",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/operational-contexts/0a7303f6-64a5-428c-a829-c2b09966fefd",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/companies/0a7303f6-64a5-428c-a829-c2b09966fefd",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/audit-logs",
+      "status": 403
+    },
+    {
+      "path": "/api/v1/audit-logs",
+      "status": 403
+    },
+    {
+      "path": "/api/v1/warehouses",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/inventory/preparation",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/warehouses/14e5a8bc-20e6-4184-99a1-4238000eca8a/locations",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/inventory/lots",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/warehouses/14e5a8bc-20e6-4184-99a1-4238000eca8a/locations",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/inventory/warehouses/14e5a8bc-20e6-4184-99a1-4238000eca8a/handling-units",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/inventory/preparation",
+      "status": 200
+    }
+  ],
+  "errors": [],
+  "stockText": "Bodega\nGrupo Lorena\nRO\n\nOPERACIÓN DE BODEGA\n\nInventario\n\nConsulta existencias, revisa las unidades recibidas y prepara su ubicación en bodega.\n\n1 bodegas encontradas. Página 1 de 1.\n\nBM-001\n\nBodega Matriz Grupo Lorena\nCambiar bodega\nUbicaciones y etiquetas →\nRecepciones\nPreparar y ubicar\nExistencias\nColocación por grupo\n1 recepción(es) pendientes\n\nSeleccione una recepción, escanee el producto y reparta su cantidad entre ubicaciones. La colocación no vuelve a recibir ni suma mercancía.\n\nActualizar pendientes\nExistencia histórica sin lote de recepción atribuible\n\nEl saldo total se toma de inventario y se concilia con las unidades que sí tienen una línea de recepción. No se asigna un origen a los registros antiguos.\n\nProducto sin nombre · A02-R01-N01-P01 · available\nLegado 2.000000 u / total 2.000000 · 1 HU sin línea\nProducto de prueba1.1 · DEMO-MANUAL-2110 · A02-R01-N01-P01 · quarantine\nLegado 20.000000 u / total 20.000000 · 2 HU sin línea\nProducto sin nombre · A02-R01-N01-P01 · quarantine\nLegado 5.000000 u / total 5.000000 · 1 HU sin línea\nChocolate de Cobertura Semiamargo 5kg · PRD-CHO-006 · A02-R01-N01-P01 · available\nLegado 325.000000 cj / total 325.000000 · 1 HU sin línea\nRecepción \nSeleccione una recepción\nLOT-COM-00022 · COM-00022 · 21/10/26\n\nLOT-COM-00022\n\nCompra COM-00022 · 21/10/26, 6:20 p. m.\n\nParcial\n\nProductos en esta recepción\n\nHarina Integral de Trigo 25kg\n\nPRD-HAR-003\n\n0 pend.\n\nRecibido 16 cj\nUbicado 16\nPendiente 0\n\nHarina de Trigo Suave 50lb\n\nPRD-HAR-001\n\n39.6828 pend.\n\nRecibido 39.6828 cj\nUbicado 0\nPendiente 39.6828\nEscanear código del producto \nProducto pendiente \nSeleccione producto\nPRD-HAR-001 · Harina de Trigo Suave 50lb · LOT-COM-00022-DFE7AB0A6A6CB42BA9DB3AC52A9579902\n\nEscanee o seleccione un producto\n\nEl sistema solo aceptará productos de esta recepción con cantidad pendiente.\n\nUnidades logísticas\n9 registradas\n\nExistencias físicas identificables por caja, saco, paquete, contenedor o producto suelto. Los valores desconocidos nunca se interpretan como cero.\n\nDesde la bodega madre puedes trasladar unidades completas a una bodega de sucursal. Disponible indica que la revisión terminó. Dividir es opcional: úsalo solo si vas a separar físicamente el contenido.\n\nActualizar\nBuscar por producto, SKU, código, lote o ubicación \nUbicación \nTodas las ubicaciones\nA01-R01-N01-P01\nA02-R01-N01-P01\nEstado de existencia \nTodos los estados\nDisponible\nCuarentena\nBloqueada\nDañada\nEn tránsito\nMostrar cerradas\nSolo etiquetas pendientes de imprimir o confirmar\nUnidades logísticas, ubicación, estado, trazabilidad y ocupación física\nUnidad logística\tUbicación\tEstado\tLote y vencimiento\tCantidad\tPeso ocupado\tVolumen ocupado\tQR y acciones\n\n\nCaja de Cartón para Pastel 12 pulgadas\n\nPRD-EMP-009\n\nHU-058E9360A1B943DC\n\nMedición verificada\n\n\t\n\nA02-R01-N01-P01\n\n\tDisponible\t\n\nRecepción: LOT-COM-00025-D82E78469EA9A4037BE80FAD4776956BA\n\nSin vencimiento\n\n\t2,000\nCaja (cj)\n\t1 kg\t1 m³\t\nVer Kardex\nVer QR\n\nRevisión terminada · disponible para uso\n\nTrasladar a sucursal\n"
+}

@@ -1,0 +1,29 @@
+6.5 MÓDULO DE ALMACENES Y UBICACIONES
+6.5.1 Descripción
+El módulo de Almacenes y Ubicaciones permite administrar la estructura física destinada al
+almacenamiento de productos dentro de cada sucursal.
+Cada sucursal puede contar con uno o varios almacenes, clasificados según su función
+operativa. A su vez, cada almacén puede dividirse en múltiples ubicaciones físicas (pasillos,
+estantes, niveles y posiciones), permitiendo una gestión precisa del inventario.
+Este módulo constituye la base para los procesos de recepción de mercancías, almacenamiento,
+picking, traslados internos, inventarios físicos y despacho de productos.
+6.5.2 Objetivos
+Objetivo General
+Administrar los almacenes y sus ubicaciones físicas para optimizar el control del inventario y la
+logística de almacenamiento.
+Objetivos Específicos
+• | Registrar almacenes por sucursal.
+• | Clasificar los almacenes según su función.
+• | Administrar ubicaciones físicas.
+• | Definir la capacidad de almacenamiento.
+• | Facilitar la localización exacta de los productos.
+• | Integrar la estructura física con los módulos de inventario y logística.
+6.5.3 Modelo de Datos
+Tabla warehouse_category
+Campo | Tipo | Descripción
+id_warehouse_category | int | Identificador
+name | string | Nombre de la categoría
+description | string | Descripción
+Ejemplos de categorías
+• | Producto Terminado
+• | Materia Prima

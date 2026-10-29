@@ -1,0 +1,386 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Geist is bundled locally so the document library keeps the same metrics
+ * and hierarchy when the network is unavailable. The SIL OFL license is
+ * included next to the font assets in ``static/fonts``. */
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('/fonts/geist-sans-variable.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/geist-mono-variable.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+/*
+ * Design tokens — "Geist" inspired (Vercel).
+ * Clean monochrome palette with blue accent. Pure white surfaces, subtle
+ * gray borders, high-contrast text. Dark mode: true near-black (#000) with
+ * layered grays. No gradients on backgrounds — flat and crisp.
+ */
+:root,
+[data-theme='light'] {
+  /* Explorer rhythm — shared density and corner language */
+  --explorer-space-3xs: 0.125rem;
+  --explorer-space-0: 0.25rem;
+  --explorer-space-1: 0.5rem;
+  --explorer-space-2: 0.75rem;
+  --explorer-space-3: 1rem;
+  --explorer-space-4: 1.25rem;
+  --explorer-space-5: 1.5rem;
+  --explorer-radius-xs: 0.35rem;
+  --explorer-radius-sm: 0.5rem;
+  --explorer-radius-md: 0.75rem;
+  --explorer-radius-lg: 1rem;
+  --explorer-control-height: 2.75rem;
+  --document-folder-back: 232 164 56;
+  --document-folder-front: 255 189 84;
+  --document-folder-highlight: 255 215 134;
+  --document-file-generic: 100 116 139;
+  --document-file-generic-dark: 71 85 105;
+  --document-file-pdf: 185 45 40;
+  --document-file-pdf-dark: 132 28 26;
+  --document-file-doc: 11 107 138;
+  --document-file-doc-dark: 7 74 98;
+  --document-file-sheet: 8 122 67;
+  --document-file-sheet-dark: 5 84 46;
+  --document-file-slides: 169 75 25;
+  --document-file-slides-dark: 118 48 14;
+  --document-file-archive: 101 68 168;
+  --document-file-archive-dark: 70 45 120;
+  --document-file-text: 69 90 100;
+  --document-file-text-dark: 45 60 68;
+  --document-file-image: 35 89 166;
+  --document-file-image-dark: 22 61 118;
+  /* Surfaces — pure white, near-white */
+  --surface: 255 255 255;
+  --surface-elevated: 255 255 255;
+  --surface-muted: 250 250 250;
+  --surface-hover: 245 245 245;
+  /* Borders — Geist gray scale */
+  --border: 233 233 233;
+  --border-strong: 204 204 204;
+  /* Text — Geist gray 900/1000 */
+  --foreground: 17 17 17;
+  --foreground-muted: 102 102 102;
+  --foreground-subtle: 116 116 116;
+  /* Primary — Geist blue 600 (#0070F3) */
+  --primary: 0 112 243;
+  --primary-hover: 0 90 200;
+  --primary-foreground: 255 255 255;
+  --primary-glow: 0 112 243;
+  /* Accent — teal */
+  --accent: 0 168 150;
+  --accent-foreground: 255 255 255;
+  /* Semantic */
+  --danger: 220 38 38;
+  --danger-foreground: 255 255 255;
+  --danger-glow: 239 68 68;
+  --success: 0 112 80;
+  --success-foreground: 255 255 255;
+  --warning: 180 100 0;
+  --warning-foreground: 255 255 255;
+  /* Gradients — subtle, single-hue */
+  --gradient-primary: linear-gradient(135deg, rgb(0 112 243) 0%, rgb(0 90 200) 100%);
+  --gradient-hero: linear-gradient(135deg, rgb(0 112 243) 0%, rgb(0 168 150) 100%);
+  --gradient-success: linear-gradient(135deg, rgb(0 168 107) 0%, rgb(0 140 90) 100%);
+  --gradient-danger: linear-gradient(135deg, rgb(239 68 68) 0%, rgb(220 38 38) 100%);
+  /* Shadows — Geist style: very subtle */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-md: 0 2px 4px -1px rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 8px 16px -4px rgb(0 0 0 / 0.08), 0 4px 8px -4px rgb(0 0 0 / 0.04);
+  --shadow-xl: 0 16px 32px -8px rgb(0 0 0 / 0.1), 0 8px 16px -8px rgb(0 0 0 / 0.06);
+  --shadow-glow: 0 0 0 2px rgb(0 112 243 / 0.2);
+  /* Glass */
+  --glass-bg: 255 255 255;
+  --glass-border: 233 233 233;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  /* Explorer rhythm — shared density and corner language */
+  --explorer-space-3xs: 0.125rem;
+  --explorer-space-0: 0.25rem;
+  --explorer-space-1: 0.5rem;
+  --explorer-space-2: 0.75rem;
+  --explorer-space-3: 1rem;
+  --explorer-space-4: 1.25rem;
+  --explorer-space-5: 1.5rem;
+  --explorer-radius-xs: 0.35rem;
+  --explorer-radius-sm: 0.5rem;
+  --explorer-radius-md: 0.75rem;
+  --explorer-radius-lg: 1rem;
+  --explorer-control-height: 2.75rem;
+  --document-folder-back: 232 164 56;
+  --document-folder-front: 255 189 84;
+  --document-folder-highlight: 255 215 134;
+  --document-file-generic: 100 116 139;
+  --document-file-generic-dark: 71 85 105;
+  --document-file-pdf: 185 45 40;
+  --document-file-pdf-dark: 132 28 26;
+  --document-file-doc: 11 107 138;
+  --document-file-doc-dark: 7 74 98;
+  --document-file-sheet: 8 122 67;
+  --document-file-sheet-dark: 5 84 46;
+  --document-file-slides: 169 75 25;
+  --document-file-slides-dark: 118 48 14;
+  --document-file-archive: 101 68 168;
+  --document-file-archive-dark: 70 45 120;
+  --document-file-text: 69 90 100;
+  --document-file-text-dark: 45 60 68;
+  --document-file-image: 35 89 166;
+  --document-file-image-dark: 22 61 118;
+  /* Surfaces — true black (#000) and layered grays (Geist dark) */
+  --surface: 0 0 0;
+  --surface-elevated: 10 10 10;
+  --surface-muted: 10 10 10;
+  --surface-hover: 26 26 26;
+  /* Borders — Geist dark gray */
+  --border: 26 26 26;
+  --border-strong: 51 51 51;
+  /* Text — Geist gray 900/1000 inverted */
+  --foreground: 250 250 250;
+  --foreground-muted: 153 153 153;
+  --foreground-subtle: 153 153 153;
+  /* Primary — Geist blue 500 in dark */
+  --primary: 0 168 243;
+  --primary-hover: 0 140 210;
+  --primary-foreground: 0 0 0;
+  --primary-glow: 0 168 243;
+  /* Accent */
+  --accent: 0 200 180;
+  --accent-foreground: 0 0 0;
+  /* Semantic — brighter in dark */
+  --danger: 255 107 107;
+  --danger-foreground: 0 0 0;
+  --danger-glow: 255 107 107;
+  --success: 0 200 140;
+  --success-foreground: 0 0 0;
+  --warning: 255 184 77;
+  --warning-foreground: 0 0 0;
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, rgb(0 168 243) 0%, rgb(0 140 210) 100%);
+  --gradient-hero: linear-gradient(135deg, rgb(0 168 243) 0%, rgb(0 200 180) 100%);
+  --gradient-success: linear-gradient(135deg, rgb(0 200 140) 0%, rgb(0 170 120) 100%);
+  --gradient-danger: linear-gradient(135deg, rgb(255 107 107) 0%, rgb(239 68 68) 100%);
+  /* Shadows — stronger for depth on black */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 2px 4px -1px rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 8px 16px -4px rgb(0 0 0 / 0.6), 0 4px 8px -4px rgb(0 0 0 / 0.4);
+  --shadow-xl: 0 16px 32px -8px rgb(0 0 0 / 0.7), 0 8px 16px -8px rgb(0 0 0 / 0.5);
+  --shadow-glow: 0 0 0 2px rgb(0 168 243 / 0.25);
+  /* Glass */
+  --glass-bg: 10 10 10;
+  --glass-border: 26 26 26;
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface text-foreground font-sans antialiased;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Native select fallback: keep menus readable in both color schemes. */
+[data-theme='light'] select { color-scheme: light; }
+[data-theme='dark'] select { color-scheme: dark; }
+select option,
+select optgroup { color: rgb(var(--foreground)); background-color: rgb(var(--surface-elevated)); }
+/* Focus ring — Geist blue glow */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--surface)), 0 0 0 4px rgb(var(--primary));
+  border-radius: 0.375rem;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  button:active { transform: none !important; }
+}
+
+/* Scrollbars — thin, Geist style */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--border-strong)) transparent;
+}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgb(var(--border-strong));
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--foreground-subtle));
+}
+
+/* ===== Utility classes ===== */
+
+/* Glassmorphism — subtle */
+.glass {
+  background: rgb(var(--glass-bg) / 0.8);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgb(var(--glass-border) / 0.6);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Gradient background */
+.gradient-bg {
+  background: var(--gradient-primary);
+}
+
+/* Hero gradient */
+.hero-gradient {
+  background: var(--gradient-hero);
+}
+
+/* Shadows — Geist subtle */
+.shadow-soft { box-shadow: var(--shadow-md); }
+.shadow-lifted { box-shadow: var(--shadow-lg); }
+.shadow-floating { box-shadow: var(--shadow-xl); }
+.shadow-glow { box-shadow: var(--shadow-glow); }
+
+/* Hover lift */
+.hover-lift {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Fade + scale entrance */
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-fade-scale {
+  animation: fadeInScale 0.18s ease-out;
+}
+
+/* Slide in from right */
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in {
+  animation: slideInRight 0.15s ease-out;
+}
+
+/* Pulse glow */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(var(--primary-glow) / 0.3); }
+  50% { box-shadow: 0 0 0 5px rgb(var(--primary-glow) / 0); }
+}
+.animate-pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* Shimmer (skeleton) */
+@keyframes shimmer {
+  0% { background-position: -800px 0; }
+  100% { background-position: 800px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, rgb(var(--surface-muted)) 0%, rgb(var(--surface-hover)) 50%, rgb(var(--surface-muted)) 100%);
+  background-size: 1600px 100%;
+  animation: shimmer 1.8s linear infinite;
+}
+
+/* Status badges — Geist flat style (no gradient, subtle bg) */
+.badge-success {
+  background: rgb(var(--success) / 0.08);
+  color: rgb(var(--success));
+  border: 1px solid rgb(var(--success) / 0.15);
+}
+.badge-warning {
+  background: rgb(var(--warning) / 0.08);
+  color: rgb(var(--warning));
+  border: 1px solid rgb(var(--warning) / 0.15);
+}
+.badge-danger {
+  background: rgb(var(--danger) / 0.08);
+  color: rgb(var(--danger));
+  border: 1px solid rgb(var(--danger) / 0.15);
+}
+.badge-neutral {
+  background: rgb(var(--foreground-muted) / 0.08);
+  color: rgb(var(--foreground-muted));
+  border: 1px solid rgb(var(--foreground-muted) / 0.15);
+}
+.badge-primary {
+  background: rgb(var(--primary) / 0.08);
+  color: rgb(var(--primary));
+  border: 1px solid rgb(var(--primary) / 0.15);
+}
+
+/* View Transitions API — quick, purposeful theme feedback */
+::view-transition-group(root) {
+  animation-duration: 360ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  mix-blend-mode: normal;
+  will-change: clip-path;
+}
+
+::view-transition-new(root) {
+  animation: reveal-theme 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+::view-transition-old(root),
+[data-theme='dark']::view-transition-old(root) {
+  animation: none;
+  animation-fill-mode: both;
+  z-index: -1;
+}
+
+[data-theme='dark']::view-transition-new(root) {
+  animation: reveal-theme 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes reveal-theme {
+  from {
+    clip-path: circle(0% at calc(100% - 140px) 28px);
+  }
+  to {
+    clip-path: circle(150% at calc(100% - 140px) 28px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none !important; }
+}

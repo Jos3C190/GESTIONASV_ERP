@@ -1,0 +1,24 @@
+6.8.29 Consideración sobre IVA de Importación
+El IVA de importación no deberá formar parte del cálculo del retaceo.
+El IVA de importación será tratado como un impuesto independiente y será registrado en el
+libro de IVA correspondiente.
+Por lo tanto:
+• | Costo FOB + Flete + Gastos + DAI = Costo de adquisición para Retaceo
+No se agregará:
+• | IVA de Importación
+al costo determinado mediante el proceso de retaceo.
+Esta regla deberá respetarse tanto en los cálculos como en las pantallas, reportes y procesos
+posteriores que utilicen el costo real.
+6.8.30 Cálculo de Totales de la Orden
+El subtotal de la orden será:
+subtotal = SUM(quantity × unit_price - discount)
+Los impuestos:
+tax = SUM(tax_amount)
+Los gastos adicionales:
+additional_expenses = SUM(purchase_order_expenses.amount)
+El total:
+total = subtotal + tax + additional_expenses
+Cuando exista un descuento global, se utilizará:
+total = subtotal - global_discount + tax + additional_expenses
+Los valores deberán ser calculados por el sistema y no depender exclusivamente de valores
+introducidos manualmente por el usuario.

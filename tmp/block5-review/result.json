@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "errors": [],
+  "downloads": [
+    "Kardex-fisico-PRD-CHO-006-2026-10-29.pdf"
+  ],
+  "calls": [
+    "?page=1&page_size=50&as_of=2026-10-29",
+    "?page=1&page_size=50&as_of=2026-10-29&q=Az%C3%BAcar"
+  ],
+  "mutations": 0,
+  "financialViewsVisualFixture": true
+}

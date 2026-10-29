@@ -88,6 +88,12 @@
       </section>
 
       <dl class="grid gap-x-4 gap-y-2 rounded-lg border border-border p-3 text-sm sm:grid-cols-2">
+        <dt class="text-foreground-muted">Documento</dt>
+        <dd class="break-words text-foreground">
+          {movement.document_reference ?? movement.source_reference ?? 'Sin referencia'}
+        </dd>
+        <dt class="text-foreground-muted">Registró</dt>
+        <dd class="text-foreground">{movement.operator ?? 'No disponible'}</dd>
         <dt class="text-foreground-muted">Lote</dt>
         <dd class="break-all text-foreground">
           Fabricante: {movement.lot_code ?? 'Sin lote'}

@@ -1,0 +1,46 @@
+6.2 MÓDULO DE BITÁCORA (AUDITORÍA)
+
+                                                                                        6.2.1 Descripción
+
+El módulo de Bitácora tiene como finalidad registrar de manera automática todas las
+operaciones relevantes realizadas dentro del Mini ERP, proporcionando un mecanismo de
+auditoría, trazabilidad y control sobre la información del sistema.
+
+La bitácora constituye un componente transversal, por lo que será utilizada por todos los
+módulos del ERP para registrar las operaciones ejecutadas por los usuarios.
+
+Este módulo permitirá conocer:
+
+    •   Quién realizó una operación.
+    •   Cuándo se realizó.
+    •   Sobre qué módulo se ejecutó.
+    •   Qué información existía antes del cambio.
+    •   Qué información quedó después de la modificación.
+    •   Qué acción fue ejecutada.
+
+La información registrada en la bitácora será únicamente de consulta y no podrá ser modificada
+por ningún usuario del sistema.
+
+                                                                                           6.2.2 Objetivos
+
+Objetivo General
+
+Registrar todas las operaciones relevantes realizadas en el sistema para garantizar la
+trazabilidad, auditoría y seguridad de la información.
+
+Objetivos Específicos
+
+    •   Registrar automáticamente las operaciones CRUD realizadas por los usuarios.
+    •   Mantener un historial completo de cambios.
+    •   Facilitar auditorías internas y externas.
+    •   Permitir la consulta histórica de modificaciones.
+    •   Proporcionar evidencia de las operaciones ejecutadas en el sistema.
+    •   Apoyar el análisis de incidentes de seguridad.
+    •   Cumplir con las buenas prácticas de auditoría de sistemas de información.
+
+
+
+
+
+
+                                                                                                                 16

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.api.v1.company_access import (
+    assigned_warehouse_ids,
+    authorize_warehouse_assignment,
     effective_company_id,
     get_branch_context,
     require_company_wide_scope,
@@ -49,7 +51,16 @@ async def _authorize_warehouse(
     company_id, branch_id = scope
     require_resource_company(request, company_id, not_found_detail="Bodega no encontrada.")
     await resolve_branch_scope(session, current, company_id, branch_id)
+    await authorize_warehouse_assignment(session, current, company_id, warehouse_id)
     return company_id
+
+
+async def _authorize_company_values(session, current, company_id):
+    await require_company_wide_scope(session, current, company_id)
+    if await assigned_warehouse_ids(session, current, company_id) is not None:
+        raise HTTPException(
+            403, "Esta consulta requiere alcance de todas las bodegas de la empresa."
+        )
 
 
 @router.get(
@@ -94,6 +105,7 @@ async def physical_kardex(
         raise HTTPException(422, "La fecha inicial debe ser anterior o igual a la final.")
     company_id = await _authorize_warehouse(request, session, current, warehouse_id, kardex)
     context = await get_branch_context(session, current, company_id)
+    assigned = await assigned_warehouse_ids(session, current, company_id)
     data = await kardex.physical_kardex(
         company_id=company_id,
         warehouse_id=warehouse_id,
@@ -107,6 +119,7 @@ async def physical_kardex(
         page_size=page_size,
         access_all_branches=context.access_all_branches,
         accessible_branch_ids={branch.id for branch in context.branches},
+        accessible_warehouse_ids=set(assigned) if assigned is not None else None,
     )
     if data is None:
         raise HTTPException(404, "Artículo de inventario no encontrado.")
@@ -122,6 +135,9 @@ async def physical_kardex(
         else "No hay corte físico aprobado. Los movimientos se muestran, pero no se inventan saldos históricos."
     )
     return PhysicalKardexOut(
+        context=await kardex.context(
+            company_id=company_id, item_id=inventory_item_id, warehouse_id=warehouse_id
+        ),
         warehouse_id=warehouse_id,
         inventory_item_id=inventory_item_id,
         period_from=period_from,
@@ -152,11 +168,36 @@ async def reconcile_inventory(
     kardex: Annotated[InventoryKardexReadUseCases, Depends(get_inventory_kardex_read_use_cases)],
     page: int = Query(1, ge=1, le=100000),
     page_size: int = Query(50, ge=1, le=200),
+    as_of: date | None = None,
+    q: str = Query("", max_length=120),
+    difference_only: bool = False,
 ) -> KardexReconciliationOut:
     company_id = effective_company_id(request)
-    await require_company_wide_scope(session, current, company_id)
-    data = await kardex.reconciliation(company_id=company_id, page=page, page_size=page_size)
+    await _authorize_company_values(session, current, company_id)
+    if as_of and as_of > datetime.now(LOCAL_TZ).date():
+        raise HTTPException(422, "El corte no puede estar en el futuro.")
+    data = await kardex.reconciliation(
+        company_id=company_id,
+        page=page,
+        page_size=page_size,
+        as_of=as_of,
+        query=q,
+        difference_only=difference_only,
+    )
     return KardexReconciliationOut(
+        context=await kardex.context(company_id=company_id),
+        **{
+            key: data[key]
+            for key in (
+                "as_of",
+                "generated_at",
+                "balance_known",
+                "inventory_value",
+                "reconciled_items",
+                "discrepant_items",
+                "unvalued_items",
+            )
+        },
         valuation_enabled=data["valuation_enabled"],
         currency=data["currency"],
         items=[KardexReconciliationRowOut(**row) for row in data["items"]],
@@ -185,7 +226,7 @@ async def valued_kardex(
     if period_from > period_to:
         raise HTTPException(422, "La fecha inicial debe ser anterior o igual a la final.")
     company_id = effective_company_id(request)
-    await require_company_wide_scope(session, current, company_id)
+    await _authorize_company_values(session, current, company_id)
     data = await kardex.valued_kardex(
         company_id=company_id,
         inventory_item_id=inventory_item_id,
@@ -197,6 +238,7 @@ async def valued_kardex(
     if data is None:
         raise HTTPException(404, "Artículo de inventario no encontrado.")
     return ValuedKardexOut(
+        context=await kardex.context(company_id=company_id, item_id=inventory_item_id),
         inventory_item_id=inventory_item_id,
         setting=ValuationSettingOut.model_validate(data["setting"]) if data["setting"] else None,
         period_from=period_from,

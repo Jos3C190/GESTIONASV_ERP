@@ -1,0 +1,40 @@
+                                                                 6.8.31 Relaciones del Modelo
+
+Las principales relaciones serán:
+
+    •   branches.id_branch < purchase_requests.id_branch
+    •   warehouses.id_warehouse < purchase_requests.id_warehouse
+    •   users.id_user < purchase_requests.id_user
+    •   purchase_requests.id_purchase_request <
+        purchase_request_details.id_purchase_request
+    •   products.id_product < purchase_request_details.id_product
+    •   purchase_quotations.id_purchase_quotation <
+        purchase_quotation_details.id_purchase_quotation
+    •   supliers.id_suplier < purchase_quotations.id_supplier
+    •   purchase_requests.id_purchase_request <
+        purchase_quotation_requests.id_purchase_request
+    •   purchase_quotations.id_purchase_quotation <
+        purchase_quotation_requests.id_purchase_quotation
+    •   purchase_quotation_details.id_purchase_quotation_detail <
+    •   purchase_quotation_request_details.id_purchase_quotation_detail
+    •   purchase_request_details.id_purchase_request_detail <
+    •   purchase_quotation_request_details.id_purchase_request_detail
+    •   purchase_quotations.id_purchase_quotation <
+    •   purchase_quotation_expenses.id_purchase_quotation
+    •   purchase_orders.id_purchase_order <
+    •   purchase_order_details.id_purchase_order
+    •   purchase_orders.id_purchase_order < purchase_order_expenses.id_purchase_order
+    •   purchase_order_expenses.id_purchase_order_expense <
+        purchase_order_expense_documents.id_purchase_order_expense
+    •   purchase_orders.id_purchase_order < purchases.id_purchase_order
+    •   purchases.id_purchase < purchase_details.id_purchase
+    •   purchase_order_details.id_purchase_order_detail <
+        purchase_details.id_purchase_order_detail
+    •   purchases.id_purchase < retaceos.id_purchase
+    •   retaceos.id_retaceo < retaceo_details.id_retaceo
+    •   products.id_product < retaceo_details.id_product
+
+
+
+
+                                                                                                             83

@@ -1,0 +1,35 @@
+retaceos.calculate | Calcular costos
+retaceos.verify | Verificar retaceo
+retaceos.close | Cerrar retaceo
+retaceos.cancel | Cancelar retaceo
+6.8.38 Casos de Uso
+Código | Caso de Uso
+CU-067 | Crear solicitud de compra
+CU-068 | Modificar solicitud
+CU-069 | Consultar solicitud
+CU-070 | Aprobar solicitud
+CU-071 | Rechazar solicitud
+CU-072 | Cancelar solicitud
+CU-073 | Registrar cotización
+CU-074 | Modificar cotización
+CU-075 | Consultar cotización
+CU-076 | Relacionar cotización con solicitud
+CU-077 | Comparar cotizaciones
+CU-078 | Seleccionar proveedor
+CU-079 | Registrar tipo de gasto
+CU-080 | Registrar gasto de cotización
+CU-081 | Crear orden de compra
+CU-082 | Modificar orden
+CU-083 | Consultar orden
+CU-084 | Aprobar orden
+CU-085 | Cancelar orden
+CU-086 | Enviar orden al proveedor
+CU-087 | Registrar gasto de orden
+CU-088 | Adjuntar documento de gasto
+CU-089 | Registrar recepción
+CU-090 | Registrar compra
+CU-091 | Consultar compra
+CU-092 | Registrar retaceo
+CU-093 | Calcular retaceo
+CU-094 | Verificar retaceo
+CU-095 | Cerrar retaceo

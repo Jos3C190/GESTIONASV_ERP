@@ -1,0 +1,46 @@
+                                                                        6.7.17 Pantallas del Módulo
+
+6.7.17.1 Categorías
+
+    •    Listado de categorías.
+    •    Registrar categoría.
+    •    Editar categoría.
+    •    Activar/desactivar categoría.
+    •    Consultar productos.
+
+6.7.17.2 Subcategorías
+
+    •    Listado de subcategorías.
+    •    Registrar subcategoría.
+    •    Editar subcategoría.
+    •    Activar/desactivar subcategoría.
+    •    Consultar productos.
+
+6.7.17.3 Unidades
+
+    •    Listado de unidades.
+    •    Registrar unidad.
+    •    Editar unidad.
+    •    Activar/desactivar unidad.
+    •    Filtrar por tipo.
+
+6.7.17.4 Productos
+
+    •    Listado de productos.
+    •    Registrar producto.
+    •    Editar producto.
+    •    Ver detalle.
+    •    Activar/desactivar producto.
+
+6.7.17.5 Imágenes
+
+Dentro del detalle del producto:
+
+    •    Galería.
+    •    Cargar imagen.
+    •    Activar imagen.
+    •    Desactivar imagen.
+
+
+
+                                                                                                                     53

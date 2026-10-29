@@ -4,9 +4,13 @@ export function kardexNumber(value: string | null | undefined): string {
   return value == null ? '—' : displayDecimal(value, 3);
 }
 
-export function kardexMoney(value: string | null | undefined, currency = 'USD'): string {
+export function kardexMoney(
+  value: string | null | undefined,
+  currency = 'USD',
+  decimals = 2
+): string {
   if (value == null) return '—';
-  const formatted = displayDecimal(value, 2);
+  const formatted = displayDecimal(value, decimals);
   if (formatted === '—') return formatted;
   const [whole = '—', fraction = ''] = formatted.split('.');
   return `${currency} ${whole}.${fraction.padEnd(2, '0')}`;

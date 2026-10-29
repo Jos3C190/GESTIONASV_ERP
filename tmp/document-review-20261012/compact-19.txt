@@ -1,0 +1,24 @@
+Almacena el estado del registro después de la operación.
+Ejemplo
+{
+"price":28,
+"stock":95
+}
+id_user
+Usuario responsable de la operación.
+created_at
+Fecha y hora exacta del evento.
+La fecha deberá obtenerse desde el servidor para garantizar la integridad de la auditoría.
+6.2.5 Reglas de Negocio
+RN-LOG-001: Todo proceso que cree información deberá generar automáticamente un registro
+en la bitácora.
+RN-LOG-002: Toda modificación deberá registrar los valores originales y los nuevos valores.
+RN-LOG-003: Las eliminaciones lógicas deberán quedar registradas.
+RN-LOG-004: La bitácora será de solo lectura. No podrá modificarse mediante ninguna opción
+del sistema.
+RN-LOG-005: Los registros de auditoría no podrán eliminarse desde la aplicación.
+RN-LOG-006: Toda autenticación exitosa deberá registrarse.
+RN-LOG-007: Los cambios de contraseña deberán registrarse sin almacenar la contraseña
+anterior ni la nueva.
+RN-LOG-008: Las operaciones masivas (importaciones, exportaciones o actualizaciones por lote)
+deberán generar un registro principal y conservar el detalle correspondiente.

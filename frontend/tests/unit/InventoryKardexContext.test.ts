@@ -17,7 +17,8 @@ vi.mock('$app/state', () => ({
   page: { url: new URL('http://localhost/inventory/kardex'), params: {} }
 }));
 vi.mock('$lib/services/warehouses', () => ({ getWarehouses: mocks.getWarehouses }));
-vi.mock('$lib/features/inventory/kardex', () => ({
+vi.mock('$lib/features/inventory/kardex', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   kardexApi: {
     searchItems: mocks.searchItems,
     physical: mocks.physical,

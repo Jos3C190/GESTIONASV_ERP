@@ -84,6 +84,7 @@ from app.infrastructure.repositories.inventory_valuation_repository import (
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 T = TypeVar("T")
+MIN_RELOCATION_REASON_LENGTH = 5
 
 
 class InventoryBoundaryError(AppError):
@@ -205,7 +206,7 @@ async def _reject_legacy_transfer_through_vehicle_transit(
 
 
 async def _reject_legacy_transfer_without_document(
-    session: SessionDep, lines: list[MovementLineIn]
+    session: SessionDep, lines: list[MovementLineIn], source_reference: str | None = None
 ) -> None:
     """Require B03 documents for warehouse-to-warehouse and in-transit transfers."""
     if any(
@@ -231,6 +232,23 @@ async def _reject_legacy_transfer_without_document(
         )
     ).all()
     warehouse_by_location = dict(rows)
+    if (
+        any(
+            line.from_location_id != line.to_location_id
+            and line.from_location_id is not None
+            and line.to_location_id is not None
+            and line.from_stock_status == line.to_stock_status == StockStatus.AVAILABLE
+            and warehouse_by_location.get(line.from_location_id)
+            == warehouse_by_location.get(line.to_location_id)
+            for line in lines
+        )
+        and len((source_reference or "").strip()) < MIN_RELOCATION_REASON_LENGTH
+    ):
+        raise InventoryBoundaryError(
+            "Indique un motivo de al menos cinco caracteres para reubicar la unidad.",
+            code="inventory_relocation_reason_required",
+            status_code=409,
+        )
     if any(
         source_id in warehouse_by_location
         and destination_id in warehouse_by_location
@@ -663,7 +681,7 @@ async def confirm_movement(
     await _authorize_locations(request, session, current, location_ids)
     if body.movement_type == "transfer":
         await _reject_legacy_transfer_through_vehicle_transit(session, location_ids)
-        await _reject_legacy_transfer_without_document(session, body.lines)
+    await _reject_legacy_transfer_without_document(session, body.lines, body.source_reference)
     movement = await _execute(
         session,
         _use_cases(session).post_movement(

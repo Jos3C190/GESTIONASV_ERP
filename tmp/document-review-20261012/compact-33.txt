@@ -1,0 +1,28 @@
+RN-WHS-006: El código de ubicación deberá ser único dentro del almacén.
+RN-WHS-007: No podrá desactivarse una ubicación que contenga existencias.
+RN-WHS-008: la capacidad de una ubicación deberá ser mayor que cero.
+RN-WHS-009: No podrá existir duplicidad en la combinación Pasillo–Estante–Nivel–Posición
+dentro del mismo almacén.
+6.5.5 Operaciones del Módulo
+Gestión de Categorías
+• | Registrar categoría.
+• | Modificar categoría.
+• | Consultar categoría.
+• | Desactivar categoría.
+Gestión de Almacenes
+• | Registrar almacén.
+• | Modificar almacén.
+• | Consultar almacén.
+• | Activar almacén.
+• | Desactivar almacén.
+Gestión de Ubicaciones
+• | Registrar ubicación.
+• | Modificar ubicación.
+• | Consultar ubicación.
+• | Activar ubicación.
+• | Desactivar ubicación.
+6.5.6 Pantallas
+Categorías de Almacén
+• | Listado.
+• | Nueva categoría.
+• | Editar categoría.

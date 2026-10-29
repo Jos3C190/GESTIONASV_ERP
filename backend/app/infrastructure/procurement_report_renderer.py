@@ -74,7 +74,14 @@ def render_pdf(report: TabularReport) -> bytes:
             cells = []
             for index, value in enumerate(row):
                 if isinstance(value, Decimal):
-                    digits = 6 if section.numeric_formats.get(index, "").endswith("000000") else 2
+                    number_format = section.numeric_formats.get(index, "")
+                    digits = (
+                        0
+                        if number_format == "#,##0"
+                        else 6
+                        if number_format.endswith("000000")
+                        else 2
+                    )
                     cells.append(paragraph(f"{value:,.{digits}f}", right))
                 else:
                     cells.append(paragraph(value))

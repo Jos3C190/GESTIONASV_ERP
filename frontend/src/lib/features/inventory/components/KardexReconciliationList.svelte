@@ -40,7 +40,7 @@
         <div>
           <dt class="text-xs text-foreground-muted">Costo promedio</dt>
           <dd class="mt-1 font-semibold tabular-nums">
-            {kardexMoney(row.average_unit_cost, data.currency ?? 'USD')}
+            {kardexMoney(row.average_unit_cost, data.currency ?? 'USD', 6)}
           </dd>
         </div>
         <div class="col-span-2 border-t border-border pt-2">
@@ -90,7 +90,7 @@
             >{kardexMoney(row.inventory_value, data.currency ?? 'USD')}</td
           >
           <td class="px-3 py-3 text-right tabular-nums"
-            >{kardexMoney(row.average_unit_cost, data.currency ?? 'USD')}</td
+            >{kardexMoney(row.average_unit_cost, data.currency ?? 'USD', 6)}</td
           >
           <td class="px-3 py-3"
             ><Button variant="secondary" class="whitespace-nowrap" onclick={() => onOpenKardex(row)}

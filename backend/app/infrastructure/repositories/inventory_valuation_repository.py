@@ -52,6 +52,17 @@ def error(message: str, code: str) -> NoReturn:
     raise InventoryOperationError(message, code=code, status_code=409)
 
 
+def _physical_kind_allowed(kind: str, movement_type: str, inbound: bool) -> bool:
+    if movement_type == "opening":
+        return kind == "opening" and inbound
+    allowed = (
+        {"receipt", "adjustment_in", "customer_return"}
+        if inbound
+        else {"issue", "adjustment_out", "supplier_return"}
+    )
+    return kind in allowed
+
+
 class SqlAlchemyInventoryValuationRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -383,18 +394,11 @@ class SqlAlchemyInventoryValuationRepository:
             else "issue"
         )
         kind = data.get("valuation_kind") or default_kind
-        allowed = (
-            {"opening", "receipt", "adjustment_in", "customer_return"}
-            if inbound
-            else {"issue", "adjustment_out", "supplier_return"}
-        )
-        if kind not in allowed:
+        if not _physical_kind_allowed(kind, movement_type, inbound):
             error(
                 "El tratamiento del costo no corresponde al movimiento físico.",
                 "valuation_movement_mismatch",
             )
-        if kind == "opening" and movement_type != "opening":
-            error("El saldo inicial requiere su operación dedicada.", "valuation_movement_mismatch")
         if data.get("valuation_currency") not in {None, setting.currency}:
             error(
                 "La recepción debe expresarse en la moneda de valoración de la empresa.",
@@ -454,7 +458,9 @@ class SqlAlchemyInventoryValuationRepository:
             .where(
                 RetaceoModel.company_id == company_id,
                 RetaceoModel.status == "closed",
-                PurchaseModel.inventory_workflow.in_(["retaceo_before_inventory", "placement_before_inventory"]),
+                PurchaseModel.inventory_workflow.in_(
+                    ["retaceo_before_inventory", "placement_before_inventory"]
+                ),
                 PurchaseDetailModel.id == purchase_detail_id,
             )
         )

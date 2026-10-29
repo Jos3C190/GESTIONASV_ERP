@@ -1,0 +1,43 @@
+El módulo utilizará información proveniente principalmente de:
+
+         •   Usuarios
+         •   Sucursales
+         •   Almacenes
+         •   Proveedores
+         •   Productos
+         •   Unidades
+         •   Bitácora
+
+El módulo proporcionará posteriormente información a:
+
+         •   Inventario
+         •   Asignación de precios
+         •   Ventas
+         •   Devoluciones
+
+El Retaceo será considerado parte del proceso de Gestión de Compras, debido a que su función
+es determinar el costo real de adquisición de los productos importados a partir de los costos
+asociados a la compra.
+
+                                                                                            6.8.2 Objetivos
+
+Objetivo General
+
+Implementar un sistema de gestión de compras que permita controlar de manera estructurada,
+trazable y segura el proceso de adquisición de productos, desde la solicitud de compra hasta la
+recepción, registro de la compra y determinación del costo real mediante retaceo.
+
+Objetivos Específicos
+
+         •   Registrar solicitudes de compra.
+         •   Identificar los productos y cantidades requeridas.
+         •   Asociar las solicitudes con una sucursal y almacén.
+         •   Gestionar cotizaciones recibidas de proveedores.
+         •   Asociar cotizaciones con una o varias solicitudes de compra.
+         •   Registrar los productos y condiciones comerciales ofrecidas por los proveedores.
+         •   Registrar precios, descuentos, impuestos y tiempos de entrega.
+         •   Registrar cantidades disponibles ofrecidas por los proveedores.
+         •   Facilitar la comparación de diferentes cotizaciones.
+         •   Permitir la selección del proveedor y cotización más conveniente.
+
+                                                                                                                   61

@@ -3238,7 +3238,8 @@ class SqlAlchemyInventoryRepository:
                     raise InventoryOperationError(str(exc), code="measurements_required") from exc
                 if (
                     expiry_date is not None
-                    and expiry_date < datetime.now(UTC).date()
+                    and expiry_date
+                    < datetime.now(UTC).astimezone(ZoneInfo("America/El_Salvador")).date()
                     and requested_status is StockStatus.AVAILABLE
                 ):
                     raise InventoryOperationError(

@@ -1,0 +1,46 @@
+ product_images.update               Modificar imágenes
+ product_images.activate             Activar imágenes
+ product_images.deactivate           Desactivar imágenes
+
+                                                                                     6.7.19 Validaciones
+
+6.7.19.1 Productos
+
+El sistema deberá validar:
+
+    •    Nombre obligatorio.
+    •    Categoría obligatoria.
+    •    Subcategoría obligatoria.
+    •    Categoría y subcategoría compatibles.
+    •    SKU único.
+    •    Código interno único.
+    •    Unidad de compra obligatoria.
+    •    Unidad de venta obligatoria.
+    •    Unidad de compra activa.
+    •    Unidad de venta activa.
+    •    Unidad de compra con type = purchase.
+    •    Unidad de venta con type = sale.
+
+6.7.19.2 Categorías
+
+    •    Nombre obligatorio.
+    •    Nombre único.
+    •    Estado válido.
+
+6.7.19.3 Subcategorías
+
+    •    Categoría obligatoria.
+    •    Categoría existente.
+    •    Nombre obligatorio.
+    •    Nombre único dentro de la categoría.
+    •    Estado válido.
+
+6.7.19.4 Unidades
+
+    •    Nombre obligatorio.
+    •    Tipo obligatorio.
+    •    Tipo limitado a purchase o sale.
+    •    Nombre único dentro del tipo.
+    •    Estado válido.
+
+                                                                                                                  55

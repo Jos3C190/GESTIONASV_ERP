@@ -1,0 +1,28 @@
+commercial_line_3 | string | Giro comercial adicional
+address | string | Dirección
+id_department | int | Departamento
+id_municipality | int | Municipio
+id_district | int | Distrito
+phone | string | Teléfono
+email | string | Correo electrónico
+web_site | string | Sitio web
+logo | string | Ruta del logotipo
+is_active | boolean | Estado
+Catálogos Auxiliares
+La dirección de la empresa utilizará los siguientes catálogos de consulta:
+• | departments
+• | municipalities
+• | districts
+Estos catálogos son de solo lectura y no forman parte del mantenimiento del sistema.
+6.3.4 Reglas de Negocio
+RN-EMP-001: El NIT deberá ser único.
+RN-EMP-002: El NRC deberá ser único.
+RN-EMP-003: Toda empresa deberá pertenecer a un departamento, municipio y distrito
+válidos.
+RN-EMP-004: No podrá eliminarse una empresa con sucursales asociadas.
+RN-EMP-005: Una empresa inactiva no podrá generar nuevas transacciones.
+RN-EMP-006: El logotipo deberá aceptar únicamente formatos de imagen permitidos.
+6.3.5 Operaciones
+• | Registrar empresa.
+• | Modificar empresa.
+• | Consultar empresa.

@@ -1,0 +1,35 @@
+┌──────────────────────┐
+Gastos asociados
+└──────────────────────┘
+↓
+┌──────────────────────┐
+Recepción / Compra
+└──────────────────────┘
+↓
+┌──────────────────────┐
+Detalle de compra
+└──────────────────────┘
+↓
+┌──────────────────────┐
+Retaceo
+└──────────────────────┘
+↓
+┌──────────────────────┐
+Costo real
+└──────────────────────┘
+↓
+┌──────────────────────┐
+Inventario
+└──────────────────────┘
+6.8.5 Estructura de Base de Datos
+El módulo utilizará las siguientes tablas:
+Solicitudes
+• | purchase_requests
+• | purchase_request_details
+Cotizaciones
+• | purchase_quotations
+• | purchase_quotation_details
+• | purchase_quotation_requests
+• | purchase_quotation_request_details
+Gastos
+• | expense_types

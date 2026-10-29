@@ -1,0 +1,30 @@
+6.6.3 Modelo de Datos
+El módulo está compuesto por dos tablas principales:
+• | suppliers
+• | suppliers_contacts
+Tabla suppliers
+Representa el catálogo principal de proveedores.
+Campo | Tipo | Descripción
+id_supplier | int | Identificador único del proveedor
+code | string | Código interno del proveedor
+name | string | Nombre o razón social
+country | int | País del proveedor
+address | string | Dirección
+phone | string | Teléfono principal
+email | string | Correo electrónico principal
+website | string | Sitio web
+is_active | boolean | Estado del proveedor
+Tabla suppliers_contacts
+Almacena las personas de contacto asociadas a un proveedor.
+Campo | Tipo | Descripción
+id_supplier_contact | int | Identificador del contacto
+id_supplier | int | Proveedor al que pertenece
+full_name | string | Nombre completo del contacto
+phone | string | Teléfono del contacto
+email | string | Correo electrónico
+is_active | boolean | Estado del contacto
+6.6.4 Reglas de Negocio
+RN-SUP-001: Cada proveedor deberá tener un identificador único.
+RN-SUP-002: El código interno del proveedor deberá ser único.
+RN-SUP-003: El nombre o razón social del proveedor será obligatorio.
+RN-SUP-004: Un proveedor podrá tener múltiples contactos.

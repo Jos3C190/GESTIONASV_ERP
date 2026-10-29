@@ -1,0 +1,45 @@
+4. ACTORES DEL SISTEMA
+
+El sistema contará con los siguientes actores principales.
+
+4.1 Administrador del Sistema
+
+Responsable de la configuración general del ERP.
+
+Funciones principales:
+
+    •   Crear usuarios.
+    •   Asignar permisos.
+    •   Configurar parámetros.
+    •   Administrar catálogos.
+    •   Consultar auditoría.
+
+4.2 Gerente General
+
+Responsable de supervisar la operación comercial.
+
+Funciones:
+
+    •   Aprobar compras.
+    •   Aprobar cambios de precio.
+    •   Consultar indicadores.
+    •   Consultar reportes.
+
+4.3 Encargado de Compras
+
+Responsable del abastecimiento de productos.
+
+Funciones:
+
+    •   Gestionar proveedores.
+    •   Elaborar cotizaciones de compra.
+    •   Emitir órdenes de compra.
+    •   Registrar compras.
+    •   Ejecutar retaceos.
+
+
+
+
+
+
+                                                                                                               6

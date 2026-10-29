@@ -1,0 +1,61 @@
+APUNTES DE CLASE / SISTEMA ERP
+SESIÓN 23 · 12 OCT 2026
+Inventario y compras · Explicación, requisitos y decisiones pendientes
+9
+8. Kardex: historial de movimientos
+CLASE. El kardex permite consultar cómo se ha movido un producto: fecha, tipo de movimiento, entradas,
+salidas, saldo y costo. El sistema lo alimenta desde las operaciones; el usuario consulta y filtra sus datos, sin
+editarlos directamente.
+Movimiento
+Efecto físico explicado
+Observación para el sistema
+Compra incorporada al
+inventario
+Entrada
+Registrar al completar el ingreso definido en
+el flujo, evitando duplicar la recepción.
+Venta
+Salida
+Aplicar el costo vigente conforme al método
+de valoración.
+Devolución de cliente
+Entrada
+La clase describe su dirección; falta acordar
+qué costo se restituye.
+Devolución a proveedor
+Salida
+Conservar el vínculo con la compra y el lote;
+política de costo pendiente.
+Ajuste por sobrante
+Entrada
+Registrar una operación de ajuste con su
+motivo.
+Ajuste por faltante
+Salida
+Registrar la disminución y su motivo.
+Traslado entre
+almacenes
+Salida del origen y entrada en destino
+Relacionar ambos lados de la misma
+operación.
+Cambio de ubicación
+Salida de una ubicación y entrada en otra del
+mismo almacén
+Cambia la distribución física; no aumenta el
+total del almacén.
+La dirección de los movimientos es CLASE. Los vínculos, controles de duplicidad y motivos de ajuste son
+PROPUESTAS de implementación.
+Qué mostrar y filtrar
+CLASE. Consulta por producto, fecha y filtros relacionados con los movimientos. Mostrar entradas, salidas,
+saldo y costo promedio.
+PROPUESTA. Añadir documento de origen, lote, almacén, ubicación, usuario responsable, costo unitario
+de la operación, valor del movimiento y valor del saldo. Filtros por empresa, almacén, lote y tipo de
+movimiento facilitan las investigaciones del personal.
+Historial que se pueda explicar
+PROPUESTA. Una corrección debe dejar una operación vinculada y justificada, en vez de permitir
+sobrescribir una fila del kardex. El criterio técnico exacto de reversión y los permisos deben acordarse antes
+de implementarlo.
+El saldo inicial también necesita una procedencia identificable. Los costos guardados en movimientos
+históricos deben representar el momento de la operación; consultar hoy un movimiento antiguo no debe
+sustituir su costo por el promedio actual.
+Base del TXT: líneas 47, 227 y 229.

@@ -1,0 +1,30 @@
+• | Activar empresa.
+• | Desactivar empresa.
+• | Actualizar logotipo.
+• | Consultar información fiscal.
+6.3.6 Pantallas
+• | Listado de empresas.
+• | Nueva empresa.
+• | Editar empresa.
+• | Configuración de empresa.
+6.3.7 Permisos RBAC
+• | companies.view
+• | companies.create
+• | companies.update
+• | companies.activate
+• | companies.deactivate
+6.3.8 Validaciones
+• | Razón social obligatoria.
+• | Nombre comercial obligatorio.
+• | NIT obligatorio y único.
+• | NRC obligatorio y único.
+• | Correo electrónico válido.
+• | Departamento obligatorio.
+• | Municipio obligatorio.
+• | Distrito obligatorio.
+• | Logo opcional.
+6.3.9 Casos de Uso
+• | CU-027 Registrar empresa.
+• | CU-028 Modificar empresa.
+• | CU-029 Activar o desactivar empresa.
+• | CU-030 Consultar información empresarial.

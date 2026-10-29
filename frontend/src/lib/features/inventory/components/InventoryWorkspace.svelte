@@ -163,12 +163,16 @@
 
 <svelte:head><title>Inventario | GestionaSV</title></svelte:head>
 
-<div class="mx-auto max-w-[1600px] space-y-6 p-4 md:p-6 lg:p-8">
+<div class="mx-auto max-w-[1600px] space-y-4 p-3 sm:space-y-6 sm:p-4 md:p-6 lg:p-8">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-wider text-primary">Operación de bodega</p>
-      <h1 class="mt-2 text-2xl font-semibold tracking-tight text-foreground">Inventario</h1>
-      <p class="mt-2 max-w-2xl text-sm leading-6 text-foreground-muted">
+      <p class="hidden text-xs font-semibold uppercase tracking-wider text-primary sm:block">
+        Operación de bodega
+      </p>
+      <h1 class="text-xl font-semibold tracking-tight text-foreground sm:mt-2 sm:text-2xl">
+        Inventario
+      </h1>
+      <p class="mt-2 hidden max-w-2xl text-sm leading-6 text-foreground-muted sm:block">
         Consulta existencias, revisa las unidades recibidas y prepara su ubicación en bodega.
       </p>
     </div>
@@ -212,7 +216,7 @@
         aria-labelledby="warehouse-heading"
       >
         <div class="flex flex-wrap items-end justify-between gap-4 border-b border-border p-5">
-          <div>
+          <div class="w-full sm:w-auto">
             <h2 id="warehouse-heading" class="font-semibold text-foreground">
               Selecciona la bodega
             </h2>
@@ -338,12 +342,12 @@
     {#if selected}
       <section aria-labelledby="selected-heading" class="space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div class="w-full sm:w-auto">
             <p class="text-xs font-mono text-foreground-muted">{selected.code}</p>
             <h2
               id="selected-heading"
               tabindex="-1"
-              class="mt-1 text-lg font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              class="mt-1 text-base font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:text-lg"
             >
               {selected.name}
             </h2>
@@ -353,21 +357,21 @@
           >
           {#if permissions.hasPermission('locations.view')}
             <a
-              class="rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              class="rounded-lg border border-border px-3 py-2.5 text-xs text-foreground hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:px-4 sm:text-sm"
               href={`/warehouses/${selected.id}/locations`}>Ubicaciones y etiquetas →</a
             >
           {/if}
         </div>
         {#if permissions.hasPermission('inventory:warehouse_receipts')}
           <nav
-            class="grid grid-cols-2 gap-1 rounded-lg border border-border bg-surface p-1 sm:flex"
+            class="flex gap-1 overflow-x-auto rounded-lg border border-border bg-surface p-1"
             aria-label="Tareas de bodega"
           >
             {#each [{ id: 'receipts', label: 'Recepciones' }, { id: 'preparation', label: 'Preparar y ubicar' }, { id: 'stock', label: 'Existencias' }, { id: 'movements', label: 'Movimientos' }] as section (section.id)}
               <button
                 type="button"
                 aria-current={activeSection === section.id ? 'page' : undefined}
-                class="min-h-11 min-w-0 rounded-md px-2 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:px-4 {activeSection ===
+                class="min-h-11 shrink-0 whitespace-nowrap rounded-md px-2 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:px-4 {activeSection ===
                 section.id
                   ? 'bg-foreground text-surface'
                   : 'text-foreground-muted hover:bg-surface-hover'}"

@@ -1,0 +1,31 @@
+6.8.36.2 Cotizaciones
+Listado → Deberá mostrar:
+• | Código.
+• | Proveedor.
+• | Fecha.
+• | Vigencia.
+• | Total.
+• | Estado.
+Formulario → Campos:
+• | Proveedor.
+• | Fecha.
+• | Vigencia.
+• | Moneda.
+• | Condiciones de pago.
+• | Tiempo de entrega.
+• | Productos.
+• | Cantidades.
+• | Unidades.
+• | Precios.
+• | Descuentos.
+• | Impuestos.
+• | Gastos.
+• | Observaciones.
+6.8.36.3 Comparación de Cotizaciones
+Esta será una de las pantallas principales del módulo.
+El usuario seleccionará una solicitud y podrá visualizar las diferentes cotizaciones relacionadas.
+Ejemplo:
+Producto | Cantidad | Proveedor A | Proveedor B | Proveedor C
+Laptop | 5 | $800 | $780 | $825
+Mouse | 10 | $15 | $13 | $14
+Teclado | 10 | $20 | $19 | $18

@@ -1,0 +1,26 @@
+6.2.10 Validaciones
+• | El usuario debe estar autenticado antes de registrar el evento.
+• | El controller debe corresponder a un módulo válido del sistema.
+• | La action debe pertenecer al catálogo de acciones permitidas.
+• | modified_data será obligatorio para todas las operaciones.
+• | original_data será obligatorio en operaciones de actualización, eliminación lógica y
+restauración.
+• | El registro de auditoría se almacenará dentro de la misma transacción de la operación
+de negocio para asegurar consistencia.
+6.2.11 Casos de Uso
+• | CU-021: Consultar bitácora general.
+• | CU-022: Consultar historial de acciones de un usuario.
+• | CU-023: Consultar cambios realizados sobre un registro específico.
+• | CU-024: Filtrar eventos por módulo.
+• | CU-025: Exportar reporte de auditoría.
+• | CU-026: Comparar datos originales y modificados de una operación.
+6.2.12 Criterios de Aceptación
+• | Cada operación de creación, actualización y eliminación lógica genera automáticamente
+un registro en la tabla logs.
+• | La bitácora conserva la referencia al usuario responsable y la fecha del evento.
+• | Es posible consultar y filtrar registros por usuario, módulo, acción y rango de fechas.
+• | Los datos originales y modificados se muestran de forma estructurada para facilitar la
+auditoría.
+• | Ningún usuario puede editar o eliminar registros de la bitácora desde la aplicación.
+• | Las operaciones registradas son consistentes con la información almacenada en los
+módulos del ERP.

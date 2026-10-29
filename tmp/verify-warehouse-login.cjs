@@ -1,0 +1,52 @@
+const fs = require('node:fs');
+const assert = require('node:assert/strict');
+const { chromium } = require('C:/Users/rodri/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const directory = 'C:/Developer/GESTIONASV_ERP/tmp/warehouse-login';
+fs.mkdirSync(directory, { recursive: true });
+const credentials = fs.readFileSync('C:/Users/rodri/AppData/Local/Temp/gestionasv-rodrigo-molina-bodega-20261023.txt', 'utf8');
+const username = credentials.match(/^Usuario: (.+)$/m)?.[1].trim();
+const password = credentials.match(/^Contraseña: (.+)$/m)?.[1].trim();
+assert(username && password, 'Missing private credentials');
+(async () => {
+  const browser = await chromium.launch({executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const context = await browser.newContext({viewport:{width:1280,height:900}});
+  const page = await context.newPage();
+  const requests = [];
+  const errors = [];
+  page.on('response',r=>{if(r.url().includes('/api/v1/')) requests.push({path:new URL(r.url()).pathname,status:r.status()});});
+  page.on('pageerror',e=>errors.push(e.message));
+  try {
+    await page.goto('http://localhost:5173/login',{waitUntil:'networkidle',timeout:90000});
+    await page.locator('#login').fill(username);
+    await page.locator('#password').fill(password);
+    await page.getByRole('button',{name:'Iniciar sesión'}).click();
+    await page.waitForURL('**/companies',{timeout:90000});
+    const companyButton = page.getByRole('button').filter({hasText:'Grupo Lorena'});
+    await companyButton.first().click({timeout:30000});
+    await page.waitForURL('**/inventory',{timeout:60000});
+    await page.getByText('No hay unidades pendientes',{exact:true}).waitFor({timeout:60000});
+    const stockResponse = page.waitForResponse(r=>r.url().includes('/handling-units') && r.request().method()==='GET',{timeout:60000});
+    await page.getByRole('button',{name:'Existencias',exact:true}).click({timeout:45000});
+    assert.equal((await stockResponse).status(),200,'Live stock response');
+    await page.getByRole('button',{name:'Actualizar',exact:true}).last().waitFor({timeout:60000});
+    await page.getByText('Actualizando…',{exact:true}).first().waitFor({state:'hidden',timeout:60000});
+    await page.screenshot({path:directory+'/rodrigo-stock.png',fullPage:true});
+    const stockText = await page.locator('body').innerText();
+    assert(stockText.includes('Bodega Matriz Grupo Lorena'),'Assigned warehouse visible');
+    assert(!stockText.includes('Roles y permisos'),'Admin menu hidden');
+    await page.getByRole('button',{name:'Preparar y ubicar',exact:true}).click();
+    await page.getByText('No hay unidades pendientes',{exact:true}).waitFor({timeout:60000});
+    await page.screenshot({path:directory+'/rodrigo-preparation.png',fullPage:true});
+    assert(!requests.some(r=>r.status>=500),'No server errors');
+    const result = {ok:true,username,path:new URL(page.url()).pathname,requests,errors,stockText:stockText.slice(0,3000)};
+    fs.writeFileSync(directory+'/result.json',JSON.stringify(result,null,2));
+    process.stdout.write(JSON.stringify(result));
+  } catch(e) {
+    const authenticated = !new URL(page.url()).pathname.includes('login');
+    if(authenticated) await page.screenshot({path:directory+'/failure.png',fullPage:true});
+    const result={ok:false,path:new URL(page.url()).pathname,error:e.message,requests,errors,text:authenticated?(await page.locator('body').innerText()).slice(0,3000):'Login failed (credentials omitted)'};
+    fs.writeFileSync(directory+'/result.json',JSON.stringify(result,null,2));
+    process.stdout.write(JSON.stringify(result));
+    process.exitCode=1;
+  } finally {await browser.close();}
+})();

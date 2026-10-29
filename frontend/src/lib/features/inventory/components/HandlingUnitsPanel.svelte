@@ -12,6 +12,7 @@
   import type { HandlingUnit, PhysicalMeasuresInput, StockStatus } from '../types';
   import GroupedPutawayPanel from './GroupedPutawayPanel.svelte';
   import HandlingUnitLabelDialog from './HandlingUnitLabelDialog.svelte';
+  import UnitRelocation from './UnitRelocation.svelte';
 
   interface Props {
     warehouseId: string;
@@ -55,6 +56,7 @@
 
   let units = $state<HandlingUnit[]>([]);
   let selectedQrUnit = $state<HandlingUnit | null>(null);
+  let relocatingUnit = $state<HandlingUnit | null>(null);
   let locationCodes = $state<Map<string, string>>(new Map());
   let eligibleReleaseLocations = $state<Array<{ id: string; code: string; label: string }>>([]);
   let splittingUnitId = $state<string | null>(null);
@@ -1202,6 +1204,7 @@
                               class="cursor-pointer rounded-lg px-2 py-2 text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                               >Otras acciones</summary
                             >
+                            {#if canRelease}<button type="button" class="mb-2 mr-2 inline-flex min-h-9 items-center rounded-lg border border-border px-3 text-xs text-foreground hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" disabled={savingUnitId != null} onclick={() => relocatingUnit = unit}>Reubicar</button>{/if}
                             <button
                               type="button"
                               class="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-warning/40 bg-warning/10 px-3 text-xs font-medium text-warning transition-colors hover:bg-warning/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning disabled:pointer-events-none disabled:opacity-40"
@@ -1569,3 +1572,4 @@
   onclose={() => (selectedQrUnit = null)}
   onconfirmed={() => requestLoad()}
 />
+{#if relocatingUnit}<UnitRelocation unit={relocatingUnit} onclose={() => relocatingUnit = null} onmoved={requestLoad} />{/if}

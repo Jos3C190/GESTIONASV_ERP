@@ -6,8 +6,14 @@
   let {
     warehouseId,
     locationId = '',
-    onlocation
-  }: { warehouseId: string; locationId?: string; onlocation?: (id: string) => void } = $props();
+    onlocation,
+    compact = false
+  }: {
+    warehouseId: string;
+    locationId?: string;
+    onlocation?: (id: string) => void;
+    compact?: boolean;
+  } = $props();
   let query = $state('');
   let status = $state('');
   let applied = $state({ q: '', stock_status: '' });
@@ -55,12 +61,12 @@
     <h3 class="font-semibold text-foreground">
       {locationId ? 'Contenido del espacio' : 'Existencias por ubicación'}
     </h3>
-    <p class="mt-1 text-sm text-foreground-muted">
+    <p class="mt-1 hidden text-sm text-foreground-muted sm:block">
       Cantidades registradas en inventario. Cada fila conserva su unidad; las unidades en
       preparación se consultan aparte.
     </p>
     <form
-      class="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px_auto]"
+      class="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-3 sm:mt-4 sm:grid-cols-[minmax(0,1fr)_180px_auto]"
       onsubmit={(event) => {
         event.preventDefault();
         page = 1;
@@ -68,7 +74,7 @@
         revision += 1;
       }}
     >
-      <label class="text-sm text-foreground-muted"
+      <label class="col-span-2 text-sm text-foreground-muted sm:col-span-1"
         >Producto, código o lote<input
           class={workspaceField}
           bind:value={query}
@@ -77,7 +83,10 @@
         /></label
       >
       <label class="text-sm text-foreground-muted"
-        >Estado<select class={workspaceField} bind:value={status}
+        >Estado<select
+          class={workspaceField}
+          value={status}
+          onchange={(event) => (status = event.currentTarget.value)}
           ><option value="">Todos</option
           >{#each ['available', 'quarantine', 'blocked', 'damaged', 'in_transit'] as value}<option
               {value}>{stockStatusLabel(value)}</option
@@ -115,8 +124,12 @@
   {:else}
     <ul class="divide-y divide-border">
       {#each result.items as row, index (`${row.inventory_item_id}:${row.location_id}:${row.stock_status}:${index}`)}
-        <li class="grid gap-3 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]">
-          <div class="min-w-0">
+        <li
+          class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 p-4 sm:p-5 {compact
+            ? ''
+            : 'md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto]'}"
+        >
+          <div class="min-w-0 col-span-2 {compact ? '' : 'md:col-span-1'}">
             <p class="font-semibold text-foreground">{row.product_name}</p>
             <p class="mt-1 font-mono text-xs text-foreground-muted">
               {row.sku ?? 'Código no disponible'}

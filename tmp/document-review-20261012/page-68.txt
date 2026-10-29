@@ -1,0 +1,45 @@
+ id_purchase_quotation                   int         FK        Cotización
+ id_product                              int          FK       Producto
+ quantity                                decimal               Cantidad cotizada
+ id_unit                                 int          FK       Unidad
+ unit_price                              decimal               Precio unitario
+ discount                                decimal               Descuento
+ subtotal                                decimal               Subtotal
+ tax_rate                                decimal               Porcentaje de impuesto
+ tax_amount                              decimal               Monto de impuesto
+ total                                   decimal               Total
+ delivery_days                           int                   Días de entrega
+ available_quantity                      decimal               Cantidad disponible
+ notes                                   text                  Observaciones
+El impuesto del detalle permite conocer el tratamiento fiscal específico de cada producto.
+
+El campo purchase_quotations.tax funcionará como total consolidado de los impuestos de los
+detalles.
+
+                                      6.8.11 Relación entre Solicitudes y Cotizaciones
+
+Una solicitud no necesariamente estará relacionada con una única cotización.
+
+Una misma solicitud podrá ser cotizada por diferentes proveedores.
+
+Ejemplo:
+
+Solicitud PR-001
+        │
+       ├──── Cotización proveedor A
+        │
+       ├──── Cotización proveedor B
+        │
+        └──── Cotización proveedor C
+Esto permite realizar posteriormente la comparación de las diferentes alternativas.
+
+Además, una cotización podrá contener productos provenientes de diferentes solicitudes.
+
+Por esta razón no se agregará un único id_purchase_request directamente en
+purchase_quotations.
+
+
+
+
+
+                                                                                                                   68

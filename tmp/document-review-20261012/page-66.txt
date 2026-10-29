@@ -1,0 +1,44 @@
+ justification                   text                   Justificación
+ status                          string                 Estado
+ notes                           text                   Observaciones
+
+ created_at                      datetime               Fecha de creación
+La solicitud representa la necesidad interna de adquirir determinados productos.
+
+
+
+                                                      6.8.7 Tabla purchase_request_details
+
+Contiene los productos solicitados.
+
+ Campo                               Tipo         Clave    Descripción
+ id_purchase_request_detail          int          PK       Identificador
+ id_purchase_request                 int          FK       Solicitud
+ id_product                          int           FK      Producto
+ quantity                            decimal               Cantidad solicitada
+ id_unit                             int           FK      Unidad de compra
+ description                         string                Descripción
+ notes                               text                  Observaciones
+Una solicitud podrá contener múltiples productos.
+
+Ejemplo
+
+Solicitud:
+PR-00001
+Productos:
+Laptop Lenovo       5 unidades
+Mouse inalámbrico  10 unidades
+Teclado inalámbrico 10 unidades
+
+
+                                                                          6.8.8 Estados de Solicitud
+
+Se manejarán inicialmente los siguientes estados:
+
+ Estado            Descripción
+ draft             Solicitud en elaboración
+ submitted         Solicitud enviada
+ approved          Solicitud aprobada
+
+
+                                                                                                                 66

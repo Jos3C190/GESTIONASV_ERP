@@ -41,7 +41,10 @@
 
 <div class="space-y-4">
   <div class="flex flex-wrap items-center justify-between gap-3">
-    <nav class="flex flex-wrap gap-1" aria-label="Consultas de inventario">
+    <nav
+      class="grid w-full grid-cols-2 gap-1 sm:flex sm:w-auto"
+      aria-label="Consultas de inventario"
+    >
       {#each tabs as tab}<button
           type="button"
           aria-current={section === tab.id ? 'page' : undefined}
@@ -55,8 +58,9 @@
           }}>{tab.label}</button
         >{/each}
     </nav>
-    {#if canOpen}<Button variant="secondary" onclick={() => (section = 'opening')}
-        >Registrar saldo inicial</Button
+    {#if canOpen && section !== 'opening'}<Button
+        variant="secondary"
+        onclick={() => (section = 'opening')}>Registrar saldo inicial</Button
       >{/if}
   </div>
   {#key `${warehouseId}:${contextKey}:${revision}`}

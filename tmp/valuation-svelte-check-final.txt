@@ -1,0 +1,35 @@
+Loading svelte-check in workspace: c:\Developer\GESTIONASV_ERP\frontend
+Getting Svelte diagnostics...
+
+c:\Developer\GESTIONASV_ERP\frontend\tests\unit\PurchaseConsolidationAdjudication.test.ts:112:7
+Error: Property 'status' is missing in type '{ consolidationId: string; }' but required in type '$$ComponentProps'. 
+    render(PurchaseConsolidationAdjudication, {
+      props: { consolidationId: board.consolidation_id }
+    });
+
+c:\Developer\GESTIONASV_ERP\frontend\tests\unit\PurchaseConsolidationAdjudication.test.ts:148:7
+Error: Property 'status' is missing in type '{ consolidationId: string; }' but required in type '$$ComponentProps'. 
+    render(PurchaseConsolidationAdjudication, {
+      props: { consolidationId: board.consolidation_id }
+    });
+
+c:\Developer\GESTIONASV_ERP\frontend\tests\unit\PurchaseConsolidationAdjudication.test.ts:212:7
+Error: Property 'status' is missing in type '{ consolidationId: string; }' but required in type '$$ComponentProps'. 
+    render(PurchaseConsolidationAdjudication, {
+      props: { consolidationId: board.consolidation_id }
+    });
+
+c:\Developer\GESTIONASV_ERP\frontend\tests\unit\PurchaseConsolidationAdjudication.test.ts:287:7
+Error: Property 'status' is missing in type '{ consolidationId: string; }' but required in type '$$ComponentProps'. 
+    render(PurchaseConsolidationAdjudication, {
+      props: { consolidationId: board.consolidation_id }
+    });
+
+c:\Developer\GESTIONASV_ERP\frontend\tests\unit\PurchaseConsolidationAdjudication.test.ts:315:7
+Error: Property 'status' is missing in type '{ consolidationId: string; }' but required in type '$$ComponentProps'. 
+    render(PurchaseConsolidationAdjudication, {
+      props: { consolidationId: board.consolidation_id }
+    });
+
+====================================
+svelte-check found 5 errors and 0 warnings in 1 file

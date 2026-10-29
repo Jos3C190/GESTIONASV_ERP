@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "errors": [],
+  "responses": [
+    {
+      "path": "/api/v1/inventory/warehouses/14e5a8bc-20e6-4184-99a1-4238000eca8a/stock",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/inventory/warehouses/14e5a8bc-20e6-4184-99a1-4238000eca8a/stock",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/inventory/warehouses/14e5a8bc-20e6-4184-99a1-4238000eca8a/capacity-summary",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/inventory/lots",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/inventory/warehouses/14e5a8bc-20e6-4184-99a1-4238000eca8a/stock",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/inventory/warehouses/14e5a8bc-20e6-4184-99a1-4238000eca8a/capacity-summary",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/inventory/lots",
+      "status": 200
+    }
+  ],
+  "openingVisualFixture": true,
+  "inventoryMutations": 0
+}

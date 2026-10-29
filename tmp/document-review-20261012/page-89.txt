@@ -1,0 +1,44 @@
+Además:
+
+ Criterio            Proveedor A       Proveedor B       Proveedor C
+ Entrega             5 días            8 días            3 días
+ Disponibilidad      100%              80%               100%
+ Total               $4,450            $4,240            $4,405
+El usuario podrá seleccionar la cotización que servirá como base para generar una orden.
+
+6.8.36.4 Orden de Compra
+
+La pantalla deberá presentar:
+
+Encabezado
+
+        •    Código.
+        •    Proveedor.
+        •    Sucursal.
+        •    Almacén.
+        •    Cotización de origen.
+        •    Fecha.
+        •    Fecha esperada.
+        •    Moneda.
+        •    Condiciones de pago.
+
+Detalle
+
+        •    Producto.
+        •    Cantidad.
+        •    Unidad.
+        •    Precio unitario.
+        •    Descuento.
+        •    Impuesto.
+        •    Total.
+
+Gastos
+
+        •    Tipo de gasto.
+        •    Descripción.
+        •    Monto.
+        •    Evidencia documental.
+
+
+
+                                                                                                                 89

@@ -1,0 +1,47 @@
+Paso 7 — Retaceo
+
+Se genera:
+
+    •    RTC-00233
+
+con:
+
+    •    FOB       $55,780
+    •    Flete      $5,125
+    •    Gastos     $1,500
+    •    DAI        $8,927
+
+Paso 8 — Distribución
+
+El sistema distribuye los costos proporcionalmente al FOB.
+
+Resultado:
+
+    •    Prensadora
+    •    Costo real = $63,940.48
+
+
+
+    •    Camión
+    •    Costo real = $7,391.52
+
+Paso 9 — Integración
+
+El costo real obtenido podrá posteriormente utilizarse para la actualización del costo del
+producto en Inventario y para el proceso de asignación de precios.
+
+                               6.8.45 Consideraciones de Integridad y Consistencia
+
+El sistema deberá garantizar que las relaciones entre las diferentes etapas del proceso sean
+consistentes.
+
+Particularmente:
+
+Solicitud
+   ↓
+Cotización
+   ↓
+Orden
+   ↓
+
+                                                                                                                101

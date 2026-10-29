@@ -11,9 +11,19 @@
     disabled?: boolean;
     onselect: (item: AdjustmentItemOption) => void;
     searchItems?: typeof inventoryAdjustmentsApi.searchItems;
+    purpose?: string;
   }
 
-  let { id, warehouseId, warehouseName, selected, disabled = false, onselect, searchItems = inventoryAdjustmentsApi.searchItems }: Props = $props();
+  let {
+    id,
+    warehouseId,
+    warehouseName,
+    selected,
+    disabled = false,
+    onselect,
+    searchItems = inventoryAdjustmentsApi.searchItems,
+    purpose = 'el ajuste'
+  }: Props = $props();
   let open = $state(false);
   let dialog = $state<HTMLDialogElement | null>(null);
   let searchInput = $state<HTMLInputElement | null>(null);
@@ -170,7 +180,7 @@
 >
   <header class="flex items-start justify-between gap-3 border-b border-border p-4 sm:p-5">
     <div class="min-w-0">
-      <h2 id={`${id}-title`} class="text-lg font-semibold">Buscar producto para el ajuste</h2>
+      <h2 id={`${id}-title`} class="text-lg font-semibold">Buscar producto para {purpose}</h2>
       <p id={`${id}-context`} class="mt-1 break-words text-sm text-foreground-muted">
         {warehouseName}
       </p>
@@ -363,8 +373,7 @@
       </div>
     </div>
     <p class="text-xs text-foreground-muted">
-      Selecciona el producto para continuar con las cantidades del ajuste. Escape cierra la
-      búsqueda.
+      Selecciona el producto para continuar. Escape cierra la búsqueda.
     </p>
   </footer>
 </dialog>

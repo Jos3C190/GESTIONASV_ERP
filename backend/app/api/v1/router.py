@@ -26,6 +26,7 @@ from app.api.v1.routers import (
     inventory,
     inventory_adjustments,
     inventory_kardex,
+    inventory_kardex_reports,
     inventory_labels,
     inventory_lots,
     inventory_preparation,
@@ -78,6 +79,7 @@ api_router.include_router(inventory_workspace.router, prefix="/api/v1")
 api_router.include_router(warehouse_receiving.router, prefix="/api/v1")
 api_router.include_router(inventory_adjustments.router, prefix="/api/v1")
 api_router.include_router(inventory_kardex.router, prefix="/api/v1")
+api_router.include_router(inventory_kardex_reports.router, prefix="/api/v1")
 api_router.include_router(inventory_labels.router, prefix="/api/v1")
 api_router.include_router(inventory_preparation.router, prefix="/api/v1")
 api_router.include_router(inventory_lots.router, prefix="/api/v1")
