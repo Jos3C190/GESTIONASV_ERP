@@ -224,6 +224,10 @@ services:
       CLOUDINARY_UPLOAD_FOLDER: ${CLOUDINARY_UPLOAD_FOLDER:-erp-system}
       MEDIA_MAX_IMAGE_BYTES: ${MEDIA_MAX_IMAGE_BYTES:-10485760}
       MEDIA_SIGNATURE_TTL_SECONDS: ${MEDIA_SIGNATURE_TTL_SECONDS:-300}
+      # Vacío = módulo Seguimiento en modo demostración.
+      TRACCAR_URL: ${TRACCAR_URL:-}
+      TRACCAR_USER: ${TRACCAR_USER:-}
+      TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-}
       <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"

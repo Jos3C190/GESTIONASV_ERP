@@ -97,6 +97,11 @@ class Settings(BaseSettings):
     MEDIA_SIGNATURE_TTL_SECONDS: int = 300
     SUPPLIER_DATA_ENCRYPTION_KEY: str | None = Field(default=None, repr=False)
 
+    # --- GPS tracking (Traccar, optional) ---
+    TRACCAR_URL: str | None = None
+    TRACCAR_USER: str | None = None
+    TRACCAR_PASSWORD: str | None = Field(default=None, repr=False)
+
     # --- Generic documents / S3-compatible object storage ---
     OBJECT_STORAGE_ENABLED: bool = False
     OBJECT_STORAGE_INTERNAL_ENDPOINT: str = "http://rustfs:9000"
