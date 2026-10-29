@@ -81,6 +81,7 @@ class MeasurementSource(StrEnum):
 
 
 class MovementType(StrEnum):
+    OPENING = "opening"
     RECEIPT = "receipt"
     PUTAWAY = "putaway"
     TRANSFER = "transfer"

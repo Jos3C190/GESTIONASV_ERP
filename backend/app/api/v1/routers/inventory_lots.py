@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Any, Literal, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import and_, exists, func, select
+from sqlalchemy import and_, exists, func, or_, select
 
 from app.api.v1.company_access import (
     authorize_warehouse_assignment,
@@ -450,6 +450,7 @@ async def list_inventory_lots(
     purchase_id: uuid.UUID | None = None,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
+    q: str = Query("", max_length=120),
 ) -> InventoryLotPageOut:
     company_id = await _authorize_scope(
         request=request,
@@ -460,6 +461,16 @@ async def list_inventory_lots(
     )
     legacy_stock = await _legacy_stock_summary(session, company_id, warehouse_id)
     filters = [InventoryLotModel.company_id == company_id]
+    if q.strip():
+        matching_product = exists(select(InventoryLotDetailModel.id)
+            .join(ProductModel, and_(ProductModel.company_id == InventoryLotDetailModel.company_id,
+                                    ProductModel.id_product == InventoryLotDetailModel.product_id))
+            .where(InventoryLotDetailModel.company_id == company_id,
+                   InventoryLotDetailModel.inventory_lot_id == InventoryLotModel.id,
+                   or_(ProductModel.name.icontains(q.strip(), autoescape=True),
+                       ProductModel.sku.icontains(q.strip(), autoescape=True))))
+        filters.append(or_(InventoryLotModel.code.icontains(q.strip(), autoescape=True),
+                           PurchaseModel.code.icontains(q.strip(), autoescape=True), matching_product))
     if purchase_id is not None:
         filters.append(InventoryLotModel.purchase_id == purchase_id)
     if warehouse_id is not None:

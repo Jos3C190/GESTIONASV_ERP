@@ -33,6 +33,7 @@ from app.api.v1.routers import (
     inventory_trace,
     inventory_transfers,
     inventory_valuation,
+    inventory_workspace,
     lifecycle,
     locations,
     media,
@@ -73,6 +74,7 @@ api_router.include_router(organization.router, prefix="/api/v1")
 api_router.include_router(branch_product_demand.router, prefix="/api/v1")
 api_router.include_router(locations.router, prefix="/api/v1")
 api_router.include_router(inventory.router, prefix="/api/v1")
+api_router.include_router(inventory_workspace.router, prefix="/api/v1")
 api_router.include_router(warehouse_receiving.router, prefix="/api/v1")
 api_router.include_router(inventory_adjustments.router, prefix="/api/v1")
 api_router.include_router(inventory_kardex.router, prefix="/api/v1")

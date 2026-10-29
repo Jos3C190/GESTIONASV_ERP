@@ -390,7 +390,7 @@ class InventoryMovementModel(UUIDPKMixin, Base):
             name="fk_inventory_movements_reservation_company",
         ),
         CheckConstraint(
-            "movement_type IN ('receipt','putaway','transfer','pick','shipment',"
+            "movement_type IN ('opening','receipt','putaway','transfer','pick','shipment',"
             "'adjustment_in','adjustment_out','reversal')",
             name="ck_inventory_movements_type",
         ),

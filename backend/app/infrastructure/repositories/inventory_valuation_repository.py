@@ -384,7 +384,7 @@ class SqlAlchemyInventoryValuationRepository:
         )
         kind = data.get("valuation_kind") or default_kind
         allowed = (
-            {"receipt", "adjustment_in", "customer_return"}
+            {"opening", "receipt", "adjustment_in", "customer_return"}
             if inbound
             else {"issue", "adjustment_out", "supplier_return"}
         )
@@ -393,6 +393,8 @@ class SqlAlchemyInventoryValuationRepository:
                 "El tratamiento del costo no corresponde al movimiento físico.",
                 "valuation_movement_mismatch",
             )
+        if kind == "opening" and movement_type != "opening":
+            error("El saldo inicial requiere su operación dedicada.", "valuation_movement_mismatch")
         if data.get("valuation_currency") not in {None, setting.currency}:
             error(
                 "La recepción debe expresarse en la moneda de valoración de la empresa.",
@@ -409,7 +411,7 @@ class SqlAlchemyInventoryValuationRepository:
                     "valuation_cost_required",
                 )
             value = amount(balance.inventory_value * row.quantity_base / balance.quantity_base)
-        if kind in {"receipt", "adjustment_in"} and value is None:
+        if kind in {"opening", "receipt", "adjustment_in"} and value is None:
             error("Indique el costo provisional total de la entrada.", "valuation_cost_required")
         original_id = data.get("valuation_original_entry_id")
         initial_retaceo_id = await self._initial_receipt_retaceo(
