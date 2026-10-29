@@ -58,6 +58,8 @@ def _category_to_domain(model: DocumentCategoryModel) -> DocumentCategory:
         description=model.description,
         sort_order=model.sort_order,
         is_active=model.is_active,
+        requires_expiry=model.requires_expiry,
+        compliance_required=model.compliance_required,
         created_by=model.created_by,
         updated_by=model.updated_by,
         created_at=model.created_at,
@@ -288,6 +290,7 @@ class SqlAlchemyDocumentRecordRepository:
         expires_within_days: int | None = None,
         include_restricted: bool = True,
         branch_id: uuid.UUID | None = None,
+        modules: set[str] | None = None,
     ) -> tuple[Sequence[DocumentRecord], int]:
         statement = self._base_statement(include_deleted=include_deleted).where(
             DocumentRecordModel.company_id == company_id
@@ -296,6 +299,8 @@ class SqlAlchemyDocumentRecordRepository:
             statement = statement.where(DocumentRecordModel.is_current.is_(True))
         if module:
             statement = statement.where(DocumentRecordModel.module == module)
+        elif modules is not None:
+            statement = statement.where(DocumentRecordModel.module.in_(sorted(modules)))
         if owner_type:
             statement = statement.where(DocumentRecordModel.owner_type == owner_type)
         if owner_id:

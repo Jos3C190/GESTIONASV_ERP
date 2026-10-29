@@ -86,9 +86,24 @@ class InventoryTransferModel(UUIDPKMixin, TimestampMixin, Base):
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     dispatch_command_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     dispatch_movement_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    driver_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    compliance_override_by: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    compliance_override_reason: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (
         UniqueConstraint("company_id", "id", name="uq_inventory_transfers_company_id"),
+        ForeignKeyConstraint(
+            ["company_id", "driver_id"],
+            ["drivers.company_id", "drivers.id"],
+            name="fk_inventory_transfers_driver_company",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "(compliance_override_by IS NULL) = (compliance_override_reason IS NULL)",
+            name="ck_inventory_transfers_compliance_override",
+        ),
         UniqueConstraint("company_id", "code", name="uq_inventory_transfers_company_code"),
         UniqueConstraint(
             "company_id", "dispatch_command_id", name="uq_inventory_transfers_dispatch_command"

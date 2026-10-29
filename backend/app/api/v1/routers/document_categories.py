@@ -104,6 +104,8 @@ def _out(category: DocumentCategory, count: int = 0) -> DocumentCategoryOut:
         description=category.description,
         sort_order=category.sort_order,
         is_active=category.is_active,
+        requires_expiry=category.requires_expiry,
+        compliance_required=category.compliance_required,
         document_count=count,
     )
 

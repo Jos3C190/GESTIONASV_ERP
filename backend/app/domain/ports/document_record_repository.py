@@ -36,6 +36,7 @@ class DocumentRecordRepository(Protocol):
         expires_within_days: int | None = None,
         include_restricted: bool = True,
         branch_id: uuid.UUID | None = None,
+        modules: set[str] | None = None,
     ) -> tuple[Sequence[DocumentRecord], int]: ...
 
     async def list_folders(

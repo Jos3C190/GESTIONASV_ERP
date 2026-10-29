@@ -206,7 +206,37 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("sales_returns:receive", "Registrar recepción de devoluciones", "sales"),
     PermissionSpec("sales_returns:resolve", "Aceptar o rechazar mercancía devuelta", "sales"),
     PermissionSpec("sales_returns:cancel", "Cancelar borradores de devolución", "sales"),
+    # --- fleet ---
+    PermissionSpec("fleet:read", "Consultar la flota", "fleet"),
+    PermissionSpec("fleet:create", "Registrar vehículos", "fleet"),
+    PermissionSpec("fleet:update", "Editar vehículos y su estado", "fleet"),
+    PermissionSpec("fleet:delete", "Enviar vehículos a la papelera", "fleet"),
+    PermissionSpec("fleet:restore", "Restaurar vehículos", "fleet"),
+    PermissionSpec(
+        "fleet:manage_all", "Gestionar la flota de todas las sucursales desde casa matriz", "fleet"
+    ),
+    PermissionSpec("fleet:maintenance", "Gestionar mantenimiento y odómetro", "fleet"),
+    PermissionSpec("fleet:fuel", "Registrar cargas de combustible", "fleet"),
+    PermissionSpec("fleet:gps", "Vincular dispositivos GPS a vehículos", "fleet"),
+    PermissionSpec(
+        "fleet:compliance_override",
+        "Autorizar despachos con documentos o licencias no vigentes",
+        "fleet",
+    ),
+    PermissionSpec("fleet_documents:read", "Consultar documentos de vehículos", "fleet"),
+    PermissionSpec("fleet_documents:upload", "Cargar documentos de vehículos", "fleet"),
+    PermissionSpec("fleet_documents:update", "Editar documentos de vehículos", "fleet"),
+    PermissionSpec("fleet_documents:download", "Descargar documentos de vehículos", "fleet"),
+    # --- drivers ---
+    PermissionSpec("drivers:read", "Consultar conductores", "drivers"),
+    PermissionSpec("drivers:create", "Registrar conductores", "drivers"),
+    PermissionSpec("drivers:update", "Editar y suspender conductores", "drivers"),
+    PermissionSpec("drivers:delete", "Enviar conductores a la papelera", "drivers"),
+    PermissionSpec("drivers:restore", "Restaurar conductores", "drivers"),
+    PermissionSpec("drivers:assign", "Asignar conductores a vehículos", "drivers"),
+    PermissionSpec("drivers:documents", "Gestionar licencias de conducir", "drivers"),
     # --- tracking ---
+    PermissionSpec("tracking:read", "Consultar el seguimiento GPS", "tracking"),
     PermissionSpec(
         "tracking:geofences", "Crear y eliminar geocercas del seguimiento GPS", "tracking"
     ),

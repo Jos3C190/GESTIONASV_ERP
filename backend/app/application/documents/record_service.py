@@ -85,6 +85,10 @@ def _clean_tags(tags: tuple[str, ...]) -> list[str]:
     return cleaned
 
 
+#: Dueño por defecto de cada módulo con expedientes por entidad.
+_OWNER_TYPES = {"employees": "employee", "fleet": "vehicle"}
+
+
 class DocumentRecordService:
     def __init__(
         self,
@@ -181,6 +185,7 @@ class DocumentRecordService:
         replaces_document_id: uuid.UUID | None = None,
     ) -> DocumentRecord:
         values = self._metadata(metadata, filename=ticket.document.original_filename)
+        self._require_expiry(category, values["expires_on"])
         record = DocumentRecord(
             document_id=ticket.document.id,
             company_id=ticket.document.company_id,
@@ -234,22 +239,61 @@ class DocumentRecordService:
         employee_id: uuid.UUID,
         data: InitiateDocumentInput,
         metadata: DocumentMetadataInput,
+        *,
+        allowed_category_codes: frozenset[str] | None = None,
     ) -> DocumentRecordUpload:
         employee = await self._employees.get_by_id(employee_id)
         if employee is None or employee.company_id != data.company_id:
             raise NotFoundError("Empleado no encontrado.", code="employee_not_found")
-        category = await self._category(data.company_id, "employees", metadata.category_id)
+        return await self.initiate_owned(
+            "employees",
+            "employee",
+            employee_id,
+            data,
+            metadata,
+            allowed_category_codes=allowed_category_codes,
+        )
+
+    async def initiate_owned(
+        self,
+        module: str,
+        owner_type: str,
+        owner_id: uuid.UUID,
+        data: InitiateDocumentInput,
+        metadata: DocumentMetadataInput,
+        *,
+        allowed_category_codes: frozenset[str] | None = None,
+    ) -> DocumentRecordUpload:
+        """Start an upload for a document owned by a business entity.
+
+        The caller must already have verified that the owner belongs to
+        ``data.company_id`` and is inside the caller's branch scope.
+        """
+        category = await self._category(data.company_id, module, metadata.category_id)
+        if allowed_category_codes is not None and category.code not in allowed_category_codes:
+            raise ValidationError(
+                "La categoría no está disponible en este módulo.",
+                code="document_category_invalid",
+            )
         ticket = await self._documents.initiate(data)
         record = await self._record_from_ticket(
             ticket,
-            module="employees",
-            owner_type="employee",
-            owner_id=employee_id,
+            module=module,
+            owner_type=owner_type,
+            owner_id=owner_id,
             category=category,
             metadata=metadata,
             actor_id=data.actor_id,
         )
         return DocumentRecordUpload(ticket, record)
+
+    @staticmethod
+    def _require_expiry(category: DocumentCategory, expires_on: object) -> None:
+        if category.requires_expiry and expires_on is None:
+            raise ValidationError(
+                f"Los documentos de «{category.name}» requieren fecha de vencimiento.",
+                code="document_expiry_required",
+            )
 
     async def get(
         self, company_id: uuid.UUID, document_id: uuid.UUID, *, include_deleted: bool = False
@@ -280,13 +324,14 @@ class DocumentRecordService:
         expires_within_days: int | None = None,
         include_restricted: bool = True,
         branch_id: uuid.UUID | None = None,
+        modules: set[str] | None = None,
     ) -> tuple[list[DocumentRecord], int]:
         items, total = await self._records.list(
             company_id,
             page=page,
             size=size,
             module=module,
-            owner_type=owner_type or ("employee" if module == "employees" else None),
+            owner_type=owner_type or _OWNER_TYPES.get(module or ""),
             owner_id=owner_id,
             category_id=category_id,
             search=search,
@@ -298,6 +343,7 @@ class DocumentRecordService:
             expires_within_days=expires_within_days,
             include_restricted=include_restricted,
             branch_id=branch_id,
+            modules=modules,
         )
         records = list(items)
         assets = [item.asset for item in records if item.asset is not None]
@@ -367,6 +413,7 @@ class DocumentRecordService:
             allow_inactive=requested_category_id in (None, record.category_id),
         )
         values = self._metadata(metadata, filename=record.asset.original_filename)
+        self._require_expiry(category, values["expires_on"])
         for key, value in values.items():
             setattr(record, key, value)
         record.category_id = category.id

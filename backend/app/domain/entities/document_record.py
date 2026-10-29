@@ -19,6 +19,8 @@ class DocumentCategory:
     description: str | None = None
     sort_order: int = 0
     is_active: bool = True
+    requires_expiry: bool = False
+    compliance_required: bool = False
     created_by: uuid.UUID | None = None
     updated_by: uuid.UUID | None = None
     created_at: datetime | None = None
