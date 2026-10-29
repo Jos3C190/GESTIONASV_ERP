@@ -4,7 +4,7 @@
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import { company } from '$lib/stores/company.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
-  import { demoRoute, demoSnapshot } from './demo';
+  import { demoRoute, demoSnapshot, loadDemoRoutes } from './demo';
   import EventsPanel from './EventsPanel.svelte';
   import { demoEvents, demoLiveEvent, fromTraccarEvents, type TrackingEvent } from './events';
   import GeofencePanel from './GeofencePanel.svelte';
@@ -209,6 +209,7 @@
 
   function enterDemo() {
     mode = 'demo';
+    loadDemoRoutes((from, to) => api.tracking.route(from, to));
     trails = {};
     resetEvents();
     geofences = DEMO_GEOFENCES.map((geofence) => ({ ...geofence }));
@@ -495,7 +496,8 @@
       {selectedKey}
       {follow}
       trail={activeTrack ? activeTrack.trail : selectedKey ? (trails[selectedKey] ?? []) : []}
-      plannedRoute={activeTrack ? activeTrack.route : plannedRoute}
+      plannedRoute={activeTrack ? activeTrack.remainingRoute : plannedRoute}
+      originalRoute={activeTrack?.rerouted ? activeTrack.route : null}
       {endpoints}
       {geofences}
       {highlightedGeofence}
@@ -692,6 +694,10 @@
             <p class="flag success">
               <FleetIcon name="check" size={14} />Llegó a la sucursal de destino
             </p>
+          {:else if track.rerouted}
+            <p class="flag warning">
+              <FleetIcon name="route" size={14} />Ruta recalculada: la unidad tomó otro camino
+            </p>
           {:else if track.offRoute}
             <p class="flag danger"><FleetIcon name="alert" size={14} />Fuera de la ruta planeada</p>
           {/if}
@@ -738,6 +744,10 @@
               {track.vehicleCode
                 ? `Ningún dispositivo de Traccar se llama “${track.vehicleCode}”. Usa el código del vehículo como nombre o identificador del GPS.`
                 : 'El traslado no tiene vehículo asignado.'}
+            </p>
+          {:else if mode === 'live' && track.trail.length > 1 && !track.trailMatched}
+            <p class="note">
+              Parte del recorrido no se pudo ajustar a las calles; se muestra el trazo del GPS.
             </p>
           {:else if track.routeSource === 'straight'}
             <p class="note">Ruta aproximada en línea recta; el servicio de rutas no respondió.</p>
@@ -1195,6 +1205,10 @@
   .flag.success {
     background: rgb(var(--success) / 0.12);
     color: rgb(var(--success));
+  }
+  .flag.warning {
+    background: rgb(var(--warning) / 0.12);
+    color: rgb(var(--fleet-warning-ink, var(--warning)));
   }
   .flag.danger {
     background: rgb(var(--danger) / 0.1);

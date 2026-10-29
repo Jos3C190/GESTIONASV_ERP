@@ -3,11 +3,15 @@ import { statusFor, type TrackedVehicle } from './tracking';
 
 type LngLat = [number, number];
 
-const SAN_MIGUEL: LngLat = [-88.1833, 13.4833];
+/** Sucursal Roosevelt (San Miguel): origen de los recorridos de la demostración. */
+const SAN_MIGUEL: LngLat = [-88.185666, 13.483663];
 const DISTRIBUTION_CENTER: LngLat = [-88.177, 13.4795];
 const WORKSHOP: LngLat = [-88.17, 13.49];
 
-/** Recorridos aproximados por carretera desde San Miguel. Solo para la vista de demostración. */
+/**
+ * Recorridos de la demostración desde San Miguel. Estos trazos aproximados son el respaldo;
+ * `loadDemoRoutes` los reemplaza por rutas reales por calles (OSRM) en cuanto el backend responde.
+ */
 const ROUTES: Record<string, LngLat[]> = {
   'Santa Rosa de Lima': [
     SAN_MIGUEL,
@@ -127,3 +131,37 @@ export function demoSnapshot(now: number): TrackedVehicle[] {
 }
 
 export const demoRoute = (destination: string): LngLat[] | null => ROUTES[destination] ?? null;
+
+/** Destinos que coinciden con sucursales reales, para que la ruta termine en el pin B. */
+const BRANCH_DESTINATIONS: Record<string, LngLat> = {
+  'Santa Rosa de Lima': [-87.89288, 13.62781],
+  'La Unión': [-87.841365, 13.337231],
+  Usulután: [-88.435998, 13.343138],
+  Jiquilisco: [-88.57038, 13.32605],
+  'El Tránsito': [-88.348507, 13.354792]
+};
+
+let demoRoutesRequested = false;
+
+/**
+ * Sustituye los trazos aproximados por rutas reales por calles. Se pide una sola vez
+ * por sesión; si el servicio de rutas falla se conservan los trazos aproximados.
+ */
+export async function loadDemoRoutes(
+  fetchRoute: (from: LngLat, to: LngLat) => Promise<{ coordinates: LngLat[]; source: string }>
+): Promise<void> {
+  if (demoRoutesRequested) return;
+  demoRoutesRequested = true;
+  await Promise.all(
+    Object.entries(ROUTES).map(async ([destination, route]) => {
+      const to = BRANCH_DESTINATIONS[destination] ?? route[route.length - 1]!;
+      try {
+        const real = await fetchRoute(SAN_MIGUEL, to);
+        if (real.source === 'osrm' && real.coordinates.length > 1)
+          ROUTES[destination] = real.coordinates;
+      } catch {
+        // Se queda el trazo aproximado.
+      }
+    })
+  );
+}

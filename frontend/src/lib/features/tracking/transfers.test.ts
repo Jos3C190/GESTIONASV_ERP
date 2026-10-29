@@ -28,6 +28,7 @@ describe('transfer tracking', () => {
       expect(track.progress).toBeLessThanOrEqual(1);
       expect(track.eta!.getTime()).toBeGreaterThan(now);
       expect(track.trail.length).toBeGreaterThan(1);
+      expect(track.remainingRoute[0]).toEqual(track.trail[track.trail.length - 1]);
       expect(track.destination.point).not.toBeNull();
     }
   });
@@ -61,6 +62,9 @@ describe('transfer tracking', () => {
         source: 'osrm'
       },
       trail: [[-88.18, 13.48]],
+      trail_matched: true,
+      remaining_route: [[-88.1, 13.5]],
+      rerouted: true,
       position: { latitude: 13.5, longitude: -88.1, speed_kmh: 50, course: 60, fix_time: null },
       progress: 0.4,
       remaining_m: 24840,
@@ -72,8 +76,30 @@ describe('transfer tracking', () => {
     expect(track.origin.point).toEqual([-88.18, 13.48]);
     expect(track.destination.point).toBeNull();
     expect(track.position?.speedKmh).toBe(50);
+    expect(track.rerouted).toBe(true);
+    expect(track.remainingRoute).toEqual([[-88.1, 13.5]]);
     expect(track.eta?.toISOString()).toBe('2026-10-28T15:30:00.000Z');
     expect(formatDistance(track.remainingM)).toBe('24.8 km');
     expect(formatDistance(420)).toBe('420 m');
+  });
+});
+
+describe('demo routes', () => {
+  it('replaces the approximate demo routes with real street routes', async () => {
+    const { demoRoute, loadDemoRoutes } = await import('./demo');
+    const before = demoRoute('La Unión')!;
+    const calls: [number, number][][] = [];
+    await loadDemoRoutes(async (from, to) => {
+      calls.push([from, to]);
+      return {
+        source: 'osrm',
+        coordinates: [from, [(from[0] + to[0]) / 2, from[1]], to]
+      };
+    });
+    const after = demoRoute('La Unión')!;
+    expect(after).not.toBe(before);
+    expect(after).toHaveLength(3);
+    expect(after[2]).toEqual([-87.841365, 13.337231]);
+    expect(calls.length).toBeGreaterThanOrEqual(5);
   });
 });

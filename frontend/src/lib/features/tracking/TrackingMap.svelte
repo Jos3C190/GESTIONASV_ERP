@@ -13,6 +13,7 @@
     follow = false,
     trail = [],
     plannedRoute = null,
+    originalRoute = null,
     geofences = [],
     highlightedGeofence = null,
     draft = null,
@@ -28,6 +29,8 @@
     follow?: boolean;
     trail?: LngLat[];
     plannedRoute?: LngLat[] | null;
+    /** Ruta planeada original cuando la unidad se desvió y se recalculó. */
+    originalRoute?: LngLat[] | null;
     geofences?: GeofenceOut[];
     highlightedGeofence?: number | null;
     /** Contorno en edición: anillo del polígono o círculo y sus vértices. */
@@ -162,6 +165,19 @@
         'circle-stroke-width': 2
       }
     });
+    map.addSource('original-route', { type: 'geojson', data: line([]) });
+    map.addLayer({
+      id: 'original-route',
+      type: 'line',
+      source: 'original-route',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#71717a',
+        'line-width': 3,
+        'line-opacity': 0.45,
+        'line-dasharray': [1, 2]
+      }
+    });
     map.addSource('planned-route', { type: 'geojson', data: line([]) });
     map.addSource('trail', { type: 'geojson', data: line([]) });
     map.addLayer({
@@ -236,6 +252,7 @@
 
   onMount(() => {
     let disposed = false;
+    let resizeObserver: ResizeObserver | undefined;
     loadMapLibre()
       .then((maplibregl) => {
         if (disposed || !container) return;
@@ -264,10 +281,15 @@
         });
         (instance as MapLibre).__maplibregl = maplibregl;
         map = instance;
+        // El contenedor cambia de tamaño sin que cambie la ventana (menú lateral,
+        // paneles); MapLibre solo escucha la ventana, así que se le avisa aquí.
+        resizeObserver = new ResizeObserver(() => instance.resize());
+        resizeObserver.observe(container);
       })
       .catch((error: Error) => (loadError = error.message));
     return () => {
       disposed = true;
+      resizeObserver?.disconnect();
       animations.forEach((frame) => cancelAnimationFrame(frame));
       markers.forEach((entry) => entry.marker.remove());
       markers.clear();
@@ -295,6 +317,7 @@
     if (!map || !styleReady) return;
     map.getSource('trail')?.setData(line(trail));
     map.getSource('planned-route')?.setData(line(plannedRoute ?? []));
+    map.getSource('original-route')?.setData(line(originalRoute ?? []));
   });
 
   let highlighted: number | null = null;

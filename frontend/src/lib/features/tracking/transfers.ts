@@ -29,6 +29,12 @@ export interface TransferTrack extends TransferSummary {
   routeSource: 'osrm' | 'straight' | 'demo';
   distanceM: number;
   trail: LngLat[];
+  /** El recorrido está ajustado a las calles (map matching). */
+  trailMatched: boolean;
+  /** Ruta que falta, desde la unidad hasta el destino (planeada o recalculada). */
+  remainingRoute: LngLat[];
+  /** La unidad se desvió y la ruta se recalculó desde su posición. */
+  rerouted: boolean;
   position: {
     latitude: number;
     longitude: number;
@@ -74,6 +80,9 @@ export function fromApiTrack(track: TransferTrackOut): TransferTrack {
     routeSource: track.route?.source ?? 'straight',
     distanceM: track.route?.distance_m ?? 0,
     trail: track.trail,
+    trailMatched: track.trail_matched,
+    remainingRoute: track.remaining_route,
+    rerouted: track.rerouted,
     position: track.position
       ? {
           latitude: track.position.latitude,
@@ -95,7 +104,7 @@ export function fromApiTrack(track: TransferTrackOut): TransferTrack {
 export function travelledAlong(
   route: LngLat[],
   point: LngLat
-): { along: LngLat[]; meters: number } {
+): { along: LngLat[]; ahead: LngLat[]; meters: number } {
   let best = { distance: Infinity, index: 0, projected: route[0] ?? point, meters: 0 };
   let travelled = 0;
   for (let i = 0; i < route.length - 1; i++) {
@@ -122,7 +131,11 @@ export function travelledAlong(
       best = { distance, index: i, projected, meters: travelled + segment * t };
     travelled += segment;
   }
-  return { along: [...route.slice(0, best.index + 1), best.projected], meters: best.meters };
+  return {
+    along: [...route.slice(0, best.index + 1), best.projected],
+    ahead: [best.projected, ...route.slice(best.index + 1)],
+    meters: best.meters
+  };
 }
 
 const routeLength = (route: LngLat[]) =>
@@ -189,7 +202,7 @@ export function demoTransferTracks(vehicles: TrackedVehicle[], now: number): Tra
     const route = demoRoute(DESTINATION_ROUTE[demo.vehicle]!) ?? [];
     const total = routeLength(route);
     const point: LngLat | null = vehicle ? [vehicle.longitude, vehicle.latitude] : null;
-    const travelled = point ? travelledAlong(route, point) : { along: [], meters: 0 };
+    const travelled = point ? travelledAlong(route, point) : { along: [], ahead: route, meters: 0 };
     const remaining = Math.max(total - travelled.meters, 0);
     const speed = vehicle?.speedKmh || 50;
     return {
@@ -207,6 +220,9 @@ export function demoTransferTracks(vehicles: TrackedVehicle[], now: number): Tra
       routeSource: 'demo',
       distanceM: total,
       trail: travelled.along,
+      trailMatched: true,
+      remainingRoute: travelled.ahead,
+      rerouted: false,
       position: vehicle
         ? {
             latitude: vehicle.latitude,

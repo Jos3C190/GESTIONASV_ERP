@@ -901,6 +901,9 @@ export interface TransferTrackOut extends TrackedTransferOut {
     source: 'osrm' | 'straight';
   } | null;
   trail: [number, number][];
+  trail_matched: boolean;
+  remaining_route: [number, number][];
+  rerouted: boolean;
   position: {
     latitude: number;
     longitude: number;
@@ -1813,6 +1816,16 @@ export const api = {
       apiFetch<TransferTrackOut>(`/tracking/transfers/${id}?company_id=${company.id ?? ''}`, {
         signal
       }),
+    route: (from: [number, number], to: [number, number], signal?: AbortSignal) =>
+      apiFetch<NonNullable<TransferTrackOut['route']>>(
+        `/tracking/route?${new URLSearchParams({
+          from_lng: String(from[0]),
+          from_lat: String(from[1]),
+          to_lng: String(to[0]),
+          to_lat: String(to[1])
+        }).toString()}`,
+        { signal }
+      ),
     events: (hours = 24, signal?: AbortSignal) =>
       apiFetch<TrackingEventOut[]>(
         `/tracking/events?company_id=${company.id ?? ''}&hours=${hours}`,
