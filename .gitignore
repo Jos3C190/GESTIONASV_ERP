@@ -79,3 +79,6 @@ object-storage/backups/
 # Migration drafts are intentionally kept outside Alembic's discoverable
 # versions directory because the development app auto-upgrades on reload.
 backend/alembic/drafts/
+backend/tmp-procurement-reports/
+frontend/tmp-labels/
+frontend/tmp-reports/
