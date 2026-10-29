@@ -206,6 +206,10 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("sales_returns:receive", "Registrar recepción de devoluciones", "sales"),
     PermissionSpec("sales_returns:resolve", "Aceptar o rechazar mercancía devuelta", "sales"),
     PermissionSpec("sales_returns:cancel", "Cancelar borradores de devolución", "sales"),
+    # --- tracking ---
+    PermissionSpec(
+        "tracking:geofences", "Crear y eliminar geocercas del seguimiento GPS", "tracking"
+    ),
     # --- roles ---
     PermissionSpec("roles:read", "Ver roles", "roles"),
     PermissionSpec("roles:create", "Crear roles", "roles"),
@@ -240,7 +244,11 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("locations.commission", "Comisionar y retirar ubicaciones", "locations"),
     # --- inventory and physical capacity ---
     PermissionSpec("inventory:read", "Consultar inventario y capacidad", "inventory"),
-    PermissionSpec("inventory:warehouse_receipts", "Operar el panel de bodega y verificar recepciones físicas", "inventory"),
+    PermissionSpec(
+        "inventory:warehouse_receipts",
+        "Operar el panel de bodega y verificar recepciones físicas",
+        "inventory",
+    ),
     PermissionSpec(
         "inventory:manage_packaging",
         "Gestionar unidades base y presentaciones",

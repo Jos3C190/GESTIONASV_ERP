@@ -23,16 +23,51 @@ class TraccarUnavailableError(RuntimeError):
     """Traccar could not be reached or rejected the service credentials."""
 
 
-def _get_json(url: str, user: str, password: str) -> Any:
+def _request(
+    url: str,
+    user: str,
+    password: str,
+    *,
+    method: str = "GET",
+    body: object | None = None,
+) -> Any:
     token = base64.b64encode(f"{user}:{password}".encode()).decode()
-    request = urllib.request.Request(  # noqa: S310
-        url, headers={"Authorization": f"Basic {token}", "Accept": "application/json"}
-    )
+    headers = {"Authorization": f"Basic {token}", "Accept": "application/json"}
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode()
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=data, headers=headers, method=method)  # noqa: S310
     try:
         with urllib.request.urlopen(request, timeout=8) as response:  # noqa: S310
-            return json.loads(response.read().decode())
+            payload = response.read().decode()
+            return json.loads(payload) if payload else None
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         raise TraccarUnavailableError(str(exc)) from exc
+
+
+def _get_json(url: str, user: str, password: str) -> Any:
+    return _request(url, user, password)
+
+
+async def traccar_call(
+    base_url: str,
+    user: str,
+    password: str,
+    path: str,
+    *,
+    method: str = "GET",
+    body: object | None = None,
+) -> Any:
+    """Call the Traccar REST API off the event loop."""
+    return await asyncio.to_thread(
+        _request, f"{base_url.rstrip('/')}{path}", user, password, method=method, body=body
+    )
+
+
+def belongs_to_company(item: dict[str, Any], company_id: str) -> bool:
+    attributes = item.get("attributes") or {}
+    return str(attributes.get(COMPANY_ATTRIBUTE, "")).strip().lower() == company_id.lower()
 
 
 async def fetch_traccar_snapshot(
@@ -65,8 +100,7 @@ def build_tracked_devices(
     latest = {position.get("deviceId"): position for position in positions}
     tracked: list[dict[str, Any]] = []
     for device in devices:
-        attributes = device.get("attributes") or {}
-        if str(attributes.get(COMPANY_ATTRIBUTE, "")).strip().lower() != company_id.lower():
+        if not belongs_to_company(device, company_id):
             continue
         position = latest.get(device.get("id"))
         position_attributes = (position or {}).get("attributes") or {}
