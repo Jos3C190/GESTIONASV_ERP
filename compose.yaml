@@ -228,6 +228,8 @@ services:
       TRACCAR_URL: ${TRACCAR_URL:-}
       TRACCAR_USER: ${TRACCAR_USER:-}
       TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-}
+      # Servidor público de demostración de OSRM; en producción usa uno propio.
+      OSRM_URL: ${OSRM_URL:-https://router.project-osrm.org}
       <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"

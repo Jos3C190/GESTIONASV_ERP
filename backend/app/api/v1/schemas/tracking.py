@@ -79,3 +79,50 @@ class TrackingEventOut(BaseModel):
     speed_kmh: float | None = None
     latitude: float | None = None
     longitude: float | None = None
+
+
+class TransferPlaceOut(BaseModel):
+    warehouse_name: str
+    branch_name: str
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+class TrackedTransferOut(BaseModel):
+    id: uuid.UUID
+    code: str
+    status: str
+    dispatched_at: datetime | None = None
+    vehicle_code: str | None = None
+    vehicle_name: str | None = None
+    origin: TransferPlaceOut
+    destination: TransferPlaceOut
+
+
+class TransferRouteOut(BaseModel):
+    coordinates: list[LngLat]
+    distance_m: float
+    duration_s: float
+    source: Literal["osrm", "straight"]
+
+
+class TransferPositionOut(BaseModel):
+    latitude: float
+    longitude: float
+    speed_kmh: float
+    course: float
+    fix_time: datetime | None = None
+
+
+class TransferTrackOut(TrackedTransferOut):
+    gps_configured: bool
+    device_found: bool
+    route: TransferRouteOut | None = None
+    trail: list[LngLat] = []
+    position: TransferPositionOut | None = None
+    progress: float = 0
+    remaining_m: float | None = None
+    eta: datetime | None = None
+    arrived: bool = False
+    off_route: bool = False
+    off_route_m: float = 0

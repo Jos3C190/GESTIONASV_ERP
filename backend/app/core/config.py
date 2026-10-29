@@ -101,6 +101,8 @@ class Settings(BaseSettings):
     TRACCAR_URL: str | None = None
     TRACCAR_USER: str | None = None
     TRACCAR_PASSWORD: str | None = Field(default=None, repr=False)
+    # Servicio de rutas OSRM para la ruta planeada de los traslados; vacío = línea recta.
+    OSRM_URL: str | None = "https://router.project-osrm.org"
 
     # --- Generic documents / S3-compatible object storage ---
     OBJECT_STORAGE_ENABLED: bool = False

@@ -9,14 +9,18 @@ from typing import Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import Select, select
+from sqlalchemy.orm import aliased
 
 from app.api.v1.company_access import require_company_access
 from app.api.v1.deps import CurrentUser, SessionDep, require_permission
 from app.api.v1.schemas.tracking import (
     GeofenceCreate,
     GeofenceOut,
+    TrackedTransferOut,
     TrackingEventOut,
     TrackingSnapshotOut,
+    TransferTrackOut,
 )
 from app.application.tracking import (
     KNOTS_TO_KMH,
@@ -29,7 +33,13 @@ from app.application.tracking import (
     to_geofence,
     traccar_call,
 )
+from app.application.tracking.transfers import build_transfer_progress, plan_route
 from app.core.config import settings
+from app.infrastructure.models.inventory_transfer import (
+    InventoryTransferModel,
+    InventoryVehicleModel,
+)
+from app.infrastructure.models.organization import Branch, Warehouse
 
 router = APIRouter(prefix="/tracking", tags=["tracking"])
 
@@ -198,3 +208,156 @@ async def list_tracking_events(
             {position["id"]: position for position in positions},
         )
     ]
+
+
+# ---------------- Traslados en tránsito ----------------
+
+_ACTIVE_TRANSFER_STATUSES = ("in_transit", "incident")
+
+
+def _transfer_query(company_id: uuid.UUID) -> Select[Any]:
+    origin_wh, destination_wh = aliased(Warehouse), aliased(Warehouse)
+    origin_br, destination_br = aliased(Branch), aliased(Branch)
+    return (
+        select(
+            InventoryTransferModel,
+            InventoryVehicleModel,
+            origin_wh.name,
+            origin_br.name,
+            origin_br.latitude,
+            origin_br.longitude,
+            destination_wh.name,
+            destination_br.name,
+            destination_br.latitude,
+            destination_br.longitude,
+        )
+        .join(origin_wh, origin_wh.id == InventoryTransferModel.origin_warehouse_id)
+        .join(origin_br, origin_br.id == origin_wh.branch_id)
+        .join(destination_wh, destination_wh.id == InventoryTransferModel.destination_warehouse_id)
+        .join(destination_br, destination_br.id == destination_wh.branch_id)
+        .outerjoin(
+            InventoryVehicleModel, InventoryVehicleModel.id == InventoryTransferModel.vehicle_id
+        )
+        .where(InventoryTransferModel.company_id == company_id)
+    )
+
+
+def _place(warehouse: str, branch: str, lat: object, lng: object) -> dict[str, Any]:
+    return {
+        "warehouse_name": warehouse,
+        "branch_name": branch,
+        "latitude": float(lat) if lat is not None else None,  # type: ignore[arg-type]
+        "longitude": float(lng) if lng is not None else None,  # type: ignore[arg-type]
+    }
+
+
+def _transfer_row(row: Any) -> dict[str, Any]:
+    transfer, vehicle, o_wh, o_br, o_lat, o_lng, d_wh, d_br, d_lat, d_lng = row
+    return {
+        "id": transfer.id,
+        "code": transfer.code,
+        "status": transfer.status,
+        "dispatched_at": transfer.dispatched_at,
+        "vehicle_code": vehicle.code if vehicle else None,
+        "vehicle_name": vehicle.name if vehicle else None,
+        "origin": _place(o_wh, o_br, o_lat, o_lng),
+        "destination": _place(d_wh, d_br, d_lat, d_lng),
+    }
+
+
+@router.get(
+    "/transfers",
+    response_model=list[TrackedTransferOut],
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def list_tracked_transfers(
+    company_id: uuid.UUID,
+    session: SessionDep,
+    current: CurrentUser,
+) -> list[TrackedTransferOut]:
+    await require_company_access(session, current, company_id)
+    rows = (
+        await session.execute(
+            _transfer_query(company_id)
+            .where(InventoryTransferModel.status.in_(_ACTIVE_TRANSFER_STATUSES))
+            .order_by(InventoryTransferModel.dispatched_at.desc().nulls_last())
+            .limit(100)
+        )
+    ).all()
+    return [TrackedTransferOut.model_validate(_transfer_row(row)) for row in rows]
+
+
+def _matches_vehicle(device: dict[str, Any], vehicle_code: str) -> bool:
+    code = vehicle_code.strip().lower()
+    return code in {
+        str(device.get("name", "")).strip().lower(),
+        str(device.get("uniqueId", "")).strip().lower(),
+    }
+
+
+@router.get(
+    "/transfers/{transfer_id}",
+    response_model=TransferTrackOut,
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def get_transfer_track(
+    transfer_id: uuid.UUID,
+    company_id: uuid.UUID,
+    session: SessionDep,
+    current: CurrentUser,
+) -> TransferTrackOut:
+    await require_company_access(session, current, company_id)
+    row = (
+        await session.execute(
+            _transfer_query(company_id).where(InventoryTransferModel.id == transfer_id)
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Traslado no encontrado.")
+    data = _transfer_row(row)
+    origin, destination = data["origin"], data["destination"]
+    data.update(gps_configured=_credentials() is not None, device_found=False)
+    if None in (
+        origin["latitude"],
+        origin["longitude"],
+        destination["latitude"],
+        destination["longitude"],
+    ):
+        # Sin coordenadas de sucursal no hay ruta que dibujar; se devuelve el traslado tal cual.
+        return TransferTrackOut.model_validate(data)
+    origin_point = (origin["longitude"], origin["latitude"])
+    destination_point = (destination["longitude"], destination["latitude"])
+    route = await plan_route(settings.OSRM_URL, origin_point, destination_point)
+    data["route"] = route
+
+    positions: list[dict[str, Any]] = []
+    if data["gps_configured"] and data["vehicle_code"]:
+        devices = await _company_items("/api/devices", company_id)
+        device = next((d for d in devices if _matches_vehicle(d, data["vehicle_code"])), None)
+        if device is not None:
+            data["device_found"] = True
+            now = datetime.now(UTC)
+            start = data["dispatched_at"] or now - timedelta(hours=12)
+            query = urlencode(
+                {
+                    "deviceId": device["id"],
+                    "from": start.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+                    "to": now.isoformat().replace("+00:00", "Z"),
+                }
+            )
+            positions = await _call(f"/api/positions?{query}") or []
+            if not positions:
+                # Sin historial desde el despacho, al menos la última posición conocida.
+                latest = (
+                    await _call(f"/api/positions?{urlencode({'deviceId': device['id']})}") or []
+                )
+                positions = latest[-1:]
+    data.update(
+        build_transfer_progress(
+            route=route,
+            destination=destination_point,
+            positions=positions,
+            now=datetime.now(UTC),
+        )
+    )
+    return TransferTrackOut.model_validate(data)
