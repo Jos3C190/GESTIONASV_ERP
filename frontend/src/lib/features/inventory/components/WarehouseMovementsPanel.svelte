@@ -13,6 +13,7 @@
   const field =
     'mt-1 min-h-11 w-full rounded-lg border border-border-control bg-surface px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
   const movementTypes = [
+    'opening',
     'receipt',
     'putaway',
     'transfer',

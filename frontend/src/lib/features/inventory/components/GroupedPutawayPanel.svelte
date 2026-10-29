@@ -451,26 +451,26 @@
   {/if}
 
   {#if !loading && legacyStock.length > 0}
-    <aside class="mt-4 rounded-lg border border-warning/30 bg-warning/5 p-3" aria-labelledby="legacy-stock-title">
-      <h4 id="legacy-stock-title" class="text-sm font-semibold text-foreground">
-        Existencia histórica sin lote de recepción atribuible
-      </h4>
+    <details class="mt-4 rounded-lg border border-warning/30 bg-warning/5 p-3">
+      <summary class="cursor-pointer rounded text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+        Existencias anteriores sin recepción vinculada ({legacyStock.length})
+      </summary>
       <p class="mt-1 text-xs text-foreground-muted">
-        El saldo total se toma de inventario y se concilia con las unidades que sí tienen una línea de recepción. No se asigna un origen a los registros antiguos.
+        Estas cantidades ya están incluidas en inventario. Falta el vínculo con una recepción concreta; no se deben recibir otra vez ni sumar al total mostrado.
       </p>
       <ul class="mt-3 space-y-2">
         {#each legacyStock as row (`${row.location_id}-${row.inventory_item_id}-${row.stock_status}`)}
           <li class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs">
-            <span class="font-medium text-foreground">{row.product_name}{row.product_sku ? ` · ${row.product_sku}` : ''} · {row.location_code ?? 'Ubicación no disponible'} · {row.stock_status}</span>
+            <span class="font-medium text-foreground">{row.product_name}{row.product_sku ? ` · ${row.product_sku}` : ''} · {row.location_code ?? 'Ubicación no disponible'} · {row.stock_status === 'available' ? 'Disponible' : row.stock_status === 'quarantine' ? 'Cuarentena' : row.stock_status}</span>
             <span class="tabular-nums text-foreground-muted">
-              Legado {row.legacy_quantity_base} {row.base_unit_symbol} / total {row.total_quantity_base}
-              {#if row.legacy_handling_unit_count > 0} · {row.legacy_handling_unit_count} HU sin línea{/if}
+              Sin recepción {formatQuantity(row.legacy_quantity_base)} {row.base_unit_symbol} / total {formatQuantity(row.total_quantity_base)}
+              {#if row.legacy_handling_unit_count > 0} · {row.legacy_handling_unit_count} unidades sin vínculo{/if}
               {#if !row.reconciled} · diferencia {row.reconciliation_difference}{/if}
             </span>
           </li>
         {/each}
       </ul>
-    </aside>
+    </details>
   {/if}
 
   {#if error}

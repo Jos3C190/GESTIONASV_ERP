@@ -29,6 +29,9 @@
   let saving = $state(false);
   let submitError = $state<string | null>(null);
   let success = $state<string | null>(null);
+  let showHistorical = $state(false);
+  let historical = $derived(receipts.filter(receipt => receipt.ready && !receipt.retaceo_code));
+  let visibleReceipts = $derived(receipts.filter(receipt => receipt.retaceo_code || !receipt.ready || showHistorical));
   let alive = true;
   let queueSequence = 0;
   let selectionSequence = 0;
@@ -240,8 +243,11 @@
           Las compras aparecerán aquí cuando se confirme su documento de recepción.
         </p>
       </div>
-    {:else}<ul class="divide-y divide-border">
-        {#each receipts as receipt (receipt.id)}<li
+    {:else}
+      {#if historical.length}<div class="mb-4 rounded-lg border border-border p-4"><label class="flex cursor-pointer items-center gap-3 text-sm font-medium"><input type="checkbox" bind:checked={showHistorical} class="h-4 w-4 accent-primary" />Mostrar recepciones del flujo anterior ({historical.length} en esta página)</label><p class="mt-2 text-xs text-foreground-muted">Se conservan como pendientes históricos. No corresponden necesariamente a una llegada nueva.</p></div>{/if}
+      {#if !visibleReceipts.length}<p class="py-4 text-sm text-foreground-muted">No hay tareas del flujo actual en esta página.</p>{/if}
+      <ul class="divide-y divide-border">
+        {#each visibleReceipts as receipt (receipt.id)}<li
             class="flex flex-wrap items-center justify-between gap-3 py-4 first:pt-0"
           >
             <div>

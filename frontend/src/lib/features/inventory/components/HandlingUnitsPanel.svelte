@@ -763,7 +763,10 @@
 </script>
 
 {#if canRelease}
-  <GroupedPutawayPanel {warehouseId} onconfirmed={requestLoad} />
+  <details class="mb-4 rounded-xl border border-border bg-surface">
+    <summary class="cursor-pointer rounded-xl p-4 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Pendientes de ubicación de recepciones anteriores</summary>
+    <div class="px-4 pb-4"><p class="mb-3 text-sm text-foreground-muted">Mercancía ya registrada con el flujo anterior. Completar su ubicación no vuelve a recibirla. Las compras nuevas se trabajan en Preparar y ubicar.</p><GroupedPutawayPanel {warehouseId} onconfirmed={requestLoad} /></div>
+  </details>
 {/if}
 
 <Card class="overflow-hidden">
