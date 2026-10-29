@@ -361,6 +361,7 @@ export const inventoryApi = {
 
   listReceiptLots: async (filters: {
     warehouseId: string;
+    q?: string;
     status?: 'pending_placement' | 'partially_placed' | 'placed' | 'all';
     page?: number;
     size?: number;
@@ -371,6 +372,7 @@ export const inventoryApi = {
       page: String(filters.page ?? 1),
       size: String(filters.size ?? 20)
     });
+    if (filters.q?.trim()) query.set('q', filters.q.trim());
     return apiFetch<{
       items: InventoryReceiptLot[];
       page: number;

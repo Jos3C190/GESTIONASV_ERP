@@ -1,5 +1,6 @@
 export function movementTypeLabel(t: string): { label: string; color: string; bg: string } {
   const labels: Record<string, { label: string; color: string; bg: string }> = {
+    opening: { label: 'Saldo inicial', color: 'text-foreground', bg: 'bg-primary/10' },
     inbound: { label: 'Entrada', color: 'text-success', bg: 'bg-success/10' },
     outbound: { label: 'Salida', color: 'text-foreground', bg: 'bg-primary/10' },
     transfer: { label: 'Transferencia', color: 'text-foreground', bg: 'bg-warning/10' },

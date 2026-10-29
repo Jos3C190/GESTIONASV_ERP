@@ -10,9 +10,10 @@
     selected: AdjustmentItemOption | null;
     disabled?: boolean;
     onselect: (item: AdjustmentItemOption) => void;
+    searchItems?: typeof inventoryAdjustmentsApi.searchItems;
   }
 
-  let { id, warehouseId, warehouseName, selected, disabled = false, onselect }: Props = $props();
+  let { id, warehouseId, warehouseName, selected, disabled = false, onselect, searchItems = inventoryAdjustmentsApi.searchItems }: Props = $props();
   let open = $state(false);
   let dialog = $state<HTMLDialogElement | null>(null);
   let searchInput = $state<HTMLInputElement | null>(null);
@@ -79,7 +80,7 @@
     const timer = setTimeout(
       async () => {
         try {
-          const result = await inventoryAdjustmentsApi.searchItems(warehouse, search, offset);
+          const result = await searchItems(warehouse, search, offset);
           if (request !== sequence) return;
           options = result.items;
           total = result.items_total ?? result.items.length;
