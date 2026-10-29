@@ -26,7 +26,7 @@
         id: zone.id,
         width,
         height,
-        padding: (zone.inset ?? 0.08) * Math.min(width, height),
+        padding: (zone.inset ?? 0.02) * Math.min(width, height),
         transform: quadToMatrix3d(width, height, zone.quad)
       };
     })
@@ -120,5 +120,7 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
+    /* Compensa el aire que suelen traer los archivos de logo. */
+    transform: scale(1.2);
   }
 </style>
