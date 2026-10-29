@@ -1,0 +1,391 @@
+<script lang="ts">
+  import type { GeofenceOut } from '$lib/api/client';
+  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
+  import { describeShape, type DraftKind, type GeofenceDraft } from './geofences';
+
+  let {
+    geofences,
+    canManage,
+    draft,
+    saving = false,
+    error = null,
+    highlighted = null,
+    onstartdraw,
+    onundo,
+    onradius,
+    oncancel,
+    onsave,
+    ondelete,
+    onfocus
+  }: {
+    geofences: GeofenceOut[];
+    canManage: boolean;
+    draft: GeofenceDraft | null;
+    saving?: boolean;
+    error?: string | null;
+    highlighted?: number | null;
+    onstartdraw: (kind: DraftKind) => void;
+    onundo: () => void;
+    onradius: (radiusM: number) => void;
+    oncancel: () => void;
+    onsave: (data: { name: string; description: string; speedLimit: number | null }) => void;
+    ondelete: (geofence: GeofenceOut) => void;
+    onfocus: (geofence: GeofenceOut) => void;
+  } = $props();
+
+  let name = $state('');
+  let description = $state('');
+  let speedLimit = $state('');
+  let confirmDelete = $state<number | null>(null);
+
+  const ready = $derived(
+    !!draft &&
+      (draft.kind === 'circle' ? draft.vertices.length >= 1 : draft.vertices.length >= 3) &&
+      name.trim().length > 0
+  );
+
+  const hint = $derived.by(() => {
+    if (!draft) return '';
+    if (draft.kind === 'circle')
+      return draft.vertices.length
+        ? 'Haz clic de nuevo para fijar el radio o ajústalo abajo.'
+        : 'Haz clic en el mapa para colocar el centro.';
+    const missing = 3 - draft.vertices.length;
+    return missing > 0
+      ? `Haz clic en el mapa para agregar vértices (faltan ${missing}).`
+      : 'Sigue agregando vértices o haz doble clic para cerrar la figura.';
+  });
+
+  function submit(event: SubmitEvent) {
+    event.preventDefault();
+    if (!ready) return;
+    const limit = Number.parseInt(speedLimit, 10);
+    onsave({
+      name: name.trim(),
+      description: description.trim(),
+      speedLimit: Number.isFinite(limit) ? limit : null
+    });
+  }
+
+  $effect(() => {
+    if (!draft) {
+      name = '';
+      description = '';
+      speedLimit = '';
+    }
+  });
+</script>
+
+{#if draft}
+  <form class="draft" onsubmit={submit}>
+    <div class="draft-head">
+      <strong>Nueva geocerca</strong>
+      <div class="kind-switch" role="group" aria-label="Tipo de geocerca">
+        <button
+          type="button"
+          class:active={draft.kind === 'polygon'}
+          aria-pressed={draft.kind === 'polygon'}
+          onclick={() => onstartdraw('polygon')}>Polígono</button
+        >
+        <button
+          type="button"
+          class:active={draft.kind === 'circle'}
+          aria-pressed={draft.kind === 'circle'}
+          onclick={() => onstartdraw('circle')}>Círculo</button
+        >
+      </div>
+    </div>
+    <p class="hint"><FleetIcon name="info" size={13} />{hint}</p>
+    {#if draft.kind === 'circle' && draft.vertices.length}
+      <label class="field">
+        <span>Radio (m)</span>
+        <input
+          type="number"
+          min="20"
+          max="100000"
+          step="10"
+          value={Math.round(draft.radiusM)}
+          oninput={(event) => onradius(Number(event.currentTarget.value) || 20)}
+        />
+      </label>
+    {/if}
+    <label class="field">
+      <span>Nombre</span>
+      <input bind:value={name} maxlength="120" placeholder="Ej. Centro de distribución" required />
+    </label>
+    <label class="field">
+      <span>Descripción <em>opcional</em></span>
+      <input bind:value={description} maxlength="500" />
+    </label>
+    <label class="field">
+      <span>Límite de velocidad dentro (km/h) <em>opcional</em></span>
+      <input bind:value={speedLimit} type="number" min="5" max="200" placeholder="Sin límite" />
+    </label>
+    {#if error}<p class="error">{error}</p>{/if}
+    <div class="draft-actions">
+      <button type="button" onclick={oncancel}>Cancelar</button>
+      <button type="button" disabled={!draft.vertices.length} onclick={onundo}
+        >Deshacer punto</button
+      >
+      <button type="submit" class="primary" disabled={!ready || saving}
+        >{saving ? 'Guardando…' : 'Guardar'}</button
+      >
+    </div>
+  </form>
+{:else}
+  <div class="toolbar">
+    <span>{geofences.length} {geofences.length === 1 ? 'geocerca' : 'geocercas'}</span>
+    {#if canManage}
+      <button type="button" class="primary" onclick={() => onstartdraw('polygon')}
+        ><FleetIcon name="plus" size={14} />Nueva geocerca</button
+      >
+    {/if}
+  </div>
+  {#if error}<p class="error inline">{error}</p>{/if}
+  <ul class="list">
+    {#each geofences as geofence (geofence.id)}
+      <li class:highlighted={highlighted === geofence.id}>
+        <button type="button" class="row" onclick={() => onfocus(geofence)}>
+          <span class="swatch" class:circle={geofence.shape.type === 'circle'}></span>
+          <span class="main">
+            <strong>{geofence.name}</strong>
+            <span>{describeShape(geofence.shape)}</span>
+            {#if geofence.speed_limit_kmh}<span class="limit"
+                >Máx. {geofence.speed_limit_kmh} km/h</span
+              >{/if}
+          </span>
+        </button>
+        {#if canManage}
+          {#if confirmDelete === geofence.id}
+            <span class="confirm">
+              <button type="button" class="danger" onclick={() => ondelete(geofence)}
+                >Eliminar</button
+              >
+              <button type="button" onclick={() => (confirmDelete = null)}>No</button>
+            </span>
+          {:else}
+            <button
+              type="button"
+              class="icon"
+              aria-label={`Eliminar ${geofence.name}`}
+              onclick={() => (confirmDelete = geofence.id)}
+              ><FleetIcon name="trash" size={14} /></button
+            >
+          {/if}
+        {/if}
+      </li>
+    {:else}
+      <li class="empty">
+        Aún no hay geocercas. {canManage
+          ? 'Dibuja una para recibir alertas cuando una unidad entre o salga.'
+          : ''}
+      </li>
+    {/each}
+  </ul>
+{/if}
+
+<style>
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    font-size: 12px;
+    color: rgb(var(--foreground-muted));
+  }
+  button.primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    background: rgb(var(--foreground));
+    color: rgb(var(--surface));
+    font-size: 12px;
+    font-weight: 600;
+  }
+  button.primary:disabled {
+    opacity: 0.45;
+  }
+  .list {
+    flex: 1;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0 6px 6px;
+    list-style: none;
+  }
+  .list li {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 9px;
+  }
+  .list li:hover,
+  .list li.highlighted {
+    background: rgb(var(--surface-hover));
+  }
+  .row {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 9px 8px;
+    text-align: left;
+  }
+  .swatch {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border: 2px solid #7c3aed;
+    border-radius: 6px;
+    background: rgb(124 58 237 / 0.15);
+    transform: rotate(-8deg);
+  }
+  .swatch.circle {
+    border-radius: 50%;
+    transform: none;
+  }
+  .main {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .main strong {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .main span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    color: rgb(var(--foreground-muted));
+  }
+  .main .limit {
+    color: rgb(var(--fleet-warning-ink, var(--warning)));
+  }
+  .icon {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    margin-right: 4px;
+    border-radius: 7px;
+    color: rgb(var(--foreground-muted));
+  }
+  .icon:hover {
+    color: rgb(var(--danger));
+    background: rgb(var(--danger) / 0.08);
+  }
+  .confirm {
+    display: flex;
+    gap: 4px;
+    margin-right: 6px;
+  }
+  .confirm button {
+    padding: 4px 7px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 6px;
+    font-size: 11px;
+  }
+  .confirm .danger {
+    border-color: rgb(var(--danger));
+    background: rgb(var(--danger));
+    color: #fff;
+  }
+  .empty {
+    padding: 24px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: center;
+    color: rgb(var(--foreground-muted));
+  }
+  .draft {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    overflow-y: auto;
+  }
+  .draft-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .kind-switch {
+    display: flex;
+    padding: 2px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 8px;
+  }
+  .kind-switch button {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    color: rgb(var(--foreground-muted));
+  }
+  .kind-switch .active {
+    background: rgb(var(--surface-hover));
+    color: rgb(var(--foreground));
+    font-weight: 600;
+  }
+  .hint {
+    display: flex;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgb(245 158 11 / 0.1);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .field {
+    display: grid;
+    gap: 4px;
+    font-size: 11px;
+    color: rgb(var(--foreground-muted));
+  }
+  .field em {
+    font-style: normal;
+    opacity: 0.7;
+  }
+  .field input {
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 8px;
+    background: transparent;
+    color: rgb(var(--foreground));
+    font-size: 12px;
+  }
+  .field input:focus {
+    outline: none;
+    border-color: rgb(var(--primary));
+  }
+  .draft-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+  .draft-actions button:not(.primary) {
+    padding: 6px 10px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 7px;
+    font-size: 12px;
+  }
+  .draft-actions button:disabled {
+    opacity: 0.45;
+  }
+  .error {
+    color: rgb(var(--danger));
+    font-size: 12px;
+  }
+  .error.inline {
+    padding: 0 12px 8px;
+  }
+  button:focus-visible {
+    outline: 2px solid rgb(var(--primary));
+    outline-offset: 2px;
+  }
+</style>

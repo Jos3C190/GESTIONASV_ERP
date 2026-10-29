@@ -9,10 +9,8 @@
 const MAPLIBRE_VERSION = '5.24.0';
 const MAPLIBRE_BASE = `https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist`;
 
-export const MAP_STYLES = {
-  light: 'https://tiles.openfreemap.org/styles/liberty',
-  dark: 'https://tiles.openfreemap.org/styles/dark'
-} as const;
+/** Estilo claro en ambos temas del ERP: es el que mejor se lee, como en Traccar. */
+export const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 
 /** San Miguel, El Salvador: punto de partida de la operación demo. */
 export const DEFAULT_CENTER: [number, number] = [-88.1833, 13.4833];

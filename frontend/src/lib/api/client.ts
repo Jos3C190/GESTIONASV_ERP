@@ -840,6 +840,39 @@ export interface TrackedDeviceOut {
   position: TrackedPositionOut | null;
 }
 
+export type GeofenceShape =
+  | { type: 'circle'; center: [number, number]; radius_m: number }
+  | { type: 'polygon'; coordinates: [number, number][] };
+
+export interface GeofenceOut {
+  id: number;
+  name: string;
+  description: string | null;
+  shape: GeofenceShape;
+  speed_limit_kmh: number | null;
+}
+
+export interface GeofenceCreate {
+  name: string;
+  description?: string | null;
+  shape: GeofenceShape;
+  speed_limit_kmh?: number | null;
+}
+
+export interface TrackingEventOut {
+  id: number;
+  type: string;
+  event_time: string | null;
+  device_id: number;
+  device_name: string;
+  device_unique_id: string;
+  geofence_name: string | null;
+  alarm: string | null;
+  speed_kmh: number | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 export interface TrackingSnapshotOut {
   configured: boolean;
   devices: TrackedDeviceOut[];
@@ -1717,7 +1750,23 @@ export const api = {
       const sp = new URLSearchParams();
       if (company.id) sp.set('company_id', company.id);
       return apiFetch<TrackingSnapshotOut>(`/tracking/positions?${sp.toString()}`, { signal });
-    }
+    },
+    geofences: (signal?: AbortSignal) =>
+      apiFetch<GeofenceOut[]>(`/tracking/geofences?company_id=${company.id ?? ''}`, { signal }),
+    createGeofence: (data: GeofenceCreate) =>
+      apiFetch<GeofenceOut>('/tracking/geofences', {
+        method: 'POST',
+        body: JSON.stringify({ ...data, company_id: company.id })
+      }),
+    deleteGeofence: (id: number) =>
+      apiFetch<void>(`/tracking/geofences/${id}?company_id=${company.id ?? ''}`, {
+        method: 'DELETE'
+      }),
+    events: (hours = 24, signal?: AbortSignal) =>
+      apiFetch<TrackingEventOut[]>(
+        `/tracking/events?company_id=${company.id ?? ''}&hours=${hours}`,
+        { signal }
+      )
   },
   branches: {
     list: (signal?: AbortSignal) =>

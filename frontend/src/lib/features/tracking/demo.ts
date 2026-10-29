@@ -9,13 +9,42 @@ const WORKSHOP: LngLat = [-88.17, 13.49];
 
 /** Recorridos aproximados por carretera desde San Miguel. Solo para la vista de demostración. */
 const ROUTES: Record<string, LngLat[]> = {
-  'Santa Rosa de Lima': [SAN_MIGUEL, [-88.1, 13.53], [-88.02, 13.57], [-87.95, 13.6], [-87.8936, 13.6247]],
+  'Santa Rosa de Lima': [
+    SAN_MIGUEL,
+    [-88.1, 13.53],
+    [-88.02, 13.57],
+    [-87.95, 13.6],
+    [-87.8936, 13.6247]
+  ],
   'La Unión': [SAN_MIGUEL, [-88.1, 13.45], [-88.0, 13.4], [-87.92, 13.37], [-87.8439, 13.3369]],
   Usulután: [SAN_MIGUEL, [-88.26, 13.43], [-88.35, 13.38], [-88.42, 13.36], [-88.44, 13.344]],
-  Jiquilisco: [SAN_MIGUEL, [-88.26, 13.43], [-88.35, 13.38], [-88.44, 13.344], [-88.52, 13.33], [-88.573, 13.3189]],
+  Jiquilisco: [
+    SAN_MIGUEL,
+    [-88.26, 13.43],
+    [-88.35, 13.38],
+    [-88.44, 13.344],
+    [-88.52, 13.33],
+    [-88.573, 13.3189]
+  ],
   'El Tránsito': [SAN_MIGUEL, [-88.26, 13.4], [-88.33, 13.36], [-88.353, 13.35]],
-  'San Salvador': [SAN_MIGUEL, [-88.3, 13.52], [-88.48, 13.55], [-88.7, 13.6], [-88.9, 13.66], [-89.05, 13.7], [-89.2182, 13.6929]],
-  'Santa Ana': [SAN_MIGUEL, [-88.48, 13.55], [-88.9, 13.66], [-89.2182, 13.6929], [-89.35, 13.75], [-89.45, 13.88], [-89.5597, 13.9946]]
+  'San Salvador': [
+    SAN_MIGUEL,
+    [-88.3, 13.52],
+    [-88.48, 13.55],
+    [-88.7, 13.6],
+    [-88.9, 13.66],
+    [-89.05, 13.7],
+    [-89.2182, 13.6929]
+  ],
+  'Santa Ana': [
+    SAN_MIGUEL,
+    [-88.48, 13.55],
+    [-88.9, 13.66],
+    [-89.2182, 13.6929],
+    [-89.35, 13.75],
+    [-89.45, 13.88],
+    [-89.5597, 13.9946]
+  ]
 };
 
 /** Un recorrido completo dura ~25 minutos en la simulación. */
@@ -36,7 +65,8 @@ function bearing([ax, ay]: LngLat, [bx, by]: LngLat): number {
 /** Punto y rumbo a una fracción (0–1) del recorrido. */
 export function pointAlong(route: LngLat[], fraction: number): { point: LngLat; course: number } {
   const lengths = route.slice(1).map((point, i) => segmentLength(route[i]!, point));
-  let remaining = Math.min(Math.max(fraction, 0), 1) * lengths.reduce((sum, value) => sum + value, 0);
+  let remaining =
+    Math.min(Math.max(fraction, 0), 1) * lengths.reduce((sum, value) => sum + value, 0);
   for (let i = 0; i < lengths.length; i++) {
     const start = route[i]!;
     const end = route[i + 1]!;

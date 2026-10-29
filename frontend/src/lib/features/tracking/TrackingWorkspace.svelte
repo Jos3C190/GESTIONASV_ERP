@@ -1,9 +1,22 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from '$lib/api/client';
+  import { api, type GeofenceOut } from '$lib/api/client';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import { company } from '$lib/stores/company.svelte';
+  import { permissions } from '$lib/stores/permissions.svelte';
   import { demoRoute, demoSnapshot } from './demo';
+  import EventsPanel from './EventsPanel.svelte';
+  import { demoEvents, demoLiveEvent, fromTraccarEvents, type TrackingEvent } from './events';
+  import GeofencePanel from './GeofencePanel.svelte';
+  import {
+    DEMO_GEOFENCES,
+    distanceM,
+    draftRing,
+    draftShape,
+    shapeRing,
+    type DraftKind,
+    type GeofenceDraft
+  } from './geofences';
   import TrackingMap from './TrackingMap.svelte';
   import {
     compassPoint,
@@ -16,9 +29,13 @@
 
   type Mode = 'loading' | 'live' | 'demo';
   type Filter = 'all' | TrackingStatus;
+  type Tab = 'units' | 'geofences' | 'events';
 
   const LIVE_POLL_MS = 5000;
+  const EVENTS_POLL_MS = 15000;
   const DEMO_TICK_MS = 1000;
+  const DEMO_EVENT_EVERY_MS = 45000;
+  const TOAST_MS = 7000;
   const TRAIL_POINTS = 60;
 
   let mode = $state<Mode>('loading');
@@ -32,6 +49,35 @@
   let now = $state(Date.now());
   let lastSync = $state<Date | null>(null);
 
+  let tab = $state<Tab>('units');
+  let mapView = $state<{ fitRing: (ring: [number, number][]) => void }>();
+  let geofences = $state<GeofenceOut[]>([]);
+  let geofenceError = $state<string | null>(null);
+  let highlightedGeofence = $state<number | null>(null);
+  let draft = $state<GeofenceDraft | null>(null);
+  let savingGeofence = $state(false);
+  let events = $state<TrackingEvent[]>([]);
+  let unread = $state(0);
+  let focusedEvent = $state<TrackingEvent | null>(null);
+  let toasts = $state<TrackingEvent[]>([]);
+  let seenEventIds = new Set<string>();
+  let eventsPrimed = false;
+
+  const canManageGeofences = $derived(
+    mode === 'demo' || permissions.hasPermission('tracking:geofences')
+  );
+  const draftPreview = $derived(
+    draft ? { ring: draftRing(draft), vertices: draft.vertices } : null
+  );
+  const focusPoint = $derived(
+    focusedEvent && focusedEvent.latitude !== null && focusedEvent.longitude !== null
+      ? {
+          key: focusedEvent.id,
+          at: [focusedEvent.longitude, focusedEvent.latitude] as [number, number]
+        }
+      : null
+  );
+
   const filters: { id: Filter; label: string }[] = [
     { id: 'all', label: 'Todos' },
     { id: 'moving', label: 'En movimiento' },
@@ -40,10 +86,12 @@
   ];
 
   const counts = $derived(
-    vehicles.reduce(
-      (acc, vehicle) => ({ ...acc, [vehicle.status]: acc[vehicle.status] + 1 }),
-      { all: vehicles.length, moving: 0, stopped: 0, offline: 0 } as Record<Filter, number>
-    )
+    vehicles.reduce((acc, vehicle) => ({ ...acc, [vehicle.status]: acc[vehicle.status] + 1 }), {
+      all: vehicles.length,
+      moving: 0,
+      stopped: 0,
+      offline: 0
+    } as Record<Filter, number>)
   );
 
   const visible = $derived(
@@ -92,12 +140,16 @@
       const snapshot = await api.tracking.positions(signal);
       liveError = null;
       if (snapshot.configured) {
-        if (mode !== 'live') trails = {};
-        mode = 'live';
+        if (mode !== 'live') {
+          trails = {};
+          mode = 'live';
+          resetEvents();
+          loadGeofences();
+          pollEvents();
+        }
         apply(fromTraccar(snapshot.devices));
       } else if (mode !== 'demo') {
-        mode = 'demo';
-        trails = {};
+        enterDemo();
       }
     } catch {
       if (signal.aborted) return;
@@ -105,16 +157,161 @@
         mode === 'live'
           ? 'Se perdió la conexión con el servidor GPS. Reintentando…'
           : 'No se pudo conectar con el servidor GPS. Mostrando la demostración.';
-      if (mode === 'loading') mode = 'demo';
+      if (mode === 'loading') enterDemo();
     } finally {
       polling = false;
     }
+  }
+
+  function enterDemo() {
+    mode = 'demo';
+    trails = {};
+    resetEvents();
+    geofences = DEMO_GEOFENCES.map((geofence) => ({ ...geofence }));
+    receiveEvents(demoEvents(Date.now()));
+  }
+
+  function resetEvents() {
+    events = [];
+    toasts = [];
+    unread = 0;
+    seenEventIds = new Set();
+    eventsPrimed = false;
+  }
+
+  /** Agrega eventos nuevos; los que llegan después de la primera carga se notifican. */
+  function receiveEvents(incoming: TrackingEvent[]) {
+    const initial = !eventsPrimed;
+    eventsPrimed = true;
+    const fresh = incoming.filter((event) => !seenEventIds.has(event.id));
+    if (!fresh.length) return;
+    fresh.forEach((event) => seenEventIds.add(event.id));
+    events = [...fresh, ...events]
+      .sort((a, b) => b.time.getTime() - a.time.getTime())
+      .slice(0, 200);
+    if (initial) return;
+    if (tab !== 'events') unread += fresh.length;
+    for (const event of fresh.slice(0, 3)) {
+      toasts = [event, ...toasts].slice(0, 3);
+      setTimeout(() => (toasts = toasts.filter((toast) => toast.id !== event.id)), TOAST_MS);
+    }
+  }
+
+  async function pollEvents(signal?: AbortSignal) {
+    if (mode !== 'live') return;
+    try {
+      receiveEvents(fromTraccarEvents(await api.tracking.events(24, signal)));
+    } catch {
+      // Los eventos son complementarios; el banner de conexión ya avisa si Traccar cae.
+    }
+  }
+
+  async function loadGeofences() {
+    try {
+      geofences = await api.tracking.geofences();
+      geofenceError = null;
+    } catch {
+      geofenceError = 'No se pudieron cargar las geocercas.';
+    }
+  }
+
+  function startDraw(kind: DraftKind) {
+    draft = { kind, vertices: [], radiusM: 500 };
+    geofenceError = null;
+    select(null);
+  }
+
+  function addDraftPoint(point: [number, number]) {
+    if (!draft) return;
+    if (draft.kind === 'circle') {
+      if (!draft.vertices.length) draft = { ...draft, vertices: [point] };
+      else draft = { ...draft, radiusM: Math.max(20, distanceM(draft.vertices[0]!, point)) };
+      return;
+    }
+    const last = draft.vertices[draft.vertices.length - 1];
+    // El doble clic para cerrar también dispara clics sueltos; se ignoran puntos repetidos.
+    if (last && distanceM(last, point) < 3) return;
+    draft = { ...draft, vertices: [...draft.vertices, point] };
+  }
+
+  function undoDraftPoint() {
+    if (draft) draft = { ...draft, vertices: draft.vertices.slice(0, -1) };
+  }
+
+  async function saveGeofence(data: {
+    name: string;
+    description: string;
+    speedLimit: number | null;
+  }) {
+    const shape = draft && draftShape(draft);
+    if (!shape) return;
+    const payload = {
+      name: data.name,
+      description: data.description || null,
+      shape,
+      speed_limit_kmh: data.speedLimit
+    };
+    if (mode === 'demo') {
+      geofences = [...geofences, { ...payload, id: -(Date.now() % 1_000_000) - 10 }];
+      draft = null;
+      return;
+    }
+    savingGeofence = true;
+    try {
+      const created = await api.tracking.createGeofence(payload);
+      geofences = [...geofences, created];
+      draft = null;
+      geofenceError = null;
+    } catch {
+      geofenceError = 'No se pudo guardar la geocerca. Revisa la conexión con el servidor GPS.';
+    } finally {
+      savingGeofence = false;
+    }
+  }
+
+  async function deleteGeofence(geofence: GeofenceOut) {
+    if (mode === 'live') {
+      try {
+        await api.tracking.deleteGeofence(geofence.id);
+      } catch {
+        geofenceError = 'No se pudo eliminar la geocerca.';
+        return;
+      }
+    }
+    geofences = geofences.filter((item) => item.id !== geofence.id);
+    if (highlightedGeofence === geofence.id) highlightedGeofence = null;
+  }
+
+  function focusGeofence(geofence: GeofenceOut) {
+    highlightedGeofence = geofence.id;
+    mapView?.fitRing(shapeRing(geofence.shape));
+  }
+
+  function focusEvent(event: TrackingEvent) {
+    // El punto del evento se muestra solo; la tarjeta de la unidad lo taparía.
+    select(null);
+    focusedEvent = event;
+  }
+
+  function openTab(next: Tab) {
+    tab = next;
+    if (next === 'events') unread = 0;
+    if (next !== 'geofences') {
+      draft = null;
+      highlightedGeofence = null;
+    }
+    if (next !== 'events') focusedEvent = null;
   }
 
   onMount(() => {
     const controller = new AbortController();
     pollLive(controller.signal);
     const livePoll = setInterval(() => pollLive(controller.signal), LIVE_POLL_MS);
+    const eventsPoll = setInterval(() => pollEvents(controller.signal), EVENTS_POLL_MS);
+    let demoSequence = 0;
+    const demoEventsTimer = setInterval(() => {
+      if (mode === 'demo') receiveEvents([demoLiveEvent(demoSequence++, Date.now())]);
+    }, DEMO_EVENT_EVERY_MS);
     const tick = setInterval(() => {
       now = Date.now();
       if (mode === 'demo') apply(demoSnapshot(now));
@@ -122,6 +319,8 @@
     return () => {
       controller.abort();
       clearInterval(livePoll);
+      clearInterval(eventsPoll);
+      clearInterval(demoEventsTimer);
       clearInterval(tick);
     };
   });
@@ -134,7 +333,10 @@
 
 <svelte:window
   onkeydown={(event) => {
-    if (event.key === 'Escape' && selectedKey) select(null);
+    if (event.key !== 'Escape') return;
+    if (draft) draft = null;
+    else if (focusedEvent) focusedEvent = null;
+    else if (selectedKey) select(null);
   }}
 />
 
@@ -150,11 +352,14 @@
         {/if}
       </div>
       <p>
-        Ubicación en tiempo real de las unidades de {company.active?.commercial_name ?? 'tu empresa'}.
+        Ubicación en tiempo real de las unidades de {company.active?.commercial_name ??
+          'tu empresa'}.
       </p>
     </div>
     <div class="heading-meta">
-      {#if lastSync}<span><FleetIcon name="refresh" size={14} /> Actualizado {timeAgo(lastSync, now)}</span>{/if}
+      {#if lastSync}<span
+          ><FleetIcon name="refresh" size={14} /> Actualizado {timeAgo(lastSync, now)}</span
+        >{/if}
     </div>
   </header>
 
@@ -164,70 +369,157 @@
 
   <div class="tracking-shell">
     <TrackingMap
+      bind:this={mapView}
       vehicles={visible}
       {selectedKey}
       {follow}
       trail={selectedKey ? (trails[selectedKey] ?? []) : []}
       {plannedRoute}
-      onselect={select}
+      {geofences}
+      {highlightedGeofence}
+      draft={draftPreview}
+      drawing={draft !== null}
+      {focusPoint}
+      onselect={(key) => {
+        select(key);
+        focusedEvent = null;
+      }}
+      ondrawpoint={addDraftPoint}
     />
 
-    <aside class="device-panel" aria-label="Unidades rastreadas">
-      <div class="panel-search">
-        <FleetIcon name="search" size={16} />
-        <input
-          bind:value={query}
-          type="search"
-          placeholder="Buscar unidad, placa o conductor"
-          aria-label="Buscar unidades"
-        />
-      </div>
-      <div class="filters" role="group" aria-label="Filtrar por estado">
-        {#each filters as item (item.id)}
+    {#if toasts.length}
+      <div class="toasts" aria-live="polite">
+        {#each toasts as toast (toast.id)}
           <button
             type="button"
-            class:active={filter === item.id}
-            aria-pressed={filter === item.id}
-            onclick={() => (filter = item.id)}
-            >{item.label}<span>{counts[item.id]}</span></button
+            class="toast {toast.tone}"
+            onclick={() => {
+              openTab('events');
+              focusEvent(toast);
+              toasts = toasts.filter((item) => item.id !== toast.id);
+            }}
           >
+            <FleetIcon name="alert" size={15} />
+            <span
+              ><strong>{toast.title}</strong>{toast.vehicleName}{toast.detail
+                ? ` · ${toast.detail}`
+                : ''}</span
+            >
+          </button>
         {/each}
       </div>
-      <ul class="device-list">
-        {#each visible as vehicle (vehicle.key)}
-          <li>
+    {/if}
+
+    <aside class="device-panel" aria-label="Seguimiento de unidades">
+      <div class="tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'units'}
+          class:active={tab === 'units'}
+          onclick={() => openTab('units')}>Unidades</button
+        >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'geofences'}
+          class:active={tab === 'geofences'}
+          onclick={() => openTab('geofences')}>Geocercas</button
+        >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'events'}
+          class:active={tab === 'events'}
+          onclick={() => openTab('events')}
+          >Eventos{#if unread}<span class="unread">{unread > 99 ? '99+' : unread}</span
+            >{/if}</button
+        >
+      </div>
+      {#if tab === 'geofences'}
+        <GeofencePanel
+          {geofences}
+          canManage={canManageGeofences}
+          {draft}
+          saving={savingGeofence}
+          error={geofenceError}
+          highlighted={highlightedGeofence}
+          onstartdraw={startDraw}
+          onundo={undoDraftPoint}
+          onradius={(radiusM) => draft && (draft = { ...draft, radiusM })}
+          oncancel={() => (draft = null)}
+          onsave={saveGeofence}
+          ondelete={deleteGeofence}
+          onfocus={focusGeofence}
+        />
+      {:else if tab === 'events'}
+        <EventsPanel {events} {now} focusedId={focusedEvent?.id ?? null} onfocus={focusEvent} />
+      {:else}
+        <div class="panel-search">
+          <FleetIcon name="search" size={16} />
+          <input
+            bind:value={query}
+            type="search"
+            placeholder="Buscar unidad, placa o conductor"
+            aria-label="Buscar unidades"
+          />
+        </div>
+        <div class="filters" role="group" aria-label="Filtrar por estado">
+          {#each filters as item (item.id)}
             <button
               type="button"
-              class="device-row"
-              class:selected={vehicle.key === selectedKey}
-              aria-pressed={vehicle.key === selectedKey}
-              onclick={() => select(vehicle.key)}
+              class:active={filter === item.id}
+              aria-pressed={filter === item.id}
+              onclick={() => (filter = item.id)}>{item.label}<span>{counts[item.id]}</span></button
             >
-              <span class="device-avatar {vehicle.status}"><FleetIcon name="truck" size={17} /></span>
-              <span class="device-main">
-                <strong>{vehicle.name}</strong>
-                <span>{vehicle.vehicle ? `${vehicle.vehicle.plate} · ${vehicle.vehicle.driver}` : 'Dispositivo GPS'}</span>
-              </span>
-              <span class="device-side">
-                <span class="status-text {vehicle.status}">{STATUS_LABELS[vehicle.status]}</span>
-                <span>{vehicle.status === 'moving' ? `${Math.round(vehicle.speedKmh)} km/h` : timeAgo(vehicle.fixTime, now)}</span>
-              </span>
-            </button>
-          </li>
-        {:else}
-          <li class="empty">
-            {mode === 'loading'
-              ? 'Conectando con el servidor GPS…'
-              : vehicles.length
-                ? 'Ninguna unidad coincide con la búsqueda.'
-                : 'Aún no hay unidades reportando posición.'}
-          </li>
-        {/each}
-      </ul>
+          {/each}
+        </div>
+        <ul class="device-list">
+          {#each visible as vehicle (vehicle.key)}
+            <li>
+              <button
+                type="button"
+                class="device-row"
+                class:selected={vehicle.key === selectedKey}
+                aria-pressed={vehicle.key === selectedKey}
+                onclick={() => select(vehicle.key)}
+              >
+                <span class="device-avatar {vehicle.status}"
+                  ><FleetIcon name="truck" size={17} /></span
+                >
+                <span class="device-main">
+                  <strong>{vehicle.name}</strong>
+                  <span
+                    >{vehicle.vehicle
+                      ? `${vehicle.vehicle.plate} · ${vehicle.vehicle.driver}`
+                      : 'Dispositivo GPS'}</span
+                  >
+                </span>
+                <span class="device-side">
+                  <span class="status-text {vehicle.status}">{STATUS_LABELS[vehicle.status]}</span>
+                  <span
+                    >{vehicle.status === 'moving'
+                      ? `${Math.round(vehicle.speedKmh)} km/h`
+                      : timeAgo(vehicle.fixTime, now)}</span
+                  >
+                </span>
+              </button>
+            </li>
+          {:else}
+            <li class="empty">
+              {mode === 'loading'
+                ? 'Conectando con el servidor GPS…'
+                : vehicles.length
+                  ? 'Ninguna unidad coincide con la búsqueda.'
+                  : 'Aún no hay unidades reportando posición.'}
+            </li>
+          {/each}
+        </ul>
+      {/if}
       {#if mode === 'demo'}
         <p class="panel-note">
-          <FleetIcon name="info" size={13} />Posiciones simuladas. Configura Traccar para ver tus unidades
-          reales.
+          <FleetIcon name="info" size={13} />Posiciones simuladas. Configura Traccar para ver tus
+          unidades reales.
         </p>
       {/if}
     </aside>
@@ -243,14 +535,21 @@
                 : 'Dispositivo sin vehículo asociado'}
             </p>
           </div>
-          <button type="button" class="icon-button" aria-label="Cerrar detalle" onclick={() => select(null)}
-            ><FleetIcon name="close" size={16} /></button
+          <button
+            type="button"
+            class="icon-button"
+            aria-label="Cerrar detalle"
+            onclick={() => select(null)}><FleetIcon name="close" size={16} /></button
           >
         </header>
         <div class="card-status">
-          <span class="status-pill {selected.status}"><span></span>{STATUS_LABELS[selected.status]}</span>
+          <span class="status-pill {selected.status}"
+            ><span></span>{STATUS_LABELS[selected.status]}</span
+          >
           {#if selected.vehicle?.status === 'En ruta'}
-            <span class="route-to"><FleetIcon name="route" size={14} />{selected.vehicle.destination}</span>
+            <span class="route-to"
+              ><FleetIcon name="route" size={14} />{selected.vehicle.destination}</span
+            >
           {/if}
         </div>
         <dl class="stats">
@@ -271,7 +570,9 @@
           </div>
           <div>
             <dt>Motor</dt>
-            <dd>{selected.ignition === null ? '—' : selected.ignition ? 'Encendido' : 'Apagado'}</dd>
+            <dd>
+              {selected.ignition === null ? '—' : selected.ignition ? 'Encendido' : 'Apagado'}
+            </dd>
           </div>
           {#if selected.vehicle}
             <div>
@@ -296,7 +597,9 @@
             class:active={follow}
             aria-pressed={follow}
             onclick={() => (follow = !follow)}
-            ><FleetIcon name="crosshair" size={15} />{follow ? 'Siguiendo' : 'Seguir unidad'}</button
+            ><FleetIcon name="crosshair" size={15} />{follow
+              ? 'Siguiendo'
+              : 'Seguir unidad'}</button
           >
           {#if selected.vehicle}
             <a href="/fleet"><FleetIcon name="truck" size={15} />Ver en Flota</a>
@@ -401,6 +704,80 @@
     background: rgb(var(--surface) / 0.97);
     box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
     backdrop-filter: blur(6px);
+  }
+  .tabs {
+    display: flex;
+    gap: 2px;
+    padding: 6px 6px 0;
+    border-bottom: 1px solid rgb(var(--border));
+  }
+  .tabs button {
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 9px 4px 8px;
+    border-bottom: 2px solid transparent;
+    font-size: 12px;
+    color: rgb(var(--foreground-muted));
+  }
+  .tabs button.active {
+    border-bottom-color: rgb(var(--foreground));
+    color: rgb(var(--foreground));
+    font-weight: 600;
+  }
+  .unread {
+    min-width: 18px;
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: rgb(var(--danger));
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .toasts {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    z-index: 3;
+    display: grid;
+    gap: 8px;
+    width: min(360px, calc(100% - 24px));
+    transform: translateX(-50%);
+  }
+  .toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 10px 12px;
+    border: 1px solid rgb(var(--border));
+    border-left: 4px solid rgb(var(--primary));
+    border-radius: 10px;
+    background: rgb(var(--surface));
+    box-shadow: 0 10px 28px rgb(0 0 0 / 0.22);
+    text-align: left;
+    font-size: 12px;
+    color: rgb(var(--foreground-muted));
+    animation: rise 160ms ease-out;
+  }
+  .toast strong {
+    display: block;
+    margin-bottom: 2px;
+    color: rgb(var(--foreground));
+    font-size: 13px;
+  }
+  .toast.danger {
+    border-left-color: rgb(var(--danger));
+  }
+  .toast.warning {
+    border-left-color: rgb(var(--warning));
+  }
+  .toast.success {
+    border-left-color: rgb(var(--success));
+  }
+  .toast.danger > :global(svg) {
+    color: rgb(var(--danger));
   }
   .panel-search {
     display: flex;

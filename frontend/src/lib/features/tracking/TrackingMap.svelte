@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { theme } from '$lib/stores/theme.svelte';
-  import { DEFAULT_CENTER, loadMapLibre, MAP_STYLES, type MapLibre } from './maplibre';
+  import type { GeofenceOut } from '$lib/api/client';
+  import { geofenceCollection } from './geofences';
+  import { DEFAULT_CENTER, loadMapLibre, MAP_STYLE, type MapLibre } from './maplibre';
   import { STATUS_LABELS, type TrackedVehicle } from './tracking';
 
   type LngLat = [number, number];
@@ -12,14 +13,30 @@
     follow = false,
     trail = [],
     plannedRoute = null,
-    onselect
+    geofences = [],
+    highlightedGeofence = null,
+    draft = null,
+    drawing = false,
+    focusPoint = null,
+    onselect,
+    ondrawpoint,
+    ondrawfinish
   }: {
     vehicles: TrackedVehicle[];
     selectedKey?: string | null;
     follow?: boolean;
     trail?: LngLat[];
     plannedRoute?: LngLat[] | null;
+    geofences?: GeofenceOut[];
+    highlightedGeofence?: number | null;
+    /** Contorno en edición: anillo del polígono o círculo y sus vértices. */
+    draft?: { ring: LngLat[]; vertices: LngLat[] } | null;
+    drawing?: boolean;
+    /** Punto a resaltar (p. ej. el lugar de un evento). */
+    focusPoint?: { key: string; at: LngLat } | null;
     onselect: (key: string | null) => void;
+    ondrawpoint?: (point: LngLat) => void;
+    ondrawfinish?: () => void;
   } = $props();
 
   const TRUCK_PATH =
@@ -37,10 +54,76 @@
     properties: {},
     geometry: { type: 'LineString', coordinates }
   });
+  const points = (coordinates: LngLat[]) => ({
+    type: 'FeatureCollection',
+    features: coordinates.map((point) => ({
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'Point', coordinates: point }
+    }))
+  });
+  const polygon = (ring: LngLat[]) => ({
+    type: 'Feature',
+    properties: {},
+    geometry: { type: 'Polygon', coordinates: ring.length >= 4 ? [ring] : [] }
+  });
+  let focusMarker: MapLibre | null = null;
 
-  // Las capas propias se pierden con cada setStyle (cambio de tema), así que se recrean.
+  // Las capas propias se agregan cuando el estilo termina de cargar.
   function addOverlayLayers() {
     if (!map || map.getSource('planned-route')) return;
+    map.addSource('geofences', { type: 'geojson', data: geofenceCollection([]) });
+    map.addLayer({
+      id: 'geofences-fill',
+      type: 'fill',
+      source: 'geofences',
+      paint: {
+        'fill-color': '#7c3aed',
+        'fill-opacity': ['case', ['boolean', ['feature-state', 'highlight'], false], 0.24, 0.1]
+      }
+    });
+    map.addLayer({
+      id: 'geofences-line',
+      type: 'line',
+      source: 'geofences',
+      paint: { 'line-color': '#7c3aed', 'line-width': 2, 'line-opacity': 0.8 }
+    });
+    map.addLayer({
+      id: 'geofences-label',
+      type: 'symbol',
+      source: 'geofences',
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Noto Sans Bold'],
+        'text-size': 12
+      },
+      paint: { 'text-color': '#5b21b6', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 }
+    });
+    map.addSource('draft', { type: 'geojson', data: polygon([]) });
+    map.addSource('draft-vertices', { type: 'geojson', data: points([]) });
+    map.addLayer({
+      id: 'draft-fill',
+      type: 'fill',
+      source: 'draft',
+      paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.18 }
+    });
+    map.addLayer({
+      id: 'draft-line',
+      type: 'line',
+      source: 'draft',
+      paint: { 'line-color': '#d97706', 'line-width': 2, 'line-dasharray': [2, 1] }
+    });
+    map.addLayer({
+      id: 'draft-vertices',
+      type: 'circle',
+      source: 'draft-vertices',
+      paint: {
+        'circle-radius': 5,
+        'circle-color': '#ffffff',
+        'circle-stroke-color': '#d97706',
+        'circle-stroke-width': 2
+      }
+    });
     map.addSource('planned-route', { type: 'geojson', data: line([]) });
     map.addSource('trail', { type: 'geojson', data: line([]) });
     map.addLayer({
@@ -48,7 +131,12 @@
       type: 'line',
       source: 'planned-route',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#0ea5e9', 'line-width': 3, 'line-opacity': 0.55, 'line-dasharray': [1.5, 1.5] }
+      paint: {
+        'line-color': '#0ea5e9',
+        'line-width': 3,
+        'line-opacity': 0.55,
+        'line-dasharray': [1.5, 1.5]
+      }
     });
     map.addLayer({
       id: 'trail',
@@ -114,16 +202,27 @@
         if (disposed || !container) return;
         const instance = new maplibregl.Map({
           container,
-          style: MAP_STYLES[theme.current],
+          style: MAP_STYLE,
           center: DEFAULT_CENTER,
           zoom: 9,
           attributionControl: { compact: true }
         });
-        instance.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+        instance.addControl(
+          new maplibregl.NavigationControl({ visualizePitch: true }),
+          'top-right'
+        );
         instance.addControl(new maplibregl.FullscreenControl(), 'top-right');
         instance.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-right');
         instance.on('style.load', addOverlayLayers);
-        instance.on('click', () => onselect(null));
+        instance.on('click', (event: MapLibre) => {
+          if (drawing) ondrawpoint?.([event.lngLat.lng, event.lngLat.lat]);
+          else onselect(null);
+        });
+        instance.on('dblclick', (event: MapLibre) => {
+          if (!drawing) return;
+          event.preventDefault();
+          ondrawfinish?.();
+        });
         (instance as MapLibre).__maplibregl = maplibregl;
         map = instance;
       })
@@ -138,21 +237,17 @@
 
   $effect(() => {
     if (!map) return;
-    const style = MAP_STYLES[theme.current];
-    // setStyle conserva los marcadores HTML; las capas propias se reagregan en style.load.
-    if (map.__currentStyle && map.__currentStyle !== style) map.setStyle(style);
-    map.__currentStyle = style;
-  });
-
-  $effect(() => {
-    if (!map) return;
     void selectedKey;
     syncMarkers(map.__maplibregl);
     if (!fitted && vehicles.length) {
       fitted = true;
       const bounds = new map.__maplibregl.LngLatBounds();
       vehicles.forEach((vehicle) => bounds.extend([vehicle.longitude, vehicle.latitude]));
-      map.fitBounds(bounds, { padding: { top: 60, bottom: 60, left: 380, right: 60 }, maxZoom: 13, duration: 0 });
+      map.fitBounds(bounds, {
+        padding: { top: 60, bottom: 60, left: 380, right: 60 },
+        maxZoom: 13,
+        duration: 0
+      });
     }
   });
 
@@ -161,6 +256,58 @@
     map.getSource('trail')?.setData(line(trail));
     map.getSource('planned-route')?.setData(line(plannedRoute ?? []));
   });
+
+  let highlighted: number | null = null;
+  $effect(() => {
+    if (!map || !styleReady) return;
+    map.getSource('geofences')?.setData(geofenceCollection(geofences));
+    if (highlighted !== null)
+      map.setFeatureState({ source: 'geofences', id: Math.abs(highlighted) }, { highlight: false });
+    highlighted = highlightedGeofence;
+    if (highlighted !== null)
+      map.setFeatureState({ source: 'geofences', id: Math.abs(highlighted) }, { highlight: true });
+  });
+
+  $effect(() => {
+    if (!map || !styleReady) return;
+    map.getSource('draft')?.setData(polygon(draft?.ring ?? []));
+    map.getSource('draft-vertices')?.setData(points(draft?.vertices ?? []));
+  });
+
+  $effect(() => {
+    if (!map) return;
+    map.getCanvas().style.cursor = drawing ? 'crosshair' : '';
+    if (drawing) map.doubleClickZoom.disable();
+    else map.doubleClickZoom.enable();
+  });
+
+  $effect(() => {
+    if (!map) return;
+    focusMarker?.remove();
+    focusMarker = null;
+    if (!focusPoint) return;
+    const element = document.createElement('div');
+    element.className = 'tm-focus';
+    focusMarker = new map.__maplibregl.Marker({ element }).setLngLat(focusPoint.at).addTo(map);
+    map.flyTo({
+      center: focusPoint.at,
+      zoom: Math.max(map.getZoom(), 13),
+      offset: [160, 0],
+      duration: 900
+    });
+  });
+
+  /** Encuadra un contorno completo (lo usa el panel al elegir una geocerca). */
+  export function fitRing(ring: LngLat[]) {
+    if (!map || !ring.length) return;
+    const bounds = new map.__maplibregl.LngLatBounds();
+    ring.forEach((point) => bounds.extend(point));
+    map.fitBounds(bounds, {
+      padding: { top: 60, bottom: 60, left: 380, right: 60 },
+      maxZoom: 16,
+      duration: 800
+    });
+  }
 
   $effect(() => {
     if (!map || !follow || !selectedKey) return;
@@ -280,6 +427,20 @@
   }
   :global(.tm-marker:focus-visible .tm-pin) {
     box-shadow: 0 0 0 3px rgb(var(--primary));
+  }
+  :global(.tm-focus) {
+    width: 22px;
+    height: 22px;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    background: rgb(220 38 38);
+    box-shadow: 0 0 0 0 rgb(220 38 38 / 0.6);
+    animation: tm-ping 1.4s ease-out infinite;
+  }
+  @keyframes -global-tm-ping {
+    to {
+      box-shadow: 0 0 0 18px rgb(220 38 38 / 0);
+    }
   }
   :global(.tracking-map .maplibregl-ctrl-group) {
     border-radius: 10px;
