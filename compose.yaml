@@ -551,6 +551,59 @@ services:
     mem_limit: 512m
     restart: unless-stopped
 
+  # ---------------- GPS tracking: Traccar (optional, profile: tracking) ----------------
+  # Servidor GPS para el módulo Seguimiento. Usa su propia base `traccar` dentro del
+  # Postgres del ERP para no mezclar sus tablas con las migraciones de Alembic.
+  traccar-db-init:
+    profiles: [tracking]
+    image: postgres:16-alpine
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-erp_admin}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production_please}
+      PGDATABASE: ${POSTGRES_DB:-erp_db}
+      TRACCAR_DB: ${TRACCAR_DB:-traccar}
+    command:
+      - sh
+      - -c
+      - >-
+        psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$${TRACCAR_DB}'" | grep -q 1
+        || psql -c "CREATE DATABASE \"$${TRACCAR_DB}\""
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  traccar:
+    profiles: [tracking]
+    image: traccar/traccar:6.16.0-alpine
+    environment:
+      CONFIG_USE_ENVIRONMENT_VARIABLES: "true"
+      DATABASE_DRIVER: org.postgresql.Driver
+      DATABASE_URL: jdbc:postgresql://db:5432/${TRACCAR_DB:-traccar}
+      DATABASE_USER: ${POSTGRES_USER:-erp_admin}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production_please}
+      LOGGER_CONSOLE: "true"
+    volumes:
+      - traccar-logs:/opt/traccar/logs
+    ports:
+      # Interfaz web y API REST/WebSocket, solo local como Grafana.
+      - "127.0.0.1:8082:8082"
+      # Protocolo OsmAnd (app Traccar Client). Abierto en la red para que llegue el celular.
+      - "5055:5055"
+    depends_on:
+      traccar-db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8082/api/server >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    cpus: 1.0
+    mem_limit: 768m
+    restart: unless-stopped
+
   # ---------------- Security Scanners (optional, profile: security) ----------------
   security-zap:
     profiles: [security]
@@ -789,3 +842,4 @@ volumes:
   trivy-cache:
   backend-cache:
   frontend-node-modules:
+  traccar-logs:
