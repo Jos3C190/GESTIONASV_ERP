@@ -10,12 +10,18 @@ depends_on = None
 
 def upgrade() -> None:
     op.drop_constraint("ck_inventory_movements_type", "inventory_movements", type_="check")
-    op.create_check_constraint("ck_inventory_movements_type", "inventory_movements",
-        "movement_type IN ('opening','receipt','putaway','transfer','pick','shipment','adjustment_in','adjustment_out','reversal')")
+    op.create_check_constraint(
+        "ck_inventory_movements_type",
+        "inventory_movements",
+        "movement_type IN ('opening','receipt','putaway','transfer','pick','shipment','adjustment_in','adjustment_out','reversal')",
+    )
 
 
 def downgrade() -> None:
     # PostgreSQL will reject a downgrade if opening rows exist; never relabel history.
     op.drop_constraint("ck_inventory_movements_type", "inventory_movements", type_="check")
-    op.create_check_constraint("ck_inventory_movements_type", "inventory_movements",
-        "movement_type IN ('receipt','putaway','transfer','pick','shipment','adjustment_in','adjustment_out','reversal')")
+    op.create_check_constraint(
+        "ck_inventory_movements_type",
+        "inventory_movements",
+        "movement_type IN ('receipt','putaway','transfer','pick','shipment','adjustment_in','adjustment_out','reversal')",
+    )
