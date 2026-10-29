@@ -18,6 +18,17 @@
     type GeofenceDraft
   } from './geofences';
   import TrackingMap from './TrackingMap.svelte';
+  import TransfersPanel from './TransfersPanel.svelte';
+  import {
+    demoTransferTracks,
+    formatClock,
+    formatDistance,
+    fromApiSummary,
+    fromApiTrack,
+    type TransferSummary,
+    type TransferTrack
+  } from './transfers';
+  import { page } from '$app/state';
   import {
     compassPoint,
     fromTraccar,
@@ -29,7 +40,9 @@
 
   type Mode = 'loading' | 'live' | 'demo';
   type Filter = 'all' | TrackingStatus;
-  type Tab = 'units' | 'geofences' | 'events';
+  type Tab = 'units' | 'transfers' | 'geofences' | 'events';
+  const TRANSFERS_POLL_MS = 30000;
+  const TRACK_POLL_MS = 10000;
 
   const LIVE_POLL_MS = 5000;
   const EVENTS_POLL_MS = 15000;
@@ -50,6 +63,35 @@
   let lastSync = $state<Date | null>(null);
 
   let tab = $state<Tab>('units');
+  let liveTransfers = $state<TransferSummary[]>([]);
+  let transfersLoading = $state(false);
+  let transferError = $state<string | null>(null);
+  let selectedTransferId = $state<string | null>(null);
+  let liveTrack = $state<TransferTrack | null>(null);
+
+  const transferList = $derived<(TransferSummary | TransferTrack)[]>(
+    mode === 'demo' ? demoTransferTracks(vehicles, now) : liveTransfers
+  );
+  const activeTrack = $derived.by<TransferTrack | null>(() => {
+    if (!selectedTransferId) return null;
+    if (mode === 'demo')
+      return (
+        (transferList as TransferTrack[]).find((item) => item.id === selectedTransferId) ?? null
+      );
+    return liveTrack?.id === selectedTransferId ? liveTrack : null;
+  });
+  const endpoints = $derived(
+    activeTrack
+      ? {
+          origin: activeTrack.origin.point
+            ? { at: activeTrack.origin.point, label: activeTrack.origin.branch }
+            : null,
+          destination: activeTrack.destination.point
+            ? { at: activeTrack.destination.point, label: activeTrack.destination.branch }
+            : null
+        }
+      : null
+  );
   let mapView = $state<{ fitRing: (ring: [number, number][]) => void }>();
   let geofences = $state<GeofenceOut[]>([]);
   let geofenceError = $state<string | null>(null);
@@ -143,6 +185,8 @@
         if (mode !== 'live') {
           trails = {};
           mode = 'live';
+          loadTransfers();
+          loadTrack();
           resetEvents();
           loadGeofences();
           pollEvents();
@@ -293,8 +337,73 @@
     focusedEvent = event;
   }
 
+  async function loadTransfers(signal?: AbortSignal) {
+    if (mode !== 'live') return;
+    transfersLoading = true;
+    try {
+      liveTransfers = (await api.tracking.transfers(signal)).map(fromApiSummary);
+      transferError = null;
+    } catch {
+      if (!signal?.aborted) transferError = 'No se pudieron consultar los traslados.';
+    } finally {
+      transfersLoading = false;
+    }
+  }
+
+  async function loadTrack(signal?: AbortSignal) {
+    if (mode !== 'live' || !selectedTransferId) return;
+    const id = selectedTransferId;
+    try {
+      const track = fromApiTrack(await api.tracking.transferTrack(id, signal));
+      if (selectedTransferId === id) liveTrack = track;
+    } catch {
+      if (!signal?.aborted) transferError = 'No se pudo consultar el recorrido del traslado.';
+    }
+  }
+
+  let fittedTransfer: string | null = null;
+  $effect(() => {
+    if (!activeTrack || fittedTransfer === activeTrack.id) return;
+    const ring = [
+      ...activeTrack.route,
+      ...[activeTrack.origin.point, activeTrack.destination.point].filter(
+        (point): point is [number, number] => point !== null
+      )
+    ];
+    if (!ring.length) return;
+    fittedTransfer = activeTrack.id;
+    mapView?.fitRing(ring);
+  });
+
+  $effect(() => {
+    // Resalta y permite seguir la unidad del traslado sin abrir su tarjeta.
+    if (!activeTrack?.vehicleCode) return;
+    const vehicle = vehicles.find((item) => item.name === activeTrack.vehicleCode);
+    if (vehicle && selectedKey !== vehicle.key) selectedKey = vehicle.key;
+  });
+
+  $effect(() => {
+    // Un traslado pedido por URL no existe en la demostración.
+    if (mode === 'demo' && selectedTransferId && !activeTrack) selectTransfer(null);
+  });
+
+  function selectTransfer(id: string | null) {
+    selectedTransferId = id;
+    liveTrack = null;
+    fittedTransfer = null;
+    transferError = null;
+    if (!id) {
+      select(null);
+      return;
+    }
+    focusedEvent = null;
+    loadTrack();
+  }
+
   function openTab(next: Tab) {
     tab = next;
+    if (next === 'transfers') loadTransfers();
+    else if (selectedTransferId) selectTransfer(null);
     if (next === 'events') unread = 0;
     if (next !== 'geofences') {
       draft = null;
@@ -312,6 +421,15 @@
     const demoEventsTimer = setInterval(() => {
       if (mode === 'demo') receiveEvents([demoLiveEvent(demoSequence++, Date.now())]);
     }, DEMO_EVENT_EVERY_MS);
+    const transfersPoll = setInterval(() => {
+      if (tab === 'transfers') loadTransfers(controller.signal);
+    }, TRANSFERS_POLL_MS);
+    const trackPoll = setInterval(() => loadTrack(controller.signal), TRACK_POLL_MS);
+    const requested = page.url.searchParams.get('transfer');
+    if (requested) {
+      tab = 'transfers';
+      selectedTransferId = requested;
+    }
     const tick = setInterval(() => {
       now = Date.now();
       if (mode === 'demo') apply(demoSnapshot(now));
@@ -322,6 +440,8 @@
       clearInterval(eventsPoll);
       clearInterval(demoEventsTimer);
       clearInterval(tick);
+      clearInterval(transfersPoll);
+      clearInterval(trackPoll);
     };
   });
 
@@ -336,6 +456,7 @@
     if (event.key !== 'Escape') return;
     if (draft) draft = null;
     else if (focusedEvent) focusedEvent = null;
+    else if (selectedTransferId) selectTransfer(null);
     else if (selectedKey) select(null);
   }}
 />
@@ -373,14 +494,17 @@
       vehicles={visible}
       {selectedKey}
       {follow}
-      trail={selectedKey ? (trails[selectedKey] ?? []) : []}
-      {plannedRoute}
+      trail={activeTrack ? activeTrack.trail : selectedKey ? (trails[selectedKey] ?? []) : []}
+      plannedRoute={activeTrack ? activeTrack.route : plannedRoute}
+      {endpoints}
       {geofences}
       {highlightedGeofence}
       draft={draftPreview}
       drawing={draft !== null}
       {focusPoint}
       onselect={(key) => {
+        if (activeTrack && key === null) return;
+        if (activeTrack) selectTransfer(null);
         select(key);
         focusedEvent = null;
       }}
@@ -422,6 +546,13 @@
         <button
           type="button"
           role="tab"
+          aria-selected={tab === 'transfers'}
+          class:active={tab === 'transfers'}
+          onclick={() => openTab('transfers')}>Traslados</button
+        >
+        <button
+          type="button"
+          role="tab"
           aria-selected={tab === 'geofences'}
           class:active={tab === 'geofences'}
           onclick={() => openTab('geofences')}>Geocercas</button
@@ -451,6 +582,15 @@
           onsave={saveGeofence}
           ondelete={deleteGeofence}
           onfocus={focusGeofence}
+        />
+      {:else if tab === 'transfers'}
+        <TransfersPanel
+          transfers={transferList}
+          selectedId={selectedTransferId}
+          loading={transfersLoading}
+          error={transferError}
+          {now}
+          onselect={(id) => selectTransfer(id === selectedTransferId ? null : id)}
         />
       {:else if tab === 'events'}
         <EventsPanel {events} {now} focusedId={focusedEvent?.id ?? null} onfocus={focusEvent} />
@@ -524,7 +664,100 @@
       {/if}
     </aside>
 
-    {#if selected}
+    {#if selectedTransferId}
+      {@const track = activeTrack}
+      <section class="vehicle-card transfer-card" aria-label="Recorrido del traslado">
+        <header>
+          <div>
+            <h2>{track?.code ?? 'Cargando traslado…'}</h2>
+            {#if track}<p>
+                {track.vehicleCode ?? 'Sin vehículo asignado'}{track.vehicleName
+                  ? ` · ${track.vehicleName}`
+                  : ''}
+              </p>{/if}
+          </div>
+          <button
+            type="button"
+            class="icon-button"
+            aria-label="Cerrar recorrido"
+            onclick={() => selectTransfer(null)}><FleetIcon name="close" size={16} /></button
+          >
+        </header>
+        {#if track}
+          <ol class="legs">
+            <li><span class="leg-pin">A</span>{track.origin.branch}</li>
+            <li><span class="leg-pin destination">B</span>{track.destination.branch}</li>
+          </ol>
+          {#if track.arrived}
+            <p class="flag success">
+              <FleetIcon name="check" size={14} />Llegó a la sucursal de destino
+            </p>
+          {:else if track.offRoute}
+            <p class="flag danger"><FleetIcon name="alert" size={14} />Fuera de la ruta planeada</p>
+          {/if}
+          <div class="progress-line">
+            <span>Avance</span><strong>{Math.round(track.progress * 100)}%</strong>
+          </div>
+          <div class="progress-track"><span style:width="{track.progress * 100}%"></span></div>
+          <dl class="stats">
+            <div>
+              <dt>Restante</dt>
+              <dd>{formatDistance(track.remainingM)}</dd>
+            </div>
+            <div>
+              <dt>Llegada est.</dt>
+              <dd>{track.arrived ? 'Llegó' : formatClock(track.eta)}</dd>
+            </div>
+            <div>
+              <dt>Velocidad</dt>
+              <dd>{track.position ? `${Math.round(track.position.speedKmh)} km/h` : '—'}</dd>
+            </div>
+            <div>
+              <dt>Salida</dt>
+              <dd>{formatClock(track.dispatchedAt)}</dd>
+            </div>
+            <div>
+              <dt>Distancia</dt>
+              <dd>{formatDistance(track.distanceM)}</dd>
+            </div>
+            <div>
+              <dt>Última señal</dt>
+              <dd>{timeAgo(track.position?.fixTime ?? null, now)}</dd>
+            </div>
+          </dl>
+          {#if !track.origin.point || !track.destination.point}
+            <p class="note">
+              Una de las sucursales no tiene coordenadas; regístralas para ver la ruta.
+            </p>
+          {:else if mode === 'live' && !track.gpsConfigured}
+            <p class="note">
+              El servidor GPS no está configurado; solo se muestra la ruta planeada.
+            </p>
+          {:else if mode === 'live' && !track.deviceFound}
+            <p class="note">
+              {track.vehicleCode
+                ? `Ningún dispositivo de Traccar se llama “${track.vehicleCode}”. Usa el código del vehículo como nombre o identificador del GPS.`
+                : 'El traslado no tiene vehículo asignado.'}
+            </p>
+          {:else if track.routeSource === 'straight'}
+            <p class="note">Ruta aproximada en línea recta; el servicio de rutas no respondió.</p>
+          {/if}
+          <div class="card-actions">
+            <button
+              type="button"
+              class:active={follow}
+              aria-pressed={follow}
+              disabled={!track.position}
+              onclick={() => (follow = !follow)}
+              ><FleetIcon name="crosshair" size={15} />{follow
+                ? 'Siguiendo'
+                : 'Seguir unidad'}</button
+            >
+            <a href="/transfers"><FleetIcon name="route" size={15} />Ver traslados</a>
+          </div>
+        {/if}
+      </section>
+    {:else if selected}
       <section class="vehicle-card" aria-label={`Detalle de ${selected.name}`}>
         <header>
           <div>
@@ -919,6 +1152,86 @@
     font-size: 11px;
     line-height: 1.5;
     color: rgb(var(--foreground-muted));
+  }
+  .transfer-card .legs {
+    display: grid;
+    gap: 6px;
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+    font-weight: 550;
+  }
+  .transfer-card .legs li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .leg-pin {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #0f172a;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .leg-pin.destination {
+    background: #16a34a;
+  }
+  .flag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 7px 9px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .flag.success {
+    background: rgb(var(--success) / 0.12);
+    color: rgb(var(--success));
+  }
+  .flag.danger {
+    background: rgb(var(--danger) / 0.1);
+    color: rgb(var(--danger));
+  }
+  .progress-line {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 12px;
+    font-size: 11px;
+    color: rgb(var(--foreground-muted));
+  }
+  .progress-line strong {
+    color: rgb(var(--foreground));
+  }
+  .progress-track {
+    height: 6px;
+    margin-top: 6px;
+    overflow: hidden;
+    border-radius: 6px;
+    background: rgb(var(--border));
+  }
+  .progress-track span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: rgb(var(--primary));
+    transition: width 600ms ease-out;
+  }
+  .note {
+    margin-top: 10px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: rgb(var(--foreground-muted));
+  }
+  .card-actions button:disabled {
+    opacity: 0.45;
   }
   .vehicle-card {
     position: absolute;

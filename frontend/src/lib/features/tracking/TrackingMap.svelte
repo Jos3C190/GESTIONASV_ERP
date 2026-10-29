@@ -18,6 +18,7 @@
     draft = null,
     drawing = false,
     focusPoint = null,
+    endpoints = null,
     onselect,
     ondrawpoint,
     ondrawfinish
@@ -34,6 +35,11 @@
     drawing?: boolean;
     /** Punto a resaltar (p. ej. el lugar de un evento). */
     focusPoint?: { key: string; at: LngLat } | null;
+    /** Origen y destino de un traslado (marcadores A y B). */
+    endpoints?: {
+      origin: { at: LngLat; label: string } | null;
+      destination: { at: LngLat; label: string } | null;
+    } | null;
     onselect: (key: string | null) => void;
     ondrawpoint?: (point: LngLat) => void;
     ondrawfinish?: () => void;
@@ -68,6 +74,38 @@
     geometry: { type: 'Polygon', coordinates: ring.length >= 4 ? [ring] : [] }
   });
   let focusMarker: MapLibre | null = null;
+
+  /** Margen para encuadrar sin quedar debajo del panel lateral (solo en pantallas anchas). */
+  const mapPadding = () => {
+    const wide = (container?.clientWidth ?? 0) > 900;
+    return { top: 60, bottom: 60, left: wide ? 380 : 40, right: 60 };
+  };
+  let endpointMarkers: MapLibre[] = [];
+  const ANIMATION_MS = 900;
+  const animations = new Map<string, number>();
+
+  // Desliza el marcador entre la posición anterior y la nueva en lugar de saltar.
+  function animateTo(key: string, marker: MapLibre, target: LngLat) {
+    const from = marker.getLngLat();
+    const start = performance.now();
+    cancelAnimationFrame(animations.get(key) ?? 0);
+    const jump = Math.abs(from.lng - target[0]) > 0.5 || Math.abs(from.lat - target[1]) > 0.5;
+    if (jump || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      marker.setLngLat(target);
+      return;
+    }
+    const step = (time: number) => {
+      const t = Math.min((time - start) / ANIMATION_MS, 1);
+      const eased = 1 - (1 - t) ** 3;
+      marker.setLngLat([
+        from.lng + (target[0] - from.lng) * eased,
+        from.lat + (target[1] - from.lat) * eased
+      ]);
+      if (t < 1) animations.set(key, requestAnimationFrame(step));
+      else animations.delete(key);
+    };
+    animations.set(key, requestAnimationFrame(step));
+  }
 
   // Las capas propias se agregan cuando el estilo termina de cargar.
   function addOverlayLayers() {
@@ -178,7 +216,7 @@
         entry = { marker, element };
         markers.set(vehicle.key, entry);
       }
-      entry.marker.setLngLat([vehicle.longitude, vehicle.latitude]);
+      animateTo(vehicle.key, entry.marker, [vehicle.longitude, vehicle.latitude]);
       const { element } = entry;
       element.dataset.status = vehicle.status;
       element.classList.toggle('selected', vehicle.key === selectedKey);
@@ -189,6 +227,7 @@
     }
     for (const [key, entry] of markers) {
       if (!seen.has(key)) {
+        cancelAnimationFrame(animations.get(key) ?? 0);
         entry.marker.remove();
         markers.delete(key);
       }
@@ -229,6 +268,7 @@
       .catch((error: Error) => (loadError = error.message));
     return () => {
       disposed = true;
+      animations.forEach((frame) => cancelAnimationFrame(frame));
       markers.forEach((entry) => entry.marker.remove());
       markers.clear();
       map?.remove();
@@ -244,7 +284,7 @@
       const bounds = new map.__maplibregl.LngLatBounds();
       vehicles.forEach((vehicle) => bounds.extend([vehicle.longitude, vehicle.latitude]));
       map.fitBounds(bounds, {
-        padding: { top: 60, bottom: 60, left: 380, right: 60 },
+        padding: mapPadding(),
         maxZoom: 13,
         duration: 0
       });
@@ -297,13 +337,33 @@
     });
   });
 
+  $effect(() => {
+    if (!map) return;
+    endpointMarkers.forEach((marker) => marker.remove());
+    endpointMarkers = [];
+    if (!endpoints) return;
+    for (const [kind, point] of [
+      ['A', endpoints.origin],
+      ['B', endpoints.destination]
+    ] as const) {
+      if (!point) continue;
+      const element = document.createElement('div');
+      element.className = `tm-endpoint ${kind === 'A' ? 'origin' : 'destination'}`;
+      element.innerHTML = `<span class="tm-endpoint-pin"><b>${kind}</b></span><span class="tm-endpoint-label"></span>`;
+      element.querySelector<HTMLElement>('.tm-endpoint-label')!.textContent = point.label;
+      endpointMarkers.push(
+        new map.__maplibregl.Marker({ element, anchor: 'bottom' }).setLngLat(point.at).addTo(map)
+      );
+    }
+  });
+
   /** Encuadra un contorno completo (lo usa el panel al elegir una geocerca). */
   export function fitRing(ring: LngLat[]) {
     if (!map || !ring.length) return;
     const bounds = new map.__maplibregl.LngLatBounds();
     ring.forEach((point) => bounds.extend(point));
     map.fitBounds(bounds, {
-      padding: { top: 60, bottom: 60, left: 380, right: 60 },
+      padding: mapPadding(),
       maxZoom: 16,
       duration: 800
     });
@@ -319,6 +379,8 @@
   $effect(() => {
     if (!map || !selectedKey || selectedKey === lastFocused) return;
     lastFocused = selectedKey;
+    // En un traslado el mapa encuadra la ruta completa; no se acerca a la unidad.
+    if (endpoints) return;
     const vehicle = vehicles.find((item) => item.key === selectedKey);
     if (vehicle)
       map.flyTo({
@@ -427,6 +489,43 @@
   }
   :global(.tm-marker:focus-visible .tm-pin) {
     box-shadow: 0 0 0 3px rgb(var(--primary));
+  }
+  :global(.tm-endpoint) {
+    display: grid;
+    justify-items: center;
+    pointer-events: none;
+  }
+  :global(.tm-endpoint-pin) {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 3px solid #fff;
+    border-radius: 50% 50% 50% 0;
+    background: #0f172a;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    transform: rotate(-45deg);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+  }
+  :global(.tm-endpoint.destination .tm-endpoint-pin) {
+    background: #16a34a;
+  }
+  :global(.tm-endpoint-pin b) {
+    transform: rotate(45deg);
+  }
+  :global(.tm-endpoint-label) {
+    order: -1;
+    margin-bottom: 4px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: rgb(255 255 255 / 0.95);
+    color: #18181b;
+    font-size: 11px;
+    font-weight: 650;
+    white-space: nowrap;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
   }
   :global(.tm-focus) {
     width: 22px;

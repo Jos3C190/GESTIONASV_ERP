@@ -873,6 +873,49 @@ export interface TrackingEventOut {
   longitude: number | null;
 }
 
+export interface TransferPlaceOut {
+  warehouse_name: string;
+  branch_name: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface TrackedTransferOut {
+  id: string;
+  code: string;
+  status: string;
+  dispatched_at: string | null;
+  vehicle_code: string | null;
+  vehicle_name: string | null;
+  origin: TransferPlaceOut;
+  destination: TransferPlaceOut;
+}
+
+export interface TransferTrackOut extends TrackedTransferOut {
+  gps_configured: boolean;
+  device_found: boolean;
+  route: {
+    coordinates: [number, number][];
+    distance_m: number;
+    duration_s: number;
+    source: 'osrm' | 'straight';
+  } | null;
+  trail: [number, number][];
+  position: {
+    latitude: number;
+    longitude: number;
+    speed_kmh: number;
+    course: number;
+    fix_time: string | null;
+  } | null;
+  progress: number;
+  remaining_m: number | null;
+  eta: string | null;
+  arrived: boolean;
+  off_route: boolean;
+  off_route_m: number;
+}
+
 export interface TrackingSnapshotOut {
   configured: boolean;
   devices: TrackedDeviceOut[];
@@ -1761,6 +1804,14 @@ export const api = {
     deleteGeofence: (id: number) =>
       apiFetch<void>(`/tracking/geofences/${id}?company_id=${company.id ?? ''}`, {
         method: 'DELETE'
+      }),
+    transfers: (signal?: AbortSignal) =>
+      apiFetch<TrackedTransferOut[]>(`/tracking/transfers?company_id=${company.id ?? ''}`, {
+        signal
+      }),
+    transferTrack: (id: string, signal?: AbortSignal) =>
+      apiFetch<TransferTrackOut>(`/tracking/transfers/${id}?company_id=${company.id ?? ''}`, {
+        signal
       }),
     events: (hours = 24, signal?: AbortSignal) =>
       apiFetch<TrackingEventOut[]>(
