@@ -48,6 +48,12 @@ const baseQuotation: PurchaseQuotation = {
   total: '0.000000',
   status: 'draft',
   notes: null,
+  response_notes: null,
+  consolidation_id: null,
+  consolidation_code: null,
+  version_number: 1,
+  sent_at: null,
+  snapshots: [],
   created_at: null,
   updated_at: null
 };
@@ -80,21 +86,43 @@ describe('PurchaseQuotationWorkflowActions', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Enviar al proveedor' }));
 
-    expect(mocks.send).toHaveBeenCalledWith(baseQuotation.id);
+    expect(mocks.send).toHaveBeenCalledWith(baseQuotation.id, null);
     expect(onupdated).toHaveBeenCalledWith(updated);
+  });
+
+  it('shows the printable RFQ and sends consolidation context in workflow links', async () => {
+    const consolidationId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+    const quotation = { ...baseQuotation, consolidation_id: consolidationId };
+    const updated = { ...quotation, status: 'requested' } as const;
+    mocks.send.mockResolvedValue(updated);
+
+    render(PurchaseQuotationWorkflowActions, {
+      props: { quotation, onupdated: vi.fn() }
+    });
+
+    expect(screen.getByRole('link', { name: 'Ver PDF de la RFQ' })).toHaveAttribute(
+      'href',
+      `/purchase-quotations/${quotation.id}/request?consolidation_id=${consolidationId}`
+    );
+    expect(screen.getByText(/GestionaSV no envía correos/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Registrar envío manual' }));
+    expect(screen.getByText('¿Ya enviaste el PDF al proveedor?')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Sí, confirmar envío' }));
+
+    expect(mocks.send).toHaveBeenCalledWith(quotation.id, consolidationId);
   });
 
   it('shows response capture and cancellation for requested quotations', () => {
     render(PurchaseQuotationWorkflowActions, {
       props: {
-        quotation: { ...baseQuotation, status: 'requested' },
+        quotation: { ...baseQuotation, status: 'requested', consolidation_id: 'dddddddd-dddd-dddd-dddd-dddddddddddd' },
         onupdated: vi.fn()
       }
     });
 
     expect(screen.getByRole('link', { name: 'Registrar respuesta' })).toHaveAttribute(
       'href',
-      `/purchase-quotations/${baseQuotation.id}/response`
+      `/purchase-quotations/${baseQuotation.id}/response?consolidation_id=dddddddd-dddd-dddd-dddd-dddddddddddd`
     );
     expect(screen.getByRole('button', { name: 'Cancelar cotización' })).toBeInTheDocument();
   });

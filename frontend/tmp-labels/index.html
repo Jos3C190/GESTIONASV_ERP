@@ -1,0 +1,20 @@
+<!doctype html><html lang="es" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/src/app.css"><title>Prueba local de etiquetas</title></head><body class="bg-surface text-foreground"><div id="app"></div><script type="module">
+import { mount } from 'svelte';
+import LabelDialog from '/src/lib/features/inventory/components/HandlingUnitLabelDialog.svelte';
+const params = new URLSearchParams(location.search);
+document.documentElement.dataset.theme = params.get('theme') || 'light';
+const unit = { id:'hu-1', code:'HU-DD17851A961041B8', warehouse_id:'wh',inventory_item_id:'item', product_name:'Azúcar Glass Premium 10kg', quantity_base:10, stock_status:'quarantine', closed_at:null };
+const preview = { inventory_lot_id:'lot', inventory_lot_detail_id:'detail',handling_unit_id:unit.id,handling_unit_code:unit.code, inventory_item_id:'item',product_internal_code:'INT-004',product_name:unit.product_name,receipt_lot_code:'LOT-COM-00027-DD3EB6A00CFDB48C49D4AED9BCCDAF3F5',receipt_lot_header_code:'LOT-COM-00027', manufacturer_lot_code:'FAB-2026-10',received_on:'2026-10-28',quantity_base:'10',base_unit_symbol:'cj',expiry_date:'2027-02-01',stock_status:'quarantine',print_count:0,has_initial_print:false,label_revision:1,label_print_id:null,label_confirmation_required:true,label_confirmed:false,presentation_equivalence:null };
+const originalFetch = window.fetch;
+window.fetch = async (url, options) => {
+  if (!String(url).includes('/api/v1/')) return originalFetch(url, options);
+  let data, status = 200;
+  if (String(url).includes('trace-capabilities')) data = { token:'demo-label-token' };
+  else if (String(url).includes('labels/preview')) {
+    if (params.has('blocked')) { data = { code:'inventory_label_retaceo_not_final', message:'Verifica y cierra el retaceo vigente antes de imprimir la etiqueta.' }; status=409; }
+    else data = preview;
+  } else throw new Error('Esta vista de prueba no permite escrituras.');
+  return new Response(JSON.stringify(data), { status, headers:{'content-type':'application/json'} });
+};
+mount(LabelDialog, { target:document.getElementById('app'), props:{unit,canVerify:true,contextKey:'demo'} });
+</script></body></html>

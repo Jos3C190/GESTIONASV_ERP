@@ -28,6 +28,13 @@ vi.mock('$lib/api/purchases', () => ({
   }
 }));
 
+vi.mock('$lib/api/catalog', () => ({
+  catalogApi: {
+    listUnits: vi.fn().mockResolvedValue([]),
+    getProduct: vi.fn().mockResolvedValue(null)
+  }
+}));
+
 vi.mock('$lib/stores/permissions.svelte', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
@@ -43,6 +50,23 @@ const retaceo: Retaceo = {
   created_by_id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
   currency: 'USD',
   details: [],
+  costs: [
+    {
+      id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      retaceo_id: '11111111-1111-1111-1111-111111111111',
+      source_purchase_order_expense_id: null,
+      expense_type_id: null,
+      classification: 'freight',
+      title: 'Flete',
+      description: null,
+      amount: '10.000000',
+      is_active: true,
+      allocations: [],
+      documents: [],
+      created_at: null,
+      updated_at: null
+    }
+  ],
   total_fob: '100.000000',
   total_freight: '10.000000',
   total_expenses: '5.000000',
@@ -74,42 +98,61 @@ describe('RetaceoDraftEditor', () => {
     });
   });
 
-  it('updates a draft and redirects to its detail', async () => {
+  it('updates the itemized draft cost and opens the calculation step', async () => {
     mocks.update.mockResolvedValue({
       ...retaceo,
       total_freight: '12.000000',
-      notes: 'Actualizado'
+      costs: retaceo.costs?.map((cost) => ({
+        ...cost,
+        title: 'Flete internacional',
+        amount: '12.000000'
+      }))
     });
 
     render(RetaceoDraftEditor, {
       props: { retaceoId: retaceo.id }
     });
 
-    expect(await screen.findByText('Editar RET-0001')).toBeInTheDocument();
-    expect(screen.getByText('COM-0001')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Costos y comprobantes' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Retaceo · RET-0001')).toBeInTheDocument();
+    expect(screen.getByText(/Orden COM-0001/)).toBeInTheDocument();
 
-    await fireEvent.input(screen.getByLabelText('Flete'), {
+    await fireEvent.input(screen.getByLabelText('Concepto'), {
+      target: { value: 'Flete internacional' }
+    });
+    await fireEvent.input(screen.getByLabelText('Monto real · USD'), {
       target: { value: '12.000000' }
     });
 
-    await fireEvent.input(screen.getByLabelText('Notas'), {
-      target: { value: 'Actualizado' }
-    });
-
     await fireEvent.submit(
-      screen.getByRole('button', { name: 'Guardar cambios' }).closest('form')!
+      screen.getByRole('button', { name: 'Guardar borrador' }).closest('form')!
     );
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(retaceo.id, {
-        total_freight: '12.000000',
+        total_freight: '10.000000',
         total_expenses: '5.000000',
         total_dai: '3.000000',
         import_vat: '15.340000',
-        notes: 'Actualizado'
+        notes: 'Inicial',
+        costs: [
+          {
+            id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            classification: 'freight',
+            title: 'Flete internacional',
+            description: null,
+            amount: '12.000000',
+            allocations: []
+          }
+        ]
       });
     });
 
+    expect(
+      await screen.findByText('Borrador guardado. Abriendo el detalle para calcular el retaceo.')
+    ).toBeInTheDocument();
     expect(mocks.goto).toHaveBeenCalledWith(`/retaceos/${retaceo.id}`);
   });
 
@@ -128,7 +171,7 @@ describe('RetaceoDraftEditor', () => {
     );
 
     expect(mocks.getPurchase).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Guardar borrador' })).not.toBeInTheDocument();
   });
 
   it('blocks editing without retaceos:manage', async () => {

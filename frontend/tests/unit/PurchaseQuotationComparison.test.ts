@@ -108,7 +108,7 @@ describe('PurchaseQuotationComparison', () => {
     expect(within(firstRow).getByText('Proveedor Alterno')).toBeInTheDocument();
     expect(within(firstRow).getByText('$100.00')).toBeInTheDocument();
 
-    expect(mocks.compare).toHaveBeenCalledWith(requestId, undefined);
+    expect(mocks.compare).toHaveBeenCalledWith(requestId, undefined, null);
   });
 
   it('requeries the backend when a currency is selected', async () => {
@@ -122,7 +122,7 @@ describe('PurchaseQuotationComparison', () => {
     select.value = 'USD';
     await fireEvent.change(select);
 
-    expect(mocks.compare).toHaveBeenLastCalledWith(requestId, 'USD');
+    expect(mocks.compare).toHaveBeenLastCalledWith(requestId, 'USD', null);
   });
 
   it('shows backend comparison errors and keeps the currency filter available', async () => {

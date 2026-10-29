@@ -44,14 +44,16 @@ export interface WarehouseMovement {
 }
 export interface Warehouse {
   id: string;
+  companyId?: string;
   categoryId?: string;
   code: string;
   name: string;
   description: string;
+  isCentral: boolean;
   type: WarehouseType;
   status: WarehouseStatus;
   location: string;
-  branchId: string;
+  branchId: string | null;
   branchName: string;
   branchAddress: string;
   area: number;

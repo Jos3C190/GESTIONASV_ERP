@@ -3,11 +3,12 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import PurchaseRequestProductPicker from '$lib/features/purchase-requests/components/PurchaseRequestProductPicker.svelte';
-  import { HttpError } from '$lib/api/client';
+  import { api, HttpError } from '$lib/api/client';
   import { catalogApi } from '$lib/api/catalog';
   import { purchaseRequestsApi } from '$lib/api/purchase-requests';
   import { getWarehouses } from '$lib/services/warehouses';
   import { branch } from '$lib/stores/branch.svelte';
+  import { company } from '$lib/stores/company.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type { Product } from '$lib/types/catalog';
   import type { PurchaseRequestDetailInput } from '$lib/types/purchase-request';
@@ -46,8 +47,13 @@
   let productPageError = $state<string | null>(null);
   let validation = $state<Record<string, string>>({});
   let loadGeneration = 0;
+  let branchContextReady = $state(false);
+  let availableBranches = $state(branch.branches.filter((item) => item.is_active));
+  let loadedCompanyId: string | null = null;
 
-  let canManage = $derived(permissions.hasPermission('purchase_requests:manage'));
+  let canCreate = $derived(
+    permissions.hasAnyPermission(['purchase_requests:create', 'purchase_requests:manage'])
+  );
 
   async function loadOptions(selectedBranchId: string) {
     const generation = ++loadGeneration;
@@ -97,6 +103,33 @@
     }
   }
 
+  async function loadBranchContext(companyId: string) {
+    branchContextReady = false;
+    loadingOptions = true;
+    error = null;
+
+    try {
+      const context = await api.operationalContext.get(companyId);
+      if (company.id !== companyId) return;
+
+      branch.configure(context);
+      availableBranches = context.branches.filter((item) => item.is_active);
+      if (!availableBranches.some((item) => item.id === branchId)) {
+        branchId = branch.id ?? context.last_branch_id ?? availableBranches[0]?.id ?? '';
+      }
+      branchContextReady = true;
+    } catch (err: unknown) {
+      error =
+        err instanceof HttpError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'No se pudieron cargar las sucursales autorizadas.';
+    } finally {
+      if (!branchContextReady) loadingOptions = false;
+    }
+  }
+
   async function loadMoreProducts() {
     if (loadingMoreProducts || productCurrentPage >= productPages) return;
 
@@ -137,7 +170,16 @@
   }
 
   $effect(() => {
-    void loadOptions(branchId);
+    const companyId = company.id;
+    if (!companyId || companyId === loadedCompanyId) return;
+    loadedCompanyId = companyId;
+    void loadBranchContext(companyId);
+  });
+
+  $effect(() => {
+    const selectedBranchId = branchId;
+    if (!branchContextReady) return;
+    void loadOptions(selectedBranchId);
   });
 
   function updateLine(index: number, patch: Partial<DraftLine>) {
@@ -203,7 +245,7 @@
   }
 
   async function submit() {
-    if (!canManage || saving) return;
+    if (!canCreate || saving) return;
     if (!validate()) {
       focusFirstInvalidField();
       return;
@@ -263,12 +305,12 @@
     </div>
   </header>
 
-  {#if !canManage}
+  {#if !canCreate}
     <div
       class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-foreground"
       role="alert"
     >
-      No tienes permiso para gestionar solicitudes de compra.
+      Tu rol no tiene permiso para crear solicitudes de compra. Pide a un administrador que habilite la creación para tu rol.
     </div>
   {:else if loadingOptions}
     <div class="space-y-4" aria-label="Cargando formulario de solicitud">
@@ -286,7 +328,9 @@
           type="button"
           size="sm"
           variant="secondary"
-          onclick={() => void loadOptions(branchId)}
+          onclick={() => {
+            if (company.id) void loadBranchContext(company.id);
+          }}
           disabled={loadingOptions}
         >
           Reintentar
@@ -321,7 +365,7 @@
               class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <option value="">Selecciona una sucursal</option>
-              {#each branch.branches.filter((item) => item.is_active) as item}
+              {#each availableBranches as item}
                 <option value={item.id}>{item.code ? `${item.code} — ` : ''}{item.name}</option>
               {/each}
             </select>

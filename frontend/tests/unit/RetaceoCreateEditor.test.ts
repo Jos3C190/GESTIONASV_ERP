@@ -50,7 +50,7 @@ const purchase: Purchase = {
   discount: '0.000000',
   tax: '13.000000',
   total: '113.000000',
-  status: 'received',
+  status: 'verified',
   notes: null,
   created_at: null,
   updated_at: null
@@ -77,23 +77,7 @@ describe('RetaceoCreateEditor', () => {
     });
 
     expect(await screen.findByText('COM-0001')).toBeInTheDocument();
-    expect(screen.getByText('Recibida')).toBeInTheDocument();
-
-    await fireEvent.input(screen.getByLabelText('Flete'), {
-      target: { value: '10.000000' }
-    });
-
-    await fireEvent.input(screen.getByLabelText('Gastos'), {
-      target: { value: '5.000000' }
-    });
-
-    await fireEvent.input(screen.getByLabelText('DAI'), {
-      target: { value: '3.000000' }
-    });
-
-    await fireEvent.input(screen.getByLabelText('IVA de importación'), {
-      target: { value: '2.340000' }
-    });
+    expect(screen.getByText('Verificada')).toBeInTheDocument();
 
     await fireEvent.input(screen.getByLabelText('Notas'), {
       target: { value: 'Importación septiembre' }
@@ -104,15 +88,17 @@ describe('RetaceoCreateEditor', () => {
     await waitFor(() => {
       expect(mocks.create).toHaveBeenCalledWith({
         purchase_id: purchase.id,
-        total_freight: '10.000000',
-        total_expenses: '5.000000',
-        total_dai: '3.000000',
-        import_vat: '2.340000',
+        total_freight: '0',
+        total_expenses: '0',
+        total_dai: '0',
+        import_vat: '0',
         notes: 'Importación septiembre'
       });
     });
 
-    expect(mocks.goto).toHaveBeenCalledWith('/retaceos/99999999-9999-9999-9999-999999999999');
+    expect(mocks.goto).toHaveBeenCalledWith(
+      '/retaceos/99999999-9999-9999-9999-999999999999/edit'
+    );
   });
 
   it('does not load purchase data without retaceos:manage', async () => {

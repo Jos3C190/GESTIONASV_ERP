@@ -100,23 +100,27 @@
   });
 
   async function save() {
-    const nextErrors = validateCapacityGroupDraft(draft, groups, group?.id ?? null, warehouse);
-    errors = nextErrors;
-    saveError = null;
-    if (Object.keys(nextErrors).length > 0) return;
+    if (saving) return;
 
-    saving = true;
+    saveError = null;
     try {
+      const nextErrors = validateCapacityGroupDraft(draft, groups, group?.id ?? null, warehouse);
+      errors = nextErrors;
+      if (Object.keys(nextErrors).length > 0) return;
+
+      saving = true;
       const input = capacityGroupDraftToInput(draft);
       const saved = group
         ? await updateCapacityGroup(warehouseId, group.id, input)
         : await createCapacityGroup(warehouseId, input);
       onsaved(saved);
     } catch (error) {
-      saveError =
-        error instanceof HttpError
-          ? error.message
-          : 'No se pudo guardar la estructura de capacidad. Intente nuevamente.';
+      if (error instanceof HttpError) {
+        saveError = error.message;
+      } else {
+        console.error('No se pudo guardar la estructura de capacidad.', error);
+        saveError = 'No se pudo guardar la estructura de capacidad. Intente nuevamente.';
+      }
     } finally {
       saving = false;
     }
@@ -136,6 +140,7 @@
 >
   <form
     class="space-y-6"
+    novalidate
     onsubmit={(event) => {
       event.preventDefault();
       void save();
@@ -236,7 +241,7 @@
           bind:value={draft.certified_max_weight_kg}
           error={errors.certified_max_weight_kg}
           min="0.000001"
-          step="0.001"
+          step="0.000001"
           placeholder="No registrado"
         />
         <FormField
@@ -246,7 +251,7 @@
           bind:value={draft.operational_max_weight_kg}
           error={errors.operational_max_weight_kg}
           min="0.000001"
-          step="0.001"
+          step="0.000001"
           placeholder="No registrado"
         />
         <FormField
@@ -256,7 +261,7 @@
           bind:value={draft.certified_usable_volume_m3}
           error={errors.certified_usable_volume_m3}
           min="0.000001"
-          step="0.001"
+          step="0.000001"
           placeholder="No registrado"
         />
         <FormField
@@ -266,7 +271,7 @@
           bind:value={draft.operational_usable_volume_m3}
           error={errors.operational_usable_volume_m3}
           min="0.000001"
-          step="0.001"
+          step="0.000001"
           placeholder="No registrado"
         />
       </div>
@@ -290,7 +295,7 @@
           bind:value={draft.usable_length_m}
           error={errors.usable_length_m}
           min="0.000001"
-          step="0.001"
+          step="0.000001"
           placeholder="No registrado"
         />
         <FormField
@@ -300,7 +305,7 @@
           bind:value={draft.usable_width_m}
           error={errors.usable_width_m}
           min="0.000001"
-          step="0.001"
+          step="0.000001"
           placeholder="No registrado"
         />
         <FormField
@@ -310,7 +315,7 @@
           bind:value={draft.usable_height_m}
           error={errors.usable_height_m}
           min="0.000001"
-          step="0.001"
+          step="0.000001"
           placeholder="No registrado"
         />
       </div>
@@ -364,7 +369,7 @@
 
     <div class="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
       <Button variant="ghost" onclick={onclose} disabled={saving}>Cancelar</Button>
-      <Button type="submit" disabled={saving}>
+      <Button type="button" onclick={save} disabled={saving}>
         {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear estructura'}
       </Button>
     </div>

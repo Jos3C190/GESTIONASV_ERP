@@ -81,4 +81,22 @@ describe('retaceosApi', () => {
       method: 'POST'
     });
   });
+
+  it('uses the document endpoints for listing, download and removal', async () => {
+    await retaceosApi.listCostDocuments('ret-1', 'cost-1');
+    await retaceosApi.createCostDocumentDownloadUrl('ret-1', 'cost-1', 'document-1');
+    await retaceosApi.removeCostDocument('ret-1', 'cost-1', 'document-1');
+
+    expect(mocks.apiFetch).toHaveBeenNthCalledWith(1, '/retaceos/ret-1/costs/cost-1/documents');
+    expect(mocks.apiFetch).toHaveBeenNthCalledWith(
+      2,
+      '/retaceos/ret-1/costs/cost-1/documents/document-1/download-url',
+      { method: 'POST' }
+    );
+    expect(mocks.apiFetch).toHaveBeenNthCalledWith(
+      3,
+      '/retaceos/ret-1/costs/cost-1/documents/document-1',
+      { method: 'DELETE' }
+    );
+  });
 });

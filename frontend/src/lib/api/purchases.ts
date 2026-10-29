@@ -4,7 +4,9 @@ import type {
   PurchaseCreateInput,
   PurchaseListParams,
   PurchaseReceivable,
-  PurchaseUpdateInput
+  PurchaseUpdateInput,
+  PurchaseVerifyInput,
+  PurchaseValuationContext
 } from '$lib/types/purchase';
 
 function queryPath(path: string, params: URLSearchParams): string {
@@ -54,10 +56,24 @@ export const purchasesApi = {
     });
   },
 
-  verify(id: string) {
+  verify(id: string, payload: PurchaseVerifyInput) {
     return apiFetch<Purchase>(`/purchases/${id}/verify`, {
-      method: 'POST'
+      method: 'POST',
+      body: JSON.stringify(payload)
     });
+  },
+
+  valuationContext(id: string) {
+    return apiFetch<PurchaseValuationContext>(`/purchases/${id}/valuation-context`);
+  },
+  receivingReadiness(id: string) {
+    return apiFetch<{
+      required: boolean;
+      ready: boolean;
+      retaceo_id: string | null;
+      retaceo_code: string | null;
+      retaceo_status: string | null;
+    }>(`/purchases/${id}/receiving-readiness`);
   },
 
   cancel(id: string) {

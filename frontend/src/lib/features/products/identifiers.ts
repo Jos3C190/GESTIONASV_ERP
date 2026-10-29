@@ -72,13 +72,15 @@ export function barcodeFormat(
     if (normalized.length === 13) return 'EAN13';
     if (normalized.length === 14) return 'ITF14';
   }
-  if (type === 'internal' && normalized.length > 0) return 'CODE128';
+  if (type === 'internal' && /^[\x20-\x7E]+$/.test(normalized)) return 'CODE128';
   return null;
 }
 
 export function identifierFormatHint(type: ProductIdentifierType, value: string): string | null {
   if (!value.trim()) return null;
   if (barcodeFormat(type, value)) return null;
+  if (type === 'internal')
+    return 'Code 128 requiere un código interno con letras sin tildes, números o símbolos ASCII.';
   const normalized = value.replace(/[^0-9X]/gi, '').toUpperCase();
   if (
     (type === 'ean' && [8, 13].includes(normalized.length)) ||

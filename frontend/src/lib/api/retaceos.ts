@@ -1,6 +1,10 @@
 import { apiFetch, type Page } from '$lib/api/client';
 import type {
   Retaceo,
+  RetaceoAverageComparison,
+  RetaceoCostDocument,
+  RetaceoCostDocumentDownloadUrl,
+  RetaceoCostDocumentUpload,
   RetaceoCreateInput,
   RetaceoListParams,
   RetaceoUpdateInput
@@ -64,5 +68,59 @@ export const retaceosApi = {
     return apiFetch<Retaceo>(`/retaceos/${id}/close`, {
       method: 'POST'
     });
+  },
+
+  valuationStatus(id: string) {
+    return apiFetch<{ enabled: boolean; inventory_after_retaceo: boolean }>(
+      `/retaceos/${id}/valuation-status`
+    );
+  },
+
+  averageComparison(id: string) {
+    return apiFetch<RetaceoAverageComparison>(`/retaceos/${id}/average-comparison`);
+  },
+
+  apply(id: string) {
+    return apiFetch<Retaceo>(`/retaceos/${id}/apply`, { method: 'POST' });
+  },
+
+  initiateCostDocument(
+    retaceoId: string,
+    costId: string,
+    payload: {
+      file_name: string;
+      content_type: string;
+      size_bytes: number;
+      checksum_sha256: string;
+    }
+  ) {
+    return apiFetch<RetaceoCostDocumentUpload>(
+      `/retaceos/${retaceoId}/costs/${costId}/documents/uploads`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    );
+  },
+
+  completeCostDocument(retaceoId: string, costId: string, documentId: string) {
+    return apiFetch<RetaceoCostDocument>(
+      `/retaceos/${retaceoId}/costs/${costId}/documents/${documentId}/complete`,
+      { method: 'POST' }
+    );
+  },
+
+  removeCostDocument(retaceoId: string, costId: string, documentId: string) {
+    return apiFetch<void>(`/retaceos/${retaceoId}/costs/${costId}/documents/${documentId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  listCostDocuments(retaceoId: string, costId: string) {
+    return apiFetch<RetaceoCostDocument[]>(`/retaceos/${retaceoId}/costs/${costId}/documents`);
+  },
+
+  createCostDocumentDownloadUrl(retaceoId: string, costId: string, documentId: string) {
+    return apiFetch<RetaceoCostDocumentDownloadUrl>(
+      `/retaceos/${retaceoId}/costs/${costId}/documents/${documentId}/download-url`,
+      { method: 'POST' }
+    );
   }
 };

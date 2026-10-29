@@ -13,6 +13,7 @@ export default {
         },
         border: {
           DEFAULT: 'rgb(var(--border) / <alpha-value>)',
+          control: 'rgb(var(--control-border) / <alpha-value>)',
           strong: 'rgb(var(--border-strong) / <alpha-value>)'
         },
         foreground: {
@@ -58,7 +59,7 @@ export default {
         glow: 'var(--shadow-glow)'
       },
       transitionDuration: {
-        '250': '250ms'
+        250: '250ms'
       }
     }
   },

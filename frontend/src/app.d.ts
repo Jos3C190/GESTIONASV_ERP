@@ -14,10 +14,14 @@ declare module 'jsbarcode' {
     format?: string;
     displayValue?: boolean;
     margin?: number;
+    marginLeft?: number;
+    marginRight?: number;
     height?: number;
     width?: number;
     lineColor?: string;
     background?: string;
+    fontSize?: number;
+    textMargin?: number;
   }
 
   interface JsBarcode {

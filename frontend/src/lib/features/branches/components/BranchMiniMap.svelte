@@ -37,7 +37,14 @@
   });
 
   async function initMap() {
-    if (!containerEl || destroyed) return;
+    if (
+      !containerEl ||
+      destroyed ||
+      branch.lat === null ||
+      branch.lng === null ||
+      !Number.isFinite(branch.lat) ||
+      !Number.isFinite(branch.lng)
+    ) return;
     if (!isCartoBasemapConfigured()) {
       mapError = true;
       return;
@@ -144,7 +151,13 @@
     : 'w-full'} overflow-hidden rounded-xl border border-border bg-surface-elevated"
   style={fillHeight ? '' : `height: ${height}px`}
 >
-  <div bind:this={containerEl} class="h-full w-full"></div>
+  {#if branch.lat !== null && branch.lng !== null && Number.isFinite(branch.lat) && Number.isFinite(branch.lng)}
+    <div bind:this={containerEl} class="h-full w-full"></div>
+  {:else}
+    <div class="grid h-full place-items-center p-6 text-center">
+      <p class="max-w-sm text-sm text-foreground-muted">Esta sede administrativa no tiene una ubicación física registrada.</p>
+    </div>
+  {/if}
   {#if mapError}
     <div class="absolute inset-0 grid place-items-center bg-surface-muted p-6 text-center">
       <p class="text-sm text-foreground-muted">

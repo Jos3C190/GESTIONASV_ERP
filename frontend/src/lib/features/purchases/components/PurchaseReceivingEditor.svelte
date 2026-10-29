@@ -5,11 +5,12 @@
   import { catalogApi } from '$lib/api/catalog';
   import { purchasesApi } from '$lib/api/purchases';
   import { permissions } from '$lib/stores/permissions.svelte';
-  import type { PurchaseLineInput, PurchaseReceivable } from '$lib/types/purchase';
+  import type { Purchase, PurchaseLineInput, PurchaseReceivable } from '$lib/types/purchase';
 
   let { orderId }: { orderId: string } = $props();
 
   let receivable = $state<PurchaseReceivable | null>(null);
+  let existingDraft = $state<Purchase | null>(null);
   let productLabels = $state<Map<number, string>>(new Map());
   let unitLabels = $state<Map<number, string>>(new Map());
   let quantityInputs = $state<Record<string, string>>({});
@@ -60,6 +61,7 @@
     loading = true;
     error = null;
     validationError = null;
+    existingDraft = null;
 
     if (!currentOrderId) {
       receivable = null;
@@ -69,10 +71,20 @@
     }
 
     try {
-      const next = await purchasesApi.getReceivable(currentOrderId);
+      const [next, drafts] = await Promise.all([
+        purchasesApi.getReceivable(currentOrderId),
+        purchasesApi.list({
+          purchase_order_id: currentOrderId,
+          status: 'draft',
+          page: 1,
+          size: 1
+        })
+      ]);
       if (sequence !== requestSequence) return;
 
       receivable = next;
+      existingDraft = drafts.items[0] ?? null;
+      if (existingDraft) return;
       quantityInputs = Object.fromEntries(
         next.lines.map((line) => [line.purchase_order_detail_id, ''])
       );
@@ -115,7 +127,7 @@
   }
 
   async function saveDraft() {
-    if (!receivable || saving || !canManage) return;
+    if (!receivable || existingDraft || saving || !canManage || !hasPending) return;
 
     validationError = null;
 
@@ -140,7 +152,7 @@
     saving = true;
 
     try {
-      await purchasesApi.create({
+      const created = await purchasesApi.create({
         purchase_order_id: receivable.purchase_order_id,
         supplier_invoice_number: supplierInvoiceNumber.trim() || null,
         supplier_invoice_date: supplierInvoiceDate || null,
@@ -148,7 +160,7 @@
         notes: notes.trim() || null
       });
 
-      await goto('/purchases');
+      await goto(`/purchases/${created.id}`);
     } catch (cause: unknown) {
       validationError = errorMessage(cause, 'No se pudo guardar el borrador de recepción.');
     } finally {
@@ -165,6 +177,10 @@
 
   function retry() {
     void load(orderId);
+  }
+
+  function continueDraft() {
+    if (existingDraft) void goto(`/purchases/${existingDraft.id}`);
   }
 
   $effect(() => {
@@ -201,6 +217,20 @@
       <div class="skeleton h-32 rounded-xl"></div>
       <div class="skeleton h-72 rounded-xl"></div>
     </div>
+  {:else if existingDraft}
+    <section
+      class="rounded-xl border border-warning/30 bg-warning/10 p-4"
+      aria-label="Recepción pendiente de confirmar"
+    >
+      <h1 class="text-xl font-semibold text-foreground">Ya existe una recepción en borrador</h1>
+      <p class="mt-2 text-sm text-foreground-muted">
+        {existingDraft.code} todavía no está confirmada. Continúa ese documento para revisar las cantidades
+        y confirmar la recepción. Si no corresponde, cancela ese borrador antes de crear otro.
+      </p>
+      <Button class="mt-3" onclick={continueDraft}>
+        Continuar recepción {existingDraft.code}
+      </Button>
+    </section>
   {:else if receivable}
     <header>
       <p class="text-sm font-medium text-primary">Recepción de compra</p>
@@ -218,6 +248,11 @@
         No tienes permiso para registrar recepciones de compra.
       </div>
     {/if}
+
+    <p class="text-sm text-foreground-muted" role="status">
+      Guardar crea un borrador y abre su detalle. Después pulsa «Confirmar recepción» para
+      actualizar el pendiente de la orden; si recibes todo, la orden quedará totalmente recibida.
+    </p>
 
     <article class="rounded-xl border border-border bg-surface p-4">
       <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

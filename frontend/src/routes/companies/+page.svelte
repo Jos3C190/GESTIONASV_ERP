@@ -46,6 +46,16 @@
     description: ''
   });
 
+  function companySelectionDestination(): string {
+    const requestedReturnTo = new URLSearchParams(window.location.search).get('returnTo');
+    return requestedReturnTo &&
+      requestedReturnTo.startsWith('/') &&
+      !requestedReturnTo.startsWith('//') &&
+      !requestedReturnTo.includes('\\')
+      ? requestedReturnTo
+      : '/dashboard';
+  }
+
   async function load() {
     loading = true;
     error = null;
@@ -133,7 +143,7 @@
       if (!context.access_all_branches && context.branches.length === 0) {
         throw new Error('No tiene sucursales autorizadas en esta empresa.');
       }
-      await goto('/dashboard');
+      await goto(companySelectionDestination());
     } catch (err) {
       branch.clear();
       company.clear();

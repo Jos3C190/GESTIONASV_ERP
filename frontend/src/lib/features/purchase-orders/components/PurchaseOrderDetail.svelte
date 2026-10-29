@@ -6,6 +6,7 @@
   import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
   import { suppliersApi } from '$lib/api/suppliers';
   import PurchaseOrderExpenseDocuments from '$lib/features/purchase-orders/components/PurchaseOrderExpenseDocuments.svelte';
+  import PurchaseOrderActualExpenses from './PurchaseOrderActualExpenses.svelte';
   import PurchaseOrderReceivingAction from '$lib/features/purchase-orders/components/PurchaseOrderReceivingAction.svelte';
   import PurchaseOrderWorkflowActions from '$lib/features/purchase-orders/components/PurchaseOrderWorkflowActions.svelte';
   import { getWarehouse } from '$lib/services/warehouses';
@@ -86,13 +87,13 @@
     item = updated;
   }
 
-  async function load(currentId: string) {
+  async function load(currentId: string, currentBranchId: string | null) {
     const sequence = ++requestSequence;
     loading = true;
     error = null;
 
     try {
-      const order = await purchaseOrdersApi.get(currentId);
+      const order = await purchaseOrdersApi.get(currentId, currentBranchId);
       if (sequence !== requestSequence) return;
 
       item = order;
@@ -100,7 +101,7 @@
       const productIds = [...new Set(order.details.map((detail) => detail.product_id))];
       const [supplier, quotation, warehouse, units, products, expenseTypes] = await Promise.all([
         suppliersApi.getSupplier(order.supplier_id).catch(() => null),
-        purchaseQuotationsApi.get(order.purchase_quotation_id).catch(() => null),
+        purchaseQuotationsApi.get(order.purchase_quotation_id, currentBranchId).catch(() => null),
         getWarehouse(order.warehouse_id).catch(() => null),
         catalogApi.listUnits(false).catch(() => []),
         Promise.all(
@@ -118,7 +119,9 @@
       const currentBranch = branch.branches.find((candidate) => candidate.id === order.branch_id);
       branchLabel = currentBranch
         ? `${currentBranch.code ? `${currentBranch.code} — ` : ''}${currentBranch.name}`
-        : `Sucursal ${order.branch_id}`;
+        : order.branch_id
+          ? `Sucursal ${order.branch_id}`
+          : 'Empresa · casa matriz';
 
       warehouseLabel = warehouse
         ? `${warehouse.code ? `${warehouse.code} — ` : ''}${warehouse.name}`
@@ -162,12 +165,13 @@
   }
 
   function retry() {
-    void load(id);
+    void load(id, branch.id);
   }
 
   $effect(() => {
     const currentId = id;
-    if (currentId) void load(currentId);
+    const currentBranchId = branch.id;
+    if (currentId) void load(currentId, currentBranchId);
   });
 </script>
 
@@ -217,6 +221,7 @@
     <PurchaseOrderWorkflowActions order={item} onupdated={handleWorkflowUpdated} />
 
     <PurchaseOrderReceivingAction order={item} />
+    <PurchaseOrderActualExpenses order={item} />
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <article class="rounded-xl border border-border bg-surface p-4">
@@ -229,7 +234,7 @@
       <article class="rounded-xl border border-border bg-surface p-4">
         <p class="text-xs font-medium uppercase tracking-wide text-foreground-muted">Sucursal</p>
         <p class="mt-2 font-medium text-foreground">
-          {branchLabel || `Sucursal ${item.branch_id}`}
+          {branchLabel || (item.branch_id ? `Sucursal ${item.branch_id}` : 'Empresa · casa matriz')}
         </p>
       </article>
 
@@ -283,6 +288,14 @@
                     <tr class="text-foreground">
                       <td class="min-w-56 px-4 py-3 font-medium">
                         {productLabel(detail.product_id)}
+                        {#if detail.purchase_consolidation_award_id}
+                          <span class="mt-1 block text-xs font-normal text-primary">
+                            Adjudicación vinculada · {detail.purchase_consolidation_award_id.slice(
+                              0,
+                              8
+                            )}
+                          </span>
+                        {/if}
                       </td>
                       <td class="whitespace-nowrap px-4 py-3 text-foreground-muted">
                         {unitLabel(detail.unit_id)}

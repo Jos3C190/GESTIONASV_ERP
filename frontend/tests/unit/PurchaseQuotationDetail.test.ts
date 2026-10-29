@@ -4,7 +4,14 @@ import PurchaseQuotationDetail from '$lib/features/purchase-quotations/component
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
+  getProduct: vi.fn(),
   getSupplier: vi.fn()
+}));
+
+vi.mock('$lib/api/catalog', () => ({
+  catalogApi: {
+    getProduct: mocks.getProduct
+  }
 }));
 
 vi.mock('$lib/api/purchase-quotations', () => ({
@@ -45,6 +52,29 @@ const quotation = {
       ],
       created_at: null,
       updated_at: null
+    }
+  ],
+  snapshots: [
+    {
+      purchase_quotation_detail_id: '55555555-5555-5555-5555-555555555555',
+      consolidation_line_id: '10101010-1010-1010-1010-101010101010',
+      product_sku: 'PRD-HAR-001',
+      product_name: 'Harina de Trigo Suave 50lb',
+      unit_name: 'Kilogramo (kg)',
+      branch_quantity: '5.000000',
+      central_quantity: '0.000000',
+      sources: [
+        {
+          purchase_request_id: '33333333-3333-3333-3333-333333333333',
+          purchase_request_detail_id: '66666666-6666-6666-6666-666666666666',
+          request_code: 'SCR-00029',
+          branch_name: 'Pastería Lorena Roosevelt',
+          warehouse_name: 'Bodega de tienda San Miguel',
+          requester_name: 'Ztwo',
+          required_date: '2026-10-09',
+          included_quantity: '5.000000'
+        }
+      ]
     }
   ],
   details: [
@@ -104,6 +134,7 @@ const supplier = {
 describe('PurchaseQuotationDetail', () => {
   beforeEach(() => {
     mocks.get.mockReset();
+    mocks.getProduct.mockReset().mockResolvedValue(null);
     mocks.getSupplier.mockReset();
   });
 
@@ -118,17 +149,21 @@ describe('PurchaseQuotationDetail', () => {
     expect(await screen.findByRole('heading', { name: 'CQ-0001' })).toBeInTheDocument();
     expect(screen.getByText('PRV-025 — Proveedor Central')).toBeInTheDocument();
     expect(screen.getByText('Recibida')).toBeInTheDocument();
-    expect(screen.getByText('Producto #10')).toBeInTheDocument();
+    expect(screen.getAllByText('Harina de Trigo Suave 50lb').length).toBeGreaterThan(0);
     expect(screen.getByText('Flete')).toBeInTheDocument();
     expect(screen.getByText('Oferta recibida')).toBeInTheDocument();
 
-    const requestLink = screen.getByRole('link', {
-      name: /Solicitud 33333333-3333-3333-3333-333333333333/
-    });
-    expect(requestLink).toHaveAttribute(
-      'href',
-      '/purchase-requests/33333333-3333-3333-3333-333333333333'
-    );
+    const requestSummary = screen.getByText('Solicitud SCR-00029');
+    await fireEvent.click(requestSummary);
+
+    const sameTabLink = screen.getByRole('link', { name: 'Abrir en esta pestaña' });
+    const newTabLink = screen.getByRole('link', { name: 'Abrir en otra pestaña' });
+    const expectedRequestPath = '/purchase-requests/33333333-3333-3333-3333-333333333333';
+    expect(sameTabLink).toHaveAttribute('href', expectedRequestPath);
+    expect(sameTabLink).not.toHaveAttribute('target');
+    expect(newTabLink).toHaveAttribute('href', expectedRequestPath);
+    expect(newTabLink).toHaveAttribute('target', '_blank');
+    expect(newTabLink).toHaveAttribute('rel', 'noopener noreferrer');
 
     const totals = screen.getByRole('heading', { name: 'Totales' }).closest('article')!;
     expect(within(totals).getByText('$113.00')).toBeInTheDocument();

@@ -105,6 +105,16 @@ const order: PurchaseOrder = {
   updated_at: null
 };
 
+const awardedOrder: PurchaseOrder = {
+  ...order,
+  details: [
+    {
+      ...order.details[0]!,
+      purchase_consolidation_award_id: '99999999-9999-9999-9999-999999999999'
+    }
+  ]
+};
+
 describe('PurchaseOrderDraftEditor', () => {
   beforeEach(() => {
     mocks.goto.mockReset();
@@ -146,9 +156,12 @@ describe('PurchaseOrderDraftEditor', () => {
 
     expect(await screen.findByText(`Editar ${order.code}`)).toBeInTheDocument();
 
-    await fireEvent.input(screen.getByRole('spinbutton', { name: 'Cantidad línea 1' }), {
-      target: { value: '1.5' }
-    });
+    await fireEvent.input(
+      screen.getByRole('spinbutton', { name: 'Cantidad de SKU-10 — Producto 10' }),
+      {
+        target: { value: '1.5' }
+      }
+    );
     await fireEvent.input(screen.getByRole('textbox', { name: 'Notas' }), {
       target: { value: 'Actualizada' }
     });
@@ -170,7 +183,8 @@ describe('PurchaseOrderDraftEditor', () => {
           lines: [
             {
               purchase_quotation_detail_id: order.details[0]!.purchase_quotation_detail_id,
-              quantity: 1.5
+              quantity: 1.5,
+              purchase_consolidation_award_id: null
             }
           ],
           expenses: [
@@ -197,6 +211,77 @@ describe('PurchaseOrderDraftEditor', () => {
       'Solo las órdenes en borrador pueden editarse.'
     );
     expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument();
+  });
+
+  it('associates quantity validation with the product input', async () => {
+    render(PurchaseOrderDraftEditor, { props: { orderId: order.id } });
+
+    const quantity = await screen.findByRole('spinbutton', {
+      name: 'Cantidad de SKU-10 — Producto 10'
+    });
+    await fireEvent.input(quantity, { target: { value: '0' } });
+    await fireEvent.submit(
+      screen.getByRole('button', { name: 'Guardar cambios' }).closest('form')!
+    );
+
+    await waitFor(() => expect(quantity).toHaveAttribute('aria-invalid', 'true'));
+    const errorId = quantity.getAttribute('aria-describedby');
+    expect(errorId).toBeTruthy();
+    expect(document.getElementById(errorId!)).toHaveTextContent(
+      'La cantidad debe ser mayor que cero.'
+    );
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it('explains what to do when an order draft has no lines', async () => {
+    mocks.get.mockResolvedValue({ ...order, details: [] });
+
+    render(PurchaseOrderDraftEditor, { props: { orderId: order.id } });
+
+    expect(await screen.findByText('Este borrador no tiene líneas de compra.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Abrir detalle para revisar la orden' })
+    ).toHaveAttribute('href', `/purchase-orders/${order.id}`);
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled();
+  });
+
+  it('keeps awarded order quantities and line membership locked while allowing metadata edits', async () => {
+    mocks.get.mockResolvedValue(awardedOrder);
+    mocks.update.mockResolvedValue(awardedOrder);
+
+    render(PurchaseOrderDraftEditor, { props: { orderId: awardedOrder.id } });
+
+    expect(
+      await screen.findByText(/Sus líneas y cantidades están protegidas/i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Incluir SKU-10 — Producto 10' })).toBeDisabled();
+    expect(
+      screen.getByRole('spinbutton', { name: 'Cantidad de SKU-10 — Producto 10' })
+    ).toBeDisabled();
+
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Notas' }), {
+      target: { value: 'Cambió la fecha de recepción' }
+    });
+    await fireEvent.submit(
+      screen.getByRole('button', { name: 'Guardar cambios' }).closest('form')!
+    );
+
+    await waitFor(() =>
+      expect(mocks.update).toHaveBeenCalledWith(
+        awardedOrder.id,
+        expect.objectContaining({
+          lines: [
+            {
+              purchase_quotation_detail_id: awardedOrder.details[0]!.purchase_quotation_detail_id,
+              quantity: 2,
+              purchase_consolidation_award_id:
+                awardedOrder.details[0]!.purchase_consolidation_award_id
+            }
+          ],
+          notes: 'Cambió la fecha de recepción'
+        })
+      )
+    );
   });
 
   it('blocks editing without manage permission', async () => {

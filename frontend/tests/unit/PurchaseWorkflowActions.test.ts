@@ -101,33 +101,28 @@ describe('PurchaseWorkflowActions', () => {
     expect(onupdated).toHaveBeenCalledWith(updated);
   });
 
-  it('verifies a received purchase with purchases:verify', async () => {
-    mocks.hasPermission.mockImplementation((code: string) => code === 'purchases:verify');
+  it('requires inventory and location access before showing receipt verification', async () => {
+    mocks.hasPermission.mockImplementation(
+      (code: string) => code === 'purchases:verify' || code === 'purchases:read'
+    );
 
     const received: Purchase = {
       ...purchase,
       status: 'received'
     };
 
-    const verified: Purchase = {
-      ...purchase,
-      status: 'verified'
-    };
-
-    mocks.verify.mockResolvedValue(verified);
-    const onupdated = vi.fn();
-
     render(PurchaseWorkflowActions, {
       props: {
         purchase: received,
-        onupdated
+        onupdated: vi.fn()
       }
     });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Verificar recepción' }));
-
-    expect(mocks.verify).toHaveBeenCalledWith(purchase.id);
-    expect(onupdated).toHaveBeenCalledWith(verified);
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Para completar la recepción, tu perfil necesita acceso para registrar la mercancía en Inventario y consultar o asignar ubicaciones.'
+    );
+    expect(screen.queryByRole('button', { name: 'Verificar recepción' })).not.toBeInTheDocument();
+    expect(mocks.verify).not.toHaveBeenCalled();
   });
 
   it('closes a verified purchase with purchases:verify', async () => {

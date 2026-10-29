@@ -19,7 +19,7 @@
   import { listCapacityGroups } from '$lib/features/warehouses/capacity-groups.service';
   import type { WarehouseCapacityGroup } from '$lib/features/warehouses/capacity-groups.types';
   import {
-    getLocationCodeScheme,
+    getOptionalLocationCodeScheme,
     getLocationSummary,
     listLocations
   } from '$lib/features/locations/services';
@@ -45,6 +45,8 @@
   let meta = $state<PageMeta | null>(null);
   let loading = $state(true);
   let contextLoading = $state(true);
+  let warehouseLoadError = $state<string | null>(null);
+  let schemeLoadError = $state<string | null>(null);
   let error = $state<string | null>(null);
   let success = $state<string | null>(null);
   let currentPage = $state(1);
@@ -62,6 +64,9 @@
   let canCreate = $derived(permissions.hasPermission('locations.create'));
   let canGenerate = $derived(permissions.hasPermission('locations.bulk'));
   let canManageScheme = $derived(permissions.hasPermission('locations.scheme'));
+  let canConfigureScheme = $derived(
+    canManageScheme && !contextLoading && !warehouseLoadError && !schemeLoadError
+  );
   let hasFilters = $derived(
     Boolean(
       search.trim() || areaFilter || typeFilter || statusFilter || activityFilter || structureFilter
@@ -141,16 +146,19 @@
   async function initialize() {
     contextLoading = true;
     error = null;
+    warehouseLoadError = null;
+    schemeLoadError = null;
     try {
-      const [warehouse, activeScheme] = await Promise.all([
-        api.warehouses.get(warehouseId),
-        getLocationCodeScheme(warehouseId).catch((cause) => {
-          if (cause instanceof HttpError && cause.status === 404) return null;
-          throw cause;
-        })
-      ]);
+      const warehouse = await api.warehouses.get(warehouseId);
       warehouseName = warehouse.name;
-      scheme = activeScheme;
+      try {
+        scheme = await getOptionalLocationCodeScheme(warehouseId);
+      } catch (cause) {
+        schemeLoadError =
+          cause instanceof HttpError
+            ? cause.message
+            : 'No se pudo comprobar el esquema de códigos de este almacén.';
+      }
       readFiltersFromUrl();
       capacityGroupsLoading = true;
       try {
@@ -168,6 +176,8 @@
     } catch (cause) {
       error =
         cause instanceof HttpError ? cause.message : 'No se pudo abrir la estructura del almacén.';
+      warehouseLoadError =
+        'No se pudo verificar el almacén. Reintenta antes de configurar sus códigos.';
       loading = false;
     } finally {
       contextLoading = false;
@@ -450,7 +460,7 @@
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
           <h1 class="text-xl font-bold text-foreground">Ubicaciones de almacenamiento</h1>
-          {#if scheme}<span
+          {#if !contextLoading && scheme}<span
               class="rounded-md border border-border bg-surface-muted px-2 py-0.5 font-mono text-xs text-foreground-muted"
               >Esquema v{scheme.version}</span
             >{/if}
@@ -462,9 +472,9 @@
         </p>
       </div>
       <div class="flex flex-wrap gap-2 lg:shrink-0">
-        {#if canManageScheme && scheme}
+        {#if canConfigureScheme}
           <Button variant="ghost" size="sm" onclick={() => (schemeOpen = true)}>
-            Configurar códigos
+            {scheme ? 'Configurar códigos' : 'Crear esquema de códigos'}
           </Button>
         {/if}
         {#if canGenerate}<Button
@@ -509,9 +519,30 @@
         role="alert"
       >
         <span>{error}</span>
-        <Button variant="secondary" size="sm" onclick={() => void loadData(true)}>Reintentar</Button
+        <Button
+          variant="secondary"
+          size="sm"
+          onclick={() => void (warehouseLoadError ? initialize() : loadData(true))}
+          >Reintentar</Button
         >
       </div>
+    {/if}
+    {#if schemeLoadError}
+      <div
+        class="mb-5 flex flex-col gap-3 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger sm:flex-row sm:items-center sm:justify-between"
+        role="alert"
+      >
+        <span
+          >{schemeLoadError} No abrí la configuración para evitar crear un esquema duplicado.</span
+        >
+        <Button variant="secondary" size="sm" onclick={() => void initialize()}>Reintentar</Button>
+      </div>
+    {/if}
+    {#if canConfigureScheme && !scheme}
+      <Callout variant="warning" dismissible={false}>
+        Este almacén aún no tiene un formato de códigos. Créalo para poder registrar ubicaciones
+        físicas.
+      </Callout>
     {/if}
 
     <section
@@ -706,7 +737,7 @@
   </div>
 </div>
 
-{#if scheme}
+{#if canConfigureScheme}
   <LocationCodeSchemeModal
     open={schemeOpen}
     {warehouseId}
@@ -714,7 +745,10 @@
     onclose={() => (schemeOpen = false)}
     onsaved={(nextScheme) => {
       scheme = nextScheme;
-      success = `Esquema de códigos actualizado a la versión ${nextScheme.version}.`;
+      success =
+        nextScheme.version === 1
+          ? 'Esquema de códigos creado. Ya puedes registrar ubicaciones.'
+          : `Esquema de códigos actualizado a la versión ${nextScheme.version}.`;
     }}
   />
 {/if}

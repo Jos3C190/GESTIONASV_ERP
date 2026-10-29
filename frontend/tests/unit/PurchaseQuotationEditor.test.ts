@@ -27,6 +27,16 @@ vi.mock('$lib/api/purchase-requests', () => ({
   }
 }));
 
+vi.mock('$lib/api/catalog', () => ({
+  catalogApi: {
+    getProduct: vi.fn().mockResolvedValue({
+      id_product: 10,
+      sku: 'PROD-10',
+      name: 'Producto de prueba'
+    })
+  }
+}));
+
 vi.mock('$lib/api/suppliers', () => ({
   suppliersApi: {
     listSuppliers: mocks.listSuppliers,
@@ -43,7 +53,7 @@ vi.mock('$lib/stores/permissions.svelte', () => ({
 const request = {
   id: '11111111-1111-1111-1111-111111111111',
   company_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-  code: 'SC-0001',
+  code: 'SCR-0001',
   branch_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
   warehouse_id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
   requested_by_id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
@@ -127,7 +137,7 @@ describe('PurchaseQuotationEditor', () => {
     render(PurchaseQuotationEditor);
 
     await screen.findByRole('option', {
-      name: 'SC-0001 — Aprobada'
+      name: 'SCR-0001 — Aprobada'
     });
 
     await fireEvent.change(screen.getByLabelText('Solicitud para agregar'), {
@@ -136,6 +146,7 @@ describe('PurchaseQuotationEditor', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Agregar solicitud' }));
 
     expect(await screen.findByText('Producto #10')).toBeInTheDocument();
+    await fireEvent.change(screen.getByLabelText('Moneda'), { target: { value: 'USD' } });
 
     await fireEvent.submit(screen.getByRole('button', { name: 'Crear borrador' }).closest('form')!);
 
@@ -166,7 +177,7 @@ describe('PurchaseQuotationEditor', () => {
   it('preselects the purchase request when opened from its detail page', async () => {
     render(PurchaseQuotationEditor, { props: { initialRequestId: request.id } });
 
-    expect(await screen.findByText('SC-0001')).toBeInTheDocument();
+    expect(await screen.findByText('SCR-0001')).toBeInTheDocument();
     expect(screen.getByText('Producto #10')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Quitar solicitud' })).toBeInTheDocument();
   });
@@ -175,7 +186,7 @@ describe('PurchaseQuotationEditor', () => {
     render(PurchaseQuotationEditor);
 
     await screen.findByRole('option', {
-      name: 'SC-0001 — Aprobada'
+      name: 'SCR-0001 — Aprobada'
     });
 
     await fireEvent.submit(screen.getByRole('button', { name: 'Crear borrador' }).closest('form')!);

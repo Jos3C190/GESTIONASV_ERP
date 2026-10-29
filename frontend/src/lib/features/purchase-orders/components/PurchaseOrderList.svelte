@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+  import { page as currentPage } from '$app/state';
   import Button from '$lib/components/ui/Button.svelte';
   import { HttpError } from '$lib/api/client';
   import { purchaseOrdersApi } from '$lib/api/purchase-orders';
+  import { branch } from '$lib/stores/branch.svelte';
   import { suppliersApi } from '$lib/api/suppliers';
   import type { PurchaseOrder, PurchaseOrderStatus } from '$lib/types/purchase-order';
   import type { Supplier } from '$lib/types/supplier';
@@ -17,9 +20,17 @@
     { value: 'closed', label: 'Cerrada' }
   ];
 
+  function parseStatus(value: string | null): PurchaseOrderStatus | '' {
+    return STATUS_OPTIONS.some((option) => option.value === value)
+      ? (value as PurchaseOrderStatus)
+      : '';
+  }
+
   let items = $state<PurchaseOrder[]>([]);
   let suppliers = $state<Supplier[]>([]);
-  let statusFilter = $state<PurchaseOrderStatus | ''>('');
+  let statusFilter = $state<PurchaseOrderStatus | ''>(
+    parseStatus(currentPage.url.searchParams.get('status'))
+  );
   let supplierFilter = $state('');
   let page = $state(1);
   let total = $state(0);
@@ -69,6 +80,14 @@
   function handleStatusChange(event: Event) {
     statusFilter = (event.currentTarget as HTMLSelectElement).value as PurchaseOrderStatus | '';
     page = 1;
+    syncStatusInUrl(statusFilter);
+  }
+
+  function syncStatusInUrl(status: PurchaseOrderStatus | '') {
+    const url = new URL(currentPage.url);
+    if (status) url.searchParams.set('status', status);
+    else url.searchParams.delete('status');
+    void goto(url, { replaceState: true, keepFocus: true, noScroll: true });
   }
 
   function handleSupplierChange(event: Event) {
@@ -93,7 +112,8 @@
   async function loadOrders(
     currentStatus: PurchaseOrderStatus | '',
     currentSupplier: string,
-    currentPage: number
+    currentPage: number,
+    currentBranchId: string | null
   ) {
     const sequence = ++requestSequence;
     loading = true;
@@ -103,6 +123,7 @@
       const response = await purchaseOrdersApi.list({
         status: currentStatus || undefined,
         supplier_id: currentSupplier ? Number(currentSupplier) : undefined,
+        branch_id: currentBranchId,
         page: currentPage,
         size: 20
       });
@@ -123,11 +144,12 @@
   }
 
   function retry() {
-    void loadOrders(statusFilter, supplierFilter, page);
+    void loadOrders(statusFilter, supplierFilter, page, branch.id);
   }
 
   function emptyAction() {
     if (statusFilter || supplierFilter) {
+      syncStatusInUrl('');
       statusFilter = '';
       supplierFilter = '';
       page = 1;
@@ -144,7 +166,8 @@
     const currentStatus = statusFilter;
     const currentSupplier = supplierFilter;
     const currentPage = page;
-    void loadOrders(currentStatus, currentSupplier, currentPage);
+    const currentBranchId = branch.id;
+    void loadOrders(currentStatus, currentSupplier, currentPage, currentBranchId);
   });
 </script>
 

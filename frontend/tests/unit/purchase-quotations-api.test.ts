@@ -78,7 +78,7 @@ describe('purchaseQuotationsApi', () => {
         {
           product_id: 10,
           unit_id: 2,
-          quantity: 5,
+          offered_quantity: 5,
           unit_price: 12.5,
           discount: 0,
           tax_rate: 13,
@@ -110,6 +110,121 @@ describe('purchaseQuotationsApi', () => {
         body: JSON.stringify(responsePayload)
       }
     );
+  });
+
+  it('creates and lists RFQs inside a consolidation scope', async () => {
+    mocks.apiFetch.mockResolvedValue(undefined);
+    const consolidationId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const payload = {
+      supplier_id: 25,
+      currency: 'USD',
+      consolidation_line_ids: ['bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'],
+      notes: 'Entrega esta semana'
+    };
+
+    await purchaseQuotationsApi.createFromConsolidation(consolidationId, payload);
+    await purchaseQuotationsApi.listForConsolidation(consolidationId);
+
+    expect(mocks.apiFetch).toHaveBeenNthCalledWith(
+      1,
+      `/purchase-consolidations/${consolidationId}/purchase-quotations`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    );
+    expect(mocks.apiFetch).toHaveBeenNthCalledWith(
+      2,
+      `/purchase-consolidations/${consolidationId}/purchase-quotations`
+    );
+  });
+
+  it('keeps consolidation scope for quote details, responses, and workflow actions', async () => {
+    mocks.apiFetch.mockResolvedValue(undefined);
+    const quotationId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+    const consolidationId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+    await purchaseQuotationsApi.get(quotationId, 'ignored-branch', consolidationId);
+    await purchaseQuotationsApi.send(quotationId, consolidationId);
+    await purchaseQuotationsApi.recordResponse(
+      quotationId,
+      {
+        quotation_date: '2026-10-05T12:00:00-06:00',
+        valid_until: null,
+        payment_terms: null,
+        delivery_days: null,
+        lines: [],
+        expenses: [],
+        notes: null
+      },
+      'ignored-branch',
+      consolidationId
+    );
+
+    expect(mocks.apiFetch).toHaveBeenNthCalledWith(
+      1,
+      `/purchase-quotations/${quotationId}?consolidation_id=${consolidationId}`
+    );
+    expect(mocks.apiFetch).toHaveBeenNthCalledWith(
+      2,
+      `/purchase-quotations/${quotationId}/send?consolidation_id=${consolidationId}`,
+      { method: 'POST' }
+    );
+    expect(mocks.apiFetch).toHaveBeenNthCalledWith(
+      3,
+      `/purchase-quotations/${quotationId}/response?consolidation_id=${consolidationId}`,
+      expect.objectContaining({ method: 'PUT' })
+    );
+  });
+
+  it('keeps consolidation scope for supplier offer document lifecycle', async () => {
+    mocks.apiFetch.mockResolvedValue(undefined);
+    const quotationId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+    const consolidationId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const documentId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+
+    await purchaseQuotationsApi.initiateDocument(
+      quotationId,
+      {
+        file_name: 'oferta-proveedor.pdf',
+        content_type: 'application/pdf',
+        size_bytes: 1024,
+        checksum_sha256: 'a'.repeat(64)
+      },
+      undefined,
+      consolidationId
+    );
+    await purchaseQuotationsApi.completeDocument(
+      quotationId,
+      documentId,
+      undefined,
+      consolidationId
+    );
+    await purchaseQuotationsApi.listDocuments(quotationId, undefined, consolidationId);
+    await purchaseQuotationsApi.removeDocument(quotationId, documentId, undefined, consolidationId);
+    await purchaseQuotationsApi.createDocumentDownloadUrl(
+      quotationId,
+      documentId,
+      undefined,
+      consolidationId
+    );
+
+    expect(mocks.apiFetch.mock.calls).toEqual([
+      [
+        `/purchase-quotations/${quotationId}/documents/uploads?consolidation_id=${consolidationId}`,
+        expect.objectContaining({ method: 'POST' })
+      ],
+      [
+        `/purchase-quotations/${quotationId}/documents/${documentId}/complete?consolidation_id=${consolidationId}`,
+        { method: 'POST' }
+      ],
+      [`/purchase-quotations/${quotationId}/documents?consolidation_id=${consolidationId}`],
+      [
+        `/purchase-quotations/${quotationId}/documents/${documentId}?consolidation_id=${consolidationId}`,
+        { method: 'DELETE' }
+      ],
+      [
+        `/purchase-quotations/${quotationId}/documents/${documentId}/download-url?consolidation_id=${consolidationId}`,
+        { method: 'POST' }
+      ]
+    ]);
   });
 
   it('maps every workflow action to its POST endpoint', async () => {

@@ -9,6 +9,7 @@
   import { getWarehouses } from '$lib/services/warehouses';
   import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
+  import { session } from '$lib/stores/session.svelte';
   import type { Product } from '$lib/types/catalog';
   import type { PurchaseRequest, PurchaseRequestDetailInput } from '$lib/types/purchase-request';
   import type { Warehouse } from '$lib/features/warehouses/types';
@@ -42,13 +43,18 @@
   let loading = $state(true);
   let saving = $state(false);
   let editable = $state(true);
+  let requestOwnerId = $state<string | null>(null);
   let error = $state<string | null>(null);
   let validation = $state<Record<string, string>>({});
   let generation = 0;
 
   let canManage = $derived(permissions.hasPermission('purchase_requests:manage'));
+  let canCreate = $derived(permissions.hasPermission('purchase_requests:create'));
+  let canEditOwnDraft = $derived(canCreate && requestOwnerId === session.user?.id);
+  let canEditDraft = $derived(canManage || canEditOwnDraft);
 
   function fromRequest(item: PurchaseRequest) {
+    requestOwnerId = item.requested_by_id;
     branchId = item.branch_id;
     warehouseId = item.warehouse_id;
     requiredDate = item.required_date ? item.required_date.slice(0, 10) : '';
@@ -108,6 +114,12 @@
       if (item.status !== 'draft') {
         editable = false;
         error = 'Solo las solicitudes en borrador pueden editarse.';
+        return;
+      }
+
+      if (!canManage && item.requested_by_id !== session.user?.id) {
+        editable = false;
+        error = 'Solo puedes editar tus propios borradores de solicitud.';
         return;
       }
 
@@ -259,7 +271,7 @@
   }
 
   async function submit() {
-    if (!canManage || !editable || saving) return;
+    if (!canEditDraft || !editable || saving) return;
     if (!validate()) {
       focusFirstInvalidField();
       return;
@@ -317,12 +329,12 @@
     </div>
   </header>
 
-  {#if !canManage}
+  {#if !canManage && !canCreate}
     <div
       class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-foreground"
       role="alert"
     >
-      No tienes permiso para gestionar solicitudes de compra.
+      Tu rol no tiene permiso para editar borradores de solicitudes de compra.
     </div>
   {:else if loading}
     <div class="space-y-4" aria-label="Cargando formulario de solicitud">

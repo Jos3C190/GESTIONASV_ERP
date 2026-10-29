@@ -3,7 +3,7 @@
     label: string;
     id: string;
     type?: string;
-    value: string | number;
+    value: string | number | null;
     oninput?: (e: Event) => void;
     placeholder?: string;
     error?: string;

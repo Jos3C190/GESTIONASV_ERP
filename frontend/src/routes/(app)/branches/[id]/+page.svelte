@@ -7,6 +7,7 @@
   import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
   import ImageGallery from '$lib/features/branches/components/ImageGallery.svelte';
   import BranchMiniMap from '$lib/features/branches/components/BranchMiniMap.svelte';
+  import BranchProductDemandPanel from '$lib/features/branches/components/BranchProductDemandPanel.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
@@ -49,6 +50,7 @@
   const TABS = [
     { id: 'infraestructura', label: 'Infraestructura', icon: 'building' },
     { id: 'ubicacion', label: 'Ubicación y contacto', icon: 'map' },
+    { id: 'demanda', label: 'Demanda', icon: 'history' },
     { id: 'galeria', label: 'Galería', icon: 'gallery' },
     { id: 'descripcion', label: 'Descripción', icon: 'description' }
   ];
@@ -1169,7 +1171,9 @@
                     Coordenadas
                   </dt>
                   <dd class="font-mono text-foreground text-[12.5px]">
-                    {branch.lat.toFixed(4)}, {branch.lng.toFixed(4)}
+                    {branch.lat !== null && branch.lng !== null
+                      ? `${branch.lat.toFixed(4)}, ${branch.lng.toFixed(4)}`
+                      : 'Ubicación física no registrada'}
                   </dd>
                 </div>
                 {#if branch.website}
@@ -1232,6 +1236,10 @@
             </Card>
           </div>
         </div>
+
+        <!-- TAB: Demanda de productos -->
+      {:else if activeTab === 'demanda'}
+        <BranchProductDemandPanel branchId={branch.id} />
 
         <!-- TAB: Galería -->
       {:else if activeTab === 'galeria'}

@@ -5,6 +5,7 @@
   import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
   import { suppliersApi } from '$lib/api/suppliers';
   import ProcurementWorkQueue from '$lib/features/purchase-quotations/components/ProcurementWorkQueue.svelte';
+  import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type { PurchaseQuotation, PurchaseQuotationStatus } from '$lib/types/purchase-quotation';
   import type { Supplier } from '$lib/types/supplier';
@@ -15,6 +16,7 @@
     { value: 'received', label: 'Recibida' },
     { value: 'under_evaluation', label: 'En evaluación' },
     { value: 'selected', label: 'Seleccionada' },
+    { value: 'not_selected', label: 'No seleccionada' },
     { value: 'rejected', label: 'Rechazada' },
     { value: 'expired', label: 'Vencida' },
     { value: 'cancelled', label: 'Cancelada' }
@@ -103,7 +105,8 @@
   async function loadQuotations(
     currentStatus: PurchaseQuotationStatus | '',
     currentSupplier: string,
-    currentPage: number
+    currentPage: number,
+    currentBranchId: string | null
   ) {
     const sequence = ++requestSequence;
     loading = true;
@@ -113,6 +116,7 @@
       const response = await purchaseQuotationsApi.list({
         status: currentStatus || undefined,
         supplier_id: currentSupplier ? Number(currentSupplier) : undefined,
+        branch_id: currentBranchId,
         page: currentPage,
         size: 20
       });
@@ -133,7 +137,7 @@
   }
 
   function retry() {
-    void loadQuotations(statusFilter, supplierFilter, page);
+    void loadQuotations(statusFilter, supplierFilter, page, branch.id);
   }
 
   $effect(() => {
@@ -144,7 +148,8 @@
     const currentStatus = statusFilter;
     const currentSupplier = supplierFilter;
     const currentPage = page;
-    void loadQuotations(currentStatus, currentSupplier, currentPage);
+    const currentBranchId = branch.id;
+    void loadQuotations(currentStatus, currentSupplier, currentPage, currentBranchId);
   });
 </script>
 

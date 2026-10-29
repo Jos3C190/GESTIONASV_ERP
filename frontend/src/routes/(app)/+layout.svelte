@@ -15,6 +15,7 @@
   import UserMenu from '$lib/components/ui/UserMenu.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { clearPrivateQueryCache } from '$lib/services/query-client';
+  import { restoreAppContext } from '$lib/auth/restore-app-context';
 
   interface Props {
     children: Snippet;
@@ -27,9 +28,26 @@
   let mobileMenuButton = $state<HTMLButtonElement | null>(null);
   let loading = $state(false);
   let searchInput = $state(globalSearch.query);
-  let contextLoading = $state(!branch.ready);
+  // Always refresh branch scope when the authenticated app mounts. The branch
+  // singleton survives navigation through /login, so `branch.ready` alone can
+  // describe the previous user's permissions.
+  let contextLoading = $state(true);
   let contextError = $state<string | null>(null);
   let companyLogoFailed = $state(false);
+  let operationalWorkspace = $derived(
+    !permissions.isSuperuser && permissions.hasPermission('inventory:warehouse_receipts')
+  );
+
+  $effect(() => {
+    if (
+      !contextLoading &&
+      !contextError &&
+      operationalWorkspace &&
+      page.url.pathname === '/dashboard'
+    ) {
+      void goto('/inventory', { replaceState: true });
+    }
+  });
 
   const SEARCHABLE_ROUTES = [
     '/users',
@@ -56,19 +74,38 @@
     try {
       await api.auth.logout();
     } catch {
-      /* ignore */
+      // Even if the server cannot revoke the token, local logout must complete.
     } finally {
-      await clearPrivateQueryCache();
-      session.clear();
-      permissions.clear();
+      // Cleanup is best-effort. A storage/cache failure must never strand the
+      // user on a protected page with a cleared session.
+      try {
+        await clearPrivateQueryCache();
+      } catch {
+        // Continue to the login screen.
+      }
+      try {
+        session.clear();
+      } catch {
+        // Continue to the login screen.
+      }
+      try {
+        permissions.clear();
+      } catch {
+        // Continue to the login screen.
+      }
+      // Keep the mounted page's operational context stable until the full
+      // navigation below. Clearing it here would remount reactive pages and
+      // start fresh API requests without an authenticated session.
       loading = false;
-      window.location.href = '/login';
+      window.location.replace('/login');
     }
   }
 
   function openMobile() {
     mobileOpen = true;
-    requestAnimationFrame(() => document.querySelector<HTMLElement>('#mobile-navigation-panel button')?.focus());
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>('#mobile-navigation-panel button')?.focus()
+    );
   }
 
   function closeMobile() {
@@ -85,7 +122,11 @@
     }
     if (event.key !== 'Tab') return;
     const panel = document.querySelector<HTMLElement>('#mobile-navigation-panel');
-    const focusable = Array.from(panel?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? []);
+    const focusable = Array.from(
+      panel?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ) ?? []
+    );
     if (!focusable.length) {
       event.preventDefault();
       panel?.focus();
@@ -138,11 +179,26 @@
   });
 
   onMount(async () => {
+    const context = await restoreAppContext(page.url.searchParams.get('companyId'));
+    if (!context.authenticated) {
+      const returnTo = `${page.url.pathname}${page.url.search}`;
+      contextLoading = false;
+      await goto(`/login?returnTo=${encodeURIComponent(returnTo)}`, { replaceState: true });
+      return;
+    }
+    if (!context.companySelected) {
+      const returnTo = `${page.url.pathname}${page.url.search}`;
+      contextLoading = false;
+      await goto(`/companies?returnTo=${encodeURIComponent(returnTo)}`, { replaceState: true });
+      return;
+    }
+
     void refreshActiveCompany();
-    if (!company.id || branch.ready) {
+    if (!company.id) {
       contextLoading = false;
       return;
     }
+    contextLoading = true;
     try {
       const context = await api.operationalContext.get(company.id);
       branch.configure(context);
@@ -160,13 +216,21 @@
 
 <svelte:window onkeydown={handleMobileKeydown} />
 
-<div class="fixed inset-0 flex overflow-hidden bg-surface">
-  <div class="hidden md:flex" data-app-global-chrome>
-    <Sidebar collapsed={sidebarCollapsed} />
-  </div>
+<div class="fixed inset-0 flex overflow-clip bg-surface">
+  {#if !operationalWorkspace}<div class="hidden md:flex" data-app-global-chrome>
+      <Sidebar collapsed={sidebarCollapsed} />
+    </div>{/if}
 
-  {#if mobileOpen}
-    <div id="mobile-navigation-panel" class="fixed inset-0 z-40 md:hidden" data-app-global-chrome role="dialog" aria-modal="true" aria-label="Navegación principal" tabindex="-1">
+  {#if mobileOpen && !operationalWorkspace}
+    <div
+      id="mobile-navigation-panel"
+      class="fixed inset-0 z-40 md:hidden"
+      data-app-global-chrome
+      role="dialog"
+      aria-modal="true"
+      aria-label="Navegación principal"
+      tabindex="-1"
+    >
       <div class="absolute inset-0 bg-black/50" onclick={closeMobile} role="presentation"></div>
       <div class="absolute left-0 top-0 h-full animate-slide-in">
         <Sidebar onNavigate={closeMobile} />
@@ -175,64 +239,72 @@
   {/if}
 
   <div class="flex flex-1 flex-col overflow-hidden">
-    <header data-app-global-chrome
+    <header
+      data-app-global-chrome
       class="flex h-14 flex-none items-center justify-between gap-3 border-b border-border bg-surface px-4 md:px-6"
     >
       <!-- Left: menu + collapse + breadcrumb + search -->
       <div class="flex flex-1 items-center gap-2">
-        <button
-          type="button"
-          bind:this={mobileMenuButton}
-          onclick={openMobile}
-          class="flex h-8 w-8 flex-none items-center justify-center rounded-md text-foreground-muted hover:bg-surface-hover hover:text-foreground md:hidden"
-          aria-label="Abrir menú"
-          aria-expanded={mobileOpen}
-          aria-controls="mobile-navigation-panel"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-            ><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line
-              x1="3"
-              y1="18"
-              x2="21"
-              y2="18"
-            /></svg
+        {#if operationalWorkspace}
+          <a
+            href="/inventory"
+            class="rounded-md px-2 py-1 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >Bodega</a
           >
-        </button>
-        <button
-          type="button"
-          onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
-          class="hidden h-8 w-8 flex-none items-center justify-center rounded-md text-foreground-muted hover:bg-surface-hover hover:text-foreground md:flex"
-          aria-label="Colapsar sidebar"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-            class="transition-transform duration-200 {sidebarCollapsed ? 'rotate-180' : ''}"
-            ><polyline points="15 18 9 12 15 6" /></svg
+        {:else}
+          <button
+            type="button"
+            bind:this={mobileMenuButton}
+            onclick={openMobile}
+            class="flex h-8 w-8 flex-none items-center justify-center rounded-md text-foreground-muted hover:bg-surface-hover hover:text-foreground md:hidden"
+            aria-label="Abrir menú"
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-navigation-panel"
           >
-        </button>
-
-        {#if title}
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              ><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line
+                x1="3"
+                y1="18"
+                x2="21"
+                y2="18"
+              /></svg
+            >
+          </button>
+          <button
+            type="button"
+            onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
+            class="hidden h-8 w-8 flex-none items-center justify-center rounded-md text-foreground-muted hover:bg-surface-hover hover:text-foreground md:flex"
+            aria-label="Colapsar sidebar"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              class="transition-transform duration-200 {sidebarCollapsed ? 'rotate-180' : ''}"
+              ><polyline points="15 18 9 12 15 6" /></svg
+            >
+          </button>
+        {/if}
+        {#if title && !operationalWorkspace}
           <span class="hidden text-[15px] font-semibold text-foreground sm:block">{title}</span>
         {/if}
 
-        {#if showSearch}
+        {#if showSearch && !operationalWorkspace}
           <div class="relative ml-2 flex-1 max-w-xs">
             <svg
               class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground-subtle"

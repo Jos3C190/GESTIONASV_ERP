@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RetaceoList from '$lib/features/retaceos/components/RetaceoList.svelte';
 
 const mocks = vi.hoisted(() => ({
-  list: vi.fn()
+  list: vi.fn(),
+  goto: vi.fn()
+}));
+
+vi.mock('$app/navigation', () => ({
+  goto: mocks.goto
 }));
 
 vi.mock('$lib/api/retaceos', () => ({
@@ -46,6 +51,7 @@ const retaceo = {
 describe('RetaceoList', () => {
   beforeEach(() => {
     mocks.list.mockReset();
+    mocks.goto.mockReset();
   });
 
   it('renders retaceos and applies status and branch scope', async () => {
@@ -102,6 +108,8 @@ describe('RetaceoList', () => {
     render(RetaceoList);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No disponible');
+    expect(screen.getByText(/Total no disponible/)).toBeInTheDocument();
+    expect(screen.queryByText(/0 retaceos/)).not.toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
 

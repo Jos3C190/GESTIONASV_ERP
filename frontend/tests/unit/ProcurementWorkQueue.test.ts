@@ -95,15 +95,12 @@ describe('ProcurementWorkQueue', () => {
     render(ProcurementWorkQueue);
 
     expect(screen.getByRole('heading', { name: 'Cola de compras' })).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'La cola de cotizaciones no se muestra porque el módulo aún no filtra por sucursal.'
-      )
-    ).toBeInTheDocument();
-
     await waitFor(() => {
       expect(mocks.requests).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'submitted', branch_id: 'branch-001' })
+      );
+      expect(mocks.quotations).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'received', branch_id: 'branch-001' })
       );
       expect(screen.getByLabelText('4 pendientes')).toBeInTheDocument();
       expect(screen.getByLabelText('5 pendientes')).toBeInTheDocument();
@@ -114,8 +111,9 @@ describe('ProcurementWorkQueue', () => {
         name: /Por aprobar.*4 pendientes.*Solicitudes de compra enviadas.*Revisar solicitudes/
       })
     ).toHaveAttribute('href', '/purchase-requests?status=submitted');
-    expect(mocks.quotations).not.toHaveBeenCalled();
-    expect(screen.queryByRole('link', { name: /Ofertas registradas/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /Ofertas registradas.*3 pendientes/ })
+    ).toHaveAttribute('href', '/purchase-quotations?status=received');
   });
 
   it('does not render workflow actions when their required permissions are absent', () => {
@@ -129,7 +127,7 @@ describe('ProcurementWorkQueue', () => {
     expect(mocks.purchases).not.toHaveBeenCalled();
   });
 
-  it('shows company-wide quotation queues while a branch is selected', async () => {
+  it('scopes quotation queues to the selected branch and can restore company-wide scope', async () => {
     mocks.branchId = 'branch-001';
     mocks.branchLabel = 'Sucursal Centro';
 
@@ -138,6 +136,7 @@ describe('ProcurementWorkQueue', () => {
     await waitFor(() => {
       expect(mocks.quotations).toHaveBeenCalledWith({
         status: 'received',
+        branch_id: 'branch-001',
         page: 1,
         size: 1
       });
@@ -152,7 +151,6 @@ describe('ProcurementWorkQueue', () => {
         name: /Ofertas registradas.*3 pendientes.*Respuestas de proveedores ingresadas manualmente.*Revisar respuestas/
       })
     ).toHaveAttribute('href', '/purchase-quotations?status=received');
-    expect(screen.getByText(/Cotizaciones: todas las sucursales/)).toBeInTheDocument();
     await screen.getByRole('button', { name: 'Ver todas las sucursales' }).click();
     expect(mocks.selectBranch).toHaveBeenCalledWith(null);
   });
@@ -170,6 +168,7 @@ describe('ProcurementWorkQueue', () => {
     await waitFor(() => {
       expect(mocks.quotations).toHaveBeenCalledWith({
         status: 'received',
+        branch_id: undefined,
         page: 1,
         size: 1
       });

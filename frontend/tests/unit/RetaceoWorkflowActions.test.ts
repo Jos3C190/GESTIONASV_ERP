@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   verify: vi.fn(),
   cancel: vi.fn(),
   close: vi.fn(),
+  apply: vi.fn(),
+  valuationStatus: vi.fn(),
   hasPermission: vi.fn()
 }));
 
@@ -21,7 +23,9 @@ vi.mock('$lib/api/retaceos', () => ({
     calculate: mocks.calculate,
     verify: mocks.verify,
     cancel: mocks.cancel,
-    close: mocks.close
+    close: mocks.close,
+    apply: mocks.apply,
+    valuationStatus: mocks.valuationStatus
   }
 }));
 
@@ -30,6 +34,7 @@ vi.mock('$lib/stores/permissions.svelte', () => ({
     hasPermission: mocks.hasPermission
   }
 }));
+vi.mock('$lib/stores/branch.svelte', () => ({ branch: { accessAllBranches: true } }));
 
 const retaceo: Retaceo = {
   id: '11111111-1111-1111-1111-111111111111',
@@ -62,6 +67,8 @@ describe('RetaceoWorkflowActions', () => {
     mocks.verify.mockReset();
     mocks.cancel.mockReset();
     mocks.close.mockReset();
+    mocks.apply.mockReset();
+    mocks.valuationStatus.mockReset().mockResolvedValue({ enabled: false });
     mocks.hasPermission.mockReset();
   });
 
@@ -185,11 +192,80 @@ describe('RetaceoWorkflowActions', () => {
       }
     });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Cerrar retaceo' }));
+    const closeButton = screen.getByRole('button', { name: 'Cerrar retaceo' });
+    await waitFor(() => expect(closeButton).toBeEnabled());
+    await fireEvent.click(closeButton);
 
     await waitFor(() => {
       expect(mocks.close).toHaveBeenCalledWith(retaceo.id);
     });
+  });
+
+  it('applies verified costs before offering close when valuation is enabled', async () => {
+    mocks.hasPermission.mockReturnValue(true);
+    mocks.valuationStatus.mockResolvedValue({ enabled: true });
+    const applied: Retaceo = {
+      ...retaceo,
+      status: 'verified',
+      applied_at: '2026-10-13T20:00:00Z'
+    };
+    mocks.apply.mockResolvedValue(applied);
+    const onupdated = vi.fn();
+    render(RetaceoWorkflowActions, {
+      props: { retaceo: { ...retaceo, status: 'verified' }, onupdated }
+    });
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Aplicar costo al inventario' })
+    );
+    await waitFor(() => expect(onupdated).toHaveBeenCalledWith(applied));
+    expect(mocks.apply).toHaveBeenCalledWith(retaceo.id);
+    expect(mocks.close).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Cerrar retaceo' })).not.toBeInTheDocument();
+  });
+
+  it('offers close after costs have been applied', async () => {
+    mocks.hasPermission.mockReturnValue(true);
+    mocks.valuationStatus.mockResolvedValue({ enabled: true });
+    mocks.close.mockResolvedValue({ ...retaceo, status: 'closed' });
+    render(RetaceoWorkflowActions, {
+      props: {
+        retaceo: { ...retaceo, status: 'verified', applied_at: '2026-10-13T20:00:00Z' },
+        onupdated: vi.fn()
+      }
+    });
+    const closeButton = screen.getByRole('button', { name: 'Cerrar retaceo' });
+    await waitFor(() => expect(closeButton).toBeEnabled());
+    await fireEvent.click(closeButton);
+    await waitFor(() => expect(mocks.close).toHaveBeenCalledWith(retaceo.id));
+    expect(mocks.apply).not.toHaveBeenCalled();
+  });
+
+  it('blocks closing when valuation status cannot be checked and supports retry', async () => {
+    mocks.hasPermission.mockReturnValue(true);
+    mocks.valuationStatus.mockRejectedValueOnce(new Error('Sin conexión'));
+    render(RetaceoWorkflowActions, {
+      props: { retaceo: { ...retaceo, status: 'verified' }, onupdated: vi.fn() }
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sin conexión');
+    expect(screen.getByRole('button', { name: 'Cerrar retaceo' })).toBeDisabled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Reintentar consulta' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Cerrar retaceo' })).toBeEnabled()
+    );
+    expect(mocks.close).not.toHaveBeenCalled();
+  });
+
+  it('does not offer application without the valuation permission', async () => {
+    mocks.hasPermission.mockImplementation((code: string) => code === 'retaceos:verify');
+    mocks.valuationStatus.mockResolvedValue({ enabled: true });
+    render(RetaceoWorkflowActions, {
+      props: { retaceo: { ...retaceo, status: 'verified' }, onupdated: vi.fn() }
+    });
+    await screen.findByText(/requiere permiso de valoración/);
+    expect(
+      screen.queryByRole('button', { name: 'Aplicar costo al inventario' })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cerrar retaceo' })).not.toBeInTheDocument();
   });
 
   it('does not expose workflow actions for terminal states', () => {

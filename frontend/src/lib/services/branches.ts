@@ -7,6 +7,7 @@ import { type Branch } from '$lib/features/branches/types';
 export function mapBranchOutToBranch(b: BranchOut): Branch {
   return {
     id: b.id,
+    isHeadquarters: b.is_headquarters,
     companyId: b.company_id,
     departmentId: b.department_id,
     municipalityId: b.municipality_id,
@@ -20,8 +21,8 @@ export function mapBranchOutToBranch(b: BranchOut): Branch {
     manager: b.manager,
     managerEmployeeId: b.manager_employee_id,
     managerInitials: b.manager_initials,
-    lat: b.latitude,
-    lng: b.longitude,
+    lat: b.latitude ?? null,
+    lng: b.longitude ?? null,
     status: b.operational_status,
     employees: b.employees,
     warehouses: b.warehouses,
@@ -116,6 +117,7 @@ export async function getBranch(id: string): Promise<Branch> {
  */
 export async function createBranch(branch: Omit<Branch, 'id'>): Promise<Branch> {
   const payload = {
+    is_headquarters: branch.isHeadquarters,
     code: branch.code,
     name: branch.name,
     address: branch.address,
@@ -138,6 +140,7 @@ export async function createBranch(branch: Omit<Branch, 'id'>): Promise<Branch> 
  */
 export async function updateBranch(id: string, branch: Partial<Branch>): Promise<Branch> {
   const payload: Record<string, unknown> = {};
+  if (branch.isHeadquarters !== undefined) payload.is_headquarters = branch.isHeadquarters;
   if (branch.code !== undefined) payload.code = branch.code;
   if (branch.name !== undefined) payload.name = branch.name;
   if (branch.address !== undefined) payload.address = branch.address;

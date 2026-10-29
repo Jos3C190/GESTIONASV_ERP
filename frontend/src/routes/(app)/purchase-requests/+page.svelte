@@ -1,7 +1,7 @@
 <script lang="ts">
-  import PurchaseRequestList from '$lib/features/purchase-requests/components/PurchaseRequestList.svelte';
+  import PurchaseWorkQueue from '$lib/features/purchase-requests/components/PurchaseWorkQueue.svelte';
 </script>
 
 <svelte:head><title>Solicitudes de compra — GestionaSV</title></svelte:head>
 
-<PurchaseRequestList />
+<PurchaseWorkQueue />

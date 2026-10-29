@@ -14,34 +14,32 @@
   let format = $derived(barcodeFormat(identifierType, value));
 
   $effect(() => {
-    if (!svg || !format || !value.trim()) return;
+    const element = svg;
+    const currentFormat = format;
+    const currentValue =
+      identifierType === 'internal' ? value.trim() : value.replace(/[^0-9X]/gi, '').toUpperCase();
+    if (!element || !currentFormat || !currentValue) return;
     renderError = false;
     let cancelled = false;
     void import('jsbarcode')
       .then(({ default: JsBarcode }) => {
-        if (cancelled || !svg || !format || !value.trim()) return;
+        if (cancelled) return;
         try {
-          JsBarcode(
-            svg,
-            identifierType === 'internal'
-              ? value.trim()
-              : value.replace(/[^0-9X]/gi, '').toUpperCase(),
-            {
-              format,
-              displayValue: false,
-              margin: 0,
-              height: 54,
-              width: 1.6,
-              lineColor: 'currentColor',
-              background: 'transparent'
-            }
-          );
+          JsBarcode(element, currentValue, {
+            format: currentFormat,
+            displayValue: false,
+            margin: 10,
+            height: 54,
+            width: 1.6,
+            lineColor: '#000000',
+            background: '#ffffff'
+          });
         } catch {
           renderError = true;
         }
       })
       .catch(() => {
-        renderError = true;
+        if (!cancelled) renderError = true;
       });
     return () => {
       cancelled = true;
@@ -49,11 +47,17 @@
   });
 </script>
 
-{#if format && !renderError}
+{#if format}
   <div
-    class="rounded-lg border border-border bg-surface px-3 py-3 text-foreground"
+    class="overflow-x-auto rounded-lg border border-border bg-white px-3 py-3 text-black"
     aria-label={label}
   >
-    <svg bind:this={svg} role="img" aria-label={`${label}: ${value}`}></svg>
+    <svg bind:this={svg} class:hidden={renderError} role="img" aria-label={`${label}: ${value}`}
+    ></svg>
+    {#if renderError}
+      <p class="text-sm" role="status">
+        No se pudo generar el código de barras. Revisa el identificador del producto.
+      </p>
+    {/if}
   </div>
 {/if}

@@ -176,6 +176,14 @@
         onClick: () => void goto(`/warehouses/${warehouse.id}`)
       }
     ];
+    if (permissions.hasPermission('inventory:read')) {
+      items.push({
+        id: 'inventory',
+        label: 'Ver inventario',
+        icon: 'variants',
+        onClick: () => void goto(`/warehouses/${warehouse.id}?tab=inventario`)
+      });
+    }
     if (permissions.hasPermission('locations.view')) {
       items.push({
         id: 'locations',

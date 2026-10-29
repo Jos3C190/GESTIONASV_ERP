@@ -7,6 +7,26 @@ function itemByRoute(route: string) {
 }
 
 describe('catalog navigation', () => {
+  it('exposes the B06 commercial routes only with their own read permissions', () => {
+    expect(itemByRoute('/customers')).toMatchObject({
+      label: 'Clientes',
+      implemented: true,
+      requiredPermission: 'sales_customers:read'
+    });
+    expect(itemByRoute('/sales/quotations')).toMatchObject({
+      label: 'Cotizaciones de venta',
+      implemented: true,
+      requiredPermission: 'sales_quotations:read'
+    });
+    expect(itemByRoute('/sales')).toMatchObject({
+      label: 'Ventas',
+      implemented: true,
+      requiredPermission: 'sales:read'
+    });
+    expect(routeTitle('/sales/quotations/quote-1/edit')).toBe('Cotizaciones de venta');
+    expect(routeTitle('/sales/sale-1')).toBe('Ventas');
+  });
+
   it('exposes product categories with product read access', () => {
     expect(itemByRoute('/inventory/categories')).toMatchObject({
       label: 'Categorías de productos',
@@ -54,9 +74,11 @@ describe('catalog navigation', () => {
     expect(routeTitle('/trash')).toBe('Papelera');
   });
 
-  it('uses the valid document icon path for Kardex', () => {
-    expect(itemByRoute('/placeholder?module=Kardex')?.icon).toBe(
-      'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
-    );
+  it('opens the implemented Kardex with physical inventory read permission', () => {
+    expect(itemByRoute('/inventory/kardex')).toMatchObject({
+      label: 'Kardex',
+      implemented: true,
+      requiredPermission: 'inventory:read'
+    });
   });
 });

@@ -4,18 +4,21 @@
   import PurchaseQuotationWorkflowActions from '$lib/features/purchase-quotations/components/PurchaseQuotationWorkflowActions.svelte';
   import { HttpError } from '$lib/api/client';
   import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
+  import PurchaseQuotationDocuments from '$lib/features/purchase-quotations/components/PurchaseQuotationDocuments.svelte';
   import { suppliersApi } from '$lib/api/suppliers';
+  import { branch } from '$lib/stores/branch.svelte';
   import type { PurchaseQuotation, PurchaseQuotationStatus } from '$lib/types/purchase-quotation';
   import type { Supplier } from '$lib/types/supplier';
 
-  let { id }: { id: string } = $props();
+  let { id, consolidationId = null }: { id: string; consolidationId?: string | null } = $props();
 
   const STATUS_LABELS: Record<PurchaseQuotationStatus, string> = {
     draft: 'Borrador',
-    requested: 'Solicitada',
+    requested: 'Enviada al proveedor',
     received: 'Recibida',
     under_evaluation: 'En evaluación',
     selected: 'Seleccionada',
+    not_selected: 'No seleccionada',
     rejected: 'Rechazada',
     expired: 'Vencida',
     cancelled: 'Cancelada'
@@ -65,13 +68,29 @@
     return productNames.get(id) ?? null;
   }
 
-  async function load(currentId: string) {
+  function snapshotFor(detailId: string) {
+    return item?.snapshots.find((snapshot) => snapshot.purchase_quotation_detail_id === detailId);
+  }
+
+  function requestCode(requestId: string): string {
+    return (
+      item?.snapshots
+        .flatMap((snapshot) => snapshot.sources)
+        .find((source) => source.purchase_request_id === requestId)?.request_code ?? requestId
+    );
+  }
+
+  async function load(currentId: string, currentBranchId: string | null) {
     const sequence = ++requestSequence;
     loading = true;
     error = null;
 
     try {
-      const quotation = await purchaseQuotationsApi.get(currentId);
+      const quotation = await purchaseQuotationsApi.get(
+        currentId,
+        currentBranchId,
+        consolidationId
+      );
       if (sequence !== requestSequence) return;
 
       item = quotation;
@@ -108,19 +127,25 @@
   }
 
   function retry() {
-    void load(id);
+    void load(id, branch.id);
   }
 
   $effect(() => {
     const currentId = id;
-    if (currentId) void load(currentId);
+    const currentBranchId = branch.id;
+    if (currentId) void load(currentId, currentBranchId);
   });
 </script>
 
 <section class="space-y-5">
   <div>
-    <a href="/purchase-quotations" class="text-sm font-medium text-primary hover:underline">
-      ← Volver a cotizaciones
+    <a
+      href={item?.consolidation_id
+        ? `/purchase-consolidations/${item.consolidation_id}`
+        : '/purchase-quotations'}
+      class="text-sm font-medium text-primary hover:underline"
+    >
+      {item?.consolidation_id ? '← Volver al consolidado' : '← Volver a cotizaciones'}
     </a>
   </div>
 
@@ -152,6 +177,11 @@
         <p class="mt-1 text-sm text-foreground-muted">
           {supplier?.name ?? `Proveedor #${item.supplier_id}`}
         </p>
+        {#if item.consolidation_id}
+          <p class="mt-1 text-sm text-foreground-muted">
+            Desde {item.consolidation_code} · RFQ versión {item.version_number}
+          </p>
+        {/if}
       </div>
       <span
         class="inline-flex w-fit rounded-full border border-border bg-surface-muted px-3 py-1.5 text-sm font-medium text-foreground"
@@ -161,6 +191,86 @@
     </header>
 
     <PurchaseQuotationWorkflowActions quotation={item} onupdated={handleWorkflowUpdated} />
+
+    {#if item.status !== 'draft'}
+      <PurchaseQuotationDocuments
+        quotationId={item.id}
+        quotationStatus={item.status}
+        consolidationId={item.consolidation_id}
+      />
+    {/if}
+
+    {#if item.consolidation_id}
+      <section
+        class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4"
+      >
+        <div>
+          <h2 class="font-semibold text-foreground">
+            {item.sent_at ? 'Copia enviada al proveedor' : 'RFQ preparada'}
+          </h2>
+          <p class="mt-1 text-sm text-foreground-muted">
+            Las cantidades y el origen corresponden a {item.consolidation_code}, versión {item.version_number}.
+            {#if item.sent_at}
+              Envío registrado el {formatDate(item.sent_at)}.
+            {:else}
+              Aún no se ha registrado el envío; usa Ver / imprimir RFQ para preparar el documento.
+            {/if}
+          </p>
+        </div>
+        <a
+          href={`/purchase-quotations/${item.id}/request?consolidation_id=${item.consolidation_id}`}
+          class="inline-flex min-h-10 items-center justify-center rounded-lg border border-border bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          Ver / imprimir RFQ
+        </a>
+      </section>
+
+      <article class="overflow-hidden rounded-xl border border-border bg-surface">
+        <div class="border-b border-border px-4 py-3">
+          <h2 class="font-semibold text-foreground">Demanda que se solicitó</h2>
+          <p class="mt-1 text-xs text-foreground-muted">
+            Este registro no cambia si luego editas el consolidado.
+          </p>
+        </div>
+        <ul class="divide-y divide-border">
+          {#each item.snapshots as snapshot (snapshot.purchase_quotation_detail_id)}
+            <li class="p-4">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="font-medium text-foreground">{snapshot.product_name}</p>
+                  <p class="mt-1 font-mono text-xs text-foreground-muted">
+                    {snapshot.product_sku} · {snapshot.unit_name}
+                  </p>
+                </div>
+                <p class="font-mono text-sm font-semibold text-foreground">
+                  {formatQuantity(snapshot.branch_quantity)}
+                  {snapshot.unit_name} de sucursales
+                  {#if Number(snapshot.central_quantity) > 0}
+                    <span class="block text-right font-normal text-foreground-muted"
+                      >+ {formatQuantity(snapshot.central_quantity)} central</span
+                    >
+                  {/if}
+                </p>
+              </div>
+              {#if snapshot.sources.length > 0}
+                <ul class="mt-3 flex flex-wrap gap-2">
+                  {#each snapshot.sources as source (source.purchase_request_detail_id)}
+                    <li
+                      class="rounded-md bg-surface-muted px-2.5 py-1.5 text-xs text-foreground-muted"
+                    >
+                      {source.request_code} · {source.branch_name ?? 'Sucursal'} · {formatQuantity(
+                        source.included_quantity
+                      )}
+                      {snapshot.unit_name}
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </article>
+    {/if}
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <article class="rounded-xl border border-border bg-surface p-4">
@@ -197,6 +307,9 @@
         <article class="rounded-xl border border-border bg-surface">
           <div class="border-b border-border px-4 py-3">
             <h2 class="font-semibold text-foreground">Solicitudes vinculadas</h2>
+            <p class="mt-1 text-sm text-foreground-muted">
+              Elige si quieres abrir cada solicitud aquí o en otra pestaña.
+            </p>
           </div>
           {#if item.request_links.length === 0}
             <p class="p-4 text-sm text-foreground-muted">No hay solicitudes vinculadas.</p>
@@ -204,24 +317,43 @@
             <ul class="divide-y divide-border">
               {#each item.request_links as link (link.id)}
                 <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                  <div>
-                    <a
-                      href={`/purchase-requests/${link.purchase_request_id}`}
-                      class="font-medium text-primary hover:underline"
-                    >
-                      Solicitud {link.purchase_request_id}
-                    </a>
+                  <div class="min-w-0">
+                    <details class="group">
+                      <summary
+                        class="w-fit cursor-pointer rounded font-medium text-primary marker:text-foreground-muted hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                      >
+                        Solicitud {requestCode(link.purchase_request_id)}
+                      </summary>
+                      <div class="mt-2 flex flex-wrap gap-2">
+                        <a
+                          href={`/purchase-requests/${link.purchase_request_id}`}
+                          class="inline-flex min-h-9 items-center rounded-lg border border-border bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          Abrir en esta pestaña
+                        </a>
+                        <a
+                          href={`/purchase-requests/${link.purchase_request_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="inline-flex min-h-9 items-center rounded-lg border border-border bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          Abrir en otra pestaña
+                        </a>
+                      </div>
+                    </details>
                     <p class="mt-1 text-xs text-foreground-muted">
                       {link.details.length}
                       {link.details.length === 1 ? 'línea vinculada' : 'líneas vinculadas'}
                     </p>
                   </div>
-                  <a
-                    href={`/purchase-quotations/comparison/${link.purchase_request_id}`}
-                    class="text-sm font-medium text-primary hover:underline"
-                  >
-                    Comparar ofertas
-                  </a>
+                  {#if !item.consolidation_id}
+                    <a
+                      href={`/purchase-quotations/comparison/${link.purchase_request_id}`}
+                      class="text-sm font-medium text-primary hover:underline"
+                    >
+                      Comparar ofertas
+                    </a>
+                  {/if}
                 </li>
               {/each}
             </ul>
@@ -248,7 +380,8 @@
                 >
                   <tr>
                     <th class="px-4 py-3 font-medium">Producto</th>
-                    <th class="px-4 py-3 font-medium">Cantidad</th>
+                    <th class="px-4 py-3 font-medium">Solicitada</th>
+                    <th class="px-4 py-3 font-medium">Ofrecida</th>
                     <th class="px-4 py-3 font-medium">Precio unit.</th>
                     <th class="px-4 py-3 font-medium">Impuesto</th>
                     <th class="px-4 py-3 font-medium">Total</th>
@@ -259,18 +392,23 @@
                     <tr class="text-foreground">
                       <td class="px-4 py-3">
                         <span class="font-medium">
-                          Producto #{detail.product_id}
-                          {#if productName(detail.product_id)}
-                            <span class="font-normal text-foreground-muted">
-                              — {productName(detail.product_id)}
-                            </span>
-                          {/if}
+                          {snapshotFor(detail.id)?.product_name ??
+                            productName(detail.product_id) ??
+                            `Producto #${detail.product_id}`}
                         </span>
-                        <span class="block text-xs text-foreground-muted"
-                          >Unidad #{detail.unit_id}</span
-                        >
+                        <span class="block text-xs text-foreground-muted">
+                          {snapshotFor(detail.id)?.product_sku ?? ''}
+                          {snapshotFor(detail.id)?.unit_name ?? `Unidad #${detail.unit_id}`}
+                        </span>
                       </td>
                       <td class="whitespace-nowrap px-4 py-3">{formatQuantity(detail.quantity)}</td>
+                      <td class="whitespace-nowrap px-4 py-3">
+                        {detail.offered_quantity === null
+                          ? 'Pendiente'
+                          : Number(detail.offered_quantity) === 0
+                            ? 'No cotizado'
+                            : formatQuantity(detail.offered_quantity)}
+                      </td>
                       <td class="whitespace-nowrap px-4 py-3">
                         {formatMoney(detail.unit_price, item.currency)}
                       </td>
@@ -359,6 +497,15 @@
           <article class="rounded-xl border border-border bg-surface p-4">
             <h2 class="font-semibold text-foreground">Notas</h2>
             <p class="mt-3 whitespace-pre-wrap text-sm text-foreground-muted">{item.notes}</p>
+          </article>
+        {/if}
+
+        {#if item.response_notes}
+          <article class="rounded-xl border border-border bg-surface p-4">
+            <h2 class="font-semibold text-foreground">Notas de respuesta</h2>
+            <p class="mt-3 whitespace-pre-wrap text-sm text-foreground-muted">
+              {item.response_notes}
+            </p>
           </article>
         {/if}
       </aside>

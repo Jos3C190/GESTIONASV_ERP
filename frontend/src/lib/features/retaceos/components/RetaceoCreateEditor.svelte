@@ -3,10 +3,15 @@
   import Button from '$lib/components/ui/Button.svelte';
   import { HttpError } from '$lib/api/client';
   import { purchasesApi } from '$lib/api/purchases';
+  import { catalogApi } from '$lib/api/catalog';
   import { retaceosApi } from '$lib/api/retaceos';
   import CustomsReferencePanel from '$lib/features/retaceos/components/CustomsReferencePanel.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type { Purchase } from '$lib/types/purchase';
+  import type { RetaceoImportData } from '$lib/types/retaceo';
+  import RetaceoImportFields from './RetaceoImportFields.svelte';
+  import RetaceoFixedAmounts from './RetaceoFixedAmounts.svelte';
+  import type { FixedAmounts } from '../manual-costs';
 
   let { purchaseId }: { purchaseId: string } = $props();
 
@@ -19,15 +24,26 @@
   };
 
   let purchase = $state<Purchase | null>(null);
-  let totalFreight = $state('0');
-  let totalExpenses = $state('0');
-  let totalDai = $state('0');
-  let importVat = $state('0');
   let notes = $state('');
+  let importData = $state<RetaceoImportData>({
+    origin_country: null,
+    import_invoice_number: null,
+    import_invoice_date: null,
+    import_policy_number: null,
+    import_policy_date: null
+  });
+  let fobAmounts = $state<Record<string, string>>({});
+  const manualFob = true;
+  let fixedAmounts = $state<FixedAmounts>({ freight: '', dai: '', vat: '' });
+  let receivedLines = $derived(
+    purchase?.details.filter(
+      (line) => Number(line.quantity_accepted ?? line.quantity_received) > 0
+    ) ?? []
+  );
+  let productLabels = $state<Map<number, string>>(new Map());
   let loading = $state(true);
   let saving = $state(false);
   let error = $state<string | null>(null);
-  let validation = $state<Record<string, string>>({});
   let requestSequence = 0;
 
   let canManage = $derived(permissions.hasPermission('retaceos:manage'));
@@ -52,6 +68,16 @@
     const sequence = ++requestSequence;
     loading = true;
     error = null;
+    purchase = null;
+    notes = '';
+    fixedAmounts = { freight: '', dai: '', vat: '' };
+    importData = {
+      origin_country: null,
+      import_invoice_number: null,
+      import_invoice_date: null,
+      import_policy_number: null,
+      import_policy_date: null
+    };
 
     try {
       const current = await purchasesApi.get(currentPurchaseId);
@@ -59,6 +85,23 @@
       if (sequence !== requestSequence) return;
 
       purchase = current;
+      importData = {
+        ...importData,
+        import_invoice_number: current.supplier_invoice_number,
+        import_invoice_date: current.supplier_invoice_date
+      };
+      fobAmounts = {};
+      const products = await Promise.all(
+        [...new Set(current.details.map((line) => line.product_id))].map((id) =>
+          catalogApi.getProduct(id).catch(() => null)
+        )
+      );
+      if (sequence !== requestSequence) return;
+      productLabels = new Map(
+        products
+          .filter((product) => product !== null)
+          .map((product) => [product.id_product, `${product.sku} · ${product.name}`])
+      );
     } catch (cause: unknown) {
       if (sequence !== requestSequence) return;
 
@@ -69,48 +112,60 @@
     }
   }
 
-  function validateAmount(
-    value: string,
-    field: string,
-    label: string,
-    next: Record<string, string>
-  ) {
-    const amount = Number(value);
-
-    if (!value.trim() || !Number.isFinite(amount) || amount < 0) {
-      next[field] = `${label} debe ser un valor mayor o igual a cero.`;
-    }
-  }
-
-  function validate(): boolean {
-    const next: Record<string, string> = {};
-
-    validateAmount(totalFreight, 'totalFreight', 'El flete', next);
-    validateAmount(totalExpenses, 'totalExpenses', 'Los gastos', next);
-    validateAmount(totalDai, 'totalDai', 'El DAI', next);
-    validateAmount(importVat, 'importVat', 'El IVA de importación', next);
-
-    validation = next;
-    return Object.keys(next).length === 0;
-  }
-
   async function submit() {
-    if (!canManage || !purchase || saving || !validate()) return;
+    if (!canManage || !purchase || saving) return;
 
     saving = true;
     error = null;
+    if (receivedLines.length === 0) {
+      error = 'Esta recepción no tiene cantidades elegibles para retaceo.';
+      saving = false;
+      return;
+    }
+    if (
+      Object.values(fixedAmounts).some(
+        (value) => !value.trim() || !Number.isFinite(Number(value)) || Number(value) < 0
+      )
+    ) {
+      error = 'Completa flete, DAI e IVA; escribe 0 cuando no apliquen.';
+      saving = false;
+      return;
+    }
+
+    if (
+      manualFob &&
+      receivedLines.some(
+        (line) =>
+          !fobAmounts[line.id]?.trim() ||
+          !Number.isFinite(Number(fobAmounts[line.id])) ||
+          Number(fobAmounts[line.id]) <= 0
+      )
+    ) {
+      error = 'Escribe el FOB documentado de cada producto; debe ser mayor que cero.';
+      saving = false;
+      return;
+    }
 
     try {
       const created = await retaceosApi.create({
         purchase_id: purchase.id,
-        total_freight: totalFreight,
-        total_expenses: totalExpenses,
-        total_dai: totalDai,
-        import_vat: importVat,
+        import_data: importData,
+        ...(manualFob
+          ? {
+              fob_lines: receivedLines.map((line) => ({
+                purchase_detail_id: line.id,
+                amount: fobAmounts[line.id] ?? ''
+              }))
+            }
+          : {}),
+        total_freight: fixedAmounts.freight,
+        total_expenses: '0',
+        total_dai: fixedAmounts.dai,
+        import_vat: fixedAmounts.vat,
         notes: notes.trim() || null
       });
 
-      await goto(`/retaceos/${created.id}`);
+      await goto(`/retaceos/${created.id}/edit`);
     } catch (cause: unknown) {
       error = errorMessage(cause, 'No se pudo crear el retaceo.');
     } finally {
@@ -153,7 +208,7 @@
 
   {#if !canManage}
     <div
-      class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
+      class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-foreground"
       role="alert"
     >
       No tienes permiso para gestionar retaceos.
@@ -165,7 +220,7 @@
     </div>
   {:else if !purchase}
     <div
-      class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
+      class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-foreground"
       role="alert"
     >
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -189,7 +244,7 @@
 
     {#if error}
       <div
-        class="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+        class="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-foreground"
         role="alert"
       >
         {error}
@@ -236,7 +291,25 @@
       </div>
     </article>
 
-    <CustomsReferencePanel />
+    <details class="rounded-xl border border-border bg-surface p-4">
+      <summary
+        class="cursor-pointer rounded text-sm font-medium text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+        >Consultar referencias de aduana y DAI</summary
+      >
+      <div class="mt-4"><CustomsReferencePanel /></div>
+    </details>
+
+    {#if !['retaceo_before_inventory', 'placement_before_inventory'].includes(purchase.inventory_workflow ?? '')}
+      <div
+        class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm leading-6 text-foreground"
+        role="note"
+      >
+        Esta recepción pertenece al flujo anterior y puede estar en inventario. Si corriges su FOB,
+        explica el importe anterior, el correcto y el respaldo en Notas (mínimo 20 caracteres). Al
+        aplicar el retaceo se añadirá un ajuste de valor; se conserva la recepción original y no se
+        suman unidades otra vez.
+      </div>
+    {/if}
 
     <form
       class="space-y-5"
@@ -245,98 +318,65 @@
         void submit();
       }}
     >
-      <article class="rounded-xl border border-border bg-surface p-4">
-        <div>
-          <h2 class="font-semibold text-foreground">Costos de importación</h2>
-          <p class="mt-1 text-sm text-foreground-muted">
-            El backend distribuirá estos valores proporcionalmente sobre el FOB de los detalles de
-            compra.
+      {#if manualFob}
+        <RetaceoImportFields
+          value={importData}
+          oninput={(value) => (importData = value)}
+          disabled={saving}
+          invoiceLocked
+        />
+        <article class="space-y-4 rounded-xl border border-border bg-surface p-4">
+          <h2 class="font-semibold text-foreground">FOB documentado por producto</h2>
+          <p class="max-w-prose text-sm leading-6 text-foreground-muted">
+            Importe total documentado de cada producto, sin flete ni DAI.
+          </p>
+          {#each receivedLines as line, index (line.id)}
+            <label class="block rounded-lg border border-border p-4">
+              <span class="block text-sm font-medium text-foreground"
+                >{productLabels.get(line.product_id) ?? `Producto de la línea ${index + 1}`}</span
+              >
+              <span class="mt-1 block text-xs text-foreground-muted"
+                >Cantidad: {line.quantity_received} · Subtotal: {formatMoney(
+                  line.subtotal,
+                  purchase.currency
+                )} · Descuento: {formatMoney(line.discount, purchase.currency)} · Impuesto de compra:
+                {formatMoney(line.tax_amount, purchase.currency)}</span
+              >
+              <span class="mb-1 mt-3 block text-xs font-medium text-foreground"
+                >FOB total de la línea ({purchase.currency})</span
+              >
+              <input
+                type="number"
+                required
+                min="0.000001"
+                step="0.000001"
+                value={fobAmounts[line.id] ?? ''}
+                oninput={(event) => (fobAmounts[line.id] = event.currentTarget.value)}
+                disabled={saving}
+                class="h-10 w-full rounded-lg border border-border-control bg-surface px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              />
+            </label>
+          {/each}
+        </article>
+      {/if}
+      <RetaceoFixedAmounts
+        value={fixedAmounts}
+        currency={purchase.currency}
+        disabled={saving}
+        oninput={(key, value) => (fixedAmounts[key] = value)}
+      />
+      <article class="space-y-4 rounded-xl border border-border bg-surface p-4">
+        <div class="rounded-xl border border-primary/20 bg-primary/5 p-4">
+          <h2 class="font-semibold text-foreground">
+            Siguiente paso: registrar costos y comprobantes
+          </h2>
+          <p class="mt-1 max-w-prose text-sm leading-6 text-foreground-muted">
+            Guarda para desglosar otros gastos y, si lo deseas, adjuntar comprobantes. El
+            presupuesto no se carga automáticamente.
           </p>
         </div>
 
-        <div class="mt-4 grid gap-4 md:grid-cols-2">
-          <label class="space-y-1.5 text-sm font-medium text-foreground">
-            <span>Flete</span>
-
-            <input
-              aria-label="Flete"
-              type="number"
-              min="0"
-              step="0.000001"
-              value={totalFreight}
-              oninput={(event) => (totalFreight = (event.currentTarget as HTMLInputElement).value)}
-              disabled={saving}
-              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:opacity-60"
-            />
-
-            {#if validation.totalFreight}
-              <span class="block text-xs text-danger">{validation.totalFreight}</span>
-            {/if}
-          </label>
-
-          <label class="space-y-1.5 text-sm font-medium text-foreground">
-            <span>Gastos</span>
-
-            <input
-              aria-label="Gastos"
-              type="number"
-              min="0"
-              step="0.000001"
-              value={totalExpenses}
-              oninput={(event) => (totalExpenses = (event.currentTarget as HTMLInputElement).value)}
-              disabled={saving}
-              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:opacity-60"
-            />
-
-            {#if validation.totalExpenses}
-              <span class="block text-xs text-danger">{validation.totalExpenses}</span>
-            {/if}
-          </label>
-
-          <label class="space-y-1.5 text-sm font-medium text-foreground">
-            <span>DAI</span>
-
-            <input
-              aria-label="DAI"
-              type="number"
-              min="0"
-              step="0.000001"
-              value={totalDai}
-              oninput={(event) => (totalDai = (event.currentTarget as HTMLInputElement).value)}
-              disabled={saving}
-              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:opacity-60"
-            />
-
-            {#if validation.totalDai}
-              <span class="block text-xs text-danger">{validation.totalDai}</span>
-            {/if}
-          </label>
-
-          <label class="space-y-1.5 text-sm font-medium text-foreground">
-            <span>IVA de importación</span>
-
-            <input
-              aria-label="IVA de importación"
-              type="number"
-              min="0"
-              step="0.000001"
-              value={importVat}
-              oninput={(event) => (importVat = (event.currentTarget as HTMLInputElement).value)}
-              disabled={saving}
-              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:opacity-60"
-            />
-
-            {#if validation.importVat}
-              <span class="block text-xs text-danger">{validation.importVat}</span>
-            {/if}
-
-            <span class="block text-xs font-normal text-foreground-muted">
-              Se registra de forma informativa y no forma parte del costo aterrizado.
-            </span>
-          </label>
-        </div>
-
-        <label class="mt-4 block space-y-1.5 text-sm font-medium text-foreground">
+        <label class="block space-y-1.5 text-sm font-medium text-foreground">
           <span>Notas</span>
 
           <textarea
@@ -345,7 +385,7 @@
             maxlength="4000"
             bind:value={notes}
             disabled={saving}
-            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none disabled:opacity-60"
+            class="w-full rounded-md border border-border-control bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none disabled:opacity-60"
           ></textarea>
         </label>
       </article>

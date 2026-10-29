@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PurchaseCreateInput, PurchaseUpdateInput } from '$lib/types/purchase';
+import type {
+  PurchaseCreateInput,
+  PurchaseUpdateInput,
+  PurchaseVerifyInput
+} from '$lib/types/purchase';
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn()
@@ -80,15 +84,27 @@ describe('purchasesApi', () => {
 
   it('maps every purchase lifecycle action to its POST endpoint', async () => {
     const id = '55555555-5555-5555-5555-555555555555';
+    const verificationPayload: PurchaseVerifyInput = {
+      lines: [
+        {
+          purchase_detail_id: '66666666-6666-6666-6666-666666666666',
+          quantity_accepted: 2,
+          inventory_location_id: '77777777-7777-7777-7777-777777777777'
+        }
+      ]
+    };
 
     await purchasesApi.receive(id);
-    await purchasesApi.verify(id);
+    await purchasesApi.verify(id, verificationPayload);
     await purchasesApi.cancel(id);
     await purchasesApi.close(id);
 
     expect(mocks.apiFetch.mock.calls).toEqual([
       [`/purchases/${id}/receive`, { method: 'POST' }],
-      [`/purchases/${id}/verify`, { method: 'POST' }],
+      [
+        `/purchases/${id}/verify`,
+        { method: 'POST', body: JSON.stringify(verificationPayload) }
+      ],
       [`/purchases/${id}/cancel`, { method: 'POST' }],
       [`/purchases/${id}/close`, { method: 'POST' }]
     ]);

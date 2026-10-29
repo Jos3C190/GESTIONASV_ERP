@@ -41,7 +41,13 @@ import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
   });
 
   let coordinates = $derived.by(() => {
-    if (!branch || !Number.isFinite(branch.lat) || !Number.isFinite(branch.lng)) return '—';
+    if (
+      !branch ||
+      branch.lat === null ||
+      branch.lng === null ||
+      !Number.isFinite(branch.lat) ||
+      !Number.isFinite(branch.lng)
+    ) return 'Ubicación física no registrada';
     return `${branch.lat.toFixed(4)}, ${branch.lng.toFixed(4)}`;
   });
 </script>
@@ -62,6 +68,7 @@ import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
               <h3 class="text-sm font-bold text-foreground truncate">{branch.name}</h3>
+              {#if branch.isHeadquarters}<Badge variant="primary">Matriz administrativa</Badge>{/if}
               <Badge variant={STATUS_MAP[branch.status]?.variant || 'neutral'}>
                 {STATUS_MAP[branch.status]?.label || branch.status}
               </Badge>
@@ -76,7 +83,9 @@ import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
         <Avatar initials={branch.managerInitials} size={26} />
         <div class="min-w-0 flex-1">
           <p class="text-xs font-semibold text-foreground truncate">{branch.manager}</p>
-          <p class="text-[10px] font-medium text-foreground-subtle">Encargado de sucursal</p>
+          <p class="text-[10px] font-medium text-foreground-subtle">
+            {branch.isHeadquarters ? 'Responsable administrativo' : 'Encargado de sucursal'}
+          </p>
         </div>
       </div>
     </div>
@@ -87,7 +96,9 @@ import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
       <div class="grid grid-cols-3 gap-1.5">
         <div class="rounded-lg border border-border bg-surface-muted/40 p-1.5 text-center">
           <p class="text-[9px] font-bold uppercase tracking-wider text-foreground-subtle">Empleados</p>
-          <p class="font-mono text-sm font-bold tabular-nums text-foreground mt-0.5">{branch.employees}</p>
+          <p class="font-mono text-sm font-bold tabular-nums text-foreground mt-0.5" title={branch.isHeadquarters ? 'No aplica a una matriz administrativa' : undefined}>
+            {branch.isHeadquarters ? 'No aplica' : branch.employees}
+          </p>
         </div>
         <div class="rounded-lg border border-border bg-surface-muted/40 p-1.5 text-center">
           <p class="text-[9px] font-bold uppercase tracking-wider text-foreground-subtle">Almacenes</p>
@@ -95,8 +106,8 @@ import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
         </div>
         <div class="rounded-lg border border-border bg-surface-muted/40 p-1.5 text-center">
           <p class="text-[9px] font-bold uppercase tracking-wider text-foreground-subtle">Ventas</p>
-          <p class="font-mono text-sm font-bold tabular-nums text-foreground mt-0.5">
-            {branch.salesThisMonth > 0 ? `$${(branch.salesThisMonth / 1000).toFixed(1)}k` : '—'}
+          <p class="font-mono text-sm font-bold tabular-nums text-foreground mt-0.5" title={branch.isHeadquarters ? 'No aplica a una matriz administrativa' : undefined}>
+            {branch.isHeadquarters ? 'No aplica' : branch.salesThisMonth > 0 ? `$${(branch.salesThisMonth / 1000).toFixed(1)}k` : '—'}
           </p>
         </div>
       </div>
@@ -104,12 +115,16 @@ import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
       <!-- Sparkline de Tendencia de Ventas -->
       <div>
         <div class="flex items-center justify-between text-[9.5px] font-bold uppercase tracking-wider text-foreground-subtle mb-0.5">
-          <span>Tendencia de ventas</span>
-          {#if branch.salesThisMonth > 0}
+          <span>{branch.isHeadquarters ? 'Actividad comercial' : 'Tendencia de ventas'}</span>
+          {#if !branch.isHeadquarters && branch.salesThisMonth > 0}
             <span class="font-mono text-primary font-semibold">${branch.salesThisMonth.toLocaleString()}</span>
           {/if}
         </div>
-        {#if branch.salesThisMonth > 0 && sparkPath}
+        {#if branch.isHeadquarters}
+          <div class="flex h-8 w-full items-center justify-center rounded-md bg-surface-muted/20 px-2 text-center text-xs text-foreground-subtle">
+            No aplica a la matriz administrativa
+          </div>
+        {:else if branch.salesThisMonth > 0 && sparkPath}
           <div class="w-full overflow-hidden rounded-md bg-surface-muted/20 p-1">
             <svg width="100%" height={SH} viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none" aria-hidden="true">
               <path d={sparkPath} fill="none" stroke={strokeColor} stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
@@ -131,7 +146,7 @@ import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
           <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
         </svg>
         <div class="min-w-0 flex-1">
-          <p class="text-[9.5px] font-bold uppercase tracking-wider text-foreground-subtle">Dirección</p>
+          <p class="text-[9.5px] font-bold uppercase tracking-wider text-foreground-subtle">{branch.isHeadquarters ? 'Domicilio legal' : 'Dirección'}</p>
           <p class="font-medium text-foreground text-[12.5px] truncate">{branch.address}</p>
           <p class="text-foreground-subtle text-[11px]">{branch.city}</p>
         </div>

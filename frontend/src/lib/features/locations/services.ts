@@ -369,6 +369,18 @@ export async function getLocationCodeScheme(
   });
 }
 
+export async function getOptionalLocationCodeScheme(
+  warehouseId: string,
+  signal?: AbortSignal
+): Promise<LocationCodeScheme | null> {
+  try {
+    return await getLocationCodeScheme(warehouseId, signal);
+  } catch (cause) {
+    if (cause instanceof HttpError && cause.status === 404) return null;
+    throw cause;
+  }
+}
+
 export async function updateLocationCodeScheme(
   warehouseId: string,
   input: LocationCodeSchemeInput

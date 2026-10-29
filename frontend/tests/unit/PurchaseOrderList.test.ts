@@ -2,6 +2,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PurchaseOrderList from '$lib/features/purchase-orders/components/PurchaseOrderList.svelte';
 
+const navigationMocks = vi.hoisted(() => ({ goto: vi.fn() }));
+
+vi.mock('$app/navigation', () => ({
+  goto: navigationMocks.goto
+}));
+
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   listSuppliers: vi.fn()
@@ -91,6 +97,7 @@ describe('PurchaseOrderList', () => {
       expect(mocks.list).toHaveBeenLastCalledWith({
         status: 'pending_approval',
         supplier_id: 25,
+        branch_id: null,
         page: 1,
         size: 20
       });

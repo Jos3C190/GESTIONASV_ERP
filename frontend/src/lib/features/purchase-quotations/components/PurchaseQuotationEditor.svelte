@@ -114,7 +114,11 @@
       suppliers = supplierPage.items.filter(
         (supplier) => supplier.is_active && supplier.supplier_status === 'approved'
       );
-      currencies = currencyData.filter((item) => item.is_active);
+      const activeCurrencies = currencyData.filter((item) => item.is_active);
+      currencies = [
+        ...activeCurrencies.filter((item) => item.code === 'USD'),
+        ...activeCurrencies.filter((item) => item.code !== 'USD')
+      ];
 
       const requestMap = new Map<string, PurchaseRequest>();
       for (const requestPage of requestPages) {
@@ -137,7 +141,7 @@
       }
 
       if (!currencies.some((item) => item.code === currency)) {
-        currency = currencies[0]?.code ?? '';
+        currency = '';
       }
     } catch (cause: unknown) {
       if (generation !== loadGeneration) return;

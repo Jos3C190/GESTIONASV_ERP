@@ -5,12 +5,15 @@ import type { PurchaseOrder } from '$lib/types/purchase-order';
 
 const mocks = vi.hoisted(() => ({
   goto: vi.fn(),
+  list: vi.fn(),
   hasPermission: vi.fn()
 }));
 
 vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
+
+vi.mock('$lib/api/purchases', () => ({ purchasesApi: { list: mocks.list } }));
 
 vi.mock('$lib/stores/permissions.svelte', () => ({
   permissions: {
@@ -47,6 +50,8 @@ const order: PurchaseOrder = {
 describe('PurchaseOrderReceivingAction', () => {
   beforeEach(() => {
     mocks.goto.mockReset();
+    mocks.list.mockReset();
+    mocks.list.mockResolvedValue({ items: [], meta: { page: 1, size: 1, total: 0, pages: 0 } });
     mocks.hasPermission.mockReset();
   });
 
@@ -59,12 +64,12 @@ describe('PurchaseOrderReceivingAction', () => {
       props: { order }
     });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Registrar recepción' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Registrar recepción' }));
 
     expect(mocks.goto).toHaveBeenCalledWith(`/purchases/new?order_id=${order.id}`);
   });
 
-  it('allows another reception while the order is partially received', () => {
+  it('allows another reception while the order is partially received', async () => {
     mocks.hasPermission.mockReturnValue(true);
 
     render(PurchaseOrderReceivingAction, {
@@ -73,20 +78,25 @@ describe('PurchaseOrderReceivingAction', () => {
       }
     });
 
-    expect(screen.getByRole('button', { name: 'Registrar recepción' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Registrar recepción' })).toBeInTheDocument();
   });
 
-  it('does not expose receiving after the order is fully received', () => {
-    mocks.hasPermission.mockReturnValue(true);
+  it.each(['received', 'closed'] as const)(
+    'shows completion and no receiving when the order is %s',
+    (status) => {
+      mocks.hasPermission.mockReturnValue(true);
 
-    render(PurchaseOrderReceivingAction, {
-      props: {
-        order: { ...order, status: 'received' }
-      }
-    });
+      render(PurchaseOrderReceivingAction, {
+        props: {
+          order: { ...order, status }
+        }
+      });
 
-    expect(screen.queryByRole('button', { name: 'Registrar recepción' })).not.toBeInTheDocument();
-  });
+      expect(screen.queryByRole('button', { name: 'Registrar recepción' })).not.toBeInTheDocument();
+      expect(screen.getByText(/No admite nuevas recepciones/)).toBeInTheDocument();
+      expect(mocks.list).not.toHaveBeenCalled();
+    }
+  );
 
   it('does not expose receiving without both required purchase permissions', () => {
     mocks.hasPermission.mockImplementation((code: string) => code === 'purchases:manage');
@@ -96,5 +106,32 @@ describe('PurchaseOrderReceivingAction', () => {
     });
 
     expect(screen.queryByRole('button', { name: 'Registrar recepción' })).not.toBeInTheDocument();
+    expect(mocks.list).not.toHaveBeenCalled();
+  });
+
+  it('opens the existing draft rather than another receipt', async () => {
+    mocks.hasPermission.mockReturnValue(true);
+    mocks.list.mockResolvedValue({
+      items: [{ id: 'existing-draft', code: 'COM-00021', status: 'draft' }],
+      meta: { page: 1, size: 1, total: 1, pages: 1 }
+    });
+    render(PurchaseOrderReceivingAction, { props: { order } });
+
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Continuar recepción COM-00021' })
+    );
+    expect(screen.queryByRole('button', { name: 'Registrar recepción' })).not.toBeInTheDocument();
+    expect(mocks.goto).toHaveBeenCalledWith('/purchases/existing-draft');
+  });
+
+  it('does not enable another receipt when checking drafts fails and supports retry', async () => {
+    mocks.hasPermission.mockReturnValue(true);
+    mocks.list.mockRejectedValueOnce(new Error('Consulta no disponible'));
+    render(PurchaseOrderReceivingAction, { props: { order } });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo comprobar');
+    expect(screen.queryByRole('button', { name: 'Registrar recepción' })).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByRole('button', { name: 'Registrar recepción' })).toBeInTheDocument();
   });
 });

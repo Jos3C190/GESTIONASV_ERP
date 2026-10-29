@@ -85,6 +85,7 @@
     code: '',
     name: '',
     description: '',
+    is_central: false,
     warehouse_type: 'general',
     operational_status: 'active',
     physical_location: '',
@@ -131,7 +132,9 @@
   let errors = $state<Record<string, string>>({});
   let initialSnapshot = $state('');
   let pendingTarget = $state<string | null>(null);
-  let branches = $state<{ id: string; name: string; code?: string; status?: string }[]>([]);
+  let branches = $state<
+    { id: string; name: string; code?: string; status?: string; is_headquarters?: boolean }[]
+  >([]);
   let categories = $state<
     { id: string; name: string; description: string | null; is_active: boolean }[]
   >([]);
@@ -155,7 +158,13 @@
     )
   );
   let branchOptions = $derived(
-    branches.map((item) => ({ value: item.id, label: item.name, description: item.code }))
+    branches
+      .filter((item) => !f.is_central || item.is_headquarters === true)
+      .map((item) => ({
+        value: item.id,
+        label: item.is_headquarters ? `${item.name} · Matriz` : item.name,
+        description: item.code
+      }))
   );
   let categoryOptions = $derived(
     categories
@@ -204,11 +213,12 @@
   function fromWarehouse(warehouse: Warehouse) {
     f = {
       ...empty(),
-      branch_id: warehouse.branchId,
+      branch_id: warehouse.branchId ?? '',
       warehouse_category_id: warehouse.categoryId ?? '',
       code: warehouse.code,
       name: warehouse.name,
       description: warehouse.description,
+      is_central: warehouse.isCentral,
       warehouse_type: warehouse.type,
       operational_status: warehouse.status,
       physical_location: warehouse.location,
@@ -265,6 +275,17 @@
       loadingManagers = false;
     }
   }
+  async function setCentral(isCentral: boolean) {
+    f.is_central = isCentral;
+    if (isCentral) {
+      f.branch_id = branches.find((item) => item.is_headquarters)?.id ?? '';
+      f.manager_employee_id = '';
+      await loadManagers('', true);
+    } else if (branches.find((item) => item.id === f.branch_id)?.is_headquarters) {
+      f.branch_id = branches.find((item) => !item.is_headquarters)?.id ?? '';
+      await loadManagers(f.branch_id, true);
+    }
+  }
   async function load() {
     loading = true;
     error = null;
@@ -286,7 +307,7 @@
             : Promise.resolve()
         ]);
       } else {
-        f.branch_id = branches[0]?.id ?? '';
+        f.branch_id = branches.find((item) => !item.is_headquarters)?.id ?? '';
         f.warehouse_category_id = categories.find((item) => item.is_active)?.id ?? '';
         await loadManagers(f.branch_id, true);
       }
@@ -306,7 +327,10 @@
     const next: Record<string, string> = {};
     if (f.code.trim().length < 2) next.code = 'Ingrese un código válido.';
     if (f.name.trim().length < 2) next.name = 'Ingrese el nombre.';
-    if (!f.branch_id) next.branch_id = 'Seleccione una sucursal.';
+    if (!f.branch_id)
+      next.branch_id = f.is_central
+        ? 'Cree o active la sucursal matriz antes de asignar la bodega central.'
+        : 'Seleccione una sucursal.';
     if (!f.warehouse_category_id) next.warehouse_category_id = 'Seleccione una categoría.';
     const positiveFields = [
       ['certified_max_weight_kg', 'El límite certificado de peso'],
@@ -429,11 +453,13 @@
   }
   function payload() {
     return {
-      branch_id: f.branch_id,
+      company_id: company.id,
+      branch_id: f.branch_id || null,
       warehouse_category_id: f.warehouse_category_id,
       code: f.code.trim(),
       name: f.name.trim(),
       description: f.description.trim() || null,
+      is_central: f.is_central,
       warehouse_type: f.warehouse_type,
       operational_status: f.operational_status,
       physical_location: f.physical_location.trim() || null,
@@ -648,6 +674,18 @@
                 ['automated', 'Automatizado']
               ])}
             />
+            <label class="flex items-start gap-3 rounded-lg border border-border p-3 sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={f.is_central}
+                onchange={(event) => void setCentral((event.currentTarget as HTMLInputElement).checked)}
+                class="mt-1 accent-primary"
+              />
+              <span>
+                <span class="block text-sm font-medium text-foreground">Bodega central</span>
+                <span class="mt-1 block text-xs text-foreground-muted">Se asigna a la sucursal matriz, que recibe compras y coordina la distribución. Solo puede haber una bodega central activa por empresa.</span>
+              </span>
+            </label>
             <SmartSelect
               id="warehouse-status"
               label="Estado operativo"
@@ -675,14 +713,17 @@
         <Card id="organization" class="scroll-mt-24 p-6"
           ><h2 class="mb-1 text-base font-semibold">Organización</h2>
           <p class="mb-5 text-sm text-foreground-muted">
-            Sucursal propietaria, categoría y referencia física.
+            {f.is_central
+              ? 'Asigna la bodega central a la matriz administrativa de la empresa.'
+              : 'Sucursal propietaria, categoría y referencia física.'}
           </p>
           <div class="grid gap-4 sm:grid-cols-2">
             <SmartSelect
               id="warehouse-branch"
-              label="Sucursal"
+              label={f.is_central ? 'Sucursal matriz' : 'Sucursal responsable'}
               bind:value={f.branch_id}
               options={branchOptions}
+              placeholder={f.is_central ? 'Selecciona la matriz administrativa…' : 'Buscar sucursal…'}
               error={errors.branch_id}
               required
               onselect={(value) => void loadManagers(value)}
@@ -1076,7 +1117,18 @@
             <div>
               <dt class="text-foreground-muted">Sucursal</dt>
               <dd class="font-semibold">
-                {branches.find((item) => item.id === f.branch_id)?.name ?? 'Sin seleccionar'}
+                {#if f.is_central}
+                  {@const associatedBranch = branches.find((item) => item.id === f.branch_id)}
+                  {#if associatedBranch?.is_headquarters}
+                    {associatedBranch.name} · Matriz
+                  {:else if associatedBranch}
+                    Error: la sucursal asociada no está marcada como matriz
+                  {:else}
+                    Error: matriz administrativa no encontrada
+                  {/if}
+                {:else}
+                  {branches.find((item) => item.id === f.branch_id)?.name ?? 'Sucursal no encontrada'}
+                {/if}
               </dd>
             </div>
             <div>

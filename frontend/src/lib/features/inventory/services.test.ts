@@ -14,9 +14,33 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import { inventoryApi } from './services';
+import type { HandlingUnit } from './types';
 
 describe('inventory service', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('envía filtros de movimientos y cancelación sin descargar el historial completo', async () => {
+    apiMocks.apiFetch.mockResolvedValueOnce([]);
+    const controller = new AbortController();
+    await inventoryApi.listWarehouseMovements('warehouse-1', 26, 'receipt', 25, {
+      period_from: '2026-10-01', period_to: '2026-10-28', q: ' Chocolate ',
+      lot_code: 'LOT 28', direction: 'incoming'
+    }, controller.signal);
+    expect(apiMocks.apiFetch).toHaveBeenCalledWith(
+      '/inventory/warehouses/warehouse-1/movements?limit=26&offset=25&movement_type=receipt&period_from=2026-10-01&period_to=2026-10-28&q=Chocolate&lot_code=LOT+28&direction=incoming',
+      { signal: controller.signal }
+    );
+  });
+
+  it('permite paginar todos los movimientos de bodega', async () => {
+    apiMocks.apiFetch.mockResolvedValueOnce([]);
+
+    await inventoryApi.listWarehouseMovements('warehouse-1', 1000, 'transfer', 1000);
+
+    expect(apiMocks.apiFetch).toHaveBeenCalledWith(
+      '/inventory/warehouses/warehouse-1/movements?limit=1000&offset=1000&movement_type=transfer'
+    );
+  });
 
   it('conserva desconocidos y normaliza decimales del resumen físico', async () => {
     apiMocks.apiFetch.mockResolvedValueOnce({
@@ -201,6 +225,90 @@ describe('inventory service', () => {
     });
   });
 
+  it('obtiene la ficha QR y normaliza cantidades e historial de movimientos', async () => {
+    apiMocks.apiFetch.mockResolvedValueOnce({
+      handling_unit: {
+        id: 'hu-1',
+        company_id: 'company-1',
+        warehouse_id: 'warehouse-1',
+        location_id: 'location-1',
+        inventory_item_id: 'item-1',
+        packaging_definition_id: null,
+        code: 'HU-0001',
+        lot_code: 'L-01',
+        receipt_lot_code: 'LOT-COM-0001-D1',
+        receipt_lot_header_code: 'LOT-COM-0001',
+        expiry_date: null,
+        quantity_base: '25.500000',
+        actual_gross_weight_kg: null,
+        actual_length_m: null,
+        actual_width_m: null,
+        actual_height_m: null,
+        actual_volume_m3: null,
+        occupied_weight_kg: null,
+        occupied_volume_m3: null,
+        stock_status: 'available',
+        measurement_status: 'complete',
+        measurement_source: 'receipt',
+        closed_at: null,
+        created_at: '2026-10-05T10:00:00Z',
+        updated_at: null
+      },
+      product_sku: 'PRD-01',
+      product_name: 'Producto de prueba',
+      base_unit_name: 'Caja',
+      base_unit_symbol: 'cj',
+      warehouse_code: 'BOD-CENTRAL',
+      warehouse_name: 'Bodega madre',
+      location_code: 'REC-01',
+      origin: {
+        supplier_code: 'PROV-01',
+        supplier_name: 'Proveedor de prueba',
+        purchase_code: 'COMP-0001',
+        purchase_order_code: 'OC-0001',
+        received_at: '2026-10-05T10:00:00Z',
+        purchase_date: '2026-10-05T09:00:00Z',
+        consolidation_code: 'CD-0001',
+        requests: [
+          {
+            request_code: 'SCR-0001',
+            branch_name: 'Sucursal Centro',
+            requested_at: '2026-10-01T09:00:00Z',
+            required_date: null
+          }
+        ]
+      },
+      movements: [
+        {
+          movement_id: 'move-1',
+          movement_type: 'receipt',
+          source_reference: 'purchase-receipt:abc',
+          posted_at: '2026-10-05T10:00:00Z',
+          posted_by: 'user-1',
+          operator: 'compras',
+          from_warehouse_code: null,
+          from_warehouse_name: null,
+          from_location_code: null,
+          from_stock_status: null,
+          to_warehouse_code: 'BOD-CENTRAL',
+          to_warehouse_name: 'Bodega madre',
+          to_location_code: 'REC-01',
+          to_stock_status: 'quarantine',
+          quantity_base: '25.500000'
+        }
+      ]
+    });
+
+    const result = await inventoryApi.getHandlingUnitTraceability('hu-1');
+
+    expect(apiMocks.apiFetch).toHaveBeenCalledWith('/inventory/handling-units/hu-1/traceability');
+    expect(result.handling_unit.quantity_base).toBe(25.5);
+    expect(result.handling_unit.receipt_lot_code).toBe('LOT-COM-0001-D1');
+    expect(result.handling_unit.receipt_lot_header_code).toBe('LOT-COM-0001');
+    expect(result.origin.requests[0]?.branch_name).toBe('Sucursal Centro');
+    expect(result.movements[0]?.quantity_base).toBe(25.5);
+  });
+
   it('normaliza el resumen global de una variante sin convertir medidas desconocidas en cero', async () => {
     apiMocks.apiFetch.mockResolvedValueOnce({
       inventory_item_id: 'item-variant-1',
@@ -243,5 +351,157 @@ describe('inventory service', () => {
     expect(result.occupied_weight_kg).toBeNull();
     expect(result.status_totals[0]!.occupied_weight_kg).toBe(20);
     expect(result.status_totals[1]!.occupied_volume_m3).toBeNull();
+  });
+
+  it('crea enlaces QR y resuelve la ficha pública sin autenticación', async () => {
+    apiMocks.apiFetch.mockResolvedValueOnce({
+      token: 'q'.repeat(43),
+      created_at: '2026-10-14T10:00:00Z'
+    });
+    const capability = await inventoryApi.createTraceCapability('hu/one');
+    expect(capability.token).toBe('q'.repeat(43));
+    expect(apiMocks.apiFetch).toHaveBeenNthCalledWith(1, '/inventory/trace-capabilities', {
+      method: 'POST',
+      body: JSON.stringify({ handling_unit_id: 'hu/one' })
+    });
+
+    const publicTrace = { handling_unit_code: 'HU-0001', movements: [] };
+    apiMocks.apiFetch.mockResolvedValueOnce(publicTrace);
+    await expect(inventoryApi.getPublicTraceability(capability.token)).resolves.toBe(publicTrace);
+    expect(apiMocks.apiFetch).toHaveBeenNthCalledWith(2, '/inventory/public-traces/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ token: capability.token }),
+      noAuth: true,
+      noRefresh: true,
+      noCredentials: true
+    });
+  });
+
+  it('traslada la unidad logística completa a la ubicación de la sucursal', async () => {
+    const unit: HandlingUnit = {
+      id: 'hu-1',
+      company_id: 'company-1',
+      warehouse_id: 'mother-warehouse',
+      location_id: 'mother-location',
+      inventory_item_id: 'item-1',
+      packaging_definition_id: null,
+      code: 'HU-0001',
+      lot_code: null,
+      expiry_date: null,
+      quantity_base: 500,
+      actual_gross_weight_kg: null,
+      actual_length_m: null,
+      actual_width_m: null,
+      actual_height_m: null,
+      actual_volume_m3: null,
+      occupied_weight_kg: null,
+      occupied_volume_m3: null,
+      stock_status: 'available',
+      measurement_status: 'verified',
+      measurement_source: 'receipt',
+      closed_at: null,
+      created_at: null,
+      updated_at: null
+    };
+    apiMocks.apiFetch.mockResolvedValueOnce(undefined);
+
+    await inventoryApi.transferHandlingUnit(unit, 'branch-location', 'idem-1');
+
+    expect(apiMocks.apiFetch).toHaveBeenCalledWith('/inventory/movements/confirm', {
+      method: 'POST',
+      body: JSON.stringify({
+        idempotency_key: 'idem-1',
+        source_reference: 'warehouse-transfer:hu-1:idem-1',
+        movement_type: 'transfer',
+        lines: [
+          {
+            inventory_item_id: 'item-1',
+            handling_unit_id: 'hu-1',
+            from_location_id: 'mother-location',
+            to_location_id: 'branch-location',
+            from_stock_status: 'available',
+            to_stock_status: 'in_transit',
+            quantity_base: 500
+          }
+        ]
+      })
+    });
+  });
+
+  it('despacha solo la cantidad asignada y conserva la solicitud como referencia', async () => {
+    apiMocks.apiFetch.mockResolvedValueOnce(undefined);
+
+    await inventoryApi.transferAllocations(
+      [
+        {
+          unit: {
+            id: 'hu-mother-1',
+            inventory_item_id: 'item-1',
+            location_id: 'mother-location',
+            quantity_base: 2200
+          },
+          quantity_base: 500
+        }
+      ],
+      'branch-receiving-location',
+      'TR-20261007 · Solicitud SCR-00013 · surtido parcial',
+      'dispatch-1'
+    );
+
+    const [, request] = apiMocks.apiFetch.mock.calls[0]!;
+    expect(JSON.parse(request.body)).toMatchObject({
+      idempotency_key: 'dispatch-1',
+      source_reference: 'TR-20261007 · Solicitud SCR-00013 · surtido parcial',
+      movement_type: 'transfer',
+      lines: [
+        {
+          inventory_item_id: 'item-1',
+          handling_unit_id: 'hu-mother-1',
+          from_location_id: 'mother-location',
+          to_location_id: 'branch-receiving-location',
+          from_stock_status: 'available',
+          to_stock_status: 'in_transit',
+          quantity_base: 500
+        }
+      ]
+    });
+  });
+
+  it('registra la cantidad contada en cuarentena y mantiene el destino en tránsito', async () => {
+    apiMocks.apiFetch.mockResolvedValueOnce(undefined);
+
+    await inventoryApi.receiveTransferAllocations(
+      [
+        {
+          unit: {
+            id: 'hu-transit-1',
+            inventory_item_id: 'item-1',
+            location_id: 'branch-receiving-location',
+            quantity_base: 2200
+          },
+          quantity_base: 2180
+        }
+      ],
+      'branch-receiving-location',
+      'RECIBIDO · TR-20261007',
+      'receipt-1'
+    );
+
+    const [, request] = apiMocks.apiFetch.mock.calls[0]!;
+    expect(JSON.parse(request.body)).toMatchObject({
+      idempotency_key: 'receipt-1',
+      movement_type: 'transfer',
+      lines: [
+        {
+          inventory_item_id: 'item-1',
+          handling_unit_id: 'hu-transit-1',
+          from_location_id: 'branch-receiving-location',
+          to_location_id: 'branch-receiving-location',
+          from_stock_status: 'in_transit',
+          to_stock_status: 'quarantine',
+          quantity_base: 2180
+        }
+      ]
+    });
   });
 });

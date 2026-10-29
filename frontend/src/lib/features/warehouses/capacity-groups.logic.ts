@@ -156,8 +156,8 @@ export function capacityGroupToDraft(group: WarehouseCapacityGroup): WarehouseCa
   };
 }
 
-const parseOptionalNumber = (value: string): number | null => {
-  if (!value.trim()) return null;
+const parseOptionalNumber = (value: string | number | null): number | null => {
+  if (value == null || (typeof value === 'string' && !value.trim())) return null;
   return Number(value);
 };
 

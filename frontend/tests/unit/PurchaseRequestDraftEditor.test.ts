@@ -56,7 +56,7 @@ vi.mock('$lib/stores/permissions.svelte', () => ({
 const request = {
   id: '33333333-3333-3333-3333-333333333333',
   company_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-  code: 'SC-0001',
+  code: 'SCR-0001',
   branch_id: '11111111-1111-1111-1111-111111111111',
   warehouse_id: '22222222-2222-2222-2222-222222222222',
   requested_by_id: '44444444-4444-4444-4444-444444444444',
@@ -132,8 +132,8 @@ describe('PurchaseRequestDraftEditor', () => {
 
     expect(await screen.findByDisplayValue('Reposición de inventario')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Seleccionar PROD-10 — Producto de prueba' })
-    ).toHaveAttribute('aria-pressed', 'true');
+      screen.getByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' })
+    ).toHaveAttribute('aria-selected', 'true');
 
     await fireEvent.input(screen.getByLabelText('Justificación'), {
       target: { value: 'Reposición actualizada' }
@@ -208,19 +208,19 @@ describe('PurchaseRequestDraftEditor', () => {
       props: { requestId: request.id }
     });
 
-    await screen.findByRole('button', { name: 'Seleccionar PROD-10 — Producto de prueba' });
-    await fireEvent.input(screen.getByRole('searchbox', { name: 'Producto 1' }), {
+    await screen.findByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' });
+    await fireEvent.input(screen.getByRole('combobox', { name: 'Producto 1' }), {
       target: { value: 'PROD-11' }
     });
     await fireEvent.click(
-      await screen.findByRole('button', {
+      await screen.findByRole('option', {
         name: 'Seleccionar PROD-11 — Producto alternativo'
       })
     );
 
     expect(
-      screen.getByRole('button', { name: 'Seleccionar PROD-11 — Producto alternativo' })
-    ).toHaveAttribute('aria-pressed', 'true');
+      screen.getByRole('option', { name: 'Seleccionar PROD-11 — Producto alternativo' })
+    ).toHaveAttribute('aria-selected', 'true');
     await fireEvent.submit(
       screen.getByRole('button', { name: 'Guardar cambios' }).closest('form')!
     );
@@ -258,10 +258,10 @@ describe('PurchaseRequestDraftEditor', () => {
     expect(selectedProductLabels).toHaveLength(2);
     expect(mocks.getProduct).toHaveBeenCalledWith(99);
     expect(
-      screen.getByRole('button', {
+      screen.getByRole('option', {
         name: 'Seleccionar PROD-99 — Producto guardado en página posterior'
       })
-    ).toHaveAttribute('aria-pressed', 'true');
+    ).toHaveAttribute('aria-selected', 'true');
   });
 
   it('retries loading a saved product after its initial lookup fails', async () => {
@@ -281,10 +281,10 @@ describe('PurchaseRequestDraftEditor', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
 
     expect(
-      await screen.findByRole('button', {
+      await screen.findByRole('option', {
         name: 'Seleccionar PROD-99 — Producto guardado en página posterior'
       })
-    ).toHaveAttribute('aria-pressed', 'true');
+    ).toHaveAttribute('aria-selected', 'true');
     expect(mocks.getProduct).toHaveBeenCalledTimes(2);
     expect(screen.queryByText('No se pudo cargar el nombre del producto.')).not.toBeInTheDocument();
   });

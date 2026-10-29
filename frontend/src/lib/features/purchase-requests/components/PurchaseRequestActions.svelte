@@ -4,6 +4,7 @@
   import { HttpError } from '$lib/api/client';
   import { purchaseRequestsApi } from '$lib/api/purchase-requests';
   import { permissions } from '$lib/stores/permissions.svelte';
+  import { session } from '$lib/stores/session.svelte';
   import type { PurchaseRequest } from '$lib/types/purchase-request';
 
   interface Props {
@@ -18,6 +19,10 @@
   let error = $state<string | null>(null);
 
   let canManage = $derived(permissions.hasPermission('purchase_requests:manage'));
+  let canCreate = $derived(permissions.hasPermission('purchase_requests:create'));
+  let canWorkOwnDraft = $derived(
+    canCreate && item.status === 'draft' && item.requested_by_id === session.user?.id
+  );
   let canApprove = $derived(permissions.hasPermission('purchase_requests:approve'));
   let canCreateQuotation = $derived(
     ['approved', 'partially_quoted', 'quoted'].includes(item.status) &&
@@ -67,7 +72,7 @@
       </Button>
     {/if}
 
-    {#if item.status === 'draft' && canManage}
+    {#if item.status === 'draft' && (canManage || canWorkOwnDraft)}
       <Button
         size="sm"
         variant="secondary"
@@ -79,14 +84,16 @@
       <Button size="sm" disabled={processing !== null} onclick={() => void runAction('submit')}>
         {processing === 'submit' ? 'Enviando…' : 'Enviar a aprobación'}
       </Button>
-      <Button
-        size="sm"
-        variant="danger"
-        disabled={processing !== null}
-        onclick={() => void runAction('cancel')}
-      >
-        {processing === 'cancel' ? 'Cancelando…' : 'Cancelar solicitud'}
-      </Button>
+      {#if canManage}
+        <Button
+          size="sm"
+          variant="danger"
+          disabled={processing !== null}
+          onclick={() => void runAction('cancel')}
+        >
+          {processing === 'cancel' ? 'Cancelando…' : 'Cancelar solicitud'}
+        </Button>
+      {/if}
     {:else if item.status === 'submitted'}
       {#if canApprove}
         <Button

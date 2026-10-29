@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   getWarehouses: vi.fn(),
   listProducts: vi.fn(),
+  getOperationalContext: vi.fn(),
   goto: vi.fn()
 }));
 
@@ -26,6 +27,15 @@ const productFixtures = [
 
 vi.mock('$app/navigation', () => ({
   goto: mocks.goto
+}));
+
+vi.mock('$lib/api/client', () => ({
+  HttpError: class HttpError extends Error {},
+  api: {
+    operationalContext: {
+      get: mocks.getOperationalContext
+    }
+  }
 }));
 
 vi.mock('$lib/api/purchase-requests', () => ({
@@ -55,13 +65,21 @@ vi.mock('$lib/stores/branch.svelte', () => ({
         code: 'CENTRO',
         is_active: true
       }
-    ]
+    ],
+    configure: vi.fn()
+  }
+}));
+
+vi.mock('$lib/stores/company.svelte', () => ({
+  company: {
+    id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
   }
 }));
 
 vi.mock('$lib/stores/permissions.svelte', () => ({
   permissions: {
-    hasPermission: (code: string) => code === 'purchase_requests:manage'
+    hasPermission: (code: string) => code === 'purchase_requests:manage',
+    hasAnyPermission: (codes: string[]) => codes.includes('purchase_requests:manage')
   }
 }));
 
@@ -70,7 +88,21 @@ describe('PurchaseRequestEditor', () => {
     mocks.create.mockReset();
     mocks.getWarehouses.mockReset();
     mocks.listProducts.mockReset();
+    mocks.getOperationalContext.mockReset();
     mocks.goto.mockReset();
+
+    mocks.getOperationalContext.mockResolvedValue({
+      branches: [
+        {
+          id: '11111111-1111-1111-1111-111111111111',
+          company_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+          name: 'Sucursal Centro',
+          code: 'CENTRO',
+          is_active: true
+        }
+      ],
+      last_branch_id: '11111111-1111-1111-1111-111111111111'
+    });
 
     mocks.getWarehouses.mockResolvedValue({
       items: [
@@ -120,13 +152,13 @@ describe('PurchaseRequestEditor', () => {
       target: { value: 'Reposición de inventario' }
     });
     await fireEvent.click(
-      await screen.findByRole('button', {
+      await screen.findByRole('option', {
         name: 'Seleccionar PROD-10 — Producto de prueba'
       })
     );
     expect(
-      screen.getByRole('button', { name: 'Seleccionar PROD-10 — Producto de prueba' })
-    ).toHaveAttribute('aria-pressed', 'true');
+      screen.getByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' })
+    ).toHaveAttribute('aria-selected', 'true');
     await fireEvent.submit(screen.getByRole('button', { name: 'Crear borrador' }).closest('form')!);
 
     await waitFor(() => {
@@ -160,15 +192,15 @@ describe('PurchaseRequestEditor', () => {
 
     expect(await screen.findByText('La justificación es obligatoria.')).toBeInTheDocument();
     expect(screen.getByText('Selecciona un producto.')).toBeInTheDocument();
-    expect(screen.getByRole('searchbox', { name: 'Producto 1' })).toHaveAttribute(
+    expect(screen.getByRole('combobox', { name: 'Producto 1' })).toHaveAttribute(
       'aria-invalid',
       'true'
     );
-    expect(screen.getByRole('searchbox', { name: 'Producto 1' })).toHaveAttribute(
+    expect(screen.getByRole('combobox', { name: 'Producto 1' })).toHaveAttribute(
       'aria-describedby',
       'purchase-request-product-0-hint purchase-request-product-0-error'
     );
-    expect(screen.getByRole('searchbox', { name: 'Producto 1' })).toHaveAttribute(
+    expect(screen.getByRole('combobox', { name: 'Producto 1' })).toHaveAttribute(
       'aria-required',
       'true'
     );
@@ -179,56 +211,56 @@ describe('PurchaseRequestEditor', () => {
   it('filters products by SKU or name before assigning them with one click', async () => {
     render(PurchaseRequestEditor);
 
-    const productButton = await screen.findByRole('button', {
+    const productButton = await screen.findByRole('option', {
       name: 'Seleccionar PROD-10 — Producto de prueba'
     });
     expect(productButton).toBeInTheDocument();
 
-    await fireEvent.input(screen.getByRole('searchbox', { name: 'Producto 1' }), {
+    await fireEvent.input(screen.getByRole('combobox', { name: 'Producto 1' }), {
       target: { value: 'alternativo' }
     });
 
     expect(
-      await screen.findByRole('button', { name: 'Seleccionar PROD-11 — Producto alternativo' })
+      await screen.findByRole('option', { name: 'Seleccionar PROD-11 — Producto alternativo' })
     ).toBeInTheDocument();
     await waitFor(() =>
       expect(
-        screen.queryByRole('button', { name: 'Seleccionar PROD-10 — Producto de prueba' })
+        screen.queryByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' })
       ).not.toBeInTheDocument()
     );
 
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Seleccionar PROD-11 — Producto alternativo' })
+      screen.getByRole('option', { name: 'Seleccionar PROD-11 — Producto alternativo' })
     );
 
     expect(
-      screen.getByRole('button', { name: 'Seleccionar PROD-11 — Producto alternativo' })
-    ).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('searchbox', { name: 'Producto 1' })).toHaveValue('');
+      screen.getByRole('option', { name: 'Seleccionar PROD-11 — Producto alternativo' })
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('combobox', { name: 'Producto 1' })).toHaveValue('');
   });
 
   it('supports selecting a product from the keyboard', async () => {
     render(PurchaseRequestEditor);
 
-    const search = await screen.findByRole('searchbox', { name: 'Producto 1' });
+    const search = await screen.findByRole('combobox', { name: 'Producto 1' });
     await fireEvent.keyDown(search, { key: 'ArrowDown' });
 
-    const firstProduct = screen.getByRole('button', {
+    const firstProduct = screen.getByRole('option', {
       name: 'Seleccionar PROD-10 — Producto de prueba'
     });
-    expect(firstProduct).toHaveFocus();
+    expect(search).toHaveAttribute('aria-activedescendant', firstProduct.id);
 
-    await fireEvent.keyDown(firstProduct, { key: 'Enter' });
+    await fireEvent.keyDown(search, { key: 'Enter' });
 
-    expect(firstProduct).toHaveAttribute('aria-pressed', 'true');
+    expect(firstProduct).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Seleccionado')).toBeInTheDocument();
   });
 
   it('shows an empty state when the product search has no matches', async () => {
     render(PurchaseRequestEditor);
 
-    await screen.findByRole('button', { name: 'Seleccionar PROD-10 — Producto de prueba' });
-    await fireEvent.input(screen.getByRole('searchbox', { name: 'Producto 1' }), {
+    await screen.findByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' });
+    await fireEvent.input(screen.getByRole('combobox', { name: 'Producto 1' }), {
       target: { value: 'inexistente' }
     });
 
@@ -266,12 +298,12 @@ describe('PurchaseRequestEditor', () => {
 
     render(PurchaseRequestEditor);
 
-    await screen.findByRole('button', { name: 'Seleccionar PROD-10 — Producto de prueba' });
-    await fireEvent.input(screen.getByRole('searchbox', { name: 'Producto 1' }), {
+    await screen.findByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' });
+    await fireEvent.input(screen.getByRole('combobox', { name: 'Producto 1' }), {
       target: { value: 'PROD-101' }
     });
     expect(
-      await screen.findByRole('button', {
+      await screen.findByRole('option', {
         name: 'Seleccionar PROD-101 — Producto en segunda página'
       })
     ).toBeInTheDocument();
@@ -311,7 +343,7 @@ describe('PurchaseRequestEditor', () => {
 
     render(PurchaseRequestEditor);
 
-    await screen.findByRole('button', { name: 'Seleccionar PROD-10 — Producto de prueba' });
+    await screen.findByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' });
     await fireEvent.click(
       screen.getByRole('button', { name: 'Mostrar los siguientes 100 productos' })
     );
@@ -320,19 +352,19 @@ describe('PurchaseRequestEditor', () => {
       await screen.findByText('No se pudieron cargar más productos: Error temporal de página')
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Seleccionar PROD-10 — Producto de prueba' })
+      screen.getByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' })
     ).toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Reintentar carga de productos' }));
 
     expect(
-      await screen.findByRole('button', {
+      await screen.findByRole('option', {
         name: 'Seleccionar PROD-101 — Producto en segunda página'
       })
     ).toBeInTheDocument();
     expect(mocks.listProducts).toHaveBeenLastCalledWith({ active_only: true, page: 2, size: 100 });
     expect(
-      screen.getByRole('button', { name: 'Seleccionar PROD-10 — Producto de prueba' })
+      screen.getByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' })
     ).toBeInTheDocument();
   });
 
@@ -364,8 +396,8 @@ describe('PurchaseRequestEditor', () => {
 
     render(PurchaseRequestEditor);
 
-    await screen.findByRole('button', { name: 'Seleccionar PROD-10 — Producto de prueba' });
-    await fireEvent.input(screen.getByRole('searchbox', { name: 'Producto 1' }), {
+    await screen.findByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' });
+    await fireEvent.input(screen.getByRole('combobox', { name: 'Producto 1' }), {
       target: { value: 'PROD-101' }
     });
 
@@ -375,7 +407,7 @@ describe('PurchaseRequestEditor', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Reintentar búsqueda' }));
 
     expect(
-      await screen.findByRole('button', {
+      await screen.findByRole('option', {
         name: 'Seleccionar PROD-101 — Producto en segunda página'
       })
     ).toBeInTheDocument();
@@ -408,7 +440,7 @@ describe('PurchaseRequestEditor', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
 
     expect(
-      await screen.findByRole('button', { name: 'Seleccionar PROD-10 — Producto de prueba' })
+      await screen.findByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' })
     ).toBeInTheDocument();
   });
 });

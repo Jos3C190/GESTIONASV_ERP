@@ -69,6 +69,7 @@
   /* Borders — Geist gray scale */
   --border: 233 233 233;
   --border-strong: 204 204 204;
+  --control-border: 128 128 128;
   /* Text — Geist gray 900/1000 */
   --foreground: 17 17 17;
   --foreground-muted: 102 102 102;
@@ -147,6 +148,7 @@
   /* Borders — Geist dark gray */
   --border: 26 26 26;
   --border-strong: 51 51 51;
+  --control-border: 128 128 128;
   /* Text — Geist gray 900/1000 inverted */
   --foreground: 250 250 250;
   --foreground-muted: 153 153 153;

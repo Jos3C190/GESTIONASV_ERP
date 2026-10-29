@@ -98,10 +98,14 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 export interface ApiFetchOptions extends RequestInit {
+  /** Decode authenticated exports without losing company scope or refresh support. */
+  responseType?: 'json' | 'blob';
   /** Skip auth header (e.g. for login). */
   noAuth?: boolean;
   /** Skip the 401-refresh-retry flow (e.g. for the refresh endpoint itself). */
   noRefresh?: boolean;
+  /** Do not send cookies when calling a genuinely public endpoint. */
+  noCredentials?: boolean;
 }
 
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
@@ -109,7 +113,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     throw new Error('apiFetch must receive an absolute URL when called on the server.');
   }
   const url = path.startsWith('http') ? path : `${API_BASE_URL}${API_PREFIX}${path}`;
-  const { noAuth, noRefresh, headers: initHeaders, ...rest } = options;
+  const { noAuth, noRefresh, noCredentials, responseType = 'json', headers: initHeaders, ...rest } = options;
   const isMultipart = typeof FormData !== 'undefined' && rest.body instanceof FormData;
 
   const headers: Record<string, string> = {
@@ -125,12 +129,20 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 
   let res: Response;
   try {
-    res = await fetch(url, { ...rest, headers, credentials: 'include' });
+    res = await fetch(url, {
+      ...rest,
+      headers,
+      credentials: noCredentials ? 'omit' : (rest.credentials ?? 'include')
+    });
   } catch {
     // If initial fetch fails due to network/cold start on Render, wait 2.5s and retry once
     await new Promise((resolve) => setTimeout(resolve, 2500));
     try {
-      res = await fetch(url, { ...rest, headers, credentials: 'include' });
+      res = await fetch(url, {
+        ...rest,
+        headers,
+        credentials: noCredentials ? 'omit' : (rest.credentials ?? 'include')
+      });
     } catch {
       throw new HttpError(
         'network_error',
@@ -154,7 +166,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
         throw await parseError(retryRes);
       }
       if (retryRes.status === 204) return undefined as T;
-      return (await retryRes.json()) as T;
+      return (await (responseType === 'blob' ? retryRes.blob() : retryRes.json())) as T;
     }
     session.clear();
     redirectToLoginAfterAuthFailure();
@@ -166,16 +178,11 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   if (res.status === 204) {
     return undefined as T;
   }
-  return (await res.json()) as T;
+  return (await (responseType === 'blob' ? res.blob() : res.json())) as T;
 }
 
 export async function apiDownload(path: string): Promise<Blob> {
-  const url = path.startsWith('http') ? path : `${API_BASE_URL}${API_PREFIX}${path}`;
-  const headers: Record<string, string> = { Accept: 'text/csv' };
-  if (browser && session.token) headers.Authorization = `Bearer ${session.token}`;
-  const res = await fetch(url, { headers, credentials: 'include' });
-  if (!res.ok) throw await parseError(res);
-  return await res.blob();
+  return apiFetch<Blob>(path, { responseType: 'blob', headers: { Accept: '*/*' } });
 }
 
 export interface HealthReport {
@@ -457,7 +464,14 @@ export interface GeneralImportManifestItemInput {
   content_type?: string;
 }
 
-export type GeneralImportItemStatus = 'ready' | 'authorized' | 'completed' | 'skipped' | 'failed_retryable' | 'failed_permanent' | 'cancelled';
+export type GeneralImportItemStatus =
+  | 'ready'
+  | 'authorized'
+  | 'completed'
+  | 'skipped'
+  | 'failed_retryable'
+  | 'failed_permanent'
+  | 'cancelled';
 
 export interface GeneralImportItemOut {
   id: string;
@@ -605,6 +619,7 @@ export interface UploadedImage {
 export interface BranchOut {
   id: string;
   company_id: string;
+  is_headquarters: boolean;
   department_id: string;
   municipality_id: string;
   district_id: string;
@@ -616,8 +631,8 @@ export interface BranchOut {
   manager: string;
   manager_employee_id: string | null;
   manager_initials: string;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   operational_status: 'active' | 'inactive' | 'maintenance';
   employees: number;
   warehouses: number;
@@ -678,14 +693,16 @@ export interface BranchOut {
 
 export interface WarehouseOut {
   id: string;
+  company_id: string;
   warehouse_category_id: string;
   code: string;
   name: string;
   description?: string | null;
+  is_central: boolean;
   type: 'general' | 'cold_storage' | 'hazmat' | 'transit' | 'bonded' | 'automated';
   status: 'active' | 'maintenance' | 'inactive';
   location: string;
-  branch_id: string;
+  branch_id: string | null;
   branch_name: string;
   branch_address: string;
   area: number;
@@ -988,21 +1005,38 @@ export const api = {
           method: 'POST',
           body: JSON.stringify(data)
         }),
-      getImport: (id: string, params: { page?: number; size?: number; signal?: AbortSignal } = {}) => {
-        const sp = new URLSearchParams({ page: String(params.page ?? 1), size: String(params.size ?? 200) });
-        return apiFetch<GeneralImportOut>('/documents/general/imports/' + id + '?' + sp, { signal: params.signal });
+      getImport: (
+        id: string,
+        params: { page?: number; size?: number; signal?: AbortSignal } = {}
+      ) => {
+        const sp = new URLSearchParams({
+          page: String(params.page ?? 1),
+          size: String(params.size ?? 200)
+        });
+        return apiFetch<GeneralImportOut>('/documents/general/imports/' + id + '?' + sp, {
+          signal: params.signal
+        });
       },
       authorizeImportItem: (importId: string, itemId: string, checksum_sha256: string) =>
-        apiFetch<GeneralImportTicketOut>('/documents/general/imports/' + importId + '/items/' + itemId + '/ticket', {
-          method: 'POST',
-          body: JSON.stringify({ checksum_sha256 })
-        }),
+        apiFetch<GeneralImportTicketOut>(
+          '/documents/general/imports/' + importId + '/items/' + itemId + '/ticket',
+          {
+            method: 'POST',
+            body: JSON.stringify({ checksum_sha256 })
+          }
+        ),
       completeImportItem: (importId: string, itemId: string) =>
-        apiFetch<GeneralImportItemOut>('/documents/general/imports/' + importId + '/items/' + itemId + '/complete', {
+        apiFetch<GeneralImportItemOut>(
+          '/documents/general/imports/' + importId + '/items/' + itemId + '/complete',
+          {
+            method: 'POST'
+          }
+        ),
+      cancelImport: (id: string) =>
+        apiFetch<GeneralImportOut>('/documents/general/imports/' + id + '/cancel', {
           method: 'POST'
         }),
-      cancelImport: (id: string) =>
-        apiFetch<GeneralImportOut>('/documents/general/imports/' + id + '/cancel', { method: 'POST' }),      tree: (signal?: AbortSignal) =>
+      tree: (signal?: AbortSignal) =>
         apiFetch<GeneralFolderTreeOut>('/documents/general/folders/tree', { signal }),
       trash: {
         list: (
@@ -1723,9 +1757,16 @@ export const api = {
         signal: params.signal
       });
     },
-    catalogue: (params: { branch_id?: string; signal?: AbortSignal } = {}) => {
+    catalogue: (
+      params: {
+        branch_id?: string;
+        include_company_central?: boolean;
+        signal?: AbortSignal;
+      } = {}
+    ) => {
       const sp = new URLSearchParams();
       if (params.branch_id ?? branch.id) sp.set('branch_id', params.branch_id ?? branch.id ?? '');
+      if (params.include_company_central) sp.set('include_company_central', 'true');
       if (company.id) sp.set('company_id', company.id);
       return apiFetch<WarehouseOut[]>(`/warehouses/catalogue?${sp}`, { signal: params.signal });
     },

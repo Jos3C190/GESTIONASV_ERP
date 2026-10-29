@@ -13,7 +13,7 @@
     loadingMoreProducts?: boolean;
     loadMoreError?: string | null;
     error?: string;
-    onselect?: () => void;
+    onselect?: (product: Product) => void;
     onloadmore?: () => void;
   }
 
@@ -38,7 +38,6 @@
       .toLocaleLowerCase('es');
 
   let remoteProducts = $state<Product[]>([]);
-  let remoteTotal = $state(0);
   let remotePage = $state(0);
   let remotePages = $state(0);
   let remoteLoading = $state(false);
@@ -49,6 +48,8 @@
   let selectedProductLoading = $state(false);
   let selectedProductLookupError = $state(false);
   let selectedProductLookupRetry = $state(0);
+  let activeProductIndex = $state(-1);
+  let resultsOpen = $state(true);
   let searchRequestGeneration = 0;
   let selectedProductRequestGeneration = 0;
 
@@ -83,6 +84,18 @@
   let filteredProducts = $derived(
     (usesRemoteSearch ? remoteProducts : localProducts).filter(matchesQuery)
   );
+  let activeProduct = $derived(filteredProducts[activeProductIndex] ?? null);
+
+  function activateProduct(index: number) {
+    if (filteredProducts.length === 0) return;
+    activeProductIndex = (index + filteredProducts.length) % filteredProducts.length;
+    const product = filteredProducts[activeProductIndex];
+    if (product) {
+      requestAnimationFrame(() =>
+        document.getElementById(`${id}-option-${product.id_product}`)?.scrollIntoView({ block: 'nearest' })
+      );
+    }
+  }
 
   async function searchProducts(search: string, page: number, generation: number, append: boolean) {
     remoteLoading = true;
@@ -103,7 +116,6 @@
         (product) => product.can_purchase !== false && !knownProductIds.has(product.id_product)
       );
       remoteProducts = append ? [...remoteProducts, ...matchingProducts] : matchingProducts;
-      remoteTotal = response.meta.total;
       remotePage = response.meta.page;
       remotePages = response.meta.pages;
     } catch (err: unknown) {
@@ -125,7 +137,6 @@
     const search = searchText;
     const generation = ++searchRequestGeneration;
     remoteProducts = [];
-    remoteTotal = 0;
     remotePage = 0;
     remotePages = 0;
     remoteLoading = false;
@@ -211,41 +222,34 @@
     };
   });
 
-  function focusProduct(product: Product | undefined) {
-    if (product) document.getElementById(`${id}-option-${product.id_product}`)?.focus();
-  }
-
   function handleSearchKeydown(event: KeyboardEvent) {
     if (event.key === 'ArrowDown' && filteredProducts.length > 0 && !remoteLoading) {
       event.preventDefault();
-      focusProduct(filteredProducts[0]);
-    } else if (event.key === 'Enter' && filteredProducts.length === 1 && !remoteLoading) {
+      resultsOpen = true;
+      activateProduct(activeProductIndex < 0 ? 0 : activeProductIndex + 1);
+    } else if (event.key === 'ArrowUp' && filteredProducts.length > 0 && !remoteLoading) {
       event.preventDefault();
-      const product = filteredProducts[0];
-      if (product) selectProduct(product);
-    }
-  }
-
-  function handleProductKeydown(event: KeyboardEvent, index: number) {
-    if (event.key === 'ArrowDown' && filteredProducts.length > 0) {
-      event.preventDefault();
-      focusProduct(filteredProducts[(index + 1) % filteredProducts.length]);
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      if (index === 0) {
-        document.getElementById(`${id}-search`)?.focus();
-      } else {
-        focusProduct(filteredProducts[index - 1]);
+      resultsOpen = true;
+      activateProduct(activeProductIndex <= 0 ? filteredProducts.length - 1 : activeProductIndex - 1);
+    } else if (event.key === 'Enter') {
+      if (remoteLoading && usesRemoteSearch) {
+        event.preventDefault();
+        return;
+      }
+      if (filteredProducts.length > 0 && !remoteLoading) {
+        event.preventDefault();
+        if (!resultsOpen) {
+          resultsOpen = true;
+          activeProductIndex = -1;
+          return;
+        }
+        const product = activeProduct ?? (filteredProducts.length === 1 ? filteredProducts[0] : null);
+        if (product) selectProduct(product);
       }
     } else if (event.key === 'Escape') {
       event.preventDefault();
-      document.getElementById(`${id}-search`)?.focus();
-    } else if (event.key === 'Enter') {
-      const product = filteredProducts[index];
-      if (product) {
-        event.preventDefault();
-        selectProduct(product);
-      }
+      resultsOpen = false;
+      activeProductIndex = -1;
     }
   }
 
@@ -270,15 +274,40 @@
     selectedProductLookupError = false;
   }
 
+  function closeResultsOnFocusOut(event: FocusEvent) {
+    const container = event.currentTarget;
+    const nextFocusedElement = event.relatedTarget;
+
+    if (
+      container instanceof HTMLElement &&
+      nextFocusedElement instanceof Node &&
+      container.contains(nextFocusedElement)
+    ) {
+      return;
+    }
+
+    resultsOpen = false;
+    activeProductIndex = -1;
+  }
+
   function selectProduct(product: Product) {
     recentlySelectedProduct = product;
     value = String(product.id_product);
     query = '';
-    onselect?.();
+    activeProductIndex = -1;
+    resultsOpen = true;
+    onselect?.(product);
+    document.getElementById(`${id}-search`)?.focus();
+  }
+
+  function handleOptionKeydown(event: KeyboardEvent, product: Product) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    selectProduct(product);
   }
 </script>
 
-<div class="min-w-0 space-y-2">
+<div class="min-w-0 space-y-2" onfocusout={closeResultsOnFocusOut}>
   <label for={`${id}-search`} class="mb-1 block text-sm font-medium text-foreground">
     {label} <span class="text-danger">*</span>
   </label>
@@ -330,11 +359,21 @@
     aria-invalid={error ? 'true' : undefined}
     aria-describedby={error ? `${id}-hint ${id}-error` : `${id}-hint`}
     aria-required="true"
-    aria-controls={`${id}-results`}
+    role="combobox"
+    aria-autocomplete="list"
+    aria-haspopup="listbox"
+    aria-expanded={resultsOpen}
+    aria-activedescendant={resultsOpen && activeProduct ? `${id}-option-${activeProduct.id_product}` : undefined}
+    aria-controls={resultsOpen && filteredProducts.length > 0 ? `${id}-results` : undefined}
     type="search"
     autocomplete="off"
     maxlength="100"
     bind:value={query}
+    onfocus={() => resultsOpen = true}
+    oninput={() => {
+      activeProductIndex = -1;
+      resultsOpen = true;
+    }}
     placeholder="Buscar por SKU, nombre o código"
     onkeydown={handleSearchKeydown}
     class="h-11 w-full min-w-0 rounded-md border border-border bg-surface px-3 text-sm text-foreground placeholder:text-foreground-muted focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -350,17 +389,18 @@
       {#if remoteLoading}
         Buscando coincidencias en todo el catálogo…
       {:else}
-        El catálogo encontró {remoteTotal}
-        {remoteTotal === 1 ? 'coincidencia' : 'coincidencias'}; se muestran los productos
-        disponibles para compra.
+        Hay {filteredProducts.length}
+        {filteredProducts.length === 1 ? 'producto habilitado' : 'productos habilitados'} para compra
+        entre los resultados cargados{remotePage < remotePages ? '; puedes cargar más coincidencias.' : '.'}
       {/if}
     {:else if searchText}
       {localFilteredProducts.length}
       {localFilteredProducts.length === 1 ? 'coincidencia' : 'coincidencias'} entre los productos cargados.
       Escribe 2 caracteres para buscar en todo el catálogo.
     {:else}
-      Selecciona un producto de la lista o busca por SKU, nombre o código. {products.length}
-      {products.length === 1 ? 'producto cargado' : 'productos cargados'}.
+      {products.length} {products.length === 1 ? 'producto habilitado' : 'productos habilitados'} para compra.
+      Desplázate por la lista o busca por SKU, nombre o código.
+      {#if hasMoreProducts} Pulsa “Mostrar los siguientes 100 productos” para cargar más.{/if}
     {/if}
   </p>
 
@@ -373,99 +413,105 @@
     </p>
   {/if}
 
-  {#if filteredProducts.length > 0}
-    <ul
-      aria-label={`Productos disponibles para ${label}`}
-      id={`${id}-results`}
-      class="m-0 max-h-60 list-none space-y-1 overflow-y-auto rounded-md border border-border bg-surface p-1"
-    >
-      {#each filteredProducts as product, productIndex (product.id_product)}
-        {@const productId = String(product.id_product)}
-        <li>
-          <button
-            id={`${id}-option-${product.id_product}`}
-            type="button"
-            aria-label={`Seleccionar ${product.sku} — ${product.name}`}
-            aria-pressed={value === productId}
-            onclick={() => selectProduct(product)}
-            onkeydown={(event) => handleProductKeydown(event, productIndex)}
-            class="flex min-h-11 w-full min-w-0 items-center gap-3 rounded px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary {value ===
-            productId
-              ? 'bg-primary/10 ring-1 ring-primary/40'
-              : ''}"
-          >
-            <span class="max-w-32 shrink-0 truncate font-mono text-xs text-foreground-muted"
-              >{product.sku}</span
+  {#if resultsOpen}
+    <div class="overflow-hidden rounded-md border border-border bg-surface">
+      {#if filteredProducts.length > 0}
+        <ul
+          role="listbox"
+          aria-label={`Productos disponibles para ${label}`}
+          id={`${id}-results`}
+          class="m-0 max-h-60 list-none space-y-1 overflow-y-auto p-1"
+        >
+          {#each filteredProducts as product, productIndex (product.id_product)}
+            {@const productId = String(product.id_product)}
+            <li
+              id={`${id}-option-${product.id_product}`}
+              role="option"
+              aria-label={`Seleccionar ${product.sku} — ${product.name}`}
+              aria-selected={value === productId}
+              onpointerdown={(event) => {
+                if (event.pointerType === 'mouse' && event.button === 0) event.preventDefault();
+              }}
+              onclick={() => selectProduct(product)}
+              onkeydown={(event) => handleOptionKeydown(event, product)}
+              onpointermove={() => activeProductIndex = productIndex}
+              class="flex min-h-11 w-full min-w-0 cursor-pointer items-center gap-3 rounded px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover {activeProductIndex ===
+              productIndex
+                ? 'bg-surface-hover outline outline-1 outline-primary/40'
+                : value === productId
+                  ? 'bg-primary/10'
+                  : ''}"
             >
-            <span class="min-w-0 flex-1 break-words">{product.name}</span>
-            {#if value === productId}
-              <span class="shrink-0 text-primary" aria-hidden="true">✓</span>
-            {/if}
-          </button>
-        </li>
-      {/each}
-    </ul>
-  {:else}
-    <p
-      class="rounded-md border border-border bg-surface-muted px-3 py-4 text-sm text-foreground-muted"
-    >
-      {#if usesRemoteSearch}
-        {#if remoteLoading}
-          Cargando coincidencias del catálogo…
-        {:else}
-          No hay productos disponibles para compra que coincidan en el catálogo.
-        {/if}
-      {:else if products.length === 0}
-        No hay productos disponibles para compra.
-      {:else if searchText}
-        {#if usesRemoteSearch && remoteError}
-          La búsqueda no está disponible. Puedes reintentarla desde el botón.
-        {:else}
-          No hay coincidencias entre los productos cargados. Escribe 2 caracteres para buscar en
-          todo el catálogo.
-        {/if}
+              <span class="max-w-32 shrink-0 truncate font-mono text-xs text-foreground-muted"
+                >{product.sku}</span
+              >
+              <span class="min-w-0 flex-1 break-words">{product.name}</span>
+              {#if value === productId}
+                <span class="shrink-0 text-primary" aria-hidden="true">✓</span>
+              {/if}
+            </li>
+          {/each}
+        </ul>
       {:else}
-        No hay más resultados cargados.
+        <p
+          class="px-3 py-4 text-sm text-foreground-muted"
+          role="status"
+        >
+          {#if usesRemoteSearch}
+            {#if remoteLoading}
+              Cargando coincidencias del catálogo…
+            {:else}
+              No hay productos disponibles para compra que coincidan en el catálogo.
+            {/if}
+          {:else if products.length === 0}
+            No hay productos disponibles para compra.
+          {:else if searchText}
+            No hay coincidencias entre los productos cargados. Escribe 2 caracteres para buscar en
+            todo el catálogo.
+          {:else}
+            No hay más resultados cargados.
+          {/if}
+        </p>
       {/if}
-    </p>
-  {/if}
 
-  {#if usesRemoteSearch && (remoteError || remotePage < remotePages)}
-    <button
-      type="button"
-      class="min-h-11 w-full rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-wait disabled:opacity-60"
-      onclick={remoteError ? retryRemoteSearch : loadMoreRemoteProducts}
-      disabled={remoteLoading}
-    >
-      {remoteLoading
-        ? 'Buscando…'
-        : remoteError
-          ? 'Reintentar búsqueda'
-          : 'Cargar más coincidencias'}
-    </button>
-  {/if}
+      {#if usesRemoteSearch && (remoteError || remotePage < remotePages)}
+        <button
+          type="button"
+          class="min-h-11 w-full border-t border-border bg-surface-muted px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-wait disabled:opacity-60"
+          onclick={remoteError ? retryRemoteSearch : loadMoreRemoteProducts}
+          disabled={remoteLoading}
+        >
+          {remoteLoading
+            ? 'Buscando…'
+            : remoteError
+              ? 'Reintentar búsqueda'
+              : 'Cargar más coincidencias'}
+        </button>
+      {/if}
 
-  {#if !usesRemoteSearch && hasMoreProducts}
-    {#if loadMoreError}
-      <p
-        class="rounded-md border border-danger/30 bg-danger/10 px-3 py-3 text-sm text-foreground"
-        role="alert"
-      >
-        No se pudieron cargar más productos: {loadMoreError}
-      </p>
-    {/if}
-    <button
-      type="button"
-      class="min-h-11 w-full rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-wait disabled:opacity-60"
-      onclick={onloadmore}
-      disabled={loadingMoreProducts}
-    >
-      {loadingMoreProducts
-        ? 'Cargando…'
-        : loadMoreError
-          ? 'Reintentar carga de productos'
-          : 'Mostrar los siguientes 100 productos'}
-    </button>
+      {#if !usesRemoteSearch && hasMoreProducts}
+        {#if loadMoreError}
+          <p
+            class="border-t border-danger/30 bg-danger/10 px-3 py-3 text-sm text-foreground"
+            role="alert"
+          >
+            No se pudieron cargar más productos: {loadMoreError}
+          </p>
+        {/if}
+        <button
+          type="button"
+          class="min-h-11 w-full border-t border-border bg-surface-muted px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-wait disabled:opacity-60"
+          onclick={onloadmore}
+          disabled={loadingMoreProducts}
+        >
+          {loadingMoreProducts
+            ? 'Cargando…'
+            : loadMoreError
+              ? 'Reintentar carga de productos'
+              : 'Mostrar los siguientes 100 productos'}
+        </button>
+      {/if}
+    </div>
   {/if}
 
   {#if error}

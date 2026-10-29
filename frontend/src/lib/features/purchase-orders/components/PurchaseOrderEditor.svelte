@@ -5,6 +5,7 @@
   import { HttpError } from '$lib/api/client';
   import { catalogApi } from '$lib/api/catalog';
   import { purchaseOrdersApi } from '$lib/api/purchase-orders';
+  import { purchaseConsolidationsApi } from '$lib/api/purchase-consolidations';
   import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
   import { suppliersApi } from '$lib/api/suppliers';
   import { getWarehouses } from '$lib/services/warehouses';
@@ -15,6 +16,7 @@
   import type { PurchaseOrderExpenseType } from '$lib/types/purchase-order';
 
   interface DraftLine {
+    key: string;
     quotationDetailId: string;
     productId: number;
     unitId: number;
@@ -22,6 +24,8 @@
     quantity: string;
     unitPrice: string;
     included: boolean;
+    awardId: string | null;
+    alreadyOrderedQuantity: string | null;
   }
 
   interface DraftExpense {
@@ -31,7 +35,8 @@
     description: string;
   }
 
-  let { quotationId }: { quotationId: string } = $props();
+  let { quotationId, consolidationId = '' }: { quotationId: string; consolidationId?: string } =
+    $props();
 
   let quotation = $state<PurchaseQuotation | null>(null);
   let supplierLabel = $state('');
@@ -40,6 +45,7 @@
   let lines = $state<DraftLine[]>([]);
   let branchId = $state(branch.id ?? branch.branches.find((item) => item.is_active)?.id ?? '');
   let warehouseId = $state('');
+  let consolidationWarehouseId = $state('');
   let warehouses = $state<Warehouse[]>([]);
   let expectedDate = $state('');
   let notes = $state('');
@@ -59,6 +65,14 @@
   let warehouseGeneration = 0;
 
   let canManage = $derived(permissions.hasPermission('purchase_orders:manage'));
+  let isConsolidationMode = $derived(Boolean(consolidationId));
+  let canCreateFromQuotation = $derived(
+    quotation
+      ? isConsolidationMode
+        ? quotation.status === 'under_evaluation' || quotation.status === 'selected'
+        : quotation.status === 'selected'
+      : false
+  );
   let selectedCount = $derived(lines.filter((line) => line.included).length);
 
   function errorMessage(cause: unknown, fallback: string): string {
@@ -132,7 +146,11 @@
     }
   }
 
-  async function loadQuotation(currentQuotationId: string) {
+  async function loadQuotation(
+    currentQuotationId: string,
+    currentBranchId: string | null,
+    currentConsolidationId: string
+  ) {
     const generation = ++loadGeneration;
     loading = true;
     loadError = null;
@@ -152,21 +170,68 @@
     }
 
     try {
-      const loaded = await purchaseQuotationsApi.get(currentQuotationId);
+      const loaded = await purchaseQuotationsApi.get(
+        currentQuotationId,
+        currentConsolidationId ? null : currentBranchId
+      );
       if (generation !== loadGeneration) return;
 
       quotation = loaded;
-      lines = loaded.details.map((detail) => ({
-        quotationDetailId: detail.id,
-        productId: detail.product_id,
-        unitId: detail.unit_id,
-        sourceQuantity: detail.quantity,
-        quantity: detail.quantity,
-        unitPrice: detail.unit_price,
-        included: true
-      }));
+      if (currentConsolidationId) {
+        const [board, consolidation] = await Promise.all([
+          purchaseConsolidationsApi.getAwardBoard(currentConsolidationId),
+          purchaseConsolidationsApi.get(currentConsolidationId)
+        ]);
+        if (generation !== loadGeneration) return;
+        consolidationWarehouseId = consolidation.central_warehouse_id ?? '';
+        const detailsById = new Map(loaded.details.map((detail) => [detail.id, detail]));
+        lines = board.lines.flatMap((line) =>
+          line.decisions
+            .filter(
+              (decision) =>
+                decision.quotation_id === loaded.id &&
+                !decision.revoked_at &&
+                Number(decision.remaining_to_order_quantity) > 0
+            )
+            .flatMap((decision) => {
+              const offer = line.offers.find((item) => item.quotation_id === loaded.id);
+              const awardedDetail = offer ? detailsById.get(offer.quotation_detail_id) : undefined;
+              if (!awardedDetail) return [];
+              return [
+                {
+                  key: decision.id,
+                  quotationDetailId: awardedDetail.id,
+                  productId: awardedDetail.product_id,
+                  unitId: awardedDetail.unit_id,
+                  sourceQuantity: decision.quantity,
+                  quantity: decision.remaining_to_order_quantity,
+                  unitPrice: awardedDetail.unit_price,
+                  included: true,
+                  awardId: decision.id,
+                  alreadyOrderedQuantity: decision.ordered_quantity
+                }
+              ];
+            })
+        );
+      } else {
+        lines = loaded.details.map((detail) => ({
+          key: detail.id,
+          quotationDetailId: detail.id,
+          productId: detail.product_id,
+          unitId: detail.unit_id,
+          sourceQuantity: detail.quantity,
+          quantity: detail.quantity,
+          unitPrice: detail.unit_price,
+          included: true,
+          awardId: null,
+          alreadyOrderedQuantity: null
+        }));
+      }
 
-      if (loaded.status !== 'selected') return;
+      const canCreateFromStatus = currentConsolidationId
+        ? loaded.status === 'under_evaluation' || loaded.status === 'selected'
+        : loaded.status === 'selected';
+      if (!canCreateFromStatus) return;
 
       const productIds = [...new Set(loaded.details.map((detail) => detail.product_id))];
       const [supplier, units, products] = await Promise.all([
@@ -209,7 +274,7 @@
     loadingWarehouses = true;
     warehouseError = null;
 
-    if (!selectedBranchId) {
+    if (!selectedBranchId && !isConsolidationMode) {
       warehouses = [];
       warehouseId = '';
       loadingWarehouses = false;
@@ -217,6 +282,35 @@
     }
 
     try {
+      if (isConsolidationMode) {
+        const all: Warehouse[] = [];
+        let page = 1;
+        let pages = 1;
+        do {
+          const response = await getWarehouses({ page, size: 100, status: 'active' });
+          all.push(...response.items);
+          pages = Math.max(1, response.meta.pages);
+          page += 1;
+        } while (page <= pages);
+        if (generation !== warehouseGeneration) return;
+
+        warehouses = all.filter(
+          (warehouse) =>
+            warehouse.isCentral &&
+            warehouse.status === 'active' &&
+            warehouse.storageEligible &&
+            warehouse.type !== 'transit' &&
+            Boolean(warehouse.branchId)
+        );
+        const selected =
+          warehouses.find((warehouse) => warehouse.id === consolidationWarehouseId) ??
+          warehouses.find((warehouse) => warehouse.id === warehouseId) ??
+          warehouses[0];
+        warehouseId = selected?.id ?? '';
+        branchId = selected?.branchId ?? '';
+        return;
+      }
+
       const response = await getWarehouses({
         branchId: selectedBranchId,
         page: 1,
@@ -248,6 +342,9 @@
 
   function handleWarehouseChange(event: Event) {
     warehouseId = (event.currentTarget as HTMLSelectElement).value;
+    if (isConsolidationMode) {
+      branchId = warehouses.find((warehouse) => warehouse.id === warehouseId)?.branchId ?? '';
+    }
     validation = {};
   }
 
@@ -261,10 +358,15 @@
   function validate(): boolean {
     const next: Record<string, string> = {};
 
-    if (!quotation || quotation.status !== 'selected') {
+    if (!quotation || !canCreateFromQuotation) {
       next.quotation = 'La orden debe crearse desde una cotización seleccionada.';
     }
-    if (!branchId) next.branch = 'Selecciona una sucursal.';
+    if (isConsolidationMode && (!quotation || quotation.consolidation_id !== consolidationId)) {
+      next.quotation = 'La cotización no corresponde a este consolidado.';
+    }
+    if (!isConsolidationMode && !branchId) {
+      next.branch = 'La bodega seleccionada debe pertenecer a una sucursal activa.';
+    }
     if (!warehouseId) next.warehouse = 'Selecciona un almacén.';
 
     const selectedLines = lines.filter((line) => line.included);
@@ -300,24 +402,29 @@
     submitError = null;
 
     try {
-      const created = await purchaseOrdersApi.create({
-        purchase_quotation_id: quotation.id,
-        branch_id: branchId,
+      const payload = {
+        branch_id: branchId || null,
         warehouse_id: warehouseId,
         expected_date: expectedDate ? `${expectedDate}T12:00:00-06:00` : null,
-        lines: lines
-          .filter((line) => line.included)
-          .map((line) => ({
-            purchase_quotation_detail_id: line.quotationDetailId,
-            quantity: Number(line.quantity)
-          })),
         expenses: expenses.map((expense) => ({
           expense_type_id: expense.expenseTypeId,
           amount: Number(expense.amount),
           description: expense.description.trim() || null
         })),
         notes: notes.trim() || null
-      });
+      };
+      const created = consolidationId
+        ? await purchaseOrdersApi.createFromConsolidation(consolidationId, quotation.id, payload)
+        : await purchaseOrdersApi.create({
+            purchase_quotation_id: quotation.id,
+            ...payload,
+            lines: lines
+              .filter((line) => line.included)
+              .map((line) => ({
+                purchase_quotation_detail_id: line.quotationDetailId,
+                quantity: Number(line.quantity)
+              }))
+          });
 
       await goto(`/purchase-orders/${created.id}`);
     } catch (cause: unknown) {
@@ -328,12 +435,14 @@
   }
 
   function retry() {
-    void loadQuotation(quotationId);
+    void loadQuotation(quotationId, branch.id, consolidationId);
   }
 
   $effect(() => {
+    const currentBranchId = branch.id;
+    const currentConsolidationId = consolidationId;
     if (canManage) {
-      void loadQuotation(quotationId);
+      void loadQuotation(quotationId, currentBranchId, currentConsolidationId);
       void loadExpenseTypes();
     } else {
       loading = false;
@@ -341,6 +450,8 @@
   });
 
   $effect(() => {
+    void isConsolidationMode;
+    void consolidationWarehouseId;
     if (canManage) {
       void loadWarehouses(branchId);
     } else {
@@ -352,10 +463,14 @@
 <section class="space-y-5">
   <div>
     <a
-      href={quotationId ? `/purchase-quotations/${quotationId}` : '/purchase-quotations'}
+      href={isConsolidationMode
+        ? `/purchase-consolidations/${consolidationId}`
+        : quotationId
+          ? `/purchase-quotations/${quotationId}`
+          : '/purchase-quotations'}
       class="text-sm font-medium text-primary hover:underline"
     >
-      ← Volver a cotización
+      {isConsolidationMode ? '← Volver al consolidado' : '← Volver a cotización'}
     </a>
   </div>
 
@@ -388,19 +503,23 @@
     <header>
       <p class="text-sm font-medium text-primary">Orden de compra</p>
       <h1 class="text-2xl font-semibold tracking-tight text-foreground">
-        Crear desde {quotation.code}
+        {isConsolidationMode
+          ? `Orden desde adjudicaciones · ${quotation.code}`
+          : `Crear desde ${quotation.code}`}
       </h1>
       <p class="mt-1 text-sm text-foreground-muted">
         {supplierLabel || `Proveedor #${quotation.supplier_id}`} · {quotation.currency}
       </p>
     </header>
 
-    {#if quotation.status !== 'selected'}
+    {#if !canCreateFromQuotation}
       <div
         class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
         role="alert"
       >
-        Solo una cotización seleccionada puede originar una orden de compra.
+        {isConsolidationMode
+          ? 'Esta oferta ya no está disponible para ordenar desde el consolidado.'
+          : 'Solo una cotización seleccionada puede originar una orden de compra.'}
       </div>
     {:else}
       {#if submitError}
@@ -422,36 +541,48 @@
         <Card class="p-5">
           <h2 class="mb-4 text-sm font-semibold text-foreground">Destino de la orden</h2>
           <div class="grid gap-4 md:grid-cols-2">
-            <div>
-              <label
-                for="purchase-order-branch"
-                class="mb-1 block text-sm font-medium text-foreground"
-              >
-                Sucursal <span class="text-danger">*</span>
-              </label>
-              <select
-                id="purchase-order-branch"
-                aria-label="Sucursal"
-                value={branchId}
-                onchange={handleBranchChange}
-                class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-              >
-                <option value="">Selecciona una sucursal</option>
-                {#each branch.branches.filter((item) => item.is_active) as item (item.id)}
-                  <option value={item.id}>{item.code ? `${item.code} — ` : ''}{item.name}</option>
-                {/each}
-              </select>
-              {#if validation.branch}
-                <p class="mt-1 text-xs text-danger">{validation.branch}</p>
-              {/if}
-            </div>
+            {#if !isConsolidationMode}
+              <div>
+                <label
+                  for="purchase-order-branch"
+                  class="mb-1 block text-sm font-medium text-foreground"
+                >
+                  Sucursal <span class="text-danger">*</span>
+                </label>
+                <select
+                  id="purchase-order-branch"
+                  aria-label="Sucursal"
+                  value={branchId}
+                  onchange={handleBranchChange}
+                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                >
+                  <option value="">Selecciona una sucursal</option>
+                  {#each branch.branches.filter((item) => item.is_active) as item (item.id)}
+                    <option value={item.id}>{item.code ? `${item.code} — ` : ''}{item.name}</option>
+                  {/each}
+                </select>
+                {#if validation.branch}
+                  <p class="mt-1 text-xs text-danger">{validation.branch}</p>
+                {/if}
+              </div>
+            {:else}
+              <div class="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm">
+                <p class="font-medium text-foreground">Recepción centralizada</p>
+                <p class="mt-1 text-xs text-foreground-muted">
+                  La compra se recibirá primero en la bodega madre. Desde Inventario podrás
+                  trasladar a las sucursales las unidades que correspondan; el excedente puede
+                  quedarse aquí.
+                </p>
+              </div>
+            {/if}
 
             <div>
               <label
                 for="purchase-order-warehouse"
                 class="mb-1 block text-sm font-medium text-foreground"
               >
-                Almacén <span class="text-danger">*</span>
+                {isConsolidationMode ? 'Bodega madre de recepción' : 'Almacén'}
+                <span class="text-danger">*</span>
               </label>
               <select
                 id="purchase-order-warehouse"
@@ -463,11 +594,20 @@
               >
                 <option value="">Selecciona un almacén</option>
                 {#each warehouses as warehouse (warehouse.id)}
-                  <option value={warehouse.id}>{warehouse.code} — {warehouse.name}</option>
+                  <option value={warehouse.id}>
+                    {warehouse.code} — {warehouse.name}{warehouse.branchName
+                      ? ` · ${warehouse.branchName}`
+                      : ''}
+                  </option>
                 {/each}
               </select>
               {#if warehouseError}
                 <p class="mt-1 text-xs text-danger">{warehouseError}</p>
+              {:else if isConsolidationMode && warehouses.length === 0 && !loadingWarehouses}
+                <p class="mt-1 text-xs text-warning">
+                  No hay una bodega madre activa y apta para recibir. En Almacenes, marca la bodega
+                  central antes de crear esta orden.
+                </p>
               {:else if validation.warehouse}
                 <p class="mt-1 text-xs text-danger">{validation.warehouse}</p>
               {/if}
@@ -513,19 +653,68 @@
           <div class="border-b border-border px-4 py-3">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 class="text-sm font-semibold text-foreground">Líneas de la cotización</h2>
+                <h2 class="text-sm font-semibold text-foreground">
+                  {isConsolidationMode ? 'Cantidades adjudicadas' : 'Líneas de la cotización'}
+                </h2>
                 <p class="mt-1 text-xs text-foreground-muted">
-                  Selecciona el subconjunto que deseas ordenar. El backend valida la disponibilidad
-                  restante.
+                  {isConsolidationMode
+                    ? 'Se ordenará únicamente lo adjudicado a este proveedor que todavía no está en otra orden.'
+                    : 'Selecciona el subconjunto que deseas ordenar. El backend valida la disponibilidad restante.'}
                 </p>
               </div>
-              <span class="text-sm text-foreground-muted">{selectedCount} seleccionadas</span>
+              <span class="text-sm text-foreground-muted">
+                {selectedCount}
+                {isConsolidationMode ? 'adjudicaciones pendientes' : 'seleccionadas'}
+              </span>
             </div>
           </div>
 
           {#if lines.length === 0}
             <div class="p-6 text-center text-sm text-foreground-muted">
-              La cotización no contiene líneas disponibles para crear una orden.
+              {isConsolidationMode
+                ? 'Esta cotización no tiene cantidades adjudicadas pendientes de ordenar.'
+                : 'La cotización no contiene líneas disponibles para crear una orden.'}
+            </div>
+          {:else if isConsolidationMode}
+            <div class="space-y-3 p-4">
+              {#each lines as line (line.key)}
+                <article
+                  class="rounded-lg border border-border bg-surface p-4"
+                  aria-label={productLabel(line.productId)}
+                >
+                  <h3 class="font-semibold text-foreground">{productLabel(line.productId)}</h3>
+                  <p class="mt-1 text-sm text-foreground-muted">{unitLabel(line.unitId)}</p>
+                  <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                    <div>
+                      <dt class="text-xs text-foreground-muted">Adjudicada</dt>
+                      <dd class="mt-1 font-medium">
+                        {formatQuantity(line.sourceQuantity)}
+                        {unitLabel(line.unitId)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="text-xs text-foreground-muted">Ya incluida en otras órdenes</dt>
+                      <dd class="mt-1 font-medium">
+                        {formatQuantity(line.alreadyOrderedQuantity ?? '0')}
+                        {unitLabel(line.unitId)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="text-xs text-foreground-muted">Pendiente de ordenar</dt>
+                      <dd class="mt-1 font-semibold text-primary">
+                        {formatQuantity(line.quantity)}
+                        {unitLabel(line.unitId)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="text-xs text-foreground-muted">Precio unitario</dt>
+                      <dd class="mt-1 font-medium">
+                        {formatMoney(line.unitPrice, quotation.currency)}
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              {/each}
             </div>
           {:else}
             <div class="overflow-x-auto">
@@ -534,29 +723,40 @@
                   class="bg-surface-muted text-left text-xs uppercase tracking-wide text-foreground-muted"
                 >
                   <tr>
-                    <th class="px-4 py-3 font-medium">Incluir</th>
+                    {#if !isConsolidationMode}
+                      <th class="px-4 py-3 font-medium">Incluir</th>
+                    {/if}
                     <th class="px-4 py-3 font-medium">Producto</th>
                     <th class="px-4 py-3 font-medium">Unidad</th>
-                    <th class="px-4 py-3 font-medium">Cotizado</th>
-                    <th class="px-4 py-3 font-medium">Cantidad a ordenar</th>
+                    <th class="px-4 py-3 font-medium">
+                      {isConsolidationMode ? 'Adjudicada' : 'Cotizado'}
+                    </th>
+                    {#if isConsolidationMode}
+                      <th class="px-4 py-3 font-medium">En otras órdenes</th>
+                    {/if}
+                    <th class="px-4 py-3 font-medium">
+                      {isConsolidationMode ? 'Pendiente de ordenar' : 'Cantidad a ordenar'}
+                    </th>
                     <th class="px-4 py-3 font-medium">Precio unit.</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
-                  {#each lines as line, index (line.quotationDetailId)}
+                  {#each lines as line, index (line.key)}
                     <tr class="text-foreground">
-                      <td class="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          aria-label={`Incluir línea ${index + 1}`}
-                          checked={line.included}
-                          onchange={(event) =>
-                            updateLine(index, {
-                              included: (event.currentTarget as HTMLInputElement).checked
-                            })}
-                          class="h-4 w-4 rounded border-border"
-                        />
-                      </td>
+                      {#if !isConsolidationMode}
+                        <td class="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            aria-label={'Incluir ' + productLabel(line.productId)}
+                            checked={line.included}
+                            onchange={(event) =>
+                              updateLine(index, {
+                                included: (event.currentTarget as HTMLInputElement).checked
+                              })}
+                            class="h-4 w-4 rounded border-border"
+                          />
+                        </td>
+                      {/if}
                       <td class="min-w-56 px-4 py-3 font-medium">{productLabel(line.productId)}</td>
                       <td class="whitespace-nowrap px-4 py-3 text-foreground-muted">
                         {unitLabel(line.unitId)}
@@ -564,22 +764,44 @@
                       <td class="whitespace-nowrap px-4 py-3">
                         {formatQuantity(line.sourceQuantity)}
                       </td>
+                      {#if isConsolidationMode}
+                        <td class="whitespace-nowrap px-4 py-3 text-foreground-muted">
+                          {formatQuantity(line.alreadyOrderedQuantity ?? '0')}
+                        </td>
+                      {/if}
                       <td class="min-w-44 px-4 py-3">
-                        <input
-                          aria-label={`Cantidad línea ${index + 1}`}
-                          type="number"
-                          min="0.000001"
-                          step="0.000001"
-                          value={line.quantity}
-                          disabled={!line.included}
-                          oninput={(event) =>
-                            updateLine(index, {
-                              quantity: (event.currentTarget as HTMLInputElement).value
-                            })}
-                          class="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                        />
-                        {#if validation[`quantity-${index}`]}
-                          <p class="mt-1 text-xs text-danger">{validation[`quantity-${index}`]}</p>
+                        {#if isConsolidationMode}
+                          <span class="font-semibold text-primary">
+                            {formatQuantity(line.quantity)}
+                          </span>
+                        {:else}
+                          <input
+                            id={'purchase-order-line-quantity-' + line.key}
+                            aria-label={'Cantidad a ordenar de ' + productLabel(line.productId)}
+                            aria-invalid={Boolean(validation['quantity-' + index])}
+                            aria-describedby={validation['quantity-' + index]
+                              ? 'purchase-order-line-quantity-error-' + line.key
+                              : undefined}
+                            type="number"
+                            min="0.000001"
+                            step="0.000001"
+                            value={line.quantity}
+                            disabled={!line.included}
+                            oninput={(event) =>
+                              updateLine(index, {
+                                quantity: (event.currentTarget as HTMLInputElement).value
+                              })}
+                            class="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                          />
+                          {#if validation[`quantity-${index}`]}
+                            <p
+                              id={'purchase-order-line-quantity-error-' + line.key}
+                              class="mt-1 text-xs text-danger"
+                              role="alert"
+                            >
+                              {validation[`quantity-${index}`]}
+                            </p>
+                          {/if}
                         {/if}
                       </td>
                       <td class="whitespace-nowrap px-4 py-3">
@@ -726,7 +948,11 @@
             Cancelar
           </a>
           <Button type="submit" disabled={saving || loadingWarehouses || lines.length === 0}>
-            {saving ? 'Creando…' : 'Crear orden'}
+            {saving
+              ? 'Creando…'
+              : isConsolidationMode
+                ? 'Crear orden desde adjudicación'
+                : 'Crear orden'}
           </Button>
         </div>
       </form>

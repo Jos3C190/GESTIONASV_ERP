@@ -25,6 +25,7 @@ export interface WarehouseDetail {
 }
 export interface Branch {
   id: string;
+  isHeadquarters: boolean;
   companyId?: string;
   departmentId?: string;
   municipalityId?: string;
@@ -38,8 +39,8 @@ export interface Branch {
   manager: string;
   managerEmployeeId?: string | null;
   managerInitials: string;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   status: 'active' | 'inactive' | 'maintenance';
   employees: number;
   warehouses: number;

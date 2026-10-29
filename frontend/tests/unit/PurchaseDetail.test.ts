@@ -187,7 +187,7 @@ describe('PurchaseDetail', () => {
     mocks.hasPermission.mockImplementation((code: string) => code === 'retaceos:manage');
     mocks.get.mockResolvedValue({
       ...purchase,
-      status: 'received'
+      status: 'verified'
     });
 
     render(PurchaseDetail, {
