@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { vehicleAlerts } from './alerts';
   import FleetIcon from './FleetIcon.svelte';
   import VehicleImage from './VehicleImage.svelte';
   import VehicleStatus from './VehicleStatus.svelte';
@@ -9,6 +10,8 @@
     onselect
   }: { vehicle: FleetVehicle; selected?: boolean; onselect: () => void } = $props();
   const load = $derived(Math.round((vehicle.load / vehicle.capacity) * 100));
+  const alerts = $derived(vehicleAlerts(vehicle));
+  const topAlert = $derived(alerts[0]);
 </script>
 
 <button
@@ -24,7 +27,9 @@
   <span id={`fleet-summary-${vehicle.id}`} class="sr-only"
     >{vehicle.model}. {vehicle.status}. {vehicle.status === 'En ruta'
       ? vehicle.destination
-      : vehicle.location}.</span
+      : vehicle.location}.{alerts.length
+      ? ` Alertas: ${alerts.map((alert) => alert.label).join(', ')}.`
+      : ''}</span
   >
   <div class="vehicle-stage">
     <div class="stage-top">
@@ -47,6 +52,20 @@
         class="arrival">{vehicle.arrival}</span
       >
     </div>
+    {#if topAlert}
+      <div
+        class="alert-row {topAlert.tone}"
+        title={alerts.map((alert) => alert.label).join(' · ')}
+      >
+        <FleetIcon name="alert" size={13} /><span>{topAlert.label}</span>{#if alerts.length > 1}<span
+            class="alert-more">+{alerts.length - 1}</span
+          >{/if}
+      </div>
+    {:else}
+      <div class="alert-row ok">
+        <FleetIcon name="shield" size={13} /><span>Documentos y servicio al día</span>
+      </div>
+    {/if}
     <div class="load-label">
       <span>Capacidad de carga</span><span
         ><strong>{formatFleetNumber(vehicle.load)}</strong> / {formatFleetNumber(vehicle.capacity)} kg</span
@@ -177,6 +196,48 @@
     margin-left: auto;
     font-size: 11px;
     white-space: nowrap;
+  }
+  .alert-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 550;
+  }
+  .alert-row span:first-of-type {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .alert-row.danger {
+    color: rgb(var(--danger));
+    background: rgb(var(--danger) / 0.08);
+    border-color: rgb(var(--danger) / 0.22);
+  }
+  .alert-row.warning {
+    color: rgb(var(--fleet-warning-ink, var(--warning)));
+    background: rgb(var(--warning) / 0.08);
+    border-color: rgb(var(--warning) / 0.22);
+  }
+  .alert-row.ok {
+    color: rgb(var(--foreground-muted));
+    background: rgb(var(--surface-muted));
+    font-weight: 450;
+  }
+  .alert-row.ok :global(svg) {
+    color: rgb(var(--success));
+  }
+  .alert-more {
+    margin-left: auto;
+    padding: 1px 5px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    background: rgb(var(--surface));
+    font-size: 10px;
   }
   .load-label {
     margin-bottom: 7px;

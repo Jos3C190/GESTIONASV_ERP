@@ -13,6 +13,22 @@ export const VEHICLE_TYPES = {
 export type VehicleKind = keyof typeof VEHICLE_TYPES;
 export const VEHICLE_KINDS = Object.keys(VEHICLE_TYPES) as VehicleKind[];
 
+export const VEHICLE_DOCUMENTS = {
+  circulation: { label: 'Tarjeta de circulación', short: 'Tarjeta de circulación', feminine: true },
+  insurance: { label: 'Seguro del vehículo', short: 'Seguro', feminine: false },
+  inspection: { label: 'Revisión técnica', short: 'Revisión técnica', feminine: true }
+} as const;
+export type VehicleDocumentKind = keyof typeof VEHICLE_DOCUMENTS;
+
+export interface VehicleDocument {
+  kind: VehicleDocumentKind;
+  /** Fecha ISO de vencimiento. */
+  expires: string;
+}
+
+/** Fecha de referencia de la maqueta; las alertas se calculan contra este día. */
+export const FLEET_TODAY = '2026-10-28';
+
 export interface FleetVehicle {
   id: string;
   name: string;
@@ -31,7 +47,9 @@ export interface FleetVehicle {
   fuel: number;
   progress: number;
   arrival: string;
-  nextService: string;
+  /** Fecha ISO del próximo servicio preventivo; null mientras está en taller. */
+  serviceDue: string | null;
+  documents: VehicleDocument[];
 }
 
 // Fictional presentation data. This workspace never reads or writes fleet records.
@@ -54,7 +72,12 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 78,
     progress: 64,
     arrival: '10:45 a. m.',
-    nextService: '12 nov 2026'
+    serviceDue: '2026-11-12',
+    documents: [
+      { kind: 'circulation', expires: '2027-06-30' },
+      { kind: 'insurance', expires: '2026-11-02' },
+      { kind: 'inspection', expires: '2027-01-20' }
+    ]
   },
   {
     id: 'FL-002',
@@ -74,7 +97,12 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 92,
     progress: 0,
     arrival: 'Lista para salir',
-    nextService: '18 nov 2026'
+    serviceDue: '2026-10-31',
+    documents: [
+      { kind: 'circulation', expires: '2027-06-30' },
+      { kind: 'insurance', expires: '2027-03-15' },
+      { kind: 'inspection', expires: '2027-01-20' }
+    ]
   },
   {
     id: 'FL-003',
@@ -94,7 +122,12 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 64,
     progress: 38,
     arrival: '11:20 a. m.',
-    nextService: '20 nov 2026'
+    serviceDue: '2026-11-20',
+    documents: [
+      { kind: 'circulation', expires: '2027-06-30' },
+      { kind: 'insurance', expires: '2027-03-15' },
+      { kind: 'inspection', expires: '2027-01-20' }
+    ]
   },
   {
     id: 'FL-004',
@@ -114,7 +147,12 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 56,
     progress: 82,
     arrival: '09:50 a. m.',
-    nextService: '08 nov 2026'
+    serviceDue: '2026-10-25',
+    documents: [
+      { kind: 'circulation', expires: '2027-06-30' },
+      { kind: 'insurance', expires: '2027-03-15' },
+      { kind: 'inspection', expires: '2027-01-20' }
+    ]
   },
   {
     id: 'FL-005',
@@ -134,7 +172,12 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 45,
     progress: 0,
     arrival: 'Entrega: 30 oct',
-    nextService: 'En proceso'
+    serviceDue: null,
+    documents: [
+      { kind: 'circulation', expires: '2027-06-30' },
+      { kind: 'insurance', expires: '2027-03-15' },
+      { kind: 'inspection', expires: '2027-01-20' }
+    ]
   },
   {
     id: 'FL-006',
@@ -154,7 +197,12 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 88,
     progress: 0,
     arrival: 'Lista para salir',
-    nextService: '25 nov 2026'
+    serviceDue: '2026-11-25',
+    documents: [
+      { kind: 'circulation', expires: '2027-06-30' },
+      { kind: 'insurance', expires: '2027-03-15' },
+      { kind: 'inspection', expires: '2027-01-20' }
+    ]
   },
   {
     id: 'FL-007',
@@ -174,7 +222,12 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 71,
     progress: 46,
     arrival: '11:05 a. m.',
-    nextService: '15 nov 2026'
+    serviceDue: '2026-11-15',
+    documents: [
+      { kind: 'circulation', expires: '2027-06-30' },
+      { kind: 'insurance', expires: '2027-03-15' },
+      { kind: 'inspection', expires: '2026-10-20' }
+    ]
   },
   {
     id: 'FL-008',
@@ -194,7 +247,12 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 96,
     progress: 0,
     arrival: 'Lista para salir',
-    nextService: '28 nov 2026'
+    serviceDue: '2026-11-28',
+    documents: [
+      { kind: 'circulation', expires: '2027-06-30' },
+      { kind: 'insurance', expires: '2027-03-15' },
+      { kind: 'inspection', expires: '2027-01-20' }
+    ]
   },
   {
     id: 'FL-009',
@@ -214,7 +272,12 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 82,
     progress: 27,
     arrival: '10:30 a. m.',
-    nextService: '22 nov 2026'
+    serviceDue: '2026-11-22',
+    documents: [
+      { kind: 'circulation', expires: '2026-11-20' },
+      { kind: 'insurance', expires: '2027-03-15' },
+      { kind: 'inspection', expires: '2027-01-20' }
+    ]
   },
   {
     id: 'FL-010',
@@ -234,7 +297,12 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 94,
     progress: 0,
     arrival: 'Lista para salir',
-    nextService: '26 nov 2026'
+    serviceDue: '2026-11-26',
+    documents: [
+      { kind: 'circulation', expires: '2027-06-30' },
+      { kind: 'insurance', expires: '2027-03-15' },
+      { kind: 'inspection', expires: '2027-01-20' }
+    ]
   },
   {
     id: 'FL-011',
@@ -254,7 +322,12 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 76,
     progress: 52,
     arrival: '12:15 p. m.',
-    nextService: '16 nov 2026'
+    serviceDue: '2026-11-16',
+    documents: [
+      { kind: 'circulation', expires: '2027-06-30' },
+      { kind: 'insurance', expires: '2027-03-15' },
+      { kind: 'inspection', expires: '2027-01-20' }
+    ]
   },
   {
     id: 'FL-012',
@@ -274,7 +347,12 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 83,
     progress: 31,
     arrival: '01:40 p. m.',
-    nextService: '21 nov 2026'
+    serviceDue: '2026-11-21',
+    documents: [
+      { kind: 'circulation', expires: '2027-06-30' },
+      { kind: 'insurance', expires: '2026-10-28' },
+      { kind: 'inspection', expires: '2027-01-20' }
+    ]
   },
   {
     id: 'FL-013',
@@ -294,11 +372,25 @@ export const DEMO_VEHICLES: FleetVehicle[] = [
     fuel: 62,
     progress: 0,
     arrival: 'Entrega: 31 oct',
-    nextService: 'En proceso'
+    serviceDue: null,
+    documents: [
+      { kind: 'circulation', expires: '2027-06-30' },
+      { kind: 'insurance', expires: '2027-03-15' },
+      { kind: 'inspection', expires: '2027-01-20' }
+    ]
   }
 ];
 
 export const formatFleetNumber = (value: number) => new Intl.NumberFormat('es-SV').format(value);
+export const formatFleetDate = (iso: string) =>
+  new Intl.DateTimeFormat('es-SV', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC'
+  })
+    .format(new Date(`${iso}T00:00:00Z`))
+    .replace('.', '');
 export const vehicleImage = (vehicle: FleetVehicle) => VEHICLE_TYPES[vehicle.kind].image;
 
 export const statusTone = (status: VehicleStatus) =>

@@ -1,8 +1,16 @@
 <script lang="ts">
+  import { documentState, vehicleAlerts } from './alerts';
   import FleetIcon from './FleetIcon.svelte';
+  import { GALLERY_ACCEPT, vehicleGallery } from './gallery.svelte';
+  import ImageLightbox from './ImageLightbox.svelte';
   import VehicleImage from './VehicleImage.svelte';
   import VehicleStatus from './VehicleStatus.svelte';
-  import { formatFleetNumber, type FleetVehicle } from './mock-data';
+  import {
+    formatFleetDate,
+    formatFleetNumber,
+    VEHICLE_DOCUMENTS,
+    type FleetVehicle
+  } from './mock-data';
 
   let { vehicle, onclose }: { vehicle: FleetVehicle; onclose: () => void } = $props();
   let section = $state('Resumen');
@@ -15,7 +23,18 @@
       panel?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
     }
   });
-  const sections = ['Resumen', 'Mantenimiento', 'Documentos'];
+  const sections = ['Resumen', 'Galería', 'Mantenimiento', 'Documentos'];
+  const alerts = $derived(vehicleAlerts(vehicle));
+  const serviceAlert = $derived(alerts.find((alert) => alert.label.startsWith('Servicio')));
+  const photos = $derived(vehicleGallery.list(vehicle.id));
+  let viewerIndex = $state<number | null>(null);
+  let fileInput = $state<HTMLInputElement>();
+  let dropActive = $state(false);
+
+  function addPhotos(files: FileList | null | undefined) {
+    if (files?.length) vehicleGallery.add(vehicle.id, files);
+    if (fileInput) fileInput.value = '';
+  }
 </script>
 
 <aside bind:this={panel} class="detail" aria-label={`Detalle de ${vehicle.id}`}>
@@ -38,9 +57,13 @@
     </div>
     <VehicleImage {vehicle} large />
     <div class="hero-footer">
-      <span class="plate">{vehicle.plate}</span><span
-        ><FleetIcon name="shield" size={13} /> Documentación vigente</span
-      >
+      <span class="plate">{vehicle.plate}</span>{#if alerts[0]}<span
+          class="hero-alert {alerts[0].tone}"
+          ><FleetIcon name="alert" size={13} />
+          {alerts[0].label}{#if alerts.length > 1}&nbsp;· +{alerts.length - 1}{/if}</span
+        >{:else}<span class="hero-alert ok"
+          ><FleetIcon name="shield" size={13} /> Documentación vigente</span
+        >{/if}
     </div>
   </div>
   <nav class="detail-nav" aria-label="Secciones del vehículo">
@@ -48,7 +71,10 @@
         type="button"
         class:active={section === item}
         aria-pressed={section === item}
-        onclick={() => (section = item)}>{item}</button
+        onclick={() => (section = item)}
+        >{item}{#if item === 'Galería' && photos.length}<span class="tab-count"
+            >{photos.length}</span
+          >{/if}</button
       >{/each}
   </nav>
   <div class="detail-content">
@@ -123,13 +149,81 @@
         <div class="fuel-track"><span style:width={`${vehicle.fuel}%`}></span></div>
         <p class="muted-note">Lectura de ejemplo para esta maqueta.</p>
       </section>
+    {:else if section === 'Galería'}
+      <section class="detail-section">
+        <div class="section-heading">
+          <h3>Galería del vehículo</h3>
+          {#if photos.length}<button
+              type="button"
+              class="add-photos"
+              onclick={() => fileInput?.click()}
+              ><FleetIcon name="upload" size={14} /> Agregar fotos</button
+            >{/if}
+        </div>
+        <p class="document-intro">
+          Fotos reales de la unidad. La portada se mantiene con el modelo base y tu marca.
+        </p>
+        <input
+          bind:this={fileInput}
+          type="file"
+          accept={GALLERY_ACCEPT.join(',')}
+          multiple
+          hidden
+          onchange={(event) => addPhotos(event.currentTarget.files)}
+        />
+        {#if photos.length}
+          <ul class="gallery-grid" aria-label="Fotos del vehículo">
+            {#each photos as photo, i (photo.id)}
+              <li>
+                <button
+                  type="button"
+                  class="gallery-thumb"
+                  aria-label={`Ampliar foto ${i + 1}`}
+                  onclick={() => (viewerIndex = i)}><img src={photo.src} alt="" /></button
+                >
+                <button
+                  type="button"
+                  class="gallery-remove"
+                  aria-label={`Quitar foto ${i + 1}`}
+                  onclick={() => vehicleGallery.remove(vehicle.id, photo.id)}
+                  ><FleetIcon name="trash" size={13} /></button
+                >
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <button
+            type="button"
+            class="gallery-drop"
+            class:active={dropActive}
+            onclick={() => fileInput?.click()}
+            ondragover={(event) => {
+              event.preventDefault();
+              dropActive = true;
+            }}
+            ondragleave={() => (dropActive = false)}
+            ondrop={(event) => {
+              event.preventDefault();
+              dropActive = false;
+              addPhotos(event.dataTransfer?.files);
+            }}
+          >
+            <FleetIcon name="image" size={26} />
+            <strong>Agrega fotos de esta unidad</strong>
+            <span>Arrastra imágenes o haz clic · JPG, PNG o WebP</span>
+          </button>
+        {/if}
+        <p class="muted-note">En esta demostración las fotos no se guardan al recargar.</p>
+      </section>
     {:else if section === 'Mantenimiento'}
       <section class="detail-section">
         <h3>Próximo servicio</h3>
-        <div class="service-callout">
+        <div class="service-callout" class:overdue={serviceAlert?.tone === 'danger'}>
           <FleetIcon name="wrench" size={22} />
           <div>
-            <strong>{vehicle.nextService}</strong><span
+            <strong
+              >{vehicle.serviceDue ? formatFleetDate(vehicle.serviceDue) : 'En proceso'}</strong
+            >{#if serviceAlert}<span class="service-alert">{serviceAlert.label}</span>{/if}<span
               >{vehicle.status === 'Mantenimiento'
                 ? 'Servicio preventivo en taller central'
                 : 'Mantenimiento preventivo programado'}</span
@@ -182,13 +276,18 @@
         <h3>Documentos del vehículo</h3>
         <p class="document-intro">Una vista organizada de los documentos de cada unidad.</p>
         <div class="document-list">
-          {#each ['Tarjeta de circulación', 'Seguro del vehículo', 'Revisión técnica'] as document}<div
-              class="document-row"
-            >
+          {#each vehicle.documents as document (document.kind)}
+            {@const state = documentState(document)}
+            <div class="document-row">
               <span class="document-icon"><FleetIcon name="file" size={19} /></span>
-              <div><strong>{document}</strong><span>PDF · Documento de muestra</span></div>
-              <span class="document-status">Vigente</span>
-            </div>{/each}
+              <div>
+                <strong>{VEHICLE_DOCUMENTS[document.kind].label}</strong><span
+                  >Vence {formatFleetDate(document.expires)}</span
+                >
+              </div>
+              <span class="document-status {state.tone}">{state.label}</span>
+            </div>
+          {/each}
         </div>
         <div class="document-notice">
           <FleetIcon name="info" size={16} />
@@ -197,6 +296,17 @@
       </section>
     {/if}
   </div>
+  {#if viewerIndex !== null && photos.length}
+    <ImageLightbox
+      images={photos.map((photo, i) => ({
+        src: photo.src,
+        alt: `${vehicle.id}, foto ${i + 1} de ${photos.length}`
+      }))}
+      bind:index={viewerIndex}
+      title={`${vehicle.id} · ${vehicle.model}`}
+      onclose={() => (viewerIndex = null)}
+    />
+  {/if}
   <div class="detail-footer">
     <FleetIcon name="info" size={14} /><span>Vista de demostración. Datos sin conexión.</span>
   </div>
@@ -275,12 +385,118 @@
     color: rgb(var(--border-strong));
     padding: 0 3px;
   }
-  .hero-footer > span:last-child {
+  .hero-alert {
     display: flex;
     gap: 5px;
     align-items: center;
     color: rgb(var(--success));
     font-size: 11px;
+  }
+  .hero-alert.warning {
+    color: rgb(var(--fleet-warning-ink, var(--warning)));
+    font-weight: 550;
+  }
+  .hero-alert.danger {
+    color: rgb(var(--danger));
+    font-weight: 550;
+  }
+  .tab-count {
+    margin-left: 5px;
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: rgb(var(--surface-hover));
+    font-size: 10px;
+  }
+  .add-photos {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 9px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 550;
+  }
+  .add-photos:hover {
+    background: rgb(var(--surface-hover));
+  }
+  .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .gallery-grid li {
+    position: relative;
+  }
+  .gallery-thumb {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    border: 1px solid rgb(var(--border));
+    border-radius: 8px;
+    background: rgb(var(--surface-muted));
+    cursor: zoom-in;
+  }
+  .gallery-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 200ms;
+  }
+  .gallery-thumb:hover img {
+    transform: scale(1.05);
+  }
+  .gallery-remove {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgb(0 0 0 / 0.6);
+    color: #fff;
+    opacity: 0;
+    transition: opacity 120ms;
+  }
+  .gallery-grid li:hover .gallery-remove,
+  .gallery-remove:focus-visible {
+    opacity: 1;
+  }
+  .gallery-drop {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 26px 16px;
+    border: 1px dashed rgb(var(--border-strong));
+    border-radius: 10px;
+    background: rgb(var(--surface-muted));
+    color: rgb(var(--foreground-muted));
+    text-align: center;
+  }
+  .gallery-drop:hover,
+  .gallery-drop.active {
+    border-color: rgb(var(--primary));
+    color: rgb(var(--foreground));
+  }
+  .gallery-drop strong {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgb(var(--foreground));
+  }
+  .gallery-drop span {
+    font-size: 11px;
+  }
+  @media (hover: none) {
+    .gallery-remove {
+      opacity: 1;
+    }
   }
   .plate {
     display: inline-flex;
@@ -502,9 +718,17 @@
     padding: 15px 12px;
     margin-top: 12px;
   }
+  .service-callout.overdue {
+    background: rgb(var(--danger) / 0.07);
+    border-color: rgb(var(--danger) / 0.22);
+    color: rgb(var(--danger));
+  }
   .service-callout strong,
   .service-callout span {
     display: block;
+  }
+  .service-callout .service-alert {
+    font-weight: 600;
   }
   .service-callout strong {
     font-size: 12px;
@@ -596,6 +820,15 @@
     margin-left: auto;
     color: rgb(var(--success));
     font-size: 11px;
+    white-space: nowrap;
+  }
+  .document-status.warning {
+    color: rgb(var(--fleet-warning-ink, var(--warning)));
+    font-weight: 550;
+  }
+  .document-status.danger {
+    color: rgb(var(--danger));
+    font-weight: 550;
   }
   .document-notice {
     display: flex;

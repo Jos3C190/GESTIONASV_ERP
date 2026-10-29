@@ -20,7 +20,15 @@
     info: 'M12 11v5 M12 7h.01 M21 12a9 9 0 11-18 0 9 9 0 0118 0',
     calendar: 'M4 5h16v16H4z M16 3v4 M8 3v4 M4 10h16',
     refresh: 'M20 7v5h-5 M4 17v-5h5 M6 6a8 8 0 0113 2 M18 18a8 8 0 01-13-2',
-    shield: 'M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6z M8 12l3 3 5-6'
+    shield: 'M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6z M8 12l3 3 5-6',
+    alert: 'M12 3l10 18H2z M12 10v4 M12 17h.01',
+    image: 'M3 5h18v14H3z M3 16l5-5 4 4 3-3 6 6 M15 9h.01',
+    chevronLeft: 'M15 5l-7 7 7 7',
+    zoomIn: 'M21 21l-5-5 M18 10a8 8 0 11-16 0 8 8 0 0116 0 M10 7v6 M7 10h6',
+    zoomOut: 'M21 21l-5-5 M18 10a8 8 0 11-16 0 8 8 0 0116 0 M7 10h6',
+    fit: 'M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5',
+    upload: 'M12 16V4 M7 9l5-5 5 5 M4 20h16',
+    trash: 'M4 7h16 M9 7V4h6v3 M6 7l1 14h10l1-14'
   };
   let {
     name,

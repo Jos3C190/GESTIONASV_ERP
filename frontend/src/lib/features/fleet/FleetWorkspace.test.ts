@@ -101,6 +101,47 @@ describe('fleet UI prototype', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('shows document alerts on the cards', () => {
+    render(FleetWorkspace);
+    const card = screen.getByRole('button', { name: 'Ver detalle de FL-001' });
+    expect(within(card).getByText('Seguro vence en 5 días')).toBeVisible();
+    const overdue = screen.getByRole('button', { name: 'Ver detalle de FL-004' });
+    expect(within(overdue).getByText('Servicio vencido')).toBeVisible();
+    const clear = screen.getByRole('button', { name: 'Ver detalle de FL-006' });
+    expect(within(clear).getByText('Documentos y servicio al día')).toBeVisible();
+  });
+
+  it('adds gallery photos and browses them in the viewer', async () => {
+    let created = 0;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:photo-${++created}`);
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const { container } = render(FleetWorkspace);
+    await fireEvent.click(screen.getByRole('button', { name: 'Ver detalle de FL-002' }));
+    const detail = screen.getByRole('complementary', { name: 'Detalle de FL-002' });
+    await fireEvent.click(within(detail).getByRole('button', { name: 'Galería' }));
+    expect(within(detail).getByText('Agrega fotos de esta unidad')).toBeVisible();
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const files = ['frente.jpg', 'lateral.png'].map(
+      (name) => new File(['x'], name, { type: name.endsWith('png') ? 'image/png' : 'image/jpeg' })
+    );
+    Object.defineProperty(input, 'files', { value: files, configurable: true });
+    await fireEvent.change(input);
+
+    await fireEvent.click(within(detail).getByRole('button', { name: 'Ampliar foto 1' }));
+    const viewer = screen.getByRole('dialog', { name: 'FL-002 · Ford Transit' });
+    expect(within(viewer).getByText('1 / 2')).toBeVisible();
+    await fireEvent.click(within(viewer).getByRole('button', { name: 'Imagen siguiente' }));
+    expect(within(viewer).getByText('2 / 2')).toBeVisible();
+    await fireEvent.click(within(viewer).getByRole('button', { name: 'Acercar' }));
+    expect(within(viewer).getByText('150%')).toBeVisible();
+    await fireEvent.keyDown(within(viewer).getByRole('button', { name: 'Cerrar visor' }), {
+      key: 'Escape'
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Detalle de FL-002' })).toBeVisible();
+  });
+
   it('keeps filtered results when switching between cards and list', async () => {
     render(FleetWorkspace);
     await fireEvent.input(screen.getByLabelText('Buscar vehículos'), {
