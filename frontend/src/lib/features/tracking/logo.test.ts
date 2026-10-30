@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keyOutBackground } from './truck3d';
+import { contentBounds, keyOutBackground } from './truck3d';
 
 /** Imagen RGBA de `size`×`size` con fondo blanco y un cuadro verde con centro blanco. */
 function emblem(size = 12) {
@@ -25,6 +25,13 @@ describe('logo background', () => {
     expect(alpha(data, 12, 4, 4)).toBe(255);
     // El blanco dentro del emblema no toca el borde: se conserva.
     expect(alpha(data, 12, 5, 5)).toBe(255);
+  });
+
+  it('finds the visible part of the logo to trim its empty margin', () => {
+    const data = emblem();
+    keyOutBackground(data, 12, 12);
+    expect(contentBounds(data, 12, 12)).toEqual({ x: 3, y: 3, width: 6, height: 6 });
+    expect(contentBounds(new Uint8ClampedArray(16), 2, 2)).toBeNull();
   });
 
   it('leaves logos that already have transparency or a busy background untouched', () => {

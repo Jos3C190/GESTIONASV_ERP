@@ -85,14 +85,51 @@ function logoMaterial(THREE: Three, model: Three) {
   });
   material.visible = false;
   model.traverse((object: Three) => {
-    if (object.isMesh && String(object.name).startsWith(LOGO_PREFIX)) object.material = material;
+    const name = String(object.name);
+    if (!object.isMesh || !name.startsWith(LOGO_PREFIX)) return;
+    object.material = material;
+    const zone = Object.keys(LOGO_ZONE_SCALE).find((prefix) => name.startsWith(prefix));
+    if (zone) object.scale.multiplyScalar(LOGO_ZONE_SCALE[zone]!);
   });
   return material;
 }
 
+/**
+ * Cuánto se agranda cada zona de logo respecto del modelo, medido para que no se salga de su
+ * superficie: en la caja (1,6 → 1,84 m) queda a 6 cm del borde superior; en la puerta
+ * (0,44 → 0,57 m) por debajo de la ventana; atrás (1,2 → 1,44 m) con aire entre las bisagras de las puertas.
+ */
+const LOGO_ZONE_SCALE: Record<string, number> = {
+  LOGO_CAJA_: 1.15,
+  LOGO_PUERTA_: 1.3,
+  LOGO_TRASERO: 1.2
+};
+
 /** Lado del lienzo cuadrado del logo y margen para que no toque el borde de la zona. */
-const LOGO_CANVAS_PX = 512;
-const LOGO_INSET = 0.06;
+const LOGO_CANVAS_PX = 1024;
+const LOGO_INSET = 0.03;
+/** Resolución de trabajo para quitar el fondo y recortar el margen del logo. */
+const LOGO_WORK_PX = 1024;
+/** Opacidad mínima para considerar que un píxel es parte del logo al recortar. */
+const CONTENT_ALPHA = 16;
+
+/** Rectángulo con contenido visible (sin el margen transparente); null si está vacío. */
+export function contentBounds(data: Uint8ClampedArray, width: number, height: number) {
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++)
+      if (data[(y * width + x) * 4 + 3]! >= CONTENT_ALPHA) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+  if (maxX < 0) return null;
+  return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+}
 
 let logoRequest = 0;
 
@@ -174,10 +211,10 @@ export async function applyTruckLogo(THREE: Three, template: Three | null, url: 
       element.src = url;
     });
     if (request !== logoRequest) return;
-    const room = LOGO_CANVAS_PX * (1 - 2 * LOGO_INSET);
-    const fit = Math.min(room / image.naturalWidth, room / image.naturalHeight);
-    const width = Math.max(1, Math.round(image.naturalWidth * fit));
-    const height = Math.max(1, Math.round(image.naturalHeight * fit));
+    // Se trabaja a buena resolución: luego se recorta el margen vacío y se amplía lo útil.
+    const work = Math.min(1, LOGO_WORK_PX / Math.max(image.naturalWidth, image.naturalHeight));
+    const width = Math.max(1, Math.round(image.naturalWidth * work));
+    const height = Math.max(1, Math.round(image.naturalHeight * work));
     const art = document.createElement('canvas');
     art.width = width;
     art.height = height;
@@ -186,11 +223,27 @@ export async function applyTruckLogo(THREE: Three, template: Three | null, url: 
     // Leer los píxeles falla si el logo es de otro dominio sin CORS: WebGL tampoco podría usarlo.
     const pixels = artContext.getImageData(0, 0, width, height);
     if (keyOutBackground(pixels.data, width, height)) artContext.putImageData(pixels, 0, 0);
+    // El margen transparente que traen muchos logos achicaría la marca en la carrocería.
+    const content = contentBounds(pixels.data, width, height) ?? { x: 0, y: 0, width, height };
+    const room = LOGO_CANVAS_PX * (1 - 2 * LOGO_INSET);
+    const fit = room / Math.max(content.width, content.height);
+    const drawWidth = content.width * fit;
+    const drawHeight = content.height * fit;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = LOGO_CANVAS_PX;
-    canvas
-      .getContext('2d')!
-      .drawImage(art, (LOGO_CANVAS_PX - width) / 2, (LOGO_CANVAS_PX - height) / 2);
+    const context = canvas.getContext('2d')!;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(
+      art,
+      content.x,
+      content.y,
+      content.width,
+      content.height,
+      (LOGO_CANVAS_PX - drawWidth) / 2,
+      (LOGO_CANVAS_PX - drawHeight) / 2,
+      drawWidth,
+      drawHeight
+    );
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     // Las coordenadas de textura de glTF no se invierten en Y.
