@@ -1,4 +1,4 @@
-import type { TrackedTransferOut, TransferTrackOut } from '$lib/api/client';
+import type { TrackedTransferOut, TrackingAlertOut, TransferTrackOut } from '$lib/api/client';
 
 type LngLat = [number, number];
 
@@ -46,6 +46,9 @@ export interface TransferTrack extends TransferSummary {
   eta: Date | null;
   arrived: boolean;
   offRoute: boolean;
+  /** El recorrido es la copia guardada por el ERP al recibir el traslado. */
+  trackStored: boolean;
+  alerts: TrackingAlertOut[];
 }
 
 const place = (value: TrackedTransferOut['origin']): TransferPlace => ({
@@ -97,7 +100,9 @@ export function fromApiTrack(track: TransferTrackOut): TransferTrack {
     remainingM: track.remaining_m,
     eta: date(track.eta),
     arrived: track.arrived,
-    offRoute: track.off_route
+    offRoute: track.off_route,
+    trackStored: track.track_stored ?? false,
+    alerts: track.alerts ?? []
   };
 }
 

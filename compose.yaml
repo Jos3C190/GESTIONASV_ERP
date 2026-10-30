@@ -320,6 +320,36 @@ services:
       - backend-cache:/root/.cache/uv
     restart: unless-stopped
 
+  # Vigila los traslados en ruta y genera alertas (llegada, retraso, parada larga,
+  # GPS sin señal, desvío) aunque nadie tenga Seguimiento abierto.
+  tracking-monitor:
+    build:
+      context: ./backend
+      target: dev
+    command: ["python", "-m", "app.infrastructure.tracking_monitor"]
+    environment:
+      <<: [*observability-environment]
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SUPPLIER_DATA_ENCRYPTION_KEY: ${SUPPLIER_DATA_ENCRYPTION_KEY}
+      TRACCAR_URL: ${TRACCAR_URL:-}
+      TRACCAR_USER: ${TRACCAR_USER:-}
+      TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-}
+      OSRM_URL: ${OSRM_URL:-https://router.project-osrm.org}
+      TRACKING_MONITOR_INTERVAL_SECONDS: ${TRACKING_MONITOR_INTERVAL_SECONDS:-60}
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - backend-cache:/root/.cache/uv
+    restart: unless-stopped
+
   # ---------------- One-shot database bootstrap ----------------
   # Runs after Alembic finishes. A durable app_meta marker makes ordinary
   # restarts no-ops, preserving records intentionally sent to the trash.

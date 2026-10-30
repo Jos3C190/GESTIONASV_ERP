@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -124,6 +124,7 @@ class TrackedTransferOut(BaseModel):
     code: str
     status: str
     dispatched_at: datetime | None = None
+    received_at: datetime | None = None
     vehicle_code: str | None = None
     vehicle_name: str | None = None
     vehicle_plate: str | None = None
@@ -147,8 +148,33 @@ class TransferPositionOut(BaseModel):
     fix_time: datetime | None = None
 
 
+class TrackingAlertOut(BaseModel):
+    id: uuid.UUID
+    transfer_id: uuid.UUID
+    transfer_code: str | None = None
+    vehicle_code: str | None = None
+    kind: Literal["arrived", "delayed", "long_stop", "gps_lost", "off_route"]
+    severity: Literal["info", "warning", "critical"]
+    message: str
+    details: dict[str, Any] = {}
+    opened_at: datetime
+    last_seen_at: datetime
+    resolved_at: datetime | None = None
+    acknowledged_at: datetime | None = None
+
+
+class TrackingAlertsOut(BaseModel):
+    items: list[TrackingAlertOut]
+    unacknowledged: int
+    #: False when the GPS server is not configured (no alerts can be raised).
+    monitor_active: bool
+
+
 class TransferTrackOut(TrackedTransferOut):
     gps_configured: bool
+    #: The trail comes from the ERP copy taken when the transfer was received.
+    track_stored: bool = False
+    alerts: list[TrackingAlertOut] = []
     device_found: bool
     route: TransferRouteOut | None = None
     trail: list[LngLat] = []

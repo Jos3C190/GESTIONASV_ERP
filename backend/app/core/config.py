@@ -103,6 +103,8 @@ class Settings(BaseSettings):
     TRACCAR_PASSWORD: str | None = Field(default=None, repr=False)
     # Servicio de rutas OSRM para la ruta planeada de los traslados; vacío = línea recta.
     OSRM_URL: str | None = "https://router.project-osrm.org"
+    #: How often the tracking monitor evaluates transfers in transit for alerts.
+    TRACKING_MONITOR_INTERVAL_SECONDS: int = Field(default=60, ge=15, le=3600)
 
     # --- Generic documents / S3-compatible object storage ---
     OBJECT_STORAGE_ENABLED: bool = False

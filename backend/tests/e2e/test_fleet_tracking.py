@@ -24,6 +24,8 @@ class FakeTraccar:
         self.devices: dict[int, dict[str, Any]] = {}
         self.geofences: dict[int, dict[str, Any]] = {}
         self.links: set[tuple[int, int]] = set()
+        #: Positions per device (ISO ``fixTime`` in UTC with a ``Z`` suffix).
+        self.positions: dict[int, list[dict[str, Any]]] = {}
         self._next = 100
 
     def _id(self) -> int:
@@ -93,6 +95,12 @@ class FakeTraccar:
             else:
                 self.links.discard(link)
             return None
+        if segments == ["positions"] and "deviceId" in query:
+            trail = self.positions.get(int(query["deviceId"][0]), [])
+            if "from" in query:
+                start, end = query["from"][0], query["to"][0]
+                return [p for p in trail if start <= p["fixTime"] <= end]
+            return trail[-1:]
         if segments == ["positions"] or segments[:2] == ["reports", "events"]:
             return []
         raise AssertionError(f"unexpected Traccar call {method} {path}")

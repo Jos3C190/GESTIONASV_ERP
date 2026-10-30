@@ -185,7 +185,11 @@ from app.infrastructure.models.supplier_master_data import (
     SupplierTaxIdentifierModel,
 )
 from app.infrastructure.models.system import AppMeta
-from app.infrastructure.models.tracking import TrackingSyncStateModel
+from app.infrastructure.models.tracking import (
+    TrackingAlertModel,
+    TrackingSyncStateModel,
+    TransferTrackModel,
+)
 from app.infrastructure.models.user import User
 
 __all__: list[str] = [
@@ -322,7 +326,9 @@ __all__: list[str] = [
     "SupplierImageModel",
     "SupplierModel",
     "SupplierTaxIdentifierModel",
+    "TrackingAlertModel",
     "TrackingSyncStateModel",
+    "TransferTrackModel",
     "UnitModel",
     "User",
     "UserBranch",

@@ -5,6 +5,8 @@
   import { branch } from '$lib/stores/branch.svelte';
   import { company } from '$lib/stores/company.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
+  import AlertsPanel from './AlertsPanel.svelte';
+  import { ALERT_KIND_LABELS, trackingAlerts } from './alerts.svelte';
   import EventsPanel from './EventsPanel.svelte';
   import { fromTraccarEvents, type TrackingEvent } from './events';
   import GeofencePanel from './GeofencePanel.svelte';
@@ -39,7 +41,7 @@
 
   type Mode = 'loading' | 'live' | 'unconfigured';
   type Filter = 'all' | TrackingStatus;
-  type Tab = 'units' | 'transfers' | 'geofences' | 'events';
+  type Tab = 'units' | 'transfers' | 'geofences' | 'events' | 'alerts';
   const TRANSFERS_POLL_MS = 30000;
   const TRACK_POLL_MS = 10000;
 
@@ -438,14 +440,11 @@
       if (tab === 'transfers') loadTransfers(controller.signal);
     }, TRANSFERS_POLL_MS);
     const trackPoll = setInterval(() => loadTrack(controller.signal), TRACK_POLL_MS);
-    const requested = page.url.searchParams.get('transfer');
-    if (requested) {
-      tab = 'transfers';
-      selectedTransferId = requested;
-    }
+    const stopAlerts = trackingAlerts.subscribe();
     const tick = setInterval(() => (now = Date.now()), TICK_MS);
     return () => {
       controller.abort();
+      stopAlerts();
       clearInterval(livePoll);
       clearInterval(sitesPoll);
       clearInterval(eventsPoll);
@@ -454,6 +453,39 @@
       clearInterval(trackPoll);
     };
   });
+
+  // ?transfer=… abre ese traslado y ?tab=alerts la pestaña de alertas, también al llegar
+  // desde el indicador del encabezado estando ya en Seguimiento.
+  let handledQuery = '';
+  $effect(() => {
+    const query = page.url.search;
+    if (query === handledQuery) return;
+    handledQuery = query;
+    const requested = page.url.searchParams.get('transfer');
+    if (requested) {
+      tab = 'transfers';
+      if (requested !== selectedTransferId) selectTransfer(requested);
+    } else if (page.url.searchParams.get('tab') === 'alerts') {
+      openTab('alerts');
+    }
+  });
+
+  function openAlert(alert: { transfer_id: string }) {
+    openTab('transfers');
+    selectTransfer(alert.transfer_id);
+  }
+
+  async function acknowledgeAlert(alert: { id: string }) {
+    await trackingAlerts.acknowledge(alert.id);
+    if (liveTrack) {
+      liveTrack = {
+        ...liveTrack,
+        alerts: liveTrack.alerts.map((item) =>
+          item.id === alert.id ? { ...item, acknowledged_at: new Date().toISOString() } : item
+        )
+      };
+    }
+  }
 
   function select(key: string | null) {
     selectedKey = key;
@@ -579,6 +611,16 @@
           >Eventos{#if unread}<span class="unread">{unread > 99 ? '99+' : unread}</span
             >{/if}</button
         >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'alerts'}
+          class:active={tab === 'alerts'}
+          onclick={() => openTab('alerts')}
+          >Alertas{#if trackingAlerts.unacknowledged}<span class="unread alert-count"
+              >{trackingAlerts.unacknowledged > 99 ? '99+' : trackingAlerts.unacknowledged}</span
+            >{/if}</button
+        >
       </div>
       {#if tab === 'geofences'}
         <GeofencePanel
@@ -610,6 +652,15 @@
           error={transferError}
           {now}
           onselect={(id) => selectTransfer(id === selectedTransferId ? null : id)}
+        />
+      {:else if tab === 'alerts'}
+        <AlertsPanel
+          alerts={trackingAlerts.items}
+          {now}
+          monitorActive={trackingAlerts.monitorActive}
+          error={trackingAlerts.error}
+          onopen={openAlert}
+          onacknowledge={acknowledgeAlert}
         />
       {:else if tab === 'events'}
         <EventsPanel {events} {now} focusedId={focusedEvent?.id ?? null} onfocus={focusEvent} />
@@ -715,7 +766,24 @@
             <li><span class="leg-pin">A</span>{track.origin.branch}</li>
             <li><span class="leg-pin destination">B</span>{track.destination.branch}</li>
           </ol>
-          {#if track.arrived}
+          {#if track.alerts.length}
+            <ul class="trip-alerts" aria-label="Alertas del traslado">
+              {#each track.alerts as alert (alert.id)}
+                <li class={alert.severity}>
+                  <strong>{ALERT_KIND_LABELS[alert.kind]}</strong>
+                  <span>{alert.message}</span>
+                  {#if !alert.acknowledged_at}
+                    <button type="button" onclick={() => acknowledgeAlert(alert)}>Reconocer</button>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          {#if track.trackStored}
+            <p class="flag success">
+              <FleetIcon name="check" size={14} />Recibido · recorrido guardado en el ERP
+            </p>
+          {:else if track.arrived}
             <p class="flag success">
               <FleetIcon name="check" size={14} />Llegó a la sucursal de destino
             </p>
@@ -1500,5 +1568,52 @@
     .vehicle-card {
       animation: none;
     }
+  }
+  .trip-alerts {
+    display: grid;
+    gap: 6px;
+    margin: 0 0 10px;
+    padding: 0;
+    list-style: none;
+  }
+  .trip-alerts li {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 8px;
+    padding: 8px 10px;
+    border-left: 3px solid rgb(var(--success));
+    border-radius: 8px;
+    background: rgb(var(--success) / 0.06);
+    font-size: 12px;
+  }
+  .trip-alerts li.warning {
+    border-left-color: rgb(var(--warning));
+    background: rgb(var(--warning) / 0.07);
+  }
+  .trip-alerts li.critical {
+    border-left-color: rgb(var(--danger));
+    background: rgb(var(--danger) / 0.06);
+  }
+  .trip-alerts strong {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .trip-alerts span {
+    grid-column: 1;
+    line-height: 1.4;
+  }
+  .trip-alerts button {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    padding: 4px 8px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 6px;
+    background: rgb(var(--surface));
+    font-size: 11px;
+  }
+  .alert-count {
+    background: rgb(var(--danger));
   }
 </style>

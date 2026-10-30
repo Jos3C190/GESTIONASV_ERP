@@ -967,8 +967,34 @@ export interface TrackedTransferOut {
   destination: TransferPlaceOut;
 }
 
+export type TrackingAlertKind = 'arrived' | 'delayed' | 'long_stop' | 'gps_lost' | 'off_route';
+
+export interface TrackingAlertOut {
+  id: string;
+  transfer_id: string;
+  transfer_code: string | null;
+  vehicle_code: string | null;
+  kind: TrackingAlertKind;
+  severity: 'info' | 'warning' | 'critical';
+  message: string;
+  details: Record<string, unknown>;
+  opened_at: string;
+  last_seen_at: string;
+  resolved_at: string | null;
+  acknowledged_at: string | null;
+}
+
+export interface TrackingAlertsOut {
+  items: TrackingAlertOut[];
+  unacknowledged: number;
+  monitor_active: boolean;
+}
+
 export interface TransferTrackOut extends TrackedTransferOut {
   gps_configured: boolean;
+  /** El recorrido viene de la copia guardada por el ERP al recibir el traslado. */
+  track_stored?: boolean;
+  alerts?: TrackingAlertOut[];
   device_found: boolean;
   route: {
     coordinates: [number, number][];
@@ -1878,6 +1904,10 @@ export const api = {
       ),
     geofences: (signal?: AbortSignal) => apiFetch<GeofenceOut[]>('/tracking/geofences', { signal }),
     sites: (signal?: AbortSignal) => apiFetch<SitesOut>('/tracking/sites', { signal }),
+    alerts: (state: 'open' | 'recent' = 'open', signal?: AbortSignal) =>
+      apiFetch<TrackingAlertsOut>(`/tracking/alerts?state=${state}`, { signal }),
+    acknowledgeAlert: (id: string) =>
+      apiFetch<TrackingAlertOut>(`/tracking/alerts/${id}/acknowledge`, { method: 'POST' }),
     syncSites: () => apiFetch<SitesOut>('/tracking/sites/sync', { method: 'POST' }),
     createGeofence: (data: GeofenceCreate) =>
       apiFetch<GeofenceOut>('/tracking/geofences', {

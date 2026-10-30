@@ -46,6 +46,7 @@ from app.api.v1.schemas.inventory_transfer import (
     TransferReceiveIn,
     TransferUpdateIn,
 )
+from app.api.v1.transfer_tracking import archive_trip_on_commit
 from app.application.audit.audit_service import AuditService
 from app.application.fleet.compliance import Issue
 from app.application.fleet.dispatch import HARD_BLOCKS as DISPATCH_HARD_BLOCKS
@@ -69,6 +70,8 @@ from app.infrastructure.repositories.inventory_transfer_repository import (
 router = APIRouter(prefix="/inventory/transfers", tags=["inventory transfers"])
 T = TypeVar("T")
 DISPATCH_OVERRIDE_PERMISSION = "fleet:compliance_override"
+#: A transfer in these states has finished its trip (or never started it).
+CLOSED_TRANSFER_STATUSES = ("received", "closed_with_adjustment", "cancelled")
 
 
 def _use_cases(session: SessionDep) -> InventoryTransferUseCases:
@@ -227,6 +230,9 @@ async def _persist_command(
         async with session.begin_nested():
             result = await operation
             response = response_model.model_validate(result)
+            if getattr(response, "status", None) in CLOSED_TRANSFER_STATUSES:
+                # Al cerrarse el viaje se guarda su recorrido y se cierran sus alertas.
+                archive_trip_on_commit(session, company_id, response.id)
             await audit.record(
                 action=action,
                 user_id=current.id,

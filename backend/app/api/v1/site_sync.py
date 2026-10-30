@@ -9,7 +9,6 @@ error is recorded and the next run repairs the difference.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -17,9 +16,10 @@ from typing import Any
 from urllib.parse import urlencode
 
 from fastapi import HTTPException, Request
-from sqlalchemy import event, select, text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.after_commit import run_after_commit, wait_for_pending
 from app.api.v1.deps import SessionDep
 from app.api.v1.traccar_access import traccar, traccar_credentials
 from app.application.tracking.devices import COMPANY_ATTRIBUTE
@@ -170,31 +170,13 @@ async def sync_state(session: AsyncSession, company_id: uuid.UUID) -> dict[str, 
     }
 
 
-#: Syncs started after a commit; kept so they are not garbage-collected mid-flight.
-_pending: set[asyncio.Task[None]] = set()
-
-
 def sync_sites_on_commit(session: AsyncSession, company_id: uuid.UUID) -> None:
-    """Reconcile once ``session`` commits (never on rollback).
-
-    The request session commits after the endpoint and its background tasks
-    have run, so the sync is started from the commit itself to read the new data.
-    """
-
-    def _start(_sync_session: Any) -> None:
-        task = asyncio.get_running_loop().create_task(run_site_sync(company_id))
-        _pending.add(task)
-        task.add_done_callback(_pending.discard)
-
-    event.listen(session.sync_session, "after_commit", _start, once=True)
+    """Reconcile once ``session`` commits (never on rollback)."""
+    run_after_commit(session, lambda: run_site_sync(company_id))
 
 
-async def wait_for_pending_syncs() -> None:
-    """Await syncs started by recent commits (tests and graceful shutdown)."""
-    while _pending:
-        tasks = list(_pending)
-        await asyncio.gather(*tasks, return_exceptions=True)
-        _pending.difference_update(tasks)
+#: Kept for callers that wait for the sync itself.
+wait_for_pending_syncs = wait_for_pending
 
 
 def sync_sites_after_change(request: Request, session: SessionDep) -> None:

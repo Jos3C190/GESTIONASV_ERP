@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from contextlib import suppress
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import Select, func, or_, select
-from sqlalchemy.orm import aliased
+from sqlalchemy import Select, or_, select
 
 from app.api.v1.company_access import effective_company_id
 from app.api.v1.deps import (
@@ -32,6 +32,8 @@ from app.api.v1.schemas.tracking import (
     GeofenceOut,
     SitesOut,
     TrackedTransferOut,
+    TrackingAlertOut,
+    TrackingAlertsOut,
     TrackingEventOut,
     TrackingSnapshotOut,
     TransferRouteOut,
@@ -39,6 +41,14 @@ from app.api.v1.schemas.tracking import (
 )
 from app.api.v1.site_sync import load_sites, run_site_sync, sync_if_stale, sync_state
 from app.api.v1.traccar_access import UNAVAILABLE, traccar, traccar_credentials
+from app.api.v1.transfer_tracking import (
+    ACTIVE_TRANSFER_STATUSES,
+    capture_track,
+    compute_trip,
+    stored_track,
+    transfer_query,
+    trip_context,
+)
 from app.application.fleet.views import build_vehicle_views
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.application.tracking import (
@@ -58,24 +68,18 @@ from app.application.tracking.devices import (
 )
 from app.application.tracking.sites import is_site_geofence
 from app.application.tracking.transfers import (
-    build_transfer_progress,
-    match_trail,
     plan_route,
-    raw_trail,
-    resolve_active_route,
 )
 from app.core.config import settings
 from app.core.exceptions import ConflictError
-from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.fleet import (
-    DriverModel,
     FleetVehicleModel,
 )
 from app.infrastructure.models.inventory_transfer import (
     InventoryTransferModel,
     InventoryVehicleModel,
 )
-from app.infrastructure.models.organization import Branch, Warehouse
+from app.infrastructure.models.tracking import TrackingAlertModel
 from app.infrastructure.repositories.fleet_repository import FleetRepository
 
 router = APIRouter(prefix="/tracking", tags=["tracking"])
@@ -382,94 +386,11 @@ async def list_tracking_events(
 
 # ---------------------------------------------------------------- transfers in transit
 
-_ACTIVE_TRANSFER_STATUSES = ("in_transit", "incident")
 
-
-def _transfer_query(scope: FleetScope) -> Select[Any]:
-    origin_wh, destination_wh = aliased(Warehouse), aliased(Warehouse)
-    origin_br, destination_br = aliased(Branch), aliased(Branch)
-    statement = (
-        select(
-            InventoryTransferModel,
-            InventoryVehicleModel,
-            FleetVehicleModel,
-            Employee.first_name,
-            Employee.last_name,
-            origin_wh.name,
-            origin_br.name,
-            func.coalesce(origin_wh.latitude, origin_br.latitude),
-            func.coalesce(origin_wh.longitude, origin_br.longitude),
-            destination_wh.name,
-            destination_br.name,
-            func.coalesce(destination_wh.latitude, destination_br.latitude),
-            func.coalesce(destination_wh.longitude, destination_br.longitude),
-            func.coalesce(destination_wh.geofence_radius_m, destination_br.geofence_radius_m),
-        )
-        .join(origin_wh, origin_wh.id == InventoryTransferModel.origin_warehouse_id)
-        .join(origin_br, origin_br.id == origin_wh.branch_id)
-        .join(destination_wh, destination_wh.id == InventoryTransferModel.destination_warehouse_id)
-        .join(destination_br, destination_br.id == destination_wh.branch_id)
-        .outerjoin(
-            InventoryVehicleModel, InventoryVehicleModel.id == InventoryTransferModel.vehicle_id
-        )
-        .outerjoin(
-            FleetVehicleModel,
-            (FleetVehicleModel.company_id == InventoryTransferModel.company_id)
-            & (FleetVehicleModel.inventory_vehicle_id == InventoryTransferModel.vehicle_id),
-        )
-        .outerjoin(DriverModel, DriverModel.id == InventoryTransferModel.driver_id)
-        .outerjoin(Employee, Employee.id == DriverModel.employee_id)
-        .where(InventoryTransferModel.company_id == scope.company_id)
-        .execution_options(include_deleted=True)
+def _scoped_transfers(scope: FleetScope) -> Select[Any]:
+    return transfer_query(
+        scope.company_id, None if scope.all_branches else sorted(scope.branch_ids)
     )
-    if not scope.all_branches:
-        branches = sorted(scope.branch_ids)
-        statement = statement.where(
-            or_(origin_br.id.in_(branches), destination_br.id.in_(branches))
-        )
-    return statement
-
-
-def _place(warehouse: str, branch: str, lat: object, lng: object) -> dict[str, Any]:
-    return {
-        "warehouse_name": warehouse,
-        "branch_name": branch,
-        "latitude": float(lat) if lat is not None else None,  # type: ignore[arg-type]
-        "longitude": float(lng) if lng is not None else None,  # type: ignore[arg-type]
-    }
-
-
-def _transfer_row(row: Any) -> tuple[dict[str, Any], FleetVehicleModel | None]:
-    (
-        transfer,
-        vehicle,
-        fleet,
-        first,
-        last,
-        o_wh,
-        o_br,
-        o_lat,
-        o_lng,
-        d_wh,
-        d_br,
-        d_lat,
-        d_lng,
-        d_radius,
-    ) = row
-    data = {
-        "id": transfer.id,
-        "code": transfer.code,
-        "status": transfer.status,
-        "dispatched_at": transfer.dispatched_at,
-        "vehicle_code": fleet.code if fleet else (vehicle.code if vehicle else None),
-        "vehicle_name": f"{fleet.brand} {fleet.model}" if fleet else (vehicle.name if vehicle else None),
-        "vehicle_plate": fleet.plate if fleet else None,
-        "driver_name": f"{first} {last}".strip() if first else None,
-        "origin": _place(o_wh, o_br, o_lat, o_lng),
-        "destination": _place(d_wh, d_br, d_lat, d_lng),
-        "arrival_radius_m": d_radius,
-    }
-    return data, fleet
 
 
 @router.get("/transfers", response_model=list[TrackedTransferOut], dependencies=READ)
@@ -482,33 +403,13 @@ async def list_tracked_transfers(
     scope = await _scope(request, session, current, checker)
     rows = (
         await session.execute(
-            _transfer_query(scope)
-            .where(InventoryTransferModel.status.in_(_ACTIVE_TRANSFER_STATUSES))
+            _scoped_transfers(scope)
+            .where(InventoryTransferModel.status.in_(ACTIVE_TRANSFER_STATUSES))
             .order_by(InventoryTransferModel.dispatched_at.desc().nulls_last())
             .limit(100)
         )
     ).all()
-    return [TrackedTransferOut.model_validate(_transfer_row(row)[0]) for row in rows]
-
-
-async def _device_positions(device_id: int, since: datetime | None) -> list[dict[str, Any]]:
-    now = datetime.now(UTC)
-    start = since or now - timedelta(hours=12)
-    query = urlencode(
-        {
-            "deviceId": device_id,
-            "from": start.astimezone(UTC).isoformat().replace("+00:00", "Z"),
-            "to": now.isoformat().replace("+00:00", "Z"),
-        }
-    )
-    positions: list[dict[str, Any]] = await traccar(f"/api/positions?{query}") or []
-    if positions:
-        return positions
-    # Sin historial desde el despacho, al menos la última posición conocida.
-    latest: list[dict[str, Any]] = (
-        await traccar(f"/api/positions?{urlencode({'deviceId': device_id})}") or []
-    )
-    return latest[-1:]
+    return [TrackedTransferOut.model_validate(trip_context(row).data) for row in rows]
 
 
 @router.get("/transfers/{transfer_id}", response_model=TransferTrackOut, dependencies=READ)
@@ -521,55 +422,146 @@ async def get_transfer_track(
 ) -> TransferTrackOut:
     scope = await _scope(request, session, current, checker)
     row = (
-        await session.execute(_transfer_query(scope).where(InventoryTransferModel.id == transfer_id))
+        await session.execute(
+            _scoped_transfers(scope).where(InventoryTransferModel.id == transfer_id)
+        )
     ).first()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Traslado no encontrado.")
-    data, fleet = _transfer_row(row)
-    arrival_radius_m = data.pop("arrival_radius_m")
-    origin, destination = data["origin"], data["destination"]
-    data.update(gps_configured=traccar_credentials() is not None, device_found=False)
-    if None in (
-        origin["latitude"],
-        origin["longitude"],
-        destination["latitude"],
-        destination["longitude"],
-    ):
-        # Sin coordenadas de origen o destino no hay ruta que dibujar; se devuelve tal cual.
-        return TransferTrackOut.model_validate(data)
-    origin_point = (origin["longitude"], origin["latitude"])
-    destination_point = (destination["longitude"], destination["latitude"])
-    route = await plan_route(settings.OSRM_URL, origin_point, destination_point)
-    data["route"] = route
-
-    positions: list[dict[str, Any]] = []
-    if data["gps_configured"] and fleet is not None and fleet.traccar_device_id is not None:
-        data["device_found"] = True
-        positions = await _device_positions(fleet.traccar_device_id, data["dispatched_at"])
-    trail, trail_matched = await match_trail(
-        settings.OSRM_URL, str(transfer_id), raw_trail(positions)
-    )
-    active_route, rerouted, deviation = route, False, None
-    if positions:
-        vehicle_at = raw_trail(positions)[-1]
-        active_route, rerouted, deviation = await resolve_active_route(
-            settings.OSRM_URL, str(transfer_id), route, destination_point, vehicle_at
+    ctx = trip_context(row)
+    if ctx.final and await stored_track(session, ctx.transfer.id) is None:
+        # Si la captura al recibir falló (Traccar caído), se intenta de nuevo al consultarlo.
+        with suppress(HTTPException):
+            await capture_track(session, ctx)
+    data, _ = await compute_trip(session, ctx)
+    data["alerts"] = [
+        _alert_out(alert, data)
+        for alert in await session.scalars(
+            select(TrackingAlertModel)
+            .where(
+                TrackingAlertModel.transfer_id == transfer_id,
+                TrackingAlertModel.resolved_at.is_(None),
+            )
+            .order_by(TrackingAlertModel.opened_at.desc())
         )
-    data.update(
-        build_transfer_progress(
-            route=route,
-            destination=destination_point,
-            positions=positions,
-            now=datetime.now(UTC),
-            trail=trail,
-            active_route=active_route,
-            rerouted=rerouted,
-            deviation_m=deviation,
-            arrival_radius_m=arrival_radius_m,
-        ),
-        trail_matched=trail_matched,
-    )
+    ]
     return TransferTrackOut.model_validate(data)
+
+
+# ---------------------------------------------------------------- alerts
+
+
+def _alert_out(alert: TrackingAlertModel, trip: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {
+        "id": alert.id,
+        "transfer_id": alert.transfer_id,
+        "transfer_code": (trip or {}).get("code"),
+        "vehicle_code": (trip or {}).get("vehicle_code"),
+        "kind": alert.kind,
+        "severity": alert.severity,
+        "message": alert.message,
+        "details": alert.details,
+        "opened_at": alert.opened_at,
+        "last_seen_at": alert.last_seen_at,
+        "resolved_at": alert.resolved_at,
+        "acknowledged_at": alert.acknowledged_at,
+    }
+
+
+def _alert_scope(scope: FleetScope) -> list[Any]:
+    conditions: list[Any] = [TrackingAlertModel.company_id == scope.company_id]
+    if not scope.all_branches:
+        branches = sorted(scope.branch_ids)
+        conditions.append(
+            or_(
+                TrackingAlertModel.origin_branch_id.in_(branches),
+                TrackingAlertModel.destination_branch_id.in_(branches),
+            )
+        )
+    return conditions
+
+
+@router.get("/alerts", response_model=TrackingAlertsOut, dependencies=READ)
+async def list_tracking_alerts(
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    checker: Checker,
+    state: str = Query("open", pattern="^(open|recent)$"),
+) -> TrackingAlertsOut:
+    """Alerts of the transfers leaving from or arriving at the user's branches."""
+    scope = await _scope(request, session, current, checker)
+    conditions = _alert_scope(scope)
+    if state == "open":
+        conditions.append(TrackingAlertModel.resolved_at.is_(None))
+    else:
+        conditions.append(
+            TrackingAlertModel.opened_at >= datetime.now(UTC) - timedelta(days=7)
+        )
+    rows = (
+        await session.execute(
+            select(
+                TrackingAlertModel,
+                InventoryTransferModel.code,
+                InventoryVehicleModel.code,
+                FleetVehicleModel.code,
+            )
+            .join(InventoryTransferModel, InventoryTransferModel.id == TrackingAlertModel.transfer_id)
+            .outerjoin(
+                InventoryVehicleModel,
+                InventoryVehicleModel.id == InventoryTransferModel.vehicle_id,
+            )
+            .outerjoin(
+                FleetVehicleModel,
+                (FleetVehicleModel.company_id == InventoryTransferModel.company_id)
+                & (FleetVehicleModel.inventory_vehicle_id == InventoryTransferModel.vehicle_id),
+            )
+            .where(*conditions)
+            .execution_options(include_deleted=True)
+            .order_by(TrackingAlertModel.opened_at.desc())
+            .limit(200)
+        )
+    ).all()
+    items = [
+        _alert_out(alert, {"code": code, "vehicle_code": fleet_code or vehicle_code})
+        for alert, code, vehicle_code, fleet_code in rows
+    ]
+    unacknowledged = sum(
+        1 for item in items if item["resolved_at"] is None and item["acknowledged_at"] is None
+    )
+    return TrackingAlertsOut.model_validate(
+        {
+            "items": items,
+            "unacknowledged": unacknowledged,
+            "monitor_active": traccar_credentials() is not None,
+        }
+    )
+
+
+@router.post(
+    "/alerts/{alert_id}/acknowledge", response_model=TrackingAlertOut, dependencies=READ
+)
+async def acknowledge_tracking_alert(
+    alert_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    checker: Checker,
+) -> TrackingAlertOut:
+    """Mark an alert as seen; it stays open until its condition clears."""
+    scope = await _scope(request, session, current, checker)
+    alert = await session.scalar(
+        select(TrackingAlertModel)
+        .where(TrackingAlertModel.id == alert_id, *_alert_scope(scope))
+        .with_for_update()
+    )
+    if alert is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Alerta no encontrada.")
+    if alert.acknowledged_at is None:
+        alert.acknowledged_at = datetime.now(UTC)
+        alert.acknowledged_by = current.id
+        await session.flush()
+    return TrackingAlertOut.model_validate(_alert_out(alert))
 
 
 @router.get("/route", response_model=TransferRouteOut, dependencies=READ)

@@ -12,6 +12,7 @@
   import { onMount } from 'svelte';
   import Sidebar from '$lib/components/ui/Sidebar.svelte';
   import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
+  import TrackingAlertsBell from '$lib/features/tracking/TrackingAlertsBell.svelte';
   import UserMenu from '$lib/components/ui/UserMenu.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { clearPrivateQueryCache } from '$lib/services/query-client';
@@ -365,6 +366,7 @@
             stroke-width="2"><path d="m9 18 6-6-6-6" /></svg
           >
         </button>
+        <TrackingAlertsBell />
         <ThemeToggle />
         <UserMenu user={session.user} {loading} onLogout={handleLogout} />
       </div>
