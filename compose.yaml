@@ -425,7 +425,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
-      start_period: 25s
+      # La primera compilación de SvelteKit puede tardar más de un minuto con el código
+      # montado desde Windows; durante el arranque los fallos del chequeo no cuentan.
+      start_period: 180s
     restart: unless-stopped
 
   # ---------------- Local observability (OpenTelemetry + Grafana) ----------------
