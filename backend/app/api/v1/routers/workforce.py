@@ -21,6 +21,7 @@ from app.infrastructure.models.employee import (
     Employee,
     EmployeeBranchAssignment,
 )
+from app.infrastructure.models.fleet import DriverModel
 from app.infrastructure.models.organization import Branch
 
 router = APIRouter(tags=["workforce"])
@@ -190,6 +191,20 @@ async def end_employee_assignment(
         raise HTTPException(404, "Empleado no encontrado.")
     await require_company_access(session, current, employee.company_id, require_active=True)
     await resolve_branch_scope(session, current, employee.company_id, obj.branch_id)
+    home_driver = await session.scalar(
+        select(DriverModel.id).where(
+            DriverModel.company_id == employee.company_id,
+            DriverModel.employee_id == employee.id,
+            DriverModel.branch_id == obj.branch_id,
+            DriverModel.status != "inactive",
+        )
+    )
+    if home_driver is not None:
+        raise HTTPException(
+            409,
+            "El empleado es conductor con sucursal base en esta sucursal; cambie su sucursal "
+            "base o desactive su perfil de conductor primero.",
+        )
     before = dump(obj)
     obj.is_active = False
     obj.assigned_until = datetime.now(UTC).date()

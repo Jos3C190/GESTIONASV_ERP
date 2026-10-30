@@ -19,13 +19,14 @@
   } from './catalog';
   import ComplianceList from './ComplianceList.svelte';
   import FleetIcon from './FleetIcon.svelte';
+  import VehicleDriverPanel from './VehicleDriverPanel.svelte';
   import VehicleGallery from './VehicleGallery.svelte';
   import VehicleImage from './VehicleImage.svelte';
   import VehicleStatus from './VehicleStatus.svelte';
 
   let { vehicleId }: { vehicleId: string } = $props();
 
-  type Tab = 'summary' | 'documents' | 'gallery';
+  type Tab = 'summary' | 'driver' | 'documents' | 'gallery';
   let vehicle = $state<FleetVehicle | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -43,6 +44,11 @@
   const tabs = $derived(
     [
       { id: 'summary' as const, label: 'Resumen', visible: true },
+      {
+        id: 'driver' as const,
+        label: 'Conductor',
+        visible: permissions.hasPermission('drivers:read')
+      },
       { id: 'documents' as const, label: 'Documentos', visible: canReadDocuments },
       { id: 'gallery' as const, label: 'Galería', visible: true }
     ].filter((item) => item.visible)
@@ -260,6 +266,8 @@
             {#if vehicle.notes}<p class="notes">{vehicle.notes}</p>{/if}
           </section>
         </div>
+      {:else if tab === 'driver'}
+        <VehicleDriverPanel {vehicle} onchanged={load} />
       {:else if tab === 'documents'}
         <OwnedDocumentsPanel
           owner={fleetApi.documents(vehicle.id)}

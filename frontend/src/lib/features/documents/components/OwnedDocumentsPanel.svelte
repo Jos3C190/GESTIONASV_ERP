@@ -12,11 +12,21 @@
     owner: OwnedDocumentsApi;
     title: string;
     description: string;
-    permissionPrefix: string;
+    permissionPrefix?: string;
+    /** Permisos explícitos cuando no siguen el patrón prefijo:acción. */
+    permissionCodes?: { read: string; upload: string; update: string; download: string };
     /** Avisa al contenedor para recalcular la aptitud tras cambios. */
     onchanged?: () => void;
   }
-  let { owner, title, description, permissionPrefix, onchanged }: Props = $props();
+  let { owner, title, description, permissionPrefix, permissionCodes, onchanged }: Props = $props();
+  const codes = $derived(
+    permissionCodes ?? {
+      read: `${permissionPrefix}:read`,
+      upload: `${permissionPrefix}:upload`,
+      update: `${permissionPrefix}:update`,
+      download: `${permissionPrefix}:download`
+    }
+  );
 
   let documents = $state<DocumentRecordOut[]>([]);
   let categories = $state<DocumentCategoryOut[]>([]);
@@ -32,10 +42,10 @@
   let versions = $state<DocumentRecordOut[]>([]);
   let openingDocumentId = $state<string | null>(null);
 
-  const canRead = $derived(permissions.hasPermission(`${permissionPrefix}:read`));
-  const canUpload = $derived(permissions.hasPermission(`${permissionPrefix}:upload`));
-  const canUpdate = $derived(permissions.hasPermission(`${permissionPrefix}:update`));
-  const canDownload = $derived(permissions.hasPermission(`${permissionPrefix}:download`));
+  const canRead = $derived(permissions.hasPermission(codes.read));
+  const canUpload = $derived(permissions.hasPermission(codes.upload));
+  const canUpdate = $derived(permissions.hasPermission(codes.update));
+  const canDownload = $derived(permissions.hasPermission(codes.download));
 
   /** Categorías obligatorias sin documento vigente: invitan a cargarlas directamente. */
   const missingRequired = $derived(

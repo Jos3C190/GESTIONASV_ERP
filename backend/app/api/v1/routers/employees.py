@@ -43,6 +43,7 @@ from app.infrastructure.models.employee import (
     DepartmentBranchAssignment,
     EmployeeBranchAssignment,
 )
+from app.infrastructure.models.fleet import DriverModel
 from app.infrastructure.repositories import SqlAlchemyLifecycleRepository
 
 router = APIRouter(prefix="/employees", tags=["employees"])
@@ -309,6 +310,19 @@ async def update_employee(
         .scalars()
         .all()
     )
+    if body.status in {"inactivo", "baja"}:
+        active_driver = await session.scalar(
+            select(DriverModel.id).where(
+                DriverModel.company_id == before.company_id,
+                DriverModel.employee_id == emp_id,
+                DriverModel.status != "inactive",
+            )
+        )
+        if active_driver is not None:
+            raise HTTPException(
+                409,
+                "El empleado tiene un perfil de conductor activo; desactívelo en Conductores primero.",
+            )
     if body.status in {"inactivo", "baja"} and active_assignments:
         raise HTTPException(
             409, "Finalice primero las asignaciones activas del empleado a sucursales."

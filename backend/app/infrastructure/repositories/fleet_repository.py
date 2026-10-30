@@ -12,7 +12,7 @@ from collections.abc import Iterable, Sequence
 from datetime import date
 from typing import Any
 
-from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import and_, func, or_, select
 
 from app.application.fleet.compliance import RequiredCategory
 from app.infrastructure.models.document import DocumentAssetModel
@@ -28,6 +28,7 @@ from app.infrastructure.models.fleet import (
 )
 from app.infrastructure.models.inventory_transfer import InventoryTransferModel
 from app.infrastructure.models.organization import Branch, Warehouse
+from app.infrastructure.repositories.fleet_driver_queries import DriverQueries
 
 ACTIVE_TRANSFER_STATUSES = ("in_transit", "incident")
 
@@ -41,7 +42,7 @@ def _like(value: str) -> str:
     return f"%{escaped}%"
 
 
-class FleetRepository:
+class FleetRepository(DriverQueries):
     def __init__(self, session: Any) -> None:
         self._session = session
 
@@ -413,12 +414,3 @@ class FleetRepository:
             .limit(1)
         )
         return found is not None
-
-    def driver_query(self) -> Select[Any]:
-        return select(DriverModel, Employee).join(
-            Employee,
-            and_(
-                Employee.id == DriverModel.employee_id,
-                Employee.company_id == DriverModel.company_id,
-            ),
-        )

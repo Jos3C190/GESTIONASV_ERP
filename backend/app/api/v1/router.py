@@ -19,6 +19,7 @@ from app.api.v1.routers import (
     document_general,
     document_general_import,
     documents,
+    drivers,
     employee_documents,
     employees,
     expense_types,
@@ -93,6 +94,8 @@ api_router.include_router(dashboard.router, prefix="/api/v1")
 api_router.include_router(tracking.router, prefix="/api/v1")
 api_router.include_router(fleet.router, prefix="/api/v1")
 api_router.include_router(fleet.documents_router, prefix="/api/v1")
+api_router.include_router(drivers.router, prefix="/api/v1")
+api_router.include_router(drivers.documents_router, prefix="/api/v1")
 api_router.include_router(media.router, prefix="/api/v1")
 api_router.include_router(catalog.router, prefix="/api/v1")
 api_router.include_router(product_master.router, prefix="/api/v1")
