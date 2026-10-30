@@ -73,6 +73,8 @@ async def test_warehouse_guard_checks_branch_scope_after_company_match(
     branch_check = AsyncMock()
     monkeypatch.setattr(location_router, "resolve_branch_scope", branch_check)
     session = AsyncMock()
+    warehouse_check = AsyncMock()
+    monkeypatch.setattr(location_router, "authorize_warehouse_assignment", warehouse_check)
     current = SimpleNamespace(id=uuid.uuid4(), is_superuser=False)
 
     await location_router._authorize_warehouse(
@@ -88,6 +90,9 @@ async def test_warehouse_guard_checks_branch_scope_after_company_match(
         current,
         selected_company,
         persisted_scope.branch_id,
+    )
+    warehouse_check.assert_awaited_once_with(
+        session, current, selected_company, persisted_scope.warehouse_id
     )
 
 

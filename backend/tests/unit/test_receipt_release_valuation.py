@@ -19,7 +19,7 @@ from app.infrastructure.repositories.inventory_valuation_repository import (
 async def test_release_of_valued_purchase_respects_applicable_retaceo(
     has_retaceo, applied, allowed
 ):
-    source = SimpleNamespace(id=uuid.uuid4(), purchase_detail_id=uuid.uuid4())
+    source = SimpleNamespace(id=uuid.uuid4(), purchase_detail_id=uuid.uuid4(), retaceo_id=None)
     session = AsyncMock()
     session.scalar.side_effect = [
         source,

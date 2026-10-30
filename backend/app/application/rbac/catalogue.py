@@ -240,7 +240,11 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("locations.commission", "Comisionar y retirar ubicaciones", "locations"),
     # --- inventory and physical capacity ---
     PermissionSpec("inventory:read", "Consultar inventario y capacidad", "inventory"),
-    PermissionSpec("inventory:warehouse_receipts", "Operar el panel de bodega y verificar recepciones físicas", "inventory"),
+    PermissionSpec(
+        "inventory:warehouse_receipts",
+        "Operar el panel de bodega y verificar recepciones físicas",
+        "inventory",
+    ),
     PermissionSpec(
         "inventory:manage_packaging",
         "Gestionar unidades base y presentaciones",

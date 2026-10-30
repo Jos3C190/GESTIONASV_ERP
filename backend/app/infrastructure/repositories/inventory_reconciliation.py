@@ -3,10 +3,12 @@
 import uuid
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import Numeric, and_, case, cast, column, func, literal, or_, select, union_all
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import Subquery
 
 from app.domain.entities.inventory_kardex import LOCAL_TZ
 from app.infrastructure.models.catalog import ProductModel, UnitModel
@@ -19,6 +21,7 @@ from app.infrastructure.models.inventory import (
 from app.infrastructure.models.inventory_valuation import (
     InventoryCostAverageModel,
     InventoryValuationEntryModel,
+    InventoryValuationSettingModel,
 )
 from app.infrastructure.models.product_variant import ProductVariantModel
 from app.infrastructure.repositories.inventory_valuation_repository import (
@@ -28,7 +31,9 @@ from app.infrastructure.repositories.inventory_valuation_repository import (
 ZERO = Decimal("0")
 
 
-def _physical_at(setting, company_id, cutoff):
+def _physical_at(
+    setting: InventoryValuationSettingModel, company_id: uuid.UUID, cutoff: datetime
+) -> Subquery:
     snapshot = func.jsonb_array_elements(
         literal(setting.physical_snapshot, type_=JSONB)
     ).table_valued(column("value", JSONB))
@@ -73,7 +78,7 @@ def _physical_at(setting, company_id, cutoff):
     )
 
 
-def _values_at(company_id, cutoff):
+def _values_at(company_id: uuid.UUID, cutoff: datetime) -> Subquery:
     entry = InventoryValuationEntryModel
     ranked = (
         select(
@@ -100,7 +105,7 @@ async def reconciliation(
     as_of: date | None = None,
     query: str = "",
     difference_only: bool = False,
-):
+) -> dict[str, Any]:
     valuation = SqlAlchemyInventoryValuationRepository(session)
     await valuation.lock(company_id)
     setting = await valuation.settings(company_id)

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable
-from typing import Annotated, TypeVar
+from typing import Annotated, Any, TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -54,7 +55,7 @@ from app.infrastructure.repositories.inventory_transfer_repository import (
 )
 
 router = APIRouter(prefix="/inventory/transfers", tags=["inventory transfers"])
-T = TypeVar("T")
+T = TypeVar("T", bound=BaseModel)
 
 
 def _use_cases(session: SessionDep) -> InventoryTransferUseCases:
@@ -205,7 +206,7 @@ async def _persist_command(
     action: str,
     resource_type: str,
     resource_id: str | None,
-    operation: Awaitable[T],
+    operation: Awaitable[dict[str, Any]],
     response_model: type[T],
 ) -> T:
     """Keep document, stock projection and required audit inside one savepoint."""
@@ -219,7 +220,7 @@ async def _persist_command(
                 company_id=company_id,
                 branch_id=branch_id,
                 resource_type=resource_type,
-                resource_id=resource_id or str(getattr(response, "id", "")),
+                resource_id=resource_id or str(getattr(response, "id", None) or ""),
                 after_state=jsonable_encoder(response),
                 ip_address=request.client.host if request.client else None,
                 user_agent=request.headers.get("user-agent"),
@@ -385,7 +386,7 @@ async def list_transfers(
     if branch_id is not None:
         if not context.access_all_branches and not context.can_access(branch_id):
             raise HTTPException(403, "No tiene acceso a esta sucursal.")
-        filters = {"branch_id": branch_id}
+        filters: dict[str, Any] = {"branch_id": branch_id}
     else:
         filters = {
             "branch_ids": None

@@ -38,9 +38,7 @@ async def test_branch_scoped_catalogue_includes_mother_only_when_requested(e2e_c
     assert branches_response.status_code == 200, branches_response.text
     branches = branches_response.json()
     branch_id = next(item["id"] for item in branches if not item["is_headquarters"])
-    headquarters_id = next(
-        (item["id"] for item in branches if item["is_headquarters"]), None
-    )
+    headquarters_id = next((item["id"] for item in branches if item["is_headquarters"]), None)
     if headquarters_id is None:
         create_headquarters = await e2e_client.post(
             "/api/v1/branches",

@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
+from sqlalchemy.sql import ColumnElement, Select
 
 from app.domain.entities.inventory import ZERO
 from app.domain.entities.inventory_kardex import LOCAL_TZ, snapshot_quantity
@@ -37,7 +38,7 @@ from app.infrastructure.repositories.inventory_valuation_repository import (
 )
 
 
-def _reference_matches(column, value):
+def _reference_matches(column: ColumnElement[str], value: str) -> ColumnElement[bool]:
     for code, prefix in (
         ("TR-", "inventory_transfer"),
         ("AJ-", "adjustment"),
@@ -50,7 +51,7 @@ def _reference_matches(column, value):
     return column == value
 
 
-def _physical_projection(company_id: uuid.UUID, warehouse_id: uuid.UUID):
+def _physical_projection(company_id: uuid.UUID, warehouse_id: uuid.UUID) -> Select[Any]:
     """Build one warehouse's movement projection used by all physical balances."""
     line = InventoryMovementLineModel
     movement = InventoryMovementModel
@@ -184,7 +185,12 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def context(self, company_id, item_id=None, warehouse_id=None):
+    async def context(
+        self,
+        company_id: uuid.UUID,
+        item_id: uuid.UUID | None = None,
+        warehouse_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
         return await InventoryKardexContextRepository(self.session).context(
             company_id, item_id, warehouse_id
         )
@@ -231,7 +237,7 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
             .correlate(item)
             .scalar_subquery()
         )
-        search_filters = [
+        search_filters: list[ColumnElement[bool]] = [
             ProductModel.name.ilike(term),
             ProductModel.sku.ilike(term),
             ProductModel.internal_code.ilike(term),
@@ -389,7 +395,7 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
             .mappings()
             .all()
         )
-        return period, total, raw_rows
+        return period, total, [dict(row) for row in raw_rows]
 
     async def _physical_kardex_balances(
         self,
@@ -486,7 +492,7 @@ class SqlAlchemyInventoryKardexReadRepository(InventoryKardexReadRepository):
                     )
                 )
             ).all()
-            unit_warehouse_by_id = dict(scopes)
+            unit_warehouse_by_id = {row[0]: row[1] for row in scopes}
 
         endpoint_ids = {
             endpoint

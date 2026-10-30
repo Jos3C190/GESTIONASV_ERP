@@ -168,9 +168,7 @@ async def get_purchase_request(
     status_code=status.HTTP_201_CREATED,
     summary="Crear solicitud de compra",
     dependencies=[
-        Depends(
-            require_any_permission("purchase_requests:manage", "purchase_requests:create")
-        )
+        Depends(require_any_permission("purchase_requests:manage", "purchase_requests:create"))
     ],
 )
 async def create_purchase_request(
@@ -214,9 +212,7 @@ async def create_purchase_request(
     status_code=status.HTTP_200_OK,
     summary="Actualizar borrador de solicitud de compra",
     dependencies=[
-        Depends(
-            require_any_permission("purchase_requests:manage", "purchase_requests:create")
-        )
+        Depends(require_any_permission("purchase_requests:manage", "purchase_requests:create"))
     ],
 )
 async def update_purchase_request(
@@ -311,9 +307,7 @@ async def _transition_purchase_request(
     status_code=status.HTTP_200_OK,
     summary="Enviar solicitud de compra a aprobación",
     dependencies=[
-        Depends(
-            require_any_permission("purchase_requests:manage", "purchase_requests:create")
-        )
+        Depends(require_any_permission("purchase_requests:manage", "purchase_requests:create"))
     ],
 )
 async def submit_purchase_request(

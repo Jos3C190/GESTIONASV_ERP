@@ -123,7 +123,9 @@ class PurchaseConsolidationAdjudicationUseCases:
         self, company_id: uuid.UUID, consolidation_id: uuid.UUID
     ) -> PurchaseConsolidationAwardBoard:
         consolidation = await self._get_consolidation(company_id, consolidation_id)
-        quotations = await self._quotations.list_consolidation_quotations(company_id, consolidation_id)
+        quotations = await self._quotations.list_consolidation_quotations(
+            company_id, consolidation_id
+        )
         awards = await self._consolidations.list_awards(company_id, consolidation_id)
         ordered = (
             await self._purchase_orders.get_ordered_award_quantities(
@@ -160,9 +162,7 @@ class PurchaseConsolidationAdjudicationUseCases:
                 code="purchase_award_quantity_invalid",
             )
         instant = now or datetime.now(UTC)
-        consolidation = await self._get_consolidation(
-            company_id, consolidation_id, for_update=True
-        )
+        consolidation = await self._get_consolidation(company_id, consolidation_id, for_update=True)
         self._ensure_awardable_consolidation(consolidation)
         quotations = await self._quotations.list_consolidation_quotations(
             company_id, consolidation_id
@@ -235,9 +235,7 @@ class PurchaseConsolidationAdjudicationUseCases:
         reason: str,
     ) -> PurchaseConsolidationAward:
         reason = self._required_reason(reason)
-        consolidation = await self._get_consolidation(
-            company_id, consolidation_id, for_update=True
-        )
+        consolidation = await self._get_consolidation(company_id, consolidation_id, for_update=True)
         self._ensure_awardable_consolidation(consolidation)
         if self._purchase_orders is not None:
             ordered = await self._purchase_orders.get_ordered_award_quantities(
@@ -269,9 +267,7 @@ class PurchaseConsolidationAdjudicationUseCases:
         *,
         for_update: bool = False,
     ) -> PurchaseConsolidation:
-        item = await self._consolidations.get(
-            company_id, consolidation_id, for_update=for_update
-        )
+        item = await self._consolidations.get(company_id, consolidation_id, for_update=for_update)
         if item is None:
             raise NotFoundError(
                 "Consolidado de compra no encontrado.",
@@ -370,8 +366,7 @@ class PurchaseConsolidationAdjudicationUseCases:
             if quotation.status not in VISIBLE_QUOTATION_STATUSES:
                 continue
             snapshots_by_detail = {
-                snapshot.purchase_quotation_detail_id: snapshot
-                for snapshot in quotation.snapshots
+                snapshot.purchase_quotation_detail_id: snapshot for snapshot in quotation.snapshots
             }
             for detail in quotation.details:
                 snapshot = snapshots_by_detail.get(detail.id)
@@ -409,9 +404,7 @@ class PurchaseConsolidationAdjudicationUseCases:
         )
         remaining_offer = max(offer_cap - already_awarded, ZERO)
         supplier_awards = [
-            award
-            for award in active_line_awards
-            if award.supplier_id == quotation.supplier_id
+            award for award in active_line_awards if award.supplier_id == quotation.supplier_id
         ]
         blocked_reason = cls._offer_blocked_reason(
             quotation,
@@ -433,9 +426,7 @@ class PurchaseConsolidationAdjudicationUseCases:
             quotation_delivery_days=quotation.delivery_days,
             quotation_payment_terms=quotation.payment_terms,
             quotation_total=quotation.total,
-            quotation_expenses_total=sum(
-                (expense.amount for expense in quotation.expenses), ZERO
-            ),
+            quotation_expenses_total=sum((expense.amount for expense in quotation.expenses), ZERO),
             quotation_detail_id=detail.id,
             requested_quantity=detail.quantity,
             offered_quantity=offered,

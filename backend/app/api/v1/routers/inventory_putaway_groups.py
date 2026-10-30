@@ -284,19 +284,21 @@ async def _build_replay_allocations(
             )
         )
         confirmed.append(
-            ConfirmedPutawayAllocationOut(
-                inventory_lot_detail_id=body.inventory_lot_detail_id,
-                receipt_lot_detail_code=detail_code or "",
-                source_handling_unit_id=allocation.handling_unit_id,
-                handling_unit_id=line.handling_unit_id,
-                handling_unit_code=handling_unit.code,
-                movement_id=movement.id,
-                destination_location_id=allocation.destination_location_id,
-                destination_location_code=destination_location_code,
-                quantity_base=line.quantity_base,
-                stock_status=line.to_stock_status,
-                measurement_status=line.measurement_status,
-                measurement_source=handling_unit.measurement_source,
+            ConfirmedPutawayAllocationOut.model_validate(
+                {
+                    "inventory_lot_detail_id": body.inventory_lot_detail_id,
+                    "receipt_lot_detail_code": detail_code or "",
+                    "source_handling_unit_id": allocation.handling_unit_id,
+                    "handling_unit_id": line.handling_unit_id,
+                    "handling_unit_code": handling_unit.code,
+                    "movement_id": movement.id,
+                    "destination_location_id": allocation.destination_location_id,
+                    "destination_location_code": destination_location_code,
+                    "quantity_base": line.quantity_base,
+                    "stock_status": line.to_stock_status,
+                    "measurement_status": line.measurement_status,
+                    "measurement_source": handling_unit.measurement_source,
+                }
             )
         )
     return confirmed
@@ -746,19 +748,21 @@ async def confirm_putaway_group(
                         "No se pudo recuperar la unidad logística resultante.",
                     )
                 confirmed.append(
-                    ConfirmedPutawayAllocationOut(
-                        inventory_lot_detail_id=body.inventory_lot_detail_id,
-                        receipt_lot_detail_code=lot_details_code,
-                        source_handling_unit_id=allocation.handling_unit_id,
-                        handling_unit_id=line["handling_unit_id"],
-                        handling_unit_code=handling_unit_result.code,
-                        movement_id=movement["id"],
-                        destination_location_id=allocation.destination_location_id,
-                        destination_location_code=destination_location.code,
-                        quantity_base=line["quantity_base"],
-                        stock_status=target_status,
-                        measurement_status=line["measurement_status"],
-                        measurement_source=handling_unit_result.measurement_source,
+                    ConfirmedPutawayAllocationOut.model_validate(
+                        {
+                            "inventory_lot_detail_id": body.inventory_lot_detail_id,
+                            "receipt_lot_detail_code": lot_details_code,
+                            "source_handling_unit_id": allocation.handling_unit_id,
+                            "handling_unit_id": line["handling_unit_id"],
+                            "handling_unit_code": handling_unit_result.code,
+                            "movement_id": movement["id"],
+                            "destination_location_id": allocation.destination_location_id,
+                            "destination_location_code": destination_location.code,
+                            "quantity_base": line["quantity_base"],
+                            "stock_status": target_status,
+                            "measurement_status": line["measurement_status"],
+                            "measurement_source": handling_unit_result.measurement_source,
+                        }
                     )
                 )
 

@@ -547,9 +547,8 @@ class SqlAlchemyLifecycleRepository:
         elif policy.scope in {"company", "warehouse"}:
             stmt = stmt.where(policy.model.company_id == company_id)
         elif policy.scope == "location":
-            stmt = (
-                stmt.join(Warehouse, policy.model.warehouse_id == Warehouse.id)
-                .where(Warehouse.company_id == company_id)
+            stmt = stmt.join(Warehouse, policy.model.warehouse_id == Warehouse.id).where(
+                Warehouse.company_id == company_id
             )
         elif policy.scope == "supplier_contact":
             stmt = stmt.join(

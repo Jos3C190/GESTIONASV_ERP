@@ -117,7 +117,7 @@ describe('RetaceoDraftEditor', () => {
       await screen.findByRole('heading', { name: 'Costos y comprobantes' })
     ).toBeInTheDocument();
     expect(screen.getByText('Retaceo · RET-0001')).toBeInTheDocument();
-    expect(screen.getByText(/Orden COM-0001/)).toBeInTheDocument();
+    expect(screen.getByText(/Compra COM-0001/)).toBeInTheDocument();
 
     await fireEvent.input(screen.getByLabelText('Concepto'), {
       target: { value: 'Flete internacional' }
@@ -132,6 +132,13 @@ describe('RetaceoDraftEditor', () => {
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(retaceo.id, {
+        import_data: {
+          origin_country: null,
+          import_invoice_number: null,
+          import_invoice_date: null,
+          import_policy_number: null,
+          import_policy_date: null
+        },
         total_freight: '10.000000',
         total_expenses: '5.000000',
         total_dai: '3.000000',
@@ -151,9 +158,9 @@ describe('RetaceoDraftEditor', () => {
     });
 
     expect(
-      await screen.findByText('Borrador guardado. Abriendo el detalle para calcular el retaceo.')
+      await screen.findByText('Borrador guardado. Puedes adjuntar comprobantes de forma opcional o abrir el detalle para calcular el retaceo.')
     ).toBeInTheDocument();
-    expect(mocks.goto).toHaveBeenCalledWith(`/retaceos/${retaceo.id}`);
+    expect(mocks.goto).not.toHaveBeenCalled();
   });
 
   it('blocks editing for a non-draft retaceo', async () => {

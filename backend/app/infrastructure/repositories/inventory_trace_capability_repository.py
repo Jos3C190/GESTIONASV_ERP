@@ -6,8 +6,11 @@ import hashlib
 import secrets
 import uuid
 from datetime import UTC, datetime
+from typing import Any
+from typing import cast as type_cast
 
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.models.inventory import InventoryHandlingUnitModel
@@ -67,14 +70,17 @@ class SqlAlchemyInventoryTraceCapabilityRepository:
             )
             .values(revoked_at=datetime.now(UTC), revoked_by=actor_id)
         )
-        return int(result.rowcount or 0)
+        return int(type_cast(CursorResult[Any], result).rowcount or 0)
 
     async def get_active(self, token: str) -> InventoryTraceCapabilityModel | None:
-        return await self.session.scalar(
-            select(InventoryTraceCapabilityModel).where(
-                InventoryTraceCapabilityModel.token_digest == digest_trace_token(token),
-                InventoryTraceCapabilityModel.revoked_at.is_(None),
-            )
+        return type_cast(
+            InventoryTraceCapabilityModel | None,
+            await self.session.scalar(
+                select(InventoryTraceCapabilityModel).where(
+                    InventoryTraceCapabilityModel.token_digest == digest_trace_token(token),
+                    InventoryTraceCapabilityModel.revoked_at.is_(None),
+                )
+            ),
         )
 
 

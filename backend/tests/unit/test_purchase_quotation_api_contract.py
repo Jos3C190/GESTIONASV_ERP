@@ -153,15 +153,15 @@ def test_purchase_quotation_routes_are_registered_in_openapi() -> None:
     assert "get" in paths["/api/v1/purchase-quotations/comparison/{purchase_request_id}"]
     assert "put" in paths["/api/v1/purchase-quotations/{quotation_id}/response"]
     assert "get" in paths["/api/v1/purchase-quotations/{quotation_id}/documents"]
-    assert "delete" in paths[
-        "/api/v1/purchase-quotations/{quotation_id}/documents/{document_id}"
-    ]
+    assert "delete" in paths["/api/v1/purchase-quotations/{quotation_id}/documents/{document_id}"]
     assert "post" in paths["/api/v1/purchase-quotations/{quotation_id}/documents/uploads"]
-    assert "post" in paths[
-        "/api/v1/purchase-quotations/{quotation_id}/documents/{document_id}/complete"
-    ]
-    assert "post" in paths[
-        "/api/v1/purchase-quotations/{quotation_id}/documents/{document_id}/download-url"
-    ]
+    assert (
+        "post"
+        in paths["/api/v1/purchase-quotations/{quotation_id}/documents/{document_id}/complete"]
+    )
+    assert (
+        "post"
+        in paths["/api/v1/purchase-quotations/{quotation_id}/documents/{document_id}/download-url"]
+    )
     for action in ("send", "evaluate", "select", "reject", "cancel"):
         assert "post" in paths[f"/api/v1/purchase-quotations/{{quotation_id}}/{action}"]

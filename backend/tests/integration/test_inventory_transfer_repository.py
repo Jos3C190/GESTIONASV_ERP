@@ -793,9 +793,7 @@ async def test_demand_progress_tracks_assignment_dispatch_and_partial_receipt_on
             session.add(request_line)
             await session.flush()
 
-            use_cases = InventoryTransferUseCases(
-                SqlAlchemyInventoryTransferRepository(session)
-            )
+            use_cases = InventoryTransferUseCases(SqlAlchemyInventoryTransferRepository(session))
             transfer = await use_cases.create_transfer(
                 company_id=context.company_id,
                 origin_warehouse_id=context.origin.id,
@@ -1050,7 +1048,9 @@ async def test_transfer_command_savepoint_rolls_back_partial_movement_failures(m
                     actor_id=context.actor_id,
                 )
                 with pytest.raises(
-                    InventoryBoundaryError if isinstance(failure, InventoryOperationError) else RuntimeError
+                    InventoryBoundaryError
+                    if isinstance(failure, InventoryOperationError)
+                    else RuntimeError
                 ):
                     await _persist_command(
                         session=session,
@@ -1082,31 +1082,37 @@ async def test_transfer_command_savepoint_rolls_back_partial_movement_failures(m
                 assert persisted_transfer.status == "preparation"
                 assert persisted_transfer.dispatch_command_id is None
                 assert persisted_transfer.dispatch_movement_id is None
-                assert await session.scalar(
-                    select(func.count(InventoryMovementModel.id)).where(
-                        InventoryMovementModel.company_id == context.company_id,
-                        InventoryMovementModel.source_reference == movement_source,
-                    )
-                ) == 0
-                assert list(
-                    (
-                        await session.execute(
-                            select(
-                                InventoryBalanceModel.location_id,
-                                InventoryBalanceModel.stock_status,
-                                InventoryBalanceModel.quantity_base,
-                            )
-                            .where(
-                                InventoryBalanceModel.company_id == context.company_id,
-                                InventoryBalanceModel.inventory_item_id == context.item.id,
-                            )
-                            .order_by(
-                                InventoryBalanceModel.location_id,
-                                InventoryBalanceModel.stock_status,
-                            )
+                assert (
+                    await session.scalar(
+                        select(func.count(InventoryMovementModel.id)).where(
+                            InventoryMovementModel.company_id == context.company_id,
+                            InventoryMovementModel.source_reference == movement_source,
                         )
-                    ).all()
-                ) == balance_snapshot
+                    )
+                    == 0
+                )
+                assert (
+                    list(
+                        (
+                            await session.execute(
+                                select(
+                                    InventoryBalanceModel.location_id,
+                                    InventoryBalanceModel.stock_status,
+                                    InventoryBalanceModel.quantity_base,
+                                )
+                                .where(
+                                    InventoryBalanceModel.company_id == context.company_id,
+                                    InventoryBalanceModel.inventory_item_id == context.item.id,
+                                )
+                                .order_by(
+                                    InventoryBalanceModel.location_id,
+                                    InventoryBalanceModel.stock_status,
+                                )
+                            )
+                        ).all()
+                    )
+                    == balance_snapshot
+                )
                 valuation_after = await session.get(
                     InventoryCostAverageModel,
                     (context.company_id, context.item.id),
@@ -1117,13 +1123,16 @@ async def test_transfer_command_savepoint_rolls_back_partial_movement_failures(m
                     valuation_after.inventory_value,
                     valuation_after.average_unit_cost,
                 ) == valuation_snapshot
-                assert await session.scalar(
-                    select(func.count(AuditLog.id)).where(
-                        AuditLog.company_id == context.company_id,
-                        AuditLog.action == "DISPATCH_TRANSFER",
-                        AuditLog.resource_id == str(transfer["id"]),
+                assert (
+                    await session.scalar(
+                        select(func.count(AuditLog.id)).where(
+                            AuditLog.company_id == context.company_id,
+                            AuditLog.action == "DISPATCH_TRANSFER",
+                            AuditLog.resource_id == str(transfer["id"]),
+                        )
                     )
-                ) == 0
+                    == 0
+                )
                 audit.record.assert_not_awaited()
         finally:
             if transaction.is_active:

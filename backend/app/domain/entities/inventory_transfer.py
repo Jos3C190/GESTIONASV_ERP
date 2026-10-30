@@ -75,4 +75,3 @@ def validate_dispatch_quantity(*, requested: Decimal, available: Decimal) -> Non
             "La cantidad solicitada supera la unidad logística disponible.",
             code="transfer_over_dispatch",
         )
-

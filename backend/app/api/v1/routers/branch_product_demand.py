@@ -30,6 +30,7 @@ from app.infrastructure.models.purchase_request import (
 )
 
 router = APIRouter(tags=["branch-product-demand"])
+MAX_DEMAND_PERIOD_DAYS = 365
 _EL_SALVADOR_TIMEZONE = ZoneInfo("America/El_Salvador")
 _DEMAND_STATUSES = (
     "submitted",
@@ -85,7 +86,7 @@ async def get_branch_product_demand(
     start = date_from or end - timedelta(days=29)
     if start > end:
         raise HTTPException(422, "La fecha inicial no puede ser posterior a la fecha final.")
-    if (end - start).days > 365:
+    if (end - start).days > MAX_DEMAND_PERIOD_DAYS:
         raise HTTPException(422, "El período no puede exceder 366 días.")
     starts_at, ends_at = _period_bounds(start, end)
 
@@ -273,9 +274,11 @@ async def update_branch_product_demand_level(
         user_agent=request.headers.get("user-agent"),
         required=True,
     )
-    return BranchProductDemandLevelResponse(
-        branch_id=branch_id,
-        product_id=product_id,
-        level=after_level,
-        updated_at=updated_at,
+    return BranchProductDemandLevelResponse.model_validate(
+        {
+            "branch_id": branch_id,
+            "product_id": product_id,
+            "level": after_level,
+            "updated_at": updated_at,
+        }
     )

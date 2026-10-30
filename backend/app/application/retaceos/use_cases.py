@@ -9,7 +9,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from app.application.retaceos.manual_entry import fixed_allocations, protected_invoice
 from app.core.exceptions import BusinessRuleError, NotFoundError, ValidationError
-from app.domain.entities.actual_expense import is_fixed_retaceo_category
+from app.domain.entities.actual_expense import ActualPurchaseExpense, is_fixed_retaceo_category
 from app.domain.entities.purchase import (
     Purchase,
     PurchaseDetail,
@@ -18,6 +18,7 @@ from app.domain.entities.purchase import (
 )
 from app.domain.entities.retaceo import (
     FOB_CORRECTION_REASON_MIN_LENGTH,
+    ManualRetaceoAllocation,
     Retaceo,
     RetaceoCost,
     RetaceoCostAllocation,
@@ -36,7 +37,10 @@ from app.domain.ports.inventory_valuation import RetaceoAverageComparison, Retac
 from app.domain.ports.purchase_order_expense_document_repository import (
     PurchaseOrderExpenseDocumentRepository,
 )
-from app.domain.ports.purchase_order_repository import PurchaseOrderRepository
+from app.domain.ports.purchase_order_repository import (
+    PurchaseOrderExpenseTypeReference,
+    PurchaseOrderRepository,
+)
 from app.domain.ports.purchase_repository import PurchaseRepository
 from app.domain.ports.retaceo_repository import RetaceoRepository
 
@@ -118,7 +122,9 @@ class RetaceoUseCases:
             raise NotFoundError("Compra no encontrada.", code="purchase_not_found")
         return purchase.inventory_workflow is not PurchaseInventoryWorkflow.LEGACY
 
-    async def cost_categories(self, company_id: uuid.UUID):
+    async def cost_categories(
+        self, company_id: uuid.UUID
+    ) -> tuple[PurchaseOrderExpenseTypeReference, ...]:
         if self._orders is None:
             return ()
         return tuple(
@@ -567,7 +573,11 @@ class RetaceoUseCases:
                 total_freight=allocation.total_freight,
                 total_expenses=allocation.total_expenses,
                 total_dai=allocation.total_dai,
-                import_vat=(allocation.import_vat if costs is not None else normalized_import_vat),
+                import_vat=(
+                    allocation.import_vat
+                    if isinstance(allocation, ManualRetaceoAllocation)
+                    else normalized_import_vat
+                ),
                 total_cost=allocation.total_cost,
                 status=RetaceoStatus.DRAFT,
                 notes=notes,
@@ -846,7 +856,7 @@ class RetaceoUseCases:
     async def _validate_extra_category(self, company_id: uuid.UUID, cost: RetaceoCost) -> None:
         category = (
             await self._orders.get_expense_type(company_id, cost.expense_type_id)
-            if cost.expense_type_id
+            if self._orders is not None and cost.expense_type_id
             else None
         )
         if category is None or not category.is_active or is_fixed_retaceo_category(category.name):
@@ -861,7 +871,12 @@ class RetaceoUseCases:
             )
 
     @staticmethod
-    def _validate_actual_source(cost, source, allocated, seen_sources) -> None:
+    def _validate_actual_source(
+        cost: RetaceoCost,
+        source: ActualPurchaseExpense | None,
+        allocated: Decimal,
+        seen_sources: set[uuid.UUID],
+    ) -> None:
         if source is None or source.id in seen_sources:
             raise ValidationError(
                 "Seleccione un gasto real de esta orden, sin repetirlo.",
@@ -878,7 +893,9 @@ class RetaceoUseCases:
                 code="retaceo_actual_expense_exceeded",
             )
 
-    async def _copy_actual_documents(self, purchase, current, cost):
+    async def _copy_actual_documents(
+        self, purchase: Purchase, current: Retaceo, cost: RetaceoCost
+    ) -> RetaceoCost:
         if (
             cost.source_purchase_order_expense_id is None
             or self._expense_documents is None

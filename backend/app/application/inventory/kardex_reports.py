@@ -1,6 +1,8 @@
 """Render-neutral statements from the same authorized Kardex read snapshots."""
 
+from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from app.domain.entities.inventory_kardex import LOCAL_TZ
 from app.domain.entities.tabular_report import ReportSection, TabularReport
@@ -21,15 +23,15 @@ KINDS = {
 }
 
 
-def _number(value):
+def _number(value: Decimal | None) -> Decimal | str:
     return value if value is not None else "No reconstruible"
 
 
-def _local(value):
+def _local(value: datetime) -> str:
     return value.astimezone(LOCAL_TZ).strftime("%d/%m/%Y %H:%M")
 
 
-def _physical(data):
+def _physical(data: dict[str, Any]) -> tuple[ReportSection, ...]:
     rows = tuple(
         (
             _local(row["posted_at"]),
@@ -82,7 +84,7 @@ def _physical(data):
     )
 
 
-def _valued(data):
+def _valued(data: dict[str, Any]) -> tuple[ReportSection, ...]:
     rows = []
     outgoing = {"issue", "supplier_return", "adjustment_out"}
     for row in data["entries"]:
@@ -151,7 +153,7 @@ def _valued(data):
     )
 
 
-def _reconciliation(data):
+def _reconciliation(data: dict[str, Any]) -> tuple[ReportSection, ...]:
     return (
         ReportSection(
             "Resumen de conciliación",
@@ -198,7 +200,7 @@ def _reconciliation(data):
     )
 
 
-def kardex_report(kind: str, data: dict, filters: dict) -> TabularReport:
+def kardex_report(kind: str, data: dict[str, Any], filters: dict[str, Any]) -> TabularReport:
     context = data.get("context") or {}
     title, code, sections = {
         "physical": ("Kardex de movimientos físicos", "KARDEX-FISICO", _physical),

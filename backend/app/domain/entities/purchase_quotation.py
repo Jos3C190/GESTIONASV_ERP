@@ -230,7 +230,11 @@ class PurchaseQuotationLineSnapshot:
     sources: tuple[PurchaseQuotationSourceSnapshot, ...]
 
     def __post_init__(self) -> None:
-        if not self.product_sku.strip() or not self.product_name.strip() or not self.unit_name.strip():
+        if (
+            not self.product_sku.strip()
+            or not self.product_name.strip()
+            or not self.unit_name.strip()
+        ):
             raise ValueError("La copia de RFQ debe conservar SKU, producto y unidad.")
         _ensure_nonnegative(self.branch_quantity, "La demanda de sucursales")
         _ensure_nonnegative(self.central_quantity, "La demanda central")

@@ -148,43 +148,45 @@ async def resolve_public_trace(
 
     unit = trace["handling_unit"]
     origin = trace["origin"]
-    return PublicHandlingUnitTraceOut(
-        handling_unit_code=unit["code"],
-        product_sku=trace["product_sku"],
-        product_name=trace["product_name"],
-        quantity_base=unit["quantity_base"],
-        base_unit_symbol=trace["base_unit_symbol"],
-        lot_code=unit["lot_code"],
-        receipt_lot_code=unit.get("receipt_lot_code"),
-        receipt_lot_header_code=unit.get("receipt_lot_header_code"),
-        expiry_date=unit["expiry_date"],
-        stock_status=unit["stock_status"],
-        warehouse_code=trace["warehouse_code"],
-        warehouse_name=trace["warehouse_name"],
-        location_code=trace["location_code"],
-        origin={
-            "supplier_name": origin["supplier_name"],
-            "purchase_code": origin["purchase_code"],
-            "purchase_order_code": origin["purchase_order_code"],
-            "received_at": origin["received_at"],
-            "consolidation_code": origin["consolidation_code"],
-        },
-        movements=[
-            {
-                "movement_type": movement["movement_type"],
-                "posted_at": movement["posted_at"],
-                "from_warehouse_code": movement["from_warehouse_code"],
-                "from_warehouse_name": movement["from_warehouse_name"],
-                "from_location_code": movement["from_location_code"],
-                "from_stock_status": movement["from_stock_status"],
-                "to_warehouse_code": movement["to_warehouse_code"],
-                "to_warehouse_name": movement["to_warehouse_name"],
-                "to_location_code": movement["to_location_code"],
-                "to_stock_status": movement["to_stock_status"],
-                "quantity_base": movement["quantity_base"],
-            }
-            for movement in trace["movements"]
-        ],
+    return PublicHandlingUnitTraceOut.model_validate(
+        {
+            "handling_unit_code": unit["code"],
+            "product_sku": trace["product_sku"],
+            "product_name": trace["product_name"],
+            "quantity_base": unit["quantity_base"],
+            "base_unit_symbol": trace["base_unit_symbol"],
+            "lot_code": unit["lot_code"],
+            "receipt_lot_code": unit.get("receipt_lot_code"),
+            "receipt_lot_header_code": unit.get("receipt_lot_header_code"),
+            "expiry_date": unit["expiry_date"],
+            "stock_status": unit["stock_status"],
+            "warehouse_code": trace["warehouse_code"],
+            "warehouse_name": trace["warehouse_name"],
+            "location_code": trace["location_code"],
+            "origin": {
+                "supplier_name": origin["supplier_name"],
+                "purchase_code": origin["purchase_code"],
+                "purchase_order_code": origin["purchase_order_code"],
+                "received_at": origin["received_at"],
+                "consolidation_code": origin["consolidation_code"],
+            },
+            "movements": [
+                {
+                    "movement_type": movement["movement_type"],
+                    "posted_at": movement["posted_at"],
+                    "from_warehouse_code": movement["from_warehouse_code"],
+                    "from_warehouse_name": movement["from_warehouse_name"],
+                    "from_location_code": movement["from_location_code"],
+                    "from_stock_status": movement["from_stock_status"],
+                    "to_warehouse_code": movement["to_warehouse_code"],
+                    "to_warehouse_name": movement["to_warehouse_name"],
+                    "to_location_code": movement["to_location_code"],
+                    "to_stock_status": movement["to_stock_status"],
+                    "quantity_base": movement["quantity_base"],
+                }
+                for movement in trace["movements"]
+            ],
+        }
     )
 
 

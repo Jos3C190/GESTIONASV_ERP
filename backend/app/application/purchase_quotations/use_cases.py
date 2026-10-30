@@ -666,9 +666,7 @@ class PurchaseQuotationUseCases:
         requested_details: tuple[PurchaseQuotationDetail, ...],
         lines: tuple[PurchaseQuotationResponseLineDraft, ...],
     ) -> tuple[PurchaseQuotationDetail, ...]:
-        allowed = {
-            (detail.product_id, detail.unit_id): detail for detail in requested_details
-        }
+        allowed = {(detail.product_id, detail.unit_id): detail for detail in requested_details}
         keys = [(line.product_id, line.unit_id) for line in lines]
         if len(keys) != len(set(keys)):
             raise ValidationError(
@@ -681,9 +679,7 @@ class PurchaseQuotationUseCases:
                     "La respuesta contiene un producto o unidad fuera del alcance solicitado.",
                     code="purchase_quotation_response_out_of_scope",
                 )
-        received_by_key = {
-            (line.product_id, line.unit_id): line for line in lines
-        }
+        received_by_key = {(line.product_id, line.unit_id): line for line in lines}
         details: list[PurchaseQuotationDetail] = []
         for requested in requested_details:
             key = (requested.product_id, requested.unit_id)
@@ -731,9 +727,7 @@ class PurchaseQuotationUseCases:
                 tax_amount=tax_amount,
                 total=total,
                 delivery_days=response.delivery_days if response is not None else None,
-                available_quantity=(
-                    response.available_quantity if response is not None else None
-                ),
+                available_quantity=(response.available_quantity if response is not None else None),
                 notes=response.notes if response is not None else None,
                 offered_quantity=offered_quantity,
             )

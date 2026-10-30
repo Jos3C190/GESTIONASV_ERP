@@ -601,9 +601,7 @@ async def test_quotation_document_repository_persists_company_scoped_attachment(
     hidden_after_detach = await repository.get_document(
         graph.company.id, saved_quotation.id, document_id
     )
-    listed_after_detach = await repository.list_documents(
-        graph.company.id, saved_quotation.id
-    )
+    listed_after_detach = await repository.list_documents(graph.company.id, saved_quotation.id)
 
     assert loaded is not None
     assert loaded.file_name == "oferta.pdf"

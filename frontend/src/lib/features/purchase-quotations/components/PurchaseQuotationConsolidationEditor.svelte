@@ -8,7 +8,7 @@
   import { suppliersApi } from '$lib/api/suppliers';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type { Currency, Supplier } from '$lib/types/supplier';
-  import type { PurchaseConsolidation, ConsolidationLine } from '$lib/types/purchase-consolidation';
+  import type { PurchaseConsolidation } from '$lib/types/purchase-consolidation';
 
   let { consolidationId }: { consolidationId: string } = $props();
 

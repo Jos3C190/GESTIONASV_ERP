@@ -31,6 +31,12 @@ class InventoryTransferUseCases:
         normalized: list[dict[str, Any]] = []
         for index, line in enumerate(lines, start=1):
             unit_id = line.get("handling_unit_id")
+            if unit_id is None:
+                raise TransferDomainError(
+                    "Identifique la unidad logística del traslado.",
+                    code="transfer_handling_unit_required",
+                    status_code=422,
+                )
             if unit_id in seen_units:
                 raise TransferDomainError(
                     "Una unidad logística solo puede asignarse una vez al mismo traslado.",
@@ -91,20 +97,22 @@ class InventoryTransferUseCases:
             )
         return normalized
 
-    async def create_transfer(self, *, lines: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
-        return await self._repository.create_transfer(
-            lines=self._validated_lines(lines), **kwargs
-        )
+    async def create_transfer(
+        self, *, lines: list[dict[str, Any]], **kwargs: Any
+    ) -> dict[str, Any]:
+        return await self._repository.create_transfer(lines=self._validated_lines(lines), **kwargs)
 
-    async def update_transfer(self, *, lines: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
-        return await self._repository.update_transfer(
-            lines=self._validated_lines(lines), **kwargs
-        )
+    async def update_transfer(
+        self, *, lines: list[dict[str, Any]], **kwargs: Any
+    ) -> dict[str, Any]:
+        return await self._repository.update_transfer(lines=self._validated_lines(lines), **kwargs)
 
     async def dispatch_transfer(self, **kwargs: Any) -> dict[str, Any]:
         return await self._repository.dispatch_transfer(**kwargs)
 
-    async def receive_transfer(self, *, lines: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
+    async def receive_transfer(
+        self, *, lines: list[dict[str, Any]], **kwargs: Any
+    ) -> dict[str, Any]:
         if not lines:
             raise TransferDomainError(
                 "Indique las unidades recibidas.",
@@ -145,7 +153,9 @@ class InventoryTransferUseCases:
     async def cancel_transfer(self, **kwargs: Any) -> dict[str, Any]:
         return await self._repository.cancel_transfer(**kwargs)
 
-    async def get_transfer(self, company_id: uuid.UUID, transfer_id: uuid.UUID) -> dict[str, Any] | None:
+    async def get_transfer(
+        self, company_id: uuid.UUID, transfer_id: uuid.UUID
+    ) -> dict[str, Any] | None:
         return await self._repository.get_transfer(company_id, transfer_id)
 
     async def list_transfers(self, **kwargs: Any) -> list[dict[str, Any]]:
@@ -162,4 +172,3 @@ class InventoryTransferUseCases:
 
     async def set_vehicle_status(self, **kwargs: Any) -> dict[str, Any]:
         return await self._repository.set_vehicle_status(**kwargs)
-

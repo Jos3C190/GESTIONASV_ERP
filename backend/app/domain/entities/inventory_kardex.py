@@ -15,14 +15,20 @@ ZERO = Decimal("0")
 
 
 def snapshot_quantity(
-    snapshot: list[dict[str, Any]], *, warehouse_id: uuid.UUID,
-    inventory_item_id: uuid.UUID, lot_code: str | None,
+    snapshot: list[dict[str, Any]],
+    *,
+    warehouse_id: uuid.UUID,
+    inventory_item_id: uuid.UUID,
+    lot_code: str | None,
 ) -> Decimal:
     return sum(
-        (Decimal(row["quantity_base"]) for row in snapshot
-         if row.get("warehouse_id") == str(warehouse_id)
-         and row.get("inventory_item_id") == str(inventory_item_id)
-         and (lot_code is None or row.get("lot_code") == lot_code)),
+        (
+            Decimal(row["quantity_base"])
+            for row in snapshot
+            if row.get("warehouse_id") == str(warehouse_id)
+            and row.get("inventory_item_id") == str(inventory_item_id)
+            and (lot_code is None or row.get("lot_code") == lot_code)
+        ),
         ZERO,
     )
 
@@ -44,8 +50,12 @@ def mask_unauthorized_warehouse_endpoints(
     for prefix in ("from", "to"):
         if row[f"{prefix}_warehouse_id"] not in authorized_warehouse_ids:
             for field in (
-                "warehouse_id", "warehouse_code", "warehouse_name",
-                "location_id", "location_code", "stock_status",
+                "warehouse_id",
+                "warehouse_code",
+                "warehouse_name",
+                "location_id",
+                "location_code",
+                "stock_status",
             ):
                 row[f"{prefix}_{field}"] = None
     return row

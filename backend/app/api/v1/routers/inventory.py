@@ -231,7 +231,7 @@ async def _reject_legacy_transfer_without_document(
             select(Location.id, Location.warehouse_id).where(Location.id.in_(location_ids))
         )
     ).all()
-    warehouse_by_location = dict(rows)
+    warehouse_by_location = {row[0]: row[1] for row in rows}
     if (
         any(
             line.from_location_id != line.to_location_id
@@ -985,19 +985,21 @@ async def _execute_handling_unit_split(
             code="handling_unit_split_result_missing",
             status_code=409,
         )
-    response = HandlingUnitSplitPrepareOut(
-        idempotency_key=body.idempotency_key,
-        source_reference=references.source_reference,
-        quarantine_movement=MovementOut.model_validate(quarantined),
-        split_movement=MovementOut.model_validate(split),
-        remainder_handling_unit_id=source.id,
-        remainder_handling_unit_code=source.code,
-        remainder_quantity_base=origin.quantity_base - body.split_quantity_base,
-        split_handling_unit_id=split_unit.id,
-        split_handling_unit_code=split_unit.code,
-        split_quantity_base=body.split_quantity_base,
-        stock_status=StockStatus.QUARANTINE,
-        measurement_status=split_unit.measurement_status,
+    response = HandlingUnitSplitPrepareOut.model_validate(
+        {
+            "idempotency_key": body.idempotency_key,
+            "source_reference": references.source_reference,
+            "quarantine_movement": MovementOut.model_validate(quarantined),
+            "split_movement": MovementOut.model_validate(split),
+            "remainder_handling_unit_id": source.id,
+            "remainder_handling_unit_code": source.code,
+            "remainder_quantity_base": origin.quantity_base - body.split_quantity_base,
+            "split_handling_unit_id": split_unit.id,
+            "split_handling_unit_code": split_unit.code,
+            "split_quantity_base": body.split_quantity_base,
+            "stock_status": StockStatus.QUARANTINE,
+            "measurement_status": split_unit.measurement_status,
+        }
     )
     if not origin.is_replay:
         await audit.record(

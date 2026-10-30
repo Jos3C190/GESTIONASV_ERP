@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Any, TypeVar
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.exc import IntegrityError
@@ -57,6 +58,8 @@ from app.application.sales.service import SalesService
 from app.core.exceptions import AuthorizationError
 from app.domain.entities.inventory import InventoryOperationError
 
+T = TypeVar("T")
+
 router = APIRouter(prefix="/sales", tags=["sales"])
 SalesServiceDep = Annotated[SalesService, Depends(get_sales_service)]
 SalesDeliveryServiceDep = Annotated[SalesDeliveryService, Depends(get_sales_delivery_service)]
@@ -64,7 +67,7 @@ SalesReturnServiceDep = Annotated[SalesReturnService, Depends(get_sales_return_s
 AuditDep = Annotated[AuditService, Depends(get_audit_service)]
 
 
-async def _delivery_call(awaitable):
+async def _delivery_call(awaitable: Awaitable[T]) -> T:
     try:
         return await awaitable
     except (InventoryApplicationError, InventoryOperationError) as exc:
@@ -84,7 +87,7 @@ async def _delivery_call(awaitable):
 
 async def _list_scope(
     session: SessionDep, current: CurrentUser, company_id: uuid.UUID, branch_id: uuid.UUID | None
-):
+) -> tuple[uuid.UUID | None, tuple[uuid.UUID, ...] | None]:
     context = await get_branch_context(session, current, company_id)
     if branch_id is not None:
         await resolve_branch_scope(session, current, company_id, branch_id)
@@ -172,7 +175,7 @@ async def list_customers(
     active: bool | None = None,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
-):
+) -> dict[str, Any]:
     return await service.list_customers(
         company_id, search=search, active=active, page=page, size=size
     )
@@ -190,7 +193,7 @@ async def create_customer(
     service: SalesServiceDep,
     current: CurrentUser,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     return await service.create_customer(
         company_id=company_id,
         actor_id=current.id,
@@ -208,7 +211,7 @@ async def get_customer(
     customer_id: uuid.UUID,
     service: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     return service.customer_out(await service.get_customer(company_id, customer_id))
 
 
@@ -224,7 +227,7 @@ async def update_customer(
     service: SalesServiceDep,
     current: CurrentUser,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     return await service.update_customer(
         company_id=company_id,
         actor_id=current.id,
@@ -241,7 +244,7 @@ async def update_customer(
 )
 async def sales_catalog(
     service: SalesServiceDep, company_id: Annotated[uuid.UUID, Depends(request_company_id)]
-):
+) -> list[dict[str, Any]]:
     return await service.catalog(company_id)
 
 
@@ -262,7 +265,7 @@ async def list_quotations(
     to_date: date | None = None,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
-):
+) -> dict[str, Any]:
     scoped_branch, branch_ids = await _list_scope(session, current, company_id, branch_id)
     return await service.list_quotations(
         company_id,
@@ -291,7 +294,7 @@ async def create_quotation(
     service: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
-):
+) -> dict[str, Any]:
     await resolve_branch_scope(session, current, company_id, body.branch_id)
     return await service.create_quotation(
         company_id=company_id,
@@ -314,7 +317,7 @@ async def get_quotation(
     current: CurrentUser,
     service: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     row = await service.get_quotation(company_id, quote_id)
     await resolve_branch_scope(session, current, company_id, row.branch_id)
     return await service.quotation_out(row)
@@ -333,7 +336,7 @@ async def update_quotation(
     current: CurrentUser,
     service: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     await _authorize_quote_branch(session, current, company_id, service, quote_id)
     return await service.update_quotation(
         company_id=company_id,
@@ -357,7 +360,7 @@ async def confirm_quotation(
     current: CurrentUser,
     service: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     await _authorize_quote_branch(session, current, company_id, service, quote_id)
     return await service.confirm_quotation(
         company_id=company_id,
@@ -381,7 +384,7 @@ async def cancel_quotation(
     current: CurrentUser,
     service: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     await _authorize_quote_branch(session, current, company_id, service, quote_id)
     return await service.cancel_quotation(
         company_id=company_id,
@@ -407,7 +410,7 @@ async def convert_quotation(
     service: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
-):
+) -> dict[str, Any]:
     await _authorize_quote_branch(session, current, company_id, service, quote_id)
     return await service.convert_quotation(
         company_id=company_id,
@@ -432,7 +435,7 @@ async def list_sales(
     to_date: date | None = None,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
-):
+) -> dict[str, Any]:
     scoped_branch, branch_ids = await _list_scope(session, current, company_id, branch_id)
     return await service.list_sales(
         company_id,
@@ -458,7 +461,7 @@ async def list_sales_returns(
     service: SalesReturnServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
     branch_id: uuid.UUID | None = None,
-):
+) -> list[dict[str, Any]]:
     _scoped_branch, branch_ids = await _list_scope(session, current, company_id, branch_id)
     if branch_id is not None:
         branch_ids = (branch_id,)
@@ -476,7 +479,7 @@ async def get_sales_return(
     current: CurrentUser,
     service: SalesReturnServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     await _authorize_return_branch(session, current, company_id, service, return_id)
     return await service.return_out(company_id, return_id)
 
@@ -493,7 +496,7 @@ async def returnable_sale_allocations(
     sales: SalesServiceDep,
     service: SalesReturnServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> list[dict[str, Any]]:
     await _authorize_sale_branch(session, current, company_id, sales, sale_id)
     return await service.returnable_allocations(company_id, sale_id)
 
@@ -510,7 +513,7 @@ async def list_sale_returns(
     sales: SalesServiceDep,
     service: SalesReturnServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> list[dict[str, Any]]:
     await _authorize_sale_branch(session, current, company_id, sales, sale_id)
     return await service.list_for_sale(company_id, sale_id)
 
@@ -532,20 +535,22 @@ async def create_sale_return(
     checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
-):
+) -> dict[str, Any]:
     await _authorize_sale_branch(session, current, company_id, sales, sale_id)
     if body.document_ids:
         await _authorize_return_evidence_access(session, current, company_id, checker)
-    return await _delivery_call(service.create_draft(
-        company_id=company_id,
-        actor_id=current.id,
-        sale_id=sale_id,
-        lines=[line.model_dump(mode="python") for line in body.lines],
-        document_ids=body.document_ids,
-        notes=body.notes,
-        idempotency_key=idempotency_key,
-        request=request,
-    ))
+    return await _delivery_call(
+        service.create_draft(
+            company_id=company_id,
+            actor_id=current.id,
+            sale_id=sale_id,
+            lines=[line.model_dump(mode="python") for line in body.lines],
+            document_ids=body.document_ids,
+            notes=body.notes,
+            idempotency_key=idempotency_key,
+            request=request,
+        )
+    )
 
 
 @router.post(
@@ -561,10 +566,15 @@ async def receive_sale_return(
     service: SalesReturnServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
-):
+) -> dict[str, Any]:
     await _authorize_return_branch(session, current, company_id, service, return_id)
-    return await service.receive(company_id=company_id, actor_id=current.id,
-        return_id=return_id, idempotency_key=idempotency_key, request=request)
+    return await service.receive(
+        company_id=company_id,
+        actor_id=current.id,
+        return_id=return_id,
+        idempotency_key=idempotency_key,
+        request=request,
+    )
 
 
 @router.post(
@@ -581,12 +591,18 @@ async def resolve_sale_return(
     service: SalesReturnServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
-):
+) -> dict[str, Any]:
     await _authorize_return_branch(session, current, company_id, service, return_id)
-    return await _delivery_call(service.resolve(company_id=company_id,
-        actor_id=current.id, return_id=return_id,
-        lines=[line.model_dump(mode="python") for line in body.lines],
-        idempotency_key=idempotency_key, request=request))
+    return await _delivery_call(
+        service.resolve(
+            company_id=company_id,
+            actor_id=current.id,
+            return_id=return_id,
+            lines=[line.model_dump(mode="python") for line in body.lines],
+            idempotency_key=idempotency_key,
+            request=request,
+        )
+    )
 
 
 @router.post(
@@ -603,11 +619,16 @@ async def cancel_sale_return(
     service: SalesReturnServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
-):
+) -> dict[str, Any]:
     await _authorize_return_branch(session, current, company_id, service, return_id)
-    return await service.cancel_draft(company_id=company_id, actor_id=current.id,
-        return_id=return_id, reason=body.reason, idempotency_key=idempotency_key,
-        request=request)
+    return await service.cancel_draft(
+        company_id=company_id,
+        actor_id=current.id,
+        return_id=return_id,
+        reason=body.reason,
+        idempotency_key=idempotency_key,
+        request=request,
+    )
 
 
 @router.get(
@@ -620,7 +641,7 @@ async def get_sale(
     current: CurrentUser,
     service: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     row = await service.get_sale(company_id, sale_id)
     await resolve_branch_scope(session, current, company_id, row.branch_id)
     return await service.sale_out(row)
@@ -637,7 +658,7 @@ async def update_sale(
     current: CurrentUser,
     service: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     await _authorize_sale_branch(session, current, company_id, service, sale_id)
     return await service.update_sale(
         company_id=company_id,
@@ -661,7 +682,7 @@ async def confirm_sale(
     current: CurrentUser,
     service: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     await _authorize_sale_branch(session, current, company_id, service, sale_id)
     return await service.confirm_sale(
         company_id=company_id,
@@ -685,7 +706,7 @@ async def cancel_sale(
     current: CurrentUser,
     service: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     await _authorize_sale_branch(session, current, company_id, service, sale_id)
     return await service.cancel_sale(
         company_id=company_id,
@@ -709,7 +730,7 @@ async def delivery_stock_options(
     service: SalesDeliveryServiceDep,
     sales: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> list[dict[str, Any]]:
     await _authorize_sale_branch(session, current, company_id, sales, sale_id)
     return await service.stock_options(company_id, sale_id)
 
@@ -726,7 +747,7 @@ async def list_sale_deliveries(
     service: SalesDeliveryServiceDep,
     sales: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> list[dict[str, Any]]:
     await _authorize_sale_branch(session, current, company_id, sales, sale_id)
     return await service.deliveries_for_sale(company_id, sale_id)
 
@@ -747,7 +768,7 @@ async def create_sale_delivery(
     sales: SalesServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
-):
+) -> dict[str, Any]:
     await _authorize_sale_branch(session, current, company_id, sales, sale_id)
     return await _delivery_call(
         service.create_draft(
@@ -773,7 +794,7 @@ async def get_sale_delivery(
     current: CurrentUser,
     service: SalesDeliveryServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     await _authorize_delivery_branch(session, current, company_id, service, delivery_id)
     return await service.delivery_out(company_id, delivery_id)
 
@@ -791,7 +812,7 @@ async def update_sale_delivery(
     current: CurrentUser,
     service: SalesDeliveryServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     await _authorize_delivery_branch(session, current, company_id, service, delivery_id)
     return await _delivery_call(
         service.update_draft(
@@ -820,7 +841,7 @@ async def confirm_sale_delivery(
     service: SalesDeliveryServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
-):
+) -> dict[str, Any]:
     await _authorize_delivery_branch(session, current, company_id, service, delivery_id)
     return await _delivery_call(
         service.confirm(
@@ -847,7 +868,7 @@ async def cancel_sale_delivery(
     current: CurrentUser,
     service: SalesDeliveryServiceDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-):
+) -> dict[str, Any]:
     await _authorize_delivery_branch(session, current, company_id, service, delivery_id)
     return await _delivery_call(
         service.cancel_draft(

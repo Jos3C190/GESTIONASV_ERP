@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from decimal import Decimal
+from typing import cast as type_cast
 
 from sqlalchemy import Integer, Select, and_, exists, func, or_, select, union_all
 from sqlalchemy import cast as sa_cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql import ColumnElement, Subquery
 
 from app.domain.entities.actual_expense import ActualExpenseClosure, ActualPurchaseExpense
 from app.domain.entities.purchase_order import (
@@ -143,7 +146,13 @@ class SqlAlchemyPurchaseOrderRepository:
         ).first()
         return ActualExpenseClosure(row.id, row.code) if row else None
 
-    async def actual_expense_usage(self, company_id, expense_ids, *, exclude_retaceo_id=None):
+    async def actual_expense_usage(
+        self,
+        company_id: uuid.UUID,
+        expense_ids: tuple[uuid.UUID, ...],
+        *,
+        exclude_retaceo_id: uuid.UUID | None = None,
+    ) -> dict[uuid.UUID, Decimal]:
         if not expense_ids:
             return {}
         statement = (
@@ -162,9 +171,11 @@ class SqlAlchemyPurchaseOrderRepository:
         )
         if exclude_retaceo_id is not None:
             statement = statement.where(RetaceoModel.id != exclude_retaceo_id)
-        return dict((await self._session.execute(statement)).all())
+        return {row[0]: row[1] for row in (await self._session.execute(statement)).all()}
 
-    async def list_actual_expenses(self, company_id, order_id):
+    async def list_actual_expenses(
+        self, company_id: uuid.UUID, order_id: uuid.UUID
+    ) -> tuple[ActualPurchaseExpense, ...]:
         rows = list(
             (
                 await self._session.scalars(
@@ -180,6 +191,9 @@ class SqlAlchemyPurchaseOrderRepository:
                 )
             ).all()
         )
+        for row in rows:
+            if row.incurred_on is None or row.reference is None or row.description is None:
+                raise ValueError("Un gasto real debe tener fecha, referencia y descripción.")
         usage = await self.actual_expense_usage(company_id, tuple(row.id for row in rows))
         return tuple(
             ActualPurchaseExpense(
@@ -188,16 +202,16 @@ class SqlAlchemyPurchaseOrderRepository:
                 purchase_order_id=row.purchase_order_id,
                 expense_type_id=row.expense_type_id,
                 amount=row.amount,
-                incurred_on=row.incurred_on,
-                reference=row.reference,
-                description=row.description,
+                incurred_on=type_cast(date, row.incurred_on),
+                reference=type_cast(str, row.reference),
+                description=type_cast(str, row.description),
                 allocated_amount=usage.get(row.id, Decimal("0")),
                 created_at=row.created_at,
             )
             for row in rows
         )
 
-    async def add_actual_expense(self, expense):
+    async def add_actual_expense(self, expense: ActualPurchaseExpense) -> ActualPurchaseExpense:
         self._session.add(
             PurchaseOrderExpenseModel(
                 id=expense.id,
@@ -415,7 +429,7 @@ class SqlAlchemyPurchaseOrderRepository:
         }
 
     @staticmethod
-    def _quotation_branch_scope_conditions(branch_id: uuid.UUID) -> tuple[object, ...]:
+    def _quotation_branch_scope_conditions(branch_id: uuid.UUID) -> tuple[ColumnElement[bool], ...]:
         """Allow scoped order creation only from a single-branch quotation."""
         scoped_link = PurchaseQuotationRequestModel.__table__.alias("scoped_quotation_request")
         scoped_request = PurchaseRequestModel.__table__.alias("scoped_purchase_request")
@@ -551,7 +565,7 @@ class SqlAlchemyPurchaseOrderRepository:
         )
 
     @staticmethod
-    def _expense_type_usage(company_id: uuid.UUID):
+    def _expense_type_usage(company_id: uuid.UUID) -> Subquery:
         return union_all(
             select(
                 PurchaseOrderExpenseModel.expense_type_id.label("expense_type_id"),
@@ -1000,7 +1014,9 @@ class SqlAlchemyPurchaseOrderRepository:
         )
 
     @staticmethod
-    def _effective_branch_condition(company_id: uuid.UUID, branch_id: uuid.UUID):
+    def _effective_branch_condition(
+        company_id: uuid.UUID, branch_id: uuid.UUID
+    ) -> ColumnElement[bool]:
         central_warehouse_in_branch = exists(
             select(1)
             .select_from(Warehouse)

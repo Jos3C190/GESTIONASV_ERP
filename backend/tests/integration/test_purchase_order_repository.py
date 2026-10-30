@@ -77,6 +77,7 @@ from app.infrastructure.repositories.purchase_order_repository import (
 from app.infrastructure.repositories.purchase_quotation_repository import (
     SqlAlchemyPurchaseQuotationRepository,
 )
+from app.infrastructure.repositories.purchase_repository import SqlAlchemyPurchaseRepository
 from app.infrastructure.repositories.purchase_request_repository import (
     SqlAlchemyPurchaseRequestRepository,
 )
@@ -522,14 +523,16 @@ async def test_repository_persists_tenant_scoped_order_and_resolves_references(
 
 
 @pytest.mark.asyncio
-async def test_repository_accepts_company_level_mother_warehouse_destination(
+async def test_repository_accepts_headquarters_mother_warehouse_destination(
     order_session: AsyncSession,
 ) -> None:
     graph = await _build_graph(order_session)
+    graph.branch.is_headquarters = True
+    await order_session.flush()
     mother = Warehouse(
         id=uuid.uuid4(),
         company_id=graph.company.id,
-        branch_id=None,
+        branch_id=graph.branch.id,
         warehouse_category_id=graph.warehouse.warehouse_category_id,
         name=f"Mother warehouse {uuid.uuid4().hex[:8]}",
         code=f"MW-{uuid.uuid4().hex[:8]}",
@@ -546,31 +549,35 @@ async def test_repository_accepts_company_level_mother_warehouse_destination(
     quotation = await _persist_selected_quotation(order_session, graph, (request,))
     repository = SqlAlchemyPurchaseOrderRepository(order_session)
     order = await _build_order(repository, graph, quotation, quantity=Decimal("2"))
-    saved_order = await repository.add_order(replace(order, branch_id=None, warehouse_id=mother.id))
+    saved_order = await repository.add_order(
+        replace(order, branch_id=graph.branch.id, warehouse_id=mother.id)
+    )
     destination = await repository.get_destination_reference(
         graph.company.id,
-        None,
+        graph.branch.id,
         mother.id,
     )
 
-    assert saved_order.branch_id is None
+    assert saved_order.branch_id == graph.branch.id
     assert saved_order.warehouse_id == mother.id
     assert destination is not None
-    assert destination.branch_id is None
-    assert destination.branch_is_active is None
+    assert destination.branch_id == graph.branch.id
+    assert destination.branch_is_active is True
     assert destination.warehouse_is_central is True
     assert destination.warehouse_storage_eligible is True
 
 
 @pytest.mark.asyncio
-async def test_verified_receipt_posts_into_company_level_mother_warehouse(
+async def test_verified_receipt_posts_into_headquarters_mother_warehouse(
     order_session: AsyncSession,
 ) -> None:
     graph = await _build_graph(order_session)
+    graph.branch.is_headquarters = True
+    await order_session.flush()
     mother = Warehouse(
         id=uuid.uuid4(),
         company_id=graph.company.id,
-        branch_id=None,
+        branch_id=graph.branch.id,
         warehouse_category_id=graph.warehouse.warehouse_category_id,
         name=f"Receipt mother {uuid.uuid4().hex[:8]}",
         code=f"RM-{uuid.uuid4().hex[:8]}",
@@ -607,15 +614,24 @@ async def test_verified_receipt_posts_into_company_level_mother_warehouse(
     order_session.add_all([location, item])
     await order_session.flush()
 
+    request = await _persist_request(order_session, graph, quantity=Decimal("2"))
+    quotation = await _persist_selected_quotation(order_session, graph, (request,))
+    order_repository = SqlAlchemyPurchaseOrderRepository(order_session)
+    order = await order_repository.add_order(
+        replace(
+            await _build_order(order_repository, graph, quotation, quantity=Decimal("2")),
+            warehouse_id=mother.id,
+        )
+    )
     purchase_id = uuid.uuid4()
     purchase_detail_id = uuid.uuid4()
     purchase = Purchase(
         id=purchase_id,
         company_id=graph.company.id,
         code=f"RCPT-{uuid.uuid4().hex[:8]}",
-        purchase_order_id=uuid.uuid4(),
+        purchase_order_id=order.id,
         supplier_id=graph.supplier.id_supplier,
-        branch_id=None,
+        branch_id=graph.branch.id,
         warehouse_id=mother.id,
         created_by_id=graph.user.id,
         purchase_date=datetime.now(UTC),
@@ -624,7 +640,7 @@ async def test_verified_receipt_posts_into_company_level_mother_warehouse(
             PurchaseDetail(
                 id=purchase_detail_id,
                 purchase_id=purchase_id,
-                purchase_order_detail_id=uuid.uuid4(),
+                purchase_order_detail_id=order.details[0].id,
                 product_id=graph.product.id_product,
                 quantity_ordered=Decimal("2"),
                 quantity_received=Decimal("2"),
@@ -639,6 +655,7 @@ async def test_verified_receipt_posts_into_company_level_mother_warehouse(
         status=PurchaseStatus.RECEIVED,
     )
 
+    purchase = await SqlAlchemyPurchaseRepository(order_session).add_purchase(purchase)
     movement_id = await SqlAlchemyPurchaseInventoryGateway(order_session).post_verified_receipt(
         purchase=purchase,
         lines=(

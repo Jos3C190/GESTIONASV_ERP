@@ -129,7 +129,11 @@ def _validate_branch_location(branch: BranchIn) -> None:
 
 
 def _validate_branch_area_totals(branch: BranchIn) -> None:
-    if branch.area is not None and branch.area_built is not None and branch.area_built > branch.area:
+    if (
+        branch.area is not None
+        and branch.area_built is not None
+        and branch.area_built > branch.area
+    ):
         raise ValueError("El área construida no puede superar el área total.")
     if (
         branch.area is not None
@@ -227,7 +231,9 @@ class WarehouseIn(CapacityConfigurationIn):
     @model_validator(mode="after")
     def validate_operational_data(self) -> WarehouseIn:
         if self.branch_id is None:
-            raise ValueError("Todo almacén debe pertenecer a una sucursal, incluida la bodega central.")
+            raise ValueError(
+                "Todo almacén debe pertenecer a una sucursal, incluida la bodega central."
+            )
         allowed_shifts = {"mañana", "tarde", "noche"}
         if len(set(self.shifts)) != len(self.shifts):
             raise ValueError("Los turnos del almacén no pueden repetirse.")

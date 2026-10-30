@@ -106,7 +106,9 @@ async def _reference_ids() -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, int, int, s
             if item.base_unit_id == purchase_unit_id and item.is_active:
                 product_id = candidate_id
                 break
-        assert product_id is not None, "El seed E2E necesita un producto con unidad base compatible."
+        assert product_id is not None, (
+            "El seed E2E necesita un producto con unidad base compatible."
+        )
         supplier_id = await session.scalar(
             select(SupplierModel.id_supplier)
             .where(
@@ -145,6 +147,19 @@ async def _receiving_location_id(warehouse_id: uuid.UUID) -> uuid.UUID:
         )
     assert location_id is not None, "El almacén de prueba necesita un punto de recepción activo."
     return location_id
+
+
+async def _legacy_receipt(purchase_id: str) -> None:
+    """Exercise the historical receipt-before-retaceo contract explicitly.
+
+    New placement-first purchases have separate acceptance coverage; these
+    original workflows still protect compatibility with existing receipts.
+    """
+    async with async_session_factory() as session:
+        purchase = await session.get(PurchaseModel, uuid.UUID(purchase_id))
+        assert purchase is not None
+        purchase.inventory_workflow = "receipt_before_retaceo"
+        await session.commit()
 
 
 async def _headers(
@@ -835,6 +850,7 @@ async def test_headquarters_user_can_read_new_central_receipt_without_global_sco
         f"/api/v1/purchases/{purchase['id']}/receive", headers=reader_headers
     )
     assert received.status_code == 200, received.text
+    await _legacy_receipt(purchase["id"])
     verified = await purchase_order_client.post(
         f"/api/v1/purchases/{purchase['id']}/verify",
         headers=reader_headers,
@@ -863,9 +879,7 @@ async def test_headquarters_user_can_read_new_central_receipt_without_global_sco
     )
     assert headquarters_receipts.status_code == 200, headquarters_receipts.text
     assert purchase["id"] in {item["id"] for item in headquarters_receipts.json()["items"]}
-    global_receipts = await purchase_order_client.get(
-        "/api/v1/purchases", headers=reader_headers
-    )
+    global_receipts = await purchase_order_client.get("/api/v1/purchases", headers=reader_headers)
     assert global_receipts.status_code == 403, global_receipts.text
     other_branch_receipts = await purchase_order_client.get(
         "/api/v1/purchases",
@@ -892,16 +906,12 @@ async def test_headquarters_user_can_read_new_central_receipt_without_global_sco
         headers=reader_headers,
     )
     assert headquarters_legacy_list.status_code == 200, headquarters_legacy_list.text
-    assert purchase["id"] in {
-        item["id"] for item in headquarters_legacy_list.json()["items"]
-    }
+    assert purchase["id"] in {item["id"] for item in headquarters_legacy_list.json()["items"]}
     global_legacy_receipt = await purchase_order_client.get(
         f"/api/v1/purchases/{purchase['id']}", headers=admin_headers
     )
     assert global_legacy_receipt.status_code == 200, global_legacy_receipt.text
-    global_legacy_list = await purchase_order_client.get(
-        "/api/v1/purchases", headers=admin_headers
-    )
+    global_legacy_list = await purchase_order_client.get("/api/v1/purchases", headers=admin_headers)
     assert global_legacy_list.status_code == 200, global_legacy_list.text
     assert purchase["id"] in {item["id"] for item in global_legacy_list.json()["items"]}
     other_branch_legacy_list = await purchase_order_client.get(
@@ -1085,6 +1095,7 @@ async def test_purchase_receiving_partial_then_complete_workflow_and_audit(
     assert immutable.status_code == 422
     assert immutable.json()["code"] == "purchase_not_editable"
 
+    await _legacy_receipt(first_purchase_id)
     verified = await purchase_order_client.post(
         f"/api/v1/purchases/{first_purchase_id}/verify",
         headers=headers,
@@ -1316,6 +1327,7 @@ async def test_rejected_receipt_stays_pending_and_creates_no_inventory_movement(
     )
     assert received.status_code == 200, received.text
 
+    await _legacy_receipt(purchase_id)
     verified = await purchase_order_client.post(
         f"/api/v1/purchases/{purchase_id}/verify",
         headers=headers,
@@ -1421,6 +1433,7 @@ async def test_cross_warehouse_receipt_location_rolls_back_verification(
     )
     assert received.status_code == 200, received.text
 
+    await _legacy_receipt(purchase_id)
     rejected = await purchase_order_client.post(
         f"/api/v1/purchases/{purchase_id}/verify",
         headers=headers,
@@ -1511,6 +1524,7 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
     assert received.status_code == 200, received.text
     assert received.json()["status"] == "received"
 
+    await _legacy_receipt(purchase_id)
     verified = await purchase_order_client.post(
         f"/api/v1/purchases/{purchase_id}/verify",
         headers=headers,
@@ -1561,11 +1575,7 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
         allocations: list[dict[str, object]] = []
         for cost in costs:
             classification = str(cost["classification"])
-            amount = (
-                freight_amount
-                if classification == "freight"
-                else str(cost["amount"])
-            )
+            amount = freight_amount if classification == "freight" else str(cost["amount"])
             allocations.append(
                 {
                     "id": cost["id"],

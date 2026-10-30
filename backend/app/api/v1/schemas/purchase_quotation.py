@@ -46,7 +46,7 @@ class PurchaseQuotationFromConsolidationCreate(BaseModel):
 
 
 class PurchaseQuotationResponseLineInput(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, populate_by_name=True)
 
     product_id: int = Field(gt=0)
     unit_id: int = Field(gt=0)

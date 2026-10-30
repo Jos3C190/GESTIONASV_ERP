@@ -284,7 +284,10 @@ class PurchaseOrderExpenseModel(UUIDPKMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
-        CheckConstraint("NOT is_actual OR (incurred_on IS NOT NULL AND description IS NOT NULL AND reference IS NOT NULL AND length(trim(description)) > 0 AND length(trim(reference)) > 0)", name="ck_order_actual_expense_documented"),
+        CheckConstraint(
+            "NOT is_actual OR (incurred_on IS NOT NULL AND description IS NOT NULL AND reference IS NOT NULL AND length(trim(description)) > 0 AND length(trim(reference)) > 0)",
+            name="ck_order_actual_expense_documented",
+        ),
         ForeignKeyConstraint(
             ["purchase_order_id", "company_id"],
             ["purchase_orders.id", "purchase_orders.company_id"],

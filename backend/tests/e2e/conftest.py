@@ -47,8 +47,20 @@ async def seed_user(
     from app.infrastructure.models.employee import Employee as ORMEmployee
     from app.infrastructure.models.organization import UserCompany
     from app.infrastructure.models.user import User as ORMUser
+    from sqlalchemy import select
 
     async with async_session_factory() as session:
+        # The canonical bootstrap already owns this account. Reuse it inside
+        # the disposable test database instead of inserting a duplicate user.
+        if username == "superadmin":
+            existing = await session.scalar(select(ORMUser).where(ORMUser.username == username))
+            if existing is not None:
+                existing.email = email
+                existing.password_hash = hash_password(password)
+                existing.is_active = is_active
+                existing.is_superuser = is_superuser
+                await session.commit()
+                return str(existing.id)
         orm = ORMUser(
             username=username,
             email=email,

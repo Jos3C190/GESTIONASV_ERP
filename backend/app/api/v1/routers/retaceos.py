@@ -259,7 +259,7 @@ def _retaceo_audit_state(item: Retaceo) -> dict[str, object]:
     }
 
 
-def _cost_document_out(view) -> RetaceoCostDocumentResponse:
+def _cost_document_out(view: RetaceoCostDocumentView) -> RetaceoCostDocumentResponse:
     return RetaceoCostDocumentResponse(
         id=view.attachment.id,
         retaceo_cost_id=view.attachment.retaceo_cost_id,

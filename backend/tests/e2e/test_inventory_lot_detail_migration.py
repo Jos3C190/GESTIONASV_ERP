@@ -61,8 +61,7 @@ async def test_separate_partial_receipts_have_distinct_detail_codes(e2e_client):
         }
         lot_by_id = {lot.id: lot for lot in lots if lot is not None}
         assert all(
-            detail.code
-            == f"{lot_by_id[detail.inventory_lot_id].code}-D{detail.id.hex.upper()}"
+            detail.code == f"{lot_by_id[detail.inventory_lot_id].code}-D{detail.id.hex.upper()}"
             for detail in details
         )
 
@@ -121,7 +120,9 @@ async def test_0084_to_0085_keeps_immutable_movements_and_resolves_legacy_detail
     engine = create_engine(database_url)
     try:
         with engine.connect() as connection:
-            revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+            revision = connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one()
             migrated_line = connection.execute(
                 text(
                     "SELECT id, movement_id, line_number, inventory_item_id, handling_unit_id, "

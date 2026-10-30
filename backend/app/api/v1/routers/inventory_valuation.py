@@ -71,22 +71,25 @@ async def overview(
             .order_by(ProductModel.name)
         )
     ).all()
-    return ValuationOverviewOut(
-        setting=ValuationSettingOut.model_validate(setting) if setting else None,
-        snapshot_fingerprint=fingerprint(snapshot),
-        physical_stock=snapshot,
-        items=[
-            {
-                "inventory_item_id": row[0],
-                "product_name": row[1],
-                "sku": row[2],
-                "base_unit": row[3] or "unidad base",
-            }
-            for row in rows
-        ],
-        balances=[
-            ValuationBalanceOut.model_validate(row) for row in await repository.balances(company_id)
-        ],
+    return ValuationOverviewOut.model_validate(
+        {
+            "setting": ValuationSettingOut.model_validate(setting) if setting else None,
+            "snapshot_fingerprint": fingerprint(snapshot),
+            "physical_stock": snapshot,
+            "items": [
+                {
+                    "inventory_item_id": row[0],
+                    "product_name": row[1],
+                    "sku": row[2],
+                    "base_unit": row[3] or "unidad base",
+                }
+                for row in rows
+            ],
+            "balances": [
+                ValuationBalanceOut.model_validate(row)
+                for row in await repository.balances(company_id)
+            ],
+        }
     )
 
 

@@ -1,9 +1,10 @@
 """Authenticated exports of the complete, authorized Kardex query."""
 
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import date
 from functools import partial
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -16,6 +17,11 @@ from app.api.v1.deps import (
     require_permission,
 )
 from app.api.v1.routers.inventory_kardex import physical_kardex, reconcile_inventory, valued_kardex
+from app.api.v1.schemas.inventory_kardex import (
+    KardexReconciliationOut,
+    PhysicalKardexOut,
+    ValuedKardexOut,
+)
 from app.application.inventory.kardex_read import InventoryKardexReadUseCases
 from app.application.inventory.kardex_reports import kardex_report
 from app.infrastructure.procurement_report_renderer import render_pdf, render_xlsx
@@ -25,7 +31,12 @@ Cases = Annotated[InventoryKardexReadUseCases, Depends(get_inventory_kardex_read
 MAX_REPORT_ROWS = 5000
 
 
-async def _export(fetch, kind: str, export_format: str, filters: dict):
+async def _export(
+    fetch: Callable[..., Awaitable[PhysicalKardexOut | ValuedKardexOut | KardexReconciliationOut]],
+    kind: str,
+    export_format: str,
+    filters: dict[str, Any],
+) -> Response:
     first = await fetch(page=1, page_size=200)
     if first.total > MAX_REPORT_ROWS:
         raise HTTPException(
@@ -66,7 +77,7 @@ async def export_physical(
     lot_code: str | None = Query(None, max_length=120),
     source_reference: str | None = Query(None, max_length=160),
     export_format: Literal["pdf", "xlsx"] = Query("pdf", alias="format"),
-):
+) -> Response:
     return await _export(
         partial(
             physical_kardex,
@@ -102,7 +113,7 @@ async def export_valued(
     period_from: date,
     period_to: date,
     export_format: Literal["pdf", "xlsx"] = Query("pdf", alias="format"),
-):
+) -> Response:
     return await _export(
         partial(
             valued_kardex,
@@ -132,7 +143,7 @@ async def export_reconciliation(
     q: str = Query("", max_length=120),
     difference_only: bool = False,
     export_format: Literal["pdf", "xlsx"] = Query("pdf", alias="format"),
-):
+) -> Response:
     return await _export(
         partial(
             reconcile_inventory,

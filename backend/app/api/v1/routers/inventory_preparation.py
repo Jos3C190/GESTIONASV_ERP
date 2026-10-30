@@ -37,7 +37,7 @@ async def list_pending(
     page: int = Query(1, ge=1),
     size: int = Query(10, ge=1, le=50),
     search: str = Query("", max_length=120),
-):
+) -> Page[PreparationUnitOut]:
     company_id = await _authorize_warehouse(request, session, current, warehouse_id)
     rows, total = await SqlAlchemyInventoryPreparationRepository(session).list_pending(
         company_id, warehouse_id, skip=(page - 1) * size, limit=size, search=search
@@ -48,7 +48,15 @@ async def list_pending(
     )
 
 
-async def _command(action, unit_id, payload, request, session, current, audit):
+async def _command(
+    action: str,
+    unit_id: uuid.UUID,
+    payload: PreparationCommandIn | PlacementCommandIn,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    audit: AuditService,
+) -> PreparationActionOut:
     company_id = effective_company_id(request)
     _, branch_id = await authorize_handling_unit_branch_scope(session, current, company_id, unit_id)
     try:
@@ -93,7 +101,7 @@ async def split(
     session: SessionDep,
     current: CurrentUser,
     audit: AuditService = Depends(get_audit_service),
-):
+) -> PreparationActionOut:
     return await _command("split", unit_id, payload, request, session, current, audit)
 
 
@@ -112,5 +120,5 @@ async def place(
     session: SessionDep,
     current: CurrentUser,
     audit: AuditService = Depends(get_audit_service),
-):
+) -> PreparationActionOut:
     return await _command("place", unit_id, payload, request, session, current, audit)

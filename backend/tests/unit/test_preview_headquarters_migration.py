@@ -53,9 +53,7 @@ class _ScalarConnection(_Connection):
 
 
 def test_preview_reports_unassigned_noncentral_warehouses() -> None:
-    connection = _Connection(
-        unassigned=[{"id": "warehouse-1", "company_id": "company-1"}]
-    )
+    connection = _Connection(unassigned=[{"id": "warehouse-1", "company_id": "company-1"}])
 
     errors = _legacy_shape_errors(connection)
 

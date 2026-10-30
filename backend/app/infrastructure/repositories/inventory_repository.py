@@ -1667,7 +1667,11 @@ class SqlAlchemyInventoryRepository:
             unit_data = self._handling_unit_dict(row)
             identity = identities.get(row.inventory_item_id, {})
             unit_data.update({key: value for key, value in identity.items() if key != "id"})
-            definition = packaging.get(row.packaging_definition_id)
+            definition = (
+                packaging.get(row.packaging_definition_id)
+                if row.packaging_definition_id is not None
+                else None
+            )
             if definition is not None:
                 unit_data["packaging_name"] = definition.name
                 unit_data["packaging_base_quantity"] = definition.base_quantity
@@ -1676,7 +1680,11 @@ class SqlAlchemyInventoryRepository:
                 unit_data["receipt_lot_header_code"] = receipt_lot.code
                 unit_data["received_at"] = receipt_lot.received_at
                 unit_data["purchase_code"] = purchase_codes.get(receipt_lot.purchase_id)
-            unit_data["receipt_lot_code"] = detail_codes.get(row.inventory_lot_detail_id)
+            unit_data["receipt_lot_code"] = (
+                detail_codes.get(row.inventory_lot_detail_id)
+                if row.inventory_lot_detail_id is not None
+                else None
+            )
             if row.id in release_reasons_by_unit:
                 unit_data["release_requirements"] = release_reasons_by_unit[row.id]
             result.append(unit_data)
@@ -1725,13 +1733,14 @@ class SqlAlchemyInventoryRepository:
                     )
                 )
             ).all()
-            purchase_codes = dict(purchase_rows)
+            purchase_codes = {row[0]: row[1] for row in purchase_rows}
 
         detail_ids = {row.inventory_lot_detail_id for row in rows if row.inventory_lot_detail_id}
         detail_codes: dict[uuid.UUID, str] = {}
         if detail_ids:
-            detail_codes = dict(
-                (
+            detail_codes = {
+                row[0]: row[1]
+                for row in (
                     await self._session.execute(
                         select(InventoryLotDetailModel.id, InventoryLotDetailModel.code).where(
                             InventoryLotDetailModel.company_id == company_id,
@@ -1739,7 +1748,7 @@ class SqlAlchemyInventoryRepository:
                         )
                     )
                 ).all()
-            )
+            }
 
         label_confirmed_ids: set[uuid.UUID] = set()
         if release_units:
@@ -1790,17 +1799,19 @@ class SqlAlchemyInventoryRepository:
 
         release_reasons_by_unit: dict[uuid.UUID, list[str]] = {}
         for unit in release_units:
-            lot = lots_by_id.get(unit.inventory_lot_id) if unit.inventory_lot_id else None
+            release_lot = lots_by_id.get(unit.inventory_lot_id) if unit.inventory_lot_id else None
             reasons = handling_unit_release_requirements(
                 is_partial=False,
                 measurement_status=unit.measurement_status,
                 measurement_source=unit.measurement_source,
                 expiry_date=unit.expiry_date,
                 today=today,
-                label_confirmation_required=bool(lot and lot.label_confirmation_required),
+                label_confirmation_required=bool(
+                    release_lot and release_lot.label_confirmation_required
+                ),
                 label_confirmed=unit.id in label_confirmed_ids,
                 retaceo_readiness_error=(
-                    retaceo_error_by_purchase.get(lot.purchase_id) if lot else None
+                    retaceo_error_by_purchase.get(release_lot.purchase_id) if release_lot else None
                 ),
             )
             release_reasons_by_unit[unit.id] = [reason.value for reason in reasons]
@@ -3051,6 +3062,12 @@ class SqlAlchemyInventoryRepository:
                             code="partial_handling_unit_transfer_only",
                         )
                     if quarantine_putaway_split:
+                        if to_location_id is None:
+                            raise InventoryOperationError(
+                                "El destino es obligatorio.",
+                                code="putaway_split_warehouse_mismatch",
+                                status_code=409,
+                            )
                         destination_context = contexts[to_location_id]
                         if destination_context.warehouse.id != handling_unit.warehouse_id:
                             raise InventoryOperationError(

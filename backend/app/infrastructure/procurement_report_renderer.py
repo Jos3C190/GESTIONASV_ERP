@@ -1,18 +1,26 @@
 """Render the same immutable report snapshot to PDF or XLSX."""
 
 import re
+from collections.abc import Callable, Sequence
 from decimal import Decimal
 from html import escape
 from io import BytesIO
 
-from app.domain.entities.tabular_report import TabularReport
+from openpyxl import Workbook
+from openpyxl.worksheet.worksheet import Worksheet
+from reportlab.pdfgen.canvas import Canvas
+from reportlab.platypus import LongTable, Paragraph
+
+from app.domain.entities.tabular_report import ReportSection, TabularReport
 
 
 def _text(value: str) -> str:
     return re.sub(r"[\x00-\x08\x0b-\x1f]", " ", value)
 
 
-def _pdf_metadata(report, width, paragraph):
+def _pdf_metadata(
+    report: TabularReport, width: float, paragraph: Callable[..., Paragraph]
+) -> LongTable:
     from reportlab.platypus import LongTable, TableStyle
 
     rows = []
@@ -58,7 +66,7 @@ def render_pdf(report: TabularReport) -> bytes:
         keepWithNext=True,
     )
 
-    def paragraph(value, style=body):
+    def paragraph(value: object, style: ParagraphStyle = body) -> Paragraph:
         return Paragraph(escape(_text(str(value))).replace("\n", "<br/>"), style)
 
     content = [
@@ -114,7 +122,7 @@ def render_pdf(report: TabularReport) -> bytes:
     for note in report.notes:
         content.extend([paragraph(note), Spacer(1, 5)])
 
-    def footer(canvas, document):
+    def footer(canvas: Canvas, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(colors.HexColor("#526170"))
@@ -126,7 +134,7 @@ def render_pdf(report: TabularReport) -> bytes:
     return output.getvalue()
 
 
-def _append_excel_row(sheet, values):
+def _append_excel_row(sheet: Worksheet, values: Sequence[str | Decimal]) -> None:
     sheet.append([_text(value) if isinstance(value, str) else value for value in values])
     # User text must stay text, even if it starts with =, +, - or @.
     for cell, value in zip(sheet[sheet.max_row], values, strict=True):
@@ -134,7 +142,7 @@ def _append_excel_row(sheet, values):
             cell.data_type = "s"
 
 
-def _style_excel_sheet(sheet):
+def _style_excel_sheet(sheet: Worksheet) -> None:
     from openpyxl.styles import Alignment, Font, PatternFill
 
     sheet.sheet_view.showGridLines = False
@@ -156,7 +164,7 @@ def _style_excel_sheet(sheet):
         )
 
 
-def _add_excel_section(book, section):
+def _add_excel_section(book: Workbook, section: ReportSection) -> None:
     from openpyxl.utils import get_column_letter
 
     sheet = book.create_sheet(section.title[:31])

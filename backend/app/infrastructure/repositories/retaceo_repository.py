@@ -234,20 +234,22 @@ class SqlAlchemyRetaceoRepository:
         current_allocation_by_detail = {
             allocation.purchase_detail_id: allocation for allocation in persisted_cost.allocations
         }
-        for allocation in replacement_cost.allocations:
-            current_allocation = current_allocation_by_detail.get(allocation.purchase_detail_id)
+        for replacement_allocation in replacement_cost.allocations:
+            current_allocation = current_allocation_by_detail.get(
+                replacement_allocation.purchase_detail_id
+            )
             if current_allocation is None:
                 persisted_cost.allocations.append(
                     RetaceoCostAllocationModel(
                         id=uuid.uuid4(),
                         company_id=company_id,
                         retaceo_cost_id=cost_id,
-                        purchase_detail_id=allocation.purchase_detail_id,
-                        amount=allocation.amount,
+                        purchase_detail_id=replacement_allocation.purchase_detail_id,
+                        amount=replacement_allocation.amount,
                     )
                 )
             else:
-                current_allocation.amount = allocation.amount
+                current_allocation.amount = replacement_allocation.amount
 
     def _replace_existing_draft_costs(
         self,

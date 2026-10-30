@@ -10,6 +10,7 @@ from decimal import Decimal
 from sqlalchemy import Integer, Select, and_, cast, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
+from sqlalchemy.sql import ColumnElement
 
 from app.domain.entities.purchase_quotation import (
     PurchaseQuotation,
@@ -123,9 +124,7 @@ def _to_entity(model: PurchaseQuotationModel) -> PurchaseQuotation:
             sources=tuple(
                 PurchaseQuotationSourceSnapshot(
                     purchase_request_id=uuid.UUID(str(source["purchase_request_id"])),
-                    purchase_request_detail_id=uuid.UUID(
-                        str(source["purchase_request_detail_id"])
-                    ),
+                    purchase_request_detail_id=uuid.UUID(str(source["purchase_request_detail_id"])),
                     request_code=str(source["request_code"]),
                     branch_name=(
                         str(source["branch_name"])
@@ -485,7 +484,9 @@ class SqlAlchemyPurchaseQuotationRepository:
         for detail in quotation.details:
             persisted = persisted_details[detail.id]
             if persisted.quantity != detail.quantity:
-                raise ValueError("La respuesta no puede modificar la cantidad enviada al proveedor.")
+                raise ValueError(
+                    "La respuesta no puede modificar la cantidad enviada al proveedor."
+                )
             persisted.product_id = detail.product_id
             persisted.unit_id = detail.unit_id
             persisted.offered_quantity = detail.offered_quantity
@@ -667,7 +668,7 @@ class SqlAlchemyPurchaseQuotationRepository:
         return result.scalars().unique().one_or_none()
 
     @staticmethod
-    def _branch_scope_conditions(branch_id: uuid.UUID) -> tuple[object, ...]:
+    def _branch_scope_conditions(branch_id: uuid.UUID) -> tuple[ColumnElement[bool], ...]:
         """Keep a quotation visible only when all its source requests are in-scope."""
         scoped_link = PurchaseQuotationRequestModel.__table__.alias("scoped_quotation_request")
         scoped_request = PurchaseRequestModel.__table__.alias("scoped_purchase_request")

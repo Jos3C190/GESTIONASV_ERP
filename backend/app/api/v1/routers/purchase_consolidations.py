@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime
 from typing import Literal
+from typing import cast as type_cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
@@ -28,6 +29,7 @@ from app.api.v1.schemas.purchase_consolidation import (
     ConsolidationEventResponse,
     ConsolidationLineResponse,
     ConsolidationSourceResponse,
+    ProductStockSnapshotResponse,
     PurchaseConsolidationAddRequests,
     PurchaseConsolidationAwardBoardResponse,
     PurchaseConsolidationAwardCreate,
@@ -58,6 +60,7 @@ from app.application.purchase_consolidations import (
     PurchaseConsolidationUseCases,
     SourceQuantityChange,
 )
+from app.application.purchase_consolidations.adjudication import PurchaseConsolidationAwardBoard
 from app.application.purchase_quotations import PurchaseQuotationUseCases
 from app.core.exceptions import NotFoundError
 from app.domain.entities.purchase_consolidation import (
@@ -136,7 +139,9 @@ def _response(item: PurchaseConsolidation) -> PurchaseConsolidationResponse:
     )
 
 
-def _award_board_response(board) -> PurchaseConsolidationAwardBoardResponse:
+def _award_board_response(
+    board: PurchaseConsolidationAwardBoard,
+) -> PurchaseConsolidationAwardBoardResponse:
     return PurchaseConsolidationAwardBoardResponse(
         consolidation_id=board.consolidation_id,
         consolidation_code=board.consolidation_code,
@@ -330,7 +335,7 @@ async def _resolve_warehouse_branch(
             status_code=422,
             detail="El almacén seleccionado no pertenece a la sucursal filtrada.",
         )
-    return warehouse.branch_id
+    return type_cast(uuid.UUID | None, warehouse.branch_id)
 
 
 async def _assert_request_scope(
@@ -487,12 +492,12 @@ async def resolve_selected_purchase_requests(
     resolutions = await use_cases.resolve_selected_requests(company_id, selected_request_ids)
     visible_resolutions: list[SelectedPurchaseRequestResolution] = []
     for request_resolution in resolutions:
-        visible_resolution = request_resolution
-        if request_resolution["eligibility"] == "already_consolidated":
+        visible_resolution = SelectedPurchaseRequestResolution.model_validate(request_resolution)
+        if visible_resolution.eligibility == "already_consolidated":
             can_view_all_consolidations = True
-            for consolidation_ref in request_resolution["consolidations"]:
+            for consolidation_ref in visible_resolution.consolidations:
                 try:
-                    consolidation = await use_cases.get(company_id, consolidation_ref["id"])
+                    consolidation = await use_cases.get(company_id, consolidation_ref.id)
                 except NotFoundError:
                     can_view_all_consolidations = False
                     break
@@ -504,11 +509,9 @@ async def resolve_selected_purchase_requests(
                     can_view_all_consolidations = False
                     break
             if not can_view_all_consolidations:
-                visible_resolution = {
-                    **request_resolution,
-                    "eligibility": "unavailable",
-                    "consolidations": (),
-                }
+                visible_resolution = visible_resolution.model_copy(
+                    update={"eligibility": "unavailable", "consolidations": ()}
+                )
         visible_resolutions.append(
             SelectedPurchaseRequestResolution.model_validate(visible_resolution)
         )
@@ -859,7 +862,9 @@ async def get_consolidation_inventory_snapshot(
         warehouse_id=item.central_warehouse_id,
         checked_at=datetime.now(UTC),
         reservation_data_available=False,
-        items=tuple(snapshots),
+        items=tuple(
+            ProductStockSnapshotResponse.model_validate(snapshot) for snapshot in snapshots
+        ),
     )
 
 

@@ -22,7 +22,9 @@ from tests.integration.test_inventory_transfer_repository import _create_context
 pytestmark = pytest.mark.e2e
 
 
-async def _committed_transfer_context(client, suffix: str) -> tuple[SimpleNamespace, dict[str, str]]:
+async def _committed_transfer_context(
+    client, suffix: str
+) -> tuple[SimpleNamespace, dict[str, str]]:
     async with async_session_factory() as session:
         context = await _create_context(session, suffix)
         actor_username = f"transfer-{suffix[:16]}"
@@ -59,7 +61,9 @@ async def _committed_transfer_context(client, suffix: str) -> tuple[SimpleNamesp
     return values, headers
 
 
-async def _create_preparation(client, values: SimpleNamespace, headers: dict[str, str], suffix: str):
+async def _create_preparation(
+    client, values: SimpleNamespace, headers: dict[str, str], suffix: str
+):
     response = await client.post(
         "/api/v1/inventory/transfers",
         headers=headers,
@@ -114,8 +118,12 @@ async def test_concurrent_dispatches_cannot_consume_the_same_handling_unit(e2e_c
         dispatch(first, f"dispatch-first-{suffix}"),
         dispatch(second, f"dispatch-second-{suffix}"),
     )
-    successes = [(transfer, response) for transfer, response in results if response.status_code == 200]
-    conflicts = [(transfer, response) for transfer, response in results if response.status_code == 409]
+    successes = [
+        (transfer, response) for transfer, response in results if response.status_code == 200
+    ]
+    conflicts = [
+        (transfer, response) for transfer, response in results if response.status_code == 409
+    ]
     assert len(successes) == 1, [(response.status_code, response.text) for _, response in results]
     assert len(conflicts) == 1, [(response.status_code, response.text) for _, response in results]
 
@@ -177,9 +185,8 @@ async def test_destination_branch_receiver_can_receive_without_global_access(e2e
         receiver = await session.scalar(
             select(UserCompany).where(
                 UserCompany.company_id == values.company_id,
-                UserCompany.user_id == select(User.id)
-                .where(User.username == receiver_username)
-                .scalar_subquery(),
+                UserCompany.user_id
+                == select(User.id).where(User.username == receiver_username).scalar_subquery(),
             )
         )
         assert receiver is not None

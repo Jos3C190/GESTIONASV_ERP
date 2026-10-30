@@ -24,20 +24,22 @@ class SelectedRequestUseCases:
 
 
 def _request() -> Request:
-    return Request({
-        "type": "http",
-        "http_version": "1.1",
-        "method": "GET",
-        "scheme": "http",
-        "path": "/api/v1/purchase-consolidations/selected-requests",
-        "raw_path": b"/api/v1/purchase-consolidations/selected-requests",
-        "query_string": b"",
-        "headers": [],
-        "client": ("test", 0),
-        "server": ("test", 80),
-        "state": {},
-        "app": object(),
-    })
+    return Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/api/v1/purchase-consolidations/selected-requests",
+            "raw_path": b"/api/v1/purchase-consolidations/selected-requests",
+            "query_string": b"",
+            "headers": [],
+            "client": ("test", 0),
+            "server": ("test", 80),
+            "state": {},
+            "app": object(),
+        }
+    )
 
 
 @pytest.mark.asyncio
@@ -47,16 +49,22 @@ async def test_selected_request_resolution_hides_consolidation_outside_user_scop
     company_id = uuid.uuid4()
     request_id = uuid.uuid4()
     consolidation_id = uuid.uuid4()
-    fake = SelectedRequestUseCases([{
-        "id": request_id,
-        "code": "SCR-00035",
-        "eligibility": "already_consolidated",
-        "consolidations": ({
-            "id": consolidation_id,
-            "code": "CD-00005",
-            "status": "draft",
-        },),
-    }])
+    fake = SelectedRequestUseCases(
+        [
+            {
+                "id": request_id,
+                "code": "SCR-00035",
+                "eligibility": "already_consolidated",
+                "consolidations": (
+                    {
+                        "id": consolidation_id,
+                        "code": "CD-00005",
+                        "status": "draft",
+                    },
+                ),
+            }
+        ]
+    )
 
     async def allow_request_scope(**kwargs: object) -> None:
         return None

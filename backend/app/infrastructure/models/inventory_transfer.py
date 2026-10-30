@@ -73,7 +73,9 @@ class InventoryTransferModel(UUIDPKMixin, TimestampMixin, Base):
     )
     code: Mapped[str] = mapped_column(String(40), nullable=False)
     origin_warehouse_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    destination_warehouse_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    destination_warehouse_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False
+    )
     vehicle_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, server_default="preparation")
     notes: Mapped[str | None] = mapped_column(Text)
@@ -135,7 +137,9 @@ class InventoryTransferModel(UUIDPKMixin, TimestampMixin, Base):
             name="ck_inventory_transfers_distinct_warehouses",
         ),
         Index("ix_inventory_transfers_company_status", "company_id", "status", "created_at"),
-        Index("ix_inventory_transfers_destination", "company_id", "destination_warehouse_id", "status"),
+        Index(
+            "ix_inventory_transfers_destination", "company_id", "destination_warehouse_id", "status"
+        ),
     )
 
 
@@ -223,7 +227,9 @@ class InventoryTransferDemandAllocationModel(UUIDPKMixin, TimestampMixin, Base):
 
     company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     transfer_detail_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    purchase_request_detail_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    purchase_request_detail_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False
+    )
     allocated_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     quantity_dispatched: Mapped[Decimal] = mapped_column(
         Numeric(18, 6), nullable=False, server_default="0"
@@ -343,7 +349,9 @@ class InventoryTransferReceiptModel(UUIDPKMixin, Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint("quantity_received > 0", name="ck_inventory_transfer_receipts_positive"),
-        Index("ix_inventory_transfer_receipts_transfer", "company_id", "transfer_id", "received_at"),
+        Index(
+            "ix_inventory_transfer_receipts_transfer", "company_id", "transfer_id", "received_at"
+        ),
     )
 
 
@@ -370,9 +378,14 @@ class InventoryTransferIncidentModel(UUIDPKMixin, TimestampMixin, Base):
             ondelete="RESTRICT",
         ),
         UniqueConstraint(
-            "company_id", "transfer_id", "id", name="uq_inventory_transfer_incidents_transfer_identity"
+            "company_id",
+            "transfer_id",
+            "id",
+            name="uq_inventory_transfer_incidents_transfer_identity",
         ),
-        CheckConstraint("status IN ('open','resolved')", name="ck_inventory_transfer_incidents_status"),
+        CheckConstraint(
+            "status IN ('open','resolved')", name="ck_inventory_transfer_incidents_status"
+        ),
         CheckConstraint(
             "(status = 'open' AND resolution IS NULL AND resolved_at IS NULL) OR "
             "(status = 'resolved' AND resolution IS NOT NULL AND resolved_at IS NOT NULL)",
@@ -386,4 +399,3 @@ class InventoryTransferIncidentModel(UUIDPKMixin, TimestampMixin, Base):
             postgresql_where=text("status = 'open'"),
         ),
     )
-

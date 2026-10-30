@@ -23,14 +23,20 @@ from app.infrastructure.models.sales_delivery import SalesDeliveryModel
 from app.infrastructure.models.user import User
 
 
-def _readable_reference(row, labels, retaceo_codes):
+def _readable_reference(
+    row: dict[str, Any], labels: dict[str, str], retaceo_codes: dict[uuid.UUID, str]
+) -> str:
     reference = row.get("source_reference") or ""
     prefix, _, tail = reference.partition(":")
     if reference in labels:
         return labels[reference]
     if prefix in {"inventory_transfer", "adjustment", "customer-return", "customer_return"}:
         return tail.split(":", 1)[0]
-    return retaceo_codes.get(row.get("retaceo_id")) or reference or "Sin referencia"
+    return (
+        (retaceo_codes.get(row["retaceo_id"]) if row.get("retaceo_id") is not None else None)
+        or reference
+        or "Sin referencia"
+    )
 
 
 class InventoryKardexContextRepository:
@@ -49,7 +55,9 @@ class InventoryKardexContextRepository:
                 return f"{prefix}:{key}"
         return reference
 
-    async def _receipt_lots(self, company_id, rows):
+    async def _receipt_lots(
+        self, company_id: uuid.UUID, rows: list[dict[str, Any]]
+    ) -> dict[uuid.UUID, str | None]:
         ids = {row["movement_line_id"] for row in rows if row.get("movement_line_id")}
         if not ids:
             return {}
@@ -59,8 +67,9 @@ class InventoryKardexContextRepository:
             InventoryLotDetailModel,
             InventoryLotModel,
         )
-        return dict(
-            (
+        return {
+            row[0]: row[1]
+            for row in (
                 await self.session.execute(
                     select(line.id, func.coalesce(detail.code, lot.code, line.lot_code))
                     .select_from(line)
@@ -83,9 +92,14 @@ class InventoryKardexContextRepository:
                     .where(line.company_id == company_id, line.id.in_(ids))
                 )
             ).all()
-        )
+        }
 
-    async def context(self, company_id: uuid.UUID, item_id=None, warehouse_id=None):
+    async def context(
+        self,
+        company_id: uuid.UUID,
+        item_id: uuid.UUID | None = None,
+        warehouse_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
         company = (
             await self.session.execute(
                 select(Company.name, Company.nit, Company.nrc).where(Company.id == company_id)
@@ -192,27 +206,29 @@ class InventoryKardexContextRepository:
                     labels[f"{prefix}:{key}"] = code
         retaceos = {row["retaceo_id"] for row in rows if row.get("retaceo_id")}
         retaceo_codes = (
-            dict(
-                (
+            {
+                row[0]: row[1]
+                for row in (
                     await self.session.execute(
                         select(RetaceoModel.id, RetaceoModel.code).where(
                             RetaceoModel.company_id == company_id, RetaceoModel.id.in_(retaceos)
                         )
                     )
                 ).all()
-            )
+            }
             if retaceos
             else {}
         )
         actors = {row["posted_by"] for row in rows if row.get("posted_by")}
         operators = (
-            dict(
-                (
+            {
+                row[0]: row[1]
+                for row in (
                     await self.session.execute(
                         select(User.id, User.username).where(User.id.in_(actors))
                     )
                 ).all()
-            )
+            }
             if actors
             else {}
         )
@@ -221,7 +237,11 @@ class InventoryKardexContextRepository:
             row["document_reference"] = _readable_reference(row, labels, retaceo_codes)
             row["operator"] = operators.get(row.get("posted_by")) or row.get("operator")
             if "inventory_delta" in row:
-                row["receipt_lot_code"] = lots.get(row.get("movement_line_id"))
+                row["receipt_lot_code"] = (
+                    lots.get(row["movement_line_id"])
+                    if row.get("movement_line_id") is not None
+                    else None
+                )
                 quantity = row["quantity_base"]
                 row["applied_unit_cost"] = (
                     abs(row["inventory_delta"] / quantity).quantize(

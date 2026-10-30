@@ -307,9 +307,12 @@ async def test_prepare_split_route_replays_conflicts_and_rolls_back_atomically(m
                 assert row["product_sku"] == product.sku
                 assert row["base_unit_name"]
                 assert row["base_unit_symbol"]
-            assert await inventory.list_handling_units(
-                company_id=uuid.uuid4(), warehouse_id=warehouse.id
-            ) == []
+            assert (
+                await inventory.list_handling_units(
+                    company_id=uuid.uuid4(), warehouse_id=warehouse.id
+                )
+                == []
+            )
             balances = list(
                 (
                     await session.scalars(
@@ -327,9 +330,7 @@ async def test_prepare_split_route_replays_conflicts_and_rolls_back_atomically(m
             assert sum((balance.quantity_base for balance in balances), Decimal("0")) == Decimal(
                 "10"
             )
-            split_valuation = await session.get(
-                InventoryCostAverageModel, (company_id, item.id)
-            )
+            split_valuation = await session.get(InventoryCostAverageModel, (company_id, item.id))
             assert split_valuation is not None
             assert split_valuation.quantity_base == Decimal("10.000000")
             assert split_valuation.inventory_value == Decimal("100.000000")
@@ -407,9 +408,7 @@ async def test_prepare_split_route_replays_conflicts_and_rolls_back_atomically(m
                 )
                 == 0
             )
-            rollback_valuation = await session.get(
-                InventoryCostAverageModel, (company_id, item.id)
-            )
+            rollback_valuation = await session.get(InventoryCostAverageModel, (company_id, item.id))
             assert rollback_valuation is not None
             assert rollback_valuation.quantity_base == Decimal("15.000000")
             assert rollback_valuation.inventory_value == Decimal("150.000000")

@@ -24,6 +24,7 @@ from app.api.v1.deps import (
     require_permission,
 )
 from app.api.v1.schemas.inventory_kardex import (
+    KardexContextOut,
     KardexItemOptionOut,
     KardexReconciliationOut,
     KardexReconciliationRowOut,
@@ -55,7 +56,9 @@ async def _authorize_warehouse(
     return company_id
 
 
-async def _authorize_company_values(session, current, company_id):
+async def _authorize_company_values(
+    session: SessionDep, current: CurrentUser, company_id: uuid.UUID
+) -> None:
     await require_company_wide_scope(session, current, company_id)
     if await assigned_warehouse_ids(session, current, company_id) is not None:
         raise HTTPException(
@@ -134,25 +137,27 @@ async def physical_kardex(
         if cut is not None
         else "No hay corte físico aprobado. Los movimientos se muestran, pero no se inventan saldos históricos."
     )
-    return PhysicalKardexOut(
-        context=await kardex.context(
-            company_id=company_id, item_id=inventory_item_id, warehouse_id=warehouse_id
-        ),
-        warehouse_id=warehouse_id,
-        inventory_item_id=inventory_item_id,
-        period_from=period_from,
-        period_to=period_to,
-        balance_basis=basis,
-        opening_known=data["opening_known"],
-        opening_quantity=data["opening_quantity"],
-        incoming_quantity=data["incoming_quantity"],
-        outgoing_quantity=data["outgoing_quantity"],
-        closing_known=data["closing_known"],
-        closing_quantity=data["closing_quantity"],
-        items=items,
-        page=page,
-        page_size=page_size,
-        total=data["total"],
+    return PhysicalKardexOut.model_validate(
+        {
+            "context": await kardex.context(
+                company_id=company_id, item_id=inventory_item_id, warehouse_id=warehouse_id
+            ),
+            "warehouse_id": warehouse_id,
+            "inventory_item_id": inventory_item_id,
+            "period_from": period_from,
+            "period_to": period_to,
+            "balance_basis": basis,
+            "opening_known": data["opening_known"],
+            "opening_quantity": data["opening_quantity"],
+            "incoming_quantity": data["incoming_quantity"],
+            "outgoing_quantity": data["outgoing_quantity"],
+            "closing_known": data["closing_known"],
+            "closing_quantity": data["closing_quantity"],
+            "items": items,
+            "page": page,
+            "page_size": page_size,
+            "total": data["total"],
+        }
     )
 
 
@@ -185,7 +190,7 @@ async def reconcile_inventory(
         difference_only=difference_only,
     )
     return KardexReconciliationOut(
-        context=await kardex.context(company_id=company_id),
+        context=KardexContextOut.model_validate(await kardex.context(company_id=company_id)),
         **{
             key: data[key]
             for key in (
@@ -237,21 +242,25 @@ async def valued_kardex(
     )
     if data is None:
         raise HTTPException(404, "Artículo de inventario no encontrado.")
-    return ValuedKardexOut(
-        context=await kardex.context(company_id=company_id, item_id=inventory_item_id),
-        inventory_item_id=inventory_item_id,
-        setting=ValuationSettingOut.model_validate(data["setting"]) if data["setting"] else None,
-        period_from=period_from,
-        period_to=period_to,
-        opening_known=data["opening_known"],
-        opening_quantity=data["opening_quantity"],
-        opening_value=data["opening_value"],
-        closing_known=data["closing_known"],
-        closing_quantity=data["closing_quantity"],
-        closing_value=data["closing_value"],
-        period_value_change=data["period_value_change"],
-        entries=[ValuationEntryOut.model_validate(row) for row in data["entries"]],
-        page=data["page"],
-        page_size=data["page_size"],
-        total=data["total"],
+    return ValuedKardexOut.model_validate(
+        {
+            "context": await kardex.context(company_id=company_id, item_id=inventory_item_id),
+            "inventory_item_id": inventory_item_id,
+            "setting": ValuationSettingOut.model_validate(data["setting"])
+            if data["setting"]
+            else None,
+            "period_from": period_from,
+            "period_to": period_to,
+            "opening_known": data["opening_known"],
+            "opening_quantity": data["opening_quantity"],
+            "opening_value": data["opening_value"],
+            "closing_known": data["closing_known"],
+            "closing_quantity": data["closing_quantity"],
+            "closing_value": data["closing_value"],
+            "period_value_change": data["period_value_change"],
+            "entries": [ValuationEntryOut.model_validate(row) for row in data["entries"]],
+            "page": data["page"],
+            "page_size": data["page_size"],
+            "total": data["total"],
+        }
     )

@@ -151,6 +151,10 @@ async def _existing_receipt_comparison(
     result = []
     for item_id, adjustments in changes.items():
         item = await valuation.session.get(InventoryItemModel, item_id)
+        if item is None or item.product_id is None:
+            valuation_error(
+                "El producto de valoración no está disponible.", "valuation_item_not_found"
+            )
         events = [
             valuation._event(row) for row in await valuation._rows(retaceo.company_id, item_id)
         ]
@@ -205,6 +209,10 @@ async def _posted_comparison(
         grouped.setdefault(item.id, (item, []))[1].append(entry)
     result = []
     for item, entries in grouped.values():
+        if item.product_id is None:
+            valuation_error(
+                "El producto de valoración no está disponible.", "valuation_item_not_found"
+            )
         first, last = entries[0], entries[-1]
         quantity = first.balance_quantity - first.quantity_base
         value = first.balance_value - first.inventory_delta

@@ -59,7 +59,7 @@ async def test_legacy_null_branch_uses_the_central_warehouse_headquarters(monkey
 
     actual_branch = await company_access.resolve_document_warehouse_scope(
         _Session(_warehouse_row(headquarters_id)),
-        current=object(),
+        current=SimpleNamespace(is_superuser=True),
         company_id=company_id,
         document_branch_id=None,
         warehouse_id=warehouse_id,

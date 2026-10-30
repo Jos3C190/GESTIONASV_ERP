@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any
+from typing import cast as type_cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import and_, func, or_, select, update
@@ -722,7 +723,7 @@ async def _validate_warehouse_branch(
     if branch.operational_status != "active":
         raise HTTPException(409, "La sucursal seleccionada no está activa.")
     await resolve_branch_scope(session, current, company_id, branch.id)
-    return branch
+    return type_cast(Branch, branch)
 
 
 async def _validate_central_warehouse(

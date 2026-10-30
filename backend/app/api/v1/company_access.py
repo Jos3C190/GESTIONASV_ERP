@@ -7,6 +7,7 @@ the context already authorised for the request.
 """
 
 import uuid
+from typing import cast as type_cast
 
 from fastapi import HTTPException, Request
 from sqlalchemy import select
@@ -234,7 +235,7 @@ async def resolve_document_warehouse_scope(
         raise HTTPException(409, "La bodega central no está vinculada a una matriz activa.")
     await resolve_branch_scope(session, current, company_id, row.branch_id)
     await authorize_warehouse_assignment(session, current, company_id, warehouse_id)
-    return row.branch_id
+    return type_cast(uuid.UUID, row.branch_id)
 
 
 async def assigned_warehouse_ids(

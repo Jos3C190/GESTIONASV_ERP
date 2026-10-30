@@ -144,7 +144,7 @@ def _group_lot_details(
     grouped_lines: dict[uuid.UUID, dict[uuid.UUID, _LotLineData]] = defaultdict(dict)
     for row in detail_rows:
         detail = row.InventoryLotDetailModel
-        line = {
+        line: _LotLineData = {
             "inventory_lot_detail_ids": [detail.id],
             "inventory_lot_detail_id": detail.id,
             "receipt_lot_detail_code": detail.code,
@@ -462,15 +462,31 @@ async def list_inventory_lots(
     legacy_stock = await _legacy_stock_summary(session, company_id, warehouse_id)
     filters = [InventoryLotModel.company_id == company_id]
     if q.strip():
-        matching_product = exists(select(InventoryLotDetailModel.id)
-            .join(ProductModel, and_(ProductModel.company_id == InventoryLotDetailModel.company_id,
-                                    ProductModel.id_product == InventoryLotDetailModel.product_id))
-            .where(InventoryLotDetailModel.company_id == company_id,
-                   InventoryLotDetailModel.inventory_lot_id == InventoryLotModel.id,
-                   or_(ProductModel.name.icontains(q.strip(), autoescape=True),
-                       ProductModel.sku.icontains(q.strip(), autoescape=True))))
-        filters.append(or_(InventoryLotModel.code.icontains(q.strip(), autoescape=True),
-                           PurchaseModel.code.icontains(q.strip(), autoescape=True), matching_product))
+        matching_product = exists(
+            select(InventoryLotDetailModel.id)
+            .join(
+                ProductModel,
+                and_(
+                    ProductModel.company_id == InventoryLotDetailModel.company_id,
+                    ProductModel.id_product == InventoryLotDetailModel.product_id,
+                ),
+            )
+            .where(
+                InventoryLotDetailModel.company_id == company_id,
+                InventoryLotDetailModel.inventory_lot_id == InventoryLotModel.id,
+                or_(
+                    ProductModel.name.icontains(q.strip(), autoescape=True),
+                    ProductModel.sku.icontains(q.strip(), autoescape=True),
+                ),
+            )
+        )
+        filters.append(
+            or_(
+                InventoryLotModel.code.icontains(q.strip(), autoescape=True),
+                PurchaseModel.code.icontains(q.strip(), autoescape=True),
+                matching_product,
+            )
+        )
     if purchase_id is not None:
         filters.append(InventoryLotModel.purchase_id == purchase_id)
     if warehouse_id is not None:

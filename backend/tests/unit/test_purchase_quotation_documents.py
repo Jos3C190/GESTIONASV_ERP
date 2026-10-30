@@ -48,9 +48,7 @@ class FakeQuotationDocumentRepository:
             and attachment.deleted_at is None
         )
 
-    async def mark_uploaded(
-        self, company_id, quotation_id, document_id, *, file_type, uploaded_at
-    ):
+    async def mark_uploaded(self, company_id, quotation_id, document_id, *, file_type, uploaded_at):
         attachment = await self.get_document(company_id, quotation_id, document_id)
         if attachment is None:
             return None
@@ -58,9 +56,7 @@ class FakeQuotationDocumentRepository:
         self.attachments[document_id] = updated
         return updated
 
-    async def detach_document(
-        self, company_id, quotation_id, document_id, *, deleted_at
-    ):
+    async def detach_document(self, company_id, quotation_id, document_id, *, deleted_at):
         attachment = await self.get_document(company_id, quotation_id, document_id)
         if attachment is None:
             return None
@@ -116,7 +112,9 @@ class FakeDocumentService:
         document = await self.get(company_id, document_id)
         if document.status != "active":
             raise BusinessRuleError("Documento no disponible.", code="document_not_active")
-        return f"https://storage.test/download/{document.id}", datetime.now(UTC) + timedelta(minutes=5)
+        return f"https://storage.test/download/{document.id}", datetime.now(UTC) + timedelta(
+            minutes=5
+        )
 
 
 class FakeAudit:
@@ -228,9 +226,7 @@ async def test_supplier_offer_document_detach_rejects_closed_or_unsent_quotes(st
         quotation_id=quotation_id,
         status=status,
     )
-    service = PurchaseQuotationDocumentService(
-        repository, FakeDocumentService(), FakeAudit()
-    )
+    service = PurchaseQuotationDocumentService(repository, FakeDocumentService(), FakeAudit())
 
     with pytest.raises(BusinessRuleError) as exc_info:
         await service.remove(company_id, actor_id, quotation_id, uuid.uuid4())
