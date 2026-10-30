@@ -175,11 +175,12 @@ export const sessionKey = (session: Pick<SimulationOut, 'traccar_device_id'>) =>
 // ------------------------------------------------------------ reproducción de rutas
 
 /**
- * El servidor mide el avance de una ruta simulada cada ~2 s y el mapa lo consulta cada ~2 s.
- * En vez de saltar entre mediciones, el mapa reproduce el avance con este retraso, interpolando
- * entre dos mediciones reales: la unidad se mueve de forma continua y siempre sobre la calle.
+ * El servidor mide el avance de una ruta simulada cada segundo y el mapa lo consulta cada
+ * segundo mientras hay unidades en marcha. En vez de saltar entre mediciones, el mapa reproduce
+ * el avance con este retraso, interpolando entre dos mediciones reales: la unidad se mueve de
+ * forma continua y siempre sobre la calle.
  */
-export const REPLAY_DELAY_MS = 4500;
+export const REPLAY_DELAY_MS = 2600;
 /** Si una medición se atrasa, se proyecta brevemente con la última velocidad medida. */
 const MAX_EXTRAPOLATION_MS = 1500;
 const MAX_SAMPLES = 12;

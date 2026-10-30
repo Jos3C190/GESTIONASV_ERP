@@ -3,7 +3,6 @@ import {
   animationPath,
   bearing,
   measurePath,
-  offsetLane,
   pathBetween,
   pointAlong,
   poseAt,
@@ -58,7 +57,7 @@ describe('3D truck motion', () => {
     expect(pathBetween(route, [0.002, 0.002], [0.0012, 0.004])).toBeNull();
   });
 
-  it('rounds corners: the pose follows an arc and the heading turns gradually', () => {
+  it('stays on the street at corners while the heading turns gradually', () => {
     // 100 m al norte y luego 100 m al este.
     const path = measurePath([
       [0, 0],
@@ -71,18 +70,12 @@ describe('3D truck motion', () => {
     expect(poseAt(path, 50).course).toBeCloseTo(0, 0);
     const corner = poseAt(path, 100);
     expect(corner.course).toBeCloseTo(45, 0);
-    // En la esquina va por dentro del ángulo, como un vehículo que dobla.
-    expect(corner.point[0]).toBeGreaterThan(0);
-    expect(corner.point[1]).toBeLessThan(0.000898);
+    // En la esquina la posición es el propio vértice: nunca se sale de la calle.
+    expect(corner.point[0]).toBeCloseTo(0, 6);
+    expect(corner.point[1]).toBeCloseTo(0.000898, 6);
+    expect(poseAt(path, 97).course).toBeLessThan(45);
+    expect(poseAt(path, 103).course).toBeGreaterThan(45);
     expect(poseAt(path, 200).point).toEqual([0.000898, 0.000898]);
-  });
-
-  it('moves the 3D unit to the right-hand lane', () => {
-    const north = offsetLane([0, 0], 0, 1.6);
-    expect(north[0]).toBeGreaterThan(0);
-    expect(north[1]).toBeCloseTo(0, 9);
-    const east = offsetLane([0, 0], 90, 1.6);
-    expect(east[1]).toBeLessThan(0);
   });
 
   it('falls back to a straight line when the trail does not cover both fixes', () => {

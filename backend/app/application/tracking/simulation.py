@@ -22,8 +22,8 @@ from app.application.tracking.transfers import EARTH_RADIUS_M, LngLat, distance_
 SimulationMode = Literal["route", "joystick"]
 SimulationState = Literal["running", "paused", "arrived", "ended"]
 
-#: How often the engine advances route sessions.
-TICK_SECONDS = 2.0
+#: How often the engine advances route sessions (1 s: braking and corners stay precise).
+TICK_SECONDS = 1.0
 #: Report period while moving (a phone app usually reports every few seconds).
 MOVING_REPORT_S = 3.0
 #: Heartbeat while stopped, so Traccar keeps the unit online.

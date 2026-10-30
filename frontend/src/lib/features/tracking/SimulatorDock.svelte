@@ -58,8 +58,10 @@
 
   const OPEN_KEY = 'tracking.simulator.open';
   const POLL_OPEN_MS = 2500;
-  /** Con sesiones abiertas se consulta seguido: el mapa reproduce su avance medido. */
-  const POLL_ACTIVE_MS = 2000;
+  /** Con unidades en marcha se consulta cada segundo: el mapa reproduce su avance medido. */
+  const POLL_MOVING_MS = 1000;
+  /** Con sesiones abiertas pero detenidas basta con menos. */
+  const POLL_ACTIVE_MS = 2500;
   const POLL_CLOSED_MS = 15000;
 
   let info = $state<SimulatorOut | null>(null);
@@ -426,7 +428,13 @@
           if (info?.enabled !== false || open) await refresh(controller.signal);
           schedule();
         },
-        info?.sessions.length ? POLL_ACTIVE_MS : open ? POLL_OPEN_MS : POLL_CLOSED_MS
+        info?.sessions.some((item) => item.mode === 'route' && item.state === 'running')
+          ? POLL_MOVING_MS
+          : info?.sessions.length
+            ? POLL_ACTIVE_MS
+            : open
+              ? POLL_OPEN_MS
+              : POLL_CLOSED_MS
       );
     };
     schedule();

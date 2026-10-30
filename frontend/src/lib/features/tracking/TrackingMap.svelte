@@ -7,7 +7,6 @@
     animationPath,
     createTruckLayer,
     loadThree,
-    LANE_OFFSET_M,
     loadTruckModel,
     measurePath,
     poseAt,
@@ -153,7 +152,7 @@
     const start = performance.now();
     cancelAnimationFrame(animations.get(key) ?? 0);
     const jump = Math.abs(from[0] - target[0]) > 0.5 || Math.abs(from[1] - target[1]) > 0.5;
-    // Esquinas redondeadas y rumbo continuo, en vez de girar de golpe en cada vértice.
+    // Sobre el trazo y con rumbo continuo, en vez de girar de golpe en cada vértice.
     const measured = measurePath(path);
     const place = (point: LngLat, heading: number) => {
       marker.setLngLat(point);
@@ -452,7 +451,6 @@
       }
       state.status = vehicle.status;
       state.selected = vehicle.key === selectedKey;
-      state.laneOffsetM = vehicle.simulated ? LANE_OFFSET_M : 0;
       if (piloted.has(vehicle.key)) {
         // La posición manejada manda: la del servidor llega con retraso.
       } else if (from[0] !== target[0] || from[1] !== target[1]) {
