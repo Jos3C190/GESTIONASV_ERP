@@ -132,6 +132,10 @@ async def test_purchase_request_permissions_are_created_from_empty_catalogue(
 async def test_purchase_request_permissions_are_idempotent_and_reconcile_existing_super_admin(
     migration_at_0043: None,
 ) -> None:
+    # Create the pre-existing catalogue through the real revision, then replay
+    # it from its parent. Its downgrade intentionally preserves shared grants.
+    _run_alembic("upgrade", "0044")
+    _run_alembic("downgrade", "0043")
     async with async_session_factory() as session:
         permissions = await _purchase_permissions(session)
         permission_ids_before = {permission.code: permission.id for permission in permissions}

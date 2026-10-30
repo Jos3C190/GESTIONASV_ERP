@@ -1546,8 +1546,15 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
         headers=headers,
         json={
             "purchase_id": purchase_id,
+            "fob_lines": [
+                {
+                    "purchase_detail_id": row["id"],
+                    "amount": str(Decimal(row["subtotal"]) - Decimal(row["discount"])),
+                }
+                for row in purchase["details"]
+            ],
             "total_freight": "5.000000",
-            "total_expenses": "2.000000",
+            "total_expenses": "0.000000",
             "total_dai": "3.000000",
             "import_vat": "13.000000",
             "notes": "Retaceo E2E",
@@ -1564,9 +1571,8 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
     assert retaceo["branch_id"] == str(branch_id)
     assert retaceo["details"][0]["purchase_detail_id"] == purchase_detail["id"]
     assert Decimal(retaceo["total_fob"]) == expected_fob
-    # Cost concepts start unallocated; only line-level allocations affect
-    # landed unit costs. The UI requires this explicit distribution step.
-    assert Decimal(retaceo["total_cost"]) == expected_fob
+    # Explicit fixed amounts are distributed across the manually entered FOB.
+    assert Decimal(retaceo["total_cost"]) == expected_fob + Decimal("8")
     assert Decimal(retaceo["import_vat"]) == Decimal("13")
 
     def allocated_costs(
@@ -1581,6 +1587,12 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
                     "id": cost["id"],
                     "classification": classification,
                     "title": cost["title"],
+                    "description": cost.get("description"),
+                    "expense_type_id": cost.get("expense_type_id"),
+                    "incurred_on": cost.get("incurred_on"),
+                    "source_purchase_order_expense_id": cost.get(
+                        "source_purchase_order_expense_id"
+                    ),
                     "amount": amount,
                     "allocations": (
                         []
@@ -1599,6 +1611,23 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
     created_costs = retaceo["costs"]
     assert isinstance(created_costs, list)
 
+    async with async_session_factory() as session:
+        expense_type = ExpenseTypeModel(
+            company_id=company_id, name="Gasto documentado E2E", is_active=True
+        )
+        session.add(expense_type)
+        await session.commit()
+        expense_type_id = str(expense_type.id)
+    extra_expense = {
+        "classification": "expense",
+        "title": "Gasto documentado E2E",
+        "description": "Comprobante operativo de la recepción",
+        "expense_type_id": expense_type_id,
+        "incurred_on": datetime.now(UTC).date().isoformat(),
+        "amount": "2.000000",
+        "allocations": [{"purchase_detail_id": purchase_detail["id"], "amount": "2.000000"}],
+    }
+
     updated = await purchase_order_client.put(
         f"/api/v1/retaceos/{retaceo_id}",
         headers=headers,
@@ -1608,7 +1637,7 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
             "total_dai": "3.000000",
             "import_vat": "13.000000",
             "notes": "Retaceo con costos distribuidos",
-            "costs": allocated_costs(created_costs),
+            "costs": [*allocated_costs(created_costs), extra_expense],
         },
     )
     assert updated.status_code == 200, updated.text
