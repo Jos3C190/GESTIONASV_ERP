@@ -59,7 +59,13 @@ from app.application.tracking.simulation import (
     plausible_drive,
     point_at,
 )
-from app.application.tracking.transfers import LngLat, downsample, nearest_road, plan_path
+from app.application.tracking.transfers import (
+    LngLat,
+    distance_m,
+    downsample,
+    nearest_road,
+    plan_path,
+)
 from app.core.config import settings
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.infrastructure.models.employee import Employee
@@ -83,6 +89,8 @@ DEFAULT_SIGNAL_MINUTES = 12
 #: Joystick reports closer than this are kept but not forwarded to Traccar.
 DRIVE_REPORT_S = 0.9
 MIN_ROUTE_POINTS = 2
+#: Closer than this the unit is already at its starting point.
+AT_START_M = 30
 
 
 def _require_enabled() -> None:
@@ -190,6 +198,8 @@ async def _sessions_out(
                     "mode": item.mode,
                     "state": item.state,
                     "route": item.route,
+                    "stops": item.stops,
+                    "leg": item.leg,
                     "route_length_m": float(item.route_length_m),
                     "progress_m": float(item.progress_m),
                     "speed_kmh": float(item.speed_kmh),
@@ -355,7 +365,7 @@ async def _transfer_route(
 
 async def _planned_route(
     session: SessionDep, scope: FleetScope, vehicle: FleetVehicleModel, body: SimulationCreate
-) -> list[LngLat]:
+) -> tuple[list[LngLat], list[LngLat]]:
     if body.transfer_id is not None and body.waypoints:
         raise ValidationError(
             "Elija un traslado o puntos en el mapa, no ambos.", code="simulation_source"
@@ -368,11 +378,26 @@ async def _planned_route(
         raise ValidationError(
             "Indique un traslado o al menos dos puntos del recorrido.", code="simulation_source"
         )
+    return stops, await _street_path(stops)
+
+
+async def _street_path(stops: list[LngLat]) -> list[LngLat]:
     planned = await plan_path(settings.OSRM_URL, stops)
     route = downsample([_point(item) for item in planned["coordinates"]])
     if len(route) < MIN_ROUTE_POINTS or path_length(route) < 1:
         raise ValidationError("El recorrido es demasiado corto.", code="simulation_route")
     return route
+
+
+def _follow(simulation: TrackingSimulationModel, route: list[LngLat], leg: str) -> None:
+    """Put the unit on a new route that starts where it is now."""
+    simulation.mode = "route"
+    simulation.leg = leg
+    simulation.route = [list(point) for point in route]
+    simulation.route_length_m = Decimal(f"{path_length(route):.1f}")
+    simulation.progress_m = Decimal("0")
+    simulation.state = "running"
+    simulation.stop_until = None
 
 
 async def _joystick_start(
@@ -422,11 +447,12 @@ async def start_simulation(
         )
 
     if body.mode == "route":
-        route = await _planned_route(session, scope, vehicle, body)
+        stops, route = await _planned_route(session, scope, vehicle, body)
         start, course = point_at(route, 0)
     else:
         route = []
         start, course = await _joystick_start(repo, scope, vehicle, body), 0.0
+        stops = [start]
 
     device_id, unique_id = await ensure_virtual_device(vehicle)
     now = datetime.now(UTC)
@@ -441,6 +467,8 @@ async def start_simulation(
             mode=body.mode,
             state="running",
             route=[list(point) for point in route],
+            stops=[list(point) for point in stops],
+            leg="outbound",
             route_length_m=Decimal(f"{path_length(route):.1f}"),
             progress_m=Decimal("0"),
             speed_kmh=Decimal(f"{body.speed_kmh:.1f}"),
@@ -494,7 +522,7 @@ async def control_simulation(  # noqa: C901 - one branch per action keeps the ru
     now = datetime.now(UTC)
     on_route = simulation.mode == "route"
     action = body.action
-    if action in {"pause", "resume", "detour", "restart"} and not on_route:
+    if action in {"pause", "resume", "detour", "restart", "outbound"} and not on_route:
         raise ConflictError(
             "Esa acción es para trayectos automáticos.", code="simulation_action_invalid"
         )
@@ -541,10 +569,44 @@ async def control_simulation(  # noqa: C901 - one branch per action keeps the ru
         simulation.stop_until = None
         apply_position(simulation, start, course, 0)
         simulation.last_report_at = None
+    elif action in {"return", "outbound", "take_control"}:
+        await _round_trip(simulation, action)
     simulation.last_activity_at = now
     await session.flush()
     can_simulate = await _can_simulate(current, checker, scope.company_id)
     return (await _sessions_out(session, [simulation], scope=scope, can_simulate=can_simulate))[0]
+
+
+async def _round_trip(simulation: TrackingSimulationModel, action: str) -> None:
+    """Go back to the starting point, set off again, or hand the unit to the joystick."""
+    stops = [_point(item) for item in simulation.stops]
+    here = _position(simulation)
+    if action == "take_control":
+        # El joystick retoma la unidad donde esté; el recorrido automático se descarta.
+        simulation.mode = "joystick"
+        simulation.leg = "outbound"
+        simulation.route = []
+        simulation.route_length_m = Decimal("0")
+        simulation.progress_m = Decimal("0")
+        simulation.state = "running"
+        simulation.stop_until = None
+        simulation.current_speed_kmh = Decimal("0")
+        return
+    if action == "return":
+        if not stops:
+            raise ConflictError("La sesión no tiene punto de inicio.", code="simulation_no_start")
+        if distance_m(here, stops[0]) <= AT_START_M:
+            raise ConflictError(
+                "La unidad ya está en el punto inicial.", code="simulation_at_start"
+            )
+        # Ruta nueva por calles desde donde está hasta donde empezó.
+        _follow(simulation, await _street_path([here, stops[0]]), "return")
+        return
+    if len(stops) < MIN_ROUTE_POINTS:
+        raise ConflictError(
+            "La sesión no tiene un recorrido de ida que repetir.", code="simulation_no_route"
+        )
+    _follow(simulation, await _street_path([here, *stops[1:]]), "outbound")
 
 
 @router.post(

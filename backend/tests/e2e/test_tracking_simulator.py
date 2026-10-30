@@ -192,6 +192,20 @@ async def test_route_session_stands_in_for_the_real_gps(
     assert controlled.json()["speed_kmh"] == 80
     assert controlled.json()["route_length_m"] != simulation["route_length_m"]
 
+    # Ida y vuelta: el regreso es una ruta nueva hasta el punto inicial, y luego se sale de nuevo.
+    control = f"{SIMULATOR}/sessions/{simulation['id']}/control"
+    assert simulation["leg"] == "outbound"
+    assert len(simulation["stops"]) == 2
+    back = await e2e_client.post(control, headers=headers, json={"action": "return"})
+    assert back.status_code == 200, back.text
+    assert back.json()["leg"] == "return"
+    assert back.json()["state"] == "running"
+    assert back.json()["route"][-1] == pytest.approx(simulation["stops"][0])
+    again = await e2e_client.post(control, headers=headers, json={"action": "outbound"})
+    assert again.status_code == 200, again.text
+    assert again.json()["leg"] == "outbound"
+    assert again.json()["route"][-1] == pytest.approx(simulation["stops"][-1])
+
     ended = await e2e_client.delete(f"{SIMULATOR}/sessions/{simulation['id']}", headers=headers)
     assert ended.status_code == 204
     async with async_session_factory() as session:
@@ -240,6 +254,11 @@ async def test_joystick_permissions_and_shutdown(
     assert started.status_code == 201, started.text
     simulation = started.json()
     assert simulation["route"] == []
+    at_start = await e2e_client.post(
+        f"{SIMULATOR}/sessions/{simulation['id']}/control", headers=admin, json={"action": "return"}
+    )
+    assert at_start.status_code == 409
+    assert at_start.json()["code"] == "simulation_at_start"
 
     # Un vehículo sin GPS real aparece en el mapa gracias al GPS virtual.
     positions = (await e2e_client.get("/api/v1/tracking/positions", headers=admin)).json()
@@ -262,10 +281,21 @@ async def test_joystick_permissions_and_shutdown(
     )
     assert teleport.status_code == 409
     assert teleport.json()["code"] == "simulation_teleport"
-    paused = await e2e_client.post(
-        f"{SIMULATOR}/sessions/{simulation['id']}/control", headers=admin, json={"action": "pause"}
-    )
+    control = f"{SIMULATOR}/sessions/{simulation['id']}/control"
+    paused = await e2e_client.post(control, headers=admin, json={"action": "pause"})
     assert paused.status_code == 409
+    # Desde el joystick la unidad vuelve sola al inicio y luego se retoma el control.
+    home = await e2e_client.post(control, headers=admin, json={"action": "return"})
+    assert home.status_code == 200, home.text
+    assert home.json()["mode"] == "route"
+    assert home.json()["leg"] == "return"
+    assert home.json()["route"][-1] == pytest.approx([-88.18, 13.48])
+    no_outbound = await e2e_client.post(control, headers=admin, json={"action": "outbound"})
+    assert no_outbound.status_code == 409
+    manual = await e2e_client.post(control, headers=admin, json={"action": "take_control"})
+    assert manual.status_code == 200, manual.text
+    assert manual.json()["mode"] == "joystick"
+    assert manual.json()["route"] == []
 
     seen = (await e2e_client.get(SIMULATOR, headers=manager)).json()["sessions"]
     assert [item["id"] for item in seen] == [simulation["id"]]

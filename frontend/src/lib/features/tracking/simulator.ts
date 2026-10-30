@@ -121,12 +121,15 @@ export function sessionStatus(
   const until = (value: string | null) => (value ? new Date(value).getTime() - now : 0);
   if (until(session.signal_lost_until) > 0)
     return { label: `Sin señal · ${countdown(until(session.signal_lost_until))}`, tone: 'lost' };
-  if (session.state === 'arrived') return { label: 'Llegó al destino', tone: 'done' };
+  const returning = session.leg === 'return';
+  if (session.state === 'arrived')
+    return { label: returning ? 'De vuelta en el inicio' : 'Llegó al destino', tone: 'done' };
   if (session.state === 'paused') return { label: 'En pausa', tone: 'hold' };
   if (until(session.stop_until) > 0)
     return { label: `Detenida · ${countdown(until(session.stop_until))}`, tone: 'hold' };
   if (session.mode === 'joystick') return { label: 'Manejo manual', tone: 'live' };
-  return { label: `En ruta · ${Math.round(session.current_speed_kmh)} km/h`, tone: 'live' };
+  const speed = `${Math.round(session.current_speed_kmh)} km/h`;
+  return { label: returning ? `Regresando · ${speed}` : `En ruta · ${speed}`, tone: 'live' };
 }
 
 export function countdown(ms: number): string {
@@ -135,6 +138,26 @@ export function countdown(ms: number): string {
   const seconds = total % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
+
+/** Botones de ida y vuelta que tienen sentido en el estado actual de la sesión. */
+export function roundTripActions(
+  session: SimulationOut
+): ('return' | 'outbound' | 'take_control')[] {
+  const hasOutbound = session.stops.length >= 2;
+  if (session.mode === 'joystick') return ['return'];
+  const actions: ('return' | 'outbound' | 'take_control')[] = [];
+  if (session.leg === 'outbound') actions.push('return');
+  else if (hasOutbound) actions.push('outbound');
+  // Una sesión que empezó con joystick vuelve a él al terminar de regresar.
+  if (!hasOutbound) actions.push('take_control');
+  return actions;
+}
+
+export const ROUND_TRIP_LABELS = {
+  return: 'Regresar al inicio',
+  outbound: 'Salir de nuevo',
+  take_control: 'Tomar el control'
+} as const;
 
 export function progressOf(session: SimulationOut): number {
   if (session.mode !== 'route' || session.route_length_m <= 0) return 0;

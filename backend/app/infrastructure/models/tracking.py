@@ -164,6 +164,10 @@ class TrackingSimulationModel(Base):
     state: Mapped[str] = mapped_column(String(10), nullable=False, default="running")
     #: Planned path ``[[lng, lat], ...]``; empty while driving with the joystick.
     route: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    #: Planned stops ``[[lng, lat], ...]``: the first one is the starting point.
+    stops: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    #: ``outbound`` or ``return`` (heading back to the starting point).
+    leg: Mapped[str] = mapped_column(String(8), nullable=False, default="outbound")
     route_length_m: Mapped[Decimal] = mapped_column(Numeric(12, 1), nullable=False, default=0)
     progress_m: Mapped[Decimal] = mapped_column(Numeric(12, 1), nullable=False, default=0)
     speed_kmh: Mapped[Decimal] = mapped_column(Numeric(6, 1), nullable=False, default=40)
@@ -214,6 +218,7 @@ class TrackingSimulationModel(Base):
             name="ck_tracking_simulations_state",
         ),
         CheckConstraint("speed_kmh BETWEEN 1 AND 300", name="ck_tracking_simulations_speed"),
+        CheckConstraint("leg IN ('outbound', 'return')", name="ck_tracking_simulations_leg"),
         CheckConstraint(
             "progress_m >= 0 AND progress_m <= route_length_m + 1",
             name="ck_tracking_simulations_progress",

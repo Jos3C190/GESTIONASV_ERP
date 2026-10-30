@@ -272,6 +272,10 @@ class SimulationOut(BaseModel):
     mode: Literal["route", "joystick"]
     state: Literal["running", "paused", "arrived", "ended"]
     route: list[LngLat] = []
+    #: Planned stops; the first one is where the session started.
+    stops: list[LngLat] = []
+    #: ``return`` while heading back to the starting point.
+    leg: Literal["outbound", "return"] = "outbound"
     route_length_m: float
     progress_m: float
     speed_kmh: float
@@ -311,7 +315,17 @@ class SimulationCreate(BaseModel):
 
 class SimulationControl(BaseModel):
     action: Literal[
-        "pause", "resume", "stop", "signal_loss", "signal_restore", "detour", "speed", "restart"
+        "pause",
+        "resume",
+        "stop",
+        "signal_loss",
+        "signal_restore",
+        "detour",
+        "speed",
+        "restart",
+        "return",
+        "outbound",
+        "take_control",
     ]
     #: Length of a timed stop or signal loss.
     minutes: int | None = Field(default=None, ge=1, le=240)

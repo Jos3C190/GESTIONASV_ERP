@@ -18,6 +18,8 @@
     formatDistance,
     inputFromKeys,
     progressOf,
+    ROUND_TRIP_LABELS,
+    roundTripActions,
     sessionKey,
     sessionStatus,
     typingTarget,
@@ -125,6 +127,8 @@
     loading = true;
     try {
       info = await api.tracking.simulator.state(signal);
+      const current = info.sessions.find((item) => item.id === activeId);
+      if (driving && current && current.mode !== 'joystick') stopDriving(false);
       if (activeId && !info.sessions.some((item) => item.id === activeId)) {
         // La sesión terminó (por el usuario, por inactividad o al desactivar el simulador).
         activeId = null;
@@ -191,7 +195,11 @@
     busy = true;
     error = null;
     try {
-      replace(await api.tracking.simulator.control(active.id, action, extra));
+      const updated = await api.tracking.simulator.control(active.id, action, extra);
+      replace(updated);
+      // Regresar desde el joystick pasa a ruta automática; "Tomar el control" vuelve al joystick.
+      if (updated.mode === 'joystick' && !driving) startDriving(updated);
+      else if (updated.mode !== 'joystick' && driving) stopDriving(false);
     } catch (failure) {
       error = message(failure);
     } finally {
@@ -249,9 +257,9 @@
     frame = requestAnimationFrame(loop);
   }
 
-  function stopDriving() {
+  function stopDriving(notify = true) {
     cancelAnimationFrame(frame);
-    if (driving && drive && drive.speedKmh > 0) {
+    if (notify && driving && drive && drive.speedKmh > 0) {
       // Al soltar el control la unidad queda detenida donde está.
       drive.speedKmh = 0;
       void send(true);
@@ -459,9 +467,11 @@
             <p class="muted small">
               {active.mode === 'joystick'
                 ? 'Joystick'
-                : active.transfer_code
-                  ? `Traslado ${active.transfer_code}`
-                  : 'Recorrido marcado'}
+                : active.leg === 'return'
+                  ? 'Regreso al punto inicial'
+                  : active.transfer_code
+                    ? `Traslado ${active.transfer_code}`
+                    : 'Recorrido marcado'}
               {#if active.started_by_name}· {active.started_by_name}{/if}
             </p>
 
@@ -532,9 +542,14 @@
                       >Reanudar</button
                     >
                   {:else if active.state === 'arrived'}
-                    <button type="button" disabled={busy} onclick={() => control('restart')}
-                      >Repetir</button
-                    >
+                    {#if active.leg === 'outbound'}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        title="Vuelve a recorrer la ida desde su inicio"
+                        onclick={() => control('restart')}>Repetir</button
+                      >
+                    {/if}
                   {:else}
                     <button type="button" disabled={busy} onclick={() => control('pause')}
                       >Pausar</button
@@ -553,6 +568,38 @@
                   {/if}
                 </div>
               {/if}
+
+              <div class="trip">
+                {#each roundTripActions(active) as action (action)}
+                  <button
+                    type="button"
+                    class="trip-button"
+                    class:primary-soft={active.state === 'arrived' || active.mode === 'joystick'}
+                    disabled={busy}
+                    title={action === 'return'
+                      ? 'Calcula una ruta por calles desde aquí hasta el punto inicial'
+                      : action === 'outbound'
+                        ? 'Vuelve a hacer la ida desde donde está'
+                        : 'Maneja la unidad con el joystick desde donde está'}
+                    onclick={() => control(action)}
+                  >
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"
+                      ><path
+                        d={action === 'return'
+                          ? 'M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3'
+                          : action === 'outbound'
+                            ? 'M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3'
+                            : 'M12 3v6M12 15v6M3 12h6M15 12h6'}
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      /></svg
+                    >{ROUND_TRIP_LABELS[action]}
+                  </button>
+                {/each}
+              </div>
 
               <div class="group">
                 <span class="label">Detener</span>
@@ -1034,6 +1081,33 @@
   }
   .actions button {
     flex: 1;
+  }
+  .trip {
+    display: flex;
+    gap: 6px;
+  }
+  .trip-button {
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 9px;
+    border: 1px solid rgb(var(--sim) / 0.35);
+    border-radius: 8px;
+    background: transparent;
+    color: rgb(var(--sim));
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .trip-button:hover:not(:disabled) {
+    background: rgb(var(--sim) / 0.08);
+  }
+  .trip-button.primary-soft {
+    border-color: transparent;
+    background: rgb(var(--sim));
+    color: #fff;
   }
   .presets button {
     padding: 3px 8px;

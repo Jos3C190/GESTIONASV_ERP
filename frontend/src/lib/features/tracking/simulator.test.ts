@@ -7,6 +7,7 @@ import {
   inputFromKeys,
   offsetPoint,
   progressOf,
+  roundTripActions,
   sessionKey,
   sessionStatus,
   typingTarget,
@@ -34,6 +35,11 @@ function session(overrides: Partial<SimulationOut> = {}): SimulationOut {
     mode: 'route',
     state: 'running',
     route: [],
+    stops: [
+      [-88.19, 13.48],
+      [-88.18, 13.49]
+    ],
+    leg: 'outbound',
     route_length_m: 2000,
     progress_m: 500,
     speed_kmh: 60,
@@ -106,6 +112,22 @@ describe('session status', () => {
     expect(sessionStatus(session({ state: 'arrived' }), now).tone).toBe('done');
     expect(sessionStatus(session(), now).label).toBe('En ruta · 58 km/h');
     expect(sessionStatus(session({ mode: 'joystick' }), now).label).toBe('Manejo manual');
+  });
+
+  it('names the return leg and offers the round trip that fits', () => {
+    expect(sessionStatus(session({ leg: 'return' }), now).label).toBe('Regresando · 58 km/h');
+    expect(sessionStatus(session({ leg: 'return', state: 'arrived' }), now).label).toBe(
+      'De vuelta en el inicio'
+    );
+    expect(roundTripActions(session())).toEqual(['return']);
+    expect(roundTripActions(session({ leg: 'return' }))).toEqual(['outbound']);
+    expect(roundTripActions(session({ mode: 'joystick', stops: [[-88.19, 13.48]] }))).toEqual([
+      'return'
+    ]);
+    // Empezó con joystick y volvió solo al inicio: puede retomar el control.
+    expect(roundTripActions(session({ leg: 'return', stops: [[-88.19, 13.48]] }))).toEqual([
+      'take_control'
+    ]);
   });
 
   it('reports progress, distances and the map key', () => {

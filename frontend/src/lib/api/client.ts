@@ -1037,7 +1037,10 @@ export type SimulationAction =
   | 'signal_restore'
   | 'detour'
   | 'speed'
-  | 'restart';
+  | 'restart'
+  | 'return'
+  | 'outbound'
+  | 'take_control';
 
 export interface SimulatorVehicleOut {
   id: string;
@@ -1064,6 +1067,10 @@ export interface SimulationOut {
   mode: SimulationMode;
   state: SimulationState;
   route: [number, number][];
+  /** Paradas planeadas; la primera es el punto inicial. */
+  stops: [number, number][];
+  /** `return` mientras vuelve al punto inicial. */
+  leg: 'outbound' | 'return';
   route_length_m: number;
   progress_m: number;
   speed_kmh: number;
