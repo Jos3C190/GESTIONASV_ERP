@@ -84,9 +84,10 @@ def test_locate_on_route_follows_polyline_segments() -> None:
 
 
 def test_downsample_keeps_ends() -> None:
-    points = [(float(i), 0.0) for i in range(1000)]
+    # Una calle en zigzag: reducirla respeta el límite y conserva los extremos.
+    points = [(i * 0.0001, (i % 2) * 0.0001) for i in range(1000)]
     sampled = downsample(points, 100)
-    assert len(sampled) == 100
+    assert len(sampled) <= 100
     assert sampled[0] == points[0]
     assert sampled[-1] == points[-1]
 

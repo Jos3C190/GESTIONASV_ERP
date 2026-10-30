@@ -7,8 +7,10 @@
     animationPath,
     createTruckLayer,
     loadThree,
+    LANE_OFFSET_M,
     loadTruckModel,
-    pointAlong,
+    measurePath,
+    poseAt,
     type TruckState
   } from './truck3d';
   import { DEFAULT_CENTER, loadMapLibre, MAP_STYLE, type MapLibre } from './maplibre';
@@ -32,7 +34,7 @@
     endpoints = null,
     simRoutes = {},
     simPoints = [],
-    pilot = null,
+    pilots = {},
     onselect,
     ondrawpoint,
     ondrawfinish
@@ -61,8 +63,11 @@
     /** Recorridos de las sesiones del simulador y los puntos que se están marcando. */
     simRoutes?: Record<string, LngLat[]>;
     simPoints?: LngLat[];
-    /** Unidad manejada con el joystick: se dibuja en cada cuadro, sin esperar al servidor. */
-    pilot?: { key: string; lngLat: LngLat; course: number } | null;
+    /**
+     * Unidades que el navegador ubica en cada cuadro sin esperar al servidor: la del joystick y
+     * las que recorren una ruta simulada (se reproduce su avance medido por el servidor).
+     */
+    pilots?: Record<string, { lngLat: LngLat; course: number }>;
     onselect: (key: string | null) => void;
     ondrawpoint?: (point: LngLat) => void;
     ondrawfinish?: () => void;
@@ -148,6 +153,8 @@
     const start = performance.now();
     cancelAnimationFrame(animations.get(key) ?? 0);
     const jump = Math.abs(from[0] - target[0]) > 0.5 || Math.abs(from[1] - target[1]) > 0.5;
+    // Esquinas redondeadas y rumbo continuo, en vez de girar de golpe en cada vértice.
+    const measured = measurePath(path);
     const place = (point: LngLat, heading: number) => {
       marker.setLngLat(point);
       const state = truckStates.get(key);
@@ -164,7 +171,7 @@
     const step = (time: number) => {
       const t = Math.min((time - start) / ANIMATION_MS, 1);
       const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-      const along = pointAlong(path, eased);
+      const along = poseAt(measured, eased * measured.length);
       place(along.point, along.course ?? course);
       if (t < 1) animations.set(key, requestAnimationFrame(step));
       else {
@@ -423,7 +430,7 @@
 
   function syncMarkers(maplibregl: MapLibre) {
     const seen = new Set<string>();
-    const piloted = untrack(() => pilot?.key ?? null);
+    const piloted = untrack(() => new Set(Object.keys(pilots)));
     for (const vehicle of vehicles) {
       seen.add(vehicle.key);
       let entry = markers.get(vehicle.key);
@@ -445,7 +452,8 @@
       }
       state.status = vehicle.status;
       state.selected = vehicle.key === selectedKey;
-      if (vehicle.key === piloted) {
+      state.laneOffsetM = vehicle.simulated ? LANE_OFFSET_M : 0;
+      if (piloted.has(vehicle.key)) {
         // La posición manejada manda: la del servidor llega con retraso.
       } else if (from[0] !== target[0] || from[1] !== target[1]) {
         // La unidad del traslado abierto avanza por su recorrido ajustado a calles.
@@ -468,7 +476,7 @@
         `${vehicle.name}${vehicle.simulated ? ' (simulado)' : ''}, ${STATUS_LABELS[vehicle.status]}`
       );
       element.querySelector<HTMLElement>('.tm-name')!.textContent = vehicle.name;
-      if (vehicle.key !== piloted)
+      if (!piloted.has(vehicle.key))
         element.querySelector<HTMLElement>('.tm-heading')!.style.transform =
           `rotate(${vehicle.course}deg)`;
     }
@@ -547,23 +555,25 @@
     }
   });
 
-  // Unidad manejada con el joystick: marcador y camión 3D siguen al control en cada cuadro.
+  // Unidades guiadas por el navegador: marcador y camión 3D se ubican en cada cuadro.
   $effect(() => {
-    if (!map || !pilot) return;
-    const entry = markers.get(pilot.key);
-    if (!entry) return;
-    cancelAnimationFrame(animations.get(pilot.key) ?? 0);
-    animations.delete(pilot.key);
-    entry.marker.setLngLat(pilot.lngLat);
-    entry.element.querySelector<HTMLElement>('.tm-heading')!.style.transform =
-      `rotate(${pilot.course}deg)`;
-    const state = truckStates.get(pilot.key);
-    if (state) {
-      state.lngLat = pilot.lngLat;
-      state.course = pilot.course;
+    if (!map) return;
+    for (const [key, pilot] of Object.entries(pilots)) {
+      const entry = markers.get(key);
+      if (!entry) continue;
+      cancelAnimationFrame(animations.get(key) ?? 0);
+      animations.delete(key);
+      entry.marker.setLngLat(pilot.lngLat);
+      entry.element.querySelector<HTMLElement>('.tm-heading')!.style.transform =
+        `rotate(${pilot.course}deg)`;
+      const state = truckStates.get(key);
+      if (state) {
+        state.lngLat = pilot.lngLat;
+        state.course = pilot.course;
+      }
+      if (follow && key === selectedKey) map.setCenter(pilot.lngLat);
     }
     repaint();
-    if (follow && pilot.key === selectedKey) map.setCenter(pilot.lngLat);
   });
 
   $effect(() => {

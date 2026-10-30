@@ -1078,6 +1078,8 @@ export interface SimulationOut {
   longitude: number;
   latitude: number;
   course: number;
+  /** Cuándo midió el servidor `progress_m`: el mapa reproduce el avance entre mediciones. */
+  advanced_at?: string | null;
   stop_until: string | null;
   signal_lost_until: string | null;
   last_report_at: string | null;
@@ -1088,6 +1090,8 @@ export interface SimulationOut {
 
 export interface SimulatorOut {
   enabled: boolean;
+  /** Reloj del servidor, para alinear `advanced_at` con el del navegador. */
+  server_time?: string | null;
   ready: boolean;
   can_simulate: boolean;
   vehicles: SimulatorVehicleOut[];

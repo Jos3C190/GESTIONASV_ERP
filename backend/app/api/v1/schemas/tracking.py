@@ -283,6 +283,8 @@ class SimulationOut(BaseModel):
     longitude: float
     latitude: float
     course: float
+    #: When ``progress_m`` was measured: maps replay the motion between two measurements.
+    advanced_at: datetime | None = None
     stop_until: datetime | None = None
     signal_lost_until: datetime | None = None
     last_report_at: datetime | None = None
@@ -294,6 +296,8 @@ class SimulationOut(BaseModel):
 class SimulatorOut(BaseModel):
     #: The deployment allows simulation (never in production).
     enabled: bool
+    #: Server clock, so the browser can line up ``advanced_at`` with its own clock.
+    server_time: datetime | None = None
     #: The GPS server is configured, so a virtual device can report.
     ready: bool
     can_simulate: bool

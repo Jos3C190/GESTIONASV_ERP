@@ -116,11 +116,59 @@ def route_length_m(route: list[LngLat]) -> float:
     return sum(distance_m(a, b) for a, b in pairwise(route))
 
 
+#: Starting tolerance of the line simplification; it doubles until the line fits.
+SIMPLIFY_TOLERANCE_M = 1.0
+
+
+def simplify(points: list[LngLat], tolerance_m: float) -> list[LngLat]:
+    """Douglas-Peucker: drop only points closer than ``tolerance_m`` to the simplified line.
+
+    Unlike keeping every n-th point, every corner and curve of the street survives.
+    """
+    if len(points) <= 2:  # noqa: PLR2004 - a segment cannot be simplified
+        return list(points)
+    lat0 = math.radians(sum(point[1] for point in points) / len(points))
+    xy = [
+        (
+            lng * math.cos(lat0) * EARTH_RADIUS_M * math.pi / 180,
+            lat * EARTH_RADIUS_M * math.pi / 180,
+        )
+        for lng, lat in points
+    ]
+    keep = [False] * len(points)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(points) - 1)]
+    while stack:
+        first, last = stack.pop()
+        (x1, y1), (x2, y2) = xy[first], xy[last]
+        dx, dy = x2 - x1, y2 - y1
+        length = math.hypot(dx, dy)
+        worst, index = 0.0, -1
+        for i in range(first + 1, last):
+            px, py = xy[i]
+            if length == 0:
+                gap = math.hypot(px - x1, py - y1)
+            else:
+                t = max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / length**2))
+                gap = math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
+            if gap > worst:
+                worst, index = gap, i
+        if index >= 0 and worst > tolerance_m:
+            keep[index] = True
+            stack += [(first, index), (index, last)]
+    return [point for point, kept in zip(points, keep, strict=True) if kept]
+
+
 def downsample(points: list[LngLat], limit: int = MAX_LINE_POINTS) -> list[LngLat]:
+    """At most ``limit`` points, keeping the shape of the street (corners included)."""
     if len(points) <= limit:
         return points
-    step = (len(points) - 1) / (limit - 1)
-    return [points[round(i * step)] for i in range(limit)]
+    tolerance = SIMPLIFY_TOLERANCE_M
+    simplified = simplify(points, tolerance)
+    while len(simplified) > limit:
+        tolerance *= 2
+        simplified = simplify(points, tolerance)
+    return simplified
 
 
 def dedupe(points: Iterable[LngLat], min_gap_m: float = DEDUPE_M) -> list[LngLat]:

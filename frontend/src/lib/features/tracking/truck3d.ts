@@ -68,6 +68,8 @@ export interface TruckState {
   course: number;
   status: TrackingStatus;
   selected: boolean;
+  /** Desplazamiento lateral a la derecha (m): una unidad simulada va en su carril, no en el eje. */
+  laneOffsetM?: number;
 }
 
 const STATUS_COLORS: Record<TrackingStatus, number> = {
@@ -255,7 +257,10 @@ export function createTruckLayer(
         // El rumbo queda en el propio camión (Y arriba); Mercator crece hacia el sur,
         // de ahí el medio giro extra para que el frente -Z apunte al rumbo.
         truck.group.rotation.set(0, Math.PI + (state.course * Math.PI) / 180, 0);
-        const mercator = maplibregl.MercatorCoordinate.fromLngLat(state.lngLat, 0);
+        const place = state.laneOffsetM
+          ? offsetLane(state.lngLat, state.course, state.laneOffsetM)
+          : state.lngLat;
+        const mercator = maplibregl.MercatorCoordinate.fromLngLat(place, 0);
         const metersPerPixel =
           (156543.03392 * Math.cos((state.lngLat[1] * Math.PI) / 180)) / 2 ** zoom;
         const sizeMeters = Math.max(TRUCK_LENGTH_M, MIN_SCREEN_PX * metersPerPixel);
@@ -353,6 +358,81 @@ export function pathBetween(path: LngLat[], from: LngLat, to: LngLat): LngLat[] 
  */
 export function animationPath(from: LngLat, to: LngLat, trail: LngLat[] = []): LngLat[] {
   return pathBetween(trail, from, to) ?? [from, to];
+}
+
+const METERS_PER_DEGREE = 111_320;
+/** Radio con que se redondean las esquinas al animar: la unidad describe un arco, no un ángulo. */
+export const CORNER_RADIUS_M = 7;
+/** Medio carril: OSRM da el eje de la calle y en El Salvador se circula por la derecha. */
+export const LANE_OFFSET_M = 1.6;
+
+export interface MeasuredPath {
+  points: LngLat[];
+  /** Distancia acumulada en metros hasta cada punto. */
+  cumulative: number[];
+  length: number;
+}
+
+export function measurePath(points: LngLat[]): MeasuredPath {
+  const cumulative = [0];
+  for (let index = 1; index < points.length; index++)
+    cumulative.push(
+      cumulative[index - 1]! + planar(points[index - 1]!, points[index]!) * METERS_PER_DEGREE
+    );
+  return { points, cumulative, length: cumulative[cumulative.length - 1] ?? 0 };
+}
+
+/** Punto a `meters` metros del inicio del camino. */
+export function sampleAt(path: MeasuredPath, meters: number): LngLat {
+  const { points, cumulative, length } = path;
+  if (points.length < 2) return points[0]!;
+  const distance = Math.min(Math.max(meters, 0), length);
+  let low = 1;
+  let high = cumulative.length - 1;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (cumulative[middle]! < distance) low = middle + 1;
+    else high = middle;
+  }
+  const a = points[low - 1]!;
+  const b = points[low]!;
+  const span = cumulative[low]! - cumulative[low - 1]!;
+  const t = span <= 0 ? 0 : (distance - cumulative[low - 1]!) / span;
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+
+/**
+ * Posición y rumbo a `meters` metros, con las esquinas redondeadas: se promedian los puntos
+ * un poco antes y un poco después, así la unidad dobla en arco y su rumbo gira de forma continua.
+ * En los extremos el radio se reduce para que el inicio y el final sean exactos.
+ */
+export function poseAt(
+  path: MeasuredPath,
+  meters: number,
+  radius = CORNER_RADIUS_M
+): { point: LngLat; course: number | null } {
+  const distance = Math.min(Math.max(meters, 0), path.length);
+  const reach = Math.min(radius, distance, path.length - distance);
+  if (reach < 0.5) {
+    const before = sampleAt(path, distance - 1);
+    const after = sampleAt(path, distance + 1);
+    const course = before[0] === after[0] && before[1] === after[1] ? null : bearing(before, after);
+    return { point: sampleAt(path, distance), course };
+  }
+  const before = sampleAt(path, distance - reach);
+  const after = sampleAt(path, distance + reach);
+  return {
+    point: [(before[0] + after[0]) / 2, (before[1] + after[1]) / 2],
+    course: bearing(before, after)
+  };
+}
+
+/** Punto desplazado `meters` metros a la derecha del rumbo. */
+export function offsetLane(point: LngLat, course: number, meters: number): LngLat {
+  const heading = toRad(course + 90);
+  const dLat = (meters * Math.cos(heading)) / METERS_PER_DEGREE;
+  const dLng = (meters * Math.sin(heading)) / (METERS_PER_DEGREE * Math.cos(toRad(point[1])));
+  return [point[0] + dLng, point[1] + dLat];
 }
 
 /** Punto y rumbo a una fracción `t` (0–1) del largo del camino. */

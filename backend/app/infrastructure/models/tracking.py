@@ -175,6 +175,10 @@ class TrackingSimulationModel(Base):
     longitude: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
     latitude: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
     course: Mapped[Decimal] = mapped_column(Numeric(5, 1), nullable=False, default=0)
+    #: When ``progress_m`` was last computed (the engine's tick or a user action).
+    advanced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     stop_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     signal_lost_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_report_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

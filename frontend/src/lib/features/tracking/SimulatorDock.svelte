@@ -13,19 +13,25 @@
     SIGNAL_PRESETS,
     SPEED_PRESETS,
     STOP_PRESETS,
+    addSample,
     countdown,
     driveStep,
     formatDistance,
     inputFromKeys,
     progressOf,
+    REPLAY_DELAY_MS,
+    replayProgress,
+    routeSignature,
     ROUND_TRIP_LABELS,
     roundTripActions,
     sessionKey,
     sessionStatus,
     typingTarget,
     type DriveInput,
-    type DriveState
+    type DriveState,
+    type ProgressSample
   } from './simulator';
+  import { measurePath, poseAt, type MeasuredPath } from './truck3d';
   import type { TrackedVehicle } from './tracking';
 
   type LngLat = [number, number];
@@ -34,7 +40,7 @@
     vehicles = [],
     picking = $bindable(false),
     waypoints = $bindable<LngLat[]>([]),
-    pilot = $bindable<{ key: string; lngLat: LngLat; course: number } | null>(null),
+    pilots = $bindable<Record<string, { lngLat: LngLat; course: number }>>({}),
     routes = $bindable<Record<string, LngLat[]>>({}),
     onfocus
   }: {
@@ -44,7 +50,7 @@
     picking?: boolean;
     waypoints?: LngLat[];
     /** Unidad manejada con el joystick: el mapa la dibuja sin esperar al servidor. */
-    pilot?: { key: string; lngLat: LngLat; course: number } | null;
+    pilots?: Record<string, { lngLat: LngLat; course: number }>;
     /** Recorridos de las sesiones automáticas por unidad del mapa: se dibujan y la unidad los sigue. */
     routes?: Record<string, LngLat[]>;
     onfocus?: (key: string) => void;
@@ -52,6 +58,8 @@
 
   const OPEN_KEY = 'tracking.simulator.open';
   const POLL_OPEN_MS = 2500;
+  /** Con sesiones abiertas se consulta seguido: el mapa reproduce su avance medido. */
+  const POLL_ACTIVE_MS = 2000;
   const POLL_CLOSED_MS = 15000;
 
   let info = $state<SimulatorOut | null>(null);
@@ -126,7 +134,9 @@
     if (loading) return;
     loading = true;
     try {
-      info = await api.tracking.simulator.state(signal);
+      const next = await api.tracking.simulator.state(signal);
+      if (next.server_time) clockOffset = Date.now() - Date.parse(next.server_time);
+      info = next;
       const current = info.sessions.find((item) => item.id === activeId);
       if (driving && current && current.mode !== 'joystick') stopDriving(false);
       if (activeId && !info.sessions.some((item) => item.id === activeId)) {
@@ -235,6 +245,65 @@
     }
   }
 
+  // ------------------------------------------------------------ reproducción de rutas
+
+  /** Diferencia entre el reloj del navegador y el del servidor (ms). */
+  let clockOffset = 0;
+  const tracks = new Map<
+    string,
+    { signature: string; path: MeasuredPath; samples: ProgressSample[]; shown: number }
+  >();
+
+  // Cada respuesta del servidor aporta una medición del avance de las rutas simuladas.
+  $effect(() => {
+    const seen = new Set<string>();
+    for (const session of sessions) {
+      if (session.mode !== 'route' || session.route.length < 2 || !session.advanced_at) continue;
+      seen.add(session.id);
+      const signature = routeSignature(session);
+      let track = tracks.get(session.id);
+      if (!track || track.signature !== signature) {
+        track = { signature, path: measurePath(session.route), samples: [], shown: 0 };
+        tracks.set(session.id, track);
+      }
+      track.samples = addSample(track.samples, {
+        at: Date.parse(session.advanced_at) + clockOffset,
+        progress: session.progress_m
+      });
+    }
+    for (const id of [...tracks.keys()]) if (!seen.has(id)) tracks.delete(id);
+  });
+
+  /** Un cuadro de animación: joystick y rutas simuladas se ubican sin esperar al servidor. */
+  function animate(time: number) {
+    const next: Record<string, { lngLat: LngLat; course: number }> = {};
+    if (driving && drive) {
+      const dt = Math.min(0.1, (time - lastFrame) / 1000);
+      drive = driveStep(drive, currentInput(), dt, speed);
+      shownSpeed = drive.speedKmh;
+      next[sessionKey(driving)] = { lngLat: drive.lngLat, course: drive.course };
+      const moving = drive.speedKmh > 0.5;
+      if (time - lastSent >= DRIVE_SEND_MS && (moving || sentMoving)) {
+        lastSent = time;
+        void send(false);
+      }
+    }
+    lastFrame = time;
+    const at = Date.now() - REPLAY_DELAY_MS;
+    for (const session of sessions) {
+      const track = tracks.get(session.id);
+      if (!track) continue;
+      const progress = replayProgress(track.samples, at);
+      if (progress === null) continue;
+      // Nunca retrocede dentro de una misma ruta.
+      track.shown = Math.min(track.path.length, Math.max(track.shown, progress));
+      const pose = poseAt(track.path, track.shown);
+      next[sessionKey(session)] = { lngLat: pose.point, course: pose.course ?? session.course };
+    }
+    if (Object.keys(next).length || Object.keys(pilots).length) pilots = next;
+    frame = requestAnimationFrame(animate);
+  }
+
   // ------------------------------------------------------------ joystick
 
   let drive: DriveState | null = null;
@@ -254,11 +323,9 @@
     drive = { lngLat: [session.longitude, session.latitude], course: session.course, speedKmh: 0 };
     lastFrame = performance.now();
     lastSent = 0;
-    frame = requestAnimationFrame(loop);
   }
 
   function stopDriving(notify = true) {
-    cancelAnimationFrame(frame);
     if (notify && driving && drive && drive.speedKmh > 0) {
       // Al soltar el control la unidad queda detenida donde está.
       drive.speedKmh = 0;
@@ -266,7 +333,6 @@
     }
     driving = null;
     drive = null;
-    pilot = null;
     pressed.clear();
     pad = { throttle: 0, steer: 0 };
     knob = { x: 0, y: 0 };
@@ -278,21 +344,6 @@
       throttle: keys.throttle !== 0 ? keys.throttle : pad.throttle,
       steer: keys.steer !== 0 ? keys.steer : pad.steer
     };
-  }
-
-  function loop(time: number) {
-    if (!driving || !drive) return;
-    const dt = Math.min(0.1, (time - lastFrame) / 1000);
-    lastFrame = time;
-    drive = driveStep(drive, currentInput(), dt, speed);
-    shownSpeed = drive.speedKmh;
-    pilot = { key: sessionKey(driving), lngLat: drive.lngLat, course: drive.course };
-    const moving = drive.speedKmh > 0.5;
-    if (time - lastSent >= DRIVE_SEND_MS && (moving || sentMoving)) {
-      lastSent = time;
-      void send(false);
-    }
-    frame = requestAnimationFrame(loop);
   }
 
   async function send(final: boolean) {
@@ -375,17 +426,19 @@
           if (info?.enabled !== false || open) await refresh(controller.signal);
           schedule();
         },
-        open ? POLL_OPEN_MS : POLL_CLOSED_MS
+        info?.sessions.length ? POLL_ACTIVE_MS : open ? POLL_OPEN_MS : POLL_CLOSED_MS
       );
     };
     schedule();
     const tick = setInterval(() => (now = Date.now()), 1000);
+    frame = requestAnimationFrame(animate);
     const blur = () => pressed.clear();
     window.addEventListener('blur', blur);
     return () => {
       controller.abort();
       clearTimeout(timer);
       clearInterval(tick);
+      cancelAnimationFrame(frame);
       clearTimeout(speedTimer);
       window.removeEventListener('blur', blur);
       stopDriving();

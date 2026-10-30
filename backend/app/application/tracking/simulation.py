@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import uuid
+from bisect import bisect_left
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from itertools import pairwise
@@ -53,6 +54,15 @@ FIRST_DRIVE_MAX_M = 5_000
 #: Like the angle setting of Traccar Client: a turn sharper than this is always reported,
 #: so the trail in Traccar bends at the corner instead of cutting the block.
 TURN_REPORT_DEG = 15.0
+#: A turn is measured between points this far before and after the vertex, so a curve
+#: drawn with many small vertices counts as one turn.
+TURN_WINDOW_M = 15.0
+#: Speed through a corner: gentle bends barely slow down, 90° ≈ 20 km/h, U-turn 10 km/h.
+MIN_CORNER_KMH = 10.0
+CORNER_FREE_DEG = 15.0
+#: Extra distance looked ahead beyond the braking distance.
+LOOKAHEAD_MARGIN_M = 30.0
+MAX_LOOKAHEAD_M = 400.0
 #: Timer slack so a 3 s period is not missed by a few milliseconds.
 REPORT_SLACK_S = 0.05
 
@@ -155,6 +165,66 @@ def turns_between(
     return corners
 
 
+def corner_speed_kmh(turn_deg: float) -> float:
+    """Comfortable speed through a turn of ``turn_deg`` degrees."""
+    if turn_deg < CORNER_FREE_DEG:
+        return math.inf
+    return max(MIN_CORNER_KMH, 70.0 - 0.55 * turn_deg)
+
+
+def _cumulative(route: list[LngLat]) -> list[float]:
+    distances = [0.0]
+    for a, b in pairwise(route):
+        distances.append(distances[-1] + distance_m(a, b))
+    return distances
+
+
+def _at(route: list[LngLat], cumulative: list[float], distance: float) -> LngLat:
+    distance = max(0.0, min(distance, cumulative[-1]))
+    index = max(1, min(bisect_left(cumulative, distance), len(route) - 1))
+    a, b = route[index - 1], route[index]
+    span = cumulative[index] - cumulative[index - 1]
+    t = 0.0 if span <= 0 else (distance - cumulative[index - 1]) / span
+    return a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t
+
+
+def upcoming_turns(route: list[LngLat], start: float, end: float) -> list[tuple[float, float]]:
+    """``(distance, turn degrees)`` of the vertices between ``start`` and ``end`` meters."""
+    if len(route) < 3:  # noqa: PLR2004 - no vertex between two points
+        return []
+    cumulative = _cumulative(route)
+    turns: list[tuple[float, float]] = []
+    for index in range(1, len(route) - 1):
+        at = cumulative[index]
+        if at <= start:
+            continue
+        if at > end:
+            break
+        vertex = route[index]
+        before = _at(route, cumulative, at - TURN_WINDOW_M)
+        after = _at(route, cumulative, at + TURN_WINDOW_M)
+        if vertex in (before, after):
+            continue
+        turns.append((at, _turn(bearing(before, vertex), bearing(vertex, after))))
+    return turns
+
+
+def corner_limit_kmh(
+    route: list[LngLat], progress: float, current_kmh: float, accel_ms2: float
+) -> float:
+    """Fastest speed now that still lets the unit slow down for every turn ahead."""
+    speed_ms = current_kmh / 3.6
+    lookahead = min(MAX_LOOKAHEAD_M, speed_ms**2 / (2 * accel_ms2) + LOOKAHEAD_MARGIN_M)
+    limit = math.inf
+    for at, turn in upcoming_turns(route, progress - TURN_WINDOW_M, progress + lookahead):
+        corner = corner_speed_kmh(turn)
+        if math.isinf(corner):
+            continue
+        gap = max(0.0, at - progress)
+        limit = min(limit, math.sqrt((corner / 3.6) ** 2 + 2 * accel_ms2 * gap) * 3.6)
+    return limit
+
+
 def detour_waypoint(route: list[LngLat], progress: float) -> LngLat | None:
     """A point off to the side of the road ahead, to force a deviation."""
     length = path_length(route)
@@ -255,6 +325,13 @@ def step(snapshot: SimSnapshot, now: datetime, dt: float) -> SimStep:
     # Frena a tiempo para detenerse justo en el destino.
     accel_ms2 = ACCEL_KMH_PER_S / 3.6
     target = min(target, math.sqrt(2 * accel_ms2 * remaining) * 3.6)
+    # Y antes de cada curva, a la velocidad que permite tomarla. Se mide desde donde estará
+    # al terminar este paso: con el punto de partida, el freno llegaba un paso tarde.
+    ahead = snapshot.progress_m + snapshot.current_speed_kmh / 3.6 * dt
+    target = min(
+        target,
+        corner_limit_kmh(snapshot.route, ahead, snapshot.current_speed_kmh, accel_ms2),
+    )
     change = ACCEL_KMH_PER_S * dt
     current = snapshot.current_speed_kmh
     speed = min(target, current + change) if target >= current else max(target, current - change)
@@ -356,6 +433,8 @@ __all__ = [
     "SimulationMode",
     "SimulationState",
     "bearing",
+    "corner_limit_kmh",
+    "corner_speed_kmh",
     "detour_waypoint",
     "expiry_reason",
     "holding",
@@ -370,4 +449,5 @@ __all__ = [
     "step",
     "turns_between",
     "unique_id_for",
+    "upcoming_turns",
 ]

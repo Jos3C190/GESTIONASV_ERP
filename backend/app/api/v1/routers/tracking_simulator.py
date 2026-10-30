@@ -207,6 +207,7 @@ async def _sessions_out(
                     "longitude": float(item.longitude),
                     "latitude": float(item.latitude),
                     "course": float(item.course),
+                    "advanced_at": item.advanced_at,
                     "stop_until": item.stop_until,
                     "signal_lost_until": item.signal_lost_until,
                     "last_report_at": item.last_report_at,
@@ -316,6 +317,7 @@ async def get_simulator(
     return SimulatorOut.model_validate(
         {
             "enabled": True,
+            "server_time": datetime.now(UTC),
             "ready": traccar_credentials() is not None,
             "can_simulate": can_simulate,
             "vehicles": vehicles_out,
@@ -479,6 +481,7 @@ async def start_simulation(
             last_activity_at=now,
             started_by=current.id,
             started_at=now,
+            advanced_at=now,
         )
         session.add(simulation)
         try:
@@ -572,6 +575,7 @@ async def control_simulation(  # noqa: C901 - one branch per action keeps the ru
     elif action in {"return", "outbound", "take_control"}:
         await _round_trip(simulation, action)
     simulation.last_activity_at = now
+    simulation.advanced_at = now
     await session.flush()
     can_simulate = await _can_simulate(current, checker, scope.company_id)
     return (await _sessions_out(session, [simulation], scope=scope, can_simulate=can_simulate))[0]

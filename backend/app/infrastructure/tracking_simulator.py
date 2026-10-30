@@ -111,6 +111,7 @@ async def tick(now: datetime | None = None, dt: float | None = None) -> int:
             result = step(snapshot_of(simulation), moment, dt)
             simulation.state = result.state
             simulation.progress_m = Decimal(f"{result.progress_m:.1f}")
+            simulation.advanced_at = moment
             simulation.stop_until = result.stop_until
             simulation.signal_lost_until = result.signal_lost_until
             apply_position(simulation, result.position, result.course, result.current_speed_kmh)

@@ -6,7 +6,10 @@ import {
   formatDistance,
   inputFromKeys,
   offsetPoint,
+  addSample,
   progressOf,
+  replayProgress,
+  routeSignature,
   roundTripActions,
   sessionKey,
   sessionStatus,
@@ -137,5 +140,29 @@ describe('session status', () => {
     expect(formatDistance(12_340)).toBe('12.3 km');
     expect(countdown(65_000)).toBe('1:05');
     expect(sessionKey(session())).toBe('traccar-42');
+  });
+});
+
+describe('route replay', () => {
+  const samples = [
+    { at: 1000, progress: 0 },
+    { at: 3000, progress: 40 },
+    { at: 5000, progress: 100 }
+  ];
+
+  it('interpolates between measurements and never runs far ahead of the last one', () => {
+    expect(replayProgress([], 2000)).toBeNull();
+    expect(replayProgress(samples, 500)).toBe(0);
+    expect(replayProgress(samples, 2000)).toBe(20);
+    expect(replayProgress(samples, 4000)).toBe(70);
+    // Tras la última medición avanza a la última velocidad, como mucho 1.5 s.
+    expect(replayProgress(samples, 6000)).toBe(130);
+    expect(replayProgress(samples, 60000)).toBe(145);
+  });
+
+  it('keeps measurements in order and changes signature with the route', () => {
+    expect(addSample(samples, { at: 4000, progress: 1 })).toBe(samples);
+    expect(addSample(samples, { at: 7000, progress: 120 })).toHaveLength(4);
+    expect(routeSignature(session())).not.toBe(routeSignature(session({ leg: 'return' })));
   });
 });

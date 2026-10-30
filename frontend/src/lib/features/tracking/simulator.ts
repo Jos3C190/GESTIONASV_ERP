@@ -171,3 +171,53 @@ export function formatDistance(meters: number): string {
 /** Clave del marcador del mapa para el GPS virtual de una sesión. */
 export const sessionKey = (session: Pick<SimulationOut, 'traccar_device_id'>) =>
   `traccar-${session.traccar_device_id}`;
+
+// ------------------------------------------------------------ reproducción de rutas
+
+/**
+ * El servidor mide el avance de una ruta simulada cada ~2 s y el mapa lo consulta cada ~2 s.
+ * En vez de saltar entre mediciones, el mapa reproduce el avance con este retraso, interpolando
+ * entre dos mediciones reales: la unidad se mueve de forma continua y siempre sobre la calle.
+ */
+export const REPLAY_DELAY_MS = 4500;
+/** Si una medición se atrasa, se proyecta brevemente con la última velocidad medida. */
+const MAX_EXTRAPOLATION_MS = 1500;
+const MAX_SAMPLES = 12;
+
+export interface ProgressSample {
+  /** Hora de la medición en el reloj del navegador (ms). */
+  at: number;
+  progress: number;
+}
+
+export function addSample(samples: ProgressSample[], sample: ProgressSample): ProgressSample[] {
+  const last = samples[samples.length - 1];
+  if (last && sample.at <= last.at) return samples;
+  return [...samples, sample].slice(-MAX_SAMPLES);
+}
+
+/** Avance (m) en el instante `at`, interpolado entre mediciones. */
+export function replayProgress(samples: ProgressSample[], at: number): number | null {
+  const first = samples[0];
+  if (!first) return null;
+  if (at <= first.at) return first.progress;
+  for (let index = 1; index < samples.length; index++) {
+    const next = samples[index]!;
+    if (at <= next.at) {
+      const previous = samples[index - 1]!;
+      const t = (at - previous.at) / (next.at - previous.at);
+      return previous.progress + (next.progress - previous.progress) * t;
+    }
+  }
+  const last = samples[samples.length - 1]!;
+  const previous = samples[samples.length - 2];
+  if (!previous) return last.progress;
+  const rate = (last.progress - previous.progress) / (last.at - previous.at);
+  return last.progress + Math.max(0, rate) * Math.min(at - last.at, MAX_EXTRAPOLATION_MS);
+}
+
+/** Cambia cuando la sesión toma otra ruta (desvío, regreso, salir de nuevo, repetir). */
+export function routeSignature(session: SimulationOut): string {
+  const first = session.route[0];
+  return `${session.leg}|${session.route_length_m}|${session.route.length}|${first?.join(',') ?? ''}`;
+}

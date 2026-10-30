@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { api, type GeofenceOut, type SitesOut, type TrackedVehicleOut } from '$lib/api/client';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
@@ -446,7 +446,12 @@
     const trackPoll = setInterval(() => loadTrack(controller.signal), TRACK_POLL_MS);
     const stopAlerts = trackingAlerts.subscribe();
     const tick = setInterval(() => (now = Date.now()), TICK_MS);
+    const head = setInterval(() => {
+      const pilot = selectedKey ? untrack(() => pilots[selectedKey!]) : undefined;
+      trailHead = pilot ? pilot.lngLat : null;
+    }, 300);
     return () => {
+      clearInterval(head);
       controller.abort();
       stopAlerts();
       clearInterval(livePoll);
@@ -501,7 +506,9 @@
     if (!selectedKey) return [];
     const route = simRoutes[selectedKey];
     if (route && route.length > 1 && selected)
-      return pathBetween(route, route[0]!, [selected.longitude, selected.latitude]) ?? [];
+      return (
+        pathBetween(route, route[0]!, trailHead ?? [selected.longitude, selected.latitude]) ?? []
+      );
     return trails[selectedKey] ?? [];
   });
 
@@ -510,7 +517,9 @@
   let simPicking = $state(false);
   let simWaypoints = $state<[number, number][]>([]);
   let simRoutes = $state<Record<string, [number, number][]>>({});
-  let pilot = $state<{ key: string; lngLat: [number, number]; course: number } | null>(null);
+  let pilots = $state<Record<string, { lngLat: [number, number]; course: number }>>({});
+  /** Punta del rastro de la unidad elegida, muestreada cada 300 ms para no redibujarlo por cuadro. */
+  let trailHead = $state<[number, number] | null>(null);
 
   function addMapPoint(point: [number, number]) {
     if (simPicking) {
@@ -561,7 +570,7 @@
       {focusPoint}
       {simRoutes}
       simPoints={simWaypoints}
-      {pilot}
+      {pilots}
       onselect={(key) => {
         if (activeTrack && key === null) return;
         if (activeTrack) selectTransfer(null);
@@ -575,7 +584,7 @@
       vehicles={visible}
       bind:picking={simPicking}
       bind:waypoints={simWaypoints}
-      bind:pilot
+      bind:pilots
       bind:routes={simRoutes}
       onfocus={(key) => {
         if (activeTrack) selectTransfer(null);

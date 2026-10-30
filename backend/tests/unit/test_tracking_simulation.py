@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import uuid
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -10,12 +11,15 @@ import pytest
 from app.application.tracking.simulation import (
     IDLE_TIMEOUT,
     MAX_SESSION,
+    MIN_CORNER_KMH,
     PARKED_REPORT_S,
     SimSnapshot,
     bearing,
+    corner_speed_kmh,
     detour_waypoint,
     expiry_reason,
     is_simulator_unique_id,
+    offset_point,
     osmand_params,
     osmand_url,
     path_length,
@@ -24,8 +28,9 @@ from app.application.tracking.simulation import (
     step,
     turns_between,
     unique_id_for,
+    upcoming_turns,
 )
-from app.application.tracking.transfers import distance_m, locate_on_route
+from app.application.tracking.transfers import distance_m, downsample, locate_on_route
 
 NOW = datetime(2026, 10, 30, 15, 0, tzinfo=UTC)
 #: About 1.1 km heading east, then 1.1 km heading north.
@@ -154,6 +159,52 @@ def test_corners_crossed_on_a_tick_are_reported_in_order() -> None:
     assert 0 < fraction < 1
     lost = replace(before, signal_lost_until=NOW + timedelta(minutes=1))
     assert step(lost, NOW + timedelta(seconds=2), 2.0).corners == ()
+
+
+def test_unit_slows_down_for_the_corner_and_speeds_up_after_it() -> None:
+    corner = distance_m(ROUTE[0], ROUTE[1])
+    assert corner_speed_kmh(5) == math.inf
+    assert corner_speed_kmh(90) == pytest.approx(20.5)
+    assert corner_speed_kmh(180) == MIN_CORNER_KMH
+    snapshot = _snapshot(current_speed_kmh=60)
+    moment, at_corner, after = NOW, None, None
+    for _ in range(200):
+        moment += timedelta(seconds=0.5)
+        result = step(snapshot, moment, 0.5)
+        snapshot = replace(
+            snapshot,
+            progress_m=result.progress_m,
+            current_speed_kmh=result.current_speed_kmh,
+            state=result.state,
+        )
+        if at_corner is None and snapshot.progress_m >= corner:
+            at_corner = snapshot.current_speed_kmh
+        if after is None and snapshot.progress_m >= corner + 300:
+            after = snapshot.current_speed_kmh
+    assert at_corner is not None
+    assert at_corner <= 26  # Frenó antes de doblar 90° (≈ 20 km/h) en vez de ir a 60.
+    assert after is not None
+    assert after > 45
+
+
+def test_curves_drawn_with_many_vertices_count_as_one_turn() -> None:
+    center = (-88.19, 13.48)
+    arc = [offset_point(center, angle, 30) for angle in range(0, 91, 10)]
+    turns = upcoming_turns(
+        [offset_point(arc[0], 270, 200), *arc, offset_point(arc[-1], 180, 200)], 0, 1e6
+    )
+    assert max(turn for _, turn in turns) >= 25
+
+
+def test_simplification_keeps_every_corner_of_the_street() -> None:
+    # Una calle con 4 000 puntos y una esquina: reducirla no debe cortar la cuadra.
+    east = [(-88.20 + i * 0.000005, 13.48) for i in range(2000)]
+    north = [(east[-1][0], 13.48 + i * 0.000005) for i in range(1, 2001)]
+    reduced = downsample(east + north, 1500)
+    assert len(reduced) <= 1500
+    assert east[-1] in reduced
+    assert reduced[0] == east[0]
+    assert reduced[-1] == north[-1]
 
 
 def test_detour_point_is_beside_the_road_ahead() -> None:
