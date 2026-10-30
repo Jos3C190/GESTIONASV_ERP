@@ -19,6 +19,7 @@
   } from './catalog';
   import ComplianceList from './ComplianceList.svelte';
   import FleetIcon from './FleetIcon.svelte';
+  import MoveToTrashDialog from './MoveToTrashDialog.svelte';
   import VehicleDriverPanel from './VehicleDriverPanel.svelte';
   import VehicleFuelPanel from './VehicleFuelPanel.svelte';
   import VehicleGallery from './VehicleGallery.svelte';
@@ -43,8 +44,11 @@
   let targetBranch = $state('');
   let saving = $state(false);
   let actionError = $state<string | null>(null);
+  let trashOpen = $state(false);
 
   const canUpdate = $derived(permissions.hasPermission('fleet:update'));
+  // La papelera es administrativa: requiere alcance de todas las sucursales.
+  const canDelete = $derived(permissions.hasPermission('fleet:delete') && branch.accessAllBranches);
   const canReadDocuments = $derived(permissions.hasPermission('fleet_documents:read'));
   const tabs = $derived(
     [
@@ -159,6 +163,11 @@
             {/if}
             {#if branchOptions.length && vehicle.status !== 'retired'}
               <Button size="sm" variant="secondary" onclick={openBranch}>Cambiar sucursal</Button>
+            {/if}
+            {#if canDelete}
+              <Button size="sm" variant="ghost" onclick={() => (trashOpen = true)}
+                >Mover a papelera</Button
+              >
             {/if}
           </div>
         {/if}
@@ -337,6 +346,16 @@
       </div>
     </div>
   </Modal>
+
+  <MoveToTrashDialog
+    open={trashOpen}
+    title="Mover vehículo a la papelera"
+    resource="fleet_vehicles"
+    recordId={vehicle.id}
+    description={`${vehicle.code} · ${vehicle.plate} dejará de aparecer en Flota, Traslados y Seguimiento. Debe estar sin conductor, sin traslado en ruta, sin órdenes de taller abiertas y sin GPS vinculado.`}
+    onclose={() => (trashOpen = false)}
+    ondone={() => goto('/fleet')}
+  />
 
   <Modal open={branchOpen} title="Cambiar sucursal base" onclose={() => (branchOpen = false)}>
     <div class="modal-body">

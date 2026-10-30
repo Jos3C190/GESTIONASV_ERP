@@ -13,6 +13,7 @@
   } from '$lib/features/fleet/catalog';
   import ComplianceList from '$lib/features/fleet/ComplianceList.svelte';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
+  import MoveToTrashDialog from '$lib/features/fleet/MoveToTrashDialog.svelte';
   import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import {
@@ -35,6 +36,7 @@
   let tab = $state<Tab>('summary');
 
   let modal = $state<'edit' | 'status' | 'branch' | null>(null);
+  let trashOpen = $state(false);
   let licenseClass = $state<LicenseClass>('liviana');
   let notes = $state('');
   let nextStatus = $state<DriverStatus>('active');
@@ -44,6 +46,10 @@
   let actionError = $state<string | null>(null);
 
   const canUpdate = $derived(permissions.hasPermission('drivers:update'));
+  // La papelera es administrativa: requiere alcance de todas las sucursales.
+  const canDelete = $derived(
+    permissions.hasPermission('drivers:delete') && branch.accessAllBranches
+  );
   const licenseOptions = Object.keys(LICENSE_LABELS) as LicenseClass[];
   const statusOptions = $derived(
     (['active', 'suspended', 'inactive'] as const).filter((item) => item !== driver?.status)
@@ -162,10 +168,25 @@
               variant="ghost"
               onclick={() => goto(`/employees/${driver!.employee.id}`)}>Ver empleado</Button
             >
+            {#if canDelete}
+              <Button size="sm" variant="ghost" onclick={() => (trashOpen = true)}
+                >Mover a papelera</Button
+              >
+            {/if}
           </div>
         {/if}
       </div>
     </header>
+
+    <MoveToTrashDialog
+      open={trashOpen}
+      title="Mover conductor a la papelera"
+      resource="drivers"
+      recordId={driver.id}
+      description={`Se retira el perfil de conductor de ${driver.employee.name}; el empleado no se modifica. Debe estar sin vehículo asignado y sin traslados en ruta.`}
+      onclose={() => (trashOpen = false)}
+      ondone={() => goto('/drivers')}
+    />
 
     <nav class="tabs" aria-label="Secciones del conductor">
       <button

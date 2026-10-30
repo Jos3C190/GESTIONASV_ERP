@@ -30,6 +30,7 @@ from app.infrastructure.models.employee import (
     Employee,
     EmployeeBranchAssignment,
 )
+from app.infrastructure.models.fleet import DriverModel, FleetVehicleModel
 from app.infrastructure.models.media import MediaAsset
 from app.infrastructure.models.organization import (
     Branch,
@@ -46,6 +47,15 @@ from app.infrastructure.models.supplier_image import SupplierContactImageModel, 
 from app.infrastructure.models.user import User
 from app.infrastructure.repositories.capacity_hierarchy_repository import (
     SqlAlchemyCapacityHierarchyRepository,
+)
+from app.infrastructure.repositories.fleet_lifecycle import (
+    FLEET_RESOURCES,
+    employee_driver_blocker,
+    fleet_deletion_blockers,
+    fleet_restore_blockers,
+    on_fleet_deleted,
+    on_fleet_restored,
+    reload_label,
 )
 
 
@@ -79,6 +89,8 @@ RESOURCE_POLICIES: dict[str, ResourcePolicy] = {
         SupplierContactModel, "id_supplier_contact", ("full_name",), "supplier_contact"
     ),
     "documents": ResourcePolicy(DocumentAssetModel, "id", ("original_filename",), "company"),
+    "fleet_vehicles": ResourcePolicy(FleetVehicleModel, "id", ("code", "plate"), "company"),
+    "drivers": ResourcePolicy(DriverModel, "id", ("display_name",), "company"),
 }
 
 
@@ -341,6 +353,10 @@ class SqlAlchemyLifecycleRepository:
                 blockers.append("sucursales bajo su responsabilidad")
             if await self._exists(Warehouse, Warehouse.manager_employee_id == record.id):
                 blockers.append("almacenes bajo su responsabilidad")
+            if driver := await employee_driver_blocker(self._session, record.id):
+                blockers.append(driver)
+        elif resource in FLEET_RESOURCES:
+            blockers.extend(await fleet_deletion_blockers(self._session, resource, record))
         elif resource == "users":
             if record.id == actor_id:
                 blockers.append("su propia sesión")
@@ -410,6 +426,8 @@ class SqlAlchemyLifecycleRepository:
         async def missing(model: type[Any], *conditions: Any) -> bool:
             return not await self._exists(model, *conditions)
 
+        if resource in FLEET_RESOURCES:
+            blockers.extend(await fleet_restore_blockers(self._session, resource, record))
         if resource == "branches" and await missing(Company, Company.id == record.company_id):
             blockers.append("la empresa está eliminada")
         elif resource == "warehouses":
@@ -746,6 +764,7 @@ class SqlAlchemyLifecycleRepository:
         record.deleted_at = datetime.now(UTC)
         record.deleted_by = actor_id
         record.deletion_reason = reason
+        await on_fleet_deleted(self._session, resource, record)
         if resource == "users":
             record.is_active = False
             await self._session.execute(
@@ -765,6 +784,7 @@ class SqlAlchemyLifecycleRepository:
                 .values(used_at=record.deleted_at)
             )
         await self._session.flush()
+        await reload_label(self._session, resource, record)
         return self._deleted_record(resource, policy, record, actual_company_id)
 
     async def restore(
@@ -846,7 +866,9 @@ class SqlAlchemyLifecycleRepository:
                 record.deleted_at = None
                 record.deleted_by = None
                 record.deletion_reason = None
+                await on_fleet_restored(self._session, resource, record)
                 await self._session.flush()
+                await reload_label(self._session, resource, record)
         except IntegrityError as exc:
             raise ConflictError(
                 "No se puede restaurar porque ya existe otro registro con el mismo identificador.",

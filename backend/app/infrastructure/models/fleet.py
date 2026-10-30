@@ -26,12 +26,14 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    select,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, column_property, mapped_column
 
 from app.infrastructure.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPKMixin
+from app.infrastructure.models.employee import Employee
 
 VEHICLE_KINDS = (
     "refrigerated",
@@ -189,6 +191,13 @@ class DriverModel(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[uuid.UUID | None] = _user_fk()
     updated_by: Mapped[uuid.UUID | None] = _user_fk()
+    #: Employee's full name, for listings such as the trash.
+    display_name: Mapped[str] = column_property(
+        select(func.concat(Employee.first_name, " ", Employee.last_name))
+        .where(Employee.id == employee_id)
+        .correlate_except(Employee)
+        .scalar_subquery()
+    )
 
     __table_args__ = (
         UniqueConstraint("company_id", "id", name="uq_drivers_company_id"),

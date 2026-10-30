@@ -81,4 +81,23 @@ describe('catalog navigation', () => {
       requiredPermission: 'inventory:read'
     });
   });
+
+  it('exposes the logistics modules with their own read permissions', () => {
+    expect(itemByRoute('/fleet')).toMatchObject({
+      implemented: true,
+      requiredPermission: 'fleet:read'
+    });
+    expect(itemByRoute('/drivers')).toMatchObject({
+      label: 'Conductores',
+      implemented: true,
+      requiredPermission: 'drivers:read'
+    });
+    expect(itemByRoute('/tracking')).toMatchObject({
+      implemented: true,
+      requiredPermission: 'tracking:read'
+    });
+    expect(routeTitle('/fleet/new')).toBe('Nuevo vehículo');
+    expect(routeTitle('/fleet/v1/edit')).toBe('Editar vehículo');
+    expect(routeTitle('/drivers/d1')).toBe('Conductores');
+  });
 });
