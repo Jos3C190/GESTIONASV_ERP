@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { GeofenceOut } from '$lib/api/client';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
+  import { branch } from '$lib/stores/branch.svelte';
   import { describeShape, type DraftKind, type GeofenceDraft } from './geofences';
 
   let {
@@ -28,7 +29,12 @@
     onundo: () => void;
     onradius: (radiusM: number) => void;
     oncancel: () => void;
-    onsave: (data: { name: string; description: string; speedLimit: number | null }) => void;
+    onsave: (data: {
+      name: string;
+      description: string;
+      speedLimit: number | null;
+      branchId: string | null;
+    }) => void;
     ondelete: (geofence: GeofenceOut) => void;
     onfocus: (geofence: GeofenceOut) => void;
   } = $props();
@@ -36,6 +42,8 @@
   let name = $state('');
   let description = $state('');
   let speedLimit = $state('');
+  /** '' = toda la empresa. */
+  let scopeBranch = $state('');
   let confirmDelete = $state<number | null>(null);
 
   const ready = $derived(
@@ -63,7 +71,8 @@
     onsave({
       name: name.trim(),
       description: description.trim(),
-      speedLimit: Number.isFinite(limit) ? limit : null
+      speedLimit: Number.isFinite(limit) ? limit : null,
+      branchId: scopeBranch || null
     });
   }
 
@@ -72,6 +81,8 @@
       name = '';
       description = '';
       speedLimit = '';
+      // Por defecto, la sucursal operativa; toda la empresa solo para quien ve todas.
+      scopeBranch = branch.id ?? (branch.accessAllBranches ? '' : (branch.branches[0]?.id ?? ''));
     }
   });
 </script>
@@ -114,6 +125,15 @@
       <input bind:value={name} maxlength="120" placeholder="Ej. Centro de distribución" required />
     </label>
     <label class="field">
+      <span>Aplica a</span>
+      <select bind:value={scopeBranch}>
+        {#if branch.accessAllBranches}<option value="">Toda la empresa</option>{/if}
+        {#each branch.branches as item (item.id)}
+          <option value={item.id}>{item.name}</option>
+        {/each}
+      </select>
+    </label>
+    <label class="field">
       <span>Descripción <em>opcional</em></span>
       <input bind:value={description} maxlength="500" />
     </label>
@@ -149,13 +169,15 @@
           <span class="swatch" class:circle={geofence.shape.type === 'circle'}></span>
           <span class="main">
             <strong>{geofence.name}</strong>
-            <span>{describeShape(geofence.shape)}</span>
+            <span
+              >{describeShape(geofence.shape)} · {geofence.branch_name ?? 'Toda la empresa'}</span
+            >
             {#if geofence.speed_limit_kmh}<span class="limit"
                 >Máx. {geofence.speed_limit_kmh} km/h</span
               >{/if}
           </span>
         </button>
-        {#if canManage}
+        {#if canManage && geofence.can_manage}
           {#if confirmDelete === geofence.id}
             <span class="confirm">
               <button type="button" class="danger" onclick={() => ondelete(geofence)}
@@ -350,7 +372,8 @@
     font-style: normal;
     opacity: 0.7;
   }
-  .field input {
+  .field input,
+  .field select {
     height: 34px;
     padding: 0 10px;
     border: 1px solid rgb(var(--border));

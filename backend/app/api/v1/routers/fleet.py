@@ -41,6 +41,7 @@ from app.api.v1.schemas.fleet import (
     VehiclePhotoOut,
     VehicleStatusIn,
 )
+from app.api.v1.traccar_sync import sync_device_branch
 from app.application.audit.audit_service import AuditService
 from app.application.fleet.compliance import license_issue
 from app.application.fleet.views import build_vehicle_views, summarize
@@ -531,6 +532,7 @@ async def change_vehicle_branch(
             metadata={"reason": body.reason},
             required=True,
         )
+    await sync_device_branch(vehicle)
     return await _view(repo, company_id, vehicle)
 
 

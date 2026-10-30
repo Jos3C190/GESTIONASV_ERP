@@ -113,7 +113,14 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     throw new Error('apiFetch must receive an absolute URL when called on the server.');
   }
   const url = path.startsWith('http') ? path : `${API_BASE_URL}${API_PREFIX}${path}`;
-  const { noAuth, noRefresh, noCredentials, responseType = 'json', headers: initHeaders, ...rest } = options;
+  const {
+    noAuth,
+    noRefresh,
+    noCredentials,
+    responseType = 'json',
+    headers: initHeaders,
+    ...rest
+  } = options;
   const isMultipart = typeof FormData !== 'undefined' && rest.body instanceof FormData;
 
   const headers: Record<string, string> = {
@@ -834,6 +841,21 @@ export interface TrackedPositionOut {
   battery_level: number | null;
 }
 
+export interface TrackedVehicleOut {
+  id: string;
+  code: string;
+  plate: string;
+  kind: string;
+  brand: string;
+  model: string;
+  branch_id: string;
+  branch_name: string;
+  operational_status: string;
+  driver_name: string | null;
+  transfer_code: string | null;
+  transfer_destination: string | null;
+}
+
 export interface TrackedDeviceOut {
   id: number;
   unique_id: string;
@@ -841,6 +863,8 @@ export interface TrackedDeviceOut {
   status: 'online' | 'offline' | 'unknown';
   last_update: string | null;
   position: TrackedPositionOut | null;
+  /** Vehículo de Flota vinculado al dispositivo. */
+  vehicle: TrackedVehicleOut | null;
 }
 
 export type GeofenceShape =
@@ -853,9 +877,14 @@ export interface GeofenceOut {
   description: string | null;
   shape: GeofenceShape;
   speed_limit_kmh: number | null;
+  /** null = aplica a toda la empresa. */
+  branch_id?: string | null;
+  branch_name?: string | null;
+  can_manage?: boolean;
 }
 
 export interface GeofenceCreate {
+  branch_id?: string | null;
   name: string;
   description?: string | null;
   shape: GeofenceShape;
@@ -890,6 +919,8 @@ export interface TrackedTransferOut {
   dispatched_at: string | null;
   vehicle_code: string | null;
   vehicle_name: string | null;
+  vehicle_plate?: string | null;
+  driver_name?: string | null;
   origin: TransferPlaceOut;
   destination: TransferPlaceOut;
 }
@@ -925,6 +956,8 @@ export interface TransferTrackOut extends TrackedTransferOut {
 export interface TrackingSnapshotOut {
   configured: boolean;
   devices: TrackedDeviceOut[];
+  vehicles_total: number;
+  vehicles_with_gps: number;
 }
 
 export interface DashboardSummary {
@@ -1795,30 +1828,24 @@ export const api = {
     }
   },
   tracking: {
-    positions: (signal?: AbortSignal) => {
-      const sp = new URLSearchParams();
-      if (company.id) sp.set('company_id', company.id);
-      return apiFetch<TrackingSnapshotOut>(`/tracking/positions?${sp.toString()}`, { signal });
-    },
-    geofences: (signal?: AbortSignal) =>
-      apiFetch<GeofenceOut[]>(`/tracking/geofences?company_id=${company.id ?? ''}`, { signal }),
+    // La empresa viaja en X-Company-ID; el alcance por sucursal lo decide el servidor.
+    positions: (signal?: AbortSignal) =>
+      apiFetch<TrackingSnapshotOut>(
+        `/tracking/positions${branch.id ? `?branch_id=${branch.id}` : ''}`,
+        { signal }
+      ),
+    geofences: (signal?: AbortSignal) => apiFetch<GeofenceOut[]>('/tracking/geofences', { signal }),
     createGeofence: (data: GeofenceCreate) =>
       apiFetch<GeofenceOut>('/tracking/geofences', {
         method: 'POST',
-        body: JSON.stringify({ ...data, company_id: company.id })
+        body: JSON.stringify(data)
       }),
     deleteGeofence: (id: number) =>
-      apiFetch<void>(`/tracking/geofences/${id}?company_id=${company.id ?? ''}`, {
-        method: 'DELETE'
-      }),
+      apiFetch<void>(`/tracking/geofences/${id}`, { method: 'DELETE' }),
     transfers: (signal?: AbortSignal) =>
-      apiFetch<TrackedTransferOut[]>(`/tracking/transfers?company_id=${company.id ?? ''}`, {
-        signal
-      }),
+      apiFetch<TrackedTransferOut[]>('/tracking/transfers', { signal }),
     transferTrack: (id: string, signal?: AbortSignal) =>
-      apiFetch<TransferTrackOut>(`/tracking/transfers/${id}?company_id=${company.id ?? ''}`, {
-        signal
-      }),
+      apiFetch<TransferTrackOut>(`/tracking/transfers/${id}`, { signal }),
     route: (from: [number, number], to: [number, number], signal?: AbortSignal) =>
       apiFetch<NonNullable<TransferTrackOut['route']>>(
         `/tracking/route?${new URLSearchParams({
@@ -1831,7 +1858,7 @@ export const api = {
       ),
     events: (hours = 24, signal?: AbortSignal) =>
       apiFetch<TrackingEventOut[]>(
-        `/tracking/events?company_id=${company.id ?? ''}&hours=${hours}`,
+        `/tracking/events?hours=${hours}${branch.id ? `&branch_id=${branch.id}` : ''}`,
         { signal }
       )
   },

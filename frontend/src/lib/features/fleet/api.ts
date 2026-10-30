@@ -265,6 +265,13 @@ export const fleetApi = {
   deletePhoto: (id: string, photoId: string) =>
     apiFetch<void>(`/fleet/vehicles/${id}/photos/${photoId}`, { method: 'DELETE' }),
   documents: (id: string) => ownedDocuments(`/fleet/vehicles/${id}`),
+  linkGps: (id: string, uniqueId: string) =>
+    apiFetch<FleetVehicle>(
+      `/fleet/vehicles/${id}/gps-device`,
+      json('PUT', { unique_id: uniqueId })
+    ),
+  unlinkGps: (id: string) =>
+    apiFetch<FleetVehicle>(`/fleet/vehicles/${id}/gps-device`, { method: 'DELETE' }),
   alerts: (signal?: AbortSignal) =>
     apiFetch<FleetAlert[]>(`/fleet/alerts${query({ branch_id: branch.id })}`, { signal }),
   odometer: (id: string) => apiFetch<OdometerReading[]>(`/fleet/vehicles/${id}/odometer`),

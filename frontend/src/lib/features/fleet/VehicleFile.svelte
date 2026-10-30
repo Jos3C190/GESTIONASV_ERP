@@ -22,6 +22,7 @@
   import VehicleDriverPanel from './VehicleDriverPanel.svelte';
   import VehicleFuelPanel from './VehicleFuelPanel.svelte';
   import VehicleGallery from './VehicleGallery.svelte';
+  import VehicleGpsPanel from './VehicleGpsPanel.svelte';
   import VehicleImage from './VehicleImage.svelte';
   import VehicleMaintenancePanel from './VehicleMaintenancePanel.svelte';
   import VehicleOdometerPanel from './VehicleOdometerPanel.svelte';
@@ -29,7 +30,8 @@
 
   let { vehicleId }: { vehicleId: string } = $props();
 
-  type Tab = 'summary' | 'driver' | 'documents' | 'maintenance' | 'fuel' | 'odometer' | 'gallery';
+  type Tab =
+    'summary' | 'driver' | 'documents' | 'maintenance' | 'fuel' | 'odometer' | 'gps' | 'gallery';
   let vehicle = $state<FleetVehicle | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -56,6 +58,7 @@
       { id: 'maintenance' as const, label: 'Mantenimiento', visible: true },
       { id: 'fuel' as const, label: 'Combustible', visible: true },
       { id: 'odometer' as const, label: 'Odómetro', visible: true },
+      { id: 'gps' as const, label: 'GPS', visible: true },
       { id: 'gallery' as const, label: 'Galería', visible: true }
     ].filter((item) => item.visible)
   );
@@ -288,6 +291,8 @@
         <VehicleFuelPanel {vehicle} onchanged={load} />
       {:else if tab === 'odometer'}
         <VehicleOdometerPanel {vehicle} onchanged={load} />
+      {:else if tab === 'gps'}
+        <VehicleGpsPanel {vehicle} onchanged={(next) => (vehicle = next)} />
       {:else}
         <VehicleGallery
           vehicleId={vehicle.id}

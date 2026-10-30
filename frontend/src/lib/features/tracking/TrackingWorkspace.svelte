@@ -1,15 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, type GeofenceOut } from '$lib/api/client';
+  import { api, type GeofenceOut, type TrackedVehicleOut } from '$lib/api/client';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
+  import { branch } from '$lib/stores/branch.svelte';
   import { company } from '$lib/stores/company.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
-  import { demoRoute, demoSnapshot, loadDemoRoutes } from './demo';
   import EventsPanel from './EventsPanel.svelte';
-  import { demoEvents, demoLiveEvent, fromTraccarEvents, type TrackingEvent } from './events';
+  import { fromTraccarEvents, type TrackingEvent } from './events';
   import GeofencePanel from './GeofencePanel.svelte';
   import {
-    DEMO_GEOFENCES,
     distanceM,
     draftRing,
     draftShape,
@@ -20,7 +19,6 @@
   import TrackingMap from './TrackingMap.svelte';
   import TransfersPanel from './TransfersPanel.svelte';
   import {
-    demoTransferTracks,
     formatClock,
     formatDistance,
     fromApiSummary,
@@ -38,7 +36,7 @@
     type TrackingStatus
   } from './tracking';
 
-  type Mode = 'loading' | 'live' | 'demo';
+  type Mode = 'loading' | 'live' | 'unconfigured';
   type Filter = 'all' | TrackingStatus;
   type Tab = 'units' | 'transfers' | 'geofences' | 'events';
   const TRANSFERS_POLL_MS = 30000;
@@ -46,8 +44,7 @@
 
   const LIVE_POLL_MS = 5000;
   const EVENTS_POLL_MS = 15000;
-  const DEMO_TICK_MS = 1000;
-  const DEMO_EVENT_EVERY_MS = 45000;
+  const TICK_MS = 1000;
   const TOAST_MS = 7000;
   const TRAIL_POINTS = 60;
 
@@ -61,6 +58,7 @@
   let filter = $state<Filter>('all');
   let now = $state(Date.now());
   let lastSync = $state<Date | null>(null);
+  let coverage = $state<{ total: number; withGps: number } | null>(null);
 
   let tab = $state<Tab>('units');
   let liveTransfers = $state<TransferSummary[]>([]);
@@ -69,17 +67,10 @@
   let selectedTransferId = $state<string | null>(null);
   let liveTrack = $state<TransferTrack | null>(null);
 
-  const transferList = $derived<(TransferSummary | TransferTrack)[]>(
-    mode === 'demo' ? demoTransferTracks(vehicles, now) : liveTransfers
+  const transferList = $derived<(TransferSummary | TransferTrack)[]>(liveTransfers);
+  const activeTrack = $derived.by<TransferTrack | null>(() =>
+    selectedTransferId && liveTrack?.id === selectedTransferId ? liveTrack : null
   );
-  const activeTrack = $derived.by<TransferTrack | null>(() => {
-    if (!selectedTransferId) return null;
-    if (mode === 'demo')
-      return (
-        (transferList as TransferTrack[]).find((item) => item.id === selectedTransferId) ?? null
-      );
-    return liveTrack?.id === selectedTransferId ? liveTrack : null;
-  });
   const endpoints = $derived(
     activeTrack
       ? {
@@ -106,7 +97,15 @@
   let eventsPrimed = false;
 
   const canManageGeofences = $derived(
-    mode === 'demo' || permissions.hasPermission('tracking:geofences')
+    mode === 'live' && permissions.hasPermission('tracking:geofences')
+  );
+  /** Vehículo de Flota por id de dispositivo, para nombrar los eventos. */
+  const vehiclesByDevice = $derived(
+    new Map<number, TrackedVehicleOut>(
+      vehicles.flatMap((item) =>
+        item.vehicle ? [[Number(item.key.replace('traccar-', '')), item.vehicle] as const] : []
+      )
+    )
   );
   const draftPreview = $derived(
     draft ? { ring: draftRing(draft), vertices: draft.vertices } : null
@@ -141,18 +140,19 @@
       if (filter !== 'all' && vehicle.status !== filter) return false;
       const term = query.trim().toLowerCase();
       if (!term) return true;
-      return [vehicle.name, vehicle.vehicle?.plate, vehicle.vehicle?.driver, vehicle.vehicle?.model]
+      return [
+        vehicle.name,
+        vehicle.vehicle?.plate,
+        vehicle.vehicle?.driver_name,
+        vehicle.vehicle?.model,
+        vehicle.vehicle?.branch_name
+      ]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(term));
     })
   );
 
   const selected = $derived(vehicles.find((vehicle) => vehicle.key === selectedKey) ?? null);
-  const plannedRoute = $derived(
-    mode === 'demo' && selected?.vehicle?.status === 'En ruta'
-      ? demoRoute(selected.vehicle.destination)
-      : null
-  );
 
   function apply(next: TrackedVehicle[]) {
     vehicles = next;
@@ -173,14 +173,15 @@
 
   let polling = false;
 
-  // Consulta Traccar a través del backend. Sin configuración se usa la demostración;
-  // si falla, se conservan los últimos datos en vivo o se muestra la demostración.
+  // Consulta Traccar a través del backend; el servidor solo devuelve las unidades de las
+  // sucursales visibles. Si falla, se conservan los últimos datos en vivo.
   async function pollLive(signal: AbortSignal) {
     if (polling) return;
     polling = true;
     try {
       const snapshot = await api.tracking.positions(signal);
       liveError = null;
+      coverage = { total: snapshot.vehicles_total, withGps: snapshot.vehicles_with_gps };
       if (snapshot.configured) {
         if (mode !== 'live') {
           trails = {};
@@ -192,28 +193,22 @@
           pollEvents();
         }
         apply(fromTraccar(snapshot.devices));
-      } else if (mode !== 'demo') {
-        enterDemo();
+      } else if (mode !== 'unconfigured') {
+        // Sin servidor GPS aún se pueden consultar los traslados y sus rutas planeadas.
+        mode = 'unconfigured';
+        apply([]);
+        loadTransfers();
+        loadTrack();
       }
     } catch {
       if (signal.aborted) return;
       liveError =
         mode === 'live'
           ? 'Se perdió la conexión con el servidor GPS. Reintentando…'
-          : 'No se pudo conectar con el servidor GPS. Mostrando la demostración.';
-      if (mode === 'loading') enterDemo();
+          : 'No se pudo conectar con el servidor GPS. Reintentando…';
     } finally {
       polling = false;
     }
-  }
-
-  function enterDemo() {
-    mode = 'demo';
-    loadDemoRoutes((from, to) => api.tracking.route(from, to));
-    trails = {};
-    resetEvents();
-    geofences = DEMO_GEOFENCES.map((geofence) => ({ ...geofence }));
-    receiveEvents(demoEvents(Date.now()));
   }
 
   function resetEvents() {
@@ -245,7 +240,7 @@
   async function pollEvents(signal?: AbortSignal) {
     if (mode !== 'live') return;
     try {
-      receiveEvents(fromTraccarEvents(await api.tracking.events(24, signal)));
+      receiveEvents(fromTraccarEvents(await api.tracking.events(24, signal), vehiclesByDevice));
     } catch {
       // Los eventos son complementarios; el banner de conexión ya avisa si Traccar cae.
     }
@@ -287,6 +282,7 @@
     name: string;
     description: string;
     speedLimit: number | null;
+    branchId: string | null;
   }) {
     const shape = draft && draftShape(draft);
     if (!shape) return;
@@ -294,34 +290,31 @@
       name: data.name,
       description: data.description || null,
       shape,
-      speed_limit_kmh: data.speedLimit
+      speed_limit_kmh: data.speedLimit,
+      branch_id: data.branchId
     };
-    if (mode === 'demo') {
-      geofences = [...geofences, { ...payload, id: -(Date.now() % 1_000_000) - 10 }];
-      draft = null;
-      return;
-    }
     savingGeofence = true;
     try {
       const created = await api.tracking.createGeofence(payload);
       geofences = [...geofences, created];
       draft = null;
       geofenceError = null;
-    } catch {
-      geofenceError = 'No se pudo guardar la geocerca. Revisa la conexión con el servidor GPS.';
+    } catch (cause) {
+      geofenceError =
+        cause instanceof Error && cause.message
+          ? cause.message
+          : 'No se pudo guardar la geocerca. Revisa la conexión con el servidor GPS.';
     } finally {
       savingGeofence = false;
     }
   }
 
   async function deleteGeofence(geofence: GeofenceOut) {
-    if (mode === 'live') {
-      try {
-        await api.tracking.deleteGeofence(geofence.id);
-      } catch {
-        geofenceError = 'No se pudo eliminar la geocerca.';
-        return;
-      }
+    try {
+      await api.tracking.deleteGeofence(geofence.id);
+    } catch {
+      geofenceError = 'No se pudo eliminar la geocerca.';
+      return;
     }
     geofences = geofences.filter((item) => item.id !== geofence.id);
     if (highlightedGeofence === geofence.id) highlightedGeofence = null;
@@ -339,7 +332,7 @@
   }
 
   async function loadTransfers(signal?: AbortSignal) {
-    if (mode !== 'live') return;
+    if (mode === 'loading') return;
     transfersLoading = true;
     try {
       liveTransfers = (await api.tracking.transfers(signal)).map(fromApiSummary);
@@ -352,7 +345,7 @@
   }
 
   async function loadTrack(signal?: AbortSignal) {
-    if (mode !== 'live' || !selectedTransferId) return;
+    if (mode === 'loading' || !selectedTransferId) return;
     const id = selectedTransferId;
     try {
       const track = fromApiTrack(await api.tracking.transferTrack(id, signal));
@@ -381,11 +374,6 @@
     if (!activeTrack?.vehicleCode) return;
     const vehicle = vehicles.find((item) => item.name === activeTrack.vehicleCode);
     if (vehicle && selectedKey !== vehicle.key) selectedKey = vehicle.key;
-  });
-
-  $effect(() => {
-    // Un traslado pedido por URL no existe en la demostración.
-    if (mode === 'demo' && selectedTransferId && !activeTrack) selectTransfer(null);
   });
 
   function selectTransfer(id: string | null) {
@@ -418,10 +406,6 @@
     pollLive(controller.signal);
     const livePoll = setInterval(() => pollLive(controller.signal), LIVE_POLL_MS);
     const eventsPoll = setInterval(() => pollEvents(controller.signal), EVENTS_POLL_MS);
-    let demoSequence = 0;
-    const demoEventsTimer = setInterval(() => {
-      if (mode === 'demo') receiveEvents([demoLiveEvent(demoSequence++, Date.now())]);
-    }, DEMO_EVENT_EVERY_MS);
     const transfersPoll = setInterval(() => {
       if (tab === 'transfers') loadTransfers(controller.signal);
     }, TRANSFERS_POLL_MS);
@@ -431,15 +415,11 @@
       tab = 'transfers';
       selectedTransferId = requested;
     }
-    const tick = setInterval(() => {
-      now = Date.now();
-      if (mode === 'demo') apply(demoSnapshot(now));
-    }, DEMO_TICK_MS);
+    const tick = setInterval(() => (now = Date.now()), TICK_MS);
     return () => {
       controller.abort();
       clearInterval(livePoll);
       clearInterval(eventsPoll);
-      clearInterval(demoEventsTimer);
       clearInterval(tick);
       clearInterval(transfersPoll);
       clearInterval(trackPoll);
@@ -469,13 +449,14 @@
         <h1>Seguimiento</h1>
         {#if mode === 'live'}
           <span class="mode-badge live"><span></span>En vivo · Traccar</span>
-        {:else if mode === 'demo'}
-          <span class="mode-badge"><span></span>Vista de demostración</span>
+        {:else if mode === 'unconfigured'}
+          <span class="mode-badge"><span></span>Servidor GPS sin configurar</span>
         {/if}
       </div>
       <p>
-        Ubicación en tiempo real de las unidades de {company.active?.commercial_name ??
-          'tu empresa'}.
+        Ubicación en tiempo real de las unidades de {branch.id
+          ? branch.label
+          : (company.active?.commercial_name ?? 'tu empresa')}.
       </p>
     </div>
     <div class="heading-meta">
@@ -496,7 +477,7 @@
       {selectedKey}
       {follow}
       trail={activeTrack ? activeTrack.trail : selectedKey ? (trails[selectedKey] ?? []) : []}
-      plannedRoute={activeTrack ? activeTrack.remainingRoute : plannedRoute}
+      plannedRoute={activeTrack ? activeTrack.remainingRoute : null}
       originalRoute={activeTrack?.rerouted ? activeTrack.route : null}
       {endpoints}
       {geofences}
@@ -633,7 +614,9 @@
                   <strong>{vehicle.name}</strong>
                   <span
                     >{vehicle.vehicle
-                      ? `${vehicle.vehicle.plate} · ${vehicle.vehicle.driver}`
+                      ? [vehicle.vehicle.plate, vehicle.vehicle.driver_name ?? 'Sin conductor']
+                          .filter(Boolean)
+                          .join(' · ')
                       : 'Dispositivo GPS'}</span
                   >
                 </span>
@@ -653,15 +636,21 @@
                 ? 'Conectando con el servidor GPS…'
                 : vehicles.length
                   ? 'Ninguna unidad coincide con la búsqueda.'
-                  : 'Aún no hay unidades reportando posición.'}
+                  : mode === 'unconfigured'
+                    ? 'El servidor GPS no está configurado. Los traslados siguen disponibles en su pestaña.'
+                    : coverage && coverage.withGps === 0
+                      ? coverage.total
+                        ? 'Ningún vehículo tiene GPS vinculado. Vincúlalo desde su ficha en Flota.'
+                        : 'No hay vehículos registrados en Flota para esta sucursal.'
+                      : 'Las unidades con GPS aún no reportan posición.'}
             </li>
           {/each}
         </ul>
       {/if}
-      {#if mode === 'demo'}
+      {#if mode === 'live' && coverage && coverage.withGps < coverage.total}
         <p class="panel-note">
-          <FleetIcon name="info" size={13} />Posiciones simuladas. Configura Traccar para ver tus
-          unidades reales.
+          <FleetIcon name="info" size={13} />{coverage.withGps} de {coverage.total} vehículos tienen GPS
+          vinculado. <a href="/fleet">Vincular en Flota</a>
         </p>
       {/if}
     </aside>
@@ -673,9 +662,9 @@
           <div>
             <h2>{track?.code ?? 'Cargando traslado…'}</h2>
             {#if track}<p>
-                {track.vehicleCode ?? 'Sin vehículo asignado'}{track.vehicleName
-                  ? ` · ${track.vehicleName}`
-                  : ''}
+                {track.vehicleCode ?? 'Sin vehículo asignado'}{track.vehiclePlate
+                  ? ` · ${track.vehiclePlate}`
+                  : ''}{track.driverName ? ` · ${track.driverName}` : ''}
               </p>{/if}
           </div>
           <button
@@ -774,7 +763,7 @@
             <h2>{selected.name}</h2>
             <p>
               {selected.vehicle
-                ? `${selected.vehicle.model} · ${selected.vehicle.plate}`
+                ? `${selected.vehicle.brand} ${selected.vehicle.model} · ${selected.vehicle.plate}`
                 : 'Dispositivo sin vehículo asociado'}
             </p>
           </div>
@@ -789,9 +778,10 @@
           <span class="status-pill {selected.status}"
             ><span></span>{STATUS_LABELS[selected.status]}</span
           >
-          {#if selected.vehicle?.status === 'En ruta'}
+          {#if selected.vehicle?.transfer_code}
             <span class="route-to"
-              ><FleetIcon name="route" size={14} />{selected.vehicle.destination}</span
+              ><FleetIcon name="route" size={14} />{selected.vehicle.transfer_code} → {selected
+                .vehicle.transfer_destination}</span
             >
           {/if}
         </div>
@@ -820,7 +810,11 @@
           {#if selected.vehicle}
             <div>
               <dt>Conductor</dt>
-              <dd>{selected.vehicle.driver}</dd>
+              <dd>{selected.vehicle.driver_name ?? 'Sin asignar'}</dd>
+            </div>
+            <div>
+              <dt>Sucursal</dt>
+              <dd>{selected.vehicle.branch_name}</dd>
             </div>
           {/if}
           {#if selected.battery !== null}
@@ -845,7 +839,9 @@
               : 'Seguir unidad'}</button
           >
           {#if selected.vehicle}
-            <a href="/fleet"><FleetIcon name="truck" size={15} />Ver en Flota</a>
+            <a href={`/fleet/${selected.vehicle.id}`}
+              ><FleetIcon name="truck" size={15} />Ver en Flota</a
+            >
           {/if}
         </div>
       </section>

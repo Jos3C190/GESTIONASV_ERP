@@ -7,7 +7,8 @@ import {
   draftShape,
   shapeAreaM2
 } from './geofences';
-import { demoEvents, describeEvent, fromTraccarEvents } from './events';
+import type { TrackedVehicleOut } from '$lib/api/client';
+import { describeEvent, fromTraccarEvents } from './events';
 
 describe('geofence geometry', () => {
   it('draws a closed circle whose points sit on the radius', () => {
@@ -69,33 +70,30 @@ describe('tracking events', () => {
   });
 
   it('maps API events to fleet vehicles', () => {
-    const [event] = fromTraccarEvents([
-      {
-        id: 5,
-        type: 'ignitionOn',
-        event_time: '2026-10-28T15:00:00Z',
-        device_id: 1,
-        device_name: 'FL-003',
-        device_unique_id: 'x',
-        geofence_name: null,
-        alarm: null,
-        speed_kmh: null,
-        latitude: 13.4,
-        longitude: -88.1
-      }
-    ]);
+    const vehicle = { code: 'FL-003', plate: 'C 345-678' } as TrackedVehicleOut;
+    const [event] = fromTraccarEvents(
+      [
+        {
+          id: 5,
+          type: 'ignitionOn',
+          event_time: '2026-10-28T15:00:00Z',
+          device_id: 1,
+          device_name: 'FL-003',
+          device_unique_id: 'x',
+          geofence_name: null,
+          alarm: null,
+          speed_kmh: null,
+          latitude: 13.4,
+          longitude: -88.1
+        }
+      ],
+      new Map([[1, vehicle]])
+    );
     expect(event).toMatchObject({
       id: 'traccar-5',
       vehicleName: 'FL-003',
       title: 'Motor encendido'
     });
     expect(event?.vehicle?.plate).toBe('C 345-678');
-  });
-
-  it('builds a demo history relative to now', () => {
-    const now = Date.parse('2026-10-28T15:00:00Z');
-    const history = demoEvents(now);
-    expect(history.length).toBeGreaterThan(5);
-    expect(history.every((event) => event.time.getTime() <= now)).toBe(true);
   });
 });

@@ -20,6 +20,23 @@ class TrackedPositionOut(BaseModel):
     battery_level: float | None = None
 
 
+class TrackedVehicleOut(BaseModel):
+    """Fleet record linked to a GPS device."""
+
+    id: uuid.UUID
+    code: str
+    plate: str
+    kind: str
+    brand: str
+    model: str
+    branch_id: uuid.UUID
+    branch_name: str
+    operational_status: str
+    driver_name: str | None = None
+    transfer_code: str | None = None
+    transfer_destination: str | None = None
+
+
 class TrackedDeviceOut(BaseModel):
     id: int
     unique_id: str
@@ -27,11 +44,15 @@ class TrackedDeviceOut(BaseModel):
     status: Literal["online", "offline", "unknown"]
     last_update: datetime | None = None
     position: TrackedPositionOut | None = None
+    vehicle: TrackedVehicleOut | None = None
 
 
 class TrackingSnapshotOut(BaseModel):
     configured: bool
     devices: list[TrackedDeviceOut]
+    #: Vehicles in scope (not retired) and how many have a GPS device linked.
+    vehicles_total: int = 0
+    vehicles_with_gps: int = 0
 
 
 LngLat = Annotated[list[float], Field(min_length=2, max_length=2)]
@@ -57,10 +78,15 @@ class GeofenceOut(BaseModel):
     description: str | None = None
     shape: GeofenceShape
     speed_limit_kmh: int | None = None
+    #: ``None`` = applies to every branch of the company.
+    branch_id: uuid.UUID | None = None
+    branch_name: str | None = None
+    can_manage: bool = False
 
 
 class GeofenceCreate(BaseModel):
-    company_id: uuid.UUID
+    #: Branch the geofence applies to; omit for a company-wide geofence.
+    branch_id: uuid.UUID | None = None
     name: str = Field(min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=500)
     shape: GeofenceShape
@@ -95,6 +121,8 @@ class TrackedTransferOut(BaseModel):
     dispatched_at: datetime | None = None
     vehicle_code: str | None = None
     vehicle_name: str | None = None
+    vehicle_plate: str | None = None
+    driver_name: str | None = None
     origin: TransferPlaceOut
     destination: TransferPlaceOut
 

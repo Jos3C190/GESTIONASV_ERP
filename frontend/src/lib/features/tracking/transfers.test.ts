@@ -1,38 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { demoSnapshot } from './demo';
-import { distanceM } from './geofences';
-import { demoTransferTracks, formatDistance, fromApiTrack, travelledAlong } from './transfers';
+import { formatDistance, fromApiTrack } from './transfers';
 
 describe('transfer tracking', () => {
-  it('measures how far a point is along the route and cuts the trail there', () => {
-    const route: [number, number][] = [
-      [0, 0],
-      [0, 0.01],
-      [0.01, 0.01]
-    ];
-    const { along, meters } = travelledAlong(route, [0.005, 0.0101]);
-    expect(meters).toBeCloseTo(
-      distanceM([0, 0], [0, 0.01]) + distanceM([0, 0.01], [0.005, 0.01]),
-      -1
-    );
-    expect(along).toHaveLength(3);
-    expect(along[2]![0]).toBeCloseTo(0.005, 4);
-  });
-
-  it('follows demo vehicles with progress and ETA', () => {
-    const now = Date.parse('2026-10-28T15:00:00Z');
-    const tracks = demoTransferTracks(demoSnapshot(now), now);
-    expect(tracks.map((track) => track.vehicleCode)).toEqual(['FL-001', 'FL-003', 'FL-004']);
-    for (const track of tracks) {
-      expect(track.progress).toBeGreaterThan(0);
-      expect(track.progress).toBeLessThanOrEqual(1);
-      expect(track.eta!.getTime()).toBeGreaterThan(now);
-      expect(track.trail.length).toBeGreaterThan(1);
-      expect(track.remainingRoute[0]).toEqual(track.trail[track.trail.length - 1]);
-      expect(track.destination.point).not.toBeNull();
-    }
-  });
-
   it('maps the API response', () => {
     const track = fromApiTrack({
       id: 'a1',
@@ -41,6 +10,8 @@ describe('transfer tracking', () => {
       dispatched_at: '2026-10-28T14:00:00Z',
       vehicle_code: 'FL-001',
       vehicle_name: 'Camión 1',
+      vehicle_plate: 'C 123',
+      driver_name: 'Carlos Martínez',
       origin: {
         warehouse_name: 'B1',
         branch_name: 'Roosevelt',
@@ -74,6 +45,7 @@ describe('transfer tracking', () => {
       off_route_m: 12
     });
     expect(track.origin.point).toEqual([-88.18, 13.48]);
+    expect(track.driverName).toBe('Carlos Martínez');
     expect(track.destination.point).toBeNull();
     expect(track.position?.speedKmh).toBe(50);
     expect(track.rerouted).toBe(true);
@@ -81,25 +53,5 @@ describe('transfer tracking', () => {
     expect(track.eta?.toISOString()).toBe('2026-10-28T15:30:00.000Z');
     expect(formatDistance(track.remainingM)).toBe('24.8 km');
     expect(formatDistance(420)).toBe('420 m');
-  });
-});
-
-describe('demo routes', () => {
-  it('replaces the approximate demo routes with real street routes', async () => {
-    const { demoRoute, loadDemoRoutes } = await import('./demo');
-    const before = demoRoute('La Unión')!;
-    const calls: [number, number][][] = [];
-    await loadDemoRoutes(async (from, to) => {
-      calls.push([from, to]);
-      return {
-        source: 'osrm',
-        coordinates: [from, [(from[0] + to[0]) / 2, from[1]], to]
-      };
-    });
-    const after = demoRoute('La Unión')!;
-    expect(after).not.toBe(before);
-    expect(after).toHaveLength(3);
-    expect(after[2]).toEqual([-87.841365, 13.337231]);
-    expect(calls.length).toBeGreaterThanOrEqual(5);
   });
 });

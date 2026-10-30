@@ -1,13 +1,12 @@
-import type { TrackedDeviceOut } from '$lib/api/client';
-import { DEMO_VEHICLES, type FleetVehicle } from '$lib/features/fleet/mock-data';
+import type { TrackedDeviceOut, TrackedVehicleOut } from '$lib/api/client';
 
 export type TrackingStatus = 'moving' | 'stopped' | 'offline';
 
 export interface TrackedVehicle {
   key: string;
-  /** Código visible: el de flota (FL-001) o el nombre del dispositivo en Traccar. */
+  /** Código de flota (FL-001) del vehículo vinculado al dispositivo. */
   name: string;
-  vehicle: FleetVehicle | null;
+  vehicle: TrackedVehicleOut | null;
   status: TrackingStatus;
   latitude: number;
   longitude: number;
@@ -28,17 +27,6 @@ export const STATUS_LABELS: Record<TrackingStatus, string> = {
   offline: 'Sin señal'
 };
 
-const fleetByCode = new Map(DEMO_VEHICLES.map((vehicle) => [vehicle.id.toUpperCase(), vehicle]));
-
-/** Un dispositivo de Traccar se asocia a un vehículo si su nombre o identificador es el código de flota. */
-export function matchFleetVehicle(device: Pick<TrackedDeviceOut, 'name' | 'unique_id'>) {
-  return (
-    fleetByCode.get(device.name.trim().toUpperCase()) ??
-    fleetByCode.get(device.unique_id.trim().toUpperCase()) ??
-    null
-  );
-}
-
 export function statusFor(online: boolean, speedKmh: number): TrackingStatus {
   if (!online) return 'offline';
   return speedKmh > MOVING_THRESHOLD_KMH ? 'moving' : 'stopped';
@@ -49,12 +37,11 @@ export function fromTraccar(devices: TrackedDeviceOut[]): TrackedVehicle[] {
   return devices.flatMap((device) => {
     const position = device.position;
     if (!position) return [];
-    const vehicle = matchFleetVehicle(device);
     return [
       {
         key: `traccar-${device.id}`,
-        name: vehicle?.id ?? device.name,
-        vehicle,
+        name: device.vehicle?.code ?? device.name,
+        vehicle: device.vehicle,
         status: statusFor(device.status === 'online', position.speed_kmh),
         latitude: position.latitude,
         longitude: position.longitude,

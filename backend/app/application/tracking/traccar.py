@@ -94,14 +94,14 @@ def _parse_time(value: object) -> datetime | None:
 def build_tracked_devices(
     devices: list[dict[str, Any]],
     positions: list[dict[str, Any]],
-    company_id: str,
 ) -> list[dict[str, Any]]:
-    """Join devices with their latest position, keeping only the company's devices."""
+    """Join devices with their latest position.
+
+    Callers pass only the devices the user may see (linked to vehicles in scope).
+    """
     latest = {position.get("deviceId"): position for position in positions}
     tracked: list[dict[str, Any]] = []
     for device in devices:
-        if not belongs_to_company(device, company_id):
-            continue
         position = latest.get(device.get("id"))
         position_attributes = (position or {}).get("attributes") or {}
         tracked.append(

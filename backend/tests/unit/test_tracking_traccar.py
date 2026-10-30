@@ -17,13 +17,8 @@ def _device(device_id: int, name: str, company: str | None = COMPANY) -> dict[st
     }
 
 
-def test_keeps_only_devices_of_the_requested_company() -> None:
-    devices = [
-        _device(1, "FL-001"),
-        _device(2, "Otra empresa", "other"),
-        _device(3, "Sin dueño", None),
-    ]
-    tracked = build_tracked_devices(devices, [], COMPANY.upper())
+def test_device_without_position_keeps_its_last_update() -> None:
+    tracked = build_tracked_devices([_device(1, "FL-001")], [])
     assert [item["name"] for item in tracked] == ["FL-001"]
     assert tracked[0]["position"] is None
     assert tracked[0]["last_update"] == datetime(2026, 10, 28, 15, 30, tzinfo=UTC)
@@ -42,7 +37,7 @@ def test_joins_latest_position_and_converts_speed_to_kmh() -> None:
             "attributes": {"ignition": True, "batteryLevel": 81},
         }
     ]
-    position = build_tracked_devices([_device(1, "FL-001")], positions, COMPANY)[0]["position"]
+    position = build_tracked_devices([_device(1, "FL-001")], positions)[0]["position"]
     assert position["speed_kmh"] == 50.0
     assert position["course"] == 90.0
     assert position["ignition"] is True

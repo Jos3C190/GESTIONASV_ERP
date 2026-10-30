@@ -1,19 +1,31 @@
-"""Live GPS positions, geofences and events from Traccar for the tracking module."""
+"""Live GPS positions, geofences and events from Traccar for the tracking module.
+
+Every endpoint is bound to the request's authorised company and to the
+branches the user may see (the same scope as Fleet): a branch user only sees
+the GPS devices of its branch's vehicles, the geofences of its branch (plus
+company-wide ones) and the transfers that leave from or arrive at it.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Select, select
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import aliased
 
-from app.api.v1.company_access import require_company_access
-from app.api.v1.deps import CurrentUser, SessionDep, require_permission
+from app.api.v1.company_access import effective_company_id
+from app.api.v1.deps import (
+    CurrentUser,
+    SessionDep,
+    get_check_permission_use_case,
+    require_permission,
+)
+from app.api.v1.fleet_scope import FleetScope, get_fleet_scope
 from app.api.v1.schemas.tracking import (
     GeofenceCreate,
     GeofenceOut,
@@ -23,16 +35,23 @@ from app.api.v1.schemas.tracking import (
     TransferRouteOut,
     TransferTrackOut,
 )
+from app.api.v1.traccar_access import UNAVAILABLE, traccar, traccar_credentials
+from app.application.fleet.views import build_vehicle_views
+from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.application.tracking import (
     KNOTS_TO_KMH,
     TraccarUnavailableError,
-    belongs_to_company,
     build_area,
     build_events,
     build_tracked_devices,
     fetch_traccar_snapshot,
     to_geofence,
-    traccar_call,
+)
+from app.application.tracking.devices import (
+    BRANCH_ATTRIBUTE,
+    COMPANY_ATTRIBUTE,
+    geofence_branch,
+    geofence_visible,
 )
 from app.application.tracking.transfers import (
     build_transfer_progress,
@@ -42,93 +61,167 @@ from app.application.tracking.transfers import (
     resolve_active_route,
 )
 from app.core.config import settings
+from app.infrastructure.models.employee import Employee
+from app.infrastructure.models.fleet import (
+    DriverModel,
+    FleetVehicleModel,
+)
 from app.infrastructure.models.inventory_transfer import (
     InventoryTransferModel,
     InventoryVehicleModel,
 )
 from app.infrastructure.models.organization import Branch, Warehouse
+from app.infrastructure.repositories.fleet_repository import FleetRepository
 
 router = APIRouter(prefix="/tracking", tags=["tracking"])
 
-_UNAVAILABLE = "El servidor GPS no está disponible."
+Checker = Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)]
+READ = [Depends(require_permission("tracking:read"))]
+MANAGE_GEOFENCES = [Depends(require_permission("tracking:geofences"))]
 
 
-def _credentials() -> tuple[str, str, str] | None:
-    if settings.TRACCAR_URL and settings.TRACCAR_USER and settings.TRACCAR_PASSWORD:
-        return settings.TRACCAR_URL, settings.TRACCAR_USER, settings.TRACCAR_PASSWORD
-    return None
+async def _scope(
+    request: Request, session: SessionDep, current: CurrentUser, checker: CheckPermissionUseCase
+) -> FleetScope:
+    return await get_fleet_scope(session, current, checker, effective_company_id(request))
 
 
-def _require_credentials() -> tuple[str, str, str]:
-    credentials = _credentials()
-    if credentials is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "El servidor GPS no está configurado.")
-    return credentials
+async def _linked_vehicles(
+    session: SessionDep, scope: FleetScope, branch_ids: list[uuid.UUID] | None
+) -> list[FleetVehicleModel]:
+    vehicles = await FleetRepository(session).all_vehicles(scope.company_id, branch_ids)
+    return [vehicle for vehicle in vehicles if vehicle.status != "retired"]
 
 
-async def _call(path: str, *, method: str = "GET", body: object | None = None) -> Any:
-    try:
-        return await traccar_call(*_require_credentials(), path, method=method, body=body)
-    except TraccarUnavailableError as exc:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _UNAVAILABLE) from exc
+# ---------------------------------------------------------------- positions
 
 
-async def _company_items(path: str, company_id: uuid.UUID) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = await _call(path) or []
-    return [item for item in items if belongs_to_company(item, str(company_id))]
-
-
-@router.get("/positions", response_model=TrackingSnapshotOut)
+@router.get("/positions", response_model=TrackingSnapshotOut, dependencies=READ)
 async def get_tracking_positions(
-    company_id: uuid.UUID,
+    request: Request,
     session: SessionDep,
     current: CurrentUser,
+    checker: Checker,
+    branch_id: uuid.UUID | None = Query(None),
 ) -> TrackingSnapshotOut:
-    await require_company_access(session, current, company_id)
-    credentials = _credentials()
+    scope = await _scope(request, session, current, checker)
+    vehicles = await _linked_vehicles(session, scope, scope.list_filter(branch_id))
+    linked = [vehicle for vehicle in vehicles if vehicle.traccar_device_id is not None]
+    counts = {"vehicles_total": len(vehicles), "vehicles_with_gps": len(linked)}
+    credentials = traccar_credentials()
     if credentials is None:
-        return TrackingSnapshotOut(configured=False, devices=[])
+        return TrackingSnapshotOut(configured=False, devices=[], **counts)
+    if not linked:
+        return TrackingSnapshotOut(configured=True, devices=[], **counts)
     try:
         devices, positions = await fetch_traccar_snapshot(*credentials)
     except TraccarUnavailableError as exc:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _UNAVAILABLE) from exc
-    return TrackingSnapshotOut.model_validate(
-        {"configured": True, "devices": build_tracked_devices(devices, positions, str(company_id))}
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, UNAVAILABLE) from exc
+    views = {
+        view["id"]: view
+        for view in await build_vehicle_views(
+            FleetRepository(session), scope.company_id, linked, today=datetime.now(UTC).date()
+        )
+    }
+    by_device = {vehicle.traccar_device_id: vehicle for vehicle in linked}
+    tracked = build_tracked_devices(
+        [device for device in devices if device.get("id") in by_device], positions
     )
+    for item in tracked:
+        view = views[by_device[item["id"]].id]
+        trip = view["current_transfer"]
+        item["name"] = view["code"]
+        item["vehicle"] = {
+            "id": view["id"],
+            "code": view["code"],
+            "plate": view["plate"],
+            "kind": view["kind"],
+            "brand": view["brand"],
+            "model": view["model"],
+            "branch_id": view["branch_id"],
+            "branch_name": view["branch_name"],
+            "operational_status": view["operational_status"],
+            "driver_name": view["driver"]["name"] if view["driver"] else None,
+            "transfer_code": trip["code"] if trip else None,
+            "transfer_destination": trip["destination_branch"] if trip else None,
+        }
+    return TrackingSnapshotOut.model_validate({"configured": True, "devices": tracked, **counts})
 
 
-@router.get("/geofences", response_model=list[GeofenceOut])
+# ---------------------------------------------------------------- geofences
+
+
+async def _visible_geofences(scope: FleetScope) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = await traccar("/api/geofences") or []
+    return [item for item in items if geofence_visible(item, scope)]
+
+
+def _can_manage(scope: FleetScope, branch_id: uuid.UUID | None) -> bool:
+    # Las geocercas de toda la empresa solo las administra quien ve todas las sucursales.
+    return scope.all_branches if branch_id is None else scope.allows(branch_id)
+
+
+async def _geofence_out(
+    session: SessionDep, scope: FleetScope, items: list[dict[str, Any]]
+) -> list[GeofenceOut]:
+    branch_ids = [branch for item in items if (branch := geofence_branch(item)) is not None]
+    names = await FleetRepository(session).branch_names(scope.company_id, branch_ids)
+    result: list[GeofenceOut] = []
+    for item in items:
+        geofence = to_geofence(item)
+        if geofence is None:
+            continue
+        branch = geofence_branch(item)
+        geofence.update(
+            branch_id=branch,
+            branch_name=names.get(branch) if branch else None,
+            can_manage=_can_manage(scope, branch),
+        )
+        result.append(GeofenceOut.model_validate(geofence))
+    return result
+
+
+@router.get("/geofences", response_model=list[GeofenceOut], dependencies=READ)
 async def list_geofences(
-    company_id: uuid.UUID,
+    request: Request,
     session: SessionDep,
     current: CurrentUser,
+    checker: Checker,
 ) -> list[GeofenceOut]:
-    await require_company_access(session, current, company_id)
-    geofences = await _company_items("/api/geofences", company_id)
-    return [
-        GeofenceOut.model_validate(item)
-        for item in (to_geofence(geofence) for geofence in geofences)
-        if item is not None
-    ]
+    scope = await _scope(request, session, current, checker)
+    return await _geofence_out(session, scope, await _visible_geofences(scope))
 
 
 @router.post(
     "/geofences",
     response_model=GeofenceOut,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("tracking:geofences"))],
+    dependencies=MANAGE_GEOFENCES,
 )
 async def create_geofence(
     body: GeofenceCreate,
+    request: Request,
     session: SessionDep,
     current: CurrentUser,
+    checker: Checker,
 ) -> GeofenceOut:
-    await require_company_access(session, current, body.company_id)
-    attributes: dict[str, object] = {"erpCompanyId": str(body.company_id)}
+    scope = await _scope(request, session, current, checker)
+    if body.branch_id is not None:
+        scope.require_target(body.branch_id)
+        if await FleetRepository(session).branch(scope.company_id, body.branch_id) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Sucursal no encontrada.")
+    elif not scope.all_branches:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Solo quien administra todas las sucursales puede crear geocercas de toda la empresa.",
+        )
+    attributes: dict[str, object] = {COMPANY_ATTRIBUTE: str(scope.company_id)}
+    if body.branch_id is not None:
+        attributes[BRANCH_ATTRIBUTE] = str(body.branch_id)
     if body.speed_limit_kmh is not None:
         # Traccar evalúa el exceso de velocidad dentro de la geocerca con este límite en nudos.
         attributes["speedLimit"] = round(body.speed_limit_kmh / KNOTS_TO_KMH, 2)
-    created = await _call(
+    created = await traccar(
         "/api/geofences",
         method="POST",
         body={
@@ -139,63 +232,78 @@ async def create_geofence(
         },
     )
     # Traccar solo genera eventos de geocerca para los dispositivos enlazados a ella.
-    devices = await _company_items("/api/devices", body.company_id)
+    vehicles = await _linked_vehicles(
+        session, scope, None if body.branch_id is None else [body.branch_id]
+    )
     await asyncio.gather(
         *(
-            _call(
+            traccar(
                 "/api/permissions",
                 method="POST",
-                body={"deviceId": device["id"], "geofenceId": created["id"]},
+                body={"deviceId": vehicle.traccar_device_id, "geofenceId": created["id"]},
             )
-            for device in devices
+            for vehicle in vehicles
+            if vehicle.traccar_device_id is not None
         )
     )
-    geofence = to_geofence(created)
-    if geofence is None:
+    result = await _geofence_out(session, scope, [created])
+    if not result:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Traccar devolvió una geocerca inválida.")
-    return GeofenceOut.model_validate(geofence)
+    return result[0]
 
 
 @router.delete(
     "/geofences/{geofence_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_permission("tracking:geofences"))],
+    dependencies=MANAGE_GEOFENCES,
 )
 async def delete_geofence(
     geofence_id: int,
-    company_id: uuid.UUID,
+    request: Request,
     session: SessionDep,
     current: CurrentUser,
+    checker: Checker,
 ) -> None:
-    await require_company_access(session, current, company_id)
-    owned = await _company_items("/api/geofences", company_id)
-    if not any(item["id"] == geofence_id for item in owned):
+    scope = await _scope(request, session, current, checker)
+    target = next(
+        (item for item in await _visible_geofences(scope) if item["id"] == geofence_id), None
+    )
+    if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Geocerca no encontrada.")
-    await _call(f"/api/geofences/{geofence_id}", method="DELETE")
+    if not _can_manage(scope, geofence_branch(target)):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "No puede eliminar geocercas de toda la empresa."
+        )
+    await traccar(f"/api/geofences/{geofence_id}", method="DELETE")
 
 
-@router.get("/events", response_model=list[TrackingEventOut])
+# ---------------------------------------------------------------- events
+
+
+@router.get("/events", response_model=list[TrackingEventOut], dependencies=READ)
 async def list_tracking_events(
-    company_id: uuid.UUID,
+    request: Request,
     session: SessionDep,
     current: CurrentUser,
+    checker: Checker,
     hours: int = Query(default=24, ge=1, le=168),
+    branch_id: uuid.UUID | None = Query(None),
 ) -> list[TrackingEventOut]:
-    await require_company_access(session, current, company_id)
-    devices = await _company_items("/api/devices", company_id)
-    if not devices:
+    scope = await _scope(request, session, current, checker)
+    vehicles = await _linked_vehicles(session, scope, scope.list_filter(branch_id))
+    by_device = {v.traccar_device_id: v for v in vehicles if v.traccar_device_id is not None}
+    if not by_device or traccar_credentials() is None:
         return []
     now = datetime.now(UTC)
     query = urlencode(
-        [("deviceId", device["id"]) for device in devices]
+        [("deviceId", device_id) for device_id in by_device]
         + [
             ("from", (now - timedelta(hours=hours)).isoformat().replace("+00:00", "Z")),
             ("to", now.isoformat().replace("+00:00", "Z")),
         ]
     )
     events, geofences = await asyncio.gather(
-        _call(f"/api/reports/events?{query}"),
-        _company_items("/api/geofences", company_id),
+        traccar(f"/api/reports/events?{query}"), _visible_geofences(scope)
     )
     events = events or []
     position_ids = sorted({event["positionId"] for event in events if event.get("positionId")})
@@ -203,32 +311,37 @@ async def list_tracking_events(
     # Traccar acepta varios ?id= por consulta; se agrupan para no saturar la URL.
     for start in range(0, len(position_ids), 100):
         chunk = position_ids[start : start + 100]
-        positions += (
-            await _call(f"/api/positions?{urlencode([('id', pid) for pid in chunk])}") or []
-        )
+        positions += await traccar(f"/api/positions?{urlencode([('id', pid) for pid in chunk])}") or []
+    devices = {
+        device_id: {"id": device_id, "name": vehicle.code, "uniqueId": vehicle.gps_device_unique_id}
+        for device_id, vehicle in by_device.items()
+    }
     return [
         TrackingEventOut.model_validate(item)
         for item in build_events(
             events,
-            {device["id"]: device for device in devices},
+            devices,
             {geofence["id"]: str(geofence.get("name", "")) for geofence in geofences},
             {position["id"]: position for position in positions},
         )
     ]
 
 
-# ---------------- Traslados en tránsito ----------------
+# ---------------------------------------------------------------- transfers in transit
 
 _ACTIVE_TRANSFER_STATUSES = ("in_transit", "incident")
 
 
-def _transfer_query(company_id: uuid.UUID) -> Select[Any]:
+def _transfer_query(scope: FleetScope) -> Select[Any]:
     origin_wh, destination_wh = aliased(Warehouse), aliased(Warehouse)
     origin_br, destination_br = aliased(Branch), aliased(Branch)
-    return (
+    statement = (
         select(
             InventoryTransferModel,
             InventoryVehicleModel,
+            FleetVehicleModel,
+            Employee.first_name,
+            Employee.last_name,
             origin_wh.name,
             origin_br.name,
             origin_br.latitude,
@@ -245,8 +358,22 @@ def _transfer_query(company_id: uuid.UUID) -> Select[Any]:
         .outerjoin(
             InventoryVehicleModel, InventoryVehicleModel.id == InventoryTransferModel.vehicle_id
         )
-        .where(InventoryTransferModel.company_id == company_id)
+        .outerjoin(
+            FleetVehicleModel,
+            (FleetVehicleModel.company_id == InventoryTransferModel.company_id)
+            & (FleetVehicleModel.inventory_vehicle_id == InventoryTransferModel.vehicle_id),
+        )
+        .outerjoin(DriverModel, DriverModel.id == InventoryTransferModel.driver_id)
+        .outerjoin(Employee, Employee.id == DriverModel.employee_id)
+        .where(InventoryTransferModel.company_id == scope.company_id)
+        .execution_options(include_deleted=True)
     )
+    if not scope.all_branches:
+        branches = sorted(scope.branch_ids)
+        statement = statement.where(
+            or_(origin_br.id.in_(branches), destination_br.id.in_(branches))
+        )
+    return statement
 
 
 def _place(warehouse: str, branch: str, lat: object, lng: object) -> dict[str, Any]:
@@ -258,72 +385,81 @@ def _place(warehouse: str, branch: str, lat: object, lng: object) -> dict[str, A
     }
 
 
-def _transfer_row(row: Any) -> dict[str, Any]:
-    transfer, vehicle, o_wh, o_br, o_lat, o_lng, d_wh, d_br, d_lat, d_lng = row
-    return {
+def _transfer_row(row: Any) -> tuple[dict[str, Any], FleetVehicleModel | None]:
+    (transfer, vehicle, fleet, first, last, o_wh, o_br, o_lat, o_lng, d_wh, d_br, d_lat, d_lng) = (
+        row
+    )
+    data = {
         "id": transfer.id,
         "code": transfer.code,
         "status": transfer.status,
         "dispatched_at": transfer.dispatched_at,
-        "vehicle_code": vehicle.code if vehicle else None,
-        "vehicle_name": vehicle.name if vehicle else None,
+        "vehicle_code": fleet.code if fleet else (vehicle.code if vehicle else None),
+        "vehicle_name": f"{fleet.brand} {fleet.model}" if fleet else (vehicle.name if vehicle else None),
+        "vehicle_plate": fleet.plate if fleet else None,
+        "driver_name": f"{first} {last}".strip() if first else None,
         "origin": _place(o_wh, o_br, o_lat, o_lng),
         "destination": _place(d_wh, d_br, d_lat, d_lng),
     }
+    return data, fleet
 
 
-@router.get(
-    "/transfers",
-    response_model=list[TrackedTransferOut],
-    dependencies=[Depends(require_permission("inventory:read"))],
-)
+@router.get("/transfers", response_model=list[TrackedTransferOut], dependencies=READ)
 async def list_tracked_transfers(
-    company_id: uuid.UUID,
+    request: Request,
     session: SessionDep,
     current: CurrentUser,
+    checker: Checker,
 ) -> list[TrackedTransferOut]:
-    await require_company_access(session, current, company_id)
+    scope = await _scope(request, session, current, checker)
     rows = (
         await session.execute(
-            _transfer_query(company_id)
+            _transfer_query(scope)
             .where(InventoryTransferModel.status.in_(_ACTIVE_TRANSFER_STATUSES))
             .order_by(InventoryTransferModel.dispatched_at.desc().nulls_last())
             .limit(100)
         )
     ).all()
-    return [TrackedTransferOut.model_validate(_transfer_row(row)) for row in rows]
+    return [TrackedTransferOut.model_validate(_transfer_row(row)[0]) for row in rows]
 
 
-def _matches_vehicle(device: dict[str, Any], vehicle_code: str) -> bool:
-    code = vehicle_code.strip().lower()
-    return code in {
-        str(device.get("name", "")).strip().lower(),
-        str(device.get("uniqueId", "")).strip().lower(),
-    }
+async def _device_positions(device_id: int, since: datetime | None) -> list[dict[str, Any]]:
+    now = datetime.now(UTC)
+    start = since or now - timedelta(hours=12)
+    query = urlencode(
+        {
+            "deviceId": device_id,
+            "from": start.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+            "to": now.isoformat().replace("+00:00", "Z"),
+        }
+    )
+    positions: list[dict[str, Any]] = await traccar(f"/api/positions?{query}") or []
+    if positions:
+        return positions
+    # Sin historial desde el despacho, al menos la última posición conocida.
+    latest: list[dict[str, Any]] = (
+        await traccar(f"/api/positions?{urlencode({'deviceId': device_id})}") or []
+    )
+    return latest[-1:]
 
 
-@router.get(
-    "/transfers/{transfer_id}",
-    response_model=TransferTrackOut,
-    dependencies=[Depends(require_permission("inventory:read"))],
-)
+@router.get("/transfers/{transfer_id}", response_model=TransferTrackOut, dependencies=READ)
 async def get_transfer_track(
     transfer_id: uuid.UUID,
-    company_id: uuid.UUID,
+    request: Request,
     session: SessionDep,
     current: CurrentUser,
+    checker: Checker,
 ) -> TransferTrackOut:
-    await require_company_access(session, current, company_id)
+    scope = await _scope(request, session, current, checker)
     row = (
-        await session.execute(
-            _transfer_query(company_id).where(InventoryTransferModel.id == transfer_id)
-        )
+        await session.execute(_transfer_query(scope).where(InventoryTransferModel.id == transfer_id))
     ).first()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Traslado no encontrado.")
-    data = _transfer_row(row)
+    data, fleet = _transfer_row(row)
     origin, destination = data["origin"], data["destination"]
-    data.update(gps_configured=_credentials() is not None, device_found=False)
+    data.update(gps_configured=traccar_credentials() is not None, device_found=False)
     if None in (
         origin["latitude"],
         origin["longitude"],
@@ -338,27 +474,9 @@ async def get_transfer_track(
     data["route"] = route
 
     positions: list[dict[str, Any]] = []
-    if data["gps_configured"] and data["vehicle_code"]:
-        devices = await _company_items("/api/devices", company_id)
-        device = next((d for d in devices if _matches_vehicle(d, data["vehicle_code"])), None)
-        if device is not None:
-            data["device_found"] = True
-            now = datetime.now(UTC)
-            start = data["dispatched_at"] or now - timedelta(hours=12)
-            query = urlencode(
-                {
-                    "deviceId": device["id"],
-                    "from": start.astimezone(UTC).isoformat().replace("+00:00", "Z"),
-                    "to": now.isoformat().replace("+00:00", "Z"),
-                }
-            )
-            positions = await _call(f"/api/positions?{query}") or []
-            if not positions:
-                # Sin historial desde el despacho, al menos la última posición conocida.
-                latest = (
-                    await _call(f"/api/positions?{urlencode({'deviceId': device['id']})}") or []
-                )
-                positions = latest[-1:]
+    if data["gps_configured"] and fleet is not None and fleet.traccar_device_id is not None:
+        data["device_found"] = True
+        positions = await _device_positions(fleet.traccar_device_id, data["dispatched_at"])
     trail, trail_matched = await match_trail(
         settings.OSRM_URL, str(transfer_id), raw_trail(positions)
     )
@@ -384,15 +502,13 @@ async def get_transfer_track(
     return TransferTrackOut.model_validate(data)
 
 
-@router.get("/route", response_model=TransferRouteOut)
+@router.get("/route", response_model=TransferRouteOut, dependencies=READ)
 async def get_driving_route(
-    current: CurrentUser,
     from_lng: float = Query(ge=-180, le=180),
     from_lat: float = Query(ge=-90, le=90),
     to_lng: float = Query(ge=-180, le=180),
     to_lat: float = Query(ge=-90, le=90),
 ) -> TransferRouteOut:
-    """Driving route between two points (used by the demo view and future planners)."""
-    del current  # solo requiere sesión iniciada
+    """Driving route between two points."""
     route = await plan_route(settings.OSRM_URL, (from_lng, from_lat), (to_lng, to_lat))
     return TransferRouteOut.model_validate(route)
