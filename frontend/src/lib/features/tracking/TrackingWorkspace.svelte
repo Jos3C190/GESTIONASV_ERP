@@ -2,8 +2,6 @@
   import { onMount } from 'svelte';
   import { api, type GeofenceOut, type SitesOut, type TrackedVehicleOut } from '$lib/api/client';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { company } from '$lib/stores/company.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import AlertsPanel from './AlertsPanel.svelte';
   import { ALERT_KIND_LABELS, trackingAlerts } from './alerts.svelte';
@@ -504,34 +502,19 @@
 />
 
 <div class="tracking-workspace">
-  <header class="page-heading">
-    <div>
-      <div class="title-line">
-        <h1>Seguimiento</h1>
-        {#if mode === 'live'}
-          <span class="mode-badge live"><span></span>En vivo · Traccar</span>
-        {:else if mode === 'unconfigured'}
-          <span class="mode-badge"><span></span>Servidor GPS sin configurar</span>
-        {/if}
-      </div>
-      <p>
-        Ubicación en tiempo real de las unidades de {branch.id
-          ? branch.label
-          : (company.active?.commercial_name ?? 'tu empresa')}.
-      </p>
-    </div>
-    <div class="heading-meta">
-      {#if lastSync}<span
-          ><FleetIcon name="refresh" size={14} /> Actualizado {timeAgo(lastSync, now)}</span
-        >{/if}
-    </div>
-  </header>
-
-  {#if liveError}
-    <div class="banner" role="status"><FleetIcon name="alert" size={15} />{liveError}</div>
-  {/if}
-
   <div class="tracking-shell">
+    <div class="status-chip" class:warn={!!liveError} role="status" aria-live="polite">
+      {#if liveError}
+        <FleetIcon name="alert" size={13} /><span>{liveError}</span>
+      {:else if mode === 'live'}
+        <span class="dot live"></span><span>En vivo</span>
+        {#if lastSync}<span class="muted">· Actualizado {timeAgo(lastSync, now)}</span>{/if}
+      {:else if mode === 'unconfigured'}
+        <span class="dot"></span><span>Servidor GPS sin configurar</span>
+      {:else}
+        <span class="dot"></span><span>Conectando…</span>
+      {/if}
+    </div>
     <TrackingMap
       bind:this={mapView}
       vehicles={visible}
@@ -954,83 +937,59 @@
 </div>
 
 <style>
+  /* El mapa ocupa todo el contenedor: el título ya lo muestra el encabezado de la app. */
   .tracking-workspace {
-    max-width: 1840px;
-    margin: 0 auto;
-    padding: 22px 30px;
+    height: 100%;
     color: rgb(var(--foreground));
   }
-  .page-heading {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 24px;
-    margin-bottom: 16px;
-  }
-  .title-line {
-    display: flex;
-    align-items: center;
-    gap: 13px;
-  }
-  h1 {
-    font-size: 27px;
-    line-height: 1.15;
-    font-weight: 650;
-    letter-spacing: -1px;
-  }
-  .page-heading p {
-    margin-top: 7px;
-    font-size: 12px;
-    color: rgb(var(--foreground-muted));
-  }
-  .mode-badge {
+  .status-chip {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    z-index: 3;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 8px;
+    max-width: min(520px, calc(100% - 24px));
+    padding: 6px 12px;
     border: 1px solid rgb(var(--border));
-    border-radius: 6px;
-    font-size: 11px;
+    border-radius: 999px;
+    background: rgb(var(--surface) / 0.94);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.14);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    transform: translateX(-50%);
+    backdrop-filter: blur(6px);
+  }
+  .status-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .status-chip .muted {
+    font-weight: 400;
     color: rgb(var(--foreground-muted));
   }
-  .mode-badge > span {
-    width: 6px;
-    height: 6px;
+  .status-chip.warn {
+    border-color: rgb(var(--warning) / 0.4);
+    color: rgb(var(--warning));
+  }
+  .status-chip .dot {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: rgb(var(--foreground-muted));
   }
-  .mode-badge.live {
-    color: rgb(var(--success));
-    border-color: rgb(var(--success) / 0.3);
-  }
-  .mode-badge.live > span {
+  .status-chip .dot.live {
     background: rgb(var(--success));
     animation: pulse 1.6s ease-in-out infinite;
   }
-  .heading-meta span {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: rgb(var(--foreground-muted));
-  }
-  .banner {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 12px;
-    padding: 9px 12px;
-    border: 1px solid rgb(var(--warning) / 0.3);
-    border-radius: 8px;
-    background: rgb(var(--warning) / 0.08);
-    font-size: 12px;
-  }
   .tracking-shell {
     position: relative;
-    height: max(560px, calc(100dvh - 190px));
+    height: 100%;
+    min-height: 480px;
     overflow: hidden;
-    border: 1px solid rgb(var(--border));
-    border-radius: 14px;
   }
   .device-panel {
     position: absolute;
@@ -1503,17 +1462,9 @@
     }
   }
   @media (max-width: 900px) {
+    /* En pantallas angostas el mapa va arriba, de borde a borde, y el panel debajo. */
     .tracking-workspace {
-      padding: 16px;
-    }
-    .page-heading {
-      flex-wrap: wrap;
-      align-items: flex-start;
-      gap: 8px 16px;
-    }
-    .title-line {
-      flex-wrap: wrap;
-      gap: 8px 12px;
+      height: auto;
     }
     .tabs {
       overflow-x: auto;
@@ -1525,23 +1476,24 @@
     }
     .tracking-shell {
       height: auto;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       gap: 12px;
+      padding-bottom: 12px;
       overflow: visible;
-      border: 0;
     }
     .tracking-shell > :global(.tracking-map) {
       position: relative;
-      height: 420px;
-      border: 1px solid rgb(var(--border));
-      border-radius: 14px;
+      height: 55dvh;
+      min-height: 320px;
       overflow: hidden;
     }
     .vehicle-card {
       position: static;
       order: 1;
       width: auto;
+      margin: 0 12px;
       box-shadow: none;
     }
     .device-panel {
@@ -1549,22 +1501,18 @@
       order: 2;
       width: auto;
       height: min(70dvh, 560px);
+      margin: 0 12px;
       box-shadow: none;
     }
   }
   @media (max-width: 520px) {
-    .tracking-workspace {
-      padding: 12px;
-    }
-    h1 {
-      font-size: 22px;
-    }
     .tracking-shell > :global(.tracking-map) {
-      height: 340px;
+      height: 50dvh;
     }
   }
+
   @media (prefers-reduced-motion: reduce) {
-    .mode-badge.live > span,
+    .status-chip .dot.live,
     .vehicle-card {
       animation: none;
     }
