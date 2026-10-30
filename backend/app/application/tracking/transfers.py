@@ -166,10 +166,10 @@ class _TooBigError(Exception):
     """The routing server rejected the number of coordinates in one request."""
 
 
-def _osrm_request(url: str) -> dict[str, Any]:
+def _osrm_request(url: str, timeout: float = OSRM_TIMEOUT_S) -> dict[str, Any]:
     request = urllib.request.Request(url, headers={"User-Agent": "erp-tracking/1.0"})  # noqa: S310
     try:
-        with urllib.request.urlopen(request, timeout=OSRM_TIMEOUT_S) as response:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
             data: dict[str, Any] = json.loads(response.read().decode())
     except urllib.error.HTTPError as exc:
         # OSRM answers 400 with a JSON body (e.g. NoMatch / NoSegment).
@@ -220,6 +220,68 @@ async def plan_route(base_url: str | None, origin: LngLat, destination: LngLat) 
     }
     _ROUTE_CACHE.put(key, route)
     return dict(route)
+
+
+_ENDPOINTS = 2
+
+
+def _polyline(points: list[LngLat]) -> dict[str, Any]:
+    distance = sum(distance_m(a, b) for a, b in pairwise(points))
+    return {
+        "coordinates": [list(point) for point in points],
+        "distance_m": distance,
+        "duration_s": distance / (FALLBACK_SPEED_KMH / 3.6),
+        "source": "straight",
+    }
+
+
+async def plan_path(base_url: str | None, points: list[LngLat]) -> dict[str, Any]:
+    """Driving route through every point in order; a polyline as fallback."""
+    if len(points) == _ENDPOINTS:
+        return await plan_route(base_url, points[0], points[1])
+    if not base_url or len(points) < _ENDPOINTS:
+        return _polyline(points)
+    url = (
+        f"{base_url.rstrip('/')}/route/v1/driving/{_coords(points)}"
+        "?overview=full&geometries=geojson&alternatives=false&steps=false"
+    )
+    try:
+        data = await asyncio.to_thread(_osrm_request, url)
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        logger.warning("osrm_path_failed", error=str(exc))
+        return _polyline(points)
+    if data.get("code") != "Ok" or not data.get("routes"):
+        return _polyline(points)
+    best = data["routes"][0]
+    return {
+        "coordinates": best["geometry"]["coordinates"],
+        "distance_m": float(best["distance"]),
+        "duration_s": float(best["duration"]),
+        "source": "osrm",
+    }
+
+
+#: Snapping a joystick position must answer fast or be skipped.
+NEAREST_TIMEOUT_S = 2.0
+NEAREST_MAX_M = 80
+
+
+async def nearest_road(base_url: str | None, point: LngLat) -> LngLat:
+    """The closest point on a drivable street, or ``point`` itself."""
+    if not base_url:
+        return point
+    url = f"{base_url.rstrip('/')}/nearest/v1/driving/{_coords([point])}?number=1"
+    try:
+        data = await asyncio.to_thread(_osrm_request, url, NEAREST_TIMEOUT_S)
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return point
+    waypoints = data.get("waypoints") or []
+    if data.get("code") != "Ok" or not waypoints:
+        return point
+    lng, lat = waypoints[0]["location"]
+    snapped = (float(lng), float(lat))
+    # Lejos de cualquier calle (campo abierto, predio) se respeta lo que maneja el usuario.
+    return snapped if distance_m(point, snapped) <= NEAREST_MAX_M else point
 
 
 async def _match_window(base_url: str, points: list[LngLat]) -> list[LngLat] | None:

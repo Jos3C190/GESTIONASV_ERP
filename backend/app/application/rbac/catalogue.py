@@ -240,6 +240,11 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec(
         "tracking:geofences", "Crear y eliminar geocercas del seguimiento GPS", "tracking"
     ),
+    PermissionSpec(
+        "tracking:simulate",
+        "Usar las herramientas de simulación del seguimiento GPS",
+        "tracking",
+    ),
     # --- roles ---
     PermissionSpec("roles:read", "Ver roles", "roles"),
     PermissionSpec("roles:create", "Crear roles", "roles"),

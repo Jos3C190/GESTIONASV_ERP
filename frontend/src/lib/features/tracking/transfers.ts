@@ -19,6 +19,8 @@ export interface TransferSummary {
   driverName: string | null;
   origin: TransferPlace;
   destination: TransferPlace;
+  /** El viaje se lee desde el GPS virtual del simulador. */
+  simulated: boolean;
 }
 
 export interface TransferTrack extends TransferSummary {
@@ -71,7 +73,8 @@ export function fromApiSummary(transfer: TrackedTransferOut): TransferSummary {
     vehiclePlate: transfer.vehicle_plate ?? null,
     driverName: transfer.driver_name ?? null,
     origin: place(transfer.origin),
-    destination: place(transfer.destination)
+    destination: place(transfer.destination),
+    simulated: transfer.simulated ?? false
   };
 }
 

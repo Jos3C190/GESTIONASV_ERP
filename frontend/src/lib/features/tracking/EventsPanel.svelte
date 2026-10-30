@@ -56,7 +56,12 @@
       >
         <span class="icon {event.tone}"><FleetIcon name={ICONS[event.group]} size={15} /></span>
         <span class="main">
-          <strong>{event.title}</strong>
+          <strong
+            >{event.title}{#if event.simulated}<span
+                class="sim-tag"
+                title="Generado por el simulador">SIM</span
+              >{/if}</strong
+          >
           <span>{event.vehicleName}{event.detail ? ` · ${event.detail}` : ''}</span>
         </span>
         <time datetime={event.time.toISOString()}>{timeAgo(event.time, now)}</time>
@@ -68,6 +73,18 @@
 </ul>
 
 <style>
+  .sim-tag {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: rgb(124 58 237 / 0.12);
+    color: #7c3aed;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    vertical-align: 1px;
+  }
   .filters {
     display: flex;
     flex-wrap: wrap;

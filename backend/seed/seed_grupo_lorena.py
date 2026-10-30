@@ -224,6 +224,7 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
             "drivers:documents",
             "tracking:read",
             "tracking:geofences",
+            "tracking:simulate",
         ),
     ),
     "GERENTE DE SUCURSAL": (

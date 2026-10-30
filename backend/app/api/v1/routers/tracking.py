@@ -39,6 +39,7 @@ from app.api.v1.schemas.tracking import (
     TransferRouteOut,
     TransferTrackOut,
 )
+from app.api.v1.simulator import open_simulations, simulation_devices_since, tracking_device
 from app.api.v1.site_sync import load_sites, run_site_sync, sync_if_stale, sync_state
 from app.api.v1.traccar_access import UNAVAILABLE, traccar, traccar_credentials
 from app.api.v1.transfer_tracking import (
@@ -115,8 +116,14 @@ async def get_tracking_positions(
 ) -> TrackingSnapshotOut:
     scope = await _scope(request, session, current, checker)
     vehicles = await _linked_vehicles(session, scope, scope.list_filter(branch_id))
-    linked = [vehicle for vehicle in vehicles if vehicle.traccar_device_id is not None]
-    counts = {"vehicles_total": len(vehicles), "vehicles_with_gps": len(linked)}
+    counts = {
+        "vehicles_total": len(vehicles),
+        "vehicles_with_gps": sum(1 for vehicle in vehicles if vehicle.traccar_device_id),
+    }
+    # Con una sesión de simulación abierta, la unidad se lee de su GPS virtual.
+    simulations = await open_simulations(session, scope.company_id, [v.id for v in vehicles])
+    sources = {vehicle.id: tracking_device(vehicle, simulations) for vehicle in vehicles}
+    linked = [vehicle for vehicle in vehicles if sources[vehicle.id][0] is not None]
     credentials = traccar_credentials()
     if credentials is None:
         return TrackingSnapshotOut(configured=False, devices=[], **counts)
@@ -132,7 +139,7 @@ async def get_tracking_positions(
             FleetRepository(session), scope.company_id, linked, today=datetime.now(UTC).date()
         )
     }
-    by_device = {vehicle.traccar_device_id: vehicle for vehicle in linked}
+    by_device = {sources[vehicle.id][0]: vehicle for vehicle in linked}
     tracked = build_tracked_devices(
         [device for device in devices if device.get("id") in by_device], positions
     )
@@ -140,6 +147,7 @@ async def get_tracking_positions(
         view = views[by_device[item["id"]].id]
         trip = view["current_transfer"]
         item["name"] = view["code"]
+        item["simulated"] = sources[by_device[item["id"]].id][1]
         item["vehicle"] = {
             "id": view["id"],
             "code": view["code"],
@@ -256,7 +264,17 @@ async def create_geofence(
             )
             for vehicle in vehicles
             if vehicle.traccar_device_id is not None
-        )
+        ),
+        *(
+            traccar(
+                "/api/permissions",
+                method="POST",
+                body={"deviceId": simulation.traccar_device_id, "geofenceId": created["id"]},
+            )
+            for simulation in (
+                await open_simulations(session, scope.company_id, [v.id for v in vehicles])
+            ).values()
+        ),
     )
     result = await _geofence_out(session, scope, [created])
     if not result:
@@ -346,9 +364,19 @@ async def list_tracking_events(
     scope = await _scope(request, session, current, checker)
     vehicles = await _linked_vehicles(session, scope, scope.list_filter(branch_id))
     by_device = {v.traccar_device_id: v for v in vehicles if v.traccar_device_id is not None}
+    now = datetime.now(UTC)
+    # Los eventos de GPS virtuales (abiertos o usados en la ventana) también se muestran.
+    in_scope = {vehicle.id: vehicle for vehicle in vehicles}
+    simulated_devices = {
+        device_id: in_scope[vehicle_id]
+        for device_id, vehicle_id in (
+            await simulation_devices_since(session, scope.company_id, now - timedelta(hours=hours))
+        ).items()
+        if vehicle_id in in_scope
+    }
+    by_device.update(simulated_devices)
     if not by_device or traccar_credentials() is None:
         return []
-    now = datetime.now(UTC)
     query = urlencode(
         [("deviceId", device_id) for device_id in by_device]
         + [
@@ -365,15 +393,27 @@ async def list_tracking_events(
     # Traccar acepta varios ?id= por consulta; se agrupan para no saturar la URL.
     for start in range(0, len(position_ids), 100):
         chunk = position_ids[start : start + 100]
-        positions += await traccar(f"/api/positions?{urlencode([('id', pid) for pid in chunk])}") or []
+        positions += (
+            await traccar(f"/api/positions?{urlencode([('id', pid) for pid in chunk])}") or []
+        )
     devices = {
-        device_id: {"id": device_id, "name": vehicle.code, "uniqueId": vehicle.gps_device_unique_id}
+        device_id: {
+            "id": device_id,
+            "name": vehicle.code,
+            "uniqueId": vehicle.gps_device_unique_id
+            if device_id not in simulated_devices
+            else f"sim:{vehicle.code}",
+        }
         for device_id, vehicle in by_device.items()
     }
     system_ids = {geofence["id"] for geofence in geofences if is_site_geofence(geofence)}
     return [
         TrackingEventOut.model_validate(
-            {**item, "geofence_system": item.get("geofence_id") in system_ids}
+            {
+                **item,
+                "geofence_system": item.get("geofence_id") in system_ids,
+                "simulated": item.get("device_id") in simulated_devices,
+            }
         )
         for item in build_events(
             events,
@@ -465,6 +505,7 @@ def _alert_out(alert: TrackingAlertModel, trip: dict[str, Any] | None = None) ->
         "last_seen_at": alert.last_seen_at,
         "resolved_at": alert.resolved_at,
         "acknowledged_at": alert.acknowledged_at,
+        "simulated": alert.simulated,
     }
 
 
@@ -495,9 +536,7 @@ async def list_tracking_alerts(
     if state == "open":
         conditions.append(TrackingAlertModel.resolved_at.is_(None))
     else:
-        conditions.append(
-            TrackingAlertModel.opened_at >= datetime.now(UTC) - timedelta(days=7)
-        )
+        conditions.append(TrackingAlertModel.opened_at >= datetime.now(UTC) - timedelta(days=7))
     rows = (
         await session.execute(
             select(
@@ -506,7 +545,9 @@ async def list_tracking_alerts(
                 InventoryVehicleModel.code,
                 FleetVehicleModel.code,
             )
-            .join(InventoryTransferModel, InventoryTransferModel.id == TrackingAlertModel.transfer_id)
+            .join(
+                InventoryTransferModel, InventoryTransferModel.id == TrackingAlertModel.transfer_id
+            )
             .outerjoin(
                 InventoryVehicleModel,
                 InventoryVehicleModel.id == InventoryTransferModel.vehicle_id,
@@ -538,9 +579,7 @@ async def list_tracking_alerts(
     )
 
 
-@router.post(
-    "/alerts/{alert_id}/acknowledge", response_model=TrackingAlertOut, dependencies=READ
-)
+@router.post("/alerts/{alert_id}/acknowledge", response_model=TrackingAlertOut, dependencies=READ)
 async def acknowledge_tracking_alert(
     alert_id: uuid.UUID,
     request: Request,

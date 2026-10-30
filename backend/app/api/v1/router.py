@@ -55,6 +55,7 @@ from app.api.v1.routers import (
     supplier_master,
     suppliers,
     tracking,
+    tracking_simulator,
     users,
     warehouse_receiving,
     workforce,
@@ -93,6 +94,7 @@ api_router.include_router(inventory_transfers.router, prefix="/api/v1")
 api_router.include_router(inventory_valuation.router, prefix="/api/v1")
 api_router.include_router(operational_context.router, prefix="/api/v1")
 api_router.include_router(dashboard.router, prefix="/api/v1")
+api_router.include_router(tracking_simulator.router, prefix="/api/v1")
 api_router.include_router(tracking.router, prefix="/api/v1")
 api_router.include_router(fleet_gps.router, prefix="/api/v1")
 api_router.include_router(fleet_operations.router, prefix="/api/v1")

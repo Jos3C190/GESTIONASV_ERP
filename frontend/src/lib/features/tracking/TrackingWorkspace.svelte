@@ -17,6 +17,7 @@
     type DraftKind,
     type GeofenceDraft
   } from './geofences';
+  import SimulatorDock from './SimulatorDock.svelte';
   import TrackingMap from './TrackingMap.svelte';
   import TransfersPanel from './TransfersPanel.svelte';
   import {
@@ -489,12 +490,26 @@
     selectedKey = key;
     if (!key) follow = false;
   }
+
+  // Simulador: puntos del recorrido marcados en el mapa y unidad manejada con el joystick.
+  const MAX_SIM_POINTS = 25;
+  let simPicking = $state(false);
+  let simWaypoints = $state<[number, number][]>([]);
+  let simRoutes = $state<[number, number][][]>([]);
+  let pilot = $state<{ key: string; lngLat: [number, number]; course: number } | null>(null);
+
+  function addMapPoint(point: [number, number]) {
+    if (simPicking) {
+      if (simWaypoints.length < MAX_SIM_POINTS) simWaypoints = [...simWaypoints, point];
+    } else addDraftPoint(point);
+  }
 </script>
 
 <svelte:window
   onkeydown={(event) => {
     if (event.key !== 'Escape') return;
-    if (draft) draft = null;
+    if (simPicking) simPicking = false;
+    else if (draft) draft = null;
     else if (focusedEvent) focusedEvent = null;
     else if (selectedTransferId) selectTransfer(null);
     else if (selectedKey) select(null);
@@ -528,15 +543,30 @@
       sites={sitesData?.sites ?? []}
       {highlightedGeofence}
       draft={draftPreview}
-      drawing={draft !== null}
+      drawing={draft !== null || simPicking}
       {focusPoint}
+      {simRoutes}
+      simPoints={simWaypoints}
+      {pilot}
       onselect={(key) => {
         if (activeTrack && key === null) return;
         if (activeTrack) selectTransfer(null);
         select(key);
         focusedEvent = null;
       }}
-      ondrawpoint={addDraftPoint}
+      ondrawpoint={addMapPoint}
+    />
+
+    <SimulatorDock
+      vehicles={visible}
+      bind:picking={simPicking}
+      bind:waypoints={simWaypoints}
+      bind:pilot
+      bind:routes={simRoutes}
+      onfocus={(key) => {
+        if (activeTrack) selectTransfer(null);
+        select(key);
+      }}
     />
 
     {#if toasts.length}
@@ -681,7 +711,12 @@
                   ><FleetIcon name="truck" size={17} /></span
                 >
                 <span class="device-main">
-                  <strong>{vehicle.name}</strong>
+                  <strong
+                    >{vehicle.name}{#if vehicle.simulated}<span
+                        class="sim-tag"
+                        title="Posición del GPS virtual del simulador">SIM</span
+                      >{/if}</strong
+                  >
                   <span
                     >{vehicle.vehicle
                       ? [vehicle.vehicle.plate, vehicle.vehicle.driver_name ?? 'Sin conductor']
@@ -761,6 +796,12 @@
                 </li>
               {/each}
             </ul>
+          {/if}
+          {#if track.simulated}
+            <p class="flag sim">
+              <FleetIcon name="info" size={14} />Viaje leído del simulador: alertas y recorrido
+              quedan marcados como simulados
+            </p>
           {/if}
           {#if track.trackStored}
             <p class="flag success">
@@ -847,7 +888,13 @@
       <section class="vehicle-card" aria-label={`Detalle de ${selected.name}`}>
         <header>
           <div>
-            <h2>{selected.name}</h2>
+            <h2>
+              {selected.name}{#if selected.simulated}<span
+                  class="sim-tag"
+                  title="Posición del GPS virtual del simulador; el GPS real sigue reportando"
+                  >SIM</span
+                >{/if}
+            </h2>
             <p>
               {selected.vehicle
                 ? `${selected.vehicle.brand} ${selected.vehicle.model} · ${selected.vehicle.plate}`
@@ -937,6 +984,21 @@
 </div>
 
 <style>
+  .sim-tag {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: rgb(124 58 237 / 0.12);
+    color: #7c3aed;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    vertical-align: 1px;
+  }
+  .flag.sim {
+    color: #6d28d9;
+  }
   /* El mapa ocupa todo el contenedor: el título ya lo muestra el encabezado de la app. */
   .tracking-workspace {
     height: 100%;

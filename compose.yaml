@@ -230,6 +230,9 @@ services:
       TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-}
       # Servidor público de demostración de OSRM; en producción usa uno propio.
       OSRM_URL: ${OSRM_URL:-https://router.project-osrm.org}
+      # Herramientas de simulación de Seguimiento (nunca se activan en producción).
+      TRACKING_SIMULATOR_ENABLED: ${TRACKING_SIMULATOR_ENABLED:-false}
+      TRACCAR_OSMAND_URL: ${TRACCAR_OSMAND_URL:-}
       <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
@@ -340,6 +343,8 @@ services:
       TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-}
       OSRM_URL: ${OSRM_URL:-https://router.project-osrm.org}
       TRACKING_MONITOR_INTERVAL_SECONDS: ${TRACKING_MONITOR_INTERVAL_SECONDS:-60}
+      TRACKING_SIMULATOR_ENABLED: ${TRACKING_SIMULATOR_ENABLED:-false}
+      TRACCAR_OSMAND_URL: ${TRACCAR_OSMAND_URL:-}
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
     depends_on:

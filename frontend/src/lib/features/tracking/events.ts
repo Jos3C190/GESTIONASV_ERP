@@ -16,6 +16,8 @@ export interface TrackingEvent {
   detail: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** Generado por el GPS virtual del simulador. */
+  simulated: boolean;
 }
 
 export const EVENT_GROUPS: { id: 'all' | EventGroup; label: string }[] = [
@@ -108,7 +110,8 @@ export function fromTraccarEvents(
       vehicleName: vehicle?.code ?? event.device_name,
       vehicle,
       latitude: event.latitude,
-      longitude: event.longitude
+      longitude: event.longitude,
+      simulated: event.simulated ?? false
     };
   });
 }

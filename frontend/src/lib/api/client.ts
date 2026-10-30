@@ -871,6 +871,8 @@ export interface TrackedDeviceOut {
   position: TrackedPositionOut | null;
   /** Vehículo de Flota vinculado al dispositivo. */
   vehicle: TrackedVehicleOut | null;
+  /** GPS virtual de una sesión del simulador que reemplaza al real. */
+  simulated?: boolean;
 }
 
 export type GeofenceShape =
@@ -941,6 +943,7 @@ export interface TrackingEventOut {
   geofence_id?: number | null;
   geofence_name: string | null;
   geofence_system?: boolean;
+  simulated?: boolean;
   alarm: string | null;
   speed_kmh: number | null;
   latitude: number | null;
@@ -965,6 +968,8 @@ export interface TrackedTransferOut {
   driver_name?: string | null;
   origin: TransferPlaceOut;
   destination: TransferPlaceOut;
+  /** El viaje se está leyendo desde una sesión del simulador. */
+  simulated?: boolean;
 }
 
 export type TrackingAlertKind = 'arrived' | 'delayed' | 'long_stop' | 'gps_lost' | 'off_route';
@@ -982,6 +987,7 @@ export interface TrackingAlertOut {
   last_seen_at: string;
   resolved_at: string | null;
   acknowledged_at: string | null;
+  simulated?: boolean;
 }
 
 export interface TrackingAlertsOut {
@@ -1019,6 +1025,82 @@ export interface TransferTrackOut extends TrackedTransferOut {
   arrived: boolean;
   off_route: boolean;
   off_route_m: number;
+}
+
+export type SimulationMode = 'route' | 'joystick';
+export type SimulationState = 'running' | 'paused' | 'arrived' | 'ended';
+export type SimulationAction =
+  | 'pause'
+  | 'resume'
+  | 'stop'
+  | 'signal_loss'
+  | 'signal_restore'
+  | 'detour'
+  | 'speed'
+  | 'restart';
+
+export interface SimulatorVehicleOut {
+  id: string;
+  code: string;
+  plate: string;
+  kind: string;
+  branch_id: string;
+  branch_name: string;
+  has_gps: boolean;
+  transfer_id: string | null;
+  transfer_code: string | null;
+  start: [number, number] | null;
+}
+
+export interface SimulationOut {
+  id: string;
+  vehicle_id: string;
+  vehicle_code: string;
+  vehicle_plate: string;
+  branch_id: string;
+  transfer_id: string | null;
+  transfer_code: string | null;
+  traccar_device_id: number;
+  mode: SimulationMode;
+  state: SimulationState;
+  route: [number, number][];
+  route_length_m: number;
+  progress_m: number;
+  speed_kmh: number;
+  current_speed_kmh: number;
+  longitude: number;
+  latitude: number;
+  course: number;
+  stop_until: string | null;
+  signal_lost_until: string | null;
+  last_report_at: string | null;
+  started_at: string;
+  started_by_name: string | null;
+  can_control: boolean;
+}
+
+export interface SimulatorOut {
+  enabled: boolean;
+  ready: boolean;
+  can_simulate: boolean;
+  vehicles: SimulatorVehicleOut[];
+  sessions: SimulationOut[];
+}
+
+export interface SimulationCreate {
+  vehicle_id: string;
+  mode: SimulationMode;
+  transfer_id?: string | null;
+  waypoints?: [number, number][];
+  start?: [number, number] | null;
+  speed_kmh: number;
+}
+
+export interface SimulationDriveOut {
+  longitude: number;
+  latitude: number;
+  snapped: boolean;
+  reported: boolean;
 }
 
 export interface TrackingSnapshotOut {
@@ -1934,7 +2016,41 @@ export const api = {
       apiFetch<TrackingEventOut[]>(
         `/tracking/events?hours=${hours}${branch.id ? `&branch_id=${branch.id}` : ''}`,
         { signal }
-      )
+      ),
+    // Herramientas de simulación (solo si el servidor las habilita; nunca en producción).
+    simulator: {
+      state: (signal?: AbortSignal) => apiFetch<SimulatorOut>('/tracking/simulator', { signal }),
+      start: (data: SimulationCreate) =>
+        apiFetch<SimulationOut>('/tracking/simulator/sessions', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        }),
+      control: (
+        id: string,
+        action: SimulationAction,
+        extra: { minutes?: number; speed_kmh?: number } = {}
+      ) =>
+        apiFetch<SimulationOut>(`/tracking/simulator/sessions/${id}/control`, {
+          method: 'POST',
+          body: JSON.stringify({ action, ...extra })
+        }),
+      drive: (
+        id: string,
+        data: {
+          latitude: number;
+          longitude: number;
+          course: number;
+          speed_kmh: number;
+          snap: boolean;
+        }
+      ) =>
+        apiFetch<SimulationDriveOut>(`/tracking/simulator/sessions/${id}/drive`, {
+          method: 'POST',
+          body: JSON.stringify(data)
+        }),
+      end: (id: string) =>
+        apiFetch<void>(`/tracking/simulator/sessions/${id}`, { method: 'DELETE' })
+    }
   },
   branches: {
     list: (signal?: AbortSignal) =>

@@ -105,6 +105,10 @@ class Settings(BaseSettings):
     OSRM_URL: str | None = "https://router.project-osrm.org"
     #: How often the tracking monitor evaluates transfers in transit for alerts.
     TRACKING_MONITOR_INTERVAL_SECONDS: int = Field(default=60, ge=15, le=3600)
+    # Simulador de Seguimiento para desarrollo y pruebas; en producción nunca se activa.
+    TRACKING_SIMULATOR_ENABLED: bool = False
+    #: Receptor OsmAnd de Traccar; vacío = el host de TRACCAR_URL en el puerto 5055.
+    TRACCAR_OSMAND_URL: str | None = None
 
     # --- Generic documents / S3-compatible object storage ---
     OBJECT_STORAGE_ENABLED: bool = False
@@ -160,6 +164,10 @@ class Settings(BaseSettings):
     @property
     def is_test(self) -> bool:
         return self.ENVIRONMENT == "test"
+
+    @property
+    def simulator_enabled(self) -> bool:
+        return self.TRACKING_SIMULATOR_ENABLED and not self.is_production
 
     @computed_field  # type: ignore[prop-decorator]
     @property

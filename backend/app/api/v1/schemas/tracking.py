@@ -45,6 +45,8 @@ class TrackedDeviceOut(BaseModel):
     last_update: datetime | None = None
     position: TrackedPositionOut | None = None
     vehicle: TrackedVehicleOut | None = None
+    #: Virtual GPS of a simulator session standing in for the vehicle.
+    simulated: bool = False
 
 
 class TrackingSnapshotOut(BaseModel):
@@ -110,6 +112,7 @@ class TrackingEventOut(BaseModel):
     speed_kmh: float | None = None
     latitude: float | None = None
     longitude: float | None = None
+    simulated: bool = False
 
 
 class TransferPlaceOut(BaseModel):
@@ -131,6 +134,8 @@ class TrackedTransferOut(BaseModel):
     driver_name: str | None = None
     origin: TransferPlaceOut
     destination: TransferPlaceOut
+    #: The trip is being read from a simulator session.
+    simulated: bool = False
 
 
 class TransferRouteOut(BaseModel):
@@ -161,6 +166,7 @@ class TrackingAlertOut(BaseModel):
     last_seen_at: datetime
     resolved_at: datetime | None = None
     acknowledged_at: datetime | None = None
+    simulated: bool = False
 
 
 class TrackingAlertsOut(BaseModel):
@@ -234,3 +240,95 @@ class SitesOut(BaseModel):
     sites: list[SiteOut]
     missing: list[MissingSiteOut]
     sync: SiteSyncOut
+
+
+# ---------------------------------------------------------------- simulator
+
+
+class SimulatorVehicleOut(BaseModel):
+    id: uuid.UUID
+    code: str
+    plate: str
+    kind: str
+    branch_id: uuid.UUID
+    branch_name: str
+    has_gps: bool
+    #: Transfer in transit with this vehicle, to simulate its trip.
+    transfer_id: uuid.UUID | None = None
+    transfer_code: str | None = None
+    #: Where a new session starts: last known position or the home branch.
+    start: LngLat | None = None
+
+
+class SimulationOut(BaseModel):
+    id: uuid.UUID
+    vehicle_id: uuid.UUID
+    vehicle_code: str
+    vehicle_plate: str
+    branch_id: uuid.UUID
+    transfer_id: uuid.UUID | None = None
+    transfer_code: str | None = None
+    traccar_device_id: int
+    mode: Literal["route", "joystick"]
+    state: Literal["running", "paused", "arrived", "ended"]
+    route: list[LngLat] = []
+    route_length_m: float
+    progress_m: float
+    speed_kmh: float
+    current_speed_kmh: float
+    longitude: float
+    latitude: float
+    course: float
+    stop_until: datetime | None = None
+    signal_lost_until: datetime | None = None
+    last_report_at: datetime | None = None
+    started_at: datetime
+    started_by_name: str | None = None
+    can_control: bool = False
+
+
+class SimulatorOut(BaseModel):
+    #: The deployment allows simulation (never in production).
+    enabled: bool
+    #: The GPS server is configured, so a virtual device can report.
+    ready: bool
+    can_simulate: bool
+    vehicles: list[SimulatorVehicleOut] = []
+    sessions: list[SimulationOut] = []
+
+
+class SimulationCreate(BaseModel):
+    vehicle_id: uuid.UUID
+    mode: Literal["route", "joystick"]
+    #: Route mode: follow this transfer from origin to destination...
+    transfer_id: uuid.UUID | None = None
+    #: ...or drive through these points (the first one is the start).
+    waypoints: list[LngLat] = Field(default_factory=list, max_length=25)
+    #: Joystick mode: where the unit appears (defaults to its last known position).
+    start: LngLat | None = None
+    speed_kmh: float = Field(default=40, ge=1, le=300)
+
+
+class SimulationControl(BaseModel):
+    action: Literal[
+        "pause", "resume", "stop", "signal_loss", "signal_restore", "detour", "speed", "restart"
+    ]
+    #: Length of a timed stop or signal loss.
+    minutes: int | None = Field(default=None, ge=1, le=240)
+    speed_kmh: float | None = Field(default=None, ge=1, le=300)
+
+
+class SimulationDrive(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    course: float = Field(ge=0, lt=360)
+    speed_kmh: float = Field(ge=0, le=300)
+    #: Snap the position to the nearest street.
+    snap: bool = False
+
+
+class SimulationDriveOut(BaseModel):
+    longitude: float
+    latitude: float
+    snapped: bool
+    reported: bool

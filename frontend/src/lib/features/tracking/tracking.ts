@@ -16,6 +16,8 @@ export interface TrackedVehicle {
   address: string | null;
   ignition: boolean | null;
   battery: number | null;
+  /** Posición del GPS virtual del simulador (no del vehículo real). */
+  simulated: boolean;
 }
 
 /** Velocidad mínima para considerar que la unidad está en movimiento. */
@@ -50,7 +52,8 @@ export function fromTraccar(devices: TrackedDeviceOut[]): TrackedVehicle[] {
         fixTime: position.fix_time ? new Date(position.fix_time) : null,
         address: position.address,
         ignition: position.ignition,
-        battery: position.battery_level
+        battery: position.battery_level,
+        simulated: device.simulated ?? false
       }
     ];
   });

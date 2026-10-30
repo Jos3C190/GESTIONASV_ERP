@@ -4,7 +4,8 @@ Runs as its own service (``python -m app.infrastructure.tracking_monitor``).
 Every cycle it evaluates each transfer on the road (arrival, delay, long stop,
 GPS silence, deviation), keeps one open alert per transfer and kind, and
 archives the trail of transfers closed while the GPS server was unreachable.
-Only one monitor works at a time (PostgreSQL advisory lock).
+Only one monitor works at a time (PostgreSQL advisory lock). The same service
+runs the tracking simulator engine (``tracking_simulator``) on a faster tick.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import signal
 import uuid
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 
@@ -31,11 +33,13 @@ from app.api.v1.transfer_tracking import (
     trip_snapshot,
 )
 from app.application.tracking.alerts import evaluate_trip
+from app.application.tracking.simulation import TICK_SECONDS
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.infrastructure.db.session import async_session_factory
 from app.infrastructure.models.inventory_transfer import InventoryTransferModel
 from app.infrastructure.models.tracking import TrackingAlertModel, TransferTrackModel
+from app.infrastructure.tracking_simulator import tick as simulator_tick
 
 log = get_logger(__name__)
 
@@ -133,6 +137,18 @@ async def run_once() -> None:
             )
 
 
+async def _every(stop: asyncio.Event, seconds: float, job: Callable[[], Awaitable[object]]) -> None:
+    while not stop.is_set():
+        try:
+            await job()
+        except Exception:
+            log.exception("tracking_monitor_failed", job=getattr(job, "__name__", "job"))
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=seconds)
+        except TimeoutError:
+            continue
+
+
 async def main() -> None:
     configure_logging()
     stop = asyncio.Event()
@@ -140,15 +156,11 @@ async def main() -> None:
     for signum in (signal.SIGINT, signal.SIGTERM):
         with suppress(NotImplementedError):
             loop.add_signal_handler(signum, stop.set)
-    while not stop.is_set():
-        try:
-            await run_once()
-        except Exception:
-            log.exception("tracking_monitor_failed")
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=settings.TRACKING_MONITOR_INTERVAL_SECONDS)
-        except TimeoutError:
-            continue
+    await asyncio.gather(
+        _every(stop, settings.TRACKING_MONITOR_INTERVAL_SECONDS, run_once),
+        # El simulador también cierra sesiones abiertas si la función se desactiva.
+        _every(stop, TICK_SECONDS, simulator_tick),
+    )
 
 
 if __name__ == "__main__":

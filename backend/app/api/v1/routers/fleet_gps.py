@@ -29,6 +29,7 @@ from app.application.audit.audit_service import AuditService
 from app.application.fleet.views import build_vehicle_views
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.application.tracking.devices import device_body, device_owner
+from app.application.tracking.simulation import is_simulator_unique_id
 from app.core.exceptions import ConflictError
 from app.infrastructure.models.fleet import FleetVehicleModel
 from app.infrastructure.repositories.fleet_repository import FleetRepository
@@ -74,6 +75,11 @@ async def link_gps_device(
     if vehicle.status == "retired":
         raise ConflictError("El vehículo está dado de baja.", code="vehicle_retired")
     unique_id = body.unique_id.strip()
+    if is_simulator_unique_id(unique_id):
+        raise ConflictError(
+            "Ese identificador está reservado para el GPS virtual del simulador.",
+            code="gps_device_reserved",
+        )
     if vehicle.gps_device_unique_id == unique_id:
         return await _view(session, vehicle)
     taken = await session.scalar(

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import type { GeofenceOut, SiteOut } from '$lib/api/client';
   import { geofenceCollection } from './geofences';
   import { siteAreas, sitePopup } from './sites';
@@ -30,6 +30,9 @@
     drawing = false,
     focusPoint = null,
     endpoints = null,
+    simRoutes = [],
+    simPoints = [],
+    pilot = null,
     onselect,
     ondrawpoint,
     ondrawfinish
@@ -55,6 +58,11 @@
       origin: { at: LngLat; label: string } | null;
       destination: { at: LngLat; label: string } | null;
     } | null;
+    /** Recorridos de las sesiones del simulador y los puntos que se están marcando. */
+    simRoutes?: LngLat[][];
+    simPoints?: LngLat[];
+    /** Unidad manejada con el joystick: se dibuja en cada cuadro, sin esperar al servidor. */
+    pilot?: { key: string; lngLat: LngLat; course: number } | null;
     onselect: (key: string | null) => void;
     ondrawpoint?: (point: LngLat) => void;
     ondrawfinish?: () => void;
@@ -86,6 +94,22 @@
       properties: {},
       geometry: { type: 'Point', coordinates: point }
     }))
+  });
+  const lines = (paths: LngLat[][]) => ({
+    type: 'FeatureCollection',
+    features: paths.filter((path) => path.length > 1).map(line)
+  });
+  /** Puntos numerados del recorrido simulado y la línea que los une. */
+  const waypointFeatures = (coordinates: LngLat[]) => ({
+    type: 'FeatureCollection',
+    features: [
+      ...(coordinates.length > 1 ? [line(coordinates)] : []),
+      ...coordinates.map((point, index) => ({
+        type: 'Feature',
+        properties: { label: String(index + 1) },
+        geometry: { type: 'Point', coordinates: point }
+      }))
+    ]
   });
   const polygon = (ring: LngLat[]) => ({
     type: 'Feature',
@@ -297,6 +321,52 @@
         'circle-stroke-width': 2
       }
     });
+    map.addSource('sim-routes', { type: 'geojson', data: lines([]) });
+    map.addSource('sim-points', { type: 'geojson', data: lines([]) });
+    map.addLayer({
+      id: 'sim-routes',
+      type: 'line',
+      source: 'sim-routes',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#7c3aed',
+        'line-width': 3,
+        'line-opacity': 0.5,
+        'line-dasharray': [0.5, 1.6]
+      }
+    });
+    map.addLayer({
+      id: 'sim-points-line',
+      type: 'line',
+      source: 'sim-points',
+      filter: ['==', ['geometry-type'], 'LineString'],
+      paint: { 'line-color': '#7c3aed', 'line-width': 2, 'line-dasharray': [2, 1.5] }
+    });
+    map.addLayer({
+      id: 'sim-points',
+      type: 'circle',
+      source: 'sim-points',
+      filter: ['==', ['geometry-type'], 'Point'],
+      paint: {
+        'circle-radius': 6,
+        'circle-color': '#ffffff',
+        'circle-stroke-color': '#7c3aed',
+        'circle-stroke-width': 2.5
+      }
+    });
+    map.addLayer({
+      id: 'sim-points-label',
+      type: 'symbol',
+      source: 'sim-points',
+      filter: ['==', ['geometry-type'], 'Point'],
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-font': ['Noto Sans Bold'],
+        'text-size': 10,
+        'text-allow-overlap': true
+      },
+      paint: { 'text-color': '#6d28d9' }
+    });
     map.addSource('original-route', { type: 'geojson', data: line([]) });
     map.addLayer({
       id: 'original-route',
@@ -337,7 +407,7 @@
   function createMarkerElement(vehicle: TrackedVehicle): HTMLDivElement {
     const element = document.createElement('div');
     element.className = 'tm-marker';
-    element.innerHTML = `<span class="tm-heading"></span><span class="tm-pin"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${TRUCK_PATH}"/></svg></span><span class="tm-label"></span>`;
+    element.innerHTML = `<span class="tm-heading"></span><span class="tm-pin"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${TRUCK_PATH}"/></svg></span><span class="tm-label"><span class="tm-name"></span><span class="tm-sim-tag">SIM</span></span>`;
     element.setAttribute('role', 'button');
     element.tabIndex = 0;
     const select = (event: Event) => {
@@ -353,6 +423,7 @@
 
   function syncMarkers(maplibregl: MapLibre) {
     const seen = new Set<string>();
+    const piloted = untrack(() => pilot?.key ?? null);
     for (const vehicle of vehicles) {
       seen.add(vehicle.key);
       let entry = markers.get(vehicle.key);
@@ -374,7 +445,9 @@
       }
       state.status = vehicle.status;
       state.selected = vehicle.key === selectedKey;
-      if (from[0] !== target[0] || from[1] !== target[1]) {
+      if (vehicle.key === piloted) {
+        // La posición manejada manda: la del servidor llega con retraso.
+      } else if (from[0] !== target[0] || from[1] !== target[1]) {
         // La unidad del traslado abierto avanza por su recorrido ajustado a calles.
         const path = animationPath(from, target, vehicle.key === selectedKey ? trail : []);
         animateTo(vehicle.key, entry.marker, path, vehicle.course);
@@ -384,10 +457,15 @@
       const { element } = entry;
       element.dataset.status = vehicle.status;
       element.classList.toggle('selected', vehicle.key === selectedKey);
-      element.setAttribute('aria-label', `${vehicle.name}, ${STATUS_LABELS[vehicle.status]}`);
-      element.querySelector<HTMLElement>('.tm-label')!.textContent = vehicle.name;
-      element.querySelector<HTMLElement>('.tm-heading')!.style.transform =
-        `rotate(${vehicle.course}deg)`;
+      element.classList.toggle('sim', vehicle.simulated);
+      element.setAttribute(
+        'aria-label',
+        `${vehicle.name}${vehicle.simulated ? ' (simulado)' : ''}, ${STATUS_LABELS[vehicle.status]}`
+      );
+      element.querySelector<HTMLElement>('.tm-name')!.textContent = vehicle.name;
+      if (vehicle.key !== piloted)
+        element.querySelector<HTMLElement>('.tm-heading')!.style.transform =
+          `rotate(${vehicle.course}deg)`;
     }
     for (const [key, entry] of markers) {
       if (!seen.has(key)) {
@@ -462,6 +540,31 @@
         duration: 0
       });
     }
+  });
+
+  // Unidad manejada con el joystick: marcador y camión 3D siguen al control en cada cuadro.
+  $effect(() => {
+    if (!map || !pilot) return;
+    const entry = markers.get(pilot.key);
+    if (!entry) return;
+    cancelAnimationFrame(animations.get(pilot.key) ?? 0);
+    animations.delete(pilot.key);
+    entry.marker.setLngLat(pilot.lngLat);
+    entry.element.querySelector<HTMLElement>('.tm-heading')!.style.transform =
+      `rotate(${pilot.course}deg)`;
+    const state = truckStates.get(pilot.key);
+    if (state) {
+      state.lngLat = pilot.lngLat;
+      state.course = pilot.course;
+    }
+    repaint();
+    if (follow && pilot.key === selectedKey) map.setCenter(pilot.lngLat);
+  });
+
+  $effect(() => {
+    if (!map || !styleReady) return;
+    map.getSource('sim-routes')?.setData(lines(simRoutes));
+    map.getSource('sim-points')?.setData(waypointFeatures(simPoints));
   });
 
   $effect(() => {
@@ -754,6 +857,25 @@
     font-weight: 650;
     white-space: nowrap;
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  }
+  /* GPS virtual del simulador: contorno punteado violeta y etiqueta SIM, también en 3D. */
+  :global(.tm-marker .tm-sim-tag) {
+    display: none;
+    margin-left: 4px;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: #7c3aed;
+    color: #fff;
+    font-size: 8.5px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+  }
+  :global(.tm-marker.sim .tm-sim-tag) {
+    display: inline-block;
+  }
+  :global(.tm-marker.sim .tm-pin) {
+    outline: 2px dashed #7c3aed;
+    outline-offset: 2px;
   }
   :global(.tm-marker.selected) {
     z-index: 2;

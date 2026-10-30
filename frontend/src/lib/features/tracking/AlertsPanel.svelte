@@ -45,7 +45,12 @@
       <li class={alert.severity} class:acknowledged={!!alert.acknowledged_at}>
         <button type="button" class="body" onclick={() => onopen(alert)}>
           <span class="head">
-            <span class="kind">{ALERT_KIND_LABELS[alert.kind]}</span>
+            <span class="kind"
+              >{ALERT_KIND_LABELS[alert.kind]}{#if alert.simulated}<span
+                  class="sim-tag"
+                  title="Alerta generada por el simulador">SIM</span
+                >{/if}</span
+            >
             <span class="time">{timeAgo(new Date(alert.opened_at), now)}</span>
           </span>
           <strong>{alert.message}</strong>
@@ -76,6 +81,18 @@
 </div>
 
 <style>
+  .sim-tag {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: rgb(124 58 237 / 0.12);
+    color: #7c3aed;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    vertical-align: 1px;
+  }
   .content {
     flex: 1;
     min-height: 0;

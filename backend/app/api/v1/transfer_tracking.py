@@ -45,7 +45,11 @@ from app.infrastructure.models.inventory_transfer import (
     InventoryVehicleModel,
 )
 from app.infrastructure.models.organization import Branch, Warehouse
-from app.infrastructure.models.tracking import TrackingAlertModel, TransferTrackModel
+from app.infrastructure.models.tracking import (
+    TrackingAlertModel,
+    TrackingSimulationModel,
+    TransferTrackModel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +68,9 @@ class TripContext:
     origin_branch_id: uuid.UUID
     destination_branch_id: uuid.UUID
     arrival_radius_m: float | None
+    #: GPS read for the trip: the simulator's virtual device while a session is open.
+    device_id: int | None = None
+    simulated: bool = False
 
     @property
     def final(self) -> bool:
@@ -81,6 +88,7 @@ def transfer_query(company_id: uuid.UUID, branch_ids: list[uuid.UUID] | None) ->
     """Transfers of the company; ``branch_ids`` keeps those leaving from or arriving at them."""
     origin_wh, destination_wh = aliased(Warehouse), aliased(Warehouse)
     origin_br, destination_br = aliased(Branch), aliased(Branch)
+    simulation = aliased(TrackingSimulationModel)
     statement = (
         select(
             InventoryTransferModel,
@@ -100,6 +108,7 @@ def transfer_query(company_id: uuid.UUID, branch_ids: list[uuid.UUID] | None) ->
             func.coalesce(destination_wh.geofence_radius_m, destination_br.geofence_radius_m),
             origin_br.id,
             destination_br.id,
+            simulation.traccar_device_id,
         )
         .join(origin_wh, origin_wh.id == InventoryTransferModel.origin_warehouse_id)
         .join(origin_br, origin_br.id == origin_wh.branch_id)
@@ -112,6 +121,10 @@ def transfer_query(company_id: uuid.UUID, branch_ids: list[uuid.UUID] | None) ->
             FleetVehicleModel,
             (FleetVehicleModel.company_id == InventoryTransferModel.company_id)
             & (FleetVehicleModel.inventory_vehicle_id == InventoryTransferModel.vehicle_id),
+        )
+        .outerjoin(
+            simulation,
+            (simulation.vehicle_id == FleetVehicleModel.id) & (simulation.state != "ended"),
         )
         .outerjoin(DriverModel, DriverModel.id == InventoryTransferModel.driver_id)
         .outerjoin(Employee, Employee.id == DriverModel.employee_id)
@@ -152,6 +165,7 @@ def trip_context(row: Any) -> TripContext:
         d_radius,
         origin_branch_id,
         destination_branch_id,
+        simulation_device,
     ) = row
     data = {
         "id": transfer.id,
@@ -168,6 +182,8 @@ def trip_context(row: Any) -> TripContext:
         "origin": _place(o_wh, o_br, o_lat, o_lng),
         "destination": _place(d_wh, d_br, d_lat, d_lng),
     }
+    simulated = simulation_device is not None and settings.simulator_enabled
+    data["simulated"] = simulated
     return TripContext(
         transfer=transfer,
         fleet=fleet,
@@ -175,6 +191,10 @@ def trip_context(row: Any) -> TripContext:
         origin_branch_id=origin_branch_id,
         destination_branch_id=destination_branch_id,
         arrival_radius_m=float(d_radius) if d_radius is not None else None,
+        device_id=simulation_device
+        if simulated
+        else (fleet.traccar_device_id if fleet is not None else None),
+        simulated=simulated,
     )
 
 
@@ -220,11 +240,12 @@ async def compute_trip(session: AsyncSession, ctx: TripContext) -> tuple[dict[st
     data = dict(ctx.data)
     origin, destination = data["origin"], data["destination"]
     stored = await stored_track(session, ctx.transfer.id) if ctx.final else None
-    device_id = ctx.fleet.traccar_device_id if ctx.fleet is not None else None
+    device_id = ctx.device_id
     data.update(
         gps_configured=traccar_credentials() is not None,
         device_found=stored is not None or device_id is not None,
         track_stored=stored is not None,
+        simulated=stored.simulated if stored is not None else ctx.simulated,
     )
     positions: list[dict[str, Any]] = []
     trail: list[Any] | None = None
@@ -293,7 +314,7 @@ async def capture_track(session: AsyncSession, ctx: TripContext) -> TransferTrac
     existing = await stored_track(session, ctx.transfer.id)
     if existing is not None:
         return existing
-    device_id = ctx.fleet.traccar_device_id if ctx.fleet is not None else None
+    device_id = ctx.device_id
     if device_id is None or traccar_credentials() is None:
         return None
     start, end = ctx.window
@@ -315,6 +336,7 @@ async def capture_track(session: AsyncSession, ctx: TripContext) -> TransferTrac
         point_count=len(points),
         distance_m=distance,
         max_speed_kmh=top_speed,
+        simulated=ctx.simulated,
     )
     session.add(track)
     await session.flush()
@@ -336,7 +358,7 @@ def trip_snapshot(
         now=datetime.now(UTC),
         dispatched_at=ctx.transfer.dispatched_at,
         destination_name=ctx.data["destination"]["warehouse_name"],
-        gps_linked=ctx.fleet is not None and ctx.fleet.traccar_device_id is not None,
+        gps_linked=ctx.device_id is not None,
         fixes=fixes(positions),
         planned_duration_s=route.get("duration_s"),
         eta=eta if isinstance(eta, datetime) else None,
@@ -364,9 +386,12 @@ async def apply_conditions(
         )
     }
     wanted = {condition.kind: condition for condition in conditions}
-    for kind, alert in current.items():
-        if kind not in wanted:
+    for kind, alert in list(current.items()):
+        # Una alerta simulada nunca continúa como real (ni al revés): se cierra y se abre otra.
+        if kind not in wanted or alert.simulated != ctx.simulated:
             alert.resolved_at = now
+            current.pop(kind)
+    await session.flush()
     for kind, condition in wanted.items():
         existing = current.get(kind)
         if existing is None:
@@ -382,6 +407,7 @@ async def apply_conditions(
                     details=condition.details,
                     opened_at=now,
                     last_seen_at=now,
+                    simulated=ctx.simulated,
                 )
             )
         else:

@@ -33,7 +33,7 @@ from app.application.tracking.sites import (
 from app.infrastructure.db.session import async_session_factory
 from app.infrastructure.models.fleet import FleetVehicleModel
 from app.infrastructure.models.organization import Branch, Warehouse
-from app.infrastructure.models.tracking import TrackingSyncStateModel
+from app.infrastructure.models.tracking import TrackingSimulationModel, TrackingSyncStateModel
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ def _owned(item: dict[str, Any], company_id: uuid.UUID) -> bool:
 async def _link_devices(
     session: AsyncSession, company_id: uuid.UUID, geofence_ids: set[int]
 ) -> None:
-    """Every GPS device of the company must report every site geofence."""
+    """Every GPS device of the company (real or simulated) must report every site geofence."""
     devices = (
         await session.scalars(
             select(FleetVehicleModel.traccar_device_id).where(
@@ -73,7 +73,15 @@ async def _link_devices(
             )
         )
     ).all()
-    for device_id in devices:
+    virtual = (
+        await session.scalars(
+            select(TrackingSimulationModel.traccar_device_id).where(
+                TrackingSimulationModel.company_id == company_id,
+                TrackingSimulationModel.state != "ended",
+            )
+        )
+    ).all()
+    for device_id in sorted({*(d for d in devices if d is not None), *virtual}):
         linked: list[dict[str, Any]] = (
             await traccar(f"/api/geofences?{urlencode({'deviceId': device_id})}") or []
         )
