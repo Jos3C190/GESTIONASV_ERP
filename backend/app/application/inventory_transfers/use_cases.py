@@ -157,8 +157,10 @@ class InventoryTransferUseCases:
     async def create_vehicle(self, **kwargs: Any) -> dict[str, Any]:
         return await self._repository.create_vehicle(**kwargs)
 
-    async def list_vehicles(self, company_id: uuid.UUID) -> list[dict[str, Any]]:
-        return await self._repository.list_vehicles(company_id)
+    async def list_vehicles(
+        self, company_id: uuid.UUID, branch_ids: list[uuid.UUID] | None = None
+    ) -> list[dict[str, Any]]:
+        return await self._repository.list_vehicles(company_id, branch_ids)
 
     async def set_vehicle_status(self, **kwargs: Any) -> dict[str, Any]:
         return await self._repository.set_vehicle_status(**kwargs)

@@ -1,7 +1,8 @@
 import { apiFetch } from '$lib/api/client';
 
 export type TransferDecimal = string | number;
-export type TransferStatus = 'preparation' | 'in_transit' | 'received' | 'closed_with_adjustment' | 'incident' | 'cancelled';
+export type TransferStatus =
+  'preparation' | 'in_transit' | 'received' | 'closed_with_adjustment' | 'incident' | 'cancelled';
 
 export interface TransferDemandRecord {
   purchase_request_detail_id: string;
@@ -38,6 +39,66 @@ export interface TransferVehicle {
   transit_warehouse_name: string;
   transit_location_id: string;
   created_at: string;
+  fleet_vehicle_id: string | null;
+  plate: string | null;
+  kind: string | null;
+  branch_id: string | null;
+  branch_name: string | null;
+}
+
+export interface DispatchIssue {
+  code: string;
+  severity: 'blocking' | 'warning';
+  message: string;
+  overridable: boolean;
+}
+
+export interface DispatchCheck {
+  vehicle_id: string;
+  driver_id: string | null;
+  vehicle_issues: DispatchIssue[];
+  driver_issues: DispatchIssue[];
+  blocked: boolean;
+  hard_blocked: boolean;
+  can_override: boolean;
+}
+
+export type FitnessState = 'ok' | 'warning' | 'blocked';
+
+/** Vehicle, driver and exception chosen in the dispatch panel. */
+export interface DispatchSelection {
+  vehicleId: string;
+  driverId: string;
+  overrideReason: string;
+  /** True when the server will accept the dispatch as selected. */
+  ready: boolean;
+  label: string;
+}
+
+export interface DispatchOptions {
+  origin_branch_id: string;
+  origin_branch_name: string;
+  vehicles: Array<{
+    inventory_vehicle_id: string;
+    fleet_vehicle_id: string;
+    code: string;
+    plate: string;
+    kind: string;
+    brand: string;
+    model: string;
+    compliance_state: FitnessState;
+    available: boolean;
+    unavailable_reason: string | null;
+    driver_id: string | null;
+    driver_name: string | null;
+  }>;
+  drivers: Array<{
+    id: string;
+    name: string;
+    license_class: string;
+    compliance_state: FitnessState;
+    current_vehicle_code: string | null;
+  }>;
 }
 
 export interface TransferVehicleReference {
@@ -45,6 +106,9 @@ export interface TransferVehicleReference {
   code: string;
   name: string;
   status: string;
+  transit_warehouse_id?: string | null;
+  fleet_vehicle_id?: string | null;
+  plate?: string | null;
 }
 
 export interface TransferDemandAllocation {
@@ -124,6 +188,8 @@ export interface InventoryTransfer {
   destination_warehouse_name: string;
   destination_branch_id: string | null;
   vehicle: TransferVehicleReference | null;
+  driver?: { id: string; name: string; employee_code: string } | null;
+  compliance_override_reason?: string | null;
   status: TransferStatus;
   notes: string | null;
   created_by_id: string;
@@ -169,18 +235,16 @@ export const inventoryTransfersApi = {
     return apiFetch<TransferDemandRecord[]>(`${root}/demand?${query.toString()}`);
   },
 
+  /** Read-only: vehicles are registered and edited in Fleet. */
   listVehicles: () => apiFetch<TransferVehicle[]>(`${root}/vehicles`),
 
-  createVehicle: (body: { code: string; name: string }) =>
-    apiFetch<TransferVehicle>(`${root}/vehicles`, {
-      method: 'POST',
-      body: JSON.stringify(body)
-    }),
+  dispatchOptions: (transferId: string) =>
+    apiFetch<DispatchOptions>(`${root}/${encodeURIComponent(transferId)}/dispatch-options`),
 
-  setVehicleStatus: (vehicleId: string, status: 'active' | 'inactive') =>
-    apiFetch<TransferVehicle>(`${root}/vehicles/${encodeURIComponent(vehicleId)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status })
+  dispatchCheck: (transferId: string, vehicleId: string, driverId?: string | null) =>
+    apiFetch<DispatchCheck>(`${root}/${encodeURIComponent(transferId)}/dispatch-check`, {
+      method: 'POST',
+      body: JSON.stringify({ vehicle_id: vehicleId, driver_id: driverId || null })
     }),
 
   list: (filters: { status?: TransferStatus; page?: number; size?: number } = {}) => {
@@ -210,10 +274,20 @@ export const inventoryTransfersApi = {
       body: JSON.stringify({ idempotency_key: idempotencyKey })
     }),
 
-  dispatch: (transferId: string, vehicleId: string, idempotencyKey: string) =>
+  dispatch: (
+    transferId: string,
+    vehicleId: string,
+    idempotencyKey: string,
+    options: { driverId?: string | null; overrideReason?: string | null } = {}
+  ) =>
     apiFetch<InventoryTransfer>(`${root}/${encodeURIComponent(transferId)}/dispatch`, {
       method: 'POST',
-      body: JSON.stringify({ vehicle_id: vehicleId, idempotency_key: idempotencyKey })
+      body: JSON.stringify({
+        vehicle_id: vehicleId,
+        idempotency_key: idempotencyKey,
+        driver_id: options.driverId || null,
+        override_reason: options.overrideReason?.trim() || null
+      })
     }),
 
   receive: (

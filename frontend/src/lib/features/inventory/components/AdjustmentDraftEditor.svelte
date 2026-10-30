@@ -158,12 +158,12 @@
             'La incidencia ya no tiene una cantidad en tránsito ajustable. Actualiza el traslado.'
           );
         }
-        const vehicles = await inventoryTransfersApi.listVehicles();
-        if (sequence !== loadSequence || activeScope !== `${company.id ?? ''}:${branch.id ?? ''}`)
-          return;
-        const vehicle = vehicles.find((item) => item.id === loadedTransfer.vehicle?.id);
-        if (!vehicle) throw new Error('No se encontró el vehículo y su bodega de tránsito.');
-        const transitUnits = await inventoryApi.listHandlingUnits(vehicle.transit_warehouse_id, {
+        // El traslado ya trae la bodega de tránsito de su vehículo: no hace falta el catálogo,
+        // que solo muestra los vehículos de las sucursales del usuario.
+        const transitWarehouseId = loadedTransfer.vehicle.transit_warehouse_id;
+        if (!transitWarehouseId)
+          throw new Error('No se encontró el vehículo y su bodega de tránsito.');
+        const transitUnits = await inventoryApi.listHandlingUnits(transitWarehouseId, {
           inventoryItemId: selectedLine.inventory_item_id,
           stockStatus: 'in_transit'
         });

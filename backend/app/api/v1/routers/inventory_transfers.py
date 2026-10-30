@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable
+from datetime import UTC, datetime
 from typing import Annotated, TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -25,12 +26,17 @@ from app.api.v1.deps import (
     get_check_permission_use_case,
     require_permission,
 )
+from app.api.v1.fleet_scope import get_fleet_scope
 from app.api.v1.routers.inventory import InventoryBoundaryError
 from app.api.v1.schemas.inventory_transfer import (
+    DispatchCheckIn,
+    DispatchCheckOut,
+    DispatchDriverOptionOut,
+    DispatchIssueOut,
+    DispatchOptionsOut,
+    DispatchVehicleOptionOut,
     InventoryTransferOut,
-    InventoryVehicleCreateIn,
     InventoryVehicleOut,
-    InventoryVehicleStatusIn,
     TransferCommandIn,
     TransferCreateIn,
     TransferDemandOut,
@@ -41,20 +47,28 @@ from app.api.v1.schemas.inventory_transfer import (
     TransferUpdateIn,
 )
 from app.application.audit.audit_service import AuditService
+from app.application.fleet.compliance import Issue
+from app.application.fleet.dispatch import HARD_BLOCKS as DISPATCH_HARD_BLOCKS
+from app.application.fleet.dispatch import DispatchEvaluation, evaluate_dispatch
+from app.application.fleet.driver_views import build_driver_views
+from app.application.fleet.views import build_vehicle_views
 from app.application.inventory import InventoryApplicationError
 from app.application.inventory_transfers.use_cases import InventoryTransferUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.exceptions import AuthorizationError
 from app.domain.entities.inventory import InventoryOperationError
 from app.domain.entities.inventory_transfer import TransferDomainError
+from app.infrastructure.models.fleet import FleetVehicleModel
 from app.infrastructure.models.inventory_transfer import InventoryTransferModel
 from app.infrastructure.models.organization import Branch, Warehouse
+from app.infrastructure.repositories.fleet_repository import FleetRepository
 from app.infrastructure.repositories.inventory_transfer_repository import (
     SqlAlchemyInventoryTransferRepository,
 )
 
 router = APIRouter(prefix="/inventory/transfers", tags=["inventory transfers"])
 T = TypeVar("T")
+DISPATCH_OVERRIDE_PERMISSION = "fleet:compliance_override"
 
 
 def _use_cases(session: SessionDep) -> InventoryTransferUseCases:
@@ -279,87 +293,18 @@ async def list_vehicles(
     request: Request,
     session: SessionDep,
     current: CurrentUser,
+    checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
 ) -> list[InventoryVehicleOut]:
+    """Transit vehicles of the branches the user operates.
+
+    Vehicles are created and edited in Fleet; this catalogue is read-only.
+    """
     company_id = effective_company_id(request)
     await require_company_access(session, current, company_id)
-    await _require_headquarters_scope(session, current, company_id)
-    rows = await _use_cases(session).list_vehicles(company_id)
+    scope = await get_fleet_scope(session, current, checker, company_id)
+    branch_ids = None if scope.all_branches else list(scope.branch_ids)
+    rows = await _use_cases(session).list_vehicles(company_id, branch_ids)
     return [InventoryVehicleOut.model_validate(row) for row in rows]
-
-
-@router.post(
-    "/vehicles",
-    response_model=InventoryVehicleOut,
-    status_code=201,
-    dependencies=[Depends(require_permission("inventory:read"))],
-)
-async def create_vehicle(
-    body: InventoryVehicleCreateIn,
-    request: Request,
-    session: SessionDep,
-    current: CurrentUser,
-    checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
-    audit: AuditService = Depends(get_audit_service),
-) -> InventoryVehicleOut:
-    company_id = effective_company_id(request)
-    await require_company_access(session, current, company_id)
-    branch_id = await _require_headquarters_scope(session, current, company_id)
-    await _require_dynamic_permission(checker, current, company_id, "inventory:move")
-    return await _persist_command(
-        session=session,
-        audit=audit,
-        current=current,
-        request=request,
-        company_id=company_id,
-        branch_id=branch_id,
-        action="CREATE_VEHICLE",
-        resource_type="inventory_vehicles",
-        resource_id=None,
-        operation=_use_cases(session).create_vehicle(
-            company_id=company_id,
-            code=body.code,
-            name=body.name,
-            actor_id=current.id,
-        ),
-        response_model=InventoryVehicleOut,
-    )
-
-
-@router.patch(
-    "/vehicles/{vehicle_id}",
-    response_model=InventoryVehicleOut,
-    dependencies=[Depends(require_permission("inventory:read"))],
-)
-async def set_vehicle_status(
-    vehicle_id: uuid.UUID,
-    body: InventoryVehicleStatusIn,
-    request: Request,
-    session: SessionDep,
-    current: CurrentUser,
-    checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
-    audit: AuditService = Depends(get_audit_service),
-) -> InventoryVehicleOut:
-    company_id = effective_company_id(request)
-    await require_company_access(session, current, company_id)
-    branch_id = await _require_headquarters_scope(session, current, company_id)
-    await _require_dynamic_permission(checker, current, company_id, "inventory:move")
-    return await _persist_command(
-        session=session,
-        audit=audit,
-        current=current,
-        request=request,
-        company_id=company_id,
-        branch_id=branch_id,
-        action="SET_VEHICLE_STATUS",
-        resource_type="inventory_vehicles",
-        resource_id=str(vehicle_id),
-        operation=_use_cases(session).set_vehicle_status(
-            company_id=company_id,
-            vehicle_id=vehicle_id,
-            status=body.status,
-        ),
-        response_model=InventoryVehicleOut,
-    )
 
 
 @router.get(
@@ -547,6 +492,181 @@ async def cancel_transfer(
     )
 
 
+def _issues_out(issues: list[Issue]) -> list[DispatchIssueOut]:
+    return [
+        DispatchIssueOut(
+            code=issue.code,
+            severity=issue.severity,
+            message=issue.message,
+            overridable=issue.severity == "blocking" and issue.code not in DISPATCH_HARD_BLOCKS,
+        )
+        for issue in issues
+    ]
+
+
+async def _dispatch_subject(
+    session: SessionDep,
+    company_id: uuid.UUID,
+    transfer_id: uuid.UUID,
+    inventory_vehicle_id: uuid.UUID,
+) -> FleetVehicleModel:
+    vehicle = await session.scalar(
+        select(FleetVehicleModel).where(
+            FleetVehicleModel.company_id == company_id,
+            FleetVehicleModel.inventory_vehicle_id == inventory_vehicle_id,
+        )
+    )
+    if vehicle is None:
+        raise HTTPException(
+            422,
+            detail={
+                "code": "transfer_vehicle_not_in_fleet",
+                "message": "El vehículo no está registrado en Flota.",
+            },
+        )
+    return vehicle
+
+
+async def _evaluate(
+    session: SessionDep,
+    company_id: uuid.UUID,
+    transfer_id: uuid.UUID,
+    origin_branch_id: uuid.UUID | None,
+    inventory_vehicle_id: uuid.UUID,
+    driver_id: uuid.UUID | None,
+) -> DispatchEvaluation:
+    if origin_branch_id is None:
+        raise HTTPException(409, "La bodega de origen no pertenece a una sucursal.")
+    vehicle = await _dispatch_subject(session, company_id, transfer_id, inventory_vehicle_id)
+    return await evaluate_dispatch(
+        FleetRepository(session),
+        company_id,
+        origin_branch_id=origin_branch_id,
+        vehicle=vehicle,
+        driver_id=driver_id,
+        transfer_id=transfer_id,
+        today=datetime.now(UTC).date(),
+    )
+
+
+async def _can_override(
+    checker: CheckPermissionUseCase, current: CurrentUser, company_id: uuid.UUID
+) -> bool:
+    return bool(
+        current.is_superuser
+        or (await checker.execute(current.id, company_id, DISPATCH_OVERRIDE_PERMISSION)).allowed
+    )
+
+
+@router.get(
+    "/{transfer_id}/dispatch-options",
+    response_model=DispatchOptionsOut,
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def dispatch_options(
+    transfer_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+) -> DispatchOptionsOut:
+    """Fleet vehicles and drivers of the origin branch that could take the transfer."""
+    company_id = effective_company_id(request)
+    origin_branch_id, _ = await _transfer_branch_scope(
+        session, current, company_id, transfer_id, side="origin"
+    )
+    if origin_branch_id is None:
+        raise HTTPException(409, "La bodega de origen no pertenece a una sucursal.")
+    repo = FleetRepository(session)
+    today = datetime.now(UTC).date()
+    vehicles = [
+        vehicle
+        for vehicle in await repo.all_vehicles(company_id, [origin_branch_id])
+        if vehicle.inventory_vehicle_id is not None and vehicle.status != "retired"
+    ]
+    vehicle_views = await build_vehicle_views(repo, company_id, vehicles, today=today)
+    rows, _ = await repo.list_drivers(
+        company_id, [origin_branch_id], status="active", search=None, page=1, size=10_000
+    )
+    driver_views = await build_driver_views(repo, company_id, rows, today=today)
+    branch_name = (await repo.branch_names(company_id, [origin_branch_id])).get(
+        origin_branch_id, ""
+    )
+
+    def unavailable(view: dict[str, object]) -> str | None:
+        if view["status"] != "active":
+            return "En mantenimiento" if view["status"] == "maintenance" else "Fuera de servicio"
+        if view["maintenance_in_progress"]:
+            return "En el taller"
+        trip = view["current_transfer"]
+        if isinstance(trip, dict) and trip["id"] != transfer_id:
+            return f"En ruta ({trip['code']})"
+        return None
+
+    return DispatchOptionsOut(
+        origin_branch_id=origin_branch_id,
+        origin_branch_name=branch_name,
+        vehicles=[
+            DispatchVehicleOptionOut(
+                inventory_vehicle_id=view["inventory_vehicle_id"],
+                fleet_vehicle_id=view["id"],
+                code=view["code"],
+                plate=view["plate"],
+                kind=view["kind"],
+                brand=view["brand"],
+                model=view["model"],
+                compliance_state=view["compliance"]["state"],
+                available=unavailable(view) is None,
+                unavailable_reason=unavailable(view),
+                driver_id=view["driver"]["driver_id"] if view["driver"] else None,
+                driver_name=view["driver"]["name"] if view["driver"] else None,
+            )
+            for view in vehicle_views
+        ],
+        drivers=[
+            DispatchDriverOptionOut(
+                id=view["id"],
+                name=view["employee"]["name"],
+                license_class=view["license"]["license_class"],
+                compliance_state=view["compliance"]["state"],
+                current_vehicle_code=view["vehicle"]["code"] if view["vehicle"] else None,
+            )
+            for view in driver_views
+        ],
+    )
+
+
+@router.post(
+    "/{transfer_id}/dispatch-check",
+    response_model=DispatchCheckOut,
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def dispatch_check(
+    transfer_id: uuid.UUID,
+    body: DispatchCheckIn,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
+) -> DispatchCheckOut:
+    """Preview the fitness gate the dispatch will apply to this vehicle and driver."""
+    company_id = effective_company_id(request)
+    origin_branch_id, _ = await _transfer_branch_scope(
+        session, current, company_id, transfer_id, side="origin"
+    )
+    evaluation = await _evaluate(
+        session, company_id, transfer_id, origin_branch_id, body.vehicle_id, body.driver_id
+    )
+    return DispatchCheckOut(
+        vehicle_id=body.vehicle_id,
+        driver_id=evaluation.driver_id,
+        vehicle_issues=_issues_out(evaluation.vehicle_issues),
+        driver_issues=_issues_out(evaluation.driver_issues),
+        blocked=bool(evaluation.blocking),
+        hard_blocked=evaluation.hard_blocked,
+        can_override=await _can_override(checker, current, company_id),
+    )
+
+
 @router.post(
     "/{transfer_id}/dispatch",
     response_model=InventoryTransferOut,
@@ -566,6 +686,34 @@ async def dispatch_transfer(
         session, current, company_id, transfer_id, side="origin"
     )
     await _require_dynamic_permission(checker, current, company_id, "inventory:move")
+    evaluation = await _evaluate(
+        session, company_id, transfer_id, branch_id, body.vehicle_id, body.driver_id
+    )
+    override_reason: str | None = None
+    if evaluation.blocking:
+        if evaluation.hard_blocked:
+            raise HTTPException(
+                409, detail={"code": "transfer_dispatch_blocked", "message": evaluation.summary()}
+            )
+        if not await _can_override(checker, current, company_id):
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "transfer_dispatch_blocked",
+                    "message": evaluation.summary()
+                    + " Solo un usuario autorizado para excepciones puede despacharlo.",
+                },
+            )
+        if not body.override_reason or not body.override_reason.strip():
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "transfer_override_reason_required",
+                    "message": evaluation.summary()
+                    + " Indique el motivo de la excepción para despachar.",
+                },
+            )
+        override_reason = body.override_reason.strip()
     return await _persist_command(
         session=session,
         audit=audit,
@@ -573,13 +721,15 @@ async def dispatch_transfer(
         request=request,
         company_id=company_id,
         branch_id=branch_id,
-        action="DISPATCH_TRANSFER",
+        action="DISPATCH_TRANSFER_OVERRIDE" if override_reason else "DISPATCH_TRANSFER",
         resource_type="inventory_transfers",
         resource_id=str(transfer_id),
         operation=_use_cases(session).dispatch_transfer(
             company_id=company_id,
             transfer_id=transfer_id,
             vehicle_id=body.vehicle_id,
+            driver_id=evaluation.driver_id,
+            compliance_override_reason=override_reason,
             idempotency_key=body.idempotency_key,
             actor_id=current.id,
         ),

@@ -10,6 +10,11 @@ from types import SimpleNamespace
 import pytest
 from app.infrastructure.db.session import async_session_factory
 from app.infrastructure.models.employee import Employee
+from app.infrastructure.models.fleet import (
+    DriverModel,
+    FleetVehicleModel,
+    VehicleDriverAssignmentModel,
+)
 from app.infrastructure.models.inventory import InventoryBalanceModel, InventoryMovementModel
 from app.infrastructure.models.organization import Company, UserCompany
 from app.infrastructure.models.user import User
@@ -21,21 +26,54 @@ from tests.integration.test_inventory_transfer_repository import _create_context
 
 pytestmark = pytest.mark.e2e
 
+#: The fixture vehicle has no circulation card, insurance or inspection on file.
+DISPATCH_OVERRIDE = "Documentación en trámite, autorizado por gerencia."
 
-async def _committed_transfer_context(client, suffix: str) -> tuple[SimpleNamespace, dict[str, str]]:
+
+async def _committed_transfer_context(
+    client, suffix: str
+) -> tuple[SimpleNamespace, dict[str, str]]:
     async with async_session_factory() as session:
         context = await _create_context(session, suffix)
         actor_username = f"transfer-{suffix[:16]}"
         actor = await session.scalar(select(User).where(User.id == context.actor_id))
         assert actor is not None
+        employee = Employee(
+            company_id=context.company_id,
+            employee_code=f"TR-{suffix[:12].upper()}",
+            first_name=actor_username,
+            last_name="Prueba",
+            user_id=context.actor_id,
+            status="activo",
+        )
+        session.add(employee)
+        await session.flush()
+        # Flota es la fuente: el vehículo de tránsito tiene su ficha y un conductor asignado.
+        fleet_vehicle = FleetVehicleModel(
+            company_id=context.company_id,
+            branch_id=context.origin.branch_id,
+            code=f"FT-{suffix[:8].upper()}",
+            plate=f"T{suffix[:7].upper()}",
+            kind="cargo_van",
+            brand="Toyota",
+            model="Hiace",
+            year=2024,
+            capacity_kg=Decimal("1500"),
+            fuel_type="diesel",
+            odometer_km=Decimal("1000"),
+            inventory_vehicle_id=context.vehicle_id,
+        )
+        driver = DriverModel(
+            company_id=context.company_id,
+            employee_id=employee.id,
+            branch_id=context.origin.branch_id,
+            license_class="liviana",
+        )
+        session.add_all([fleet_vehicle, driver])
+        await session.flush()
         session.add(
-            Employee(
-                company_id=context.company_id,
-                employee_code=f"TR-{suffix[:12].upper()}",
-                first_name=actor_username,
-                last_name="Prueba",
-                user_id=context.actor_id,
-                status="activo",
+            VehicleDriverAssignmentModel(
+                company_id=context.company_id, vehicle_id=fleet_vehicle.id, driver_id=driver.id
             )
         )
         values = SimpleNamespace(
@@ -48,6 +86,7 @@ async def _committed_transfer_context(client, suffix: str) -> tuple[SimpleNamesp
             handling_unit_id=context.handling_unit_id,
             item_id=context.item.id,
             vehicle_id=context.vehicle_id,
+            driver_id=driver.id,
         )
         await session.commit()
     headers = await _headers(
@@ -59,7 +98,9 @@ async def _committed_transfer_context(client, suffix: str) -> tuple[SimpleNamesp
     return values, headers
 
 
-async def _create_preparation(client, values: SimpleNamespace, headers: dict[str, str], suffix: str):
+async def _create_preparation(
+    client, values: SimpleNamespace, headers: dict[str, str], suffix: str
+):
     response = await client.post(
         "/api/v1/inventory/transfers",
         headers=headers,
@@ -92,6 +133,7 @@ async def _dispatch(
         json={
             "vehicle_id": str(vehicle_id),
             "idempotency_key": f"transfer-dispatch-{suffix}",
+            "override_reason": DISPATCH_OVERRIDE,
         },
     )
 
@@ -106,7 +148,11 @@ async def test_concurrent_dispatches_cannot_consume_the_same_handling_unit(e2e_c
         response = await e2e_client.post(
             f"/api/v1/inventory/transfers/{transfer['id']}/dispatch",
             headers=headers,
-            json={"vehicle_id": str(values.vehicle_id), "idempotency_key": key},
+            json={
+                "vehicle_id": str(values.vehicle_id),
+                "idempotency_key": key,
+                "override_reason": DISPATCH_OVERRIDE,
+            },
         )
         return transfer, response
 
@@ -114,8 +160,12 @@ async def test_concurrent_dispatches_cannot_consume_the_same_handling_unit(e2e_c
         dispatch(first, f"dispatch-first-{suffix}"),
         dispatch(second, f"dispatch-second-{suffix}"),
     )
-    successes = [(transfer, response) for transfer, response in results if response.status_code == 200]
-    conflicts = [(transfer, response) for transfer, response in results if response.status_code == 409]
+    successes = [
+        (transfer, response) for transfer, response in results if response.status_code == 200
+    ]
+    conflicts = [
+        (transfer, response) for transfer, response in results if response.status_code == 409
+    ]
     assert len(successes) == 1, [(response.status_code, response.text) for _, response in results]
     assert len(conflicts) == 1, [(response.status_code, response.text) for _, response in results]
 
@@ -177,9 +227,8 @@ async def test_destination_branch_receiver_can_receive_without_global_access(e2e
         receiver = await session.scalar(
             select(UserCompany).where(
                 UserCompany.company_id == values.company_id,
-                UserCompany.user_id == select(User.id)
-                .where(User.username == receiver_username)
-                .scalar_subquery(),
+                UserCompany.user_id
+                == select(User.id).where(User.username == receiver_username).scalar_subquery(),
             )
         )
         assert receiver is not None
@@ -262,3 +311,51 @@ async def test_transfer_from_another_company_is_not_visible(e2e_client) -> None:
         f"/api/v1/inventory/transfers/{transfer['id']}", headers=foreign_company_headers
     )
     assert response.status_code == 404, response.text
+
+
+async def test_dispatch_requires_fit_vehicle_and_driver(e2e_client) -> None:
+    suffix = uuid.uuid4().hex
+    values, headers = await _committed_transfer_context(e2e_client, suffix)
+    transfer = await _create_preparation(e2e_client, values, headers, f"gate-{suffix[:12]}")
+    second = await _create_preparation(e2e_client, values, headers, f"gate-c-{suffix[:12]}")
+    base = f"/api/v1/inventory/transfers/{transfer['id']}"
+
+    options = await e2e_client.get(f"{base}/dispatch-options", headers=headers)
+    assert options.status_code == 200, options.text
+    option = next(
+        item
+        for item in options.json()["vehicles"]
+        if item["inventory_vehicle_id"] == str(values.vehicle_id)
+    )
+    assert option["driver_id"] == str(values.driver_id)
+    assert option["compliance_state"] == "blocked"
+
+    check = await e2e_client.post(
+        f"{base}/dispatch-check", headers=headers, json={"vehicle_id": str(values.vehicle_id)}
+    )
+    assert check.status_code == 200, check.text
+    preview = check.json()
+    assert preview["driver_id"] == str(values.driver_id)
+    assert preview["blocked"] is True
+    assert preview["hard_blocked"] is False
+    assert {issue["code"] for issue in preview["vehicle_issues"]} >= {"document_missing"}
+
+    without_reason = await e2e_client.post(
+        f"{base}/dispatch",
+        headers=headers,
+        json={"vehicle_id": str(values.vehicle_id), "idempotency_key": f"gate-a-{suffix}"},
+    )
+    assert without_reason.status_code == 409
+    assert without_reason.json()["detail"]["code"] == "transfer_override_reason_required"
+
+    dispatched = await _dispatch(
+        e2e_client, transfer, headers, f"gate-b-{suffix}", values.vehicle_id
+    )
+    assert dispatched.status_code == 200, dispatched.text
+    body = dispatched.json()
+    assert body["driver"]["id"] == str(values.driver_id)
+    assert body["compliance_override_reason"] == DISPATCH_OVERRIDE
+
+    # El vehículo ya está en ruta: ninguna excepción permite despacharlo otra vez.
+    busy = await _dispatch(e2e_client, second, headers, f"gate-d-{suffix}", values.vehicle_id)
+    assert busy.status_code == 409

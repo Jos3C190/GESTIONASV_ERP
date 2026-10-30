@@ -51,6 +51,62 @@ class TransferCommandIn(StrictModel):
 
 class TransferDispatchIn(TransferCommandIn):
     vehicle_id: uuid.UUID
+    #: Defaults to the driver assigned to the vehicle in Fleet.
+    driver_id: uuid.UUID | None = None
+    #: Required to dispatch despite expired documents or license class (audited).
+    override_reason: str | None = Field(None, min_length=5, max_length=500)
+
+
+class DispatchCheckIn(StrictModel):
+    vehicle_id: uuid.UUID
+    driver_id: uuid.UUID | None = None
+
+
+class DispatchIssueOut(StrictModel):
+    code: str
+    severity: Literal["blocking", "warning"]
+    message: str
+    overridable: bool
+
+
+class DispatchCheckOut(StrictModel):
+    vehicle_id: uuid.UUID
+    driver_id: uuid.UUID | None
+    vehicle_issues: list[DispatchIssueOut]
+    driver_issues: list[DispatchIssueOut]
+    blocked: bool
+    hard_blocked: bool
+    can_override: bool
+
+
+class DispatchVehicleOptionOut(StrictModel):
+    inventory_vehicle_id: uuid.UUID
+    fleet_vehicle_id: uuid.UUID
+    code: str
+    plate: str
+    kind: str
+    brand: str
+    model: str
+    compliance_state: Literal["ok", "warning", "blocked"]
+    available: bool
+    unavailable_reason: str | None
+    driver_id: uuid.UUID | None
+    driver_name: str | None
+
+
+class DispatchDriverOptionOut(StrictModel):
+    id: uuid.UUID
+    name: str
+    license_class: str
+    compliance_state: Literal["ok", "warning", "blocked"]
+    current_vehicle_code: str | None
+
+
+class DispatchOptionsOut(StrictModel):
+    origin_branch_id: uuid.UUID
+    origin_branch_name: str
+    vehicles: list[DispatchVehicleOptionOut]
+    drivers: list[DispatchDriverOptionOut]
 
 
 class TransferReceiptLineIn(StrictModel):
@@ -73,15 +129,6 @@ class TransferIncidentResolveIn(TransferCommandIn):
     resolution_notes: str = Field(min_length=5, max_length=4000)
 
 
-class InventoryVehicleCreateIn(StrictModel):
-    code: str = Field(min_length=1, max_length=32)
-    name: str = Field(min_length=2, max_length=120)
-
-
-class InventoryVehicleStatusIn(StrictModel):
-    status: Literal["active", "inactive"]
-
-
 class InventoryVehicleOut(ORMOut):
     id: uuid.UUID
     company_id: uuid.UUID
@@ -92,6 +139,11 @@ class InventoryVehicleOut(ORMOut):
     transit_warehouse_name: str
     transit_location_id: uuid.UUID
     created_at: datetime
+    fleet_vehicle_id: uuid.UUID | None = None
+    plate: str | None = None
+    kind: str | None = None
+    branch_id: uuid.UUID | None = None
+    branch_name: str | None = None
 
 
 class TransferVehicleReferenceOut(StrictModel):
@@ -99,6 +151,15 @@ class TransferVehicleReferenceOut(StrictModel):
     code: str
     name: str
     status: str
+    transit_warehouse_id: uuid.UUID | None = None
+    fleet_vehicle_id: uuid.UUID | None = None
+    plate: str | None = None
+
+
+class TransferDriverReferenceOut(StrictModel):
+    id: uuid.UUID
+    name: str
+    employee_code: str
 
 
 class TransferDemandAllocationOut(StrictModel):
@@ -178,6 +239,8 @@ class InventoryTransferOut(ORMOut):
     destination_warehouse_name: str
     destination_branch_id: uuid.UUID | None
     vehicle: TransferVehicleReferenceOut | None
+    driver: TransferDriverReferenceOut | None = None
+    compliance_override_reason: str | None = None
     status: Literal["preparation", "in_transit", "received", "closed_with_adjustment", "incident", "cancelled"]
     notes: str | None
     created_by_id: uuid.UUID

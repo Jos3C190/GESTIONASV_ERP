@@ -15,9 +15,11 @@
   import TransferPreparationDialog from './TransferPreparationDialog.svelte';
   import TransferDocumentList from './TransferDocumentList.svelte';
   import TransferLifecycleProgress from './TransferLifecycleProgress.svelte';
+  import TransferDispatchPanel from './TransferDispatchPanel.svelte';
   import TransferVehicleCatalog from './TransferVehicleCatalog.svelte';
   import {
     inventoryTransfersApi,
+    type DispatchSelection,
     type InventoryTransfer,
     type TransferCreateInput,
     type TransferDemandRecord,
@@ -86,9 +88,6 @@
   let vehicles = $state<TransferVehicle[]>([]);
   let vehicleState = $state<CollectionState>('loading');
   let vehicleError = $state<string | null>(null);
-  let vehicleCode = $state('');
-  let vehicleName = $state('');
-  let vehicleSaving = $state(false);
   let destinations = $state<Warehouse[]>([]);
   let demandBranchErrors = $state<string[]>([]);
 
@@ -109,7 +108,13 @@
   let selectedTransfer = $state<InventoryTransfer | null>(null);
   let detailLoading = $state(false);
   let detailError = $state<string | null>(null);
-  let selectedVehicleId = $state('');
+  let dispatchSelection = $state<DispatchSelection>({
+    vehicleId: '',
+    driverId: '',
+    overrideReason: '',
+    ready: false,
+    label: ''
+  });
   let actionError = $state<string | null>(null);
   let actionNotice = $state<string | null>(null);
   let actionSaving = $state(false);
@@ -316,9 +321,6 @@
     vehicles = [];
     vehicleState = 'loading';
     vehicleError = null;
-    selectedVehicleId = '';
-    vehicleCode = '';
-    vehicleName = '';
     draftSaving = false;
     activeTab = 'supply';
     clearDraft();
@@ -518,8 +520,6 @@
       if (!isCurrent(key, version)) return;
       vehicles = result;
       vehicleState = result.length ? 'loaded' : 'empty';
-      if (!selectedVehicleId)
-        selectedVehicleId = result.find((item) => item.status === 'active')?.id ?? '';
     } catch (cause) {
       if (!isCurrent(key, version)) return;
       vehicles = [];
@@ -1043,17 +1043,24 @@
     if (
       !transfer ||
       transfer.status !== 'preparation' ||
-      !selectedVehicleId ||
+      !dispatchSelection.ready ||
       actionSaving ||
       !canMoveInventory
     )
       return;
+    const selection = { ...dispatchSelection };
     await runTransferCommand(
       'dispatch',
       transfer,
-      (key) => inventoryTransfersApi.dispatch(transfer.id, selectedVehicleId, key),
+      (key) =>
+        inventoryTransfersApi.dispatch(transfer.id, selection.vehicleId, key, {
+          driverId: selection.driverId,
+          overrideReason: selection.overrideReason
+        }),
       {
-        vehicle_id: selectedVehicleId
+        vehicle_id: selection.vehicleId,
+        driver_id: selection.driverId,
+        override_reason: selection.overrideReason
       }
     );
   }
@@ -1119,9 +1126,9 @@
 
   function requestDispatch() {
     if (!selectedTransfer) return;
-    const vehicle = vehicles.find((item) => item.id === selectedVehicleId);
-    if (!vehicle || vehicle.status !== 'active') {
-      actionError = 'Seleccione un vehículo activo antes de despachar.';
+    if (!dispatchSelection.ready) {
+      actionError =
+        'Seleccione un vehículo y un conductor aptos (o registre la excepción) antes de despachar.';
       return;
     }
     const summary = selectedTransfer.lines
@@ -1132,7 +1139,7 @@
       .join('; ');
     confirmAction(
       'Confirmar despacho',
-      `${selectedTransfer.origin_warehouse_name} → ${selectedTransfer.destination_warehouse_name} · ${vehicle.code} · ${summary}`,
+      `${selectedTransfer.origin_warehouse_name} → ${selectedTransfer.destination_warehouse_name} · ${dispatchSelection.label} · ${summary}`,
       dispatchPreparation
     );
   }
@@ -1322,46 +1329,6 @@
 
   function branchWarehouseName(warehouse: Warehouse): string {
     return [warehouse.branchName, warehouse.name].filter(Boolean).join(' · ');
-  }
-
-  async function saveVehicle(event: SubmitEvent) {
-    event.preventDefault();
-    if (vehicleSaving || !canMoveInventory) return;
-    const code = vehicleCode.trim();
-    const name = vehicleName.trim();
-    if (!code || name.length < 2) {
-      vehicleError = 'Indique el código y un nombre de al menos dos caracteres.';
-      return;
-    }
-    vehicleSaving = true;
-    vehicleError = null;
-    try {
-      await inventoryTransfersApi.createVehicle({ code, name });
-      vehicleCode = '';
-      vehicleName = '';
-      await loadVehicles();
-    } catch (cause) {
-      vehicleError = message(cause, 'No se pudo registrar el vehículo.');
-    } finally {
-      vehicleSaving = false;
-    }
-  }
-
-  async function changeVehicleStatus(vehicle: TransferVehicle) {
-    if (!canMoveInventory || vehicleSaving) return;
-    vehicleSaving = true;
-    vehicleError = null;
-    try {
-      await inventoryTransfersApi.setVehicleStatus(
-        vehicle.id,
-        vehicle.status === 'active' ? 'inactive' : 'active'
-      );
-      await loadVehicles();
-    } catch (cause) {
-      vehicleError = message(cause, 'No se pudo cambiar el estado del vehículo.');
-    } finally {
-      vehicleSaving = false;
-    }
   }
 
   function chooseDocumentFilter(value: string) {
@@ -1983,18 +1950,11 @@
               <div
                 class="grid gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4 lg:grid-cols-[1fr_auto] lg:items-end"
               >
-                <label class="space-y-1 text-sm font-medium text-foreground"
-                  >Vehículo activo para el despacho
-                  <select
-                    class="field-control"
-                    bind:value={selectedVehicleId}
-                    disabled={!canMoveInventory || vehicleState === 'error'}
-                    ><option value="">Seleccione vehículo</option
-                    >{#each vehicles.filter((item) => item.status === 'active') as vehicle (vehicle.id)}<option
-                        value={vehicle.id}>{vehicle.code} · {vehicle.name}</option
-                      >{/each}</select
-                  >
-                </label>
+                <TransferDispatchPanel
+                  transfer={selectedTransfer}
+                  disabled={!canMoveInventory || actionSaving}
+                  bind:selection={dispatchSelection}
+                />
                 <div class="flex flex-wrap gap-2">
                   <Button
                     variant="secondary"
@@ -2005,7 +1965,7 @@
                     disabled={!canMoveInventory || actionSaving}
                     onclick={requestCancel}>Cancelar preparación</Button
                   ><Button
-                    disabled={!canMoveInventory || actionSaving || !selectedVehicleId}
+                    disabled={!canMoveInventory || actionSaving || !dispatchSelection.ready}
                     onclick={requestDispatch}>Confirmar despacho</Button
                   >
                 </div>
@@ -2318,14 +2278,7 @@
       {vehicles}
       state={vehicleState}
       error={vehicleError}
-      canManage={canMoveInventory}
-      saving={vehicleSaving}
-      code={vehicleCode}
-      name={vehicleName}
-      onCodeChange={(value) => (vehicleCode = value)}
-      onNameChange={(value) => (vehicleName = value)}
-      onSave={(event) => void saveVehicle(event)}
-      onToggleStatus={(vehicle) => void changeVehicleStatus(vehicle)}
+      canManageFleet={permissions.hasPermission('fleet:read')}
     />
   {/if}
 </main>

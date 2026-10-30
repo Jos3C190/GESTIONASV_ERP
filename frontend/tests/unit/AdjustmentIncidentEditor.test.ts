@@ -11,10 +11,10 @@ vi.mock('$lib/services/warehouses', () => ({ getWarehouses: vi.fn().mockResolved
 vi.mock('$lib/features/inventory/services', () => ({ inventoryApi: { listHandlingUnits: vi.fn().mockResolvedValue([{ id: 'hu-1', code: 'HU-DEMO', location_id: 'vehicle-location', stock_status: 'in_transit', quantity_base: '2' }]) } }));
 vi.mock('$lib/features/inventory/adjustments', () => ({ inventoryAdjustmentsApi: { create: mocks.create } }));
 vi.mock('$lib/features/inventory/transfer-documents', () => ({ inventoryTransfersApi: {
-  get: vi.fn().mockResolvedValue({ id: 'transfer-1', code: 'TR-DEMO', status: 'incident', origin_warehouse_id: 'origin', vehicle: { id: 'vehicle-1' },
+  get: vi.fn().mockResolvedValue({ id: 'transfer-1', code: 'TR-DEMO', status: 'incident', origin_warehouse_id: 'origin', vehicle: { id: 'vehicle-1', transit_warehouse_id: 'transit' },
     incidents: [{ id: 'incident-1', status: 'open', reason: 'Faltante documentado' }],
     lines: [{ id: 'detail-1', inventory_item_id: 'item-1', product_name: 'Producto de prueba', quantity_in_transit: '2', transit_handling_unit_id: 'hu-1' }] }),
-  listVehicles: vi.fn().mockResolvedValue([{ id: 'vehicle-1', transit_warehouse_id: 'transit' }])
+  listVehicles: vi.fn()
 } }));
 
 it('permite justificar el faltante conservando el origen de traslado y la unidad en tránsito', async () => {

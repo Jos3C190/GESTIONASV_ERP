@@ -24,6 +24,8 @@ from app.domain.entities.inventory_transfer import (
     validate_receipt_quantity,
 )
 from app.infrastructure.models.catalog import CompanyUnitModel, ProductModel, UnitModel
+from app.infrastructure.models.employee import Employee
+from app.infrastructure.models.fleet import DriverModel, FleetVehicleModel
 from app.infrastructure.models.inventory import (
     InventoryBalanceModel,
     InventoryHandlingUnitModel,
@@ -688,8 +690,12 @@ class SqlAlchemyInventoryTransferRepository:
         vehicle_id: uuid.UUID,
         idempotency_key: str,
         actor_id: uuid.UUID,
+        driver_id: uuid.UUID | None = None,
+        compliance_override_reason: str | None = None,
     ) -> dict[str, Any]:
-        fingerprint = self._fingerprint("dispatch", {"transfer_id": transfer_id, "vehicle_id": vehicle_id})
+        fingerprint = self._fingerprint(
+            "dispatch", {"transfer_id": transfer_id, "vehicle_id": vehicle_id, "driver_id": driver_id}
+        )
         replay = await self._replay_command(
             company_id=company_id, action="dispatch", key=idempotency_key, fingerprint=fingerprint
         )
@@ -786,6 +792,9 @@ class SqlAlchemyInventoryTransferRepository:
             for allocation in allocations:
                 allocation.quantity_dispatched = allocation.allocated_quantity
         transfer.vehicle_id = vehicle.id
+        transfer.driver_id = driver_id
+        transfer.compliance_override_by = actor_id if compliance_override_reason else None
+        transfer.compliance_override_reason = compliance_override_reason
         transfer.status = "in_transit"
         transfer.dispatched_by_id = actor_id
         transfer.dispatched_at = now
@@ -1182,7 +1191,39 @@ class SqlAlchemyInventoryTransferRepository:
                 )
             )
             if record is not None:
-                vehicle = {"id": record.id, "code": record.code, "name": record.name, "status": record.status}
+                fleet = (
+                    await self._session.execute(
+                        select(FleetVehicleModel.id, FleetVehicleModel.plate).where(
+                            FleetVehicleModel.company_id == transfer.company_id,
+                            FleetVehicleModel.inventory_vehicle_id == record.id,
+                        )
+                    )
+                ).first()
+                vehicle = {
+                    "id": record.id,
+                    "code": record.code,
+                    "name": record.name,
+                    "status": record.status,
+                    "transit_warehouse_id": record.transit_warehouse_id,
+                    "fleet_vehicle_id": fleet[0] if fleet else None,
+                    "plate": fleet[1] if fleet else None,
+                }
+        driver = None
+        if transfer.driver_id is not None:
+            driver_row = (
+                await self._session.execute(
+                    select(DriverModel.id, Employee.first_name, Employee.last_name, Employee.employee_code)
+                    .join(Employee, Employee.id == DriverModel.employee_id)
+                    .where(DriverModel.company_id == transfer.company_id, DriverModel.id == transfer.driver_id)
+                    .execution_options(include_deleted=True)
+                )
+            ).first()
+            if driver_row is not None:
+                driver = {
+                    "id": driver_row[0],
+                    "name": f"{driver_row[1]} {driver_row[2]}".strip(),
+                    "employee_code": driver_row[3],
+                }
         details = list(
             (
                 await self._session.scalars(
@@ -1412,6 +1453,8 @@ class SqlAlchemyInventoryTransferRepository:
             "destination_warehouse_name": destination.name,
             "destination_branch_id": destination.branch_id,
             "vehicle": vehicle,
+            "driver": driver,
+            "compliance_override_reason": transfer.compliance_override_reason,
             "status": transfer.status,
             "notes": transfer.notes,
             "created_by_id": transfer.created_by_id,
@@ -1829,20 +1872,42 @@ class SqlAlchemyInventoryTransferRepository:
             "created_at": vehicle.created_at,
         }
 
-    async def list_vehicles(self, company_id: uuid.UUID) -> list[dict[str, Any]]:
-        rows = (
-            await self._session.execute(
-                select(InventoryVehicleModel, Warehouse.name)
-                .join(
-                    Warehouse,
-                    (Warehouse.company_id == InventoryVehicleModel.company_id)
-                    & (Warehouse.id == InventoryVehicleModel.transit_warehouse_id),
-                )
-                .where(InventoryVehicleModel.company_id == company_id)
-                .order_by(InventoryVehicleModel.code)
+    async def list_vehicles(
+        self, company_id: uuid.UUID, branch_ids: list[uuid.UUID] | None = None
+    ) -> list[dict[str, Any]]:
+        """Transit vehicles with their Fleet record; ``branch_ids`` limits to those branches."""
+        statement = (
+            select(InventoryVehicleModel, Warehouse.name, FleetVehicleModel, Branch.name)
+            .join(
+                Warehouse,
+                (Warehouse.company_id == InventoryVehicleModel.company_id)
+                & (Warehouse.id == InventoryVehicleModel.transit_warehouse_id),
             )
-        ).all()
-        return [self._vehicle_payload(vehicle, warehouse_name) for vehicle, warehouse_name in rows]
+            .outerjoin(
+                FleetVehicleModel,
+                (FleetVehicleModel.company_id == InventoryVehicleModel.company_id)
+                & (FleetVehicleModel.inventory_vehicle_id == InventoryVehicleModel.id),
+            )
+            .outerjoin(Branch, Branch.id == FleetVehicleModel.branch_id)
+            .where(InventoryVehicleModel.company_id == company_id)
+            .order_by(InventoryVehicleModel.code)
+        )
+        if branch_ids is not None:
+            statement = statement.where(FleetVehicleModel.branch_id.in_(branch_ids))
+        rows = (await self._session.execute(statement)).all()
+        payloads = []
+        for vehicle, warehouse_name, fleet, branch_name in rows:
+            payload = self._vehicle_payload(vehicle, warehouse_name)
+            if fleet is not None:
+                payload.update(
+                    fleet_vehicle_id=fleet.id,
+                    plate=fleet.plate,
+                    kind=fleet.kind,
+                    branch_id=fleet.branch_id,
+                    branch_name=branch_name,
+                )
+            payloads.append(payload)
+        return payloads
 
     async def set_vehicle_status(
         self,
