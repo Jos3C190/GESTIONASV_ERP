@@ -497,6 +497,24 @@
     }
   }
 
+  /** La tarjeta de detalle se puede contraer para despejar el mapa; se recuerda la preferencia. */
+  const CARD_KEY = 'tracking.card.collapsed';
+  let cardCollapsed = $state(false);
+  try {
+    cardCollapsed = localStorage.getItem(CARD_KEY) === '1';
+  } catch {
+    // Sin almacenamiento (modo privado) la tarjeta empieza abierta.
+  }
+
+  function toggleCard() {
+    cardCollapsed = !cardCollapsed;
+    try {
+      localStorage.setItem(CARD_KEY, cardCollapsed ? '1' : '0');
+    } catch {
+      // La preferencia solo dura esta visita.
+    }
+  }
+
   function select(key: string | null) {
     selectedKey = key;
     if (!key) follow = false;
@@ -910,9 +928,13 @@
         {/if}
       </section>
     {:else if selected}
-      <section class="vehicle-card" aria-label={`Detalle de ${selected.name}`}>
+      <section
+        class="vehicle-card"
+        class:collapsed={cardCollapsed}
+        aria-label={`Detalle de ${selected.name}`}
+      >
         <header>
-          <div>
+          <div class="card-title">
             <h2>
               {selected.name}{#if selected.simulated}<span
                   class="sim-tag"
@@ -920,89 +942,123 @@
                   >SIM</span
                 >{/if}
             </h2>
-            <p>
-              {selected.vehicle
-                ? `${selected.vehicle.brand} ${selected.vehicle.model} · ${selected.vehicle.plate}`
-                : 'Dispositivo sin vehículo asociado'}
-            </p>
+            {#if cardCollapsed}
+              <p class="card-summary">
+                <span class="status-pill {selected.status}"
+                  ><span></span>{STATUS_LABELS[selected.status]}</span
+                >
+                <span>{Math.round(selected.speedKmh)} km/h</span>
+                <span>{timeAgo(selected.fixTime, now)}</span>
+              </p>
+            {:else}
+              <p>
+                {selected.vehicle
+                  ? `${selected.vehicle.brand} ${selected.vehicle.model} · ${selected.vehicle.plate}`
+                  : 'Dispositivo sin vehículo asociado'}
+              </p>
+            {/if}
           </div>
-          <button
-            type="button"
-            class="icon-button"
-            aria-label="Cerrar detalle"
-            onclick={() => select(null)}><FleetIcon name="close" size={16} /></button
-          >
+          <div class="card-tools">
+            {#if cardCollapsed}
+              <button
+                type="button"
+                class="icon-button"
+                class:active={follow}
+                aria-pressed={follow}
+                aria-label={follow ? 'Dejar de seguir la unidad' : 'Seguir unidad'}
+                title={follow ? 'Siguiendo' : 'Seguir unidad'}
+                onclick={() => (follow = !follow)}><FleetIcon name="crosshair" size={15} /></button
+              >
+            {/if}
+            <button
+              type="button"
+              class="icon-button collapse"
+              class:flipped={cardCollapsed}
+              aria-expanded={!cardCollapsed}
+              aria-label={cardCollapsed ? 'Mostrar el detalle' : 'Contraer el detalle'}
+              title={cardCollapsed ? 'Mostrar el detalle' : 'Contraer el detalle'}
+              onclick={toggleCard}><FleetIcon name="chevron" size={15} /></button
+            >
+            <button
+              type="button"
+              class="icon-button"
+              aria-label="Cerrar detalle"
+              onclick={() => select(null)}><FleetIcon name="close" size={16} /></button
+            >
+          </div>
         </header>
-        <div class="card-status">
-          <span class="status-pill {selected.status}"
-            ><span></span>{STATUS_LABELS[selected.status]}</span
-          >
-          {#if selected.vehicle?.transfer_code}
-            <span class="route-to"
-              ><FleetIcon name="route" size={14} />{selected.vehicle.transfer_code} → {selected
-                .vehicle.transfer_destination}</span
+        {#if !cardCollapsed}
+          <div class="card-status">
+            <span class="status-pill {selected.status}"
+              ><span></span>{STATUS_LABELS[selected.status]}</span
             >
-          {/if}
-        </div>
-        <dl class="stats">
-          <div>
-            <dt>Velocidad</dt>
-            <dd>{Math.round(selected.speedKmh)} km/h</dd>
+            {#if selected.vehicle?.transfer_code}
+              <span class="route-to"
+                ><FleetIcon name="route" size={14} />{selected.vehicle.transfer_code} → {selected
+                  .vehicle.transfer_destination}</span
+              >
+            {/if}
           </div>
-          <div>
-            <dt>Rumbo</dt>
-            <dd>
-              <FleetIcon name="navigation" size={13} class="course-icon" />
-              {selected.status === 'moving' ? compassPoint(selected.course) : '—'}
-            </dd>
-          </div>
-          <div>
-            <dt>Última señal</dt>
-            <dd>{timeAgo(selected.fixTime, now)}</dd>
-          </div>
-          <div>
-            <dt>Motor</dt>
-            <dd>
-              {selected.ignition === null ? '—' : selected.ignition ? 'Encendido' : 'Apagado'}
-            </dd>
-          </div>
-          {#if selected.vehicle}
+          <dl class="stats">
             <div>
-              <dt>Conductor</dt>
-              <dd>{selected.vehicle.driver_name ?? 'Sin asignar'}</dd>
+              <dt>Velocidad</dt>
+              <dd>{Math.round(selected.speedKmh)} km/h</dd>
             </div>
             <div>
-              <dt>Sucursal</dt>
-              <dd>{selected.vehicle.branch_name}</dd>
+              <dt>Rumbo</dt>
+              <dd>
+                <FleetIcon name="navigation" size={13} class="course-icon" />
+                {selected.status === 'moving' ? compassPoint(selected.course) : '—'}
+              </dd>
             </div>
-          {/if}
-          {#if selected.battery !== null}
             <div>
-              <dt>Batería GPS</dt>
-              <dd>{Math.round(selected.battery)}%</dd>
+              <dt>Última señal</dt>
+              <dd>{timeAgo(selected.fixTime, now)}</dd>
             </div>
-          {/if}
-        </dl>
-        <p class="coords">
-          <FleetIcon name="pin" size={13} />{selected.address ??
-            `${selected.latitude.toFixed(5)}, ${selected.longitude.toFixed(5)}`}
-        </p>
-        <div class="card-actions">
-          <button
-            type="button"
-            class:active={follow}
-            aria-pressed={follow}
-            onclick={() => (follow = !follow)}
-            ><FleetIcon name="crosshair" size={15} />{follow
-              ? 'Siguiendo'
-              : 'Seguir unidad'}</button
-          >
-          {#if selected.vehicle}
-            <a href={`/fleet/${selected.vehicle.id}`}
-              ><FleetIcon name="truck" size={15} />Ver en Flota</a
+            <div>
+              <dt>Motor</dt>
+              <dd>
+                {selected.ignition === null ? '—' : selected.ignition ? 'Encendido' : 'Apagado'}
+              </dd>
+            </div>
+            {#if selected.vehicle}
+              <div>
+                <dt>Conductor</dt>
+                <dd>{selected.vehicle.driver_name ?? 'Sin asignar'}</dd>
+              </div>
+              <div>
+                <dt>Sucursal</dt>
+                <dd>{selected.vehicle.branch_name}</dd>
+              </div>
+            {/if}
+            {#if selected.battery !== null}
+              <div>
+                <dt>Batería GPS</dt>
+                <dd>{Math.round(selected.battery)}%</dd>
+              </div>
+            {/if}
+          </dl>
+          <p class="coords">
+            <FleetIcon name="pin" size={13} />{selected.address ??
+              `${selected.latitude.toFixed(5)}, ${selected.longitude.toFixed(5)}`}
+          </p>
+          <div class="card-actions">
+            <button
+              type="button"
+              class:active={follow}
+              aria-pressed={follow}
+              onclick={() => (follow = !follow)}
+              ><FleetIcon name="crosshair" size={15} />{follow
+                ? 'Siguiendo'
+                : 'Seguir unidad'}</button
             >
-          {/if}
-        </div>
+            {#if selected.vehicle}
+              <a href={`/fleet/${selected.vehicle.id}`}
+                ><FleetIcon name="truck" size={15} />Ver en Flota</a
+              >
+            {/if}
+          </div>
+        {/if}
       </section>
     {/if}
   </div>
@@ -1410,6 +1466,45 @@
     display: flex;
     justify-content: space-between;
     gap: 12px;
+  }
+  .card-title {
+    min-width: 0;
+  }
+  .card-tools {
+    display: flex;
+    flex-shrink: 0;
+    gap: 6px;
+  }
+  .icon-button.collapse :global(svg) {
+    /* Abierta: la flecha apunta hacia abajo (contraer); contraída, hacia arriba. */
+    transform: rotate(90deg);
+    transition: transform 160ms ease;
+  }
+  .icon-button.collapse.flipped :global(svg) {
+    transform: rotate(-90deg);
+  }
+  .icon-button.active {
+    border-color: rgb(var(--primary) / 0.5);
+    background: rgb(var(--primary) / 0.12);
+    color: rgb(var(--primary));
+  }
+  .vehicle-card.collapsed {
+    width: auto;
+    min-width: 280px;
+    max-width: 380px;
+    padding: 10px 12px;
+  }
+  .vehicle-card.collapsed h2 {
+    font-size: 15px;
+  }
+  .card-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    margin-top: 5px;
+    font-size: 12px;
+    color: rgb(var(--foreground-muted));
   }
   .vehicle-card h2 {
     font-size: 18px;
