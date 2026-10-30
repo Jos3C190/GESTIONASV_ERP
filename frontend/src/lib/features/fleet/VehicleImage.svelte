@@ -1,25 +1,29 @@
 <script lang="ts">
   import { company } from '$lib/stores/company.svelte';
   import BrandedVehicle from './BrandedVehicle.svelte';
+  import { KIND_META, type VehicleKind } from './catalog';
   import FleetIcon from './FleetIcon.svelte';
-  import { vehicleImage, type FleetVehicle } from './mock-data';
-  let { vehicle, large = false }: { vehicle: FleetVehicle; large?: boolean } = $props();
+  let {
+    kind,
+    label,
+    large = false
+  }: { kind: VehicleKind; label: string; large?: boolean } = $props();
   let failed = $state(false);
   $effect(() => {
-    if (vehicle.id) failed = false;
+    if (kind) failed = false;
   });
 </script>
 
 <div class:large class="vehicle-image">
   {#if failed}
     <div class="image-fallback">
-      <FleetIcon name="truck" size={64} /><span>{vehicle.model}</span>
+      <FleetIcon name="truck" size={64} /><span>{KIND_META[kind].label}</span>
     </div>
   {:else}
     <BrandedVehicle
-      src={vehicleImage(vehicle)}
-      alt={`${vehicle.model}, vehículo ${vehicle.id}`}
-      kind={vehicle.kind}
+      src={KIND_META[kind].image}
+      alt={label}
+      {kind}
       logo={company.active?.logo ?? null}
       onerror={() => (failed = true)}
     />

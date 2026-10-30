@@ -10,6 +10,7 @@ MediaPurpose = Literal[
     "employee_avatar",
     "branch_image",
     "warehouse_image",
+    "vehicle_image",
     "product_image",
     "supplier_logo",
     "supplier_contact_avatar",

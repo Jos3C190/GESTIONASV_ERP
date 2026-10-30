@@ -1,158 +1,146 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import FleetWorkspace from './FleetWorkspace.svelte';
-import { DEMO_VEHICLES } from './mock-data';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { FleetSummary, FleetVehicle } from './api';
 
-const availableCount = DEMO_VEHICLES.filter((vehicle) => vehicle.status === 'Disponible').length;
+const apiMock = vi.hoisted(() => ({
+  list: vi.fn(),
+  summary: vi.fn()
+}));
+const permissionMock = vi.hoisted(() => ({ codes: new Set<string>() }));
+
+vi.mock('./api', () => ({ fleetApi: apiMock }));
+vi.mock('$lib/stores/permissions.svelte', () => ({
+  permissions: { hasPermission: (code: string) => permissionMock.codes.has(code) }
+}));
+
+import FleetWorkspace from './FleetWorkspace.svelte';
+
+function vehicle(patch: Partial<FleetVehicle> = {}): FleetVehicle {
+  return {
+    id: 'v1',
+    code: 'FL-001',
+    plate: 'C 123-456',
+    vin: null,
+    kind: 'refrigerated',
+    brand: 'Isuzu',
+    model: 'ELF 400',
+    year: 2024,
+    color: null,
+    capacity_kg: '4000.00',
+    fuel_type: 'diesel',
+    odometer_km: '42680.0',
+    status: 'active',
+    operational_status: 'available',
+    branch_id: 'b1',
+    branch_name: 'Roosevelt',
+    driver: null,
+    current_transfer: null,
+    maintenance_in_progress: false,
+    gps_linked: false,
+    gps_device_unique_id: null,
+    inventory_vehicle_id: 'i1',
+    notes: null,
+    compliance: { state: 'ok', issues: [] },
+    created_at: '2026-10-01T10:00:00Z',
+    updated_at: '2026-10-01T10:00:00Z',
+    ...patch
+  };
+}
+
+const summary: FleetSummary = {
+  total: 2,
+  available: 1,
+  in_route: 1,
+  maintenance: 0,
+  out_of_service: 0,
+  blocked: 1,
+  with_warnings: 0
+};
+
+beforeEach(() => {
+  permissionMock.codes = new Set(['fleet:read']);
+  apiMock.summary.mockResolvedValue(summary);
+  apiMock.list.mockResolvedValue({
+    items: [
+      vehicle(),
+      vehicle({
+        id: 'v2',
+        code: 'FL-002',
+        plate: 'C 234-567',
+        operational_status: 'in_route',
+        current_transfer: {
+          id: 't1',
+          code: 'TR-0141',
+          status: 'in_transit',
+          dispatched_at: '2026-10-28T14:00:00Z',
+          destination_branch: 'Santa Rosa de Lima'
+        },
+        compliance: {
+          state: 'blocked',
+          issues: [
+            {
+              code: 'document_expired',
+              severity: 'blocking',
+              message: 'Póliza de seguro vencida desde el 01/10/2026.'
+            }
+          ]
+        }
+      })
+    ],
+    meta: { page: 1, size: 24, total: 2, pages: 1 }
+  });
+});
 
 afterEach(() => {
   cleanup();
-  vi.restoreAllMocks();
+  vi.clearAllMocks();
 });
 
-describe('fleet UI prototype', () => {
-  it.each([
-    ['Panel compacto', 'FL-010', 'compact-panel-van.png', '750 kg'],
-    ['Con lona', 'FL-011', 'curtain-side-truck.png', '8,000 kg'],
-    ['Tráiler', 'FL-012', 'semi-trailer-truck.png', '24,000 kg'],
-    ['Cisterna', 'FL-013', 'tanker-truck.png', '12,000 kg']
-  ])('opens the correct image and capacity for %s', async (kind, id, filename, capacity) => {
+describe('fleet workspace', () => {
+  it('shows real vehicles, KPIs and fitness alerts', async () => {
     render(FleetWorkspace);
-    await fireEvent.change(screen.getByLabelText('Tipo de vehículo'), {
-      target: { value: kind }
-    });
-    expect(screen.getAllByRole('button', { name: /^Ver detalle de/ })).toHaveLength(1);
-    const card = screen.getByRole('button', { name: `Ver detalle de ${id}` });
-    expect(within(card).getByRole('img')).toHaveAttribute('src', `/images/fleet/${filename}`);
-    await fireEvent.click(card);
-    const detail = screen.getByRole('complementary', { name: `Detalle de ${id}` });
-    expect(within(detail).getByRole('img')).toHaveAttribute('src', `/images/fleet/${filename}`);
-    expect(within(detail).getByText(kind, { exact: true })).toBeVisible();
-    expect(within(detail).getByText(capacity, { exact: true })).toBeVisible();
+    const card = await screen.findByRole('button', { name: 'Ver detalle de FL-002' });
+    expect(within(card).getByText('Póliza de seguro vencida desde el 01/10/2026.')).toBeVisible();
+    expect(within(card).getByText('TR-0141 → Santa Rosa de Lima')).toBeVisible();
+    const healthy = screen.getByRole('button', { name: 'Ver detalle de FL-001' });
+    expect(within(healthy).getByText('Documentos y servicio al día')).toBeVisible();
+    expect(screen.getByText('No aptos para operar')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Añadir vehículo/ })).not.toBeInTheDocument();
   });
 
-  it('filters the new vehicle types and keeps the matching image in the detail', async () => {
+  it('offers creation only with fleet:create', async () => {
+    permissionMock.codes.add('fleet:create');
     render(FleetWorkspace);
-    await fireEvent.change(screen.getByLabelText('Tipo de vehículo'), {
-      target: { value: 'Pickup' }
-    });
-    expect(screen.getAllByRole('button', { name: /^Ver detalle de/ })).toHaveLength(2);
-    await fireEvent.click(screen.getByRole('button', { name: /^Disponibles / }));
-    expect(screen.getAllByRole('button', { name: /^Ver detalle de/ })).toHaveLength(1);
-    await fireEvent.click(screen.getByRole('button', { name: 'Ver detalle de FL-008' }));
-    const detail = screen.getByRole('complementary', { name: 'Detalle de FL-008' });
-    expect(within(detail).getByRole('img', { name: /Toyota Hilux/ })).toHaveAttribute(
-      'src',
-      '/images/fleet/pickup.png'
-    );
-    await fireEvent.keyDown(window, { key: 'Escape' });
-    await fireEvent.click(screen.getByRole('button', { name: /^Todos los vehículos / }));
-    await fireEvent.change(screen.getByLabelText('Tipo de vehículo'), {
-      target: { value: 'Plataforma' }
-    });
-    expect(screen.getByRole('button', { name: 'Ver detalle de FL-007' })).toBeVisible();
-    expect(screen.getByRole('img', { name: /Isuzu NPR 75/ })).toHaveAttribute(
-      'src',
-      '/images/fleet/flatbed-truck.png'
-    );
-    await fireEvent.change(screen.getByLabelText('Tipo de vehículo'), {
-      target: { value: 'Carga seca' }
-    });
-    expect(screen.getByRole('button', { name: 'Ver detalle de FL-003' })).toBeVisible();
-    expect(screen.getByRole('img', { name: /Hino Serie 300/ })).toHaveAttribute(
-      'src',
-      '/images/fleet/dry-box-truck.png'
+    expect(await screen.findByRole('button', { name: /Añadir vehículo/ })).toBeVisible();
+  });
+
+  it('filters by stored status through the API', async () => {
+    render(FleetWorkspace);
+    await screen.findByRole('button', { name: 'Ver detalle de FL-001' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Dados de baja' }));
+    await vi.waitFor(() =>
+      expect(apiMock.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: 'retired', include_retired: true, page: 1 })
+      )
     );
   });
 
-  it('combines status, type and text filters and recovers from an empty result', async () => {
+  it('opens the summary panel with a link to the full file', async () => {
     render(FleetWorkspace);
-    await fireEvent.click(screen.getByRole('button', { name: /^Disponibles / }));
-    expect(screen.getAllByRole('button', { name: /^Ver detalle de/ })).toHaveLength(availableCount);
-    await fireEvent.change(screen.getByLabelText('Tipo de vehículo'), {
-      target: { value: 'Refrigerado' }
-    });
-    expect(screen.getByLabelText('Tipo de vehículo')).toHaveValue('Refrigerado');
-    expect(screen.getByText('No encontramos vehículos')).toBeVisible();
-    await fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }));
-    expect(screen.getAllByRole('button', { name: /^Ver detalle de/ })).toHaveLength(
-      DEMO_VEHICLES.length
+    await fireEvent.click(await screen.findByRole('button', { name: 'Ver detalle de FL-001' }));
+    const panel = screen.getByRole('complementary', { name: 'Detalle de FL-001' });
+    expect(within(panel).getByRole('link', { name: /Abrir ficha completa/ })).toHaveAttribute(
+      'href',
+      '/fleet/v1'
     );
-    await fireEvent.input(screen.getByLabelText('Buscar vehículos'), {
-      target: { value: 'C 345-678' }
+  });
+
+  it('shows the empty state when the branch has no vehicles', async () => {
+    apiMock.list.mockResolvedValueOnce({
+      items: [],
+      meta: { page: 1, size: 24, total: 0, pages: 1 }
     });
-    expect(screen.getAllByRole('button', { name: /^Ver detalle de/ })).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Ver detalle de FL-003' })).toBeVisible();
-  });
-
-  it('previews vehicle sections without calling a backend and closes with Escape', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
     render(FleetWorkspace);
-    await fireEvent.click(screen.getByRole('button', { name: 'Ver detalle de FL-001' }));
-    expect(screen.getByRole('complementary', { name: 'Detalle de FL-001' })).toBeVisible();
-    await fireEvent.click(screen.getByRole('button', { name: 'Documentos' }));
-    expect(screen.getByText('Tarjeta de circulación')).toBeVisible();
-    await fireEvent.click(screen.getByRole('button', { name: 'Mantenimiento' }));
-    expect(screen.getByText('Cambio de aceite y filtros')).toBeVisible();
-    await fireEvent.keyDown(window, { key: 'Escape' });
-    expect(
-      screen.queryByRole('complementary', { name: 'Detalle de FL-001' })
-    ).not.toBeInTheDocument();
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it('shows document alerts on the cards', () => {
-    render(FleetWorkspace);
-    const card = screen.getByRole('button', { name: 'Ver detalle de FL-001' });
-    expect(within(card).getByText('Seguro vence en 5 días')).toBeVisible();
-    const overdue = screen.getByRole('button', { name: 'Ver detalle de FL-004' });
-    expect(within(overdue).getByText('Servicio vencido')).toBeVisible();
-    const clear = screen.getByRole('button', { name: 'Ver detalle de FL-006' });
-    expect(within(clear).getByText('Documentos y servicio al día')).toBeVisible();
-  });
-
-  it('adds gallery photos and browses them in the viewer', async () => {
-    let created = 0;
-    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:photo-${++created}`);
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-    const { container } = render(FleetWorkspace);
-    await fireEvent.click(screen.getByRole('button', { name: 'Ver detalle de FL-002' }));
-    const detail = screen.getByRole('complementary', { name: 'Detalle de FL-002' });
-    await fireEvent.click(within(detail).getByRole('button', { name: 'Galería' }));
-    expect(within(detail).getByText('Agrega fotos de esta unidad')).toBeVisible();
-
-    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
-    const files = ['frente.jpg', 'lateral.png'].map(
-      (name) => new File(['x'], name, { type: name.endsWith('png') ? 'image/png' : 'image/jpeg' })
-    );
-    Object.defineProperty(input, 'files', { value: files, configurable: true });
-    await fireEvent.change(input);
-
-    await fireEvent.click(within(detail).getByRole('button', { name: 'Ampliar foto 1' }));
-    const viewer = screen.getByRole('dialog', { name: 'FL-002 · Ford Transit' });
-    expect(within(viewer).getByText('1 / 2')).toBeVisible();
-    await fireEvent.click(within(viewer).getByRole('button', { name: 'Imagen siguiente' }));
-    expect(within(viewer).getByText('2 / 2')).toBeVisible();
-    await fireEvent.click(within(viewer).getByRole('button', { name: 'Acercar' }));
-    expect(within(viewer).getByText('150%')).toBeVisible();
-    await fireEvent.keyDown(within(viewer).getByRole('button', { name: 'Cerrar visor' }), {
-      key: 'Escape'
-    });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'Detalle de FL-002' })).toBeVisible();
-  });
-
-  it('keeps filtered results when switching between cards and list', async () => {
-    render(FleetWorkspace);
-    await fireEvent.input(screen.getByLabelText('Buscar vehículos'), {
-      target: { value: 'Sofia' }
-    });
-    await fireEvent.click(screen.getByRole('button', { name: 'Vista de lista' }));
-    expect(screen.getByRole('table', { name: 'Vehículos de demostración' })).toBeVisible();
-    expect(screen.getByText('Sofía Castro')).toBeVisible();
-    expect(screen.getAllByRole('button', { name: /^Ver detalle de/ })).toHaveLength(1);
-    await fireEvent.click(screen.getByRole('button', { name: 'Vista de tarjetas' }));
-    expect(screen.getByRole('button', { name: 'Ver detalle de FL-006' })).toBeVisible();
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(await screen.findByText('Aún no hay vehículos')).toBeVisible();
   });
 });

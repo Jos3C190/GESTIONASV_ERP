@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -1680,17 +1680,83 @@ class SqlAlchemyInventoryTransferRepository:
             )
         return output
 
-    async def _transit_warehouse(self, company_id: uuid.UUID) -> Warehouse:
-        warehouse = await self._session.scalar(
+    async def _find_transit_warehouse(self, company_id: uuid.UUID) -> Warehouse | None:
+        warehouse: Warehouse | None = await self._session.scalar(
             select(Warehouse).where(
                 Warehouse.company_id == company_id,
                 Warehouse.is_transit.is_(True),
                 Warehouse.deleted_at.is_(None),
             )
         )
+        return warehouse
+
+    async def _provision_transit_warehouse(self, company_id: uuid.UUID) -> None:
+        """Create the technical transit warehouse in the headquarters branch.
+
+        Migration 0086 only provisioned companies that existed at that time.
+        Companies configured later get it on first use, with the same rules:
+        it requires an active headquarters with an active central warehouse.
+        """
+        params = {"company_id": company_id}
+        await self._session.execute(
+            text(
+                """
+                INSERT INTO warehouse_categories (id, company_id, name, description, is_active,
+                  created_at, updated_at)
+                SELECT gen_random_uuid(), :company_id, 'Tránsito interno',
+                  'Categoría técnica para ubicaciones móviles de vehículos.', true, now(), now()
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM warehouse_categories
+                  WHERE company_id = :company_id AND lower(name) = lower('Tránsito interno')
+                    AND deleted_at IS NULL)
+                """
+            ),
+            params,
+        )
+        await self._session.execute(
+            text(
+                """
+                INSERT INTO warehouses (id, company_id, branch_id, warehouse_category_id, name,
+                  code, warehouse_type, is_central, is_transit, operational_status,
+                  capacity_profile, capacity_enforcement_mode, storage_eligible, created_at,
+                  updated_at, is_active)
+                SELECT gen_random_uuid(), central.company_id, headquarters.id, category.id,
+                  'Tránsito de vehículos',
+                  'TRN-' || upper(substr(replace(central.company_id::text, '-', ''), 1, 8)),
+                  'transit', false, true, 'active', 'transit', 'disabled', false, now(), now(),
+                  true
+                FROM warehouses AS central
+                JOIN branches AS headquarters ON headquarters.id = central.branch_id
+                  AND headquarters.company_id = central.company_id
+                JOIN warehouse_categories AS category ON category.company_id = central.company_id
+                  AND lower(category.name) = lower('Tránsito interno')
+                  AND category.deleted_at IS NULL
+                WHERE central.company_id = :company_id
+                  AND central.is_central IS TRUE AND central.is_active IS TRUE
+                  AND central.operational_status = 'active' AND central.deleted_at IS NULL
+                  AND headquarters.is_headquarters IS TRUE AND headquarters.is_active IS TRUE
+                  AND headquarters.operational_status = 'active'
+                  AND headquarters.deleted_at IS NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM warehouses AS transit
+                    WHERE transit.company_id = central.company_id
+                      AND transit.is_transit IS TRUE AND transit.deleted_at IS NULL)
+                LIMIT 1
+                """
+            ),
+            params,
+        )
+        await self._session.flush()
+
+    async def _transit_warehouse(self, company_id: uuid.UUID) -> Warehouse:
+        warehouse = await self._find_transit_warehouse(company_id)
+        if warehouse is None:
+            await self._provision_transit_warehouse(company_id)
+            warehouse = await self._find_transit_warehouse(company_id)
         if warehouse is None:
             self._raise(
-                "La empresa no tiene bodega técnica de tránsito; revise la matriz y aplique la migración.",
+                "La empresa necesita una sucursal matriz activa con bodega central activa "
+                "para habilitar los vehículos de traslado.",
                 "transit_warehouse_not_configured",
             )
         return warehouse

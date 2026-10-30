@@ -341,7 +341,9 @@ export interface DocumentFoldersPage {
 export interface DocumentCategoryOut {
   id: string;
   company_id: string;
-  module: 'general' | 'employees';
+  module: 'general' | 'employees' | 'fleet';
+  requires_expiry?: boolean;
+  compliance_required?: boolean;
   code: string;
   name: string;
   group_name: string;
@@ -602,6 +604,7 @@ export type MediaPurpose =
   | 'employee_avatar'
   | 'branch_image'
   | 'warehouse_image'
+  | 'vehicle_image'
   | 'product_image'
   | 'supplier_logo'
   | 'supplier_contact_avatar';

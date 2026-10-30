@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { OwnedDocumentsApi } from '$lib/api/owned-documents';
   import {
     api,
     HttpError,
@@ -17,6 +18,8 @@
   interface Props {
     categories: DocumentCategoryOut[];
     employeeId?: string;
+    /** Documentos de una entidad (vehículo, conductor); tiene prioridad sobre employeeId. */
+    owner?: OwnedDocumentsApi;
     folderId?: string | null;
     initialCategoryId?: string;
     replaceDocumentId?: string;
@@ -57,6 +60,7 @@
   let {
     categories,
     employeeId,
+    owner,
     folderId,
     initialCategoryId,
     replaceDocumentId,
@@ -224,7 +228,11 @@
         checksum_sha256: sha,
         ...metadata(item.metadata)
       };
-      const ticket = replaceDocumentId
+      const ticket = owner
+        ? replaceDocumentId
+          ? await owner.replace(replaceDocumentId, input)
+          : await owner.initiate(input)
+        : replaceDocumentId
         ? await api.documents.replace(replaceDocumentId, input, employeeId)
         : employeeId
           ? await api.documents.initiateEmployee(employeeId, input)
@@ -237,7 +245,8 @@
       );
       setItem(item.id, { state: 'verifying', progress: 100 });
       setItem(item.id, { state: 'scanning' });
-      await api.documents.complete(ticket.document_id, employeeId);
+      if (owner) await owner.complete(ticket.document_id);
+      else await api.documents.complete(ticket.document_id, employeeId);
       // The completion response means the synchronous antivirus phase ended;
       // OCR, when applicable, remains asynchronous and does not block success.
       setItem(item.id, { state: 'done', progress: 100 });

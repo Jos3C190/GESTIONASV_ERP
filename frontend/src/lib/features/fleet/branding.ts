@@ -1,4 +1,4 @@
-import type { VehicleKind } from './mock-data';
+import type { VehicleKind } from './catalog';
 
 /**
  * Branding de vehículos: cada imagen base declara zonas de decal (cuadriláteros en
@@ -24,73 +24,194 @@ export interface VehicleDecalSpec {
   zones: DecalZone[];
 }
 
-const TRUCK_DOOR: Quad = [[592, 556], [716, 556], [718, 652], [594, 658]];
+const TRUCK_DOOR: Quad = [
+  [592, 556],
+  [716, 556],
+  [718, 652],
+  [594, 658]
+];
 
 export const VEHICLE_DECALS: Record<VehicleKind, VehicleDecalSpec> = {
-  Refrigerado: {
+  refrigerated: {
     width: 1536,
     height: 1024,
     zones: [
-      { id: 'side', quad: [[872, 100], [1464, 196], [1466, 628], [872, 640]] },
+      {
+        id: 'side',
+        quad: [
+          [872, 100],
+          [1464, 196],
+          [1466, 628],
+          [872, 640]
+        ]
+      },
       { id: 'door', quad: TRUCK_DOOR }
     ]
   },
-  Furgón: {
+  cargo_van: {
     width: 1774,
     height: 887,
     zones: [
-      { id: 'side', quad: [[1090, 152], [1640, 144], [1648, 532], [1090, 544]] },
-      { id: 'door', quad: [[790, 432], [1028, 432], [1032, 556], [798, 562]] }
+      {
+        id: 'side',
+        quad: [
+          [1090, 152],
+          [1640, 144],
+          [1648, 532],
+          [1090, 544]
+        ]
+      },
+      {
+        id: 'door',
+        quad: [
+          [790, 432],
+          [1028, 432],
+          [1032, 556],
+          [798, 562]
+        ]
+      }
     ]
   },
-  'Carga seca': {
+  dry_box: {
     width: 1536,
     height: 1024,
     zones: [
-      { id: 'side', quad: [[872, 88], [1464, 196], [1466, 628], [872, 640]] },
+      {
+        id: 'side',
+        quad: [
+          [872, 88],
+          [1464, 196],
+          [1466, 628],
+          [872, 640]
+        ]
+      },
       { id: 'door', quad: TRUCK_DOOR }
     ]
   },
-  Pickup: {
+  pickup: {
     width: 1774,
     height: 887,
-    zones: [{ id: 'door', quad: [[872, 420], [1102, 418], [1106, 604], [876, 610]] }]
+    zones: [
+      {
+        id: 'door',
+        quad: [
+          [872, 420],
+          [1102, 418],
+          [1106, 604],
+          [876, 610]
+        ]
+      }
+    ]
   },
-  Plataforma: {
+  flatbed: {
     width: 1619,
     height: 971,
-    zones: [{ id: 'door', quad: [[612, 470], [768, 462], [770, 590], [614, 600]] }]
+    zones: [
+      {
+        id: 'door',
+        quad: [
+          [612, 470],
+          [768, 462],
+          [770, 590],
+          [614, 600]
+        ]
+      }
+    ]
   },
-  'Panel compacto': {
+  compact_van: {
     width: 1620,
     height: 971,
     zones: [
-      { id: 'side', quad: [[1176, 212], [1504, 216], [1504, 588], [1180, 598]] },
-      { id: 'door', quad: [[932, 526], [1144, 526], [1144, 618], [936, 624]] }
+      {
+        id: 'side',
+        quad: [
+          [1176, 212],
+          [1504, 216],
+          [1504, 588],
+          [1180, 598]
+        ]
+      },
+      {
+        id: 'door',
+        quad: [
+          [932, 526],
+          [1144, 526],
+          [1144, 618],
+          [936, 624]
+        ]
+      }
     ]
   },
-  'Con lona': {
+  curtain_side: {
     width: 1619,
     height: 971,
     zones: [
-      { id: 'side', quad: [[832, 96], [1568, 196], [1568, 498], [832, 500]] },
-      { id: 'door', quad: [[592, 498], [724, 490], [726, 598], [594, 608]] }
+      {
+        id: 'side',
+        quad: [
+          [832, 96],
+          [1568, 196],
+          [1568, 498],
+          [832, 500]
+        ]
+      },
+      {
+        id: 'door',
+        quad: [
+          [592, 498],
+          [724, 490],
+          [726, 598],
+          [594, 608]
+        ]
+      }
     ]
   },
-  Tráiler: {
+  semi_trailer: {
     width: 1774,
     height: 887,
     zones: [
-      { id: 'side', quad: [[748, 128], [1718, 292], [1720, 560], [748, 544]] },
-      { id: 'door', quad: [[452, 470], [652, 470], [656, 608], [456, 614]] }
+      {
+        id: 'side',
+        quad: [
+          [748, 128],
+          [1718, 292],
+          [1720, 560],
+          [748, 544]
+        ]
+      },
+      {
+        id: 'door',
+        quad: [
+          [452, 470],
+          [652, 470],
+          [656, 608],
+          [456, 614]
+        ]
+      }
     ]
   },
-  Cisterna: {
+  tanker: {
     width: 1774,
     height: 887,
     zones: [
-      { id: 'side', quad: [[900, 230], [1640, 236], [1640, 440], [900, 456]] },
-      { id: 'door', quad: [[602, 440], [750, 434], [752, 578], [604, 584]] }
+      {
+        id: 'side',
+        quad: [
+          [900, 230],
+          [1640, 236],
+          [1640, 440],
+          [900, 456]
+        ]
+      },
+      {
+        id: 'door',
+        quad: [
+          [602, 440],
+          [750, 434],
+          [752, 578],
+          [604, 584]
+        ]
+      }
     ]
   }
 };
@@ -129,7 +250,12 @@ function solve(a: number[][], b: number[]): number[] {
 
 /** Homografía [a, b, c, d, e, f, g, h] que lleva el rectángulo (0,0)-(w,h) al cuadrilátero. */
 export function rectToQuadHomography(width: number, height: number, quad: Quad): Homography {
-  const source: Quad = [[0, 0], [width, 0], [width, height], [0, height]];
+  const source: Quad = [
+    [0, 0],
+    [width, 0],
+    [width, height],
+    [0, height]
+  ];
   const a: number[][] = [];
   const b: number[] = [];
   source.forEach(([x, y], i) => {

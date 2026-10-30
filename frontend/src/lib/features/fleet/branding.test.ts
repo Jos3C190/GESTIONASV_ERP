@@ -7,14 +7,24 @@ import {
   zoneSize,
   type Quad
 } from './branding';
-import { VEHICLE_TYPES } from './mock-data';
+import { VEHICLE_KINDS } from './catalog';
 
 describe('fleet branding', () => {
   it('maps every rectangle corner onto the matching quad corner', () => {
-    const quad: Quad = [[872, 100], [1464, 196], [1466, 628], [872, 640]];
+    const quad: Quad = [
+      [872, 100],
+      [1464, 196],
+      [1466, 628],
+      [872, 640]
+    ];
     const { width, height } = zoneSize({ id: 'side', quad });
     const homography = rectToQuadHomography(width, height, quad);
-    const corners: Quad = [[0, 0], [width, 0], [width, height], [0, height]];
+    const corners: Quad = [
+      [0, 0],
+      [width, 0],
+      [width, height],
+      [0, height]
+    ];
 
     corners.forEach((corner, i) => {
       const [x, y] = projectPoint(homography, corner);
@@ -25,13 +35,18 @@ describe('fleet branding', () => {
   });
 
   it('builds an identity-like matrix for an axis-aligned rectangle', () => {
-    expect(quadToMatrix3d(100, 50, [[10, 20], [110, 20], [110, 70], [10, 70]])).toBe(
-      'matrix3d(1,0,0,0,0,1,0,0,0,0,1,0,10,20,0,1)'
-    );
+    expect(
+      quadToMatrix3d(100, 50, [
+        [10, 20],
+        [110, 20],
+        [110, 70],
+        [10, 70]
+      ])
+    ).toBe('matrix3d(1,0,0,0,0,1,0,0,0,0,1,0,10,20,0,1)');
   });
 
   it('declares decal zones inside the image for every vehicle type', () => {
-    for (const kind of Object.keys(VEHICLE_TYPES) as (keyof typeof VEHICLE_TYPES)[]) {
+    for (const kind of VEHICLE_KINDS) {
       const spec = VEHICLE_DECALS[kind];
       expect(spec.zones.length).toBeGreaterThan(0);
       for (const zone of spec.zones) {

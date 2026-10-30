@@ -1,13 +1,13 @@
 <script lang="ts">
   import BrandedVehicle from '$lib/features/fleet/BrandedVehicle.svelte';
   import { VEHICLE_DECALS, type DecalZone, type Point } from '$lib/features/fleet/branding';
-  import { VEHICLE_TYPES, type VehicleKind } from '$lib/features/fleet/mock-data';
+  import { KIND_META, VEHICLE_KINDS, type VehicleKind } from '$lib/features/fleet/catalog';
   import { company } from '$lib/stores/company.svelte';
 
-  const kinds = Object.keys(VEHICLE_TYPES) as VehicleKind[];
-  let kind = $state<VehicleKind>('Refrigerado');
+  const kinds = VEHICLE_KINDS;
+  let kind = $state<VehicleKind>('refrigerated');
   let logo = $state(company.active?.logo ?? '');
-  let zones = $state<DecalZone[]>(structuredClone(VEHICLE_DECALS.Refrigerado.zones));
+  let zones = $state<DecalZone[]>(structuredClone(VEHICLE_DECALS.refrigerated.zones));
   let svg = $state<SVGSVGElement>();
   let dragging = $state<{ zone: number; corner: number } | null>(null);
   let copied = $state(false);
@@ -44,12 +44,17 @@
 <section class="calibrate">
   <header>
     <h1>Calibrar zonas de logo</h1>
-    <p>Arrastra las esquinas (TL, TR, BR, BL) de cada zona y copia el resultado a <code>branding.ts</code>.</p>
+    <p>
+      Arrastra las esquinas (TL, TR, BR, BL) de cada zona y copia el resultado a <code
+        >branding.ts</code
+      >.
+    </p>
   </header>
 
   <div class="controls">
     <select value={kind} onchange={(event) => selectKind(event.currentTarget.value as VehicleKind)}>
-      {#each kinds as option (option)}<option value={option}>{option}</option>{/each}
+      {#each kinds as option (option)}<option value={option}>{KIND_META[option].label}</option
+        >{/each}
     </select>
     <input bind:value={logo} placeholder="URL del logo" />
     <button type="button" onclick={() => selectKind(kind)}>Restablecer</button>
@@ -57,7 +62,7 @@
   </div>
 
   <div class="stage">
-    <BrandedVehicle src={VEHICLE_TYPES[kind].image} alt={kind} {kind} logo={logo || null} {zones} />
+    <BrandedVehicle src={KIND_META[kind].image} alt={kind} {kind} logo={logo || null} {zones} />
     <svg
       bind:this={svg}
       viewBox="0 0 {spec.width} {spec.height}"

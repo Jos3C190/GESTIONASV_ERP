@@ -1,17 +1,23 @@
 <script lang="ts">
-  import { vehicleAlerts } from './alerts';
+  import type { FleetVehicle } from './api';
+  import { formatNumber, KIND_META } from './catalog';
   import FleetIcon from './FleetIcon.svelte';
   import VehicleImage from './VehicleImage.svelte';
   import VehicleStatus from './VehicleStatus.svelte';
-  import { formatFleetNumber, type FleetVehicle } from './mock-data';
   let {
     vehicle,
     selected = false,
     onselect
   }: { vehicle: FleetVehicle; selected?: boolean; onselect: () => void } = $props();
-  const load = $derived(Math.round((vehicle.load / vehicle.capacity) * 100));
-  const alerts = $derived(vehicleAlerts(vehicle));
-  const topAlert = $derived(alerts[0]);
+  const issues = $derived(vehicle.compliance.issues);
+  const topIssue = $derived(
+    issues.find((issue) => issue.severity === 'blocking') ?? issues[0] ?? null
+  );
+  const place = $derived(
+    vehicle.current_transfer
+      ? `${vehicle.current_transfer.code} → ${vehicle.current_transfer.destination_branch}`
+      : vehicle.branch_name
+  );
 </script>
 
 <button
@@ -19,47 +25,56 @@
   type="button"
   class="vehicle-card"
   class:selected
-  aria-label={`Ver detalle de ${vehicle.id}`}
+  aria-label={`Ver detalle de ${vehicle.code}`}
   aria-describedby={`fleet-summary-${vehicle.id}`}
   aria-pressed={selected}
   onclick={onselect}
 >
   <span id={`fleet-summary-${vehicle.id}`} class="sr-only"
-    >{vehicle.model}. {vehicle.status}. {vehicle.status === 'En ruta'
-      ? vehicle.destination
-      : vehicle.location}.{alerts.length
-      ? ` Alertas: ${alerts.map((alert) => alert.label).join(', ')}.`
+    >{vehicle.brand}
+    {vehicle.model}. {place}.{issues.length
+      ? ` Alertas: ${issues.map((issue) => issue.message).join(' ')}`
       : ''}</span
   >
   <div class="vehicle-stage">
     <div class="stage-top">
-      <VehicleStatus status={vehicle.status} /><span class="vehicle-kind">{vehicle.kind}</span>
+      <VehicleStatus status={vehicle.operational_status} /><span class="vehicle-kind"
+        >{KIND_META[vehicle.kind].label}</span
+      >
     </div>
-    <VehicleImage {vehicle} />
+    <VehicleImage
+      kind={vehicle.kind}
+      label={`${vehicle.brand} ${vehicle.model}, ${vehicle.code}`}
+    />
     <div class="stage-bottom">
-      <span class="vehicle-code">{vehicle.id}</span><span class="plate">{vehicle.plate}</span>
+      <span class="vehicle-code">{vehicle.code}</span><span class="plate">{vehicle.plate}</span>
     </div>
   </div>
   <div class="card-body">
-    <div class="model-line"><span>{vehicle.model}</span><span>{vehicle.year}</span></div>
+    <div class="model-line">
+      <span>{vehicle.brand} {vehicle.model}</span><span>{vehicle.year}</span>
+    </div>
     <div class="destination">
-      <FleetIcon name={vehicle.status === 'En ruta' ? 'route' : 'pin'} size={15} /><span
-        >{vehicle.status === 'En ruta' ? vehicle.destination : vehicle.location}</span
+      <FleetIcon name={vehicle.current_transfer ? 'route' : 'pin'} size={15} /><span>{place}</span
       ><FleetIcon name="chevron" size={14} />
     </div>
     <div class="driver">
-      <span class="avatar">{vehicle.initials}</span><span>{vehicle.driver}</span><span
-        class="arrival">{vehicle.arrival}</span
-      >
+      {#if vehicle.driver}
+        <span class="avatar">{vehicle.driver.initials}</span><span>{vehicle.driver.name}</span>
+      {:else}
+        <span class="avatar empty"><FleetIcon name="info" size={12} /></span><span
+          >Sin conductor asignado</span
+        >
+      {/if}
+      <span class="arrival">{formatNumber(vehicle.odometer_km)} km</span>
     </div>
-    {#if topAlert}
+    {#if topIssue}
       <div
-        class="alert-row {topAlert.tone}"
-        title={alerts.map((alert) => alert.label).join(' · ')}
+        class="alert-row {topIssue.severity}"
+        title={issues.map((issue) => issue.message).join(' · ')}
       >
-        <FleetIcon name="alert" size={13} /><span>{topAlert.label}</span>{#if alerts.length > 1}<span
-            class="alert-more">+{alerts.length - 1}</span
-          >{/if}
+        <FleetIcon name="alert" size={13} /><span>{topIssue.message}</span
+        >{#if issues.length > 1}<span class="alert-more">+{issues.length - 1}</span>{/if}
       </div>
     {:else}
       <div class="alert-row ok">
@@ -68,18 +83,8 @@
     {/if}
     <div class="load-label">
       <span>Capacidad de carga</span><span
-        ><strong>{formatFleetNumber(vehicle.load)}</strong> / {formatFleetNumber(vehicle.capacity)} kg</span
+        ><strong>{formatNumber(vehicle.capacity_kg)}</strong> kg</span
       >
-    </div>
-    <div
-      class="load-track"
-      role="progressbar"
-      aria-label={`Carga de ${vehicle.id}`}
-      aria-valuenow={load}
-      aria-valuemin={0}
-      aria-valuemax={100}
-    >
-      <div style:width={`${load}%`}></div>
     </div>
   </div>
 </button>
@@ -179,6 +184,11 @@
     color: rgb(var(--foreground-muted));
     margin-bottom: 12px;
   }
+  .avatar.empty {
+    color: rgb(var(--foreground-muted));
+    background: transparent;
+    border-style: dashed;
+  }
   .avatar {
     display: grid;
     place-items: center;
@@ -213,7 +223,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .alert-row.danger {
+  .alert-row.blocking {
     color: rgb(var(--danger));
     background: rgb(var(--danger) / 0.08);
     border-color: rgb(var(--danger) / 0.22);
@@ -247,17 +257,6 @@
   .load-label strong {
     font-weight: 550;
     color: rgb(var(--foreground));
-  }
-  .load-track {
-    height: 4px;
-    overflow: hidden;
-    border-radius: 5px;
-    background: rgb(var(--border));
-  }
-  .load-track div {
-    height: 100%;
-    border-radius: inherit;
-    background: rgb(var(--success));
   }
   @media (prefers-reduced-motion: reduce) {
     .vehicle-card {

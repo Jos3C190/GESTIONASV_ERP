@@ -275,6 +275,7 @@ class DocumentRecordService:
                 "La categoría no está disponible en este módulo.",
                 code="document_category_invalid",
             )
+        self._require_expiry(category, metadata.expires_on)
         ticket = await self._documents.initiate(data)
         record = await self._record_from_ticket(
             ticket,

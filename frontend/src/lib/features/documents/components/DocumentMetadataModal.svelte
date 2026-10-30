@@ -8,16 +8,18 @@
   import Button from '$lib/components/ui/Button.svelte';
   import FormField from '$lib/components/ui/FormField.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import type { OwnedDocumentsApi } from '$lib/api/owned-documents';
 
   interface Props {
     document: DocumentRecordOut;
     categories: DocumentCategoryOut[];
     employeeId?: string;
+    owner?: OwnedDocumentsApi;
     onclose: () => void;
     onsaved?: (document: DocumentRecordOut) => void;
   }
 
-  let { document, categories, employeeId, onclose, onsaved }: Props = $props();
+  let { document, categories, employeeId, owner, onclose, onsaved }: Props = $props();
   let categoryId = $state('');
   let title = $state('');
   let description = $state('');
@@ -66,7 +68,9 @@
           .map((tag) => tag.trim())
           .filter(Boolean)
       };
-      const updated = employeeId
+      const updated = owner
+        ? await owner.update(document.id, payload)
+        : employeeId
         ? await api.documents.updateEmployee(employeeId, document.id, payload)
         : await api.documents.update(document.id, payload);
       onsaved?.(updated);

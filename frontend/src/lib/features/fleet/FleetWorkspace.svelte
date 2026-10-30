@@ -1,82 +1,153 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { HttpError } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
+  import { branch } from '$lib/stores/branch.svelte';
+  import { permissions } from '$lib/stores/permissions.svelte';
+  import { fleetApi, type FleetSummary, type FleetVehicle } from './api';
+  import {
+    formatNumber,
+    KIND_META,
+    VEHICLE_KINDS,
+    type VehicleKind,
+    type VehicleStatus as StoredStatus
+  } from './catalog';
   import FleetIcon from './FleetIcon.svelte';
   import VehicleCard from './VehicleCard.svelte';
   import VehicleDetail from './VehicleDetail.svelte';
   import VehicleStatus from './VehicleStatus.svelte';
-  import {
-    DEMO_VEHICLES,
-    VEHICLE_TYPES,
-    VEHICLE_KINDS,
-    formatFleetNumber,
-    type FleetVehicle,
-    type VehicleStatus as Status,
-    type VehicleKind
-  } from './mock-data';
+
+  type Tab = '' | StoredStatus;
+  const PAGE_SIZE = 24;
 
   let query = $state('');
-  let status = $state<'Todos' | Status>('Todos');
-  let kind = $state<'Todos' | VehicleKind>('Todos');
+  let debouncedQuery = $state('');
+  let tab = $state<Tab>('');
+  let kind = $state<'' | VehicleKind>('');
   let view = $state<'grid' | 'list'>('grid');
+  let page = $state(1);
   let selected = $state<FleetVehicle | null>(null);
-  const tabs = [
-    { value: 'Todos', label: 'Todos los vehículos' },
-    { value: 'En ruta', label: 'En ruta' },
-    { value: 'Disponible', label: 'Disponibles' },
-    { value: 'Mantenimiento', label: 'Mantenimiento' }
-  ] as const;
-  const total = (value: string) =>
-    DEMO_VEHICLES.filter((item) => value === 'Todos' || item.status === value).length;
-  const metrics = [
+  let vehicles = $state<FleetVehicle[]>([]);
+  let total = $state(0);
+  let pages = $state(1);
+  let summary = $state<FleetSummary | null>(null);
+  let loading = $state(true);
+  let error = $state<string | null>(null);
+  let mounted = $state(false);
+  let generation = 0;
+
+  const canCreate = $derived(permissions.hasPermission('fleet:create'));
+  const scopeLabel = $derived(branch.id ? branch.label : 'la empresa');
+  const tabs: { value: Tab; label: string }[] = [
+    { value: '', label: 'Todos' },
+    { value: 'active', label: 'Activos' },
+    { value: 'maintenance', label: 'Mantenimiento' },
+    { value: 'out_of_service', label: 'Fuera de servicio' },
+    { value: 'retired', label: 'Dados de baja' }
+  ];
+  const metrics = $derived([
     {
       label: 'Vehículos en flota',
-      value: DEMO_VEHICLES.length,
+      value: summary?.total ?? 0,
       icon: 'truck',
-      caption: 'Unidades de distribución',
+      caption: branch.id ? branch.label : 'Todas las sucursales',
       tone: 'neutral'
     },
     {
       label: 'En ruta',
-      value: total('En ruta'),
+      value: summary?.in_route ?? 0,
       icon: 'route',
-      caption: 'En recorridos de entrega',
+      caption: 'En traslados activos',
       tone: 'route'
     },
     {
       label: 'Disponibles',
-      value: total('Disponible'),
+      value: summary?.available ?? 0,
       icon: 'check',
-      caption: 'Listos para una nueva ruta',
+      caption: 'Listos para salir',
       tone: 'available'
     },
     {
-      label: 'En mantenimiento',
-      value: total('Mantenimiento'),
-      icon: 'wrench',
-      caption: 'En servicio preventivo',
+      label: 'No aptos para operar',
+      value: summary?.blocked ?? 0,
+      icon: 'alert',
+      caption: `${summary?.with_warnings ?? 0} con advertencias`,
       tone: 'maintenance'
     }
-  ] as const;
-  const normalize = (value: string) =>
-    value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
-  let filtered = $derived(
-    DEMO_VEHICLES.filter(
-      (vehicle) =>
-        (status === 'Todos' || vehicle.status === status) &&
-        (kind === 'Todos' || vehicle.kind === kind) &&
-        normalize(
-          `${vehicle.id} ${vehicle.plate} ${vehicle.kind} ${vehicle.name} ${vehicle.model} ${vehicle.driver} ${vehicle.destination}`
-        ).includes(normalize(query.trim()))
-    )
-  );
+  ] as const);
+  const today = new Intl.DateTimeFormat('es-SV', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  })
+    .format(new Date())
+    .replace('.', '');
 
+  async function load() {
+    const current = ++generation;
+    loading = true;
+    error = null;
+    try {
+      const [list, stats] = await Promise.all([
+        fleetApi.list({
+          status: tab,
+          kind,
+          search: debouncedQuery.trim() || undefined,
+          include_retired: tab === 'retired',
+          page,
+          size: PAGE_SIZE
+        }),
+        fleetApi.summary()
+      ]);
+      if (current !== generation) return;
+      vehicles = list.items;
+      total = list.meta.total;
+      pages = list.meta.pages;
+      summary = stats;
+      if (selected) selected = vehicles.find((item) => item.id === selected?.id) ?? null;
+    } catch (err) {
+      if (current !== generation) return;
+      error = err instanceof HttpError ? err.message : 'No se pudo cargar la flota.';
+    } finally {
+      if (current === generation) loading = false;
+    }
+  }
+
+  $effect(() => {
+    const value = query;
+    const timer = setTimeout(() => {
+      if (value !== debouncedQuery) {
+        debouncedQuery = value;
+        page = 1;
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  });
+
+  onMount(() => {
+    mounted = true;
+  });
+
+  $effect(() => {
+    if (!mounted) return;
+    void tab;
+    void kind;
+    void debouncedQuery;
+    void page;
+    load();
+  });
+
+  function setTab(value: Tab) {
+    tab = value;
+    page = 1;
+  }
   function clearFilters() {
     query = '';
-    status = 'Todos';
-    kind = 'Todos';
+    debouncedQuery = '';
+    tab = '';
+    kind = '';
+    page = 1;
   }
   function closeDetail() {
     const id = selected?.id;
@@ -96,46 +167,48 @@
     <div>
       <div class="title-line">
         <h1>Flota</h1>
-        <span class="prototype"><span></span>Vista de demostración</span>
       </div>
-      <p>Un lugar para conocer cada vehículo y el pulso de tu operación.</p>
+      <p>Los vehículos de {scopeLabel}, su aptitud para operar y su estado en tiempo real.</p>
     </div>
     <div class="heading-actions">
-      <span class="snapshot-date"><FleetIcon name="calendar" size={14} />28 oct, 2026</span><span
-        title="El registro de vehículos estará disponible en la versión funcional"
-        ><Button size="sm" disabled><FleetIcon name="plus" size={15} />Añadir vehículo</Button
-        ></span
-      >
+      <span class="snapshot-date"><FleetIcon name="calendar" size={14} />{today}</span>
+      {#if canCreate}
+        <Button size="sm" onclick={() => goto('/fleet/new')}
+          ><FleetIcon name="plus" size={15} />Añadir vehículo</Button
+        >
+      {/if}
     </div>
   </header>
 
   <section class="overview" aria-label="Resumen de la flota">
     <h2 class="sr-only">Estado de la operación</h2>
     <div class="metrics">
-      {#each metrics as metric}<div class="metric">
+      {#each metrics as metric (metric.label)}<div class="metric">
           <div class="metric-label">
             <FleetIcon name={metric.icon} size={15} /><span>{metric.label}</span>
           </div>
           <div class="metric-value">
-            <strong>{String(metric.value).padStart(2, '0')}</strong><span
+            <strong>{summary ? String(metric.value).padStart(2, '0') : '—'}</strong><span
               class="metric-mark {metric.tone}"><FleetIcon name={metric.icon} size={16} /></span
             >
           </div>
           <p>{metric.caption}</p>
         </div>{/each}
     </div>
-    <div class="fleet-distribution" aria-hidden="true">
-      <span
-        class="distribution-route"
-        style:width={`${(total('En ruta') / DEMO_VEHICLES.length) * 100}%`}
-      ></span><span
-        class="distribution-available"
-        style:width={`${(total('Disponible') / DEMO_VEHICLES.length) * 100}%`}
-      ></span><span
-        class="distribution-maintenance"
-        style:width={`${(total('Mantenimiento') / DEMO_VEHICLES.length) * 100}%`}
-      ></span>
-    </div>
+    {#if summary && summary.total > 0}
+      <div class="fleet-distribution" aria-hidden="true">
+        <span
+          class="distribution-route"
+          style:width={`${(summary.in_route / summary.total) * 100}%`}
+        ></span><span
+          class="distribution-available"
+          style:width={`${(summary.available / summary.total) * 100}%`}
+        ></span><span
+          class="distribution-maintenance"
+          style:width={`${((summary.maintenance + summary.out_of_service) / summary.total) * 100}%`}
+        ></span>
+      </div>
+    {/if}
   </section>
 
   <section class="fleet-catalog" aria-labelledby="fleet-catalog-heading">
@@ -161,11 +234,11 @@
     </div>
     <div class="catalog-toolbar">
       <nav class="status-tabs" aria-label="Filtrar vehículos por estado">
-        {#each tabs as tab}<button
+        {#each tabs as item (item.value)}<button
             type="button"
-            class:active={status === tab.value}
-            aria-pressed={status === tab.value}
-            onclick={() => (status = tab.value)}>{tab.label}<span>{total(tab.value)}</span></button
+            class:active={tab === item.value}
+            aria-pressed={tab === item.value}
+            onclick={() => setTab(item.value)}>{item.label}</button
           >{/each}
       </nav>
     </div>
@@ -174,67 +247,94 @@
         ><FleetIcon name="search" size={16} /><span class="sr-only">Buscar vehículos</span><input
           type="search"
           bind:value={query}
-          placeholder="Buscar por vehículo, placa o conductor…"
+          placeholder="Buscar por código, placa, marca o modelo…"
         /></label
       ><label class="kind-filter"
         ><span class="sr-only">Tipo de vehículo</span><select
           value={kind}
-          onchange={(event) => (kind = event.currentTarget.value as typeof kind)}
-          ><option value="Todos">Todos los tipos</option>
-          {#each VEHICLE_KINDS as vehicleKind}
-            <option value={vehicleKind}>{VEHICLE_TYPES[vehicleKind].label}</option>
+          onchange={(event) => {
+            kind = event.currentTarget.value as typeof kind;
+            page = 1;
+          }}
+          ><option value="">Todos los tipos</option>
+          {#each VEHICLE_KINDS as vehicleKind (vehicleKind)}
+            <option value={vehicleKind}>{KIND_META[vehicleKind].plural}</option>
           {/each}</select
         ></label
       ><span class="result-count" aria-live="polite"
-        >{filtered.length} {filtered.length === 1 ? 'vehículo' : 'vehículos'}</span
+        >{total} {total === 1 ? 'vehículo' : 'vehículos'}</span
       >
     </div>
 
+    {#if error}
+      <div class="load-error" role="alert">
+        <FleetIcon name="alert" size={15} /><span>{error}</span>
+        <Button variant="secondary" size="sm" onclick={load}>Reintentar</Button>
+      </div>
+    {/if}
+
     <div class="workspace" class:has-detail={selected !== null}>
       <div class="catalog-content">
-        {#if filtered.length === 0}
+        {#if loading && vehicles.length === 0}
+          <div class="vehicle-grid" aria-busy="true">
+            {#each [0, 1, 2] as index (index)}<div class="card-skeleton"></div>{/each}
+          </div>
+        {:else if vehicles.length === 0 && !error}
           <div class="empty-state">
-            <span class="empty-icon"><FleetIcon name="search" size={25} /></span>
-            <h3>No encontramos vehículos</h3>
-            <p>Prueba con otra placa, nombre o combinación de filtros.</p>
-            <Button variant="secondary" size="sm" onclick={clearFilters}>Limpiar filtros</Button>
+            <span class="empty-icon"><FleetIcon name="truck" size={25} /></span>
+            {#if query || tab || kind}
+              <h3>No encontramos vehículos</h3>
+              <p>Prueba con otra placa, código o combinación de filtros.</p>
+              <Button variant="secondary" size="sm" onclick={clearFilters}>Limpiar filtros</Button>
+            {:else}
+              <h3>Aún no hay vehículos</h3>
+              <p>Registra el primer vehículo para empezar a gestionar la flota de {scopeLabel}.</p>
+              {#if canCreate}<Button size="sm" onclick={() => goto('/fleet/new')}
+                  >Añadir vehículo</Button
+                >{/if}
+            {/if}
           </div>
         {:else if view === 'grid'}
-          <div class="vehicle-grid">
-            {#each filtered as vehicle (vehicle.id)}<VehicleCard
+          <div class="vehicle-grid" class:refreshing={loading}>
+            {#each vehicles as vehicle (vehicle.id)}<VehicleCard
                 {vehicle}
                 selected={selected?.id === vehicle.id}
                 onselect={() => (selected = vehicle)}
               />{/each}
           </div>
         {:else}
-          <div class="list-wrap">
+          <div class="list-wrap" class:refreshing={loading}>
             <table>
-              <caption class="sr-only">Vehículos de demostración</caption><thead
+              <caption class="sr-only">Vehículos de la flota</caption><thead
                 ><tr
-                  ><th>Vehículo</th><th>Estado</th><th>Conductor</th><th>Ubicación / destino</th><th
-                    >Kilometraje</th
+                  ><th>Vehículo</th><th>Estado</th><th>Conductor</th><th>Sucursal / destino</th><th
+                    >Odómetro</th
                   ><th><span class="sr-only">Acciones</span></th></tr
                 ></thead
               ><tbody
-                >{#each filtered as vehicle (vehicle.id)}<tr
+                >{#each vehicles as vehicle (vehicle.id)}<tr
                     class:selected-row={selected?.id === vehicle.id}
                     ><td
                       ><div class="table-vehicle">
                         <span class="table-icon"><FleetIcon name="truck" size={21} /></span>
                         <div>
-                          <strong>{vehicle.id}</strong><span>{vehicle.model} · {vehicle.plate}</span
+                          <strong>{vehicle.code}</strong><span
+                            >{vehicle.brand} {vehicle.model} · {vehicle.plate}</span
                           >
                         </div>
                       </div></td
-                    ><td><VehicleStatus status={vehicle.status} /></td><td>{vehicle.driver}</td><td
-                      >{vehicle.status === 'En ruta' ? vehicle.destination : vehicle.location}</td
-                    ><td class="mileage">{formatFleetNumber(vehicle.mileage)} km</td><td
+                    ><td><VehicleStatus status={vehicle.operational_status} /></td><td
+                      >{vehicle.driver?.name ?? 'Sin conductor'}</td
+                    ><td
+                      >{vehicle.current_transfer
+                        ? vehicle.current_transfer.destination_branch
+                        : vehicle.branch_name}</td
+                    ><td class="mileage">{formatNumber(vehicle.odometer_km)} km</td><td
                       ><button
                         id={`fleet-card-${vehicle.id}`}
                         type="button"
                         class="table-action"
-                        aria-label={`Ver detalle de ${vehicle.id}`}
+                        aria-label={`Ver detalle de ${vehicle.code}`}
                         aria-pressed={selected?.id === vehicle.id}
                         onclick={() => (selected = vehicle)}
                         ><FleetIcon name="chevron" size={16} /></button
@@ -245,21 +345,29 @@
             </table>
           </div>
         {/if}
-        <div class="catalog-footer">
-          <span>Mostrando {filtered.length} de {DEMO_VEHICLES.length} vehículos</span><span
-            ><FleetIcon name="shield" size={13} />Información de ejemplo</span
-          >
-        </div>
+        {#if pages > 1}
+          <div class="catalog-footer">
+            <span>Página {page} de {pages}</span>
+            <span class="pager">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={page <= 1 || loading}
+                onclick={() => (page -= 1)}>Anterior</Button
+              >
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={page >= pages || loading}
+                onclick={() => (page += 1)}>Siguiente</Button
+              >
+            </span>
+          </div>
+        {/if}
       </div>
       {#if selected}<VehicleDetail vehicle={selected} onclose={closeDetail} />{/if}
     </div>
   </section>
-  <div class="prototype-note">
-    <FleetIcon name="info" size={14} /><span
-      >Maqueta de Flota. Puedes explorar las vistas y los filtros; los datos son ilustrativos y no
-      se guardan cambios.</span
-    >
-  </div>
 </div>
 
 <style>
@@ -294,23 +402,6 @@
     font-size: 12px;
     color: rgb(var(--foreground-muted));
     line-height: 1.6;
-  }
-  .prototype {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 7px;
-    border: 1px solid rgb(var(--border));
-    border-radius: 5px;
-    color: rgb(var(--foreground-muted));
-    font-size: 11px;
-    white-space: nowrap;
-  }
-  .prototype > span {
-    height: 5px;
-    width: 5px;
-    border-radius: 50%;
-    background: rgb(var(--foreground-muted));
   }
   .heading-actions {
     display: flex;
@@ -469,18 +560,6 @@
     color: rgb(var(--foreground));
     border-bottom-color: rgb(var(--foreground));
     font-weight: 600;
-  }
-  .status-tabs button > span {
-    display: grid;
-    place-items: center;
-    min-width: 19px;
-    height: 17px;
-    padding: 0 4px;
-    background: rgb(var(--surface-hover));
-    border: 1px solid rgb(var(--border));
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 500;
   }
   button:focus-visible,
   select:focus-visible {
@@ -671,16 +750,6 @@
   .mileage {
     font-variant-numeric: tabular-nums;
   }
-  .prototype-note {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 7px;
-    margin-top: 25px;
-    color: rgb(var(--foreground-muted));
-    font-size: 11px;
-    line-height: 1.6;
-  }
   :global([data-theme='dark']) .fleet-workspace {
     --fleet-route-ink: 0 168 243;
     --fleet-warning-ink: 255 184 77;
@@ -824,18 +893,53 @@
     .catalog-footer {
       font-size: 11px;
     }
-    .catalog-footer > span:last-child {
-      display: none;
-    }
-    .prototype-note {
-      align-items: flex-start;
-      justify-content: flex-start;
-    }
     .result-count {
       font-size: 12px;
     }
     .catalog-heading {
       margin-bottom: 12px;
     }
+  }
+
+  .load-error {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border: 1px solid rgb(var(--danger) / 0.3);
+    border-radius: 9px;
+    background: rgb(var(--danger) / 0.07);
+    color: rgb(var(--danger));
+    font-size: 12px;
+  }
+  .load-error span {
+    flex: 1;
+  }
+  .card-skeleton {
+    height: 330px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 12px;
+    background: linear-gradient(
+      90deg,
+      rgb(var(--surface-muted)) 0%,
+      rgb(var(--surface-hover)) 50%,
+      rgb(var(--surface-muted)) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+  .refreshing {
+    opacity: 0.6;
+    transition: opacity 150ms;
+  }
+  .pager {
+    display: inline-flex;
+    gap: 6px;
   }
 </style>

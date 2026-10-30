@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { statusTone, type VehicleStatus } from './mock-data';
-  let { status }: { status: VehicleStatus } = $props();
+  import { OPERATIONAL_META, type OperationalStatus } from './catalog';
+  let { status }: { status: OperationalStatus } = $props();
+  const meta = $derived(OPERATIONAL_META[status]);
 </script>
 
-<span class="vehicle-status {statusTone(status)}"><span class="dot"></span>{status}</span>
+<span class="vehicle-status {meta.tone}"><span class="dot"></span>{meta.label}</span>
 
 <style>
   .vehicle-status {
@@ -34,5 +35,9 @@
   .maintenance {
     color: rgb(var(--fleet-warning-ink, var(--warning)));
     background: rgb(var(--warning) / 0.09);
+  }
+  .muted {
+    color: rgb(var(--foreground-muted));
+    background: rgb(var(--surface-hover));
   }
 </style>

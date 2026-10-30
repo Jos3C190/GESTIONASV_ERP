@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { VehicleKind } from './mock-data';
+  import type { VehicleKind } from './catalog';
   import { quadToMatrix3d, VEHICLE_DECALS, zoneSize, type DecalZone } from './branding';
 
   let {
