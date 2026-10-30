@@ -22,6 +22,7 @@ from app.application.tracking.simulation import (
     plausible_drive,
     point_at,
     step,
+    turns_between,
     unique_id_for,
 )
 from app.application.tracking.transfers import distance_m, locate_on_route
@@ -140,6 +141,21 @@ def test_joystick_sessions_are_kept_alive_without_moving() -> None:
     assert result.report
 
 
+def test_corners_crossed_on_a_tick_are_reported_in_order() -> None:
+    corner = distance_m(ROUTE[0], ROUTE[1])
+    assert [vertex for _, vertex, _ in turns_between(ROUTE, 0, corner + 50)] == [ROUTE[1]]
+    assert turns_between(ROUTE, 0, corner - 50) == []
+    before = _snapshot(progress_m=corner - 20, current_speed_kmh=60, last_report_at=NOW)
+    result = step(before, NOW + timedelta(seconds=2), 2.0)
+    assert result.report  # Aunque no tocaba reportar, cruzar la esquina lo exige.
+    [(vertex, course, fraction)] = result.corners
+    assert vertex == ROUTE[1]
+    assert course == pytest.approx(0, abs=1)
+    assert 0 < fraction < 1
+    lost = replace(before, signal_lost_until=NOW + timedelta(minutes=1))
+    assert step(lost, NOW + timedelta(seconds=2), 2.0).corners == ()
+
+
 def test_detour_point_is_beside_the_road_ahead() -> None:
     waypoint = detour_waypoint(ROUTE, 0)
     assert waypoint is not None
@@ -170,7 +186,7 @@ def test_osmand_report_and_receiver_url() -> None:
     assert params["lat"] == "13.480000"
     assert params["speed"] == "50.00"  # nudos
     assert params["bearing"] == "10.0"
-    assert params["timestamp"] == str(int(NOW.timestamp()))
+    assert params["timestamp"] == str(int(NOW.timestamp() * 1000))
     assert osmand_url(None, "http://traccar:8082") == "http://traccar:5055"
     assert osmand_url("http://gps.test:9000/", "http://traccar:8082") == "http://gps.test:9000"
     assert osmand_url(None, None) is None

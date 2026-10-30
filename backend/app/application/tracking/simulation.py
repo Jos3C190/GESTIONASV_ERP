@@ -50,6 +50,9 @@ STILL_KMH = 0.5
 ARRIVAL_SLACK_M = 0.5
 #: A joystick session may appear at most this far from where it was created.
 FIRST_DRIVE_MAX_M = 5_000
+#: Like the angle setting of Traccar Client: a turn sharper than this is always reported,
+#: so the trail in Traccar bends at the corner instead of cutting the block.
+TURN_REPORT_DEG = 15.0
 #: Timer slack so a 3 s period is not missed by a few milliseconds.
 REPORT_SLACK_S = 0.05
 
@@ -119,6 +122,39 @@ def point_at(route: list[LngLat], distance: float) -> tuple[LngLat, float]:
     return route[-1], bearing(*last)
 
 
+def _turn(a: float, b: float) -> float:
+    return abs((b - a + 180) % 360 - 180)
+
+
+def turns_between(
+    route: list[LngLat], start: float, end: float
+) -> list[tuple[float, LngLat, float]]:
+    """Corners of ``route`` passed between ``start`` and ``end`` meters.
+
+    Returns ``(distance, vertex, course after the vertex)`` for every vertex where the
+    road turns at least ``TURN_REPORT_DEG``.
+    """
+    corners: list[tuple[float, LngLat, float]] = []
+    walked = 0.0
+    previous: float | None = None
+    for a, b in pairwise(route):
+        segment = distance_m(a, b)
+        if segment <= 0:
+            continue
+        course = bearing(a, b)
+        if (
+            previous is not None
+            and start < walked < end
+            and _turn(previous, course) >= TURN_REPORT_DEG
+        ):
+            corners.append((walked, a, course))
+        if walked > end:
+            break
+        walked += segment
+        previous = course
+    return corners
+
+
 def detour_waypoint(route: list[LngLat], progress: float) -> LngLat | None:
     """A point off to the side of the road ahead, to force a deviation."""
     length = path_length(route)
@@ -160,6 +196,9 @@ class SimStep:
     #: Holds that ran out on this tick.
     stop_until: datetime | None
     signal_lost_until: datetime | None
+    #: Corners crossed on this tick, ``(vertex, course, fraction of the tick)``, to report
+    #: before the position so the trail follows the street.
+    corners: tuple[tuple[LngLat, float, float], ...] = ()
 
 
 def holding(snapshot: SimSnapshot, now: datetime) -> bool:
@@ -229,15 +268,24 @@ def step(snapshot: SimSnapshot, now: datetime, dt: float) -> SimStep:
     if speed < STILL_KMH and travelled < ARRIVAL_SLACK_M:
         course = snapshot.course
     moved = replace(snapshot, current_speed_kmh=speed)
+    corners: tuple[tuple[LngLat, float, float], ...] = ()
+    if not signal_lost(snapshot, now) and progress > snapshot.progress_m:
+        span = progress - snapshot.progress_m
+        corners = tuple(
+            (vertex, heading, (at - snapshot.progress_m) / span)
+            for at, vertex, heading in turns_between(snapshot.route, snapshot.progress_m, progress)
+        )
     return SimStep(
         state=state,
         progress_m=progress,
         position=position,
         course=course,
         current_speed_kmh=round(speed, 1),
-        report=_report_due(moved, now, speed),
+        # Si cruzó una esquina, informa también la posición actual: el tramo queda completo.
+        report=_report_due(moved, now, speed) or bool(corners),
         stop_until=stop_until,
         signal_lost_until=lost_until,
+        corners=corners,
     )
 
 
@@ -271,7 +319,8 @@ def osmand_params(
         "id": unique_id,
         "lat": f"{position[1]:.6f}",
         "lon": f"{position[0]:.6f}",
-        "timestamp": str(int(at.timestamp())),
+        # En milisegundos: las esquinas y la posición de un mismo segundo quedan en orden.
+        "timestamp": str(int(at.timestamp() * 1000)),
         "speed": f"{max(speed_kmh, 0.0) / KMH_PER_KNOT:.2f}",
         "bearing": f"{course % 360:.1f}",
         "accuracy": "5",
@@ -301,6 +350,7 @@ __all__ = [
     "MIN_SPEED_KMH",
     "SIMULATED_ATTRIBUTE",
     "TICK_SECONDS",
+    "TURN_REPORT_DEG",
     "SimSnapshot",
     "SimStep",
     "SimulationMode",
@@ -318,5 +368,6 @@ __all__ = [
     "point_at",
     "signal_lost",
     "step",
+    "turns_between",
     "unique_id_for",
 ]

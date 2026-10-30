@@ -30,7 +30,7 @@
     drawing = false,
     focusPoint = null,
     endpoints = null,
-    simRoutes = [],
+    simRoutes = {},
     simPoints = [],
     pilot = null,
     onselect,
@@ -59,7 +59,7 @@
       destination: { at: LngLat; label: string } | null;
     } | null;
     /** Recorridos de las sesiones del simulador y los puntos que se están marcando. */
-    simRoutes?: LngLat[][];
+    simRoutes?: Record<string, LngLat[]>;
     simPoints?: LngLat[];
     /** Unidad manejada con el joystick: se dibuja en cada cuadro, sin esperar al servidor. */
     pilot?: { key: string; lngLat: LngLat; course: number } | null;
@@ -449,7 +449,12 @@
         // La posición manejada manda: la del servidor llega con retraso.
       } else if (from[0] !== target[0] || from[1] !== target[1]) {
         // La unidad del traslado abierto avanza por su recorrido ajustado a calles.
-        const path = animationPath(from, target, vehicle.key === selectedKey ? trail : []);
+        // La unidad simulada sigue exactamente el recorrido de su sesión.
+        const path = animationPath(
+          from,
+          target,
+          simRoutes[vehicle.key] ?? (vehicle.key === selectedKey ? trail : [])
+        );
         animateTo(vehicle.key, entry.marker, path, vehicle.course);
       } else {
         state.course = vehicle.course;
@@ -563,7 +568,7 @@
 
   $effect(() => {
     if (!map || !styleReady) return;
-    map.getSource('sim-routes')?.setData(lines(simRoutes));
+    map.getSource('sim-routes')?.setData(lines(Object.values(simRoutes)));
     map.getSource('sim-points')?.setData(waypointFeatures(simPoints));
   });
 

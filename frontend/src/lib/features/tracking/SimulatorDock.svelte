@@ -33,7 +33,7 @@
     picking = $bindable(false),
     waypoints = $bindable<LngLat[]>([]),
     pilot = $bindable<{ key: string; lngLat: LngLat; course: number } | null>(null),
-    routes = $bindable<LngLat[][]>([]),
+    routes = $bindable<Record<string, LngLat[]>>({}),
     onfocus
   }: {
     /** Unidades visibles en el mapa: el joystick parte de la posición mostrada. */
@@ -43,8 +43,8 @@
     waypoints?: LngLat[];
     /** Unidad manejada con el joystick: el mapa la dibuja sin esperar al servidor. */
     pilot?: { key: string; lngLat: LngLat; course: number } | null;
-    /** Recorridos de las sesiones automáticas, para dibujarlos en el mapa. */
-    routes?: LngLat[][];
+    /** Recorridos de las sesiones automáticas por unidad del mapa: se dibujan y la unidad los sigue. */
+    routes?: Record<string, LngLat[]>;
     onfocus?: (key: string) => void;
   } = $props();
 
@@ -86,7 +86,9 @@
   });
 
   $effect(() => {
-    routes = sessions.filter((item) => item.mode === 'route').map((item) => item.route);
+    routes = Object.fromEntries(
+      sessions.filter((item) => item.mode === 'route').map((item) => [sessionKey(item), item.route])
+    );
   });
 
   $effect(() => {

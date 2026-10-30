@@ -10,7 +10,7 @@ changing right now are skipped for one tick instead of waiting.
 from __future__ import annotations
 
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select, text
@@ -116,6 +116,16 @@ async def tick(now: datetime | None = None, dt: float | None = None) -> int:
             apply_position(simulation, result.position, result.course, result.current_speed_kmh)
             if result.report:
                 try:
+                    # Las esquinas cruzadas en este tick van primero, con su hora estimada.
+                    for vertex, heading, fraction in result.corners:
+                        await send_report(
+                            simulation,
+                            vertex,
+                            speed_kmh=result.current_speed_kmh,
+                            course=heading,
+                            at=moment - timedelta(seconds=dt * (1 - fraction)),
+                        )
+                        reported += 1
                     await send_report(
                         simulation,
                         result.position,

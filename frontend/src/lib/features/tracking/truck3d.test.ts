@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { animationPath, bearing, pointAlong } from './truck3d';
+import { animationPath, bearing, pathBetween, pointAlong } from './truck3d';
 
 type LngLat = [number, number];
 
@@ -30,6 +30,23 @@ describe('3D truck motion', () => {
     expect(middle.point[0]).toBeCloseTo(0.0005, 6);
     expect(middle.point[1]).toBeCloseTo(0.001, 6);
     expect(middle.course).toBeCloseTo(90, 0);
+  });
+
+  it('turns the corner between fixes in the middle of long street segments', () => {
+    // Calle hacia el norte y luego hacia el este; los reportes caen a media cuadra.
+    const route: LngLat[] = [
+      [0, 0],
+      [0, 0.004],
+      [0.004, 0.004]
+    ];
+    const path = animationPath([0, 0.0031], [0.0012, 0.004], route);
+    expect(path).toEqual([
+      [0, 0.0031],
+      [0, 0.004],
+      [0.0012, 0.004]
+    ]);
+    expect(pathBetween(route, [0.0012, 0.004], [0, 0.0031])).toBeNull();
+    expect(pathBetween(route, [0.002, 0.002], [0.0012, 0.004])).toBeNull();
   });
 
   it('falls back to a straight line when the trail does not cover both fixes', () => {

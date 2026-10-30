@@ -303,17 +303,47 @@ export function bearing([lng1, lat1]: LngLat, [lng2, lat2]: LngLat): number {
 const planar = (a: LngLat, b: LngLat) =>
   Math.hypot((b[0] - a[0]) * Math.cos(toRad((a[1] + b[1]) / 2)), b[1] - a[1]);
 
-function nearestIndex(path: LngLat[], point: LngLat): number {
-  let best = 0;
-  let bestDistance = Infinity;
-  path.forEach((candidate, index) => {
-    const distance = planar(candidate, point);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best = index;
-    }
-  });
+/** Proyección de `point` sobre el camino: segmento, punto más cercano y distancia recorrida. */
+function locate(path: LngLat[], point: LngLat) {
+  let best = { segment: 0, point: path[0]!, along: 0, offset: Infinity };
+  let walked = 0;
+  for (let index = 0; index < path.length - 1; index++) {
+    const a = path[index]!;
+    const b = path[index + 1]!;
+    const scale = Math.cos(toRad((a[1] + b[1]) / 2));
+    const dx = (b[0] - a[0]) * scale;
+    const dy = b[1] - a[1];
+    const length = Math.hypot(dx, dy);
+    const t =
+      length === 0
+        ? 0
+        : Math.min(
+            1,
+            Math.max(0, ((point[0] - a[0]) * scale * dx + (point[1] - a[1]) * dy) / length ** 2)
+          );
+    const closest: LngLat = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    const offset = planar(closest, point);
+    if (offset < best.offset)
+      best = { segment: index, point: closest, along: walked + length * t, offset };
+    walked += length;
+  }
   return best;
+}
+
+/** ~40 m: un punto más lejos de la línea no está sobre ese recorrido. */
+const ON_PATH = 0.0004;
+
+/**
+ * Tramo del camino entre dos puntos que están sobre él (proyectados sobre sus segmentos,
+ * no sobre el vértice más cercano: en una esquina eso cortaba la cuadra). `null` si alguno
+ * de los dos queda fuera del camino o si `to` está antes que `from`.
+ */
+export function pathBetween(path: LngLat[], from: LngLat, to: LngLat): LngLat[] | null {
+  if (path.length < 2) return null;
+  const start = locate(path, from);
+  const end = locate(path, to);
+  if (start.offset > ON_PATH || end.offset > ON_PATH || end.along < start.along) return null;
+  return [from, ...path.slice(start.segment + 1, end.segment + 1), to];
 }
 
 /**
@@ -322,18 +352,7 @@ function nearestIndex(path: LngLat[], point: LngLat): number {
  * (la última posición real reportada).
  */
 export function animationPath(from: LngLat, to: LngLat, trail: LngLat[] = []): LngLat[] {
-  if (trail.length >= 2) {
-    const start = nearestIndex(trail, from);
-    const end = nearestIndex(trail, to);
-    const tolerance = 0.0015; // ~150 m: los extremos deben estar sobre el recorrido
-    if (
-      end > start &&
-      planar(trail[start]!, from) < tolerance &&
-      planar(trail[end]!, to) < tolerance
-    )
-      return [from, ...trail.slice(start + 1, end), to];
-  }
-  return [from, to];
+  return pathBetween(trail, from, to) ?? [from, to];
 }
 
 /** Punto y rumbo a una fracción `t` (0–1) del largo del camino. */

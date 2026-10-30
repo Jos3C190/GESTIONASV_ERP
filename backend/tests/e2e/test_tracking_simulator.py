@@ -35,9 +35,7 @@ SIMULATOR = "/api/v1/tracking/simulator"
 
 
 @pytest.fixture
-def reports(
-    traccar: FakeTraccar, monkeypatch: pytest.MonkeyPatch
-) -> list[dict[str, str]]:
+def reports(traccar: FakeTraccar, monkeypatch: pytest.MonkeyPatch) -> list[dict[str, str]]:
     """Enable the simulator and record what the virtual GPS sends over OsmAnd."""
     sent: list[dict[str, str]] = []
     monkeypatch.setattr(settings, "TRACKING_SIMULATOR_ENABLED", True)
@@ -47,7 +45,7 @@ def reports(
         query = {key: values[0] for key, values in parse_qs(urlsplit(url).query).items()}
         sent.append(query)
         device = next(d for d in traccar.devices.values() if d["uniqueId"] == query["id"])
-        at = datetime.fromtimestamp(int(query["timestamp"]), UTC)
+        at = datetime.fromtimestamp(int(query["timestamp"]) / 1000, UTC)
         traccar.positions.setdefault(device["id"], []).append(
             {
                 "longitude": float(query["lon"]),
@@ -103,7 +101,8 @@ async def test_route_session_stands_in_for_the_real_gps(
             (record.destination_warehouse_id, (Decimal("-88.4360"), Decimal("13.3431"))),
         ):
             warehouse = await session.get(Warehouse, warehouse_id)
-            assert warehouse is not None and warehouse.branch_id is not None
+            assert warehouse is not None
+            assert warehouse.branch_id is not None
             branch = await session.get(Branch, warehouse.branch_id)
             assert branch is not None
             branch.longitude, branch.latitude = point
@@ -215,7 +214,9 @@ async def test_joystick_permissions_and_shutdown(
     branch = (await _branches(e2e_client, admin))[0]["id"]
     suffix = uuid.uuid4().hex[:5].upper()
     created = await e2e_client.post(
-        "/api/v1/fleet/vehicles", headers=admin, json=_vehicle(branch, f"SIM-{suffix}", f"S {suffix}")
+        "/api/v1/fleet/vehicles",
+        headers=admin,
+        json=_vehicle(branch, f"SIM-{suffix}", f"S {suffix}"),
     )
     assert created.status_code == 201, created.text
     vehicle_id = created.json()["id"]

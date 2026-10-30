@@ -18,6 +18,7 @@
     type GeofenceDraft
   } from './geofences';
   import SimulatorDock from './SimulatorDock.svelte';
+  import { pathBetween } from './truck3d';
   import TrackingMap from './TrackingMap.svelte';
   import TransfersPanel from './TransfersPanel.svelte';
   import {
@@ -49,7 +50,8 @@
   const TICK_MS = 1000;
   const SITES_POLL_MS = 60000;
   const TOAST_MS = 7000;
-  const TRAIL_POINTS = 60;
+  /** Puntos del rastro en vivo (los de una ruta simulada incluyen cada vértice de las calles). */
+  const TRAIL_POINTS = 600;
 
   let mode = $state<Mode>('loading');
   let liveError = $state<string | null>(null);
@@ -169,10 +171,13 @@
       const previous = trails[vehicle.key] ?? [];
       const point: [number, number] = [vehicle.longitude, vehicle.latitude];
       const last = previous[previous.length - 1];
+      // Una unidad simulada recorre su ruta: el rastro dobla las esquinas igual que ella.
+      const segment =
+        last && simRoutes[vehicle.key] ? pathBetween(simRoutes[vehicle.key]!, last, point) : null;
       nextTrails[vehicle.key] =
         last && last[0] === point[0] && last[1] === point[1]
           ? previous
-          : [...previous, point].slice(-TRAIL_POINTS);
+          : [...previous, ...(segment ? segment.slice(1) : [point])].slice(-TRAIL_POINTS);
     }
     trails = nextTrails;
     if (selectedKey && !next.some((vehicle) => vehicle.key === selectedKey)) selectedKey = null;
@@ -491,11 +496,20 @@
     if (!key) follow = false;
   }
 
+  /** Rastro de la unidad elegida; si recorre una ruta simulada, el tramo ya recorrido de esa ruta. */
+  const selectedTrail = $derived.by<[number, number][]>(() => {
+    if (!selectedKey) return [];
+    const route = simRoutes[selectedKey];
+    if (route && route.length > 1 && selected)
+      return pathBetween(route, route[0]!, [selected.longitude, selected.latitude]) ?? [];
+    return trails[selectedKey] ?? [];
+  });
+
   // Simulador: puntos del recorrido marcados en el mapa y unidad manejada con el joystick.
   const MAX_SIM_POINTS = 25;
   let simPicking = $state(false);
   let simWaypoints = $state<[number, number][]>([]);
-  let simRoutes = $state<[number, number][][]>([]);
+  let simRoutes = $state<Record<string, [number, number][]>>({});
   let pilot = $state<{ key: string; lngLat: [number, number]; course: number } | null>(null);
 
   function addMapPoint(point: [number, number]) {
@@ -535,7 +549,7 @@
       vehicles={visible}
       {selectedKey}
       {follow}
-      trail={activeTrack ? activeTrack.trail : selectedKey ? (trails[selectedKey] ?? []) : []}
+      trail={activeTrack ? activeTrack.trail : selectedTrail}
       plannedRoute={activeTrack ? activeTrack.remainingRoute : null}
       originalRoute={activeTrack?.rerouted ? activeTrack.route : null}
       {endpoints}
