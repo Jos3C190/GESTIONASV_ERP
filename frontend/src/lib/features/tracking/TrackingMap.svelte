@@ -7,6 +7,7 @@
     animationPath,
     createTruckLayer,
     loadThree,
+    loadTruckModel,
     pointAlong,
     type TruckState
   } from './truck3d';
@@ -166,10 +167,16 @@
     }
     truckLayerReady = true;
     loadThree()
-      .then((THREE) => {
+      .then(async (THREE) => [THREE, await loadTruckModel(THREE)] as const)
+      .then(([THREE, template]) => {
         if (!map) return;
         map.addLayer(
-          createTruckLayer(map.__maplibregl, THREE, () => (threeD ? truckStates.entries() : []))
+          createTruckLayer(
+            map.__maplibregl,
+            THREE,
+            () => (threeD ? truckStates.entries() : []),
+            template
+          )
         );
         threeD = map.getPitch() > TILT_3D;
         map.triggerRepaint();

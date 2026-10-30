@@ -1,14 +1,18 @@
 /**
  * Camiones 3D para la vista inclinada de Seguimiento.
  *
- * three.js se descarga solo al inclinar el mapa (versión fija, mismo CDN que MapLibre) y
- * dibuja un camión de pocos polígonos por unidad dentro de una capa personalizada de
- * MapLibre. El modelo se arma con figuras básicas: no depende de archivos de terceros.
+ * three.js y su cargador glTF se descargan solo al inclinar el mapa (versión fija). Cada
+ * unidad es el furgón de reparto del Car Kit de Kenney (licencia CC0, servido por el propio
+ * ERP en /models/vehicles); si no se puede cargar, se usa un camión armado con figuras básicas.
  */
 import type { MapLibre } from './maplibre';
 import type { TrackingStatus } from './tracking';
 
-const THREE_URL = 'https://unpkg.com/three@0.169.0/build/three.module.min.js';
+// El cargador de jsDelivr importa three desde esta misma URL: ambos comparten instancia.
+const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.169.0/+esm';
+const GLTF_LOADER_URL =
+  'https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/loaders/GLTFLoader.js/+esm';
+const TRUCK_MODEL_URL = '/models/vehicles/delivery.glb';
 
 // three.js se carga en tiempo de ejecución, sin tipos empaquetados.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,6 +26,40 @@ export function loadThree(): Promise<Three> {
     throw error;
   });
   return threePromise;
+}
+
+let modelPromise: Promise<Three | null> | null = null;
+
+/**
+ * Furgón normalizado: 7 m de largo, apoyado en el suelo, centrado y con el frente hacia -Z.
+ * Devuelve null si no se pudo cargar (la capa usa entonces el camión de respaldo).
+ */
+export function loadTruckModel(THREE: Three): Promise<Three | null> {
+  modelPromise ??= import(/* @vite-ignore */ GLTF_LOADER_URL)
+    .then(
+      ({ GLTFLoader }) =>
+        new Promise<Three>((resolve, reject) =>
+          new GLTFLoader().load(TRUCK_MODEL_URL, resolve, undefined, reject)
+        )
+    )
+    .then((gltf: Three) => {
+      const model = gltf.scene;
+      const bounds = new THREE.Box3().setFromObject(model);
+      const size = bounds.getSize(new THREE.Vector3());
+      const center = bounds.getCenter(new THREE.Vector3());
+      const scale = TRUCK_LENGTH_M / Math.max(size.z, size.x);
+      model.position.set(-center.x, -bounds.min.y, -center.z);
+      const scaled = new THREE.Group();
+      scaled.add(model);
+      scaled.scale.setScalar(scale);
+      // El modelo del kit mira hacia +Z; la capa espera el frente hacia -Z.
+      scaled.rotation.y = Math.PI;
+      const template = new THREE.Group();
+      template.add(scaled);
+      return template;
+    })
+    .catch(() => null);
+  return modelPromise;
 }
 
 export interface TruckState {
@@ -50,6 +88,40 @@ const MIN_SCREEN_PX = 18;
  * Camión de reparto mirando hacia -Z (norte una vez ubicado en el mapa), con Y hacia arriba,
  * en metros. Devuelve el grupo y las piezas que cambian con el estado.
  */
+/**
+ * Una unidad a partir del furgón del kit: su textura no se tiñe (ventanas y llantas se
+ * verían mal), así que el estado se muestra con un disco de color bajo el vehículo.
+ */
+function buildFromModel(THREE: Three, template: Three) {
+  const group = new THREE.Group();
+  group.add(template.clone(true));
+  // Base fina con grosor real (no un plano): se ve sobre el asfalto sin parpadear.
+  const paint = new THREE.MeshBasicMaterial({
+    color: STATUS_COLORS.moving,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false
+  });
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.0, 0.1, 40), paint);
+  disc.position.y = 0.08;
+  group.add(disc);
+  const ring = selectionRing(THREE);
+  group.add(ring);
+  return { group, paint, ring };
+}
+
+function selectionRing(THREE: Three) {
+  // Aro con volumen ligeramente elevado: no compite con el suelo del mapa.
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(4.3, 0.22, 8, 56),
+    new THREE.MeshBasicMaterial({ color: 0x0284c7 })
+  );
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.35;
+  return ring;
+}
+
+/** Camión de respaldo armado con figuras básicas, por si el modelo no carga. */
 function buildTruck(THREE: Three) {
   const group = new THREE.Group();
   const paint = new THREE.MeshStandardMaterial({
@@ -116,21 +188,7 @@ function buildTruck(THREE: Three) {
   }
 
   // Aro de selección en el suelo.
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(4.2, 4.8, 48),
-    new THREE.MeshBasicMaterial({
-      color: 0x0284c7,
-      transparent: true,
-      opacity: 0.9,
-      depthWrite: false,
-      // Se pinta antes que el camión y sin prueba de profundidad: el suelo del mapa no lo corta.
-      depthTest: false,
-      side: THREE.DoubleSide
-    })
-  );
-  ring.renderOrder = -1;
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.25;
+  const ring = selectionRing(THREE);
   group.add(ring);
   return { group, paint, ring };
 }
@@ -142,7 +200,8 @@ function buildTruck(THREE: Three) {
 export function createTruckLayer(
   maplibregl: MapLibre,
   THREE: Three,
-  states: () => Iterable<[string, TruckState]>
+  states: () => Iterable<[string, TruckState]>,
+  template: Three | null = null
 ) {
   let renderer: Three;
   let map: MapLibre;
@@ -152,10 +211,10 @@ export function createTruckLayer(
   // Luz ambiente, sol y relleno opuesto: ninguna cara del camión queda negra al girar.
   scene.add(new THREE.HemisphereLight(0xffffff, 0x94a3b8, 1.9));
   const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-  sun.position.set(30, -40, 80);
+  sun.position.set(30, 80, 40);
   scene.add(sun);
   const fill = new THREE.DirectionalLight(0xffffff);
-  fill.position.set(-30, 40, 30);
+  fill.position.set(-30, 40, -30);
   scene.add(fill);
 
   return {
@@ -182,29 +241,32 @@ export function createTruckLayer(
       );
       const zoom = map.getZoom();
       const seen = new Set<string>();
+      const frame: [ReturnType<typeof buildTruck>, Three][] = [];
       for (const [key, state] of states()) {
         seen.add(key);
         let truck = trucks.get(key);
         if (!truck) {
-          truck = buildTruck(THREE);
+          truck = template ? buildFromModel(THREE, template) : buildTruck(THREE);
           trucks.set(key, truck);
           scene.add(truck.group);
         }
         truck.paint.color.setHex(STATUS_COLORS[state.status]);
         truck.ring.visible = state.selected;
+        // El rumbo queda en el propio camión (Y arriba); Mercator crece hacia el sur,
+        // de ahí el medio giro extra para que el frente -Z apunte al rumbo.
+        truck.group.rotation.set(0, Math.PI + (state.course * Math.PI) / 180, 0);
         const mercator = maplibregl.MercatorCoordinate.fromLngLat(state.lngLat, 0);
         const metersPerPixel =
           (156543.03392 * Math.cos((state.lngLat[1] * Math.PI) / 180)) / 2 ** zoom;
         const sizeMeters = Math.max(TRUCK_LENGTH_M, MIN_SCREEN_PX * metersPerPixel);
         const scale = mercator.meterInMercatorCoordinateUnits() * (sizeMeters / TRUCK_LENGTH_M);
-        truck.group.matrixAutoUpdate = false;
-        truck.group.matrix = new THREE.Matrix4()
+        // Posición y escala se combinan con la matriz del mapa en la CPU (doble precisión):
+        // en la GPU, en precisión simple, los triángulos se recortarían.
+        const placement = new THREE.Matrix4()
           .makeTranslation(mercator.x, mercator.y, mercator.z)
-          // Escala uniforme (sin espejo, para que la luz caiga bien) y giro: el frente -Z
-          // apunta al rumbo; Mercator crece hacia el sur, de ahí el medio giro extra.
           .scale(new THREE.Vector3(scale, scale, scale))
-          .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2))
-          .multiply(new THREE.Matrix4().makeRotationY(Math.PI + (state.course * Math.PI) / 180));
+          .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+        frame.push([truck, projection.clone().multiply(placement)]);
       }
       for (const [key, truck] of trucks) {
         if (!seen.has(key)) {
@@ -212,9 +274,15 @@ export function createTruckLayer(
           trucks.delete(key);
         }
       }
-      camera.projectionMatrix = projection;
       renderer.resetState();
-      renderer.render(scene, camera);
+      trucks.forEach((truck) => (truck.group.visible = false));
+      for (const [truck, matrix] of frame) {
+        truck.group.visible = true;
+        camera.projectionMatrix = matrix;
+        camera.projectionMatrixInverse.copy(matrix).invert();
+        renderer.render(scene, camera);
+        truck.group.visible = false;
+      }
     }
   };
 }
