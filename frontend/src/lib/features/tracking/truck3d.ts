@@ -38,70 +38,100 @@ const STATUS_COLORS: Record<TrackingStatus, number> = {
   offline: 0x71717a
 };
 
-/** Largo real aproximado del modelo, en metros (la escala lo agranda al alejarse). */
-const TRUCK_LENGTH_M = 8;
-/** Tamaño mínimo en pantalla para que la unidad se distinga a cualquier zoom. */
-const MIN_SCREEN_PX = 46;
+/** Largo real del modelo en metros: cabe en un carril (2,3 m de ancho). */
+const TRUCK_LENGTH_M = 7;
+/**
+ * Tamaño mínimo en pantalla: a escala real casi no se ve con el mapa alejado, así que
+ * crece solo lo necesario para distinguirse; de cerca queda del tamaño de la calle.
+ */
+const MIN_SCREEN_PX = 18;
 
 /**
- * Camión mirando hacia -Z (norte una vez ubicado en el mapa), con Y hacia arriba.
- * Devuelve el grupo y los materiales que cambian con el estado.
+ * Camión de reparto mirando hacia -Z (norte una vez ubicado en el mapa), con Y hacia arriba,
+ * en metros. Devuelve el grupo y las piezas que cambian con el estado.
  */
 function buildTruck(THREE: Three) {
   const group = new THREE.Group();
-  const paint = new THREE.MeshLambertMaterial({ color: STATUS_COLORS.moving });
-  const cargoMaterial = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
-  const dark = new THREE.MeshLambertMaterial({ color: 0x1f2937 });
-  const glass = new THREE.MeshLambertMaterial({ color: 0x93c5fd });
-  const light = new THREE.MeshBasicMaterial({ color: 0xfef9c3 });
-  const box = (
-    w: number,
-    h: number,
-    d: number,
-    material: unknown,
-    x: number,
-    y: number,
-    z: number
-  ) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
-    mesh.position.set(x, y, z);
+  const paint = new THREE.MeshStandardMaterial({
+    color: STATUS_COLORS.moving,
+    roughness: 0.45,
+    metalness: 0.15
+  });
+  const body = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.6 });
+  const trim = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 });
+  const tyre = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.9 });
+  const hub = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.3, metalness: 0.6 });
+  const glass = new THREE.MeshStandardMaterial({
+    color: 0x1e3a5f,
+    roughness: 0.15,
+    metalness: 0.3
+  });
+  const lamp = new THREE.MeshBasicMaterial({ color: 0xfff7cc });
+  const rear = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+
+  const box = (size: [number, number, number], material: unknown, at: [number, number, number]) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
+    mesh.position.set(...at);
     group.add(mesh);
     return mesh;
   };
-  // Chasis, caja de carga y cabina.
-  box(2.3, 0.35, 7.6, dark, 0, 0.75, 0.2);
-  box(2.4, 2.5, 5.2, cargoMaterial, 0, 2.2, 1.4);
-  box(2.3, 0.18, 5.2, paint, 0, 3.5, 1.4); // franja superior con el color de estado
-  box(2.3, 2.0, 2.0, paint, 0, 1.95, -2.4);
-  box(2.0, 0.85, 0.08, glass, 0, 2.45, -3.42); // parabrisas
-  box(0.45, 0.25, 0.08, light, -0.75, 1.2, -3.42);
-  box(0.45, 0.25, 0.08, light, 0.75, 1.2, -3.42);
-  // Ruedas: eje delantero y doble eje trasero.
-  const wheel = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 14);
-  for (const z of [-2.5, 1.6, 2.9]) {
-    for (const x of [-1.15, 1.15]) {
-      const mesh = new THREE.Mesh(wheel, dark);
-      mesh.rotation.z = Math.PI / 2;
-      mesh.position.set(x, 0.5, z);
-      group.add(mesh);
+
+  // Chasis y parachoques.
+  box([2.0, 0.3, 6.6], trim, [0, 0.62, 0.15]);
+  box([2.25, 0.28, 0.22], trim, [0, 0.62, -3.25]);
+  // Caja de carga blanca con franja del color de estado y puertas traseras.
+  box([2.3, 2.3, 4.4], body, [0, 1.95, 0.95]);
+  box([2.32, 0.22, 4.42], paint, [0, 1.0, 0.95]);
+  box([0.04, 2.0, 0.02], trim, [0, 1.95, 3.16]);
+  box([0.3, 0.18, 0.05], rear, [-0.95, 0.85, 3.18]);
+  box([0.3, 0.18, 0.05], rear, [0.95, 0.85, 3.18]);
+  // Cabina pintada con techo, parabrisas inclinado y ventanas laterales.
+  box([2.2, 1.55, 1.75], paint, [0, 1.55, -2.2]);
+  box([2.1, 0.35, 1.5], paint, [0, 2.45, -2.1]);
+  const windshield = box([1.95, 0.75, 0.06], glass, [0, 1.95, -3.08]);
+  windshield.rotation.x = -0.18;
+  box([0.06, 0.6, 0.9], glass, [-1.11, 1.95, -2.25]);
+  box([0.06, 0.6, 0.9], glass, [1.11, 1.95, -2.25]);
+  box([0.35, 0.18, 0.05], lamp, [-0.75, 1.0, -3.1]);
+  box([0.35, 0.18, 0.05], lamp, [0.75, 1.0, -3.1]);
+  // Espejos.
+  box([0.25, 0.3, 0.06], trim, [-1.3, 1.95, -2.75]);
+  box([0.25, 0.3, 0.06], trim, [1.3, 1.95, -2.75]);
+
+  // Ruedas con rin: eje delantero y doble eje trasero.
+  const wheel = new THREE.CylinderGeometry(0.46, 0.46, 0.34, 20);
+  const rim = new THREE.CylinderGeometry(0.24, 0.24, 0.36, 14);
+  for (const z of [-2.25, 1.55, 2.6]) {
+    for (const x of [-1.02, 1.02]) {
+      for (const [geometry, material] of [
+        [wheel, tyre],
+        [rim, hub]
+      ] as const) {
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.rotation.z = Math.PI / 2;
+        mesh.position.set(x, 0.46, z);
+        group.add(mesh);
+      }
     }
   }
+
   // Aro de selección en el suelo.
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(5.2, 6.2, 40),
+    new THREE.RingGeometry(4.2, 4.8, 48),
     new THREE.MeshBasicMaterial({
       color: 0x0284c7,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.9,
+      depthWrite: false,
+      // Se pinta antes que el camión y sin prueba de profundidad: el suelo del mapa no lo corta.
+      depthTest: false,
       side: THREE.DoubleSide
     })
   );
+  ring.renderOrder = -1;
   ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.05;
+  ring.position.y = 0.25;
   group.add(ring);
-  group.traverse((node: Three) => {
-    if (node.material) node.material.side = THREE.DoubleSide;
-  });
   return { group, paint, ring };
 }
 
@@ -124,7 +154,7 @@ export function createTruckLayer(
   const sun = new THREE.DirectionalLight(0xffffff, 1.4);
   sun.position.set(30, -40, 80);
   scene.add(sun);
-  const fill = new THREE.DirectionalLight(0xffffff, 0.8);
+  const fill = new THREE.DirectionalLight(0xffffff);
   fill.position.set(-30, 40, 30);
   scene.add(fill);
 
@@ -170,9 +200,11 @@ export function createTruckLayer(
         truck.group.matrixAutoUpdate = false;
         truck.group.matrix = new THREE.Matrix4()
           .makeTranslation(mercator.x, mercator.y, mercator.z)
-          .scale(new THREE.Vector3(scale, -scale, scale))
+          // Escala uniforme (sin espejo, para que la luz caiga bien) y giro: el frente -Z
+          // apunta al rumbo; Mercator crece hacia el sur, de ahí el medio giro extra.
+          .scale(new THREE.Vector3(scale, scale, scale))
           .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2))
-          .multiply(new THREE.Matrix4().makeRotationY((-state.course * Math.PI) / 180));
+          .multiply(new THREE.Matrix4().makeRotationY(Math.PI + (state.course * Math.PI) / 180));
       }
       for (const [key, truck] of trucks) {
         if (!seen.has(key)) {
