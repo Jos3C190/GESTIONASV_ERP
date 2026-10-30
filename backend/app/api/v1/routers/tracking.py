@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import Select, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import aliased
 
 from app.api.v1.company_access import effective_company_id
@@ -29,12 +30,14 @@ from app.api.v1.fleet_scope import FleetScope, get_fleet_scope
 from app.api.v1.schemas.tracking import (
     GeofenceCreate,
     GeofenceOut,
+    SitesOut,
     TrackedTransferOut,
     TrackingEventOut,
     TrackingSnapshotOut,
     TransferRouteOut,
     TransferTrackOut,
 )
+from app.api.v1.site_sync import load_sites, run_site_sync, sync_if_stale, sync_state
 from app.api.v1.traccar_access import UNAVAILABLE, traccar, traccar_credentials
 from app.application.fleet.views import build_vehicle_views
 from app.application.rbac.check_permission import CheckPermissionUseCase
@@ -53,6 +56,7 @@ from app.application.tracking.devices import (
     geofence_branch,
     geofence_visible,
 )
+from app.application.tracking.sites import is_site_geofence
 from app.application.tracking.transfers import (
     build_transfer_progress,
     match_trail,
@@ -61,6 +65,7 @@ from app.application.tracking.transfers import (
     resolve_active_route,
 )
 from app.core.config import settings
+from app.core.exceptions import ConflictError
 from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.fleet import (
     DriverModel,
@@ -172,10 +177,12 @@ async def _geofence_out(
         if geofence is None:
             continue
         branch = geofence_branch(item)
+        system = is_site_geofence(item)
         geofence.update(
             branch_id=branch,
             branch_name=names.get(branch) if branch else None,
-            can_manage=_can_manage(scope, branch),
+            can_manage=not system and _can_manage(scope, branch),
+            system=system,
         )
         result.append(GeofenceOut.model_validate(geofence))
     return result
@@ -189,6 +196,7 @@ async def list_geofences(
     checker: Checker,
 ) -> list[GeofenceOut]:
     scope = await _scope(request, session, current, checker)
+    await sync_if_stale(session, scope.company_id)
     return await _geofence_out(session, scope, await _visible_geofences(scope))
 
 
@@ -270,11 +278,53 @@ async def delete_geofence(
     )
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Geocerca no encontrada.")
+    if is_site_geofence(target):
+        raise ConflictError(
+            "Esta geocerca representa una sucursal o almacén; se administra desde esos módulos.",
+            code="system_geofence",
+        )
     if not _can_manage(scope, geofence_branch(target)):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "No puede eliminar geocercas de toda la empresa."
         )
     await traccar(f"/api/geofences/{geofence_id}", method="DELETE")
+
+
+# ---------------------------------------------------------------- sites
+
+
+@router.get("/sites", response_model=SitesOut, dependencies=READ)
+async def list_sites(
+    request: Request,
+    session: SessionDep,
+) -> SitesOut:
+    """Every operating branch and warehouse of the company, for all its branches to see."""
+    company_id = effective_company_id(request)
+    await sync_if_stale(session, company_id)
+    sites, missing = await load_sites(session, company_id)
+    return SitesOut.model_validate(
+        {
+            "sites": [asdict(site) for site in sites],
+            "missing": missing,
+            "sync": await sync_state(session, company_id),
+        }
+    )
+
+
+@router.post("/sites/sync", response_model=SitesOut, dependencies=MANAGE_GEOFENCES)
+async def sync_sites(request: Request, session: SessionDep) -> SitesOut:
+    """Reconcile the automatic geofences now (e.g. after Traccar was down)."""
+    company_id = effective_company_id(request)
+    await run_site_sync(company_id)
+    session.expire_all()
+    sites, missing = await load_sites(session, company_id)
+    return SitesOut.model_validate(
+        {
+            "sites": [asdict(site) for site in sites],
+            "missing": missing,
+            "sync": await sync_state(session, company_id),
+        }
+    )
 
 
 # ---------------------------------------------------------------- events
@@ -316,8 +366,11 @@ async def list_tracking_events(
         device_id: {"id": device_id, "name": vehicle.code, "uniqueId": vehicle.gps_device_unique_id}
         for device_id, vehicle in by_device.items()
     }
+    system_ids = {geofence["id"] for geofence in geofences if is_site_geofence(geofence)}
     return [
-        TrackingEventOut.model_validate(item)
+        TrackingEventOut.model_validate(
+            {**item, "geofence_system": item.get("geofence_id") in system_ids}
+        )
         for item in build_events(
             events,
             devices,
@@ -344,12 +397,13 @@ def _transfer_query(scope: FleetScope) -> Select[Any]:
             Employee.last_name,
             origin_wh.name,
             origin_br.name,
-            origin_br.latitude,
-            origin_br.longitude,
+            func.coalesce(origin_wh.latitude, origin_br.latitude),
+            func.coalesce(origin_wh.longitude, origin_br.longitude),
             destination_wh.name,
             destination_br.name,
-            destination_br.latitude,
-            destination_br.longitude,
+            func.coalesce(destination_wh.latitude, destination_br.latitude),
+            func.coalesce(destination_wh.longitude, destination_br.longitude),
+            func.coalesce(destination_wh.geofence_radius_m, destination_br.geofence_radius_m),
         )
         .join(origin_wh, origin_wh.id == InventoryTransferModel.origin_warehouse_id)
         .join(origin_br, origin_br.id == origin_wh.branch_id)
@@ -386,9 +440,22 @@ def _place(warehouse: str, branch: str, lat: object, lng: object) -> dict[str, A
 
 
 def _transfer_row(row: Any) -> tuple[dict[str, Any], FleetVehicleModel | None]:
-    (transfer, vehicle, fleet, first, last, o_wh, o_br, o_lat, o_lng, d_wh, d_br, d_lat, d_lng) = (
-        row
-    )
+    (
+        transfer,
+        vehicle,
+        fleet,
+        first,
+        last,
+        o_wh,
+        o_br,
+        o_lat,
+        o_lng,
+        d_wh,
+        d_br,
+        d_lat,
+        d_lng,
+        d_radius,
+    ) = row
     data = {
         "id": transfer.id,
         "code": transfer.code,
@@ -400,6 +467,7 @@ def _transfer_row(row: Any) -> tuple[dict[str, Any], FleetVehicleModel | None]:
         "driver_name": f"{first} {last}".strip() if first else None,
         "origin": _place(o_wh, o_br, o_lat, o_lng),
         "destination": _place(d_wh, d_br, d_lat, d_lng),
+        "arrival_radius_m": d_radius,
     }
     return data, fleet
 
@@ -458,6 +526,7 @@ async def get_transfer_track(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Traslado no encontrado.")
     data, fleet = _transfer_row(row)
+    arrival_radius_m = data.pop("arrival_radius_m")
     origin, destination = data["origin"], data["destination"]
     data.update(gps_configured=traccar_credentials() is not None, device_found=False)
     if None in (
@@ -466,7 +535,7 @@ async def get_transfer_track(
         destination["latitude"],
         destination["longitude"],
     ):
-        # Sin coordenadas de sucursal no hay ruta que dibujar; se devuelve el traslado tal cual.
+        # Sin coordenadas de origen o destino no hay ruta que dibujar; se devuelve tal cual.
         return TransferTrackOut.model_validate(data)
     origin_point = (origin["longitude"], origin["latitude"])
     destination_point = (destination["longitude"], destination["latitude"])
@@ -496,6 +565,7 @@ async def get_transfer_track(
             active_route=active_route,
             rerouted=rerouted,
             deviation_m=deviation,
+            arrival_radius_m=arrival_radius_m,
         ),
         trail_matched=trail_matched,
     )

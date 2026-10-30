@@ -1,4 +1,5 @@
 import type { TrackedVehicleOut, TrackingEventOut } from '$lib/api/client';
+import { siteEventTitle } from './sites';
 
 export type EventGroup = 'geofence' | 'speed' | 'engine' | 'alarm' | 'stop';
 export type EventTone = 'info' | 'success' | 'warning' | 'danger';
@@ -38,6 +39,7 @@ const ALARMS: Record<string, string> = {
 interface RawEvent {
   type: string;
   geofence_name: string | null;
+  geofence_system?: boolean;
   alarm: string | null;
   speed_kmh: number | null;
 }
@@ -47,6 +49,14 @@ export function describeEvent(
   event: RawEvent
 ): Pick<TrackingEvent, 'group' | 'tone' | 'title' | 'detail'> {
   const zone = event.geofence_name ?? 'geocerca';
+  const site = siteEventTitle(event.type, event.geofence_name, event.geofence_system ?? false);
+  if (site)
+    return {
+      group: 'geofence',
+      tone: event.type === 'geofenceEnter' ? 'success' : 'info',
+      title: site,
+      detail: null
+    };
   switch (event.type) {
     case 'geofenceEnter':
       return { group: 'geofence', tone: 'info', title: `Entró a ${zone}`, detail: null };

@@ -82,6 +82,8 @@ class GeofenceOut(BaseModel):
     branch_id: uuid.UUID | None = None
     branch_name: str | None = None
     can_manage: bool = False
+    #: Automatic geofence of a branch or warehouse; managed from those modules.
+    system: bool = False
 
 
 class GeofenceCreate(BaseModel):
@@ -100,7 +102,10 @@ class TrackingEventOut(BaseModel):
     device_id: int
     device_name: str
     device_unique_id: str
+    geofence_id: int | None = None
     geofence_name: str | None = None
+    #: The geofence is the automatic one of a branch or warehouse.
+    geofence_system: bool = False
     alarm: str | None = None
     speed_kmh: float | None = None
     latitude: float | None = None
@@ -159,3 +164,47 @@ class TransferTrackOut(TrackedTransferOut):
     arrived: bool = False
     off_route: bool = False
     off_route_m: float = 0
+
+
+class SiteWarehouseOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    code: str | None = None
+    is_central: bool
+    status: str
+
+
+class SiteOut(BaseModel):
+    """A fixed place on the tracking map: a branch or a warehouse in its own building."""
+
+    kind: Literal["branch", "warehouse"]
+    id: uuid.UUID
+    name: str
+    code: str | None = None
+    address: str | None = None
+    latitude: float
+    longitude: float
+    radius_m: int
+    status: str
+    branch_id: uuid.UUID
+    branch_name: str
+    warehouses: list[SiteWarehouseOut] = []
+
+
+class MissingSiteOut(BaseModel):
+    kind: Literal["branch", "warehouse"]
+    id: uuid.UUID
+    name: str
+
+
+class SiteSyncOut(BaseModel):
+    configured: bool
+    synced_at: datetime | None = None
+    last_attempt_at: datetime | None = None
+    error: str | None = None
+
+
+class SitesOut(BaseModel):
+    sites: list[SiteOut]
+    missing: list[MissingSiteOut]
+    sync: SiteSyncOut

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { GeofenceOut } from '$lib/api/client';
+  import type { GeofenceOut, SiteOut } from '$lib/api/client';
   import { geofenceCollection } from './geofences';
+  import { siteAreas, sitePopup } from './sites';
   import { DEFAULT_CENTER, loadMapLibre, MAP_STYLE, type MapLibre } from './maplibre';
   import { STATUS_LABELS, type TrackedVehicle } from './tracking';
 
@@ -15,6 +16,7 @@
     plannedRoute = null,
     originalRoute = null,
     geofences = [],
+    sites = [],
     highlightedGeofence = null,
     draft = null,
     drawing = false,
@@ -32,6 +34,8 @@
     /** Ruta planeada original cuando la unidad se desvió y se recalculó. */
     originalRoute?: LngLat[] | null;
     geofences?: GeofenceOut[];
+    /** Sucursales y almacenes: capa fija que no se puede ocultar. */
+    sites?: SiteOut[];
     highlightedGeofence?: number | null;
     /** Contorno en edición: anillo del polígono o círculo y sus vértices. */
     draft?: { ring: LngLat[]; vertices: LngLat[] } | null;
@@ -48,6 +52,10 @@
     ondrawfinish?: () => void;
   } = $props();
 
+  const SITE_BRANCH_ICON =
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"/></svg>';
+  const SITE_WAREHOUSE_ICON =
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-5 9 5v11H3zM7 20v-7h10v7M7 16h10"/></svg>';
   const TRUCK_PATH =
     'M3 5h11v12H3z M14 9h4l3 4v4h-7 M7 19a2 2 0 100-4 2 2 0 000 4 M17 19a2 2 0 100-4 2 2 0 000 4';
 
@@ -84,6 +92,7 @@
     return { top: 60, bottom: 60, left: wide ? 380 : 40, right: 60 };
   };
   let endpointMarkers: MapLibre[] = [];
+  let siteMarkers: MapLibre[] = [];
   const ANIMATION_MS = 900;
   const animations = new Map<string, number>();
 
@@ -113,6 +122,24 @@
   // Las capas propias se agregan cuando el estilo termina de cargar.
   function addOverlayLayers() {
     if (!map || map.getSource('planned-route')) return;
+    map.addSource('site-areas', { type: 'geojson', data: siteAreas([]) });
+    map.addLayer({
+      id: 'site-areas-fill',
+      type: 'fill',
+      source: 'site-areas',
+      paint: { 'fill-color': '#0f766e', 'fill-opacity': 0.06 }
+    });
+    map.addLayer({
+      id: 'site-areas-line',
+      type: 'line',
+      source: 'site-areas',
+      paint: {
+        'line-color': '#0f766e',
+        'line-width': 1.5,
+        'line-opacity': 0.7,
+        'line-dasharray': [2, 2]
+      }
+    });
     map.addSource('geofences', { type: 'geojson', data: geofenceCollection([]) });
     map.addLayer({
       id: 'geofences-fill',
@@ -333,6 +360,51 @@
 
   $effect(() => {
     if (!map || !styleReady) return;
+    map.getSource('site-areas')?.setData(siteAreas(sites));
+  });
+
+  // Marcadores de sucursales y almacenes; quedan debajo de las unidades (z-index en CSS).
+  $effect(() => {
+    if (!map) return;
+    siteMarkers.forEach((marker) => marker.remove());
+    siteMarkers = [];
+    for (const site of sites) {
+      const element = document.createElement('button');
+      element.type = 'button';
+      element.className = `tm-site ${site.kind}`;
+      element.setAttribute(
+        'aria-label',
+        `${site.kind === 'branch' ? 'Sucursal' : 'Almacén'} ${site.name}`
+      );
+      element.innerHTML = `<span class="tm-site-pin">${
+        site.kind === 'branch' ? SITE_BRANCH_ICON : SITE_WAREHOUSE_ICON
+      }</span>`;
+      const popup = new map.__maplibregl.Popup({
+        offset: 18,
+        closeButton: false,
+        maxWidth: '260px'
+      }).setDOMContent(sitePopup(site));
+      siteMarkers.push(
+        new map.__maplibregl.Marker({ element, anchor: 'bottom' })
+          .setLngLat([site.longitude, site.latitude])
+          .setPopup(popup)
+          .addTo(map)
+      );
+    }
+  });
+
+  let sitesFitted = false;
+  $effect(() => {
+    // Sin unidades en el mapa, se encuadran los lugares de la empresa.
+    if (!map || sitesFitted || fitted || vehicles.length || !sites.length) return;
+    sitesFitted = true;
+    const bounds = new map.__maplibregl.LngLatBounds();
+    sites.forEach((site) => bounds.extend([site.longitude, site.latitude]));
+    map.fitBounds(bounds, { padding: mapPadding(), maxZoom: 13, duration: 0 });
+  });
+
+  $effect(() => {
+    if (!map || !styleReady) return;
     map.getSource('draft')?.setData(polygon(draft?.ring ?? []));
     map.getSource('draft-vertices')?.setData(points(draft?.vertices ?? []));
   });
@@ -422,6 +494,53 @@
 </div>
 
 <style>
+  :global(.tm-site) {
+    z-index: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+  :global(.tm-site-pin) {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border: 2px solid #fff;
+    border-radius: 50% 50% 50% 0;
+    background: #0f766e;
+    color: #fff;
+    box-shadow: 0 2px 6px rgb(15 23 42 / 0.3);
+    transform: rotate(-45deg);
+  }
+  :global(.tm-site-pin svg) {
+    transform: rotate(45deg);
+  }
+  :global(.tm-site.warehouse .tm-site-pin) {
+    background: #b45309;
+  }
+  :global(.tm-marker) {
+    z-index: 2;
+  }
+  :global(.tm-site-popup) {
+    display: grid;
+    gap: 4px;
+    font-size: 12px;
+    color: #0f172a;
+  }
+  :global(.tm-site-popup strong) {
+    font-size: 13px;
+  }
+  :global(.tm-site-popup small) {
+    color: #64748b;
+  }
+  :global(.tm-site-popup ul) {
+    display: grid;
+    gap: 2px;
+    margin: 4px 0 0;
+    padding-left: 14px;
+  }
+
   .tracking-map {
     position: absolute;
     inset: 0;

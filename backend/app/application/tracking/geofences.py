@@ -120,6 +120,7 @@ def build_events(
                 "device_id": device["id"],
                 "device_name": str(device.get("name", "")),
                 "device_unique_id": str(device.get("uniqueId", "")),
+                "geofence_id": event.get("geofenceId") or None,
                 "geofence_name": geofences.get(event.get("geofenceId") or 0),
                 "alarm": attributes.get("alarm"),
                 "speed_kmh": round(float(position.get("speed") or 0) * KNOTS_TO_KMH, 1)

@@ -355,11 +355,13 @@ def build_transfer_progress(
     active_route: dict[str, Any] | None = None,
     rerouted: bool = False,
     deviation_m: float | None = None,
+    arrival_radius_m: float | None = None,
 ) -> dict[str, Any]:
     """Trail, current position, progress, ETA, arrival and deviation for a transfer.
 
     ``trail`` is the (optionally street-matched) driven path; ``active_route``
     the route currently being followed (the planned one or a recalculation).
+    ``arrival_radius_m`` is the destination site's geofence radius.
     """
     driven = trail if trail is not None else raw_trail(positions)
     active = active_route or route
@@ -387,7 +389,7 @@ def build_transfer_progress(
         "course": float(last.get("course") or 0),
         "fix_time": _parse_time(last.get("fixTime")),
     }
-    arrived = distance_m(current, destination) <= ARRIVAL_RADIUS_M
+    arrived = distance_m(current, destination) <= (arrival_radius_m or ARRIVAL_RADIUS_M)
     active_points = _as_points(active["coordinates"])
     active_total = route_length_m(active_points) or active["distance_m"] or 1.0
     along, lateral, remaining_geometry = split_route(current, active_points)

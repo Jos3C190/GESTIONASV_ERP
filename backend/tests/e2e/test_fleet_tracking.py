@@ -78,8 +78,14 @@ class FakeTraccar:
                 return [g for g in self.geofences.values() if (device_id, g["id"]) in self.links]
             return list(self.geofences.values())
         if segments[0] == "geofences" and method == "DELETE":
-            self.geofences.pop(int(segments[1]))
+            geofence_id = int(segments[1])
+            self.geofences.pop(geofence_id)
+            self.links = {link for link in self.links if link[1] != geofence_id}
             return None
+        if segments[0] == "geofences" and method == "PUT":
+            geofence_id = int(segments[1])
+            self.geofences[geofence_id] = {**body, "id": geofence_id}
+            return self.geofences[geofence_id]
         if segments == ["permissions"]:
             link = (body["deviceId"], body["geofenceId"])
             if method == "POST":
@@ -229,7 +235,7 @@ async def test_tracking_is_scoped_to_the_users_branches(
     assert foreign_branch.status_code == 201, foreign_branch.text
 
     visible = (await e2e_client.get("/api/v1/tracking/geofences", headers=manager)).json()
-    by_name = {item["name"]: item for item in visible}
+    by_name = {item["name"]: item for item in visible if not item["system"]}
     assert set(by_name) == {"Patio A", "Zona metropolitana"}
     assert by_name["Zona metropolitana"]["can_manage"] is False
     assert (

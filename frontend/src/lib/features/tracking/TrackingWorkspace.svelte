@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, type GeofenceOut, type TrackedVehicleOut } from '$lib/api/client';
+  import { api, type GeofenceOut, type SitesOut, type TrackedVehicleOut } from '$lib/api/client';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import { branch } from '$lib/stores/branch.svelte';
   import { company } from '$lib/stores/company.svelte';
@@ -9,6 +9,7 @@
   import { fromTraccarEvents, type TrackingEvent } from './events';
   import GeofencePanel from './GeofencePanel.svelte';
   import {
+    circleRing,
     distanceM,
     draftRing,
     draftShape,
@@ -45,6 +46,7 @@
   const LIVE_POLL_MS = 5000;
   const EVENTS_POLL_MS = 15000;
   const TICK_MS = 1000;
+  const SITES_POLL_MS = 60000;
   const TOAST_MS = 7000;
   const TRAIL_POINTS = 60;
 
@@ -85,6 +87,10 @@
   );
   let mapView = $state<{ fitRing: (ring: [number, number][]) => void }>();
   let geofences = $state<GeofenceOut[]>([]);
+  let sitesData = $state<SitesOut | null>(null);
+  let syncingSites = $state(false);
+  /** Las geocercas automáticas se dibujan con la capa de sucursales y almacenes. */
+  const manualGeofences = $derived(geofences.filter((item) => !item.system));
   let geofenceError = $state<string | null>(null);
   let highlightedGeofence = $state<number | null>(null);
   let draft = $state<GeofenceDraft | null>(null);
@@ -246,6 +252,26 @@
     }
   }
 
+  async function loadSites(signal?: AbortSignal) {
+    try {
+      sitesData = await api.tracking.sites(signal);
+    } catch {
+      // La capa de lugares es complementaria; se reintenta en el siguiente ciclo.
+    }
+  }
+
+  async function syncSites() {
+    syncingSites = true;
+    try {
+      sitesData = await api.tracking.syncSites();
+      await loadGeofences();
+    } catch {
+      geofenceError = 'No se pudo sincronizar las geocercas de sucursales y almacenes.';
+    } finally {
+      syncingSites = false;
+    }
+  }
+
   async function loadGeofences() {
     try {
       geofences = await api.tracking.geofences();
@@ -404,6 +430,8 @@
   onMount(() => {
     const controller = new AbortController();
     pollLive(controller.signal);
+    loadSites(controller.signal);
+    const sitesPoll = setInterval(() => loadSites(controller.signal), SITES_POLL_MS);
     const livePoll = setInterval(() => pollLive(controller.signal), LIVE_POLL_MS);
     const eventsPoll = setInterval(() => pollEvents(controller.signal), EVENTS_POLL_MS);
     const transfersPoll = setInterval(() => {
@@ -419,6 +447,7 @@
     return () => {
       controller.abort();
       clearInterval(livePoll);
+      clearInterval(sitesPoll);
       clearInterval(eventsPoll);
       clearInterval(tick);
       clearInterval(transfersPoll);
@@ -480,7 +509,8 @@
       plannedRoute={activeTrack ? activeTrack.remainingRoute : null}
       originalRoute={activeTrack?.rerouted ? activeTrack.route : null}
       {endpoints}
-      {geofences}
+      geofences={manualGeofences}
+      sites={sitesData?.sites ?? []}
       {highlightedGeofence}
       draft={draftPreview}
       drawing={draft !== null}
@@ -552,7 +582,13 @@
       </div>
       {#if tab === 'geofences'}
         <GeofencePanel
-          {geofences}
+          geofences={manualGeofences}
+          sites={sitesData}
+          canSync={permissions.hasPermission('tracking:geofences')}
+          syncing={syncingSites}
+          onsync={syncSites}
+          onfocussite={(site) =>
+            mapView?.fitRing(circleRing([site.longitude, site.latitude], site.radius_m, 32))}
           canManage={canManageGeofences}
           {draft}
           saving={savingGeofence}

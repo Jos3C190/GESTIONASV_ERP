@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { GeofenceOut } from '$lib/api/client';
+  import type { GeofenceOut, SiteOut, SitesOut } from '$lib/api/client';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import { branch } from '$lib/stores/branch.svelte';
   import { describeShape, type DraftKind, type GeofenceDraft } from './geofences';
@@ -17,7 +17,12 @@
     oncancel,
     onsave,
     ondelete,
-    onfocus
+    onfocus,
+    sites = null,
+    canSync = false,
+    syncing = false,
+    onsync,
+    onfocussite
   }: {
     geofences: GeofenceOut[];
     canManage: boolean;
@@ -37,7 +42,20 @@
     }) => void;
     ondelete: (geofence: GeofenceOut) => void;
     onfocus: (geofence: GeofenceOut) => void;
+    /** Capa fija de sucursales y almacenes con su estado de sincronización. */
+    sites?: SitesOut | null;
+    canSync?: boolean;
+    syncing?: boolean;
+    onsync?: () => void;
+    onfocussite?: (site: SiteOut) => void;
   } = $props();
+
+  const syncLabel = $derived.by(() => {
+    if (!sites) return '';
+    if (!sites.sync.configured) return 'Servidor GPS sin configurar: sin eventos de llegada.';
+    if (sites.sync.error) return 'Geocercas de sucursales pendientes de sincronizar.';
+    return sites.sync.synced_at ? 'Geocercas de llegada sincronizadas.' : 'Sincronizando…';
+  });
 
   let name = $state('');
   let description = $state('');
@@ -153,6 +171,49 @@
     </div>
   </form>
 {:else}
+  {#if sites}
+    <section class="sites" aria-label="Sucursales y almacenes">
+      <header>
+        <strong>Sucursales y almacenes</strong>
+        <span>Automáticas · se administran en Sucursales y Almacenes</span>
+      </header>
+      <p class="sync" class:warn={!!sites.sync.error || !sites.sync.configured}>
+        {syncLabel}
+        {#if canSync && sites.sync.configured && sites.sync.error}
+          <button type="button" disabled={syncing} onclick={() => onsync?.()}
+            >{syncing ? 'Reintentando…' : 'Reintentar'}</button
+          >
+        {/if}
+      </p>
+      <ul class="list">
+        {#each sites.sites as site (site.id)}
+          <li>
+            <button type="button" class="row" onclick={() => onfocussite?.(site)}>
+              <span class="swatch site" class:warehouse={site.kind === 'warehouse'}></span>
+              <span class="main">
+                <strong>{site.kind === 'branch' ? 'Sucursal' : 'Almacén'} {site.name}</strong>
+                <span
+                  >Radio {site.radius_m} m{site.kind === 'branch' && site.warehouses.length
+                    ? ` · ${site.warehouses.length} ${site.warehouses.length === 1 ? 'almacén' : 'almacenes'}`
+                    : site.kind === 'warehouse'
+                      ? ` · ${site.branch_name}`
+                      : ''}</span
+                >
+              </span>
+            </button>
+          </li>
+        {/each}
+      </ul>
+      {#if sites.missing.length}
+        <p class="missing">
+          Sin ubicación en el mapa: {sites.missing
+            .map((item) => `${item.kind === 'branch' ? 'Sucursal' : 'Almacén'} ${item.name}`)
+            .join(', ')}. Complétala en
+          <a href="/branches">Sucursales</a> o <a href="/warehouses">Almacenes</a>.
+        </p>
+      {/if}
+    </section>
+  {/if}
   <div class="toolbar">
     <span>{geofences.length} {geofences.length === 1 ? 'geocerca' : 'geocercas'}</span>
     {#if canManage}
@@ -410,5 +471,45 @@
   button:focus-visible {
     outline: 2px solid rgb(var(--primary));
     outline-offset: 2px;
+  }
+  .sites {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgb(var(--border));
+  }
+  .sites header {
+    display: grid;
+    gap: 2px;
+    font-size: 12px;
+  }
+  .sites header span,
+  .sync,
+  .missing {
+    font-size: 11px;
+    color: rgb(var(--foreground-muted));
+  }
+  .sync {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sync.warn {
+    color: rgb(var(--warning));
+  }
+  .sync button,
+  .missing a {
+    font-weight: 500;
+    color: rgb(var(--primary));
+  }
+  .swatch.site {
+    border-color: #0f766e;
+    border-style: dashed;
+    background: rgb(15 118 110 / 0.12);
+  }
+  .swatch.site.warehouse {
+    border-color: #b45309;
+    background: rgb(180 83 9 / 0.12);
   }
 </style>

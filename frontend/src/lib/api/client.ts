@@ -887,6 +887,40 @@ export interface GeofenceOut {
   branch_id?: string | null;
   branch_name?: string | null;
   can_manage?: boolean;
+  /** Geocerca automática de una sucursal o almacén (solo lectura). */
+  system?: boolean;
+}
+
+export interface SiteOut {
+  kind: 'branch' | 'warehouse';
+  id: string;
+  name: string;
+  code: string | null;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  radius_m: number;
+  status: string;
+  branch_id: string;
+  branch_name: string;
+  warehouses: {
+    id: string;
+    name: string;
+    code: string | null;
+    is_central: boolean;
+    status: string;
+  }[];
+}
+
+export interface SitesOut {
+  sites: SiteOut[];
+  missing: { kind: 'branch' | 'warehouse'; id: string; name: string }[];
+  sync: {
+    configured: boolean;
+    synced_at: string | null;
+    last_attempt_at: string | null;
+    error: string | null;
+  };
 }
 
 export interface GeofenceCreate {
@@ -904,7 +938,9 @@ export interface TrackingEventOut {
   device_id: number;
   device_name: string;
   device_unique_id: string;
+  geofence_id?: number | null;
   geofence_name: string | null;
+  geofence_system?: boolean;
   alarm: string | null;
   speed_kmh: number | null;
   latitude: number | null;
@@ -1841,6 +1877,8 @@ export const api = {
         { signal }
       ),
     geofences: (signal?: AbortSignal) => apiFetch<GeofenceOut[]>('/tracking/geofences', { signal }),
+    sites: (signal?: AbortSignal) => apiFetch<SitesOut>('/tracking/sites', { signal }),
+    syncSites: () => apiFetch<SitesOut>('/tracking/sites/sync', { method: 'POST' }),
     createGeofence: (data: GeofenceCreate) =>
       apiFetch<GeofenceOut>('/tracking/geofences', {
         method: 'POST',
