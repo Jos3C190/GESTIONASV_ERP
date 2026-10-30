@@ -36,6 +36,7 @@
     zone: '',
     latitude: '13.6929',
     longitude: '-89.2182',
+    geofence_radius_m: '150',
     phone: '',
     email: '',
     website: '',
@@ -116,7 +117,7 @@
   ] as const;
   let sections = $derived(
     f.is_headquarters
-      ? ([['general', 'Información general'], ['review', 'Revisión']] as const)
+      ? ([['general', 'Información general'], ['location', 'Ubicación en el mapa'], ['review', 'Revisión']] as const)
       : branchSections
   );
   const options = (items: { id: string; name: string }[]) =>
@@ -168,6 +169,7 @@
       zone: branch.zone,
       latitude: branch.lat === null ? '' : String(branch.lat),
       longitude: branch.lng === null ? '' : String(branch.lng),
+      geofence_radius_m: String(branch.geofenceRadiusM ?? 150),
       phone: branch.phone,
       email: branch.email,
       website: branch.website,
@@ -269,11 +271,16 @@
     if (!f.is_headquarters && !f.municipality_id) next.municipality_id = 'Seleccione un municipio.';
     if (!f.is_headquarters && !f.district_id) next.district_id = 'Seleccione un distrito.';
     if (!f.is_headquarters && f.address.trim().length < 3) next.address = 'Ingrese la dirección.';
+    if ((f.latitude === '') !== (f.longitude === ''))
+      next.latitude = 'Indique ambas coordenadas o deje ambas vacías.';
+    const radius = Number(f.geofence_radius_m);
+    if (!Number.isInteger(radius) || radius < 30 || radius > 2000)
+      next.geofence_radius_m = 'El radio debe estar entre 30 y 2000 m.';
     if (!f.is_headquarters && Number(f.area_built || 0) > Number(f.area || 0))
       next.area_built = 'No puede superar el área total.';
     errors = next;
     if (Object.keys(next).length) {
-      scrollToSection(f.is_headquarters || next.code || next.name ? 'general' : 'location');
+      scrollToSection(next.code || next.name || (f.is_headquarters && !next.latitude && !next.geofence_radius_m) ? 'general' : 'location');
       return false;
     }
     return true;
@@ -296,8 +303,10 @@
       email: f.email || null,
       website: f.website || null,
       zone: f.zone || null,
-      latitude: f.is_headquarters ? null : num(f.latitude),
-      longitude: f.is_headquarters ? null : num(f.longitude),
+      // La matriz puede no tener coordenadas; si las tiene, aparece en Seguimiento.
+      latitude: num(f.latitude),
+      longitude: num(f.longitude),
+      geofence_radius_m: num(f.geofence_radius_m),
       area: num(f.area),
       area_built: num(f.area_built),
       area_unbuilt: num(f.area_unbuilt),
@@ -610,6 +619,66 @@
             </div>
           </div></Card
         >
+        {#if f.is_headquarters}
+        <Card id="location" class="scroll-mt-24 p-6"
+          ><h2 class="mb-1 text-base font-semibold">Ubicación en el mapa</h2>
+          <p class="mb-5 text-sm text-foreground-muted">
+            Opcional. Con coordenadas, la matriz y sus almacenes aparecen en Seguimiento y las rutas
+            de traslado parten desde aquí.
+          </p>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <FormField
+              id="hq-lat"
+              label="Latitud"
+              type="number"
+              min="-90"
+              max="90"
+              step="0.000001"
+              bind:value={f.latitude}
+              error={errors.latitude}
+            /><FormField
+              id="hq-lng"
+              label="Longitud"
+              type="number"
+              min="-180"
+              max="180"
+              step="0.000001"
+              bind:value={f.longitude}
+            /><FormField
+              id="hq-radius"
+              label="Radio de llegada (m)"
+              type="number"
+              min="30"
+              max="2000"
+              step="10"
+              bind:value={f.geofence_radius_m}
+              error={errors.geofence_radius_m}
+            />
+            {#if f.latitude !== '' || f.longitude !== ''}
+              <div class="self-end pb-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onclick={() => {
+                    f.latitude = '';
+                    f.longitude = '';
+                  }}>Quitar ubicación</Button
+                >
+              </div>
+            {/if}
+          </div>
+          <div class="mt-4">
+            <BranchLocationPicker
+              latitude={f.latitude}
+              longitude={f.longitude}
+              onpositionchange={(position) => {
+                f.latitude = position.latitude.toFixed(6);
+                f.longitude = position.longitude.toFixed(6);
+              }}
+            />
+          </div></Card
+        >
+        {/if}
         {#if !f.is_headquarters}
         <Card id="location" class="scroll-mt-24 p-6"
           ><h2 class="mb-1 text-base font-semibold">Dirección y ubicación</h2>
@@ -675,7 +744,19 @@
               step="0.000001"
               bind:value={f.longitude}
               required
+            /><FormField
+              id="branch-radius"
+              label="Radio de llegada (m)"
+              type="number"
+              min="30"
+              max="2000"
+              step="10"
+              bind:value={f.geofence_radius_m}
+              error={errors.geofence_radius_m}
             />
+            <p class="self-end pb-2 text-xs text-foreground-muted">
+              Seguimiento registra la llegada y salida de las unidades dentro de este radio.
+            </p>
           </div>
           <div class="mt-4">
             <BranchLocationPicker

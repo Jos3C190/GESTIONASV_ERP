@@ -643,6 +643,7 @@ export interface BranchOut {
   manager_initials: string;
   latitude: number | null;
   longitude: number | null;
+  geofence_radius_m?: number;
   operational_status: 'active' | 'inactive' | 'maintenance';
   employees: number;
   warehouses: number;
@@ -712,6 +713,11 @@ export interface WarehouseOut {
   type: 'general' | 'cold_storage' | 'hazmat' | 'transit' | 'bonded' | 'automated';
   status: 'active' | 'maintenance' | 'inactive';
   location: string;
+  /** branch: dentro de su sucursal; own: en otra dirección con coordenadas propias. */
+  location_mode?: 'branch' | 'own';
+  latitude?: number | null;
+  longitude?: number | null;
+  geofence_radius_m?: number | null;
   branch_id: string | null;
   branch_name: string;
   branch_address: string;

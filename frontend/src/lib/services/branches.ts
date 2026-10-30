@@ -23,6 +23,7 @@ export function mapBranchOutToBranch(b: BranchOut): Branch {
     managerInitials: b.manager_initials,
     lat: b.latitude ?? null,
     lng: b.longitude ?? null,
+    geofenceRadiusM: b.geofence_radius_m ?? 150,
     status: b.operational_status,
     employees: b.employees,
     warehouses: b.warehouses,

@@ -130,6 +130,10 @@ class Branch(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     email: Mapped[str | None] = mapped_column(String(320))
     latitude: Mapped[float | None] = mapped_column(Numeric(9, 6))
     longitude: Mapped[float | None] = mapped_column(Numeric(9, 6))
+    #: Radius of the automatic arrival/departure geofence in tracking.
+    geofence_radius_m: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=150, server_default="150"
+    )
     operational_status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="active"
     )
@@ -270,6 +274,13 @@ class Warehouse(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
         String(20), nullable=False, server_default="active"
     )
     physical_location: Mapped[str | None] = mapped_column(String(200))
+    #: ``branch``: shares its branch's point; ``own``: a separate building with its coordinates.
+    location_mode: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="branch", server_default="branch"
+    )
+    latitude: Mapped[float | None] = mapped_column(Numeric(9, 6))
+    longitude: Mapped[float | None] = mapped_column(Numeric(9, 6))
+    geofence_radius_m: Mapped[int | None] = mapped_column(Integer)
     manager_employee_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL")
     )

@@ -11,6 +11,7 @@
   import EditorSectionNav from '$lib/components/editor/EditorSectionNav.svelte';
   import FormField from '$lib/components/ui/FormField.svelte';
   import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
+  import BranchLocationPicker from '$lib/features/branches/components/BranchLocationPicker.svelte';
   import WarehouseImagesEditor from './WarehouseImagesEditor.svelte';
   import { listCapacityGroups } from '../capacity-groups.service';
   import type { WarehouseCapacityGroup } from '../capacity-groups.types';
@@ -89,6 +90,10 @@
     warehouse_type: 'general',
     operational_status: 'active',
     physical_location: '',
+    location_mode: 'branch' as 'branch' | 'own',
+    latitude: '',
+    longitude: '',
+    geofence_radius_m: '150',
     manager_employee_id: '',
     area: '',
     height: '',
@@ -133,8 +138,18 @@
   let initialSnapshot = $state('');
   let pendingTarget = $state<string | null>(null);
   let branches = $state<
-    { id: string; name: string; code?: string; status?: string; is_headquarters?: boolean }[]
+    {
+      id: string;
+      name: string;
+      code?: string;
+      status?: string;
+      is_headquarters?: boolean;
+      address?: string;
+      latitude?: number | null;
+      longitude?: number | null;
+    }[]
   >([]);
+  let selectedBranch = $derived(branches.find((item) => item.id === f.branch_id) ?? null);
   let categories = $state<
     { id: string; name: string; description: string | null; is_active: boolean }[]
   >([]);
@@ -222,6 +237,10 @@
       warehouse_type: warehouse.type,
       operational_status: warehouse.status,
       physical_location: warehouse.location,
+      location_mode: warehouse.locationMode,
+      latitude: warehouse.latitude === null ? '' : String(warehouse.latitude),
+      longitude: warehouse.longitude === null ? '' : String(warehouse.longitude),
+      geofence_radius_m: String(warehouse.geofenceRadiusM ?? 150),
       manager_employee_id: warehouse.managerEmployeeId ?? '',
       area: String(warehouse.area || ''),
       height: String(warehouse.height || ''),
@@ -332,6 +351,14 @@
         ? 'Cree o active la sucursal matriz antes de asignar la bodega central.'
         : 'Seleccione una sucursal.';
     if (!f.warehouse_category_id) next.warehouse_category_id = 'Seleccione una categoría.';
+    if (f.location_mode === 'own') {
+      if (!f.physical_location.trim()) next.physical_location = 'Indique la dirección del almacén.';
+      if (f.latitude === '' || f.longitude === '')
+        next.latitude = 'Marque la ubicación del almacén en el mapa.';
+      const radius = Number(f.geofence_radius_m);
+      if (!Number.isInteger(radius) || radius < 30 || radius > 2000)
+        next.geofence_radius_m = 'El radio debe estar entre 30 y 2000 m.';
+    }
     const positiveFields = [
       ['certified_max_weight_kg', 'El límite certificado de peso'],
       ['operational_max_weight_kg', 'El límite operativo de peso'],
@@ -433,7 +460,14 @@
     errors = next;
     if (Object.keys(next).length) {
       if (next.code || next.name) scrollToSection('general');
-      else if (next.branch_id || next.warehouse_category_id) scrollToSection('organization');
+      else if (
+        next.branch_id ||
+        next.warehouse_category_id ||
+        next.physical_location ||
+        next.latitude ||
+        next.geofence_radius_m
+      )
+        scrollToSection('organization');
       else if (
         next.certified_max_weight_kg ||
         next.operational_max_weight_kg ||
@@ -463,6 +497,10 @@
       warehouse_type: f.warehouse_type,
       operational_status: f.operational_status,
       physical_location: f.physical_location.trim() || null,
+      location_mode: f.location_mode,
+      latitude: f.location_mode === 'own' ? num(f.latitude) : null,
+      longitude: f.location_mode === 'own' ? num(f.longitude) : null,
+      geofence_radius_m: f.location_mode === 'own' ? num(f.geofence_radius_m) : null,
       manager_employee_id: f.manager_employee_id || null,
       area: num(f.area),
       height: num(f.height),
@@ -678,12 +716,16 @@
               <input
                 type="checkbox"
                 checked={f.is_central}
-                onchange={(event) => void setCentral((event.currentTarget as HTMLInputElement).checked)}
+                onchange={(event) =>
+                  void setCentral((event.currentTarget as HTMLInputElement).checked)}
                 class="mt-1 accent-primary"
               />
               <span>
                 <span class="block text-sm font-medium text-foreground">Bodega central</span>
-                <span class="mt-1 block text-xs text-foreground-muted">Se asigna a la sucursal matriz, que recibe compras y coordina la distribución. Solo puede haber una bodega central activa por empresa.</span>
+                <span class="mt-1 block text-xs text-foreground-muted"
+                  >Se asigna a la sucursal matriz, que recibe compras y coordina la distribución.
+                  Solo puede haber una bodega central activa por empresa.</span
+                >
               </span>
             </label>
             <SmartSelect
@@ -723,7 +765,9 @@
               label={f.is_central ? 'Sucursal matriz' : 'Sucursal responsable'}
               bind:value={f.branch_id}
               options={branchOptions}
-              placeholder={f.is_central ? 'Selecciona la matriz administrativa…' : 'Buscar sucursal…'}
+              placeholder={f.is_central
+                ? 'Selecciona la matriz administrativa…'
+                : 'Buscar sucursal…'}
               error={errors.branch_id}
               required
               onselect={(value) => void loadManagers(value)}
@@ -736,14 +780,96 @@
               error={errors.warehouse_category_id}
               required
             />
+            <fieldset class="sm:col-span-2 space-y-3">
+              <legend class="mb-1 text-sm font-medium">¿Dónde está el almacén?</legend>
+              <div class="grid gap-2 sm:grid-cols-2">
+                <label class="location-choice" class:selected={f.location_mode === 'branch'}>
+                  <input type="radio" value="branch" bind:group={f.location_mode} />
+                  <span>
+                    <strong>En la sucursal</strong>
+                    <small
+                      >{selectedBranch?.address
+                        ? selectedBranch.address
+                        : 'Usa la ubicación de la sucursal en el mapa.'}</small
+                    >
+                  </span>
+                </label>
+                <label class="location-choice" class:selected={f.location_mode === 'own'}>
+                  <input type="radio" value="own" bind:group={f.location_mode} />
+                  <span>
+                    <strong>En otra dirección</strong>
+                    <small>Otro edificio con su propio punto en el mapa.</small>
+                  </span>
+                </label>
+              </div>
+              {#if f.location_mode === 'branch' && selectedBranch && (selectedBranch.latitude == null || selectedBranch.longitude == null)}
+                <p
+                  class="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning"
+                >
+                  La sucursal aún no tiene ubicación en el mapa; el almacén no aparecerá en
+                  Seguimiento hasta que se complete en Sucursales.
+                </p>
+              {/if}
+            </fieldset>
             <div class="sm:col-span-2">
               <FormField
                 id="warehouse-location"
-                label="Ubicación física / referencia"
+                label={f.location_mode === 'own'
+                  ? 'Dirección del almacén'
+                  : 'Ubicación física / referencia'}
                 bind:value={f.physical_location}
-                placeholder="Ej. Edificio B, nivel 1"
+                error={errors.physical_location}
+                required={f.location_mode === 'own'}
+                placeholder={f.location_mode === 'own'
+                  ? 'Ej. Carretera Panamericana km 12, bodega 4'
+                  : 'Ej. Edificio B, nivel 1'}
               />
             </div>
+            {#if f.location_mode === 'own'}
+              <FormField
+                id="warehouse-lat"
+                label="Latitud"
+                type="number"
+                min="-90"
+                max="90"
+                step="0.000001"
+                bind:value={f.latitude}
+                error={errors.latitude}
+                required
+              /><FormField
+                id="warehouse-lng"
+                label="Longitud"
+                type="number"
+                min="-180"
+                max="180"
+                step="0.000001"
+                bind:value={f.longitude}
+                required
+              />
+              <div class="sm:col-span-2">
+                <BranchLocationPicker
+                  latitude={f.latitude}
+                  longitude={f.longitude}
+                  onpositionchange={(position) => {
+                    f.latitude = position.latitude.toFixed(6);
+                    f.longitude = position.longitude.toFixed(6);
+                  }}
+                />
+              </div>
+              <FormField
+                id="warehouse-radius"
+                label="Radio de llegada (m)"
+                type="number"
+                min="30"
+                max="2000"
+                step="10"
+                bind:value={f.geofence_radius_m}
+                error={errors.geofence_radius_m}
+              />
+              <p class="self-end pb-2 text-xs text-foreground-muted">
+                Seguimiento registra la llegada y salida de las unidades dentro de este radio.
+              </p>
+            {/if}
             {#if mode === 'edit' && locations.length > 0}<p
                 class="sm:col-span-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning"
               >
@@ -1127,7 +1253,8 @@
                     Error: matriz administrativa no encontrada
                   {/if}
                 {:else}
-                  {branches.find((item) => item.id === f.branch_id)?.name ?? 'Sucursal no encontrada'}
+                  {branches.find((item) => item.id === f.branch_id)?.name ??
+                    'Sucursal no encontrada'}
                 {/if}
               </dd>
             </div>
@@ -1165,5 +1292,33 @@
   .field:focus {
     border-color: rgb(var(--primary));
     box-shadow: 0 0 0 1px rgb(var(--primary));
+  }
+  .location-choice {
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  .location-choice.selected {
+    border-color: rgb(var(--primary) / 0.5);
+    background: rgb(var(--primary) / 0.05);
+  }
+  .location-choice input {
+    margin-top: 3px;
+    accent-color: rgb(var(--primary));
+  }
+  .location-choice span {
+    display: grid;
+    gap: 2px;
+  }
+  .location-choice strong {
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .location-choice small {
+    font-size: 12px;
+    color: rgb(var(--foreground-muted));
   }
 </style>

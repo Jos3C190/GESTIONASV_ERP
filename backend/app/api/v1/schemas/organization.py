@@ -48,6 +48,8 @@ class BranchIn(BaseModel):
     email: EmailStr | None = None
     latitude: float | None = Field(None, ge=-90, le=90)
     longitude: float | None = Field(None, ge=-180, le=180)
+    #: Radius of the automatic arrival/departure geofence; omitted keeps the current one.
+    geofence_radius_m: int | None = Field(None, ge=30, le=2000)
     operational_status: str = Field(default="active", pattern="^(active|inactive|maintenance)$")
     manager_employee_id: uuid.UUID | None = None
     opened_at: date | None = None
@@ -194,6 +196,12 @@ class WarehouseIn(CapacityConfigurationIn):
     )
     operational_status: str = Field(default="active", pattern="^(active|inactive|maintenance)$")
     physical_location: str | None = Field(None, max_length=200)
+    #: ``branch``: inside its branch (shares its point); ``own``: another building.
+    #: Omitted keeps the current location (new warehouses default to ``branch``).
+    location_mode: Literal["branch", "own"] | None = None
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
+    geofence_radius_m: int | None = Field(None, ge=30, le=2000)
     manager_employee_id: uuid.UUID | None = None
     area: float | None = Field(None, ge=0)
     height: float | None = Field(None, ge=0)
@@ -243,7 +251,29 @@ class WarehouseIn(CapacityConfigurationIn):
             )
         if self.sanitary_permit_expiry and not self.sanitary_permit:
             raise ValueError("Debe indicar el permiso sanitario antes de registrar su vencimiento.")
+        _validate_warehouse_location(self)
         return self
+
+
+DEFAULT_GEOFENCE_RADIUS_M = 150
+
+
+def _validate_warehouse_location(warehouse: WarehouseIn) -> None:
+    """A warehouse in another building needs its own address and coordinates."""
+    if warehouse.location_mode is None:
+        return
+    if warehouse.location_mode == "branch":
+        # Usa el punto de su sucursal: no guarda coordenadas ni radio propios.
+        warehouse.latitude = None
+        warehouse.longitude = None
+        warehouse.geofence_radius_m = None
+        return
+    if warehouse.latitude is None or warehouse.longitude is None:
+        raise ValueError("Indique la ubicación en el mapa del almacén que está en otra dirección.")
+    if not (warehouse.physical_location or "").strip():
+        raise ValueError("Indique la dirección del almacén que está en otra dirección.")
+    if warehouse.geofence_radius_m is None:
+        warehouse.geofence_radius_m = DEFAULT_GEOFENCE_RADIUS_M
 
 
 CapacityGroupType = Literal[

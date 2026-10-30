@@ -41,6 +41,8 @@ export interface Branch {
   managerInitials: string;
   lat: number | null;
   lng: number | null;
+  /** Radio de la geocerca automática de llegada/salida en Seguimiento. */
+  geofenceRadiusM?: number;
   status: 'active' | 'inactive' | 'maintenance';
   employees: number;
   warehouses: number;
