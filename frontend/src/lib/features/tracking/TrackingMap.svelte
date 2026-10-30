@@ -3,6 +3,13 @@
   import type { GeofenceOut, SiteOut } from '$lib/api/client';
   import { geofenceCollection } from './geofences';
   import { siteAreas, sitePopup } from './sites';
+  import {
+    animationPath,
+    createTruckLayer,
+    loadThree,
+    pointAlong,
+    type TruckState
+  } from './truck3d';
   import { DEFAULT_CENTER, loadMapLibre, MAP_STYLE, type MapLibre } from './maplibre';
   import { STATUS_LABELS, type TrackedVehicle } from './tracking';
 
@@ -93,30 +100,121 @@
   };
   let endpointMarkers: MapLibre[] = [];
   let siteMarkers: MapLibre[] = [];
-  const ANIMATION_MS = 900;
+  /** Algo menos que el ciclo de consulta: la unidad se mueve de forma continua. */
+  const ANIMATION_MS = 4000;
+  /** Inclinación a partir de la cual las unidades se dibujan como camiones 3D. */
+  const TILT_3D = 25;
   const animations = new Map<string, number>();
+  /** Posición animada, rumbo y estado de cada unidad; lo lee la capa 3D en cada cuadro. */
+  const truckStates = new Map<string, TruckState>();
+  let threeD = $state(false);
+  let truckLayerReady = false;
+  let truckLayerFailed = false;
 
-  // Desliza el marcador entre la posición anterior y la nueva en lugar de saltar.
-  function animateTo(key: string, marker: MapLibre, target: LngLat) {
-    const from = marker.getLngLat();
+  const repaint = () => {
+    if (threeD) map?.triggerRepaint();
+  };
+
+  // Desliza la unidad desde su posición anterior hasta la nueva siguiendo `path` (el
+  // recorrido ajustado a calles cuando se conoce); nunca pasa de la última posición real.
+  function animateTo(key: string, marker: MapLibre, path: LngLat[], course: number) {
+    const target = path[path.length - 1]!;
+    const from = path[0]!;
     const start = performance.now();
     cancelAnimationFrame(animations.get(key) ?? 0);
-    const jump = Math.abs(from.lng - target[0]) > 0.5 || Math.abs(from.lat - target[1]) > 0.5;
+    const jump = Math.abs(from[0] - target[0]) > 0.5 || Math.abs(from[1] - target[1]) > 0.5;
+    const place = (point: LngLat, heading: number) => {
+      marker.setLngLat(point);
+      const state = truckStates.get(key);
+      if (state) {
+        state.lngLat = point;
+        state.course = heading;
+      }
+      repaint();
+    };
     if (jump || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-      marker.setLngLat(target);
+      place(target, course);
       return;
     }
     const step = (time: number) => {
       const t = Math.min((time - start) / ANIMATION_MS, 1);
-      const eased = 1 - (1 - t) ** 3;
-      marker.setLngLat([
-        from.lng + (target[0] - from.lng) * eased,
-        from.lat + (target[1] - from.lat) * eased
-      ]);
+      const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+      const along = pointAlong(path, eased);
+      place(along.point, along.course ?? course);
       if (t < 1) animations.set(key, requestAnimationFrame(step));
-      else animations.delete(key);
+      else {
+        animations.delete(key);
+        place(target, course);
+      }
     };
     animations.set(key, requestAnimationFrame(step));
+  }
+
+  // Al inclinar el mapa las unidades pasan a camiones 3D; three.js se descarga entonces.
+  function updateTilt() {
+    if (!map) return;
+    const tilted = map.getPitch() > TILT_3D;
+    if (!tilted || truckLayerFailed) {
+      threeD = false;
+      repaint();
+      return;
+    }
+    if (truckLayerReady) {
+      threeD = true;
+      map.triggerRepaint();
+      return;
+    }
+    truckLayerReady = true;
+    loadThree()
+      .then((THREE) => {
+        if (!map) return;
+        map.addLayer(
+          createTruckLayer(map.__maplibregl, THREE, () => (threeD ? truckStates.entries() : []))
+        );
+        threeD = map.getPitch() > TILT_3D;
+        map.triggerRepaint();
+      })
+      .catch(() => {
+        // Sin three.js se mantienen los marcadores planos.
+        truckLayerFailed = true;
+        threeD = false;
+      });
+  }
+
+  /** Botón 3D/2D junto al control de navegación. */
+  function tiltControl() {
+    let button: HTMLButtonElement;
+    return {
+      onAdd(instance: MapLibre) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+        button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'tm-tilt';
+        const sync = () => {
+          const tilted = instance.getPitch() > TILT_3D;
+          button.textContent = tilted ? '2D' : '3D';
+          button.title = tilted ? 'Vista plana' : 'Vista 3D con camiones';
+          button.setAttribute('aria-label', button.title);
+        };
+        button.addEventListener('click', () => {
+          const tilted = instance.getPitch() > TILT_3D;
+          instance.easeTo({
+            pitch: tilted ? 0 : 60,
+            bearing: tilted ? 0 : instance.getBearing(),
+            zoom: tilted ? instance.getZoom() : Math.max(instance.getZoom(), 14),
+            duration: 900
+          });
+        });
+        instance.on('pitchend', sync);
+        sync();
+        wrapper.appendChild(button);
+        return wrapper;
+      },
+      onRemove() {
+        button?.parentElement?.remove();
+      }
+    };
   }
 
   // Las capas propias se agregan cuando el estilo termina de cargar.
@@ -259,7 +357,23 @@
         entry = { marker, element };
         markers.set(vehicle.key, entry);
       }
-      animateTo(vehicle.key, entry.marker, [vehicle.longitude, vehicle.latitude]);
+      const target: LngLat = [vehicle.longitude, vehicle.latitude];
+      const current = entry.marker.getLngLat();
+      const from: LngLat = [current.lng, current.lat];
+      let state = truckStates.get(vehicle.key);
+      if (!state) {
+        state = { lngLat: from, course: vehicle.course, status: vehicle.status, selected: false };
+        truckStates.set(vehicle.key, state);
+      }
+      state.status = vehicle.status;
+      state.selected = vehicle.key === selectedKey;
+      if (from[0] !== target[0] || from[1] !== target[1]) {
+        // La unidad del traslado abierto avanza por su recorrido ajustado a calles.
+        const path = animationPath(from, target, vehicle.key === selectedKey ? trail : []);
+        animateTo(vehicle.key, entry.marker, path, vehicle.course);
+      } else {
+        state.course = vehicle.course;
+      }
       const { element } = entry;
       element.dataset.status = vehicle.status;
       element.classList.toggle('selected', vehicle.key === selectedKey);
@@ -273,6 +387,7 @@
         cancelAnimationFrame(animations.get(key) ?? 0);
         entry.marker.remove();
         markers.delete(key);
+        truckStates.delete(key);
       }
     }
   }
@@ -294,9 +409,11 @@
           new maplibregl.NavigationControl({ visualizePitch: true }),
           'top-right'
         );
+        instance.addControl(tiltControl(), 'top-right');
         instance.addControl(new maplibregl.FullscreenControl(), 'top-right');
         instance.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-right');
         instance.on('style.load', addOverlayLayers);
+        instance.on('pitch', updateTilt);
         instance.on('click', (event: MapLibre) => {
           if (drawing) ondrawpoint?.([event.lngLat.lng, event.lngLat.lat]);
           else onselect(null);
@@ -487,13 +604,27 @@
   });
 </script>
 
-<div class="tracking-map" bind:this={container}>
+<div class="tracking-map" class:tm-3d={threeD} bind:this={container}>
   {#if loadError}
     <div class="map-error">{loadError} Revisa tu conexión a internet.</div>
   {/if}
 </div>
 
 <style>
+  /* En 3D el camión reemplaza al pin; el marcador queda como zona de clic y etiqueta. */
+  .tm-3d :global(.tm-marker .tm-pin),
+  .tm-3d :global(.tm-marker .tm-heading) {
+    opacity: 0;
+  }
+  .tm-3d :global(.tm-marker .tm-label) {
+    transform: translateY(16px);
+  }
+  :global(.tm-tilt) {
+    font-size: 11px !important;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
   :global(.tm-site) {
     z-index: 0;
     padding: 0;
