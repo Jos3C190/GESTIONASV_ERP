@@ -110,6 +110,108 @@ export interface VehiclePhoto {
   created_at: string;
 }
 
+export interface OdometerReading {
+  id: string;
+  reading_km: string;
+  read_at: string;
+  source: 'manual' | 'fuel' | 'maintenance' | 'gps';
+  notes: string | null;
+  recorded_by_name: string | null;
+}
+
+export type DueState = 'ok' | 'soon' | 'overdue' | 'unknown';
+
+export interface MaintenancePlan {
+  id: string;
+  name: string;
+  interval_km: number | null;
+  interval_days: number | null;
+  last_service_km: string | null;
+  last_service_on: string | null;
+  due_km: string | null;
+  due_on: string | null;
+  state: DueState;
+  is_active: boolean;
+}
+
+export interface MaintenancePlanInput {
+  name: string;
+  interval_km: number | null;
+  interval_days: number | null;
+  last_service_km: string | null;
+  last_service_on: string | null;
+}
+
+export type OrderStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface MaintenanceOrder {
+  id: string;
+  plan_id: string | null;
+  plan_name: string | null;
+  kind: 'preventive' | 'corrective';
+  status: OrderStatus;
+  title: string;
+  description: string | null;
+  workshop: string | null;
+  scheduled_on: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  odometer_km: string | null;
+  cost: string | null;
+  cancel_reason: string | null;
+  created_at: string;
+}
+
+export interface MaintenanceOrderInput {
+  kind: 'preventive' | 'corrective';
+  title: string;
+  description?: string | null;
+  workshop?: string | null;
+  scheduled_on?: string | null;
+  plan_id?: string | null;
+}
+
+export interface FuelLog {
+  id: string;
+  filled_at: string;
+  liters: string;
+  total_amount: string;
+  unit_price: string;
+  odometer_km: string;
+  full_tank: boolean;
+  station: string | null;
+  driver_id: string | null;
+  driver_name: string | null;
+  km_per_liter: string | null;
+}
+
+export interface FuelStats {
+  liters: string;
+  amount: string;
+  average_km_per_liter: string | null;
+  cost_per_km: string | null;
+}
+
+export interface FuelLogInput {
+  filled_at: string;
+  liters: string;
+  total_amount: string;
+  odometer_km: string;
+  full_tank: boolean;
+  station?: string | null;
+  driver_id?: string | null;
+}
+
+export interface FleetAlert {
+  vehicle_id: string | null;
+  driver_id: string | null;
+  subject: string;
+  branch_name: string;
+  code: string;
+  severity: 'blocking' | 'warning';
+  message: string;
+}
+
 function query(params: Record<string, string | number | boolean | null | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -162,5 +264,46 @@ export const fleetApi = {
     apiFetch<VehiclePhoto>(`/fleet/vehicles/${id}/photos`, json('POST', { url, caption })),
   deletePhoto: (id: string, photoId: string) =>
     apiFetch<void>(`/fleet/vehicles/${id}/photos/${photoId}`, { method: 'DELETE' }),
-  documents: (id: string) => ownedDocuments(`/fleet/vehicles/${id}`)
+  documents: (id: string) => ownedDocuments(`/fleet/vehicles/${id}`),
+  alerts: (signal?: AbortSignal) =>
+    apiFetch<FleetAlert[]>(`/fleet/alerts${query({ branch_id: branch.id })}`, { signal }),
+  odometer: (id: string) => apiFetch<OdometerReading[]>(`/fleet/vehicles/${id}/odometer`),
+  addOdometer: (id: string, data: { reading_km: string; read_at?: string; notes?: string }) =>
+    apiFetch<OdometerReading>(`/fleet/vehicles/${id}/odometer`, json('POST', data)),
+  plans: (id: string) => apiFetch<MaintenancePlan[]>(`/fleet/vehicles/${id}/maintenance-plans`),
+  createPlan: (id: string, data: MaintenancePlanInput) =>
+    apiFetch<MaintenancePlan>(`/fleet/vehicles/${id}/maintenance-plans`, json('POST', data)),
+  updatePlan: (id: string, planId: string, data: MaintenancePlanInput) =>
+    apiFetch<MaintenancePlan>(
+      `/fleet/vehicles/${id}/maintenance-plans/${planId}`,
+      json('PUT', data)
+    ),
+  deactivatePlan: (id: string, planId: string) =>
+    apiFetch<void>(`/fleet/vehicles/${id}/maintenance-plans/${planId}`, { method: 'DELETE' }),
+  orders: (id: string) => apiFetch<MaintenanceOrder[]>(`/fleet/vehicles/${id}/maintenance-orders`),
+  createOrder: (id: string, data: MaintenanceOrderInput) =>
+    apiFetch<MaintenanceOrder>(`/fleet/vehicles/${id}/maintenance-orders`, json('POST', data)),
+  startOrder: (id: string, orderId: string) =>
+    apiFetch<MaintenanceOrder>(
+      `/fleet/vehicles/${id}/maintenance-orders/${orderId}/start`,
+      json('POST')
+    ),
+  completeOrder: (
+    id: string,
+    orderId: string,
+    data: { odometer_km: string; cost: string; workshop?: string | null; notes?: string | null }
+  ) =>
+    apiFetch<MaintenanceOrder>(
+      `/fleet/vehicles/${id}/maintenance-orders/${orderId}/complete`,
+      json('POST', data)
+    ),
+  cancelOrder: (id: string, orderId: string, reason: string) =>
+    apiFetch<MaintenanceOrder>(
+      `/fleet/vehicles/${id}/maintenance-orders/${orderId}/cancel`,
+      json('POST', { reason })
+    ),
+  fuel: (id: string) =>
+    apiFetch<{ items: FuelLog[]; stats: FuelStats }>(`/fleet/vehicles/${id}/fuel-logs`),
+  addFuel: (id: string, data: FuelLogInput) =>
+    apiFetch<FuelLog>(`/fleet/vehicles/${id}/fuel-logs`, json('POST', data))
 };

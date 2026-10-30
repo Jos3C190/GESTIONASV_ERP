@@ -5,7 +5,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
-  import { fleetApi, type FleetSummary, type FleetVehicle } from './api';
+  import { fleetApi, type FleetAlert, type FleetSummary, type FleetVehicle } from './api';
   import {
     formatNumber,
     KIND_META,
@@ -35,6 +35,8 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let mounted = $state(false);
+  let alerts = $state<FleetAlert[]>([]);
+  let showAllAlerts = $state(false);
   let generation = 0;
 
   const canCreate = $derived(permissions.hasPermission('fleet:create'));
@@ -129,6 +131,26 @@
     mounted = true;
   });
 
+  const ALERT_PREVIEW = 4;
+  const visibleAlerts = $derived(showAllAlerts ? alerts : alerts.slice(0, ALERT_PREVIEW));
+  const blockingAlerts = $derived(alerts.filter((item) => item.severity === 'blocking').length);
+
+  async function loadAlerts() {
+    try {
+      alerts = await fleetApi.alerts();
+    } catch {
+      // Las alertas complementan el catálogo; si fallan, el catálogo sigue disponible.
+      alerts = [];
+    }
+  }
+
+  $effect(() => {
+    if (!mounted) return;
+    void branch.id;
+    void summary;
+    void loadAlerts();
+  });
+
   $effect(() => {
     if (!mounted) return;
     void tab;
@@ -210,6 +232,35 @@
       </div>
     {/if}
   </section>
+
+  {#if alerts.length}
+    <section class="fleet-alerts" aria-labelledby="fleet-alerts-heading">
+      <header>
+        <h2 id="fleet-alerts-heading">
+          <FleetIcon name="alert" size={14} /> Alertas de cumplimiento
+        </h2>
+        <span>{blockingAlerts} bloqueantes · {alerts.length - blockingAlerts} advertencias</span>
+      </header>
+      <ul>
+        {#each visibleAlerts as alert, index (index)}
+          <li class:blocking={alert.severity === 'blocking'}>
+            <a
+              href={alert.vehicle_id ? `/fleet/${alert.vehicle_id}` : `/drivers/${alert.driver_id}`}
+            >
+              <strong>{alert.subject}</strong>
+              <span>{alert.message}</span>
+              <small>{alert.vehicle_id ? 'Vehículo' : 'Conductor'} · {alert.branch_name}</small>
+            </a>
+          </li>
+        {/each}
+      </ul>
+      {#if alerts.length > ALERT_PREVIEW}
+        <button type="button" class="alerts-toggle" onclick={() => (showAllAlerts = !showAllAlerts)}
+          >{showAllAlerts ? 'Ver menos' : `Ver todas (${alerts.length})`}</button
+        >
+      {/if}
+    </section>
+  {/if}
 
   <section class="fleet-catalog" aria-labelledby="fleet-catalog-heading">
     <div class="catalog-heading">
@@ -941,5 +992,59 @@
   .pager {
     display: inline-flex;
     gap: 6px;
+  }
+  .fleet-alerts {
+    padding: 16px 18px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 12px;
+    background: rgb(var(--surface));
+  }
+  .fleet-alerts header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .fleet-alerts h2 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .fleet-alerts header span,
+  .fleet-alerts small {
+    font-size: 12px;
+    color: rgb(var(--foreground-muted));
+  }
+  .fleet-alerts ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 8px;
+    list-style: none;
+  }
+  .fleet-alerts li a {
+    display: grid;
+    gap: 2px;
+    height: 100%;
+    padding: 9px 11px;
+    border-left: 3px solid rgb(var(--warning));
+    border-radius: 8px;
+    background: rgb(var(--warning) / 0.07);
+    font-size: 12px;
+  }
+  .fleet-alerts li.blocking a {
+    border-left-color: rgb(var(--danger));
+    background: rgb(var(--danger) / 0.06);
+  }
+  .fleet-alerts li a:hover strong {
+    text-decoration: underline;
+  }
+  .alerts-toggle {
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgb(var(--primary));
   }
 </style>

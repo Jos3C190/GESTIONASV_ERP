@@ -20,13 +20,16 @@
   import ComplianceList from './ComplianceList.svelte';
   import FleetIcon from './FleetIcon.svelte';
   import VehicleDriverPanel from './VehicleDriverPanel.svelte';
+  import VehicleFuelPanel from './VehicleFuelPanel.svelte';
   import VehicleGallery from './VehicleGallery.svelte';
   import VehicleImage from './VehicleImage.svelte';
+  import VehicleMaintenancePanel from './VehicleMaintenancePanel.svelte';
+  import VehicleOdometerPanel from './VehicleOdometerPanel.svelte';
   import VehicleStatus from './VehicleStatus.svelte';
 
   let { vehicleId }: { vehicleId: string } = $props();
 
-  type Tab = 'summary' | 'driver' | 'documents' | 'gallery';
+  type Tab = 'summary' | 'driver' | 'documents' | 'maintenance' | 'fuel' | 'odometer' | 'gallery';
   let vehicle = $state<FleetVehicle | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -50,6 +53,9 @@
         visible: permissions.hasPermission('drivers:read')
       },
       { id: 'documents' as const, label: 'Documentos', visible: canReadDocuments },
+      { id: 'maintenance' as const, label: 'Mantenimiento', visible: true },
+      { id: 'fuel' as const, label: 'Combustible', visible: true },
+      { id: 'odometer' as const, label: 'Odómetro', visible: true },
       { id: 'gallery' as const, label: 'Galería', visible: true }
     ].filter((item) => item.visible)
   );
@@ -276,6 +282,12 @@
           permissionPrefix="fleet_documents"
           onchanged={load}
         />
+      {:else if tab === 'maintenance'}
+        <VehicleMaintenancePanel {vehicle} onchanged={load} />
+      {:else if tab === 'fuel'}
+        <VehicleFuelPanel {vehicle} onchanged={load} />
+      {:else if tab === 'odometer'}
+        <VehicleOdometerPanel {vehicle} onchanged={load} />
       {:else}
         <VehicleGallery
           vehicleId={vehicle.id}

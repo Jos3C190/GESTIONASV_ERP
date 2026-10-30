@@ -4,7 +4,8 @@ import type { FleetSummary, FleetVehicle } from './api';
 
 const apiMock = vi.hoisted(() => ({
   list: vi.fn(),
-  summary: vi.fn()
+  summary: vi.fn(),
+  alerts: vi.fn()
 }));
 const permissionMock = vi.hoisted(() => ({ codes: new Set<string>() }));
 
@@ -60,6 +61,7 @@ const summary: FleetSummary = {
 beforeEach(() => {
   permissionMock.codes = new Set(['fleet:read']);
   apiMock.summary.mockResolvedValue(summary);
+  apiMock.alerts.mockResolvedValue([]);
   apiMock.list.mockResolvedValue({
     items: [
       vehicle(),
@@ -142,5 +144,39 @@ describe('fleet workspace', () => {
     });
     render(FleetWorkspace);
     expect(await screen.findByText('Aún no hay vehículos')).toBeVisible();
+  });
+
+  it('shows compliance alerts linking to the vehicle or driver', async () => {
+    apiMock.alerts.mockResolvedValue([
+      {
+        vehicle_id: 'v1',
+        driver_id: null,
+        subject: 'FL-001 · C 123-456',
+        branch_name: 'Roosevelt',
+        code: 'document_expired',
+        severity: 'blocking',
+        message: 'Póliza de seguro vencida.'
+      },
+      {
+        vehicle_id: null,
+        driver_id: 'd1',
+        subject: 'Carlos Martínez',
+        branch_name: 'Roosevelt',
+        code: 'document_expiring',
+        severity: 'warning',
+        message: 'Licencia por vencer.'
+      }
+    ]);
+    render(FleetWorkspace);
+    const section = (await screen.findByText('Alertas de cumplimiento')).closest('section')!;
+    expect(within(section).getByText('1 bloqueantes · 1 advertencias')).toBeVisible();
+    expect(within(section).getByText('Póliza de seguro vencida.').closest('a')).toHaveAttribute(
+      'href',
+      '/fleet/v1'
+    );
+    expect(within(section).getByText('Licencia por vencer.').closest('a')).toHaveAttribute(
+      'href',
+      '/drivers/d1'
+    );
   });
 });
