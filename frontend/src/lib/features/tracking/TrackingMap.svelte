@@ -7,6 +7,7 @@
     animationPath,
     createTruckLayer,
     loadThree,
+    applyTruckLogo,
     loadTruckModel,
     measurePath,
     poseAt,
@@ -34,6 +35,7 @@
     simRoutes = {},
     simPoints = [],
     pilots = {},
+    logo = null,
     onselect,
     ondrawpoint,
     ondrawfinish
@@ -67,6 +69,8 @@
      * las que recorren una ruta simulada (se reproduce su avance medido por el servidor).
      */
     pilots?: Record<string, { lngLat: LngLat; course: number }>;
+    /** Logo de la empresa activa: se pone en las cinco zonas de logo de los camiones 3D. */
+    logo?: string | null;
     onselect: (key: string | null) => void;
     ondrawpoint?: (point: LngLat) => void;
     ondrawfinish?: () => void;
@@ -139,6 +143,8 @@
   let threeD = $state(false);
   let truckLayerReady = false;
   let truckLayerFailed = false;
+  /** three.js y el modelo, una vez cargados (para cambiarle el logo). */
+  let truckKit = $state.raw<{ THREE: unknown; template: unknown } | null>(null);
 
   const repaint = () => {
     if (threeD) map?.triggerRepaint();
@@ -208,6 +214,7 @@
             template
           )
         );
+        truckKit = { THREE, template };
         threeD = map.getPitch() > TILT_3D;
         map.triggerRepaint();
       })
@@ -551,6 +558,14 @@
         duration: 0
       });
     }
+  });
+
+  // El logo de la empresa activa va en las zonas de logo; al cambiar de empresa se actualiza.
+  $effect(() => {
+    const kit = truckKit;
+    const url = logo;
+    if (!kit) return;
+    void applyTruckLogo(kit.THREE, kit.template, url).then(repaint);
   });
 
   // Unidades guiadas por el navegador: marcador y camión 3D se ubican en cada cuadro.

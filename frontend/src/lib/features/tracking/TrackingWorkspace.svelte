@@ -17,6 +17,7 @@
     type DraftKind,
     type GeofenceDraft
   } from './geofences';
+  import { company } from '$lib/stores/company.svelte';
   import SimulatorDock from './SimulatorDock.svelte';
   import { pathBetween } from './truck3d';
   import TrackingMap from './TrackingMap.svelte';
@@ -571,6 +572,7 @@
       {simRoutes}
       simPoints={simWaypoints}
       {pilots}
+      logo={company.active?.logo ?? null}
       onselect={(key) => {
         if (activeTrack && key === null) return;
         if (activeTrack) selectTransfer(null);

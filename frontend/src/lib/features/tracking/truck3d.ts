@@ -2,8 +2,9 @@
  * Camiones 3D para la vista inclinada de Seguimiento.
  *
  * three.js y su cargador glTF se descargan solo al inclinar el mapa (versión fija). Cada
- * unidad es el furgón de reparto del Car Kit de Kenney (licencia CC0, servido por el propio
- * ERP en /models/vehicles); si no se puede cargar, se usa un camión armado con figuras básicas.
+ * unidad es un Isuzu ELF 400 refrigerado (modelo propio del ERP, en /models/vehicles) con cinco
+ * zonas de logo (caja, puertas y parte trasera) donde se pone el logo de la empresa activa,
+ * como en Flota. Si el modelo no carga, se usa un camión armado con figuras básicas.
  */
 import type { MapLibre } from './maplibre';
 import type { TrackingStatus } from './tracking';
@@ -12,7 +13,9 @@ import type { TrackingStatus } from './tracking';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.169.0/+esm';
 const GLTF_LOADER_URL =
   'https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/loaders/GLTFLoader.js/+esm';
-const TRUCK_MODEL_URL = '/models/vehicles/delivery.glb';
+const TRUCK_MODEL_URL = '/models/vehicles/isuzu-elf400.glb';
+/** Las zonas de logo del modelo se llaman LOGO_CAJA_IZQUIERDA, LOGO_PUERTA_DERECHA, etc. */
+const LOGO_PREFIX = 'LOGO_';
 
 // three.js se carga en tiempo de ejecución, sin tipos empaquetados.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,8 +34,9 @@ export function loadThree(): Promise<Three> {
 let modelPromise: Promise<Three | null> | null = null;
 
 /**
- * Furgón normalizado: 7 m de largo, apoyado en el suelo, centrado y con el frente hacia -Z.
- * Devuelve null si no se pudo cargar (la capa usa entonces el camión de respaldo).
+ * Camión normalizado: largo real, apoyado en el suelo, centrado y con el frente hacia -Z.
+ * Sus zonas de logo comparten un solo material (en `userData.logoMaterial`), oculto hasta que
+ * se le pone el logo de la empresa. Devuelve null si no se pudo cargar.
  */
 export function loadTruckModel(THREE: Three): Promise<Three | null> {
   modelPromise ??= import(/* @vite-ignore */ GLTF_LOADER_URL)
@@ -52,14 +56,153 @@ export function loadTruckModel(THREE: Three): Promise<Three | null> {
       const scaled = new THREE.Group();
       scaled.add(model);
       scaled.scale.setScalar(scale);
-      // El modelo del kit mira hacia +Z; la capa espera el frente hacia -Z.
-      scaled.rotation.y = Math.PI;
+      // El ELF 400 mira hacia -X; la capa espera el frente hacia -Z.
+      scaled.rotation.y = -Math.PI / 2;
       const template = new THREE.Group();
       template.add(scaled);
+      template.userData.logoMaterial = logoMaterial(THREE, model);
       return template;
     })
     .catch(() => null);
   return modelPromise;
+}
+
+/**
+ * Un material compartido por las cinco zonas de logo de todas las unidades: cambiar su imagen
+ * cambia el logo en todo el mapa. Va levemente adelantado en profundidad para no parpadear
+ * sobre la caja con el mapa alejado, y oculto mientras no haya logo.
+ */
+function logoMaterial(THREE: Three, model: Three) {
+  const material = new THREE.MeshStandardMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    roughness: 0.39,
+    metalness: 0,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1
+  });
+  material.visible = false;
+  model.traverse((object: Three) => {
+    if (object.isMesh && String(object.name).startsWith(LOGO_PREFIX)) object.material = material;
+  });
+  return material;
+}
+
+/** Lado del lienzo cuadrado del logo y margen para que no toque el borde de la zona. */
+const LOGO_CANVAS_PX = 512;
+const LOGO_INSET = 0.06;
+
+let logoRequest = 0;
+
+/** Diferencia de color hasta la que un píxel es fondo, y hasta la que se funde con el borde. */
+const BACKGROUND_TOLERANCE = 48;
+const EDGE_TOLERANCE = 110;
+
+/**
+ * Quita el fondo liso de un logo sin transparencia (un JPG con fondo blanco): vacía los píxeles
+ * del color de las esquinas conectados con el borde y suaviza el contorno. El blanco dentro del
+ * emblema se conserva porque no está conectado con el borde. Devuelve false si no tocó nada
+ * (el logo ya trae transparencia o su fondo no es de un solo color).
+ */
+export function keyOutBackground(data: Uint8ClampedArray, width: number, height: number): boolean {
+  const total = width * height;
+  for (let index = 0; index < total; index++) if (data[index * 4 + 3]! < 250) return false;
+  const corners = [0, width - 1, (height - 1) * width, total - 1];
+  const background = [0, 1, 2].map(
+    (channel) => corners.reduce((sum, pixel) => sum + data[pixel * 4 + channel]!, 0) / 4
+  );
+  const distance = (pixel: number) =>
+    Math.hypot(
+      data[pixel * 4]! - background[0]!,
+      data[pixel * 4 + 1]! - background[1]!,
+      data[pixel * 4 + 2]! - background[2]!
+    );
+  if (corners.some((pixel) => distance(pixel) > BACKGROUND_TOLERANCE)) return false;
+  const visited = new Uint8Array(total);
+  const queue: number[] = [];
+  for (let x = 0; x < width; x++) queue.push(x, (height - 1) * width + x);
+  for (let y = 0; y < height; y++) queue.push(y * width, y * width + width - 1);
+  while (queue.length) {
+    const pixel = queue.pop()!;
+    if (visited[pixel]) continue;
+    visited[pixel] = 1;
+    const gap = distance(pixel);
+    if (gap > EDGE_TOLERANCE) continue;
+    if (gap > BACKGROUND_TOLERANCE) {
+      // Contorno: semitransparente según cuánto se parece al fondo; no se sigue de largo.
+      const keep = (gap - BACKGROUND_TOLERANCE) / (EDGE_TOLERANCE - BACKGROUND_TOLERANCE);
+      data[pixel * 4 + 3] = Math.round(255 * keep);
+      continue;
+    }
+    data[pixel * 4 + 3] = 0;
+    const x = pixel % width;
+    if (x > 0) queue.push(pixel - 1);
+    if (x < width - 1) queue.push(pixel + 1);
+    if (pixel >= width) queue.push(pixel - width);
+    if (pixel < total - width) queue.push(pixel + width);
+  }
+  return true;
+}
+
+/**
+ * Pone `url` (el logo de la empresa activa) en las zonas de logo, ajustado sin deformarse a un
+ * lienzo transparente. Sin logo, o si no se puede leer, las zonas quedan vacías: nunca se
+ * muestra la marca de otra empresa.
+ */
+export async function applyTruckLogo(THREE: Three, template: Three | null, url: string | null) {
+  const material = template?.userData.logoMaterial;
+  if (!material) return;
+  const request = ++logoRequest;
+  const clear = () => {
+    material.map?.dispose();
+    material.map = null;
+    material.visible = false;
+    material.needsUpdate = true;
+  };
+  if (!url) {
+    clear();
+    return;
+  }
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.crossOrigin = 'anonymous';
+      element.onload = () => resolve(element);
+      element.onerror = reject;
+      element.src = url;
+    });
+    if (request !== logoRequest) return;
+    const room = LOGO_CANVAS_PX * (1 - 2 * LOGO_INSET);
+    const fit = Math.min(room / image.naturalWidth, room / image.naturalHeight);
+    const width = Math.max(1, Math.round(image.naturalWidth * fit));
+    const height = Math.max(1, Math.round(image.naturalHeight * fit));
+    const art = document.createElement('canvas');
+    art.width = width;
+    art.height = height;
+    const artContext = art.getContext('2d', { willReadFrequently: true })!;
+    artContext.drawImage(image, 0, 0, width, height);
+    // Leer los píxeles falla si el logo es de otro dominio sin CORS: WebGL tampoco podría usarlo.
+    const pixels = artContext.getImageData(0, 0, width, height);
+    if (keyOutBackground(pixels.data, width, height)) artContext.putImageData(pixels, 0, 0);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = LOGO_CANVAS_PX;
+    canvas
+      .getContext('2d')!
+      .drawImage(art, (LOGO_CANVAS_PX - width) / 2, (LOGO_CANVAS_PX - height) / 2);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    // Las coordenadas de textura de glTF no se invierten en Y.
+    texture.flipY = false;
+    texture.anisotropy = 4;
+    material.map?.dispose();
+    material.map = texture;
+    material.visible = true;
+    material.needsUpdate = true;
+  } catch {
+    if (request === logoRequest) clear();
+  }
 }
 
 export interface TruckState {
@@ -76,8 +219,8 @@ const STATUS_COLORS: Record<TrackingStatus, number> = {
   offline: 0x71717a
 };
 
-/** Largo real del modelo en metros: cabe en un carril (2,3 m de ancho). */
-const TRUCK_LENGTH_M = 7;
+/** Largo real del ELF 400 en metros (unos 2,2 m de ancho): cabe en un carril. */
+const TRUCK_LENGTH_M = 7.2;
 /**
  * Tamaño mínimo en pantalla: a escala real casi no se ve con el mapa alejado, así que
  * crece solo lo necesario para distinguirse; de cerca queda del tamaño de la calle.
@@ -89,8 +232,8 @@ const MIN_SCREEN_PX = 18;
  * en metros. Devuelve el grupo y las piezas que cambian con el estado.
  */
 /**
- * Una unidad a partir del furgón del kit: su textura no se tiñe (ventanas y llantas se
- * verían mal), así que el estado se muestra con un disco de color bajo el vehículo.
+ * Una unidad a partir del modelo: su carrocería no se tiñe (el logo y los cristales se verían
+ * mal), así que el estado se muestra con un disco de color bajo el vehículo.
  */
 function buildFromModel(THREE: Three, template: Three) {
   const group = new THREE.Group();
@@ -102,7 +245,7 @@ function buildFromModel(THREE: Three, template: Three) {
     opacity: 0.5,
     depthWrite: false
   });
-  const disc = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.0, 0.1, 40), paint);
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(3.9, 3.9, 0.1, 48), paint);
   disc.position.y = 0.08;
   group.add(disc);
   const ring = selectionRing(THREE);
@@ -113,7 +256,7 @@ function buildFromModel(THREE: Three, template: Three) {
 function selectionRing(THREE: Three) {
   // Aro con volumen ligeramente elevado: no compite con el suelo del mapa.
   const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(4.3, 0.22, 8, 56),
+    new THREE.TorusGeometry(4.8, 0.22, 8, 64),
     new THREE.MeshBasicMaterial({ color: 0x0284c7 })
   );
   ring.rotation.x = Math.PI / 2;
@@ -208,6 +351,12 @@ export function createTruckLayer(
   const scene = new THREE.Scene();
   const camera = new THREE.Camera();
   const trucks = new Map<string, ReturnType<typeof buildTruck>>();
+  /**
+   * Del modelo (X derecha, Y arriba, frente hacia -Z) a Mercator (X este, Y sur, Z arriba).
+   * Mercator crece hacia el sur, así que este paso es un reflejo que compensa el del mapa: sin
+   * él el camión se dibujaría en espejo (logos invertidos y caras internas a la vista).
+   */
+  const MODEL_TO_MERCATOR = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1);
   // Luz ambiente, sol y relleno opuesto: ninguna cara del camión queda negra al girar.
   scene.add(new THREE.HemisphereLight(0xffffff, 0x94a3b8, 1.9));
   const sun = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -252,9 +401,8 @@ export function createTruckLayer(
         }
         truck.paint.color.setHex(STATUS_COLORS[state.status]);
         truck.ring.visible = state.selected;
-        // El rumbo queda en el propio camión (Y arriba); Mercator crece hacia el sur,
-        // de ahí el medio giro extra para que el frente -Z apunte al rumbo.
-        truck.group.rotation.set(0, Math.PI + (state.course * Math.PI) / 180, 0);
+        // El rumbo (horario desde el norte) gira el camión sobre su eje vertical (Y arriba).
+        truck.group.rotation.set(0, (-state.course * Math.PI) / 180, 0);
         const mercator = maplibregl.MercatorCoordinate.fromLngLat(state.lngLat, 0);
         const metersPerPixel =
           (156543.03392 * Math.cos((state.lngLat[1] * Math.PI) / 180)) / 2 ** zoom;
@@ -265,7 +413,7 @@ export function createTruckLayer(
         const placement = new THREE.Matrix4()
           .makeTranslation(mercator.x, mercator.y, mercator.z)
           .scale(new THREE.Vector3(scale, scale, scale))
-          .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+          .multiply(MODEL_TO_MERCATOR);
         frame.push([truck, projection.clone().multiply(placement)]);
       }
       for (const [key, truck] of trucks) {
