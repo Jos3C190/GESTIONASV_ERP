@@ -50,6 +50,8 @@
     onfocussite?: (site: SiteOut) => void;
   } = $props();
 
+  let sitesOpen = $state(true);
+
   const syncLabel = $derived.by(() => {
     if (!sites) return '';
     if (!sites.sync.configured) return 'Servidor GPS sin configurar: sin eventos de llegada.';
@@ -171,111 +173,131 @@
     </div>
   </form>
 {:else}
-  {#if sites}
-    <section class="sites" aria-label="Sucursales y almacenes">
-      <header>
-        <strong>Sucursales y almacenes</strong>
-        <span>Automáticas · se administran en Sucursales y Almacenes</span>
-      </header>
-      <p class="sync" class:warn={!!sites.sync.error || !sites.sync.configured}>
-        {syncLabel}
-        {#if canSync && sites.sync.configured && sites.sync.error}
-          <button type="button" disabled={syncing} onclick={() => onsync?.()}
-            >{syncing ? 'Reintentando…' : 'Reintentar'}</button
+  <div class="content">
+    {#if sites}
+      <section class="group" aria-labelledby="sites-heading">
+        <button
+          type="button"
+          class="group-head"
+          aria-expanded={sitesOpen}
+          onclick={() => (sitesOpen = !sitesOpen)}
+        >
+          <span class="group-title">
+            <strong id="sites-heading">Sucursales y almacenes</strong>
+            <span class="count">{sites.sites.length}</span>
+          </span>
+          <span class="chevron" class:open={sitesOpen}><FleetIcon name="chevron" size={14} /></span>
+        </button>
+        <p class="group-note">Automáticas · se administran en Sucursales y Almacenes</p>
+        <p class="sync" class:warn={!!sites.sync.error || !sites.sync.configured}>
+          <span class="dot"></span>
+          <span class="sync-text">{syncLabel}</span>
+          {#if canSync && sites.sync.configured && sites.sync.error}
+            <button type="button" disabled={syncing} onclick={() => onsync?.()}
+              >{syncing ? 'Reintentando…' : 'Reintentar'}</button
+            >
+          {/if}
+        </p>
+        {#if sitesOpen}
+          <ul class="list">
+            {#each sites.sites as site (site.id)}
+              <li>
+                <button type="button" class="row" onclick={() => onfocussite?.(site)}>
+                  <span class="swatch site" class:warehouse={site.kind === 'warehouse'}></span>
+                  <span class="main">
+                    <strong title={site.name}
+                      >{site.kind === 'branch' ? 'Sucursal' : 'Almacén'} {site.name}</strong
+                    >
+                    <span
+                      >Radio {site.radius_m} m{site.kind === 'branch' && site.warehouses.length
+                        ? ` · ${site.warehouses.length} ${site.warehouses.length === 1 ? 'almacén' : 'almacenes'}`
+                        : site.kind === 'warehouse'
+                          ? ` · ${site.branch_name}`
+                          : ''}</span
+                    >
+                  </span>
+                </button>
+              </li>
+            {:else}
+              <li class="empty">Aún no hay sucursales con ubicación en el mapa.</li>
+            {/each}
+          </ul>
+          {#if sites.missing.length}
+            <p class="missing">
+              <FleetIcon name="alert" size={13} />
+              <span
+                >Sin ubicación en el mapa: {sites.missing
+                  .map((item) => `${item.kind === 'branch' ? 'Sucursal' : 'Almacén'} ${item.name}`)
+                  .join(', ')}. Complétala en <a href="/branches">Sucursales</a> o
+                <a href="/warehouses">Almacenes</a>.</span
+              >
+            </p>
+          {/if}
+        {/if}
+      </section>
+    {/if}
+
+    <section class="group" aria-labelledby="custom-heading">
+      <div class="group-head static">
+        <span class="group-title">
+          <strong id="custom-heading">Geocercas personalizadas</strong>
+          <span class="count">{geofences.length}</span>
+        </span>
+        {#if canManage}
+          <button type="button" class="primary" onclick={() => onstartdraw('polygon')}
+            ><FleetIcon name="plus" size={14} />Nueva</button
           >
         {/if}
-      </p>
+      </div>
+      {#if error}<p class="error inline">{error}</p>{/if}
       <ul class="list">
-        {#each sites.sites as site (site.id)}
-          <li>
-            <button type="button" class="row" onclick={() => onfocussite?.(site)}>
-              <span class="swatch site" class:warehouse={site.kind === 'warehouse'}></span>
+        {#each geofences as geofence (geofence.id)}
+          <li class:highlighted={highlighted === geofence.id}>
+            <button type="button" class="row" onclick={() => onfocus(geofence)}>
+              <span class="swatch" class:circle={geofence.shape.type === 'circle'}></span>
               <span class="main">
-                <strong>{site.kind === 'branch' ? 'Sucursal' : 'Almacén'} {site.name}</strong>
+                <strong>{geofence.name}</strong>
                 <span
-                  >Radio {site.radius_m} m{site.kind === 'branch' && site.warehouses.length
-                    ? ` · ${site.warehouses.length} ${site.warehouses.length === 1 ? 'almacén' : 'almacenes'}`
-                    : site.kind === 'warehouse'
-                      ? ` · ${site.branch_name}`
-                      : ''}</span
+                  >{describeShape(geofence.shape)} · {geofence.branch_name ??
+                    'Toda la empresa'}</span
                 >
+                {#if geofence.speed_limit_kmh}<span class="limit"
+                    >Máx. {geofence.speed_limit_kmh} km/h</span
+                  >{/if}
               </span>
             </button>
+            {#if canManage && geofence.can_manage}
+              {#if confirmDelete === geofence.id}
+                <span class="confirm">
+                  <button type="button" class="danger" onclick={() => ondelete(geofence)}
+                    >Eliminar</button
+                  >
+                  <button type="button" onclick={() => (confirmDelete = null)}>No</button>
+                </span>
+              {:else}
+                <button
+                  type="button"
+                  class="icon"
+                  aria-label={`Eliminar ${geofence.name}`}
+                  onclick={() => (confirmDelete = geofence.id)}
+                  ><FleetIcon name="trash" size={14} /></button
+                >
+              {/if}
+            {/if}
+          </li>
+        {:else}
+          <li class="empty">
+            Aún no hay geocercas. {canManage
+              ? 'Dibuja una para recibir alertas cuando una unidad entre o salga.'
+              : ''}
           </li>
         {/each}
       </ul>
-      {#if sites.missing.length}
-        <p class="missing">
-          Sin ubicación en el mapa: {sites.missing
-            .map((item) => `${item.kind === 'branch' ? 'Sucursal' : 'Almacén'} ${item.name}`)
-            .join(', ')}. Complétala en
-          <a href="/branches">Sucursales</a> o <a href="/warehouses">Almacenes</a>.
-        </p>
-      {/if}
     </section>
-  {/if}
-  <div class="toolbar">
-    <span>{geofences.length} {geofences.length === 1 ? 'geocerca' : 'geocercas'}</span>
-    {#if canManage}
-      <button type="button" class="primary" onclick={() => onstartdraw('polygon')}
-        ><FleetIcon name="plus" size={14} />Nueva geocerca</button
-      >
-    {/if}
   </div>
-  {#if error}<p class="error inline">{error}</p>{/if}
-  <ul class="list">
-    {#each geofences as geofence (geofence.id)}
-      <li class:highlighted={highlighted === geofence.id}>
-        <button type="button" class="row" onclick={() => onfocus(geofence)}>
-          <span class="swatch" class:circle={geofence.shape.type === 'circle'}></span>
-          <span class="main">
-            <strong>{geofence.name}</strong>
-            <span
-              >{describeShape(geofence.shape)} · {geofence.branch_name ?? 'Toda la empresa'}</span
-            >
-            {#if geofence.speed_limit_kmh}<span class="limit"
-                >Máx. {geofence.speed_limit_kmh} km/h</span
-              >{/if}
-          </span>
-        </button>
-        {#if canManage && geofence.can_manage}
-          {#if confirmDelete === geofence.id}
-            <span class="confirm">
-              <button type="button" class="danger" onclick={() => ondelete(geofence)}
-                >Eliminar</button
-              >
-              <button type="button" onclick={() => (confirmDelete = null)}>No</button>
-            </span>
-          {:else}
-            <button
-              type="button"
-              class="icon"
-              aria-label={`Eliminar ${geofence.name}`}
-              onclick={() => (confirmDelete = geofence.id)}
-              ><FleetIcon name="trash" size={14} /></button
-            >
-          {/if}
-        {/if}
-      </li>
-    {:else}
-      <li class="empty">
-        Aún no hay geocercas. {canManage
-          ? 'Dibuja una para recibir alertas cuando una unidad entre o salga.'
-          : ''}
-      </li>
-    {/each}
-  </ul>
 {/if}
 
 <style>
-  .toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 12px;
-    font-size: 12px;
-    color: rgb(var(--foreground-muted));
-  }
   button.primary {
     display: inline-flex;
     align-items: center;
@@ -291,10 +313,8 @@
     opacity: 0.45;
   }
   .list {
-    flex: 1;
-    overflow-y: auto;
     margin: 0;
-    padding: 0 6px 6px;
+    padding: 0 6px;
     list-style: none;
   }
   .list li {
@@ -466,42 +486,114 @@
     font-size: 12px;
   }
   .error.inline {
-    padding: 0 12px 8px;
+    padding: 0 14px 8px;
   }
   button:focus-visible {
     outline: 2px solid rgb(var(--primary));
     outline-offset: 2px;
   }
-  .sites {
-    display: grid;
+  .content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .group {
+    padding: 4px 0 8px;
+  }
+  .group + .group {
+    border-top: 1px solid rgb(var(--border));
+  }
+  .group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 8px;
-    margin-bottom: 14px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgb(var(--border));
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 14px;
+    text-align: left;
   }
-  .sites header {
+  button.group-head:hover .chevron {
+    color: rgb(var(--foreground));
+  }
+  .group-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: 13px;
+  }
+  .group-title strong {
+    font-weight: 600;
+  }
+  .count {
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgb(var(--surface-hover));
+    font-size: 11px;
+    font-weight: 600;
+    color: rgb(var(--foreground-muted));
+  }
+  .chevron {
     display: grid;
-    gap: 2px;
-    font-size: 12px;
+    place-items: center;
+    color: rgb(var(--foreground-muted));
+    transition: transform 0.15s ease;
   }
-  .sites header span,
+  .chevron.open {
+    transform: rotate(90deg);
+  }
+  .group-note,
   .sync,
   .missing {
+    margin: 0;
+    padding: 0 14px;
     font-size: 11px;
+    line-height: 1.45;
     color: rgb(var(--foreground-muted));
   }
   .sync {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    margin: 4px 0 6px;
+  }
+  .sync .dot {
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgb(var(--success));
   }
   .sync.warn {
     color: rgb(var(--warning));
   }
+  .sync.warn .dot {
+    background: rgb(var(--warning));
+  }
+  .sync-text {
+    flex: 1;
+    min-width: 0;
+  }
   .sync button,
   .missing a {
-    font-weight: 500;
+    flex-shrink: 0;
+    font-weight: 600;
     color: rgb(var(--primary));
+  }
+  .missing {
+    display: flex;
+    gap: 6px;
+    margin: 6px 14px 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgb(var(--warning) / 0.08);
+    color: rgb(var(--warning));
+  }
+  .missing :global(svg) {
+    flex-shrink: 0;
+    margin-top: 1px;
   }
   .swatch.site {
     border-color: #0f766e;

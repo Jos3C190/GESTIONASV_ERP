@@ -1429,9 +1429,31 @@
       transform: translateY(8px);
     }
   }
+  @media (max-width: 1200px) {
+    .device-panel {
+      width: 300px;
+    }
+  }
   @media (max-width: 900px) {
     .tracking-workspace {
       padding: 16px;
+    }
+    .page-heading {
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 8px 16px;
+    }
+    .title-line {
+      flex-wrap: wrap;
+      gap: 8px 12px;
+    }
+    .tabs {
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tabs button {
+      flex: 1 0 auto;
+      padding-inline: 10px;
     }
     .tracking-shell {
       height: auto;
@@ -1458,8 +1480,19 @@
       position: static;
       order: 2;
       width: auto;
-      max-height: 360px;
+      height: min(70dvh, 560px);
       box-shadow: none;
+    }
+  }
+  @media (max-width: 520px) {
+    .tracking-workspace {
+      padding: 12px;
+    }
+    h1 {
+      font-size: 22px;
+    }
+    .tracking-shell > :global(.tracking-map) {
+      height: 340px;
     }
   }
   @media (prefers-reduced-motion: reduce) {
