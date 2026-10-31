@@ -9,13 +9,16 @@
   import { clearPrivateQueryCache } from '$lib/services/query-client';
 
   interface Props {
+    id?: string;
     collapsed?: boolean;
+    onToggleCollapse?: () => void;
     onNavigate?: () => void;
   }
 
-  let { collapsed = false, onNavigate }: Props = $props();
+  let { id, collapsed = false, onToggleCollapse, onNavigate }: Props = $props();
   let switchingBranch = $state(false);
   let branchError = $state<string | null>(null);
+  let tooltipDismissed = $state(false);
 
   function isVisible(item: NavItem): boolean {
     if (item.requiredPermissions?.length) {
@@ -30,8 +33,10 @@
       const module = new URLSearchParams(route.split('?')[1]).get('module');
       return page.url.pathname === '/placeholder' && page.url.searchParams.get('module') === module;
     }
-    return page.url.pathname === route ||
-      (route === '/documents' && page.url.pathname.startsWith('/documents/'));
+    return (
+      page.url.pathname === route ||
+      (route === '/documents' && page.url.pathname.startsWith('/documents/'))
+    );
   }
 
   function handleClick() {
@@ -56,8 +61,15 @@
   }
 </script>
 
+<svelte:window
+  onkeydown={(event) => {
+    if (event.key === 'Escape') tooltipDismissed = true;
+  }}
+/>
+
 <aside
-  class="flex h-full flex-col border-r border-border bg-surface transition-all duration-200 {collapsed
+  {id}
+  class="flex h-full flex-col border-r border-border bg-surface transition-[width] duration-200 motion-reduce:transition-none {collapsed
     ? 'w-[52px]'
     : 'w-60'}"
   role="navigation"
@@ -200,6 +212,59 @@
             {session.user?.is_superuser ? 'Super Admin' : 'Usuario'}
           </p>
         </div>
+      </div>
+    </div>
+  {/if}
+  {#if onToggleCollapse}
+    <div class="flex-none border-t border-border py-2 {collapsed ? 'px-1.5' : 'px-2'}">
+      <div class="group relative">
+        <button
+          type="button"
+          onclick={onToggleCollapse}
+          onpointerenter={() => (tooltipDismissed = false)}
+          onfocus={() => (tooltipDismissed = false)}
+          class="peer relative flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] text-foreground-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transition-none {collapsed
+            ? 'justify-center'
+            : ''}"
+          aria-label={collapsed ? 'Expandir menú' : 'Contraer menú'}
+          aria-expanded={!collapsed}
+          aria-controls={id}
+        >
+          <svg
+            class="flex-none"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.85"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="3" />
+            <path d="M9 3v18" />
+            {#if !collapsed}<path
+                d="M4 6h4v12H4z"
+                fill="currentColor"
+                stroke="none"
+                opacity=".25"
+              />{/if}
+          </svg>
+          {#if !collapsed}
+            <span class="whitespace-nowrap">Contraer menú</span>
+          {/if}
+        </button>
+        {#if collapsed && !tooltipDismissed}
+          <span
+            aria-hidden="true"
+            class="invisible absolute left-full top-1/2 z-50 -translate-y-1/2 pl-3 opacity-0 group-hover:visible group-hover:opacity-100 peer-focus-visible:visible peer-focus-visible:opacity-100"
+            ><span
+              class="block whitespace-nowrap rounded-md border border-border bg-surface-elevated px-2.5 py-1.5 text-xs font-medium text-foreground shadow-soft"
+              >Expandir menú</span
+            ></span
+          >
+        {/if}
       </div>
     </div>
   {/if}
