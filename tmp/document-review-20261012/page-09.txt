@@ -1,0 +1,49 @@
+RN-016: Todo movimiento deberá quedar registrado en el Kardex.
+
+RN-017: Cada movimiento de inventario deberá indicar su documento de origen (compra,
+venta, devolución o traslado).
+
+Ventas
+
+RN-018: Toda venta deberá disminuir automáticamente las existencias.
+
+RN-019: No podrá venderse un producto sin existencia disponible.
+
+RN-020: Una cotización podrá convertirse en una venta.
+
+Devoluciones
+
+RN-021: Toda devolución deberá estar asociada a una venta previamente realizada.
+
+RN-022: Las devoluciones incrementarán nuevamente el inventario cuando el producto sea
+aceptado.
+
+Auditoría
+
+RN-023: Toda operación de creación, modificación o eliminación lógica deberá registrarse en la
+bitácora.
+
+RN-024: Ningún registro histórico podrá eliminarse físicamente del sistema.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                  9

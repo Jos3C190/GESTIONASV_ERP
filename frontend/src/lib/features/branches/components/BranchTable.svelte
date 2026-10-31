@@ -204,6 +204,7 @@
                       {branch.name}
                     </p>
                     <div class="mt-1 flex min-w-0 items-center gap-1.5">
+                      {#if branch.isHeadquarters}<Badge variant="primary">Matriz</Badge>{/if}
                       <span
                         class="truncate font-mono text-[10px] font-medium leading-tight text-foreground-subtle"
                         >{branch.code}</span
@@ -220,7 +221,11 @@
 
               <!-- Ciudad -->
               <td class="col-city min-w-0 px-3 py-2.5 text-[12px] text-foreground-muted">
-                <span class="block truncate" title={branch.city}>{branch.city}</span>
+                {#if branch.isHeadquarters}
+                  <span class="block truncate" title="Matriz administrativa sin ubicación física">Sede administrativa</span>
+                {:else}
+                  <span class="block truncate" title={branch.city}>{branch.city}</span>
+                {/if}
               </td>
 
               <!-- Encargado -->
@@ -245,7 +250,11 @@
               <td
                 class="col-employees px-3 py-2.5 text-right font-mono text-[12px] font-bold tabular-nums text-foreground"
               >
-                {branch.employees}
+                {#if branch.isHeadquarters}
+                  <span class="font-sans text-[11px]" title="No aplica a una matriz administrativa">No aplica</span>
+                {:else}
+                  {branch.employees}
+                {/if}
               </td>
 
               <!-- Almacenes -->
@@ -257,7 +266,9 @@
 
               <!-- Ventas mes + Micro Sparkline -->
               <td class="col-sales px-3 py-2.5 text-right">
-                {#if branch.salesThisMonth > 0}
+                {#if branch.isHeadquarters}
+                  <span class="text-[11px] text-foreground-subtle" title="No aplica a una matriz administrativa">No aplica</span>
+                {:else if branch.salesThisMonth > 0}
                   <div class="inline-flex items-center justify-end gap-2">
                     <span class="font-mono text-[12px] font-bold tabular-nums text-foreground">
                       ${branch.salesThisMonth.toLocaleString()}
@@ -331,9 +342,10 @@
                   <p class="truncate text-[13px] font-semibold text-foreground" title={branch.name}>
                     {branch.name}
                   </p>
-                  <p class="mt-0.5 truncate text-[11px] text-foreground-muted" title={branch.city}>
+                  <p class="mt-0.5 truncate text-[11px] text-foreground-muted" title={branch.isHeadquarters ? 'Matriz administrativa sin ubicación física' : branch.city}>
+                    {#if branch.isHeadquarters}<Badge variant="primary">Matriz</Badge>{/if}
                     <span class="font-mono text-[10px] text-foreground-subtle">{branch.code}</span>
-                    <span aria-hidden="true"> · </span>{branch.city}
+                    <span aria-hidden="true"> · </span>{branch.isHeadquarters ? 'Sede administrativa · sin ubicación física' : branch.city}
                   </p>
                 </div>
               </div>
@@ -354,7 +366,9 @@
                   <Badge variant={STATUS_MAP[branch.status]?.variant || 'neutral'}>
                     {STATUS_MAP[branch.status]?.label || branch.status}
                   </Badge>
-                  <span title={`${branch.employees} empleados`}>{branch.employees} empl.</span>
+                  {#if !branch.isHeadquarters}
+                    <span title={`${branch.employees} empleados`}>{branch.employees} empl.</span>
+                  {/if}
                   <span title={`${branch.warehouses} almacenes`}>{branch.warehouses} alm.</span>
                 </div>
               </div>

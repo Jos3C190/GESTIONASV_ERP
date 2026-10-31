@@ -53,6 +53,7 @@ def test_purchase_request_schema_rejects_client_supplied_unit_id() -> None:
 def test_purchase_request_permissions_are_registered() -> None:
     assert {
         "purchase_requests:read",
+        "purchase_requests:create",
         "purchase_requests:manage",
         "purchase_requests:approve",
     }.issubset(ALL_PERMISSION_CODES)

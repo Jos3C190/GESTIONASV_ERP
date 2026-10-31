@@ -22,6 +22,29 @@ export interface PurchaseUpdateInput {
   notes: string | null;
 }
 
+export interface PurchaseVerificationLineInput {
+  purchase_detail_id: string;
+  quantity_accepted: number;
+  inventory_location_id: string | null;
+}
+
+export interface PurchaseVerifyInput {
+  lines: PurchaseVerificationLineInput[];
+  valuation_conversion?: PurchaseValuationConversion;
+}
+
+export interface PurchaseValuationConversion {
+  currency: string;
+  rate: string;
+  effective_date: string;
+  reference: string;
+}
+
+export interface PurchaseValuationContext {
+  receipt_currency: string;
+  valuation_currency: string | null;
+}
+
 export interface PurchaseDetail {
   id: string;
   purchase_id: string;
@@ -29,7 +52,10 @@ export interface PurchaseDetail {
   product_id: number;
   quantity_ordered: string;
   quantity_received: string;
+  quantity_accepted?: string | null;
+  quantity_rejected?: string | null;
   unit_id: number;
+  inventory_location_id?: string | null;
   unit_price: string;
   discount: string;
   subtotal: string;
@@ -42,12 +68,13 @@ export interface PurchaseDetail {
 }
 
 export interface Purchase {
+  inventory_workflow?: 'receipt_before_retaceo' | 'retaceo_before_inventory' | 'placement_before_inventory';
   id: string;
   company_id: string;
   code: string;
   purchase_order_id: string;
   supplier_id: number;
-  branch_id: string;
+  branch_id: string | null;
   warehouse_id: string;
   created_by_id: string;
   purchase_date: string;
@@ -55,11 +82,13 @@ export interface Purchase {
   supplier_invoice_date: string | null;
   currency: string;
   details: PurchaseDetail[];
+  valuation_conversion?: PurchaseValuationConversion | null;
   subtotal: string;
   discount: string;
   tax: string;
   total: string;
   status: PurchaseStatus;
+  inventory_movement_id?: string | null;
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -92,7 +121,7 @@ export interface PurchaseReceivable {
   code: string;
   status: PurchaseOrderStatus;
   supplier_id: number;
-  branch_id: string;
+  branch_id: string | null;
   warehouse_id: string;
   currency: string;
   lines: PurchaseReceivableLine[];

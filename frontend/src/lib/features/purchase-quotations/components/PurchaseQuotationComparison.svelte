@@ -2,6 +2,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import { HttpError } from '$lib/api/client';
   import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
+  import { branch } from '$lib/stores/branch.svelte';
   import { suppliersApi } from '$lib/api/suppliers';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type {
@@ -18,6 +19,7 @@
     received: 'Recibida',
     under_evaluation: 'En evaluación',
     selected: 'Seleccionada',
+    not_selected: 'No seleccionada',
     rejected: 'Rechazada',
     expired: 'Vencida',
     cancelled: 'Cancelada'
@@ -84,7 +86,11 @@
     }
   }
 
-  async function loadComparison(currentRequestId: string, currentCurrency: string) {
+  async function loadComparison(
+    currentRequestId: string,
+    currentCurrency: string,
+    currentBranchId: string | null
+  ) {
     const sequence = ++requestSequence;
     loading = true;
     error = null;
@@ -92,7 +98,8 @@
     try {
       const result = await purchaseQuotationsApi.compare(
         currentRequestId,
-        currentCurrency || undefined
+        currentCurrency || undefined,
+        currentBranchId
       );
 
       if (sequence !== requestSequence) return;
@@ -111,7 +118,7 @@
   }
 
   function retry() {
-    void loadComparison(requestId, currency);
+    void loadComparison(requestId, currency, branch.id);
   }
 
   $effect(() => {
@@ -121,9 +128,10 @@
   $effect(() => {
     const currentRequestId = requestId;
     const currentCurrency = currency;
+    const currentBranchId = branch.id;
 
     if (canRead && currentRequestId) {
-      void loadComparison(currentRequestId, currentCurrency);
+      void loadComparison(currentRequestId, currentCurrency, currentBranchId);
     } else {
       loading = false;
     }

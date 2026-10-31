@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
 import pytest
@@ -39,15 +39,11 @@ os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
 os.environ.setdefault("SUPER_ADMIN_PASSWORD", "TestOnly!SuperAdmin2026")
 
 
-def _has_database_tests(request: pytest.FixtureRequest) -> bool:
-    return any(
-        item.get_closest_marker("integration") is not None
-        or item.get_closest_marker("e2e") is not None
-        for item in request.session.items
-    )
+def _has_integration_tests(request: pytest.FixtureRequest) -> bool:
+    return any(item.get_closest_marker("integration") is not None for item in request.session.items)
 
 
-def _prepare_postgres_database() -> None:
+def _prepare_postgres_database(*, revision: str = "head", seed: bool = True) -> None:
     """Create and rebuild only the dedicated test database."""
     from alembic import command
     from alembic.config import Config
@@ -78,7 +74,18 @@ def _prepare_postgres_database() -> None:
     alembic_config = Config(str(backend_root / "alembic.ini"))
     alembic_config.set_main_option("script_location", str(backend_root / "alembic"))
     alembic_config.set_main_option("sqlalchemy.url", TEST_DATABASE_URL_SYNC)
-    command.upgrade(alembic_config, "head")
+    command.upgrade(alembic_config, revision)
+
+    if not seed:
+        # Historical RBAC tests need a schema that actually predates later,
+        # intentionally irreversible inventory migrations. Seed only the role
+        # those revisions reconcile, without invoking today's application ORM.
+        with connect(psycopg_dsn) as database:
+            database.execute(
+                "INSERT INTO roles (id, name, is_system) "
+                "VALUES (gen_random_uuid(), 'SUPER_ADMIN', true)"
+            )
+        return
 
     from app.infrastructure.db.session import dispose_engine
     from seed.seed_data import bootstrap
@@ -94,8 +101,21 @@ def _prepare_postgres_database() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def _isolated_database(request: pytest.FixtureRequest):
-    """Prepare PostgreSQL only when the collected tests actually need it."""
-    if _has_database_tests(request):
+    """Prepare PostgreSQL once for integration tests that share a rolled-back fixture."""
+    if _has_integration_tests(request):
+        _prepare_postgres_database()
+
+
+@pytest.fixture
+def rebuild_test_database() -> Callable[..., None]:
+    """Rebuild the guarded disposable database at an explicitly chosen revision."""
+    return _prepare_postgres_database
+
+
+@pytest.fixture(autouse=True)
+def _isolated_e2e_database(request: pytest.FixtureRequest):
+    """Give every stateful API workflow a fresh schema and canonical seed."""
+    if request.node.get_closest_marker("e2e") is not None:
         _prepare_postgres_database()
 
 

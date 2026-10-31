@@ -1,0 +1,49 @@
+Loading svelte-check in workspace: c:\Developer\GESTIONASV_ERP\frontend
+Getting Svelte diagnostics...
+
+c:\Developer\GESTIONASV_ERP\frontend\src\routes\(app)\inventory\valuation\+page.svelte:206:76
+Error: Expected token >
+https://svelte.dev/e/expected_token (svelte)
+                {#each filtered.slice(page * 20, (page + 1) * 20) as row (row.inventory_item_id)}{@const item =
+                    labels.get(row.inventory_item_id)}<tr class:bg-primary/5={selected === row.inventory_item_id}
+                    ><th scope="row" class="max-w-xs p-4 font-normal"
+
+c:\Developer\GESTIONASV_ERP\frontend\src\routes\(app)\inventory\valuation\+page.svelte:206:76
+Error: Expected token >
+https://svelte.dev/e/expected_token (ts)
+                {#each filtered.slice(page * 20, (page + 1) * 20) as row (row.inventory_item_id)}{@const item =
+                    labels.get(row.inventory_item_id)}<tr class:bg-primary/5={selected === row.inventory_item_id}
+                    ><th scope="row" class="max-w-xs p-4 font-normal"
+
+c:\Developer\GESTIONASV_ERP\frontend\tests\unit\PurchaseConsolidationAdjudication.test.ts:112:7
+Error: Property 'status' is missing in type '{ consolidationId: string; }' but required in type '$$ComponentProps'. 
+    render(PurchaseConsolidationAdjudication, {
+      props: { consolidationId: board.consolidation_id }
+    });
+
+c:\Developer\GESTIONASV_ERP\frontend\tests\unit\PurchaseConsolidationAdjudication.test.ts:148:7
+Error: Property 'status' is missing in type '{ consolidationId: string; }' but required in type '$$ComponentProps'. 
+    render(PurchaseConsolidationAdjudication, {
+      props: { consolidationId: board.consolidation_id }
+    });
+
+c:\Developer\GESTIONASV_ERP\frontend\tests\unit\PurchaseConsolidationAdjudication.test.ts:212:7
+Error: Property 'status' is missing in type '{ consolidationId: string; }' but required in type '$$ComponentProps'. 
+    render(PurchaseConsolidationAdjudication, {
+      props: { consolidationId: board.consolidation_id }
+    });
+
+c:\Developer\GESTIONASV_ERP\frontend\tests\unit\PurchaseConsolidationAdjudication.test.ts:287:7
+Error: Property 'status' is missing in type '{ consolidationId: string; }' but required in type '$$ComponentProps'. 
+    render(PurchaseConsolidationAdjudication, {
+      props: { consolidationId: board.consolidation_id }
+    });
+
+c:\Developer\GESTIONASV_ERP\frontend\tests\unit\PurchaseConsolidationAdjudication.test.ts:315:7
+Error: Property 'status' is missing in type '{ consolidationId: string; }' but required in type '$$ComponentProps'. 
+    render(PurchaseConsolidationAdjudication, {
+      props: { consolidationId: board.consolidation_id }
+    });
+
+====================================
+svelte-check found 7 errors and 0 warnings in 2 files

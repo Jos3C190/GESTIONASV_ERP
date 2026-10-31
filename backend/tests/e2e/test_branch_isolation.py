@@ -30,15 +30,17 @@ async def _company_with_multiple_branches() -> uuid.UUID:
 
 
 async def _login_superadmin(e2e_client) -> dict[str, str]:
+    username = f"branch-scope-admin-{uuid.uuid4().hex[:8]}"
+    password = "Cambio!Seguro2026"
     await seed_user(
-        username="superadmin",
-        email="superadmin@erp-system.dev",
-        password="Cambio!Seguro2026",
+        username=username,
+        email=f"{username}@example.com",
+        password=password,
         is_superuser=True,
     )
     response = await e2e_client.post(
         "/api/v1/auth/login",
-        json={"login": "superadmin", "password": "Cambio!Seguro2026"},
+        json={"login": username, "password": password},
     )
     company_id = await _company_with_multiple_branches()
     return {

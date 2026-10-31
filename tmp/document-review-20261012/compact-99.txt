@@ -1,0 +1,27 @@
+CA-COM-016: El sistema deberá permitir adjuntar documentos a los gastos de las órdenes.
+CA-COM-017: El sistema deberá permitir registrar una recepción o compra a partir de una
+orden.
+CA-COM-018: El sistema deberá permitir realizar recepciones parciales.
+CA-COM-019: El sistema deberá mantener la relación entre cada detalle de compra y el detalle
+de orden correspondiente.
+CA-COM-020: El sistema deberá permitir crear un retaceo asociado a una compra.
+CA-COM-021: El sistema deberá distribuir los gastos de retaceo proporcionalmente al FOB.
+CA-COM-022: El sistema deberá calcular el costo unitario de cada producto.
+CA-COM-023: El sistema deberá permitir consultar los porcentajes de distribución calculados.
+CA-COM-024: El sistema no deberá incluir el IVA de importación dentro del cálculo del retaceo.
+CA-COM-025: El sistema deberá mantener la trazabilidad entre solicitud, cotización, orden,
+compra y retaceo.
+CA-COM-026: Las operaciones críticas deberán quedar registradas en la bitácora.
+CA-COM-027: Los registros con historial de transacciones no deberán eliminarse físicamente.
+6.8.44 Ejemplo Completo del Proceso
+Para ilustrar el funcionamiento del módulo se utilizará el siguiente escenario:
+Paso 1 — Solicitud
+Código: PR-00042
+Producto:
+• | Prensadora
+• | Cantidad: 1
+Producto:
+• | Camión
+• | Cantidad: 1
+Paso 2 — Cotizaciones
+Se reciben cotizaciones de diferentes proveedores:

@@ -1,13 +1,41 @@
 import { describe, expect, it, vi } from 'vitest';
-import { apiFetch } from '$lib/api/client';
-import { getLocationSummary, normalizeLocation, normalizeLocationBatch } from './services';
+import { apiFetch, HttpError } from '$lib/api/client';
+import {
+  getLocationSummary,
+  getOptionalLocationCodeScheme,
+  normalizeLocation,
+  normalizeLocationBatch
+} from './services';
 import { locationBatchRequiredPermissions } from './types';
 
 vi.mock('$lib/api/client', () => ({
-  apiFetch: vi.fn()
+  apiFetch: vi.fn(),
+  HttpError: class HttpError extends Error {
+    readonly code: string;
+    readonly status: number;
+
+    constructor(code: string, message: string, status: number) {
+      super(message);
+      this.code = code;
+      this.status = status;
+    }
+  }
 }));
 
 describe('location service normalization', () => {
+  it('trata un 404 como almacén sin esquema inicial', async () => {
+    vi.mocked(apiFetch).mockRejectedValueOnce(new HttpError('not_found', 'No existe', 404));
+
+    await expect(getOptionalLocationCodeScheme('warehouse-1')).resolves.toBeNull();
+  });
+
+  it('no convierte errores reales de consulta en ausencia de esquema', async () => {
+    const error = new HttpError('internal_error', 'Error del servidor', 500);
+    vi.mocked(apiFetch).mockRejectedValueOnce(error);
+
+    await expect(getOptionalLocationCodeScheme('warehouse-1')).rejects.toBe(error);
+  });
+
   it('unifica el bucket legado "Sin área" con el sentinel técnico', async () => {
     vi.mocked(apiFetch).mockResolvedValueOnce({
       total: 4,

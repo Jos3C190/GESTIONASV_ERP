@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+  import { page as currentPage } from '$app/state';
   import Button from '$lib/components/ui/Button.svelte';
   import { HttpError } from '$lib/api/client';
   import { retaceosApi } from '$lib/api/retaceos';
@@ -13,8 +15,14 @@
     { value: 'cancelled', label: 'Cancelado' }
   ];
 
+  function parseStatus(value: string | null): RetaceoStatus | '' {
+    return STATUS_OPTIONS.some((option) => option.value === value) ? (value as RetaceoStatus) : '';
+  }
+
   let items = $state<Retaceo[]>([]);
-  let statusFilter = $state<RetaceoStatus | ''>('');
+  let statusFilter = $state<RetaceoStatus | ''>(
+    parseStatus(currentPage.url.searchParams.get('status'))
+  );
   let page = $state(1);
   let total = $state(0);
   let pages = $state(0);
@@ -61,6 +69,14 @@
   function handleStatusChange(event: Event) {
     statusFilter = (event.currentTarget as HTMLSelectElement).value as RetaceoStatus | '';
     page = 1;
+    syncStatusInUrl(statusFilter);
+  }
+
+  function syncStatusInUrl(status: RetaceoStatus | '') {
+    const url = new URL(currentPage.url);
+    if (status) url.searchParams.set('status', status);
+    else url.searchParams.delete('status');
+    void goto(url, { replaceState: true, keepFocus: true, noScroll: true });
   }
 
   async function loadRetaceos(
@@ -104,12 +120,19 @@
 
   function emptyAction() {
     if (statusFilter) {
+      syncStatusInUrl('');
       statusFilter = '';
       page = 1;
       return;
     }
 
     retry();
+  }
+
+  function showAllBranches() {
+    if (!branch.accessAllBranches) return;
+    branch.select(null);
+    page = 1;
   }
 
   $effect(() => {
@@ -137,9 +160,16 @@
       </p>
     </div>
 
-    <p class="text-sm text-foreground-muted">
-      {total}
-      {total === 1 ? 'retaceo' : 'retaceos'}
+    <p class="text-sm text-foreground-muted" aria-live="polite">
+      {#if loading}
+        Cargando retaceos…
+      {:else if error}
+        Total no disponible
+      {:else}
+        {total}
+        {total === 1 ? 'retaceo' : 'retaceos'}
+      {/if}
+      <span class="text-foreground-subtle">· {branch.label}</span>
     </p>
   </header>
 
@@ -151,7 +181,7 @@
         aria-label="Estado"
         value={statusFilter}
         onchange={handleStatusChange}
-        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <option value="">Todos los estados</option>
 
@@ -174,10 +204,9 @@
     </div>
   {:else if loading}
     <div class="overflow-hidden rounded-xl border border-border bg-surface">
-      <div class="space-y-3 p-4" aria-label="Cargando retaceos">
+      <div class="space-y-3 p-4" role="status" aria-live="polite" aria-label="Cargando retaceos">
         {#each Array(5) as _}
           <div class="grid grid-cols-6 gap-3">
-            <div class="skeleton h-5 rounded"></div>
             <div class="skeleton h-5 rounded"></div>
             <div class="skeleton h-5 rounded"></div>
             <div class="skeleton h-5 rounded"></div>
@@ -203,12 +232,19 @@
 
       <p class="mt-1 max-w-md text-sm text-foreground-muted">
         Los retaceos se generan desde compras recibidas, verificadas o cerradas. Ajusta el filtro si
-        esperabas encontrar un registro existente.
+        esperabas encontrar un registro en {branch.label}.
       </p>
 
-      <Button class="mt-4" size="sm" variant="secondary" onclick={emptyAction}>
-        {statusFilter ? 'Limpiar filtro' : 'Actualizar'}
-      </Button>
+      <div class="mt-4 flex flex-wrap justify-center gap-2">
+        {#if branch.accessAllBranches && branch.id}
+          <Button size="sm" variant="secondary" onclick={showAllBranches}>
+            Ver todas las sucursales
+          </Button>
+        {/if}
+        <Button size="sm" variant="secondary" onclick={emptyAction}>
+          {statusFilter ? 'Limpiar filtro' : 'Actualizar'}
+        </Button>
+      </div>
     </div>
   {:else}
     <div class="overflow-x-auto rounded-xl border border-border bg-surface">
@@ -230,7 +266,11 @@
           {#each items as item (item.id)}
             <tr class="text-foreground">
               <td class="whitespace-nowrap px-4 py-3 font-medium">
-                <a href={`/retaceos/${item.id}`} class="text-primary hover:underline">
+                <a
+                  href={`/retaceos/${item.id}`}
+                  data-sveltekit-reload
+                  class="text-primary hover:underline"
+                >
                   {item.code}
                 </a>
 

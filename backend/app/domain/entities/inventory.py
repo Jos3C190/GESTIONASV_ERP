@@ -77,9 +77,11 @@ class MeasurementSource(StrEnum):
     RECEIPT = "receipt"
     MANUAL = "manual"
     DEVICE = "device"
+    SPLIT_ESTIMATE = "split_estimate"
 
 
 class MovementType(StrEnum):
+    OPENING = "opening"
     RECEIPT = "receipt"
     PUTAWAY = "putaway"
     TRANSFER = "transfer"
@@ -322,6 +324,22 @@ class InventoryItemSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class ProductStockSnapshot:
+    """Current warehouse balances by status in the inventory item's base unit."""
+
+    product_id: int
+    inventory_item_id: uuid.UUID | None
+    base_unit_id: int | None
+    base_unit_name: str | None
+    is_active: bool | None
+    available_quantity: Decimal
+    in_transit_quantity: Decimal
+    quarantine_quantity: Decimal
+    blocked_quantity: Decimal
+    damaged_quantity: Decimal
+
+
+@dataclass(frozen=True, slots=True)
 class PackagingDefinition:
     id: uuid.UUID
     company_id: uuid.UUID
@@ -329,6 +347,7 @@ class PackagingDefinition:
     code: str
     name: str
     packaging_type: PackagingType
+    packaging_unit_id: int | None
     version: int
     base_quantity: Decimal
     measures: PhysicalMeasures

@@ -1,8 +1,11 @@
 <script lang="ts">
+  import { page as currentPage } from '$app/state';
   import Button from '$lib/components/ui/Button.svelte';
   import { HttpError } from '$lib/api/client';
   import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
   import { suppliersApi } from '$lib/api/suppliers';
+  import ProcurementWorkQueue from '$lib/features/purchase-quotations/components/ProcurementWorkQueue.svelte';
+  import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type { PurchaseQuotation, PurchaseQuotationStatus } from '$lib/types/purchase-quotation';
   import type { Supplier } from '$lib/types/supplier';
@@ -13,14 +16,23 @@
     { value: 'received', label: 'Recibida' },
     { value: 'under_evaluation', label: 'En evaluación' },
     { value: 'selected', label: 'Seleccionada' },
+    { value: 'not_selected', label: 'No seleccionada' },
     { value: 'rejected', label: 'Rechazada' },
     { value: 'expired', label: 'Vencida' },
     { value: 'cancelled', label: 'Cancelada' }
   ];
 
+  function parseStatus(value: string | null): PurchaseQuotationStatus | '' {
+    return STATUS_OPTIONS.some((option) => option.value === value)
+      ? (value as PurchaseQuotationStatus)
+      : '';
+  }
+
   let items = $state<PurchaseQuotation[]>([]);
   let suppliers = $state<Supplier[]>([]);
-  let statusFilter = $state<PurchaseQuotationStatus | ''>('');
+  let statusFilter = $state<PurchaseQuotationStatus | ''>(
+    parseStatus(currentPage.url.searchParams.get('status'))
+  );
   let supplierFilter = $state('');
   let page = $state(1);
   let total = $state(0);
@@ -93,7 +105,8 @@
   async function loadQuotations(
     currentStatus: PurchaseQuotationStatus | '',
     currentSupplier: string,
-    currentPage: number
+    currentPage: number,
+    currentBranchId: string | null
   ) {
     const sequence = ++requestSequence;
     loading = true;
@@ -103,6 +116,7 @@
       const response = await purchaseQuotationsApi.list({
         status: currentStatus || undefined,
         supplier_id: currentSupplier ? Number(currentSupplier) : undefined,
+        branch_id: currentBranchId,
         page: currentPage,
         size: 20
       });
@@ -123,7 +137,7 @@
   }
 
   function retry() {
-    void loadQuotations(statusFilter, supplierFilter, page);
+    void loadQuotations(statusFilter, supplierFilter, page, branch.id);
   }
 
   $effect(() => {
@@ -134,43 +148,63 @@
     const currentStatus = statusFilter;
     const currentSupplier = supplierFilter;
     const currentPage = page;
-    void loadQuotations(currentStatus, currentSupplier, currentPage);
+    const currentBranchId = branch.id;
+    void loadQuotations(currentStatus, currentSupplier, currentPage, currentBranchId);
   });
 </script>
 
-<section class="space-y-5">
-  <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+<section class="space-y-6">
+  <header
+    class="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between"
+  >
     <div>
-      <p class="text-sm font-medium text-primary">Compras</p>
+      <p class="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-foreground-subtle">
+        Compras
+      </p>
       <h1 class="text-2xl font-semibold tracking-tight text-foreground">Cotizaciones de compra</h1>
-      <p class="mt-1 text-sm text-foreground-muted">
+      <p class="mt-1.5 text-sm text-foreground-muted">
         Consulta y filtra las solicitudes de cotización enviadas a proveedores.
       </p>
     </div>
-    <div class="flex flex-wrap items-center gap-3">
-      <p class="text-sm text-foreground-muted">
+    <div class="flex flex-wrap items-center gap-2.5 sm:pb-0.5">
+      <p
+        class="rounded-full border border-border bg-surface-muted px-3 py-1.5 text-xs font-medium text-foreground-muted"
+        aria-live="polite"
+      >
         {total}
         {total === 1 ? 'cotización' : 'cotizaciones'}
       </p>
       {#if permissions.hasPermission('purchase_quotations:manage')}
         <a
           href="/purchase-quotations/new"
-          class="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          class="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-foreground px-3.5 text-sm font-medium text-surface shadow-soft transition-all duration-150 hover:bg-foreground-muted active:scale-[0.98] focus-visible:outline-none focus-visible:shadow-glow"
         >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg
+          >
           Nueva cotización
         </a>
       {/if}
     </div>
   </header>
 
-  <div class="grid gap-3 rounded-xl border border-border bg-surface p-4 md:grid-cols-2">
+  <ProcurementWorkQueue />
+
+  <div class="grid gap-4 rounded-xl border border-border bg-surface p-4 md:grid-cols-2 md:p-5">
     <label class="space-y-1.5 text-sm font-medium text-foreground">
       <span>Estado</span>
       <select
         aria-label="Estado"
         value={statusFilter}
         onchange={handleStatusChange}
-        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <option value="">Todos los estados</option>
         {#each STATUS_OPTIONS as option}
@@ -186,7 +220,7 @@
         value={supplierFilter}
         onchange={handleSupplierChange}
         disabled={suppliers.length === 0}
-        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
       >
         <option value="">Todos los proveedores</option>
         {#each suppliers as supplier (supplier.id_supplier)}
@@ -211,7 +245,12 @@
     </div>
   {:else if loading}
     <div class="overflow-hidden rounded-xl border border-border bg-surface">
-      <div class="space-y-3 p-4">
+      <div
+        class="space-y-3 p-4"
+        role="status"
+        aria-live="polite"
+        aria-label="Cargando cotizaciones"
+      >
         {#each Array(5) as _}
           <div class="grid grid-cols-5 gap-3">
             <div class="skeleton h-5 rounded"></div>

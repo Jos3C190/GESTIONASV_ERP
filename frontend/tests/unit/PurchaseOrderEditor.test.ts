@@ -1,10 +1,13 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PurchaseOrderEditor from '$lib/features/purchase-orders/components/PurchaseOrderEditor.svelte';
 
 const mocks = vi.hoisted(() => ({
   getQuotation: vi.fn(),
   createOrder: vi.fn(),
+  createFromConsolidation: vi.fn(),
+  getConsolidation: vi.fn(),
+  getAwardBoard: vi.fn(),
   listExpenseTypes: vi.fn(),
   getSupplier: vi.fn(),
   getProduct: vi.fn(),
@@ -27,7 +30,15 @@ vi.mock('$lib/api/purchase-quotations', () => ({
 vi.mock('$lib/api/purchase-orders', () => ({
   purchaseOrdersApi: {
     create: mocks.createOrder,
+    createFromConsolidation: mocks.createFromConsolidation,
     listExpenseTypes: mocks.listExpenseTypes
+  }
+}));
+
+vi.mock('$lib/api/purchase-consolidations', () => ({
+  purchaseConsolidationsApi: {
+    get: mocks.getConsolidation,
+    getAwardBoard: mocks.getAwardBoard
   }
 }));
 
@@ -144,10 +155,99 @@ const createdOrder = {
   id: '99999999-9999-9999-9999-999999999999'
 };
 
+const consolidationId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const centralWarehouseId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+const headquartersBranchId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+const centralWarehouse = {
+  id: centralWarehouseId,
+  code: 'BM-001',
+  name: 'Bodega madre Grupo Lorena',
+  branchId: headquartersBranchId,
+  branchName: 'Casa matriz',
+  isCentral: true,
+  type: 'general',
+  status: 'active',
+  storageEligible: true
+};
+const consolidationQuotation = {
+  ...quotation,
+  consolidation_id: consolidationId,
+  status: 'under_evaluation' as const
+};
+const consolidationBoard = {
+  consolidation_id: consolidationId,
+  consolidation_code: 'CD-00002',
+  currencies: ['USD'],
+  lines: [
+    {
+      id: '44444444-4444-4444-4444-444444444444',
+      product_id: 10,
+      product_sku: 'PROD-10',
+      product_name: 'Producto A',
+      unit_id: 2,
+      unit_name: 'Unidad',
+      demand_quantity: '8.000000',
+      awarded_quantity: '4.000000',
+      remaining_quantity: '4.000000',
+      offers: [
+        {
+          quotation_id: quotation.id,
+          quotation_code: 'CQ-0007',
+          quotation_version: 1,
+          supplier_id: 25,
+          quotation_status: 'under_evaluation',
+          currency: 'USD',
+          valid_until: null,
+          delivery_days: 3,
+          payment_terms: '30 días',
+          quotation_total: '70.625000',
+          quotation_expenses_total: '15.000000',
+          quotation_detail_id: quotation.details[0].id,
+          requested_quantity: '8.000000',
+          offered_quantity: '5.000000',
+          available_quantity: '4.000000',
+          awarded_quantity: '4.000000',
+          remaining_offer_quantity: '0.000000',
+          unit_price: '12.500000',
+          discount: '0.000000',
+          subtotal: '62.500000',
+          tax_rate: '13.000000',
+          tax_amount: '8.125000',
+          line_total: '70.625000',
+          line_delivery_days: 3,
+          notes: null,
+          can_award: false,
+          blocked_reason: null
+        }
+      ],
+      decisions: [
+        {
+          id: '55555555-5555-5555-5555-555555555555',
+          quotation_id: quotation.id,
+          quotation_code: 'CQ-0007',
+          supplier_id: 25,
+          quantity: '4.000000',
+          reason: 'Entrega confirmada',
+          decided_by_id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+          created_at: '2026-10-05T12:00:00Z',
+          revoked_at: null,
+          revoked_by_id: null,
+          revocation_reason: null,
+          ordered_quantity: '1.000000',
+          remaining_to_order_quantity: '3.000000'
+        }
+      ]
+    }
+  ]
+};
+
 describe('PurchaseOrderEditor', () => {
   beforeEach(() => {
     mocks.getQuotation.mockReset();
     mocks.createOrder.mockReset();
+    mocks.createFromConsolidation.mockReset();
+    mocks.getConsolidation.mockReset();
+    mocks.getAwardBoard.mockReset();
     mocks.listExpenseTypes.mockReset();
     mocks.getSupplier.mockReset();
     mocks.getProduct.mockReset();
@@ -158,6 +258,11 @@ describe('PurchaseOrderEditor', () => {
 
     mocks.hasPermission.mockImplementation((code: string) => code === 'purchase_orders:manage');
     mocks.getQuotation.mockResolvedValue(quotation);
+    mocks.getConsolidation.mockResolvedValue({
+      id: consolidationId,
+      central_warehouse_id: centralWarehouseId
+    });
+    mocks.getAwardBoard.mockResolvedValue(consolidationBoard);
     mocks.listExpenseTypes.mockResolvedValue([
       {
         id: '88888888-8888-8888-8888-888888888888',
@@ -192,7 +297,8 @@ describe('PurchaseOrderEditor', () => {
           code: 'ALM-01',
           name: 'Almacén principal',
           branchId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
-        }
+        },
+        centralWarehouse
       ],
       meta: { page: 1, size: 100, total: 1, pages: 1 },
       summary: {}
@@ -214,8 +320,8 @@ describe('PurchaseOrderEditor', () => {
       expect(screen.getByRole('button', { name: 'Crear orden' })).not.toBeDisabled();
     });
 
-    await fireEvent.click(screen.getByLabelText('Incluir línea 2'));
-    await fireEvent.input(screen.getByLabelText('Cantidad línea 1'), {
+    await fireEvent.click(screen.getByLabelText('Incluir PROD-20 — Producto B'));
+    await fireEvent.input(screen.getByLabelText('Cantidad a ordenar de PROD-10 — Producto A'), {
       target: { value: '2.5' }
     });
 
@@ -270,6 +376,74 @@ describe('PurchaseOrderEditor', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Crear orden' })).not.toBeInTheDocument();
     expect(mocks.createOrder).not.toHaveBeenCalled();
+  });
+
+  it('creates a consolidation order in the headquarters warehouse with server-derived pending award lines', async () => {
+    mocks.getQuotation.mockResolvedValue(consolidationQuotation);
+    mocks.createFromConsolidation.mockResolvedValue(createdOrder);
+
+    render(PurchaseOrderEditor, {
+      props: { quotationId: quotation.id, consolidationId }
+    });
+
+    expect(await screen.findByText('Cantidades adjudicadas')).toBeInTheDocument();
+    const awardedCard = screen.getByRole('article', { name: 'PROD-10 — Producto A' });
+    expect(within(awardedCard).getByText(/3\s+UND — Unidad/)).toBeInTheDocument();
+    expect(await screen.findByText(/PRV-025 — Proveedor Central/)).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('Cantidad a ordenar de PROD-10 — Producto A')
+    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Almacén' })).toHaveValue(
+        centralWarehouseId
+      );
+      expect(
+        screen.getByRole('button', { name: 'Crear orden desde adjudicación' })
+      ).not.toBeDisabled();
+    });
+
+    await fireEvent.submit(
+      screen.getByRole('button', { name: 'Crear orden desde adjudicación' }).closest('form')!
+    );
+
+    await waitFor(() =>
+      expect(mocks.createFromConsolidation).toHaveBeenCalledWith(consolidationId, quotation.id, {
+        branch_id: headquartersBranchId,
+        warehouse_id: centralWarehouseId,
+        expected_date: null,
+        expenses: [],
+        notes: null
+      })
+    );
+    expect(mocks.createOrder).not.toHaveBeenCalled();
+    expect(mocks.goto).toHaveBeenCalledWith(`/purchase-orders/${createdOrder.id}`);
+  });
+
+  it('only offers active storage-eligible central warehouses associated with a branch', async () => {
+    mocks.getQuotation.mockResolvedValue(consolidationQuotation);
+    mocks.getWarehouses.mockResolvedValue({
+      items: [
+        centralWarehouse,
+        { ...centralWarehouse, id: 'regular', name: 'Sucursal normal', isCentral: false },
+        { ...centralWarehouse, id: 'inactive', name: 'Central inactiva', status: 'inactive' },
+        { ...centralWarehouse, id: 'ineligible', name: 'Central no apta', storageEligible: false },
+        { ...centralWarehouse, id: 'transit', name: 'Vehículo', type: 'transit' },
+        { ...centralWarehouse, id: 'unassigned', name: 'Central sin matriz', branchId: null }
+      ],
+      meta: { page: 1, size: 100, total: 6, pages: 1 },
+      summary: {}
+    });
+
+    render(PurchaseOrderEditor, {
+      props: { quotationId: quotation.id, consolidationId }
+    });
+
+    const select = await screen.findByRole('combobox', { name: 'Almacén' });
+    await waitFor(() => expect(select).toHaveValue(centralWarehouseId));
+    expect(select).not.toBeDisabled();
+    expect(within(select).getAllByRole('option')).toHaveLength(2);
+    expect(within(select).getByRole('option', { name: /BM-001.*Casa matriz/ })).toBeInTheDocument();
+    expect(screen.queryByText(/No hay una bodega madre activa y apta/)).not.toBeInTheDocument();
   });
 
   it('surfaces backend business errors without inventing remaining availability', async () => {

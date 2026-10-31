@@ -1,0 +1,48 @@
+APUNTES DE CLASE / SISTEMA ERP
+SESIÓN 23 · 12 OCT 2026
+Inventario y compras · Explicación, requisitos y decisiones pendientes
+14
+13. Decisiones que siguen pendientes
+La explicación define el flujo principal, pero no todos los detalles operativos. Estos puntos deben
+contrastarse con las tablas y el documento anunciados por el ingeniero.
+Tema
+Decisión necesaria
+Momento de ingreso
+Confirmar cómo se registra una ubicación parcial y cuándo se reconoce su
+cantidad y valor, manteniendo la recepción sin duplicidades.
+Promedio global
+Precisar si todos los almacenes de una empresa comparten un promedio por
+producto, además de compartir el método configurado.
+Identificación del lote
+Resolver el caso de varios lotes del mismo producto cuando el código de barras
+contiene solo el código interno.
+Unidades y presentaciones
+Definir si el conteo y la viñeta corresponden a caja, paquete o unidad, y cómo se
+convierten cantidades si existen varias presentaciones.
+Recepción con incidencias
+Determinar aceptación de sobrantes, faltantes, daños y cantidades que no
+pueden incorporarse.
+Ubicación válida
+Definir qué significa capacidad y compatibilidad, sus unidades y quién autoriza
+un destino.
+Devoluciones y ajustes
+Acordar el costo que se aplica y los documentos o autorizaciones requeridos.
+Traslado entre almacenes
+Definir tránsito, confirmación de destino, diferencias y conservación del valor.
+Cambios y redondeos
+Fijar precisión, tratamiento de residuos, correcciones, fechas retroactivas y
+cambios a costos ya aplicados.
+Lotes o seriales adicionales
+Decidir necesidades de lote de fabricante, caducidad y número de serie según los
+productos del negocio.
+Qué no debe darse por exigido en esta sesión
+La clase no solicita explícitamente integración con una impresora o escáner de marca concreta,
+automatización de la mejor ubicación, un módulo completo de exhibición, QR con todos los documentos
+embebidos ni valoración PEPS obligatoria junto al promedio.
+Tampoco entrega una nueva especificación completa de consolidación, cotizaciones, PDFs por proveedor o
+gastos. Esos temas proceden de reuniones anteriores y deben conservar su propia referencia.
+Orden de implementación propuesto
+Cerrar primero el contrato de datos entre recepción, retaceo y lote; después viñeteado y ubicación;
+conectar la confirmación con existencias, valoración y kardex. Continuar con traslados y ventas, tal como
+anuncia el ingeniero.
+Base del TXT: ambigüedades en líneas 47-69, 227-229 y 231-245. Lista de decisiones elaborada durante el análisis.

@@ -1,0 +1,15 @@
+BEGIN
+ database 
+----------
+ erp_db
+(1 row)
+
+         sku         |                        name                        | physical  |  valued   | inventory_value | movement_lines | handling_units | valuation_entries 
+---------------------+----------------------------------------------------+-----------+-----------+-----------------+----------------+----------------+-------------------
+ ERS-INC-EE8FE228    | Artículo demostración integral ERS-INC-EE8FE228    |  4.000000 |  4.000000 |       40.000000 |              5 |              3 |                 2
+ ERS-LATE-B1B55D6D   | Artículo demostración integral ERS-LATE-B1B55D6D   |  5.000000 |  5.000000 |       60.000000 |              9 |              3 |                 4
+ ERS-REVIEW-DD6BBF85 | Artículo demostración integral ERS-REVIEW-DD6BBF85 | 12.000000 | 12.000000 |      160.000000 |             15 |              5 |                 5
+ ERS-UI-F767BABC     | Artículo demostración integral ERS-UI-F767BABC     |  0.000000 |  0.000000 |        0.000000 |              8 |              2 |                 3
+(4 rows)
+
+COMMIT

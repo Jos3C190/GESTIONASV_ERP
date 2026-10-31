@@ -5,27 +5,31 @@
   type Size = 'sm' | 'md' | 'lg';
 
   interface Props {
+    id?: string;
     variant?: Variant;
     size?: Size;
     disabled?: boolean;
     type?: 'button' | 'submit' | 'reset';
+    form?: string;
     onclick?: (e: MouseEvent) => void;
     children: Snippet;
     class?: string;
   }
 
   let {
+    id,
     variant = 'primary',
     size = 'md',
     disabled = false,
     type = 'button',
+    form,
     onclick,
     children,
     class: className = ''
   }: Props = $props();
 
   const base =
-    'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-150 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none focus-visible:shadow-glow';
+    'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-150 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
 
   const variants: Record<Variant, string> = {
     primary: 'bg-foreground text-surface hover:bg-foreground-muted',
@@ -46,6 +50,6 @@
   const classes = $derived(`${base} ${variants[variant]} ${sizes[size]} ${className}`);
 </script>
 
-<button {type} {disabled} {onclick} class={classes}>
+<button {id} {type} {form} {disabled} {onclick} class={classes}>
   {@render children()}
 </button>

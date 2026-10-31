@@ -1,0 +1,51 @@
+Compra
+   ↓
+Retaceo
+   ↓
+Costo real
+   ↓
+Asignación de precio
+   ↓
+Precio de venta
+Gestión de Compras será responsable de proporcionar el costo de adquisición, mientras que la
+determinación del precio comercial será responsabilidad del módulo correspondiente.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                103

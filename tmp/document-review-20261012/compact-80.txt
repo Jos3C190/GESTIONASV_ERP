@@ -1,0 +1,27 @@
+created_at | datetime | Fecha de creación
+El Retaceo estará relacionado con la compra real y no directamente con la orden de compra.
+La relación será:
+purchase_orders
+↓
+purchases
+↓
+retaceos
+Esto permite determinar el costo real de lo efectivamente recibido.
+6.8.27 Tabla retaceo_details
+Contiene la distribución de los costos asociados a cada producto.
+Campo | Tipo | Clave | Descripción
+id_retaceo_detail | int | PK | Identificador
+id_retaceo | int | FK | Retaceo
+id_product | int | FK | Producto
+quantity | decimal | Cantidad
+cost_fob | decimal | Costo FOB
+freight_amount | decimal | Flete asignado
+expense_amount | decimal | Gastos asignados
+dai_amount | decimal | DAI asignado
+unit_cost | decimal | Costo unitario
+total_cost | decimal | Costo total
+No se almacenarán en esta tabla:
+• | freight_rate
+• | expense_rate
+• | dai_rate
+Estos porcentajes podrán calcularse dinámicamente al mostrar el retaceo.

@@ -84,4 +84,27 @@ describe('apiFetch', () => {
       globalThis.fetch = original;
     }
   });
+
+  it('omits cookies for requests that resolve public QR links', async () => {
+    const original = globalThis.fetch;
+    let capturedCredentials: RequestCredentials | undefined;
+    globalThis.fetch = (async (_input, init) => {
+      capturedCredentials = init?.credentials;
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }) as typeof fetch;
+    try {
+      await apiFetch('http://example.test/public-trace', {
+        method: 'POST',
+        noAuth: true,
+        noRefresh: true,
+        noCredentials: true
+      });
+      expect(capturedCredentials).toBe('omit');
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
 });

@@ -8,7 +8,11 @@
   let isDanger = $derived(
     confirmation.current?.kind === 'delete' || confirmation.current?.kind === 'revoke'
   );
-  let isRestore = $derived(confirmation.current?.kind === 'restore');
+  let isRestore = $derived(
+    confirmation.current?.kind === 'restore' ||
+      confirmation.current?.kind === 'release' ||
+      confirmation.current?.kind === 'transfer'
+  );
 
   function handleBackdrop(event: MouseEvent) {
     if (event.target === event.currentTarget) confirmation.cancel();
@@ -90,7 +94,18 @@
                 d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
               /></svg
             >
-          {:else if confirmation.current.kind === 'restore'}
+          {:else if confirmation.current.kind === 'restore' || confirmation.current.kind === 'release'}
+            <svg
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 3v6h6" /></svg
+            >
+          {:else if confirmation.current.kind === 'transfer'}
             <svg
               width="19"
               height="19"
@@ -100,7 +115,9 @@
               stroke-width="2"
               stroke-linecap="round"
               stroke-linejoin="round"
-              ><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 3v6h6" /></svg
+              ><path d="M4 7h13" /><path d="m14 4 3 3-3 3" /><path d="M20 17H7" /><path
+                d="m10 14-3 3 3 3"
+              /></svg
             >
           {:else if confirmation.current.kind === 'end-assignment' || confirmation.current.kind === 'revoke'}
             <svg

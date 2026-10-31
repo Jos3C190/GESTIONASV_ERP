@@ -14,6 +14,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
+vi.mock('$lib/api/client', async (original) => ({
+  ...(await original<object>()),
+  apiFetch: vi.fn().mockResolvedValue([])
+}));
 
 vi.mock('$lib/api/retaceos', () => ({
   retaceosApi: {
@@ -25,6 +29,13 @@ vi.mock('$lib/api/retaceos', () => ({
 vi.mock('$lib/api/purchases', () => ({
   purchasesApi: {
     get: mocks.getPurchase
+  }
+}));
+
+vi.mock('$lib/api/catalog', () => ({
+  catalogApi: {
+    listUnits: vi.fn().mockResolvedValue([]),
+    getProduct: vi.fn().mockResolvedValue(null)
   }
 }));
 
@@ -43,6 +54,23 @@ const retaceo: Retaceo = {
   created_by_id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
   currency: 'USD',
   details: [],
+  costs: [
+    {
+      id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      retaceo_id: '11111111-1111-1111-1111-111111111111',
+      source_purchase_order_expense_id: null,
+      expense_type_id: null,
+      classification: 'freight',
+      title: 'Flete',
+      description: null,
+      amount: '10.000000',
+      is_active: true,
+      allocations: [],
+      documents: [],
+      created_at: null,
+      updated_at: null
+    }
+  ],
   total_fob: '100.000000',
   total_freight: '10.000000',
   total_expenses: '5.000000',
@@ -74,43 +102,146 @@ describe('RetaceoDraftEditor', () => {
     });
   });
 
-  it('updates a draft and redirects to its detail', async () => {
+  it('reopens the saved automatic mode and recalculates taxes after a freight change', async () => {
+    const detail = {
+      id: 'detail',
+      retaceo_id: retaceo.id,
+      purchase_detail_id: 'line',
+      product_id: 10,
+      unit_id: 3,
+      quantity: '1',
+      cost_fob: '100',
+      freight: '10',
+      expenses: '0',
+      dai: '11',
+      total_cost: '121',
+      unit_cost: '121',
+      created_at: null,
+      updated_at: null
+    };
+    const automatic: Retaceo = {
+      ...retaceo,
+      manual_entry: true,
+      calculation_mode: 'automatic',
+      dai_rate: '10',
+      vat_rate: '13',
+      details: [detail],
+      total_expenses: '0',
+      total_dai: '11',
+      import_vat: '15.73',
+      total_cost: '121'
+    };
+    mocks.getRetaceo.mockResolvedValue(automatic);
+    mocks.getPurchase.mockResolvedValue({
+      id: retaceo.purchase_id,
+      code: 'COM-0001',
+      details: [
+        {
+          id: 'line',
+          product_id: 10,
+          subtotal: '100',
+          discount: '0',
+          quantity_received: '1',
+          quantity_accepted: null
+        }
+      ]
+    });
+    mocks.update.mockResolvedValue(automatic);
+    render(RetaceoDraftEditor, { retaceoId: retaceo.id });
+    expect(await screen.findByRole('radio', { name: /^Automático/ })).toBeChecked();
+    expect(screen.getByRole('spinbutton', { name: 'DAI (%)' })).toHaveValue(10);
+    expect(screen.getByRole('spinbutton', { name: 'IVA (%)' })).toHaveValue(13);
+    expect(screen.queryByRole('spinbutton', { name: /FOB total/ })).not.toBeInTheDocument();
+    await fireEvent.input(screen.getByRole('spinbutton', { name: /Flete y seguro total/ }), {
+      target: { value: '20' }
+    });
+    await fireEvent.submit(
+      screen.getByRole('button', { name: 'Guardar borrador' }).closest('form')!
+    );
+    await waitFor(() =>
+      expect(mocks.update).toHaveBeenCalledWith(
+        retaceo.id,
+        expect.objectContaining({
+          calculation_mode: 'automatic',
+          dai_rate: '10',
+          vat_rate: '13',
+          total_freight: '20',
+          total_dai: '12.000000',
+          import_vat: '17.160000'
+        })
+      )
+    );
+    expect(mocks.update.mock.calls[0]![1]).not.toHaveProperty('fob_lines');
+  });
+
+  it('updates the itemized draft cost and opens the calculation step', async () => {
     mocks.update.mockResolvedValue({
       ...retaceo,
       total_freight: '12.000000',
-      notes: 'Actualizado'
+      costs: retaceo.costs?.map((cost) => ({
+        ...cost,
+        title: 'Flete internacional',
+        amount: '12.000000'
+      }))
     });
 
     render(RetaceoDraftEditor, {
       props: { retaceoId: retaceo.id }
     });
 
-    expect(await screen.findByText('Editar RET-0001')).toBeInTheDocument();
-    expect(screen.getByText('COM-0001')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Costos y comprobantes' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Retaceo · RET-0001')).toBeInTheDocument();
+    expect(screen.getByText(/Compra COM-0001/)).toBeInTheDocument();
 
-    await fireEvent.input(screen.getByLabelText('Flete'), {
+    await fireEvent.input(screen.getByLabelText('Concepto'), {
+      target: { value: 'Flete internacional' }
+    });
+    await fireEvent.input(screen.getByLabelText('Monto real · USD'), {
       target: { value: '12.000000' }
     });
 
-    await fireEvent.input(screen.getByLabelText('Notas'), {
-      target: { value: 'Actualizado' }
-    });
-
     await fireEvent.submit(
-      screen.getByRole('button', { name: 'Guardar cambios' }).closest('form')!
+      screen.getByRole('button', { name: 'Guardar borrador' }).closest('form')!
     );
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(retaceo.id, {
-        total_freight: '12.000000',
+        calculation_mode: 'manual',
+        dai_rate: null,
+        vat_rate: null,
+        import_data: {
+          origin_country: null,
+          import_invoice_number: null,
+          import_invoice_date: null,
+          import_policy_number: null,
+          import_policy_date: null
+        },
+        total_freight: '10.000000',
         total_expenses: '5.000000',
         total_dai: '3.000000',
         import_vat: '15.340000',
-        notes: 'Actualizado'
+        notes: 'Inicial',
+        costs: [
+          {
+            id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            classification: 'freight',
+            title: 'Flete internacional',
+            description: null,
+            amount: '12.000000',
+            allocations: []
+          }
+        ]
       });
     });
 
-    expect(mocks.goto).toHaveBeenCalledWith(`/retaceos/${retaceo.id}`);
+    expect(
+      await screen.findByText(
+        'Borrador guardado. Puedes adjuntar comprobantes de forma opcional o abrir el detalle para calcular el retaceo.'
+      )
+    ).toBeInTheDocument();
+    expect(mocks.goto).not.toHaveBeenCalled();
   });
 
   it('blocks editing for a non-draft retaceo', async () => {
@@ -128,7 +259,7 @@ describe('RetaceoDraftEditor', () => {
     );
 
     expect(mocks.getPurchase).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Guardar borrador' })).not.toBeInTheDocument();
   });
 
   it('blocks editing without retaceos:manage', async () => {

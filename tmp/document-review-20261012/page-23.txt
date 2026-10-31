@@ -1,0 +1,45 @@
+6.3 MÓDULO DE EMPRESAS
+
+                                                                                       6.3.1 Descripción
+
+El módulo de Empresas permite administrar la información legal, tributaria y comercial de las
+empresas que utilizarán el Mini ERP.
+
+El sistema soporta una arquitectura multiempresa, permitiendo que una misma instalación
+administre una o varias empresas de manera independiente, cada una con su propia estructura
+organizacional, sucursales, almacenes y operaciones.
+
+Cada empresa constituye el nivel superior de la jerarquía organizacional y servirá como base
+para los módulos de Compras, Ventas, Inventario, Recursos Humanos, Contabilidad y Reportes.
+
+                                                                                          6.3.2 Objetivos
+
+Objetivo General
+
+Administrar la información general, fiscal y de contacto de las empresas registradas en el
+sistema.
+
+Objetivos Específicos
+
+    •   Registrar empresas.
+    •   Administrar la información tributaria.
+    •   Administrar datos comerciales.
+    •   Gestionar la ubicación geográfica.
+    •   Administrar el logotipo institucional.
+    •   Activar o desactivar empresas.
+    •   Proporcionar la información corporativa utilizada por los demás módulos.
+
+                                                                              6.3.3 Modelo de Datos
+
+Tabla companies
+
+ Campo                    Tipo         Descripción
+ id_company               int          Identificador único
+ name                     string       Razón social
+ commercial_name          string       Nombre comercial
+ nit                      string       Número de Identificación Tributaria
+ nrc                      string       Número de Registro de Contribuyente
+ commercial_line_1        string       Giro comercial principal
+ commercial_line_2        string       Giro comercial secundario
+
+                                                                                                                23

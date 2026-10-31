@@ -134,9 +134,9 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Clientes',
         icon: ICONS.clients,
-        route: '/placeholder?module=Clientes',
-        implemented: false,
-        module: 'Clientes'
+        route: '/customers',
+        implemented: true,
+        requiredPermission: 'sales_customers:read'
       },
       {
         label: 'Proveedores',
@@ -188,6 +188,13 @@ export const NAV_GROUPS: NavGroup[] = [
         requiredPermission: 'purchase_orders:read'
       },
       {
+        label: 'Tipos de gasto',
+        icon: ICONS.pricing,
+        route: '/expense-types',
+        implemented: true,
+        requiredPermission: 'expense_types:manage'
+      },
+      {
         label: 'Compras',
         icon: ICONS.purchases,
         route: '/purchases',
@@ -214,11 +221,25 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Inventario',
     items: [
       {
+        label: 'Valoración de inventario',
+        icon: ICONS.pricing,
+        route: '/inventory/valuation',
+        implemented: true,
+        requiredPermission: 'inventory:valuation'
+      },
+      {
+        label: 'Ajustes de inventario',
+        icon: ICONS.inventory,
+        route: '/inventory/adjustments',
+        implemented: true,
+        requiredPermission: 'inventory:read'
+      },
+      {
         label: 'Inventario',
         icon: ICONS.inventory,
-        route: '/placeholder?module=Inventario',
-        implemented: false,
-        module: 'Inventario'
+        route: '/inventory',
+        implemented: true,
+        requiredPermission: 'inventory:read'
       },
       {
         label: 'Almacenes',
@@ -244,9 +265,9 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Traslados',
         icon: ICONS.transfers,
-        route: '/placeholder?module=Traslados',
-        implemented: false,
-        module: 'Traslados'
+        route: '/transfers',
+        implemented: true,
+        requiredPermission: 'inventory:read'
       }
     ]
   },
@@ -256,23 +277,23 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Cotizaciones de venta',
         icon: ICONS.salesQuotes,
-        route: '/placeholder?module=Cotizaciones de venta',
-        implemented: false,
-        module: 'Cotizaciones de venta'
+        route: '/sales/quotations',
+        implemented: true,
+        requiredPermission: 'sales_quotations:read'
       },
       {
         label: 'Ventas',
         icon: ICONS.sales,
-        route: '/placeholder?module=Ventas',
-        implemented: false,
-        module: 'Ventas'
+        route: '/sales',
+        implemented: true,
+        requiredPermission: 'sales:read'
       },
       {
         label: 'Devoluciones',
         icon: ICONS.returns,
-        route: '/placeholder?module=Devoluciones',
-        implemented: false,
-        module: 'Devoluciones'
+        route: '/sales/returns',
+        implemented: true,
+        requiredPermission: 'sales_returns:read'
       }
     ]
   },
@@ -289,9 +310,9 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: 'Kardex',
         icon: ICONS.kardex,
-        route: '/placeholder?module=Kardex',
-        implemented: false,
-        module: 'Kardex'
+        route: '/inventory/kardex',
+        implemented: true,
+        requiredPermission: 'inventory:read'
       }
     ]
   },

@@ -3,6 +3,7 @@
   import PurchaseRequestActions from '$lib/features/purchase-requests/components/PurchaseRequestActions.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { HttpError } from '$lib/api/client';
+  import { catalogApi } from '$lib/api/catalog';
   import { purchaseRequestsApi } from '$lib/api/purchase-requests';
   import type { PurchaseRequest, PurchaseRequestStatus } from '$lib/types/purchase-request';
 
@@ -21,6 +22,8 @@
   };
 
   let item = $state<PurchaseRequest | null>(null);
+  let productNames = $state<Map<number, string>>(new Map());
+  let unitLabels = $state<Map<number, string>>(new Map());
   let loading = $state(true);
   let error = $state<string | null>(null);
   let generation = 0;
@@ -34,9 +37,40 @@
       const response = await purchaseRequestsApi.get(id);
       if (currentGeneration !== generation) return;
       item = response;
+
+      const productIds = [...new Set(response.details.map((detail) => detail.product_id))];
+      const [products, units] = await Promise.all([
+        Promise.all(
+          productIds.map((productId) => catalogApi.getProduct(productId).catch(() => null))
+        ),
+        catalogApi.listUnits(false).catch(() => [])
+      ]);
+
+      if (currentGeneration !== generation) return;
+
+      const nextProductNames = new Map<number, string>();
+      for (const product of products) {
+        if (product?.name.trim()) nextProductNames.set(product.id_product, product.name.trim());
+      }
+      productNames = nextProductNames;
+
+      const nextUnitLabels = new Map<number, string>();
+      for (const unit of units) {
+        const name = unit.name.trim();
+        const symbol = unit.symbol.trim();
+        if (name) {
+          nextUnitLabels.set(
+            unit.id_unit,
+            symbol && symbol !== name ? `${name} (${symbol})` : name
+          );
+        }
+      }
+      unitLabels = nextUnitLabels;
     } catch (err: unknown) {
       if (currentGeneration !== generation) return;
       item = null;
+      productNames = new Map();
+      unitLabels = new Map();
       error =
         err instanceof HttpError
           ? err.message
@@ -60,6 +94,14 @@
       month: '2-digit',
       year: 'numeric'
     }).format(new Date(value));
+  }
+
+  function productName(id: number) {
+    return productNames.get(id) ?? 'Producto no disponible';
+  }
+
+  function unitName(id: number) {
+    return unitLabels.get(id) ?? 'Unidad no disponible';
   }
 </script>
 
@@ -138,11 +180,11 @@
           </div>
           <div>
             <dt class="text-xs text-foreground-muted">Sucursal</dt>
-            <dd class="mt-1 break-all font-mono text-xs text-foreground">{item.branch_id}</dd>
+            <dd class="mt-1 text-sm font-medium text-foreground">{item.branch_name ?? '—'}</dd>
           </div>
           <div>
             <dt class="text-xs text-foreground-muted">Almacén</dt>
-            <dd class="mt-1 break-all font-mono text-xs text-foreground">{item.warehouse_id}</dd>
+            <dd class="mt-1 text-sm font-medium text-foreground">{item.warehouse_name ?? '—'}</dd>
           </div>
         </dl>
       </Card>
@@ -157,8 +199,8 @@
           <table class="w-full min-w-[760px] text-sm">
             <thead class="border-b border-border bg-surface-muted">
               <tr>
-                <th class="px-4 py-3 text-left font-semibold text-foreground">Producto ID</th>
-                <th class="px-4 py-3 text-left font-semibold text-foreground">Unidad ID</th>
+                <th class="px-4 py-3 text-left font-semibold text-foreground">Producto</th>
+                <th class="px-4 py-3 text-left font-semibold text-foreground">Unidad</th>
                 <th class="px-4 py-3 text-right font-semibold text-foreground">Cantidad</th>
                 <th class="px-4 py-3 text-left font-semibold text-foreground">Descripción</th>
                 <th class="px-4 py-3 text-left font-semibold text-foreground">Notas</th>
@@ -167,8 +209,10 @@
             <tbody class="divide-y divide-border">
               {#each item.details as detail (detail.id)}
                 <tr>
-                  <td class="px-4 py-3 font-mono text-xs text-foreground">{detail.product_id}</td>
-                  <td class="px-4 py-3 font-mono text-xs text-foreground">{detail.unit_id}</td>
+                  <td class="px-4 py-3 font-medium text-foreground">
+                    {productName(detail.product_id)}
+                  </td>
+                  <td class="px-4 py-3 text-foreground">{unitName(detail.unit_id)}</td>
                   <td class="px-4 py-3 text-right font-mono text-foreground">{detail.quantity}</td>
                   <td class="px-4 py-3 text-foreground-muted">{detail.description || '—'}</td>
                   <td class="px-4 py-3 text-foreground-muted">{detail.notes || '—'}</td>

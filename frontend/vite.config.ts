@@ -1,24 +1,58 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type ViteDevServer } from 'vite';
+
+function normalizeSvelteRouteModulePath() {
+  return {
+    name: 'normalize-svelte-route-module-path',
+    enforce: 'pre' as const,
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use((request, _response, next) => {
+        const url = request.url;
+        if (!url?.startsWith('/src/routes/')) {
+          next();
+          return;
+        }
+
+        const queryStart = url.indexOf('?');
+        const pathname = queryStart === -1 ? url : url.slice(0, queryStart);
+        if (!pathname.includes('%2B')) {
+          next();
+          return;
+        }
+
+        request.url =
+          pathname.replace(/%2B/gi, '+') + (queryStart === -1 ? '' : url.slice(queryStart));
+        next();
+      });
+    }
+  };
+}
 
 export default defineConfig(({ mode }) => ({
-  plugins: [sveltekit(), ...(mode === 'test' ? [svelteTesting()] : [])],
+  plugins: [
+    normalizeSvelteRouteModulePath(),
+    sveltekit(),
+    ...(mode === 'test' ? [svelteTesting()] : [])
+  ],
   server: {
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
-    warmup: {
-      // Transform the product screens during startup to avoid a long SSR
-      // transform waterfall on the first navigation in slower environments.
-      ssrFiles: [
-        './src/routes/(app)/+layout.svelte',
-        './src/routes/(app)/products/[id]/+page.svelte',
-        './src/routes/(app)/products/[id]/variants/[variantId]/+page.svelte'
-      ]
-    },
+    // Let SvelteKit initialize SSR on demand. Speculative app-route warmup can
+    // race its server module runner and cache a 500 response until restart.
     watch: {
-      ignored: ['**/.svelte-kit/**']
+      usePolling: process.env.VITE_USE_POLLING === 'true',
+      interval: 1000,
+      binaryInterval: 2000,
+      ignored: [
+        '**/.svelte-kit/**',
+        '**/.pnpm-store/**',
+        '**/.vercel/**',
+        '**/node_modules/**',
+        '**/tmp-labels/**',
+        '**/tmp-reports/**'
+      ]
     },
     fs: {
       strict: false

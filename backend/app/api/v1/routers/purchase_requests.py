@@ -12,6 +12,7 @@ from app.api.v1.deps import (
     SessionDep,
     get_audit_service,
     get_purchase_request_use_cases,
+    require_any_permission,
     require_permission,
 )
 from app.api.v1.schemas.common import Page, PageMeta
@@ -23,6 +24,7 @@ from app.api.v1.schemas.purchase_request import (
 )
 from app.application.audit.audit_service import AuditService
 from app.application.purchase_requests import PurchaseRequestLineDraft, PurchaseRequestUseCases
+from app.core.exceptions import AuthorizationError
 from app.domain.entities.purchase_request import PurchaseRequest, PurchaseRequestStatus
 
 router = APIRouter(prefix="/purchase-requests", tags=["purchase-requests"])
@@ -81,6 +83,26 @@ async def _visible_request(
     item = await use_cases.get_request(company_id, request_id)
     await resolve_branch_scope(session, current, company_id, item.branch_id)
     return company_id, item
+
+
+def _has_granted_permission(request: Request, code: str) -> bool:
+    return code in getattr(request.state, "granted_permission_codes", ())
+
+
+def _require_manage_or_owned_draft(
+    *, request: Request, current: CurrentUser, item: PurchaseRequest
+) -> None:
+    if _has_granted_permission(request, "purchase_requests:manage"):
+        return
+    if (
+        _has_granted_permission(request, "purchase_requests:create")
+        and item.requested_by_id == current.id
+        and item.status == PurchaseRequestStatus.DRAFT
+    ):
+        return
+    raise AuthorizationError(
+        "Solo puedes editar o enviar tus propios borradores de solicitud.", code="forbidden"
+    )
 
 
 @router.get(
@@ -145,7 +167,9 @@ async def get_purchase_request(
     response_model=PurchaseRequestResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Crear solicitud de compra",
-    dependencies=[Depends(require_permission("purchase_requests:manage"))],
+    dependencies=[
+        Depends(require_any_permission("purchase_requests:manage", "purchase_requests:create"))
+    ],
 )
 async def create_purchase_request(
     payload: PurchaseRequestCreate,
@@ -187,7 +211,9 @@ async def create_purchase_request(
     response_model=PurchaseRequestResponse,
     status_code=status.HTTP_200_OK,
     summary="Actualizar borrador de solicitud de compra",
-    dependencies=[Depends(require_permission("purchase_requests:manage"))],
+    dependencies=[
+        Depends(require_any_permission("purchase_requests:manage", "purchase_requests:create"))
+    ],
 )
 async def update_purchase_request(
     request_id: uuid.UUID,
@@ -205,6 +231,7 @@ async def update_purchase_request(
         use_cases=use_cases,
         request_id=request_id,
     )
+    _require_manage_or_owned_draft(request=request, current=current, item=before)
     await resolve_branch_scope(session, current, company_id, payload.branch_id)
     updated = await use_cases.replace_draft(
         company_id=company_id,
@@ -249,6 +276,8 @@ async def _transition_purchase_request(
         use_cases=use_cases,
         request_id=request_id,
     )
+    if action == "SUBMIT":
+        _require_manage_or_owned_draft(request=request, current=current, item=before)
     operations = {
         "SUBMIT": use_cases.submit_request,
         "APPROVE": use_cases.approve_request,
@@ -277,7 +306,9 @@ async def _transition_purchase_request(
     response_model=PurchaseRequestResponse,
     status_code=status.HTTP_200_OK,
     summary="Enviar solicitud de compra a aprobación",
-    dependencies=[Depends(require_permission("purchase_requests:manage"))],
+    dependencies=[
+        Depends(require_any_permission("purchase_requests:manage", "purchase_requests:create"))
+    ],
 )
 async def submit_purchase_request(
     request_id: uuid.UUID,

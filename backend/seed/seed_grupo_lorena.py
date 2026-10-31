@@ -1139,6 +1139,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             branch.floor_material = "porcelanato"
             branch.exterior_material = "mixta"
             branch.is_active = True
+            branch.is_headquarters = False
             await session.flush()
             branches[branch_seed.code] = branch
             if branch_created:
@@ -1156,6 +1157,60 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     )
                 )
 
+        active_headquarters = list(
+            (
+                await session.execute(
+                    select(Branch)
+                    .where(
+                        Branch.company_id == company.id,
+                        Branch.is_headquarters.is_(True),
+                        Branch.is_active.is_(True),
+                        Branch.operational_status == "active",
+                        Branch.deleted_at.is_(None),
+                    )
+                    .order_by(Branch.id)
+                )
+            )
+            .scalars()
+        )
+        if len(active_headquarters) > 1:
+            raise RuntimeError("Grupo Lorena tiene más de una sucursal matriz activa.")
+        if active_headquarters:
+            headquarters_branch = active_headquarters[0]
+        else:
+            headquarters_code = f"HQ-{company.id.hex[:8]}".upper()
+            headquarters_branch = await session.scalar(
+                select(Branch)
+                .where(
+                    Branch.company_id == company.id,
+                    func.lower(Branch.code) == headquarters_code.casefold(),
+                )
+                .order_by(Branch.deleted_at.asc().nullsfirst(), Branch.created_at.desc())
+                .limit(1)
+                .execution_options(include_deleted=True)
+            )
+            if headquarters_branch is None:
+                headquarters_branch = Branch(company_id=company.id, code=headquarters_code)
+                session.add(headquarters_branch)
+            else:
+                _restore_seed_record(headquarters_branch)
+            headquarters_branch.code = headquarters_code
+            headquarters_branch.name = "Casa matriz"
+            headquarters_branch.address = company.address
+            headquarters_branch.department_id = company.department_id
+            headquarters_branch.municipality_id = company.municipality_id
+            headquarters_branch.district_id = company.district_id
+            headquarters_branch.latitude = None
+            headquarters_branch.longitude = None
+            headquarters_branch.operational_status = "active"
+            headquarters_branch.description = (
+                "Recepción y distribución. Domicilio de la empresa; "
+                "sin punto de venta ni coordenadas físicas registradas."
+            )
+            headquarters_branch.is_headquarters = True
+            headquarters_branch.is_active = True
+            await session.flush()
+
         await _seed_media(
             session,
             company=company,
@@ -1168,7 +1223,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             user=superadmin,
             company=company,
             technology_department=departments["Tecnología"],
-            headquarters_branch=branches["LOR-SM-01"],
+            headquarters_branch=headquarters_branch,
         )
 
         category_specs = {
@@ -1423,6 +1478,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             warehouse_created = warehouse is None
             if warehouse is None:
                 warehouse = Warehouse(
+                    company_id=branch.company_id,
                     branch_id=branch.id,
                     code=warehouse_code,
                     warehouse_category_id=categories["Inventario de tienda"].id,

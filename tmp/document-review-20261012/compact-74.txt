@@ -1,0 +1,28 @@
+amount | decimal | Monto
+created_at | datetime | Fecha
+Los gastos podrán incluir:
+• | Flete
+• | Transporte
+• | Seguro
+• | Aduana
+• | Manipulación
+• | Almacenamiento
+• | Otros
+El campo additional_expenses de purchase_orders será calculado a partir de estos registros.
+additional_expenses = SUM(purchase_order_expenses.amount)
+Por lo tanto, no será necesario registrar manualmente el valor total de gastos adicionales.
+6.8.20 Tabla purchase_order_expense_documents
+Permite almacenar las evidencias documentales asociadas a un gasto de la orden de compra.
+Campo | Tipo | Clave | Descripción
+id_purchase_order_expense_document | int | PK | Identificador
+id_purchase_order_expense | int | FK | Gasto asociado
+file_name | string | Nombre del archivo
+file_path | string | Ubicación del archivo
+file_type | string | Tipo de archivo
+uploaded_at | datetime | Fecha de carga
+Los tipos de archivo permitidos podrán incluir:
+• | PDF
+• | JPG
+• | JPEG
+• | PNG
+• | WEBP

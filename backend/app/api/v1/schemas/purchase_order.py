@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -18,6 +18,7 @@ class PurchaseOrderLineInput(BaseModel):
 
     purchase_quotation_detail_id: uuid.UUID
     quantity: Decimal = Field(gt=0, max_digits=18, decimal_places=6)
+    purchase_consolidation_award_id: uuid.UUID | None = None
 
 
 class PurchaseOrderExpenseInput(BaseModel):
@@ -28,11 +29,41 @@ class PurchaseOrderExpenseInput(BaseModel):
     description: str | None = Field(default=None, max_length=1000)
 
 
+class ActualExpenseCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    expense_type_id: uuid.UUID
+    amount: Decimal = Field(gt=0, max_digits=18, decimal_places=6)
+    incurred_on: date
+    reference: str = Field(min_length=1, max_length=240)
+    description: str = Field(min_length=1, max_length=1000)
+
+
+class ActualExpenseResponse(ORMOut):
+    id: uuid.UUID
+    company_id: uuid.UUID
+    purchase_order_id: uuid.UUID
+    expense_type_id: uuid.UUID
+    amount: Decimal
+    incurred_on: date
+    reference: str
+    description: str
+    allocated_amount: Decimal
+    unallocated_amount: Decimal
+    created_at: datetime | None = None
+
+
+class ActualExpenseAvailabilityResponse(ORMOut):
+    can_record: bool
+    reason: str | None = None
+    closed_retaceo_id: uuid.UUID | None = None
+    closed_retaceo_code: str | None = None
+
+
 class PurchaseOrderCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     purchase_quotation_id: uuid.UUID
-    branch_id: uuid.UUID
+    branch_id: uuid.UUID | None = None
     warehouse_id: uuid.UUID
     expected_date: AwareDatetime | None = None
     lines: tuple[PurchaseOrderLineInput, ...] = Field(min_length=1, max_length=200)
@@ -43,10 +74,20 @@ class PurchaseOrderCreate(BaseModel):
 class PurchaseOrderUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    branch_id: uuid.UUID
+    branch_id: uuid.UUID | None = None
     warehouse_id: uuid.UUID
     expected_date: AwareDatetime | None = None
     lines: tuple[PurchaseOrderLineInput, ...] = Field(min_length=1, max_length=200)
+    expenses: tuple[PurchaseOrderExpenseInput, ...] = Field(default=(), max_length=50)
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+class PurchaseOrderFromConsolidationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    branch_id: uuid.UUID | None = None
+    warehouse_id: uuid.UUID
+    expected_date: AwareDatetime | None = None
     expenses: tuple[PurchaseOrderExpenseInput, ...] = Field(default=(), max_length=50)
     notes: str | None = Field(default=None, max_length=4000)
 
@@ -65,6 +106,7 @@ class PurchaseOrderDetailResponse(ORMOut):
     tax_amount: Decimal
     total: Decimal
     notes: str | None = None
+    purchase_consolidation_award_id: uuid.UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -84,7 +126,7 @@ class PurchaseOrderResponse(ORMOut):
     company_id: uuid.UUID
     code: str
     supplier_id: int
-    branch_id: uuid.UUID
+    branch_id: uuid.UUID | None = None
     warehouse_id: uuid.UUID
     purchase_quotation_id: uuid.UUID
     created_by_id: uuid.UUID

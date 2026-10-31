@@ -15,6 +15,7 @@ from app.core.exceptions import BusinessRuleError, ValidationError
 from app.domain.entities.purchase_order import PurchaseOrder, PurchaseOrderStatus
 from app.domain.entities.purchase_quotation import PurchaseQuotationStatus
 from app.domain.ports.purchase_order_repository import (
+    PurchaseOrderAwardReference,
     PurchaseOrderDestinationReference,
     PurchaseOrderQuotationDetailReference,
     PurchaseOrderQuotationReference,
@@ -30,6 +31,10 @@ class FakePurchaseOrderRepository:
         ] = {}
         self.expense_types: set[tuple[uuid.UUID, uuid.UUID]] = set()
         self.ordered: dict[tuple[uuid.UUID, uuid.UUID], dict[uuid.UUID, Decimal]] = {}
+        self.consolidation_statuses: dict[tuple[uuid.UUID, uuid.UUID], str] = {}
+        self.awards: dict[
+            tuple[uuid.UUID, uuid.UUID, uuid.UUID], tuple[PurchaseOrderAwardReference, ...]
+        ] = {}
         self.advanced: list[tuple[uuid.UUID, uuid.UUID]] = []
         self.next_number = 1
 
@@ -56,6 +61,29 @@ class FakePurchaseOrderRepository:
 
     async def get_quotation_reference_for_update(self, company_id, quotation_id):
         return self.quotations.get((company_id, quotation_id))
+
+    async def get_consolidation_status_for_update(self, company_id, consolidation_id):
+        return self.consolidation_statuses.get((company_id, consolidation_id))
+
+    async def list_active_awards_for_quotation_for_update(
+        self, company_id, consolidation_id, quotation_id
+    ):
+        return self.awards.get((company_id, consolidation_id, quotation_id), ())
+
+    async def get_ordered_award_quantities(self, company_id, award_ids, *, exclude_order_id=None):
+        totals: dict[uuid.UUID, Decimal] = {}
+        for (tenant_id, order_id), order in self.orders.items():
+            if (
+                tenant_id != company_id
+                or order_id == exclude_order_id
+                or order.status is PurchaseOrderStatus.CANCELLED
+            ):
+                continue
+            for detail in order.details:
+                award_id = detail.purchase_consolidation_award_id
+                if award_id in award_ids:
+                    totals[award_id] = totals.get(award_id, Decimal("0")) + detail.quantity
+        return totals
 
     async def get_destination_reference(self, company_id, branch_id, warehouse_id):
         return self.destinations.get((company_id, branch_id, warehouse_id))
@@ -139,6 +167,7 @@ def _setup() -> tuple[
             warehouse_is_active=True,
             warehouse_operational_status="active",
             warehouse_storage_eligible=True,
+            warehouse_is_central=True,
         )
     )
     return (
@@ -188,6 +217,41 @@ async def test_create_draft_uses_selected_quotation_and_calculates_totals() -> N
     assert order.details[0].total == Decimal("20.340000")
     assert order.additional_expenses == Decimal("3.250000")
     assert order.total == Decimal("23.590000")
+
+
+@pytest.mark.asyncio
+async def test_create_draft_allows_company_level_mother_warehouse() -> None:
+    repository, company_id, quotation_id, detail_id, _branch_id, _warehouse_id = _setup()
+    mother_warehouse_id = uuid.uuid4()
+    repository.destinations[(company_id, None, mother_warehouse_id)] = (
+        PurchaseOrderDestinationReference(
+            branch_id=None,
+            warehouse_id=mother_warehouse_id,
+            branch_is_active=None,
+            branch_operational_status=None,
+            warehouse_is_active=True,
+            warehouse_operational_status="active",
+            warehouse_storage_eligible=True,
+            warehouse_is_central=True,
+        )
+    )
+
+    order = await PurchaseOrderUseCases(repository).create_draft(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        purchase_quotation_id=quotation_id,
+        branch_id=None,
+        warehouse_id=mother_warehouse_id,
+        lines=(
+            PurchaseOrderLineDraft(
+                purchase_quotation_detail_id=detail_id,
+                quantity=Decimal("1"),
+            ),
+        ),
+    )
+
+    assert order.branch_id is None
+    assert order.warehouse_id == mother_warehouse_id
 
 
 @pytest.mark.asyncio
@@ -460,3 +524,239 @@ async def test_expected_date_before_order_date_is_rejected() -> None:
             ),
         )
     assert exc_info.value.code == "purchase_order_invalid"
+
+
+def _consolidation_order_setup():
+    repository, company_id, quotation_id, detail_id, branch_id, warehouse_id = _setup()
+    consolidation_id = uuid.uuid4()
+    award_id = uuid.uuid4()
+    repository.quotations[(company_id, quotation_id)] = replace(
+        repository.quotations[(company_id, quotation_id)],
+        status=PurchaseQuotationStatus.UNDER_EVALUATION,
+        consolidation_id=consolidation_id,
+    )
+    repository.consolidation_statuses[(company_id, consolidation_id)] = "draft"
+    repository.awards[(company_id, consolidation_id, quotation_id)] = (
+        PurchaseOrderAwardReference(
+            id=award_id,
+            purchase_quotation_detail_id=detail_id,
+            supplier_id=7,
+            quantity=Decimal("3.5"),
+        ),
+    )
+    return (
+        repository,
+        company_id,
+        quotation_id,
+        detail_id,
+        branch_id,
+        warehouse_id,
+        consolidation_id,
+        award_id,
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_from_consolidation_uses_only_remaining_awarded_quantity_and_links_award():
+    (
+        repository,
+        company_id,
+        quotation_id,
+        detail_id,
+        branch_id,
+        warehouse_id,
+        consolidation_id,
+        award_id,
+    ) = _consolidation_order_setup()
+    order = await PurchaseOrderUseCases(repository).create_draft_from_consolidation_awards(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        consolidation_id=consolidation_id,
+        purchase_quotation_id=quotation_id,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+    )
+
+    assert len(order.details) == 1
+    assert order.details[0].purchase_quotation_detail_id == detail_id
+    assert order.details[0].purchase_consolidation_award_id == award_id
+    assert order.details[0].quantity == Decimal("3.5")
+
+
+@pytest.mark.asyncio
+async def test_create_from_consolidation_rejects_non_mother_warehouse():
+    repository, company_id, quotation_id, _, branch_id, warehouse_id, consolidation_id, _ = (
+        _consolidation_order_setup()
+    )
+    key = (company_id, branch_id, warehouse_id)
+    repository.destinations[key] = replace(repository.destinations[key], warehouse_is_central=False)
+
+    with pytest.raises(BusinessRuleError) as exc_info:
+        await PurchaseOrderUseCases(repository).create_draft_from_consolidation_awards(
+            company_id=company_id,
+            created_by_id=uuid.uuid4(),
+            consolidation_id=consolidation_id,
+            purchase_quotation_id=quotation_id,
+            branch_id=branch_id,
+            warehouse_id=warehouse_id,
+        )
+
+    assert exc_info.value.code == "purchase_order_central_warehouse_required"
+    assert repository.orders == {}
+
+
+@pytest.mark.asyncio
+async def test_create_from_consolidation_prevents_duplicate_ordering_of_award():
+    repository, company_id, quotation_id, _, branch_id, warehouse_id, consolidation_id, _ = (
+        _consolidation_order_setup()
+    )
+    use_cases = PurchaseOrderUseCases(repository)
+    await use_cases.create_draft_from_consolidation_awards(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        consolidation_id=consolidation_id,
+        purchase_quotation_id=quotation_id,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+    )
+
+    with pytest.raises(BusinessRuleError) as exc_info:
+        await use_cases.create_draft_from_consolidation_awards(
+            company_id=company_id,
+            created_by_id=uuid.uuid4(),
+            consolidation_id=consolidation_id,
+            purchase_quotation_id=quotation_id,
+            branch_id=branch_id,
+            warehouse_id=warehouse_id,
+        )
+    assert exc_info.value.code == "purchase_order_awards_already_ordered"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_awarded_order_releases_awarded_quantity_for_recreation():
+    repository, company_id, quotation_id, _, branch_id, warehouse_id, consolidation_id, _ = (
+        _consolidation_order_setup()
+    )
+    use_cases = PurchaseOrderUseCases(repository)
+    first = await use_cases.create_draft_from_consolidation_awards(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        consolidation_id=consolidation_id,
+        purchase_quotation_id=quotation_id,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+    )
+    await use_cases.cancel_order(company_id, first.id)
+    recreated = await use_cases.create_draft_from_consolidation_awards(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        consolidation_id=consolidation_id,
+        purchase_quotation_id=quotation_id,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+    )
+    assert recreated.details[0].quantity == Decimal("3.5")
+
+
+@pytest.mark.asyncio
+async def test_awarded_order_lines_cannot_be_changed_in_draft():
+    (
+        repository,
+        company_id,
+        quotation_id,
+        detail_id,
+        branch_id,
+        warehouse_id,
+        consolidation_id,
+        award_id,
+    ) = _consolidation_order_setup()
+    use_cases = PurchaseOrderUseCases(repository)
+    order = await use_cases.create_draft_from_consolidation_awards(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        consolidation_id=consolidation_id,
+        purchase_quotation_id=quotation_id,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+    )
+
+    with pytest.raises(BusinessRuleError) as exc_info:
+        await use_cases.update_draft(
+            company_id=company_id,
+            order_id=order.id,
+            branch_id=branch_id,
+            warehouse_id=warehouse_id,
+            lines=(
+                PurchaseOrderLineDraft(
+                    purchase_quotation_detail_id=detail_id,
+                    quantity=Decimal("2"),
+                    purchase_consolidation_award_id=award_id,
+                ),
+            ),
+        )
+    assert exc_info.value.code == "purchase_order_awarded_lines_locked"
+
+
+@pytest.mark.asyncio
+async def test_awarded_order_allows_metadata_edits_and_preserves_award_traceability():
+    (
+        repository,
+        company_id,
+        quotation_id,
+        detail_id,
+        branch_id,
+        warehouse_id,
+        consolidation_id,
+        award_id,
+    ) = _consolidation_order_setup()
+    use_cases = PurchaseOrderUseCases(repository)
+    order = await use_cases.create_draft_from_consolidation_awards(
+        company_id=company_id,
+        created_by_id=uuid.uuid4(),
+        consolidation_id=consolidation_id,
+        purchase_quotation_id=quotation_id,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+    )
+
+    updated = await use_cases.update_draft(
+        company_id=company_id,
+        order_id=order.id,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+        quotation_branch_id=branch_id,
+        lines=(
+            PurchaseOrderLineDraft(
+                purchase_quotation_detail_id=detail_id,
+                quantity=Decimal("3.5"),
+                purchase_consolidation_award_id=award_id,
+            ),
+        ),
+        notes="Entrega coordinada con bodega",
+    )
+
+    assert updated.details == order.details
+    assert updated.details[0].purchase_consolidation_award_id == award_id
+    assert updated.notes == "Entrega coordinada con bodega"
+
+
+@pytest.mark.asyncio
+async def test_generic_order_cannot_bypass_consolidation_adjudication():
+    repository, company_id, quotation_id, detail_id, branch_id, warehouse_id, _, _ = (
+        _consolidation_order_setup()
+    )
+    with pytest.raises(BusinessRuleError) as exc_info:
+        await PurchaseOrderUseCases(repository).create_draft(
+            company_id=company_id,
+            created_by_id=uuid.uuid4(),
+            purchase_quotation_id=quotation_id,
+            branch_id=branch_id,
+            warehouse_id=warehouse_id,
+            lines=(
+                PurchaseOrderLineDraft(
+                    purchase_quotation_detail_id=detail_id,
+                    quantity=Decimal("1"),
+                ),
+            ),
+        )
+    assert exc_info.value.code == "purchase_order_consolidation_requires_award"

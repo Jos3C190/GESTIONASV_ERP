@@ -109,6 +109,9 @@ class Branch(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     company_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
     )
+    is_headquarters: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     code: Mapped[str | None] = mapped_column(String(32))
     address: Mapped[str] = mapped_column(Text, nullable=False)
@@ -202,6 +205,19 @@ class Branch(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             postgresql_where=text("deleted_at IS NULL"),
             sqlite_where=text("deleted_at IS NULL"),
         ),
+        Index(
+            "uq_branches_company_active_headquarters",
+            "company_id",
+            unique=True,
+            postgresql_where=text(
+                "is_headquarters AND is_active AND operational_status = 'active' "
+                "AND deleted_at IS NULL"
+            ),
+            sqlite_where=text(
+                "is_headquarters AND is_active AND operational_status = 'active' "
+                "AND deleted_at IS NULL"
+            ),
+        ),
         Index("ix_branches_company_deleted_at", "company_id", "deleted_at"),
     )
 
@@ -230,9 +246,10 @@ class WarehouseCategory(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
 
 class Warehouse(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "warehouses"
-    branch_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT"), nullable=False
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
     )
+    branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     warehouse_category_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("warehouse_categories.id", ondelete="RESTRICT"),
@@ -242,6 +259,12 @@ class Warehouse(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     code: Mapped[str | None] = mapped_column(String(32))
     warehouse_type: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default="general"
+    )
+    is_central: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    is_transit: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
     operational_status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="active"
@@ -297,9 +320,19 @@ class Warehouse(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
         return capacity_status_for(self)
 
     __table_args__ = (
+        UniqueConstraint("company_id", "id", name="uq_warehouses_company_identity"),
+        ForeignKeyConstraint(
+            ["branch_id", "company_id"],
+            ["branches.id", "branches.company_id"],
+            name="fk_warehouses_branch_company",
+            ondelete="RESTRICT",
+        ),
         CheckConstraint(
             "operational_status IN ('active','inactive','maintenance')",
             name="ck_warehouses_operational_status",
+        ),
+        CheckConstraint(
+            "NOT (is_central AND is_transit)", name="ck_warehouses_central_not_transit"
         ),
         CheckConstraint(
             "capacity_profile IN ('general_mixed','rack','bulk_floor','cold','oversize_manual','transit')",
@@ -367,11 +400,6 @@ class Warehouse(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             "AND operational_usable_volume_m3 IS NOT NULL)",
             name="ck_warehouses_enforce_capacity_complete",
         ),
-        UniqueConstraint(
-            "id",
-            "branch_id",
-            name="uq_warehouses_id_branch_id",
-        ),
         Index(
             "uq_warehouses_branch_name_visible",
             "branch_id",
@@ -388,7 +416,42 @@ class Warehouse(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             postgresql_where=text("deleted_at IS NULL"),
             sqlite_where=text("deleted_at IS NULL"),
         ),
+        Index(
+            "uq_warehouses_company_name_unassigned_visible",
+            "company_id",
+            func.lower(name),
+            unique=True,
+            postgresql_where=text("branch_id IS NULL AND deleted_at IS NULL"),
+            sqlite_where=text("branch_id IS NULL AND deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_warehouses_company_code_unassigned_visible",
+            "company_id",
+            func.lower(code),
+            unique=True,
+            postgresql_where=text("branch_id IS NULL AND deleted_at IS NULL"),
+            sqlite_where=text("branch_id IS NULL AND deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_warehouses_company_active_central",
+            "company_id",
+            unique=True,
+            postgresql_where=text(
+                "is_central AND is_active AND operational_status = 'active' AND deleted_at IS NULL"
+            ),
+            sqlite_where=text(
+                "is_central AND is_active AND operational_status = 'active' AND deleted_at IS NULL"
+            ),
+        ),
         Index("ix_warehouses_branch_deleted_at", "branch_id", "deleted_at"),
+        Index("ix_warehouses_company_deleted_at", "company_id", "deleted_at"),
+        Index(
+            "uq_warehouses_company_transit",
+            "company_id",
+            unique=True,
+            postgresql_where=text("is_transit IS TRUE AND deleted_at IS NULL"),
+            sqlite_where=text("is_transit = 1 AND deleted_at IS NULL"),
+        ),
     )
 
 
@@ -404,6 +467,9 @@ class UserCompany(Base):
     access_all_branches: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
+    warehouse_restricted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     last_branch_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         nullable=True,
@@ -416,6 +482,25 @@ class UserCompany(Base):
             ["branches.id", "branches.company_id"],
             name="fk_user_companies_last_branch_company",
             ondelete="RESTRICT",
+        ),
+    )
+
+
+class UserWarehouseAccess(Base):
+    __tablename__ = "user_warehouse_access"
+    user_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    warehouse_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["user_id", "company_id"],
+            ["user_companies.user_id", "user_companies.company_id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["warehouse_id", "company_id"],
+            ["warehouses.id", "warehouses.company_id"],
+            ondelete="CASCADE",
         ),
     )
 
@@ -763,7 +848,7 @@ class Location(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             name="ck_locations_lifecycle_status",
         ),
         CheckConstraint(
-            "location_type IN ('standard','bulk','receiving','reserve','picking','staging','quality','packing','shipping','returns','virtual')",
+            "location_type IN ('standard','bulk','receiving','reserve','picking','staging','quality','packing','shipping','returns','virtual','vehicle')",
             name="ck_locations_type",
         ),
         CheckConstraint(

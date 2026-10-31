@@ -41,6 +41,34 @@ def test_accepts_decimal_coordinates_and_enterprise_profile() -> None:
     assert branch.electrical_capacity_kva == 225.5
 
 
+def test_accepts_minimal_administrative_headquarters_without_physical_coordinates() -> None:
+    company_id = uuid.uuid4()
+    headquarters = BranchIn.model_validate(
+        {
+            "company_id": company_id,
+            "is_headquarters": True,
+            "name": "Casa matriz",
+        }
+    )
+
+    assert headquarters.company_id == company_id
+    assert headquarters.code is None
+    assert headquarters.latitude is None
+    assert headquarters.longitude is None
+
+
+def test_headquarters_coordinates_must_be_both_present_or_both_empty() -> None:
+    with pytest.raises(ValidationError, match="ambas coordenadas"):
+        BranchIn.model_validate(
+            {
+                "company_id": uuid.uuid4(),
+                "is_headquarters": True,
+                "name": "Casa matriz",
+                "latitude": 13.7,
+            }
+        )
+
+
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [

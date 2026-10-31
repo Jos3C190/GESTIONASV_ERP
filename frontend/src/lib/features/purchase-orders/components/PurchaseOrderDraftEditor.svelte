@@ -12,12 +12,14 @@
   import type { PurchaseOrder, PurchaseOrderExpenseType } from '$lib/types/purchase-order';
 
   interface DraftLine {
+    key: string;
     quotationDetailId: string;
     productId: number;
     unitId: number;
     quantity: string;
     unitPrice: string;
     included: boolean;
+    awardId: string | null;
   }
 
   interface DraftExpense {
@@ -55,6 +57,7 @@
 
   let canManage = $derived(permissions.hasPermission('purchase_orders:manage'));
   let selectedCount = $derived(lines.filter((line) => line.included).length);
+  let hasAwardedLines = $derived(lines.some((line) => line.awardId !== null));
 
   function errorMessage(cause: unknown, fallback: string): string {
     if (cause instanceof HttpError) return cause.message;
@@ -80,17 +83,19 @@
   }
 
   function fromOrder(item: PurchaseOrder) {
-    branchId = item.branch_id;
+    branchId = item.branch_id ?? '';
     warehouseId = item.warehouse_id;
     expectedDate = item.expected_date ? item.expected_date.slice(0, 10) : '';
     notes = item.notes ?? '';
     lines = item.details.map((detail) => ({
+      key: detail.id,
       quotationDetailId: detail.purchase_quotation_detail_id,
       productId: detail.product_id,
       unitId: detail.unit_id,
       quantity: detail.quantity,
       unitPrice: detail.unit_price,
-      included: true
+      included: true,
+      awardId: detail.purchase_consolidation_award_id ?? null
     }));
     expenses = item.expenses.map((expense) => ({
       key: expense.id,
@@ -147,16 +152,9 @@
     loadingWarehouses = true;
     warehouseError = null;
 
-    if (!selectedBranchId) {
-      warehouses = [];
-      warehouseId = '';
-      loadingWarehouses = false;
-      return;
-    }
-
     try {
       const response = await getWarehouses({
-        branchId: selectedBranchId,
+        ...(selectedBranchId ? { branchId: selectedBranchId } : {}),
         page: 1,
         size: 100,
         status: 'active'
@@ -164,7 +162,11 @@
 
       if (generation !== warehouseGeneration) return;
 
-      warehouses = response.items.filter((warehouse) => warehouse.branchId === selectedBranchId);
+      warehouses = selectedBranchId
+        ? response.items.filter((warehouse) => warehouse.branchId === selectedBranchId)
+        : response.items.filter(
+            (warehouse) => warehouse.isCentral && warehouse.branchId === null
+          );
       if (!preserveWarehouseId || !warehouses.some((warehouse) => warehouse.id === warehouseId)) {
         warehouseId = warehouses[0]?.id ?? '';
       }
@@ -178,7 +180,7 @@
     }
   }
 
-  async function loadData(currentOrderId: string) {
+  async function loadData(currentOrderId: string, currentBranchId: string | null) {
     const generation = ++loadGeneration;
     loading = true;
     editable = true;
@@ -186,7 +188,7 @@
     validation = {};
 
     try {
-      const item = await purchaseOrdersApi.get(currentOrderId);
+      const item = await purchaseOrdersApi.get(currentOrderId, currentBranchId);
       if (generation !== loadGeneration) return;
 
       order = item;
@@ -222,7 +224,7 @@
       }
       productLabels = nextProductLabels;
 
-      await Promise.all([loadWarehouses(item.branch_id), loadExpenseTypes()]);
+      await Promise.all([loadWarehouses(item.branch_id ?? ''), loadExpenseTypes()]);
     } catch (cause: unknown) {
       if (generation !== loadGeneration) return;
       order = null;
@@ -243,6 +245,7 @@
 
   function handleWarehouseChange(event: Event) {
     warehouseId = (event.currentTarget as HTMLSelectElement).value;
+    branchId = warehouses.find((warehouse) => warehouse.id === warehouseId)?.branchId ?? '';
     validation = {};
   }
 
@@ -256,7 +259,9 @@
   function validate(): boolean {
     const next: Record<string, string> = {};
 
-    if (!branchId) next.branch = 'Selecciona una sucursal.';
+    if (!branchId && !warehouses.some((warehouse) => warehouse.id === warehouseId && warehouse.isCentral)) {
+      next.branch = 'Selecciona una sucursal o una bodega madre activa.';
+    }
     if (!warehouseId) next.warehouse = 'Selecciona un almacén.';
 
     const selectedLines = lines.filter((line) => line.included);
@@ -293,14 +298,15 @@
 
     try {
       const updated = await purchaseOrdersApi.update(order.id, {
-        branch_id: branchId,
+        branch_id: branchId || null,
         warehouse_id: warehouseId,
         expected_date: expectedDate ? `${expectedDate}T12:00:00-06:00` : null,
         lines: lines
           .filter((line) => line.included)
           .map((line) => ({
             purchase_quotation_detail_id: line.quotationDetailId,
-            quantity: Number(line.quantity)
+            quantity: Number(line.quantity),
+            purchase_consolidation_award_id: line.awardId
           })),
         expenses: expenses.map((expense) => ({
           expense_type_id: expense.expenseTypeId,
@@ -319,13 +325,14 @@
   }
 
   function retry() {
-    void loadData(orderId);
+    void loadData(orderId, branch.id);
   }
 
   $effect(() => {
     const currentOrderId = orderId;
+    const currentBranchId = branch.id;
     if (canManage && currentOrderId) {
-      void loadData(currentOrderId);
+      void loadData(currentOrderId, currentBranchId);
     } else {
       loading = false;
     }
@@ -409,7 +416,7 @@
               onchange={(event) => void handleBranchChange(event)}
               class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
             >
-              <option value="">Selecciona una sucursal</option>
+              <option value="">Empresa · bodega madre</option>
               {#each branch.branches.filter((item) => item.is_active) as item (item.id)}
                 <option value={item.id}>{item.code ? `${item.code} — ` : ''}{item.name}</option>
               {/each}
@@ -488,71 +495,105 @@
             <div>
               <h2 class="text-sm font-semibold text-foreground">Líneas de la orden</h2>
               <p class="mt-1 text-xs text-foreground-muted">
-                Cada línea conserva la referencia exacta a su detalle de cotización.
+                Cada producto mantiene el precio y la cotización con los que se creó esta orden.
               </p>
+              {#if hasAwardedLines}
+                <p
+                  class="mt-2 max-w-3xl rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-foreground-muted"
+                >
+                  Esta orden viene de adjudicaciones. Sus líneas y cantidades están protegidas; para
+                  cambiar una adjudicación, cancela esta orden primero.
+                </p>
+              {/if}
             </div>
             <span class="text-sm text-foreground-muted">{selectedCount} seleccionadas</span>
           </div>
         </div>
 
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-border text-sm">
-            <thead
-              class="bg-surface-muted text-left text-xs uppercase tracking-wide text-foreground-muted"
+        {#if lines.length === 0}
+          <div class="m-4 rounded-lg border border-border bg-surface-muted p-4" role="status">
+            <p class="font-medium text-foreground">Este borrador no tiene líneas de compra.</p>
+            <p class="mt-1 text-sm text-foreground-muted">
+              Revisa la orden. Si el borrador quedó incompleto, cancélalo desde su detalle y crea
+              otra orden desde una cotización válida.
+            </p>
+            <a
+              href={'/purchase-orders/' + order.id}
+              class="mt-3 inline-flex min-h-10 items-center rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-foreground hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
-              <tr>
-                <th class="px-4 py-3 font-medium">Incluir</th>
-                <th class="px-4 py-3 font-medium">Producto</th>
-                <th class="px-4 py-3 font-medium">Unidad</th>
-                <th class="px-4 py-3 font-medium">Cantidad</th>
-                <th class="px-4 py-3 font-medium">Precio unit.</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border">
-              {#each lines as line, index (line.quotationDetailId)}
-                <tr class="text-foreground">
-                  <td class="px-4 py-3">
+              Abrir detalle para revisar la orden
+            </a>
+          </div>
+        {:else}
+          <div class="space-y-3 p-4">
+            {#each lines as line, index (line.key)}
+              <article
+                class="grid gap-4 rounded-lg border border-border bg-surface p-4 sm:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)] sm:items-center"
+              >
+                <div class="min-w-0">
+                  <label class="flex min-h-10 items-center gap-3 font-medium text-foreground">
                     <input
                       type="checkbox"
-                      aria-label={`Incluir línea ${index + 1}`}
+                      aria-label={'Incluir ' + productLabel(line.productId)}
                       checked={line.included}
+                      disabled={line.awardId !== null}
                       onchange={(event) =>
                         updateLine(index, {
                           included: (event.currentTarget as HTMLInputElement).checked
                         })}
-                      class="h-4 w-4 rounded border-border"
+                      class="h-4 w-4 shrink-0 rounded border-border"
                     />
-                  </td>
-                  <td class="min-w-56 px-4 py-3 font-medium">{productLabel(line.productId)}</td>
-                  <td class="whitespace-nowrap px-4 py-3 text-foreground-muted"
-                    >{unitLabel(line.unitId)}</td
-                  >
-                  <td class="min-w-44 px-4 py-3">
+                    <span>{productLabel(line.productId)}</span>
+                  </label>
+                  <p class="mt-1 pl-7 text-sm text-foreground-muted">{unitLabel(line.unitId)}</p>
+                </div>
+                <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+                  <div>
+                    <label
+                      for={'purchase-order-line-quantity-' + line.key}
+                      class="mb-1 block text-xs font-medium text-foreground-muted"
+                    >
+                      Cantidad
+                    </label>
                     <input
-                      aria-label={`Cantidad línea ${index + 1}`}
+                      id={'purchase-order-line-quantity-' + line.key}
+                      aria-label={'Cantidad de ' + productLabel(line.productId)}
+                      aria-invalid={Boolean(validation['quantity-' + index])}
+                      aria-describedby={validation['quantity-' + index]
+                        ? 'purchase-order-line-quantity-error-' + line.key
+                        : undefined}
                       type="number"
                       min="0.000001"
                       step="0.000001"
                       value={line.quantity}
-                      disabled={!line.included}
+                      disabled={!line.included || line.awardId !== null}
                       oninput={(event) =>
                         updateLine(index, {
                           quantity: (event.currentTarget as HTMLInputElement).value
                         })}
-                      class="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                      class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                     />
-                    {#if validation[`quantity-${index}`]}
-                      <p class="mt-1 text-xs text-danger">{validation[`quantity-${index}`]}</p>
+                    {#if validation['quantity-' + index]}
+                      <p
+                        id={'purchase-order-line-quantity-error-' + line.key}
+                        class="mt-1 text-xs text-danger"
+                        role="alert"
+                      >
+                        {validation['quantity-' + index]}
+                      </p>
                     {/if}
-                  </td>
-                  <td class="whitespace-nowrap px-4 py-3"
-                    >{formatMoney(line.unitPrice, order.currency)}</td
-                  >
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                  <div class="pb-2 text-right">
+                    <p class="text-xs text-foreground-muted">Precio unitario</p>
+                    <p class="mt-1 whitespace-nowrap text-sm font-medium text-foreground">
+                      {formatMoney(line.unitPrice, order.currency)}
+                    </p>
+                  </div>
+                </div>
+              </article>
+            {/each}
+          </div>
+        {/if}
 
         {#if validation.lines}
           <p class="border-t border-border px-4 py-3 text-sm text-danger">{validation.lines}</p>

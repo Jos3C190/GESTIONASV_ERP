@@ -71,7 +71,7 @@
       <div>
         <h2 class="font-semibold text-foreground">Acciones</h2>
         <p class="mt-1 text-sm text-foreground-muted">
-          Ejecuta únicamente las transiciones expuestas por el backend para el estado actual.
+          Revisa la orden, solicita su aprobación y registra el envío al proveedor.
         </p>
       </div>
 
@@ -109,7 +109,7 @@
         {:else if order.status === 'approved'}
           {#if canSend}
             <Button disabled={pending !== null} onclick={() => void run('send')}>
-              {pending === 'send' ? 'Enviando…' : 'Enviar al proveedor'}
+              {pending === 'send' ? 'Registrando…' : 'Marcar enviada al proveedor'}
             </Button>
           {/if}
           {#if canManage}

@@ -1,0 +1,67 @@
+                         jsonb_pretty                         
+--------------------------------------------------------------
+ {                                                           +
+     "lots": {                                               +
+         "rows": 1,                                          +
+         "fingerprint": "f87e62f28ad1f83bd6a27535d31a0f82"   +
+     },                                                      +
+     "balances": {                                           +
+         "rows": 27,                                         +
+         "fingerprint": "699b03bb6bb6d3671b4036b297f4a4e1",  +
+         "quantity_base": 2892.000000                        +
+     },                                                      +
+     "movements": {                                          +
+         "rows": 65,                                         +
+         "fingerprint": "768be12e66f88d00fe922600dc8ed69e"   +
+     },                                                      +
+     "purchases": {                                          +
+         "rows": 17,                                         +
+         "id_fingerprint": "82c83117758f4c618a60c116aff387f5"+
+     },                                                      +
+     "warehouses": {                                         +
+         "rows": 8,                                          +
+         "fingerprint": "a0e1053e829b282cbd1ef908d3f43b1f"   +
+     },                                                      +
+     "lot_details": {                                        +
+         "rows": 1,                                          +
+         "fingerprint": "cc259c2d050bfa69007d224cee97a851",  +
+         "accepted_quantity_base": 9.000000                  +
+     },                                                      +
+     "label_prints": {                                       +
+         "rows": 8,                                          +
+         "fingerprint": "15890262e0413bc50fa98726238209b3"   +
+     },                                                      +
+     "cost_averages": {                                      +
+         "rows": 6,                                          +
+         "fingerprint": "5cec3996399a4d5c7b3df70e1d0aeb0f",  +
+         "quantity_base": 2892.000000,                       +
+         "inventory_value": 47.500000                        +
+     },                                                      +
+     "handling_units": {                                     +
+         "rows": 25,                                         +
+         "fingerprint": "1633b4797b0da36671ca80cb0f42f487",  +
+         "quantity_base": 2892.000000                        +
+     },                                                      +
+     "movement_lines": {                                     +
+         "rows": 71,                                         +
+         "fingerprint": "eb969287d53c98e2df9e7ce6a32fb3a0",  +
+         "quantity_base": 11963.200000                       +
+     },                                                      +
+     "schema_revision": "0085",                              +
+     "valuation_entries": {                                  +
+         "rows": 6,                                          +
+         "fingerprint": "19d8e0060c72df785cf964963d965d46",  +
+         "source_value": 47.500000,                          +
+         "quantity_base": 2892.000000                        +
+     },                                                      +
+     "valuation_settings": {                                 +
+         "rows": 1,                                          +
+         "fingerprint": "ef37451e110a6d507d16b32b251456a0"   +
+     },                                                      +
+     "retaceo_applications": {                               +
+         "rows": 0,                                          +
+         "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"   +
+     }                                                       +
+ }
+(1 row)
+

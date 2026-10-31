@@ -590,6 +590,7 @@
               <PackagingManager
                 variantId={variant.id}
                 defaultBaseUnitId={product.sale_unit}
+                defaultPackagingUnitId={product.purchase_unit}
                 unitOptions={units.map((unit) => ({ id: unit.id_unit, label: unit.name }))}
                 canManage={permissions.hasPermission('inventory:manage_packaging')}
               />

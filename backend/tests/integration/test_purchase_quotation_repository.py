@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -14,6 +14,7 @@ from app.domain.entities.purchase_quotation import (
     PurchaseQuotationRequestDetail,
     PurchaseQuotationStatus,
 )
+from app.domain.entities.purchase_quotation_document import PurchaseQuotationDocument
 from app.domain.entities.purchase_request import (
     PurchaseRequest,
     PurchaseRequestDetail,
@@ -27,6 +28,7 @@ from app.infrastructure.models.catalog import (
     ProductModel,
     UnitModel,
 )
+from app.infrastructure.models.document import DocumentAssetModel
 from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.organization import (
     Branch,
@@ -42,6 +44,9 @@ from app.infrastructure.models.purchase_quotation import ExpenseTypeModel
 from app.infrastructure.models.supplier import SupplierModel
 from app.infrastructure.models.supplier_master_data import CurrencyModel
 from app.infrastructure.models.user import User
+from app.infrastructure.repositories.purchase_quotation_document_repository import (
+    SqlAlchemyPurchaseQuotationDocumentRepository,
+)
 from app.infrastructure.repositories.purchase_quotation_repository import (
     SqlAlchemyPurchaseQuotationRepository,
 )
@@ -133,6 +138,7 @@ async def _build_test_graph(session: AsyncSession) -> QuotationTestGraph:
     await session.flush()
     warehouse = Warehouse(
         id=uuid.uuid4(),
+        company_id=company.id,
         branch_id=branch.id,
         warehouse_category_id=warehouse_category.id,
         name=f"Quotation warehouse {suffix}",
@@ -529,3 +535,81 @@ async def test_repository_lists_only_comparable_quotes_for_requested_purchase_re
 
     assert [item.id for item in comparable] == [received.id]
     assert hidden == []
+
+
+@pytest.mark.asyncio
+async def test_quotation_document_repository_persists_company_scoped_attachment(
+    quotation_session: AsyncSession,
+) -> None:
+    graph = await _build_test_graph(quotation_session)
+    request = await _persist_approved_request(quotation_session, graph)
+    quotation_repository = SqlAlchemyPurchaseQuotationRepository(quotation_session)
+    quotation = _quotation_for_detail(
+        graph=graph,
+        request=request,
+        request_detail=request.details[0],
+        code=await quotation_repository.allocate_next_code(graph.company.id),
+    )
+    saved_quotation = await quotation_repository.add_quotation(quotation)
+    document_id = uuid.uuid4()
+    quotation_session.add(
+        DocumentAssetModel(
+            id=document_id,
+            company_id=graph.company.id,
+            original_filename="oferta.pdf",
+            extension=".pdf",
+            declared_content_type="application/pdf",
+            size_bytes=128,
+            checksum_sha256="a" * 64,
+            bucket="documents",
+            object_key=f"quotation-offers/{uuid.uuid4()}.pdf",
+            status="pending_upload",
+            upload_expires_at=datetime.now(UTC) + timedelta(minutes=10),
+            uploaded_by=graph.user.id,
+        )
+    )
+    await quotation_session.flush()
+
+    repository = SqlAlchemyPurchaseQuotationDocumentRepository(quotation_session)
+    attachment = PurchaseQuotationDocument(
+        id=uuid.uuid4(),
+        company_id=graph.company.id,
+        purchase_quotation_id=saved_quotation.id,
+        document_id=document_id,
+        file_name="oferta.pdf",
+        file_type="application/pdf",
+    )
+    await repository.add_document(attachment)
+    loaded = await repository.get_document(graph.company.id, saved_quotation.id, document_id)
+    listed = await repository.list_documents(graph.company.id, saved_quotation.id)
+    hidden = await repository.get_document(uuid.uuid4(), saved_quotation.id, document_id)
+    uploaded_at = datetime.now(UTC)
+    marked = await repository.mark_uploaded(
+        graph.company.id,
+        saved_quotation.id,
+        document_id,
+        file_type="application/pdf",
+        uploaded_at=uploaded_at,
+    )
+    detached_at = datetime.now(UTC)
+    detached = await repository.detach_document(
+        graph.company.id,
+        saved_quotation.id,
+        document_id,
+        deleted_at=detached_at,
+    )
+    hidden_after_detach = await repository.get_document(
+        graph.company.id, saved_quotation.id, document_id
+    )
+    listed_after_detach = await repository.list_documents(graph.company.id, saved_quotation.id)
+
+    assert loaded is not None
+    assert loaded.file_name == "oferta.pdf"
+    assert len(listed) == 1
+    assert hidden is None
+    assert marked is not None
+    assert marked.uploaded_at == uploaded_at
+    assert detached is not None
+    assert detached.deleted_at == detached_at
+    assert hidden_after_detach is None
+    assert listed_after_detach == ()

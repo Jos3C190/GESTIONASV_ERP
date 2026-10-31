@@ -1,0 +1,69 @@
+APUNTES DE CLASE / SISTEMA ERP
+SESIÓN 23 · 12 OCT 2026
+Inventario y compras · Explicación, requisitos y decisiones pendientes
+12
+11. Trabajo a repartir entre los responsables
+Esta lista convierte los apuntes en entregables revisables. Prioridad A cubre el flujo principal de esta
+sesión. Prioridad B corresponde a la continuación anunciada o a decisiones complementarias.
+ID /
+prioridad
+Responsable funcional
+Entregable y condición de término
+R01 / A
+Solicitudes + Cotizaciones
+Comprobar que se conserva el vínculo con los documentos posteriores
+cuando aplica. Es una integración propuesta; no se solicita rehacer estos
+módulos.
+R02 / A
+Órdenes + Recepciones
+Consultar cantidades solicitadas y recibidas con su origen, fecha y
+diferencias.
+R03 / A
+Recepciones + Retaceo
+Exponer el costo final y la condición de retaceo finalizado antes del
+ingreso valorado.
+R04 / A
+Recepciones + Inventario
+Crear e identificar un lote interno por recepción, con varios productos
+asociados cuando corresponda.
+R05 / A
+Viñeteado
+Imprimir código interno, lote y fecha; consultar cantidad y fecha de
+impresiones.
+R06 / A
+Almacenes
+Confirmar ubicación, producto y cantidad; admitir distribución de un lote
+entre ubicaciones.
+R07 / A
+Inventario
+Mostrar las cantidades ubicadas y pendientes, evitando registrar dos
+veces una misma incorporación.
+R08 / A
+Inventario / Costos
+Calcular promedio con cantidad y valor remanentes más la entrada al
+costo final. Definir alcance por empresa y producto.
+R09 / A
+Kardex
+Registrar entradas, salidas, saldos y costos; consultar y filtrar sin edición
+directa.
+R10 / A
+Equipo completo
+Conservar referencias de compra, recepción, retaceo, lote, ubicación y
+movimiento para consultar la procedencia.
+R11 / B
+Traslados
+Implementar salida de origen y entrada de destino relacionadas; resolver
+tránsito y diferencias.
+R12 / B
+Ventas
+Registrar salidas y costo aplicado, conservando la identificación física del
+producto retirado.
+Dependencias antes de cerrar cada entrega
+PROPUESTA. R03 debe quedar resuelto antes de valorar las entradas; R04 antes de identificar las viñetas;
+R06 y R07 deben usar la misma regla de ingreso; R08 y R09 deben registrar cantidades y valores coherentes
+en una sola confirmación.
+R01 y los detalles de permisos, reimpresión y prevención de duplicados son soluciones técnicas propuestas.
+El resto deriva del flujo descrito, con decisiones pendientes indicadas en sus capítulos.
+Que una función aparezca en esta lista significa que debe existir o comprobarse. No significa que se haya
+verificado su ausencia en el sistema actual.
+Base del TXT: líneas 43-85, 215-229 y 245.

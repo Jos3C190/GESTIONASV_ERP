@@ -1,0 +1,52 @@
+CA-SUP-006: Los contactos inactivos no deberán aparecer como contactos disponibles en las
+operaciones comerciales.
+
+CA-SUP-007: El sistema deberá conservar la información histórica de proveedores que hayan
+participado en operaciones comerciales.
+
+CA-SUP-008: Toda modificación realizada sobre proveedores o contactos deberá registrarse
+automáticamente en la bitácora.
+
+CA-SUP-009: El sistema deberá permitir consultar los contactos directamente desde la
+información del proveedor.
+
+CA-SUP-010: El módulo deberá proporcionar información de proveedores para su utilización en
+Cotizaciones de Compra, Órdenes de Compra y Compras.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                43

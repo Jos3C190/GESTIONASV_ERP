@@ -31,6 +31,7 @@ class PurchaseQuotationRequestReference:
     id: uuid.UUID
     status: PurchaseRequestStatus
     details: tuple[PurchaseQuotationRequestDetailReference, ...]
+    branch_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +49,7 @@ class PurchaseQuotationRepository(Protocol):
         self,
         company_id: uuid.UUID,
         *,
+        branch_id: uuid.UUID | None = None,
         status: PurchaseQuotationStatus | None = None,
         supplier_id: int | None = None,
         skip: int = 0,
@@ -58,6 +60,8 @@ class PurchaseQuotationRepository(Protocol):
         self,
         company_id: uuid.UUID,
         quotation_id: uuid.UUID,
+        *,
+        branch_id: uuid.UUID | None = None,
     ) -> PurchaseQuotation | None: ...
 
     async def get_quotation_for_update(
@@ -67,6 +71,19 @@ class PurchaseQuotationRepository(Protocol):
     ) -> PurchaseQuotation | None: ...
 
     async def allocate_next_code(self, company_id: uuid.UUID) -> str: ...
+
+    async def allocate_next_consolidation_version(
+        self,
+        company_id: uuid.UUID,
+        consolidation_id: uuid.UUID,
+        supplier_id: int,
+    ) -> int: ...
+
+    async def list_consolidation_quotations(
+        self,
+        company_id: uuid.UUID,
+        consolidation_id: uuid.UUID,
+    ) -> tuple[PurchaseQuotation, ...]: ...
 
     async def get_supplier_reference(
         self,
@@ -109,6 +126,8 @@ class PurchaseQuotationRepository(Protocol):
         self,
         company_id: uuid.UUID,
         purchase_request_id: uuid.UUID,
+        *,
+        branch_id: uuid.UUID | None = None,
     ) -> list[PurchaseQuotation]: ...
 
     async def advance_purchase_request_quotation_statuses(

@@ -23,6 +23,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infrastructure.db.base import Base, TimestampMixin, UUIDPKMixin
+from app.infrastructure.models.organization import Branch, Warehouse
 
 
 class PurchaseRequestModel(UUIDPKMixin, TimestampMixin, Base):
@@ -54,6 +55,8 @@ class PurchaseRequestModel(UUIDPKMixin, TimestampMixin, Base):
         lazy="selectin",
         order_by="PurchaseRequestDetailModel.created_at",
     )
+    branch: Mapped[Branch] = relationship(viewonly=True, lazy="selectin")
+    warehouse: Mapped[Warehouse] = relationship(viewonly=True, lazy="selectin")
 
     __table_args__ = (
         ForeignKeyConstraint(

@@ -14,9 +14,15 @@ export interface PurchaseOrderExpenseType {
   description: string | null;
 }
 
+export interface PurchaseOrderExpenseTypeCatalog extends PurchaseOrderExpenseType {
+  is_active: boolean;
+  usage_count: number;
+}
+
 export interface PurchaseOrderLineInput {
   purchase_quotation_detail_id: string;
   quantity: number;
+  purchase_consolidation_award_id?: string | null;
 }
 
 export interface PurchaseOrderExpenseInput {
@@ -27,7 +33,7 @@ export interface PurchaseOrderExpenseInput {
 
 export interface PurchaseOrderCreateInput {
   purchase_quotation_id: string;
-  branch_id: string;
+  branch_id: string | null;
   warehouse_id: string;
   expected_date: string | null;
   lines: PurchaseOrderLineInput[];
@@ -35,8 +41,16 @@ export interface PurchaseOrderCreateInput {
   notes: string | null;
 }
 
+export interface PurchaseOrderFromConsolidationInput {
+  branch_id: string | null;
+  warehouse_id: string;
+  expected_date: string | null;
+  expenses: PurchaseOrderExpenseInput[];
+  notes: string | null;
+}
+
 export interface PurchaseOrderUpdateInput {
-  branch_id: string;
+  branch_id: string | null;
   warehouse_id: string;
   expected_date: string | null;
   lines: PurchaseOrderLineInput[];
@@ -58,6 +72,7 @@ export interface PurchaseOrderDetail {
   tax_amount: string;
   total: string;
   notes: string | null;
+  purchase_consolidation_award_id?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -77,7 +92,7 @@ export interface PurchaseOrder {
   company_id: string;
   code: string;
   supplier_id: number;
-  branch_id: string;
+  branch_id: string | null;
   warehouse_id: string;
   purchase_quotation_id: string;
   created_by_id: string;
@@ -101,6 +116,7 @@ export interface PurchaseOrder {
 export interface PurchaseOrderListParams {
   status?: PurchaseOrderStatus;
   supplier_id?: number;
+  branch_id?: string | null;
   page?: number;
   size?: number;
 }

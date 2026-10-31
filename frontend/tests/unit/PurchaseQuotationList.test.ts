@@ -89,6 +89,7 @@ describe('PurchaseQuotationList', () => {
       expect(mocks.list).toHaveBeenLastCalledWith({
         status: 'received',
         supplier_id: 25,
+        branch_id: null,
         page: 1,
         size: 20
       });

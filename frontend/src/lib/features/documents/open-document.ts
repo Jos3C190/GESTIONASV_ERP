@@ -27,6 +27,30 @@ export class DocumentBrowserOpenError extends Error {
 }
 
 /**
+ * Opens a URL resolved asynchronously in a tab created within the user's click
+ * gesture, so browsers do not block the document after URL authorization.
+ */
+export async function openResolvedDocumentInBrowser(
+  resolveUrl: () => Promise<string>
+): Promise<void> {
+  const popup = window.open('about:blank', '_blank');
+  if (!popup) throw new DocumentBrowserOpenError();
+
+  try {
+    popup.opener = null;
+    const referrerMeta = popup.document.createElement('meta');
+    referrerMeta.name = 'referrer';
+    referrerMeta.content = 'no-referrer';
+    popup.document.head.appendChild(referrerMeta);
+
+    popup.location.replace(await resolveUrl());
+  } catch (error) {
+    popup.close();
+    throw error;
+  }
+}
+
+/**
  * Opens the canonical document in the browser's own viewer.
  *
  * The blank tab is created synchronously from the user gesture so popup
@@ -40,20 +64,8 @@ export async function openDocumentInBrowser(
   documentId: string,
   employeeId?: string
 ): Promise<void> {
-  const popup = window.open('about:blank', '_blank');
-  if (!popup) throw new DocumentBrowserOpenError();
-
-  try {
-    popup.opener = null;
-    const referrerMeta = popup.document.createElement('meta');
-    referrerMeta.name = 'referrer';
-    referrerMeta.content = 'no-referrer';
-    popup.document.head.appendChild(referrerMeta);
-
+  return openResolvedDocumentInBrowser(async () => {
     const result = await api.documents.previewUrl(documentId, employeeId, 'original');
-    popup.location.replace(result.url);
-  } catch (error) {
-    popup.close();
-    throw error;
-  }
+    return result.url;
+  });
 }

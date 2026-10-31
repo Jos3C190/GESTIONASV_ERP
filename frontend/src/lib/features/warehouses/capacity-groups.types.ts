@@ -51,16 +51,16 @@ export interface WarehouseCapacityGroupDraft {
   code: string;
   name: string;
   group_type: CapacityGroupType;
-  certified_max_weight_kg: string;
-  operational_max_weight_kg: string;
-  certified_usable_volume_m3: string;
-  operational_usable_volume_m3: string;
+  certified_max_weight_kg: string | number | null;
+  operational_max_weight_kg: string | number | null;
+  certified_usable_volume_m3: string | number | null;
+  operational_usable_volume_m3: string | number | null;
   capacity_profile: CapacityProfile;
   capacity_enforcement_mode: CapacityEnforcementMode;
   storage_eligible: boolean;
-  usable_length_m: string;
-  usable_width_m: string;
-  usable_height_m: string;
+  usable_length_m: string | number | null;
+  usable_width_m: string | number | null;
+  usable_height_m: string | number | null;
   is_active: boolean;
 }
 

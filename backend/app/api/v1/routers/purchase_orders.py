@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from app.api.v1.company_access import request_company_id
+from app.api.v1.company_access import (
+    request_company_id,
+    resolve_branch_scope,
+    resolve_document_warehouse_scope,
+)
 from app.api.v1.deps import (
     CurrentUser,
+    SessionDep,
     get_audit_service,
     get_purchase_order_expense_document_service,
     get_purchase_order_use_cases,
@@ -17,11 +22,15 @@ from app.api.v1.deps import (
 from app.api.v1.schemas.common import Page, PageMeta
 from app.api.v1.schemas.documents import DownloadUrlOut
 from app.api.v1.schemas.purchase_order import (
+    ActualExpenseAvailabilityResponse,
+    ActualExpenseCreate,
+    ActualExpenseResponse,
     PurchaseOrderCreate,
     PurchaseOrderExpenseDocumentInitiate,
     PurchaseOrderExpenseDocumentResponse,
     PurchaseOrderExpenseDocumentUploadResponse,
     PurchaseOrderExpenseInput,
+    PurchaseOrderFromConsolidationCreate,
     PurchaseOrderLineInput,
     PurchaseOrderResponse,
     PurchaseOrderUpdate,
@@ -33,6 +42,7 @@ from app.application.purchase_orders import (
     PurchaseOrderLineDraft,
     PurchaseOrderUseCases,
 )
+from app.application.purchase_orders.actual_expenses import ActualExpenseUseCases
 from app.application.purchase_orders.expense_documents import (
     PurchaseOrderExpenseDocumentService,
 )
@@ -40,6 +50,9 @@ from app.domain.entities.document import DocumentAsset
 from app.domain.entities.purchase_order import PurchaseOrder, PurchaseOrderStatus
 from app.domain.entities.purchase_order_expense_document import (
     PurchaseOrderExpenseDocument,
+)
+from app.infrastructure.repositories.purchase_order_repository import (
+    SqlAlchemyPurchaseOrderRepository,
 )
 
 router = APIRouter(prefix="/purchase-orders", tags=["purchase-orders"])
@@ -52,6 +65,7 @@ def _line_drafts(
         PurchaseOrderLineDraft(
             purchase_quotation_detail_id=line.purchase_quotation_detail_id,
             quantity=line.quantity,
+            purchase_consolidation_award_id=line.purchase_consolidation_award_id,
         )
         for line in lines
     )
@@ -75,7 +89,7 @@ def _order_audit_state(item: PurchaseOrder) -> dict[str, object]:
         "id": str(item.id),
         "code": item.code,
         "supplier_id": item.supplier_id,
-        "branch_id": str(item.branch_id),
+        "branch_id": str(item.branch_id) if item.branch_id is not None else None,
         "warehouse_id": str(item.warehouse_id),
         "purchase_quotation_id": str(item.purchase_quotation_id),
         "created_by_id": str(item.created_by_id),
@@ -94,6 +108,11 @@ def _order_audit_state(item: PurchaseOrder) -> dict[str, object]:
             {
                 "id": str(detail.id),
                 "purchase_quotation_detail_id": str(detail.purchase_quotation_detail_id),
+                "purchase_consolidation_award_id": (
+                    str(detail.purchase_consolidation_award_id)
+                    if detail.purchase_consolidation_award_id
+                    else None
+                ),
                 "product_id": detail.product_id,
                 "unit_id": detail.unit_id,
                 "quantity": str(detail.quantity),
@@ -142,6 +161,151 @@ async def _audit_change(
     )
 
 
+async def _visible_purchase_order(
+    *,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: PurchaseOrderUseCases,
+    order_id: uuid.UUID,
+    branch_id: uuid.UUID | None,
+) -> tuple[uuid.UUID, PurchaseOrder]:
+    company_id = request_company_id(request)
+    if branch_id is not None:
+        await resolve_branch_scope(session, current, company_id, branch_id)
+    item = await use_cases.get_order(
+        company_id,
+        order_id,
+        branch_id=branch_id,
+    )
+    if item is None:
+        raise HTTPException(404, "Orden de compra no encontrada.")
+    await resolve_document_warehouse_scope(
+        session,
+        current,
+        company_id,
+        document_branch_id=item.branch_id,
+        warehouse_id=item.warehouse_id,
+    )
+    return company_id, item
+
+
+@router.get(
+    "/{order_id}/actual-expenses/availability",
+    response_model=ActualExpenseAvailabilityResponse,
+    dependencies=[Depends(require_permission("purchase_orders:read"))],
+)
+async def actual_expense_availability(
+    order_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
+) -> ActualExpenseAvailabilityResponse:
+    company_id, order = await _visible_purchase_order(
+        request=request,
+        session=session,
+        current=current,
+        order_id=order_id,
+        branch_id=None,
+        use_cases=use_cases,
+    )
+    available = await ActualExpenseUseCases(
+        SqlAlchemyPurchaseOrderRepository(session)
+    ).availability(company_id, order)
+    return ActualExpenseAvailabilityResponse.model_validate(available)
+
+
+@router.get(
+    "/{order_id}/actual-expenses",
+    response_model=list[ActualExpenseResponse],
+    dependencies=[Depends(require_permission("purchase_orders:read"))],
+)
+async def list_actual_expenses(
+    order_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
+) -> list[ActualExpenseResponse]:
+    company_id, _ = await _visible_purchase_order(
+        request=request,
+        session=session,
+        current=current,
+        use_cases=use_cases,
+        order_id=order_id,
+        branch_id=None,
+    )
+    rows = await SqlAlchemyPurchaseOrderRepository(session).list_actual_expenses(
+        company_id, order_id
+    )
+    return [ActualExpenseResponse.model_validate(row) for row in rows]
+
+
+@router.post(
+    "/{order_id}/actual-expenses",
+    response_model=ActualExpenseResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("purchase_orders:manage"))],
+)
+async def create_actual_expense(
+    order_id: uuid.UUID,
+    payload: ActualExpenseCreate,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
+    audit: AuditService = Depends(get_audit_service),
+) -> ActualExpenseResponse:
+    company_id, _ = await _visible_purchase_order(
+        request=request,
+        session=session,
+        current=current,
+        use_cases=use_cases,
+        order_id=order_id,
+        branch_id=None,
+    )
+    item = await ActualExpenseUseCases(SqlAlchemyPurchaseOrderRepository(session)).create(
+        company_id=company_id, order_id=order_id, **payload.model_dump()
+    )
+    result = ActualExpenseResponse.model_validate(item)
+    await audit.record(
+        action="ACTUAL_EXPENSE_RECORDED",
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="purchase_order_expenses",
+        resource_id=str(item.id),
+        after_state=result.model_dump(mode="json"),
+        required=True,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    return result
+
+
+async def _authorize_order_destination(
+    *,
+    session: SessionDep,
+    current: CurrentUser,
+    company_id: uuid.UUID,
+    selected_branch_id: uuid.UUID | None,
+    document_branch_id: uuid.UUID | None,
+    warehouse_id: uuid.UUID,
+) -> uuid.UUID:
+    if document_branch_id is not None:
+        await resolve_branch_scope(session, current, company_id, document_branch_id)
+    effective_branch_id = await resolve_document_warehouse_scope(
+        session,
+        current,
+        company_id,
+        document_branch_id=document_branch_id,
+        warehouse_id=warehouse_id,
+    )
+    if selected_branch_id is not None and effective_branch_id != selected_branch_id:
+        raise HTTPException(403, "La bodega destino no pertenece a la sucursal seleccionada.")
+    return effective_branch_id
+
+
 @router.get(
     "",
     response_model=Page[PurchaseOrderResponse],
@@ -151,15 +315,20 @@ async def _audit_change(
 )
 async def list_purchase_orders(
     request: Request,
+    session: SessionDep,
+    current: CurrentUser,
     status_filter: PurchaseOrderStatus | None = Query(None, alias="status"),
     supplier_id: int | None = Query(None, gt=0),
+    branch_id: uuid.UUID | None = Query(None),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
 ) -> Page[PurchaseOrderResponse]:
     company_id = request_company_id(request)
+    await resolve_branch_scope(session, current, company_id, branch_id)
     items, total = await use_cases.list_orders(
         company_id,
+        branch_id=branch_id,
         status=status_filter,
         supplier_id=supplier_id,
         skip=(page - 1) * size,
@@ -182,10 +351,19 @@ async def list_purchase_orders(
 async def get_purchase_order(
     order_id: uuid.UUID,
     request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    branch_id: uuid.UUID | None = Query(None),
     use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
 ) -> PurchaseOrderResponse:
-    company_id = request_company_id(request)
-    item = await use_cases.get_order(company_id, order_id)
+    _, item = await _visible_purchase_order(
+        request=request,
+        session=session,
+        current=current,
+        use_cases=use_cases,
+        order_id=order_id,
+        branch_id=branch_id,
+    )
     return PurchaseOrderResponse.model_validate(item)
 
 
@@ -200,10 +378,21 @@ async def create_purchase_order(
     payload: PurchaseOrderCreate,
     request: Request,
     current: CurrentUser,
+    session: SessionDep,
+    branch_id: uuid.UUID | None = Query(None),
     use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
     audit: AuditService = Depends(get_audit_service),
 ) -> PurchaseOrderResponse:
     company_id = request_company_id(request)
+    await resolve_branch_scope(session, current, company_id, branch_id)
+    await _authorize_order_destination(
+        session=session,
+        current=current,
+        company_id=company_id,
+        selected_branch_id=branch_id,
+        document_branch_id=payload.branch_id,
+        warehouse_id=payload.warehouse_id,
+    )
     created = await use_cases.create_draft(
         company_id=company_id,
         created_by_id=current.id,
@@ -211,12 +400,63 @@ async def create_purchase_order(
         branch_id=payload.branch_id,
         warehouse_id=payload.warehouse_id,
         lines=_line_drafts(payload.lines),
+        quotation_branch_id=branch_id,
         expected_date=payload.expected_date,
         expenses=_expense_drafts(payload.expenses),
         notes=payload.notes,
     )
     await _audit_change(
         action="CREATE",
+        request=request,
+        current=current,
+        audit=audit,
+        company_id=company_id,
+        item=created,
+    )
+    return PurchaseOrderResponse.model_validate(created)
+
+
+@router.post(
+    "/from-consolidation/{consolidation_id}/{quotation_id}",
+    response_model=PurchaseOrderResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear orden de compra desde cantidades adjudicadas",
+    dependencies=[Depends(require_permission("purchase_orders:manage"))],
+)
+async def create_purchase_order_from_consolidation(
+    consolidation_id: uuid.UUID,
+    quotation_id: uuid.UUID,
+    payload: PurchaseOrderFromConsolidationCreate,
+    request: Request,
+    current: CurrentUser,
+    session: SessionDep,
+    branch_id: uuid.UUID | None = Query(None),
+    use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
+    audit: AuditService = Depends(get_audit_service),
+) -> PurchaseOrderResponse:
+    company_id = request_company_id(request)
+    await resolve_branch_scope(session, current, company_id, branch_id)
+    await _authorize_order_destination(
+        session=session,
+        current=current,
+        company_id=company_id,
+        selected_branch_id=branch_id,
+        document_branch_id=payload.branch_id,
+        warehouse_id=payload.warehouse_id,
+    )
+    created = await use_cases.create_draft_from_consolidation_awards(
+        company_id=company_id,
+        created_by_id=current.id,
+        consolidation_id=consolidation_id,
+        purchase_quotation_id=quotation_id,
+        branch_id=payload.branch_id,
+        warehouse_id=payload.warehouse_id,
+        expected_date=payload.expected_date,
+        expenses=_expense_drafts(payload.expenses),
+        notes=payload.notes,
+    )
+    await _audit_change(
+        action="CREATE_FROM_CONSOLIDATION_AWARDS",
         request=request,
         current=current,
         audit=audit,
@@ -238,17 +478,34 @@ async def update_purchase_order(
     payload: PurchaseOrderUpdate,
     request: Request,
     current: CurrentUser,
+    session: SessionDep,
+    branch_id: uuid.UUID | None = Query(None),
     use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
     audit: AuditService = Depends(get_audit_service),
 ) -> PurchaseOrderResponse:
-    company_id = request_company_id(request)
-    before = await use_cases.get_order(company_id, order_id)
+    company_id, before = await _visible_purchase_order(
+        request=request,
+        session=session,
+        current=current,
+        use_cases=use_cases,
+        order_id=order_id,
+        branch_id=branch_id,
+    )
+    await _authorize_order_destination(
+        session=session,
+        current=current,
+        company_id=company_id,
+        selected_branch_id=branch_id,
+        document_branch_id=payload.branch_id,
+        warehouse_id=payload.warehouse_id,
+    )
     updated = await use_cases.update_draft(
         company_id=company_id,
         order_id=order_id,
         branch_id=payload.branch_id,
         warehouse_id=payload.warehouse_id,
         lines=_line_drafts(payload.lines),
+        quotation_branch_id=branch_id,
         expected_date=payload.expected_date,
         expenses=_expense_drafts(payload.expenses),
         notes=payload.notes,
@@ -271,11 +528,19 @@ async def _transition_purchase_order(
     order_id: uuid.UUID,
     request: Request,
     current: CurrentUser,
+    session: SessionDep,
+    branch_id: uuid.UUID | None,
     use_cases: PurchaseOrderUseCases,
     audit: AuditService,
 ) -> PurchaseOrderResponse:
-    company_id = request_company_id(request)
-    before = await use_cases.get_order(company_id, order_id)
+    company_id, before = await _visible_purchase_order(
+        request=request,
+        session=session,
+        current=current,
+        use_cases=use_cases,
+        order_id=order_id,
+        branch_id=branch_id,
+    )
     if action == "SUBMIT":
         updated = await use_cases.submit_order(company_id, order_id)
     elif action == "APPROVE":
@@ -310,6 +575,8 @@ async def submit_purchase_order(
     order_id: uuid.UUID,
     request: Request,
     current: CurrentUser,
+    session: SessionDep,
+    branch_id: uuid.UUID | None = Query(None),
     use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
     audit: AuditService = Depends(get_audit_service),
 ) -> PurchaseOrderResponse:
@@ -318,6 +585,8 @@ async def submit_purchase_order(
         order_id=order_id,
         request=request,
         current=current,
+        session=session,
+        branch_id=branch_id,
         use_cases=use_cases,
         audit=audit,
     )
@@ -334,6 +603,8 @@ async def approve_purchase_order(
     order_id: uuid.UUID,
     request: Request,
     current: CurrentUser,
+    session: SessionDep,
+    branch_id: uuid.UUID | None = Query(None),
     use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
     audit: AuditService = Depends(get_audit_service),
 ) -> PurchaseOrderResponse:
@@ -342,6 +613,8 @@ async def approve_purchase_order(
         order_id=order_id,
         request=request,
         current=current,
+        session=session,
+        branch_id=branch_id,
         use_cases=use_cases,
         audit=audit,
     )
@@ -358,6 +631,8 @@ async def send_purchase_order(
     order_id: uuid.UUID,
     request: Request,
     current: CurrentUser,
+    session: SessionDep,
+    branch_id: uuid.UUID | None = Query(None),
     use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
     audit: AuditService = Depends(get_audit_service),
 ) -> PurchaseOrderResponse:
@@ -366,6 +641,8 @@ async def send_purchase_order(
         order_id=order_id,
         request=request,
         current=current,
+        session=session,
+        branch_id=branch_id,
         use_cases=use_cases,
         audit=audit,
     )
@@ -382,6 +659,8 @@ async def cancel_purchase_order(
     order_id: uuid.UUID,
     request: Request,
     current: CurrentUser,
+    session: SessionDep,
+    branch_id: uuid.UUID | None = Query(None),
     use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
     audit: AuditService = Depends(get_audit_service),
 ) -> PurchaseOrderResponse:
@@ -390,6 +669,8 @@ async def cancel_purchase_order(
         order_id=order_id,
         request=request,
         current=current,
+        session=session,
+        branch_id=branch_id,
         use_cases=use_cases,
         audit=audit,
     )
@@ -427,11 +708,22 @@ async def initiate_purchase_order_expense_document(
     payload: PurchaseOrderExpenseDocumentInitiate,
     request: Request,
     current: CurrentUser,
+    session: SessionDep,
+    branch_id: uuid.UUID | None = Query(None),
+    use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
     service: PurchaseOrderExpenseDocumentService = Depends(
         get_purchase_order_expense_document_service
     ),
 ) -> PurchaseOrderExpenseDocumentUploadResponse:
     company_id = request_company_id(request)
+    await _visible_purchase_order(
+        request=request,
+        session=session,
+        current=current,
+        use_cases=use_cases,
+        order_id=order_id,
+        branch_id=branch_id,
+    )
     upload = await service.initiate(
         order_id,
         expense_id,
@@ -465,11 +757,22 @@ async def complete_purchase_order_expense_document(
     document_id: uuid.UUID,
     request: Request,
     current: CurrentUser,
+    session: SessionDep,
+    branch_id: uuid.UUID | None = Query(None),
+    use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
     service: PurchaseOrderExpenseDocumentService = Depends(
         get_purchase_order_expense_document_service
     ),
 ) -> PurchaseOrderExpenseDocumentResponse:
     company_id = request_company_id(request)
+    await _visible_purchase_order(
+        request=request,
+        session=session,
+        current=current,
+        use_cases=use_cases,
+        order_id=order_id,
+        branch_id=branch_id,
+    )
     view = await service.complete(
         company_id,
         order_id,
@@ -491,11 +794,23 @@ async def list_purchase_order_expense_documents(
     order_id: uuid.UUID,
     expense_id: uuid.UUID,
     request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    branch_id: uuid.UUID | None = Query(None),
+    use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
     service: PurchaseOrderExpenseDocumentService = Depends(
         get_purchase_order_expense_document_service
     ),
 ) -> list[PurchaseOrderExpenseDocumentResponse]:
     company_id = request_company_id(request)
+    await _visible_purchase_order(
+        request=request,
+        session=session,
+        current=current,
+        use_cases=use_cases,
+        order_id=order_id,
+        branch_id=branch_id,
+    )
     views = await service.list_documents(company_id, order_id, expense_id)
     return [_expense_document_out(view.attachment, view.document) for view in views]
 
@@ -513,11 +828,22 @@ async def create_purchase_order_expense_document_download_url(
     document_id: uuid.UUID,
     request: Request,
     current: CurrentUser,
+    session: SessionDep,
+    branch_id: uuid.UUID | None = Query(None),
+    use_cases: PurchaseOrderUseCases = Depends(get_purchase_order_use_cases),
     service: PurchaseOrderExpenseDocumentService = Depends(
         get_purchase_order_expense_document_service
     ),
 ) -> DownloadUrlOut:
     company_id = request_company_id(request)
+    await _visible_purchase_order(
+        request=request,
+        session=session,
+        current=current,
+        use_cases=use_cases,
+        order_id=order_id,
+        branch_id=branch_id,
+    )
     url, expires_at = await service.download_url(
         company_id,
         order_id,

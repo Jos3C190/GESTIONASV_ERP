@@ -4,6 +4,7 @@ import PurchaseReceivingEditor from '$lib/features/purchases/components/Purchase
 
 const mocks = vi.hoisted(() => ({
   getReceivable: vi.fn(),
+  list: vi.fn(),
   create: vi.fn(),
   listUnits: vi.fn(),
   getProduct: vi.fn(),
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('$lib/api/purchases', () => ({
   purchasesApi: {
     getReceivable: mocks.getReceivable,
+    list: mocks.list,
     create: mocks.create
   }
 }));
@@ -61,13 +63,15 @@ const receivable = {
 describe('PurchaseReceivingEditor', () => {
   beforeEach(() => {
     mocks.getReceivable.mockReset();
+    mocks.list.mockReset();
     mocks.create.mockReset();
     mocks.listUnits.mockReset();
     mocks.getProduct.mockReset();
     mocks.goto.mockReset();
 
     mocks.getReceivable.mockResolvedValue(receivable);
-    mocks.create.mockResolvedValue({});
+    mocks.list.mockResolvedValue({ items: [], meta: { page: 1, size: 1, total: 0, pages: 0 } });
+    mocks.create.mockResolvedValue({ id: '55555555-5555-5555-5555-555555555555' });
     mocks.listUnits.mockResolvedValue([
       {
         id_unit: 3,
@@ -125,7 +129,7 @@ describe('PurchaseReceivingEditor', () => {
       });
     });
 
-    expect(mocks.goto).toHaveBeenCalledWith('/purchases');
+    expect(mocks.goto).toHaveBeenCalledWith('/purchases/55555555-5555-5555-5555-555555555555');
   });
 
   it('requires at least one positive received quantity', async () => {
@@ -143,6 +147,39 @@ describe('PurchaseReceivingEditor', () => {
       'Ingresa una cantidad mayor que cero en al menos una línea.'
     );
 
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it('continues an existing draft instead of offering a duplicate from the direct new URL', async () => {
+    mocks.list.mockResolvedValue({
+      items: [{ id: 'existing-draft', code: 'COM-00021', status: 'draft' }],
+      meta: { page: 1, size: 1, total: 1, pages: 1 }
+    });
+
+    render(PurchaseReceivingEditor, { props: { orderId: receivable.purchase_order_id } });
+
+    const action = await screen.findByRole('button', { name: 'Continuar recepción COM-00021' });
+    expect(screen.queryByRole('button', { name: 'Guardar borrador' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(mocks.list).toHaveBeenCalledWith({
+      purchase_order_id: receivable.purchase_order_id,
+      status: 'draft',
+      page: 1,
+      size: 1
+    });
+    await fireEvent.click(action);
+    expect(mocks.goto).toHaveBeenCalledWith('/purchases/existing-draft');
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it('does not offer a new draft when existing receipts could not be checked', async () => {
+    mocks.list.mockRejectedValue(new Error('No se pudieron consultar los borradores.'));
+    render(PurchaseReceivingEditor, { props: { orderId: receivable.purchase_order_id } });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No se pudieron consultar los borradores.'
+    );
+    expect(screen.queryByRole('button', { name: 'Guardar borrador' })).not.toBeInTheDocument();
     expect(mocks.create).not.toHaveBeenCalled();
   });
 });

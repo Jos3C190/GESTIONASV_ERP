@@ -1,0 +1,37 @@
+6.8 MÓDULO DE GESTIÓN DE COMPRAS
+6.8.1 Descripción
+El módulo de Gestión de Compras permitirá administrar y controlar el proceso de
+abastecimiento de productos de la organización, desde la identificación de una necesidad de
+adquisición hasta la recepción de los productos, el registro de la compra y la determinación de
+su costo real mediante el proceso de retaceo.
+El módulo permitirá mantener la trazabilidad de las operaciones comerciales relacionadas con
+la adquisición de productos, conservando la relación entre solicitudes, cotizaciones,
+proveedores, órdenes de compra, gastos, compras, recepción de mercancías y retaceos.
+El flujo general del módulo será:
+Solicitud de compra
+↓
+Productos solicitados
+↓
+Cotizaciones
+↓
+Productos cotizados
+↓
+Comparación de cotizaciones
+↓
+Selección de proveedor
+↓
+Orden de compra
+↓
+Gastos asociados
+↓
+Recepción / Compra
+↓
+Detalle de compra
+↓
+Retaceo
+↓
+Costo real
+↓
+Integración con Inventario
+↓
+Asignación de precio de venta

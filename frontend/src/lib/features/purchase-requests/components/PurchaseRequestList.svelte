@@ -1,9 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { page as currentPage } from '$app/state';
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { HttpError } from '$lib/api/client';
   import { purchaseRequestsApi } from '$lib/api/purchase-requests';
+  import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type { PurchaseRequest, PurchaseRequestStatus } from '$lib/types/purchase-request';
 
@@ -32,10 +34,18 @@
     cancelled: 'Cancelada'
   };
 
+  function parseStatus(value: string | null): '' | PurchaseRequestStatus {
+    return statusOptions.some((option) => option.value === value)
+      ? (value as PurchaseRequestStatus)
+      : '';
+  }
+
   let items = $state<PurchaseRequest[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let selectedStatus = $state<'' | PurchaseRequestStatus>('');
+  let selectedStatus = $state<'' | PurchaseRequestStatus>(
+    parseStatus(currentPage.url.searchParams.get('status'))
+  );
   let page = $state(1);
   let totalPages = $state(0);
   let totalItems = $state(0);
@@ -43,7 +53,8 @@
 
   async function loadData(
     status: '' | PurchaseRequestStatus = selectedStatus,
-    currentPage: number = page
+    currentPageNumber: number = page,
+    currentBranchId: string | null = branch.id
   ) {
     const generation = ++requestGeneration;
     loading = true;
@@ -52,8 +63,9 @@
     try {
       const response = await purchaseRequestsApi.list({
         status: status || undefined,
-        page: currentPage,
-        size: 20
+        page: currentPageNumber,
+        size: 20,
+        ...(currentBranchId ? { branch_id: currentBranchId } : {})
       });
 
       if (generation !== requestGeneration) return;
@@ -79,11 +91,18 @@
   }
 
   $effect(() => {
-    void loadData(selectedStatus, page);
+    const selectedBranchId = branch.id;
+    void loadData(selectedStatus, page, selectedBranchId);
   });
 
   function changeStatus(event: Event) {
     selectedStatus = (event.currentTarget as HTMLSelectElement).value as '' | PurchaseRequestStatus;
+    page = 1;
+  }
+
+  function showAllBranches() {
+    if (!branch.accessAllBranches) return;
+    branch.select(null);
     page = 1;
   }
 
@@ -110,7 +129,8 @@
     <div>
       <h1 class="text-xl font-semibold text-foreground">Solicitudes de compra</h1>
       <p class="mt-1 text-sm text-foreground-muted">
-        {totalItems} solicitud(es) registradas
+        {totalItems}
+        {totalItems === 1 ? 'solicitud' : 'solicitudes'} en {branch.label}
       </p>
     </div>
 
@@ -119,7 +139,7 @@
         aria-label="Filtrar por estado"
         value={selectedStatus}
         onchange={changeStatus}
-        class="h-9 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground focus:border-primary focus:outline-none"
+        class="h-9 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         {#each statusOptions as option}
           <option value={option.value}>{option.label}</option>
@@ -144,7 +164,12 @@
 
   <Card class="overflow-hidden p-0">
     {#if loading}
-      <div class="space-y-3 p-4" aria-label="Cargando solicitudes de compra">
+      <div
+        class="space-y-3 p-4"
+        role="status"
+        aria-live="polite"
+        aria-label="Cargando solicitudes de compra"
+      >
         {#each Array(5) as _}
           <div class="skeleton h-12 w-full rounded-md"></div>
         {/each}
@@ -170,11 +195,30 @@
         </div>
         <p class="text-sm font-medium text-foreground">No hay solicitudes para mostrar</p>
         <p class="mt-1 max-w-md text-xs text-foreground-muted">
-          Ajusta el filtro de estado o vuelve a cargar la información.
+          No hay solicitudes{#if selectedStatus}
+            con estado
+            <span class="font-medium text-foreground">{statusLabels[selectedStatus]}</span>{/if}
+          en {branch.label}. Cambia el estado o revisa otras sucursales.
         </p>
-        <Button class="mt-4" size="sm" variant="secondary" onclick={() => void loadData()}>
-          Recargar
-        </Button>
+        <div class="mt-4 flex flex-wrap justify-center gap-2">
+          {#if branch.accessAllBranches && branch.id}
+            <Button size="sm" variant="secondary" onclick={showAllBranches}>
+              Ver todas las sucursales
+            </Button>
+          {/if}
+          {#if selectedStatus}
+            <Button
+              size="sm"
+              variant="secondary"
+              onclick={() => {
+                selectedStatus = '';
+                page = 1;
+              }}>Limpiar filtro</Button
+            >
+          {:else}
+            <Button size="sm" variant="secondary" onclick={() => void loadData()}>Recargar</Button>
+          {/if}
+        </div>
       </div>
     {:else}
       <div class="overflow-x-auto">

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   verify: vi.fn(),
   cancel: vi.fn(),
   close: vi.fn(),
+  receivingReadiness: vi.fn().mockResolvedValue({ required: false, ready: true }),
   getSupplier: vi.fn(),
   getOrder: vi.fn(),
   listUnits: vi.fn(),
@@ -23,7 +24,8 @@ vi.mock('$lib/api/purchases', () => ({
     receive: mocks.receive,
     verify: mocks.verify,
     cancel: mocks.cancel,
-    close: mocks.close
+    close: mocks.close,
+    receivingReadiness: mocks.receivingReadiness
   }
 }));
 
@@ -187,7 +189,7 @@ describe('PurchaseDetail', () => {
     mocks.hasPermission.mockImplementation((code: string) => code === 'retaceos:manage');
     mocks.get.mockResolvedValue({
       ...purchase,
-      status: 'received'
+      status: 'verified'
     });
 
     render(PurchaseDetail, {

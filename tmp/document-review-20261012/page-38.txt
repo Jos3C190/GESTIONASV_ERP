@@ -1,0 +1,46 @@
+RN-SUP-005: Cada contacto deberá pertenecer a un proveedor existente.
+
+RN-SUP-006: Un contacto inactivo no deberá aparecer como contacto disponible durante una
+operación de compra.
+
+RN-SUP-007: Un proveedor inactivo no podrá ser seleccionado para nuevas cotizaciones,
+órdenes de compra o compras.
+
+RN-SUP-008: No deberá eliminarse físicamente un proveedor que tenga operaciones
+comerciales asociadas.
+
+RN-SUP-009: Cuando un proveedor deje de utilizarse, deberá desactivarse mediante el campo
+is_active.
+
+RN-SUP-010: Cuando un contacto deje de trabajar con el proveedor, deberá desactivarse sin
+eliminar su historial.
+
+RN-SUP-011: El correo electrónico deberá cumplir con un formato válido cuando sea
+proporcionado.
+
+RN-SUP-012: El sitio web deberá validarse como una dirección web cuando sea proporcionado.
+
+RN-SUP-013: Toda creación, modificación, activación o desactivación deberá quedar registrada
+en la bitácora.
+
+                                                                    6.6.5 Gestión de Proveedores
+
+El sistema deberá permitir las siguientes operaciones:
+
+    •    Registrar proveedor.
+    •    Modificar proveedor.
+    •    Consultar proveedor.
+    •    Buscar proveedor.
+    •    Filtrar proveedores activos.
+    •    Activar proveedor.
+    •    Desactivar proveedor.
+    •    Consultar contactos.
+    •    Consultar historial de operaciones.
+    •    Asociar contactos.
+    •    Consultar compras realizadas al proveedor.
+
+
+
+
+
+                                                                                                                  38

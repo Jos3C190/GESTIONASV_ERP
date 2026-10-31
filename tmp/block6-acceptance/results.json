@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-29",
+  "scope": "recepcion-retaceo-ubicacion-inventario-kardex",
+  "database": "erp_db_test",
+  "development_business_data_modified": false,
+  "schema_head": "0097",
+  "final_distinct_tests_passed": 146,
+  "backend_logic_integration_passed": 68,
+  "backend_e2e_regressions_passed": 10,
+  "backend_e2e_final_flow_passed": 1,
+  "frontend_passed": 67,
+  "svelte_errors": 0,
+  "svelte_existing_css_warnings": 8,
+  "ruff": "passed",
+  "final_flow": {
+    "receipt_quantities": [5, 10, 15],
+    "receipt_values": [50, 150, 300],
+    "historical_averages": [10, 13.333333, 16.666667],
+    "confirmed_delivery_quantity": 30,
+    "exhausted_quantity": 0,
+    "exhausted_value": 0,
+    "new_order_quantity": 6,
+    "new_receipt_quantity": 4,
+    "new_receipt_value": 100,
+    "new_average": 25,
+    "pending_receipt_quantity": 2,
+    "final_reconciliation_difference": 0,
+    "history_preserved": true,
+    "operator_financial_api_status": 403,
+    "exports": ["pdf", "xlsx"]
+  },
+  "resolved_test_issues": [
+    "Old sales fixture used the now-prohibited generic purchase receipt endpoint; moved only fixture setup to internal service, retaining HTTP delivery and return checks.",
+    "New receipt test queried receivable on fully received orders; now verifies received state or remaining partial quantity as appropriate."
+  ],
+  "evidence_note": "regression-e2e.log retains 10 passes and the prior final-case assertion failure; final-flow.log records the corrected case passing. No unresolved selected-test failures."
+}

@@ -1,0 +1,21 @@
+describe('AUDIT block 3 stale period', () => {
+  it('discards a response when the valued period changes while loading', async () => {
+    vi.clearAllMocks();
+    mocks.accessAllBranches = true;
+    mocks.getWarehouses.mockResolvedValue({items: []});
+    mocks.reconciliation.mockResolvedValue({valuation_enabled: true, currency: 'USD', items: [{inventory_item_id: 'item-1', product_name: 'Chocolate', sku: 'CH-01', base_unit_symbol: 'cj', physical_quantity: '1', valued_quantity: '1', quantity_difference: '0', inventory_value: '999', average_unit_cost: '999'}], page: 1, page_size: 50, total: 1});
+    let finish!: (data: unknown) => void;
+    mocks.valued.mockReturnValue(new Promise(resolve => {finish = resolve;}));
+    render(KardexPage);
+    await fireEvent.click(screen.getByRole('tab', {name: 'Conciliación'}));
+    await screen.findAllByRole('button', {name: /Ver Kardex/});
+    await fireEvent.click(screen.getAllByRole('button', {name: /Ver Kardex/})[0]!);
+    await waitFor(() => expect(mocks.valued).toHaveBeenCalledTimes(1));
+    await fireEvent.input(document.getElementById('value-from')!, {target: {value: '2025-01-01'}});
+    finish({inventory_item_id: 'item-1', setting: {currency: 'USD', opened_at: '2026-10-01T06:00:00Z', opening_reference: 'CUT'}, period_from: '2026-10-01', period_to: '2026-10-14', opening_known: true, opening_quantity: '1', opening_value: '999', closing_known: true, closing_quantity: '1', closing_value: '999', period_value_change: '0', entries: [], page: 1, page_size: 25, total: 0});
+    await waitFor(() => expect(screen.queryByText('Consultando…')).not.toBeInTheDocument());
+    expect(screen.queryAllByText(/USD 999/)).toHaveLength(0);
+  });
+});
+
+

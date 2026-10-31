@@ -4,12 +4,25 @@ import type {
   CapacityScopeSummary,
   CapacitySummary,
   HandlingUnit,
+  TransferHandlingUnit,
+  HandlingUnitTraceability,
+  InventoryMovementHistory,
+  WarehouseMovementFilters,
   InventoryItem,
   InventoryItemSummary,
   PackagingCreateInput,
   PackagingDefinition,
   PhysicalMeasuresInput,
-  StockStatus
+  StockStatus,
+  InventoryReceiptLot,
+  InventoryLabelPreview,
+  InventoryLabelConfirmation,
+  InventoryLabelPrint,
+  InventoryLabelLayout,
+  PutawayGroupResult,
+  HandlingUnitSplitPrepareResult,
+  InventoryTraceCapability,
+  PublicHandlingUnitTrace
 } from './types';
 
 type DecimalValue = number | string | null;
@@ -70,7 +83,7 @@ type RawPackaging = Omit<
   volume_m3: DecimalValue;
 };
 
-type RawHandlingUnit = Omit<
+export type RawHandlingUnit = Omit<
   HandlingUnit,
   | 'quantity_base'
   | 'actual_gross_weight_kg'
@@ -89,6 +102,36 @@ type RawHandlingUnit = Omit<
   actual_volume_m3: DecimalValue;
   occupied_weight_kg: DecimalValue;
   occupied_volume_m3: DecimalValue;
+};
+
+type RawTransferHandlingUnit = Omit<
+  TransferHandlingUnit,
+  | 'quantity_base'
+  | 'actual_gross_weight_kg'
+  | 'actual_length_m'
+  | 'actual_width_m'
+  | 'actual_height_m'
+  | 'actual_volume_m3'
+  | 'occupied_weight_kg'
+  | 'occupied_volume_m3'
+> & {
+  quantity_base: DecimalValue;
+  actual_gross_weight_kg: DecimalValue;
+  actual_length_m: DecimalValue;
+  actual_width_m: DecimalValue;
+  actual_height_m: DecimalValue;
+  actual_volume_m3: DecimalValue;
+  occupied_weight_kg: DecimalValue;
+  occupied_volume_m3: DecimalValue;
+};
+
+type RawHandlingUnitTraceability = Omit<HandlingUnitTraceability, 'handling_unit' | 'movements'> & {
+  handling_unit: RawHandlingUnit;
+  movements: Array<
+    Omit<HandlingUnitTraceability['movements'][number], 'quantity_base'> & {
+      quantity_base: DecimalValue;
+    }
+  >;
 };
 
 interface RawInventoryItemSummary extends Omit<
@@ -161,7 +204,21 @@ function packaging(raw: RawPackaging): PackagingDefinition {
   };
 }
 
-function handlingUnit(raw: RawHandlingUnit): HandlingUnit {
+export function handlingUnit(raw: RawHandlingUnit): HandlingUnit {
+  return {
+    ...raw,
+    quantity_base: requiredDecimal(raw.quantity_base, 'quantity_base'),
+    actual_gross_weight_kg: decimal(raw.actual_gross_weight_kg),
+    actual_length_m: decimal(raw.actual_length_m),
+    actual_width_m: decimal(raw.actual_width_m),
+    actual_height_m: decimal(raw.actual_height_m),
+    actual_volume_m3: decimal(raw.actual_volume_m3),
+    occupied_weight_kg: decimal(raw.occupied_weight_kg),
+    occupied_volume_m3: decimal(raw.occupied_volume_m3)
+  };
+}
+
+function transferHandlingUnit(raw: RawTransferHandlingUnit): TransferHandlingUnit {
   return {
     ...raw,
     quantity_base: requiredDecimal(raw.quantity_base, 'quantity_base'),
@@ -280,6 +337,295 @@ export const inventoryApi = {
       )
     ).map(handlingUnit);
   },
+
+  listTransferUnits: async (warehouseId: string, stockStatus: 'available' | 'in_transit') =>
+    (
+      await apiFetch<RawTransferHandlingUnit[]>(
+        `/inventory/warehouses/${warehouseId}/transfer-units?stock_status=${stockStatus}`
+      )
+    ).map(transferHandlingUnit),
+
+  getHandlingUnitTraceability: async (handlingUnitId: string) => {
+    const raw = await apiFetch<RawHandlingUnitTraceability>(
+      `/inventory/handling-units/${handlingUnitId}/traceability`
+    );
+    return {
+      ...raw,
+      handling_unit: handlingUnit(raw.handling_unit),
+      movements: raw.movements.map((movement) => ({
+        ...movement,
+        quantity_base: requiredDecimal(movement.quantity_base, 'quantity_base')
+      }))
+    } satisfies HandlingUnitTraceability;
+  },
+
+  listReceiptLots: async (filters: {
+    warehouseId: string;
+    q?: string;
+    status?: 'pending_placement' | 'partially_placed' | 'placed' | 'all';
+    page?: number;
+    size?: number;
+  }) => {
+    const query = new URLSearchParams({
+      warehouse_id: filters.warehouseId,
+      status: filters.status ?? 'pending_placement',
+      page: String(filters.page ?? 1),
+      size: String(filters.size ?? 20)
+    });
+    if (filters.q?.trim()) query.set('q', filters.q.trim());
+    return apiFetch<{
+      items: InventoryReceiptLot[];
+      page: number;
+      size: number;
+      total: number;
+      legacy_stock: import('./types').LegacyInventoryStock[];
+    }>(`/inventory/lots?${query.toString()}`);
+  },
+
+  confirmPutawayGroup: (body: {
+    idempotency_key: string;
+    receipt_lot_id: string;
+    inventory_lot_detail_id: string;
+    inventory_item_id: string;
+    allocations: Array<{
+      handling_unit_id: string;
+      quantity_base: string;
+      destination_location_id: string;
+    }>;
+  }) =>
+    apiFetch<PutawayGroupResult>('/inventory/putaway-groups/confirm', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+
+  previewInventoryLabel: (target: {
+    inventory_lot_detail_id?: string;
+    handling_unit_id?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (target.inventory_lot_detail_id) {
+      query.set('inventory_lot_detail_id', target.inventory_lot_detail_id);
+    }
+    if (target.handling_unit_id) query.set('handling_unit_id', target.handling_unit_id);
+    return apiFetch<InventoryLabelPreview>(`/inventory/labels/preview?${query.toString()}`);
+  },
+
+  recordInventoryLabelPrint: (body: {
+    idempotency_key: string;
+    inventory_lot_detail_id?: string;
+    handling_unit_id?: string;
+    quantity_printed: number;
+    print_date: string;
+    reason: 'initial' | 'reprint';
+    layout?: InventoryLabelLayout;
+    notes?: string | null;
+  }) =>
+    apiFetch<InventoryLabelPrint>('/inventory/labels/prints', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+
+  confirmInventoryLabelPlacement: (body: {
+    idempotency_key: string;
+    handling_unit_id: string;
+    handling_unit_code: string;
+    label_print_id: string;
+  }) =>
+    apiFetch<InventoryLabelConfirmation>('/inventory/labels/confirmations', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+
+  createTraceCapability: (handlingUnitId: string) =>
+    apiFetch<InventoryTraceCapability>('/inventory/trace-capabilities', {
+      method: 'POST',
+      body: JSON.stringify({ handling_unit_id: handlingUnitId })
+    }),
+
+  revokeTraceCapabilities: (handlingUnitId: string) =>
+    apiFetch<{ revoked_count: number }>(
+      `/inventory/trace-capabilities/${encodeURIComponent(handlingUnitId)}/revoke`,
+      { method: 'POST' }
+    ),
+
+  getPublicTraceability: (token: string) =>
+    apiFetch<PublicHandlingUnitTrace>('/inventory/public-traces/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+      noAuth: true,
+      noRefresh: true,
+      noCredentials: true
+    }),
+
+  listWarehouseMovements: async (
+    warehouseId: string,
+    limit = 10,
+    movementType?: string,
+    offset = 0,
+    filters: WarehouseMovementFilters = {},
+    signal?: AbortSignal
+  ) => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (offset > 0) query.set('offset', String(offset));
+    if (movementType) query.set('movement_type', movementType);
+    for (const [key, value] of Object.entries(filters)) {
+      if (value?.trim()) query.set(key, value.trim());
+    }
+    const path = `/inventory/warehouses/${warehouseId}/movements?${query.toString()}`;
+    return signal
+      ? apiFetch<InventoryMovementHistory[]>(path, { signal })
+      : apiFetch<InventoryMovementHistory[]>(path);
+  },
+
+  releaseHandlingUnit: async (
+    unit: HandlingUnit,
+    destinationLocationId: string,
+    idempotencyKey: string
+  ) => {
+    const reference = `quarantine-release:${unit.id}:${idempotencyKey}`;
+    await apiFetch<unknown>('/inventory/movements/confirm', {
+      method: 'POST',
+      body: JSON.stringify({
+        idempotency_key: idempotencyKey,
+        source_reference: reference,
+        movement_type: 'putaway',
+        lines: [
+          {
+            inventory_item_id: unit.inventory_item_id,
+            handling_unit_id: unit.id,
+            from_location_id: unit.location_id,
+            to_location_id: destinationLocationId,
+            from_stock_status: 'quarantine',
+            to_stock_status: 'available',
+            quantity_base: unit.quantity_base
+          }
+        ]
+      })
+    });
+  },
+
+  transferUnits: async (
+    units: Array<Pick<HandlingUnit, 'id' | 'inventory_item_id' | 'location_id' | 'quantity_base'>>,
+    destinationLocationId: string,
+    sourceReference: string,
+    fromStatus: 'available' | 'in_transit',
+    toStatus: 'in_transit' | 'available' | 'quarantine',
+    idempotencyKey: string,
+    destinationStatusByUnitId?: Record<string, 'available' | 'quarantine'>
+  ) =>
+    apiFetch<unknown>('/inventory/movements/confirm', {
+      method: 'POST',
+      body: JSON.stringify({
+        idempotency_key: idempotencyKey,
+        source_reference: sourceReference.slice(0, 160),
+        movement_type: 'transfer',
+        lines: units.map((unit) => ({
+          inventory_item_id: unit.inventory_item_id,
+          handling_unit_id: unit.id,
+          from_location_id: unit.location_id,
+          to_location_id: destinationLocationId,
+          from_stock_status: fromStatus,
+          to_stock_status: destinationStatusByUnitId?.[unit.id] ?? toStatus,
+          quantity_base: unit.quantity_base
+        }))
+      })
+    }),
+
+  transferAllocations: async (
+    allocations: Array<{
+      unit: Pick<HandlingUnit, 'id' | 'inventory_item_id' | 'location_id' | 'quantity_base'>;
+      quantity_base: number;
+    }>,
+    destinationLocationId: string,
+    sourceReference: string,
+    idempotencyKey: string
+  ) =>
+    apiFetch<unknown>('/inventory/movements/confirm', {
+      method: 'POST',
+      body: JSON.stringify({
+        idempotency_key: idempotencyKey,
+        source_reference: sourceReference.slice(0, 160),
+        movement_type: 'transfer',
+        lines: allocations.map(({ unit, quantity_base }) => ({
+          inventory_item_id: unit.inventory_item_id,
+          handling_unit_id: unit.id,
+          from_location_id: unit.location_id,
+          to_location_id: destinationLocationId,
+          from_stock_status: 'available',
+          to_stock_status: 'in_transit',
+          quantity_base
+        }))
+      })
+    }),
+
+  receiveTransferAllocations: async (
+    allocations: Array<{
+      unit: Pick<HandlingUnit, 'id' | 'inventory_item_id' | 'location_id' | 'quantity_base'>;
+      quantity_base: number;
+    }>,
+    destinationLocationId: string,
+    sourceReference: string,
+    idempotencyKey: string
+  ) =>
+    apiFetch<unknown>('/inventory/movements/confirm', {
+      method: 'POST',
+      body: JSON.stringify({
+        idempotency_key: idempotencyKey,
+        source_reference: sourceReference.slice(0, 160),
+        movement_type: 'transfer',
+        lines: allocations.map(({ unit, quantity_base }) => ({
+          inventory_item_id: unit.inventory_item_id,
+          handling_unit_id: unit.id,
+          from_location_id: unit.location_id,
+          to_location_id: destinationLocationId,
+          from_stock_status: 'in_transit',
+          to_stock_status: 'quarantine',
+          quantity_base
+        }))
+      })
+    }),
+
+  transferHandlingUnit: async (
+    unit: HandlingUnit,
+    destinationLocationId: string,
+    idempotencyKey: string
+  ) => {
+    const reference = `warehouse-transfer:${unit.id}:${idempotencyKey}`;
+    await apiFetch<unknown>('/inventory/movements/confirm', {
+      method: 'POST',
+      body: JSON.stringify({
+        idempotency_key: idempotencyKey,
+        source_reference: reference,
+        movement_type: 'transfer',
+        lines: [
+          {
+            inventory_item_id: unit.inventory_item_id,
+            handling_unit_id: unit.id,
+            from_location_id: unit.location_id,
+            to_location_id: destinationLocationId,
+            from_stock_status: 'available',
+            to_stock_status: 'in_transit',
+            quantity_base: unit.quantity_base
+          }
+        ]
+      })
+    });
+  },
+
+  prepareHandlingUnitSplit: (
+    unitId: string,
+    splitQuantityBase: number,
+    destinationLocationId: string,
+    idempotencyKey: string
+  ) =>
+    apiFetch<HandlingUnitSplitPrepareResult>(`/inventory/handling-units/${unitId}/prepare-split`, {
+      method: 'POST',
+      body: JSON.stringify({
+        idempotency_key: idempotencyKey,
+        split_quantity_base: splitQuantityBase.toString(),
+        destination_location_id: destinationLocationId
+      })
+    }),
 
   verifyHandlingUnitMeasurements: async (
     handlingUnitId: string,

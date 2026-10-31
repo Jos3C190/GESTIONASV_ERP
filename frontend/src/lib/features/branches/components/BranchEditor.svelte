@@ -23,6 +23,7 @@
   const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
   const emptySchedule = (): ScheduleDay[] => DAYS.map((day) => ({ day, open: null, close: null }));
   const empty = () => ({
+    is_headquarters: false,
     code: '',
     name: '',
     operational_status: 'active',
@@ -102,7 +103,7 @@
     permissions.hasPermission(mode === 'create' ? 'branches.create' : 'branches.update')
   );
   let dirty = $derived(!loading && initialSnapshot !== JSON.stringify(f));
-  const sections = [
+  const branchSections = [
     ['general', 'Información general'],
     ['location', 'Ubicación'],
     ['schedule', 'Horarios'],
@@ -113,6 +114,11 @@
     ['gallery', 'Galería'],
     ['review', 'Revisión']
   ] as const;
+  let sections = $derived(
+    f.is_headquarters
+      ? ([['general', 'Información general'], ['review', 'Revisión']] as const)
+      : branchSections
+  );
   const options = (items: { id: string; name: string }[]) =>
     items.map((item) => ({ value: item.id, label: item.name }));
   const enumOptions = (items: [string, string][]) =>
@@ -149,6 +155,7 @@
   function fromBranch(branch: Branch) {
     f = {
       ...empty(),
+      is_headquarters: branch.isHeadquarters,
       code: branch.code,
       name: branch.name,
       operational_status: branch.status,
@@ -159,8 +166,8 @@
       district_id: branch.districtId ?? '',
       address: branch.address,
       zone: branch.zone,
-      latitude: String(branch.lat),
-      longitude: String(branch.lng),
+      latitude: branch.lat === null ? '' : String(branch.lat),
+      longitude: branch.lng === null ? '' : String(branch.lng),
       phone: branch.phone,
       email: branch.email,
       website: branch.website,
@@ -256,17 +263,17 @@
   }
   function validate() {
     const next: Record<string, string> = {};
-    if (f.code.trim().length < 2) next.code = 'Ingrese un código válido.';
+    if (!f.is_headquarters && f.code.trim().length < 2) next.code = 'Ingrese un código válido.';
     if (f.name.trim().length < 2) next.name = 'Ingrese el nombre.';
-    if (!f.department_id) next.department_id = 'Seleccione un departamento.';
-    if (!f.municipality_id) next.municipality_id = 'Seleccione un municipio.';
-    if (!f.district_id) next.district_id = 'Seleccione un distrito.';
-    if (f.address.trim().length < 3) next.address = 'Ingrese la dirección.';
-    if (Number(f.area_built || 0) > Number(f.area || 0))
+    if (!f.is_headquarters && !f.department_id) next.department_id = 'Seleccione un departamento.';
+    if (!f.is_headquarters && !f.municipality_id) next.municipality_id = 'Seleccione un municipio.';
+    if (!f.is_headquarters && !f.district_id) next.district_id = 'Seleccione un distrito.';
+    if (!f.is_headquarters && f.address.trim().length < 3) next.address = 'Ingrese la dirección.';
+    if (!f.is_headquarters && Number(f.area_built || 0) > Number(f.area || 0))
       next.area_built = 'No puede superar el área total.';
     errors = next;
     if (Object.keys(next).length) {
-      scrollToSection(next.code || next.name ? 'general' : 'location');
+      scrollToSection(f.is_headquarters || next.code || next.name ? 'general' : 'location');
       return false;
     }
     return true;
@@ -274,9 +281,14 @@
   function payload() {
     return {
       ...f,
+      is_headquarters: f.is_headquarters,
       company_id: company.id,
-      code: f.code.trim(),
+      code: f.code.trim() || null,
       name: f.name.trim(),
+      address: f.is_headquarters ? f.address.trim() || null : f.address.trim(),
+      department_id: f.department_id || null,
+      municipality_id: f.municipality_id || null,
+      district_id: f.district_id || null,
       description: f.description || null,
       opened_at: f.opened_at || null,
       manager_employee_id: f.manager_employee_id || null,
@@ -284,8 +296,8 @@
       email: f.email || null,
       website: f.website || null,
       zone: f.zone || null,
-      latitude: Number(f.latitude),
-      longitude: Number(f.longitude),
+      latitude: f.is_headquarters ? null : num(f.latitude),
+      longitude: f.is_headquarters ? null : num(f.longitude),
       area: num(f.area),
       area_built: num(f.area_built),
       area_unbuilt: num(f.area_unbuilt),
@@ -504,7 +516,9 @@
         <Card id="general" class="scroll-mt-24 p-6"
           ><h2 class="mb-1 text-base font-semibold">Información general</h2>
           <p class="mb-5 text-sm text-foreground-muted">
-            Identidad, responsable y contacto operativo.
+            {f.is_headquarters
+              ? 'Sede administrativa para recibir y distribuir compras.'
+              : 'Identidad, responsable y contacto operativo.'}
           </p>
           <div class="grid gap-4 sm:grid-cols-2">
             <FormField
@@ -512,23 +526,52 @@
               label="Código"
               bind:value={f.code}
               error={errors.code}
-              required
+              required={!f.is_headquarters}
             /><FormField
               id="branch-name"
               label="Nombre"
               bind:value={f.name}
               error={errors.name}
               required
-            /><SmartSelect
+            />
+            <label class="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3 sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={f.is_headquarters}
+                onchange={(event) => {
+                  f.is_headquarters = (event.currentTarget as HTMLInputElement).checked;
+                  if (f.is_headquarters) {
+                    f.latitude = '';
+                    f.longitude = '';
+                    f.opened_at = '';
+                    f.manager_employee_id = '';
+                    f.phone = '';
+                    f.email = '';
+                    f.website = '';
+                    f.zone = '';
+                  }
+                }}
+                class="mt-1 accent-primary"
+              />
+              <span>
+                <span class="block text-sm font-medium text-foreground">Es la matriz administrativa</span>
+                <span class="mt-1 block text-xs text-foreground-muted">
+                  Recibe y distribuye compras. No necesita punto de venta ni coordenadas; si falta el código, se asignará al guardar.
+                </span>
+              </span>
+            </label>
+            <SmartSelect
               id="branch-status"
-              label="Estado operativo"
+              label={f.is_headquarters ? 'Estado administrativo' : 'Estado operativo'}
               bind:value={f.operational_status}
               options={enumOptions([
                 ['active', 'Activa'],
                 ['maintenance', 'Mantenimiento'],
                 ['inactive', 'Inactiva']
               ])}
-            /><FormField
+            />
+            {#if !f.is_headquarters}
+            <FormField
               id="branch-opened"
               label="Fecha de apertura"
               type="date"
@@ -553,6 +596,7 @@
             <div class="sm:col-span-2">
               <FormField id="branch-website" label="Sitio web" type="url" bind:value={f.website} />
             </div>
+            {/if}
             <div class="sm:col-span-2">
               <label for="branch-description" class="mb-1 block text-sm font-medium"
                 >Descripción</label
@@ -566,6 +610,7 @@
             </div>
           </div></Card
         >
+        {#if !f.is_headquarters}
         <Card id="location" class="scroll-mt-24 p-6"
           ><h2 class="mb-1 text-base font-semibold">Dirección y ubicación</h2>
           <p class="mb-5 text-sm text-foreground-muted">
@@ -989,11 +1034,16 @@
         <Card id="gallery" class="scroll-mt-24 p-6"
           ><BranchImagesEditor bind:images={f.images} companyId={company.id ?? ''} /></Card
         >
+        {/if}
         <Card id="review" class="scroll-mt-24 p-6"
           ><h2 class="mb-4 text-base font-semibold">Revisión</h2>
           <dl class="grid gap-3 text-sm sm:grid-cols-2">
             <div>
-              <dt class="text-foreground-muted">Sucursal</dt>
+              <dt class="text-foreground-muted">Tipo</dt>
+              <dd class="font-medium">{f.is_headquarters ? 'Matriz administrativa' : 'Sucursal operativa'}</dd>
+            </div>
+            <div>
+              <dt class="text-foreground-muted">Código y nombre</dt>
               <dd class="font-medium">{f.code || '—'} · {f.name || '—'}</dd>
             </div>
             <div>

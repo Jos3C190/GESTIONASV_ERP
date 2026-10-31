@@ -28,6 +28,25 @@
   let { branches, selectedId, onSelect }: Props = $props();
 
   const apiKey = configuredGoogleMapsApiKey;
+  let geocodedBranches = $derived(
+    branches.filter(
+      (branch) =>
+        branch.lat !== null &&
+        branch.lng !== null &&
+        Number.isFinite(branch.lat) &&
+        Number.isFinite(branch.lng)
+    )
+  );
+  let administrativeMatrixOmitted = $derived(
+    branches.some(
+      (branch) =>
+        branch.isHeadquarters &&
+        (branch.lat === null ||
+          branch.lng === null ||
+          !Number.isFinite(branch.lat) ||
+          !Number.isFinite(branch.lng))
+    )
+  );
 
   let containerEl: HTMLDivElement | null = $state(null);
   let mapInstance = $state<any>(null);
@@ -55,14 +74,14 @@
   // Centro inicial del mapa: promedio de todas las sucursales
   let center = $derived.by(() => {
     if (selectedId) {
-      const b = branches.find((b) => b.id === selectedId);
+      const b = geocodedBranches.find((b) => b.id === selectedId);
       if (b) return { lat: b.lat, lng: b.lng, zoom: 13 };
     }
-    const avgLat = branches.length
-      ? branches.reduce((s, b) => s + b.lat, 0) / branches.length
+    const avgLat = geocodedBranches.length
+      ? geocodedBranches.reduce((s, b) => s + b.lat!, 0) / geocodedBranches.length
       : 13.6989;
-    const avgLng = branches.length
-      ? branches.reduce((s, b) => s + b.lng, 0) / branches.length
+    const avgLng = geocodedBranches.length
+      ? geocodedBranches.reduce((s, b) => s + b.lng!, 0) / geocodedBranches.length
       : -89.1914;
     return { lat: avgLat, lng: avgLng, zoom: 8 };
   });
@@ -110,7 +129,7 @@
     markersMap.forEach((m) => m.remove());
     markersMap.clear();
 
-    branches.forEach((branch) => {
+    geocodedBranches.forEach((branch) => {
       const isSelected = branch.id === selectedId;
       const color = isSelected
         ? '#0070F3'
@@ -219,7 +238,7 @@
     markersMap.forEach((m) => m.setMap(null));
     markersMap.clear();
 
-    branches.forEach((branch) => {
+    geocodedBranches.forEach((branch) => {
       const isSelected = branch.id === selectedId;
       const color = isSelected
         ? '#0070F3'
@@ -296,7 +315,7 @@
       if (useGoogleMaps) {
         renderGoogleMarkers();
         if (id) {
-          const b = branches.find((b) => b.id === id);
+          const b = geocodedBranches.find((b) => b.id === id);
           if (b) {
             mapInstance.panTo({ lat: b.lat, lng: b.lng });
             mapInstance.setZoom(13);
@@ -309,7 +328,7 @@
         renderLeafletMarkers(L);
 
         if (id) {
-          const b = branches.find((b) => b.id === id);
+          const b = geocodedBranches.find((b) => b.id === id);
           if (b) {
             mapInstance.flyTo([b.lat, b.lng], 15, { duration: 0.5 });
             const m = markersMap.get(b.id);
@@ -376,6 +395,11 @@
       <p class="max-w-sm text-sm text-foreground-muted">
         El mapa no está disponible porque el proveedor CARTO aún no está configurado.
       </p>
+    </div>
+  {/if}
+  {#if administrativeMatrixOmitted}
+    <div class="absolute bottom-3 left-3 z-[500] max-w-sm rounded-lg border border-border bg-surface-elevated/95 px-3 py-2 text-xs text-foreground-muted shadow-sm">
+      La matriz administrativa no aparece en el mapa porque no tiene una ubicación física registrada.
     </div>
   {/if}
 </div>

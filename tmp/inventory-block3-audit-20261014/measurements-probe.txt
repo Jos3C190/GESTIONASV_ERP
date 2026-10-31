@@ -1,0 +1,12 @@
+describe('AUDIT block 3 split measurements', () => {
+  it('offers verification for a quarantined split_estimate unit', async () => {
+    vi.clearAllMocks();
+    confirmation.reset();
+    inventoryMocks.listHandlingUnits.mockResolvedValue([handlingUnit({measurement_status: 'complete', measurement_source: 'split_estimate', occupied_weight_kg: 4, occupied_volume_m3: 1, quantity_base: 4})]);
+    locationMocks.listLocations.mockResolvedValue(locationPage('location-2', 'RACK-01', 1, 1));
+    warehouseMocks.getWarehouses.mockResolvedValue({items: [], meta: {page: 1, size: 100, total: 0, pages: 0}});
+    render(HandlingUnitsPanel, {props: {warehouseId: 'warehouse-1', canVerify: true}});
+    await screen.findByText('HU-0001');
+    expect(screen.queryByRole('button', {name: 'Verificar medidas'})).not.toBeNull();
+  });
+});

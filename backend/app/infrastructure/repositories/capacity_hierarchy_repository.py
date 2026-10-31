@@ -30,7 +30,6 @@ from app.infrastructure.models.inventory import (
     InventoryHandlingUnitModel,
 )
 from app.infrastructure.models.organization import (
-    Branch,
     Location,
     Warehouse,
     WarehouseCapacityGroup,
@@ -106,9 +105,7 @@ class SqlAlchemyCapacityHierarchyRepository:
 
     async def _company_id(self, warehouse_id: uuid.UUID) -> uuid.UUID:
         company_id = await self._session.scalar(
-            select(Branch.company_id)
-            .join(Warehouse, Warehouse.branch_id == Branch.id)
-            .where(Warehouse.id == warehouse_id)
+            select(Warehouse.company_id).where(Warehouse.id == warehouse_id)
         )
         if company_id is None:
             raise NotFoundError("Almacén no encontrado.", code="warehouse_not_found")
@@ -189,6 +186,7 @@ class SqlAlchemyCapacityHierarchyRepository:
             InventoryHandlingUnitModel.company_id == company_id,
             InventoryHandlingUnitModel.warehouse_id == warehouse_id,
             InventoryHandlingUnitModel.closed_at.is_(None),
+            InventoryHandlingUnitModel.inventory_posted_at.is_not(None),
             InventoryHandlingUnitModel.measurement_status == "incomplete",
         ]
         if location_ids is not None:

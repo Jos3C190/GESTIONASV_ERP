@@ -138,6 +138,7 @@ def create_app() -> FastAPI | CORSMiddleware:
         allow_headers=[
             "Authorization",
             "Content-Type",
+            "Idempotency-Key",
             "X-Requested-With",
             "X-Company-ID",
             "X-Branch-ID",

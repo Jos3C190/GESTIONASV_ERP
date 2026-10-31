@@ -1,0 +1,29 @@
+RN-PRO-002 — Subcategoría obligatoria: Todo producto deberá pertenecer a una subcategoría
+existente y activa.
+RN-PRO-003 — Correspondencia de categoría: La subcategoría seleccionada deberá
+pertenecer a la categoría seleccionada.
+RN-PRO-004 — SKU único: El SKU de cada producto deberá ser único dentro del sistema.
+RN-PRO-005 — Código interno único: El código interno del producto deberá ser único.
+RN-PRO-006 — Unidad de compra obligatoria: Todo producto deberá tener definida una
+unidad de compra.
+RN-PRO-007 — Unidad de venta obligatoria: Todo producto deberá tener definida una unidad
+de venta.
+RN-PRO-008 — Tipo de unidad de compra: La unidad asignada a purchase_unit deberá tener
+type = purchase
+RN-PRO-009 — Tipo de unidad de venta: La unidad asignada a sale_unit deberá tener: | type =
+sale
+RN-PRO-010 — Unidades activas: Las unidades asignadas a los productos deberán encontrarse
+activas.
+RN-PRO-011 — Producto inactivo: Un producto inactivo no podrá utilizarse en nuevas
+operaciones comerciales.
+RN-PRO-012 — Conservación histórica: Un producto que tenga movimientos de inventario o
+transacciones comerciales no deberá eliminarse físicamente.
+RN-PRO-013 — Categorías utilizadas: Una categoría que tenga subcategorías o productos
+asociados no deberá eliminarse físicamente.
+RN-PRO-014 — Subcategorías utilizadas: Una subcategoría que tenga productos asociados no
+deberá eliminarse físicamente.
+RN-PRO-015 — Unidades utilizadas: Una unidad que esté asociada a productos no deberá
+eliminarse físicamente.
+RN-PRO-016 — Imágenes: Toda imagen deberá estar asociada a un producto existente.
+RN-PRO-017 — Estado de imágenes: Una imagen inactiva no deberá mostrarse en la galería
+activa del producto.

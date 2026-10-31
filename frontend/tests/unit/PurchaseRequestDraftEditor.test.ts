@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   getWarehouses: vi.fn(),
   listProducts: vi.fn(),
+  getProduct: vi.fn(),
   goto: vi.fn()
 }));
 
@@ -27,7 +28,8 @@ vi.mock('$lib/services/warehouses', () => ({
 
 vi.mock('$lib/api/catalog', () => ({
   catalogApi: {
-    listProducts: mocks.listProducts
+    listProducts: mocks.listProducts,
+    getProduct: mocks.getProduct
   }
 }));
 
@@ -54,7 +56,7 @@ vi.mock('$lib/stores/permissions.svelte', () => ({
 const request = {
   id: '33333333-3333-3333-3333-333333333333',
   company_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-  code: 'SC-0001',
+  code: 'SCR-0001',
   branch_id: '11111111-1111-1111-1111-111111111111',
   warehouse_id: '22222222-2222-2222-2222-222222222222',
   requested_by_id: '44444444-4444-4444-4444-444444444444',
@@ -86,6 +88,7 @@ describe('PurchaseRequestDraftEditor', () => {
     mocks.update.mockReset();
     mocks.getWarehouses.mockReset();
     mocks.listProducts.mockReset();
+    mocks.getProduct.mockReset();
     mocks.goto.mockReset();
 
     mocks.get.mockResolvedValue(request);
@@ -112,6 +115,12 @@ describe('PurchaseRequestDraftEditor', () => {
       ],
       meta: { page: 1, size: 100, total: 1, pages: 1 }
     });
+    mocks.getProduct.mockResolvedValue({
+      id_product: 99,
+      sku: 'PROD-99',
+      name: 'Producto guardado en página posterior',
+      can_purchase: true
+    });
   });
 
   it('loads a draft and updates it with the PUT contract', async () => {
@@ -122,7 +131,9 @@ describe('PurchaseRequestDraftEditor', () => {
     });
 
     expect(await screen.findByDisplayValue('Reposición de inventario')).toBeInTheDocument();
-    expect(screen.getByLabelText('Producto 1')).toHaveValue('10');
+    expect(
+      screen.getByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' })
+    ).toHaveAttribute('aria-selected', 'true');
 
     await fireEvent.input(screen.getByLabelText('Justificación'), {
       target: { value: 'Reposición actualizada' }
@@ -165,5 +176,116 @@ describe('PurchaseRequestDraftEditor', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument();
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it('searches and selects a different product in one action while editing a draft', async () => {
+    mocks.listProducts
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id_product: 10,
+            sku: 'PROD-10',
+            name: 'Producto de prueba',
+            can_purchase: true
+          }
+        ],
+        meta: { page: 1, size: 100, total: 1, pages: 1 }
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id_product: 11,
+            sku: 'PROD-11',
+            name: 'Producto alternativo',
+            can_purchase: true
+          }
+        ],
+        meta: { page: 1, size: 100, total: 1, pages: 1 }
+      });
+    mocks.update.mockResolvedValue(request);
+
+    render(PurchaseRequestDraftEditor, {
+      props: { requestId: request.id }
+    });
+
+    await screen.findByRole('option', { name: 'Seleccionar PROD-10 — Producto de prueba' });
+    await fireEvent.input(screen.getByRole('combobox', { name: 'Producto 1' }), {
+      target: { value: 'PROD-11' }
+    });
+    await fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'Seleccionar PROD-11 — Producto alternativo'
+      })
+    );
+
+    expect(
+      screen.getByRole('option', { name: 'Seleccionar PROD-11 — Producto alternativo' })
+    ).toHaveAttribute('aria-selected', 'true');
+    await fireEvent.submit(
+      screen.getByRole('button', { name: 'Guardar cambios' }).closest('form')!
+    );
+
+    await waitFor(() => {
+      expect(mocks.update).toHaveBeenCalledWith(
+        request.id,
+        expect.objectContaining({
+          details: [
+            {
+              product_id: 11,
+              quantity: 5,
+              description: null,
+              notes: null
+            }
+          ]
+        })
+      );
+    });
+  });
+
+  it('loads and shows the existing product even when it is outside the first catalog page', async () => {
+    mocks.get.mockResolvedValue({
+      ...request,
+      details: request.details.map((detail) => ({ ...detail, product_id: 99 }))
+    });
+
+    render(PurchaseRequestDraftEditor, {
+      props: { requestId: request.id }
+    });
+
+    const selectedProductLabels = await screen.findAllByText(
+      'Producto guardado en página posterior'
+    );
+    expect(selectedProductLabels).toHaveLength(2);
+    expect(mocks.getProduct).toHaveBeenCalledWith(99);
+    expect(
+      screen.getByRole('option', {
+        name: 'Seleccionar PROD-99 — Producto guardado en página posterior'
+      })
+    ).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('retries loading a saved product after its initial lookup fails', async () => {
+    mocks.get.mockResolvedValue({
+      ...request,
+      details: request.details.map((detail) => ({ ...detail, product_id: 99 }))
+    });
+    mocks.getProduct.mockRejectedValueOnce(new Error('Network error'));
+
+    render(PurchaseRequestDraftEditor, {
+      props: { requestId: request.id }
+    });
+
+    expect(
+      await screen.findByText('No se pudo cargar el nombre del producto.')
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(
+      await screen.findByRole('option', {
+        name: 'Seleccionar PROD-99 — Producto guardado en página posterior'
+      })
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(mocks.getProduct).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('No se pudo cargar el nombre del producto.')).not.toBeInTheDocument();
   });
 });

@@ -16,11 +16,13 @@ from app.domain.entities.inventory import (
     PackagingDefinition,
     PackagingType,
     PhysicalMeasures,
+    ProductStockSnapshot,
 )
 from app.domain.ports.inventory_repository import InventoryRepository
 
 MAX_RESERVATION_MINUTES = 120
 MIN_OVERRIDE_REASON_LENGTH = 10
+MAX_SNAPSHOT_PRODUCTS = 100
 
 
 class InventoryApplicationError(Exception):
@@ -129,6 +131,7 @@ class InventoryUseCases:
         code: str,
         name: str,
         packaging_type: PackagingType,
+        packaging_unit_id: int,
         base_quantity: Decimal,
         measures: PhysicalMeasures,
         stackable: bool,
@@ -139,9 +142,9 @@ class InventoryUseCases:
             measures.validate()
         except ValueError as exc:
             raise InventoryApplicationError(str(exc), code="invalid_physical_measures") from exc
-        if not code.strip() or not name.strip() or base_quantity <= 0:
+        if not code.strip() or not name.strip() or packaging_unit_id <= 0 or base_quantity <= 0:
             raise InventoryApplicationError(
-                "Código, nombre y cantidad base son obligatorios.",
+                "Código, nombre, unidad de empaque y cantidad base son obligatorios.",
                 code="invalid_packaging_definition",
             )
         if not stackable and max_stack is not None:
@@ -155,6 +158,7 @@ class InventoryUseCases:
             code=code.strip().upper(),
             name=name.strip(),
             packaging_type=packaging_type,
+            packaging_unit_id=packaging_unit_id,
             base_quantity=base_quantity,
             measures=measures,
             stackable=stackable,
@@ -206,8 +210,38 @@ class InventoryUseCases:
     async def list_handling_units(self, **kwargs: Any) -> Sequence[dict[str, Any]]:
         return await self._repository.list_handling_units(**kwargs)
 
+    async def get_handling_unit_traceability(
+        self, *, company_id: uuid.UUID, handling_unit_id: uuid.UUID
+    ) -> dict[str, Any] | None:
+        return await self._repository.get_handling_unit_traceability(
+            company_id=company_id, handling_unit_id=handling_unit_id
+        )
+
     async def list_balances(self, **kwargs: Any) -> Sequence[dict[str, Any]]:
         return await self._repository.list_balances(**kwargs)
+
+    async def product_stock_snapshot(
+        self,
+        *,
+        company_id: uuid.UUID,
+        warehouse_id: uuid.UUID,
+        product_ids: Sequence[int],
+    ) -> Sequence[ProductStockSnapshot]:
+        if len(product_ids) > MAX_SNAPSHOT_PRODUCTS or any(
+            product_id <= 0 for product_id in product_ids
+        ):
+            raise InventoryApplicationError(
+                f"La consulta debe incluir hasta {MAX_SNAPSHOT_PRODUCTS} productos válidos.",
+                code="inventory_snapshot_products_invalid",
+            )
+        return await self._repository.product_stock_snapshot(
+            company_id=company_id,
+            warehouse_id=warehouse_id,
+            product_ids=product_ids,
+        )
+
+    async def list_movements(self, **kwargs: Any) -> Sequence[dict[str, Any]]:
+        return await self._repository.list_movements(**kwargs)
 
     async def post_movement(
         self,
@@ -226,6 +260,7 @@ class InventoryUseCases:
                 code="direct_reversal_not_allowed",
             )
         allowed_types = {
+            "opening",
             "receipt",
             "putaway",
             "transfer",
@@ -241,7 +276,9 @@ class InventoryUseCases:
         for line in lines:
             source = line.get("from_location_id")
             destination = line.get("to_location_id")
-            if movement_type in {"receipt", "adjustment_in"} and (source or not destination):
+            if movement_type in {"opening", "receipt", "adjustment_in"} and (
+                source or not destination
+            ):
                 raise InventoryApplicationError(
                     "Una entrada requiere destino y no admite ubicación de origen.",
                     code="invalid_movement_endpoints",

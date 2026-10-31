@@ -8,19 +8,25 @@ from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.core.exceptions import BusinessRuleError, NotFoundError, ValidationError
+from app.domain.entities.purchase_consolidation import (
+    ConsolidationLine,
+    PurchaseConsolidation,
+    PurchaseConsolidationStatus,
+)
 from app.domain.entities.purchase_quotation import (
     PurchaseQuotation,
     PurchaseQuotationDetail,
     PurchaseQuotationExpense,
+    PurchaseQuotationLineSnapshot,
     PurchaseQuotationRequest,
     PurchaseQuotationRequestDetail,
+    PurchaseQuotationSourceSnapshot,
     PurchaseQuotationStatus,
     PurchaseQuotationTransitionError,
     ensure_purchase_quotation_transition,
 )
 from app.domain.entities.purchase_request import PurchaseRequestStatus
 from app.domain.ports.purchase_quotation_repository import (
-    PurchaseQuotationCoverageReference,
     PurchaseQuotationRepository,
     PurchaseQuotationRequestReference,
     PurchaseQuotationSupplierReference,
@@ -59,7 +65,7 @@ class PurchaseQuotationRequestDraft:
 class PurchaseQuotationResponseLineDraft:
     product_id: int
     unit_id: int
-    quantity: Decimal
+    offered_quantity: Decimal
     unit_price: Decimal
     discount: Decimal = Decimal("0")
     tax_rate: Decimal = Decimal("0")
@@ -95,13 +101,23 @@ class PurchaseQuotationUseCases:
         self,
         company_id: uuid.UUID,
         *,
+        branch_id: uuid.UUID | None = None,
         status: PurchaseQuotationStatus | None = None,
         supplier_id: int | None = None,
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[list[PurchaseQuotation], int]:
+        if branch_id is None:
+            return await self._repository.list_quotations(
+                company_id,
+                status=status,
+                supplier_id=supplier_id,
+                skip=skip,
+                limit=limit,
+            )
         return await self._repository.list_quotations(
             company_id,
+            branch_id=branch_id,
             status=status,
             supplier_id=supplier_id,
             skip=skip,
@@ -112,14 +128,33 @@ class PurchaseQuotationUseCases:
         self,
         company_id: uuid.UUID,
         quotation_id: uuid.UUID,
+        *,
+        branch_id: uuid.UUID | None = None,
     ) -> PurchaseQuotation:
-        quotation = await self._repository.get_quotation(company_id, quotation_id)
+        if branch_id is None:
+            quotation = await self._repository.get_quotation(company_id, quotation_id)
+        else:
+            quotation = await self._repository.get_quotation(
+                company_id,
+                quotation_id,
+                branch_id=branch_id,
+            )
         if quotation is None:
             raise NotFoundError(
                 "Cotización de compra no encontrada.",
                 code="purchase_quotation_not_found",
             )
         return quotation
+
+    async def list_consolidation_quotations(
+        self,
+        company_id: uuid.UUID,
+        consolidation_id: uuid.UUID,
+    ) -> tuple[PurchaseQuotation, ...]:
+        return await self._repository.list_consolidation_quotations(
+            company_id,
+            consolidation_id,
+        )
 
     async def create_draft(
         self,
@@ -129,6 +164,7 @@ class PurchaseQuotationUseCases:
         supplier_id: int,
         currency: str,
         requests: tuple[PurchaseQuotationRequestDraft, ...],
+        branch_id: uuid.UUID | None = None,
         notes: str | None = None,
     ) -> PurchaseQuotation:
         await self._validate_supplier(company_id, supplier_id)
@@ -139,6 +175,7 @@ class PurchaseQuotationUseCases:
             company_id,
             quotation_id,
             requests,
+            branch_id=branch_id,
         )
         code = await self._repository.allocate_next_code(company_id)
         quotation = self._build_quotation(
@@ -153,6 +190,180 @@ class PurchaseQuotationUseCases:
             notes=notes,
         )
         return await self._repository.add_quotation(quotation)
+
+    async def create_from_consolidation(
+        self,
+        *,
+        company_id: uuid.UUID,
+        created_by_id: uuid.UUID,
+        consolidation: PurchaseConsolidation,
+        supplier_id: int,
+        currency: str,
+        line_ids: tuple[uuid.UUID, ...],
+        notes: str | None = None,
+    ) -> PurchaseQuotation:
+        if consolidation.company_id != company_id:
+            raise NotFoundError(
+                "Consolidado de compra no encontrado.",
+                code="purchase_consolidation_not_found",
+            )
+        if consolidation.status is PurchaseConsolidationStatus.CANCELLED:
+            raise BusinessRuleError(
+                "No se puede preparar una RFQ desde un consolidado cancelado.",
+                code="purchase_quotation_consolidation_cancelled",
+            )
+        if consolidation.status is PurchaseConsolidationStatus.CLOSED:
+            raise BusinessRuleError(
+                "No se puede preparar una RFQ desde un consolidado cerrado.",
+                code="purchase_quotation_consolidation_closed",
+            )
+        await self._validate_supplier(company_id, supplier_id)
+        normalized_currency = currency.strip().upper()
+        await self._validate_currency(normalized_currency)
+        selected_lines = self._select_consolidation_lines(consolidation, line_ids)
+        requests = self._build_consolidation_request_drafts(selected_lines)
+
+        quotation_id = uuid.uuid4()
+        request_links: tuple[PurchaseQuotationRequest, ...] = ()
+        branch_details: tuple[PurchaseQuotationDetail, ...] = ()
+        if requests:
+            request_links, branch_details = await self._build_request_links(
+                company_id,
+                quotation_id,
+                requests,
+            )
+        details, snapshots = self._build_consolidation_quote_lines(
+            quotation_id,
+            selected_lines,
+            branch_details,
+        )
+
+        code = await self._repository.allocate_next_code(company_id)
+        version_number = await self._repository.allocate_next_consolidation_version(
+            company_id,
+            consolidation.id,
+            supplier_id,
+        )
+        quotation = self._build_quotation(
+            quotation_id=quotation_id,
+            company_id=company_id,
+            code=code,
+            supplier_id=supplier_id,
+            currency=normalized_currency,
+            created_by_id=created_by_id,
+            request_links=request_links,
+            details=details,
+            notes=notes,
+            consolidation_id=consolidation.id,
+            consolidation_code=consolidation.code,
+            version_number=version_number,
+            snapshots=snapshots,
+        )
+        return await self._repository.add_quotation(quotation)
+
+    @staticmethod
+    def _select_consolidation_lines(
+        consolidation: PurchaseConsolidation,
+        line_ids: tuple[uuid.UUID, ...],
+    ) -> tuple[ConsolidationLine, ...]:
+        if not line_ids:
+            raise ValidationError(
+                "Selecciona al menos un producto para solicitar precio.",
+                code="purchase_quotation_consolidation_lines_required",
+            )
+        if len(line_ids) != len(set(line_ids)):
+            raise ValidationError(
+                "No repitas productos en la misma RFQ.",
+                code="purchase_quotation_consolidation_duplicate_line",
+            )
+
+        line_map = {line.id: line for line in consolidation.lines}
+        selected: list[ConsolidationLine] = []
+        for line_id in line_ids:
+            line = line_map.get(line_id)
+            if line is None:
+                raise NotFoundError(
+                    "Una línea seleccionada no pertenece al consolidado.",
+                    code="purchase_quotation_consolidation_line_not_found",
+                )
+            if line.total_quantity <= 0:
+                raise ValidationError(
+                    f"{line.product_name} no tiene cantidad vigente para solicitar precio.",
+                    code="purchase_quotation_consolidation_line_empty",
+                )
+            selected.append(line)
+        return tuple(selected)
+
+    @staticmethod
+    def _build_consolidation_request_drafts(
+        selected_lines: tuple[ConsolidationLine, ...],
+    ) -> tuple[PurchaseQuotationRequestDraft, ...]:
+        request_lines: dict[uuid.UUID, list[PurchaseQuotationRequestLineDraft]] = {}
+        for line in selected_lines:
+            for source in line.sources:
+                if source.included_quantity > 0:
+                    request_lines.setdefault(source.purchase_request_id, []).append(
+                        PurchaseQuotationRequestLineDraft(
+                            purchase_request_detail_id=source.purchase_request_detail_id,
+                            quantity=source.included_quantity,
+                        )
+                    )
+        return tuple(
+            PurchaseQuotationRequestDraft(purchase_request_id=request_id, lines=tuple(lines))
+            for request_id, lines in request_lines.items()
+        )
+
+    @staticmethod
+    def _build_consolidation_quote_lines(
+        quotation_id: uuid.UUID,
+        selected_lines: tuple[ConsolidationLine, ...],
+        branch_details: tuple[PurchaseQuotationDetail, ...],
+    ) -> tuple[tuple[PurchaseQuotationDetail, ...], tuple[PurchaseQuotationLineSnapshot, ...]]:
+        detail_ids_by_product_unit = {
+            (detail.product_id, detail.unit_id): detail.id for detail in branch_details
+        }
+        details: list[PurchaseQuotationDetail] = []
+        snapshots: list[PurchaseQuotationLineSnapshot] = []
+        for line in selected_lines:
+            detail_id = detail_ids_by_product_unit.get((line.product_id, line.unit_id))
+            if detail_id is None:
+                detail_id = uuid.uuid4()
+            details.append(
+                PurchaseQuotationDetail(
+                    id=detail_id,
+                    purchase_quotation_id=quotation_id,
+                    product_id=line.product_id,
+                    unit_id=line.unit_id,
+                    quantity=line.total_quantity,
+                    unit_price=Decimal("0"),
+                )
+            )
+            snapshots.append(
+                PurchaseQuotationLineSnapshot(
+                    purchase_quotation_detail_id=detail_id,
+                    consolidation_line_id=line.id,
+                    product_sku=line.product_sku,
+                    product_name=line.product_name,
+                    unit_name=line.unit_name,
+                    branch_quantity=line.branch_quantity,
+                    central_quantity=line.central_quantity,
+                    sources=tuple(
+                        PurchaseQuotationSourceSnapshot(
+                            purchase_request_id=source.purchase_request_id,
+                            purchase_request_detail_id=source.purchase_request_detail_id,
+                            request_code=source.request_code,
+                            branch_name=source.branch_name,
+                            warehouse_name=source.warehouse_name,
+                            requester_name=source.requester_name,
+                            required_date=source.required_date,
+                            included_quantity=source.included_quantity,
+                        )
+                        for source in line.sources
+                        if source.included_quantity > 0
+                    ),
+                )
+            )
+        return tuple(details), tuple(snapshots)
 
     async def send_request(
         self,
@@ -201,8 +412,7 @@ class PurchaseQuotationUseCases:
     ) -> PurchaseQuotation:
         current = await self._get_for_update(company_id, quotation_id)
         self._ensure_transition(current.status, PurchaseQuotationStatus.RECEIVED)
-        coverage = await self._repository.get_coverage_references(company_id, quotation_id)
-        details = self._build_response_details(quotation_id, coverage, lines)
+        details = self._build_response_details(quotation_id, current.details, lines)
         expense_entities = await self._build_expenses(company_id, quotation_id, expenses)
         subtotal = self._money(sum((detail.subtotal for detail in details), Decimal("0")))
         discount = self._money(sum((detail.discount for detail in details), Decimal("0")))
@@ -225,7 +435,7 @@ class PurchaseQuotationUseCases:
             discount=discount,
             tax=tax,
             total=total,
-            notes=notes,
+            response_notes=notes,
         )
         saved = await self._repository.replace_response(replacement)
         if saved is None:
@@ -233,11 +443,12 @@ class PurchaseQuotationUseCases:
                 "Cotización de compra no encontrada.",
                 code="purchase_quotation_not_found",
             )
-        request_ids = tuple(link.purchase_request_id for link in saved.request_links)
-        await self._repository.advance_purchase_request_quotation_statuses(
-            company_id,
-            request_ids,
-        )
+        if saved.consolidation_id is None:
+            request_ids = tuple(link.purchase_request_id for link in saved.request_links)
+            await self._repository.advance_purchase_request_quotation_statuses(
+                company_id,
+                request_ids,
+            )
         return saved
 
     async def compare_offers(
@@ -245,12 +456,29 @@ class PurchaseQuotationUseCases:
         company_id: uuid.UUID,
         purchase_request_id: uuid.UUID,
         *,
+        branch_id: uuid.UUID | None = None,
         currency: str | None = None,
         now: datetime | None = None,
     ) -> tuple[PurchaseQuotationComparisonRow, ...]:
-        quotations = await self._repository.list_comparable(company_id, purchase_request_id)
+        if branch_id is None:
+            quotations = await self._repository.list_comparable(company_id, purchase_request_id)
+        else:
+            quotations = await self._repository.list_comparable(
+                company_id,
+                purchase_request_id,
+                branch_id=branch_id,
+            )
         instant = now or datetime.now(UTC)
         active = [quotation for quotation in quotations if self._is_comparable(quotation, instant)]
+        active = [quotation for quotation in active if quotation.consolidation_id is None]
+        active = [
+            quotation
+            for quotation in active
+            if any(
+                detail.offered_quantity is None or detail.offered_quantity > 0
+                for detail in quotation.details
+            )
+        ]
         filtered = self._filter_comparison_currency(active, currency)
         return tuple(
             PurchaseQuotationComparisonRow(
@@ -274,7 +502,20 @@ class PurchaseQuotationUseCases:
         now: datetime | None = None,
     ) -> PurchaseQuotation:
         current = await self._get_for_update(company_id, quotation_id)
+        if current.consolidation_id is not None:
+            raise BusinessRuleError(
+                "Las RFQ de un consolidado se adjudican por producto en el flujo de compras.",
+                code="purchase_quotation_requires_line_adjudication",
+            )
         instant = now or datetime.now(UTC)
+        if not any(
+            detail.offered_quantity is None or detail.offered_quantity > 0
+            for detail in current.details
+        ):
+            raise BusinessRuleError(
+                "No se puede seleccionar una cotización sin cantidades ofrecidas.",
+                code="purchase_quotation_offer_empty",
+            )
         if current.valid_until is not None and current.valid_until < instant:
             raise BusinessRuleError(
                 "No se puede seleccionar una cotización vencida.",
@@ -307,6 +548,8 @@ class PurchaseQuotationUseCases:
         company_id: uuid.UUID,
         quotation_id: uuid.UUID,
         requests: tuple[PurchaseQuotationRequestDraft, ...],
+        *,
+        branch_id: uuid.UUID | None = None,
     ) -> tuple[tuple[PurchaseQuotationRequest, ...], tuple[PurchaseQuotationDetail, ...]]:
         if not requests:
             raise ValidationError(
@@ -328,6 +571,11 @@ class PurchaseQuotationUseCases:
                 draft.purchase_request_id,
             )
             reference = self._require_request(reference)
+            if branch_id is not None and reference.branch_id != branch_id:
+                raise NotFoundError(
+                    "Solicitud de compra no encontrada.",
+                    code="purchase_quotation_request_not_found",
+                )
             self._ensure_request_quotable(reference)
             links.append(
                 self._build_request_link(
@@ -415,15 +663,10 @@ class PurchaseQuotationUseCases:
     def _build_response_details(
         self,
         quotation_id: uuid.UUID,
-        coverage: tuple[PurchaseQuotationCoverageReference, ...],
+        requested_details: tuple[PurchaseQuotationDetail, ...],
         lines: tuple[PurchaseQuotationResponseLineDraft, ...],
     ) -> tuple[PurchaseQuotationDetail, ...]:
-        if not lines:
-            raise ValidationError(
-                "La respuesta del proveedor debe incluir al menos un detalle.",
-                code="purchase_quotation_response_details_required",
-            )
-        allowed = self._aggregate_coverage(coverage)
+        allowed = {(detail.product_id, detail.unit_id): detail for detail in requested_details}
         keys = [(line.product_id, line.unit_id) for line in lines]
         if len(keys) != len(set(keys)):
             raise ValidationError(
@@ -436,30 +679,22 @@ class PurchaseQuotationUseCases:
                     "La respuesta contiene un producto o unidad fuera del alcance solicitado.",
                     code="purchase_quotation_response_out_of_scope",
                 )
-        if set(keys) != set(allowed):
-            raise ValidationError(
-                "La respuesta debe incluir todos los productos y unidades solicitados al proveedor.",
-                code="purchase_quotation_response_incomplete",
-            )
+        received_by_key = {(line.product_id, line.unit_id): line for line in lines}
         details: list[PurchaseQuotationDetail] = []
-        for line in lines:
-            purchase_quotation_detail_id, maximum = allowed[(line.product_id, line.unit_id)]
-            if line.quantity > maximum:
+        for requested in requested_details:
+            key = (requested.product_id, requested.unit_id)
+            response = received_by_key.get(key)
+            offered_quantity = response.offered_quantity if response is not None else Decimal("0")
+            if offered_quantity > requested.quantity:
                 raise ValidationError(
                     "La cantidad cotizada supera la cantidad solicitada al proveedor.",
                     code="purchase_quotation_response_quantity_exceeded",
                 )
-            if line.quantity < maximum:
-                raise ValidationError(
-                    "La cantidad cotizada debe coincidir con la solicitada; "
-                    "use available_quantity para disponibilidad parcial.",
-                    code="purchase_quotation_response_quantity_incomplete",
-                )
             details.append(
                 self._build_response_detail(
                     quotation_id,
-                    purchase_quotation_detail_id,
-                    line,
+                    requested,
+                    response,
                 )
             )
         return tuple(details)
@@ -467,29 +702,34 @@ class PurchaseQuotationUseCases:
     def _build_response_detail(
         self,
         quotation_id: uuid.UUID,
-        purchase_quotation_detail_id: uuid.UUID,
-        line: PurchaseQuotationResponseLineDraft,
+        requested: PurchaseQuotationDetail,
+        response: PurchaseQuotationResponseLineDraft | None,
     ) -> PurchaseQuotationDetail:
-        subtotal = self._money(line.quantity * line.unit_price)
-        discounted_base = subtotal - line.discount
-        tax_amount = self._money(discounted_base * line.tax_rate / Decimal("100"))
+        offered_quantity = response.offered_quantity if response is not None else Decimal("0")
+        unit_price = response.unit_price if response is not None else Decimal("0")
+        discount = response.discount if response is not None else Decimal("0")
+        tax_rate = response.tax_rate if response is not None else Decimal("0")
+        subtotal = self._money(offered_quantity * unit_price)
+        discounted_base = subtotal - discount
+        tax_amount = self._money(discounted_base * tax_rate / Decimal("100"))
         total = self._money(discounted_base + tax_amount)
         try:
             return PurchaseQuotationDetail(
-                id=purchase_quotation_detail_id,
+                id=requested.id,
                 purchase_quotation_id=quotation_id,
-                product_id=line.product_id,
-                unit_id=line.unit_id,
-                quantity=line.quantity,
-                unit_price=self._money(line.unit_price),
-                discount=self._money(line.discount),
+                product_id=requested.product_id,
+                unit_id=requested.unit_id,
+                quantity=requested.quantity,
+                unit_price=self._money(unit_price),
+                discount=self._money(discount),
                 subtotal=subtotal,
-                tax_rate=self._money(line.tax_rate),
+                tax_rate=self._money(tax_rate),
                 tax_amount=tax_amount,
                 total=total,
-                delivery_days=line.delivery_days,
-                available_quantity=line.available_quantity,
-                notes=line.notes,
+                delivery_days=response.delivery_days if response is not None else None,
+                available_quantity=(response.available_quantity if response is not None else None),
+                notes=response.notes if response is not None else None,
+                offered_quantity=offered_quantity,
             )
         except ValueError as exc:
             raise ValidationError(
@@ -628,6 +868,10 @@ class PurchaseQuotationUseCases:
         request_links: tuple[PurchaseQuotationRequest, ...],
         details: tuple[PurchaseQuotationDetail, ...],
         notes: str | None,
+        consolidation_id: uuid.UUID | None = None,
+        consolidation_code: str | None = None,
+        version_number: int = 1,
+        snapshots: tuple[PurchaseQuotationLineSnapshot, ...] = (),
     ) -> PurchaseQuotation:
         try:
             return PurchaseQuotation(
@@ -641,6 +885,10 @@ class PurchaseQuotationUseCases:
                 request_links=request_links,
                 details=details,
                 notes=notes,
+                consolidation_id=consolidation_id,
+                consolidation_code=consolidation_code,
+                version_number=version_number,
+                snapshots=snapshots,
             )
         except ValueError as exc:
             raise ValidationError(
@@ -662,7 +910,7 @@ class PurchaseQuotationUseCases:
         discount: Decimal,
         tax: Decimal,
         total: Decimal,
-        notes: str | None,
+        response_notes: str | None,
     ) -> PurchaseQuotation:
         try:
             return PurchaseQuotation(
@@ -684,35 +932,21 @@ class PurchaseQuotationUseCases:
                 tax=tax,
                 total=total,
                 status=PurchaseQuotationStatus.RECEIVED,
-                notes=notes,
+                notes=current.notes,
                 created_at=current.created_at,
                 updated_at=current.updated_at,
+                consolidation_id=current.consolidation_id,
+                consolidation_code=current.consolidation_code,
+                version_number=current.version_number,
+                sent_at=current.sent_at,
+                response_notes=response_notes,
+                snapshots=current.snapshots,
             )
         except ValueError as exc:
             raise ValidationError(
                 str(exc),
                 code="purchase_quotation_response_invalid",
             ) from exc
-
-    @staticmethod
-    def _aggregate_coverage(
-        coverage: tuple[PurchaseQuotationCoverageReference, ...],
-    ) -> dict[tuple[int, int], tuple[uuid.UUID, Decimal]]:
-        aggregated: dict[tuple[int, int], tuple[uuid.UUID, Decimal]] = {}
-        for item in coverage:
-            key = (item.product_id, item.unit_id)
-            current = aggregated.get(key)
-            if current is None:
-                aggregated[key] = (item.purchase_quotation_detail_id, item.quantity)
-                continue
-            purchase_quotation_detail_id, quantity = current
-            if purchase_quotation_detail_id != item.purchase_quotation_detail_id:
-                raise ValidationError(
-                    "La trazabilidad de la cotización contiene detalles incompatibles.",
-                    code="purchase_quotation_traceability_invalid",
-                )
-            aggregated[key] = (purchase_quotation_detail_id, quantity + item.quantity)
-        return aggregated
 
     @staticmethod
     def _is_comparable(quotation: PurchaseQuotation, now: datetime) -> bool:

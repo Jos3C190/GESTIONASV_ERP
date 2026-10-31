@@ -1,0 +1,36 @@
+Detalle de retaceo | Incluido
+Distribución de gastos | Incluido
+Cálculo de costo real | Incluido
+Integración con Inventario | Preparada
+Asignación de precios | Integración posterior
+El módulo no tendrá una tabla genérica denominada purchase_documents.
+Los documentos relacionados con gastos serán administrados mediante la tabla:
+purchase_order_expense_documents
+Esto permitirá mantener los documentos asociados directamente al gasto que los origina y
+evitar duplicación de archivos dentro del sistema.
+6.8.4 Flujo General del Proceso de Compras
+El flujo completo será:
+┌──────────────────────┐
+Solicitud de compra
+└──────────────────────┘
+↓
+┌──────────────────────┐
+Productos solicitado
+└──────────────────────┘
+↓
+┌──────────────────────┐
+Cotizaciones
+└──────────────────────┘
+↓
+┌──────────────────────┐
+Comparación de ofertas
+└──────────────────────┘
+↓
+┌──────────────────────┐
+Proveedor seleccionado
+└──────────────────────┘
+↓
+┌──────────────────────┐
+Orden de compra
+└──────────────────────┘
+↓

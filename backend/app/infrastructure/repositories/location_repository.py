@@ -36,7 +36,6 @@ from app.infrastructure.models.location import (
     LocationCodeScheme,
 )
 from app.infrastructure.models.organization import (
-    Branch,
     Location,
     Warehouse,
     WarehouseCapacityGroup,
@@ -459,13 +458,11 @@ class SqlAlchemyLocationRepository:
             await self._session.execute(
                 select(
                     Warehouse.id,
-                    Branch.company_id,
-                    Branch.id,
+                    Warehouse.company_id,
+                    Warehouse.branch_id,
                     Warehouse.is_active,
                     Warehouse.operational_status,
-                )
-                .join(Branch, Branch.id == Warehouse.branch_id)
-                .where(Warehouse.id == warehouse_id)
+                ).where(Warehouse.id == warehouse_id)
             )
         ).one_or_none()
         if row is None:

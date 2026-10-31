@@ -1,0 +1,32 @@
+6.6.6 Gestión de Contactos
+Para cada proveedor se permitirá:
+• | Registrar contacto.
+• | Modificar contacto.
+• | Consultar contacto.
+• | Activar contacto.
+• | Desactivar contacto.
+• | Buscar contacto.
+• | Consultar contactos activos.
+• | Consultar historial de contactos.
+6.6.7 Pantallas del Módulo
+Pantalla de Proveedores
+La pantalla principal deberá mostrar como mínimo:
+Columna
+Código
+Proveedor
+País
+Teléfono
+Correo
+Estado
+Acciones
+Las acciones podrán incluir:
+• | Ver
+• | Editar
+• | Activar
+• | Desactivar
+• | Contactos
+• | Historial
+Pantalla de Registro de Proveedor
+Campos:
+• | Código
+• | Nombre

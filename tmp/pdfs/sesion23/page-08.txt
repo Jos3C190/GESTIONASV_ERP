@@ -1,0 +1,48 @@
+APUNTES DE CLASE / SISTEMA ERP
+SESIÓN 23 · 12 OCT 2026
+Inventario y compras · Explicación, requisitos y decisiones pendientes
+8
+7. PEPS y promedio: ejemplos corregidos
+CLASE. PEPS significa primeras entradas, primeras salidas. El ingeniero distingue sacar físicamente la
+mercancía más antigua de valorar sus costos mediante PEPS. Se puede mantener la rotación física por
+antigüedad y valorar por promedio.
+El ejemplo de 10 unidades y 8 unidades
+Primera entrada: 10 unidades a $10 = $100. Segunda entrada: 8 unidades a $12 = $96. Antes de vender hay
+18 unidades y $196 de valor total. Se retiran 12 unidades.
+Concepto
+Valoración PEPS
+Promedio ponderado
+Base de costo
+Costos de los lotes más antiguos primero
+$196 / 18 = $10.888888... por unidad
+Costo de salida de 12
+unidades
+(10 × $10) + (2 × $12) = $124.00
+12 × ($196 / 18) = $130.666666...; se muestra
+$130.67
+Unidades que quedan
+6
+6
+Valor del inventario
+restante
+6 × $12 = $72.00
+6 × ($196 / 18) = $65.333333...; se muestra
+$65.33
+Comprobación
+$124 + $72 = $196
+$130.666666... + $65.333333... = $196
+Los resultados se reconstruyeron matemáticamente; no son una copia de las cifras mal reconocidas por la
+transcripción. En particular, 10 + 8 no son 20, y el costo de salida por promedio no es $130.60.
+Qué quería mostrar el ejemplo de las vacas
+Dos unidades comparables, una que costó $1,000 y otra $900, tienen un valor conjunto de $1,900 y un
+promedio de $950. Si la segunda hubiera costado $1,200, el total sería $2,200 y el promedio $1,100.
+El promedio redistribuye el costo unitario entre las existencias. En estos ejemplos no desaparece valor
+total por promediar: baja el valor atribuido a una unidad cara y aumenta el atribuido a la barata. Esa es la
+aclaración útil que se recupera del ejemplo, más allá de sus frases confusas.
+Caso sin existencias anteriores
+Si el saldo anterior es cero y entran 8 unidades a $12, el promedio queda en $12. Si queda una sola unidad
+de una compra anterior, su cantidad y valor deben incluirse en la fórmula.
+Alcance del proyecto: el ingeniero elige promedio para esta fase y explica PEPS como comparación.
+Implementar un motor completo de valoración PEPS no queda establecido como entrega adicional
+obligatoria en este TXT.
+Base del TXT: líneas 61-85, 147-195 y 215-225. Aritmética corregida para estos apuntes.

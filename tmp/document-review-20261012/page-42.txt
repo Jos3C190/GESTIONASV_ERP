@@ -1,0 +1,46 @@
+Retaceo: Permite relacionar los costos adicionales con las compras correspondientes.
+
+Productos: permitirá posteriormente asociar productos con proveedores, si se incorpora esta
+relación al modelo de datos.
+
+Bitácora: Todas las operaciones realizadas sobre proveedores y contactos serán auditadas.
+
+
+
+                                                                                  6.6.11 Casos de Uso
+
+CU-041: Registrar proveedor.
+
+CU-042: Modificar proveedor.
+
+CU-043: Consultar proveedores.
+
+CU-044: Activar proveedor.
+
+CU-045: Desactivar proveedor.
+
+CU-046: Registrar contacto de proveedor.
+
+CU-047: Modificar contacto.
+
+CU-048: Activar o desactivar contacto.
+
+CU-049: Consultar contactos de proveedor.
+
+                                                                  6.6.12 Criterios de Aceptación
+
+CA-SUP-001: El sistema deberá permitir registrar proveedores con la información definida en
+suppliers.
+
+CA-SUP-002: El código del proveedor no podrá repetirse.
+
+CA-SUP-003: El sistema deberá permitir registrar múltiples contactos para un mismo
+proveedor.
+
+CA-SUP-004: Un contacto no podrá registrarse sin estar asociado a un proveedor existente.
+
+CA-SUP-005: Los proveedores inactivos no deberán aparecer como opciones disponibles para
+nuevas operaciones de compra.
+
+
+                                                                                                                42

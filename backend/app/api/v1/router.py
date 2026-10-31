@@ -11,6 +11,7 @@ from fastapi import APIRouter
 from app.api.v1.routers import (
     audit_logs,
     auth,
+    branch_product_demand,
     catalog,
     dashboard,
     departments,
@@ -23,21 +24,35 @@ from app.api.v1.routers import (
     expense_types,
     health,
     inventory,
+    inventory_adjustments,
+    inventory_kardex,
+    inventory_kardex_reports,
+    inventory_labels,
+    inventory_lots,
+    inventory_preparation,
+    inventory_putaway_groups,
+    inventory_trace,
+    inventory_transfers,
+    inventory_valuation,
+    inventory_workspace,
     lifecycle,
     locations,
     media,
     operational_context,
     organization,
     product_master,
+    purchase_consolidations,
     purchase_orders,
     purchase_quotations,
     purchase_requests,
     purchases,
     retaceos,
     roles,
+    sales,
     supplier_master,
     suppliers,
     users,
+    warehouse_receiving,
     workforce,
 )
 
@@ -57,8 +72,22 @@ api_router.include_router(employees.router, prefix="/api/v1")
 api_router.include_router(workforce.router, prefix="/api/v1")
 api_router.include_router(audit_logs.router, prefix="/api/v1")
 api_router.include_router(organization.router, prefix="/api/v1")
+api_router.include_router(branch_product_demand.router, prefix="/api/v1")
 api_router.include_router(locations.router, prefix="/api/v1")
 api_router.include_router(inventory.router, prefix="/api/v1")
+api_router.include_router(inventory_workspace.router, prefix="/api/v1")
+api_router.include_router(warehouse_receiving.router, prefix="/api/v1")
+api_router.include_router(inventory_adjustments.router, prefix="/api/v1")
+api_router.include_router(inventory_kardex.router, prefix="/api/v1")
+api_router.include_router(inventory_kardex_reports.router, prefix="/api/v1")
+api_router.include_router(inventory_labels.router, prefix="/api/v1")
+api_router.include_router(inventory_preparation.router, prefix="/api/v1")
+api_router.include_router(inventory_lots.router, prefix="/api/v1")
+api_router.include_router(inventory_putaway_groups.router, prefix="/api/v1")
+api_router.include_router(inventory_trace.router, prefix="/api/v1")
+api_router.include_router(inventory_trace.public_router, prefix="/api/v1")
+api_router.include_router(inventory_transfers.router, prefix="/api/v1")
+api_router.include_router(inventory_valuation.router, prefix="/api/v1")
 api_router.include_router(operational_context.router, prefix="/api/v1")
 api_router.include_router(dashboard.router, prefix="/api/v1")
 api_router.include_router(media.router, prefix="/api/v1")
@@ -71,6 +100,8 @@ api_router.include_router(purchases.router, prefix="/api/v1")
 api_router.include_router(retaceos.router, prefix="/api/v1")
 api_router.include_router(purchase_quotations.router, prefix="/api/v1")
 api_router.include_router(purchase_requests.router, prefix="/api/v1")
+api_router.include_router(purchase_consolidations.router, prefix="/api/v1")
 api_router.include_router(supplier_master.router, prefix="/api/v1")
+api_router.include_router(sales.router, prefix="/api/v1")
 api_router.include_router(suppliers.router, prefix="/api/v1")
 api_router.include_router(lifecycle.router, prefix="/api/v1")

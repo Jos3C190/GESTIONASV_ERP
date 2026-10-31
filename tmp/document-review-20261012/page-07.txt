@@ -1,0 +1,48 @@
+4.4 Encargado de Inventario
+
+Funciones:
+
+    •   Crear productos.
+    •   Administrar almacenes.
+    •   Gestionar existencias.
+    •   Realizar traslados.
+    •   Consultar Kardex.
+
+4.5 Vendedor
+
+Funciones:
+
+    •   Administrar clientes.
+    •   Elaborar cotizaciones.
+    •   Registrar ventas.
+    •   Gestionar devoluciones.
+
+4.6 Encargado de Logística
+
+Funciones:
+
+    •   Administrar vehículos.
+    •   Administrar conductores.
+    •   Asignar entregas.
+    •   Controlar despachos.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                  7

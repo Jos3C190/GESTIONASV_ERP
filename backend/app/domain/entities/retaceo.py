@@ -4,13 +4,19 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 from enum import StrEnum
+
+from app.domain.entities.retaceo_calculation import CalculationMode, validate_tax_rate
 
 MONEY_QUANTUM = Decimal("0.000001")
 PERCENT_QUANTUM = Decimal("0.000001")
 ISO_CURRENCY_CODE_LENGTH = 3
+RETACEO_COST_FILE_NAME_MAX_LENGTH = 255
+RETACEO_COST_FILE_TYPE_MAX_LENGTH = 160
+RETACEO_COST_TITLE_MAX_LENGTH = 160
+FOB_CORRECTION_REASON_MIN_LENGTH = 20
 
 
 class RetaceoStatus(StrEnum):
@@ -21,6 +27,15 @@ class RetaceoStatus(StrEnum):
     VERIFIED = "verified"
     CANCELLED = "cancelled"
     CLOSED = "closed"
+
+
+class RetaceoCostClass(StrEnum):
+    """Accounting treatment selected for an actual landed-cost expense."""
+
+    FREIGHT = "freight"
+    EXPENSE = "expense"
+    DAI = "dai"
+    IMPORT_VAT = "import_vat"
 
 
 RETACEO_TRANSITIONS: dict[RetaceoStatus, frozenset[RetaceoStatus]] = {
@@ -111,6 +126,181 @@ class RetaceoAllocation:
     total_expenses: Decimal
     total_dai: Decimal
     total_cost: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class RetaceoCostAllocation:
+    purchase_detail_id: uuid.UUID
+    amount: Decimal
+
+    def __post_init__(self) -> None:
+        _ensure_nonnegative(self.amount, "La distribución del gasto")
+
+
+@dataclass(frozen=True, slots=True)
+class RetaceoCostDocument:
+    id: uuid.UUID
+    retaceo_cost_id: uuid.UUID
+    document_id: uuid.UUID
+    file_name: str
+    file_type: str
+    uploaded_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    deleted_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if not self.file_name.strip() or len(self.file_name) > RETACEO_COST_FILE_NAME_MAX_LENGTH:
+            raise ValueError("El nombre del comprobante no es válido.")
+        if not self.file_type.strip() or len(self.file_type) > RETACEO_COST_FILE_TYPE_MAX_LENGTH:
+            raise ValueError("El tipo del comprobante no es válido.")
+
+
+@dataclass(frozen=True, slots=True)
+class RetaceoCost:
+    id: uuid.UUID
+    retaceo_id: uuid.UUID
+    classification: RetaceoCostClass
+    title: str
+    amount: Decimal
+    allocations: tuple[RetaceoCostAllocation, ...] = ()
+    documents: tuple[RetaceoCostDocument, ...] = ()
+    source_purchase_order_expense_id: uuid.UUID | None = None
+    expense_type_id: uuid.UUID | None = None
+    description: str | None = None
+    is_active: bool = True
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    incurred_on: date | None = None
+
+    def __post_init__(self) -> None:
+        if not self.title.strip() or len(self.title) > RETACEO_COST_TITLE_MAX_LENGTH:
+            raise ValueError(
+                "El nombre del gasto es obligatorio y debe tener 160 caracteres o menos."
+            )
+        _ensure_positive(self.amount, "El monto del gasto")
+        allocation_ids = [allocation.purchase_detail_id for allocation in self.allocations]
+        if len(allocation_ids) != len(set(allocation_ids)):
+            raise ValueError("Una línea recibida no puede repetirse dentro de un gasto.")
+        if any(document.retaceo_cost_id != self.id for document in self.documents):
+            raise ValueError("Todos los comprobantes deben pertenecer al gasto.")
+
+
+@dataclass(frozen=True, slots=True)
+class ManualRetaceoAllocation:
+    lines: tuple[RetaceoAllocationLine, ...]
+    total_fob: Decimal
+    total_freight: Decimal
+    total_expenses: Decimal
+    total_dai: Decimal
+    import_vat: Decimal
+    total_cost: Decimal
+
+
+def _apply_manual_retaceo_cost(
+    cost: RetaceoCost,
+    *,
+    source_ids: set[uuid.UUID],
+    allocated: dict[uuid.UUID, dict[RetaceoCostClass, Decimal]],
+    totals: dict[RetaceoCostClass, Decimal],
+    seen_costs: set[uuid.UUID],
+) -> None:
+    if not cost.is_active:
+        return
+    if cost.id in seen_costs:
+        raise ValueError("Un gasto no puede repetirse en el retaceo.")
+    seen_costs.add(cost.id)
+    amount = _money(cost.amount)
+    _ensure_positive(amount, "El monto del gasto")
+    totals[cost.classification] += amount
+    if cost.classification is RetaceoCostClass.IMPORT_VAT:
+        if cost.allocations:
+            raise ValueError(
+                "El IVA de importación es informativo y no se distribuye por producto."
+            )
+        return
+
+    allocated_for_cost = Decimal("0")
+    for allocation in cost.allocations:
+        if allocation.purchase_detail_id not in source_ids:
+            raise ValueError("La distribución referencia una línea que no pertenece al retaceo.")
+        amount_for_line = _money(allocation.amount)
+        _ensure_nonnegative(amount_for_line, "La distribución del gasto")
+        allocated[allocation.purchase_detail_id][cost.classification] += amount_for_line
+        allocated_for_cost += amount_for_line
+    if _money(allocated_for_cost) > amount:
+        raise ValueError("La distribución de un gasto no puede superar su monto.")
+
+
+def calculate_manual_retaceo_allocation(
+    sources: tuple[RetaceoSourceLine, ...],
+    costs: tuple[RetaceoCost, ...],
+) -> ManualRetaceoAllocation:
+    """Build item costs from explicit per-line allocations without auto-splitting."""
+
+    if not sources:
+        raise ValueError("El retaceo debe contener al menos un detalle de compra.")
+    source_ids = {source.purchase_detail_id for source in sources}
+    if len(source_ids) != len(sources):
+        raise ValueError("Un detalle de compra no puede repetirse en el retaceo.")
+
+    allocated: dict[uuid.UUID, dict[RetaceoCostClass, Decimal]] = {
+        source.purchase_detail_id: {
+            RetaceoCostClass.FREIGHT: Decimal("0"),
+            RetaceoCostClass.EXPENSE: Decimal("0"),
+            RetaceoCostClass.DAI: Decimal("0"),
+        }
+        for source in sources
+    }
+    totals = {kind: Decimal("0") for kind in RetaceoCostClass}
+    seen_costs: set[uuid.UUID] = set()
+
+    for cost in costs:
+        _apply_manual_retaceo_cost(
+            cost,
+            source_ids=source_ids,
+            allocated=allocated,
+            totals=totals,
+            seen_costs=seen_costs,
+        )
+
+    lines: list[RetaceoAllocationLine] = []
+    for source in sources:
+        buckets = allocated[source.purchase_detail_id]
+        freight = _money(buckets[RetaceoCostClass.FREIGHT])
+        expenses = _money(buckets[RetaceoCostClass.EXPENSE])
+        dai = _money(buckets[RetaceoCostClass.DAI])
+        fob = _money(source.cost_fob)
+        total = _money(fob + freight + expenses + dai)
+        lines.append(
+            RetaceoAllocationLine(
+                purchase_detail_id=source.purchase_detail_id,
+                product_id=source.product_id,
+                unit_id=source.unit_id,
+                quantity=source.quantity,
+                cost_fob=fob,
+                freight=freight,
+                expenses=expenses,
+                dai=dai,
+                total_cost=total,
+                unit_cost=_money(total / source.quantity),
+            )
+        )
+
+    total_fob = _money(sum((line.cost_fob for line in lines), Decimal("0")))
+    total_freight = _money(sum((line.freight for line in lines), Decimal("0")))
+    total_expenses = _money(sum((line.expenses for line in lines), Decimal("0")))
+    total_dai = _money(sum((line.dai for line in lines), Decimal("0")))
+    total_cost = _money(total_fob + total_freight + total_expenses + total_dai)
+    return ManualRetaceoAllocation(
+        lines=tuple(lines),
+        total_fob=total_fob,
+        total_freight=total_freight,
+        total_expenses=total_expenses,
+        total_dai=total_dai,
+        import_vat=_money(totals[RetaceoCostClass.IMPORT_VAT]),
+        total_cost=total_cost,
+    )
 
 
 def _allocate_bucket(total: Decimal, weights: tuple[Decimal, ...]) -> tuple[Decimal, ...]:
@@ -252,12 +442,21 @@ class RetaceoDetail:
 
 
 @dataclass(frozen=True, slots=True)
+class RetaceoImportData:
+    origin_country: str | None = None
+    import_invoice_number: str | None = None
+    import_invoice_date: date | None = None
+    import_policy_number: str | None = None
+    import_policy_date: date | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Retaceo:
     id: uuid.UUID
     company_id: uuid.UUID
     code: str
     purchase_id: uuid.UUID
-    branch_id: uuid.UUID
+    branch_id: uuid.UUID | None
     created_by_id: uuid.UUID
     currency: str
     details: tuple[RetaceoDetail, ...]
@@ -271,10 +470,39 @@ class Retaceo:
     notes: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    costs: tuple[RetaceoCost, ...] = ()
+    applied_at: datetime | None = None
+    applied_by: uuid.UUID | None = None
+    origin_country: str | None = None
+    import_invoice_number: str | None = None
+    import_invoice_date: date | None = None
+    import_policy_number: str | None = None
+    import_policy_date: date | None = None
+    manual_entry: bool = False
+    calculation_mode: CalculationMode = "manual"
+    dai_rate: Decimal | None = None
+    vat_rate: Decimal | None = None
+
+    @property
+    def documents_historical_fob_correction(self) -> bool:
+        """A manual retaceo can regularize value, never rewrite its source receipt."""
+        return (
+            self.manual_entry
+            and len((self.notes or "").strip()) >= FOB_CORRECTION_REASON_MIN_LENGTH
+        )
 
     def __post_init__(self) -> None:
         if not self.code.strip():
             raise ValueError("El código del retaceo es obligatorio.")
+        if self.calculation_mode == "automatic":
+            validate_tax_rate(self.dai_rate)
+            validate_tax_rate(self.vat_rate)
+        elif (
+            self.calculation_mode != "manual"
+            or self.dai_rate is not None
+            or self.vat_rate is not None
+        ):
+            raise ValueError("El modo manual conserva importes, sin porcentajes automáticos.")
         if (
             len(self.currency) != ISO_CURRENCY_CODE_LENGTH
             or not self.currency.isalpha()
@@ -283,9 +511,19 @@ class Retaceo:
             raise ValueError("La moneda debe ser un código ISO de tres letras en mayúsculas.")
         if not self.details:
             raise ValueError("El retaceo debe contener al menos un detalle.")
+        self._validate_detail_identity()
+        self._validate_totals()
+
+    def _validate_detail_identity(self) -> None:
         if any(detail.retaceo_id != self.id for detail in self.details):
             raise ValueError("Todos los detalles deben pertenecer al retaceo.")
+        cost_ids = [cost.id for cost in self.costs]
+        if len(cost_ids) != len(set(cost_ids)):
+            raise ValueError("Un gasto no puede repetirse en el retaceo.")
+        if any(cost.retaceo_id != self.id for cost in self.costs):
+            raise ValueError("Todos los gastos deben pertenecer al retaceo.")
 
+    def _validate_totals(self) -> None:
         _ensure_positive(self.total_fob, "El FOB total")
         for value, label in (
             (self.total_freight, "El flete total"),

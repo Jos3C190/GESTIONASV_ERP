@@ -1,0 +1,44 @@
+         •   Compras.
+         •   Recepciones.
+
+                                           6.8.42 Reglas para Documentos y Evidencias
+
+Los documentos utilizados como evidencia de gastos deberán mantenerse asociados al gasto
+correspondiente.
+
+La estructura será:
+
+purchase_orders
+      ↓
+purchase_order_expenses
+      ↓
+purchase_order_expense_documents
+
+
+Ejemplo:
+
+OC-00025
+    │
+   ├── Flete
+    │      │
+    │      ├── factura_flete.pdf
+    │      └── comprobante.png
+    │
+   ├── Aduana
+    │      │
+    │      └── documento_aduana.pdf
+    │
+    └── Seguro
+          │
+          └── poliza_seguro.pdf
+
+
+No se creará una tabla independiente denominada purchase_documents.
+
+La información documental podrá ser consultada desde una compra mediante la relación
+existente con la orden:
+
+
+
+
+                                                                                                                  97

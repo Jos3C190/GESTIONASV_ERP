@@ -26,14 +26,16 @@ const numeric = (value: unknown): number => nullableNumber(value) ?? 0;
 export function mapWarehouseOutToWarehouse(w: WarehouseOut): Warehouse {
   return {
     id: w.id,
+    companyId: w.company_id,
     categoryId: w.warehouse_category_id,
     code: w.code,
     name: w.name,
     description: w.description ?? '',
+    isCentral: w.is_central === true,
     type: (w.type ?? 'general') as WarehouseType,
     status: (w.status ?? 'active') as WarehouseStatus,
     location: w.location,
-    branchId: w.branch_id,
+    branchId: w.branch_id ?? null,
     branchName: w.branch_name,
     branchAddress: w.branch_address ?? '',
     area: w.area ?? 0,
@@ -172,9 +174,11 @@ export async function createWarehouse(warehouse: Omit<Warehouse, 'id'>): Promise
     code: warehouse.code,
     name: warehouse.name,
     warehouse_type: warehouse.type,
+    is_central: warehouse.isCentral,
     operational_status: warehouse.status,
     physical_location: warehouse.location,
-    branch_id: warehouse.branchId,
+    branch_id: warehouse.branchId || null,
+    company_id: warehouse.companyId,
     warehouse_category_id: warehouse.categoryId,
     certified_max_weight_kg: warehouse.certifiedMaxWeightKg,
     operational_max_weight_kg: warehouse.operationalMaxWeightKg,
@@ -202,6 +206,7 @@ export async function updateWarehouse(
   const payload: Record<string, unknown> = {};
   if (warehouse.code !== undefined) payload.code = warehouse.code;
   if (warehouse.name !== undefined) payload.name = warehouse.name;
+  if (warehouse.isCentral !== undefined) payload.is_central = warehouse.isCentral;
   if (warehouse.type !== undefined) payload.warehouse_type = warehouse.type;
   if (warehouse.status !== undefined) payload.operational_status = warehouse.status;
   if (warehouse.location !== undefined) payload.physical_location = warehouse.location;

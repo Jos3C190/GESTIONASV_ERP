@@ -17,6 +17,7 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let imageErrors = $state<Record<string, boolean>>({});
+  let packagingSection = $state<HTMLDivElement | null>(null);
   let productId = $derived(Number(page.params.id));
 
   const statusLabel = (active: boolean) => (active ? 'Activo' : 'Inactivo');
@@ -63,6 +64,12 @@
 
   $effect(() => {
     if (productId) void load();
+  });
+
+  $effect(() => {
+    if (packagingSection && page.url.hash === '#presentaciones-inventario') {
+      packagingSection.scrollIntoView({ block: 'start' });
+    }
   });
 </script>
 
@@ -413,14 +420,17 @@
       </div>
 
       {#if product.product_kind === 'goods' && product.variant_mode === 'standalone' && permissions.hasPermission('inventory:read')}
-        <Card class="p-6">
-          <PackagingManager
-            productId={product.id_product}
-            defaultBaseUnitId={product.sale_unit}
-            unitOptions={units.map((unit) => ({ id: unit.id_unit, label: unit.name }))}
-            canManage={permissions.hasPermission('inventory:manage_packaging')}
-          />
-        </Card>
+        <div id="presentaciones-inventario" class="scroll-mt-24" bind:this={packagingSection}>
+          <Card class="p-6">
+            <PackagingManager
+              productId={product.id_product}
+              defaultBaseUnitId={product.sale_unit}
+              defaultPackagingUnitId={product.purchase_unit}
+              unitOptions={units.map((unit) => ({ id: unit.id_unit, label: unit.name }))}
+              canManage={permissions.hasPermission('inventory:manage_packaging')}
+            />
+          </Card>
+        </div>
       {/if}
 
       {#if product.variant_mode === 'template'}

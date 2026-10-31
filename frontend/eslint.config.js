@@ -29,6 +29,12 @@ export default [
     name: 'gestiona-sv/javascript-recommended'
   },
   ...tsPlugin.configs['flat/recommended'],
+  {
+    name: 'gestiona-sv/label-qa-node-scripts',
+    files: ['tmp-labels/*.cjs'],
+    languageOptions: { globals: { require: 'readonly', global: 'readonly' } },
+    rules: { '@typescript-eslint/no-require-imports': 'off' }
+  },
   ...svelte.configs['flat/recommended'],
   ...svelte.configs['flat/prettier'],
   {

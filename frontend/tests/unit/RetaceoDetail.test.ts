@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('$lib/api/retaceos', () => ({
   retaceosApi: {
-    get: mocks.getRetaceo
+    get: mocks.getRetaceo,
+    valuationStatus: vi.fn().mockResolvedValue({ enabled: false })
   }
 }));
 
@@ -111,7 +112,9 @@ describe('RetaceoDetail', () => {
       `/purchases/${retaceo.purchase_id}`
     );
 
-    expect(screen.getByText('PROD-10 — Producto A')).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'PROD-10 — Producto A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Descargar PDF' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Descargar Excel' })).toBeEnabled();
     expect(screen.getByText('UND — Unidad')).toBeInTheDocument();
 
     expect(screen.getByText('Calculado')).toBeInTheDocument();

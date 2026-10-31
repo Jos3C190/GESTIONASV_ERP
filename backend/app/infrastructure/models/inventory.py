@@ -20,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -87,6 +88,7 @@ class InventoryPackagingModel(UUIDPKMixin, TimestampMixin, Base):
 
     company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     inventory_item_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    packaging_unit_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     code: Mapped[str] = mapped_column(String(60), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     packaging_type: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -118,6 +120,12 @@ class InventoryPackagingModel(UUIDPKMixin, TimestampMixin, Base):
             name="fk_inventory_packaging_item_company",
         ),
         ForeignKeyConstraint(
+            ["company_id", "packaging_unit_id"],
+            ["company_units.company_id", "company_units.unit_id"],
+            ondelete="RESTRICT",
+            name="fk_inventory_packaging_unit_company",
+        ),
+        ForeignKeyConstraint(
             ["company_id", "inventory_item_id", "supersedes_id"],
             [
                 "inventory_packaging_definitions.company_id",
@@ -141,6 +149,14 @@ class InventoryPackagingModel(UUIDPKMixin, TimestampMixin, Base):
             "code",
             unique=True,
             postgresql_where=text("is_current AND is_active"),
+        ),
+        Index(
+            "uq_inventory_packaging_current_unit",
+            "company_id",
+            "inventory_item_id",
+            "packaging_unit_id",
+            unique=True,
+            postgresql_where=text("is_current AND is_active AND packaging_unit_id IS NOT NULL"),
         ),
         CheckConstraint(
             "packaging_type IN ('piece','box','bag','package','roll','drum','container','loose_other')",
@@ -184,10 +200,20 @@ class InventoryHandlingUnitModel(UUIDPKMixin, TimestampMixin, Base):
     warehouse_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     location_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     inventory_item_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    inventory_lot_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    inventory_lot_detail_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
     packaging_definition_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=True
     )
+    origin_handling_unit_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
     code: Mapped[str] = mapped_column(String(120), nullable=False)
+    label_revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
     lot_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     quantity_base: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
@@ -203,6 +229,9 @@ class InventoryHandlingUnitModel(UUIDPKMixin, TimestampMixin, Base):
     measurement_status: Mapped[str] = mapped_column(String(20), nullable=False)
     measurement_source: Mapped[str] = mapped_column(String(20), nullable=False)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    inventory_posted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True).evaluates_none(), nullable=True, server_default=func.now()
+    )
 
     __table_args__ = (
         UniqueConstraint("company_id", "id", name="uq_inventory_handling_units_company_id"),
@@ -233,6 +262,24 @@ class InventoryHandlingUnitModel(UUIDPKMixin, TimestampMixin, Base):
             ],
             ondelete="RESTRICT",
             name="fk_inventory_handling_units_packaging_item",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "origin_handling_unit_id"],
+            ["inventory_handling_units.company_id", "inventory_handling_units.id"],
+            ondelete="RESTRICT",
+            name="fk_inventory_handling_units_origin_company",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "inventory_lot_id"],
+            ["inventory_lots.company_id", "inventory_lots.id"],
+            ondelete="RESTRICT",
+            name="fk_inventory_handling_units_inventory_lot_company",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "inventory_lot_detail_id"],
+            ["inventory_lot_details.company_id", "inventory_lot_details.id"],
+            ondelete="RESTRICT",
+            name="fk_inventory_handling_units_lot_detail_company",
         ),
         Index(
             "uq_inventory_handling_units_code",
@@ -282,7 +329,7 @@ class InventoryHandlingUnitModel(UUIDPKMixin, TimestampMixin, Base):
             name="ck_inventory_handling_units_measurement_status",
         ),
         CheckConstraint(
-            "measurement_source IN ('master','receipt','manual','device')",
+            "measurement_source IN ('master','receipt','manual','device','split_estimate')",
             name="ck_inventory_handling_units_measurement_source",
         ),
         CheckConstraint(
@@ -297,11 +344,12 @@ class InventoryHandlingUnitModel(UUIDPKMixin, TimestampMixin, Base):
             name="ck_inventory_handling_units_measured_values",
         ),
         CheckConstraint(
-            "measurement_status = 'incomplete' OR measurement_source = 'master' OR "
+            "measurement_status = 'incomplete' OR measurement_source IN ('master','split_estimate') OR "
             "(actual_gross_weight_kg IS NOT NULL AND actual_volume_m3 IS NOT NULL)",
             name="ck_inventory_handling_units_actual_measure_evidence",
         ),
         Index("ix_inventory_handling_units_location_status", "location_id", "stock_status"),
+        Index("ix_inventory_handling_units_origin", "company_id", "origin_handling_unit_id"),
     )
 
 
@@ -318,9 +366,10 @@ class InventoryMovementModel(UUIDPKMixin, Base):
     reversal_of_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     reservation_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     posted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    posted_by: Mapped[uuid.UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    # Keep the actor UUID as immutable historical attribution. A foreign key
+    # with ON DELETE SET NULL would mutate this append-only ledger row when a
+    # user is removed, contradicting the database immutability trigger.
+    posted_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
@@ -341,7 +390,7 @@ class InventoryMovementModel(UUIDPKMixin, Base):
             name="fk_inventory_movements_reservation_company",
         ),
         CheckConstraint(
-            "movement_type IN ('receipt','putaway','transfer','pick','shipment',"
+            "movement_type IN ('opening','receipt','putaway','transfer','pick','shipment',"
             "'adjustment_in','adjustment_out','reversal')",
             name="ck_inventory_movements_type",
         ),
@@ -357,6 +406,9 @@ class InventoryMovementLineModel(UUIDPKMixin, Base):
     line_number: Mapped[int] = mapped_column(Integer, nullable=False)
     inventory_item_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     handling_unit_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    inventory_lot_detail_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
     operational_override_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=True
     )
@@ -398,6 +450,12 @@ class InventoryMovementLineModel(UUIDPKMixin, Base):
             name="fk_inventory_movement_lines_handling_unit_item",
         ),
         ForeignKeyConstraint(
+            ["company_id", "inventory_lot_detail_id"],
+            ["inventory_lot_details.company_id", "inventory_lot_details.id"],
+            ondelete="RESTRICT",
+            name="fk_inventory_movement_lines_lot_detail_company",
+        ),
+        ForeignKeyConstraint(
             ["company_id", "to_location_id", "operational_override_id"],
             [
                 "inventory_capacity_operational_overrides.company_id",
@@ -420,6 +478,7 @@ class InventoryMovementLineModel(UUIDPKMixin, Base):
             name="fk_inventory_movement_lines_to_location",
         ),
         UniqueConstraint("movement_id", "line_number", name="uq_inventory_movement_lines_number"),
+        UniqueConstraint("company_id", "id", name="uq_inventory_movement_lines_company_id"),
         CheckConstraint("line_number >= 1", name="ck_inventory_movement_lines_number_positive"),
         CheckConstraint("quantity_base > 0", name="ck_inventory_movement_lines_quantity_positive"),
         CheckConstraint(

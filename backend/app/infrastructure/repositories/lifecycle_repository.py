@@ -139,8 +139,7 @@ class SqlAlchemyLifecycleRepository:
             return cast(
                 uuid.UUID | None,
                 await self._session.scalar(
-                    select(Branch.company_id)
-                    .join(Warehouse, Warehouse.branch_id == Branch.id)
+                    select(Warehouse.company_id)
                     .where(Warehouse.id == record.id)
                     .execution_options(include_deleted=True)
                 ),
@@ -149,8 +148,7 @@ class SqlAlchemyLifecycleRepository:
             return cast(
                 uuid.UUID | None,
                 await self._session.scalar(
-                    select(Branch.company_id)
-                    .join(Warehouse, Warehouse.branch_id == Branch.id)
+                    select(Warehouse.company_id)
                     .join(Location, Location.warehouse_id == Warehouse.id)
                     .where(Location.id == record.id)
                     .execution_options(include_deleted=True)
@@ -546,17 +544,11 @@ class SqlAlchemyLifecycleRepository:
         if policy.scope == "self":
             if not include_all_companies:
                 stmt = stmt.where(policy.model.id == company_id)
-        elif policy.scope == "company":
+        elif policy.scope in {"company", "warehouse"}:
             stmt = stmt.where(policy.model.company_id == company_id)
-        elif policy.scope == "warehouse":
-            stmt = stmt.join(Branch, policy.model.branch_id == Branch.id).where(
-                Branch.company_id == company_id
-            )
         elif policy.scope == "location":
-            stmt = (
-                stmt.join(Warehouse, policy.model.warehouse_id == Warehouse.id)
-                .join(Branch, Warehouse.branch_id == Branch.id)
-                .where(Branch.company_id == company_id)
+            stmt = stmt.join(Warehouse, policy.model.warehouse_id == Warehouse.id).where(
+                Warehouse.company_id == company_id
             )
         elif policy.scope == "supplier_contact":
             stmt = stmt.join(

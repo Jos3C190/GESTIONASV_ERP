@@ -1,0 +1,34 @@
+• | Generar órdenes de compra.
+• | Registrar gastos asociados a las cotizaciones y órdenes de compra.
+• | Permitir adjuntar documentos que sirvan como evidencia de los gastos.
+• | Registrar la recepción real de mercancías.
+• | Diferenciar entre lo solicitado, lo ordenado y lo efectivamente recibido.
+• | Registrar las compras realizadas.
+• | Mantener la relación entre la compra y la orden de compra que la originó.
+• | Mantener trazabilidad entre los detalles de compra y los detalles de la orden.
+• | Registrar información necesaria para el proceso de retaceo.
+• | Distribuir proporcionalmente los gastos de importación entre los productos.
+• | Determinar el costo real de adquisición.
+• | Excluir el IVA de importación del cálculo del retaceo.
+• | Preparar la información necesaria para la actualización del costo de los productos y
+la integración con Inventario.
+6.8.3 Alcance del Módulo
+El módulo de Gestión de Compras comprenderá las siguientes etapas:
+Componente | Alcance
+Solicitudes de compra | Incluido
+Detalle de solicitudes | Incluido
+Cotizaciones | Incluido
+Detalle de cotizaciones | Incluido
+Relación solicitud-cotización | Incluido
+Relación producto solicitado-producto cotizado | Incluido
+Comparación de cotizaciones | Incluido
+Selección de proveedor | Incluido
+Tipos de gastos | Incluido
+Gastos de cotización | Incluido
+Órdenes de compra | Incluido
+Detalle de órdenes | Incluido
+Gastos de órdenes | Incluido
+Documentos de gastos | Incluido
+Recepción / Compra | Incluido
+Detalle de compra | Incluido
+Retaceo | Incluido

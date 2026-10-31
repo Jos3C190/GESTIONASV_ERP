@@ -1,0 +1,51 @@
+    •    Consultar roles asignados.
+
+Asignación Rol-Permiso
+
+    •    Agregar permiso.
+    •    Eliminar permiso.
+    •    Consultar permisos.
+
+                                                                        6.1.6  Pantallas del Módulo
+
+    1.   Inicio de sesión.
+    2.   Gestión de Usuarios.
+    3.   Gestión de Roles.
+    4.   Gestión de Permisos.
+    5.   Asignación de Roles a Usuarios.
+    6.   Asignación de Permisos a Roles.
+    7.   Cambio de Contraseña.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                   15

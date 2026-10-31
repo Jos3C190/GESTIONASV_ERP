@@ -16,6 +16,7 @@ from app.domain.entities.inventory import (
     PackagingDefinition,
     PackagingType,
     PhysicalMeasures,
+    ProductStockSnapshot,
     StockStatus,
 )
 
@@ -56,6 +57,7 @@ class InventoryRepository(Protocol):
         code: str,
         name: str,
         packaging_type: PackagingType,
+        packaging_unit_id: int,
         base_quantity: Decimal,
         measures: PhysicalMeasures,
         stackable: bool,
@@ -126,6 +128,10 @@ class InventoryRepository(Protocol):
         include_closed: bool = False,
     ) -> Sequence[dict[str, Any]]: ...
 
+    async def get_handling_unit_traceability(
+        self, *, company_id: uuid.UUID, handling_unit_id: uuid.UUID
+    ) -> dict[str, Any] | None: ...
+
     async def list_balances(
         self,
         *,
@@ -138,6 +144,14 @@ class InventoryRepository(Protocol):
         expiry_before: date | None = None,
     ) -> Sequence[dict[str, Any]]: ...
 
+    async def product_stock_snapshot(
+        self,
+        *,
+        company_id: uuid.UUID,
+        warehouse_id: uuid.UUID,
+        product_ids: Sequence[int],
+    ) -> Sequence[ProductStockSnapshot]: ...
+
     async def post_movement(
         self,
         *,
@@ -149,6 +163,22 @@ class InventoryRepository(Protocol):
         actor_id: uuid.UUID,
         reservation_id: uuid.UUID | None = None,
     ) -> dict[str, Any]: ...
+
+    async def list_movements(
+        self,
+        *,
+        company_id: uuid.UUID,
+        warehouse_id: uuid.UUID,
+        limit: int,
+        movement_type: str | None = None,
+        offset: int = 0,
+        period_from: date | None = None,
+        period_to: date | None = None,
+        query: str | None = None,
+        lot_code: str | None = None,
+        source_reference: str | None = None,
+        direction: str | None = None,
+    ) -> Sequence[dict[str, Any]]: ...
 
     async def capacity_summary(
         self,

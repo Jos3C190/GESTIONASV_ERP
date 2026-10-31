@@ -1,4 +1,5 @@
-export type ConfirmActionKind = 'delete' | 'deactivate' | 'restore' | 'end-assignment' | 'revoke';
+export type ConfirmActionKind =
+  'delete' | 'deactivate' | 'restore' | 'release' | 'transfer' | 'end-assignment' | 'revoke' | 'confirm';
 
 export interface ConfirmActionRequest {
   kind: ConfirmActionKind;

@@ -1,0 +1,42 @@
+APUNTES DE CLASE / SISTEMA ERP
+SESIÓN 23 · 12 OCT 2026
+Inventario y compras · Explicación, requisitos y decisiones pendientes
+7
+6. Valoración por costo promedio ponderado
+CLASE. Para el proyecto se plantea utilizar costo promedio ponderado y configurarlo globalmente por
+empresa. Los lotes siguen siendo necesarios para conservar el origen y organizar físicamente las salidas.
+Fórmula reconstruida
+Nuevo costo promedio = (valor anterior del inventario + valor de la entrada) / (cantidad anterior +
+cantidad de entrada).
+Variable
+Significado
+Cantidad anterior
+Unidades que quedan del producto antes de la nueva entrada.
+Valor anterior
+Valor que conservan esas existencias. En un promedio consistente: cantidad
+anterior por costo promedio anterior.
+Cantidad de entrada
+Unidades nuevas que se incorporan.
+Valor de entrada
+Cantidad incorporada por su costo unitario final, proveniente del retaceo.
+El promedio utiliza las existencias remanentes, no todas las unidades compradas históricamente. Se
+calcula por producto: no se mezclan costos de café con leche, ni de modelos diferentes de un televisor.
+Cuándo cambia
+CLASE. Una nueva compra que entra con existencias anteriores obliga a combinar ambos valores. Si ya no
+queda ninguna unidad, la entrada toma su propio costo. Una venta reduce cantidad y valor al costo
+vigente; el ejemplo de la clase mantiene el promedio después de vender.
+PROPUESTA. Definir una sola operación que confirme el ingreso, actualice el saldo valorado y registre el
+movimiento. Si una recepción se ubica por partes, usar únicamente la cantidad del ingreso que se está
+confirmando y evitar contabilizar toda la recepción en cada parte.
+Configuración por empresa
+El alcance global por empresa aparece expresamente en la clase. POR DEFINIR: confirmar en el
+documento del ingeniero si, además de la política global, el saldo y el promedio de cada producto se
+agrupan entre todos los almacenes de la empresa. La interfaz puede mostrar existencias por ubicación sin
+que eso implique promedios independientes.
+Precisión y costo de venta
+PROPUESTA. Calcular con precisión decimal suficiente y redondear según una política uniforme al
+presentar totales. No usar como base el promedio ya redondeado de la pantalla si eso altera el resultado.
+El costo promedio valora la salida y las existencias. El precio que se cobra al cliente se define en el proceso
+comercial. La transcripción mezcla ocasionalmente estas expresiones; la clase distingue ambos conceptos al
+principio y durante los ejemplos.
+Base del TXT: líneas 45, 67-85 y 197-225.

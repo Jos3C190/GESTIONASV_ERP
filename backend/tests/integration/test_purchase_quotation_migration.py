@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import asyncio
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Literal
 
@@ -49,15 +50,15 @@ async def _quotation_permissions(session: AsyncSession) -> list[Permission]:
 
 
 @pytest.fixture
-async def migration_at_0048() -> AsyncIterator[None]:
+async def migration_at_0048(rebuild_test_database: Callable[..., None]) -> AsyncIterator[None]:
+    """Recreate 0048 directly; later ledgers deliberately prohibit downgrades."""
     await dispose_engine()
-    _run_alembic("upgrade", "head")
-    _run_alembic("downgrade", "0048")
+    await asyncio.to_thread(rebuild_test_database, revision="0048", seed=False)
     try:
         yield
     finally:
         await dispose_engine()
-        _run_alembic("upgrade", "head")
+        await asyncio.to_thread(rebuild_test_database)
         await dispose_engine()
 
 

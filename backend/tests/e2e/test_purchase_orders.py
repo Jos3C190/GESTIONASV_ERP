@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -15,19 +14,16 @@ from app.domain.ports.object_storage import PresignedUpload, StoredObjectInfo
 from app.infrastructure.db.session import async_session_factory
 from app.infrastructure.models.audit import AuditLog
 from app.infrastructure.models.catalog import CompanyUnitModel, ProductModel
-from app.infrastructure.models.organization import Branch, Warehouse
-from app.infrastructure.models.purchase import PurchaseDetailModel, PurchaseModel
-from app.infrastructure.models.purchase_order import PurchaseOrderModel
+from app.infrastructure.models.inventory import InventoryItemModel, InventoryMovementModel
+from app.infrastructure.models.organization import Branch, Location, Warehouse, WarehouseCategory
+from app.infrastructure.models.purchase import PurchaseModel
 from app.infrastructure.models.purchase_quotation import (
     ExpenseTypeModel,
-    PurchaseQuotationModel,
 )
-from app.infrastructure.models.purchase_request import PurchaseRequestModel
-from app.infrastructure.models.retaceo import RetaceoDetailModel, RetaceoModel
 from app.infrastructure.models.supplier import SupplierModel
 from app.infrastructure.models.supplier_master_data import CurrencyModel
 from httpx import AsyncClient
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, select
 
 from tests.e2e.conftest import get_test_company_id, seed_user
 
@@ -37,20 +33,9 @@ PASSWORD = "Strong!Passw0rd2026"
 
 
 @pytest.fixture
-async def purchase_order_client(e2e_client: AsyncClient) -> AsyncIterator[AsyncClient]:
-    """Clean procurement rows before the shared E2E fixture deletes users."""
-    try:
-        yield e2e_client
-    finally:
-        async with async_session_factory() as session:
-            await session.execute(delete(RetaceoDetailModel))
-            await session.execute(delete(RetaceoModel))
-            await session.execute(delete(PurchaseDetailModel))
-            await session.execute(delete(PurchaseModel))
-            await session.execute(delete(PurchaseOrderModel))
-            await session.execute(delete(PurchaseQuotationModel))
-            await session.execute(delete(PurchaseRequestModel))
-            await session.commit()
+async def purchase_order_client(e2e_client: AsyncClient) -> AsyncClient:
+    """Alias for the API client; the disposable database resets per test."""
+    return e2e_client
 
 
 async def _reference_ids() -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, int, int, str]:
@@ -73,9 +58,9 @@ async def _reference_ids() -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, int, int, s
                 .limit(1)
             )
         ).one()
-        product_id = (
+        products = (
             await session.execute(
-                select(ProductModel.id_product)
+                select(ProductModel.id_product, ProductModel.purchase_unit)
                 .join(
                     CompanyUnitModel,
                     and_(
@@ -91,9 +76,39 @@ async def _reference_ids() -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, int, int, s
                     ProductModel.can_purchase.is_(True),
                     CompanyUnitModel.is_enabled.is_(True),
                 )
-                .limit(1)
+                .order_by(ProductModel.id_product)
             )
-        ).scalar_one()
+        ).all()
+        product_id = None
+        for candidate_id, purchase_unit_id in products:
+            item = await session.scalar(
+                select(InventoryItemModel).where(
+                    InventoryItemModel.company_id == company_id,
+                    InventoryItemModel.product_id == candidate_id,
+                )
+            )
+            if item is None:
+                # The catalog seed intentionally has no operational stock.
+                # Create only the inventory identity needed by receipt E2E
+                # tests, using the product's purchase unit as its base unit.
+                session.add(
+                    InventoryItemModel(
+                        company_id=company_id,
+                        product_id=candidate_id,
+                        variant_id=None,
+                        base_unit_id=purchase_unit_id,
+                        is_active=True,
+                    )
+                )
+                await session.commit()
+                product_id = candidate_id
+                break
+            if item.base_unit_id == purchase_unit_id and item.is_active:
+                product_id = candidate_id
+                break
+        assert product_id is not None, (
+            "El seed E2E necesita un producto con unidad base compatible."
+        )
         supplier_id = await session.scalar(
             select(SupplierModel.id_supplier)
             .where(
@@ -113,6 +128,38 @@ async def _reference_ids() -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, int, int, s
         assert supplier_id is not None
         assert currency is not None
     return company_id, branch_id, warehouse_id, product_id, supplier_id, currency
+
+
+async def _receiving_location_id(warehouse_id: uuid.UUID) -> uuid.UUID:
+    """Return an active receiving point in the exact warehouse under test."""
+    async with async_session_factory() as session:
+        location_id = await session.scalar(
+            select(Location.id)
+            .where(
+                Location.warehouse_id == warehouse_id,
+                Location.location_type == "receiving",
+                Location.is_active.is_(True),
+                Location.lifecycle_status == "active",
+                Location.deleted_at.is_(None),
+            )
+            .order_by(Location.created_at, Location.id)
+            .limit(1)
+        )
+    assert location_id is not None, "El almacén de prueba necesita un punto de recepción activo."
+    return location_id
+
+
+async def _legacy_receipt(purchase_id: str) -> None:
+    """Exercise the historical receipt-before-retaceo contract explicitly.
+
+    New placement-first purchases have separate acceptance coverage; these
+    original workflows still protect compatibility with existing receipts.
+    """
+    async with async_session_factory() as session:
+        purchase = await session.get(PurchaseModel, uuid.UUID(purchase_id))
+        assert purchase is not None
+        purchase.inventory_workflow = "receipt_before_retaceo"
+        await session.commit()
 
 
 async def _headers(
@@ -146,6 +193,7 @@ async def _approved_purchase_request(
     branch_id: uuid.UUID,
     warehouse_id: uuid.UUID,
     product_id: int,
+    quantity: str = "4.000000",
 ) -> dict[str, object]:
     created = await client.post(
         "/api/v1/purchase-requests",
@@ -154,7 +202,7 @@ async def _approved_purchase_request(
             "branch_id": str(branch_id),
             "warehouse_id": str(warehouse_id),
             "justification": "Compra para validar órdenes",
-            "details": [{"product_id": product_id, "quantity": "4.000000"}],
+            "details": [{"product_id": product_id, "quantity": quantity}],
         },
     )
     assert created.status_code == 201, created.text
@@ -553,6 +601,7 @@ async def _sent_order(
         branch_id=branch_id,
         warehouse_id=warehouse_id,
         product_id=product_id,
+        quantity=quantity,
     )
     quotation = await _selected_quotation(
         client,
@@ -592,6 +641,353 @@ async def _sent_order(
     assert sent.status_code == 200, sent.text
     assert sent.json()["status"] == "sent"
     return sent.json()
+
+
+async def test_headquarters_user_can_read_new_central_receipt_without_global_scope(
+    purchase_order_client: AsyncClient,
+) -> None:
+    from app.infrastructure.models.rbac import Permission, Role, RolePermission
+
+    company_id, regular_branch_id, _, product_id, supplier_id, currency = await _reference_ids()
+    admin_headers = await _headers(
+        purchase_order_client,
+        company_id=company_id,
+        username="purchase-headquarters-admin",
+        is_superuser=True,
+    )
+
+    branches_response = await purchase_order_client.get(
+        f"/api/v1/branches?company_id={company_id}", headers=admin_headers
+    )
+    assert branches_response.status_code == 200, branches_response.text
+    headquarters = next(
+        (item for item in branches_response.json() if item["is_headquarters"]), None
+    )
+    regular_branch_id = uuid.UUID(
+        next(item["id"] for item in branches_response.json() if not item["is_headquarters"])
+    )
+    if headquarters is None:
+        created_headquarters = await purchase_order_client.post(
+            "/api/v1/branches",
+            headers=admin_headers,
+            json={
+                "company_id": str(company_id),
+                "is_headquarters": True,
+                "name": "Matriz recepción prueba B01",
+            },
+        )
+        assert created_headquarters.status_code == 201, created_headquarters.text
+        headquarters = created_headquarters.json()
+    headquarters_id = uuid.UUID(headquarters["id"])
+
+    async with async_session_factory() as session:
+        central_warehouse_id = await session.scalar(
+            select(Warehouse.id)
+            .where(
+                Warehouse.company_id == company_id,
+                Warehouse.branch_id == headquarters_id,
+                Warehouse.is_central.is_(True),
+                Warehouse.is_active.is_(True),
+                Warehouse.operational_status == "active",
+                Warehouse.deleted_at.is_(None),
+            )
+            .order_by(Warehouse.created_at, Warehouse.id)
+            .limit(1)
+        )
+        category_id = await session.scalar(
+            select(WarehouseCategory.id)
+            .where(
+                WarehouseCategory.company_id == company_id,
+                WarehouseCategory.is_active.is_(True),
+                WarehouseCategory.deleted_at.is_(None),
+            )
+            .order_by(WarehouseCategory.name)
+            .limit(1)
+        )
+    if central_warehouse_id is None:
+        assert category_id is not None
+        created_central = await purchase_order_client.post(
+            "/api/v1/warehouses",
+            headers=admin_headers,
+            json={
+                "company_id": str(company_id),
+                "branch_id": str(headquarters_id),
+                "warehouse_category_id": str(category_id),
+                "code": f"BM-B01-{uuid.uuid4().hex[:8]}",
+                "name": f"Bodega central B01 {uuid.uuid4().hex[:6]}",
+                "is_central": True,
+            },
+        )
+        assert created_central.status_code == 201, created_central.text
+        central_warehouse_id = uuid.UUID(created_central.json()["id"])
+
+    async with async_session_factory() as session:
+        receiving_location_id = await session.scalar(
+            select(Location.id)
+            .where(
+                Location.warehouse_id == central_warehouse_id,
+                Location.location_type == "receiving",
+                Location.is_active.is_(True),
+                Location.lifecycle_status == "active",
+                Location.deleted_at.is_(None),
+            )
+            .order_by(Location.created_at, Location.id)
+            .limit(1)
+        )
+        if receiving_location_id is None:
+            receiving_location = Location(
+                warehouse_id=central_warehouse_id,
+                code=f"B01-REC-{uuid.uuid4().hex[:8]}",
+                aisle="A",
+                rack="R01",
+                level="N01",
+                position="P01",
+                location_type="receiving",
+                lifecycle_status="active",
+            )
+            session.add(receiving_location)
+            await session.commit()
+            receiving_location_id = receiving_location.id
+
+    order = await _sent_order(
+        purchase_order_client,
+        headers=admin_headers,
+        branch_id=headquarters_id,
+        warehouse_id=central_warehouse_id,
+        product_id=product_id,
+        supplier_id=supplier_id,
+        currency=currency,
+        quantity="2.000000",
+    )
+    order_detail = order["details"][0]
+    purchase_response = await purchase_order_client.post(
+        "/api/v1/purchases",
+        headers=admin_headers,
+        json={
+            "purchase_order_id": order["id"],
+            "supplier_invoice_number": "FAC-B01-CENTRAL-001",
+            "lines": [
+                {
+                    "purchase_order_detail_id": order_detail["id"],
+                    "quantity_received": "2.000000",
+                }
+            ],
+        },
+    )
+    assert purchase_response.status_code == 201, purchase_response.text
+    purchase = purchase_response.json()
+    assert purchase["branch_id"] == str(headquarters_id)
+    assert purchase["warehouse_id"] == str(central_warehouse_id)
+
+    username = f"hq-receipt-reader-{uuid.uuid4().hex[:8]}"
+    async with async_session_factory() as session:
+        permission_ids = set(
+            (
+                await session.scalars(
+                    select(Permission.id).where(
+                        Permission.code.in_(
+                            {
+                                "purchases:read",
+                                "purchases:receive",
+                                "purchases:verify",
+                                "inventory:receive",
+                                "locations.view",
+                            }
+                        ),
+                        Permission.deleted_at.is_(None),
+                    )
+                )
+            ).all()
+        )
+        assert len(permission_ids) == 5
+        reader_role = Role(
+            company_id=company_id,
+            name=f"B01 Receipt Reader {uuid.uuid4().hex[:8]}",
+            description="Receive, verify, and read receipts within headquarters scope E2E.",
+        )
+        session.add(reader_role)
+        await session.flush()
+        role_id = reader_role.id
+        session.add_all(
+            RolePermission(role_id=role_id, permission_id=permission_id)
+            for permission_id in permission_ids
+        )
+        await session.commit()
+    reader_created = await purchase_order_client.post(
+        "/api/v1/users",
+        headers=admin_headers,
+        json={
+            "company_id": str(company_id),
+            "username": username,
+            "email": f"{username}@example.com",
+            "password": "Headquarters!2026",
+            "role_ids": [str(role_id)],
+        },
+    )
+    assert reader_created.status_code == 201, reader_created.text
+    access_updated = await purchase_order_client.put(
+        f"/api/v1/users/{reader_created.json()['id']}/companies/{company_id}/branch-access",
+        headers=admin_headers,
+        json={
+            "access_all_branches": False,
+            "branch_ids": [str(headquarters_id)],
+            "default_branch_id": str(headquarters_id),
+        },
+    )
+    assert access_updated.status_code == 200, access_updated.text
+    reader_login = await purchase_order_client.post(
+        "/api/v1/auth/login",
+        json={"login": username, "password": "Headquarters!2026"},
+    )
+    assert reader_login.status_code == 200, reader_login.text
+    reader_headers = {
+        "Authorization": f"Bearer {reader_login.json()['access_token']}",
+        "X-Company-ID": str(company_id),
+        "X-Branch-ID": str(headquarters_id),
+    }
+
+    received = await purchase_order_client.post(
+        f"/api/v1/purchases/{purchase['id']}/receive", headers=reader_headers
+    )
+    assert received.status_code == 200, received.text
+    await _legacy_receipt(purchase["id"])
+    verified = await purchase_order_client.post(
+        f"/api/v1/purchases/{purchase['id']}/verify",
+        headers=reader_headers,
+        json={
+            "lines": [
+                {
+                    "purchase_detail_id": purchase["details"][0]["id"],
+                    "quantity_accepted": "2.000000",
+                    "inventory_location_id": str(receiving_location_id),
+                }
+            ]
+        },
+    )
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["status"] == "verified"
+
+    read_receipt = await purchase_order_client.get(
+        f"/api/v1/purchases/{purchase['id']}", headers=reader_headers
+    )
+    assert read_receipt.status_code == 200, read_receipt.text
+    assert read_receipt.json()["warehouse_id"] == str(central_warehouse_id)
+    headquarters_receipts = await purchase_order_client.get(
+        "/api/v1/purchases",
+        params={"branch_id": str(headquarters_id)},
+        headers=reader_headers,
+    )
+    assert headquarters_receipts.status_code == 200, headquarters_receipts.text
+    assert purchase["id"] in {item["id"] for item in headquarters_receipts.json()["items"]}
+    global_receipts = await purchase_order_client.get("/api/v1/purchases", headers=reader_headers)
+    assert global_receipts.status_code == 403, global_receipts.text
+    other_branch_receipts = await purchase_order_client.get(
+        "/api/v1/purchases",
+        params={"branch_id": str(regular_branch_id)},
+        headers=reader_headers,
+    )
+    assert other_branch_receipts.status_code == 403, other_branch_receipts.text
+
+    # Reproduce a legacy central receipt without changing its historical branch field.
+    async with async_session_factory() as session:
+        historical_purchase = await session.get(PurchaseModel, uuid.UUID(purchase["id"]))
+        assert historical_purchase is not None
+        historical_purchase.branch_id = None
+        await session.commit()
+
+    headquarters_legacy_receipt = await purchase_order_client.get(
+        f"/api/v1/purchases/{purchase['id']}", headers=reader_headers
+    )
+    assert headquarters_legacy_receipt.status_code == 200, headquarters_legacy_receipt.text
+    assert headquarters_legacy_receipt.json()["branch_id"] is None
+    headquarters_legacy_list = await purchase_order_client.get(
+        "/api/v1/purchases",
+        params={"branch_id": str(headquarters_id)},
+        headers=reader_headers,
+    )
+    assert headquarters_legacy_list.status_code == 200, headquarters_legacy_list.text
+    assert purchase["id"] in {item["id"] for item in headquarters_legacy_list.json()["items"]}
+    global_legacy_receipt = await purchase_order_client.get(
+        f"/api/v1/purchases/{purchase['id']}", headers=admin_headers
+    )
+    assert global_legacy_receipt.status_code == 200, global_legacy_receipt.text
+    global_legacy_list = await purchase_order_client.get("/api/v1/purchases", headers=admin_headers)
+    assert global_legacy_list.status_code == 200, global_legacy_list.text
+    assert purchase["id"] in {item["id"] for item in global_legacy_list.json()["items"]}
+    other_branch_legacy_list = await purchase_order_client.get(
+        "/api/v1/purchases",
+        params={"branch_id": str(regular_branch_id)},
+        headers=reader_headers,
+    )
+    assert other_branch_legacy_list.status_code == 403, other_branch_legacy_list.text
+
+
+async def test_purchase_draft_can_be_edited_and_saved_without_duplicate_detail(
+    purchase_order_client: AsyncClient,
+) -> None:
+    company_id, branch_id, warehouse_id, product_id, supplier_id, currency = await _reference_ids()
+    headers = await _headers(
+        purchase_order_client,
+        company_id=company_id,
+        username="purchase-draft-edit-save",
+        is_superuser=True,
+    )
+    order = await _sent_order(
+        purchase_order_client,
+        headers=headers,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        supplier_id=supplier_id,
+        currency=currency,
+    )
+    order_detail_id = order["details"][0]["id"]
+
+    created = await purchase_order_client.post(
+        "/api/v1/purchases",
+        headers=headers,
+        json={
+            "purchase_order_id": order["id"],
+            "supplier_invoice_number": "FAC-DRAFT-001",
+            "lines": [
+                {
+                    "purchase_order_detail_id": order_detail_id,
+                    "quantity_received": "2.000000",
+                }
+            ],
+            "notes": "Borrador original",
+        },
+    )
+    assert created.status_code == 201, created.text
+    purchase = created.json()
+    purchase_id = purchase["id"]
+    detail_id = purchase["details"][0]["id"]
+
+    updated = await purchase_order_client.put(
+        f"/api/v1/purchases/{purchase_id}",
+        headers=headers,
+        json={
+            "supplier_invoice_number": "FAC-DRAFT-001-EDITADA",
+            "supplier_invoice_date": datetime.now(UTC).date().isoformat(),
+            "lines": [
+                {
+                    "purchase_order_detail_id": order_detail_id,
+                    "quantity_received": "2.000000",
+                }
+            ],
+            "notes": "Borrador editado y guardado",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    edited = updated.json()
+    assert edited["supplier_invoice_number"] == "FAC-DRAFT-001-EDITADA"
+    assert edited["notes"] == "Borrador editado y guardado"
+    assert len(edited["details"]) == 1
+    assert edited["details"][0]["id"] == detail_id
+
+    persisted = await purchase_order_client.get(f"/api/v1/purchases/{purchase_id}", headers=headers)
+    assert persisted.status_code == 200, persisted.text
+    assert persisted.json()["details"][0]["id"] == detail_id
 
 
 async def test_purchase_receiving_partial_then_complete_workflow_and_audit(
@@ -699,9 +1095,19 @@ async def test_purchase_receiving_partial_then_complete_workflow_and_audit(
     assert immutable.status_code == 422
     assert immutable.json()["code"] == "purchase_not_editable"
 
+    await _legacy_receipt(first_purchase_id)
     verified = await purchase_order_client.post(
         f"/api/v1/purchases/{first_purchase_id}/verify",
         headers=headers,
+        json={
+            "lines": [
+                {
+                    "purchase_detail_id": first_purchase["details"][0]["id"],
+                    "quantity_accepted": "2.000000",
+                    "inventory_location_id": str(await _receiving_location_id(warehouse_id)),
+                }
+            ]
+        },
     )
     assert verified.status_code == 200, verified.text
     assert verified.json()["status"] == "verified"
@@ -877,8 +1283,199 @@ async def test_purchase_receiving_requires_rbac_permission(
     assert response.json()["code"] == "forbidden"
 
 
+async def test_rejected_receipt_stays_pending_and_creates_no_inventory_movement(
+    purchase_order_client: AsyncClient,
+) -> None:
+    company_id, branch_id, warehouse_id, product_id, supplier_id, currency = await _reference_ids()
+    headers = await _headers(
+        purchase_order_client,
+        company_id=company_id,
+        username="purchase-rejected-receipt-e2e",
+        is_superuser=True,
+    )
+    order = await _sent_order(
+        purchase_order_client,
+        headers=headers,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        supplier_id=supplier_id,
+        currency=currency,
+    )
+    order_id = order["id"]
+    order_detail_id = order["details"][0]["id"]
+
+    created = await purchase_order_client.post(
+        "/api/v1/purchases",
+        headers=headers,
+        json={
+            "purchase_order_id": order_id,
+            "lines": [
+                {
+                    "purchase_order_detail_id": order_detail_id,
+                    "quantity_received": "2.000000",
+                }
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    purchase_id = created.json()["id"]
+
+    received = await purchase_order_client.post(
+        f"/api/v1/purchases/{purchase_id}/receive",
+        headers=headers,
+    )
+    assert received.status_code == 200, received.text
+
+    await _legacy_receipt(purchase_id)
+    verified = await purchase_order_client.post(
+        f"/api/v1/purchases/{purchase_id}/verify",
+        headers=headers,
+        json={
+            "lines": [
+                {
+                    "purchase_detail_id": created.json()["details"][0]["id"],
+                    "quantity_accepted": "0",
+                    "inventory_location_id": None,
+                }
+            ]
+        },
+    )
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["status"] == "verified"
+    assert verified.json()["inventory_movement_id"] is None
+    assert Decimal(verified.json()["details"][0]["quantity_rejected"]) == Decimal("2")
+
+    order_after = await purchase_order_client.get(
+        f"/api/v1/purchase-orders/{order_id}", headers=headers
+    )
+    assert order_after.status_code == 200, order_after.text
+    assert order_after.json()["status"] == "sent"
+
+    receivable = await purchase_order_client.get(
+        f"/api/v1/purchase-orders/{order_id}/receivable", headers=headers
+    )
+    assert receivable.status_code == 200, receivable.text
+    assert Decimal(receivable.json()["lines"][0]["quantity_received"]) == Decimal("0")
+    assert Decimal(receivable.json()["lines"][0]["quantity_pending"]) == Decimal("4")
+
+    async with async_session_factory() as session:
+        movement_id = await session.scalar(
+            select(InventoryMovementModel.id).where(
+                InventoryMovementModel.company_id == company_id,
+                InventoryMovementModel.source_reference == f"purchase-receipt:{purchase_id}",
+            )
+        )
+    assert movement_id is None
+
+
+async def test_cross_warehouse_receipt_location_rolls_back_verification(
+    purchase_order_client: AsyncClient,
+) -> None:
+    company_id, branch_id, warehouse_id, product_id, supplier_id, currency = await _reference_ids()
+    async with async_session_factory() as session:
+        foreign_location_id = await session.scalar(
+            select(Location.id)
+            .join(Warehouse, Warehouse.id == Location.warehouse_id)
+            .join(Branch, Branch.id == Warehouse.branch_id)
+            .where(
+                Branch.company_id == company_id,
+                Location.warehouse_id != warehouse_id,
+                Location.is_active.is_(True),
+                Location.lifecycle_status == "active",
+                Location.deleted_at.is_(None),
+                Warehouse.is_active.is_(True),
+                Warehouse.operational_status == "active",
+                Warehouse.deleted_at.is_(None),
+            )
+            .limit(1)
+        )
+    assert foreign_location_id is not None
+
+    headers = await _headers(
+        purchase_order_client,
+        company_id=company_id,
+        username="purchase-cross-warehouse-location-e2e",
+        is_superuser=True,
+    )
+    order = await _sent_order(
+        purchase_order_client,
+        headers=headers,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        supplier_id=supplier_id,
+        currency=currency,
+    )
+    order_id = order["id"]
+    order_detail_id = order["details"][0]["id"]
+
+    created = await purchase_order_client.post(
+        "/api/v1/purchases",
+        headers=headers,
+        json={
+            "purchase_order_id": order_id,
+            "lines": [
+                {
+                    "purchase_order_detail_id": order_detail_id,
+                    "quantity_received": "2.000000",
+                }
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    purchase_id = created.json()["id"]
+    purchase_detail_id = created.json()["details"][0]["id"]
+
+    received = await purchase_order_client.post(
+        f"/api/v1/purchases/{purchase_id}/receive",
+        headers=headers,
+    )
+    assert received.status_code == 200, received.text
+
+    await _legacy_receipt(purchase_id)
+    rejected = await purchase_order_client.post(
+        f"/api/v1/purchases/{purchase_id}/verify",
+        headers=headers,
+        json={
+            "lines": [
+                {
+                    "purchase_detail_id": purchase_detail_id,
+                    "quantity_accepted": "1",
+                    "inventory_location_id": str(foreign_location_id),
+                }
+            ]
+        },
+    )
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["code"] == "purchase_receipt_location_invalid"
+
+    purchase_after = await purchase_order_client.get(
+        f"/api/v1/purchases/{purchase_id}", headers=headers
+    )
+    assert purchase_after.status_code == 200, purchase_after.text
+    assert purchase_after.json()["status"] == "received"
+    assert purchase_after.json()["details"][0]["quantity_accepted"] is None
+
+    order_after = await purchase_order_client.get(
+        f"/api/v1/purchase-orders/{order_id}", headers=headers
+    )
+    assert order_after.status_code == 200, order_after.text
+    assert order_after.json()["status"] == "partially_received"
+
+    async with async_session_factory() as session:
+        movement_id = await session.scalar(
+            select(InventoryMovementModel.id).where(
+                InventoryMovementModel.company_id == company_id,
+                InventoryMovementModel.source_reference == f"purchase-receipt:{purchase_id}",
+            )
+        )
+    assert movement_id is None
+
+
 async def test_retaceo_workflow_uses_purchase_details_and_audits(
     purchase_order_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     company_id, branch_id, warehouse_id, product_id, supplier_id, currency = await _reference_ids()
     headers = await _headers(
@@ -927,13 +1524,37 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
     assert received.status_code == 200, received.text
     assert received.json()["status"] == "received"
 
+    await _legacy_receipt(purchase_id)
+    verified = await purchase_order_client.post(
+        f"/api/v1/purchases/{purchase_id}/verify",
+        headers=headers,
+        json={
+            "lines": [
+                {
+                    "purchase_detail_id": purchase["details"][0]["id"],
+                    "quantity_accepted": "2.000000",
+                    "inventory_location_id": str(await _receiving_location_id(warehouse_id)),
+                }
+            ]
+        },
+    )
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["status"] == "verified"
+
     created = await purchase_order_client.post(
         "/api/v1/retaceos",
         headers=headers,
         json={
             "purchase_id": purchase_id,
+            "fob_lines": [
+                {
+                    "purchase_detail_id": row["id"],
+                    "amount": str(Decimal(row["subtotal"]) - Decimal(row["discount"])),
+                }
+                for row in purchase["details"]
+            ],
             "total_freight": "5.000000",
-            "total_expenses": "2.000000",
+            "total_expenses": "0.000000",
             "total_dai": "3.000000",
             "import_vat": "13.000000",
             "notes": "Retaceo E2E",
@@ -950,12 +1571,83 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
     assert retaceo["branch_id"] == str(branch_id)
     assert retaceo["details"][0]["purchase_detail_id"] == purchase_detail["id"]
     assert Decimal(retaceo["total_fob"]) == expected_fob
-    assert Decimal(retaceo["total_cost"]) == expected_fob + Decimal("10")
+    # Explicit fixed amounts are distributed across the manually entered FOB.
+    assert Decimal(retaceo["total_cost"]) == expected_fob + Decimal("8")
     assert Decimal(retaceo["import_vat"]) == Decimal("13")
-    assert Decimal(retaceo["freight_percentage"]) == Decimal("20")
-    assert Decimal(retaceo["expense_percentage"]) == Decimal("8")
-    assert Decimal(retaceo["dai_percentage"]) == Decimal("12")
 
+    def allocated_costs(
+        costs: list[dict[str, object]], *, freight_amount: str = "5.000000"
+    ) -> list[dict[str, object]]:
+        allocations: list[dict[str, object]] = []
+        for cost in costs:
+            classification = str(cost["classification"])
+            amount = freight_amount if classification == "freight" else str(cost["amount"])
+            allocations.append(
+                {
+                    "id": cost["id"],
+                    "classification": classification,
+                    "title": cost["title"],
+                    "description": cost.get("description"),
+                    "expense_type_id": cost.get("expense_type_id"),
+                    "incurred_on": cost.get("incurred_on"),
+                    "source_purchase_order_expense_id": cost.get(
+                        "source_purchase_order_expense_id"
+                    ),
+                    "amount": amount,
+                    "allocations": (
+                        []
+                        if classification == "import_vat"
+                        else [
+                            {
+                                "purchase_detail_id": purchase_detail["id"],
+                                "amount": amount,
+                            }
+                        ]
+                    ),
+                }
+            )
+        return allocations
+
+    created_costs = retaceo["costs"]
+    assert isinstance(created_costs, list)
+
+    async with async_session_factory() as session:
+        expense_type = ExpenseTypeModel(
+            company_id=company_id, name="Gasto documentado E2E", is_active=True
+        )
+        session.add(expense_type)
+        await session.commit()
+        expense_type_id = str(expense_type.id)
+    extra_expense = {
+        "classification": "expense",
+        "title": "Gasto documentado E2E",
+        "description": "Comprobante operativo de la recepción",
+        "expense_type_id": expense_type_id,
+        "incurred_on": datetime.now(UTC).date().isoformat(),
+        "amount": "2.000000",
+        "allocations": [{"purchase_detail_id": purchase_detail["id"], "amount": "2.000000"}],
+    }
+
+    updated = await purchase_order_client.put(
+        f"/api/v1/retaceos/{retaceo_id}",
+        headers=headers,
+        json={
+            "total_freight": "5.000000",
+            "total_expenses": "2.000000",
+            "total_dai": "3.000000",
+            "import_vat": "13.000000",
+            "notes": "Retaceo con costos distribuidos",
+            "costs": [*allocated_costs(created_costs), extra_expense],
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert Decimal(updated.json()["total_cost"]) == expected_fob + Decimal("10")
+    assert Decimal(updated.json()["freight_percentage"]) == Decimal("20")
+    assert Decimal(updated.json()["expense_percentage"]) == Decimal("8")
+    assert Decimal(updated.json()["dai_percentage"]) == Decimal("12")
+
+    updated_costs = updated.json()["costs"]
+    assert isinstance(updated_costs, list)
     updated = await purchase_order_client.put(
         f"/api/v1/retaceos/{retaceo_id}",
         headers=headers,
@@ -965,10 +1657,40 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
             "total_dai": "3.000000",
             "import_vat": "13.000000",
             "notes": "Retaceo ajustado",
+            "costs": allocated_costs(updated_costs, freight_amount="6.000000"),
         },
     )
     assert updated.status_code == 200, updated.text
     assert Decimal(updated.json()["total_cost"]) == expected_fob + Decimal("11")
+
+    storage = _enable_purchase_order_document_services(
+        purchase_order_client,
+        monkeypatch,
+        PurchaseOrderE2EScanner(ScanResult(clean=True)),
+    )
+    for cost in updated.json()["costs"]:
+        cost_id = cost["id"]
+        payload = f"%PDF-1.7\nComprobante E2E: {cost['title']}".encode()
+        base = f"/api/v1/retaceos/{retaceo_id}/costs/{cost_id}/documents"
+        initiated = await purchase_order_client.post(
+            f"{base}/uploads",
+            headers=headers,
+            json={
+                "file_name": f"retaceo-{cost_id}.pdf",
+                "content_type": "application/pdf",
+                "size_bytes": len(payload),
+                "checksum_sha256": hashlib.sha256(payload).hexdigest(),
+            },
+        )
+        assert initiated.status_code == 201, initiated.text
+        document_id = initiated.json()["document"]["document_id"]
+        storage.put(document_id, payload)
+        completed = await purchase_order_client.post(
+            f"{base}/{document_id}/complete",
+            headers=headers,
+        )
+        assert completed.status_code == 200, completed.text
+        assert completed.json()["status"] == "active"
 
     calculated = await purchase_order_client.post(
         f"/api/v1/retaceos/{retaceo_id}/calculate",

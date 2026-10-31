@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+  import { page as currentPage } from '$app/state';
   import Button from '$lib/components/ui/Button.svelte';
   import { HttpError } from '$lib/api/client';
   import { purchaseOrdersApi } from '$lib/api/purchase-orders';
+  import { branch } from '$lib/stores/branch.svelte';
   import { suppliersApi } from '$lib/api/suppliers';
   import type { PurchaseOrder, PurchaseOrderStatus } from '$lib/types/purchase-order';
   import type { Supplier } from '$lib/types/supplier';
@@ -17,9 +20,17 @@
     { value: 'closed', label: 'Cerrada' }
   ];
 
+  function parseStatus(value: string | null): PurchaseOrderStatus | '' {
+    return STATUS_OPTIONS.some((option) => option.value === value)
+      ? (value as PurchaseOrderStatus)
+      : '';
+  }
+
   let items = $state<PurchaseOrder[]>([]);
   let suppliers = $state<Supplier[]>([]);
-  let statusFilter = $state<PurchaseOrderStatus | ''>('');
+  let statusFilter = $state<PurchaseOrderStatus | ''>(
+    parseStatus(currentPage.url.searchParams.get('status'))
+  );
   let supplierFilter = $state('');
   let page = $state(1);
   let total = $state(0);
@@ -69,6 +80,14 @@
   function handleStatusChange(event: Event) {
     statusFilter = (event.currentTarget as HTMLSelectElement).value as PurchaseOrderStatus | '';
     page = 1;
+    syncStatusInUrl(statusFilter);
+  }
+
+  function syncStatusInUrl(status: PurchaseOrderStatus | '') {
+    const url = new URL(currentPage.url);
+    if (status) url.searchParams.set('status', status);
+    else url.searchParams.delete('status');
+    void goto(url, { replaceState: true, keepFocus: true, noScroll: true });
   }
 
   function handleSupplierChange(event: Event) {
@@ -93,7 +112,8 @@
   async function loadOrders(
     currentStatus: PurchaseOrderStatus | '',
     currentSupplier: string,
-    currentPage: number
+    currentPage: number,
+    currentBranchId: string | null
   ) {
     const sequence = ++requestSequence;
     loading = true;
@@ -103,6 +123,7 @@
       const response = await purchaseOrdersApi.list({
         status: currentStatus || undefined,
         supplier_id: currentSupplier ? Number(currentSupplier) : undefined,
+        branch_id: currentBranchId,
         page: currentPage,
         size: 20
       });
@@ -123,11 +144,12 @@
   }
 
   function retry() {
-    void loadOrders(statusFilter, supplierFilter, page);
+    void loadOrders(statusFilter, supplierFilter, page, branch.id);
   }
 
   function emptyAction() {
     if (statusFilter || supplierFilter) {
+      syncStatusInUrl('');
       statusFilter = '';
       supplierFilter = '';
       page = 1;
@@ -144,7 +166,8 @@
     const currentStatus = statusFilter;
     const currentSupplier = supplierFilter;
     const currentPage = page;
-    void loadOrders(currentStatus, currentSupplier, currentPage);
+    const currentBranchId = branch.id;
+    void loadOrders(currentStatus, currentSupplier, currentPage, currentBranchId);
   });
 </script>
 
@@ -170,7 +193,7 @@
         aria-label="Estado"
         value={statusFilter}
         onchange={handleStatusChange}
-        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <option value="">Todos los estados</option>
         {#each STATUS_OPTIONS as option}
@@ -186,7 +209,7 @@
         value={supplierFilter}
         onchange={handleSupplierChange}
         disabled={suppliers.length === 0}
-        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
       >
         <option value="">Todos los proveedores</option>
         {#each suppliers as supplier (supplier.id_supplier)}
@@ -211,7 +234,12 @@
     </div>
   {:else if loading}
     <div class="overflow-hidden rounded-xl border border-border bg-surface">
-      <div class="space-y-3 p-4" aria-label="Cargando órdenes de compra">
+      <div
+        class="space-y-3 p-4"
+        role="status"
+        aria-live="polite"
+        aria-label="Cargando órdenes de compra"
+      >
         {#each Array(5) as _}
           <div class="grid grid-cols-6 gap-3">
             <div class="skeleton h-5 rounded"></div>

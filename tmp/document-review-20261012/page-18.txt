@@ -1,0 +1,46 @@
+Ejemplos:
+
+    •   Users
+    •   Products
+    •   Sales
+    •   Purchases
+    •   Inventory
+    •   Warehouses
+    •   Customers
+    •   Suppliers
+    •   Roles
+    •   Permissions
+
+
+
+action
+
+Representa la acción ejecutada por el usuario.
+
+Valores recomendados:
+
+    •   CREATE
+    •   UPDATE
+    •   DELETE
+
+
+
+original_data
+
+Almacena el estado del registro antes de la modificación.
+
+Ejemplo
+
+{
+  "price":25,
+  "stock":100
+}
+
+Cuando la acción sea CREATE este campo permanecerá NULL.
+
+
+
+modified_data
+
+
+                                                                                                                 18

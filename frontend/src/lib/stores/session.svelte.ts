@@ -20,6 +20,7 @@ export interface CurrentUser {
 
 const TOKEN_STORAGE_KEY = 'erp_access_token';
 const USER_STORAGE_KEY = 'erp_current_user';
+const OPERATIONAL_BRANCH_STORAGE_KEY = 'erp_operational_branch';
 
 function createSessionStore() {
   let user = $state<CurrentUser | null>(loadUser());
@@ -57,6 +58,15 @@ function createSessionStore() {
     }
   }
 
+  function clearBranchPreferenceWhenUserChanges(nextUser: CurrentUser) {
+    if (!user || user.id === nextUser.id || !browser) return;
+    try {
+      sessionStorage.removeItem(OPERATIONAL_BRANCH_STORAGE_KEY);
+    } catch {
+      // A storage failure must not prevent login.
+    }
+  }
+
   return {
     get user(): CurrentUser | null {
       return user;
@@ -71,6 +81,7 @@ function createSessionStore() {
       return loading;
     },
     setSession(token: string, u: CurrentUser) {
+      clearBranchPreferenceWhenUserChanges(u);
       accessToken = token;
       user = u;
       persist();
@@ -80,6 +91,7 @@ function createSessionStore() {
       persist();
     },
     setUser(u: CurrentUser) {
+      clearBranchPreferenceWhenUserChanges(u);
       user = u;
       persist();
     },
@@ -89,7 +101,7 @@ function createSessionStore() {
       loading = false;
       persist();
       if (browser) sessionStorage.removeItem('erp_active_company');
-      if (browser) sessionStorage.removeItem('erp_operational_branch');
+      if (browser) sessionStorage.removeItem(OPERATIONAL_BRANCH_STORAGE_KEY);
     },
     setLoading(v: boolean) {
       loading = v;

@@ -1,0 +1,45 @@
+Compra
+   ↓
+Retaceo
+No deberá existir un retaceo sin una compra asociada.
+
+No deberá existir una compra sin una orden de compra asociada.
+
+No deberá existir una orden de compra generada a partir de una cotización sin conservar la
+referencia de dicha cotización.
+
+Los detalles deberán mantener las relaciones necesarias para conocer el origen de cada
+producto.
+
+                                6.8.46 Preparación para Integración con Inventario
+
+Una vez registrada y verificada la compra, el sistema deberá disponer de la información
+necesaria para que posteriormente Inventario pueda registrar el ingreso de mercancías.
+
+La información relevante será:
+
+    •   Producto
+    •   Cantidad
+    •   Unidad
+    •   Sucursal
+    •   Almacén
+    •   Compra
+    •   Costo unitario
+    •   Costo real
+    •   Fecha de recepción
+
+En el caso de productos importados sometidos a retaceo, el costo real determinado por el
+retaceo será la referencia para el proceso posterior de valoración.
+
+La actualización definitiva de existencias será responsabilidad del módulo de Inventario.
+
+                                       6.8.47 Preparación para Asignación de Precios
+
+El costo real determinado mediante el proceso de compra y retaceo podrá servir como base
+para el módulo de Asignación de Precios.
+
+El flujo posterior será:
+
+
+
+                                                                                                              102

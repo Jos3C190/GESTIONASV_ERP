@@ -3,13 +3,24 @@
 
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import { HttpError } from '$lib/api/client';
   import { getWarehouse } from '$lib/services/warehouses';
   import { inventoryApi } from '$lib/features/inventory/services';
-  import type { CapacitySummary } from '$lib/features/inventory/types';
+  import type { CapacitySummary, InventoryMovementHistory } from '$lib/features/inventory/types';
+  import {
+    formatMovementDate,
+    formatMovementQuantity,
+    movementIcon,
+    movementTypeLabel,
+    stockStatusLabel
+  } from '$lib/features/inventory/movement-presentation';
   import CapacitySummaryPanel from '$lib/features/inventory/components/CapacitySummaryPanel.svelte';
   import HandlingUnitsPanel from '$lib/features/inventory/components/HandlingUnitsPanel.svelte';
+  import MovementDetailsModal from '$lib/features/inventory/components/MovementDetailsModal.svelte';
   import WarehouseCapacityGroupsSummary from '$lib/features/warehouses/components/WarehouseCapacityGroupsSummary.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
+  import { company } from '$lib/stores/company.svelte';
+  import { branch } from '$lib/stores/branch.svelte';
   import {
     CAPACITY_ENFORCEMENT_LABEL,
     CAPACITY_PROFILE_LABEL,
@@ -32,18 +43,51 @@
   let capacitySummary = $state<CapacitySummary | null>(null);
   let capacityLoading = $state(false);
   let capacityError = $state<string | null>(null);
+  let movementHistory = $state<InventoryMovementHistory[]>([]);
+  let selectedMovement = $state<InventoryMovementHistory | null>(null);
+  let movementsLoading = $state(false);
+  let movementsError = $state<string | null>(null);
 
   let warehouseId = $derived(page.params.id ?? '');
+  let inventoryContextKey = $derived(
+    [
+      company.id ?? '',
+      branch.id ?? '',
+      permissions.isSuperuser,
+      ...permissions.permissions.slice().sort()
+    ].join('|')
+  );
 
   async function loadData() {
     if (!warehouseId) return;
     const canLoadCapacity = permissions.hasPermission('inventory:capacity');
+    const canReadInventory = permissions.hasPermission('inventory:read');
     loading = true;
     error = null;
     capacitySummary = null;
     capacityError = null;
+    movementHistory = [];
+    movementsError = null;
     try {
-      warehouse = await getWarehouse(warehouseId);
+      const loadedWarehouse = await getWarehouse(warehouseId);
+      warehouse = loadedWarehouse;
+      if (canReadInventory) {
+        movementsLoading = true;
+        try {
+          movementHistory = await inventoryApi.listWarehouseMovements(warehouseId, 10);
+          warehouse = {
+            ...loadedWarehouse,
+            recentMovements: movementHistory.map(mapHistoryMovement)
+          };
+        } catch (err) {
+          movementsError =
+            err instanceof HttpError
+              ? err.message
+              : 'No se pudo cargar el historial. Actualiza la página para intentarlo de nuevo.';
+        } finally {
+          movementsLoading = false;
+        }
+      }
       if (canLoadCapacity) {
         capacityLoading = true;
         try {
@@ -64,6 +108,7 @@
 
   $effect(() => {
     void permissions.hasPermission('inventory:capacity');
+    void permissions.hasPermission('inventory:read');
     if (warehouseId) void loadData();
   });
 
@@ -81,7 +126,14 @@
     { id: 'operaciones', label: 'Operaciones', icon: 'operations' },
     { id: 'seguridad', label: 'Seguridad y cumplimiento', icon: 'security' }
   ];
-  let activeTab = $state('resumen');
+  let activeTab = $state(
+    page.url.searchParams.get('tab') === 'inventario' ? 'inventario' : 'resumen'
+  );
+  let focusHandlingUnitId = $derived(page.url.searchParams.get('handling_unit') ?? undefined);
+
+  $effect(() => {
+    if (page.url.searchParams.get('tab') === 'inventario') activeTab = 'inventario';
+  });
 
   // === Helpers ===
   function fmt(value: string | number | null | undefined, suffix = ''): string {
@@ -111,22 +163,41 @@
     return `${Number(value).toLocaleString('es-SV', { maximumFractionDigits: 3 })} ${unit}`;
   }
 
-  function movementTypeLabel(t: WarehouseMovement['type']): {
-    label: string;
-    color: string;
-    bg: string;
-  } {
-    const m: Record<WarehouseMovement['type'], { label: string; color: string; bg: string }> = {
-      inbound: { label: 'Entrada', color: 'text-success', bg: 'bg-success/10' },
-      outbound: { label: 'Salida', color: 'text-primary', bg: 'bg-primary/10' },
-      transfer: { label: 'Transferencia', color: 'text-warning', bg: 'bg-warning/10' },
-      adjustment: { label: 'Ajuste', color: 'text-foreground-muted', bg: 'bg-surface-muted/60' }
+  function mapHistoryMovement(item: InventoryMovementHistory): WarehouseMovement {
+    const type: WarehouseMovement['type'] =
+      item.movement_type === 'receipt'
+        ? 'inbound'
+        : ['pick', 'shipment'].includes(item.movement_type)
+          ? 'outbound'
+          : ['putaway', 'transfer'].includes(item.movement_type)
+            ? 'transfer'
+            : 'adjustment';
+    return {
+      id: item.id,
+      date: formatMovementDate(item.posted_at),
+      type,
+      productSku: item.product_sku ?? '—',
+      productName: item.product_name ?? 'Producto sin nombre',
+      quantity: Number(item.quantity_base),
+      operator: item.operator ?? 'Usuario no disponible',
+      reference: item.source_reference ?? item.movement_id
     };
-    return m[t];
   }
 
-  function movementIcon(t: WarehouseMovement['type']): string {
-    return t === 'inbound' ? '↓' : t === 'outbound' ? '↑' : t === 'transfer' ? '↔' : '⚙';
+  function movementBusinessReference(item: InventoryMovementHistory): string {
+    const codes = [item.purchase_order_code, item.purchase_code].filter((code): code is string =>
+      Boolean(code)
+    );
+    if (codes.length > 0) return codes.join(' · ');
+    if (item.movement_type === 'putaway' && item.handling_unit_code) {
+      return `Unidad ${item.handling_unit_code}`;
+    }
+    if (item.movement_type === 'receipt') return 'Recepción de compra';
+    return 'Movimiento registrado';
+  }
+
+  function closeMovementDetails() {
+    selectedMovement = null;
   }
 
   function stockStatus(
@@ -290,11 +361,15 @@
                     r="3"
                   /></svg
                 >
-                <button
-                  onclick={() => warehouse && goto(`/branches/${warehouse.branchId}`)}
-                  class="hover:text-primary transition-colors underline-offset-2 hover:underline"
-                  >{warehouse.branchName}</button
-                >
+                {#if warehouse.branchId}
+                  <button
+                    onclick={() => warehouse && goto(`/branches/${warehouse.branchId}`)}
+                    class="hover:text-primary transition-colors underline-offset-2 hover:underline"
+                    >{warehouse.branchName}</button
+                  >
+                {:else}
+                  <span>{warehouse.branchName || 'Casa matriz · independiente'}</span>
+                {/if}
               </span>
               <span class="flex items-center gap-1.5">
                 <svg
@@ -318,6 +393,13 @@
               >
                 {TYPE_LABEL[warehouse.type]}
               </span>
+              {#if warehouse.isCentral}
+                <span
+                  class="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10.5px] font-medium text-primary"
+                >
+                  Bodega madre
+                </span>
+              {/if}
             </div>
           </div>
           <div class="flex flex-none flex-col items-start gap-1.5 sm:items-end">
@@ -494,32 +576,23 @@
             >
             Movimiento reciente
           </p>
-          {#if warehouse.dailyMovementsAvg > 0}
-            <div class="grid grid-cols-2 gap-2 mb-2">
-              <div class="rounded-md border border-border bg-surface-muted/40 px-2 py-1.5">
-                <p class="text-[9px] font-bold uppercase tracking-wider text-foreground-subtle">
-                  Entradas mes
-                </p>
-                <p class="font-mono text-sm font-bold tabular-nums text-success">
-                  {fmt(warehouse.inboundThisMonth)}
-                </p>
-              </div>
-              <div class="rounded-md border border-border bg-surface-muted/40 px-2 py-1.5">
-                <p class="text-[9px] font-bold uppercase tracking-wider text-foreground-subtle">
-                  Salidas mes
-                </p>
-                <p class="font-mono text-sm font-bold tabular-nums text-primary">
-                  {fmt(warehouse.outboundThisMonth)}
-                </p>
-              </div>
-            </div>
-            <p class="text-[10.5px] text-foreground-subtle">
-              Últ. movimiento: <span class="font-medium text-foreground"
-                >{warehouse.lastMovement}</span
+          {#if movementsLoading}
+            <p class="text-xs text-foreground-subtle">Cargando historial...</p>
+          {:else if movementHistory.length > 0}
+            <p class="font-mono text-xl font-bold tabular-nums text-foreground">
+              {movementHistory.length} <span class="text-xs font-normal">recientes</span>
+            </p>
+            <p class="mt-1 text-[10.5px] text-foreground-subtle">
+              Último: <span class="font-medium text-foreground"
+                >{movementHistory[0] ? formatMovementDate(movementHistory[0].posted_at) : '—'}</span
               >
             </p>
+          {:else if movementsError}
+            <p class="text-xs text-danger">No se pudo leer el historial.</p>
+          {:else if !permissions.hasPermission('inventory:read')}
+            <p class="text-xs text-foreground-subtle">Historial restringido por permisos.</p>
           {:else}
-            <p class="text-xs text-foreground-subtle">Sin movimientos recientes</p>
+            <p class="text-xs text-foreground-subtle">Sin movimientos registrados.</p>
           {/if}
         </Card>
 
@@ -860,7 +933,19 @@
           {#if permissions.hasPermission('inventory:read')}
             <HandlingUnitsPanel
               warehouseId={warehouse.id}
+              contextKey={inventoryContextKey}
+              {focusHandlingUnitId}
               canVerify={permissions.hasPermission('inventory:receive')}
+              canReadRetaceos={permissions.hasPermission('retaceos:read')}
+              canVerifyRetaceos={permissions.hasPermission('retaceos:verify')}
+              canRelease={permissions.hasPermission('inventory:move')}
+              canPrepareSplit={warehouse.status === 'active' &&
+                warehouse.storageEligible &&
+                permissions.hasPermission('inventory:move')}
+              canTransfer={warehouse.isCentral &&
+                warehouse.status === 'active' &&
+                warehouse.storageEligible &&
+                permissions.hasPermission('inventory:move')}
             />
           {:else}
             <Card class="p-5">
@@ -1033,6 +1118,133 @@
           aria-labelledby="tab-operaciones"
           class="space-y-5"
         >
+          <Card class="p-6">
+            <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-semibold text-foreground">Historial de movimientos</h3>
+                <p class="mt-1 text-xs text-foreground-muted">
+                  Registro conservado por línea para consultar recepciones, liberaciones y
+                  traslados.
+                </p>
+              </div>
+              {#if movementHistory.length > 0}
+                <span
+                  class="inline-flex items-center rounded-md border border-border bg-surface-muted/40 px-2 py-1 text-xs text-foreground-muted"
+                  >{movementHistory.length} recientes</span
+                >
+              {/if}
+            </div>
+
+            {#if !permissions.hasPermission('inventory:read')}
+              <p
+                class="rounded-lg border border-border bg-surface-muted/30 px-3 py-3 text-sm text-foreground-muted"
+              >
+                Tu permiso actual no permite consultar el historial de inventario.
+              </p>
+            {:else if movementsLoading}
+              <p class="py-6 text-center text-sm text-foreground-muted">
+                Cargando movimientos guardados...
+              </p>
+            {:else if movementsError}
+              <p
+                class="rounded-lg border border-danger/30 bg-danger/10 px-3 py-3 text-sm text-danger"
+                role="alert"
+              >
+                {movementsError}
+              </p>
+            {:else if movementHistory.length === 0}
+              <p
+                class="rounded-lg border border-dashed border-border px-3 py-8 text-center text-sm text-foreground-muted"
+              >
+                Todavía no hay movimientos registrados en este almacén.
+              </p>
+            {:else}
+              <ul class="space-y-2">
+                {#each movementHistory as movement (movement.id)}
+                  {@const movementStyle = movementTypeLabel(movement.movement_type)}
+                  <li
+                    class="flex flex-col gap-3 rounded-lg border border-border bg-surface-muted/20 p-3 sm:flex-row sm:items-center"
+                  >
+                    <span
+                      class="flex h-9 w-9 flex-none items-center justify-center rounded-full {movementStyle.bg} {movementStyle.color} text-base font-bold"
+                      aria-hidden="true">{movementIcon(movement.movement_type)}</span
+                    >
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span
+                          class="inline-flex items-center rounded-md {movementStyle.bg} px-1.5 py-0.5 text-xs font-semibold {movementStyle.color}"
+                          >{movementStyle.label}</span
+                        >
+                        {#if movement.purchase_order_code || movement.purchase_code || movement.handling_unit_code}
+                          <span class="max-w-full truncate font-mono text-xs text-foreground-muted"
+                            >{movementBusinessReference(movement)}</span
+                          >
+                        {/if}
+                      </div>
+                      <p class="mt-2 text-sm text-foreground">
+                        <span class="font-semibold"
+                          >{formatMovementQuantity(movement.quantity_base)} ×</span
+                        >
+                        {movement.product_name ?? 'Producto sin nombre'}
+                        {#if movement.product_sku}
+                          <span class="font-mono text-xs text-foreground-muted"
+                            >({movement.product_sku})</span
+                          >
+                        {/if}
+                        <span class="text-foreground-muted">
+                          {movement.base_unit_symbol ?? movement.base_unit_name ?? 'unidades'}
+                        </span>
+                      </p>
+                      <p class="mt-1 text-xs text-foreground-muted">
+                        {movement.from_location_code ?? 'Origen externo'}
+                        {#if movement.from_stock_status}
+                          · {stockStatusLabel(movement.from_stock_status)}
+                        {/if}
+                        <span class="px-1">→</span>
+                        {movement.to_location_code ?? 'Destino externo'}
+                        {#if movement.to_stock_status}
+                          · {stockStatusLabel(movement.to_stock_status)}
+                        {/if}
+                      </p>
+                    </div>
+                    <div class="flex-none text-left sm:text-right">
+                      <p class="text-xs text-foreground-muted">
+                        {formatMovementDate(movement.posted_at)}
+                      </p>
+                      <p class="mt-1 text-xs text-foreground">
+                        {movement.operator ?? 'Usuario no disponible'}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      class="min-h-11 w-full justify-start sm:w-auto sm:justify-center"
+                      onclick={() => (selectedMovement = movement)}
+                    >
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                        ><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" /><circle
+                          cx="12"
+                          cy="12"
+                          r="3"
+                        /></svg
+                      >
+                      Ver detalles
+                    </Button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </Card>
+
           <!-- Personal y turnos -->
           <Card class="p-6">
             <h3 class="mb-4 text-sm font-semibold text-foreground flex items-center gap-2">
@@ -1552,3 +1764,5 @@
     </div>
   {/if}
 </div>
+
+<MovementDetailsModal movement={selectedMovement} onclose={closeMovementDetails} />

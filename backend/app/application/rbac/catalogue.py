@@ -122,6 +122,11 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     # --- purchase requests ---
     PermissionSpec("purchase_requests:read", "Ver solicitudes de compra", "purchase_requests"),
     PermissionSpec(
+        "purchase_requests:create",
+        "Crear, editar y enviar solicitudes propias",
+        "purchase_requests",
+    ),
+    PermissionSpec(
         "purchase_requests:manage",
         "Crear, editar, enviar y cancelar solicitudes",
         "purchase_requests",
@@ -160,6 +165,11 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
         "purchase_orders",
     ),
     PermissionSpec("purchase_orders:send", "Enviar órdenes de compra aprobadas", "purchase_orders"),
+    PermissionSpec(
+        "expense_types:manage",
+        "Administrar tipos de gasto de compras",
+        "purchase_orders",
+    ),
     # --- purchase quotations ---
     PermissionSpec(
         "purchase_quotations:read",
@@ -172,8 +182,30 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
         "purchase_quotations",
     ),
     PermissionSpec(
-        "purchase_quotations:select", "Seleccionar la oferta ganadora", "purchase_quotations"
+        "purchase_quotations:select", "Adjudicar ofertas de compra", "purchase_quotations"
     ),
+    # --- sales ---
+    PermissionSpec("sales_customers:read", "Consultar clientes de venta", "customers"),
+    PermissionSpec("sales_customers:manage", "Crear, editar y desactivar clientes", "customers"),
+    PermissionSpec("sales_quotations:read", "Consultar cotizaciones de venta", "sales"),
+    PermissionSpec("sales_quotations:manage", "Crear y editar borradores de cotización", "sales"),
+    PermissionSpec("sales_quotations:confirm", "Confirmar y cancelar cotizaciones", "sales"),
+    PermissionSpec("sales_quotations:convert", "Convertir cotizaciones en ventas", "sales"),
+    PermissionSpec("sales:read", "Consultar ventas", "sales"),
+    PermissionSpec("sales:manage", "Editar borradores de venta", "sales"),
+    PermissionSpec("sales:confirm", "Confirmar ventas", "sales"),
+    PermissionSpec("sales:cancel", "Cancelar ventas con motivo", "sales"),
+    PermissionSpec("sales_deliveries:read", "Consultar entregas de venta", "sales"),
+    PermissionSpec("sales_deliveries:manage", "Preparar entregas de venta", "sales"),
+    PermissionSpec(
+        "sales_deliveries:confirm", "Confirmar entregas y descontar inventario", "sales"
+    ),
+    PermissionSpec("sales_deliveries:cancel", "Cancelar borradores de entrega", "sales"),
+    PermissionSpec("sales_returns:read", "Consultar devoluciones de venta", "sales"),
+    PermissionSpec("sales_returns:manage", "Registrar devoluciones de venta", "sales"),
+    PermissionSpec("sales_returns:receive", "Registrar recepción de devoluciones", "sales"),
+    PermissionSpec("sales_returns:resolve", "Aceptar o rechazar mercancía devuelta", "sales"),
+    PermissionSpec("sales_returns:cancel", "Cancelar borradores de devolución", "sales"),
     # --- roles ---
     PermissionSpec("roles:read", "Ver roles", "roles"),
     PermissionSpec("roles:create", "Crear roles", "roles"),
@@ -209,12 +241,24 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     # --- inventory and physical capacity ---
     PermissionSpec("inventory:read", "Consultar inventario y capacidad", "inventory"),
     PermissionSpec(
+        "inventory:warehouse_receipts",
+        "Operar el panel de bodega y verificar recepciones físicas",
+        "inventory",
+    ),
+    PermissionSpec(
         "inventory:manage_packaging",
         "Gestionar unidades base y presentaciones",
         "inventory",
     ),
     PermissionSpec("inventory:receive", "Registrar recepciones de inventario", "inventory"),
+    PermissionSpec(
+        "inventory:valuation", "Consultar y aprobar valoración de inventario", "inventory"
+    ),
     PermissionSpec("inventory:move", "Registrar movimientos y traslados", "inventory"),
+    PermissionSpec("inventory:adjust", "Crear y administrar ajustes de inventario", "inventory"),
+    PermissionSpec(
+        "inventory:adjust_approve", "Aprobar y aplicar ajustes de inventario", "inventory"
+    ),
     PermissionSpec("inventory:capacity", "Consultar proyecciones de capacidad", "inventory"),
     PermissionSpec("inventory:reserve", "Reservar y confirmar capacidad", "inventory"),
     PermissionSpec(

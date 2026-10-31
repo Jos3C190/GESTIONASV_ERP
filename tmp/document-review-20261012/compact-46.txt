@@ -1,0 +1,27 @@
+6.7.4 Tabla products
+La tabla products representa el catálogo principal de productos del sistema.
+Campo | Tipo | Clave | Descripción
+id_product | int | PK | Identificador único del producto
+uuid | string | Identificador universal
+id_category | int | FK | Categoría del producto
+id_sub_category | int | FK | Subcategoría del producto
+sku | string | Código SKU
+original_code | string | Código original del fabricante o proveedor
+internal_code | string | Código interno de la organización
+name | string | Nombre del producto
+size | string | Tamaño o talla
+dimensions | string | Dimensiones
+description | string | Descripción del producto
+presentation | string | Presentación comercial
+purchase_unit | int | FK | Unidad utilizada para comprar
+sale_unit | int | FK | Unidad utilizada para vender
+is_active | boolean | Estado del producto
+6.7.5 Tabla products_images
+Esta tabla permite almacenar las imágenes asociadas a cada producto.
+Campo | Tipo | Clave | Descripción
+id_product_image | int | PK | Identificador de la imagen
+uuid | string | Identificador universal de la imagen
+id_product | int | FK | Producto asociado
+path | string | Ruta o ubicación del archivo
+is_active | boolean | Estado de la imagen
+Un producto podrá tener múltiples imágenes.

@@ -1,0 +1,30 @@
+Totales
+• | Subtotal.
+• | Descuento.
+• | Impuestos.
+• | Gastos adicionales.
+• | Total.
+6.8.36.5 Recepción / Compra
+La pantalla de recepción permitirá registrar las mercancías realmente recibidas.
+Deberá mostrar la información de la orden:
+Orden: OC-00025
+• | Proveedor: Proveedor A
+• | Almacén: Bodega Principal
+Y el detalle:
+Producto | Ordenado | Recibido | Pendiente
+Producto A | 100 | 60 | 40
+Producto B | 50 | 50 | 0
+El usuario podrá registrar cantidades recibidas.
+El sistema deberá impedir recibir cantidades superiores a las pendientes, salvo que exista una
+regla específica que permita sobre-recepción.
+6.8.36.6 Retaceo
+La pantalla de Retaceo deberá permitir:
+Encabezado
+• | Código de retaceo.
+• | Proveedor.
+• | Compra.
+• | Fecha.
+• | País de origen.
+• | Factura de importación.
+• | Fecha de factura.
+• | Póliza de importación.

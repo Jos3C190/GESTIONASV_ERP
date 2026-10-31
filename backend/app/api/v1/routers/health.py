@@ -11,9 +11,14 @@ typical probe expectations. They are also registered in `main.py` separately.
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime
+from functools import lru_cache
+from pathlib import Path
 from urllib.request import Request, urlopen
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from fastapi import APIRouter, status
 from sqlalchemy import text
 
@@ -26,13 +31,37 @@ from app.infrastructure.observability import record_gauge
 from app.infrastructure.redis_client import get_redis_client, redis_health
 
 router = APIRouter(prefix="/health", tags=["health"])
-EXPECTED_SCHEMA_REVISION = "0043"
+log = logging.getLogger(__name__)
+BACKEND_ROOT = Path(__file__).resolve().parents[4]
 HTTP_OK_MIN = 200
 HTTP_REDIRECTION_MIN = 300
 
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+@lru_cache(maxsize=1)
+def _expected_schema_heads() -> frozenset[str]:
+    """Return the Alembic heads shipped with this application version."""
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
+    return frozenset(ScriptDirectory.from_config(config).get_heads())
+
+
+def _schema_revision_status(
+    actual_heads: frozenset[str] | None,
+    expected_heads: frozenset[str],
+) -> tuple[str, str | None]:
+    """Compare applied and shipped revisions without exposing database errors."""
+    if actual_heads is None:
+        return "unknown", "Schema version could not be verified"
+    if actual_heads == expected_heads:
+        return "ok", None
+
+    expected = ", ".join(sorted(expected_heads)) or "none"
+    actual = ", ".join(sorted(actual_heads)) or "none"
+    return "outdated", f"Expected {expected}; found {actual}"
 
 
 async def _observability_health() -> tuple[str, str | None]:
@@ -81,16 +110,23 @@ async def ready(session: SessionDep) -> HealthReport:
     try:
         result = await session.execute(text("SELECT 1"))
         _ = result.scalar_one()
-        revision = (
-            await session.execute(text("SELECT version_num FROM alembic_version"))
-        ).scalar_one()
-        schema_status = "ok" if revision == EXPECTED_SCHEMA_REVISION else "outdated"
-        if schema_status != "ok":
-            schema_detail = f"Expected {EXPECTED_SCHEMA_REVISION}; found {revision}"
     except Exception as exc:
         db_status = "down"
-        detail = str(exc)[:200]
-        schema_status = "unknown"
+        detail = "Database is unavailable"
+        log.warning("Health check could not reach the database", exc_info=exc)
+
+    if db_status == "ok":
+        try:
+            expected_heads = _expected_schema_heads()
+            result = await session.execute(text("SELECT version_num FROM alembic_version"))
+            actual_heads = frozenset(result.scalars().all())
+            schema_status, schema_detail = _schema_revision_status(
+                actual_heads,
+                expected_heads,
+            )
+        except Exception as exc:
+            schema_status, schema_detail = _schema_revision_status(None, frozenset())
+            log.warning("Health check could not verify the Alembic schema revision", exc_info=exc)
 
     components = [
         HealthComponent(name="database", status=db_status, detail=detail),

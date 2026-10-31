@@ -24,7 +24,7 @@ dependencies = [
     "email-validator>=2.1,<3",
     # Security
     "argon2-cffi>=23.1,<24",
-    "pyjwt[crypto]>=2.8,<3",
+    "pyjwt[crypto]>=2.14.0,<3",
     "cryptography>=50.0.1,<51",
     # Logging
     "structlog>=24.1,<26",
@@ -36,6 +36,7 @@ dependencies = [
     "typer>=0.12,<1",
     "faker>=25.0,<37",
     "openpyxl>=3.1.5,<4",
+    "reportlab>=4.2,<5",
     "defusedxml>=0.7.1,<1",
     "boto3>=1.40,<2",
     # ARQ 0.28 currently requires redis-py < 6; it remains compatible with Redis 7.4 server.
@@ -72,6 +73,17 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv]
+# Security floors for transitive dependencies reported by the runtime/lockfile gate.
+constraint-dependencies = [
+    "certifi>=2026.10.18",
+    "dnspython>=2.9.0",
+    "filelock>=4.2.1",
+    "msgpack>=1.2.3",
+    "pillow>=13.0.0",
+    "urllib3>=2.8.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app", "seed"]

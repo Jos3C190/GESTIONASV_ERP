@@ -228,7 +228,7 @@ class LocationBatchRecord:
 class WarehouseLocationScope:
     warehouse_id: uuid.UUID
     company_id: uuid.UUID
-    branch_id: uuid.UUID
+    branch_id: uuid.UUID | None
     warehouse_active: bool
     operational_status: str
 

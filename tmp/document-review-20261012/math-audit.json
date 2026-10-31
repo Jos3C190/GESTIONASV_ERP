@@ -1,0 +1,292 @@
+{
+  "source": "C:\\Users\\rodri\\Downloads\\Retaceo (4).xlsx",
+  "sha256": "26ea20286b8f0c43697b84bf5d71372abf61ab93f6a2e2bc3280c0b1a720f283",
+  "formula_count": 28,
+  "all_cached_results_match": true,
+  "formula_checks": [
+    {
+      "sheet": "Retaceo",
+      "cell": "F14",
+      "formula": "=\"Flete \"&TEXT(IF(E19>0,F19/E19,0),\"0.00%\")",
+      "independently_computed": "Flete 9.19%",
+      "saved": "Flete 9.19%",
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "G14",
+      "formula": "=\"Gastos \"&TEXT(IF(E19>0,G19/E19,0),\"0.00%\")",
+      "independently_computed": "Gastos 2.69%",
+      "saved": "Gastos 2.69%",
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "H14",
+      "formula": "=\"DAI \"&TEXT(IF(E19>0,H19/E19,0),\"0.00%\")",
+      "independently_computed": "DAI 16.00%",
+      "saved": "DAI 16.00%",
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "F15",
+      "formula": "=$E15*IF($G$10>0,$G$11/$G$10,0)",
+      "independently_computed": "4593.94048045894585873072785944783076",
+      "saved": 4593.940480458946,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "G15",
+      "formula": "=$E15*IF($G$10>0,$I$10/$G$10,0)",
+      "independently_computed": "1344.56794550017927572606669057009681",
+      "saved": 1344.5679455001793,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "H15",
+      "formula": "=$E15*IF($G$10>0,$I$11/$G$10,0)",
+      "independently_computed": "8001.97203298673359627106489781283615",
+      "saved": 8001.972032986733,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "I15",
+      "formula": "=SUM(E15:H15)",
+      "independently_computed": "63940.4804589458587307278594478307638",
+      "saved": 63940.48045894586,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "F16",
+      "formula": "=$E16*IF($G$10>0,$G$11/$G$10,0)",
+      "independently_computed": "531.059519541054141269272140552169236",
+      "saved": 531.0595195410542,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "G16",
+      "formula": "=$E16*IF($G$10>0,$I$10/$G$10,0)",
+      "independently_computed": "155.432054499820724273933309429903191",
+      "saved": 155.43205449982074,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "H16",
+      "formula": "=$E16*IF($G$10>0,$I$11/$G$10,0)",
+      "independently_computed": "925.027967013266403728935102187163859",
+      "saved": 925.0279670132663,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "I16",
+      "formula": "=SUM(E16:H16)",
+      "independently_computed": "7391.51954105414126927214055216923629",
+      "saved": 7391.519541054142,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "F17",
+      "formula": "=$E17*IF($G$10>0,$G$11/$G$10,0)",
+      "independently_computed": "0E-37",
+      "saved": 0,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "G17",
+      "formula": "=$E17*IF($G$10>0,$I$10/$G$10,0)",
+      "independently_computed": "0E-37",
+      "saved": 0,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "H17",
+      "formula": "=$E17*IF($G$10>0,$I$11/$G$10,0)",
+      "independently_computed": "0E-36",
+      "saved": 0,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "I17",
+      "formula": "=SUM(E17:H17)",
+      "independently_computed": "0E-37",
+      "saved": 0,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "F18",
+      "formula": "=$E18*IF($G$10>0,$G$11/$G$10,0)",
+      "independently_computed": "0E-37",
+      "saved": 0,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "G18",
+      "formula": "=$E18*IF($G$10>0,$I$10/$G$10,0)",
+      "independently_computed": "0E-37",
+      "saved": 0,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "H18",
+      "formula": "=$E18*IF($G$10>0,$I$11/$G$10,0)",
+      "independently_computed": "0E-36",
+      "saved": 0,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "I18",
+      "formula": "=SUM(E18:H18)",
+      "independently_computed": "0E-37",
+      "saved": 0,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "D19",
+      "formula": "=SUM(D15:D18)",
+      "independently_computed": "2",
+      "saved": 2,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "E19",
+      "formula": "=SUM(E15:E18)",
+      "independently_computed": "55780",
+      "saved": 55780,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "F19",
+      "formula": "=SUM(F15:F18)",
+      "independently_computed": "5125.00000000000000000000000000000000",
+      "saved": 5125,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "G19",
+      "formula": "=SUM(G15:G18)",
+      "independently_computed": "1500.00000000000000000000000000000000",
+      "saved": 1500,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "H19",
+      "formula": "=SUM(H15:H18)",
+      "independently_computed": "8927.00000000000000000000000000000001",
+      "saved": 8927,
+      "matches": true
+    },
+    {
+      "sheet": "Retaceo",
+      "cell": "I19",
+      "formula": "=SUM(I15:I18)",
+      "independently_computed": "71332.0000000000000000000000000000001",
+      "saved": 71332,
+      "matches": true
+    },
+    {
+      "sheet": "Datos",
+      "cell": "I2",
+      "formula": "=SUM(D4:D6)",
+      "independently_computed": "62155",
+      "saved": 62155,
+      "matches": true
+    },
+    {
+      "sheet": "Datos",
+      "cell": "D8",
+      "formula": "=D4*G2",
+      "independently_computed": "8367.00",
+      "saved": 8367,
+      "matches": true
+    },
+    {
+      "sheet": "Datos",
+      "cell": "L22",
+      "formula": "=SUM(L5:L18)",
+      "independently_computed": "72582",
+      "saved": 72582,
+      "matches": true
+    }
+  ],
+  "reconciliation": {
+    "fob": "55780.00",
+    "freight": "5125.00",
+    "insurance": "1250.00",
+    "listed_other_costs": "1500.00",
+    "dai": "8927.00",
+    "retaceo_total": "71332.00",
+    "inventory_total": "72582.00",
+    "difference": "1250.00",
+    "total_with_insurance": "72582.00",
+    "cif": "62155.00",
+    "workbook_import_vat": "8367.00"
+  },
+  "insurance_scenario": [
+    {
+      "product": "Prensadora",
+      "insurance_allocation": "1120.47",
+      "corrected_line_cost": "65060.95",
+      "original_line_cost": "63940.48"
+    },
+    {
+      "product": "Camion",
+      "insurance_allocation": "129.53",
+      "corrected_line_cost": "7521.05",
+      "original_line_cost": "7391.52"
+    }
+  ],
+  "quantity_two_scenario": {
+    "line_fob_unchanged": "50000.00",
+    "quantity": 2,
+    "workbook_shown_unit_cost": "63940.48",
+    "actual_unit_cost": "31970.24"
+  },
+  "extra_fob_5000_without_header_update": {
+    "line_fob_total": "60780.00",
+    "denominator_still": "55780.00",
+    "actual_costs_to_allocate": "15552.00",
+    "workbook_allocated": "16946.05"
+  },
+  "pdf_comparison_example": [
+    {
+      "provider": "A",
+      "computed": 4350,
+      "document": 4450,
+      "difference": 100
+    },
+    {
+      "provider": "B",
+      "computed": 4220,
+      "document": 4240,
+      "difference": 20
+    },
+    {
+      "provider": "C",
+      "computed": 4445,
+      "document": 4405,
+      "difference": -40
+    }
+  ],
+  "source_unchanged": true
+}

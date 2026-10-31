@@ -2,11 +2,13 @@
   import { goto } from '$app/navigation';
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
-  import { HttpError } from '$lib/api/client';
+  import PurchaseRequestProductPicker from '$lib/features/purchase-requests/components/PurchaseRequestProductPicker.svelte';
+  import { api, HttpError } from '$lib/api/client';
   import { catalogApi } from '$lib/api/catalog';
   import { purchaseRequestsApi } from '$lib/api/purchase-requests';
   import { getWarehouses } from '$lib/services/warehouses';
   import { branch } from '$lib/stores/branch.svelte';
+  import { company } from '$lib/stores/company.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type { Product } from '$lib/types/catalog';
   import type { PurchaseRequestDetailInput } from '$lib/types/purchase-request';
@@ -14,6 +16,7 @@
 
   interface DraftLine {
     productId: string;
+    productSearch: string;
     quantity: string;
     description: string;
     notes: string;
@@ -21,6 +24,7 @@
 
   const emptyLine = (): DraftLine => ({
     productId: '',
+    productSearch: '',
     quantity: '1',
     description: '',
     notes: ''
@@ -34,21 +38,32 @@
   let lines = $state<DraftLine[]>([emptyLine()]);
   let warehouses = $state<Warehouse[]>([]);
   let products = $state<Product[]>([]);
+  let productCurrentPage = $state(1);
+  let productPages = $state(1);
+  let loadingMoreProducts = $state(false);
   let loadingOptions = $state(true);
   let saving = $state(false);
   let error = $state<string | null>(null);
+  let productPageError = $state<string | null>(null);
   let validation = $state<Record<string, string>>({});
   let loadGeneration = 0;
+  let branchContextReady = $state(false);
+  let availableBranches = $state(branch.branches.filter((item) => item.is_active));
+  let loadedCompanyId: string | null = null;
 
-  let canManage = $derived(permissions.hasPermission('purchase_requests:manage'));
+  let canCreate = $derived(
+    permissions.hasAnyPermission(['purchase_requests:create', 'purchase_requests:manage'])
+  );
 
   async function loadOptions(selectedBranchId: string) {
     const generation = ++loadGeneration;
     loadingOptions = true;
+    loadingMoreProducts = false;
     error = null;
+    productPageError = null;
 
     try {
-      const [warehousePage, productPage] = await Promise.all([
+      const [warehousePage, productPageResponse] = await Promise.all([
         getWarehouses({
           branchId: selectedBranchId || undefined,
           page: 1,
@@ -67,7 +82,9 @@
       warehouses = warehousePage.items.filter(
         (warehouse) => !selectedBranchId || warehouse.branchId === selectedBranchId
       );
-      products = productPage.items.filter((product) => product.can_purchase !== false);
+      products = productPageResponse.items.filter((product) => product.can_purchase !== false);
+      productCurrentPage = productPageResponse.meta.page;
+      productPages = productPageResponse.meta.pages;
 
       if (!warehouses.some((warehouse) => warehouse.id === warehouseId)) {
         warehouseId = warehouses[0]?.id ?? '';
@@ -86,8 +103,83 @@
     }
   }
 
+  async function loadBranchContext(companyId: string) {
+    branchContextReady = false;
+    loadingOptions = true;
+    error = null;
+
+    try {
+      const context = await api.operationalContext.get(companyId);
+      if (company.id !== companyId) return;
+
+      branch.configure(context);
+      availableBranches = context.branches.filter((item) => item.is_active);
+      if (!availableBranches.some((item) => item.id === branchId)) {
+        branchId = branch.id ?? context.last_branch_id ?? availableBranches[0]?.id ?? '';
+      }
+      branchContextReady = true;
+    } catch (err: unknown) {
+      error =
+        err instanceof HttpError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'No se pudieron cargar las sucursales autorizadas.';
+    } finally {
+      if (!branchContextReady) loadingOptions = false;
+    }
+  }
+
+  async function loadMoreProducts() {
+    if (loadingMoreProducts || productCurrentPage >= productPages) return;
+
+    const generation = loadGeneration;
+    loadingMoreProducts = true;
+    productPageError = null;
+
+    try {
+      const nextPage = await catalogApi.listProducts({
+        active_only: true,
+        page: productCurrentPage + 1,
+        size: 100
+      });
+
+      if (generation !== loadGeneration) return;
+
+      const knownProductIds = new Set(products.map((product) => product.id_product));
+      products = [
+        ...products,
+        ...nextPage.items.filter(
+          (product) => product.can_purchase !== false && !knownProductIds.has(product.id_product)
+        )
+      ];
+      productCurrentPage = nextPage.meta.page;
+      productPages = nextPage.meta.pages;
+    } catch (err: unknown) {
+      if (generation !== loadGeneration) return;
+
+      productPageError =
+        err instanceof HttpError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'No se pudieron cargar más productos.';
+    } finally {
+      if (generation === loadGeneration) loadingMoreProducts = false;
+    }
+  }
+
   $effect(() => {
-    void loadOptions(branchId);
+    const companyId = company.id;
+    if (!companyId || companyId === loadedCompanyId) return;
+    loadedCompanyId = companyId;
+    void loadBranchContext(companyId);
+  });
+
+  $effect(() => {
+    const selectedBranchId = branchId;
+    if (!branchContextReady) return;
+    void loadOptions(selectedBranchId);
   });
 
   function updateLine(index: number, patch: Partial<DraftLine>) {
@@ -125,6 +217,24 @@
     return Object.keys(next).length === 0;
   }
 
+  function focusFirstInvalidField() {
+    const firstError = Object.keys(validation)[0];
+    if (!firstError) return;
+
+    const inputId =
+      firstError === 'branchId'
+        ? 'purchase-request-branch'
+        : firstError === 'warehouseId'
+          ? 'purchase-request-warehouse'
+          : firstError === 'justification'
+            ? 'purchase-request-justification'
+            : firstError.startsWith('product-')
+              ? `purchase-request-product-${firstError.slice('product-'.length)}-search`
+              : `purchase-request-${firstError}`;
+
+    window.requestAnimationFrame(() => document.getElementById(inputId)?.focus());
+  }
+
   function detailPayload(): PurchaseRequestDetailInput[] {
     return lines.map((line) => ({
       product_id: Number(line.productId),
@@ -135,7 +245,11 @@
   }
 
   async function submit() {
-    if (!canManage || saving || !validate()) return;
+    if (!canCreate || saving) return;
+    if (!validate()) {
+      focusFirstInvalidField();
+      return;
+    }
 
     saving = true;
     error = null;
@@ -191,12 +305,12 @@
     </div>
   </header>
 
-  {#if !canManage}
+  {#if !canCreate}
     <div
-      class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
+      class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-foreground"
       role="alert"
     >
-      No tienes permiso para gestionar solicitudes de compra.
+      Tu rol no tiene permiso para crear solicitudes de compra. Pide a un administrador que habilite la creación para tu rol.
     </div>
   {:else if loadingOptions}
     <div class="space-y-4" aria-label="Cargando formulario de solicitud">
@@ -206,10 +320,21 @@
   {:else}
     {#if error}
       <div
-        class="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+        class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-foreground"
         role="alert"
       >
         {error}
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onclick={() => {
+            if (company.id) void loadBranchContext(company.id);
+          }}
+          disabled={loadingOptions}
+        >
+          Reintentar
+        </Button>
       </div>
     {/if}
 
@@ -234,16 +359,20 @@
             <select
               id="purchase-request-branch"
               aria-label="Sucursal"
+              aria-invalid={validation.branchId ? 'true' : undefined}
+              aria-describedby={validation.branchId ? 'purchase-request-branch-error' : undefined}
               bind:value={branchId}
-              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <option value="">Selecciona una sucursal</option>
-              {#each branch.branches.filter((item) => item.is_active) as item}
+              {#each availableBranches as item}
                 <option value={item.id}>{item.code ? `${item.code} — ` : ''}{item.name}</option>
               {/each}
             </select>
             {#if validation.branchId}
-              <p class="mt-1 text-xs text-danger">{validation.branchId}</p>
+              <p id="purchase-request-branch-error" class="mt-1 text-xs text-danger">
+                {validation.branchId}
+              </p>
             {/if}
           </div>
 
@@ -257,8 +386,12 @@
             <select
               id="purchase-request-warehouse"
               aria-label="Almacén"
+              aria-invalid={validation.warehouseId ? 'true' : undefined}
+              aria-describedby={validation.warehouseId
+                ? 'purchase-request-warehouse-error'
+                : undefined}
               bind:value={warehouseId}
-              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <option value="">Selecciona un almacén</option>
               {#each warehouses as warehouse}
@@ -266,7 +399,9 @@
               {/each}
             </select>
             {#if validation.warehouseId}
-              <p class="mt-1 text-xs text-danger">{validation.warehouseId}</p>
+              <p id="purchase-request-warehouse-error" class="mt-1 text-xs text-danger">
+                {validation.warehouseId}
+              </p>
             {/if}
           </div>
 
@@ -282,7 +417,7 @@
               aria-label="Fecha requerida"
               type="date"
               bind:value={requiredDate}
-              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
           </div>
 
@@ -296,13 +431,19 @@
             <input
               id="purchase-request-justification"
               aria-label="Justificación"
+              aria-invalid={validation.justification ? 'true' : undefined}
+              aria-describedby={validation.justification
+                ? 'purchase-request-justification-error'
+                : undefined}
               bind:value={justification}
               maxlength="4000"
-              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+              class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               placeholder="Motivo de la solicitud"
             />
             {#if validation.justification}
-              <p class="mt-1 text-xs text-danger">{validation.justification}</p>
+              <p id="purchase-request-justification-error" class="mt-1 text-xs text-danger">
+                {validation.justification}
+              </p>
             {/if}
           </div>
         </div>
@@ -320,7 +461,7 @@
             bind:value={notes}
             maxlength="4000"
             rows="3"
-            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             placeholder="Observaciones opcionales"
           ></textarea>
         </div>
@@ -346,32 +487,23 @@
         <div class="divide-y divide-border">
           {#each lines as line, index (index)}
             <div class="grid gap-3 p-4 lg:grid-cols-[2fr_1fr_2fr_2fr_auto] lg:items-start">
-              <div>
-                <label
-                  for={`purchase-request-product-${index}`}
-                  class="mb-1 block text-sm font-medium text-foreground"
-                >
-                  Producto {index + 1} <span class="text-danger">*</span>
-                </label>
-                <select
-                  id={`purchase-request-product-${index}`}
-                  aria-label={`Producto ${index + 1}`}
-                  value={line.productId}
-                  onchange={(event) =>
-                    updateLine(index, {
-                      productId: (event.currentTarget as HTMLSelectElement).value
-                    })}
-                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                >
-                  <option value="">Selecciona un producto</option>
-                  {#each products as product}
-                    <option value={product.id_product}>{product.sku} — {product.name}</option>
-                  {/each}
-                </select>
-                {#if validation[`product-${index}`]}
-                  <p class="mt-1 text-xs text-danger">{validation[`product-${index}`]}</p>
-                {/if}
-              </div>
+              <PurchaseRequestProductPicker
+                id={`purchase-request-product-${index}`}
+                label={`Producto ${index + 1}`}
+                {products}
+                bind:value={line.productId}
+                bind:query={line.productSearch}
+                hasMoreProducts={productCurrentPage < productPages}
+                {loadingMoreProducts}
+                loadMoreError={productPageError}
+                onloadmore={loadMoreProducts}
+                error={validation[`product-${index}`]}
+                onselect={() => {
+                  const nextValidation = { ...validation };
+                  delete nextValidation[`product-${index}`];
+                  validation = nextValidation;
+                }}
+              />
 
               <div>
                 <label
@@ -383,6 +515,10 @@
                 <input
                   id={`purchase-request-quantity-${index}`}
                   aria-label={`Cantidad ${index + 1}`}
+                  aria-invalid={validation[`quantity-${index}`] ? 'true' : undefined}
+                  aria-describedby={validation[`quantity-${index}`]
+                    ? `purchase-request-quantity-${index}-error`
+                    : undefined}
                   type="number"
                   min="0.000001"
                   step="0.000001"
@@ -391,10 +527,15 @@
                     updateLine(index, {
                       quantity: (event.currentTarget as HTMLInputElement).value
                     })}
-                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
                 {#if validation[`quantity-${index}`]}
-                  <p class="mt-1 text-xs text-danger">{validation[`quantity-${index}`]}</p>
+                  <p
+                    id={`purchase-request-quantity-${index}-error`}
+                    class="mt-1 text-xs text-danger"
+                  >
+                    {validation[`quantity-${index}`]}
+                  </p>
                 {/if}
               </div>
 
@@ -414,7 +555,7 @@
                     updateLine(index, {
                       description: (event.currentTarget as HTMLInputElement).value
                     })}
-                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
               </div>
 
@@ -434,7 +575,7 @@
                     updateLine(index, {
                       notes: (event.currentTarget as HTMLInputElement).value
                     })}
-                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                  class="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
               </div>
 

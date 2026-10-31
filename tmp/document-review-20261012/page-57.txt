@@ -1,0 +1,44 @@
+                                                      6.7.21 Integración con Otros Módulos
+
+El módulo de Productos será utilizado por prácticamente todos los módulos operativos del Mini
+ERP.
+
+Proveedores: Los productos podrán posteriormente relacionarse con los proveedores.
+
+Cotizaciones de Compra: Permitirá seleccionar los productos sobre los cuales se solicitarán
+precios a proveedores.
+
+Órdenes de Compra: Los productos formarán parte del detalle de las órdenes.
+
+Compras: Los productos serán registrados como parte de las compras realizadas.
+
+Retaceo: Los productos adquiridos serán utilizados para determinar el costo real de
+adquisición.
+
+Asignación de Precios: Los productos serán utilizados para definir y administrar precios de
+venta.
+
+Inventario: Los productos constituirán uno de los elementos principales del control de
+existencias.
+
+Cotizaciones de Venta: Los productos serán incluidos en las cotizaciones realizadas a clientes.
+
+Ventas: Los productos formarán parte del detalle de las ventas.
+
+Devoluciones: Los productos permitirán identificar los artículos devueltos.
+
+Bitácora: Las operaciones realizadas sobre el catálogo serán registradas en la bitácora.
+
+                                                                                   6.7.22 Casos de Uso
+
+Código    Caso de Uso
+CU-050 Registrar categoría
+CU-051 Modificar categoría
+CU-052 Activar/desactivar categoría
+CU-053 Registrar subcategoría
+CU-054 Modificar subcategoría
+CU-055 Activar/desactivar subcategoría
+CU-056 Registrar unidad
+CU-057 Modificar unidad
+
+                                                                                                                 57

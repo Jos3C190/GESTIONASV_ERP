@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ExpenseTypeResponse(BaseModel):
@@ -13,4 +13,29 @@ class ExpenseTypeResponse(BaseModel):
     description: str | None = None
 
 
-__all__ = ["ExpenseTypeResponse"]
+class ExpenseTypeCatalogResponse(ExpenseTypeResponse):
+    is_active: bool
+    usage_count: int
+
+
+class ExpenseTypeCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=1000)
+
+
+class ExpenseTypeUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=1000)
+    is_active: bool
+
+
+__all__ = [
+    "ExpenseTypeCatalogResponse",
+    "ExpenseTypeCreate",
+    "ExpenseTypeResponse",
+    "ExpenseTypeUpdate",
+]

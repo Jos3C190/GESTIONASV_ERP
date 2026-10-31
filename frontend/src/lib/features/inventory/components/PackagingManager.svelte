@@ -18,6 +18,7 @@
     productId?: number;
     variantId?: string;
     defaultBaseUnitId: number;
+    defaultPackagingUnitId: number;
     unitOptions: UnitOption[];
     canManage?: boolean;
     inventoryItem?: InventoryItem | null;
@@ -28,6 +29,7 @@
     productId,
     variantId,
     defaultBaseUnitId,
+    defaultPackagingUnitId,
     unitOptions,
     canManage = false,
     inventoryItem,
@@ -42,6 +44,7 @@
   let success = $state<string | null>(null);
   let formOpen = $state(false);
   let baseUnitId = $state(0);
+  let packagingUnitId = $state(0);
   let supersedesId = $state<string | null>(null);
   let code = $state('');
   let name = $state('');
@@ -63,6 +66,7 @@
   }
 
   function unitName(id: number): string {
+    if (id === 0) return 'Seleccione una unidad';
     return unitOptions.find((unit) => unit.id === id)?.label ?? `Unidad #${id}`;
   }
 
@@ -80,6 +84,7 @@
     code = '';
     name = '';
     packagingType = 'box';
+    packagingUnitId = defaultPackagingUnitId;
     baseQuantity = 1;
     grossWeightKg = undefined;
     lengthM = undefined;
@@ -140,6 +145,7 @@
     code = definition.code;
     name = definition.name;
     packagingType = definition.packaging_type;
+    packagingUnitId = definition.packaging_unit_id ?? defaultPackagingUnitId;
     baseQuantity = definition.base_quantity;
     grossWeightKg = definition.gross_weight_kg ?? undefined;
     lengthM = definition.length_m ?? undefined;
@@ -166,7 +172,16 @@
     const normalizedName = name.trim();
     const parsedMaxStack = maxStack ?? null;
     if (!normalizedCode || normalizedName.length < 2 || quantity == null) {
-      error = 'Complete código, nombre y cantidad contenida con valores válidos.';
+      error =
+        'Complete código, nombre, unidad de empaque y cantidad contenida con valores válidos.';
+      return;
+    }
+    if (!unitOptions.some((unit) => unit.id === packagingUnitId)) {
+      error = 'Seleccione una unidad de empaque habilitada para la empresa.';
+      return;
+    }
+    if (packagingUnitId === item.base_unit_id && quantity !== 1) {
+      error = 'Si la unidad de empaque es la unidad base, la conversión debe ser 1 a 1.';
       return;
     }
     if (!/^[A-Z0-9._-]+$/.test(normalizedCode)) {
@@ -190,6 +205,7 @@
       code: normalizedCode,
       name: normalizedName,
       packaging_type: packagingType,
+      packaging_unit_id: packagingUnitId,
       base_quantity: quantity,
       measures: {
         gross_weight_kg: numeric(grossWeightKg),
@@ -239,6 +255,7 @@
     void inventoryItem;
     void inventoryItemResolved;
     baseUnitId = defaultBaseUnitId;
+    packagingUnitId = defaultPackagingUnitId;
     void load();
   });
 </script>
@@ -372,7 +389,16 @@
             </select>
           </label>
           <label class="text-xs text-foreground-muted"
-            >Cantidad base contenida por empaque
+            >Unidad de compra
+            <select class={inputClass} bind:value={packagingUnitId} required>
+              <option value={0} disabled>Seleccione una unidad</option>
+              {#each unitOptions as unit (unit.id)}
+                <option value={unit.id}>{unit.label}</option>
+              {/each}
+            </select>
+          </label>
+          <label class="text-xs text-foreground-muted"
+            >Unidades base por cada unidad de compra
             <input
               class={inputClass}
               type="number"
@@ -439,6 +465,11 @@
           {/if}
         </div>
         <p class="mt-3 text-[11px] text-foreground-muted">
+          Ejemplo: 1 {unitName(packagingUnitId)} equivale a {baseQuantity ?? '—'}
+          {unitName(item.base_unit_id)}. El sistema usará esta equivalencia al recibir compras en
+          otra unidad.
+        </p>
+        <p class="mt-3 text-[11px] text-foreground-muted">
           Si faltan peso o volumen del empaque, la mercancía solo podrá recibirse en cuarentena
           hasta ser medida.
         </p>
@@ -460,7 +491,91 @@
     {/if}
 
     {#if definitions.length}
-      <div class="overflow-x-auto rounded-xl border border-border">
+      <div class="space-y-2 sm:hidden">
+        {#each definitions as definition (definition.id)}
+          <article
+            class="space-y-3 rounded-xl border border-border bg-surface-muted/10 p-3"
+            class:border-dashed={!definition.is_active}
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h4 class="break-words text-sm font-semibold text-foreground">{definition.name}</h4>
+                <p class="mt-0.5 break-all font-mono text-[11px] text-foreground-muted">
+                  {definition.code} · {PACKAGING_TYPE_LABEL[definition.packaging_type]}
+                </p>
+              </div>
+              <span
+                class={`shrink-0 rounded-full px-2 py-1 text-[10px] font-medium ${
+                  definition.is_current && definition.is_active
+                    ? 'bg-success/10 text-success'
+                    : !definition.is_active
+                      ? 'bg-danger/10 text-danger'
+                      : 'bg-surface-muted text-foreground-muted'
+                }`}
+              >
+                {definition.is_current && definition.is_active
+                  ? 'Vigente'
+                  : definition.is_active
+                    ? 'Histórica'
+                    : 'Inactiva'} · v{definition.version}
+              </span>
+            </div>
+
+            {#if definition.packaging_unit_id == null}
+              <p class="rounded-lg bg-warning/10 px-2.5 py-2 text-xs font-medium text-foreground">
+                Sin equivalencia de unidad de compra
+              </p>
+            {:else}
+              <p class="rounded-lg bg-primary/10 px-2.5 py-2 text-xs font-medium text-foreground">
+                1 {unitName(definition.packaging_unit_id)} = {definition.base_quantity.toLocaleString(
+                  'es-SV'
+                )}
+                {unitName(item.base_unit_id)}
+              </p>
+            {/if}
+
+            <dl class="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <dt class="text-foreground-muted">Peso del empaque</dt>
+                <dd class="mt-0.5 font-mono text-foreground">
+                  {definition.gross_weight_kg == null
+                    ? 'Sin medir'
+                    : `${definition.gross_weight_kg.toLocaleString('es-SV')} kg`}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-foreground-muted">Volumen del empaque</dt>
+                <dd class="mt-0.5 font-mono text-foreground">
+                  {definition.volume_m3 == null
+                    ? 'Sin medir'
+                    : `${definition.volume_m3.toLocaleString('es-SV')} m³`}
+                </dd>
+              </div>
+            </dl>
+
+            {#if canManage && definition.is_current && definition.is_active}
+              <div class="flex flex-wrap gap-x-4 gap-y-2 border-t border-border pt-2">
+                <button
+                  class="text-xs font-medium text-primary hover:underline disabled:opacity-40"
+                  type="button"
+                  disabled={saving}
+                  aria-label={`Crear nueva versión de ${definition.name}`}
+                  onclick={() => startVersion(definition)}>Nueva versión</button
+                >
+                <button
+                  class="text-xs font-medium text-danger hover:underline disabled:opacity-40"
+                  type="button"
+                  disabled={saving}
+                  aria-label={`Desactivar ${definition.name}`}
+                  onclick={() => void deactivate(definition)}>Desactivar</button
+                >
+              </div>
+            {/if}
+          </article>
+        {/each}
+      </div>
+
+      <div class="hidden overflow-x-auto rounded-xl border border-border sm:block">
         <table class="w-full min-w-[760px] text-xs">
           <caption class="sr-only">Presentaciones y medidas físicas del inventario</caption>
           <thead class="border-b border-border bg-surface-muted/30 text-left text-foreground-muted">
@@ -477,17 +592,25 @@
           </thead>
           <tbody class="divide-y divide-border">
             {#each definitions as definition (definition.id)}
-              <tr class:opacity-60={!definition.is_active}>
+              <tr>
                 <td class="px-3 py-2"
                   ><p class="font-medium text-foreground">{definition.name}</p>
                   <p class="font-mono text-[10px] text-foreground-muted">
                     {definition.code} · {PACKAGING_TYPE_LABEL[definition.packaging_type]}
                   </p></td
                 >
-                <td class="px-3 py-2 text-foreground-muted"
-                  >{definition.base_quantity.toLocaleString('es-SV')}
-                  {unitName(item.base_unit_id)}</td
-                >
+                <td class="px-3 py-2 text-foreground-muted">
+                  {#if definition.packaging_unit_id == null}
+                    <span class="rounded bg-warning/10 px-2 py-1 font-medium text-foreground"
+                      >Sin equivalencia de unidad de compra</span
+                    >
+                  {:else}
+                    1 {unitName(definition.packaging_unit_id)} = {definition.base_quantity.toLocaleString(
+                      'es-SV'
+                    )}
+                    {unitName(item.base_unit_id)}
+                  {/if}
+                </td>
                 <td class="px-3 py-2 font-mono text-foreground"
                   >{definition.gross_weight_kg == null
                     ? 'Sin medir'

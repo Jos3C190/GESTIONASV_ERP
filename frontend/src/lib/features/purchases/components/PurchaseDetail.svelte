@@ -6,6 +6,8 @@
   import { purchasesApi } from '$lib/api/purchases';
   import { suppliersApi } from '$lib/api/suppliers';
   import PurchaseWorkflowActions from '$lib/features/purchases/components/PurchaseWorkflowActions.svelte';
+  import { getLocation } from '$lib/features/locations/services';
+  import type { LocationOut } from '$lib/features/locations/types';
   import { getWarehouse } from '$lib/services/warehouses';
   import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
@@ -28,6 +30,7 @@
   let orderLabel = $state('');
   let productLabels = $state<Map<number, string>>(new Map());
   let unitLabels = $state<Map<number, string>>(new Map());
+  let locationLabels = $state<Map<string, string>>(new Map());
   let loading = $state(true);
   let error = $state<string | null>(null);
   let requestSequence = 0;
@@ -36,7 +39,11 @@
   let canCreateRetaceo = $derived(
     canManageRetaceo &&
       item !== null &&
-      (item.status === 'received' || item.status === 'verified' || item.status === 'closed')
+      !['retaceo_before_inventory', 'placement_before_inventory'].includes(item.inventory_workflow ?? '') &&
+      (item.status === 'verified' || item.status === 'closed') &&
+      item.details.some(
+        (detail) => detail.quantity_accepted == null || Number(detail.quantity_accepted) > 0
+      )
   );
 
   function errorMessage(cause: unknown): string {
@@ -105,15 +112,32 @@
       item = purchase;
 
       const productIds = [...new Set(purchase.details.map((detail) => detail.product_id))];
+      const locationIds = [
+        ...new Set(
+          purchase.details
+            .map((detail) => detail.inventory_location_id)
+            .filter((locationId): locationId is string => Boolean(locationId))
+        )
+      ];
+      const destinationLocations: Promise<[string, LocationOut | null][]> =
+        permissions.hasPermission('locations.view')
+          ? Promise.all(
+              locationIds.map(async (locationId) => [
+                locationId,
+                await getLocation(purchase.warehouse_id, locationId).catch(() => null)
+              ])
+            )
+          : Promise.resolve([]);
 
-      const [supplier, order, warehouse, units, products] = await Promise.all([
+      const [supplier, order, warehouse, units, products, destinations] = await Promise.all([
         suppliersApi.getSupplier(purchase.supplier_id).catch(() => null),
-        purchaseOrdersApi.get(purchase.purchase_order_id).catch(() => null),
+        purchaseOrdersApi.get(purchase.purchase_order_id, branch.id).catch(() => null),
         getWarehouse(purchase.warehouse_id).catch(() => null),
         catalogApi.listUnits(false).catch(() => []),
         Promise.all(
           productIds.map((productId) => catalogApi.getProduct(productId).catch(() => null))
-        )
+        ),
+        destinationLocations
       ]);
 
       if (sequence !== requestSequence) return;
@@ -128,7 +152,9 @@
 
       branchLabel = currentBranch
         ? `${currentBranch.code ? `${currentBranch.code} — ` : ''}${currentBranch.name}`
-        : `Sucursal ${purchase.branch_id}`;
+        : purchase.branch_id
+          ? `Sucursal ${purchase.branch_id}`
+          : 'Empresa · casa matriz';
 
       warehouseLabel = warehouse
         ? `${warehouse.code ? `${warehouse.code} — ` : ''}${warehouse.name}`
@@ -149,6 +175,19 @@
         }
       }
       productLabels = nextProductLabels;
+
+      const nextLocationLabels = new Map<string, string>();
+      for (const [locationId, location] of destinations) {
+        if (!location) continue;
+        const coordinates = [location.aisle, location.rack, location.level, location.position]
+          .filter((value) => value && value !== '-')
+          .join(' · ');
+        nextLocationLabels.set(
+          locationId,
+          coordinates ? `${location.code} · ${coordinates}` : location.code
+        );
+      }
+      locationLabels = nextLocationLabels;
     } catch (cause: unknown) {
       if (sequence !== requestSequence) return;
 
@@ -159,6 +198,7 @@
       orderLabel = '';
       productLabels = new Map();
       unitLabels = new Map();
+      locationLabels = new Map();
       error = errorMessage(cause);
     } finally {
       if (sequence === requestSequence) loading = false;
@@ -221,7 +261,12 @@
       </span>
     </header>
 
-    <PurchaseWorkflowActions purchase={item} onupdated={handleUpdated} />
+    <PurchaseWorkflowActions
+      purchase={item}
+      {productLabels}
+      {unitLabels}
+      onupdated={handleUpdated}
+    />
 
     {#if canCreateRetaceo}
       <section
@@ -246,6 +291,21 @@
       </section>
     {/if}
 
+    {#if item.valuation_conversion}
+      <section
+        class="rounded-xl border border-border bg-surface p-4"
+        aria-label="Tipo de cambio registrado"
+      >
+        <h2 class="font-semibold text-foreground">Tipo de cambio registrado</h2>
+        <p class="mt-2 text-sm text-foreground">
+          1 {item.valuation_conversion.currency} = {item.valuation_conversion.rate}
+          {item.currency}
+          · {formatDate(item.valuation_conversion.effective_date)}
+        </p>
+        <p class="mt-1 text-sm text-foreground-muted">{item.valuation_conversion.reference}</p>
+      </section>
+    {/if}
+
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <article class="rounded-xl border border-border bg-surface p-4">
         <p class="text-xs font-medium uppercase tracking-wide text-foreground-muted">Proveedor</p>
@@ -257,7 +317,7 @@
       <article class="rounded-xl border border-border bg-surface p-4">
         <p class="text-xs font-medium uppercase tracking-wide text-foreground-muted">Sucursal</p>
         <p class="mt-2 font-medium text-foreground">
-          {branchLabel || `Sucursal ${item.branch_id}`}
+          {branchLabel || (item.branch_id ? `Sucursal ${item.branch_id}` : 'Empresa · casa matriz')}
         </p>
       </article>
 
@@ -297,6 +357,9 @@
                 <th class="px-4 py-3 font-medium">Unidad</th>
                 <th class="px-4 py-3 font-medium">Ordenado</th>
                 <th class="px-4 py-3 font-medium">Recibido</th>
+                <th class="px-4 py-3 font-medium">Aceptado</th>
+                <th class="px-4 py-3 font-medium">Rechazado</th>
+                <th class="px-4 py-3 font-medium">Ubicación</th>
                 <th class="px-4 py-3 font-medium">Precio unit.</th>
                 <th class="px-4 py-3 font-medium">Total</th>
               </tr>
@@ -319,6 +382,27 @@
 
                   <td class="whitespace-nowrap px-4 py-3 font-medium">
                     {formatQuantity(detail.quantity_received)}
+                  </td>
+
+                  <td class="whitespace-nowrap px-4 py-3">
+                    {detail.quantity_accepted == null
+                      ? 'Pendiente de verificación'
+                      : formatQuantity(detail.quantity_accepted)}
+                  </td>
+
+                  <td class="whitespace-nowrap px-4 py-3">
+                    {detail.quantity_rejected == null
+                      ? '—'
+                      : formatQuantity(detail.quantity_rejected)}
+                  </td>
+
+                  <td class="whitespace-nowrap px-4 py-3 text-foreground-muted">
+                    {detail.quantity_accepted == null
+                      ? '—'
+                      : Number(detail.quantity_accepted) === 0
+                        ? '—'
+                        : (locationLabels.get(detail.inventory_location_id ?? '') ??
+                          'Ubicación registrada')}
                   </td>
 
                   <td class="whitespace-nowrap px-4 py-3">
@@ -369,6 +453,18 @@
             </div>
           </dl>
         </article>
+
+        {#if item.inventory_movement_id}
+          <article class="rounded-xl border border-border bg-surface p-4">
+            <h2 class="font-semibold text-foreground">Movimiento de inventario</h2>
+            <p class="mt-2 break-all font-mono text-xs text-foreground-muted">
+              {item.inventory_movement_id}
+            </p>
+            <p class="mt-2 text-xs text-foreground-muted">
+              Referencia estable de esta recepción; reintentos no duplican existencias.
+            </p>
+          </article>
+        {/if}
 
         <article class="rounded-xl border border-border bg-surface p-4">
           <h2 class="font-semibold text-foreground">Documento proveedor</h2>

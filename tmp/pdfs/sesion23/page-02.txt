@@ -1,0 +1,61 @@
+APUNTES DE CLASE / SISTEMA ERP
+SESIÓN 23 · 12 OCT 2026
+Inventario y compras · Explicación, requisitos y decisiones pendientes
+2
+1. Impacto en los cinco módulos de compras
+Para organizar el trabajo, se toman como cinco módulos: Solicitudes de compra, Cotizaciones, Órdenes
+de compra, Compras/Recepciones y Retaceo, de acuerdo con el contexto previo del sistema. Esta
+distribución es editorial; el ingeniero concentra esta sesión en inventario.
+Módulo
+Qué incorporar o comprobar
+Alcance de esta sesión
+1. Solicitudes de
+compra
+Conservar su relación con los documentos
+posteriores cuando exista, para poder
+consultar el origen de la necesidad.
+No se describe una función nueva de
+solicitudes. Esta relación es una propuesta de
+continuidad con los apuntes anteriores.
+2. Cotizaciones
+Mantener precios y condiciones ofrecidas
+como antecedentes de la compra; identificar
+la oferta de origen cuando corresponda.
+No se redefine la comparación ni la
+adjudicación. El costo de inventario se toma
+del proceso de compra y retaceo, no
+directamente de una oferta.
+3. Órdenes de compra
+Vincular orden, líneas y recepciones para
+contrastar lo pedido con lo recibido.
+Mantener accesible su relación con los gastos
+que llegan al retaceo.
+Integración propuesta con el flujo existente;
+la clase menciona cantidades solicitadas y
+recibidas, pero no desarrolla otra vez la
+gestión de gastos de la orden.
+4. Compras /
+Recepciones
+Registrar el conteo real, conservar el origen
+de cada recepción y habilitar el proceso de
+lote, viñetas y ubicación.
+Es un punto central de la clase. Recibir
+mercancía no completa por sí solo su
+disponibilidad en inventario.
+5. Retaceo
+Entregar el costo final de la mercancía
+recibida y mantener la relación con la compra
+y sus productos.
+El retaceo finalizado precede al flujo de
+ingreso valorado. Después se aplica la
+valoración del inventario.
+Funciones compartidas que deben conectarse
+CLASE. Se necesitan lotes internos, viñeteado, ubicaciones codificadas, existencias, valoración y kardex. Al
+final se anuncia continuar con traslados y después con ventas.
+PROPUESTA. Implementar estos procesos en Inventario y Almacenes y enlazarlos desde
+Compras/Recepciones y Retaceo. Una misma recepción puede quedar parcialmente ubicada; el usuario
+debe poder distinguir lo recibido, lo pendiente de ubicar y lo disponible.
+Continuidad con reuniones anteriores. Los consolidados, PDFs por proveedor, adjudicaciones y
+documentos de gastos siguen siendo antecedentes del proyecto. Este TXT no introduce nuevas reglas
+detalladas para ellos.
+Base del TXT: líneas 43-55, 69 y 245. El reparto por módulos es una propuesta de organización.

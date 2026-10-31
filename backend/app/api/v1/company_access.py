@@ -7,6 +7,7 @@ the context already authorised for the request.
 """
 
 import uuid
+from typing import cast as type_cast
 
 from fastapi import HTTPException, Request
 from sqlalchemy import select
@@ -15,7 +16,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.deps import CurrentUser
 from app.application.organization import GetOperationalContext
 from app.domain.entities.operational_context import OperationalContext
-from app.infrastructure.models.organization import Company, UserCompany
+from app.infrastructure.models.inventory import InventoryHandlingUnitModel
+from app.infrastructure.models.organization import (
+    Branch,
+    Company,
+    UserCompany,
+    UserWarehouseAccess,
+    Warehouse,
+)
 from app.infrastructure.repositories import SqlAlchemyOperationalContextRepository
 
 EFFECTIVE_COMPANY_STATE_KEY = "effective_company_id"
@@ -180,6 +188,84 @@ async def resolve_branch_scope(
     return context
 
 
+async def resolve_document_warehouse_scope(
+    session: AsyncSession,
+    current: CurrentUser,
+    company_id: uuid.UUID,
+    *,
+    document_branch_id: uuid.UUID | None,
+    warehouse_id: uuid.UUID,
+) -> uuid.UUID:
+    """Authorize a purchase document by its persisted warehouse assignment.
+
+    Older central purchase documents intentionally retain ``branch_id = NULL``.
+    Their operational scope is the branch now assigned to the central
+    warehouse. The document itself is not rewritten to make it readable.
+    """
+    row = (
+        await session.execute(
+            select(
+                Warehouse.branch_id,
+                Warehouse.is_central,
+                Branch.is_headquarters,
+                Branch.is_active,
+                Branch.operational_status,
+                Branch.deleted_at,
+            )
+            .join(
+                Branch,
+                (Branch.id == Warehouse.branch_id) & (Branch.company_id == Warehouse.company_id),
+            )
+            .where(
+                Warehouse.id == warehouse_id,
+                Warehouse.company_id == company_id,
+            )
+        )
+    ).one_or_none()
+    if row is None or row.branch_id is None:
+        raise HTTPException(409, "La bodega del documento no tiene una sucursal válida.")
+    if document_branch_id is not None and document_branch_id != row.branch_id:
+        raise HTTPException(409, "La sucursal del documento no coincide con su bodega.")
+    if row.is_central and not (
+        row.is_headquarters
+        and row.is_active
+        and row.operational_status == "active"
+        and row.deleted_at is None
+    ):
+        raise HTTPException(409, "La bodega central no está vinculada a una matriz activa.")
+    await resolve_branch_scope(session, current, company_id, row.branch_id)
+    await authorize_warehouse_assignment(session, current, company_id, warehouse_id)
+    return type_cast(uuid.UUID, row.branch_id)
+
+
+async def assigned_warehouse_ids(
+    session: AsyncSession, current: CurrentUser, company_id: uuid.UUID
+) -> list[uuid.UUID] | None:
+    if current.is_superuser:
+        return None
+    membership = await session.get(UserCompany, (current.id, company_id))
+    if membership is None:
+        raise HTTPException(403, "No tiene acceso a esta empresa.")
+    if not membership.warehouse_restricted:
+        return None
+    return list(
+        await session.scalars(
+            select(UserWarehouseAccess.warehouse_id).where(
+                UserWarehouseAccess.user_id == current.id,
+                UserWarehouseAccess.company_id == company_id,
+            )
+        )
+    )
+
+
+async def authorize_warehouse_assignment(
+    session: AsyncSession, current: CurrentUser, company_id: uuid.UUID, warehouse_id: uuid.UUID
+) -> None:
+    assigned = await assigned_warehouse_ids(session, current, company_id)
+    if assigned is not None and warehouse_id not in assigned:
+        raise HTTPException(403, "No tiene acceso a esta bodega.")
+
+
 async def get_branch_context(
     session: AsyncSession, current: CurrentUser, company_id: uuid.UUID
 ) -> OperationalContext:
@@ -199,3 +285,33 @@ async def require_company_wide_scope(
     if not context.access_all_branches:
         raise HTTPException(403, "Esta operación requiere alcance de todas las sucursales.")
     return context
+
+
+async def authorize_handling_unit_branch_scope(
+    session: AsyncSession,
+    current: CurrentUser,
+    company_id: uuid.UUID,
+    handling_unit_id: uuid.UUID,
+) -> tuple[InventoryHandlingUnitModel, uuid.UUID | None]:
+    """Authorize one handling unit through its persisted warehouse branch."""
+    row = await session.execute(
+        select(InventoryHandlingUnitModel, Warehouse.branch_id)
+        .join(
+            Warehouse,
+            (Warehouse.id == InventoryHandlingUnitModel.warehouse_id)
+            & (Warehouse.company_id == InventoryHandlingUnitModel.company_id),
+        )
+        .where(
+            InventoryHandlingUnitModel.company_id == company_id,
+            InventoryHandlingUnitModel.id == handling_unit_id,
+        )
+    )
+    persisted = row.one_or_none()
+    if persisted is None:
+        raise HTTPException(404, "Unidad logística no encontrada.")
+    handling_unit, branch_id = persisted
+    if branch_id is None:
+        raise HTTPException(409, "La bodega aún no está asociada a una sucursal matriz.")
+    await resolve_branch_scope(session, current, company_id, branch_id)
+    await authorize_warehouse_assignment(session, current, company_id, handling_unit.warehouse_id)
+    return handling_unit, branch_id
