@@ -972,7 +972,7 @@
             {/if}
             <button
               type="button"
-              class="icon-button collapse"
+              class="icon-button card-toggle"
               class:flipped={cardCollapsed}
               aria-expanded={!cardCollapsed}
               aria-label={cardCollapsed ? 'Mostrar el detalle' : 'Contraer el detalle'}
@@ -1475,12 +1475,13 @@
     flex-shrink: 0;
     gap: 6px;
   }
-  .icon-button.collapse :global(svg) {
+  /* No se llama "collapse": Tailwind tiene una utilidad con ese nombre que oculta el elemento. */
+  .icon-button.card-toggle :global(svg) {
     /* Abierta: la flecha apunta hacia abajo (contraer); contraída, hacia arriba. */
     transform: rotate(90deg);
     transition: transform 160ms ease;
   }
-  .icon-button.collapse.flipped :global(svg) {
+  .icon-button.card-toggle.flipped :global(svg) {
     transform: rotate(-90deg);
   }
   .icon-button.active {
