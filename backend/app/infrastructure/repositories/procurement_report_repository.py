@@ -68,5 +68,5 @@ class ProcurementReportRepository:
             purchase.order_code,
             purchase.supplier_name,
             {row.id_product: (row.sku, row.name) for row in products},
-            dict(units),
+            {row[0]: row[1] for row in units},
         )

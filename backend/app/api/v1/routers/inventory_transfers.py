@@ -5,10 +5,11 @@ from __future__ import annotations
 import uuid
 from collections.abc import Awaitable
 from datetime import UTC, datetime
-from typing import Annotated, TypeVar
+from typing import Annotated, Any, TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -68,7 +69,7 @@ from app.infrastructure.repositories.inventory_transfer_repository import (
 )
 
 router = APIRouter(prefix="/inventory/transfers", tags=["inventory transfers"])
-T = TypeVar("T")
+T = TypeVar("T", bound=BaseModel)
 DISPATCH_OVERRIDE_PERMISSION = "fleet:compliance_override"
 #: A transfer in these states has finished its trip (or never started it).
 CLOSED_TRANSFER_STATUSES = ("received", "closed_with_adjustment", "cancelled")
@@ -222,7 +223,7 @@ async def _persist_command(
     action: str,
     resource_type: str,
     resource_id: str | None,
-    operation: Awaitable[T],
+    operation: Awaitable[dict[str, Any]],
     response_model: type[T],
 ) -> T:
     """Keep document, stock projection and required audit inside one savepoint."""
@@ -230,7 +231,7 @@ async def _persist_command(
         async with session.begin_nested():
             result = await operation
             response = response_model.model_validate(result)
-            if getattr(response, "status", None) in CLOSED_TRANSFER_STATUSES:
+            if isinstance(response, InventoryTransferOut) and response.status in CLOSED_TRANSFER_STATUSES:
                 # Al cerrarse el viaje se guarda su recorrido y se cierran sus alertas.
                 archive_trip_on_commit(session, company_id, response.id)
             await audit.record(
@@ -239,7 +240,7 @@ async def _persist_command(
                 company_id=company_id,
                 branch_id=branch_id,
                 resource_type=resource_type,
-                resource_id=resource_id or str(getattr(response, "id", "")),
+                resource_id=resource_id or str(getattr(response, "id", None) or ""),
                 after_state=jsonable_encoder(response),
                 ip_address=request.client.host if request.client else None,
                 user_agent=request.headers.get("user-agent"),
@@ -336,7 +337,7 @@ async def list_transfers(
     if branch_id is not None:
         if not context.access_all_branches and not context.can_access(branch_id):
             raise HTTPException(403, "No tiene acceso a esta sucursal.")
-        filters = {"branch_id": branch_id}
+        filters: dict[str, Any] = {"branch_id": branch_id}
     else:
         filters = {
             "branch_ids": None

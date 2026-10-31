@@ -148,10 +148,10 @@ describe('PurchaseOrderWorkflowActions', () => {
       }
     });
 
-    expect(screen.getByRole('button', { name: 'Enviar al proveedor' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Marcar enviada al proveedor' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancelar orden' })).not.toBeInTheDocument();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Enviar al proveedor' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Marcar enviada al proveedor' }));
     expect(mocks.send).toHaveBeenCalledWith(baseOrder.id);
   });
 

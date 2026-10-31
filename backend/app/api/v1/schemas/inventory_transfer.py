@@ -22,7 +22,9 @@ class TransferLineIn(StrictModel):
     handling_unit_id: uuid.UUID
     quantity_base: Decimal = Field(gt=0, max_digits=18, decimal_places=6)
     inventory_lot_detail_id: uuid.UUID | None = None
-    demand_allocations: list[TransferDemandAllocationIn] = Field(default_factory=list, max_length=100)
+    demand_allocations: list[TransferDemandAllocationIn] = Field(
+        default_factory=list, max_length=100
+    )
     excess_reason: str | None = Field(None, max_length=2000)
     notes: str | None = Field(None, max_length=2000)
 

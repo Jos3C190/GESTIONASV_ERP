@@ -140,7 +140,7 @@ it('recupera una recepción parcial cuya respuesta se perdió y permite completa
   await fireEvent.change(screen.getByLabelText('Ubicación de recepción / cuarentena'), { target: { value: 'location-1' } });
   await fireEvent.click(screen.getByRole('button', { name: 'Confirmar cantidades recibidas' }));
 
-  expect(await screen.findByText('Traslado recibido. Las unidades creadas por la recepción permanecen en cuarentena, pendientes de revisión de medidas y etiqueta.')).toBeInTheDocument();
+  expect(await screen.findByText(/Traslado recibido\. La mercancía ingresó en cuarentena/)).toBeInTheDocument();
   expect(mocks.receive).toHaveBeenCalledTimes(2);
   expect(mocks.receive).toHaveBeenNthCalledWith(1, 'transfer-a', expect.any(String), [{ transfer_detail_id: 'line-1', destination_location_id: 'location-1', quantity_base: '2' }]);
   expect(mocks.receive).toHaveBeenNthCalledWith(2, 'transfer-a', expect.any(String), [{ transfer_detail_id: 'line-1', destination_location_id: 'location-1', quantity_base: '1' }]);

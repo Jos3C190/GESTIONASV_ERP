@@ -27,6 +27,7 @@ export function statusLabel(status: string) {
     received: 'Respuesta recibida',
     under_evaluation: 'En evaluación',
     selected: 'Seleccionada',
+    not_selected: 'No seleccionada',
     rejected: 'Rechazada',
     expired: 'Vencida'
   };

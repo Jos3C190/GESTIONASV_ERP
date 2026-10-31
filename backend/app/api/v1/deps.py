@@ -28,6 +28,7 @@ from app.application.documents import (
     DocumentService,
 )
 from app.application.inventory import InventoryUseCases
+from app.application.inventory.kardex_read import InventoryKardexReadUseCases
 from app.application.password_policy import PasswordPolicy
 from app.application.purchase_consolidations import (
     PurchaseConsolidationAdjudicationUseCases,
@@ -44,6 +45,9 @@ from app.application.purchases import PurchaseUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.application.retaceos import RetaceoUseCases
 from app.application.retaceos.cost_documents import RetaceoCostDocumentService
+from app.application.sales.deliveries import SalesDeliveryService
+from app.application.sales.returns import SalesReturnService
+from app.application.sales.service import SalesService
 from app.core.config import settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.domain.entities.user import User
@@ -178,7 +182,7 @@ def get_inventory_use_cases(
     return InventoryUseCases(repository)
 
 
-def get_inventory_kardex_read_use_cases(session: SessionDep):
+def get_inventory_kardex_read_use_cases(session: SessionDep) -> InventoryKardexReadUseCases:
     from app.application.inventory.kardex_read import InventoryKardexReadUseCases
     from app.infrastructure.repositories.inventory_kardex_read_repository import (
         SqlAlchemyInventoryKardexReadRepository,
@@ -402,7 +406,7 @@ def get_purchase_consolidation_adjudication_use_cases(
 
 def get_sales_service(
     session: SessionDep, audit: Annotated[AuditService, Depends(get_audit_service)]
-):
+) -> SalesService:
     from app.application.sales.service import SalesService
 
     return SalesService(session, audit)
@@ -412,7 +416,7 @@ def get_sales_delivery_service(
     session: SessionDep,
     audit: Annotated[AuditService, Depends(get_audit_service)],
     inventory: Annotated[InventoryUseCases, Depends(get_inventory_use_cases)],
-):
+) -> SalesDeliveryService:
     from app.application.sales.deliveries import SalesDeliveryService
 
     return SalesDeliveryService(session, audit, inventory)
@@ -422,7 +426,7 @@ def get_sales_return_service(
     session: SessionDep,
     audit: Annotated[AuditService, Depends(get_audit_service)],
     inventory: Annotated[InventoryUseCases, Depends(get_inventory_use_cases)],
-):
+) -> SalesReturnService:
     from app.application.sales.returns import SalesReturnService
 
     return SalesReturnService(session, audit, inventory)

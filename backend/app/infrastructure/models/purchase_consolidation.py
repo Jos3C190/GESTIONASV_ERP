@@ -52,7 +52,9 @@ class PurchaseConsolidationModel(UUIDPKMixin, TimestampMixin, Base):
         back_populates="consolidation", cascade="all, delete-orphan", lazy="selectin"
     )
     events: Mapped[list[PurchaseConsolidationEventModel]] = relationship(
-        cascade="all, delete-orphan", lazy="selectin", order_by="PurchaseConsolidationEventModel.created_at"
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="PurchaseConsolidationEventModel.created_at",
     )
     central_warehouse: Mapped[Warehouse | None] = relationship(lazy="selectin")
 
@@ -61,9 +63,15 @@ class PurchaseConsolidationModel(UUIDPKMixin, TimestampMixin, Base):
         UniqueConstraint("company_id", "code", name="uq_purchase_consolidations_company_code"),
         CheckConstraint("period_end >= period_start", name="ck_purchase_consolidations_period"),
         CheckConstraint(
-            "status IN ('draft','frozen','closed','cancelled')", name="ck_purchase_consolidations_status"
+            "status IN ('draft','frozen','closed','cancelled')",
+            name="ck_purchase_consolidations_status",
         ),
-        Index("ix_purchase_consolidations_company_status_period", "company_id", "status", "period_start"),
+        Index(
+            "ix_purchase_consolidations_company_status_period",
+            "company_id",
+            "status",
+            "period_start",
+        ),
     )
 
 
@@ -87,7 +95,10 @@ class PurchaseConsolidationLineModel(UUIDPKMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("id", "company_id", name="uq_purchase_consolidation_lines_id_company"),
         UniqueConstraint(
-            "consolidation_id", "product_id", "unit_id", name="uq_purchase_consolidation_product_unit"
+            "consolidation_id",
+            "product_id",
+            "unit_id",
+            name="uq_purchase_consolidation_product_unit",
         ),
         ForeignKeyConstraint(
             ["consolidation_id", "company_id"],
@@ -107,7 +118,9 @@ class PurchaseConsolidationLineModel(UUIDPKMixin, TimestampMixin, Base):
             ondelete="RESTRICT",
             name="fk_purchase_consolidation_lines_unit_company",
         ),
-        CheckConstraint("central_quantity >= 0", name="ck_purchase_consolidation_central_nonnegative"),
+        CheckConstraint(
+            "central_quantity >= 0", name="ck_purchase_consolidation_central_nonnegative"
+        ),
         CheckConstraint(
             "central_quantity = 0 OR length(trim(coalesce(central_reason, ''))) > 0",
             name="ck_purchase_consolidation_central_reason",
@@ -122,7 +135,9 @@ class PurchaseConsolidationSourceModel(UUIDPKMixin, TimestampMixin, Base):
     company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     consolidation_line_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     purchase_request_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    purchase_request_detail_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    purchase_request_detail_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False
+    )
     requested_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     included_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -150,10 +165,10 @@ class PurchaseConsolidationSourceModel(UUIDPKMixin, TimestampMixin, Base):
             ondelete="RESTRICT",
             name="fk_purchase_consolidation_sources_request_detail_company",
         ),
-        UniqueConstraint(
-            "id", "company_id", name="uq_purchase_consolidation_sources_id_company"
+        UniqueConstraint("id", "company_id", name="uq_purchase_consolidation_sources_id_company"),
+        CheckConstraint(
+            "requested_quantity > 0", name="ck_purchase_consolidation_source_requested_positive"
         ),
-        CheckConstraint("requested_quantity > 0", name="ck_purchase_consolidation_source_requested_positive"),
         CheckConstraint(
             "included_quantity >= 0 AND included_quantity <= requested_quantity",
             name="ck_purchase_consolidation_source_included_range",
@@ -194,7 +209,12 @@ class PurchaseConsolidationEventModel(UUIDPKMixin, Base):
             ondelete="CASCADE",
             name="fk_purchase_consolidation_events_header_company",
         ),
-        Index("ix_purchase_consolidation_events_history", "company_id", "consolidation_id", "created_at"),
+        Index(
+            "ix_purchase_consolidation_events_history",
+            "company_id",
+            "consolidation_id",
+            "created_at",
+        ),
     )
 
 
@@ -207,7 +227,9 @@ class PurchaseConsolidationAwardModel(UUIDPKMixin, TimestampMixin, Base):
     consolidation_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     consolidation_line_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     purchase_quotation_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    purchase_quotation_detail_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    purchase_quotation_detail_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False
+    )
     supplier_id: Mapped[int] = mapped_column(Integer, nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
@@ -253,7 +275,9 @@ class PurchaseConsolidationAwardModel(UUIDPKMixin, TimestampMixin, Base):
         ),
         UniqueConstraint("id", "company_id", name="uq_purchase_consolidation_awards_id_company"),
         CheckConstraint("quantity > 0", name="ck_purchase_consolidation_awards_quantity_positive"),
-        CheckConstraint("length(trim(reason)) > 0", name="ck_purchase_consolidation_awards_reason_required"),
+        CheckConstraint(
+            "length(trim(reason)) > 0", name="ck_purchase_consolidation_awards_reason_required"
+        ),
         CheckConstraint(
             "(revoked_at IS NULL AND revoked_by_id IS NULL AND revocation_reason IS NULL) OR "
             "(revoked_at IS NOT NULL AND revoked_by_id IS NOT NULL "

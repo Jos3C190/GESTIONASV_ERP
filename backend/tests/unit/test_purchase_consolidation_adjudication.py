@@ -73,8 +73,7 @@ class FakeQuotationRepository:
         return tuple(
             quotation
             for quotation in self.quotations
-            if quotation.company_id == company_id
-            and quotation.consolidation_id == consolidation_id
+            if quotation.company_id == company_id and quotation.consolidation_id == consolidation_id
         )
 
 
@@ -82,9 +81,7 @@ class FakePurchaseOrderRepository:
     def __init__(self, ordered_quantities: dict[uuid.UUID, Decimal]) -> None:
         self.ordered_quantities = ordered_quantities
 
-    async def get_ordered_award_quantities(
-        self, company_id, award_ids, *, exclude_order_id=None
-    ):
+    async def get_ordered_award_quantities(self, company_id, award_ids, *, exclude_order_id=None):
         return {
             award_id: self.ordered_quantities[award_id]
             for award_id in award_ids
@@ -374,8 +371,6 @@ async def test_only_one_active_version_per_supplier_and_product_can_be_used():
         actor_id=case["actor_id"],
     )
     board = await case["use_cases"].get_board(case["company_id"], case["consolidation"].id)
-    second_offer = next(
-        offer for offer in board.lines[0].offers if offer.quotation_id == second.id
-    )
+    second_offer = next(offer for offer in board.lines[0].offers if offer.quotation_id == second.id)
     assert second_offer.can_award is False
     assert "otra versión" in (second_offer.blocked_reason or "")

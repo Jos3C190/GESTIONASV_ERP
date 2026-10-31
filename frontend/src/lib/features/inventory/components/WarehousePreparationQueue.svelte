@@ -2,6 +2,9 @@
   import { tick, untrack } from 'svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import HandlingUnitLabelDialog from './HandlingUnitLabelDialog.svelte';
+  import LocationGridPicker from '$lib/features/locations/components/LocationGridPicker.svelte';
+  import { listLocations } from '$lib/features/locations/services';
+  import type { LocationOut } from '$lib/features/locations/types';
   import { inventoryApi } from '../services';
   import { preparationApi, preparationQuantityIssue, type PreparationUnit } from '../preparation';
 
@@ -36,6 +39,12 @@
   let quantity = $state('');
   let weight = $state('');
   let volume = $state('');
+  let locations = $state<LocationOut[]>([]);
+  let locationPage = $state(0);
+  let moreLocations = $state(false);
+  let loadingLocations = $state(false);
+  let locationError = $state<string | null>(null);
+  let locationSequence = 0;
   let sequence = 0;
   let alive = true;
   let preferredId: string | null = null;
@@ -61,6 +70,63 @@
   );
   const formatQuantity = (value: number) =>
     value.toLocaleString('es-SV', { maximumFractionDigits: 6 });
+
+  $effect(() => {
+    const id = selected?.id;
+    const phase = selected?.phase;
+    void warehouseId;
+    void contextKey;
+    locationSequence++;
+    locations = [];
+    locationPage = 0;
+    moreLocations = false;
+    loadingLocations = false;
+    locationError = null;
+    if (id && phase === 'place') untrack(() => void loadLocations(true));
+    return () => {
+      locationSequence++;
+    };
+  });
+
+  async function loadLocations(reset = false) {
+    if (loadingLocations) return;
+    const request = locationSequence;
+    const warehouse = warehouseId;
+    const nextPage = reset ? 1 : locationPage + 1;
+    loadingLocations = true;
+    locationError = null;
+    try {
+      const result = await listLocations(warehouse, {
+        page: nextPage,
+        size: 100,
+        is_active: true,
+        lifecycle_status: 'active'
+      });
+      if (request !== locationSequence) return;
+      const eligible = result.items.filter(
+        (location) =>
+          location.warehouse_id === warehouse &&
+          location.is_active &&
+          location.lifecycle_status === 'active' &&
+          location.storage_eligible
+      );
+      locations = reset
+        ? eligible
+        : [
+            ...new Map(
+              [...locations, ...eligible].map((location) => [location.id, location])
+            ).values()
+          ];
+      locationPage = nextPage;
+      moreLocations = result.meta.page < result.meta.pages;
+    } catch (cause) {
+      if (request === locationSequence)
+        locationError =
+          cause instanceof Error ? cause.message : 'No se pudieron cargar las ubicaciones.';
+    } finally {
+      if (request === locationSequence) loadingLocations = false;
+    }
+  }
 
   $effect(() => {
     void warehouseId;
@@ -132,7 +198,7 @@
 
   function choose(unit: PreparationUnit, focus = true) {
     selected = unit;
-    unitScan = '';
+    unitScan = unit.code;
     locationScan = '';
     quantity = String(unit.quantity_base);
     weight = '';
@@ -438,7 +504,8 @@
                     placeholder="Escanea o escribe el código"
                     onkeydown={(e) => scannerNext(e, 'preparation-quantity')}
                   /><span class="mt-1.5 block text-xs text-foreground-muted"
-                    >Lee la etiqueta de la unidad seleccionada. También acepta su lote o producto.</span
+                    >Código de esta unidad, completado automáticamente. Puedes editarlo o escanear
+                    su etiqueta.</span
                   ></label
                 >
                 <label class="block"
@@ -534,6 +601,36 @@
                       onclick={() => (labelUnit = selected)}>Revisar y colocar etiqueta</Button
                     >
                   {:else}
+                    {#if loadingLocations}<p class="text-sm text-foreground-muted" role="status">
+                        Cargando ubicaciones…
+                      </p>{/if}
+                    {#if locationError}<div
+                        class="rounded-lg border border-danger/30 p-3 text-sm"
+                        role="alert"
+                      >
+                        <p>{locationError}</p>
+                        <Button variant="secondary" onclick={() => void loadLocations(true)}
+                          >Reintentar ubicaciones</Button
+                        >
+                      </div>{/if}
+                    <LocationGridPicker
+                      id="preparation-destination"
+                      {locations}
+                      selectedLocationId={locations.find(
+                        (location) => location.code === locationScan
+                      )?.id ?? ''}
+                      productName={selected.product_name ?? 'Producto recibido'}
+                      disabled={busy || loadingLocations}
+                      hasMoreLocations={moreLocations}
+                      onselect={(id) => {
+                        locationScan = locations.find((location) => location.id === id)?.code ?? '';
+                      }}
+                    />
+                    {#if moreLocations}<Button
+                        variant="secondary"
+                        disabled={busy || loadingLocations}
+                        onclick={() => void loadLocations()}>Cargar más ubicaciones</Button
+                      >{/if}
                     <label class="block"
                       ><span class="mb-1.5 block text-sm font-medium text-foreground"
                         >Código de ubicación</span
@@ -548,8 +645,8 @@
                         placeholder="Ej. A02-R01-N01-P01"
                         onkeydown={(e) => scannerNext(e, 'preparation-confirm')}
                       /><span class="mt-1.5 block text-xs text-foreground-muted"
-                        >Escanea el estante donde dejaste la unidad. Se validarán la bodega y su
-                        capacidad.</span
+                        >Se completa al elegir una ubicación. También puedes escanearla. La
+                        capacidad se valida al confirmar.</span
                       ></label
                     >
                     <Button

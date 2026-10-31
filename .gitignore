@@ -82,3 +82,5 @@ backend/alembic/drafts/
 backend/tmp-procurement-reports/
 frontend/tmp-labels/
 frontend/tmp-reports/
+/tmp/
+frontend/tmp-retaceo-automatic/

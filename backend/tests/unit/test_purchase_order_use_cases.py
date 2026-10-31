@@ -70,9 +70,7 @@ class FakePurchaseOrderRepository:
     ):
         return self.awards.get((company_id, consolidation_id, quotation_id), ())
 
-    async def get_ordered_award_quantities(
-        self, company_id, award_ids, *, exclude_order_id=None
-    ):
+    async def get_ordered_award_quantities(self, company_id, award_ids, *, exclude_order_id=None):
         totals: dict[uuid.UUID, Decimal] = {}
         for (tenant_id, order_id), order in self.orders.items():
             if (
@@ -546,14 +544,30 @@ def _consolidation_order_setup():
             quantity=Decimal("3.5"),
         ),
     )
-    return repository, company_id, quotation_id, detail_id, branch_id, warehouse_id, consolidation_id, award_id
+    return (
+        repository,
+        company_id,
+        quotation_id,
+        detail_id,
+        branch_id,
+        warehouse_id,
+        consolidation_id,
+        award_id,
+    )
 
 
 @pytest.mark.asyncio
 async def test_create_from_consolidation_uses_only_remaining_awarded_quantity_and_links_award():
-    repository, company_id, quotation_id, detail_id, branch_id, warehouse_id, consolidation_id, award_id = (
-        _consolidation_order_setup()
-    )
+    (
+        repository,
+        company_id,
+        quotation_id,
+        detail_id,
+        branch_id,
+        warehouse_id,
+        consolidation_id,
+        award_id,
+    ) = _consolidation_order_setup()
     order = await PurchaseOrderUseCases(repository).create_draft_from_consolidation_awards(
         company_id=company_id,
         created_by_id=uuid.uuid4(),
@@ -575,9 +589,7 @@ async def test_create_from_consolidation_rejects_non_mother_warehouse():
         _consolidation_order_setup()
     )
     key = (company_id, branch_id, warehouse_id)
-    repository.destinations[key] = replace(
-        repository.destinations[key], warehouse_is_central=False
-    )
+    repository.destinations[key] = replace(repository.destinations[key], warehouse_is_central=False)
 
     with pytest.raises(BusinessRuleError) as exc_info:
         await PurchaseOrderUseCases(repository).create_draft_from_consolidation_awards(
@@ -648,9 +660,16 @@ async def test_cancelled_awarded_order_releases_awarded_quantity_for_recreation(
 
 @pytest.mark.asyncio
 async def test_awarded_order_lines_cannot_be_changed_in_draft():
-    repository, company_id, quotation_id, detail_id, branch_id, warehouse_id, consolidation_id, award_id = (
-        _consolidation_order_setup()
-    )
+    (
+        repository,
+        company_id,
+        quotation_id,
+        detail_id,
+        branch_id,
+        warehouse_id,
+        consolidation_id,
+        award_id,
+    ) = _consolidation_order_setup()
     use_cases = PurchaseOrderUseCases(repository)
     order = await use_cases.create_draft_from_consolidation_awards(
         company_id=company_id,
@@ -680,9 +699,16 @@ async def test_awarded_order_lines_cannot_be_changed_in_draft():
 
 @pytest.mark.asyncio
 async def test_awarded_order_allows_metadata_edits_and_preserves_award_traceability():
-    repository, company_id, quotation_id, detail_id, branch_id, warehouse_id, consolidation_id, award_id = (
-        _consolidation_order_setup()
-    )
+    (
+        repository,
+        company_id,
+        quotation_id,
+        detail_id,
+        branch_id,
+        warehouse_id,
+        consolidation_id,
+        award_id,
+    ) = _consolidation_order_setup()
     use_cases = PurchaseOrderUseCases(repository)
     order = await use_cases.create_draft_from_consolidation_awards(
         company_id=company_id,

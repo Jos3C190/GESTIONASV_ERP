@@ -19,36 +19,58 @@ class InventoryAdjustmentLineIn(StrictModel):
     inventory_lot_detail_id: uuid.UUID | None = None
     handling_unit_id: uuid.UUID | None = None
     packaging_definition_id: uuid.UUID | None = None
-    documented_unit_cost: Decimal | None = Field(default=None, ge=0, max_digits=24, decimal_places=6)
-    documented_total_cost: Decimal | None = Field(default=None, ge=0, max_digits=24, decimal_places=6)
-    actual_gross_weight_kg: Decimal | None = Field(default=None, gt=0, max_digits=18, decimal_places=6)
+    documented_unit_cost: Decimal | None = Field(
+        default=None, ge=0, max_digits=24, decimal_places=6
+    )
+    documented_total_cost: Decimal | None = Field(
+        default=None, ge=0, max_digits=24, decimal_places=6
+    )
+    actual_gross_weight_kg: Decimal | None = Field(
+        default=None, gt=0, max_digits=18, decimal_places=6
+    )
     actual_volume_m3: Decimal | None = Field(default=None, gt=0, max_digits=18, decimal_places=6)
     transfer_detail_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def validate_direction_fields(self) -> InventoryAdjustmentLineIn:
         if self.direction == "increase":
-            if self.stock_status != "quarantine" or self.handling_unit_id or self.transfer_detail_id:
-                raise ValueError("Un ajuste positivo crea una nueva unidad en cuarentena.")
-            if self.documented_unit_cost is not None and self.documented_total_cost is not None:
-                raise ValueError("Indique costo unitario o total, no ambos.")
-            if self.actual_gross_weight_kg is None and self.actual_volume_m3 is None and self.packaging_definition_id is None:
-                raise ValueError("Indique peso y volumen o una presentación física registrada.")
-            if (self.actual_gross_weight_kg is None) != (self.actual_volume_m3 is None):
-                raise ValueError("El peso y el volumen deben indicarse juntos.")
+            self._validate_increase_fields()
         else:
-            if self.handling_unit_id is None:
-                raise ValueError("Una salida requiere identificar la unidad logística existente.")
-            if self.packaging_definition_id or self.documented_unit_cost is not None or self.documented_total_cost is not None:
-                raise ValueError("Una salida utiliza la unidad y el costo promedio vigente.")
-            if self.actual_gross_weight_kg is not None or self.actual_volume_m3 is not None:
-                raise ValueError("Las medidas de una salida se derivan de su unidad logística.")
-            if self.transfer_detail_id is not None and self.stock_status != "quarantine":
-                if self.stock_status != "in_transit":
-                    raise ValueError("La pérdida de traslado debe declararse en tránsito.")
-            if self.transfer_detail_id is None and self.stock_status == "in_transit":
-                raise ValueError("El tránsito solo se ajusta desde una incidencia de traslado.")
+            self._validate_decrease_fields()
         return self
+
+    def _validate_increase_fields(self) -> None:
+        if self.stock_status != "quarantine" or self.handling_unit_id or self.transfer_detail_id:
+            raise ValueError("Un ajuste positivo crea una nueva unidad en cuarentena.")
+        if self.documented_unit_cost is not None and self.documented_total_cost is not None:
+            raise ValueError("Indique costo unitario o total, no ambos.")
+        if (
+            self.actual_gross_weight_kg is None
+            and self.actual_volume_m3 is None
+            and self.packaging_definition_id is None
+        ):
+            raise ValueError("Indique peso y volumen o una presentación física registrada.")
+        if (self.actual_gross_weight_kg is None) != (self.actual_volume_m3 is None):
+            raise ValueError("El peso y el volumen deben indicarse juntos.")
+
+    def _validate_decrease_fields(self) -> None:
+        if self.handling_unit_id is None:
+            raise ValueError("Una salida requiere identificar la unidad logística existente.")
+        if (
+            self.packaging_definition_id
+            or self.documented_unit_cost is not None
+            or self.documented_total_cost is not None
+        ):
+            raise ValueError("Una salida utiliza la unidad y el costo promedio vigente.")
+        if self.actual_gross_weight_kg is not None or self.actual_volume_m3 is not None:
+            raise ValueError("Las medidas de una salida se derivan de su unidad logística.")
+        if self.transfer_detail_id is not None and self.stock_status not in {
+            "quarantine",
+            "in_transit",
+        }:
+            raise ValueError("La pérdida de traslado debe declararse en tránsito.")
+        if self.transfer_detail_id is None and self.stock_status == "in_transit":
+            raise ValueError("El tránsito solo se ajusta desde una incidencia de traslado.")
 
 
 class InventoryAdjustmentCreateIn(StrictModel):
@@ -73,8 +95,12 @@ class InventoryAdjustmentCreateIn(StrictModel):
             or self.lines[0].direction != "decrease"
             or self.lines[0].transfer_detail_id is None
         ):
-            raise ValueError("Una pérdida documentada requiere una sola línea de salida vinculada al traslado.")
-        if self.transfer_id is None and any(line.transfer_detail_id is not None for line in self.lines):
+            raise ValueError(
+                "Una pérdida documentada requiere una sola línea de salida vinculada al traslado."
+            )
+        if self.transfer_id is None and any(
+            line.transfer_detail_id is not None for line in self.lines
+        ):
             raise ValueError("La línea de traslado requiere una incidencia vinculada.")
         return self
 

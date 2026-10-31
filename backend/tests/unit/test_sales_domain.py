@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from app.application.sales.service import _unit_label
 from app.domain.entities.sales import (
     can_convert_quote,
     line_amount,
@@ -10,7 +11,6 @@ from app.domain.entities.sales import (
     quantity_in_base,
     quote_display_status,
 )
-from app.application.sales.service import _unit_label
 
 
 def test_unit_label_does_not_repeat_a_symbol_already_in_the_name() -> None:

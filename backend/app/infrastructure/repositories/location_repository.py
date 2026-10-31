@@ -462,8 +462,7 @@ class SqlAlchemyLocationRepository:
                     Warehouse.branch_id,
                     Warehouse.is_active,
                     Warehouse.operational_status,
-                )
-                .where(Warehouse.id == warehouse_id)
+                ).where(Warehouse.id == warehouse_id)
             )
         ).one_or_none()
         if row is None:

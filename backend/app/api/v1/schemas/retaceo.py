@@ -5,11 +5,13 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.api.v1.schemas.common import ORMOut
 from app.domain.entities.retaceo import RetaceoCostClass, RetaceoImportData, RetaceoStatus
+from app.domain.entities.retaceo_calculation import CalculationMode
 
 
 class RetaceoImportInput(BaseModel):
@@ -30,18 +32,38 @@ class RetaceoFobInput(BaseModel):
     amount: Decimal = Field(gt=0, max_digits=18, decimal_places=6)
 
 
-class RetaceoCreate(BaseModel):
+class RetaceoCalculationInput(BaseModel):
+    calculation_mode: CalculationMode | None = None
+    dai_rate: Decimal | None = Field(default=None, ge=0, le=1000, max_digits=10, decimal_places=6)
+    vat_rate: Decimal | None = Field(default=None, ge=0, le=1000, max_digits=10, decimal_places=6)
+    total_dai: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=6)
+    import_vat: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=6)
+    fob_lines: tuple[RetaceoFobInput, ...] | None = Field(
+        default=None, min_length=1, max_length=200
+    )
+
+    @model_validator(mode="after")
+    def validate_calculation(self) -> Self:
+        if self.calculation_mode == "automatic":
+            if self.dai_rate is None or self.vat_rate is None:
+                raise ValueError("Ingrese los porcentajes de DAI e IVA para el cálculo automático.")
+            if self.fob_lines is not None:
+                raise ValueError("El modo automático toma el FOB de la compra.")
+        else:
+            if self.total_dai is None or self.import_vat is None:
+                raise ValueError("Ingrese los importes de DAI e IVA en modo manual.")
+            if self.dai_rate is not None or self.vat_rate is not None:
+                raise ValueError("Seleccione automático para calcular desde porcentajes.")
+        return self
+
+
+class RetaceoCreate(RetaceoCalculationInput):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     purchase_id: uuid.UUID
     import_data: RetaceoImportInput | None = None
-    fob_lines: tuple[RetaceoFobInput, ...] | None = Field(
-        default=None, min_length=1, max_length=200
-    )
     total_freight: Decimal = Field(ge=0, max_digits=18, decimal_places=6)
     total_expenses: Decimal = Field(ge=0, max_digits=18, decimal_places=6)
-    total_dai: Decimal = Field(ge=0, max_digits=18, decimal_places=6)
-    import_vat: Decimal = Field(ge=0, max_digits=18, decimal_places=6)
     notes: str | None = Field(default=None, max_length=4000)
 
 
@@ -75,19 +97,14 @@ class RetaceoCostDocumentInitiate(BaseModel):
     checksum_sha256: str = Field(pattern=r"^[a-fA-F0-9]{64}$")
 
 
-class RetaceoUpdate(BaseModel):
+class RetaceoUpdate(RetaceoCalculationInput):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     import_data: RetaceoImportInput | None = None
 
     total_freight: Decimal = Field(ge=0, max_digits=18, decimal_places=6)
     total_expenses: Decimal = Field(ge=0, max_digits=18, decimal_places=6)
-    total_dai: Decimal = Field(ge=0, max_digits=18, decimal_places=6)
-    import_vat: Decimal = Field(ge=0, max_digits=18, decimal_places=6)
     notes: str | None = Field(default=None, max_length=4000)
     costs: tuple[RetaceoCostInput, ...] | None = None
-    fob_lines: tuple[RetaceoFobInput, ...] | None = Field(
-        default=None, min_length=1, max_length=200
-    )
 
 
 class RetaceoCostAllocationResponse(ORMOut):
@@ -178,6 +195,9 @@ class RetaceoAverageComparisonResponse(ORMOut):
 
 
 class RetaceoResponse(ORMOut):
+    calculation_mode: CalculationMode = "manual"
+    dai_rate: Decimal | None = None
+    vat_rate: Decimal | None = None
     manual_entry: bool = False
     origin_country: str | None = None
     import_invoice_number: str | None = None

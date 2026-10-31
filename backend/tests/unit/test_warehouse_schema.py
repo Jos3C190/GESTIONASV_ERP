@@ -72,9 +72,7 @@ def test_requires_branch_for_every_warehouse():
 
 def test_central_flag_does_not_remove_warehouse_branch_assignment():
     branch_id = uuid.uuid4()
-    warehouse = WarehouseIn.model_validate(
-        warehouse_payload(branch_id=branch_id, is_central=True)
-    )
+    warehouse = WarehouseIn.model_validate(warehouse_payload(branch_id=branch_id, is_central=True))
 
     assert warehouse.branch_id == branch_id
 

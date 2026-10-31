@@ -1,4 +1,5 @@
 export type RetaceoStatus = 'draft' | 'calculated' | 'verified' | 'closed' | 'cancelled';
+export type RetaceoCalculationMode = 'automatic' | 'manual';
 export interface RetaceoImportData {
   origin_country: string | null;
   import_invoice_number: string | null;
@@ -106,6 +107,9 @@ export interface RetaceoDetail {
 }
 
 export interface Retaceo extends Partial<RetaceoImportData> {
+  calculation_mode?: RetaceoCalculationMode;
+  dai_rate?: string | null;
+  vat_rate?: string | null;
   manual_entry?: boolean;
   id: string;
   company_id: string;
@@ -134,6 +138,9 @@ export interface Retaceo extends Partial<RetaceoImportData> {
 }
 
 export interface RetaceoCreateInput {
+  calculation_mode?: RetaceoCalculationMode;
+  dai_rate?: string | null;
+  vat_rate?: string | null;
   import_data?: RetaceoImportData;
   fob_lines?: Array<{ purchase_detail_id: string; amount: string }>;
   purchase_id: string;
@@ -145,6 +152,9 @@ export interface RetaceoCreateInput {
 }
 
 export interface RetaceoUpdateInput {
+  calculation_mode?: RetaceoCalculationMode;
+  dai_rate?: string | null;
+  vat_rate?: string | null;
   import_data?: RetaceoImportData;
   fob_lines?: Array<{ purchase_detail_id: string; amount: string }>;
   total_freight: string;

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, date, datetime, time, timedelta
+from typing import cast as type_cast
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import Integer, and_, cast, exists, func, literal, or_, select, tuple_, union_all
@@ -56,8 +57,7 @@ def _purchase_request_date_conditions(
         conditions.append(PurchaseRequestModel.request_date >= _local_date_start_utc(date_from))
     if date_to:
         conditions.append(
-            PurchaseRequestModel.request_date
-            < _local_date_start_utc(date_to + timedelta(days=1))
+            PurchaseRequestModel.request_date < _local_date_start_utc(date_to + timedelta(days=1))
         )
     return tuple(conditions)
 
@@ -107,16 +107,20 @@ class SqlAlchemyPurchaseConsolidationRepository:
                 .join(
                     PurchaseRequestModel,
                     and_(
-                        PurchaseRequestModel.id == PurchaseConsolidationSourceModel.purchase_request_id,
-                        PurchaseRequestModel.company_id == PurchaseConsolidationSourceModel.company_id,
+                        PurchaseRequestModel.id
+                        == PurchaseConsolidationSourceModel.purchase_request_id,
+                        PurchaseRequestModel.company_id
+                        == PurchaseConsolidationSourceModel.company_id,
                     ),
                 )
                 .join(
                     PurchaseConsolidationLineModel,
-                    PurchaseConsolidationLineModel.id == PurchaseConsolidationSourceModel.consolidation_line_id,
+                    PurchaseConsolidationLineModel.id
+                    == PurchaseConsolidationSourceModel.consolidation_line_id,
                 )
                 .where(
-                    PurchaseConsolidationLineModel.consolidation_id == PurchaseConsolidationModel.id,
+                    PurchaseConsolidationLineModel.consolidation_id
+                    == PurchaseConsolidationModel.id,
                     PurchaseConsolidationSourceModel.company_id == company_id,
                     PurchaseRequestModel.branch_id == branch_id,
                 )
@@ -128,16 +132,20 @@ class SqlAlchemyPurchaseConsolidationRepository:
                 .join(
                     PurchaseRequestModel,
                     and_(
-                        PurchaseRequestModel.id == PurchaseConsolidationSourceModel.purchase_request_id,
-                        PurchaseRequestModel.company_id == PurchaseConsolidationSourceModel.company_id,
+                        PurchaseRequestModel.id
+                        == PurchaseConsolidationSourceModel.purchase_request_id,
+                        PurchaseRequestModel.company_id
+                        == PurchaseConsolidationSourceModel.company_id,
                     ),
                 )
                 .join(
                     PurchaseConsolidationLineModel,
-                    PurchaseConsolidationLineModel.id == PurchaseConsolidationSourceModel.consolidation_line_id,
+                    PurchaseConsolidationLineModel.id
+                    == PurchaseConsolidationSourceModel.consolidation_line_id,
                 )
                 .where(
-                    PurchaseConsolidationLineModel.consolidation_id == PurchaseConsolidationModel.id,
+                    PurchaseConsolidationLineModel.consolidation_id
+                    == PurchaseConsolidationModel.id,
                     PurchaseConsolidationSourceModel.company_id == company_id,
                     PurchaseRequestModel.branch_id != branch_id,
                 )
@@ -171,7 +179,8 @@ class SqlAlchemyPurchaseConsolidationRepository:
                             and_(
                                 PurchaseRequestModel.id
                                 == PurchaseConsolidationSourceModel.purchase_request_id,
-                                PurchaseRequestModel.company_id == PurchaseConsolidationSourceModel.company_id,
+                                PurchaseRequestModel.company_id
+                                == PurchaseConsolidationSourceModel.company_id,
                             ),
                         )
                         .join(
@@ -180,7 +189,8 @@ class SqlAlchemyPurchaseConsolidationRepository:
                             == PurchaseConsolidationSourceModel.consolidation_line_id,
                         )
                         .where(
-                            PurchaseConsolidationLineModel.consolidation_id == PurchaseConsolidationModel.id,
+                            PurchaseConsolidationLineModel.consolidation_id
+                            == PurchaseConsolidationModel.id,
                             PurchaseConsolidationSourceModel.company_id == company_id,
                             PurchaseRequestModel.warehouse_id == warehouse_id,
                         )
@@ -221,7 +231,8 @@ class SqlAlchemyPurchaseConsolidationRepository:
                         ),
                     )
                     .where(
-                        PurchaseConsolidationLineModel.consolidation_id == PurchaseConsolidationModel.id,
+                        PurchaseConsolidationLineModel.consolidation_id
+                        == PurchaseConsolidationModel.id,
                         PurchaseConsolidationLineModel.company_id == company_id,
                         ProductModel.company_id == company_id,
                         ProductModel.id_category == category_id,
@@ -241,7 +252,10 @@ class SqlAlchemyPurchaseConsolidationRepository:
                 )
             )
             consolidation_filters.append(
-                or_(PurchaseConsolidationModel.code.ilike(pattern), PurchaseConsolidationModel.notes.ilike(pattern))
+                or_(
+                    PurchaseConsolidationModel.code.ilike(pattern),
+                    PurchaseConsolidationModel.notes.ilike(pattern),
+                )
             )
         if consolidation_id:
             request_filters.append(
@@ -254,7 +268,8 @@ class SqlAlchemyPurchaseConsolidationRepository:
                         == PurchaseConsolidationSourceModel.consolidation_line_id,
                     )
                     .where(
-                        PurchaseConsolidationSourceModel.purchase_request_id == PurchaseRequestModel.id,
+                        PurchaseConsolidationSourceModel.purchase_request_id
+                        == PurchaseRequestModel.id,
                         PurchaseConsolidationSourceModel.company_id == company_id,
                         PurchaseConsolidationLineModel.consolidation_id == consolidation_id,
                     )
@@ -275,7 +290,8 @@ class SqlAlchemyPurchaseConsolidationRepository:
             .select_from(PurchaseConsolidationSourceModel)
             .join(
                 PurchaseConsolidationLineModel,
-                PurchaseConsolidationLineModel.id == PurchaseConsolidationSourceModel.consolidation_line_id,
+                PurchaseConsolidationLineModel.id
+                == PurchaseConsolidationSourceModel.consolidation_line_id,
             )
             .where(PurchaseConsolidationLineModel.consolidation_id == PurchaseConsolidationModel.id)
             .correlate(PurchaseConsolidationModel)
@@ -289,42 +305,50 @@ class SqlAlchemyPurchaseConsolidationRepository:
             .scalar_subquery()
         )
 
-        requests = select(
-            PurchaseRequestModel.id.label("id"),
-            PurchaseRequestModel.code.label("code"),
-            literal("individual").label("item_type"),
-            PurchaseRequestModel.status.label("status"),
-            PurchaseRequestModel.request_date.label("request_date"),
-            User.username.label("requester_name"),
-            PurchaseRequestModel.required_date.label("required_date"),
-            PurchaseRequestModel.branch_id.label("branch_id"),
-            Branch.name.label("branch_name"),
-            PurchaseRequestModel.warehouse_id.label("warehouse_id"),
-            Warehouse.name.label("warehouse_name"),
-            request_count.label("line_count"),
-            literal(0).label("source_count"),
-        ).join(Branch, Branch.id == PurchaseRequestModel.branch_id).join(
-            Warehouse, Warehouse.id == PurchaseRequestModel.warehouse_id
-        ).outerjoin(
-            User, User.id == PurchaseRequestModel.requested_by_id
-        ).where(*request_filters)
+        requests = (
+            select(
+                PurchaseRequestModel.id.label("id"),
+                PurchaseRequestModel.code.label("code"),
+                literal("individual").label("item_type"),
+                PurchaseRequestModel.status.label("status"),
+                PurchaseRequestModel.request_date.label("request_date"),
+                User.username.label("requester_name"),
+                PurchaseRequestModel.required_date.label("required_date"),
+                PurchaseRequestModel.branch_id.label("branch_id"),
+                Branch.name.label("branch_name"),
+                PurchaseRequestModel.warehouse_id.label("warehouse_id"),
+                Warehouse.name.label("warehouse_name"),
+                request_count.label("line_count"),
+                literal(0).label("source_count"),
+            )
+            .join(Branch, Branch.id == PurchaseRequestModel.branch_id)
+            .join(Warehouse, Warehouse.id == PurchaseRequestModel.warehouse_id)
+            .outerjoin(User, User.id == PurchaseRequestModel.requested_by_id)
+            .where(*request_filters)
+        )
 
-        consolidations = select(
-            PurchaseConsolidationModel.id.label("id"),
-            PurchaseConsolidationModel.code.label("code"),
-            literal("consolidated").label("item_type"),
-            PurchaseConsolidationModel.status.label("status"),
-            PurchaseConsolidationModel.created_at.label("request_date"),
-            literal(None, type_=User.__table__.c.username.type).label("requester_name"),
-            literal(None, type_=PurchaseRequestModel.__table__.c.required_date.type).label("required_date"),
-            literal(None, type_=PurchaseRequestModel.__table__.c.branch_id.type).label("branch_id"),
-            literal(None, type_=Branch.__table__.c.name.type).label("branch_name"),
-            PurchaseConsolidationModel.central_warehouse_id.label("warehouse_id"),
-            Warehouse.name.label("warehouse_name"),
-            line_count.label("line_count"),
-            source_count.label("source_count"),
-        ).outerjoin(Warehouse, Warehouse.id == PurchaseConsolidationModel.central_warehouse_id).where(
-            *consolidation_filters
+        consolidations = (
+            select(
+                PurchaseConsolidationModel.id.label("id"),
+                PurchaseConsolidationModel.code.label("code"),
+                literal("consolidated").label("item_type"),
+                PurchaseConsolidationModel.status.label("status"),
+                PurchaseConsolidationModel.created_at.label("request_date"),
+                literal(None, type_=User.__table__.c.username.type).label("requester_name"),
+                literal(None, type_=PurchaseRequestModel.__table__.c.required_date.type).label(
+                    "required_date"
+                ),
+                literal(None, type_=PurchaseRequestModel.__table__.c.branch_id.type).label(
+                    "branch_id"
+                ),
+                literal(None, type_=Branch.__table__.c.name.type).label("branch_name"),
+                PurchaseConsolidationModel.central_warehouse_id.label("warehouse_id"),
+                Warehouse.name.label("warehouse_name"),
+                line_count.label("line_count"),
+                source_count.label("source_count"),
+            )
+            .outerjoin(Warehouse, Warehouse.id == PurchaseConsolidationModel.central_warehouse_id)
+            .where(*consolidation_filters)
         )
         if item_type == "individual":
             combined = requests.subquery()
@@ -387,44 +411,62 @@ class SqlAlchemyPurchaseConsolidationRepository:
                 filters.append(PurchaseRequestModel.warehouse_id == warehouse_id)
             if query and query.strip():
                 pattern = f"%{query.strip()}%"
-                filters.append(or_(PurchaseRequestModel.code.ilike(pattern), PurchaseRequestModel.justification.ilike(pattern)))
+                filters.append(
+                    or_(
+                        PurchaseRequestModel.code.ilike(pattern),
+                        PurchaseRequestModel.justification.ilike(pattern),
+                    )
+                )
         filters.append(
             ~exists(
                 select(1)
                 .select_from(PurchaseRequestDetailModel)
                 .join(
                     PurchaseConsolidationSourceModel,
-                    PurchaseConsolidationSourceModel.purchase_request_detail_id == PurchaseRequestDetailModel.id,
+                    PurchaseConsolidationSourceModel.purchase_request_detail_id
+                    == PurchaseRequestDetailModel.id,
                 )
                 .join(
                     PurchaseConsolidationLineModel,
-                    PurchaseConsolidationLineModel.id == PurchaseConsolidationSourceModel.consolidation_line_id,
+                    PurchaseConsolidationLineModel.id
+                    == PurchaseConsolidationSourceModel.consolidation_line_id,
                 )
                 .join(
                     PurchaseConsolidationModel,
                     and_(
-                        PurchaseConsolidationModel.id == PurchaseConsolidationLineModel.consolidation_id,
-                        PurchaseConsolidationModel.company_id == PurchaseConsolidationLineModel.company_id,
+                        PurchaseConsolidationModel.id
+                        == PurchaseConsolidationLineModel.consolidation_id,
+                        PurchaseConsolidationModel.company_id
+                        == PurchaseConsolidationLineModel.company_id,
                     ),
                 )
                 .where(
                     PurchaseRequestDetailModel.purchase_request_id == PurchaseRequestModel.id,
                     PurchaseRequestDetailModel.company_id == PurchaseRequestModel.company_id,
-                    PurchaseConsolidationSourceModel.purchase_request_detail_id == PurchaseRequestDetailModel.id,
-                    PurchaseConsolidationSourceModel.company_id == PurchaseRequestDetailModel.company_id,
+                    PurchaseConsolidationSourceModel.purchase_request_detail_id
+                    == PurchaseRequestDetailModel.id,
+                    PurchaseConsolidationSourceModel.company_id
+                    == PurchaseRequestDetailModel.company_id,
                     PurchaseConsolidationSourceModel.company_id == company_id,
-                    PurchaseConsolidationModel.status != PurchaseConsolidationStatus.CANCELLED.value,
+                    PurchaseConsolidationModel.status
+                    != PurchaseConsolidationStatus.CANCELLED.value,
                 )
             )
         )
-        base = select(PurchaseRequestModel).options(
-            selectinload(PurchaseRequestModel.details),
-            selectinload(PurchaseRequestModel.branch),
-            selectinload(PurchaseRequestModel.warehouse),
-        ).where(*filters)
+        base = (
+            select(PurchaseRequestModel)
+            .options(
+                selectinload(PurchaseRequestModel.details),
+                selectinload(PurchaseRequestModel.branch),
+                selectinload(PurchaseRequestModel.warehouse),
+            )
+            .where(*filters)
+        )
         total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
         result = await self._session.execute(
-            base.order_by(PurchaseRequestModel.request_date.desc(), PurchaseRequestModel.code.desc())
+            base.order_by(
+                PurchaseRequestModel.request_date.desc(), PurchaseRequestModel.code.desc()
+            )
             .offset(skip)
             .limit(limit)
         )
@@ -451,14 +493,20 @@ class SqlAlchemyPurchaseConsolidationRepository:
                     ProductModel.name,
                     func.coalesce(CompanyUnitModel.alias, UnitModel.name),
                 )
-                .join(ProductModel, and_(
-                    ProductModel.id_product == PurchaseRequestDetailModel.product_id,
-                    ProductModel.company_id == PurchaseRequestDetailModel.company_id,
-                ))
-                .join(CompanyUnitModel, and_(
-                    CompanyUnitModel.company_id == PurchaseRequestDetailModel.company_id,
-                    CompanyUnitModel.unit_id == PurchaseRequestDetailModel.unit_id,
-                ))
+                .join(
+                    ProductModel,
+                    and_(
+                        ProductModel.id_product == PurchaseRequestDetailModel.product_id,
+                        ProductModel.company_id == PurchaseRequestDetailModel.company_id,
+                    ),
+                )
+                .join(
+                    CompanyUnitModel,
+                    and_(
+                        CompanyUnitModel.company_id == PurchaseRequestDetailModel.company_id,
+                        CompanyUnitModel.unit_id == PurchaseRequestDetailModel.unit_id,
+                    ),
+                )
                 .join(UnitModel, UnitModel.id_unit == PurchaseRequestDetailModel.unit_id)
                 .where(
                     PurchaseRequestDetailModel.company_id == company_id,
@@ -466,11 +514,13 @@ class SqlAlchemyPurchaseConsolidationRepository:
                 )
             )
             detail_labels = {row[0]: (row[1], row[2], row[3]) for row in label_rows}
-            branch_product_pairs = list({
-                (model.branch_id, detail.product_id)
-                for model in request_models
-                for detail in model.details
-            })
+            branch_product_pairs = list(
+                {
+                    (model.branch_id, detail.product_id)
+                    for model in request_models
+                    for detail in model.details
+                }
+            )
             if branch_product_pairs:
                 history_rows = await self._session.execute(
                     select(
@@ -478,48 +528,86 @@ class SqlAlchemyPurchaseConsolidationRepository:
                         PurchaseRequestDetailModel.product_id,
                         func.count(func.distinct(PurchaseRequestModel.id)),
                     )
-                    .join(PurchaseRequestDetailModel, and_(
-                        PurchaseRequestDetailModel.purchase_request_id == PurchaseRequestModel.id,
-                        PurchaseRequestDetailModel.company_id == PurchaseRequestModel.company_id,
-                    ))
+                    .join(
+                        PurchaseRequestDetailModel,
+                        and_(
+                            PurchaseRequestDetailModel.purchase_request_id
+                            == PurchaseRequestModel.id,
+                            PurchaseRequestDetailModel.company_id
+                            == PurchaseRequestModel.company_id,
+                        ),
+                    )
                     .where(
                         PurchaseRequestModel.company_id == company_id,
                         PurchaseRequestModel.status.in_(
-                            ("approved", "partially_quoted", "quoted", "partially_ordered", "completed")
+                            (
+                                "approved",
+                                "partially_quoted",
+                                "quoted",
+                                "partially_ordered",
+                                "completed",
+                            )
                         ),
                         *_purchase_request_date_conditions(date_from, date_to),
-                        tuple_(PurchaseRequestModel.branch_id, PurchaseRequestDetailModel.product_id).in_(branch_product_pairs),
+                        tuple_(
+                            PurchaseRequestModel.branch_id, PurchaseRequestDetailModel.product_id
+                        ).in_(branch_product_pairs),
                     )
                     .group_by(PurchaseRequestModel.branch_id, PurchaseRequestDetailModel.product_id)
                 )
                 request_counts = {(row[0], row[1]): int(row[2]) for row in history_rows}
         output = []
         for model in request_models:
-            output.append({
-                "id": model.id,
-                "code": model.code,
-                "request_date": model.request_date,
-                "requester_name": requester_names.get(model.id),
-                "required_date": model.required_date,
-                "branch_id": model.branch_id,
-                "branch_name": model.branch.name if model.branch else None,
-                "warehouse_id": model.warehouse_id,
-                "warehouse_name": model.warehouse.name if model.warehouse else None,
-                "line_count": len(model.details),
-                "details": [
-                    {
-                        "id": detail.id,
-                        "product_id": detail.product_id,
-                        "product_sku": detail_labels.get(detail.id, (f"PRD-{detail.product_id}", f"Producto {detail.product_id}", f"Unidad {detail.unit_id}"))[0],
-                        "product_name": detail_labels.get(detail.id, (f"PRD-{detail.product_id}", f"Producto {detail.product_id}", f"Unidad {detail.unit_id}"))[1],
-                        "unit_id": detail.unit_id,
-                        "unit_name": detail_labels.get(detail.id, (f"PRD-{detail.product_id}", f"Producto {detail.product_id}", f"Unidad {detail.unit_id}"))[2],
-                        "quantity": detail.quantity,
-                        "request_count": request_counts.get((model.branch_id, detail.product_id), 0),
-                    }
-                    for detail in model.details
-                ],
-            })
+            output.append(
+                {
+                    "id": model.id,
+                    "code": model.code,
+                    "request_date": model.request_date,
+                    "requester_name": requester_names.get(model.id),
+                    "required_date": model.required_date,
+                    "branch_id": model.branch_id,
+                    "branch_name": model.branch.name if model.branch else None,
+                    "warehouse_id": model.warehouse_id,
+                    "warehouse_name": model.warehouse.name if model.warehouse else None,
+                    "line_count": len(model.details),
+                    "details": [
+                        {
+                            "id": detail.id,
+                            "product_id": detail.product_id,
+                            "product_sku": detail_labels.get(
+                                detail.id,
+                                (
+                                    f"PRD-{detail.product_id}",
+                                    f"Producto {detail.product_id}",
+                                    f"Unidad {detail.unit_id}",
+                                ),
+                            )[0],
+                            "product_name": detail_labels.get(
+                                detail.id,
+                                (
+                                    f"PRD-{detail.product_id}",
+                                    f"Producto {detail.product_id}",
+                                    f"Unidad {detail.unit_id}",
+                                ),
+                            )[1],
+                            "unit_id": detail.unit_id,
+                            "unit_name": detail_labels.get(
+                                detail.id,
+                                (
+                                    f"PRD-{detail.product_id}",
+                                    f"Producto {detail.product_id}",
+                                    f"Unidad {detail.unit_id}",
+                                ),
+                            )[2],
+                            "quantity": detail.quantity,
+                            "request_count": request_counts.get(
+                                (model.branch_id, detail.product_id), 0
+                            ),
+                        }
+                        for detail in model.details
+                    ],
+                }
+            )
         return output, int(total or 0)
 
     async def resolve_selected_requests(
@@ -537,8 +625,9 @@ class SqlAlchemyPurchaseConsolidationRepository:
             return []
 
         request_rows = await self._session.execute(
-            select(PurchaseRequestModel.id, PurchaseRequestModel.code, PurchaseRequestModel.status)
-            .where(
+            select(
+                PurchaseRequestModel.id, PurchaseRequestModel.code, PurchaseRequestModel.status
+            ).where(
                 PurchaseRequestModel.company_id == company_id,
                 PurchaseRequestModel.id.in_(selected_ids),
             )
@@ -566,8 +655,10 @@ class SqlAlchemyPurchaseConsolidationRepository:
             .join(
                 PurchaseConsolidationModel,
                 and_(
-                    PurchaseConsolidationModel.id == PurchaseConsolidationLineModel.consolidation_id,
-                    PurchaseConsolidationModel.company_id == PurchaseConsolidationLineModel.company_id,
+                    PurchaseConsolidationModel.id
+                    == PurchaseConsolidationLineModel.consolidation_id,
+                    PurchaseConsolidationModel.company_id
+                    == PurchaseConsolidationLineModel.company_id,
                 ),
             )
             .where(
@@ -576,7 +667,10 @@ class SqlAlchemyPurchaseConsolidationRepository:
                 PurchaseConsolidationModel.status != PurchaseConsolidationStatus.CANCELLED.value,
             )
             .distinct()
-            .order_by(PurchaseConsolidationSourceModel.purchase_request_id, PurchaseConsolidationModel.code)
+            .order_by(
+                PurchaseConsolidationSourceModel.purchase_request_id,
+                PurchaseConsolidationModel.code,
+            )
         )
         consolidations_by_request: dict[uuid.UUID, dict[uuid.UUID, dict[str, object]]] = {}
         for row in consolidation_rows:
@@ -610,51 +704,76 @@ class SqlAlchemyPurchaseConsolidationRepository:
         return resolutions
 
     async def allocate_next_code(self, company_id: uuid.UUID) -> str:
-        await self._session.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"purchase_consolidations:{company_id}"))))
-        value = await self._session.scalar(
-            select(func.coalesce(func.max(cast(func.substr(PurchaseConsolidationModel.code, 4), Integer)), 0)).where(
-                PurchaseConsolidationModel.company_id == company_id
+        await self._session.execute(
+            select(
+                func.pg_advisory_xact_lock(func.hashtext(f"purchase_consolidations:{company_id}"))
             )
+        )
+        value = await self._session.scalar(
+            select(
+                func.coalesce(
+                    func.max(cast(func.substr(PurchaseConsolidationModel.code, 4), Integer)), 0
+                )
+            ).where(PurchaseConsolidationModel.company_id == company_id)
         )
         return f"CD-{int(value or 0) + 1:05d}"
 
     async def central_warehouse_available(
         self, company_id: uuid.UUID, warehouse_id: uuid.UUID
     ) -> bool:
-        return bool(await self._session.scalar(
-            select(func.count())
-            .select_from(Warehouse)
-            .join(
-                Branch,
-                (Branch.id == Warehouse.branch_id)
-                & (Branch.company_id == Warehouse.company_id),
+        return bool(
+            await self._session.scalar(
+                select(func.count())
+                .select_from(Warehouse)
+                .join(
+                    Branch,
+                    (Branch.id == Warehouse.branch_id)
+                    & (Branch.company_id == Warehouse.company_id),
+                )
+                .where(
+                    Warehouse.id == warehouse_id,
+                    Warehouse.company_id == company_id,
+                    Warehouse.deleted_at.is_(None),
+                    Warehouse.operational_status == "active",
+                    Warehouse.is_central.is_(True),
+                    Branch.is_headquarters.is_(True),
+                    Branch.is_active.is_(True),
+                    Branch.operational_status == "active",
+                    Branch.deleted_at.is_(None),
+                )
             )
-            .where(
-                Warehouse.id == warehouse_id,
-                Warehouse.company_id == company_id,
-                Warehouse.deleted_at.is_(None),
-                Warehouse.operational_status == "active",
-                Warehouse.is_central.is_(True),
-                Branch.is_headquarters.is_(True),
-                Branch.is_active.is_(True),
-                Branch.operational_status == "active",
-                Branch.deleted_at.is_(None),
-            )
-        ))
+        )
 
     async def has_active_source(self, company_id: uuid.UUID, detail_id: uuid.UUID) -> bool:
-        await self._session.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"purchase_consolidation_source:{company_id}:{detail_id}"))))
-        return bool(await self._session.scalar(
-            select(func.count())
-            .select_from(PurchaseConsolidationSourceModel)
-            .join(PurchaseConsolidationLineModel, PurchaseConsolidationLineModel.id == PurchaseConsolidationSourceModel.consolidation_line_id)
-            .join(PurchaseConsolidationModel, PurchaseConsolidationModel.id == PurchaseConsolidationLineModel.consolidation_id)
-            .where(
-                PurchaseConsolidationSourceModel.company_id == company_id,
-                PurchaseConsolidationSourceModel.purchase_request_detail_id == detail_id,
-                PurchaseConsolidationModel.status != PurchaseConsolidationStatus.CANCELLED.value,
+        await self._session.execute(
+            select(
+                func.pg_advisory_xact_lock(
+                    func.hashtext(f"purchase_consolidation_source:{company_id}:{detail_id}")
+                )
             )
-        ))
+        )
+        return bool(
+            await self._session.scalar(
+                select(func.count())
+                .select_from(PurchaseConsolidationSourceModel)
+                .join(
+                    PurchaseConsolidationLineModel,
+                    PurchaseConsolidationLineModel.id
+                    == PurchaseConsolidationSourceModel.consolidation_line_id,
+                )
+                .join(
+                    PurchaseConsolidationModel,
+                    PurchaseConsolidationModel.id
+                    == PurchaseConsolidationLineModel.consolidation_id,
+                )
+                .where(
+                    PurchaseConsolidationSourceModel.company_id == company_id,
+                    PurchaseConsolidationSourceModel.purchase_request_detail_id == detail_id,
+                    PurchaseConsolidationModel.status
+                    != PurchaseConsolidationStatus.CANCELLED.value,
+                )
+            )
+        )
 
     async def create(self, consolidation: PurchaseConsolidation) -> PurchaseConsolidation:
         model = PurchaseConsolidationModel(
@@ -689,15 +808,24 @@ class SqlAlchemyPurchaseConsolidationRepository:
     async def get(
         self, company_id: uuid.UUID, consolidation_id: uuid.UUID, *, for_update: bool = False
     ) -> PurchaseConsolidation | None:
-        statement = select(PurchaseConsolidationModel).options(
-            selectinload(PurchaseConsolidationModel.central_warehouse),
-            selectinload(PurchaseConsolidationModel.lines).selectinload(PurchaseConsolidationLineModel.sources)
-            .selectinload(PurchaseConsolidationSourceModel.purchase_request)
-            .selectinload(PurchaseRequestModel.branch),
-            selectinload(PurchaseConsolidationModel.lines).selectinload(PurchaseConsolidationLineModel.sources)
-            .selectinload(PurchaseConsolidationSourceModel.purchase_request)
-            .selectinload(PurchaseRequestModel.warehouse),
-        ).where(PurchaseConsolidationModel.company_id == company_id, PurchaseConsolidationModel.id == consolidation_id)
+        statement = (
+            select(PurchaseConsolidationModel)
+            .options(
+                selectinload(PurchaseConsolidationModel.central_warehouse),
+                selectinload(PurchaseConsolidationModel.lines)
+                .selectinload(PurchaseConsolidationLineModel.sources)
+                .selectinload(PurchaseConsolidationSourceModel.purchase_request)
+                .selectinload(PurchaseRequestModel.branch),
+                selectinload(PurchaseConsolidationModel.lines)
+                .selectinload(PurchaseConsolidationLineModel.sources)
+                .selectinload(PurchaseConsolidationSourceModel.purchase_request)
+                .selectinload(PurchaseRequestModel.warehouse),
+            )
+            .where(
+                PurchaseConsolidationModel.company_id == company_id,
+                PurchaseConsolidationModel.id == consolidation_id,
+            )
+        )
         if for_update:
             statement = statement.with_for_update(of=PurchaseConsolidationModel)
         model = await self._session.scalar(statement)
@@ -716,7 +844,9 @@ class SqlAlchemyPurchaseConsolidationRepository:
         if model is None or model.status != PurchaseConsolidationStatus.DRAFT.value:
             return None
         old_sources = {source.id: source for line in model.lines for source in line.sources}
-        incoming_sources = {source.id: source for line in consolidation.lines for source in line.sources}
+        incoming_sources = {
+            source.id: source for line in consolidation.lines for source in line.sources
+        }
         if not set(old_sources).issubset(incoming_sources):
             raise ValueError("No se permite eliminar la procedencia de una línea del consolidado.")
         old_lines = {line.id: line for line in model.lines}
@@ -726,10 +856,25 @@ class SqlAlchemyPurchaseConsolidationRepository:
             if existing_line is None:
                 existing_line = self._line_model(consolidation, line)
                 model.lines.append(existing_line)
-                changes.append({"action": "line_added", "product_id": line.product_id, "unit_id": line.unit_id, "central_quantity": str(line.central_quantity)})
+                changes.append(
+                    {
+                        "action": "line_added",
+                        "product_id": line.product_id,
+                        "unit_id": line.unit_id,
+                        "central_quantity": str(line.central_quantity),
+                    }
+                )
             else:
                 if existing_line.central_quantity != line.central_quantity:
-                    changes.append({"action": "central_quantity_changed", "line_id": str(line.id), "before": str(existing_line.central_quantity), "after": str(line.central_quantity), "reason": line.central_reason})
+                    changes.append(
+                        {
+                            "action": "central_quantity_changed",
+                            "line_id": str(line.id),
+                            "before": str(existing_line.central_quantity),
+                            "after": str(line.central_quantity),
+                            "reason": line.central_reason,
+                        }
+                    )
                     existing_line.central_quantity = line.central_quantity
                     existing_line.central_reason = line.central_reason
                 existing_sources = {source.id: source for source in existing_line.sources}
@@ -737,54 +882,95 @@ class SqlAlchemyPurchaseConsolidationRepository:
                     persisted = existing_sources.get(source.id)
                     if persisted is None:
                         persisted = PurchaseConsolidationSourceModel(
-                            id=source.id, company_id=consolidation.company_id,
-                            consolidation_line_id=line.id, purchase_request_id=source.purchase_request_id,
+                            id=source.id,
+                            company_id=consolidation.company_id,
+                            consolidation_line_id=line.id,
+                            purchase_request_id=source.purchase_request_id,
                             purchase_request_detail_id=source.purchase_request_detail_id,
                             requested_quantity=source.requested_quantity,
-                            included_quantity=source.included_quantity, reason=source.reason,
+                            included_quantity=source.included_quantity,
+                            reason=source.reason,
                             demand_level=source.demand_level.value if source.demand_level else None,
                         )
                         existing_line.sources.append(persisted)
-                        changes.append({"action": "source_added", "source_id": str(source.id), "request_code": source.request_code, "included_quantity": str(source.included_quantity)})
-                    elif persisted.included_quantity != source.included_quantity or persisted.reason != source.reason:
-                        changes.append({"action": "source_quantity_changed", "source_id": str(source.id), "request_code": source.request_code, "before": str(persisted.included_quantity), "after": str(source.included_quantity), "reason": source.reason})
+                        changes.append(
+                            {
+                                "action": "source_added",
+                                "source_id": str(source.id),
+                                "request_code": source.request_code,
+                                "included_quantity": str(source.included_quantity),
+                            }
+                        )
+                    elif (
+                        persisted.included_quantity != source.included_quantity
+                        or persisted.reason != source.reason
+                    ):
+                        changes.append(
+                            {
+                                "action": "source_quantity_changed",
+                                "source_id": str(source.id),
+                                "request_code": source.request_code,
+                                "before": str(persisted.included_quantity),
+                                "after": str(source.included_quantity),
+                                "reason": source.reason,
+                            }
+                        )
                         persisted.included_quantity = source.included_quantity
                         persisted.reason = source.reason
-                    desired_demand_level = source.demand_level.value if source.demand_level else None
+                    desired_demand_level = (
+                        source.demand_level.value if source.demand_level else None
+                    )
                     if persisted.demand_level != desired_demand_level:
-                        changes.append({
-                            "action": "source_demand_level_changed",
-                            "source_id": str(source.id),
-                            "request_code": source.request_code,
-                            "before": persisted.demand_level,
-                            "after": desired_demand_level,
-                        })
+                        changes.append(
+                            {
+                                "action": "source_demand_level_changed",
+                                "source_id": str(source.id),
+                                "request_code": source.request_code,
+                                "before": persisted.demand_level,
+                                "after": desired_demand_level,
+                            }
+                        )
                         persisted.demand_level = desired_demand_level
         if model.central_warehouse_id != consolidation.central_warehouse_id:
-            changes.append({
-                "action": "central_warehouse_changed",
-                "before": str(model.central_warehouse_id) if model.central_warehouse_id else None,
-                "after": str(consolidation.central_warehouse_id) if consolidation.central_warehouse_id else None,
-            })
+            changes.append(
+                {
+                    "action": "central_warehouse_changed",
+                    "before": str(model.central_warehouse_id)
+                    if model.central_warehouse_id
+                    else None,
+                    "after": str(consolidation.central_warehouse_id)
+                    if consolidation.central_warehouse_id
+                    else None,
+                }
+            )
             model.central_warehouse_id = consolidation.central_warehouse_id
         if model.notes != consolidation.notes:
-            changes.append({"action": "notes_changed", "before": model.notes, "after": consolidation.notes})
+            changes.append(
+                {"action": "notes_changed", "before": model.notes, "after": consolidation.notes}
+            )
         model.notes = consolidation.notes
         if changes:
-            model.events.append(PurchaseConsolidationEventModel(
-                id=uuid.uuid4(),
-                company_id=consolidation.company_id,
-                consolidation_id=consolidation.id,
-                actor_id=actor_id,
-                action="draft_updated",
-                reason=change_reason,
-                changes={"items": changes},
-            ))
+            model.events.append(
+                PurchaseConsolidationEventModel(
+                    id=uuid.uuid4(),
+                    company_id=consolidation.company_id,
+                    consolidation_id=consolidation.id,
+                    actor_id=actor_id,
+                    action="draft_updated",
+                    reason=change_reason,
+                    changes={"items": changes},
+                )
+            )
         await self._session.flush()
         return await self.get(consolidation.company_id, consolidation.id)
 
     async def cancel(
-        self, company_id: uuid.UUID, consolidation_id: uuid.UUID, *, actor_id: uuid.UUID, reason: str
+        self,
+        company_id: uuid.UUID,
+        consolidation_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID,
+        reason: str,
     ) -> PurchaseConsolidation | None:
         model = await self._get_model(company_id, consolidation_id, for_update=True)
         if model is None:
@@ -792,11 +978,17 @@ class SqlAlchemyPurchaseConsolidationRepository:
         if model.status != PurchaseConsolidationStatus.DRAFT.value:
             return None
         model.status = PurchaseConsolidationStatus.CANCELLED.value
-        model.events.append(PurchaseConsolidationEventModel(
-            id=uuid.uuid4(),
-            company_id=company_id, consolidation_id=consolidation_id, actor_id=actor_id,
-            action="cancelled", reason=reason, changes={"status": "cancelled"},
-        ))
+        model.events.append(
+            PurchaseConsolidationEventModel(
+                id=uuid.uuid4(),
+                company_id=company_id,
+                consolidation_id=consolidation_id,
+                actor_id=actor_id,
+                action="cancelled",
+                reason=reason,
+                changes={"status": "cancelled"},
+            )
+        )
         await self._session.flush()
         return await self.get(company_id, consolidation_id)
 
@@ -847,20 +1039,25 @@ class SqlAlchemyPurchaseConsolidationRepository:
                 )
         previous_status = model.status
         model.status = PurchaseConsolidationStatus.CLOSED.value
-        model.events.append(PurchaseConsolidationEventModel(
-            id=uuid.uuid4(),
-            company_id=company_id,
-            consolidation_id=consolidation_id,
-            actor_id=actor_id,
-            action="closed",
-            reason=reason,
-            changes={
-                "status": {"before": previous_status, "after": PurchaseConsolidationStatus.CLOSED.value},
-                "coverage_basis": coverage_basis,
-                "unawarded_lines": list(unawarded_lines),
-                "quotation_status_changes": status_change_details,
-            },
-        ))
+        model.events.append(
+            PurchaseConsolidationEventModel(
+                id=uuid.uuid4(),
+                company_id=company_id,
+                consolidation_id=consolidation_id,
+                actor_id=actor_id,
+                action="closed",
+                reason=reason,
+                changes={
+                    "status": {
+                        "before": previous_status,
+                        "after": PurchaseConsolidationStatus.CLOSED.value,
+                    },
+                    "coverage_basis": coverage_basis,
+                    "unawarded_lines": list(unawarded_lines),
+                    "quotation_status_changes": status_change_details,
+                },
+            )
+        )
         await self._session.flush()
         return await self.get(company_id, consolidation_id)
 
@@ -873,7 +1070,9 @@ class SqlAlchemyPurchaseConsolidationRepository:
                 PurchaseConsolidationAwardModel.company_id == company_id,
                 PurchaseConsolidationAwardModel.consolidation_id == consolidation_id,
             )
-            .order_by(PurchaseConsolidationAwardModel.created_at, PurchaseConsolidationAwardModel.id)
+            .order_by(
+                PurchaseConsolidationAwardModel.created_at, PurchaseConsolidationAwardModel.id
+            )
         )
         return tuple(self._award_to_entity(row) for row in rows)
 
@@ -903,22 +1102,24 @@ class SqlAlchemyPurchaseConsolidationRepository:
             reason=award.reason,
             decided_by_id=award.decided_by_id,
         )
-        consolidation.events.append(PurchaseConsolidationEventModel(
-            id=uuid.uuid4(),
-            company_id=award.company_id,
-            consolidation_id=award.consolidation_id,
-            actor_id=award.decided_by_id,
-            action="award_created",
-            reason=award.reason,
-            changes={
-                "award_id": str(award.id),
-                "line_id": str(award.consolidation_line_id),
-                "quotation_id": str(award.purchase_quotation_id),
-                "quotation_detail_id": str(award.purchase_quotation_detail_id),
-                "supplier_id": award.supplier_id,
-                "quantity": str(award.quantity),
-            },
-        ))
+        consolidation.events.append(
+            PurchaseConsolidationEventModel(
+                id=uuid.uuid4(),
+                company_id=award.company_id,
+                consolidation_id=award.consolidation_id,
+                actor_id=award.decided_by_id,
+                action="award_created",
+                reason=award.reason,
+                changes={
+                    "award_id": str(award.id),
+                    "line_id": str(award.consolidation_line_id),
+                    "quotation_id": str(award.purchase_quotation_id),
+                    "quotation_detail_id": str(award.purchase_quotation_detail_id),
+                    "supplier_id": award.supplier_id,
+                    "quantity": str(award.quantity),
+                },
+            )
+        )
         self._session.add(model)
         await self._session.flush()
         return self._award_to_entity(model)
@@ -957,22 +1158,24 @@ class SqlAlchemyPurchaseConsolidationRepository:
         )
         if consolidation is None:
             return None
-        consolidation.events.append(PurchaseConsolidationEventModel(
-            id=uuid.uuid4(),
-            company_id=company_id,
-            consolidation_id=consolidation_id,
-            actor_id=actor_id,
-            action="award_revoked",
-            reason=reason,
-            changes={
-                "award_id": str(model.id),
-                "line_id": str(model.consolidation_line_id),
-                "quotation_id": str(model.purchase_quotation_id),
-                "quotation_detail_id": str(model.purchase_quotation_detail_id),
-                "supplier_id": model.supplier_id,
-                "quantity": str(model.quantity),
-            },
-        ))
+        consolidation.events.append(
+            PurchaseConsolidationEventModel(
+                id=uuid.uuid4(),
+                company_id=company_id,
+                consolidation_id=consolidation_id,
+                actor_id=actor_id,
+                action="award_revoked",
+                reason=reason,
+                changes={
+                    "award_id": str(model.id),
+                    "line_id": str(model.consolidation_line_id),
+                    "quotation_id": str(model.purchase_quotation_id),
+                    "quotation_detail_id": str(model.purchase_quotation_detail_id),
+                    "supplier_id": model.supplier_id,
+                    "quantity": str(model.quantity),
+                },
+            )
+        )
         await self._session.flush()
         return self._award_to_entity(model)
 
@@ -998,35 +1201,54 @@ class SqlAlchemyPurchaseConsolidationRepository:
     async def _get_model(
         self, company_id: uuid.UUID, consolidation_id: uuid.UUID, *, for_update: bool = False
     ) -> PurchaseConsolidationModel | None:
-        statement = select(PurchaseConsolidationModel).options(
-            selectinload(PurchaseConsolidationModel.lines).selectinload(PurchaseConsolidationLineModel.sources)
-        ).where(PurchaseConsolidationModel.company_id == company_id, PurchaseConsolidationModel.id == consolidation_id)
+        statement = (
+            select(PurchaseConsolidationModel)
+            .options(
+                selectinload(PurchaseConsolidationModel.lines).selectinload(
+                    PurchaseConsolidationLineModel.sources
+                )
+            )
+            .where(
+                PurchaseConsolidationModel.company_id == company_id,
+                PurchaseConsolidationModel.id == consolidation_id,
+            )
+        )
         if for_update:
             statement = statement.with_for_update(of=PurchaseConsolidationModel)
-        return await self._session.scalar(statement)
+        return type_cast(PurchaseConsolidationModel | None, await self._session.scalar(statement))
 
-    def _line_model(self, consolidation: PurchaseConsolidation, line: ConsolidationLine) -> PurchaseConsolidationLineModel:
+    def _line_model(
+        self, consolidation: PurchaseConsolidation, line: ConsolidationLine
+    ) -> PurchaseConsolidationLineModel:
         return PurchaseConsolidationLineModel(
-            id=line.id, company_id=consolidation.company_id, consolidation_id=consolidation.id,
-            product_id=line.product_id, unit_id=line.unit_id,
-            central_quantity=line.central_quantity, central_reason=line.central_reason,
-            sources=[PurchaseConsolidationSourceModel(
-                id=source.id, company_id=consolidation.company_id,
-                consolidation_line_id=line.id, purchase_request_id=source.purchase_request_id,
-                purchase_request_detail_id=source.purchase_request_detail_id,
-                requested_quantity=source.requested_quantity, included_quantity=source.included_quantity,
-                reason=source.reason,
-                demand_level=source.demand_level.value if source.demand_level else None,
-            ) for source in line.sources],
+            id=line.id,
+            company_id=consolidation.company_id,
+            consolidation_id=consolidation.id,
+            product_id=line.product_id,
+            unit_id=line.unit_id,
+            central_quantity=line.central_quantity,
+            central_reason=line.central_reason,
+            sources=[
+                PurchaseConsolidationSourceModel(
+                    id=source.id,
+                    company_id=consolidation.company_id,
+                    consolidation_line_id=line.id,
+                    purchase_request_id=source.purchase_request_id,
+                    purchase_request_detail_id=source.purchase_request_detail_id,
+                    requested_quantity=source.requested_quantity,
+                    included_quantity=source.included_quantity,
+                    reason=source.reason,
+                    demand_level=source.demand_level.value if source.demand_level else None,
+                )
+                for source in line.sources
+            ],
         )
 
     async def _to_entity(self, model: PurchaseConsolidationModel) -> PurchaseConsolidation:
         line_ids = [line.id for line in model.lines]
         labels: dict[uuid.UUID, tuple[str, str, str]] = {}
         request_ids = {
-            source.purchase_request_id
-            for line in model.lines
-            for source in line.sources
+            source.purchase_request_id for line in model.lines for source in line.sources
         }
         request_metadata: dict[uuid.UUID, tuple[str | None, datetime | None]] = {}
         if request_ids:
@@ -1042,10 +1264,7 @@ class SqlAlchemyPurchaseConsolidationRepository:
                     PurchaseRequestModel.id.in_(request_ids),
                 )
             )
-            request_metadata = {
-                row.id: (row.username, row.required_date)
-                for row in request_rows
-            }
+            request_metadata = {row.id: (row.username, row.required_date) for row in request_rows}
         if line_ids:
             result = await self._session.execute(
                 select(
@@ -1054,61 +1273,115 @@ class SqlAlchemyPurchaseConsolidationRepository:
                     ProductModel.name,
                     func.coalesce(CompanyUnitModel.alias, UnitModel.name),
                 )
-                .join(ProductModel, and_(
-                    ProductModel.id_product == PurchaseConsolidationLineModel.product_id,
-                    ProductModel.company_id == PurchaseConsolidationLineModel.company_id,
-                ))
-                .join(CompanyUnitModel, and_(
-                    CompanyUnitModel.company_id == PurchaseConsolidationLineModel.company_id,
-                    CompanyUnitModel.unit_id == PurchaseConsolidationLineModel.unit_id,
-                ))
+                .join(
+                    ProductModel,
+                    and_(
+                        ProductModel.id_product == PurchaseConsolidationLineModel.product_id,
+                        ProductModel.company_id == PurchaseConsolidationLineModel.company_id,
+                    ),
+                )
+                .join(
+                    CompanyUnitModel,
+                    and_(
+                        CompanyUnitModel.company_id == PurchaseConsolidationLineModel.company_id,
+                        CompanyUnitModel.unit_id == PurchaseConsolidationLineModel.unit_id,
+                    ),
+                )
                 .join(UnitModel, UnitModel.id_unit == PurchaseConsolidationLineModel.unit_id)
-                .where(PurchaseConsolidationLineModel.company_id == model.company_id, PurchaseConsolidationLineModel.id.in_(line_ids))
+                .where(
+                    PurchaseConsolidationLineModel.company_id == model.company_id,
+                    PurchaseConsolidationLineModel.id.in_(line_ids),
+                )
             )
             labels = {row[0]: (row[1], row[2], row[3]) for row in result}
         lines = []
         for line in model.lines:
-            sku, name, unit_name = labels.get(line.id, (f"PRD-{line.product_id}", f"Producto {line.product_id}", f"Unidad {line.unit_id}"))
+            sku, name, unit_name = labels.get(
+                line.id,
+                (f"PRD-{line.product_id}", f"Producto {line.product_id}", f"Unidad {line.unit_id}"),
+            )
             sources_list = []
             for source in line.sources:
-                requester_name, required_date = request_metadata.get(source.purchase_request_id, (None, None))
-                sources_list.append(ConsolidationSource(
-                    id=source.id,
-                    purchase_request_id=source.purchase_request_id,
-                    purchase_request_detail_id=source.purchase_request_detail_id,
-                    request_code=source.purchase_request.code if source.purchase_request else "",
-                    branch_id=source.purchase_request.branch_id if source.purchase_request else uuid.UUID(int=0),
-                    branch_name=source.purchase_request.branch.name if source.purchase_request and source.purchase_request.branch else None,
-                    warehouse_id=source.purchase_request.warehouse_id if source.purchase_request else uuid.UUID(int=0),
-                    warehouse_name=source.purchase_request.warehouse.name if source.purchase_request and source.purchase_request.warehouse else None,
-                    requester_name=requester_name,
-                    required_date=required_date,
-                    requested_quantity=source.requested_quantity,
-                    included_quantity=source.included_quantity,
-                    reason=source.reason,
-                    demand_level=BranchDemandLevel(source.demand_level) if source.demand_level else None,
-                ))
-            sources = tuple(sorted(sources_list, key=lambda source: (source.request_code, str(source.purchase_request_detail_id))))
-            lines.append(ConsolidationLine(
-                id=line.id, product_id=line.product_id, product_sku=sku, product_name=name,
-                unit_id=line.unit_id, unit_name=unit_name, central_quantity=line.central_quantity,
-                central_reason=line.central_reason, sources=sources,
-            ))
+                requester_name, required_date = request_metadata.get(
+                    source.purchase_request_id, (None, None)
+                )
+                sources_list.append(
+                    ConsolidationSource(
+                        id=source.id,
+                        purchase_request_id=source.purchase_request_id,
+                        purchase_request_detail_id=source.purchase_request_detail_id,
+                        request_code=source.purchase_request.code
+                        if source.purchase_request
+                        else "",
+                        branch_id=source.purchase_request.branch_id
+                        if source.purchase_request
+                        else uuid.UUID(int=0),
+                        branch_name=source.purchase_request.branch.name
+                        if source.purchase_request and source.purchase_request.branch
+                        else None,
+                        warehouse_id=source.purchase_request.warehouse_id
+                        if source.purchase_request
+                        else uuid.UUID(int=0),
+                        warehouse_name=source.purchase_request.warehouse.name
+                        if source.purchase_request and source.purchase_request.warehouse
+                        else None,
+                        requester_name=requester_name,
+                        required_date=required_date,
+                        requested_quantity=source.requested_quantity,
+                        included_quantity=source.included_quantity,
+                        reason=source.reason,
+                        demand_level=BranchDemandLevel(source.demand_level)
+                        if source.demand_level
+                        else None,
+                    )
+                )
+            sources = tuple(
+                sorted(
+                    sources_list,
+                    key=lambda source: (
+                        source.request_code,
+                        str(source.purchase_request_detail_id),
+                    ),
+                )
+            )
+            lines.append(
+                ConsolidationLine(
+                    id=line.id,
+                    product_id=line.product_id,
+                    product_sku=sku,
+                    product_name=name,
+                    unit_id=line.unit_id,
+                    unit_name=unit_name,
+                    central_quantity=line.central_quantity,
+                    central_reason=line.central_reason,
+                    sources=sources,
+                )
+            )
         return PurchaseConsolidation(
-            id=model.id, company_id=model.company_id, code=model.code,
-            period_start=model.period_start, period_end=model.period_end,
-            status=PurchaseConsolidationStatus(model.status), created_by_id=model.created_by_id,
-            created_at=model.created_at, updated_at=model.updated_at,
+            id=model.id,
+            company_id=model.company_id,
+            code=model.code,
+            period_start=model.period_start,
+            period_end=model.period_end,
+            status=PurchaseConsolidationStatus(model.status),
+            created_by_id=model.created_by_id,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
             central_warehouse_id=model.central_warehouse_id,
-            central_warehouse_name=model.central_warehouse.name if model.central_warehouse else None,
+            central_warehouse_name=model.central_warehouse.name
+            if model.central_warehouse
+            else None,
             notes=model.notes,
             lines=tuple(lines),
-            events=tuple(ConsolidationEvent(
-                id=event.id,
-                actor_id=event.actor_id,
-                action=event.action,
-                reason=event.reason,
-                changes=event.changes,
-                created_at=event.created_at,
-            ) for event in model.events),
+            events=tuple(
+                ConsolidationEvent(
+                    id=event.id,
+                    actor_id=event.actor_id,
+                    action=event.action,
+                    reason=event.reason,
+                    changes=event.changes,
+                    created_at=event.created_at,
+                )
+                for event in model.events
+            ),
         )

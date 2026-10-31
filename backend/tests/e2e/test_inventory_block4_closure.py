@@ -31,6 +31,7 @@ from sqlalchemy import func, or_, select
 
 from tests.e2e.test_purchase_orders import (
     _headers,
+    _legacy_receipt,
     _receiving_location_id,
     _reference_ids,
     _sent_order,
@@ -97,6 +98,7 @@ async def _measured_receipt(
     )
     assert created.status_code == 201, created.text
     purchase = created.json()
+    await _legacy_receipt(purchase["id"])
     received = await client.post(f"/api/v1/purchases/{purchase['id']}/receive", headers=headers)
     assert received.status_code == 200, received.text
     verified = await client.post(
@@ -119,8 +121,15 @@ async def _measured_receipt(
             headers=headers,
             json={
                 "purchase_id": purchase["id"],
+                "fob_lines": [
+                    {
+                        "purchase_detail_id": row["id"],
+                        "amount": str(Decimal(row["subtotal"]) - Decimal(row["discount"])),
+                    }
+                    for row in purchase["details"]
+                ],
                 "total_freight": "5.000000",
-                "total_expenses": "2.000000",
+                "total_expenses": "0.000000",
                 "total_dai": "3.000000",
                 "import_vat": "13.000000",
                 "notes": "Retaceo pendiente para regresión B4-02",
@@ -253,7 +262,6 @@ async def test_pending_label_and_retaceo_can_only_be_put_away_in_quarantine(e2e_
     async with async_session_factory() as session:
         unit = await session.get(InventoryHandlingUnitModel, unit_id)
         assert unit is not None
-        source_location_id = unit.location_id
         destinations = [
             Location(
                 warehouse_id=warehouse_id,
@@ -641,6 +649,8 @@ async def test_group_putaway_preserves_two_purchase_detail_origins(e2e_client):
     purchase = created.json()
     assert len(purchase["details"]) == 2
     assert {row["product_id"] for row in purchase["details"]} == {product_id}
+    # This scenario exercises historical grouped placement after verification.
+    await _legacy_receipt(purchase["id"])
 
     received = await e2e_client.post(f"/api/v1/purchases/{purchase['id']}/receive", headers=headers)
     assert received.status_code == 200, received.text
@@ -860,10 +870,7 @@ async def test_group_putaway_preserves_two_purchase_detail_origins(e2e_client):
             await session.scalars(
                 select(InventoryMovementLineModel).where(
                     InventoryMovementLineModel.movement_id.in_(
-                        [
-                            uuid.UUID(row["movement_id"])
-                            for row in flattened_allocations
-                        ]
+                        [uuid.UUID(row["movement_id"]) for row in flattened_allocations]
                     )
                 )
             )

@@ -106,7 +106,9 @@ async def _reference_ids() -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, int, int, s
             if item.base_unit_id == purchase_unit_id and item.is_active:
                 product_id = candidate_id
                 break
-        assert product_id is not None, "El seed E2E necesita un producto con unidad base compatible."
+        assert product_id is not None, (
+            "El seed E2E necesita un producto con unidad base compatible."
+        )
         supplier_id = await session.scalar(
             select(SupplierModel.id_supplier)
             .where(
@@ -145,6 +147,19 @@ async def _receiving_location_id(warehouse_id: uuid.UUID) -> uuid.UUID:
         )
     assert location_id is not None, "El almacén de prueba necesita un punto de recepción activo."
     return location_id
+
+
+async def _legacy_receipt(purchase_id: str) -> None:
+    """Exercise the historical receipt-before-retaceo contract explicitly.
+
+    New placement-first purchases have separate acceptance coverage; these
+    original workflows still protect compatibility with existing receipts.
+    """
+    async with async_session_factory() as session:
+        purchase = await session.get(PurchaseModel, uuid.UUID(purchase_id))
+        assert purchase is not None
+        purchase.inventory_workflow = "receipt_before_retaceo"
+        await session.commit()
 
 
 async def _headers(
@@ -835,6 +850,7 @@ async def test_headquarters_user_can_read_new_central_receipt_without_global_sco
         f"/api/v1/purchases/{purchase['id']}/receive", headers=reader_headers
     )
     assert received.status_code == 200, received.text
+    await _legacy_receipt(purchase["id"])
     verified = await purchase_order_client.post(
         f"/api/v1/purchases/{purchase['id']}/verify",
         headers=reader_headers,
@@ -863,9 +879,7 @@ async def test_headquarters_user_can_read_new_central_receipt_without_global_sco
     )
     assert headquarters_receipts.status_code == 200, headquarters_receipts.text
     assert purchase["id"] in {item["id"] for item in headquarters_receipts.json()["items"]}
-    global_receipts = await purchase_order_client.get(
-        "/api/v1/purchases", headers=reader_headers
-    )
+    global_receipts = await purchase_order_client.get("/api/v1/purchases", headers=reader_headers)
     assert global_receipts.status_code == 403, global_receipts.text
     other_branch_receipts = await purchase_order_client.get(
         "/api/v1/purchases",
@@ -892,16 +906,12 @@ async def test_headquarters_user_can_read_new_central_receipt_without_global_sco
         headers=reader_headers,
     )
     assert headquarters_legacy_list.status_code == 200, headquarters_legacy_list.text
-    assert purchase["id"] in {
-        item["id"] for item in headquarters_legacy_list.json()["items"]
-    }
+    assert purchase["id"] in {item["id"] for item in headquarters_legacy_list.json()["items"]}
     global_legacy_receipt = await purchase_order_client.get(
         f"/api/v1/purchases/{purchase['id']}", headers=admin_headers
     )
     assert global_legacy_receipt.status_code == 200, global_legacy_receipt.text
-    global_legacy_list = await purchase_order_client.get(
-        "/api/v1/purchases", headers=admin_headers
-    )
+    global_legacy_list = await purchase_order_client.get("/api/v1/purchases", headers=admin_headers)
     assert global_legacy_list.status_code == 200, global_legacy_list.text
     assert purchase["id"] in {item["id"] for item in global_legacy_list.json()["items"]}
     other_branch_legacy_list = await purchase_order_client.get(
@@ -1085,6 +1095,7 @@ async def test_purchase_receiving_partial_then_complete_workflow_and_audit(
     assert immutable.status_code == 422
     assert immutable.json()["code"] == "purchase_not_editable"
 
+    await _legacy_receipt(first_purchase_id)
     verified = await purchase_order_client.post(
         f"/api/v1/purchases/{first_purchase_id}/verify",
         headers=headers,
@@ -1316,6 +1327,7 @@ async def test_rejected_receipt_stays_pending_and_creates_no_inventory_movement(
     )
     assert received.status_code == 200, received.text
 
+    await _legacy_receipt(purchase_id)
     verified = await purchase_order_client.post(
         f"/api/v1/purchases/{purchase_id}/verify",
         headers=headers,
@@ -1421,6 +1433,7 @@ async def test_cross_warehouse_receipt_location_rolls_back_verification(
     )
     assert received.status_code == 200, received.text
 
+    await _legacy_receipt(purchase_id)
     rejected = await purchase_order_client.post(
         f"/api/v1/purchases/{purchase_id}/verify",
         headers=headers,
@@ -1511,6 +1524,7 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
     assert received.status_code == 200, received.text
     assert received.json()["status"] == "received"
 
+    await _legacy_receipt(purchase_id)
     verified = await purchase_order_client.post(
         f"/api/v1/purchases/{purchase_id}/verify",
         headers=headers,
@@ -1532,8 +1546,15 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
         headers=headers,
         json={
             "purchase_id": purchase_id,
+            "fob_lines": [
+                {
+                    "purchase_detail_id": row["id"],
+                    "amount": str(Decimal(row["subtotal"]) - Decimal(row["discount"])),
+                }
+                for row in purchase["details"]
+            ],
             "total_freight": "5.000000",
-            "total_expenses": "2.000000",
+            "total_expenses": "0.000000",
             "total_dai": "3.000000",
             "import_vat": "13.000000",
             "notes": "Retaceo E2E",
@@ -1550,9 +1571,8 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
     assert retaceo["branch_id"] == str(branch_id)
     assert retaceo["details"][0]["purchase_detail_id"] == purchase_detail["id"]
     assert Decimal(retaceo["total_fob"]) == expected_fob
-    # Cost concepts start unallocated; only line-level allocations affect
-    # landed unit costs. The UI requires this explicit distribution step.
-    assert Decimal(retaceo["total_cost"]) == expected_fob
+    # Explicit fixed amounts are distributed across the manually entered FOB.
+    assert Decimal(retaceo["total_cost"]) == expected_fob + Decimal("8")
     assert Decimal(retaceo["import_vat"]) == Decimal("13")
 
     def allocated_costs(
@@ -1561,16 +1581,18 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
         allocations: list[dict[str, object]] = []
         for cost in costs:
             classification = str(cost["classification"])
-            amount = (
-                freight_amount
-                if classification == "freight"
-                else str(cost["amount"])
-            )
+            amount = freight_amount if classification == "freight" else str(cost["amount"])
             allocations.append(
                 {
                     "id": cost["id"],
                     "classification": classification,
                     "title": cost["title"],
+                    "description": cost.get("description"),
+                    "expense_type_id": cost.get("expense_type_id"),
+                    "incurred_on": cost.get("incurred_on"),
+                    "source_purchase_order_expense_id": cost.get(
+                        "source_purchase_order_expense_id"
+                    ),
                     "amount": amount,
                     "allocations": (
                         []
@@ -1589,6 +1611,23 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
     created_costs = retaceo["costs"]
     assert isinstance(created_costs, list)
 
+    async with async_session_factory() as session:
+        expense_type = ExpenseTypeModel(
+            company_id=company_id, name="Gasto documentado E2E", is_active=True
+        )
+        session.add(expense_type)
+        await session.commit()
+        expense_type_id = str(expense_type.id)
+    extra_expense = {
+        "classification": "expense",
+        "title": "Gasto documentado E2E",
+        "description": "Comprobante operativo de la recepción",
+        "expense_type_id": expense_type_id,
+        "incurred_on": datetime.now(UTC).date().isoformat(),
+        "amount": "2.000000",
+        "allocations": [{"purchase_detail_id": purchase_detail["id"], "amount": "2.000000"}],
+    }
+
     updated = await purchase_order_client.put(
         f"/api/v1/retaceos/{retaceo_id}",
         headers=headers,
@@ -1598,7 +1637,7 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
             "total_dai": "3.000000",
             "import_vat": "13.000000",
             "notes": "Retaceo con costos distribuidos",
-            "costs": allocated_costs(created_costs),
+            "costs": [*allocated_costs(created_costs), extra_expense],
         },
     )
     assert updated.status_code == 200, updated.text

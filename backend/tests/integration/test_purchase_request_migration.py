@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Literal
 
@@ -55,31 +56,27 @@ async def _purchase_permissions(session: AsyncSession) -> list[Permission]:
 
 
 @pytest.fixture
-async def migration_at_0043() -> AsyncIterator[None]:
-    """Replay revision 0044 against the migrated, seeded test database."""
-
+async def migration_at_0043(rebuild_test_database: Callable[..., None]) -> AsyncIterator[None]:
+    """Start at the historical revision without reversing immutable ledgers."""
     await dispose_engine()
-    _run_alembic("upgrade", "head")
-    _run_alembic("downgrade", "0043")
+    await asyncio.to_thread(rebuild_test_database, revision="0043", seed=False)
     try:
         yield
     finally:
         await dispose_engine()
-        _run_alembic("upgrade", "head")
+        await asyncio.to_thread(rebuild_test_database)
         await dispose_engine()
 
 
 @pytest.fixture
-async def migration_at_head() -> AsyncIterator[None]:
-    """Keep tests that exercise downgrade isolated and restore head."""
-
+async def migration_at_head(rebuild_test_database: Callable[..., None]) -> AsyncIterator[None]:
     await dispose_engine()
-    _run_alembic("upgrade", "head")
+    await asyncio.to_thread(rebuild_test_database)
     try:
         yield
     finally:
         await dispose_engine()
-        _run_alembic("upgrade", "head")
+        await asyncio.to_thread(rebuild_test_database)
         await dispose_engine()
 
 
@@ -135,6 +132,10 @@ async def test_purchase_request_permissions_are_created_from_empty_catalogue(
 async def test_purchase_request_permissions_are_idempotent_and_reconcile_existing_super_admin(
     migration_at_0043: None,
 ) -> None:
+    # Create the pre-existing catalogue through the real revision, then replay
+    # it from its parent. Its downgrade intentionally preserves shared grants.
+    _run_alembic("upgrade", "0044")
+    _run_alembic("downgrade", "0043")
     async with async_session_factory() as session:
         permissions = await _purchase_permissions(session)
         permission_ids_before = {permission.code: permission.id for permission in permissions}
@@ -233,18 +234,17 @@ async def test_purchase_request_permissions_reconcile_database_already_at_0044(
 
 
 async def test_purchase_request_downgrade_preserves_shared_rbac_rows(
-    migration_at_head: None,
+    migration_at_0043: None,
 ) -> None:
+    _run_alembic("upgrade", "0044")
     async with async_session_factory() as session:
-        company_id = await session.scalar(select(Company.id).limit(1))
         permission = await session.scalar(
             select(Permission).where(Permission.code == "purchase_requests:read")
         )
-        assert company_id is not None
         assert permission is not None
 
         role = Role(
-            company_id=company_id,
+            company_id=None,
             name=f"purchase-migration-shared-{uuid.uuid4().hex[:12]}",
             description="Role used to verify shared RBAC preservation",
             is_system=False,

@@ -2,7 +2,7 @@
 
 from alembic import op
 
-revision = "0098"
+revision = "0098_fleet"
 down_revision = "0097"
 branch_labels = None
 depends_on = None

@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import { listLocations } from '$lib/features/locations/services';
+  import { getLocation, listLocations } from '$lib/features/locations/services';
   import type { LocationOut } from '$lib/features/locations/types';
   import { inventoryApi } from '../services';
   import type { CapacitySummary } from '../types';
@@ -22,24 +23,29 @@
   let capacity = $state<CapacitySummary | null>(null);
   let capacityError = $state('');
   let capacityLoading = $state(false);
+  let capacityRevision = $state(0);
   const groups = $derived([...new Set(locations.map((row) => row.aisle))]);
   $effect(() => {
     const warehouse = warehouseId;
     const number = page;
     const search = applied;
+    const initialId = initialLocationId;
     void revision;
     let active = true;
     loading = true;
     error = '';
     locations = [];
     selected = null;
-    listLocations(warehouse, { page: number, size: 48, search, is_active: true })
-      .then((data) => {
+    Promise.all([
+      listLocations(warehouse, { page: number, size: 48, search, is_active: true }),
+      initialId ? getLocation(warehouse, initialId) : Promise.resolve(null)
+    ])
+      .then(([data, initial]) => {
         if (active) {
           locations = data.items;
           total = data.meta.total;
           pages = data.meta.pages;
-          selected = data.items.find((row) => row.id === initialLocationId) ?? null;
+          selected = initial;
         }
       })
       .catch((cause) => {
@@ -57,6 +63,7 @@
   $effect(() => {
     const id = selected?.id;
     const warehouse = warehouseId;
+    void capacityRevision;
     let active = true;
     capacity = null;
     capacityError = '';
@@ -77,9 +84,28 @@
       active = false;
     };
   });
+  $effect(() => {
+    // The location list replaces its skeleton above the selected panel. Wait for
+    // that layout before scrolling, otherwise it can push the focused heading
+    // back below the mobile viewport after focus has already been assigned.
+    if (!selected?.id || loading) return;
+    let active = true;
+    void tick().then(() => {
+      if (!active) return;
+      const heading = document.getElementById('warehouse-selected-location');
+      heading?.focus({ preventScroll: true });
+      heading?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    });
+    return () => {
+      active = false;
+    };
+  });
 </script>
 
-<section class="space-y-4" aria-label="Mapa de ubicaciones">
+<section
+  class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]"
+  aria-label="Mapa de ubicaciones"
+>
   <div class="rounded-xl border border-border bg-surface p-4 sm:p-5">
     <h3 class="font-semibold">Ubicaciones de la bodega</h3>
     <p class="mt-1 text-sm text-foreground-muted">
@@ -133,7 +159,7 @@
               Pasillo {aisle || 'sin asignar'}
             </h4>
             <div
-              class="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              class="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2"
             >
               {#each locations.filter((row) => row.aisle === aisle) as location (location.id)}<button
                   type="button"
@@ -177,38 +203,49 @@
         </div>
       </div>{/if}
   </div>
-  {#if selected}<section
-      class="rounded-xl border border-primary/30 bg-surface p-4 sm:p-5"
-      aria-label="Espacio seleccionado"
-    >
-      <h3 class="font-semibold">{selected.code}</h3>
-      <p class="mt-1 text-sm text-foreground-muted">
-        Pasillo {selected.aisle} · Estante {selected.rack} · Nivel {selected.level} · Posición {selected.position}
-      </p>
-      {#if capacityLoading}<p role="status" class="mt-3 text-sm text-foreground-muted">
-          Consultando capacidad…
-        </p>{:else if capacityError}<p role="alert" class="mt-3 text-sm">
-          {capacityError}
-        </p>{:else if capacity}<dl class="mt-4 grid gap-4 sm:grid-cols-2">
-          {#each [{ label: 'Peso ocupado / límite operativo', metric: capacity.weight, unit: 'kg' }, { label: 'Volumen ocupado / límite operativo', metric: capacity.volume, unit: 'm³' }] as item}<div
+  {#if selected}<div class="space-y-4 xl:sticky xl:top-4">
+      <section
+        class="rounded-xl border border-primary/30 bg-surface p-4 sm:p-5"
+        aria-label="Espacio seleccionado"
+      >
+        <h3
+          id="warehouse-selected-location"
+          tabindex="-1"
+          class="rounded font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          {selected.code}
+        </h3>
+        <p class="mt-1 text-sm text-foreground-muted">
+          Pasillo {selected.aisle} · Estante {selected.rack} · Nivel {selected.level} · Posición {selected.position}
+        </p>
+        {#if capacityLoading}<p role="status" class="mt-3 text-sm text-foreground-muted">
+            Consultando capacidad…
+          </p>{:else if capacityError}<div role="alert" class="mt-3 text-sm">
+            <p>{capacityError}</p>
+            <Button variant="secondary" class="mt-2" onclick={() => (capacityRevision += 1)}
+              >Reintentar capacidad</Button
             >
-              <dt class="text-sm text-foreground-muted">{item.label}</dt>
-              <dd class="mt-1 font-semibold tabular-nums">
-                {item.metric.occupied == null ? 'Sin medir' : qty(item.metric.occupied)} / {item
-                  .metric.operational == null
-                  ? 'Sin configurar'
-                  : qty(item.metric.operational)}
-                {item.unit}
-              </dd>
-            </div>{/each}
-        </dl>
-        {#if capacity.measurementStatus !== 'complete'}<p
-            class="mt-3 text-sm text-foreground-muted"
-          >
-            Hay medidas pendientes; la ocupación no está completamente verificada.
-          </p>{/if}{/if}
-    </section>
-    {#key selected.id}<WarehouseStockPanel {warehouseId} locationId={selected.id} />{/key}
+          </div>{:else if capacity}<dl class="mt-4 grid gap-4 sm:grid-cols-2">
+            {#each [{ label: 'Peso ocupado / límite operativo', metric: capacity.weight, unit: 'kg' }, { label: 'Volumen ocupado / límite operativo', metric: capacity.volume, unit: 'm³' }] as item}<div
+              >
+                <dt class="text-sm text-foreground-muted">{item.label}</dt>
+                <dd class="mt-1 font-semibold tabular-nums">
+                  {item.metric.occupied == null ? 'Sin medir' : qty(item.metric.occupied)} / {item
+                    .metric.operational == null
+                    ? 'Sin configurar'
+                    : qty(item.metric.operational)}
+                  {item.unit}
+                </dd>
+              </div>{/each}
+          </dl>
+          {#if capacity.measurementStatus !== 'complete'}<p
+              class="mt-3 text-sm text-foreground-muted"
+            >
+              Hay medidas pendientes; la ocupación no está completamente verificada.
+            </p>{/if}{/if}
+      </section>
+      {#key selected.id}<WarehouseStockPanel {warehouseId} locationId={selected.id} compact />{/key}
+    </div>
   {:else if !loading && !error && locations.length}<p
       class="rounded-lg border border-dashed border-border p-5 text-sm text-foreground-muted"
     >

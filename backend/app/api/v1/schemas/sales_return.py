@@ -126,4 +126,11 @@ class SalesReturnCancellation(BaseModel):
     reason: ReturnReason
 
 
-__all__ = ["SalesReturnCancellation", "SalesReturnCreate", "SalesReturnEvidenceOut", "SalesReturnOut", "SalesReturnResolve", "SalesReturnableAllocationOut"]
+__all__ = [
+    "SalesReturnCancellation",
+    "SalesReturnCreate",
+    "SalesReturnEvidenceOut",
+    "SalesReturnOut",
+    "SalesReturnResolve",
+    "SalesReturnableAllocationOut",
+]

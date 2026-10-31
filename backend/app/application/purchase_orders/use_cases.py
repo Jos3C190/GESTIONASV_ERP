@@ -232,24 +232,7 @@ class PurchaseOrderUseCases:
         quotation = await self._get_quotation_reference_for_update(
             company_id, purchase_quotation_id
         )
-        if quotation.consolidation_id != consolidation_id:
-            raise BusinessRuleError(
-                "La cotización no pertenece al consolidado indicado.",
-                code="purchase_order_consolidation_quotation_mismatch",
-            )
-        if quotation.status not in {
-            PurchaseQuotationStatus.UNDER_EVALUATION,
-            PurchaseQuotationStatus.SELECTED,
-        }:
-            raise BusinessRuleError(
-                "La oferta debe estar en evaluación para convertir sus adjudicaciones en orden.",
-                code="purchase_order_consolidation_quotation_unavailable",
-            )
-        if not quotation.details:
-            raise BusinessRuleError(
-                "La oferta no contiene productos para ordenar.",
-                code="purchase_order_quotation_without_details",
-            )
+        self._validate_award_quotation(quotation, consolidation_id)
 
         await self._validate_destination(company_id, branch_id, warehouse_id, require_central=True)
         awards = await self._repository.list_active_awards_for_quotation_for_update(
@@ -500,7 +483,10 @@ class PurchaseOrderUseCases:
         lines: tuple[PurchaseOrderLineDraft, ...],
     ) -> None:
         expected = {
-            (detail.purchase_quotation_detail_id, detail.purchase_consolidation_award_id): detail.quantity
+            (
+                detail.purchase_quotation_detail_id,
+                detail.purchase_consolidation_award_id,
+            ): detail.quantity
             for detail in current.details
         }
         received: dict[tuple[uuid.UUID, uuid.UUID | None], Decimal] = {}
@@ -551,8 +537,7 @@ class PurchaseOrderUseCases:
     @staticmethod
     def _ensure_destination_available(destination: PurchaseOrderDestinationReference) -> None:
         if destination.branch_id is not None and (
-            not destination.branch_is_active
-            or destination.branch_operational_status != "active"
+            not destination.branch_is_active or destination.branch_operational_status != "active"
         ):
             raise BusinessRuleError(
                 "La sucursal de destino no está operativa.",
@@ -786,3 +771,26 @@ class PurchaseOrderUseCases:
     @staticmethod
     def _money(value: Decimal) -> Decimal:
         return value.quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+
+    @staticmethod
+    def _validate_award_quotation(
+        quotation: PurchaseOrderQuotationReference, consolidation_id: uuid.UUID
+    ) -> None:
+        if quotation.consolidation_id != consolidation_id:
+            raise BusinessRuleError(
+                "La cotización no pertenece al consolidado indicado.",
+                code="purchase_order_consolidation_quotation_mismatch",
+            )
+        if quotation.status not in {
+            PurchaseQuotationStatus.UNDER_EVALUATION,
+            PurchaseQuotationStatus.SELECTED,
+        }:
+            raise BusinessRuleError(
+                "La oferta debe estar en evaluación para convertir sus adjudicaciones en orden.",
+                code="purchase_order_consolidation_quotation_unavailable",
+            )
+        if not quotation.details:
+            raise BusinessRuleError(
+                "La oferta no contiene productos para ordenar.",
+                code="purchase_order_quotation_without_details",
+            )

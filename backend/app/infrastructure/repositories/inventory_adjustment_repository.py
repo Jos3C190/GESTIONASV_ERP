@@ -5,10 +5,10 @@ import json
 import uuid
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any
+from typing import Any, NoReturn
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.inventory import InventoryUseCases
@@ -43,7 +43,7 @@ from app.infrastructure.repositories.inventory_repository import SqlAlchemyInven
 MIN_REASON_LENGTH = 5
 
 
-def _err(message: str, code: str, status_code: int = 409) -> None:
+def _err(message: str, code: str, status_code: int = 409) -> NoReturn:
     raise InventoryAdjustmentError(message, code=code, status_code=status_code)
 
 
@@ -68,8 +68,12 @@ class SqlAlchemyInventoryAdjustmentRepository:
         items: list[dict[str, Any]] = []
         total: int | None = None
         if include_items:
-            product_id = func.coalesce(InventoryItemModel.product_id, ProductVariantModel.product_id)
-            name = func.coalesce(ProductVariantModel.name_override, ProductModel.name, "Artículo sin nombre")
+            product_id = func.coalesce(
+                InventoryItemModel.product_id, ProductVariantModel.product_id
+            )
+            name = func.coalesce(
+                ProductVariantModel.name_override, ProductModel.name, "Artículo sin nombre"
+            )
             sku = func.coalesce(ProductVariantModel.sku, ProductModel.sku)
             statement = (
                 select(
@@ -80,18 +84,27 @@ class SqlAlchemyInventoryAdjustmentRepository:
                     func.coalesce(CompanyUnitModel.alias, UnitModel.name).label("base_unit_name"),
                     UnitModel.symbol.label("base_unit_symbol"),
                 )
-                .outerjoin(ProductVariantModel, and_(
-                    ProductVariantModel.company_id == InventoryItemModel.company_id,
-                    ProductVariantModel.id == InventoryItemModel.variant_id,
-                ))
-                .outerjoin(ProductModel, and_(
-                    ProductModel.company_id == InventoryItemModel.company_id,
-                    ProductModel.id_product == product_id,
-                ))
-                .outerjoin(CompanyUnitModel, and_(
-                    CompanyUnitModel.company_id == InventoryItemModel.company_id,
-                    CompanyUnitModel.unit_id == InventoryItemModel.base_unit_id,
-                ))
+                .outerjoin(
+                    ProductVariantModel,
+                    and_(
+                        ProductVariantModel.company_id == InventoryItemModel.company_id,
+                        ProductVariantModel.id == InventoryItemModel.variant_id,
+                    ),
+                )
+                .outerjoin(
+                    ProductModel,
+                    and_(
+                        ProductModel.company_id == InventoryItemModel.company_id,
+                        ProductModel.id_product == product_id,
+                    ),
+                )
+                .outerjoin(
+                    CompanyUnitModel,
+                    and_(
+                        CompanyUnitModel.company_id == InventoryItemModel.company_id,
+                        CompanyUnitModel.unit_id == InventoryItemModel.base_unit_id,
+                    ),
+                )
                 .outerjoin(UnitModel, UnitModel.id_unit == InventoryItemModel.base_unit_id)
                 .where(
                     InventoryItemModel.company_id == company_id,
@@ -104,14 +117,19 @@ class SqlAlchemyInventoryAdjustmentRepository:
             searchable_name = func.translate(func.lower(name), "áéíóúüñ", "aeiouun")
             searchable_sku = func.translate(func.lower(sku), "áéíóúüñ", "aeiouun")
             for term in normalized.split():
-                statement = statement.where(or_(
-                    searchable_name.contains(term, autoescape=True),
-                    searchable_sku.contains(term, autoescape=True),
-                ))
+                statement = statement.where(
+                    or_(
+                        searchable_name.contains(term, autoescape=True),
+                        searchable_sku.contains(term, autoescape=True),
+                    )
+                )
             if limit is not None or offset > 0:
-                total = int(await self._session.scalar(
-                    select(func.count()).select_from(statement.subquery())
-                ) or 0)
+                total = int(
+                    await self._session.scalar(
+                        select(func.count()).select_from(statement.subquery())
+                    )
+                    or 0
+                )
             statement = statement.order_by(name, InventoryItemModel.id).offset(offset)
             if limit is not None:
                 statement = statement.limit(limit)
@@ -121,19 +139,25 @@ class SqlAlchemyInventoryAdjustmentRepository:
                 total = len(items)
         locations: list[dict[str, Any]] = []
         if include_locations:
-            rows = (await self._session.execute(
-                select(Location.id, Location.code, Location.location_type)
-                .join(Warehouse, Warehouse.id == Location.warehouse_id)
-                .where(
-                    Warehouse.company_id == company_id,
-                    Location.warehouse_id == warehouse_id,
-                    Location.is_active.is_(True),
-                    Location.deleted_at.is_(None),
-                    Location.lifecycle_status == "active",
-                    Location.storage_eligible.is_(True),
+            rows = (
+                (
+                    await self._session.execute(
+                        select(Location.id, Location.code, Location.location_type)
+                        .join(Warehouse, Warehouse.id == Location.warehouse_id)
+                        .where(
+                            Warehouse.company_id == company_id,
+                            Location.warehouse_id == warehouse_id,
+                            Location.is_active.is_(True),
+                            Location.deleted_at.is_(None),
+                            Location.lifecycle_status == "active",
+                            Location.storage_eligible.is_(True),
+                        )
+                        .order_by(Location.code, Location.id)
+                    )
                 )
-                .order_by(Location.code, Location.id)
-            )).mappings().all()
+                .mappings()
+                .all()
+            )
             locations = [dict(row) for row in rows]
         return {"items": items, "items_total": total, "locations": locations}
 
@@ -159,7 +183,9 @@ class SqlAlchemyInventoryAdjustmentRepository:
             )
         )
 
-    async def _header(self, company_id: uuid.UUID, adjustment_id: uuid.UUID, *, lock: bool = False):
+    async def _header(
+        self, company_id: uuid.UUID, adjustment_id: uuid.UUID, *, lock: bool = False
+    ) -> InventoryAdjustmentModel:
         stmt = select(InventoryAdjustmentModel).where(
             InventoryAdjustmentModel.company_id == company_id,
             InventoryAdjustmentModel.id == adjustment_id,
@@ -187,80 +213,135 @@ class SqlAlchemyInventoryAdjustmentRepository:
             )
         )
         if item is None:
-            _err("El artículo no pertenece a esta empresa o está inactivo.", "adjustment_item_not_found", 404)
+            _err(
+                "El artículo no pertenece a esta empresa o está inactivo.",
+                "adjustment_item_not_found",
+                404,
+            )
         if line["direction"] == "increase":
             return await self._validate_increase_line(company_id, warehouse_id, item, line)
         return await self._validate_decrease_line(company_id, warehouse_id, item, line, transfer_id)
 
     async def _validate_increase_line(
-        self, company_id: uuid.UUID, warehouse_id: uuid.UUID,
-        item: InventoryItemModel, line: dict[str, Any],
+        self,
+        company_id: uuid.UUID,
+        warehouse_id: uuid.UUID,
+        item: InventoryItemModel,
+        line: dict[str, Any],
     ) -> dict[str, Any]:
-        location = await self._session.scalar(select(Location).where(
-            Location.id == line["location_id"],
-            Location.warehouse_id == warehouse_id,
-            Location.is_active.is_(True),
-            Location.deleted_at.is_(None),
-            Location.lifecycle_status == "active",
-        ))
+        location = await self._session.scalar(
+            select(Location).where(
+                Location.id == line["location_id"],
+                Location.warehouse_id == warehouse_id,
+                Location.is_active.is_(True),
+                Location.deleted_at.is_(None),
+                Location.lifecycle_status == "active",
+            )
+        )
         if location is None:
-            _err("La ubicación no pertenece a la bodega del ajuste o está inactiva.", "adjustment_location_invalid")
+            _err(
+                "La ubicación no pertenece a la bodega del ajuste o está inactiva.",
+                "adjustment_location_invalid",
+            )
         if line.get("inventory_lot_detail_id") is not None:
             from app.infrastructure.models.inventory_lot import InventoryLotDetailModel
 
-            lot = await self._session.scalar(select(InventoryLotDetailModel).where(
-                InventoryLotDetailModel.company_id == company_id,
-                InventoryLotDetailModel.id == line["inventory_lot_detail_id"],
-                InventoryLotDetailModel.inventory_item_id == item.id,
-            ))
+            lot = await self._session.scalar(
+                select(InventoryLotDetailModel).where(
+                    InventoryLotDetailModel.company_id == company_id,
+                    InventoryLotDetailModel.id == line["inventory_lot_detail_id"],
+                    InventoryLotDetailModel.inventory_item_id == item.id,
+                )
+            )
             if lot is None:
                 _err("El lote no corresponde al artículo del ajuste.", "adjustment_lot_mismatch")
         if line.get("packaging_definition_id") is not None:
-            packaging = await self._session.scalar(select(InventoryPackagingModel).where(
-                InventoryPackagingModel.company_id == company_id,
-                InventoryPackagingModel.inventory_item_id == item.id,
-                InventoryPackagingModel.id == line["packaging_definition_id"],
-                InventoryPackagingModel.is_current.is_(True),
-                InventoryPackagingModel.is_active.is_(True),
-            ))
+            packaging = await self._session.scalar(
+                select(InventoryPackagingModel).where(
+                    InventoryPackagingModel.company_id == company_id,
+                    InventoryPackagingModel.inventory_item_id == item.id,
+                    InventoryPackagingModel.id == line["packaging_definition_id"],
+                    InventoryPackagingModel.is_current.is_(True),
+                    InventoryPackagingModel.is_active.is_(True),
+                )
+            )
             if packaging is None:
-                _err("La presentación física seleccionada no está vigente para el artículo.", "adjustment_packaging_invalid")
+                _err(
+                    "La presentación física seleccionada no está vigente para el artículo.",
+                    "adjustment_packaging_invalid",
+                )
         return line
 
     async def _validate_decrease_line(
-        self, company_id: uuid.UUID, warehouse_id: uuid.UUID,
-        item: InventoryItemModel, line: dict[str, Any], transfer_id: uuid.UUID | None,
+        self,
+        company_id: uuid.UUID,
+        warehouse_id: uuid.UUID,
+        item: InventoryItemModel,
+        line: dict[str, Any],
+        transfer_id: uuid.UUID | None,
     ) -> dict[str, Any]:
-        unit = await self._session.scalar(select(InventoryHandlingUnitModel).where(
-            InventoryHandlingUnitModel.company_id == company_id,
-            InventoryHandlingUnitModel.id == line["handling_unit_id"],
-            InventoryHandlingUnitModel.inventory_item_id == item.id,
-            InventoryHandlingUnitModel.closed_at.is_(None),
-        ).with_for_update())
+        unit = await self._session.scalar(
+            select(InventoryHandlingUnitModel)
+            .where(
+                InventoryHandlingUnitModel.company_id == company_id,
+                InventoryHandlingUnitModel.id == line["handling_unit_id"],
+                InventoryHandlingUnitModel.inventory_item_id == item.id,
+                InventoryHandlingUnitModel.closed_at.is_(None),
+            )
+            .with_for_update()
+        )
         if unit is None:
-            _err("La unidad logística no está disponible en esta empresa.", "adjustment_handling_unit_not_found", 404)
-        expected_status = "in_transit" if transfer_id is not None and line.get("transfer_detail_id") is not None else line["stock_status"]
+            _err(
+                "La unidad logística no está disponible en esta empresa.",
+                "adjustment_handling_unit_not_found",
+                404,
+            )
+        expected_status = (
+            "in_transit"
+            if transfer_id is not None and line.get("transfer_detail_id") is not None
+            else line["stock_status"]
+        )
         if unit.location_id != line["location_id"] or unit.stock_status != expected_status:
-            _err("La unidad, ubicación o estado cambió desde que se preparó el ajuste.", "adjustment_handling_unit_changed")
+            _err(
+                "La unidad, ubicación o estado cambió desde que se preparó el ajuste.",
+                "adjustment_handling_unit_changed",
+            )
         if transfer_id is None and unit.warehouse_id != warehouse_id:
-            _err("La unidad logística no pertenece a la bodega del ajuste.", "adjustment_warehouse_mismatch")
+            _err(
+                "La unidad logística no pertenece a la bodega del ajuste.",
+                "adjustment_warehouse_mismatch",
+            )
         if Decimal(str(line["quantity_base"])) > Decimal(unit.quantity_base):
-            _err("La cantidad de salida supera el saldo de la unidad logística.", "adjustment_insufficient_handling_unit")
+            _err(
+                "La cantidad de salida supera el saldo de la unidad logística.",
+                "adjustment_insufficient_handling_unit",
+            )
         transit_link = transfer_id is not None and line.get("transfer_detail_id") is not None
         if unit.stock_status == "in_transit" and not transit_link:
-            _err("El tránsito solo se ajusta desde una incidencia autorizada del traslado.", "adjustment_transit_requires_incident", 403)
-        if unit.stock_status != "in_transit" and (transfer_id is not None or line.get("transfer_detail_id") is not None):
-            _err("La línea vinculada al traslado debe apuntar a la unidad en tránsito.", "adjustment_transfer_line_invalid")
+            _err(
+                "El tránsito solo se ajusta desde una incidencia autorizada del traslado.",
+                "adjustment_transit_requires_incident",
+                403,
+            )
+        if unit.stock_status != "in_transit" and (
+            transfer_id is not None or line.get("transfer_detail_id") is not None
+        ):
+            _err(
+                "La línea vinculada al traslado debe apuntar a la unidad en tránsito.",
+                "adjustment_transfer_line_invalid",
+            )
         line["packaging_definition_id"] = unit.packaging_definition_id
         line["inventory_lot_detail_id"] = unit.inventory_lot_detail_id
         line["line_warehouse_id"] = unit.warehouse_id
-        location = await self._session.scalar(select(Location).where(
-            Location.id == line["location_id"],
-            Location.warehouse_id == unit.warehouse_id,
-            Location.is_active.is_(True),
-            Location.deleted_at.is_(None),
-            Location.lifecycle_status == "active",
-        ))
+        location = await self._session.scalar(
+            select(Location).where(
+                Location.id == line["location_id"],
+                Location.warehouse_id == unit.warehouse_id,
+                Location.is_active.is_(True),
+                Location.deleted_at.is_(None),
+                Location.lifecycle_status == "active",
+            )
+        )
         if location is None:
             _err("La ubicación de la unidad no es válida.", "adjustment_location_invalid")
         return line
@@ -346,75 +427,128 @@ class SqlAlchemyInventoryAdjustmentRepository:
             product = None
             variant = None
             if item and item.product_id is not None:
-                product = await self._session.scalar(select(ProductModel).where(ProductModel.company_id == adjustment.company_id, ProductModel.id_product == item.product_id))
+                product = await self._session.scalar(
+                    select(ProductModel).where(
+                        ProductModel.company_id == adjustment.company_id,
+                        ProductModel.id_product == item.product_id,
+                    )
+                )
             elif item and item.variant_id is not None:
-                variant = await self._session.scalar(select(ProductVariantModel).where(ProductVariantModel.company_id == adjustment.company_id, ProductVariantModel.id == item.variant_id))
+                variant = await self._session.scalar(
+                    select(ProductVariantModel).where(
+                        ProductVariantModel.company_id == adjustment.company_id,
+                        ProductVariantModel.id == item.variant_id,
+                    )
+                )
                 if variant:
-                    product = await self._session.scalar(select(ProductModel).where(ProductModel.company_id == adjustment.company_id, ProductModel.id_product == variant.product_id))
+                    product = await self._session.scalar(
+                        select(ProductModel).where(
+                            ProductModel.company_id == adjustment.company_id,
+                            ProductModel.id_product == variant.product_id,
+                        )
+                    )
             unit_row = await self._session.execute(
                 select(CompanyUnitModel.alias, UnitModel.name, UnitModel.symbol)
                 .join(UnitModel, UnitModel.id_unit == CompanyUnitModel.unit_id)
-                .where(CompanyUnitModel.company_id == adjustment.company_id, CompanyUnitModel.unit_id == item.base_unit_id if item else False)
+                .where(
+                    CompanyUnitModel.company_id == adjustment.company_id,
+                    CompanyUnitModel.unit_id == item.base_unit_id if item else false(),
+                )
             )
             unit_data = unit_row.one_or_none()
-            location = await self._session.scalar(select(Location).where(Location.id == detail.location_id))
-            hu = await self._session.scalar(select(InventoryHandlingUnitModel).where(InventoryHandlingUnitModel.company_id == adjustment.company_id, InventoryHandlingUnitModel.id == detail.handling_unit_id)) if detail.handling_unit_id else None
-            line_outputs.append({
-                "id": detail.id,
-                "line_number": detail.line_number,
-                "inventory_item_id": detail.inventory_item_id,
-                "product_name": (variant.name_override if variant and variant.name_override else product.name if product else "Artículo no disponible"),
-                "sku": variant.sku if variant else product.sku if product else None,
-                "base_unit_id": item.base_unit_id if item else None,
-                "base_unit_name": (unit_data.alias or unit_data.name) if unit_data else "Unidad base",
-                "base_unit_symbol": unit_data.symbol if unit_data else None,
-                "warehouse_id": detail.warehouse_id,
-                "location_id": detail.location_id,
-                "location_code": location.code if location else None,
-                "stock_status": detail.stock_status,
-                "direction": detail.direction,
-                "quantity_base": detail.quantity_base,
-                "inventory_lot_detail_id": detail.inventory_lot_detail_id,
-                "handling_unit_id": detail.handling_unit_id,
-                "handling_unit_code": hu.code if hu else None,
-                "packaging_definition_id": detail.packaging_definition_id,
-                "documented_unit_cost": detail.documented_unit_cost,
-                "documented_total_cost": detail.documented_total_cost,
-                "actual_gross_weight_kg": detail.actual_gross_weight_kg,
-                "actual_volume_m3": detail.actual_volume_m3,
-                "transfer_detail_id": detail.transfer_detail_id,
-                "movement_id": detail.movement_id,
-                "movement_line_id": detail.movement_line_id,
-            })
+            location = await self._session.scalar(
+                select(Location).where(Location.id == detail.location_id)
+            )
+            hu = (
+                await self._session.scalar(
+                    select(InventoryHandlingUnitModel).where(
+                        InventoryHandlingUnitModel.company_id == adjustment.company_id,
+                        InventoryHandlingUnitModel.id == detail.handling_unit_id,
+                    )
+                )
+                if detail.handling_unit_id
+                else None
+            )
+            line_outputs.append(
+                {
+                    "id": detail.id,
+                    "line_number": detail.line_number,
+                    "inventory_item_id": detail.inventory_item_id,
+                    "product_name": (
+                        variant.name_override
+                        if variant and variant.name_override
+                        else product.name
+                        if product
+                        else "Artículo no disponible"
+                    ),
+                    "sku": variant.sku if variant else product.sku if product else None,
+                    "base_unit_id": item.base_unit_id if item else None,
+                    "base_unit_name": (unit_data.alias or unit_data.name)
+                    if unit_data
+                    else "Unidad base",
+                    "base_unit_symbol": unit_data.symbol if unit_data else None,
+                    "warehouse_id": detail.warehouse_id,
+                    "location_id": detail.location_id,
+                    "location_code": location.code if location else None,
+                    "stock_status": detail.stock_status,
+                    "direction": detail.direction,
+                    "quantity_base": detail.quantity_base,
+                    "inventory_lot_detail_id": detail.inventory_lot_detail_id,
+                    "handling_unit_id": detail.handling_unit_id,
+                    "handling_unit_code": hu.code if hu else None,
+                    "packaging_definition_id": detail.packaging_definition_id,
+                    "documented_unit_cost": detail.documented_unit_cost,
+                    "documented_total_cost": detail.documented_total_cost,
+                    "actual_gross_weight_kg": detail.actual_gross_weight_kg,
+                    "actual_volume_m3": detail.actual_volume_m3,
+                    "transfer_detail_id": detail.transfer_detail_id,
+                    "movement_id": detail.movement_id,
+                    "movement_line_id": detail.movement_line_id,
+                }
+            )
         docs = list(
             (
                 await self._session.scalars(
-                    select(InventoryAdjustmentDocumentModel).where(
+                    select(InventoryAdjustmentDocumentModel)
+                    .where(
                         InventoryAdjustmentDocumentModel.company_id == adjustment.company_id,
                         InventoryAdjustmentDocumentModel.adjustment_id == adjustment.id,
-                    ).order_by(InventoryAdjustmentDocumentModel.linked_at)
+                    )
+                    .order_by(InventoryAdjustmentDocumentModel.linked_at)
                 )
             ).all()
         )
         doc_outputs = []
         for link in docs:
-            asset = await self._session.scalar(select(DocumentAssetModel).where(DocumentAssetModel.company_id == adjustment.company_id, DocumentAssetModel.id == link.document_id))
-            doc_outputs.append({
-                "document_id": link.document_id,
-                "original_filename": link.original_filename,
-                "checksum_sha256": link.checksum_sha256,
-                "technical_status": asset.status if asset else "deleted",
-                "upload_completed": link.upload_completed_at is not None,
-                "linked_at": link.linked_at,
-                "detached_at": link.detached_at,
-                "active": link.detached_at is None,
-            })
+            asset = await self._session.scalar(
+                select(DocumentAssetModel).where(
+                    DocumentAssetModel.company_id == adjustment.company_id,
+                    DocumentAssetModel.id == link.document_id,
+                )
+            )
+            doc_outputs.append(
+                {
+                    "document_id": link.document_id,
+                    "original_filename": link.original_filename,
+                    "checksum_sha256": link.checksum_sha256,
+                    "technical_status": asset.status if asset else "deleted",
+                    "upload_completed": link.upload_completed_at is not None,
+                    "linked_at": link.linked_at,
+                    "detached_at": link.detached_at,
+                    "active": link.detached_at is None,
+                }
+            )
         events = list(
             (
                 await self._session.scalars(
                     select(InventoryAdjustmentEventModel)
-                    .where(InventoryAdjustmentEventModel.company_id == adjustment.company_id, InventoryAdjustmentEventModel.adjustment_id == adjustment.id)
-                    .order_by(InventoryAdjustmentEventModel.occurred_at, InventoryAdjustmentEventModel.id)
+                    .where(
+                        InventoryAdjustmentEventModel.company_id == adjustment.company_id,
+                        InventoryAdjustmentEventModel.adjustment_id == adjustment.id,
+                    )
+                    .order_by(
+                        InventoryAdjustmentEventModel.occurred_at, InventoryAdjustmentEventModel.id
+                    )
                 )
             ).all()
         )
@@ -445,10 +579,36 @@ class SqlAlchemyInventoryAdjustmentRepository:
             "cancellation_reason": adjustment.cancellation_reason,
             "lines": line_outputs,
             "documents": doc_outputs,
-            "events": [{"action": event.action, "actor_id": event.actor_id, "occurred_at": event.occurred_at, "reason": event.reason, "version": event.version, "details": event.details} for event in events],
+            "events": [
+                {
+                    "action": event.action,
+                    "actor_id": event.actor_id,
+                    "occurred_at": event.occurred_at,
+                    "reason": event.reason,
+                    "version": event.version,
+                    "details": event.details,
+                }
+                for event in events
+            ],
         }
 
-    async def create_adjustment(self, *, company_id: uuid.UUID, actor_id: uuid.UUID, warehouse_id: uuid.UUID, operational_date: date, accounting_date: date, reason: str, document_reference: str, notes: str | None, lines: list[dict[str, Any]], idempotency_key: str | None = None, correction_of_id: uuid.UUID | None = None, transfer_id: uuid.UUID | None = None, transfer_incident_id: uuid.UUID | None = None) -> dict[str, Any]:
+    async def create_adjustment(
+        self,
+        *,
+        company_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        warehouse_id: uuid.UUID,
+        operational_date: date,
+        accounting_date: date,
+        reason: str,
+        document_reference: str,
+        notes: str | None,
+        lines: list[dict[str, Any]],
+        idempotency_key: str | None = None,
+        correction_of_id: uuid.UUID | None = None,
+        transfer_id: uuid.UUID | None = None,
+        transfer_incident_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
         canonical = {
             "warehouse_id": str(warehouse_id),
             "operational_date": operational_date.isoformat(),
@@ -469,52 +629,116 @@ class SqlAlchemyInventoryAdjustmentRepository:
             select(func.pg_advisory_xact_lock(func.hashtextextended(lock_key, 0)))
         )
         if idempotency_key is not None:
-            existing = await self._session.scalar(select(InventoryAdjustmentModel).where(
-                InventoryAdjustmentModel.company_id == company_id,
-                InventoryAdjustmentModel.create_idempotency_key == idempotency_key,
-            ).with_for_update())
+            existing = await self._session.scalar(
+                select(InventoryAdjustmentModel)
+                .where(
+                    InventoryAdjustmentModel.company_id == company_id,
+                    InventoryAdjustmentModel.create_idempotency_key == idempotency_key,
+                )
+                .with_for_update()
+            )
             if existing is not None:
                 if existing.create_fingerprint != fingerprint:
-                    _err("La clave de creación ya se usó con otro contenido.", "adjustment_idempotency_conflict")
+                    _err(
+                        "La clave de creación ya se usó con otro contenido.",
+                        "adjustment_idempotency_conflict",
+                    )
                 return await self._view(existing)
         # Serialize the daily code sequence even when different idempotency keys
         # create drafts at the same time. Corrections also have their origin key.
-        await self._session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(f"inventory-adjustment:{company_id}", 0))))
-        day = datetime.now(UTC).astimezone(ZoneInfo("America/El_Salvador")).date().strftime("%Y%m%d")
+        await self._session.execute(
+            select(
+                func.pg_advisory_xact_lock(
+                    func.hashtextextended(f"inventory-adjustment:{company_id}", 0)
+                )
+            )
+        )
+        day = (
+            datetime.now(UTC).astimezone(ZoneInfo("America/El_Salvador")).date().strftime("%Y%m%d")
+        )
         prefix = f"AJ-{day}-"
-        last = await self._session.scalar(select(func.max(InventoryAdjustmentModel.code)).where(InventoryAdjustmentModel.company_id == company_id, InventoryAdjustmentModel.code.like(f"{prefix}%")))
+        last = await self._session.scalar(
+            select(func.max(InventoryAdjustmentModel.code)).where(
+                InventoryAdjustmentModel.company_id == company_id,
+                InventoryAdjustmentModel.code.like(f"{prefix}%"),
+            )
+        )
         sequence = int(str(last).rsplit("-", 1)[-1]) + 1 if last else 1
         now = datetime.now(UTC)
         adjustment = InventoryAdjustmentModel(
-            company_id=company_id, code=f"{prefix}{sequence:06d}", warehouse_id=warehouse_id,
-            operational_date=operational_date, accounting_date=accounting_date,
-            reason=reason.strip(), document_reference=document_reference.strip(), notes=notes.strip() if notes else None,
-            status="draft", version=1, correction_of_id=correction_of_id, transfer_id=transfer_id,
-            transfer_incident_id=transfer_incident_id, created_by_id=actor_id, created_at=now,
+            company_id=company_id,
+            code=f"{prefix}{sequence:06d}",
+            warehouse_id=warehouse_id,
+            operational_date=operational_date,
+            accounting_date=accounting_date,
+            reason=reason.strip(),
+            document_reference=document_reference.strip(),
+            notes=notes.strip() if notes else None,
+            status="draft",
+            version=1,
+            correction_of_id=correction_of_id,
+            transfer_id=transfer_id,
+            transfer_incident_id=transfer_incident_id,
+            created_by_id=actor_id,
+            created_at=now,
             create_idempotency_key=idempotency_key,
             create_fingerprint=fingerprint if idempotency_key is not None else None,
         )
         self._session.add(adjustment)
         await self._session.flush()
         await self._add_lines(adjustment, lines, actor_id)
-        await self._event(adjustment, action="created", actor_id=actor_id, details={"line_count": len(lines)})
+        await self._event(
+            adjustment, action="created", actor_id=actor_id, details={"line_count": len(lines)}
+        )
         return await self._view(adjustment)
 
-    async def update_adjustment(self, *, company_id: uuid.UUID, adjustment_id: uuid.UUID, actor_id: uuid.UUID, operational_date: date, accounting_date: date, reason: str, document_reference: str, notes: str | None, lines: list[dict[str, Any]], approval_revocation_reason: str | None = None) -> dict[str, Any]:
+    async def update_adjustment(
+        self,
+        *,
+        company_id: uuid.UUID,
+        adjustment_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        operational_date: date,
+        accounting_date: date,
+        reason: str,
+        document_reference: str,
+        notes: str | None,
+        lines: list[dict[str, Any]],
+        approval_revocation_reason: str | None = None,
+    ) -> dict[str, Any]:
         adjustment = await self._header(company_id, adjustment_id, lock=True)
         if adjustment.status == "approved":
-            if not approval_revocation_reason or len(approval_revocation_reason.strip()) < MIN_REASON_LENGTH:
-                _err("Para editar un aprobado indique el motivo de revocación.", "adjustment_approval_revocation_reason_required", 422)
-            await self._event(adjustment, action="approval_revoked", actor_id=actor_id, reason=approval_revocation_reason.strip(), details={"approved_version": adjustment.approved_version})
+            if (
+                not approval_revocation_reason
+                or len(approval_revocation_reason.strip()) < MIN_REASON_LENGTH
+            ):
+                _err(
+                    "Para editar un aprobado indique el motivo de revocación.",
+                    "adjustment_approval_revocation_reason_required",
+                    422,
+                )
+            await self._event(
+                adjustment,
+                action="approval_revoked",
+                actor_id=actor_id,
+                reason=approval_revocation_reason.strip(),
+                details={"approved_version": adjustment.approved_version},
+            )
             adjustment.status = "draft"
             adjustment.approved_by_id = None
             adjustment.approved_at = None
             adjustment.approved_version = None
             adjustment.approval_revocation_reason = approval_revocation_reason.strip()
         elif adjustment.status != "draft":
-            _err("Solo se puede editar un ajuste en borrador o revocar su aprobación.", "adjustment_not_editable")
+            _err(
+                "Solo se puede editar un ajuste en borrador o revocar su aprobación.",
+                "adjustment_not_editable",
+            )
         if adjustment.transfer_id is not None or adjustment.correction_of_id is not None:
-            _err("Los ajustes vinculados a una incidencia o corrección no se editan; cancele el borrador y cree uno nuevo.", "adjustment_linked_document_immutable")
+            _err(
+                "Los ajustes vinculados a una incidencia o corrección no se editan; cancele el borrador y cree uno nuevo.",
+                "adjustment_linked_document_immutable",
+            )
         adjustment.version += 1
         adjustment.operational_date = operational_date
         adjustment.accounting_date = accounting_date
@@ -522,41 +746,100 @@ class SqlAlchemyInventoryAdjustmentRepository:
         adjustment.document_reference = document_reference.strip()
         adjustment.notes = notes.strip() if notes else None
         adjustment.updated_at = datetime.now(UTC)
-        existing = list((await self._session.scalars(select(InventoryAdjustmentDetailModel).where(InventoryAdjustmentDetailModel.company_id == company_id, InventoryAdjustmentDetailModel.adjustment_id == adjustment.id))).all())
+        existing = list(
+            (
+                await self._session.scalars(
+                    select(InventoryAdjustmentDetailModel).where(
+                        InventoryAdjustmentDetailModel.company_id == company_id,
+                        InventoryAdjustmentDetailModel.adjustment_id == adjustment.id,
+                    )
+                )
+            ).all()
+        )
         for row in existing:
             await self._session.delete(row)
         await self._session.flush()
         await self._add_lines(adjustment, lines, actor_id)
-        await self._event(adjustment, action="updated", actor_id=actor_id, details={"line_count": len(lines)})
+        await self._event(
+            adjustment, action="updated", actor_id=actor_id, details={"line_count": len(lines)}
+        )
         return await self._view(adjustment)
 
-    async def _validate_evidence(self, adjustment: InventoryAdjustmentModel) -> list[InventoryAdjustmentDocumentModel]:
-        links = list((await self._session.scalars(select(InventoryAdjustmentDocumentModel).where(
-            InventoryAdjustmentDocumentModel.company_id == adjustment.company_id,
-            InventoryAdjustmentDocumentModel.adjustment_id == adjustment.id,
-            InventoryAdjustmentDocumentModel.detached_at.is_(None),
-        ).order_by(InventoryAdjustmentDocumentModel.id).with_for_update())).all())
+    async def _validate_evidence(
+        self, adjustment: InventoryAdjustmentModel
+    ) -> list[InventoryAdjustmentDocumentModel]:
+        links = list(
+            (
+                await self._session.scalars(
+                    select(InventoryAdjustmentDocumentModel)
+                    .where(
+                        InventoryAdjustmentDocumentModel.company_id == adjustment.company_id,
+                        InventoryAdjustmentDocumentModel.adjustment_id == adjustment.id,
+                        InventoryAdjustmentDocumentModel.detached_at.is_(None),
+                    )
+                    .order_by(InventoryAdjustmentDocumentModel.id)
+                    .with_for_update()
+                )
+            ).all()
+        )
         valid = []
         for link in links:
-            asset = await self._session.scalar(select(DocumentAssetModel).where(
-                DocumentAssetModel.company_id == adjustment.company_id,
-                DocumentAssetModel.id == link.document_id,
-            ).with_for_update())
-            if asset is not None and asset.deleted_at is None and asset.status == "active" and asset.checksum_sha256 == link.checksum_sha256 and link.upload_completed_at is not None:
+            asset = await self._session.scalar(
+                select(DocumentAssetModel)
+                .where(
+                    DocumentAssetModel.company_id == adjustment.company_id,
+                    DocumentAssetModel.id == link.document_id,
+                )
+                .with_for_update()
+            )
+            if (
+                asset is not None
+                and asset.deleted_at is None
+                and asset.status == "active"
+                and asset.checksum_sha256 == link.checksum_sha256
+                and link.upload_completed_at is not None
+            ):
                 valid.append(link)
         if not valid:
-            _err("Adjunte y complete al menos un comprobante activo, validado y de la misma empresa.", "adjustment_evidence_required", 422)
+            _err(
+                "Adjunte y complete al menos un comprobante activo, validado y de la misma empresa.",
+                "adjustment_evidence_required",
+                422,
+            )
         return valid
 
-    async def approve_adjustment(self, *, company_id: uuid.UUID, adjustment_id: uuid.UUID, actor_id: uuid.UUID, expected_version: int) -> dict[str, Any]:
+    async def approve_adjustment(
+        self,
+        *,
+        company_id: uuid.UUID,
+        adjustment_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        expected_version: int,
+    ) -> dict[str, Any]:
         adjustment = await self._header(company_id, adjustment_id, lock=True)
         if adjustment.status != "draft":
             _err("Solo un borrador puede aprobarse.", "adjustment_not_approvable")
         if adjustment.version != expected_version:
-            _err("El borrador cambió; actualice la pantalla y vuelva a revisar.", "adjustment_version_conflict")
+            _err(
+                "El borrador cambió; actualice la pantalla y vuelva a revisar.",
+                "adjustment_version_conflict",
+            )
         if not adjustment.reason.strip() or not adjustment.document_reference.strip():
-            _err("El motivo y la referencia documental son obligatorios.", "adjustment_reason_and_reference_required", 422)
-        lines = list((await self._session.scalars(select(InventoryAdjustmentDetailModel).where(InventoryAdjustmentDetailModel.company_id == company_id, InventoryAdjustmentDetailModel.adjustment_id == adjustment.id))).all())
+            _err(
+                "El motivo y la referencia documental son obligatorios.",
+                "adjustment_reason_and_reference_required",
+                422,
+            )
+        lines = list(
+            (
+                await self._session.scalars(
+                    select(InventoryAdjustmentDetailModel).where(
+                        InventoryAdjustmentDetailModel.company_id == company_id,
+                        InventoryAdjustmentDetailModel.adjustment_id == adjustment.id,
+                    )
+                )
+            ).all()
+        )
         if not lines:
             _err("Agregue al menos una línea antes de aprobar.", "adjustment_lines_required", 422)
         await self._validate_evidence(adjustment)
@@ -565,16 +848,25 @@ class SqlAlchemyInventoryAdjustmentRepository:
         adjustment.approved_by_id = actor_id
         adjustment.approved_at = datetime.now(UTC)
         adjustment.updated_at = adjustment.approved_at
-        await self._event(adjustment, action="approved", actor_id=actor_id, details={"version": adjustment.version})
+        await self._event(
+            adjustment,
+            action="approved",
+            actor_id=actor_id,
+            details={"version": adjustment.version},
+        )
         await self._session.flush()
         return await self._view(adjustment)
 
-    async def cancel_adjustment(self, *, company_id: uuid.UUID, adjustment_id: uuid.UUID, actor_id: uuid.UUID, reason: str) -> dict[str, Any]:
+    async def cancel_adjustment(
+        self, *, company_id: uuid.UUID, adjustment_id: uuid.UUID, actor_id: uuid.UUID, reason: str
+    ) -> dict[str, Any]:
         adjustment = await self._header(company_id, adjustment_id, lock=True)
         if adjustment.status not in {"draft", "approved"}:
             _err("Solo se puede cancelar un ajuste no aplicado.", "adjustment_not_cancellable")
         if len(reason.strip()) < MIN_REASON_LENGTH:
-            _err("Indique el motivo de cancelación.", "adjustment_cancellation_reason_required", 422)
+            _err(
+                "Indique el motivo de cancelación.", "adjustment_cancellation_reason_required", 422
+            )
         adjustment.status = "cancelled"
         adjustment.cancelled_by_id = actor_id
         adjustment.cancelled_at = datetime.now(UTC)
@@ -584,20 +876,43 @@ class SqlAlchemyInventoryAdjustmentRepository:
         await self._session.flush()
         return await self._view(adjustment)
 
-    async def apply_adjustment(self, *, company_id: uuid.UUID, adjustment_id: uuid.UUID, actor_id: uuid.UUID, idempotency_key: str) -> dict[str, Any]:
+    async def apply_adjustment(
+        self,
+        *,
+        company_id: uuid.UUID,
+        adjustment_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
         adjustment = await self._header(company_id, adjustment_id, lock=True)
-        fingerprint = hashlib.sha256(json.dumps({"adjustment": str(adjustment.id), "version": adjustment.version}, sort_keys=True).encode()).hexdigest()
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                {"adjustment": str(adjustment.id), "version": adjustment.version}, sort_keys=True
+            ).encode()
+        ).hexdigest()
         if adjustment.status == "applied":
             if adjustment.apply_idempotency_key == idempotency_key:
                 return await self._view(adjustment)
-            _err("El ajuste ya fue aplicado con otra clave de idempotencia.", "adjustment_already_applied")
+            _err(
+                "El ajuste ya fue aplicado con otra clave de idempotencia.",
+                "adjustment_already_applied",
+            )
         if adjustment.status != "approved" or adjustment.approved_version != adjustment.version:
             _err("Aplique solo la versión actualmente aprobada.", "adjustment_approval_stale")
         await self._validate_evidence(adjustment)
-        lines = list((await self._session.scalars(select(InventoryAdjustmentDetailModel).where(
-            InventoryAdjustmentDetailModel.company_id == company_id,
-            InventoryAdjustmentDetailModel.adjustment_id == adjustment.id,
-        ).order_by(InventoryAdjustmentDetailModel.line_number).with_for_update())).all())
+        lines = list(
+            (
+                await self._session.scalars(
+                    select(InventoryAdjustmentDetailModel)
+                    .where(
+                        InventoryAdjustmentDetailModel.company_id == company_id,
+                        InventoryAdjustmentDetailModel.adjustment_id == adjustment.id,
+                    )
+                    .order_by(InventoryAdjustmentDetailModel.line_number)
+                    .with_for_update()
+                )
+            ).all()
+        )
         if not lines:
             _err("El ajuste no contiene líneas.", "adjustment_lines_required")
         if adjustment.transfer_id:
@@ -607,17 +922,31 @@ class SqlAlchemyInventoryAdjustmentRepository:
         for detail in lines:
             quantity = Decimal(detail.quantity_base)
             movement = await self._post_adjustment_movement(
-                adjustment=adjustment, detail=detail, actor_id=actor_id,
+                adjustment=adjustment,
+                detail=detail,
+                actor_id=actor_id,
                 inventory=inventory,
             )
             if not movement.get("lines"):
-                _err("El motor no devolvió la línea de movimiento creada.", "adjustment_movement_missing", 500)
+                _err(
+                    "El motor no devolvió la línea de movimiento creada.",
+                    "adjustment_movement_missing",
+                    500,
+                )
             movement_line_out = movement["lines"][0]
             detail.movement_id = movement["id"]
             detail.movement_line_id = movement_line_out["id"]
-            movement_refs.append({"line_id": str(detail.id), "movement_id": str(movement["id"]), "movement_line_id": str(movement_line_out["id"])})
+            movement_refs.append(
+                {
+                    "line_id": str(detail.id),
+                    "movement_id": str(movement["id"]),
+                    "movement_line_id": str(movement_line_out["id"]),
+                }
+            )
             if detail.transfer_detail_id is not None:
-                await self._apply_transfer_loss(adjustment, detail, quantity, actor_id, idempotency_key)
+                await self._apply_transfer_loss(
+                    adjustment, detail, quantity, actor_id, idempotency_key
+                )
         adjustment.status = "applied"
         adjustment.applied_by_id = actor_id
         adjustment.applied_at = datetime.now(UTC)
@@ -625,13 +954,18 @@ class SqlAlchemyInventoryAdjustmentRepository:
         adjustment.apply_idempotency_key = idempotency_key
         adjustment.apply_fingerprint = fingerprint
         adjustment.applied_movements = movement_refs
-        await self._event(adjustment, action="applied", actor_id=actor_id, details={"movements": movement_refs})
+        await self._event(
+            adjustment, action="applied", actor_id=actor_id, details={"movements": movement_refs}
+        )
         await self._session.flush()
         return await self._view(adjustment)
 
     async def _post_adjustment_movement(
-        self, *, adjustment: InventoryAdjustmentModel,
-        detail: InventoryAdjustmentDetailModel, actor_id: uuid.UUID,
+        self,
+        *,
+        adjustment: InventoryAdjustmentModel,
+        detail: InventoryAdjustmentDetailModel,
+        actor_id: uuid.UUID,
         inventory: InventoryUseCases,
     ) -> dict[str, Any]:
         quantity = Decimal(detail.quantity_base)
@@ -649,13 +983,17 @@ class SqlAlchemyInventoryAdjustmentRepository:
                 "to_stock_status": "quarantine",
                 "inventory_lot_detail_id": detail.inventory_lot_detail_id,
                 "packaging_definition_id": detail.packaging_definition_id,
-                "actual_measures": ({
-                    "gross_weight_kg": detail.actual_gross_weight_kg,
-                    "length_m": None,
-                    "width_m": None,
-                    "height_m": None,
-                    "volume_m3": detail.actual_volume_m3,
-                } if detail.actual_gross_weight_kg is not None else None),
+                "actual_measures": (
+                    {
+                        "gross_weight_kg": detail.actual_gross_weight_kg,
+                        "length_m": None,
+                        "width_m": None,
+                        "height_m": None,
+                        "volume_m3": detail.actual_volume_m3,
+                    }
+                    if detail.actual_gross_weight_kg is not None
+                    else None
+                ),
                 "valuation_kind": "adjustment_in",
                 "valuation_value": documented_total,
                 "valuation_currency": None,
@@ -687,113 +1025,267 @@ class SqlAlchemyInventoryAdjustmentRepository:
             actor_id=actor_id,
         )
 
-    async def _lock_transfer_incident(self, adjustment: InventoryAdjustmentModel, detail: InventoryAdjustmentDetailModel) -> None:
+    async def _lock_transfer_incident(
+        self, adjustment: InventoryAdjustmentModel, detail: InventoryAdjustmentDetailModel
+    ) -> None:
         if not adjustment.transfer_id or not adjustment.transfer_incident_id:
-            _err("La pérdida de tránsito requiere una incidencia vinculada.", "adjustment_transit_requires_incident", 403)
-        transfer = await self._session.scalar(select(InventoryTransferModel).where(
-            InventoryTransferModel.company_id == adjustment.company_id,
-            InventoryTransferModel.id == adjustment.transfer_id,
-        ).with_for_update())
-        incident = await self._session.scalar(select(InventoryTransferIncidentModel).where(
-            InventoryTransferIncidentModel.company_id == adjustment.company_id,
-            InventoryTransferIncidentModel.transfer_id == adjustment.transfer_id,
-            InventoryTransferIncidentModel.id == adjustment.transfer_incident_id,
-        ).with_for_update())
-        if transfer is None or incident is None or transfer.status != "incident" or incident.status != "open":
-            _err("La incidencia ya se resolvió o el traslado no está en incidencia.", "transfer_incident_not_open")
-        transfer_detail = await self._session.scalar(select(InventoryTransferDetailModel).where(
-            InventoryTransferDetailModel.company_id == adjustment.company_id,
-            InventoryTransferDetailModel.transfer_id == adjustment.transfer_id,
-            InventoryTransferDetailModel.id == detail.transfer_detail_id,
-        ).with_for_update())
-        if transfer_detail is None or transfer_detail.transit_handling_unit_id != detail.handling_unit_id:
-            _err("La unidad ya no coincide con el detalle real del tránsito.", "transfer_transit_unit_mismatch")
-        remaining = Decimal(transfer_detail.quantity_dispatched) - Decimal(transfer_detail.quantity_received) - Decimal(transfer_detail.quantity_returned) - Decimal(transfer_detail.quantity_adjusted_out)
+            _err(
+                "La pérdida de tránsito requiere una incidencia vinculada.",
+                "adjustment_transit_requires_incident",
+                403,
+            )
+        transfer = await self._session.scalar(
+            select(InventoryTransferModel)
+            .where(
+                InventoryTransferModel.company_id == adjustment.company_id,
+                InventoryTransferModel.id == adjustment.transfer_id,
+            )
+            .with_for_update()
+        )
+        incident = await self._session.scalar(
+            select(InventoryTransferIncidentModel)
+            .where(
+                InventoryTransferIncidentModel.company_id == adjustment.company_id,
+                InventoryTransferIncidentModel.transfer_id == adjustment.transfer_id,
+                InventoryTransferIncidentModel.id == adjustment.transfer_incident_id,
+            )
+            .with_for_update()
+        )
+        if (
+            transfer is None
+            or incident is None
+            or transfer.status != "incident"
+            or incident.status != "open"
+        ):
+            _err(
+                "La incidencia ya se resolvió o el traslado no está en incidencia.",
+                "transfer_incident_not_open",
+            )
+        transfer_detail = await self._session.scalar(
+            select(InventoryTransferDetailModel)
+            .where(
+                InventoryTransferDetailModel.company_id == adjustment.company_id,
+                InventoryTransferDetailModel.transfer_id == adjustment.transfer_id,
+                InventoryTransferDetailModel.id == detail.transfer_detail_id,
+            )
+            .with_for_update()
+        )
+        if (
+            transfer_detail is None
+            or transfer_detail.transit_handling_unit_id != detail.handling_unit_id
+        ):
+            _err(
+                "La unidad ya no coincide con el detalle real del tránsito.",
+                "transfer_transit_unit_mismatch",
+            )
+        remaining = (
+            Decimal(transfer_detail.quantity_dispatched)
+            - Decimal(transfer_detail.quantity_received)
+            - Decimal(transfer_detail.quantity_returned)
+            - Decimal(transfer_detail.quantity_adjusted_out)
+        )
         if Decimal(detail.quantity_base) > remaining:
-            _err("La cantidad perdida supera el remanente no recibido del traslado.", "transfer_adjustment_exceeds_transit")
+            _err(
+                "La cantidad perdida supera el remanente no recibido del traslado.",
+                "transfer_adjustment_exceeds_transit",
+            )
 
-    async def _apply_transfer_loss(self, adjustment: InventoryAdjustmentModel, detail: InventoryAdjustmentDetailModel, quantity: Decimal, actor_id: uuid.UUID, idempotency_key: str) -> None:
+    async def _apply_transfer_loss(
+        self,
+        adjustment: InventoryAdjustmentModel,
+        detail: InventoryAdjustmentDetailModel,
+        quantity: Decimal,
+        actor_id: uuid.UUID,
+        idempotency_key: str,
+    ) -> None:
         await self._lock_transfer_incident(adjustment, detail)
-        transfer_detail = await self._session.scalar(select(InventoryTransferDetailModel).where(
-            InventoryTransferDetailModel.company_id == adjustment.company_id,
-            InventoryTransferDetailModel.id == detail.transfer_detail_id,
-        ).with_for_update())
-        transfer_detail.quantity_adjusted_out = Decimal(transfer_detail.quantity_adjusted_out) + quantity
-        allocations = list((await self._session.scalars(select(InventoryTransferDemandAllocationModel).where(
-            InventoryTransferDemandAllocationModel.company_id == adjustment.company_id,
-            InventoryTransferDemandAllocationModel.transfer_detail_id == transfer_detail.id,
-        ).order_by(InventoryTransferDemandAllocationModel.id).with_for_update())).all())
+        transfer_detail = await self._session.scalar(
+            select(InventoryTransferDetailModel)
+            .where(
+                InventoryTransferDetailModel.company_id == adjustment.company_id,
+                InventoryTransferDetailModel.id == detail.transfer_detail_id,
+            )
+            .with_for_update()
+        )
+        if transfer_detail is None:
+            _err("Detalle de traslado no encontrado.", "transfer_transit_unit_mismatch")
+        transfer_detail.quantity_adjusted_out = (
+            Decimal(transfer_detail.quantity_adjusted_out) + quantity
+        )
+        allocations = list(
+            (
+                await self._session.scalars(
+                    select(InventoryTransferDemandAllocationModel)
+                    .where(
+                        InventoryTransferDemandAllocationModel.company_id == adjustment.company_id,
+                        InventoryTransferDemandAllocationModel.transfer_detail_id
+                        == transfer_detail.id,
+                    )
+                    .order_by(InventoryTransferDemandAllocationModel.id)
+                    .with_for_update()
+                )
+            ).all()
+        )
         unallocated = quantity
         for allocation in allocations:
-            pending = Decimal(allocation.quantity_dispatched) - Decimal(allocation.quantity_received) - Decimal(allocation.quantity_adjusted_out)
+            pending = (
+                Decimal(allocation.quantity_dispatched)
+                - Decimal(allocation.quantity_received)
+                - Decimal(allocation.quantity_adjusted_out)
+            )
             amount = min(unallocated, pending)
             if amount > 0:
-                allocation.quantity_adjusted_out = Decimal(allocation.quantity_adjusted_out) + amount
+                allocation.quantity_adjusted_out = (
+                    Decimal(allocation.quantity_adjusted_out) + amount
+                )
                 unallocated -= amount
             if unallocated <= 0:
                 break
-        remaining = Decimal(transfer_detail.quantity_dispatched) - Decimal(transfer_detail.quantity_received) - Decimal(transfer_detail.quantity_returned) - Decimal(transfer_detail.quantity_adjusted_out)
+        remaining = (
+            Decimal(transfer_detail.quantity_dispatched)
+            - Decimal(transfer_detail.quantity_received)
+            - Decimal(transfer_detail.quantity_returned)
+            - Decimal(transfer_detail.quantity_adjusted_out)
+        )
         if remaining <= 0:
             transfer_detail.transit_handling_unit_id = None
-        all_details = list((await self._session.scalars(select(InventoryTransferDetailModel).where(
-            InventoryTransferDetailModel.company_id == adjustment.company_id,
-            InventoryTransferDetailModel.transfer_id == adjustment.transfer_id,
-        ).order_by(InventoryTransferDetailModel.id).with_for_update())).all())
+        all_details = list(
+            (
+                await self._session.scalars(
+                    select(InventoryTransferDetailModel)
+                    .where(
+                        InventoryTransferDetailModel.company_id == adjustment.company_id,
+                        InventoryTransferDetailModel.transfer_id == adjustment.transfer_id,
+                    )
+                    .order_by(InventoryTransferDetailModel.id)
+                    .with_for_update()
+                )
+            ).all()
+        )
         all_resolved = all(
-            Decimal(row.quantity_dispatched) <= Decimal(row.quantity_received) + Decimal(row.quantity_returned) + Decimal(row.quantity_adjusted_out)
+            Decimal(row.quantity_dispatched)
+            <= Decimal(row.quantity_received)
+            + Decimal(row.quantity_returned)
+            + Decimal(row.quantity_adjusted_out)
             for row in all_details
         )
         has_loss = any(Decimal(row.quantity_adjusted_out) > 0 for row in all_details)
-        incident = await self._session.scalar(select(InventoryTransferIncidentModel).where(
-            InventoryTransferIncidentModel.company_id == adjustment.company_id,
-            InventoryTransferIncidentModel.id == adjustment.transfer_incident_id,
-        ).with_for_update())
+        incident = await self._session.scalar(
+            select(InventoryTransferIncidentModel)
+            .where(
+                InventoryTransferIncidentModel.company_id == adjustment.company_id,
+                InventoryTransferIncidentModel.id == adjustment.transfer_incident_id,
+            )
+            .with_for_update()
+        )
         if all_resolved and has_loss:
-            transfer = await self._session.scalar(select(InventoryTransferModel).where(
-                InventoryTransferModel.company_id == adjustment.company_id,
-                InventoryTransferModel.id == adjustment.transfer_id,
-            ).with_for_update())
+            transfer = await self._session.scalar(
+                select(InventoryTransferModel)
+                .where(
+                    InventoryTransferModel.company_id == adjustment.company_id,
+                    InventoryTransferModel.id == adjustment.transfer_id,
+                )
+                .with_for_update()
+            )
+            if transfer is None or incident is None:
+                _err("Incidencia de traslado no encontrada.", "transfer_incident_not_open")
             transfer.status = "closed_with_adjustment"
             incident.status = "resolved"
             incident.resolution = "close_with_adjustment"
-            incident.resolution_notes = f"Cierre automático por ajuste autorizado {adjustment.code}."
+            incident.resolution_notes = (
+                f"Cierre automático por ajuste autorizado {adjustment.code}."
+            )
             incident.resolved_by_id = actor_id
             incident.resolved_at = datetime.now(UTC)
             now = datetime.now(UTC)
-            self._session.add(InventoryTransferCommandModel(
-                company_id=adjustment.company_id, transfer_id=adjustment.transfer_id,
-                action="resolve_adjustment", idempotency_key=f"adj-loss:{idempotency_key}",
-                request_fingerprint=hashlib.sha256(f"{adjustment.id}:{detail.id}:{quantity}".encode()).hexdigest(),
-                result={"adjustment_id": str(adjustment.id), "detail_id": str(detail.transfer_detail_id), "quantity_adjusted_out": str(quantity)},
-                actor_id=actor_id, created_at=now,
-            ))
+            self._session.add(
+                InventoryTransferCommandModel(
+                    company_id=adjustment.company_id,
+                    transfer_id=adjustment.transfer_id,
+                    action="resolve_adjustment",
+                    idempotency_key=f"adj-loss:{idempotency_key}",
+                    request_fingerprint=hashlib.sha256(
+                        f"{adjustment.id}:{detail.id}:{quantity}".encode()
+                    ).hexdigest(),
+                    result={
+                        "adjustment_id": str(adjustment.id),
+                        "detail_id": str(detail.transfer_detail_id),
+                        "quantity_adjusted_out": str(quantity),
+                    },
+                    actor_id=actor_id,
+                    created_at=now,
+                )
+            )
         await self._session.flush()
 
-    async def create_correction(self, *, company_id: uuid.UUID, adjustment_id: uuid.UUID, actor_id: uuid.UUID, reason: str, document_reference: str, operational_date: date, accounting_date: date) -> dict[str, Any]:
+    async def create_correction(
+        self,
+        *,
+        company_id: uuid.UUID,
+        adjustment_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        reason: str,
+        document_reference: str,
+        operational_date: date,
+        accounting_date: date,
+    ) -> dict[str, Any]:
         original = await self._header(company_id, adjustment_id, lock=True)
         if original.status != "applied" or original.transfer_id is not None:
-            _err("Solo se admite corregir un ajuste ordinario aplicado.", "adjustment_correction_not_supported")
-        original_lines = list((await self._session.scalars(select(InventoryAdjustmentDetailModel).where(
-            InventoryAdjustmentDetailModel.company_id == company_id,
-            InventoryAdjustmentDetailModel.adjustment_id == original.id,
-        ).order_by(InventoryAdjustmentDetailModel.line_number).with_for_update())).all())
-        if len(original_lines) != 1 or original_lines[0].direction != "decrease" or original_lines[0].movement_line_id is None:
-            _err("Solo se admite corregir la cantidad completa de un ajuste ordinario negativo de una línea.", "adjustment_correction_shape_not_supported")
+            _err(
+                "Solo se admite corregir un ajuste ordinario aplicado.",
+                "adjustment_correction_not_supported",
+            )
+        original_lines = list(
+            (
+                await self._session.scalars(
+                    select(InventoryAdjustmentDetailModel)
+                    .where(
+                        InventoryAdjustmentDetailModel.company_id == company_id,
+                        InventoryAdjustmentDetailModel.adjustment_id == original.id,
+                    )
+                    .order_by(InventoryAdjustmentDetailModel.line_number)
+                    .with_for_update()
+                )
+            ).all()
+        )
+        if (
+            len(original_lines) != 1
+            or original_lines[0].direction != "decrease"
+            or original_lines[0].movement_line_id is None
+        ):
+            _err(
+                "Solo se admite corregir la cantidad completa de un ajuste ordinario negativo de una línea.",
+                "adjustment_correction_shape_not_supported",
+            )
         source = original_lines[0]
-        source_entry = await self._session.scalar(select(InventoryValuationEntryModel).where(
-            InventoryValuationEntryModel.company_id == company_id,
-            InventoryValuationEntryModel.movement_line_id == source.movement_line_id,
-            InventoryValuationEntryModel.kind == "adjustment_out",
-        ).with_for_update())
+        source_entry = await self._session.scalar(
+            select(InventoryValuationEntryModel)
+            .where(
+                InventoryValuationEntryModel.company_id == company_id,
+                InventoryValuationEntryModel.movement_line_id == source.movement_line_id,
+                InventoryValuationEntryModel.kind == "adjustment_out",
+            )
+            .with_for_update()
+        )
         if source_entry is None or source_entry.inventory_delta >= 0:
-            _err("No se puede justificar el valor del movimiento original para compensarlo.", "adjustment_correction_value_unavailable")
-        later = await self._session.scalar(select(InventoryValuationEntryModel.id).where(
-            InventoryValuationEntryModel.company_id == company_id,
-            InventoryValuationEntryModel.inventory_item_id == source.inventory_item_id,
-            InventoryValuationEntryModel.sequence > source_entry.sequence,
-        ).limit(1))
+            _err(
+                "No se puede justificar el valor del movimiento original para compensarlo.",
+                "adjustment_correction_value_unavailable",
+            )
+        later = await self._session.scalar(
+            select(InventoryValuationEntryModel.id)
+            .where(
+                InventoryValuationEntryModel.company_id == company_id,
+                InventoryValuationEntryModel.inventory_item_id == source.inventory_item_id,
+                InventoryValuationEntryModel.sequence > source_entry.sequence,
+            )
+            .limit(1)
+        )
         if later is not None:
-            _err("No se puede compensar automáticamente: el artículo tiene movimientos valorizados posteriores.", "adjustment_correction_later_operations")
+            _err(
+                "No se puede compensar automáticamente: el artículo tiene movimientos valorizados posteriores.",
+                "adjustment_correction_later_operations",
+            )
         source_movement = await self._session.scalar(
             select(InventoryMovementModel)
             .join(
@@ -809,7 +1301,10 @@ class SqlAlchemyInventoryAdjustmentRepository:
             )
         )
         if source_movement is None:
-            _err("No se encontró el movimiento físico original para respaldar la corrección.", "adjustment_correction_movement_unavailable")
+            _err(
+                "No se encontró el movimiento físico original para respaldar la corrección.",
+                "adjustment_correction_movement_unavailable",
+            )
         later_physical = await self._session.scalar(
             select(InventoryMovementLineModel.id)
             .join(
@@ -834,13 +1329,21 @@ class SqlAlchemyInventoryAdjustmentRepository:
             .limit(1)
         )
         if later_physical is not None:
-            _err("No se puede compensar automáticamente: el artículo tiene movimientos físicos posteriores.", "adjustment_correction_later_physical_operations")
-        unit = await self._session.scalar(select(InventoryHandlingUnitModel).where(
-            InventoryHandlingUnitModel.company_id == company_id,
-            InventoryHandlingUnitModel.id == source.handling_unit_id,
-        ))
+            _err(
+                "No se puede compensar automáticamente: el artículo tiene movimientos físicos posteriores.",
+                "adjustment_correction_later_physical_operations",
+            )
+        unit = await self._session.scalar(
+            select(InventoryHandlingUnitModel).where(
+                InventoryHandlingUnitModel.company_id == company_id,
+                InventoryHandlingUnitModel.id == source.handling_unit_id,
+            )
+        )
         if unit is None or unit.packaging_definition_id is None:
-            _err("La corrección requiere una presentación física vigente para crear una unidad en cuarentena.", "adjustment_correction_physical_evidence_required")
+            _err(
+                "La corrección requiere una presentación física vigente para crear una unidad en cuarentena.",
+                "adjustment_correction_physical_evidence_required",
+            )
         line = {
             "line_number": 1,
             "inventory_item_id": source.inventory_item_id,
@@ -854,31 +1357,73 @@ class SqlAlchemyInventoryAdjustmentRepository:
             "documented_unit_cost": None,
         }
         return await self.create_adjustment(
-            company_id=company_id, actor_id=actor_id,
+            company_id=company_id,
+            actor_id=actor_id,
             warehouse_id=source.warehouse_id,
-            operational_date=operational_date, accounting_date=accounting_date,
+            operational_date=operational_date,
+            accounting_date=accounting_date,
             reason=f"Corrección de {original.code}: {reason.strip()}",
             document_reference=document_reference,
-            notes=f"Corrige al ajuste aplicado {original.code}.", lines=[line],
+            notes=f"Corrige al ajuste aplicado {original.code}.",
+            lines=[line],
             correction_of_id=original.id,
         )
 
-    async def get_adjustment(self, company_id: uuid.UUID, adjustment_id: uuid.UUID) -> dict[str, Any] | None:
-        row = await self._session.scalar(select(InventoryAdjustmentModel).where(InventoryAdjustmentModel.company_id == company_id, InventoryAdjustmentModel.id == adjustment_id))
+    async def get_adjustment(
+        self, company_id: uuid.UUID, adjustment_id: uuid.UUID
+    ) -> dict[str, Any] | None:
+        row = await self._session.scalar(
+            select(InventoryAdjustmentModel).where(
+                InventoryAdjustmentModel.company_id == company_id,
+                InventoryAdjustmentModel.id == adjustment_id,
+            )
+        )
         return await self._view(row) if row else None
 
-    async def list_adjustments(self, *, company_id: uuid.UUID, warehouse_id: uuid.UUID | None = None, allowed_warehouse_ids: list[uuid.UUID] | None = None, status: str | None = None, date_from: date | None = None, date_to: date | None = None, limit: int = 50, offset: int = 0) -> tuple[list[dict[str, Any]], int]:
+    async def list_adjustments(
+        self,
+        *,
+        company_id: uuid.UUID,
+        warehouse_id: uuid.UUID | None = None,
+        allowed_warehouse_ids: list[uuid.UUID] | None = None,
+        status: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
         filters = [InventoryAdjustmentModel.company_id == company_id]
         if warehouse_id:
             filters.append(InventoryAdjustmentModel.warehouse_id == warehouse_id)
         if allowed_warehouse_ids is not None:
-            filters.append(InventoryAdjustmentModel.warehouse_id.in_(allowed_warehouse_ids) if allowed_warehouse_ids else False)
+            filters.append(
+                InventoryAdjustmentModel.warehouse_id.in_(allowed_warehouse_ids)
+                if allowed_warehouse_ids
+                else false()
+            )
         if status:
             filters.append(InventoryAdjustmentModel.status == status)
         if date_from:
             filters.append(InventoryAdjustmentModel.operational_date >= date_from)
         if date_to:
             filters.append(InventoryAdjustmentModel.operational_date <= date_to)
-        total = int(await self._session.scalar(select(func.count(InventoryAdjustmentModel.id)).where(*filters)) or 0)
-        rows = list((await self._session.scalars(select(InventoryAdjustmentModel).where(*filters).order_by(InventoryAdjustmentModel.created_at.desc(), InventoryAdjustmentModel.id).limit(limit).offset(offset))).all())
+        total = int(
+            await self._session.scalar(
+                select(func.count(InventoryAdjustmentModel.id)).where(*filters)
+            )
+            or 0
+        )
+        rows = list(
+            (
+                await self._session.scalars(
+                    select(InventoryAdjustmentModel)
+                    .where(*filters)
+                    .order_by(
+                        InventoryAdjustmentModel.created_at.desc(), InventoryAdjustmentModel.id
+                    )
+                    .limit(limit)
+                    .offset(offset)
+                )
+            ).all()
+        )
         return [await self._view(row) for row in rows], total

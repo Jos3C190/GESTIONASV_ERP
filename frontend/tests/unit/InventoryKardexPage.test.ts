@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import KardexPage from '../../src/routes/(app)/inventory/kardex/+page.svelte';
+import { HttpError } from '$lib/api/client';
 
 const mocks = vi.hoisted(() => ({
   getWarehouses: vi.fn(),
@@ -28,7 +29,8 @@ vi.mock('$lib/stores/permissions.svelte', () => ({
       (permission === 'inventory:valuation' && mocks.accessAllBranches)
   }
 }));
-vi.mock('$lib/features/inventory/kardex', () => ({
+vi.mock('$lib/features/inventory/kardex', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   kardexApi: {
     searchItems: mocks.searchItems,
     physical: mocks.physical,
@@ -46,7 +48,9 @@ describe('Kardex page', () => {
       meta: { page: 1, size: 100, total: 1, pages: 1 }
     });
     mocks.searchItems
-      .mockRejectedValueOnce(new Error('Servicio temporalmente no disponible'))
+      .mockRejectedValueOnce(
+        new HttpError('unavailable', 'Servicio temporalmente no disponible', 503)
+      )
       .mockResolvedValue([
         {
           inventory_item_id: 'item-1',
@@ -55,6 +59,40 @@ describe('Kardex page', () => {
           base_unit_symbol: 'cj'
         }
       ]);
+  });
+
+  it('explica los filtros sin coincidencias y permite limpiarlos conservando el corte', async () => {
+    mocks.accessAllBranches = true;
+    mocks.reconciliation.mockResolvedValue({
+      valuation_enabled: true,
+      currency: 'USD',
+      items: [],
+      page: 1,
+      page_size: 50,
+      total: 0
+    });
+    render(KardexPage);
+    await fireEvent.click(screen.getByRole('tab', { name: 'Conciliación' }));
+    await screen.findByText('No hay artículos de inventario para mostrar');
+    const date = (screen.getByLabelText('Corte por fecha de registro') as HTMLInputElement).value;
+    await fireEvent.input(screen.getByLabelText('Producto o código'), {
+      target: { value: 'No existe' }
+    });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Con diferencia o sin base' }));
+    await fireEvent.submit(
+      screen.getByRole('button', { name: 'Consultar corte' }).closest('form')!
+    );
+    expect(await screen.findByText('Sin coincidencias con estos filtros')).toBeInTheDocument();
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Quitar filtros de producto y estado' })
+    );
+    await waitFor(() => expect(screen.getByLabelText('Producto o código')).toHaveValue(''));
+    expect(screen.getByRole('checkbox', { name: 'Con diferencia o sin base' })).not.toBeChecked();
+    expect(mocks.reconciliation).toHaveBeenLastCalledWith(1, 50, {
+      as_of: date,
+      q: '',
+      difference_only: false
+    });
   });
 
   it('carga todas las bodegas usando el límite de paginación permitido por la API', async () => {
@@ -82,27 +120,18 @@ describe('Kardex page', () => {
   it('explica cómo iniciar la consulta y reintenta la búsqueda de artículos', async () => {
     render(KardexPage);
 
-    expect(
-      await screen.findByText(
-        'Para comenzar, elige una bodega, busca un producto o SKU con al menos dos caracteres, selecciona el artículo y consulta sus movimientos.'
-      )
-    ).toBeVisible();
-
-    fireEvent.input(screen.getByLabelText('Producto o SKU'), {
-      target: { value: 'chocolate' }
-    });
+    await screen.findByText('BOD-001 · Bodega Central');
+    await fireEvent.click(screen.getByRole('button', { name: 'Producto' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Servicio temporalmente no disponible'
     );
     expect(mocks.searchItems).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reintentar búsqueda' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
 
     await waitFor(() => expect(mocks.searchItems).toHaveBeenCalledTimes(2));
-    await waitFor(() =>
-      expect(document.querySelector('datalist option[value="Chocolate · PRD-001"]')).not.toBeNull()
-    );
+    expect(await screen.findByRole('button', { name: /Chocolate/ })).toBeInTheDocument();
     expect(screen.queryByText('Servicio temporalmente no disponible')).not.toBeInTheDocument();
   });
 
@@ -140,14 +169,8 @@ describe('Kardex page', () => {
     render(KardexPage);
 
     await screen.findByText('BOD-001 · Bodega Central');
-    const itemInput = screen.getByLabelText('Producto o SKU');
-    fireEvent.input(itemInput, { target: { value: 'chocolate' } });
-    await waitFor(() =>
-      expect(document.querySelector('datalist option[value="Chocolate · PRD-001"]')).not.toBeNull()
-    );
-    fireEvent.input(itemInput, { target: { value: 'Chocolate · PRD-001' } });
-    const queryButton = await screen.findByRole('button', { name: 'Consultar movimientos' });
-    fireEvent.click(queryButton);
+    await fireEvent.click(screen.getByRole('button', { name: 'Producto' }));
+    await fireEvent.click(await screen.findByRole('button', { name: /Chocolate/ }));
     await waitFor(() => expect(mocks.physical).toHaveBeenCalledOnce());
 
     fireEvent.input(screen.getByLabelText('Desde'), { target: { value: '2026-10-10' } });
@@ -209,7 +232,8 @@ describe('Kardex page', () => {
       total: 2
     });
     mocks.valued.mockImplementation((itemId: string) => {
-      if (itemId === 'item-2') return Promise.reject(new Error('Fallo de consulta para Azúcar'));
+      if (itemId === 'item-2')
+        return Promise.reject(new HttpError('unavailable', 'Fallo de consulta para Azúcar', 503));
       return Promise.resolve({
         inventory_item_id: itemId,
         setting: { currency: 'USD', opened_at: '2026-10-01', opening_reference: 'CORTE-1' },
@@ -307,7 +331,7 @@ describe('Kardex page', () => {
     });
     mocks.valued
       .mockResolvedValueOnce(result(1))
-      .mockRejectedValueOnce(new Error('Fallo temporal al cargar página 2'))
+      .mockRejectedValueOnce(new HttpError('unavailable', 'Fallo temporal al cargar página 2', 503))
       .mockResolvedValueOnce(result(2));
     render(KardexPage);
 

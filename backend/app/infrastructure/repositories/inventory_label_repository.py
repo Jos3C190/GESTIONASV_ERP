@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
+from typing import cast as type_cast
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, func, select
@@ -75,11 +76,14 @@ class SqlAlchemyInventoryLabelRepository:
     async def get_by_key(
         self, company_id: uuid.UUID, idempotency_key: str
     ) -> InventoryLabelPrintModel | None:
-        return await self.session.scalar(
-            select(InventoryLabelPrintModel).where(
-                InventoryLabelPrintModel.company_id == company_id,
-                InventoryLabelPrintModel.idempotency_key == idempotency_key,
-            )
+        return type_cast(
+            InventoryLabelPrintModel | None,
+            await self.session.scalar(
+                select(InventoryLabelPrintModel).where(
+                    InventoryLabelPrintModel.company_id == company_id,
+                    InventoryLabelPrintModel.idempotency_key == idempotency_key,
+                )
+            ),
         )
 
     async def preview(
@@ -228,10 +232,12 @@ class SqlAlchemyInventoryLabelRepository:
                 "expiry_date": None,
                 "packaging_snapshot": None,
                 "label_revision": None,
-                "pending_entry": purchase.inventory_workflow == PurchaseInventoryWorkflow.AFTER_PLACEMENT,
+                "pending_entry": purchase.inventory_workflow
+                == PurchaseInventoryWorkflow.AFTER_PLACEMENT,
                 "print_filter": InventoryLabelPrintModel.inventory_lot_detail_id == detail.id,
             }
 
+        assert handling_unit_id is not None
         row = await self._handling_unit_row(company_id, handling_unit_id)
         if row is None:
             unit_without_receipt_lot = await self.session.scalar(
@@ -333,6 +339,7 @@ class SqlAlchemyInventoryLabelRepository:
         if (inventory_lot_detail_id is None) == (handling_unit_id is None):
             raise ValueError("Seleccione exactamente un destino de etiqueta.")
         target_id = inventory_lot_detail_id or handling_unit_id
+        assert target_id is not None
         target_kind = "lot-detail" if inventory_lot_detail_id is not None else "handling-unit"
         from app.infrastructure.repositories.inventory_valuation_repository import (
             SqlAlchemyInventoryValuationRepository,
@@ -341,7 +348,7 @@ class SqlAlchemyInventoryLabelRepository:
         await SqlAlchemyInventoryValuationRepository(self.session).lock(company_id)
         await self._lock_target(company_id, target_kind, target_id)
 
-        payload = {
+        payload: dict[str, object] = {
             "inventory_lot_detail_id": str(inventory_lot_detail_id)
             if inventory_lot_detail_id
             else None,
@@ -429,7 +436,7 @@ class SqlAlchemyInventoryLabelRepository:
 
         await SqlAlchemyInventoryValuationRepository(self.session).lock(company_id)
         await self._lock_target(company_id, "label-confirmation", handling_unit_id)
-        payload = {
+        payload: dict[str, object] = {
             "handling_unit_id": str(handling_unit_id),
             "handling_unit_code": handling_unit_code,
             "label_print_id": str(label_print_id),

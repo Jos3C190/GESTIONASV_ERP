@@ -140,9 +140,7 @@ def _quotation_audit_state(item: PurchaseQuotation) -> dict[str, object]:
                 "unit_id": detail.unit_id,
                 "quantity": str(detail.quantity),
                 "offered_quantity": (
-                    str(detail.offered_quantity)
-                    if detail.offered_quantity is not None
-                    else None
+                    str(detail.offered_quantity) if detail.offered_quantity is not None else None
                 ),
                 "unit_price": str(detail.unit_price),
                 "discount": str(detail.discount),
@@ -233,7 +231,9 @@ async def _visible_purchase_quotation(
     company_id = request_company_id(request)
     if consolidation_id is not None:
         if consolidation_use_cases is None:
-            raise HTTPException(status_code=500, detail="No se pudo validar el consolidado de origen.")
+            raise HTTPException(
+                status_code=500, detail="No se pudo validar el consolidado de origen."
+            )
         consolidation = await consolidation_use_cases.get(company_id, consolidation_id)
         context = await get_branch_context(session, current, company_id)
         if not context.access_all_branches:
@@ -244,9 +244,12 @@ async def _visible_purchase_quotation(
                 if not context.can_access(source.branch_id)
             }
             if inaccessible:
-                raise HTTPException(status_code=403, detail="No tiene acceso a todas las sucursales del consolidado.")
+                raise HTTPException(
+                    status_code=403,
+                    detail="No tiene acceso a todas las sucursales del consolidado.",
+                )
         if consolidation.central_warehouse_id is not None:
-            central_warehouse = await session.execute(
+            central_warehouse_result = await session.execute(
                 select(
                     Warehouse.company_id,
                     Warehouse.branch_id,
@@ -266,19 +269,19 @@ async def _visible_purchase_quotation(
                     Warehouse.operational_status == "active",
                 )
             )
-            central_warehouse = central_warehouse.one_or_none()
+            central_warehouse = central_warehouse_result.one_or_none()
             if central_warehouse is None or central_warehouse.branch_id is None:
                 raise HTTPException(status_code=404, detail="Almacén central no encontrado.")
             if central_warehouse.is_central and not central_warehouse.is_headquarters:
                 raise HTTPException(
                     status_code=409, detail="La bodega central no está vinculada a la matriz."
                 )
-            await resolve_branch_scope(
-                session, current, company_id, central_warehouse.branch_id
-            )
+            await resolve_branch_scope(session, current, company_id, central_warehouse.branch_id)
         item = await use_cases.get_quotation(company_id, quotation_id)
         if item.consolidation_id != consolidation_id:
-            raise HTTPException(status_code=404, detail="Cotización no encontrada en este consolidado.")
+            raise HTTPException(
+                status_code=404, detail="Cotización no encontrada en este consolidado."
+            )
         return company_id, item
 
     await resolve_branch_scope(session, current, company_id, branch_id)
@@ -576,9 +579,7 @@ async def create_purchase_quotation_document_download_url(
         consolidation_id=consolidation_id,
         consolidation_use_cases=consolidations,
     )
-    url, expires_at = await service.download_url(
-        company_id, current.id, quotation_id, document_id
-    )
+    url, expires_at = await service.download_url(company_id, current.id, quotation_id, document_id)
     return DownloadUrlOut(url=url, expires_at=expires_at)
 
 

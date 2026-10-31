@@ -37,7 +37,12 @@
   }
 </script>
 
-<article class="rounded-xl border border-border bg-surface-muted/20 p-3 sm:p-4">
+<article
+  id={`award-offer-${line.id}-${offer.quotation_detail_id}`}
+  tabindex="-1"
+  aria-label={`Oferta ${offer.quotation_code} de ${supplierName} para ${line.product_name}`}
+  class="scroll-mt-24 rounded-xl border border-border bg-surface-muted/20 p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:p-4"
+>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="font-mono text-xs font-semibold text-primary">
@@ -113,9 +118,13 @@
     </div>
   </dl>
 
-  <p class="mt-3 max-w-3xl rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs leading-5 text-foreground-muted">
-    Máximo que puedes adjudicar aquí: <strong class="text-foreground">{formatQuantity(offer.remaining_offer_quantity)} {line.unit_name}</strong>.
-    Este límite considera lo ofrecido, la disponibilidad informada y la demanda pendiente. Si el proveedor no indicó disponibilidad, se toma lo ofrecido.
+  <p
+    class="mt-3 max-w-3xl rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs leading-5 text-foreground-muted"
+  >
+    Máximo que puedes adjudicar aquí: <strong class="text-foreground"
+      >{formatQuantity(offer.remaining_offer_quantity)} {line.unit_name}</strong
+    >. Este límite considera lo ofrecido, la disponibilidad informada y la demanda pendiente. Si el
+    proveedor no indicó disponibilidad, se toma lo ofrecido.
   </p>
 
   {#if Number(offer.quotation_expenses_total) > 0}

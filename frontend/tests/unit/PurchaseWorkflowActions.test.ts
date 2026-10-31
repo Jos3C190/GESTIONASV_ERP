@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PurchaseWorkflowActions from '$lib/features/purchases/components/PurchaseWorkflowActions.svelte';
 import type { Purchase } from '$lib/types/purchase';
@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   verify: vi.fn(),
   cancel: vi.fn(),
   close: vi.fn(),
+  receivingReadiness: vi.fn(),
   hasPermission: vi.fn()
 }));
 
@@ -21,7 +22,8 @@ vi.mock('$lib/api/purchases', () => ({
     receive: mocks.receive,
     verify: mocks.verify,
     cancel: mocks.cancel,
-    close: mocks.close
+    close: mocks.close,
+    receivingReadiness: mocks.receivingReadiness
   }
 }));
 
@@ -63,6 +65,7 @@ describe('PurchaseWorkflowActions', () => {
     mocks.cancel.mockReset();
     mocks.close.mockReset();
     mocks.hasPermission.mockReset();
+    mocks.receivingReadiness.mockReset().mockResolvedValue({ required: false, ready: true });
   });
 
   it('opens draft editing for purchase managers', async () => {
@@ -118,9 +121,9 @@ describe('PurchaseWorkflowActions', () => {
       }
     });
 
-    expect(await screen.findByRole('status')).toHaveTextContent(
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(
       'Para completar la recepción, tu perfil necesita acceso para registrar la mercancía en Inventario y consultar o asignar ubicaciones.'
-    );
+    ));
     expect(screen.queryByRole('button', { name: 'Verificar recepción' })).not.toBeInTheDocument();
     expect(mocks.verify).not.toHaveBeenCalled();
   });

@@ -60,8 +60,16 @@
           </p>
         </div>
         <Badge>{valuationKind[entry.kind] ?? entry.kind}</Badge>
+        {#if entry.operator}<p class="mt-1 text-xs text-foreground-muted">
+            Registró: {entry.operator}
+          </p>{/if}
       </header>
-      <p class="break-all font-mono text-xs text-foreground-muted">{entry.source_reference}</p>
+      <p class="break-all font-mono text-xs text-foreground-muted">
+        {entry.document_reference ?? entry.source_reference}
+      </p>
+      {#if entry.receipt_lot_code}<p class="text-xs text-foreground-muted">
+          Lote: {entry.receipt_lot_code}
+        </p>{/if}
       <dl class="grid grid-cols-2 gap-3 rounded-lg bg-surface-muted/50 p-3 text-sm">
         <div>
           <dt class="text-xs text-foreground-muted">Movimiento físico</dt>
@@ -86,9 +94,17 @@
           </dd>
         </div>
         <div class="col-span-2 border-t border-border pt-2">
-          <dt class="text-xs text-foreground-muted">Costo promedio vigente</dt>
+          <dt class="text-xs text-foreground-muted">Promedio después del movimiento</dt>
           <dd class="mt-1 font-semibold tabular-nums">
-            {kardexMoney(entry.average_unit_cost, data.setting?.currency)}
+            {kardexMoney(entry.average_unit_cost, data.setting?.currency, 6)}
+          </dd>
+        </div>
+        <div class="col-span-2">
+          <dt class="text-xs text-foreground-muted">Costo unitario aplicado</dt>
+          <dd class="mt-1 font-semibold tabular-nums">
+            {entry.applied_unit_cost == null
+              ? 'No aplica / dato histórico no disponible'
+              : kardexMoney(entry.applied_unit_cost, data.setting?.currency, 6)}
           </dd>
         </div>
       </dl>
@@ -127,7 +143,8 @@
         <th scope="col" class="px-3 py-3 text-right">Cantidad</th>
         <th scope="col" class="px-3 py-3 text-right">Cambio de valor</th>
         <th scope="col" class="px-3 py-3 text-right">Saldo de cantidad / valor</th>
-        <th scope="col" class="px-3 py-3 text-right">Costo promedio</th>
+        <th scope="col" class="px-3 py-3 text-right">Promedio histórico</th>
+        <th scope="col" class="px-3 py-3 text-right">Costo aplicado</th>
       </tr>
     </thead>
     <tbody class="divide-y divide-border">
@@ -141,9 +158,15 @@
           </td>
           <td class="px-3 py-3">
             <Badge>{valuationKind[entry.kind] ?? entry.kind}</Badge>
+            {#if entry.operator}<p class="mt-1 text-xs text-foreground-muted">
+                Registró: {entry.operator}
+              </p>{/if}
             <p class="mt-2 break-all font-mono text-xs text-foreground-muted">
-              {entry.source_reference}
+              {entry.document_reference ?? entry.source_reference}
             </p>
+            {#if entry.receipt_lot_code}<p class="mt-1 text-xs text-foreground-muted">
+                Lote: {entry.receipt_lot_code}
+              </p>{/if}
             {#if entry.retaceo_id && canReadRetaceos}
               <a
                 class="mt-1 inline-block text-xs text-primary underline-offset-4 hover:underline"
@@ -179,7 +202,12 @@
             >
           </td>
           <td class="px-3 py-3 text-right tabular-nums"
-            >{kardexMoney(entry.average_unit_cost, data.setting?.currency)}</td
+            >{kardexMoney(entry.average_unit_cost, data.setting?.currency, 6)}</td
+          >
+          <td class="px-3 py-3 text-right tabular-nums"
+            >{entry.applied_unit_cost == null
+              ? '—'
+              : kardexMoney(entry.applied_unit_cost, data.setting?.currency, 6)}</td
           >
         </tr>
       {/each}

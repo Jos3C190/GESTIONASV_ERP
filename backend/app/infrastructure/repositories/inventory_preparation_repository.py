@@ -34,7 +34,7 @@ from app.infrastructure.repositories.purchase_repository import SqlAlchemyPurcha
 
 
 class SqlAlchemyInventoryPreparationRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.inventory = SqlAlchemyInventoryRepository(session)
 
@@ -46,7 +46,7 @@ class SqlAlchemyInventoryPreparationRepository:
         skip: int,
         limit: int,
         search: str = "",
-    ):
+    ) -> tuple[list[dict[str, Any]], int]:
         conditions = [
             InventoryHandlingUnitModel.company_id == company_id,
             InventoryHandlingUnitModel.warehouse_id == warehouse_id,
@@ -108,7 +108,7 @@ class SqlAlchemyInventoryPreparationRepository:
             )
         return result, int(total or 0)
 
-    async def _label_confirmed(self, unit) -> bool:
+    async def _label_confirmed(self, unit: InventoryHandlingUnitModel) -> bool:
         return (
             await self.session.scalar(
                 select(InventoryLabelConfirmationModel.id).where(
@@ -122,8 +122,10 @@ class SqlAlchemyInventoryPreparationRepository:
             is not None
         )
 
-    async def _scan_matches(self, unit, scan: str) -> bool:
+    async def _scan_matches(self, unit: InventoryHandlingUnitModel, scan: str) -> bool:
         detail = await self.session.get(InventoryLotDetailModel, unit.inventory_lot_detail_id)
+        if detail is None:
+            raise NotFoundError("Detalle de recepción no encontrado.")
         product = await self.session.scalar(
             select(ProductModel)
             .where(
@@ -132,6 +134,8 @@ class SqlAlchemyInventoryPreparationRepository:
             )
             .execution_options(include_deleted=True)
         )
+        if product is None:
+            raise NotFoundError("Producto de recepción no encontrado.")
         if scan.strip().upper() in {
             value.upper()
             for value in (unit.code, detail.code, product.sku, product.internal_code)
@@ -168,7 +172,7 @@ class SqlAlchemyInventoryPreparationRepository:
         actor_id: uuid.UUID,
         action: str,
         command: dict[str, Any],
-    ):
+    ) -> tuple[dict[str, Any], bool]:
         await SqlAlchemyInventoryValuationRepository(self.session).lock(company_id)
         payload = {"unit_id": str(unit_id), "action": action, **command}
         fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
@@ -225,7 +229,7 @@ class SqlAlchemyInventoryPreparationRepository:
         return result, True
 
     @staticmethod
-    def _clear_measurement(unit):
+    def _clear_measurement(unit: InventoryHandlingUnitModel) -> None:
         for field in (
             "actual_gross_weight_kg",
             "actual_length_m",
@@ -239,7 +243,7 @@ class SqlAlchemyInventoryPreparationRepository:
         unit.measurement_status = "incomplete"
         unit.measurement_source = "split_estimate"
 
-    async def _split(self, unit, quantity):
+    async def _split(self, unit: InventoryHandlingUnitModel, quantity: Decimal) -> dict[str, Any]:
         if quantity <= 0 or quantity >= unit.quantity_base:
             raise ConflictError(
                 "La porción debe ser menor que la cantidad pendiente.",
@@ -276,26 +280,14 @@ class SqlAlchemyInventoryPreparationRepository:
             "movement_id": None,
         }
 
-    async def _place(self, unit, quantity, command, actor_id):
-        if quantity != unit.quantity_base:
-            raise ConflictError(
-                "Prepara y etiqueta la porción antes de colocar una cantidad parcial.",
-                code="preparation_whole_unit_required",
-            )
-        if unit.measurement_status != "verified" or not await self._label_confirmed(unit):
-            raise ConflictError(
-                "Verifica las medidas y confirma la etiqueta colocada antes de ingresar.",
-                code="preparation_review_required",
-            )
-        if (
-            unit.expiry_date
-            and unit.expiry_date
-            < datetime.now(UTC).astimezone(ZoneInfo("America/El_Salvador")).date()
-        ):
-            raise ConflictError(
-                "El lote está vencido y requiere revisión; no se ingresará como disponible.",
-                code="preparation_expired",
-            )
+    async def _place(
+        self,
+        unit: InventoryHandlingUnitModel,
+        quantity: Decimal,
+        command: dict[str, Any],
+        actor_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        await self._validate_placement_unit(unit, quantity)
         destination = await self.session.scalar(
             select(Location).where(
                 Location.warehouse_id == unit.warehouse_id,
@@ -318,15 +310,19 @@ class SqlAlchemyInventoryPreparationRepository:
             )
             .with_for_update()
         )
-        if detail.entry_value is None or detail.entry_currency is None:
+        if detail is None or detail.entry_value is None or detail.entry_currency is None:
             raise ConflictError(
                 "La recepción no tiene un costo de ingreso confirmado.",
                 code="preparation_cost_required",
             )
         lot = await self.session.get(InventoryLotModel, unit.inventory_lot_id)
+        if lot is None:
+            raise NotFoundError("Lote de recepción no encontrado.")
         purchase = await SqlAlchemyPurchaseRepository(self.session).get_purchase(
             unit.company_id, lot.purchase_id
         )
+        if purchase is None:
+            raise NotFoundError("Compra de recepción no encontrada.")
         gateway = SqlAlchemyPurchaseInventoryGateway(self.session)
         retaceo, _ = await gateway._final_receipt_costs(purchase)
         posted_qty, posted_value = (
@@ -387,6 +383,8 @@ class SqlAlchemyInventoryPreparationRepository:
             purchase, retaceo, movement["id"], actor_id, detail.entry_currency, {}
         )
         model = await self.session.get(PurchaseModel, purchase.id)
+        if model is None:
+            raise NotFoundError("Compra de recepción no encontrada.")
         if model.inventory_movement_id is None:
             model.inventory_movement_id = movement["id"]
         return {
@@ -396,3 +394,26 @@ class SqlAlchemyInventoryPreparationRepository:
             "quantity_base": str(quantity),
             "movement_id": str(movement["id"]),
         }
+
+    async def _validate_placement_unit(
+        self, unit: InventoryHandlingUnitModel, quantity: Decimal
+    ) -> None:
+        if quantity != unit.quantity_base:
+            raise ConflictError(
+                "Prepara y etiqueta la porción antes de colocar una cantidad parcial.",
+                code="preparation_whole_unit_required",
+            )
+        if unit.measurement_status != "verified" or not await self._label_confirmed(unit):
+            raise ConflictError(
+                "Verifica las medidas y confirma la etiqueta colocada antes de ingresar.",
+                code="preparation_review_required",
+            )
+        if (
+            unit.expiry_date
+            and unit.expiry_date
+            < datetime.now(UTC).astimezone(ZoneInfo("America/El_Salvador")).date()
+        ):
+            raise ConflictError(
+                "El lote está vencido y requiere revisión; no se ingresará como disponible.",
+                code="preparation_expired",
+            )

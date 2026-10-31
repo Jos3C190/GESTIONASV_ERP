@@ -5,8 +5,10 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
+from typing import cast as type_cast
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, false, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.inventory import InventoryItem, InventoryOperationError
@@ -39,6 +41,12 @@ def _attach_lot_detail_origins(
     for movement_line in movement_lines:
         movement_line["inventory_lot_id"] = lot_id
         purchase_detail_id = movement_line["purchase_detail_id"]
+        if not isinstance(purchase_detail_id, uuid.UUID):
+            raise InventoryOperationError(
+                "La línea no identifica su recepción.",
+                code="purchase_receipt_lot_detail_missing",
+                status_code=409,
+            )
         lot_detail_id = lot_detail_by_purchase_detail.get(purchase_detail_id)
         if lot_detail_id is None:
             raise InventoryOperationError(
@@ -78,10 +86,13 @@ class SqlAlchemyPurchaseInventoryGateway(PurchaseInventoryGateway):
         )
 
     async def valuation_currency(self, company_id: uuid.UUID) -> str | None:
-        return await self._session.scalar(
-            select(InventoryValuationSettingModel.currency).where(
-                InventoryValuationSettingModel.company_id == company_id,
-            )
+        return type_cast(
+            str | None,
+            await self._session.scalar(
+                select(InventoryValuationSettingModel.currency).where(
+                    InventoryValuationSettingModel.company_id == company_id,
+                )
+            ),
         )
 
     async def _receipt_valuation_currency(self, purchase: Purchase) -> str:
@@ -338,8 +349,10 @@ class SqlAlchemyPurchaseInventoryGateway(PurchaseInventoryGateway):
                     Location.lifecycle_status == "active",
                     Location.deleted_at.is_(None),
                     or_(
-                        purchase.inventory_workflow
-                        is not PurchaseInventoryWorkflow.AFTER_PLACEMENT,
+                        true()
+                        if purchase.inventory_workflow
+                        is not PurchaseInventoryWorkflow.AFTER_PLACEMENT
+                        else false(),
                         Location.location_type == "receiving",
                     ),
                     Warehouse.is_active.is_(True),
@@ -473,8 +486,13 @@ class SqlAlchemyPurchaseInventoryGateway(PurchaseInventoryGateway):
         return movement_id
 
     async def _stage_receipt_units(
-        self, purchase, lot, lot_details, movement_lines, valuation_currency
-    ):
+        self,
+        purchase: Purchase,
+        lot: InventoryLotModel,
+        lot_details: list[InventoryLotDetailModel],
+        movement_lines: list[dict[str, Any]],
+        valuation_currency: str,
+    ) -> None:
         by_id = {detail.id: detail for detail in lot_details}
         for detail in lot_details:
             detail.entry_value = sum(

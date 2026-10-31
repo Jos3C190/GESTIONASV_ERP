@@ -151,8 +151,7 @@ class SqlAlchemyPurchaseQuotationDocumentRepository:
                 and_(
                     PurchaseQuotationModel.id
                     == PurchaseQuotationDocumentModel.purchase_quotation_id,
-                    PurchaseQuotationModel.company_id
-                    == PurchaseQuotationDocumentModel.company_id,
+                    PurchaseQuotationModel.company_id == PurchaseQuotationDocumentModel.company_id,
                 ),
             )
             .where(

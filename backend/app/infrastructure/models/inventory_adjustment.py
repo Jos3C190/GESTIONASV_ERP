@@ -124,7 +124,10 @@ class InventoryAdjustmentModel(UUIDPKMixin, TimestampMixin, Base):
             name="fk_inventory_adjustments_canceller_company",
             ondelete="RESTRICT",
         ),
-        CheckConstraint("status IN ('draft','approved','applied','cancelled')", name="ck_inventory_adjustments_status"),
+        CheckConstraint(
+            "status IN ('draft','approved','applied','cancelled')",
+            name="ck_inventory_adjustments_status",
+        ),
         CheckConstraint("version >= 1", name="ck_inventory_adjustments_version"),
         CheckConstraint(
             "(status = 'draft' AND approved_at IS NULL AND applied_at IS NULL) OR "
@@ -243,10 +246,16 @@ class InventoryAdjustmentDetailModel(UUIDPKMixin, TimestampMixin, Base):
             name="fk_inventory_adjustment_details_movement_line",
             ondelete="RESTRICT",
         ),
-        UniqueConstraint("adjustment_id", "line_number", name="uq_inventory_adjustment_line_number"),
+        UniqueConstraint(
+            "adjustment_id", "line_number", name="uq_inventory_adjustment_line_number"
+        ),
         UniqueConstraint("company_id", "id", name="uq_inventory_adjustment_details_company_id"),
-        CheckConstraint("line_number > 0 AND quantity_base > 0", name="ck_inventory_adjustment_details_positive"),
-        CheckConstraint("direction IN ('increase','decrease')", name="ck_inventory_adjustment_details_direction"),
+        CheckConstraint(
+            "line_number > 0 AND quantity_base > 0", name="ck_inventory_adjustment_details_positive"
+        ),
+        CheckConstraint(
+            "direction IN ('increase','decrease')", name="ck_inventory_adjustment_details_direction"
+        ),
         CheckConstraint(
             "stock_status IN ('available','quarantine','damaged','in_transit')",
             name="ck_inventory_adjustment_details_stock_status",
@@ -264,7 +273,9 @@ class InventoryAdjustmentDetailModel(UUIDPKMixin, TimestampMixin, Base):
             "(stock_status <> 'in_transit' AND transfer_detail_id IS NULL)))",
             name="ck_inventory_adjustment_details_direction_fields",
         ),
-        Index("ix_inventory_adjustment_details_header", "company_id", "adjustment_id", "line_number"),
+        Index(
+            "ix_inventory_adjustment_details_header", "company_id", "adjustment_id", "line_number"
+        ),
     )
 
 
@@ -301,12 +312,16 @@ class InventoryAdjustmentDocumentModel(UUIDPKMixin, TimestampMixin, Base):
             name="fk_inventory_adjustment_documents_linker_company",
             ondelete="RESTRICT",
         ),
-        UniqueConstraint("company_id", "adjustment_id", "document_id", name="uq_inventory_adjustment_document"),
+        UniqueConstraint(
+            "company_id", "adjustment_id", "document_id", name="uq_inventory_adjustment_document"
+        ),
         CheckConstraint(
             "detached_at IS NULL OR detached_by_id IS NOT NULL",
             name="ck_inventory_adjustment_documents_detached_actor",
         ),
-        Index("ix_inventory_adjustment_documents_active", "company_id", "adjustment_id", "detached_at"),
+        Index(
+            "ix_inventory_adjustment_documents_active", "company_id", "adjustment_id", "detached_at"
+        ),
     )
 
 
@@ -336,5 +351,10 @@ class InventoryAdjustmentEventModel(UUIDPKMixin, Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint("version >= 1", name="ck_inventory_adjustment_events_version"),
-        Index("ix_inventory_adjustment_events_adjustment", "company_id", "adjustment_id", "occurred_at"),
+        Index(
+            "ix_inventory_adjustment_events_adjustment",
+            "company_id",
+            "adjustment_id",
+            "occurred_at",
+        ),
     )

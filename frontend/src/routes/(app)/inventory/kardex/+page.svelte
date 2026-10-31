@@ -8,6 +8,8 @@
   import PhysicalKardexList from '$lib/features/inventory/components/PhysicalKardexList.svelte';
   import KardexReconciliationList from '$lib/features/inventory/components/KardexReconciliationList.svelte';
   import ValuedKardexList from '$lib/features/inventory/components/ValuedKardexList.svelte';
+  import KardexStatementTools from '$lib/features/inventory/components/KardexStatementTools.svelte';
+  import KardexReconciliationControls from '$lib/features/inventory/components/KardexReconciliationControls.svelte';
   import { getWarehouses } from '$lib/services/warehouses';
   import { company } from '$lib/stores/company.svelte';
   import { branch } from '$lib/stores/branch.svelte';
@@ -17,6 +19,7 @@
   import {
     kardexApi,
     kardexErrorMessage,
+    kardexReportPath,
     type KardexItemOption,
     type PhysicalKardex,
     type Reconciliation,
@@ -54,6 +57,7 @@
   let reconciliationLoading = $state(false);
   let reconciliationError = $state<string | null>(null);
   let reconciliationPage = $state(1);
+  let reconciliationFilters = $state({ as_of: dateToday(), q: '', difference_only: false });
   let valuationData = $state<ValuedKardex | null>(null);
   let valuationLoading = $state(false);
   let valuationError = $state<string | null>(null);
@@ -374,30 +378,63 @@
   }
 
   async function loadReconciliation(nextPage = 1) {
+    if (!canValue) return;
     if (nextPage !== reconciliationPage || reconciliationError)
       focusResultsHeading('reconciliation-title');
     const sequence = ++reconciliationRequestSequence;
-    const identity = JSON.stringify([company.id, branch.id, canValue, nextPage, 50]);
+    const identity = JSON.stringify([
+      company.id,
+      branch.id,
+      canValue,
+      nextPage,
+      50,
+      reconciliationFilters
+    ]);
     reconciliationPage = nextPage;
     reconciliationLoading = true;
     reconciliationError = null;
+    reconciliation = null;
     try {
-      const result = await kardexApi.reconciliation(reconciliationPage, 50);
+      const result = await kardexApi.reconciliation(reconciliationPage, 50, reconciliationFilters);
       if (
         sequence === reconciliationRequestSequence &&
-        identity === JSON.stringify([company.id, branch.id, canValue, reconciliationPage, 50])
+        identity ===
+          JSON.stringify([
+            company.id,
+            branch.id,
+            canValue,
+            reconciliationPage,
+            50,
+            reconciliationFilters
+          ])
       )
         reconciliation = result;
     } catch (cause) {
       if (
         sequence === reconciliationRequestSequence &&
-        identity === JSON.stringify([company.id, branch.id, canValue, reconciliationPage, 50])
+        identity ===
+          JSON.stringify([
+            company.id,
+            branch.id,
+            canValue,
+            reconciliationPage,
+            50,
+            reconciliationFilters
+          ])
       )
         reconciliationError = errorMessage(cause, 'No se pudo conciliar el inventario.');
     } finally {
       if (
         sequence === reconciliationRequestSequence &&
-        identity === JSON.stringify([company.id, branch.id, canValue, reconciliationPage, 50])
+        identity ===
+          JSON.stringify([
+            company.id,
+            branch.id,
+            canValue,
+            reconciliationPage,
+            50,
+            reconciliationFilters
+          ])
       )
         reconciliationLoading = false;
     }
@@ -531,8 +568,9 @@
       <p class="text-sm text-foreground-muted">Inventario</p>
       <h1 class="mt-2 text-2xl font-semibold tracking-tight text-foreground">Kardex</h1>
       <p class="mt-2 text-sm leading-6 text-foreground-muted">
-        Consulta cada movimiento físico por bodega y revisa los costos desde el registro de
-        valoración de la empresa.
+        {canValue
+          ? 'Consulta cada movimiento físico por bodega y revisa los costos desde el registro de valoración de la empresa.'
+          : 'Consulta las entradas, salidas y cambios de ubicación de tus bodegas autorizadas.'}
       </p>
     </div>
     {#if view === 'physical' && physicalData}
@@ -632,7 +670,7 @@
           </div>
         {:else if warehousesError}
           <div class="rounded-lg border border-danger/30 bg-danger/10 p-4">
-            <p role="alert" class="mb-3 text-sm text-danger">{warehousesError}</p>
+            <p role="alert" class="mb-3 text-sm text-foreground">{warehousesError}</p>
             <Button variant="secondary" onclick={() => void loadWarehouses(true)}>Reintentar</Button
             >
             {#if appPage.url.searchParams.has('warehouse_id')}
@@ -753,14 +791,17 @@
                   bind:value={movementType}
                   onchange={invalidatePhysical}
                 >
-                  <option value="">Todos los tipos</option><option value="receipt">Recepción</option
-                  ><option value="putaway">Ubicación</option><option value="transfer"
-                    >Traslado</option
-                  ><option value="pick">Preparación de salida</option><option value="shipment"
-                    >Despacho</option
-                  ><option value="adjustment_in">Ajuste de entrada</option><option
-                    value="adjustment_out">Ajuste de salida</option
-                  ><option value="reversal">Reversión</option>
+                  <option value="">Todos los tipos</option><option value="opening"
+                    >Saldo inicial</option
+                  ><option value="receipt">Recepción</option><option value="putaway"
+                    >Ubicación</option
+                  ><option value="transfer">Traslado</option><option value="pick"
+                    >Preparación de salida</option
+                  ><option value="shipment">Despacho</option><option value="adjustment_in"
+                    >Ajuste de entrada</option
+                  ><option value="adjustment_out">Ajuste de salida</option><option value="reversal"
+                    >Reversión</option
+                  >
                 </select>
               </label>
               <label class="text-sm font-medium text-foreground" for="kardex-lot"
@@ -798,7 +839,7 @@
             </div>
           </details>
           {#if itemSearchError}<div class="rounded-lg border border-danger/30 bg-danger/10 p-4">
-              <p role="alert" class="mb-3 text-sm text-danger">{itemSearchError}</p>
+              <p role="alert" class="mb-3 text-sm text-foreground">{itemSearchError}</p>
               <Button variant="secondary" onclick={() => void loadWarehouses(true)}
                 >Reintentar enlace</Button
               >
@@ -825,7 +866,7 @@
             </h3>
           {/if}
           {#if physicalError}<div class="rounded-lg border border-danger/30 bg-danger/10 p-4">
-              <p role="alert" class="mb-3 text-sm text-danger">{physicalError}</p>
+              <p role="alert" class="mb-3 text-sm text-foreground">{physicalError}</p>
               <Button
                 variant="secondary"
                 onclick={() => void loadPhysical(failedPhysicalPage, true)}
@@ -876,6 +917,20 @@
                   : ''}
               </p>
             </section>
+            <KardexStatementTools
+              context={physicalData.context}
+              path={kardexReportPath('physical', {
+                warehouse_id: physicalData.warehouse_id,
+                inventory_item_id: physicalData.inventory_item_id,
+                period_from: physicalData.period_from,
+                period_to: physicalData.period_to,
+                movement_type: movementType,
+                lot_code: lotCode.trim(),
+                source_reference: sourceReference.trim()
+              })}
+              code={`Kardex-fisico-${selectedItem?.sku ?? 'producto'}-${physicalData.period_to}`}
+              scope={`Bodega: ${physicalData.context?.warehouse_name ?? warehouses.find((row) => row.id === selectedWarehouse)?.name ?? ''} · Historial físico sin costos.`}
+            />
             {#if physicalData.items.length === 0}<div
                 class="rounded-lg border border-dashed border-border p-8 text-center"
               >
@@ -932,6 +987,16 @@
             compartido; los traslados internos no lo cambian.
           </p>
         </div>
+        <KardexReconciliationControls
+          asOf={reconciliationFilters.as_of}
+          query={reconciliationFilters.q}
+          differenceOnly={reconciliationFilters.difference_only}
+          loading={reconciliationLoading}
+          onquery={(filters) => {
+            reconciliationFilters = filters;
+            void loadReconciliation(1);
+          }}
+        />
         {#if reconciliationLoading}<div role="status" class="space-y-3">
             <p class="text-sm text-foreground-muted">
               Tomando una lectura consistente de las existencias…
@@ -941,12 +1006,59 @@
         {:else if reconciliationError}<div
             class="rounded-lg border border-danger/30 bg-danger/10 p-4"
           >
-            <p role="alert" class="mb-3 text-sm text-danger">{reconciliationError}</p>
+            <p role="alert" class="mb-3 text-sm text-foreground">{reconciliationError}</p>
             <Button variant="secondary" onclick={() => void loadReconciliation(reconciliationPage)}
               >Reintentar</Button
             >
           </div>
         {:else if reconciliation}
+          {#if reconciliation.balance_known === false}<p
+              role="status"
+              class="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm"
+            >
+              El corte solicitado es anterior a la base de valoración. Los saldos no se pueden
+              reconstruir para esa fecha.
+            </p>{/if}
+          <dl class="grid grid-cols-2 gap-3 border-y border-border py-4 sm:grid-cols-4">
+            <div>
+              <dt class="text-xs text-foreground-muted">Valor del resultado</dt>
+              <dd class="mt-1 font-semibold tabular-nums">
+                {money(reconciliation.inventory_value, reconciliation.currency ?? undefined)}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs text-foreground-muted">Productos conciliados</dt>
+              <dd class="mt-1 font-semibold tabular-nums">
+                {reconciliation.reconciled_items ?? '—'}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs text-foreground-muted">Con diferencia</dt>
+              <dd class="mt-1 font-semibold tabular-nums">
+                {reconciliation.discrepant_items ?? '—'}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs text-foreground-muted">Sin base verificable</dt>
+              <dd class="mt-1 font-semibold tabular-nums">
+                {reconciliation.unvalued_items ?? '—'}
+              </dd>
+            </div>
+          </dl>
+          {#if reconciliation.valuation_enabled && reconciliation.balance_known !== false && (reconciliation.unvalued_items ?? 0) > 0}
+            <p
+              class="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-foreground"
+            >
+              Hay productos sin valoración verificable. El importe del resultado suma únicamente los
+              valores registrados.
+            </p>
+          {/if}
+          <KardexStatementTools
+            context={reconciliation.context}
+            path={kardexReportPath('reconciliation', reconciliationFilters)}
+            code={`Conciliacion-${reconciliation.as_of ?? 'actual'}`}
+            scope={`Toda la empresa · Corte por fecha de registro: ${(reconciliation.as_of ?? reconciliationFilters.as_of).split('-').reverse().join('/')}`}
+          />
           {#if !reconciliation.valuation_enabled}<div
               class="rounded-lg border border-warning/30 bg-warning/10 p-4"
             >
@@ -960,11 +1072,32 @@
                 href="/inventory/valuation">Abrir valoración de inventario</a
               >
             </div>{/if}
-          {#if reconciliation.items.length === 0}<p
-              class="rounded-lg border border-dashed border-border p-8 text-center text-sm text-foreground-muted"
+          {#if reconciliation.items.length === 0}<div
+              class="rounded-lg border border-dashed border-border p-6 text-center"
             >
-              No hay artículos de inventario para mostrar.
-            </p>{:else}
+              <p class="font-medium text-foreground">
+                {reconciliationFilters.q || reconciliationFilters.difference_only
+                  ? 'Sin coincidencias con estos filtros'
+                  : 'No hay artículos de inventario para mostrar'}
+              </p>
+              {#if reconciliationFilters.q || reconciliationFilters.difference_only}
+                <p class="mt-2 text-sm text-foreground-muted">
+                  Prueba otro producto o consulta todos los estados de conciliación.
+                </p>
+                <Button
+                  class="mt-4"
+                  variant="secondary"
+                  onclick={() => {
+                    reconciliationFilters = {
+                      ...reconciliationFilters,
+                      q: '',
+                      difference_only: false
+                    };
+                    void loadReconciliation(1);
+                  }}>Quitar filtros de producto y estado</Button
+                >
+              {/if}
+            </div>{:else}
             <KardexReconciliationList
               data={reconciliation}
               page={reconciliationPage}
@@ -1006,7 +1139,7 @@
             href="/inventory/valuation">Abrir configuración y saldos</a
           >
         </div>
-        <div class="grid gap-4 sm:grid-cols-3">
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_auto]">
           <label class="text-sm font-medium text-foreground" for="value-from"
             >Desde<input
               id="value-from"
@@ -1036,8 +1169,9 @@
               }}
             /></label
           >
-          <div class="flex items-end">
+          <div class="flex items-end sm:col-span-2 xl:col-span-1">
             <Button
+              class="whitespace-nowrap"
               disabled={!valuationItemId || valuationLoading || Boolean(periodError)}
               onclick={() => void showValued(valuationItemId, valuationItemName)}
               >{valuationLoading ? 'Consultando…' : 'Actualizar período'}</Button
@@ -1060,7 +1194,7 @@
           </p>{/if}
         {#if valuationError}
           <div class="rounded-lg border border-danger/30 bg-danger/10 p-4">
-            <p role="alert" class="mb-3 text-sm text-danger">{valuationError}</p>
+            <p role="alert" class="mb-3 text-sm text-foreground">{valuationError}</p>
             <Button
               variant="secondary"
               onclick={() => void showValued(valuationItemId, valuationItemName, valuationPage)}
@@ -1097,6 +1231,16 @@
               </p>
             </div>
           </div>
+          <KardexStatementTools
+            context={valuationData.context}
+            path={kardexReportPath('valuation', {
+              inventory_item_id: valuationData.inventory_item_id,
+              period_from: valuationData.period_from,
+              period_to: valuationData.period_to
+            })}
+            code={`Kardex-valorado-${valuationData.context?.sku ?? 'producto'}-${valuationData.period_to}`}
+            scope="Toda la empresa · Los costos de cada movimiento son históricos. La bodega seleccionada no modifica el promedio global."
+          />
           {#if valuationData.entries.length === 0}<p
               class="rounded-lg border border-dashed border-border p-8 text-center text-sm text-foreground-muted"
             >

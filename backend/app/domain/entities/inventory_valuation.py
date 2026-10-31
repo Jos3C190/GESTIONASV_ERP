@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal, localcontext
+from typing import NoReturn
 
 from app.domain.entities.inventory import InventoryOperationError
 
@@ -25,7 +26,7 @@ def amount(value: Decimal) -> Decimal:
     return value.quantize(QUANTUM, rounding=ROUND_HALF_UP)
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise InventoryOperationError(message, code="inventory_valuation_invalid", status_code=409)
 
 
@@ -74,7 +75,7 @@ def _project(events: list[ValuationEvent]) -> ValuationProjection:  # noqa: C901
         if event.quantity != amount(event.quantity) or event.value != amount(event.value):
             fail("Las cantidades y valores admiten hasta seis decimales.")
         if event.kind == "cost_adjustment":
-            source = known.get(event.original_id)
+            source = known.get(event.original_id) if event.original_id is not None else None
             if source is None or source.kind not in INBOUND or event.quantity != ZERO:
                 fail("El ajuste debe referenciar una entrada anterior sin modificar cantidades.")
             revised[source.id] = revised.get(source.id, source.value) + event.value
@@ -107,7 +108,7 @@ def _project(events: list[ValuationEvent]) -> ValuationProjection:  # noqa: C901
             result.value -= cost
             result.costs[event.id] = cost
         elif event.kind == "customer_return":
-            source = seen.get(event.original_id)
+            source = seen.get(event.original_id) if event.original_id is not None else None
             if source is None or source.kind != "issue" or event.value != ZERO:
                 fail("La devolución de cliente requiere su salida original.")
             returned = result.returned_quantities.get(source.id, ZERO)
@@ -131,7 +132,7 @@ def _project(events: list[ValuationEvent]) -> ValuationProjection:  # noqa: C901
             result.value += cost
             result.costs[event.id] = cost
         elif event.kind == "supplier_credit":
-            source = seen.get(event.original_id)
+            source = seen.get(event.original_id) if event.original_id is not None else None
             if source is None or source.kind != "supplier_return":
                 fail("El crédito requiere su devolución a proveedor.")
             if event.quantity != ZERO or event.value < ZERO or source.id in result.supplier_credits:

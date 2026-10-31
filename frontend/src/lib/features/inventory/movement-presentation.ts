@@ -31,7 +31,7 @@ export function movementTypeLabel(t: string): { label: string; color: string; bg
 }
 
 export function movementIcon(t: string): string {
-  if (['inbound', 'receipt', 'adjustment_in'].includes(t)) return '↓';
+  if (['opening', 'inbound', 'receipt', 'adjustment_in'].includes(t)) return '↓';
   if (['outbound', 'pick', 'shipment', 'adjustment_out'].includes(t)) return '↑';
   if (['transfer', 'putaway'].includes(t)) return '↔';
   return '⚙';

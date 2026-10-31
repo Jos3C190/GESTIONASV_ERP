@@ -135,6 +135,29 @@ function findMobileList(container: HTMLElement): HTMLElement {
 }
 
 describe('Kardex list presentations', () => {
+  it('conserva la precisión del promedio histórico y distingue el costo de la entrada', () => {
+    const data = {
+      ...valuedData,
+      entries: [
+        {
+          ...valuedData.entries[0]!,
+          average_unit_cost: '13.333333',
+          applied_unit_cost: '15.000000',
+          document_reference: 'COM-00027',
+          receipt_lot_code: 'LOT-COM-00027',
+          operator: 'rodrigo'
+        }
+      ]
+    };
+    const { container } = render(ValuedKardexList, { data, loading: false, onPageChange: vi.fn() });
+    const list = within(findMobileList(container));
+    expect(list.getByText('USD 13.333333')).toBeInTheDocument();
+    expect(list.getByText('USD 15.00')).toBeInTheDocument();
+    expect(list.getByText('Registró: rodrigo')).toBeInTheDocument();
+    expect(list.getByText('COM-00027')).toBeInTheDocument();
+    expect(list.getByText('Lote: LOT-COM-00027')).toBeInTheDocument();
+    expect(list.getByText('Promedio después del movimiento')).toBeInTheDocument();
+  });
   it('muestra el recorrido físico en una tarjeta y abre el detalle', async () => {
     const onOpenDetail = vi.fn();
     const { container } = render(PhysicalKardexList, {
@@ -171,7 +194,9 @@ describe('Kardex list presentations', () => {
     const mobileList = findMobileList(container);
     expect(within(mobileList).getByText('Cantidad física')).toBeInTheDocument();
     expect(within(mobileList).getByText('USD 50.00')).toBeInTheDocument();
-    const historyButton = within(mobileList).getByRole('button', { name: 'Ver Kardex de Chocolate' });
+    const historyButton = within(mobileList).getByRole('button', {
+      name: 'Ver Kardex de Chocolate'
+    });
     expect(historyButton).toHaveClass('whitespace-nowrap');
     expect(within(historyButton).getByText('de Chocolate')).toHaveClass('sr-only');
     await fireEvent.click(historyButton);

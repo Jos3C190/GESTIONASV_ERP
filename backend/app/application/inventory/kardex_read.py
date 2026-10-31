@@ -13,6 +13,9 @@ class InventoryKardexReadUseCases:
     def __init__(self, repository: InventoryKardexReadRepository) -> None:
         self._repository = repository
 
+    async def context(self, **kwargs: Any) -> Mapping[str, Any]:
+        return await self._repository.context(**kwargs)
+
     async def get_warehouse_scope(
         self, *, warehouse_id: uuid.UUID
     ) -> tuple[uuid.UUID, uuid.UUID | None] | None:

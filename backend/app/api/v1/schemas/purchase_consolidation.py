@@ -112,7 +112,9 @@ class PurchaseConsolidationUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     change_reason: str = Field(min_length=1, max_length=2000)
-    source_changes: tuple[PurchaseConsolidationSourceChange, ...] = Field(default=(), max_length=500)
+    source_changes: tuple[PurchaseConsolidationSourceChange, ...] = Field(
+        default=(), max_length=500
+    )
     central_demands: tuple[CentralDemandChange, ...] = Field(default=(), max_length=100)
     notes: str | None = Field(default=None, max_length=4000)
     central_warehouse_id: uuid.UUID | None = None

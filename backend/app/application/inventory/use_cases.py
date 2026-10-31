@@ -276,7 +276,9 @@ class InventoryUseCases:
         for line in lines:
             source = line.get("from_location_id")
             destination = line.get("to_location_id")
-            if movement_type in {"opening", "receipt", "adjustment_in"} and (source or not destination):
+            if movement_type in {"opening", "receipt", "adjustment_in"} and (
+                source or not destination
+            ):
                 raise InventoryApplicationError(
                     "Una entrada requiere destino y no admite ubicación de origen.",
                     code="invalid_movement_endpoints",

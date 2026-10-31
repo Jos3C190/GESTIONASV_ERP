@@ -29,7 +29,6 @@ pytestmark = pytest.mark.e2e
 #: The fixture vehicle has no circulation card, insurance or inspection on file.
 DISPATCH_OVERRIDE = "Documentación en trámite, autorizado por gerencia."
 
-
 async def _committed_transfer_context(
     client, suffix: str
 ) -> tuple[SimpleNamespace, dict[str, str]]:

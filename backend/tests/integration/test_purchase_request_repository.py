@@ -599,12 +599,14 @@ async def test_selected_request_resolution_distinguishes_linked_eligible_and_cha
     }
     # A request can have multiple source rows in the same consolidation. The
     # diagnostic result must show that destination only once.
-    purchase_session.add_all([
-        consolidation,
-        line,
-        PurchaseConsolidationSourceModel(id=uuid.uuid4(), **source_values),
-        PurchaseConsolidationSourceModel(id=uuid.uuid4(), **source_values),
-    ])
+    purchase_session.add_all(
+        [
+            consolidation,
+            line,
+            PurchaseConsolidationSourceModel(id=uuid.uuid4(), **source_values),
+            PurchaseConsolidationSourceModel(id=uuid.uuid4(), **source_values),
+        ]
+    )
     await purchase_session.flush()
 
     resolutions = await work_items.resolve_selected_requests(
@@ -616,11 +618,13 @@ async def test_selected_request_resolution_distinguishes_linked_eligible_and_cha
     assert len(resolutions) == 3
     assert by_id[linked_request.id]["eligibility"] == "already_consolidated"
     assert by_id[linked_request.id]["code"] == linked_request.code
-    assert by_id[linked_request.id]["consolidations"] == ({
-        "id": consolidation.id,
-        "code": consolidation.code,
-        "status": "draft",
-    },)
+    assert by_id[linked_request.id]["consolidations"] == (
+        {
+            "id": consolidation.id,
+            "code": consolidation.code,
+            "status": "draft",
+        },
+    )
     assert by_id[eligible_request.id]["eligibility"] == "eligible"
     assert by_id[changed_request.id]["eligibility"] == "not_eligible"
 

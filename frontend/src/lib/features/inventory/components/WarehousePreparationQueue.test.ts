@@ -2,7 +2,13 @@ import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/sv
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import Queue from './WarehousePreparationQueue.svelte';
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), execute: vi.fn(), measure: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  list: vi.fn(),
+  execute: vi.fn(),
+  measure: vi.fn(),
+  locations: vi.fn()
+}));
+vi.mock('$lib/features/locations/services', () => ({ listLocations: mocks.locations }));
 vi.mock('../preparation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../preparation')>()),
   preparationApi: { list: mocks.list, execute: mocks.execute }
@@ -29,15 +35,77 @@ const result = (items = [unit]) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.list.mockResolvedValue(result());
+  mocks.locations.mockResolvedValue({ items: [], meta: { page: 1, pages: 1 } });
 });
 afterEach(cleanup);
 async function selectUnit() {
   await fireEvent.click(await screen.findByRole('button', { name: /Azúcar Glass Premium/ }));
 }
 describe('preparación del bodeguero', () => {
+  it('conserva el código automático al pasar de medidas a etiqueta', async () => {
+    mocks.list.mockResolvedValue(result([{ ...unit, phase: 'measure' }]));
+    mocks.measure.mockImplementation(async () => {
+      mocks.list.mockResolvedValue(result([{ ...unit, phase: 'label' }]));
+    });
+    render(Queue, { warehouseId: 'warehouse-1', contextKey: 'company-1', canOperate: true });
+    await selectUnit();
+    await fireEvent.input(screen.getByLabelText('Peso bruto (kg)'), { target: { value: '10' } });
+    await fireEvent.input(screen.getByLabelText('Volumen (m³)'), { target: { value: '0.1' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Confirmar medidas' }));
+    await screen.findByRole('button', { name: 'Revisar y colocar etiqueta' });
+    expect(screen.getByLabelText(/Código de unidad o producto/)).toHaveValue(unit.code);
+  });
+
+  it('elige una ubicación activa de su bodega y envía el código sin escribirlo', async () => {
+    const location = {
+      id: 'destination',
+      code: 'A01-R01-N01-P01',
+      warehouse_id: 'warehouse-1',
+      is_active: true,
+      lifecycle_status: 'active',
+      storage_eligible: true,
+      area: '',
+      aisle: '01',
+      rack: '01',
+      level: '01',
+      position: '01'
+    };
+    mocks.locations.mockResolvedValue({
+      items: [
+        location,
+        { ...location, id: 'foreign', code: 'OTRA-BODEGA', warehouse_id: 'warehouse-2' },
+        { ...location, id: 'blocked', code: 'BLOQUEADA', lifecycle_status: 'blocked' }
+      ],
+      meta: { page: 1, pages: 1 }
+    });
+    mocks.execute.mockRejectedValue(new Error('Sin conexión'));
+    render(Queue, { warehouseId: 'warehouse-1', contextKey: 'company-1', canOperate: true });
+    await selectUnit();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Elegir en el mapa' })).toBeEnabled()
+    );
+    await fireEvent.click(screen.getByRole('button', { name: 'Elegir en el mapa' }));
+    await fireEvent.click(screen.getByRole('button', { name: /Seleccionar Pasillo 01/ }));
+    await fireEvent.click(screen.getAllByRole('button', { name: /Asignar A01-R01-N01-P01/ })[0]!);
+    expect(screen.getByLabelText(/Código de ubicación/)).toHaveValue(location.code);
+    await fireEvent.click(screen.getByRole('button', { name: 'Confirmar ubicación e ingresar' }));
+    await waitFor(() =>
+      expect(mocks.execute).toHaveBeenCalledWith(
+        unit.id,
+        'place',
+        expect.objectContaining({ unit_scan: unit.code, location_scan: location.code })
+      )
+    );
+    expect(screen.queryByText('OTRA-BODEGA')).not.toBeInTheDocument();
+    expect(screen.queryByText('BLOQUEADA')).not.toBeInTheDocument();
+  });
   it('exige lectura de unidad y ubicación antes de ingresar', async () => {
     render(Queue, { warehouseId: 'warehouse-1', contextKey: 'company-1', canOperate: true });
     await selectUnit();
+    expect(screen.getByLabelText(/Código de unidad o producto/)).toHaveValue('HU-TEST-1');
+    await fireEvent.input(screen.getByLabelText(/Código de unidad o producto/), {
+      target: { value: '' }
+    });
     await fireEvent.click(screen.getByRole('button', { name: 'Confirmar ubicación e ingresar' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Escanea o escribe el código de la unidad'

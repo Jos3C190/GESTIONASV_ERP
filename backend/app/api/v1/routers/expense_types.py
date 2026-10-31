@@ -24,11 +24,14 @@ from app.api.v1.schemas.expense_type import (
 from app.application.audit.audit_service import AuditService
 from app.application.purchase_orders import PurchaseOrderUseCases
 from app.core.exceptions import ConflictError
+from app.domain.ports.purchase_order_repository import (
+    PurchaseOrderExpenseTypeReference as ExpenseTypeCatalogItem,
+)
 
 router = APIRouter(prefix="/expense-types", tags=["expense-types"])
 
 
-def _catalog_out(item) -> ExpenseTypeCatalogResponse:
+def _catalog_out(item: ExpenseTypeCatalogItem) -> ExpenseTypeCatalogResponse:
     return ExpenseTypeCatalogResponse(
         id=item.id,
         name=item.name,
@@ -38,7 +41,7 @@ def _catalog_out(item) -> ExpenseTypeCatalogResponse:
     )
 
 
-def _audit_state(item) -> dict[str, object]:
+def _audit_state(item: ExpenseTypeCatalogItem) -> dict[str, object]:
     return {
         "id": str(item.id),
         "name": item.name,

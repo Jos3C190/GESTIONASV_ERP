@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import cast as type_cast
 
 from sqlalchemy import Integer, Select, and_, func, select
 from sqlalchemy import cast as sa_cast
@@ -19,6 +20,7 @@ from app.domain.entities.retaceo import (
     RetaceoDetail,
     RetaceoStatus,
 )
+from app.domain.entities.retaceo_calculation import CalculationMode
 from app.domain.ports.retaceo_repository import RetaceoCostDocumentReference, RetaceoCostReference
 from app.infrastructure.models.retaceo import (
     RetaceoCostAllocationModel,
@@ -118,6 +120,9 @@ def _to_entity(model: RetaceoModel) -> Retaceo:
         import_policy_number=model.import_policy_number,
         import_policy_date=model.import_policy_date,
         manual_entry=bool(model.manual_entry),
+        calculation_mode=type_cast(CalculationMode, model.calculation_mode),
+        dai_rate=model.dai_rate,
+        vat_rate=model.vat_rate,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
@@ -234,20 +239,22 @@ class SqlAlchemyRetaceoRepository:
         current_allocation_by_detail = {
             allocation.purchase_detail_id: allocation for allocation in persisted_cost.allocations
         }
-        for allocation in replacement_cost.allocations:
-            current_allocation = current_allocation_by_detail.get(allocation.purchase_detail_id)
+        for replacement_allocation in replacement_cost.allocations:
+            current_allocation = current_allocation_by_detail.get(
+                replacement_allocation.purchase_detail_id
+            )
             if current_allocation is None:
                 persisted_cost.allocations.append(
                     RetaceoCostAllocationModel(
                         id=uuid.uuid4(),
                         company_id=company_id,
                         retaceo_cost_id=cost_id,
-                        purchase_detail_id=allocation.purchase_detail_id,
-                        amount=allocation.amount,
+                        purchase_detail_id=replacement_allocation.purchase_detail_id,
+                        amount=replacement_allocation.amount,
                     )
                 )
             else:
-                current_allocation.amount = allocation.amount
+                current_allocation.amount = replacement_allocation.amount
 
     def _replace_existing_draft_costs(
         self,
@@ -307,6 +314,9 @@ class SqlAlchemyRetaceoRepository:
         model.import_policy_number = retaceo.import_policy_number
         model.import_policy_date = retaceo.import_policy_date
         model.manual_entry = retaceo.manual_entry
+        model.calculation_mode = retaceo.calculation_mode
+        model.dai_rate = retaceo.dai_rate
+        model.vat_rate = retaceo.vat_rate
         self._replace_draft_details(model, retaceo)
         existing_costs = {cost.id: cost for cost in model.costs}
         replacement_costs = {cost.id: cost for cost in retaceo.costs}
@@ -575,6 +585,9 @@ class SqlAlchemyRetaceoRepository:
             import_policy_number=retaceo.import_policy_number,
             import_policy_date=retaceo.import_policy_date,
             manual_entry=retaceo.manual_entry,
+            calculation_mode=retaceo.calculation_mode,
+            dai_rate=retaceo.dai_rate,
+            vat_rate=retaceo.vat_rate,
             details=[cls._detail_model(retaceo.company_id, detail) for detail in retaceo.details],
             costs=[cls._cost_model(retaceo.company_id, cost) for cost in retaceo.costs],
         )

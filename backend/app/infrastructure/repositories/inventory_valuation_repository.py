@@ -12,6 +12,7 @@ import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, NoReturn
+from typing import cast as type_cast
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
@@ -50,6 +51,17 @@ def fingerprint(value: Any) -> str:
 
 def error(message: str, code: str) -> NoReturn:
     raise InventoryOperationError(message, code=code, status_code=409)
+
+
+def _physical_kind_allowed(kind: str, movement_type: str, inbound: bool) -> bool:
+    if movement_type == "opening":
+        return kind == "opening" and inbound
+    allowed = (
+        {"receipt", "adjustment_in", "customer_return"}
+        if inbound
+        else {"issue", "adjustment_out", "supplier_return"}
+    )
+    return kind in allowed
 
 
 class SqlAlchemyInventoryValuationRepository:
@@ -184,6 +196,12 @@ class SqlAlchemyInventoryValuationRepository:
         ) + 1
         breakdown = adjustment_breakdown(events, before, after) if kind == "cost_adjustment" else []
         if kind == "supplier_credit":
+            if original_id is None:
+                raise InventoryOperationError(
+                    "El crédito requiere una devolución original.",
+                    code="valuation_original_required",
+                    status_code=409,
+                )
             cost = after.costs[original_id]
             breakdown = [
                 {
@@ -383,18 +401,11 @@ class SqlAlchemyInventoryValuationRepository:
             else "issue"
         )
         kind = data.get("valuation_kind") or default_kind
-        allowed = (
-            {"opening", "receipt", "adjustment_in", "customer_return"}
-            if inbound
-            else {"issue", "adjustment_out", "supplier_return"}
-        )
-        if kind not in allowed:
+        if not _physical_kind_allowed(kind, movement_type, inbound):
             error(
                 "El tratamiento del costo no corresponde al movimiento físico.",
                 "valuation_movement_mismatch",
             )
-        if kind == "opening" and movement_type != "opening":
-            error("El saldo inicial requiere su operación dedicada.", "valuation_movement_mismatch")
         if data.get("valuation_currency") not in {None, setting.currency}:
             error(
                 "La recepción debe expresarse en la moneda de valoración de la empresa.",
@@ -439,24 +450,29 @@ class SqlAlchemyInventoryValuationRepository:
     ) -> uuid.UUID | None:
         if kind != "receipt" or purchase_detail_id is None:
             return None
-        return await self.session.scalar(
-            select(RetaceoModel.id)
-            .join(
-                PurchaseModel,
-                (PurchaseModel.id == RetaceoModel.purchase_id)
-                & (PurchaseModel.company_id == RetaceoModel.company_id),
-            )
-            .join(
-                PurchaseDetailModel,
-                (PurchaseDetailModel.purchase_id == PurchaseModel.id)
-                & (PurchaseDetailModel.company_id == PurchaseModel.company_id),
-            )
-            .where(
-                RetaceoModel.company_id == company_id,
-                RetaceoModel.status == "closed",
-                PurchaseModel.inventory_workflow.in_(["retaceo_before_inventory", "placement_before_inventory"]),
-                PurchaseDetailModel.id == purchase_detail_id,
-            )
+        return type_cast(
+            uuid.UUID | None,
+            await self.session.scalar(
+                select(RetaceoModel.id)
+                .join(
+                    PurchaseModel,
+                    (PurchaseModel.id == RetaceoModel.purchase_id)
+                    & (PurchaseModel.company_id == RetaceoModel.company_id),
+                )
+                .join(
+                    PurchaseDetailModel,
+                    (PurchaseDetailModel.purchase_id == PurchaseModel.id)
+                    & (PurchaseDetailModel.company_id == PurchaseModel.company_id),
+                )
+                .where(
+                    RetaceoModel.company_id == company_id,
+                    RetaceoModel.status == "closed",
+                    PurchaseModel.inventory_workflow.in_(
+                        ["retaceo_before_inventory", "placement_before_inventory"]
+                    ),
+                    PurchaseDetailModel.id == purchase_detail_id,
+                )
+            ),
         )
 
     async def _ensure_retaceo_applied(self, row: InventoryMovementLineModel) -> None:

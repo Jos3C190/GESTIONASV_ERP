@@ -8,6 +8,8 @@ from datetime import date, datetime
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 from enum import StrEnum
 
+from app.domain.entities.retaceo_calculation import CalculationMode, validate_tax_rate
+
 MONEY_QUANTUM = Decimal("0.000001")
 PERCENT_QUANTUM = Decimal("0.000001")
 ISO_CURRENCY_CODE_LENGTH = 3
@@ -477,6 +479,9 @@ class Retaceo:
     import_policy_number: str | None = None
     import_policy_date: date | None = None
     manual_entry: bool = False
+    calculation_mode: CalculationMode = "manual"
+    dai_rate: Decimal | None = None
+    vat_rate: Decimal | None = None
 
     @property
     def documents_historical_fob_correction(self) -> bool:
@@ -489,6 +494,15 @@ class Retaceo:
     def __post_init__(self) -> None:
         if not self.code.strip():
             raise ValueError("El código del retaceo es obligatorio.")
+        if self.calculation_mode == "automatic":
+            validate_tax_rate(self.dai_rate)
+            validate_tax_rate(self.vat_rate)
+        elif (
+            self.calculation_mode != "manual"
+            or self.dai_rate is not None
+            or self.vat_rate is not None
+        ):
+            raise ValueError("El modo manual conserva importes, sin porcentajes automáticos.")
         if (
             len(self.currency) != ISO_CURRENCY_CODE_LENGTH
             or not self.currency.isalpha()

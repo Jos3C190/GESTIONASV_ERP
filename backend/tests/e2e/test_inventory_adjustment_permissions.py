@@ -9,8 +9,8 @@ from decimal import Decimal
 import pytest
 from app.application.documents import DocumentService
 from app.infrastructure.db.session import async_session_factory
-from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.document import DocumentAssetModel
+from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.inventory_adjustment import (
     InventoryAdjustmentDocumentModel,
 )
@@ -218,9 +218,7 @@ async def test_adjustment_evidence_download_requires_valuation_permission(
         username=f"adjustment-other-branch-{suffix[:10]}",
         permissions=("inventory:read", "inventory:valuation"),
     )
-    other_branch_download = await e2e_client.get(
-        download_path, headers=destination_reader_headers
-    )
+    other_branch_download = await e2e_client.get(download_path, headers=destination_reader_headers)
     assert other_branch_download.status_code == 403, other_branch_download.text
 
     async with async_session_factory() as session:

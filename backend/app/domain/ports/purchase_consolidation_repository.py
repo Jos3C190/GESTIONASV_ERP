@@ -73,7 +73,12 @@ class PurchaseConsolidationRepository(Protocol):
     ) -> PurchaseConsolidation | None: ...
 
     async def cancel(
-        self, company_id: uuid.UUID, consolidation_id: uuid.UUID, *, actor_id: uuid.UUID, reason: str
+        self,
+        company_id: uuid.UUID,
+        consolidation_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID,
+        reason: str,
     ) -> PurchaseConsolidation | None: ...
 
     async def close(

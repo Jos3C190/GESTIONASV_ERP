@@ -11,7 +11,11 @@ from app.application.documents.service import DocumentService, InitiateDocumentI
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.domain.entities.document import DocumentAsset
 from app.domain.entities.retaceo import RetaceoCostDocument, RetaceoStatus
-from app.domain.ports.retaceo_repository import RetaceoRepository
+from app.domain.ports.retaceo_repository import (
+    RetaceoCostDocumentReference,
+    RetaceoCostReference,
+    RetaceoRepository,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,9 +82,7 @@ class RetaceoCostDocumentService:
         cost_id: uuid.UUID,
         document_id: uuid.UUID,
     ) -> RetaceoCostDocumentView:
-        reference = await self._require_attachment(
-            company_id, retaceo_id, cost_id, document_id
-        )
+        reference = await self._require_attachment(company_id, retaceo_id, cost_id, document_id)
         if reference.status is not RetaceoStatus.DRAFT:
             raise BusinessRuleError(
                 "Solo se pueden completar comprobantes mientras el retaceo está en borrador.",
@@ -125,9 +127,7 @@ class RetaceoCostDocumentService:
         cost_id: uuid.UUID,
     ) -> list[RetaceoCostDocumentView]:
         await self._require_cost(company_id, retaceo_id, cost_id)
-        attachments = await self._repository.list_cost_documents(
-            company_id, retaceo_id, cost_id
-        )
+        attachments = await self._repository.list_cost_documents(company_id, retaceo_id, cost_id)
         views: list[RetaceoCostDocumentView] = []
         for attachment in attachments:
             document = await self._documents.get(company_id, attachment.document_id)
@@ -143,9 +143,7 @@ class RetaceoCostDocumentService:
         document_id: uuid.UUID,
     ) -> RetaceoCostDocument:
         await self._require_editable_cost(company_id, retaceo_id, cost_id)
-        reference = await self._require_attachment(
-            company_id, retaceo_id, cost_id, document_id
-        )
+        reference = await self._require_attachment(company_id, retaceo_id, cost_id, document_id)
         deleted_at = datetime.now(UTC)
         attachment = await self._repository.soft_delete_cost_document(
             company_id,
@@ -192,7 +190,7 @@ class RetaceoCostDocumentService:
         company_id: uuid.UUID,
         retaceo_id: uuid.UUID,
         cost_id: uuid.UUID,
-    ):
+    ) -> RetaceoCostReference:
         reference = await self._require_cost(company_id, retaceo_id, cost_id)
         if reference.status is not RetaceoStatus.DRAFT or not reference.is_active:
             raise BusinessRuleError(
@@ -201,7 +199,9 @@ class RetaceoCostDocumentService:
             )
         return reference
 
-    async def _require_cost(self, company_id: uuid.UUID, retaceo_id: uuid.UUID, cost_id: uuid.UUID):
+    async def _require_cost(
+        self, company_id: uuid.UUID, retaceo_id: uuid.UUID, cost_id: uuid.UUID
+    ) -> RetaceoCostReference:
         reference = await self._repository.get_cost_reference(company_id, retaceo_id, cost_id)
         if reference is None:
             raise NotFoundError("Gasto de retaceo no encontrado.", code="retaceo_cost_not_found")
@@ -213,7 +213,7 @@ class RetaceoCostDocumentService:
         retaceo_id: uuid.UUID,
         cost_id: uuid.UUID,
         document_id: uuid.UUID,
-    ):
+    ) -> RetaceoCostDocumentReference:
         reference = await self._repository.get_cost_document(
             company_id, retaceo_id, cost_id, document_id
         )

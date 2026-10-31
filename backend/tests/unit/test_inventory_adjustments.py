@@ -55,23 +55,27 @@ def test_adjustment_cost_is_unit_or_total_and_explicit_zero_is_valid():
 
 def test_decrease_requires_a_real_handling_unit_and_cannot_use_a_free_transit_status():
     with pytest.raises(ValidationError):
-        InventoryAdjustmentLineIn.model_validate({
-            "inventory_item_id": uuid4(),
-            "location_id": uuid4(),
-            "direction": "decrease",
-            "quantity_base": "1",
-            "stock_status": "available",
-        })
+        InventoryAdjustmentLineIn.model_validate(
+            {
+                "inventory_item_id": uuid4(),
+                "location_id": uuid4(),
+                "direction": "decrease",
+                "quantity_base": "1",
+                "stock_status": "available",
+            }
+        )
 
     with pytest.raises(ValidationError):
-        InventoryAdjustmentLineIn.model_validate({
-            "inventory_item_id": uuid4(),
-            "location_id": uuid4(),
-            "direction": "decrease",
-            "quantity_base": "1",
-            "stock_status": "in_transit",
-            "handling_unit_id": uuid4(),
-        })
+        InventoryAdjustmentLineIn.model_validate(
+            {
+                "inventory_item_id": uuid4(),
+                "location_id": uuid4(),
+                "direction": "decrease",
+                "quantity_base": "1",
+                "stock_status": "in_transit",
+                "handling_unit_id": uuid4(),
+            }
+        )
 
 
 def test_transfer_loss_contract_requires_linked_incident_and_detail():
@@ -84,28 +88,32 @@ def test_transfer_loss_contract_requires_linked_incident_and_detail():
         "handling_unit_id": uuid4(),
         "transfer_detail_id": uuid4(),
     }
-    body = InventoryAdjustmentCreateIn.model_validate({
-        "idempotency_key": "adjustment-create-001",
-        "warehouse_id": uuid4(),
-        "operational_date": "2026-10-19",
-        "accounting_date": "2026-10-19",
-        "reason": "Pérdida verificada en tránsito",
-        "document_reference": "ACTA-001",
-        "transfer_id": uuid4(),
-        "transfer_incident_id": uuid4(),
-        "lines": [line],
-    })
-    assert body.lines[0].transfer_detail_id == line["transfer_detail_id"]
-
-    with pytest.raises(ValidationError):
-        InventoryAdjustmentCreateIn.model_validate({
-            "idempotency_key": "adjustment-create-002",
+    body = InventoryAdjustmentCreateIn.model_validate(
+        {
+            "idempotency_key": "adjustment-create-001",
             "warehouse_id": uuid4(),
             "operational_date": "2026-10-19",
             "accounting_date": "2026-10-19",
             "reason": "Pérdida verificada en tránsito",
-            "document_reference": "ACTA-002",
+            "document_reference": "ACTA-001",
             "transfer_id": uuid4(),
             "transfer_incident_id": uuid4(),
-            "lines": [{**line, "transfer_detail_id": None}],
-        })
+            "lines": [line],
+        }
+    )
+    assert body.lines[0].transfer_detail_id == line["transfer_detail_id"]
+
+    with pytest.raises(ValidationError):
+        InventoryAdjustmentCreateIn.model_validate(
+            {
+                "idempotency_key": "adjustment-create-002",
+                "warehouse_id": uuid4(),
+                "operational_date": "2026-10-19",
+                "accounting_date": "2026-10-19",
+                "reason": "Pérdida verificada en tránsito",
+                "document_reference": "ACTA-002",
+                "transfer_id": uuid4(),
+                "transfer_incident_id": uuid4(),
+                "lines": [{**line, "transfer_detail_id": None}],
+            }
+        )

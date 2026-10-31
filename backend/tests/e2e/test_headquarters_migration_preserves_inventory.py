@@ -407,26 +407,41 @@ def test_migration_preserves_central_warehouse_inventory_and_purchase_history() 
             assert mapped is not None
             assert mapped[0] is not None
             assert mapped[1:] == (company_id, True)
-            assert connection.execute(
-                "SELECT to_jsonb(warehouse) - 'branch_id' - 'updated_at' "
-                "FROM warehouses AS warehouse WHERE id = %s",
-                (warehouse_id,),
-            ).fetchone()[0] == warehouse_before
-            assert connection.execute(
-                "SELECT quantity_base FROM inventory_handling_units WHERE id = %s",
-                (handling_unit_id,),
-            ).fetchone()[0] == 2.5
-            assert connection.execute(
-                "SELECT quantity_base FROM inventory_balances WHERE warehouse_id = %s AND location_id = %s",
-                (warehouse_id, location_id),
-            ).fetchone()[0] == 2.5
-            assert connection.execute(
-                "SELECT * FROM locations WHERE id = %s", (location_id,)
-            ).fetchone() == location_before
-            assert connection.execute(
-                "SELECT to_warehouse_id FROM inventory_movement_lines WHERE movement_id = %s",
-                (movement_id,),
-            ).fetchone()[0] == warehouse_id
+            assert (
+                connection.execute(
+                    "SELECT to_jsonb(warehouse) - 'branch_id' - 'updated_at' "
+                    "FROM warehouses AS warehouse WHERE id = %s",
+                    (warehouse_id,),
+                ).fetchone()[0]
+                == warehouse_before
+            )
+            assert (
+                connection.execute(
+                    "SELECT quantity_base FROM inventory_handling_units WHERE id = %s",
+                    (handling_unit_id,),
+                ).fetchone()[0]
+                == 2.5
+            )
+            assert (
+                connection.execute(
+                    "SELECT quantity_base FROM inventory_balances WHERE warehouse_id = %s AND location_id = %s",
+                    (warehouse_id, location_id),
+                ).fetchone()[0]
+                == 2.5
+            )
+            assert (
+                connection.execute(
+                    "SELECT * FROM locations WHERE id = %s", (location_id,)
+                ).fetchone()
+                == location_before
+            )
+            assert (
+                connection.execute(
+                    "SELECT to_warehouse_id FROM inventory_movement_lines WHERE movement_id = %s",
+                    (movement_id,),
+                ).fetchone()[0]
+                == warehouse_id
+            )
             assert connection.execute(
                 "SELECT warehouse_id, branch_id FROM purchases WHERE id = %s", (purchase_id,)
             ).fetchone() == (warehouse_id, None)
@@ -497,21 +512,25 @@ def test_duplicate_central_warehouses_fail_without_partial_migration() -> None:
             command.upgrade(config, "0084")
 
         with connect(dsn) as connection:
-            assert connection.execute(
-                "SELECT version_num FROM alembic_version"
-            ).fetchone() == ("0083",)
-            assert connection.execute(
-                "SELECT count(*) FROM information_schema.columns "
-                "WHERE table_schema = current_schema() AND table_name = 'branches' "
-                "AND column_name = 'is_headquarters'"
-            ).fetchone()[0] == 0
-            assert connection.execute(
-                "SELECT count(*) FROM warehouses WHERE id = ANY(%s) AND branch_id IS NULL",
-                (list(duplicate_ids),),
-            ).fetchone()[0] == 2
-            connection.execute(
-                "DELETE FROM warehouses WHERE id = ANY(%s)", (list(duplicate_ids),)
+            assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
+                "0083",
             )
+            assert (
+                connection.execute(
+                    "SELECT count(*) FROM information_schema.columns "
+                    "WHERE table_schema = current_schema() AND table_name = 'branches' "
+                    "AND column_name = 'is_headquarters'"
+                ).fetchone()[0]
+                == 0
+            )
+            assert (
+                connection.execute(
+                    "SELECT count(*) FROM warehouses WHERE id = ANY(%s) AND branch_id IS NULL",
+                    (list(duplicate_ids),),
+                ).fetchone()[0]
+                == 2
+            )
+            connection.execute("DELETE FROM warehouses WHERE id = ANY(%s)", (list(duplicate_ids),))
             connection.execute(
                 "CREATE UNIQUE INDEX uq_warehouses_company_active_central_unassigned "
                 "ON warehouses (company_id) WHERE branch_id IS NULL AND is_central "
@@ -594,17 +613,23 @@ def test_mid_mapping_failure_rolls_back_schema_headquarters_and_warehouse_link()
             assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
                 "0083",
             )
-            assert connection.execute(
-                "SELECT count(*) FROM information_schema.columns "
-                "WHERE table_schema = current_schema() AND table_name = 'branches' "
-                "AND column_name = 'is_headquarters'"
-            ).fetchone()[0] == 0
+            assert (
+                connection.execute(
+                    "SELECT count(*) FROM information_schema.columns "
+                    "WHERE table_schema = current_schema() AND table_name = 'branches' "
+                    "AND column_name = 'is_headquarters'"
+                ).fetchone()[0]
+                == 0
+            )
             assert connection.execute(
                 "SELECT branch_id FROM warehouses WHERE id = %s", (test_warehouse_id,)
             ).fetchone() == (None,)
-            assert connection.execute(
-                "SELECT count(*) FROM branches WHERE company_id = %s", (company_id,)
-            ).fetchone()[0] == branch_count_before
+            assert (
+                connection.execute(
+                    "SELECT count(*) FROM branches WHERE company_id = %s", (company_id,)
+                ).fetchone()[0]
+                == branch_count_before
+            )
             connection.execute(
                 "DROP TRIGGER IF EXISTS b01_test_fail_after_matrix_insert ON warehouses"
             )

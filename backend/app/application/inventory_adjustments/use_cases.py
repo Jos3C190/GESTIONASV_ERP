@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import uuid
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -17,23 +18,38 @@ class InventoryAdjustmentUseCases:
         self._repository = repository
 
     @staticmethod
-    def _validate_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _validate_lines(lines: builtins.list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not lines or len(lines) > MAX_ADJUSTMENT_LINES:
-            raise InventoryAdjustmentError("Agregue de una a cien líneas válidas.", code="adjustment_lines_required")
+            raise InventoryAdjustmentError(
+                "Agregue de una a cien líneas válidas.", code="adjustment_lines_required"
+            )
         output = []
         for index, line in enumerate(lines, start=1):
             try:
                 quantity = Decimal(str(line["quantity_base"]))
             except (InvalidOperation, TypeError, ValueError, KeyError) as exc:
-                raise InventoryAdjustmentError("La cantidad del ajuste no es válida.", code="adjustment_quantity_invalid") from exc
+                raise InventoryAdjustmentError(
+                    "La cantidad del ajuste no es válida.", code="adjustment_quantity_invalid"
+                ) from exc
+            exponent = quantity.as_tuple().exponent
             if (
                 not quantity.is_finite()
+                or not isinstance(exponent, int)
                 or quantity <= 0
-                or quantity.as_tuple().exponent < -MAX_ADJUSTMENT_DECIMAL_PLACES
+                or exponent < -MAX_ADJUSTMENT_DECIMAL_PLACES
             ):
-                raise InventoryAdjustmentError("La cantidad debe ser positiva y tener hasta seis decimales.", code="adjustment_quantity_invalid")
-            if line.get("documented_unit_cost") is not None and line.get("documented_total_cost") is not None:
-                raise InventoryAdjustmentError("Indique costo unitario o costo total, no ambos.", code="adjustment_cost_ambiguous")
+                raise InventoryAdjustmentError(
+                    "La cantidad debe ser positiva y tener hasta seis decimales.",
+                    code="adjustment_quantity_invalid",
+                )
+            if (
+                line.get("documented_unit_cost") is not None
+                and line.get("documented_total_cost") is not None
+            ):
+                raise InventoryAdjustmentError(
+                    "Indique costo unitario o costo total, no ambos.",
+                    code="adjustment_cost_ambiguous",
+                )
             output.append({**line, "line_number": index, "quantity_base": quantity})
         return output
 
@@ -46,20 +62,35 @@ class InventoryAdjustmentUseCases:
     async def get(self, company_id: uuid.UUID, adjustment_id: uuid.UUID) -> dict[str, Any] | None:
         return await self._repository.get_adjustment(company_id, adjustment_id)
 
-    async def create(self, *, lines: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
+    async def create(
+        self, *, lines: builtins.list[dict[str, Any]], **kwargs: Any
+    ) -> dict[str, Any]:
         normalized = self._validate_lines(lines)
         if len((kwargs.get("reason") or "").strip()) < MIN_ADJUSTMENT_REASON_LENGTH:
-            raise InventoryAdjustmentError("Describa el motivo del ajuste.", code="adjustment_reason_required")
+            raise InventoryAdjustmentError(
+                "Describa el motivo del ajuste.", code="adjustment_reason_required"
+            )
         if not (kwargs.get("document_reference") or "").strip():
-            raise InventoryAdjustmentError("Indique la referencia del documento que respalda el ajuste.", code="adjustment_reference_required")
+            raise InventoryAdjustmentError(
+                "Indique la referencia del documento que respalda el ajuste.",
+                code="adjustment_reference_required",
+            )
         if kwargs["accounting_date"] < kwargs["operational_date"]:
-            raise InventoryAdjustmentError("La fecha contable no puede ser anterior a la fecha operativa.", code="adjustment_accounting_date_invalid")
+            raise InventoryAdjustmentError(
+                "La fecha contable no puede ser anterior a la fecha operativa.",
+                code="adjustment_accounting_date_invalid",
+            )
         return await self._repository.create_adjustment(lines=normalized, **kwargs)
 
-    async def update(self, *, lines: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
+    async def update(
+        self, *, lines: builtins.list[dict[str, Any]], **kwargs: Any
+    ) -> dict[str, Any]:
         normalized = self._validate_lines(lines)
         if kwargs["accounting_date"] < kwargs["operational_date"]:
-            raise InventoryAdjustmentError("La fecha contable no puede ser anterior a la fecha operativa.", code="adjustment_accounting_date_invalid")
+            raise InventoryAdjustmentError(
+                "La fecha contable no puede ser anterior a la fecha operativa.",
+                code="adjustment_accounting_date_invalid",
+            )
         return await self._repository.update_adjustment(lines=normalized, **kwargs)
 
     async def approve(self, **kwargs: Any) -> dict[str, Any]:

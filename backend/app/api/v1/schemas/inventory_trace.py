@@ -8,7 +8,8 @@ from decimal import Decimal
 
 from pydantic import Field
 
-from app.api.v1.schemas.inventory import StockStatus, StrictModel
+from app.api.v1.schemas.inventory import StrictModel
+from app.domain.entities.inventory import StockStatus
 
 
 class TraceCapabilityCreateIn(StrictModel):

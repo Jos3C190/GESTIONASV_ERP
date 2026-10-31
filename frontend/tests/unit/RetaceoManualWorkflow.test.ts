@@ -257,6 +257,10 @@ describe('Manual retaceo and actual spending', () => {
   it('offers actual expense recording during shipment wait and excludes freight categories', async () => {
     const order = { id: 'order', currency: 'USD', status: 'sent' } as PurchaseOrder;
     const { container } = render(PurchaseOrderActualExpenses, { order });
+    const toggle = screen.getByRole('button', { name: 'Ver / registrar bitácora' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Registrar gasto real' })).not.toBeInTheDocument();
+    await fireEvent.click(toggle);
     await screen.findByText('Todavía no hay gastos reales registrados');
     expect(screen.getByText('Opcional')).toBeInTheDocument();
     expect(
@@ -265,6 +269,11 @@ describe('Manual retaceo and actual spending', () => {
     expect(mocks.record).not.toHaveBeenCalled();
     expect(screen.queryByRole('option', { name: 'Flete' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Registrar gasto real' })).toBeEnabled();
+    await fireEvent.input(screen.getByLabelText('Descripción'), { target: { value: 'Gasolina' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Ocultar bitácora' }));
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await fireEvent.click(toggle);
+    expect(screen.getByLabelText('Descripción')).toHaveValue('Gasolina');
     saveRetaceoPreview('bitacora-gastos', container);
   });
 
@@ -273,6 +282,7 @@ describe('Manual retaceo and actual spending', () => {
     render(PurchaseOrderActualExpenses, {
       order: { id: 'order', currency: 'USD', status: 'sent' } as PurchaseOrder
     });
+    await fireEvent.click(screen.getByRole('button', { name: 'Ver / registrar bitácora' }));
     await screen.findByRole('alert');
     expect(screen.queryByText('Todavía no hay gastos reales registrados')).not.toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Reintentar carga' }));
@@ -304,6 +314,7 @@ describe('Manual retaceo and actual spending', () => {
     render(PurchaseOrderActualExpenses, {
       order: { id: 'order', currency: 'USD', status: 'received' } as PurchaseOrder
     });
+    await fireEvent.click(screen.getByRole('button', { name: 'Ver / registrar bitácora' }));
     await screen.findByText(/RET-00021 está cerrado/);
     expect(screen.queryByRole('button', { name: 'Registrar gasto real' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Consultar RET-00021' })).toHaveAttribute(
@@ -320,6 +331,7 @@ describe('Manual retaceo and actual spending', () => {
     const { container } = render(PurchaseOrderActualExpenses, {
       order: { id: 'order', currency: 'USD', status: 'received' } as PurchaseOrder
     });
+    await fireEvent.click(screen.getByRole('button', { name: 'Ver / registrar bitácora' }));
     await screen.findByRole('button', { name: 'Registrar gasto real' });
     mocks.availability.mockResolvedValue({
       can_record: false,
