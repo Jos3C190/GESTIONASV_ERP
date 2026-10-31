@@ -8,10 +8,15 @@
   import CustomsReferencePanel from '$lib/features/retaceos/components/CustomsReferencePanel.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type { Purchase } from '$lib/types/purchase';
-  import type { RetaceoImportData } from '$lib/types/retaceo';
+  import type { RetaceoImportData, RetaceoCalculationMode } from '$lib/types/retaceo';
   import RetaceoImportFields from './RetaceoImportFields.svelte';
   import RetaceoFixedAmounts from './RetaceoFixedAmounts.svelte';
-  import type { FixedAmounts } from '../manual-costs';
+  import {
+    calculateImportAmounts,
+    receiptFob,
+    totalAmounts,
+    type FixedAmounts
+  } from '../manual-costs';
 
   let { purchaseId }: { purchaseId: string } = $props();
 
@@ -33,7 +38,18 @@
     import_policy_date: null
   });
   let fobAmounts = $state<Record<string, string>>({});
-  const manualFob = true;
+  let calculationMode = $state<RetaceoCalculationMode>('automatic');
+  let daiRate = $state('');
+  let vatRate = $state('');
+  let manualBackup: FixedAmounts | null = null;
+  const manualFob = $derived(calculationMode === 'manual');
+  const fobTotal = $derived.by(() => {
+    try {
+      return totalAmounts(manualFob ? Object.values(fobAmounts) : receivedLines.map(receiptFob));
+    } catch {
+      return '';
+    }
+  });
   let fixedAmounts = $state<FixedAmounts>({ freight: '', dai: '', vat: '' });
   let receivedLines = $derived(
     purchase?.details.filter(
@@ -71,6 +87,10 @@
     purchase = null;
     notes = '';
     fixedAmounts = { freight: '', dai: '', vat: '' };
+    calculationMode = 'automatic';
+    daiRate = '';
+    vatRate = '';
+    manualBackup = null;
     importData = {
       origin_country: null,
       import_invoice_number: null,
@@ -112,6 +132,25 @@
     }
   }
 
+  function changeCalculationMode(mode: RetaceoCalculationMode) {
+    if (mode === calculationMode) return;
+    if (mode === 'automatic') manualBackup = { ...fixedAmounts };
+    else if (manualBackup) fixedAmounts = { ...manualBackup };
+    calculationMode = mode;
+  }
+
+  $effect(() => {
+    if (calculationMode !== 'automatic') return;
+    try {
+      const calculated = calculateImportAmounts(fobTotal, fixedAmounts.freight, daiRate, vatRate);
+      fixedAmounts.dai = calculated.dai;
+      fixedAmounts.vat = calculated.vat;
+    } catch {
+      fixedAmounts.dai = '';
+      fixedAmounts.vat = '';
+    }
+  });
+
   async function submit() {
     if (!canManage || !purchase || saving) return;
 
@@ -127,7 +166,10 @@
         (value) => !value.trim() || !Number.isFinite(Number(value)) || Number(value) < 0
       )
     ) {
-      error = 'Completa flete, DAI e IVA; escribe 0 cuando no apliquen.';
+      error =
+        calculationMode === 'automatic'
+          ? 'Completa el flete y los porcentajes de DAI e IVA; escribe 0 cuando no apliquen.'
+          : 'Completa flete, DAI e IVA; escribe 0 cuando no apliquen.';
       saving = false;
       return;
     }
@@ -149,6 +191,9 @@
     try {
       const created = await retaceosApi.create({
         purchase_id: purchase.id,
+        calculation_mode: calculationMode,
+        dai_rate: manualFob ? null : daiRate,
+        vat_rate: manualFob ? null : vatRate,
         import_data: importData,
         ...(manualFob
           ? {
@@ -318,13 +363,28 @@
         void submit();
       }}
     >
+      <RetaceoImportFields
+        value={importData}
+        oninput={(value) => (importData = value)}
+        disabled={saving}
+        invoiceLocked
+      />
+      <RetaceoFixedAmounts
+        mode={calculationMode}
+        {daiRate}
+        {vatRate}
+        fob={fobTotal}
+        onmodechange={changeCalculationMode}
+        onrateinput={(key, value) => {
+          if (key === 'dai') daiRate = value;
+          else vatRate = value;
+        }}
+        value={fixedAmounts}
+        currency={purchase.currency}
+        disabled={saving}
+        oninput={(key, value) => (fixedAmounts[key] = value)}
+      />
       {#if manualFob}
-        <RetaceoImportFields
-          value={importData}
-          oninput={(value) => (importData = value)}
-          disabled={saving}
-          invoiceLocked
-        />
         <article class="space-y-4 rounded-xl border border-border bg-surface p-4">
           <h2 class="font-semibold text-foreground">FOB documentado por producto</h2>
           <p class="max-w-prose text-sm leading-6 text-foreground-muted">
@@ -359,12 +419,7 @@
           {/each}
         </article>
       {/if}
-      <RetaceoFixedAmounts
-        value={fixedAmounts}
-        currency={purchase.currency}
-        disabled={saving}
-        oninput={(key, value) => (fixedAmounts[key] = value)}
-      />
+
       <article class="space-y-4 rounded-xl border border-border bg-surface p-4">
         <div class="rounded-xl border border-primary/20 bg-primary/5 p-4">
           <h2 class="font-semibold text-foreground">

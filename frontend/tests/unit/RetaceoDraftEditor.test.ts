@@ -14,6 +14,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
+vi.mock('$lib/api/client', async (original) => ({
+  ...(await original<object>()),
+  apiFetch: vi.fn().mockResolvedValue([])
+}));
 
 vi.mock('$lib/api/retaceos', () => ({
   retaceosApi: {
@@ -98,6 +102,78 @@ describe('RetaceoDraftEditor', () => {
     });
   });
 
+  it('reopens the saved automatic mode and recalculates taxes after a freight change', async () => {
+    const detail = {
+      id: 'detail',
+      retaceo_id: retaceo.id,
+      purchase_detail_id: 'line',
+      product_id: 10,
+      unit_id: 3,
+      quantity: '1',
+      cost_fob: '100',
+      freight: '10',
+      expenses: '0',
+      dai: '11',
+      total_cost: '121',
+      unit_cost: '121',
+      created_at: null,
+      updated_at: null
+    };
+    const automatic: Retaceo = {
+      ...retaceo,
+      manual_entry: true,
+      calculation_mode: 'automatic',
+      dai_rate: '10',
+      vat_rate: '13',
+      details: [detail],
+      total_expenses: '0',
+      total_dai: '11',
+      import_vat: '15.73',
+      total_cost: '121'
+    };
+    mocks.getRetaceo.mockResolvedValue(automatic);
+    mocks.getPurchase.mockResolvedValue({
+      id: retaceo.purchase_id,
+      code: 'COM-0001',
+      details: [
+        {
+          id: 'line',
+          product_id: 10,
+          subtotal: '100',
+          discount: '0',
+          quantity_received: '1',
+          quantity_accepted: null
+        }
+      ]
+    });
+    mocks.update.mockResolvedValue(automatic);
+    render(RetaceoDraftEditor, { retaceoId: retaceo.id });
+    expect(await screen.findByRole('radio', { name: /^Automático/ })).toBeChecked();
+    expect(screen.getByRole('spinbutton', { name: 'DAI (%)' })).toHaveValue(10);
+    expect(screen.getByRole('spinbutton', { name: 'IVA (%)' })).toHaveValue(13);
+    expect(screen.queryByRole('spinbutton', { name: /FOB total/ })).not.toBeInTheDocument();
+    await fireEvent.input(screen.getByRole('spinbutton', { name: /Flete y seguro total/ }), {
+      target: { value: '20' }
+    });
+    await fireEvent.submit(
+      screen.getByRole('button', { name: 'Guardar borrador' }).closest('form')!
+    );
+    await waitFor(() =>
+      expect(mocks.update).toHaveBeenCalledWith(
+        retaceo.id,
+        expect.objectContaining({
+          calculation_mode: 'automatic',
+          dai_rate: '10',
+          vat_rate: '13',
+          total_freight: '20',
+          total_dai: '12.000000',
+          import_vat: '17.160000'
+        })
+      )
+    );
+    expect(mocks.update.mock.calls[0]![1]).not.toHaveProperty('fob_lines');
+  });
+
   it('updates the itemized draft cost and opens the calculation step', async () => {
     mocks.update.mockResolvedValue({
       ...retaceo,
@@ -132,6 +208,9 @@ describe('RetaceoDraftEditor', () => {
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(retaceo.id, {
+        calculation_mode: 'manual',
+        dai_rate: null,
+        vat_rate: null,
         import_data: {
           origin_country: null,
           import_invoice_number: null,
@@ -158,7 +237,9 @@ describe('RetaceoDraftEditor', () => {
     });
 
     expect(
-      await screen.findByText('Borrador guardado. Puedes adjuntar comprobantes de forma opcional o abrir el detalle para calcular el retaceo.')
+      await screen.findByText(
+        'Borrador guardado. Puedes adjuntar comprobantes de forma opcional o abrir el detalle para calcular el retaceo.'
+      )
     ).toBeInTheDocument();
     expect(mocks.goto).not.toHaveBeenCalled();
   });

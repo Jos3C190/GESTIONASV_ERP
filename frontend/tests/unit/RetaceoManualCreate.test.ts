@@ -47,6 +47,7 @@ describe('Retaceo manual creation', () => {
 
   it('starts financial fields empty and keeps the confirmed invoice read-only', async () => {
     const { container } = render(RetaceoCreateEditor, { purchaseId: 'purchase' });
+    await fireEvent.click(await screen.findByRole('radio', { name: /^Manual/ }));
     const fob = await screen.findByRole('spinbutton', { name: /FOB total de la línea/ });
     expect(fob).toHaveValue(null);
     expect(screen.getByRole('spinbutton', { name: /Flete total/ })).toHaveValue(null);
@@ -59,6 +60,7 @@ describe('Retaceo manual creation', () => {
 
   it('does not silently use zero for an omitted fixed component', async () => {
     const { container } = render(RetaceoCreateEditor, { purchaseId: 'purchase' });
+    await fireEvent.click(await screen.findByRole('radio', { name: /^Manual/ }));
     await fireEvent.input(
       await screen.findByRole('spinbutton', { name: /FOB total de la línea/ }),
       { target: { value: '100' } }
@@ -70,6 +72,7 @@ describe('Retaceo manual creation', () => {
 
   it('sends the manually entered amounts instead of the purchase totals', async () => {
     const { container } = render(RetaceoCreateEditor, { purchaseId: 'purchase' });
+    await fireEvent.click(await screen.findByRole('radio', { name: /^Manual/ }));
     await fireEvent.input(
       await screen.findByRole('spinbutton', { name: /FOB total de la línea/ }),
       { target: { value: '100' } }

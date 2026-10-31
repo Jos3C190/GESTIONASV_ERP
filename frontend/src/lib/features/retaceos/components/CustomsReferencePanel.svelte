@@ -65,8 +65,8 @@
       </div>
 
       <p class="mt-3 text-xs leading-5 text-foreground-subtle">
-        Estos enlaces son una referencia para consultar. El sistema conserva los importes que
-        registres; no determina por sí solo el DAI de una mercancía.
+        Consulta el porcentaje que corresponde a tus productos. En modo automático el sistema
+        calcula los importes con las tasas que ingreses; en modo manual conserva tus importes.
       </p>
     </div>
   </div>

@@ -42,7 +42,17 @@ export default defineConfig(({ mode }) => ({
     // Let SvelteKit initialize SSR on demand. Speculative app-route warmup can
     // race its server module runner and cache a 500 response until restart.
     watch: {
-      ignored: ['**/.svelte-kit/**']
+      usePolling: process.env.VITE_USE_POLLING === 'true',
+      interval: 1000,
+      binaryInterval: 2000,
+      ignored: [
+        '**/.svelte-kit/**',
+        '**/.pnpm-store/**',
+        '**/.vercel/**',
+        '**/node_modules/**',
+        '**/tmp-labels/**',
+        '**/tmp-reports/**'
+      ]
     },
     fs: {
       strict: false

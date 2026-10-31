@@ -12,11 +12,17 @@
   } from '$lib/features/purchase-orders/actual-expenses';
   import type { PurchaseOrderExpenseType } from '$lib/types/purchase-order';
   import RetaceoFixedAmounts from './RetaceoFixedAmounts.svelte';
-  import { distributeByFob, totalAmounts, type FixedAmounts } from '../manual-costs';
+  import {
+    calculateImportAmounts,
+    receiptFob,
+    distributeByFob,
+    totalAmounts,
+    type FixedAmounts
+  } from '../manual-costs';
   import CustomsReferencePanel from '$lib/features/retaceos/components/CustomsReferencePanel.svelte';
   import RetaceoImportFields from './RetaceoImportFields.svelte';
   import RetaceoPlannedExpenses from './RetaceoPlannedExpenses.svelte';
-  import type { RetaceoImportData } from '$lib/types/retaceo';
+  import type { RetaceoImportData, RetaceoCalculationMode } from '$lib/types/retaceo';
   import RetaceoCostEditor from '$lib/features/retaceos/components/RetaceoCostEditor.svelte';
   import {
     DOCUMENT_MAX_BYTES,
@@ -45,6 +51,22 @@
 
   let item = $state<Retaceo | null>(null);
   let manualFob = $state(false);
+  let calculationMode = $state<RetaceoCalculationMode>('manual');
+  let daiRate = $state('');
+  let vatRate = $state('');
+  let receiptFobs = $state<Record<string, string>>({});
+  let manualBackup: {
+    fob: Record<string, string>;
+    amounts: FixedAmounts;
+    costs: EditableRetaceoCost[];
+  } | null = null;
+  const fobTotal = $derived.by(() => {
+    try {
+      return totalAmounts(Object.values(fobAmounts));
+    } catch {
+      return '';
+    }
+  });
   let manualEntry = $derived(item?.manual_entry ?? false);
   let fixedAmounts = $state<FixedAmounts>({ freight: '', dai: '', vat: '' });
   let expenseTypes = $state<PurchaseOrderExpenseType[]>([]);
@@ -61,6 +83,15 @@
       ]);
     } catch {
       return null;
+    }
+  });
+  const otherExpenseTotal = $derived.by(() => {
+    try {
+      return totalAmounts(
+        costs.filter((cost) => cost.classification === 'expense').map((cost) => cost.amount)
+      );
+    } catch {
+      return '';
     }
   });
   let importData = $state<RetaceoImportData>({
@@ -209,6 +240,10 @@
       import_policy_date: current.import_policy_date ?? null
     };
     item = current;
+    calculationMode = current.calculation_mode ?? 'manual';
+    daiRate = current.dai_rate ?? '';
+    vatRate = current.vat_rate ?? '';
+    manualBackup = null;
     fixedAmounts = {
       freight: current.total_freight,
       dai: current.total_dai,
@@ -259,8 +294,21 @@
 
       purchaseLabel = purchase?.code ?? current.purchase_id;
       purchaseOrderId = purchase?.purchase_order_id ?? null;
+      receiptFobs = Object.fromEntries(
+        (purchase?.details ?? [])
+          .filter((line) => Number(line.quantity_accepted ?? line.quantity_received) > 0)
+          .map((line) => [line.id, receiptFob(line)])
+      );
       manualFob =
-        current.manual_entry || ['retaceo_before_inventory', 'placement_before_inventory'].includes(purchase?.inventory_workflow ?? '');
+        calculationMode === 'manual' &&
+        (current.manual_entry ||
+          ['retaceo_before_inventory', 'placement_before_inventory'].includes(
+            purchase?.inventory_workflow ?? ''
+          ));
+      if (calculationMode === 'automatic') {
+        fobAmounts = { ...receiptFobs };
+        recalculateAutomatic();
+      }
       if (current.manual_entry) await loadCostReferences(sequence);
       const nextUnitLabels = new Map<number, string>();
       for (const unit of units) {
@@ -387,8 +435,7 @@
         if (!cost.expenseTypeId)
           next[`${cost.key}-category`] = 'Selecciona una categoría de otros gastos.';
         if (!cost.incurredOn) next[`${cost.key}-date`] = 'Indica la fecha del gasto.';
-        if (!cost.description.trim())
-          next[`${cost.key}-description`] = 'Describe el gasto.';
+        if (!cost.description.trim()) next[`${cost.key}-description`] = 'Describe el gasto.';
       }
       if (!cost.amount.trim() || !Number.isFinite(amount) || amount <= 0) {
         next[`${cost.key}-amount`] = 'El monto debe ser mayor que cero.';
@@ -444,6 +491,51 @@
     }
   }
 
+  function recalculateAutomatic() {
+    if (calculationMode !== 'automatic') return;
+    try {
+      const calculated = calculateImportAmounts(fobTotal, fixedAmounts.freight, daiRate, vatRate);
+      updateFixed('dai', calculated.dai);
+      updateFixed('vat', calculated.vat);
+      for (const cost of costs.filter(
+        (cost) => cost.classification === 'expense' && Number(cost.amount) > 0
+      ))
+        distribute(cost);
+    } catch {
+      fixedAmounts.dai = '';
+      fixedAmounts.vat = '';
+    }
+  }
+
+  function changeCalculationMode(mode: RetaceoCalculationMode) {
+    if (mode === calculationMode) return;
+    if (mode === 'automatic') {
+      manualBackup = {
+        fob: { ...fobAmounts },
+        amounts: { ...fixedAmounts },
+        costs: costs.map((cost) => ({
+          ...cost,
+          allocations: { ...cost.allocations },
+          documents: [...cost.documents]
+        }))
+      };
+      fobAmounts = { ...receiptFobs };
+    } else if (manualBackup) {
+      fobAmounts = { ...manualBackup.fob };
+      fixedAmounts = { ...manualBackup.amounts };
+      costs = manualBackup.costs;
+    }
+    calculationMode = mode;
+    manualFob = mode === 'manual';
+    validation = {};
+    recalculateAutomatic();
+  }
+
+  function updateCalculationAmount(key: keyof FixedAmounts, value: string) {
+    updateFixed(key, value);
+    recalculateAutomatic();
+  }
+
   async function revealValidationIssues() {
     for (const cost of costs) {
       if (Object.keys(validation).some((key) => key.startsWith(`${cost.key}-`))) {
@@ -474,6 +566,7 @@
 
   async function submit() {
     if (!canManage || !editable || saving || !item) return;
+    recalculateAutomatic();
     if (!validate()) {
       await revealValidationIssues();
       return;
@@ -485,6 +578,9 @@
 
     try {
       const updated = await retaceosApi.update(item.id, {
+        calculation_mode: calculationMode,
+        dai_rate: calculationMode === 'automatic' ? daiRate : null,
+        vat_rate: calculationMode === 'automatic' ? vatRate : null,
         import_data: importData,
         ...(manualFob
           ? {
@@ -782,13 +878,40 @@
         void submit();
       }}
     >
-      {#if manualFob}
+      {#if manualEntry}
         <RetaceoImportFields
           value={importData}
           oninput={(value) => (importData = value)}
           disabled={saving}
           invoiceLocked={manualEntry}
         />
+      {/if}
+      {#if manualEntry}
+        <RetaceoFixedAmounts
+          mode={calculationMode}
+          {daiRate}
+          {vatRate}
+          fob={fobTotal}
+          otherExpenses={otherExpenseTotal}
+          onmodechange={changeCalculationMode}
+          onrateinput={(key, value) => {
+            if (key === 'dai') daiRate = value;
+            else vatRate = value;
+            clearValidation(`fixed-${key}`);
+            recalculateAutomatic();
+          }}
+          value={fixedAmounts}
+          currency={item.currency}
+          disabled={saving}
+          oninput={updateCalculationAmount}
+          errors={{
+            freight: validation['fixed-freight'],
+            dai: validation['fixed-dai'],
+            vat: validation['fixed-vat']
+          }}
+        />
+      {/if}
+      {#if manualFob}
         <article class="space-y-4 rounded-xl border border-border bg-surface p-4">
           <h2 class="font-semibold text-foreground">FOB documentado</h2>
           {#if validation['manual-fob']}<p
@@ -828,19 +951,7 @@
           {/each}
         </article>
       {/if}
-      {#if manualEntry}
-        <RetaceoFixedAmounts
-          value={fixedAmounts}
-          currency={item.currency}
-          disabled={saving}
-          oninput={updateFixed}
-          errors={{
-            freight: validation['fixed-freight'],
-            dai: validation['fixed-dai'],
-            vat: validation['fixed-vat']
-          }}
-        />
-      {/if}
+
       {#if manualEntry}
         <label
           class="block rounded-xl border border-border bg-surface p-4 text-sm font-medium text-foreground"
@@ -872,7 +983,9 @@
             </p>
             {#if manualEntry}
               <p class="mt-1 max-w-prose text-xs leading-5 text-foreground-muted">
-                Completa la distribución antes de calcular. Puedes adjuntar comprobantes si los
+                {calculationMode === 'automatic'
+                  ? 'Los importes se distribuyen automáticamente según el FOB.'
+                  : 'Completa la distribución antes de calcular.'} Puedes adjuntar comprobantes si los
                 tienes.
               </p>
               {#if purchaseOrderId && permissions.hasPermission('purchase_orders:read')}<a
@@ -938,6 +1051,7 @@
                   cost.amount = value;
                   clearValidation(`${cost.key}-amount`);
                   clearValidation(`${cost.key}-allocation`);
+                  if (calculationMode === 'automatic' && Number(value) > 0) distribute(cost);
                 }}
                 onDescriptionInput={(value) => {
                   cost.description = value;
