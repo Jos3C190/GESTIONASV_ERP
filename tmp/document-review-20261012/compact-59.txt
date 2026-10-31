@@ -1,5 +1,0 @@
-CA-PRO-013: Las operaciones de mantenimiento deberán quedar registradas en la bitácora.
-CA-PRO-014: El catálogo deberá estar disponible para los módulos de compras, ventas,
-inventario, cotizaciones, devoluciones, retaceo y asignación de precios.
-CA-PRO-015: El sistema deberá diferenciar correctamente las unidades destinadas a | compras
-de las unidades destinadas a ventas.

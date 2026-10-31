@@ -1,5 +1,0 @@
-COMPROBANTE FICTICIO PARA DEMOSTRACION ACADEMICA
-Referencia: ERS-LATE-B1B55D6D / COM-00019
-Costo adicional de transporte: USD 20.00, asignado a las 10 unidades recibidas.
-Se registran despues de entregar 6 unidades: USD 8 a inventario remanente y USD 12 a salidas.
-No es una factura real ni autoriza pagos.
