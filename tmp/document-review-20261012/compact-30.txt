@@ -1,7 +1,0 @@
-6.4.10 Criterios de Aceptación
-• | Cada sucursal queda asociada a una empresa existente.
-• | El sistema impide registrar nombres duplicados dentro de la misma empresa.
-• | No es posible eliminar una sucursal con almacenes asociados.
-• | Toda modificación queda registrada en la bitácora.
-• | La sucursal queda disponible para la creación de almacenes y para los procesos de
-compras, ventas e inventario.

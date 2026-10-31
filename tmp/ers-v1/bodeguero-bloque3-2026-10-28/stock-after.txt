@@ -1,4 +1,0 @@
-balances|58|6379.682800
-movements|142
-valuation|35|51742.038666
-units|49|6405.682800
