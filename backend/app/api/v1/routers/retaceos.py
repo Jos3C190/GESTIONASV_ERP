@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -186,6 +187,9 @@ def _retaceo_audit_state(item: Retaceo) -> dict[str, object]:
         "currency": item.currency,
         "total_fob": str(item.total_fob),
         "manual_entry": item.manual_entry,
+        "calculation_mode": item.calculation_mode,
+        "dai_rate": str(item.dai_rate) if item.dai_rate is not None else None,
+        "vat_rate": str(item.vat_rate) if item.vat_rate is not None else None,
         "total_freight": str(item.total_freight),
         "total_expenses": str(item.total_expenses),
         "total_dai": str(item.total_dai),
@@ -405,8 +409,11 @@ async def create_retaceo(
         else None,
         total_freight=payload.total_freight,
         total_expenses=payload.total_expenses,
-        total_dai=payload.total_dai,
-        import_vat=payload.import_vat,
+        total_dai=payload.total_dai if payload.total_dai is not None else Decimal("0"),
+        calculation_mode=payload.calculation_mode,
+        dai_rate=payload.dai_rate,
+        vat_rate=payload.vat_rate,
+        import_vat=payload.import_vat if payload.import_vat is not None else Decimal("0"),
         notes=payload.notes,
     )
     await _audit_change(
@@ -454,8 +461,11 @@ async def update_retaceo(
         if payload.fob_lines is not None
         else None,
         total_expenses=payload.total_expenses,
-        total_dai=payload.total_dai,
-        import_vat=payload.import_vat,
+        total_dai=payload.total_dai if payload.total_dai is not None else Decimal("0"),
+        calculation_mode=payload.calculation_mode,
+        dai_rate=payload.dai_rate,
+        vat_rate=payload.vat_rate,
+        import_vat=payload.import_vat if payload.import_vat is not None else Decimal("0"),
         notes=payload.notes,
         costs=(
             tuple(

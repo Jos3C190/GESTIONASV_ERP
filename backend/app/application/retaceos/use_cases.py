@@ -33,6 +33,7 @@ from app.domain.entities.retaceo import (
     calculate_retaceo_allocation,
     ensure_retaceo_transition,
 )
+from app.domain.entities.retaceo_calculation import CalculationMode, calculate_import_taxes
 from app.domain.ports.inventory_valuation import RetaceoAverageComparison, RetaceoValuationGateway
 from app.domain.ports.purchase_order_expense_document_repository import (
     PurchaseOrderExpenseDocumentRepository,
@@ -156,9 +157,23 @@ class RetaceoUseCases:
         fob_lines: tuple[RetaceoFobDraft, ...] | None = None,
         import_data: RetaceoImportData | None = None,
         manual_entry: bool = True,
+        calculation_mode: CalculationMode | None = None,
+        dai_rate: Decimal | None = None,
+        vat_rate: Decimal | None = None,
     ) -> Retaceo:
         purchase = await self._get_purchase_for_update(company_id, purchase_id)
         self._ensure_purchase_eligible(purchase)
+        calculation_mode = calculation_mode or "manual"
+        if calculation_mode == "automatic":
+            if fob_lines is not None:
+                raise ValidationError(
+                    "El FOB automático proviene de la compra.", code="retaceo_automatic_fob_locked"
+                )
+            total_dai, import_vat = self._automatic_amounts(
+                purchase, total_freight, dai_rate, vat_rate
+            )
+        else:
+            dai_rate = vat_rate = None
         after_retaceo = purchase.inventory_workflow is not PurchaseInventoryWorkflow.LEGACY
         if after_retaceo or manual_entry:
             existing, _ = await self._repository.list_retaceos(
@@ -169,7 +184,7 @@ class RetaceoUseCases:
                     "Esta compra ya tiene un retaceo activo. Continúe desde ese documento.",
                     code="retaceo_purchase_already_exists",
                 )
-        if (after_retaceo or manual_entry) and fob_lines is None:
+        if (after_retaceo or manual_entry) and fob_lines is None and calculation_mode == "manual":
             raise ValidationError(
                 "Registre manualmente el FOB de cada producto.", code="retaceo_fob_required"
             )
@@ -220,6 +235,9 @@ class RetaceoUseCases:
             fob_lines=fob_lines,
             import_data=import_data,
             manual_entry=manual_entry,
+            calculation_mode=calculation_mode,
+            dai_rate=dai_rate,
+            vat_rate=vat_rate,
         )
         return await self._repository.add_retaceo(draft)
 
@@ -236,6 +254,9 @@ class RetaceoUseCases:
         costs: tuple[RetaceoCostDraft, ...] | None = None,
         fob_lines: tuple[RetaceoFobDraft, ...] | None = None,
         import_data: RetaceoImportData | None = None,
+        calculation_mode: CalculationMode | None = None,
+        dai_rate: Decimal | None = None,
+        vat_rate: Decimal | None = None,
     ) -> Retaceo:
         current = await self._get_for_update(company_id, retaceo_id)
         if current.status is not RetaceoStatus.DRAFT:
@@ -246,9 +267,23 @@ class RetaceoUseCases:
 
         purchase = await self._get_purchase_for_update(company_id, current.purchase_id)
         self._ensure_purchase_eligible(purchase)
+        calculation_mode = calculation_mode or current.calculation_mode
+        if calculation_mode == "automatic":
+            if fob_lines is not None:
+                raise ValidationError(
+                    "El FOB automático proviene de la compra.", code="retaceo_automatic_fob_locked"
+                )
+            dai_rate = dai_rate if dai_rate is not None else current.dai_rate
+            vat_rate = vat_rate if vat_rate is not None else current.vat_rate
+            total_dai, import_vat = self._automatic_amounts(
+                purchase, total_freight, dai_rate, vat_rate
+            )
+        else:
+            dai_rate = vat_rate = None
         if (
             purchase.inventory_workflow is not PurchaseInventoryWorkflow.LEGACY
             and fob_lines is None
+            and calculation_mode == "manual"
         ):
             fob_lines = tuple(
                 RetaceoFobDraft(detail.purchase_detail_id, detail.cost_fob)
@@ -257,11 +292,15 @@ class RetaceoUseCases:
         merged_costs = current.costs or None
         if costs is not None:
             merged_costs = self._merge_costs(current, costs)
+        if calculation_mode == "automatic":
+            merged_costs = self._automatic_costs(
+                purchase, current.id, merged_costs or (), total_freight, total_dai, import_vat
+            )
         if current.manual_entry:
             merged_costs = await self._validate_manual_expenses(
                 purchase, current, merged_costs or ()
             )
-            if fob_lines is None:
+            if fob_lines is None and calculation_mode == "manual":
                 fob_lines = tuple(
                     RetaceoFobDraft(line.purchase_detail_id, line.cost_fob)
                     for line in current.details
@@ -288,6 +327,9 @@ class RetaceoUseCases:
                 import_policy_date=current.import_policy_date,
             ),
             manual_entry=current.manual_entry,
+            calculation_mode=calculation_mode,
+            dai_rate=dai_rate,
+            vat_rate=vat_rate,
         )
         saved = await self._repository.replace_draft(replacement)
         if saved is None:
@@ -446,6 +488,9 @@ class RetaceoUseCases:
         fob_lines: tuple[RetaceoFobDraft, ...] | None = None,
         import_data: RetaceoImportData | None = None,
         manual_entry: bool = False,
+        calculation_mode: CalculationMode = "manual",
+        dai_rate: Decimal | None = None,
+        vat_rate: Decimal | None = None,
     ) -> Retaceo:
         if not import_vat.is_finite() or import_vat < 0:
             raise ValidationError(
@@ -459,17 +504,7 @@ class RetaceoUseCases:
             else (import_data or RetaceoImportData())
         )
 
-        sources = tuple(
-            RetaceoSourceLine(
-                purchase_detail_id=detail.id,
-                product_id=detail.product_id,
-                unit_id=detail.unit_id,
-                quantity=self._accepted_quantity(detail),
-                cost_fob=self._accepted_fob(detail),
-            )
-            for detail in purchase.details
-            if self._accepted_quantity(detail) > 0
-        )
+        sources = self._receipt_sources(purchase)
         if fob_lines is not None:
             amounts = {line.purchase_detail_id: line.amount for line in fob_lines}
             if len(amounts) != len(fob_lines) or set(amounts) != {
@@ -584,6 +619,9 @@ class RetaceoUseCases:
                 created_at=created_at,
                 costs=costs or (),
                 manual_entry=manual_entry,
+                calculation_mode=calculation_mode,
+                dai_rate=dai_rate,
+                vat_rate=vat_rate,
                 origin_country=customs.origin_country,
                 import_invoice_number=customs.import_invoice_number,
                 import_invoice_date=customs.import_invoice_date,
@@ -946,3 +984,92 @@ class RetaceoUseCases:
                     f"La distribución manual de «{cost.title}» debe sumar exactamente su monto.",
                     code="retaceo_cost_allocation_incomplete",
                 )
+
+    def _receipt_sources(self, purchase: Purchase) -> tuple[RetaceoSourceLine, ...]:
+        return tuple(
+            RetaceoSourceLine(
+                purchase_detail_id=detail.id,
+                product_id=detail.product_id,
+                unit_id=detail.unit_id,
+                quantity=self._accepted_quantity(detail),
+                cost_fob=self._accepted_fob(detail),
+            )
+            for detail in purchase.details
+            if self._accepted_quantity(detail) > 0
+        )
+
+    def _automatic_amounts(
+        self,
+        purchase: Purchase,
+        freight: Decimal,
+        dai_rate: Decimal | None,
+        vat_rate: Decimal | None,
+    ) -> tuple[Decimal, Decimal]:
+        try:
+            return calculate_import_taxes(
+                sum((row.cost_fob for row in self._receipt_sources(purchase)), Decimal("0")),
+                freight,
+                dai_rate,
+                vat_rate,
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="retaceo_calculation_invalid") from exc
+
+    def _automatic_costs(
+        self,
+        purchase: Purchase,
+        retaceo_id: uuid.UUID,
+        costs: tuple[RetaceoCost, ...],
+        freight: Decimal,
+        dai: Decimal,
+        vat: Decimal,
+    ) -> tuple[RetaceoCost, ...]:
+        fixed = {
+            RetaceoCostClass.FREIGHT: freight,
+            RetaceoCostClass.DAI: dai,
+            RetaceoCostClass.IMPORT_VAT: vat,
+        }
+        output = [cost for cost in costs if cost.classification not in fixed or not cost.is_active]
+        for generated in self._legacy_costs(
+            retaceo_id=retaceo_id,
+            total_freight=freight,
+            total_expenses=Decimal("0"),
+            total_dai=dai,
+            import_vat=vat,
+        ):
+            matches = [
+                cost
+                for cost in costs
+                if cost.classification is generated.classification and cost.is_active
+            ]
+            if len(matches) > 1:
+                raise ValidationError(
+                    "Evite duplicar los componentes fijos.", code="retaceo_fixed_amount_mismatch"
+                )
+            output.append(
+                replace(matches[0], amount=generated.amount, allocations=())
+                if matches
+                else generated
+            )
+        for cost in costs:
+            if cost.is_active and cost.classification in fixed and fixed[cost.classification] == 0:
+                output.append(replace(cost, is_active=False))
+        sources = self._receipt_sources(purchase)
+        return tuple(self._distribute_automatic_expense(cost, sources) for cost in output)
+
+    @staticmethod
+    def _distribute_automatic_expense(
+        cost: RetaceoCost, sources: tuple[RetaceoSourceLine, ...]
+    ) -> RetaceoCost:
+        if not cost.is_active or cost.classification is not RetaceoCostClass.EXPENSE:
+            return cost
+        allocation = calculate_retaceo_allocation(
+            sources, total_freight=Decimal("0"), total_expenses=cost.amount, total_dai=Decimal("0")
+        )
+        return replace(
+            cost,
+            allocations=tuple(
+                RetaceoCostAllocation(row.purchase_detail_id, row.expenses)
+                for row in allocation.lines
+            ),
+        )

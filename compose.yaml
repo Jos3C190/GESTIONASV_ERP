@@ -369,6 +369,9 @@ services:
       PUBLIC_CARTO_BASEMAP_API_KEY: ${PUBLIC_CARTO_BASEMAP_API_KEY:-}
       PUBLIC_GOOGLE_MAPS_API_KEY: ${PUBLIC_GOOGLE_MAPS_API_KEY:-}
       ORIGIN: http://localhost:5173
+      # Polling Windows bind mounts can saturate filesystem reads and stall SSR.
+      # Opt in only when native file events are unavailable on the host.
+      VITE_USE_POLLING: ${VITE_USE_POLLING:-false}
     depends_on:
       backend:
         condition: service_healthy
@@ -379,6 +382,8 @@ services:
     volumes:
       - ./frontend:/app
       - frontend-node-modules:/app/node_modules
+      # Keep Docker's generated route modules separate from host checks/builds.
+      - frontend-svelte-kit:/app/.svelte-kit
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:5173/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s
@@ -789,3 +794,4 @@ volumes:
   trivy-cache:
   backend-cache:
   frontend-node-modules:
+  frontend-svelte-kit:

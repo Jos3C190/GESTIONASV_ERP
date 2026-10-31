@@ -31,6 +31,11 @@ from app.infrastructure.db.base import Base, TimestampMixin, UUIDPKMixin
 
 class RetaceoModel(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "retaceos"
+    calculation_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="manual", default="manual"
+    )
+    dai_rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 6), nullable=True)
+    vat_rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 6), nullable=True)
     manual_entry: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false", default=False
     )
@@ -94,6 +99,13 @@ class RetaceoModel(UUIDPKMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "calculation_mode IN ('automatic', 'manual')", name="ck_retaceos_calculation_mode"
+        ),
+        CheckConstraint(
+            "(calculation_mode = 'manual' AND dai_rate IS NULL AND vat_rate IS NULL) OR (calculation_mode = 'automatic' AND dai_rate IS NOT NULL AND vat_rate IS NOT NULL AND dai_rate BETWEEN 0 AND 1000 AND vat_rate BETWEEN 0 AND 1000)",
+            name="ck_retaceos_calculation_rates",
+        ),
         CheckConstraint(
             "(applied_at IS NULL AND applied_by IS NULL) OR (applied_at IS NOT NULL AND applied_by IS NOT NULL AND status IN ('verified', 'closed'))",
             name="ck_retaceos_application",
