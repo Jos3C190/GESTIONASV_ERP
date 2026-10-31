@@ -97,7 +97,18 @@ export default defineConfig(({ mode }) => ({
     // Let SvelteKit initialize SSR on demand. Speculative app-route warmup can
     // race its server module runner and cache a 500 response until restart.
     watch: {
-      ignored: ['**/.svelte-kit/**']
+      // Carpetas que no son código de la app. Montadas desde Windows cada archivo cuesta ~1 ms
+      // de consultar: recorrer la caché de pnpm (15 000 archivos) y las salidas de compilación
+      // retrasaba más de un minuto la primera carga de SvelteKit y Vite la cortaba a los 60 s.
+      ignored: [
+        '**/.svelte-kit/**',
+        '**/.pnpm-store/**',
+        '**/build/**',
+        '**/.vercel/**',
+        '**/playwright-report/**',
+        '**/test-results/**',
+        '**/coverage/**'
+      ]
     },
     fs: {
       strict: false
