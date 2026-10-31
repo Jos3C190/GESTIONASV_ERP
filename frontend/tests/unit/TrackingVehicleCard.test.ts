@@ -1,6 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TrackingWorkspace from '../../src/lib/features/tracking/TrackingWorkspace.svelte';
+
+const currentRoute = vi.hoisted(() => ({ search: '' }));
 
 const device = {
   id: 7,
@@ -41,7 +43,13 @@ vi.mock('$lib/features/tracking/maplibre', () => ({
   MAP_STYLE: '',
   loadMapLibre: () => new Promise(() => {})
 }));
-vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/tracking') } }));
+vi.mock('$app/state', () => ({
+  page: {
+    get url() {
+      return new URL(`http://localhost/tracking${currentRoute.search}`);
+    }
+  }
+}));
 vi.mock('$app/navigation', () => ({ goto: vi.fn(), replaceState: vi.fn() }));
 vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1', active: null } }));
 vi.mock('$lib/stores/permissions.svelte', () => ({ permissions: { hasPermission: () => true } }));
@@ -69,8 +77,15 @@ vi.mock('$lib/api/client', () => ({
   }
 }));
 
-describe('Tracking vehicle card', () => {
-  beforeEach(() => localStorage.clear());
+describe('Tracking panels', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    currentRoute.search = '';
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
 
   it('collapses to a compact bar and remembers it', async () => {
     render(TrackingWorkspace);
@@ -88,5 +103,73 @@ describe('Tracking vehicle card', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Mostrar el detalle' }));
     expect(await screen.findByText('Velocidad')).toBeInTheDocument();
+  });
+
+  it('collapses the units panel without losing selection, search, filters or focus', async () => {
+    render(TrackingWorkspace);
+    const row = await screen.findByRole('button', { name: /VEH-ET-01/ });
+    await fireEvent.input(screen.getByRole('searchbox', { name: 'Buscar unidades' }), {
+      target: { value: 'VEH-ET' }
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'En movimiento 1' }));
+    await fireEvent.click(row);
+
+    const toggle = screen.getByRole('button', { name: 'Contraer panel de seguimiento' });
+    toggle.focus();
+    await fireEvent.click(toggle);
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById('tracking-panel-content')).toHaveAttribute('hidden');
+    expect(screen.queryByRole('searchbox', { name: 'Buscar unidades' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Contraer el detalle' })).toBeVisible();
+    expect(localStorage.getItem('tracking.panel.collapsed')).toBe('1');
+    expect(localStorage.getItem('tracking.card.collapsed')).toBeNull();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Expandir panel de seguimiento' }));
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('searchbox', { name: 'Buscar unidades' })).toHaveValue('VEH-ET');
+    expect(screen.getByRole('button', { name: 'En movimiento 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(row).toHaveAttribute('aria-pressed', 'true');
+    expect(localStorage.getItem('tracking.panel.collapsed')).toBe('0');
+  });
+
+  it('restores the panel preference independently from the vehicle detail', async () => {
+    localStorage.setItem('tracking.panel.collapsed', '1');
+    render(TrackingWorkspace);
+    expect(screen.getByRole('button', { name: 'Expandir panel de seguimiento' })).toBeVisible();
+    expect(screen.queryByRole('tab', { name: 'Unidades' })).not.toBeInTheDocument();
+    await screen.findByText('1 unidad · 1 en movimiento');
+    await fireEvent.click(screen.getByRole('button', { name: 'Expandir panel de seguimiento' }));
+    await fireEvent.click(await screen.findByRole('button', { name: /VEH-ET-01/ }));
+    expect(screen.getByRole('button', { name: 'Contraer el detalle' })).toBeVisible();
+  });
+
+  it('still toggles if saving the preference is unavailable', async () => {
+    render(TrackingWorkspace);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('Storage unavailable');
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Contraer panel de seguimiento' }));
+    expect(screen.getByRole('button', { name: 'Expandir panel de seguimiento' })).toBeVisible();
+    await fireEvent.click(screen.getByRole('button', { name: 'Expandir panel de seguimiento' }));
+    expect(screen.getByRole('searchbox', { name: 'Buscar unidades' })).toBeVisible();
+  });
+
+  it.each([
+    ['?tab=alerts', 'Alertas'],
+    ['?transfer=transfer-1', 'Traslados']
+  ])('opens a minimized panel when navigating directly to %s', async (search, tabName) => {
+    localStorage.setItem('tracking.panel.collapsed', '1');
+    currentRoute.search = search;
+    render(TrackingWorkspace);
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: tabName })).toHaveAttribute('aria-selected', 'true')
+    );
+    expect(screen.getByRole('button', { name: 'Contraer panel de seguimiento' })).toBeVisible();
+    expect(localStorage.getItem('tracking.panel.collapsed')).toBe('0');
   });
 });

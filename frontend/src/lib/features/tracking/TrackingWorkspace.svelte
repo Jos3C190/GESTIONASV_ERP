@@ -423,6 +423,7 @@
   }
 
   function openTab(next: Tab) {
+    if (panelCollapsed) setPanelCollapsed(false);
     tab = next;
     if (next === 'transfers') loadTransfers();
     else if (selectedTransferId) selectTransfer(null);
@@ -473,6 +474,7 @@
     handledQuery = query;
     const requested = page.url.searchParams.get('transfer');
     if (requested) {
+      if (panelCollapsed) setPanelCollapsed(false);
       tab = 'transfers';
       if (requested !== selectedTransferId) selectTransfer(requested);
     } else if (page.url.searchParams.get('tab') === 'alerts') {
@@ -494,6 +496,24 @@
           item.id === alert.id ? { ...item, acknowledged_at: new Date().toISOString() } : item
         )
       };
+    }
+  }
+
+  /** El panel y el detalle recuerdan su tamaño de forma independiente. */
+  const PANEL_KEY = 'tracking.panel.collapsed';
+  let panelCollapsed = $state(false);
+  try {
+    panelCollapsed = localStorage.getItem(PANEL_KEY) === '1';
+  } catch {
+    // Sin almacenamiento, el panel empieza abierto.
+  }
+
+  function setPanelCollapsed(value: boolean) {
+    panelCollapsed = value;
+    try {
+      localStorage.setItem(PANEL_KEY, value ? '1' : '0');
+    } catch {
+      // La preferencia solo dura esta visita.
     }
   }
 
@@ -635,172 +655,220 @@
       </div>
     {/if}
 
-    <aside class="device-panel" aria-label="Seguimiento de unidades">
-      <div class="tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'units'}
-          class:active={tab === 'units'}
-          onclick={() => openTab('units')}>Unidades</button
-        >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'transfers'}
-          class:active={tab === 'transfers'}
-          onclick={() => openTab('transfers')}>Traslados</button
-        >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'geofences'}
-          class:active={tab === 'geofences'}
-          onclick={() => openTab('geofences')}>Geocercas</button
-        >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'events'}
-          class:active={tab === 'events'}
-          onclick={() => openTab('events')}
-          >Eventos{#if unread}<span class="unread">{unread > 99 ? '99+' : unread}</span
-            >{/if}</button
-        >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'alerts'}
-          class:active={tab === 'alerts'}
-          onclick={() => openTab('alerts')}
-          >Alertas{#if trackingAlerts.unacknowledged}<span class="unread alert-count"
-              >{trackingAlerts.unacknowledged > 99 ? '99+' : trackingAlerts.unacknowledged}</span
-            >{/if}</button
-        >
-      </div>
-      {#if tab === 'geofences'}
-        <GeofencePanel
-          geofences={manualGeofences}
-          sites={sitesData}
-          canSync={permissions.hasPermission('tracking:geofences')}
-          syncing={syncingSites}
-          onsync={syncSites}
-          onfocussite={(site) =>
-            mapView?.fitRing(circleRing([site.longitude, site.latitude], site.radius_m, 32))}
-          canManage={canManageGeofences}
-          {draft}
-          saving={savingGeofence}
-          error={geofenceError}
-          highlighted={highlightedGeofence}
-          onstartdraw={startDraw}
-          onundo={undoDraftPoint}
-          onradius={(radiusM) => draft && (draft = { ...draft, radiusM })}
-          oncancel={() => (draft = null)}
-          onsave={saveGeofence}
-          ondelete={deleteGeofence}
-          onfocus={focusGeofence}
-        />
-      {:else if tab === 'transfers'}
-        <TransfersPanel
-          transfers={transferList}
-          selectedId={selectedTransferId}
-          loading={transfersLoading}
-          error={transferError}
-          {now}
-          onselect={(id) => selectTransfer(id === selectedTransferId ? null : id)}
-        />
-      {:else if tab === 'alerts'}
-        <AlertsPanel
-          alerts={trackingAlerts.items}
-          {now}
-          monitorActive={trackingAlerts.monitorActive}
-          error={trackingAlerts.error}
-          onopen={openAlert}
-          onacknowledge={acknowledgeAlert}
-        />
-      {:else if tab === 'events'}
-        <EventsPanel {events} {now} focusedId={focusedEvent?.id ?? null} onfocus={focusEvent} />
-      {:else}
-        <div class="panel-search">
-          <FleetIcon name="search" size={16} />
-          <input
-            bind:value={query}
-            type="search"
-            placeholder="Buscar unidad, placa o conductor"
-            aria-label="Buscar unidades"
-          />
+    <aside
+      class="device-panel"
+      class:panel-collapsed={panelCollapsed}
+      aria-label="Seguimiento de unidades"
+    >
+      <header class="panel-header">
+        <div class="panel-heading">
+          <FleetIcon name="list" size={17} />
+          <div>
+            <h2>Seguimiento</h2>
+            <p>
+              {mode === 'loading'
+                ? 'Conectando GPS…'
+                : `${counts.all} ${counts.all === 1 ? 'unidad' : 'unidades'} · ${counts.moving} en movimiento`}
+            </p>
+          </div>
         </div>
-        <div class="filters" role="group" aria-label="Filtrar por estado">
-          {#each filters as item (item.id)}
-            <button
-              type="button"
-              class:active={filter === item.id}
-              aria-pressed={filter === item.id}
-              onclick={() => (filter = item.id)}>{item.label}<span>{counts[item.id]}</span></button
+        <div class="panel-tools">
+          {#if panelCollapsed && unread + trackingAlerts.unacknowledged > 0}
+            <span
+              class="unread"
+              aria-label={`${unread + trackingAlerts.unacknowledged} eventos y alertas pendientes`}
+              title="Eventos y alertas pendientes"
+              >{unread + trackingAlerts.unacknowledged > 99
+                ? '99+'
+                : unread + trackingAlerts.unacknowledged}</span
             >
-          {/each}
+          {/if}
+          <button
+            type="button"
+            class="icon-button panel-toggle"
+            class:flipped={panelCollapsed}
+            aria-expanded={!panelCollapsed}
+            aria-controls="tracking-panel-content"
+            aria-label={panelCollapsed
+              ? 'Expandir panel de seguimiento'
+              : 'Contraer panel de seguimiento'}
+            title={panelCollapsed
+              ? 'Expandir panel de seguimiento'
+              : 'Contraer panel de seguimiento'}
+            onclick={() => setPanelCollapsed(!panelCollapsed)}
+            ><FleetIcon name="chevron" size={15} /></button
+          >
         </div>
-        <ul class="device-list">
-          {#each visible as vehicle (vehicle.key)}
-            <li>
+      </header>
+      <div id="tracking-panel-content" class="panel-content" hidden={panelCollapsed}>
+        <div class="tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'units'}
+            class:active={tab === 'units'}
+            onclick={() => openTab('units')}>Unidades</button
+          >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'transfers'}
+            class:active={tab === 'transfers'}
+            onclick={() => openTab('transfers')}>Traslados</button
+          >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'geofences'}
+            class:active={tab === 'geofences'}
+            onclick={() => openTab('geofences')}>Geocercas</button
+          >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'events'}
+            class:active={tab === 'events'}
+            onclick={() => openTab('events')}
+            >Eventos{#if unread}<span class="unread">{unread > 99 ? '99+' : unread}</span
+              >{/if}</button
+          >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'alerts'}
+            class:active={tab === 'alerts'}
+            onclick={() => openTab('alerts')}
+            >Alertas{#if trackingAlerts.unacknowledged}<span class="unread alert-count"
+                >{trackingAlerts.unacknowledged > 99 ? '99+' : trackingAlerts.unacknowledged}</span
+              >{/if}</button
+          >
+        </div>
+        {#if tab === 'geofences'}
+          <GeofencePanel
+            geofences={manualGeofences}
+            sites={sitesData}
+            canSync={permissions.hasPermission('tracking:geofences')}
+            syncing={syncingSites}
+            onsync={syncSites}
+            onfocussite={(site) =>
+              mapView?.fitRing(circleRing([site.longitude, site.latitude], site.radius_m, 32))}
+            canManage={canManageGeofences}
+            {draft}
+            saving={savingGeofence}
+            error={geofenceError}
+            highlighted={highlightedGeofence}
+            onstartdraw={startDraw}
+            onundo={undoDraftPoint}
+            onradius={(radiusM) => draft && (draft = { ...draft, radiusM })}
+            oncancel={() => (draft = null)}
+            onsave={saveGeofence}
+            ondelete={deleteGeofence}
+            onfocus={focusGeofence}
+          />
+        {:else if tab === 'transfers'}
+          <TransfersPanel
+            transfers={transferList}
+            selectedId={selectedTransferId}
+            loading={transfersLoading}
+            error={transferError}
+            {now}
+            onselect={(id) => selectTransfer(id === selectedTransferId ? null : id)}
+          />
+        {:else if tab === 'alerts'}
+          <AlertsPanel
+            alerts={trackingAlerts.items}
+            {now}
+            monitorActive={trackingAlerts.monitorActive}
+            error={trackingAlerts.error}
+            onopen={openAlert}
+            onacknowledge={acknowledgeAlert}
+          />
+        {:else if tab === 'events'}
+          <EventsPanel {events} {now} focusedId={focusedEvent?.id ?? null} onfocus={focusEvent} />
+        {:else}
+          <div class="panel-search">
+            <FleetIcon name="search" size={16} />
+            <input
+              bind:value={query}
+              type="search"
+              placeholder="Buscar unidad, placa o conductor"
+              aria-label="Buscar unidades"
+            />
+          </div>
+          <div class="filters" role="group" aria-label="Filtrar por estado">
+            {#each filters as item (item.id)}
               <button
                 type="button"
-                class="device-row"
-                class:selected={vehicle.key === selectedKey}
-                aria-pressed={vehicle.key === selectedKey}
-                onclick={() => select(vehicle.key)}
+                class:active={filter === item.id}
+                aria-pressed={filter === item.id}
+                onclick={() => (filter = item.id)}
+                >{item.label}<span>{counts[item.id]}</span></button
               >
-                <span class="device-avatar {vehicle.status}"
-                  ><FleetIcon name="truck" size={17} /></span
+            {/each}
+          </div>
+          <ul class="device-list">
+            {#each visible as vehicle (vehicle.key)}
+              <li>
+                <button
+                  type="button"
+                  class="device-row"
+                  class:selected={vehicle.key === selectedKey}
+                  aria-pressed={vehicle.key === selectedKey}
+                  onclick={() => select(vehicle.key)}
                 >
-                <span class="device-main">
-                  <strong
-                    >{vehicle.name}{#if vehicle.simulated}<span
-                        class="sim-tag"
-                        title="Posición del GPS virtual del simulador">SIM</span
-                      >{/if}</strong
+                  <span class="device-avatar {vehicle.status}"
+                    ><FleetIcon name="truck" size={17} /></span
                   >
-                  <span
-                    >{vehicle.vehicle
-                      ? [vehicle.vehicle.plate, vehicle.vehicle.driver_name ?? 'Sin conductor']
-                          .filter(Boolean)
-                          .join(' · ')
-                      : 'Dispositivo GPS'}</span
-                  >
-                </span>
-                <span class="device-side">
-                  <span class="status-text {vehicle.status}">{STATUS_LABELS[vehicle.status]}</span>
-                  <span
-                    >{vehicle.status === 'moving'
-                      ? `${Math.round(vehicle.speedKmh)} km/h`
-                      : timeAgo(vehicle.fixTime, now)}</span
-                  >
-                </span>
-              </button>
-            </li>
-          {:else}
-            <li class="empty">
-              {mode === 'loading'
-                ? 'Conectando con el servidor GPS…'
-                : vehicles.length
-                  ? 'Ninguna unidad coincide con la búsqueda.'
-                  : mode === 'unconfigured'
-                    ? 'El servidor GPS no está configurado. Los traslados siguen disponibles en su pestaña.'
-                    : coverage && coverage.withGps === 0
-                      ? coverage.total
-                        ? 'Ningún vehículo tiene GPS vinculado. Vincúlalo desde su ficha en Flota.'
-                        : 'No hay vehículos registrados en Flota para esta sucursal.'
-                      : 'Las unidades con GPS aún no reportan posición.'}
-            </li>
-          {/each}
-        </ul>
-      {/if}
-      {#if mode === 'live' && coverage && coverage.withGps < coverage.total}
-        <p class="panel-note">
-          <FleetIcon name="info" size={13} />{coverage.withGps} de {coverage.total} vehículos tienen GPS
-          vinculado. <a href="/fleet">Vincular en Flota</a>
-        </p>
-      {/if}
+                  <span class="device-main">
+                    <strong
+                      >{vehicle.name}{#if vehicle.simulated}<span
+                          class="sim-tag"
+                          title="Posición del GPS virtual del simulador">SIM</span
+                        >{/if}</strong
+                    >
+                    <span
+                      >{vehicle.vehicle
+                        ? [vehicle.vehicle.plate, vehicle.vehicle.driver_name ?? 'Sin conductor']
+                            .filter(Boolean)
+                            .join(' · ')
+                        : 'Dispositivo GPS'}</span
+                    >
+                  </span>
+                  <span class="device-side">
+                    <span class="status-text {vehicle.status}">{STATUS_LABELS[vehicle.status]}</span
+                    >
+                    <span
+                      >{vehicle.status === 'moving'
+                        ? `${Math.round(vehicle.speedKmh)} km/h`
+                        : timeAgo(vehicle.fixTime, now)}</span
+                    >
+                  </span>
+                </button>
+              </li>
+            {:else}
+              <li class="empty">
+                {mode === 'loading'
+                  ? 'Conectando con el servidor GPS…'
+                  : vehicles.length
+                    ? 'Ninguna unidad coincide con la búsqueda.'
+                    : mode === 'unconfigured'
+                      ? 'El servidor GPS no está configurado. Los traslados siguen disponibles en su pestaña.'
+                      : coverage && coverage.withGps === 0
+                        ? coverage.total
+                          ? 'Ningún vehículo tiene GPS vinculado. Vincúlalo desde su ficha en Flota.'
+                          : 'No hay vehículos registrados en Flota para esta sucursal.'
+                        : 'Las unidades con GPS aún no reportan posición.'}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        {#if mode === 'live' && coverage && coverage.withGps < coverage.total}
+          <p class="panel-note">
+            <FleetIcon name="info" size={13} />{coverage.withGps} de {coverage.total} vehículos tienen
+            GPS vinculado. <a href="/fleet">Vincular en Flota</a>
+          </p>
+        {/if}
+      </div>
     </aside>
 
     {#if selectedTransferId}
@@ -1138,7 +1206,7 @@
     position: absolute;
     top: 12px;
     left: 12px;
-    bottom: 12px;
+    bottom: 16px;
     z-index: 2;
     display: flex;
     flex-direction: column;
@@ -1149,6 +1217,63 @@
     background: rgb(var(--surface) / 0.97);
     box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
     backdrop-filter: blur(6px);
+  }
+  .device-panel.panel-collapsed {
+    top: auto;
+    height: auto;
+  }
+  .panel-header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .panel-heading {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+  }
+  .panel-heading > :global(svg) {
+    flex-shrink: 0;
+    color: rgb(var(--foreground-muted));
+  }
+  .panel-heading h2 {
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .panel-heading p {
+    margin-top: 2px;
+    font-size: 11px;
+    color: rgb(var(--foreground-muted));
+  }
+  .panel-tools {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 6px;
+  }
+  .panel-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .panel-content[hidden] {
+    display: none;
+  }
+  .panel-toggle :global(svg) {
+    transform: rotate(90deg);
+    transition: transform 160ms ease;
+  }
+  .panel-toggle.flipped :global(svg) {
+    transform: rotate(-90deg);
+  }
+  .icon-button.panel-toggle {
+    width: 36px;
+    height: 36px;
   }
   .tabs {
     display: flex;
@@ -1643,8 +1768,17 @@
     .device-panel {
       width: 300px;
     }
+    .vehicle-card {
+      left: 324px;
+    }
   }
   @media (max-width: 900px) {
+    .panel-toggle :global(svg) {
+      transform: rotate(-90deg);
+    }
+    .panel-toggle.flipped :global(svg) {
+      transform: rotate(90deg);
+    }
     /* En pantallas angostas el mapa va arriba, de borde a borde, y el panel debajo. */
     .tracking-workspace {
       height: auto;
@@ -1695,6 +1829,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .panel-toggle :global(svg) {
+      transition: none;
+    }
     .status-chip .dot.live,
     .vehicle-card {
       animation: none;
