@@ -243,7 +243,9 @@ class InventoryTransferOut(ORMOut):
     vehicle: TransferVehicleReferenceOut | None
     driver: TransferDriverReferenceOut | None = None
     compliance_override_reason: str | None = None
-    status: Literal["preparation", "in_transit", "received", "closed_with_adjustment", "incident", "cancelled"]
+    status: Literal[
+        "preparation", "in_transit", "received", "closed_with_adjustment", "incident", "cancelled"
+    ]
     notes: str | None
     created_by_id: uuid.UUID
     created_at: datetime

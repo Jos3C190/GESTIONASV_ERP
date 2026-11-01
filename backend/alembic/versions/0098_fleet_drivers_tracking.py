@@ -1,5 +1,6 @@
 """Fleet vehicles, drivers, maintenance, fuel and fleet documents."""
 
+import sqlalchemy as sa
 from alembic import op
 
 revision = "0098_fleet"
@@ -421,5 +422,62 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Los registros de flota son historia operativa; no se eliminan silenciosamente.
-    raise RuntimeError("0098 no admite downgrade: elimine los datos de flota manualmente.")
+    # Permit historical migration tests and unused installations to roll back,
+    # but refuse to erase even soft-deleted fleet records or dispatch history.
+    tables = (
+        "fleet_fuel_logs",
+        "fleet_maintenance_orders",
+        "fleet_maintenance_plans",
+        "fleet_odometer_readings",
+        "vehicle_driver_assignments",
+        "fleet_vehicle_photos",
+        "drivers",
+        "fleet_vehicles",
+    )
+    op.execute(
+        "LOCK TABLE "
+        + ", ".join((*tables, "document_records", "inventory_transfers", "document_categories"))
+        + " IN ACCESS EXCLUSIVE MODE"
+    )
+    populated = op.get_bind().scalar(
+        sa.text(
+            "SELECT "
+            + " OR ".join(f"EXISTS (SELECT 1 FROM {table})" for table in tables)
+            + " OR EXISTS (SELECT 1 FROM document_records WHERE module = 'fleet')"
+            + " OR EXISTS (SELECT 1 FROM inventory_transfers WHERE driver_id IS NOT NULL "
+            "OR compliance_override_by IS NOT NULL OR compliance_override_reason IS NOT NULL)"
+        )
+    )
+    if populated:
+        raise RuntimeError("0098_fleet no admite downgrade con datos de flota o despachos.")
+
+    op.drop_constraint(
+        "fk_inventory_transfers_driver_company", "inventory_transfers", type_="foreignkey"
+    )
+    op.drop_constraint(
+        "ck_inventory_transfers_compliance_override", "inventory_transfers", type_="check"
+    )
+    for name in ("driver_id", "compliance_override_by", "compliance_override_reason"):
+        op.drop_column("inventory_transfers", name)
+    for table in tables:
+        op.drop_table(table)
+    op.drop_constraint("uq_employees_company_id", "employees", type_="unique")
+
+    op.execute("DELETE FROM document_categories WHERE module = 'fleet'")
+    op.drop_constraint(
+        "ck_document_categories_compliance_expiry", "document_categories", type_="check"
+    )
+    op.drop_column("document_categories", "compliance_required")
+    op.drop_column("document_categories", "requires_expiry")
+    for table in ("document_categories", "document_records"):
+        op.drop_constraint(f"ck_{table}_module", table, type_="check")
+        op.create_check_constraint(f"ck_{table}_module", table, "module IN ('general','employees')")
+    op.drop_constraint("ck_document_records_owner", "document_records", type_="check")
+    op.create_check_constraint(
+        "ck_document_records_owner",
+        "document_records",
+        "(module = 'general' AND owner_type IS NULL AND owner_id IS NULL) "
+        "OR (module = 'employees' AND owner_type = 'employee' AND owner_id IS NOT NULL)",
+    )
+    # Keep shared permission/category identities: earlier revisions and upgrades
+    # reconcile these catalogues idempotently without deleting existing grants.

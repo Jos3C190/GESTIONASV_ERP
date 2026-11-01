@@ -779,7 +779,8 @@ class SqlAlchemyInventoryTransferRepository:
         compliance_override_reason: str | None = None,
     ) -> dict[str, Any]:
         fingerprint = self._fingerprint(
-            "dispatch", {"transfer_id": transfer_id, "vehicle_id": vehicle_id, "driver_id": driver_id}
+            "dispatch",
+            {"transfer_id": transfer_id, "vehicle_id": vehicle_id, "driver_id": driver_id},
         )
         replay = await self._replay_command(
             company_id=company_id, action="dispatch", key=idempotency_key, fingerprint=fingerprint
@@ -1348,9 +1349,17 @@ class SqlAlchemyInventoryTransferRepository:
         if transfer.driver_id is not None:
             driver_row = (
                 await self._session.execute(
-                    select(DriverModel.id, Employee.first_name, Employee.last_name, Employee.employee_code)
+                    select(
+                        DriverModel.id,
+                        Employee.first_name,
+                        Employee.last_name,
+                        Employee.employee_code,
+                    )
                     .join(Employee, Employee.id == DriverModel.employee_id)
-                    .where(DriverModel.company_id == transfer.company_id, DriverModel.id == transfer.driver_id)
+                    .where(
+                        DriverModel.company_id == transfer.company_id,
+                        DriverModel.id == transfer.driver_id,
+                    )
                     .execution_options(include_deleted=True)
                 )
             ).first()

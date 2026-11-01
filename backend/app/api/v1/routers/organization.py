@@ -1012,7 +1012,8 @@ async def create_branch(
 
 
 @router.patch(
-    "/branches/{record_id}", dependencies=[Depends(require_permission("branches.update")), Depends(sync_sites_after_change)]
+    "/branches/{record_id}",
+    dependencies=[Depends(require_permission("branches.update")), Depends(sync_sites_after_change)],
 )
 async def update_branch(
     record_id: uuid.UUID,
@@ -1088,7 +1089,10 @@ async def update_branch(
 
 @router.post(
     "/branches/{record_id}/activate",
-    dependencies=[Depends(require_permission("branches.activate")), Depends(sync_sites_after_change)],
+    dependencies=[
+        Depends(require_permission("branches.activate")),
+        Depends(sync_sites_after_change),
+    ],
 )
 async def activate_branch(
     record_id: uuid.UUID, request: Request, session: SessionDep, current: CurrentUser
@@ -1111,7 +1115,10 @@ async def activate_branch(
 
 @router.post(
     "/branches/{record_id}/deactivate",
-    dependencies=[Depends(require_permission("branches.deactivate")), Depends(sync_sites_after_change)],
+    dependencies=[
+        Depends(require_permission("branches.deactivate")),
+        Depends(sync_sites_after_change),
+    ],
 )
 async def deactivate_branch(
     record_id: uuid.UUID, request: Request, session: SessionDep, current: CurrentUser
@@ -1746,7 +1753,10 @@ async def get_warehouse(
 @router.post(
     "/warehouses",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("warehouses.create")), Depends(sync_sites_after_change)],
+    dependencies=[
+        Depends(require_permission("warehouses.create")),
+        Depends(sync_sites_after_change),
+    ],
 )
 async def create_warehouse(
     body: WarehouseIn, request: Request, session: SessionDep, current: CurrentUser
@@ -1784,7 +1794,11 @@ async def create_warehouse(
 
 
 @router.patch(
-    "/warehouses/{record_id}", dependencies=[Depends(require_permission("warehouses.update")), Depends(sync_sites_after_change)]
+    "/warehouses/{record_id}",
+    dependencies=[
+        Depends(require_permission("warehouses.update")),
+        Depends(sync_sites_after_change),
+    ],
 )
 async def update_warehouse(
     record_id: uuid.UUID,
@@ -1860,7 +1874,10 @@ async def update_warehouse(
 
 @router.post(
     "/warehouses/{record_id}/deactivate",
-    dependencies=[Depends(require_permission("warehouses.deactivate")), Depends(sync_sites_after_change)],
+    dependencies=[
+        Depends(require_permission("warehouses.deactivate")),
+        Depends(sync_sites_after_change),
+    ],
 )
 async def deactivate_warehouse(
     record_id: uuid.UUID, request: Request, session: SessionDep, current: CurrentUser
@@ -1896,7 +1913,10 @@ async def deactivate_warehouse(
 
 @router.post(
     "/warehouses/{record_id}/activate",
-    dependencies=[Depends(require_permission("warehouses.activate")), Depends(sync_sites_after_change)],
+    dependencies=[
+        Depends(require_permission("warehouses.activate")),
+        Depends(sync_sites_after_change),
+    ],
 )
 async def activate_warehouse(
     record_id: uuid.UUID, request: Request, session: SessionDep, current: CurrentUser

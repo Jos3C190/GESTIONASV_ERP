@@ -1,5 +1,6 @@
 """Warehouse locations of their own, arrival radius and tracking site sync state."""
 
+import sqlalchemy as sa
 from alembic import op
 
 revision = "0099"
@@ -44,4 +45,25 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError("0099 is not reversible: it would drop warehouse locations.")
+    op.execute("LOCK TABLE warehouses, branches, tracking_sync_state IN ACCESS EXCLUSIVE MODE")
+    populated = op.get_bind().scalar(
+        sa.text(
+            "SELECT EXISTS (SELECT 1 FROM warehouses WHERE location_mode <> 'branch' "
+            "OR latitude IS NOT NULL OR longitude IS NOT NULL OR geofence_radius_m IS NOT NULL) "
+            "OR EXISTS (SELECT 1 FROM branches WHERE geofence_radius_m <> 150) "
+            "OR EXISTS (SELECT 1 FROM tracking_sync_state)"
+        )
+    )
+    if populated:
+        raise RuntimeError("0099 is not reversible: it would drop warehouse locations.")
+    op.drop_table("tracking_sync_state")
+    op.drop_constraint("ck_branches_geofence_radius", "branches", type_="check")
+    op.drop_column("branches", "geofence_radius_m")
+    for name in (
+        "ck_warehouses_location_mode",
+        "ck_warehouses_location_coordinates",
+        "ck_warehouses_geofence_radius",
+    ):
+        op.drop_constraint(name, "warehouses", type_="check")
+    for name in ("location_mode", "latitude", "longitude", "geofence_radius_m"):
+        op.drop_column("warehouses", name)

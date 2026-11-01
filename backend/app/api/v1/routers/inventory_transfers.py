@@ -231,7 +231,10 @@ async def _persist_command(
         async with session.begin_nested():
             result = await operation
             response = response_model.model_validate(result)
-            if isinstance(response, InventoryTransferOut) and response.status in CLOSED_TRANSFER_STATUSES:
+            if (
+                isinstance(response, InventoryTransferOut)
+                and response.status in CLOSED_TRANSFER_STATUSES
+            ):
                 # Al cerrarse el viaje se guarda su recorrido y se cierran sus alertas.
                 archive_trip_on_commit(session, company_id, response.id)
             await audit.record(
