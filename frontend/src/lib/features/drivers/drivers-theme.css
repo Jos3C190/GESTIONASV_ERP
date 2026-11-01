@@ -1,0 +1,14 @@
+/* Shared local scale for the Drivers workspace and its dialogs. */
+.drivers,
+.driver-inspector,
+.driver-create {
+  --driver-radius-sm: 6px;
+  --driver-radius: 8px;
+  --driver-radius-lg: 12px;
+  --driver-space-1: 4px;
+  --driver-space-2: 8px;
+  --driver-space-3: 12px;
+  --driver-space-4: 16px;
+  --driver-space-5: 24px;
+  --driver-space-6: 32px;
+}

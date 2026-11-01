@@ -6,11 +6,15 @@
     images,
     index = $bindable(0),
     title,
+    layer = 100,
+    onimageerror,
     onclose
   }: {
     images: { src: string; alt: string }[];
     index?: number;
     title: string;
+    layer?: number;
+    onimageerror?: () => void;
     onclose: () => void;
   } = $props();
 
@@ -18,6 +22,10 @@
   const MAX_ZOOM = 4;
   const STEP = 0.5;
 
+  const instructionsId = $props.id();
+  let imageLoading = $state(true);
+  let imageError = $state(false);
+  let imageAttempt = $state(0);
   let zoom = $state(1);
   let pan = $state({ x: 0, y: 0 });
   let drag = $state<{ pointer: number; x: number; y: number } | null>(null);
@@ -30,6 +38,9 @@
 
   $effect(() => {
     void index;
+    void current?.src;
+    imageLoading = true;
+    imageError = false;
     zoom = 1;
     pan = { x: 0, y: 0 };
   });
@@ -47,8 +58,14 @@
   function onkeydown(event: KeyboardEvent) {
     const actions: Record<string, () => void> = {
       Escape: onclose,
-      ArrowLeft: () => go(-1),
-      ArrowRight: () => go(1),
+      ArrowLeft: () => (zoom > 1 ? (pan.x += 60) : go(-1)),
+      ArrowRight: () => (zoom > 1 ? (pan.x -= 60) : go(1)),
+      ArrowUp: () => {
+        if (zoom > 1) pan.y += 60;
+      },
+      ArrowDown: () => {
+        if (zoom > 1) pan.y -= 60;
+      },
       '+': () => setZoom(zoom + STEP),
       '=': () => setZoom(zoom + STEP),
       '-': () => setZoom(zoom - STEP),
@@ -114,11 +131,16 @@
   use:portal
   bind:this={dialog}
   class="lightbox"
+  style:z-index={layer}
   role="dialog"
   aria-modal="true"
   aria-label={title}
+  aria-describedby={instructionsId}
   tabindex="-1"
   {onkeydown}
+  onclick={(event) => {
+    if (event.target === stage && zoom === 1) onclose();
+  }}
 >
   <header class="toolbar">
     <div class="caption">
@@ -152,29 +174,44 @@
     </div>
   </header>
 
-  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-  <div
-    bind:this={stage}
-    class="stage"
-    class:zoomed={zoom > 1}
-    onclick={(event) => {
-      if (event.target === event.currentTarget && zoom === 1) onclose();
-    }}
-  >
+  <div bind:this={stage} class="stage" class:zoomed={zoom > 1}>
     {#if current}
-      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-      <img
-        src={current.src}
-        alt={current.alt}
-        draggable="false"
-        style:transform="translate({pan.x}px, {pan.y}px) scale({zoom})"
-        class:dragging={drag !== null}
-        ondblclick={() => setZoom(zoom > 1 ? 1 : 2)}
-        {onpointerdown}
-        {onpointermove}
-        onpointerup={() => (drag = null)}
-        onpointercancel={() => (drag = null)}
-      />
+      {#key `${current.src}:${imageAttempt}`}
+        <img
+          src={current.src}
+          alt={current.alt}
+          draggable="false"
+          class:failed={imageError}
+          onload={() => {
+            imageLoading = false;
+            imageError = false;
+          }}
+          onerror={() => {
+            imageLoading = false;
+            imageError = true;
+            onimageerror?.();
+          }}
+          style:transform="translate({pan.x}px, {pan.y}px) scale({zoom})"
+          class:dragging={drag !== null}
+          ondblclick={() => setZoom(zoom > 1 ? 1 : 2)}
+          {onpointerdown}
+          {onpointermove}
+          onpointerup={() => (drag = null)}
+          onpointercancel={() => (drag = null)}
+        />
+      {/key}
+      {#if imageError}<div class="image-status" role="alert">
+          <p>No se pudo cargar la imagen.</p>
+          <button
+            type="button"
+            onclick={() => {
+              imageError = false;
+              imageLoading = true;
+              imageAttempt++;
+            }}>Reintentar imagen</button
+          >
+        </div>
+      {:else if imageLoading}<p class="image-status" role="status">Cargando imagen…</p>{/if}
     {/if}
     {#if multiple}
       <button type="button" class="nav prev" aria-label="Imagen anterior" onclick={() => go(-1)}
@@ -199,6 +236,9 @@
       {/each}
     </div>
   {/if}
+  <p class="viewer-help" id={instructionsId}>
+    Con zoom, usa las flechas para mover la imagen. + / − para acercar o alejar. Esc para cerrar.
+  </p>
 </div>
 
 <style>
@@ -207,15 +247,46 @@
     inset: 0;
     z-index: 100;
     display: grid;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto 1fr auto auto;
+    grid-template-columns: minmax(0, 1fr);
+    overflow: hidden;
     background: rgb(9 9 11 / 0.94);
     color: #fafafa;
     animation: fade-in 150ms ease-out;
+  }
+  .image-status {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 13px;
+    color: #e4e4e7;
+    background: rgb(9 9 11 / 0.85);
+  }
+  .image-status button {
+    min-height: 40px;
+    padding: 0 16px;
+    border: 1px solid #71717a;
+    border-radius: 8px;
+  }
+  .stage img.failed {
+    display: none;
+  }
+  .viewer-help {
+    padding: 8px 16px;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.5;
+    color: #a1a1aa;
   }
   .lightbox:focus {
     outline: none;
   }
   .toolbar {
+    min-width: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -223,6 +294,7 @@
     padding: 12px 16px;
   }
   .caption {
+    flex: 1;
     display: flex;
     align-items: baseline;
     gap: 10px;
@@ -230,6 +302,7 @@
     font-size: 13px;
   }
   .caption strong {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -241,6 +314,7 @@
     font-variant-numeric: tabular-nums;
   }
   .tools {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 4px;
@@ -280,6 +354,7 @@
     background: rgb(255 255 255 / 0.18);
   }
   .stage {
+    min-width: 0;
     position: relative;
     display: grid;
     place-items: center;

@@ -19,6 +19,7 @@ export interface OwnedDocumentsPage {
 export interface OwnedDocumentsApi {
   basePath: string;
   categories: () => Promise<DocumentCategoryOut[]>;
+  get: (id: string) => Promise<DocumentRecordOut>;
   list: (params?: {
     page?: number;
     size?: number;
@@ -41,6 +42,7 @@ export function ownedDocuments(basePath: string): OwnedDocumentsApi {
   return {
     basePath,
     categories: () => apiFetch<DocumentCategoryOut[]>(`${root}/categories`),
+    get: (id) => apiFetch<DocumentRecordOut>(`${root}/${id}`),
     list: (params = {}) => {
       const query = new URLSearchParams();
       for (const [key, value] of Object.entries(params)) {
