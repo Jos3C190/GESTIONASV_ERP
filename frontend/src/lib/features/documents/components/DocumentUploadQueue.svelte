@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { OwnedDocumentsApi } from '$lib/api/owned-documents';
   import {
     api,
@@ -55,6 +56,7 @@
     progress: number;
     error: string | null;
     metadata: MetadataDraft;
+    overriddenFields: (keyof MetadataDraft)[];
   }
 
   let {
@@ -83,6 +85,41 @@
   let error = $state<string | null>(null);
   let dragActive = $state(false);
   let fileInput: HTMLInputElement;
+
+  const activeCategories = $derived(categories.filter((category) => category.is_active));
+  const allowOther = $derived(
+    !owner || activeCategories.some((category) => category.code === 'other')
+  );
+  const categoryOptions = $derived([
+    ...(allowOther
+      ? [{ value: '', label: 'Otros' }]
+      : activeCategories.length === 1
+        ? []
+        : [{ value: '', label: 'Seleccionar categoría' }]),
+    ...activeCategories.map((category) => ({ value: category.id, label: category.name }))
+  ]);
+  const selectedCategory = $derived(
+    activeCategories.find((category) => category.id === categoryId)
+  );
+
+  $effect(() => {
+    if (!categoryId && !allowOther && activeCategories.length === 1)
+      categoryId = activeCategories[0]!.id;
+  });
+
+  // Pending files follow defaults, except fields deliberately edited for one file.
+  $effect(() => {
+    const draft = currentMetadata();
+    untrack(() => {
+      queue = queue.map((item) => {
+        if (item.state !== 'queued' && item.state !== 'error') return item;
+        const overrides = Object.fromEntries(
+          item.overriddenFields.map((field) => [field, item.metadata[field]])
+        );
+        return { ...item, metadata: { ...draft, ...overrides } };
+      });
+    });
+  });
 
   const maxQueue = 20;
   const maxConcurrency = 3;
@@ -135,7 +172,8 @@
         state: 'queued' as QueueState,
         progress: 0,
         error: null,
-        metadata: currentMetadata()
+        metadata: currentMetadata(),
+        overriddenFields: []
       }))
     ];
     if (!limitExceeded) error = null;
@@ -168,16 +206,28 @@
 
   function updateMetadata(id: string, changes: Partial<MetadataDraft>) {
     queue = queue.map((item) =>
-      item.id === id ? { ...item, metadata: { ...item.metadata, ...changes } } : item
+      item.id === id
+        ? {
+            ...item,
+            metadata: { ...item.metadata, ...changes },
+            overriddenFields: [
+              ...new Set([
+                ...item.overriddenFields,
+                ...(Object.keys(changes) as (keyof MetadataDraft)[])
+              ])
+            ]
+          }
+        : item
     );
   }
 
   function applyMetadataToAll() {
     queue = queue.map((item) =>
-      item.state === 'queued'
+      item.state === 'queued' || item.state === 'error'
         ? {
             ...item,
-            metadata: currentMetadata()
+            metadata: currentMetadata(),
+            overriddenFields: []
           }
         : item
     );
@@ -217,6 +267,21 @@
     if (!queue.some((candidate) => candidate.id === item.id && candidate.state === 'queued')) {
       return false;
     }
+    const category = activeCategories.find(
+      (candidate) => candidate.id === item.metadata.categoryId
+    );
+    const validationError =
+      !allowOther && !item.metadata.categoryId
+        ? 'Selecciona una categoría disponible para este archivo.'
+        : item.metadata.categoryId && !category
+          ? 'La categoría seleccionada ya no está disponible. Selecciona otra categoría.'
+          : category?.requires_expiry && !item.metadata.expiresOn && !replaceDocumentId
+            ? `Indica la fecha de vencimiento de «${category.name}» antes de cargar el archivo.`
+            : null;
+    if (validationError) {
+      setItem(item.id, { state: 'error', error: validationError });
+      return false;
+    }
     try {
       setItem(item.id, { state: 'preparing', progress: 0, error: null });
       const sha = await checksum(item.file);
@@ -233,12 +298,12 @@
           ? await owner.replace(replaceDocumentId, input)
           : await owner.initiate(input)
         : replaceDocumentId
-        ? await api.documents.replace(replaceDocumentId, input, employeeId)
-        : employeeId
-          ? await api.documents.initiateEmployee(employeeId, input)
-          : folderId !== undefined
-            ? await api.documents.initiateGeneral(folderId ?? null, input)
-            : await api.documents.initiate(input);
+          ? await api.documents.replace(replaceDocumentId, input, employeeId)
+          : employeeId
+            ? await api.documents.initiateEmployee(employeeId, input)
+            : folderId !== undefined
+              ? await api.documents.initiateGeneral(folderId ?? null, input)
+              : await api.documents.initiate(input);
       setItem(item.id, { state: 'uploading' });
       await api.documents.uploadDirect(ticket, item.file, (progress) =>
         setItem(item.id, { progress })
@@ -262,17 +327,23 @@
 
   async function start(ids?: string[], closeOnSuccess = true) {
     if (queue.length === 0 || running) return;
+    const pending = queue
+      .filter(
+        (item) =>
+          (item.state === 'queued' || item.state === 'error') && (!ids || ids.includes(item.id))
+      )
+      .map((item) => item.id);
+    if (!pending.length) return;
+    for (const id of pending) setItem(id, { state: 'queued', error: null });
     running = true;
     error = null;
-    const pending = queue.filter(
-      (item) => item.state !== 'done' && (!ids || ids.includes(item.id))
-    );
     let cursor = 0;
     let failed = false;
     const worker = async () => {
       while (cursor < pending.length) {
-        const item = pending[cursor++];
-        if (!item) return;
+        const id = pending[cursor++];
+        const item = queue.find((candidate) => candidate.id === id);
+        if (!item) continue;
         const succeeded = await processItem(item);
         failed ||= !succeeded;
       }
@@ -282,7 +353,7 @@
     );
     running = false;
     if (failed) error = 'Algunos archivos requieren atención. Puede reintentarlos.';
-    else if (closeOnSuccess) onfinished?.();
+    else if (closeOnSuccess || queue.every((item) => item.state === 'done')) onfinished?.();
   }
 
   async function retryItem(id: string) {
@@ -454,7 +525,7 @@
               class="mt-2 text-xs font-medium text-warning hover:underline"
               onclick={() => retryItem(item.id)}>Reintentar este archivo</button
             >{/if}
-          {#if item.state === 'queued'}
+          {#if item.state === 'queued' || item.state === 'error'}
             <details class="mt-3 border-t border-border pt-2">
               <summary class="cursor-pointer text-xs font-medium text-foreground-muted"
                 >Editar metadatos de este archivo</summary
@@ -464,12 +535,7 @@
                   id={`category-${item.id}`}
                   label="Categoría"
                   value={item.metadata.categoryId}
-                  options={[
-                    { value: '', label: 'Otros' },
-                    ...categories
-                      .filter((category) => category.is_active)
-                      .map((category) => ({ value: category.id, label: category.name }))
-                  ]}
+                  options={categoryOptions}
                   oninput={(event) =>
                     updateMetadata(item.id, {
                       categoryId: (event.currentTarget as HTMLSelectElement).value
@@ -521,12 +587,8 @@
       id="document-category"
       label="Categoría"
       bind:value={categoryId}
-      options={[
-        { value: '', label: 'Otros' },
-        ...categories
-          .filter((item) => item.is_active)
-          .map((item) => ({ value: item.id, label: item.name }))
-      ]}
+      oninput={(event) => (categoryId = (event.currentTarget as HTMLSelectElement).value)}
+      options={categoryOptions}
     />
     <FormField
       id="document-title"
@@ -550,14 +612,15 @@
     <FormField
       id="document-expires"
       label="Fecha de vencimiento"
+      required={selectedCategory?.requires_expiry ?? false}
       type="date"
       bind:value={expiresOn}
     />
   </div>
-  {#if queue.some((item) => item.state === 'queued')}<button
+  {#if queue.some((item) => item.state === 'queued' || item.state === 'error')}<button
       type="button"
       class="text-xs font-medium text-primary hover:underline"
-      onclick={applyMetadataToAll}>Aplicar estos metadatos a los archivos en cola</button
+      onclick={applyMetadataToAll}>Aplicar estos metadatos a los archivos pendientes</button
     >{/if}
   <div>
     <label for="document-description" class="mb-1 block text-sm font-medium text-foreground"
@@ -583,6 +646,9 @@
       id="document-confidentiality"
       label="Visibilidad"
       bind:value={confidentiality}
+      oninput={(event) =>
+        (confidentiality = (event.currentTarget as HTMLSelectElement).value as
+          'internal' | 'restricted')}
       options={[
         { value: 'restricted', label: 'Restringido' },
         { value: 'internal', label: 'Interno' }
@@ -610,7 +676,12 @@
     </p>{/if}
   <div class="flex items-center justify-end gap-2 border-t border-border pt-4">
     <Button variant="ghost" onclick={onclose} disabled={running}>Cancelar</Button>
-    <Button onclick={() => start()} disabled={disabled || running || queue.length === 0}
+    <Button
+      onclick={() => start()}
+      disabled={disabled ||
+        running ||
+        queue.length === 0 ||
+        queue.every((item) => item.state === 'done')}
       >{running
         ? 'Procesando…'
         : replaceDocumentId
