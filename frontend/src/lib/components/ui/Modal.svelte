@@ -1,3 +1,7 @@
+<script module lang="ts">
+  const activeDialogs = new Set<HTMLElement>();
+</script>
+
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
@@ -13,7 +17,18 @@
     mobileFullScreen?: boolean;
   }
 
-  let { open, title, onclose, children, footer, size = 'md', inline = false, preventClose = false, mobileFullScreen = false }: Props = $props();
+  let {
+    open,
+    title,
+    onclose,
+    children,
+    footer,
+    size = 'md',
+    inline = false,
+    preventClose = false,
+    mobileFullScreen = false
+  }: Props = $props();
+  const titleId = $props.id();
   let dialogEl = $state<HTMLDivElement | null>(null);
   let returnFocus = $state<HTMLElement | null>(null);
 
@@ -33,7 +48,7 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (!open || inline) return;
+    if (!open || inline || e.defaultPrevented || [...activeDialogs].at(-1) !== dialogEl) return;
     if (e.key === 'Escape') {
       e.preventDefault();
       if (!preventClose) onclose?.();
@@ -62,7 +77,9 @@
     if (open) {
       returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       requestAnimationFrame(() => {
-        const first = dialogEl?.querySelector<HTMLElement>('[autofocus], input, button, [tabindex]:not([tabindex="-1"])');
+        const first = dialogEl?.querySelector<HTMLElement>(
+          '[autofocus], input, button, [tabindex]:not([tabindex="-1"])'
+        );
         (first ?? dialogEl)?.focus();
       });
     } else if (returnFocus) {
@@ -87,11 +104,14 @@
   }
 
   $effect(() => {
-    if (inline) return;
-    if (open) {
-      setGlobalChromeInert(true);
-      return () => setGlobalChromeInert(false);
-    }
+    if (inline || !open || !dialogEl) return;
+    const element = dialogEl;
+    activeDialogs.add(element);
+    setGlobalChromeInert(true);
+    return () => {
+      activeDialogs.delete(element);
+      setGlobalChromeInert(activeDialogs.size > 0);
+    };
   });
 </script>
 
@@ -115,14 +135,16 @@
       role={inline ? 'region' : 'dialog'}
       bind:this={dialogEl}
       aria-modal={inline ? undefined : 'true'}
-      aria-labelledby="modal-title"
+      aria-labelledby={titleId}
       tabindex="-1"
     >
       <div class="flex items-center justify-between border-b border-border px-6 py-4">
-        <h2 id="modal-title" class="text-lg font-bold text-foreground">{title}</h2>
+        <h2 id={titleId} class="text-lg font-bold text-foreground">{title}</h2>
         <button
           type="button"
-          onclick={() => { if (!preventClose) onclose?.(); }}
+          onclick={() => {
+            if (!preventClose) onclose?.();
+          }}
           disabled={preventClose}
           aria-disabled={preventClose}
           class="flex h-11 w-11 items-center justify-center rounded-lg text-foreground-muted transition-colors hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
@@ -155,9 +177,12 @@
     </div>
   </div>
 {/if}
+
 <style>
   @media (max-width: 640px) {
-    .modal-mobile-backdrop { padding: 0; }
+    .modal-mobile-backdrop {
+      padding: 0;
+    }
     .modal-mobile-fullscreen {
       display: flex;
       min-height: 100dvh;
