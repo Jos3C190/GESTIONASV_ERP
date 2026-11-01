@@ -53,6 +53,10 @@ export interface Warehouse {
   type: WarehouseType;
   status: WarehouseStatus;
   location: string;
+  locationMode: 'branch' | 'own';
+  latitude: number | null;
+  longitude: number | null;
+  geofenceRadiusM: number | null;
   branchId: string | null;
   branchName: string;
   branchAddress: string;

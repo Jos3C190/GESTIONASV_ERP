@@ -101,7 +101,7 @@ class DocumentOut(BaseModel):
     ocr_completed_at: datetime | None = None
     # Business projection fields are optional so existing clients that only
     # consume the technical document contract remain fully compatible.
-    module: Literal["general", "employees"] | None = None
+    module: Literal["general", "employees", "fleet"] | None = None
     owner_type: str | None = None
     owner_id: uuid.UUID | None = None
     owner_label: str | None = None
@@ -142,11 +142,13 @@ class DocumentCategoryOut(BaseModel):
     description: str | None
     sort_order: int
     is_active: bool
+    requires_expiry: bool = False
+    compliance_required: bool = False
     document_count: int = 0
 
 
 class CreateDocumentCategoryIn(BaseModel):
-    module: Literal["general", "employees"]
+    module: Literal["general", "employees", "fleet"]
     code: str = Field(min_length=2, max_length=80, pattern=r"^[a-z0-9][a-z0-9_-]*$")
     name: str = Field(min_length=2, max_length=160)
     group_name: str = Field(default="General", min_length=2, max_length=120)
@@ -232,7 +234,7 @@ class DocumentFolderOut(BaseModel):
     id: str
     kind: DocumentFolderKind
     name: str
-    module: Literal["general", "employees"]
+    module: Literal["general", "employees", "fleet"]
     parent_id: str | None
     employee_id: str | None = None
     category_id: str | None = None

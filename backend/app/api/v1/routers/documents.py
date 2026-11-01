@@ -90,7 +90,9 @@ def _out(document: DocumentAsset, record: DocumentRecord | None = None) -> Docum
         ocr_available=document.ocr_available,
         ocr_failure_code=document.ocr_failure_code,
         ocr_completed_at=document.ocr_completed_at,
-        module=cast(Literal["general", "employees"] | None, record.module if record else None),
+        module=cast(
+            Literal["general", "employees", "fleet"] | None, record.module if record else None
+        ),
         owner_type=record.owner_type if record else None,
         owner_id=record.owner_id if record else None,
         owner_label=record.owner_label if record else None,
@@ -239,6 +241,9 @@ def _folder_out(folder: DocumentFolder) -> DocumentFolderOut:
     )
 
 
+_LIBRARY_MODULES = frozenset({"general", "employees"})
+
+
 def _allowed_document_modules(request: Request, current: CurrentUser) -> set[str]:
     """Return module capabilities without relying on client-visible state.
 
@@ -265,6 +270,10 @@ async def _authorize_record_action(
     action: str,
 ) -> None:
     """Bind an operation to the permission family of the persisted module."""
+    if record.module not in _LIBRARY_MODULES:
+        # Fleet records are served only by the fleet router, which applies the
+        # vehicle's branch scope; the central library never exposes them.
+        raise NotFoundError("Documento no encontrado.", code="document_not_found")
     if current.is_superuser:
         return
     family = "employee_documents" if record.module == "employees" else "documents"
@@ -613,6 +622,8 @@ async def list_library_documents(
         include_restricted=await _can_view_restricted(current, checker, company_id),
         confidentiality=confidentiality,
         branch_id=branch_id,
+        # Los documentos de flota solo se consultan desde Flota, con su alcance por sucursal.
+        modules=allowed_modules,
     )
     return DocumentRecordsPage(
         items=[_record_out(item) for item in items],
@@ -663,11 +674,14 @@ async def list_document_categories(
             description=item.description,
             sort_order=item.sort_order,
             is_active=item.is_active,
+            requires_expiry=item.requires_expiry,
+            compliance_required=item.compliance_required,
             document_count=await record_service._records.count_category_documents(
                 item.id, include_restricted=include_restricted, branch_id=branch_id
             ),
         )
         for item in categories
+        if item.module in allowed_modules
     ]
 
 

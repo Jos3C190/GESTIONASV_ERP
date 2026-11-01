@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import select
@@ -17,6 +17,7 @@ from app.api.v1.deps import (
 )
 from app.api.v1.schemas.common import PageMeta
 from app.api.v1.schemas.lifecycle import DeletedRecordOut, DeletedRecordsPage, SoftDeleteRequest
+from app.api.v1.site_sync import sync_sites_on_commit
 from app.application.audit.audit_service import AuditService
 from app.application.lifecycle import LifecycleService
 from app.application.rbac.check_permission import CheckPermissionUseCase
@@ -45,7 +46,19 @@ RESOURCE_PERMISSIONS: dict[str, tuple[str, str]] = {
     "suppliers": ("suppliers:delete", "suppliers:restore"),
     "supplier_contacts": ("suppliers:delete", "suppliers:restore"),
     "documents": ("documents:delete", "documents:restore"),
+    "fleet_vehicles": ("fleet:delete", "fleet:restore"),
+    "drivers": ("drivers:delete", "drivers:restore"),
 }
+
+
+#: Resources whose trash changes move the fixed places of the tracking map.
+SITE_RESOURCES = frozenset({"branches", "warehouses"})
+
+
+def _sync_sites_if_needed(session: SessionDep, resource: str, record: Any) -> None:
+    company_id = getattr(record, "company_id", None)
+    if resource in SITE_RESOURCES and record.operation_applied and company_id is not None:
+        sync_sites_on_commit(session, company_id)
 
 
 def _service(session: SessionDep) -> LifecycleService:
@@ -275,6 +288,7 @@ async def soft_delete_record(
             user_agent=request.headers.get("user-agent"),
             required=True,
         )
+    _sync_sites_if_needed(session, resource, deleted)
     return DeletedRecordOut.model_validate(deleted, from_attributes=True)
 
 
@@ -323,6 +337,7 @@ async def restore_record(
         actor_id=current.id,
         allow_global=current.is_superuser,
     )
+    _sync_sites_if_needed(session, resource, restored)
     if restored.operation_applied:
         await audit.record(
             action="RESTORE",

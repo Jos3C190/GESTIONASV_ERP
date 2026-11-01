@@ -61,8 +61,34 @@ EMPLOYEE_CATEGORY_SEEDS: tuple[tuple[str, str, str], ...] = (
     ("asset_clearance", "Solvencia de equipos y activos", "Finalización laboral"),
     ("exit_interview", "Entrevista de salida", "Finalización laboral"),
     ("employment_certificate", "Constancia laboral", "Finalización laboral"),
+    ("driver_license", "Licencia de conducir", "Conducción"),
     ("other", "Otros", "General"),
 )
+
+FLEET_CATEGORY_SEEDS: tuple[tuple[str, str, str], ...] = (
+    ("circulation_card", "Tarjeta de circulación", "Documentos legales"),
+    ("insurance_policy", "Póliza de seguro", "Documentos legales"),
+    ("technical_inspection", "Revisión técnica", "Documentos legales"),
+    ("transport_permit", "Permiso de transporte", "Documentos legales"),
+    ("purchase_invoice", "Factura de compra", "Adquisición"),
+    ("fuel_receipt", "Comprobante de combustible", "Operación"),
+    ("maintenance_invoice", "Factura de mantenimiento", "Operación"),
+    ("accident_report", "Reporte de accidente", "Operación"),
+    ("other", "Otros", "General"),
+)
+
+#: (module, code) -> (requires_expiry, compliance_required). Las categorías obligatorias
+#: son las que bloquean asignaciones y despachos cuando faltan o están vencidas.
+CATEGORY_RULES: dict[tuple[str, str], tuple[bool, bool]] = {
+    ("employees", "driver_license"): (True, True),
+    ("fleet", "circulation_card"): (True, True),
+    ("fleet", "insurance_policy"): (True, True),
+    ("fleet", "technical_inspection"): (True, True),
+    ("fleet", "transport_permit"): (True, False),
+}
+
+#: Categorías de empleados que gestiona el módulo Conductores.
+DRIVER_CATEGORY_CODES: frozenset[str] = frozenset({"driver_license"})
 
 
 def _rows(
@@ -83,6 +109,8 @@ def _rows(
             "group_name": group_name,
             "sort_order": start_order + offset,
             "is_active": True,
+            "requires_expiry": CATEGORY_RULES.get((module, code), (False, False))[0],
+            "compliance_required": CATEGORY_RULES.get((module, code), (False, False))[1],
             "created_by": actor_id,
             "updated_by": actor_id,
         }
@@ -95,7 +123,7 @@ async def ensure_default_document_categories(
     company_id: uuid.UUID,
     actor_id: uuid.UUID | None = None,
 ) -> None:
-    """Create the standard general/employee catalog for a new company.
+    """Create the standard general/employee/fleet catalog for a new company.
 
     The unique company/module/code constraint makes this safe to call during
     retries or bootstrap repair jobs.
@@ -104,13 +132,17 @@ async def ensure_default_document_categories(
     rows.extend(
         _rows(company_id, actor_id, EMPLOYEE_CATEGORY_SEEDS, module="employees", start_order=1)
     )
+    rows.extend(_rows(company_id, actor_id, FLEET_CATEGORY_SEEDS, module="fleet", start_order=1))
     statement = pg_insert(DocumentCategoryModel).values(rows)
     statement = statement.on_conflict_do_nothing(index_elements=["company_id", "module", "code"])
     await session.execute(statement)
 
 
 __all__ = [
+    "CATEGORY_RULES",
+    "DRIVER_CATEGORY_CODES",
     "EMPLOYEE_CATEGORY_SEEDS",
+    "FLEET_CATEGORY_SEEDS",
     "GENERAL_CATEGORY_SEEDS",
     "ensure_default_document_categories",
 ]

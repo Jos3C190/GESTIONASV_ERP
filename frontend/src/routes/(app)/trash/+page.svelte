@@ -29,7 +29,9 @@
     products: 'Productos',
     suppliers: 'Proveedores',
     supplier_contacts: 'Contactos de proveedores',
-    documents: 'Documentos'
+    documents: 'Documentos',
+    fleet_vehicles: 'Vehículos de flota',
+    drivers: 'Conductores'
   };
 
   const RESTORE_PERMISSIONS: Record<string, string> = {
@@ -49,7 +51,9 @@
     products: 'products:restore',
     suppliers: 'suppliers:restore',
     supplier_contacts: 'suppliers:restore',
-    documents: 'documents:restore'
+    documents: 'documents:restore',
+    fleet_vehicles: 'fleet:restore',
+    drivers: 'drivers:restore'
   };
 
   let visibleResources = $derived(

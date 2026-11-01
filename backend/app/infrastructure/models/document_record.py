@@ -36,6 +36,12 @@ class DocumentCategoryModel(UUIDPKMixin, TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    #: Los documentos de esta categoría deben registrar fecha de vencimiento.
+    requires_expiry: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    #: Un documento vigente de esta categoría es obligatorio para operar (flota y conducción).
+    compliance_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -44,7 +50,13 @@ class DocumentCategoryModel(UUIDPKMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
-        CheckConstraint("module IN ('general','employees')", name="ck_document_categories_module"),
+        CheckConstraint(
+            "module IN ('general','employees','fleet')", name="ck_document_categories_module"
+        ),
+        CheckConstraint(
+            "requires_expiry OR NOT compliance_required",
+            name="ck_document_categories_compliance_expiry",
+        ),
         UniqueConstraint(
             "company_id", "module", "code", name="uq_document_categories_company_module_code"
         ),
@@ -103,10 +115,13 @@ class DocumentRecordModel(UUIDPKMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
-        CheckConstraint("module IN ('general','employees')", name="ck_document_records_module"),
+        CheckConstraint(
+            "module IN ('general','employees','fleet')", name="ck_document_records_module"
+        ),
         CheckConstraint(
             "(module = 'general' AND owner_type IS NULL AND owner_id IS NULL) OR "
-            "(module = 'employees' AND owner_type = 'employee' AND owner_id IS NOT NULL)",
+            "(module = 'employees' AND owner_type = 'employee' AND owner_id IS NOT NULL) OR "
+            "(module = 'fleet' AND owner_type = 'vehicle' AND owner_id IS NOT NULL)",
             name="ck_document_records_owner",
         ),
         CheckConstraint(

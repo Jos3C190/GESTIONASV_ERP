@@ -51,6 +51,8 @@ class InventoryTransferRepository(Protocol):
         vehicle_id: uuid.UUID,
         idempotency_key: str,
         actor_id: uuid.UUID,
+        driver_id: uuid.UUID | None = None,
+        compliance_override_reason: str | None = None,
     ) -> dict[str, Any]: ...
 
     async def receive_transfer(
@@ -114,7 +116,9 @@ class InventoryTransferRepository(Protocol):
         self, *, company_id: uuid.UUID, code: str, name: str, actor_id: uuid.UUID
     ) -> dict[str, Any]: ...
 
-    async def list_vehicles(self, company_id: uuid.UUID) -> list[dict[str, Any]]: ...
+    async def list_vehicles(
+        self, company_id: uuid.UUID, branch_ids: list[uuid.UUID] | None = None
+    ) -> list[dict[str, Any]]: ...
 
     async def set_vehicle_status(
         self, *, company_id: uuid.UUID, vehicle_id: uuid.UUID, status: str

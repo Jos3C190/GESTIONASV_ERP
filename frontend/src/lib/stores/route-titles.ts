@@ -27,6 +27,10 @@ const TITLES: Record<string, string> = {
   '/purchase-consolidations': 'Consolidados de compra',
   '/expense-types': 'Tipos de gasto',
   '/trash': 'Papelera',
+  '/fleet': 'Flota',
+  '/fleet/new': 'Nuevo vehículo',
+  '/drivers': 'Conductores',
+  '/tracking': 'Seguimiento',
   '/placeholder': 'Módulo'
 };
 
@@ -34,6 +38,9 @@ export function routeTitle(pathname: string): string {
   // Check exact match first
   if (TITLES[pathname]) return TITLES[pathname];
   // Gestión de estructuras físicas dentro de un almacén
+  if (/^\/fleet\/[^/]+\/edit\/?$/.test(pathname)) return 'Editar vehículo';
+  if (/^\/fleet\/[^/]+\/?$/.test(pathname)) return 'Flota';
+  if (/^\/drivers\/[^/]+\/?$/.test(pathname)) return 'Conductores';
   if (/^\/warehouses\/[^/]+\/structures\/?$/.test(pathname)) {
     return 'Estructuras y límites compartidos';
   }
@@ -55,7 +62,8 @@ export function routeTitle(pathname: string): string {
     return TITLES['/warehouse-categories'] ?? 'Categorías de almacén';
   if (pathname.startsWith('/suppliers')) return TITLES['/suppliers'] ?? 'Proveedores';
   if (pathname.startsWith('/customers')) return TITLES['/customers'] ?? 'Clientes';
-  if (pathname.startsWith('/sales/quotations')) return TITLES['/sales/quotations'] ?? 'Cotizaciones de venta';
+  if (pathname.startsWith('/sales/quotations'))
+    return TITLES['/sales/quotations'] ?? 'Cotizaciones de venta';
   if (pathname.startsWith('/sales')) return TITLES['/sales'] ?? 'Ventas';
   if (pathname.startsWith('/purchase-consolidations'))
     return TITLES['/purchase-consolidations'] ?? 'Consolidados de compra';
@@ -65,7 +73,8 @@ export function routeTitle(pathname: string): string {
   if (pathname.startsWith('/inventory/units'))
     return TITLES['/inventory/units'] ?? 'Unidades de medida';
   if (pathname.startsWith('/inventory/handling-units')) return 'Trazabilidad de inventario';
-  if (pathname.startsWith('/inventory/adjustments')) return TITLES['/inventory/adjustments'] ?? 'Ajustes de inventario';
+  if (pathname.startsWith('/inventory/adjustments'))
+    return TITLES['/inventory/adjustments'] ?? 'Ajustes de inventario';
   // Check prefix for /placeholder?module=X
   for (const key of Object.keys(TITLES)) {
     if (pathname.startsWith(key)) return TITLES[key] ?? '';

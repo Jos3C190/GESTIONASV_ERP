@@ -113,7 +113,14 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     throw new Error('apiFetch must receive an absolute URL when called on the server.');
   }
   const url = path.startsWith('http') ? path : `${API_BASE_URL}${API_PREFIX}${path}`;
-  const { noAuth, noRefresh, noCredentials, responseType = 'json', headers: initHeaders, ...rest } = options;
+  const {
+    noAuth,
+    noRefresh,
+    noCredentials,
+    responseType = 'json',
+    headers: initHeaders,
+    ...rest
+  } = options;
   const isMultipart = typeof FormData !== 'undefined' && rest.body instanceof FormData;
 
   const headers: Record<string, string> = {
@@ -341,7 +348,9 @@ export interface DocumentFoldersPage {
 export interface DocumentCategoryOut {
   id: string;
   company_id: string;
-  module: 'general' | 'employees';
+  module: 'general' | 'employees' | 'fleet';
+  requires_expiry?: boolean;
+  compliance_required?: boolean;
   code: string;
   name: string;
   group_name: string;
@@ -602,6 +611,7 @@ export type MediaPurpose =
   | 'employee_avatar'
   | 'branch_image'
   | 'warehouse_image'
+  | 'vehicle_image'
   | 'product_image'
   | 'supplier_logo'
   | 'supplier_contact_avatar';
@@ -633,6 +643,7 @@ export interface BranchOut {
   manager_initials: string;
   latitude: number | null;
   longitude: number | null;
+  geofence_radius_m?: number;
   operational_status: 'active' | 'inactive' | 'maintenance';
   employees: number;
   warehouses: number;
@@ -702,6 +713,11 @@ export interface WarehouseOut {
   type: 'general' | 'cold_storage' | 'hazmat' | 'transit' | 'bonded' | 'automated';
   status: 'active' | 'maintenance' | 'inactive';
   location: string;
+  /** branch: dentro de su sucursal; own: en otra dirección con coordenadas propias. */
+  location_mode?: 'branch' | 'own';
+  latitude?: number | null;
+  longitude?: number | null;
+  geofence_radius_m?: number | null;
   branch_id: string | null;
   branch_name: string;
   branch_address: string;
@@ -818,6 +834,291 @@ export interface WarehouseCategoryOut {
   name: string;
   description: string | null;
   is_active: boolean;
+}
+
+export interface TrackedPositionOut {
+  latitude: number;
+  longitude: number;
+  speed_kmh: number;
+  course: number;
+  fix_time: string | null;
+  address: string | null;
+  ignition: boolean | null;
+  battery_level: number | null;
+}
+
+export interface TrackedVehicleOut {
+  id: string;
+  code: string;
+  plate: string;
+  kind: string;
+  brand: string;
+  model: string;
+  branch_id: string;
+  branch_name: string;
+  operational_status: string;
+  driver_name: string | null;
+  transfer_code: string | null;
+  transfer_destination: string | null;
+}
+
+export interface TrackedDeviceOut {
+  id: number;
+  unique_id: string;
+  name: string;
+  status: 'online' | 'offline' | 'unknown';
+  last_update: string | null;
+  position: TrackedPositionOut | null;
+  /** Vehículo de Flota vinculado al dispositivo. */
+  vehicle: TrackedVehicleOut | null;
+  /** GPS virtual de una sesión del simulador que reemplaza al real. */
+  simulated?: boolean;
+}
+
+export type GeofenceShape =
+  | { type: 'circle'; center: [number, number]; radius_m: number }
+  | { type: 'polygon'; coordinates: [number, number][] };
+
+export interface GeofenceOut {
+  id: number;
+  name: string;
+  description: string | null;
+  shape: GeofenceShape;
+  speed_limit_kmh: number | null;
+  /** null = aplica a toda la empresa. */
+  branch_id?: string | null;
+  branch_name?: string | null;
+  can_manage?: boolean;
+  /** Geocerca automática de una sucursal o almacén (solo lectura). */
+  system?: boolean;
+}
+
+export interface SiteOut {
+  kind: 'branch' | 'warehouse';
+  id: string;
+  name: string;
+  code: string | null;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  radius_m: number;
+  status: string;
+  branch_id: string;
+  branch_name: string;
+  warehouses: {
+    id: string;
+    name: string;
+    code: string | null;
+    is_central: boolean;
+    status: string;
+  }[];
+}
+
+export interface SitesOut {
+  sites: SiteOut[];
+  missing: { kind: 'branch' | 'warehouse'; id: string; name: string }[];
+  sync: {
+    configured: boolean;
+    synced_at: string | null;
+    last_attempt_at: string | null;
+    error: string | null;
+  };
+}
+
+export interface GeofenceCreate {
+  branch_id?: string | null;
+  name: string;
+  description?: string | null;
+  shape: GeofenceShape;
+  speed_limit_kmh?: number | null;
+}
+
+export interface TrackingEventOut {
+  id: number;
+  type: string;
+  event_time: string | null;
+  device_id: number;
+  device_name: string;
+  device_unique_id: string;
+  geofence_id?: number | null;
+  geofence_name: string | null;
+  geofence_system?: boolean;
+  simulated?: boolean;
+  alarm: string | null;
+  speed_kmh: number | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface TransferPlaceOut {
+  warehouse_name: string;
+  branch_name: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface TrackedTransferOut {
+  id: string;
+  code: string;
+  status: string;
+  dispatched_at: string | null;
+  vehicle_code: string | null;
+  vehicle_name: string | null;
+  vehicle_plate?: string | null;
+  driver_name?: string | null;
+  origin: TransferPlaceOut;
+  destination: TransferPlaceOut;
+  /** El viaje se está leyendo desde una sesión del simulador. */
+  simulated?: boolean;
+}
+
+export type TrackingAlertKind = 'arrived' | 'delayed' | 'long_stop' | 'gps_lost' | 'off_route';
+
+export interface TrackingAlertOut {
+  id: string;
+  transfer_id: string;
+  transfer_code: string | null;
+  vehicle_code: string | null;
+  kind: TrackingAlertKind;
+  severity: 'info' | 'warning' | 'critical';
+  message: string;
+  details: Record<string, unknown>;
+  opened_at: string;
+  last_seen_at: string;
+  resolved_at: string | null;
+  acknowledged_at: string | null;
+  simulated?: boolean;
+}
+
+export interface TrackingAlertsOut {
+  items: TrackingAlertOut[];
+  unacknowledged: number;
+  monitor_active: boolean;
+}
+
+export interface TransferTrackOut extends TrackedTransferOut {
+  gps_configured: boolean;
+  /** El recorrido viene de la copia guardada por el ERP al recibir el traslado. */
+  track_stored?: boolean;
+  alerts?: TrackingAlertOut[];
+  device_found: boolean;
+  route: {
+    coordinates: [number, number][];
+    distance_m: number;
+    duration_s: number;
+    source: 'osrm' | 'straight';
+  } | null;
+  trail: [number, number][];
+  trail_matched: boolean;
+  remaining_route: [number, number][];
+  rerouted: boolean;
+  position: {
+    latitude: number;
+    longitude: number;
+    speed_kmh: number;
+    course: number;
+    fix_time: string | null;
+  } | null;
+  progress: number;
+  remaining_m: number | null;
+  eta: string | null;
+  arrived: boolean;
+  off_route: boolean;
+  off_route_m: number;
+}
+
+export type SimulationMode = 'route' | 'joystick';
+export type SimulationState = 'running' | 'paused' | 'arrived' | 'ended';
+export type SimulationAction =
+  | 'pause'
+  | 'resume'
+  | 'stop'
+  | 'signal_loss'
+  | 'signal_restore'
+  | 'detour'
+  | 'speed'
+  | 'restart'
+  | 'return'
+  | 'outbound'
+  | 'take_control';
+
+export interface SimulatorVehicleOut {
+  id: string;
+  code: string;
+  plate: string;
+  kind: string;
+  branch_id: string;
+  branch_name: string;
+  has_gps: boolean;
+  transfer_id: string | null;
+  transfer_code: string | null;
+  start: [number, number] | null;
+}
+
+export interface SimulationOut {
+  id: string;
+  vehicle_id: string;
+  vehicle_code: string;
+  vehicle_plate: string;
+  branch_id: string;
+  transfer_id: string | null;
+  transfer_code: string | null;
+  traccar_device_id: number;
+  mode: SimulationMode;
+  state: SimulationState;
+  route: [number, number][];
+  /** Paradas planeadas; la primera es el punto inicial. */
+  stops: [number, number][];
+  /** `return` mientras vuelve al punto inicial. */
+  leg: 'outbound' | 'return';
+  route_length_m: number;
+  progress_m: number;
+  speed_kmh: number;
+  current_speed_kmh: number;
+  longitude: number;
+  latitude: number;
+  course: number;
+  /** Cuándo midió el servidor `progress_m`: el mapa reproduce el avance entre mediciones. */
+  advanced_at?: string | null;
+  stop_until: string | null;
+  signal_lost_until: string | null;
+  last_report_at: string | null;
+  started_at: string;
+  started_by_name: string | null;
+  can_control: boolean;
+}
+
+export interface SimulatorOut {
+  enabled: boolean;
+  /** Reloj del servidor, para alinear `advanced_at` con el del navegador. */
+  server_time?: string | null;
+  ready: boolean;
+  can_simulate: boolean;
+  vehicles: SimulatorVehicleOut[];
+  sessions: SimulationOut[];
+}
+
+export interface SimulationCreate {
+  vehicle_id: string;
+  mode: SimulationMode;
+  transfer_id?: string | null;
+  waypoints?: [number, number][];
+  start?: [number, number] | null;
+  speed_kmh: number;
+}
+
+export interface SimulationDriveOut {
+  longitude: number;
+  latitude: number;
+  snapped: boolean;
+  reported: boolean;
+}
+
+export interface TrackingSnapshotOut {
+  configured: boolean;
+  devices: TrackedDeviceOut[];
+  vehicles_total: number;
+  vehicles_with_gps: number;
 }
 
 export interface DashboardSummary {
@@ -1685,6 +1986,81 @@ export const api = {
       if (company.id) sp.set('company_id', company.id);
       if (branch.id) sp.set('branch_id', branch.id);
       return apiFetch<DashboardSummary>(`/dashboard/summary?${sp.toString()}`, { signal });
+    }
+  },
+  tracking: {
+    // La empresa viaja en X-Company-ID; el alcance por sucursal lo decide el servidor.
+    positions: (signal?: AbortSignal) =>
+      apiFetch<TrackingSnapshotOut>(
+        `/tracking/positions${branch.id ? `?branch_id=${branch.id}` : ''}`,
+        { signal }
+      ),
+    geofences: (signal?: AbortSignal) => apiFetch<GeofenceOut[]>('/tracking/geofences', { signal }),
+    sites: (signal?: AbortSignal) => apiFetch<SitesOut>('/tracking/sites', { signal }),
+    alerts: (state: 'open' | 'recent' = 'open', signal?: AbortSignal) =>
+      apiFetch<TrackingAlertsOut>(`/tracking/alerts?state=${state}`, { signal }),
+    acknowledgeAlert: (id: string) =>
+      apiFetch<TrackingAlertOut>(`/tracking/alerts/${id}/acknowledge`, { method: 'POST' }),
+    syncSites: () => apiFetch<SitesOut>('/tracking/sites/sync', { method: 'POST' }),
+    createGeofence: (data: GeofenceCreate) =>
+      apiFetch<GeofenceOut>('/tracking/geofences', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+    deleteGeofence: (id: number) =>
+      apiFetch<void>(`/tracking/geofences/${id}`, { method: 'DELETE' }),
+    transfers: (signal?: AbortSignal) =>
+      apiFetch<TrackedTransferOut[]>('/tracking/transfers', { signal }),
+    transferTrack: (id: string, signal?: AbortSignal) =>
+      apiFetch<TransferTrackOut>(`/tracking/transfers/${id}`, { signal }),
+    route: (from: [number, number], to: [number, number], signal?: AbortSignal) =>
+      apiFetch<NonNullable<TransferTrackOut['route']>>(
+        `/tracking/route?${new URLSearchParams({
+          from_lng: String(from[0]),
+          from_lat: String(from[1]),
+          to_lng: String(to[0]),
+          to_lat: String(to[1])
+        }).toString()}`,
+        { signal }
+      ),
+    events: (hours = 24, signal?: AbortSignal) =>
+      apiFetch<TrackingEventOut[]>(
+        `/tracking/events?hours=${hours}${branch.id ? `&branch_id=${branch.id}` : ''}`,
+        { signal }
+      ),
+    // Herramientas de simulación (solo si el servidor las habilita; nunca en producción).
+    simulator: {
+      state: (signal?: AbortSignal) => apiFetch<SimulatorOut>('/tracking/simulator', { signal }),
+      start: (data: SimulationCreate) =>
+        apiFetch<SimulationOut>('/tracking/simulator/sessions', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        }),
+      control: (
+        id: string,
+        action: SimulationAction,
+        extra: { minutes?: number; speed_kmh?: number } = {}
+      ) =>
+        apiFetch<SimulationOut>(`/tracking/simulator/sessions/${id}/control`, {
+          method: 'POST',
+          body: JSON.stringify({ action, ...extra })
+        }),
+      drive: (
+        id: string,
+        data: {
+          latitude: number;
+          longitude: number;
+          course: number;
+          speed_kmh: number;
+          snap: boolean;
+        }
+      ) =>
+        apiFetch<SimulationDriveOut>(`/tracking/simulator/sessions/${id}/drive`, {
+          method: 'POST',
+          body: JSON.stringify(data)
+        }),
+      end: (id: string) =>
+        apiFetch<void>(`/tracking/simulator/sessions/${id}`, { method: 'DELETE' })
     }
   },
   branches: {

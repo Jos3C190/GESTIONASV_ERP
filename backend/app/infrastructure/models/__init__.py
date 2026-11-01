@@ -30,6 +30,16 @@ from app.infrastructure.models.employee import (
     Employee,
     EmployeeBranchAssignment,
 )
+from app.infrastructure.models.fleet import (
+    DriverModel,
+    FleetVehicleModel,
+    FleetVehiclePhotoModel,
+    FuelLogModel,
+    MaintenanceOrderModel,
+    MaintenancePlanModel,
+    OdometerReadingModel,
+    VehicleDriverAssignmentModel,
+)
 from app.infrastructure.models.inventory import (
     CapacityOperationalOverrideModel,
     CapacityReservationModel,
@@ -175,6 +185,12 @@ from app.infrastructure.models.supplier_master_data import (
     SupplierTaxIdentifierModel,
 )
 from app.infrastructure.models.system import AppMeta
+from app.infrastructure.models.tracking import (
+    TrackingAlertModel,
+    TrackingSimulationModel,
+    TrackingSyncStateModel,
+    TransferTrackModel,
+)
 from app.infrastructure.models.user import User
 
 __all__: list[str] = [
@@ -200,9 +216,13 @@ __all__: list[str] = [
     "DocumentGeneralImportItemModel",
     "DocumentGeneralImportModel",
     "DocumentRecordModel",
+    "DriverModel",
     "Employee",
     "EmployeeBranchAssignment",
     "ExpenseTypeModel",
+    "FleetVehicleModel",
+    "FleetVehiclePhotoModel",
+    "FuelLogModel",
     "GeographicDepartment",
     "InventoryAdjustmentDetailModel",
     "InventoryAdjustmentDocumentModel",
@@ -236,8 +256,11 @@ __all__: list[str] = [
     "LocationBatchRow",
     "LocationCodeAlias",
     "LocationCodeScheme",
+    "MaintenanceOrderModel",
+    "MaintenancePlanModel",
     "MediaAsset",
     "Municipality",
+    "OdometerReadingModel",
     "PasswordResetToken",
     "PaymentTermsModel",
     "Permission",
@@ -304,11 +327,16 @@ __all__: list[str] = [
     "SupplierImageModel",
     "SupplierModel",
     "SupplierTaxIdentifierModel",
+    "TrackingAlertModel",
+    "TrackingSimulationModel",
+    "TrackingSyncStateModel",
+    "TransferTrackModel",
     "UnitModel",
     "User",
     "UserBranch",
     "UserCompany",
     "UserRole",
+    "VehicleDriverAssignmentModel",
     "Warehouse",
     "WarehouseCapacityGroup",
     "WarehouseCategory",

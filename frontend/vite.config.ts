@@ -29,8 +29,63 @@ function normalizeSvelteRouteModulePath() {
   };
 }
 
+/** Rutas que se cargan al arrancar, en orden: el runtime de SvelteKit y la pantalla de entrada. */
+const STARTUP_ROUTES = ['/healthz', '/login'];
+const WARMUP_HEADER = 'x-vite-startup-warmup';
+
+/**
+ * Arranque en frío ordenado del servidor de desarrollo.
+ *
+ * La primera carga de SvelteKit compila su runtime y puede tardar más de un minuto con el
+ * código montado desde Windows. Si en ese lapso llegan varias solicitudes a la vez (el
+ * chequeo de salud cada 10 s y el navegador), compiten por el mismo arranque y Vite corta la
+ * carga a los 60 s ("transport invoke timed out"). Aquí el propio servidor visita las rutas de
+ * arranque una tras otra, por el mismo camino que un usuario (no es la precarga especulativa de
+ * Vite, que compite con SvelteKit), y retiene las demás solicitudes hasta que termina.
+ * En modo middleware (Vitest) no hay servidor HTTP y no hace nada.
+ */
+function warmUpOnStart() {
+  return {
+    name: 'warm-up-on-start',
+    configureServer(server: ViteDevServer) {
+      let warming: Promise<void> | null = null;
+      server.httpServer?.once('listening', () => {
+        const address = server.httpServer?.address();
+        if (!address || typeof address === 'string') return;
+        const started = Date.now();
+        warming = (async () => {
+          for (const route of STARTUP_ROUTES) {
+            try {
+              await fetch(`http://127.0.0.1:${address.port}${route}`, {
+                headers: { [WARMUP_HEADER]: '1' },
+                redirect: 'manual'
+              });
+            } catch {
+              // Si una ruta falla, la siguiente solicitud real la vuelve a intentar.
+            }
+          }
+        })().finally(() => {
+          warming = null;
+          server.config.logger.info(
+            `  ➜  Rutas de arranque listas en ${((Date.now() - started) / 1000).toFixed(1)} s`
+          );
+        });
+      });
+      server.middlewares.use((request, _response, next) => {
+        const pending = warming;
+        if (!pending || request.headers[WARMUP_HEADER] === '1') {
+          next();
+          return;
+        }
+        pending.then(() => next(), next);
+      });
+    }
+  };
+}
+
 export default defineConfig(({ mode }) => ({
   plugins: [
+    warmUpOnStart(),
     normalizeSvelteRouteModulePath(),
     sveltekit(),
     ...(mode === 'test' ? [svelteTesting()] : [])
@@ -42,13 +97,18 @@ export default defineConfig(({ mode }) => ({
     // Let SvelteKit initialize SSR on demand. Speculative app-route warmup can
     // race its server module runner and cache a 500 response until restart.
     watch: {
+      // Avoid walking generated files on Windows bind mounts.
       usePolling: process.env.VITE_USE_POLLING === 'true',
       interval: 1000,
       binaryInterval: 2000,
       ignored: [
         '**/.svelte-kit/**',
         '**/.pnpm-store/**',
+        '**/build/**',
         '**/.vercel/**',
+        '**/playwright-report/**',
+        '**/test-results/**',
+        '**/coverage/**',
         '**/node_modules/**',
         '**/tmp-labels/**',
         '**/tmp-reports/**'

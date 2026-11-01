@@ -224,6 +224,15 @@ services:
       CLOUDINARY_UPLOAD_FOLDER: ${CLOUDINARY_UPLOAD_FOLDER:-erp-system}
       MEDIA_MAX_IMAGE_BYTES: ${MEDIA_MAX_IMAGE_BYTES:-10485760}
       MEDIA_SIGNATURE_TTL_SECONDS: ${MEDIA_SIGNATURE_TTL_SECONDS:-300}
+      # Vacío = módulo Seguimiento en modo demostración.
+      TRACCAR_URL: ${TRACCAR_URL:-}
+      TRACCAR_USER: ${TRACCAR_USER:-}
+      TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-}
+      # Servidor público de demostración de OSRM; en producción usa uno propio.
+      OSRM_URL: ${OSRM_URL:-https://router.project-osrm.org}
+      # Herramientas de simulación de Seguimiento (nunca se activan en producción).
+      TRACKING_SIMULATOR_ENABLED: ${TRACKING_SIMULATOR_ENABLED:-false}
+      TRACCAR_OSMAND_URL: ${TRACCAR_OSMAND_URL:-}
       <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
@@ -314,6 +323,38 @@ services:
       - backend-cache:/root/.cache/uv
     restart: unless-stopped
 
+  # Vigila los traslados en ruta y genera alertas (llegada, retraso, parada larga,
+  # GPS sin señal, desvío) aunque nadie tenga Seguimiento abierto.
+  tracking-monitor:
+    build:
+      context: ./backend
+      target: dev
+    command: ["python", "-m", "app.infrastructure.tracking_monitor"]
+    environment:
+      <<: [*observability-environment]
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SUPPLIER_DATA_ENCRYPTION_KEY: ${SUPPLIER_DATA_ENCRYPTION_KEY}
+      TRACCAR_URL: ${TRACCAR_URL:-}
+      TRACCAR_USER: ${TRACCAR_USER:-}
+      TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-}
+      OSRM_URL: ${OSRM_URL:-https://router.project-osrm.org}
+      TRACKING_MONITOR_INTERVAL_SECONDS: ${TRACKING_MONITOR_INTERVAL_SECONDS:-60}
+      TRACKING_SIMULATOR_ENABLED: ${TRACKING_SIMULATOR_ENABLED:-false}
+      TRACCAR_OSMAND_URL: ${TRACCAR_OSMAND_URL:-}
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - backend-cache:/root/.cache/uv
+    restart: unless-stopped
+
   # ---------------- One-shot database bootstrap ----------------
   # Runs after Alembic finishes. A durable app_meta marker makes ordinary
   # restarts no-ops, preserving records intentionally sent to the trash.
@@ -389,7 +430,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
-      start_period: 25s
+      # La primera compilación de SvelteKit puede tardar más de un minuto con el código
+      # montado desde Windows; durante el arranque los fallos del chequeo no cuentan.
+      start_period: 180s
     restart: unless-stopped
 
   # ---------------- Local observability (OpenTelemetry + Grafana) ----------------
@@ -554,6 +597,59 @@ services:
       start_period: 20s
     cpus: 0.5
     mem_limit: 512m
+    restart: unless-stopped
+
+  # ---------------- GPS tracking: Traccar (optional, profile: tracking) ----------------
+  # Servidor GPS para el módulo Seguimiento. Usa su propia base `traccar` dentro del
+  # Postgres del ERP para no mezclar sus tablas con las migraciones de Alembic.
+  traccar-db-init:
+    profiles: [tracking]
+    image: postgres:16-alpine
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-erp_admin}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production_please}
+      PGDATABASE: ${POSTGRES_DB:-erp_db}
+      TRACCAR_DB: ${TRACCAR_DB:-traccar}
+    command:
+      - sh
+      - -c
+      - >-
+        psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$${TRACCAR_DB}'" | grep -q 1
+        || psql -c "CREATE DATABASE \"$${TRACCAR_DB}\""
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  traccar:
+    profiles: [tracking]
+    image: traccar/traccar:6.16.0-alpine
+    environment:
+      CONFIG_USE_ENVIRONMENT_VARIABLES: "true"
+      DATABASE_DRIVER: org.postgresql.Driver
+      DATABASE_URL: jdbc:postgresql://db:5432/${TRACCAR_DB:-traccar}
+      DATABASE_USER: ${POSTGRES_USER:-erp_admin}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production_please}
+      LOGGER_CONSOLE: "true"
+    volumes:
+      - traccar-logs:/opt/traccar/logs
+    ports:
+      # Interfaz web y API REST/WebSocket, solo local como Grafana.
+      - "127.0.0.1:8082:8082"
+      # Protocolo OsmAnd (app Traccar Client). Abierto en la red para que llegue el celular.
+      - "5055:5055"
+    depends_on:
+      traccar-db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8082/api/server >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    cpus: 1.0
+    mem_limit: 768m
     restart: unless-stopped
 
   # ---------------- Security Scanners (optional, profile: security) ----------------
@@ -794,4 +890,5 @@ volumes:
   trivy-cache:
   backend-cache:
   frontend-node-modules:
+  traccar-logs:
   frontend-svelte-kit:

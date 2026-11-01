@@ -97,6 +97,8 @@ class Employee(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             sqlite_where=text("user_id IS NOT NULL AND deleted_at IS NULL"),
         ),
         Index("ix_employees_company_deleted_at", "company_id", "deleted_at"),
+        # Permite FKs compuestas (company_id, employee_id) desde otros módulos (conductores).
+        UniqueConstraint("company_id", "id", name="uq_employees_company_id"),
         {"comment": "Employee profiles scoped to a company."},
     )
 

@@ -12,6 +12,7 @@
   import { onMount } from 'svelte';
   import Sidebar from '$lib/components/ui/Sidebar.svelte';
   import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
+  import TrackingAlertsBell from '$lib/features/tracking/TrackingAlertsBell.svelte';
   import UserMenu from '$lib/components/ui/UserMenu.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { clearPrivateQueryCache } from '$lib/services/query-client';
@@ -218,7 +219,11 @@
 
 <div class="fixed inset-0 flex overflow-clip bg-surface">
   {#if !operationalWorkspace}<div class="hidden md:flex" data-app-global-chrome>
-      <Sidebar collapsed={sidebarCollapsed} />
+      <Sidebar
+        id="desktop-navigation"
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => (sidebarCollapsed = !sidebarCollapsed)}
+      />
     </div>{/if}
 
   {#if mobileOpen && !operationalWorkspace}
@@ -243,7 +248,7 @@
       data-app-global-chrome
       class="flex h-14 flex-none items-center justify-between gap-3 border-b border-border bg-surface px-4 md:px-6"
     >
-      <!-- Left: menu + collapse + breadcrumb + search -->
+      <!-- Left: mobile menu + page title + search -->
       <div class="flex flex-1 items-center gap-2">
         {#if operationalWorkspace}
           <a
@@ -277,26 +282,6 @@
                 x2="21"
                 y2="18"
               /></svg
-            >
-          </button>
-          <button
-            type="button"
-            onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
-            class="hidden h-8 w-8 flex-none items-center justify-center rounded-md text-foreground-muted hover:bg-surface-hover hover:text-foreground md:flex"
-            aria-label="Colapsar sidebar"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-              class="transition-transform duration-200 {sidebarCollapsed ? 'rotate-180' : ''}"
-              ><polyline points="15 18 9 12 15 6" /></svg
             >
           </button>
         {/if}
@@ -365,6 +350,7 @@
             stroke-width="2"><path d="m9 18 6-6-6-6" /></svg
           >
         </button>
+        <TrackingAlertsBell />
         <ThemeToggle />
         <UserMenu user={session.user} {loading} onLogout={handleLogout} />
       </div>

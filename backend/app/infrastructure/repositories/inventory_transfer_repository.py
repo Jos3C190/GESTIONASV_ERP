@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, NoReturn
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -24,6 +24,8 @@ from app.domain.entities.inventory_transfer import (
     validate_receipt_quantity,
 )
 from app.infrastructure.models.catalog import CompanyUnitModel, ProductModel, UnitModel
+from app.infrastructure.models.employee import Employee
+from app.infrastructure.models.fleet import DriverModel, FleetVehicleModel
 from app.infrastructure.models.inventory import (
     InventoryBalanceModel,
     InventoryHandlingUnitModel,
@@ -773,9 +775,11 @@ class SqlAlchemyInventoryTransferRepository:
         vehicle_id: uuid.UUID,
         idempotency_key: str,
         actor_id: uuid.UUID,
+        driver_id: uuid.UUID | None = None,
+        compliance_override_reason: str | None = None,
     ) -> dict[str, Any]:
         fingerprint = self._fingerprint(
-            "dispatch", {"transfer_id": transfer_id, "vehicle_id": vehicle_id}
+            "dispatch", {"transfer_id": transfer_id, "vehicle_id": vehicle_id, "driver_id": driver_id}
         )
         replay = await self._replay_command(
             company_id=company_id, action="dispatch", key=idempotency_key, fingerprint=fingerprint
@@ -890,6 +894,9 @@ class SqlAlchemyInventoryTransferRepository:
             for allocation in allocations:
                 allocation.quantity_dispatched = allocation.allocated_quantity
         transfer.vehicle_id = vehicle.id
+        transfer.driver_id = driver_id
+        transfer.compliance_override_by = actor_id if compliance_override_reason else None
+        transfer.compliance_override_reason = compliance_override_reason
         transfer.status = "in_transit"
         transfer.dispatched_by_id = actor_id
         transfer.dispatched_at = now
@@ -1320,11 +1327,38 @@ class SqlAlchemyInventoryTransferRepository:
                 )
             )
             if record is not None:
+                fleet = (
+                    await self._session.execute(
+                        select(FleetVehicleModel.id, FleetVehicleModel.plate).where(
+                            FleetVehicleModel.company_id == transfer.company_id,
+                            FleetVehicleModel.inventory_vehicle_id == record.id,
+                        )
+                    )
+                ).first()
                 vehicle = {
                     "id": record.id,
                     "code": record.code,
                     "name": record.name,
                     "status": record.status,
+                    "transit_warehouse_id": record.transit_warehouse_id,
+                    "fleet_vehicle_id": fleet[0] if fleet else None,
+                    "plate": fleet[1] if fleet else None,
+                }
+        driver = None
+        if transfer.driver_id is not None:
+            driver_row = (
+                await self._session.execute(
+                    select(DriverModel.id, Employee.first_name, Employee.last_name, Employee.employee_code)
+                    .join(Employee, Employee.id == DriverModel.employee_id)
+                    .where(DriverModel.company_id == transfer.company_id, DriverModel.id == transfer.driver_id)
+                    .execution_options(include_deleted=True)
+                )
+            ).first()
+            if driver_row is not None:
+                driver = {
+                    "id": driver_row[0],
+                    "name": f"{driver_row[1]} {driver_row[2]}".strip(),
+                    "employee_code": driver_row[3],
                 }
         details = list(
             (
@@ -1600,6 +1634,8 @@ class SqlAlchemyInventoryTransferRepository:
             "destination_warehouse_name": destination.name,
             "destination_branch_id": destination.branch_id,
             "vehicle": vehicle,
+            "driver": driver,
+            "compliance_override_reason": transfer.compliance_override_reason,
             "status": transfer.status,
             "notes": transfer.notes,
             "created_by_id": transfer.created_by_id,
@@ -1896,17 +1932,83 @@ class SqlAlchemyInventoryTransferRepository:
             )
         return output
 
-    async def _transit_warehouse(self, company_id: uuid.UUID) -> Warehouse:
-        warehouse = await self._session.scalar(
+    async def _find_transit_warehouse(self, company_id: uuid.UUID) -> Warehouse | None:
+        warehouse: Warehouse | None = await self._session.scalar(
             select(Warehouse).where(
                 Warehouse.company_id == company_id,
                 Warehouse.is_transit.is_(True),
                 Warehouse.deleted_at.is_(None),
             )
         )
+        return warehouse
+
+    async def _provision_transit_warehouse(self, company_id: uuid.UUID) -> None:
+        """Create the technical transit warehouse in the headquarters branch.
+
+        Migration 0086 only provisioned companies that existed at that time.
+        Companies configured later get it on first use, with the same rules:
+        it requires an active headquarters with an active central warehouse.
+        """
+        params = {"company_id": company_id}
+        await self._session.execute(
+            text(
+                """
+                INSERT INTO warehouse_categories (id, company_id, name, description, is_active,
+                  created_at, updated_at)
+                SELECT gen_random_uuid(), :company_id, 'Tránsito interno',
+                  'Categoría técnica para ubicaciones móviles de vehículos.', true, now(), now()
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM warehouse_categories
+                  WHERE company_id = :company_id AND lower(name) = lower('Tránsito interno')
+                    AND deleted_at IS NULL)
+                """
+            ),
+            params,
+        )
+        await self._session.execute(
+            text(
+                """
+                INSERT INTO warehouses (id, company_id, branch_id, warehouse_category_id, name,
+                  code, warehouse_type, is_central, is_transit, operational_status,
+                  capacity_profile, capacity_enforcement_mode, storage_eligible, created_at,
+                  updated_at, is_active)
+                SELECT gen_random_uuid(), central.company_id, headquarters.id, category.id,
+                  'Tránsito de vehículos',
+                  'TRN-' || upper(substr(replace(central.company_id::text, '-', ''), 1, 8)),
+                  'transit', false, true, 'active', 'transit', 'disabled', false, now(), now(),
+                  true
+                FROM warehouses AS central
+                JOIN branches AS headquarters ON headquarters.id = central.branch_id
+                  AND headquarters.company_id = central.company_id
+                JOIN warehouse_categories AS category ON category.company_id = central.company_id
+                  AND lower(category.name) = lower('Tránsito interno')
+                  AND category.deleted_at IS NULL
+                WHERE central.company_id = :company_id
+                  AND central.is_central IS TRUE AND central.is_active IS TRUE
+                  AND central.operational_status = 'active' AND central.deleted_at IS NULL
+                  AND headquarters.is_headquarters IS TRUE AND headquarters.is_active IS TRUE
+                  AND headquarters.operational_status = 'active'
+                  AND headquarters.deleted_at IS NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM warehouses AS transit
+                    WHERE transit.company_id = central.company_id
+                      AND transit.is_transit IS TRUE AND transit.deleted_at IS NULL)
+                LIMIT 1
+                """
+            ),
+            params,
+        )
+        await self._session.flush()
+
+    async def _transit_warehouse(self, company_id: uuid.UUID) -> Warehouse:
+        warehouse = await self._find_transit_warehouse(company_id)
+        if warehouse is None:
+            await self._provision_transit_warehouse(company_id)
+            warehouse = await self._find_transit_warehouse(company_id)
         if warehouse is None:
             self._raise(
-                "La empresa no tiene bodega técnica de tránsito; revise la matriz y aplique la migración.",
+                "La empresa necesita una sucursal matriz activa con bodega central activa "
+                "para habilitar los vehículos de traslado.",
                 "transit_warehouse_not_configured",
             )
         return warehouse
@@ -1985,20 +2087,42 @@ class SqlAlchemyInventoryTransferRepository:
             "created_at": vehicle.created_at,
         }
 
-    async def list_vehicles(self, company_id: uuid.UUID) -> list[dict[str, Any]]:
-        rows = (
-            await self._session.execute(
-                select(InventoryVehicleModel, Warehouse.name)
-                .join(
-                    Warehouse,
-                    (Warehouse.company_id == InventoryVehicleModel.company_id)
-                    & (Warehouse.id == InventoryVehicleModel.transit_warehouse_id),
-                )
-                .where(InventoryVehicleModel.company_id == company_id)
-                .order_by(InventoryVehicleModel.code)
+    async def list_vehicles(
+        self, company_id: uuid.UUID, branch_ids: list[uuid.UUID] | None = None
+    ) -> list[dict[str, Any]]:
+        """Transit vehicles with their Fleet record; ``branch_ids`` limits to those branches."""
+        statement = (
+            select(InventoryVehicleModel, Warehouse.name, FleetVehicleModel, Branch.name)
+            .join(
+                Warehouse,
+                (Warehouse.company_id == InventoryVehicleModel.company_id)
+                & (Warehouse.id == InventoryVehicleModel.transit_warehouse_id),
             )
-        ).all()
-        return [self._vehicle_payload(vehicle, warehouse_name) for vehicle, warehouse_name in rows]
+            .outerjoin(
+                FleetVehicleModel,
+                (FleetVehicleModel.company_id == InventoryVehicleModel.company_id)
+                & (FleetVehicleModel.inventory_vehicle_id == InventoryVehicleModel.id),
+            )
+            .outerjoin(Branch, Branch.id == FleetVehicleModel.branch_id)
+            .where(InventoryVehicleModel.company_id == company_id)
+            .order_by(InventoryVehicleModel.code)
+        )
+        if branch_ids is not None:
+            statement = statement.where(FleetVehicleModel.branch_id.in_(branch_ids))
+        rows = (await self._session.execute(statement)).all()
+        payloads = []
+        for vehicle, warehouse_name, fleet, branch_name in rows:
+            payload = self._vehicle_payload(vehicle, warehouse_name)
+            if fleet is not None:
+                payload.update(
+                    fleet_vehicle_id=fleet.id,
+                    plate=fleet.plate,
+                    kind=fleet.kind,
+                    branch_id=fleet.branch_id,
+                    branch_name=branch_name,
+                )
+            payloads.append(payload)
+        return payloads
 
     async def set_vehicle_status(
         self,

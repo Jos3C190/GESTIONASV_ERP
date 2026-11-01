@@ -35,6 +35,7 @@ from app.api.v1.schemas.capacity import CapacityConfigurationDiagnosticsOut
 from app.api.v1.schemas.common import Page, PageMeta
 from app.api.v1.schemas.location import LocationOut
 from app.api.v1.schemas.organization import (
+    DEFAULT_GEOFENCE_RADIUS_M,
     BranchIn,
     CompanyIn,
     LocationIn,
@@ -45,6 +46,7 @@ from app.api.v1.schemas.organization import (
     WarehouseListSummary,
     WarehousePage,
 )
+from app.api.v1.site_sync import sync_sites_after_change
 from app.application.locations.use_cases import LocationUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.exceptions import AuthorizationError
@@ -288,6 +290,14 @@ async def _prepare_branch_input(
     existing: Branch | None = None,
 ) -> BranchIn:
     """Resolve the minimum administrative headquarters profile from its company."""
+    if body.geofence_radius_m is None:
+        body = body.model_copy(
+            update={
+                "geofence_radius_m": existing.geofence_radius_m
+                if existing is not None
+                else DEFAULT_GEOFENCE_RADIUS_M
+            }
+        )
     company = await session.scalar(
         select(Company).where(Company.id == body.company_id).with_for_update()
     )
@@ -617,6 +627,10 @@ async def _warehouses_out(
                 "type": warehouse.warehouse_type,
                 "status": warehouse.operational_status,
                 "location": warehouse.physical_location or "",
+                "location_mode": warehouse.location_mode,
+                "latitude": _json_value(warehouse.latitude),
+                "longitude": _json_value(warehouse.longitude),
+                "geofence_radius_m": warehouse.geofence_radius_m,
                 "branch_name": branch.name if branch else "Sucursal asociada no encontrada",
                 "branch_address": branch.address if branch else "",
                 "manager": f"{manager.first_name} {manager.last_name}"
@@ -651,6 +665,31 @@ async def _warehouses_out(
 
 async def _warehouse_out(session: AsyncSession, warehouse: Warehouse) -> dict[str, Any]:
     return (await _warehouses_out(session, [warehouse]))[0]
+
+
+def _resolve_warehouse_location(body: WarehouseIn, existing: Warehouse | None) -> WarehouseIn:
+    """Keep the stored location when the request does not send one."""
+    if body.location_mode is not None:
+        return body
+    if existing is None:
+        return body.model_copy(
+            update={
+                "location_mode": "branch",
+                "latitude": None,
+                "longitude": None,
+                "geofence_radius_m": None,
+            }
+        )
+    if existing.location_mode == "own" and not (body.physical_location or "").strip():
+        raise HTTPException(422, "Indique la dirección del almacén que está en otra dirección.")
+    return body.model_copy(
+        update={
+            "location_mode": existing.location_mode,
+            "latitude": existing.latitude,
+            "longitude": existing.longitude,
+            "geofence_radius_m": existing.geofence_radius_m,
+        }
+    )
 
 
 async def _validate_warehouse_relations(
@@ -932,7 +971,7 @@ async def get_branch(
 @router.post(
     "/branches",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("branches.create"))],
+    dependencies=[Depends(require_permission("branches.create")), Depends(sync_sites_after_change)],
 )
 async def create_branch(
     body: BranchIn, request: Request, session: SessionDep, current: CurrentUser
@@ -973,7 +1012,7 @@ async def create_branch(
 
 
 @router.patch(
-    "/branches/{record_id}", dependencies=[Depends(require_permission("branches.update"))]
+    "/branches/{record_id}", dependencies=[Depends(require_permission("branches.update")), Depends(sync_sites_after_change)]
 )
 async def update_branch(
     record_id: uuid.UUID,
@@ -1049,7 +1088,7 @@ async def update_branch(
 
 @router.post(
     "/branches/{record_id}/activate",
-    dependencies=[Depends(require_permission("branches.activate"))],
+    dependencies=[Depends(require_permission("branches.activate")), Depends(sync_sites_after_change)],
 )
 async def activate_branch(
     record_id: uuid.UUID, request: Request, session: SessionDep, current: CurrentUser
@@ -1072,7 +1111,7 @@ async def activate_branch(
 
 @router.post(
     "/branches/{record_id}/deactivate",
-    dependencies=[Depends(require_permission("branches.deactivate"))],
+    dependencies=[Depends(require_permission("branches.deactivate")), Depends(sync_sites_after_change)],
 )
 async def deactivate_branch(
     record_id: uuid.UUID, request: Request, session: SessionDep, current: CurrentUser
@@ -1707,7 +1746,7 @@ async def get_warehouse(
 @router.post(
     "/warehouses",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("warehouses.create"))],
+    dependencies=[Depends(require_permission("warehouses.create")), Depends(sync_sites_after_change)],
 )
 async def create_warehouse(
     body: WarehouseIn, request: Request, session: SessionDep, current: CurrentUser
@@ -1715,6 +1754,7 @@ async def create_warehouse(
     company_id = effective_company_id(request)
     if body.company_id is not None and body.company_id != company_id:
         raise HTTPException(404, "Empresa no encontrada.")
+    body = _resolve_warehouse_location(body, None)
     branch = await _validate_warehouse_relations(
         session,
         current,
@@ -1744,7 +1784,7 @@ async def create_warehouse(
 
 
 @router.patch(
-    "/warehouses/{record_id}", dependencies=[Depends(require_permission("warehouses.update"))]
+    "/warehouses/{record_id}", dependencies=[Depends(require_permission("warehouses.update")), Depends(sync_sites_after_change)]
 )
 async def update_warehouse(
     record_id: uuid.UUID,
@@ -1761,6 +1801,7 @@ async def update_warehouse(
     company_id = await _authorize_warehouse_scope(session, current, request, existing)
     if body.company_id is not None and body.company_id != company_id:
         raise HTTPException(404, "Empresa no encontrada.")
+    body = _resolve_warehouse_location(body, existing)
     branch = await _validate_warehouse_relations(
         session,
         current,
@@ -1819,7 +1860,7 @@ async def update_warehouse(
 
 @router.post(
     "/warehouses/{record_id}/deactivate",
-    dependencies=[Depends(require_permission("warehouses.deactivate"))],
+    dependencies=[Depends(require_permission("warehouses.deactivate")), Depends(sync_sites_after_change)],
 )
 async def deactivate_warehouse(
     record_id: uuid.UUID, request: Request, session: SessionDep, current: CurrentUser
@@ -1855,7 +1896,7 @@ async def deactivate_warehouse(
 
 @router.post(
     "/warehouses/{record_id}/activate",
-    dependencies=[Depends(require_permission("warehouses.activate"))],
+    dependencies=[Depends(require_permission("warehouses.activate")), Depends(sync_sites_after_change)],
 )
 async def activate_warehouse(
     record_id: uuid.UUID, request: Request, session: SessionDep, current: CurrentUser
