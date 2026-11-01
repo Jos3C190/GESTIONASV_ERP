@@ -21,6 +21,8 @@
   import SimulatorDock from './SimulatorDock.svelte';
   import { pathBetween } from './truck3d';
   import TrackingMap from './TrackingMap.svelte';
+  import TrackingSplitView from './TrackingSplitView.svelte';
+  import type { TrackingViewCount } from './split-view';
   import TransfersPanel from './TransfersPanel.svelte';
   import {
     formatClock,
@@ -67,6 +69,8 @@
   let coverage = $state<{ total: number; withGps: number } | null>(null);
 
   let tab = $state<Tab>('units');
+  let viewCount = $state<TrackingViewCount>(1);
+  let splitAssignments = $state<(string | null)[]>([]);
   let liveTransfers = $state<TransferSummary[]>([]);
   let transfersLoading = $state(false);
   let transferError = $state<string | null>(null);
@@ -423,6 +427,7 @@
   }
 
   function openTab(next: Tab) {
+    viewCount = 1;
     if (panelCollapsed) setPanelCollapsed(false);
     tab = next;
     if (next === 'transfers') loadTransfers();
@@ -474,6 +479,7 @@
     handledQuery = query;
     const requested = page.url.searchParams.get('transfer');
     if (requested) {
+      viewCount = 1;
       if (panelCollapsed) setPanelCollapsed(false);
       tab = 'transfers';
       if (requested !== selectedTransferId) selectTransfer(requested);
@@ -565,11 +571,22 @@
       if (simWaypoints.length < MAX_SIM_POINTS) simWaypoints = [...simWaypoints, point];
     } else addDraftPoint(point);
   }
+  function setViewCount(next: TrackingViewCount) {
+    viewCount = next;
+    if (next > 1) {
+      simPicking = false;
+      draft = null;
+    }
+  }
+
+  $effect(() => {
+    if (viewCount > 1 && (simPicking || draft)) viewCount = 1;
+  });
 </script>
 
 <svelte:window
   onkeydown={(event) => {
-    if (event.key !== 'Escape') return;
+    if (event.key !== 'Escape' || viewCount > 1) return;
     if (simPicking) simPicking = false;
     else if (draft) draft = null;
     else if (focusedEvent) focusedEvent = null;
@@ -578,48 +595,580 @@
   }}
 />
 
-<div class="tracking-workspace">
-  <div class="tracking-shell">
-    <div class="status-chip" class:warn={!!liveError} role="status" aria-live="polite">
-      {#if liveError}
-        <FleetIcon name="alert" size={13} /><span>{liveError}</span>
-      {:else if mode === 'live'}
-        <span class="dot live"></span><span>En vivo</span>
-        {#if lastSync}<span class="muted">· Actualizado {timeAgo(lastSync, now)}</span>{/if}
-      {:else if mode === 'unconfigured'}
-        <span class="dot"></span><span>Servidor GPS sin configurar</span>
-      {:else}
-        <span class="dot"></span><span>Conectando…</span>
-      {/if}
-    </div>
-    <TrackingMap
-      bind:this={mapView}
-      vehicles={visible}
-      {selectedKey}
-      {follow}
-      trail={activeTrack ? activeTrack.trail : selectedTrail}
-      plannedRoute={activeTrack ? activeTrack.remainingRoute : null}
-      originalRoute={activeTrack?.rerouted ? activeTrack.route : null}
-      {endpoints}
-      geofences={manualGeofences}
-      sites={sitesData?.sites ?? []}
-      {highlightedGeofence}
-      draft={draftPreview}
-      drawing={draft !== null || simPicking}
-      {focusPoint}
-      {simRoutes}
-      simPoints={simWaypoints}
-      {pilots}
-      logo={company.active?.logo ?? null}
-      onselect={(key) => {
-        if (activeTrack && key === null) return;
-        if (activeTrack) selectTransfer(null);
-        select(key);
-        focusedEvent = null;
-      }}
-      ondrawpoint={addMapPoint}
-    />
+{#snippet connectionStatus()}
+  <div class="status-chip" class:warn={!!liveError} role="status" aria-live="polite">
+    {#if liveError}
+      <FleetIcon name="alert" size={13} /><span>{liveError}</span>
+    {:else if mode === 'live'}
+      <span class="dot live"></span><span>En vivo</span>
+      {#if lastSync}<span class="muted">· Actualizado {timeAgo(lastSync, now)}</span>{/if}
+    {:else if mode === 'unconfigured'}
+      <span class="dot"></span><span>Servidor GPS sin configurar</span>
+    {:else}
+      <span class="dot"></span><span>Conectando…</span>
+    {/if}
+  </div>
+{/snippet}
 
+{#snippet layoutControls()}
+  <div class="view-controls" role="group" aria-label="Disposición del seguimiento">
+    <FleetIcon name="grid" size={15} /><span>Vistas</span>
+    {#each [1, 2, 3, 4] as count}
+      <button
+        type="button"
+        aria-label={count === 1 ? 'Mostrar un mapa' : `Mostrar ${count} vistas`}
+        aria-pressed={viewCount === count}
+        class:active={viewCount === count}
+        title={count === 1 ? 'Un mapa' : `${count} vistas independientes`}
+        onclick={() => setViewCount(count as TrackingViewCount)}>{count}</button
+      >
+    {/each}
+  </div>
+{/snippet}
+
+<div class="tracking-workspace" class:multi-view={viewCount > 1}>
+  <div class="tracking-shell" class:split-mode={viewCount > 1}>
+    {#if viewCount > 1}
+      <header class="split-toolbar">
+        <div class="split-heading">
+          <h2>Seguimiento múltiple</h2>
+          <p>
+            {vehicles.length}
+            {vehicles.length === 1 ? 'unidad con posición' : 'unidades con posición'}
+          </p>
+        </div>
+        <div class="split-toolbar-actions">
+          {@render connectionStatus()}{@render layoutControls()}
+        </div>
+      </header>
+      <TrackingSplitView
+        count={viewCount as 2 | 3 | 4}
+        {vehicles}
+        bind:assignments={splitAssignments}
+        preferred={selectedKey}
+        {trails}
+        {simRoutes}
+        {pilots}
+        sites={sitesData?.sites ?? []}
+        geofences={manualGeofences}
+        logo={company.active?.logo ?? null}
+        {now}
+        loading={mode === 'loading'}
+      />
+    {:else}
+      <div class="tracking-toolbar">{@render layoutControls()}</div>
+      <div class="single-map-status">{@render connectionStatus()}</div>
+      <TrackingMap
+        bind:this={mapView}
+        vehicles={visible}
+        {selectedKey}
+        {follow}
+        trail={activeTrack ? activeTrack.trail : selectedTrail}
+        plannedRoute={activeTrack ? activeTrack.remainingRoute : null}
+        originalRoute={activeTrack?.rerouted ? activeTrack.route : null}
+        {endpoints}
+        geofences={manualGeofences}
+        sites={sitesData?.sites ?? []}
+        {highlightedGeofence}
+        draft={draftPreview}
+        drawing={draft !== null || simPicking}
+        {focusPoint}
+        {simRoutes}
+        simPoints={simWaypoints}
+        {pilots}
+        logo={company.active?.logo ?? null}
+        onselect={(key) => {
+          if (activeTrack && key === null) return;
+          if (activeTrack) selectTransfer(null);
+          select(key);
+          focusedEvent = null;
+        }}
+        ondrawpoint={addMapPoint}
+      />
+
+      <aside
+        class="device-panel"
+        class:panel-collapsed={panelCollapsed}
+        aria-label="Seguimiento de unidades"
+      >
+        <header class="panel-header">
+          <div class="panel-heading">
+            <FleetIcon name="list" size={17} />
+            <div>
+              <h2>Seguimiento</h2>
+              <p>
+                {mode === 'loading'
+                  ? 'Conectando GPS…'
+                  : `${counts.all} ${counts.all === 1 ? 'unidad' : 'unidades'} · ${counts.moving} en movimiento`}
+              </p>
+            </div>
+          </div>
+          <div class="panel-tools">
+            {#if panelCollapsed && unread + trackingAlerts.unacknowledged > 0}
+              <span
+                class="unread"
+                aria-label={`${unread + trackingAlerts.unacknowledged} eventos y alertas pendientes`}
+                title="Eventos y alertas pendientes"
+                >{unread + trackingAlerts.unacknowledged > 99
+                  ? '99+'
+                  : unread + trackingAlerts.unacknowledged}</span
+              >
+            {/if}
+            <button
+              type="button"
+              class="icon-button panel-toggle"
+              class:flipped={panelCollapsed}
+              aria-expanded={!panelCollapsed}
+              aria-controls="tracking-panel-content"
+              aria-label={panelCollapsed
+                ? 'Expandir panel de seguimiento'
+                : 'Contraer panel de seguimiento'}
+              title={panelCollapsed
+                ? 'Expandir panel de seguimiento'
+                : 'Contraer panel de seguimiento'}
+              onclick={() => setPanelCollapsed(!panelCollapsed)}
+              ><FleetIcon name="chevron" size={15} /></button
+            >
+          </div>
+        </header>
+        <div id="tracking-panel-content" class="panel-content" hidden={panelCollapsed}>
+          <div class="tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'units'}
+              class:active={tab === 'units'}
+              onclick={() => openTab('units')}>Unidades</button
+            >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'transfers'}
+              class:active={tab === 'transfers'}
+              onclick={() => openTab('transfers')}>Traslados</button
+            >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'geofences'}
+              class:active={tab === 'geofences'}
+              onclick={() => openTab('geofences')}>Geocercas</button
+            >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'events'}
+              class:active={tab === 'events'}
+              onclick={() => openTab('events')}
+              >Eventos{#if unread}<span class="unread">{unread > 99 ? '99+' : unread}</span
+                >{/if}</button
+            >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'alerts'}
+              class:active={tab === 'alerts'}
+              onclick={() => openTab('alerts')}
+              >Alertas{#if trackingAlerts.unacknowledged}<span class="unread alert-count"
+                  >{trackingAlerts.unacknowledged > 99
+                    ? '99+'
+                    : trackingAlerts.unacknowledged}</span
+                >{/if}</button
+            >
+          </div>
+          {#if tab === 'geofences'}
+            <GeofencePanel
+              geofences={manualGeofences}
+              sites={sitesData}
+              canSync={permissions.hasPermission('tracking:geofences')}
+              syncing={syncingSites}
+              onsync={syncSites}
+              onfocussite={(site) =>
+                mapView?.fitRing(circleRing([site.longitude, site.latitude], site.radius_m, 32))}
+              canManage={canManageGeofences}
+              {draft}
+              saving={savingGeofence}
+              error={geofenceError}
+              highlighted={highlightedGeofence}
+              onstartdraw={startDraw}
+              onundo={undoDraftPoint}
+              onradius={(radiusM) => draft && (draft = { ...draft, radiusM })}
+              oncancel={() => (draft = null)}
+              onsave={saveGeofence}
+              ondelete={deleteGeofence}
+              onfocus={focusGeofence}
+            />
+          {:else if tab === 'transfers'}
+            <TransfersPanel
+              transfers={transferList}
+              selectedId={selectedTransferId}
+              loading={transfersLoading}
+              error={transferError}
+              {now}
+              onselect={(id) => selectTransfer(id === selectedTransferId ? null : id)}
+            />
+          {:else if tab === 'alerts'}
+            <AlertsPanel
+              alerts={trackingAlerts.items}
+              {now}
+              monitorActive={trackingAlerts.monitorActive}
+              error={trackingAlerts.error}
+              onopen={openAlert}
+              onacknowledge={acknowledgeAlert}
+            />
+          {:else if tab === 'events'}
+            <EventsPanel {events} {now} focusedId={focusedEvent?.id ?? null} onfocus={focusEvent} />
+          {:else}
+            <div class="panel-search">
+              <FleetIcon name="search" size={16} />
+              <input
+                bind:value={query}
+                type="search"
+                placeholder="Buscar unidad, placa o conductor"
+                aria-label="Buscar unidades"
+              />
+            </div>
+            <div class="filters" role="group" aria-label="Filtrar por estado">
+              {#each filters as item (item.id)}
+                <button
+                  type="button"
+                  class:active={filter === item.id}
+                  aria-pressed={filter === item.id}
+                  onclick={() => (filter = item.id)}
+                  >{item.label}<span>{counts[item.id]}</span></button
+                >
+              {/each}
+            </div>
+            <ul class="device-list">
+              {#each visible as vehicle (vehicle.key)}
+                <li>
+                  <button
+                    type="button"
+                    class="device-row"
+                    class:selected={vehicle.key === selectedKey}
+                    aria-pressed={vehicle.key === selectedKey}
+                    onclick={() => select(vehicle.key)}
+                  >
+                    <span class="device-avatar {vehicle.status}"
+                      ><FleetIcon name="truck" size={17} /></span
+                    >
+                    <span class="device-main">
+                      <strong
+                        >{vehicle.name}{#if vehicle.simulated}<span
+                            class="sim-tag"
+                            title="Posición del GPS virtual del simulador">SIM</span
+                          >{/if}</strong
+                      >
+                      <span
+                        >{vehicle.vehicle
+                          ? [vehicle.vehicle.plate, vehicle.vehicle.driver_name ?? 'Sin conductor']
+                              .filter(Boolean)
+                              .join(' · ')
+                          : 'Dispositivo GPS'}</span
+                      >
+                    </span>
+                    <span class="device-side">
+                      <span class="status-text {vehicle.status}"
+                        >{STATUS_LABELS[vehicle.status]}</span
+                      >
+                      <span
+                        >{vehicle.status === 'moving'
+                          ? `${Math.round(vehicle.speedKmh)} km/h`
+                          : timeAgo(vehicle.fixTime, now)}</span
+                      >
+                    </span>
+                  </button>
+                </li>
+              {:else}
+                <li class="empty">
+                  {mode === 'loading'
+                    ? 'Conectando con el servidor GPS…'
+                    : vehicles.length
+                      ? 'Ninguna unidad coincide con la búsqueda.'
+                      : mode === 'unconfigured'
+                        ? 'El servidor GPS no está configurado. Los traslados siguen disponibles en su pestaña.'
+                        : coverage && coverage.withGps === 0
+                          ? coverage.total
+                            ? 'Ningún vehículo tiene GPS vinculado. Vincúlalo desde su ficha en Flota.'
+                            : 'No hay vehículos registrados en Flota para esta sucursal.'
+                          : 'Las unidades con GPS aún no reportan posición.'}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          {#if mode === 'live' && coverage && coverage.withGps < coverage.total}
+            <p class="panel-note">
+              <FleetIcon name="info" size={13} />{coverage.withGps} de {coverage.total} vehículos tienen
+              GPS vinculado. <a href="/fleet">Vincular en Flota</a>
+            </p>
+          {/if}
+        </div>
+      </aside>
+
+      {#if selectedTransferId}
+        {@const track = activeTrack}
+        <section class="vehicle-card transfer-card" aria-label="Recorrido del traslado">
+          <header>
+            <div>
+              <h2>{track?.code ?? 'Cargando traslado…'}</h2>
+              {#if track}<p>
+                  {track.vehicleCode ?? 'Sin vehículo asignado'}{track.vehiclePlate
+                    ? ` · ${track.vehiclePlate}`
+                    : ''}{track.driverName ? ` · ${track.driverName}` : ''}
+                </p>{/if}
+            </div>
+            <button
+              type="button"
+              class="icon-button"
+              aria-label="Cerrar recorrido"
+              onclick={() => selectTransfer(null)}><FleetIcon name="close" size={16} /></button
+            >
+          </header>
+          {#if track}
+            <ol class="legs">
+              <li><span class="leg-pin">A</span>{track.origin.branch}</li>
+              <li><span class="leg-pin destination">B</span>{track.destination.branch}</li>
+            </ol>
+            {#if track.alerts.length}
+              <ul class="trip-alerts" aria-label="Alertas del traslado">
+                {#each track.alerts as alert (alert.id)}
+                  <li class={alert.severity}>
+                    <strong>{ALERT_KIND_LABELS[alert.kind]}</strong>
+                    <span>{alert.message}</span>
+                    {#if !alert.acknowledged_at}
+                      <button type="button" onclick={() => acknowledgeAlert(alert)}
+                        >Reconocer</button
+                      >
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+            {#if track.simulated}
+              <p class="flag sim">
+                <FleetIcon name="info" size={14} />Viaje leído del simulador: alertas y recorrido
+                quedan marcados como simulados
+              </p>
+            {/if}
+            {#if track.trackStored}
+              <p class="flag success">
+                <FleetIcon name="check" size={14} />Recibido · recorrido guardado en el ERP
+              </p>
+            {:else if track.arrived}
+              <p class="flag success">
+                <FleetIcon name="check" size={14} />Llegó a la sucursal de destino
+              </p>
+            {:else if track.rerouted}
+              <p class="flag warning">
+                <FleetIcon name="route" size={14} />Ruta recalculada: la unidad tomó otro camino
+              </p>
+            {:else if track.offRoute}
+              <p class="flag danger">
+                <FleetIcon name="alert" size={14} />Fuera de la ruta planeada
+              </p>
+            {/if}
+            <div class="progress-line">
+              <span>Avance</span><strong>{Math.round(track.progress * 100)}%</strong>
+            </div>
+            <div class="progress-track"><span style:width="{track.progress * 100}%"></span></div>
+            <dl class="stats">
+              <div>
+                <dt>Restante</dt>
+                <dd>{formatDistance(track.remainingM)}</dd>
+              </div>
+              <div>
+                <dt>Llegada est.</dt>
+                <dd>{track.arrived ? 'Llegó' : formatClock(track.eta)}</dd>
+              </div>
+              <div>
+                <dt>Velocidad</dt>
+                <dd>{track.position ? `${Math.round(track.position.speedKmh)} km/h` : '—'}</dd>
+              </div>
+              <div>
+                <dt>Salida</dt>
+                <dd>{formatClock(track.dispatchedAt)}</dd>
+              </div>
+              <div>
+                <dt>Distancia</dt>
+                <dd>{formatDistance(track.distanceM)}</dd>
+              </div>
+              <div>
+                <dt>Última señal</dt>
+                <dd>{timeAgo(track.position?.fixTime ?? null, now)}</dd>
+              </div>
+            </dl>
+            {#if !track.origin.point || !track.destination.point}
+              <p class="note">
+                Una de las sucursales no tiene coordenadas; regístralas para ver la ruta.
+              </p>
+            {:else if mode === 'live' && !track.gpsConfigured}
+              <p class="note">
+                El servidor GPS no está configurado; solo se muestra la ruta planeada.
+              </p>
+            {:else if mode === 'live' && !track.deviceFound}
+              <p class="note">
+                {track.vehicleCode
+                  ? `Ningún dispositivo de Traccar se llama “${track.vehicleCode}”. Usa el código del vehículo como nombre o identificador del GPS.`
+                  : 'El traslado no tiene vehículo asignado.'}
+              </p>
+            {:else if mode === 'live' && track.trail.length > 1 && !track.trailMatched}
+              <p class="note">
+                Parte del recorrido no se pudo ajustar a las calles; se muestra el trazo del GPS.
+              </p>
+            {:else if track.routeSource === 'straight'}
+              <p class="note">Ruta aproximada en línea recta; el servicio de rutas no respondió.</p>
+            {/if}
+            <div class="card-actions">
+              <button
+                type="button"
+                class:active={follow}
+                aria-pressed={follow}
+                disabled={!track.position}
+                onclick={() => (follow = !follow)}
+                ><FleetIcon name="crosshair" size={15} />{follow
+                  ? 'Siguiendo'
+                  : 'Seguir unidad'}</button
+              >
+              <a href="/transfers"><FleetIcon name="route" size={15} />Ver traslados</a>
+            </div>
+          {/if}
+        </section>
+      {:else if selected}
+        <section
+          class="vehicle-card"
+          class:collapsed={cardCollapsed}
+          aria-label={`Detalle de ${selected.name}`}
+        >
+          <header>
+            <div class="card-title">
+              <h2>
+                {selected.name}{#if selected.simulated}<span
+                    class="sim-tag"
+                    title="Posición del GPS virtual del simulador; el GPS real sigue reportando"
+                    >SIM</span
+                  >{/if}
+              </h2>
+              {#if cardCollapsed}
+                <p class="card-summary">
+                  <span class="status-pill {selected.status}"
+                    ><span></span>{STATUS_LABELS[selected.status]}</span
+                  >
+                  <span>{Math.round(selected.speedKmh)} km/h</span>
+                  <span>{timeAgo(selected.fixTime, now)}</span>
+                </p>
+              {:else}
+                <p>
+                  {selected.vehicle
+                    ? `${selected.vehicle.brand} ${selected.vehicle.model} · ${selected.vehicle.plate}`
+                    : 'Dispositivo sin vehículo asociado'}
+                </p>
+              {/if}
+            </div>
+            <div class="card-tools">
+              {#if cardCollapsed}
+                <button
+                  type="button"
+                  class="icon-button"
+                  class:active={follow}
+                  aria-pressed={follow}
+                  aria-label={follow ? 'Dejar de seguir la unidad' : 'Seguir unidad'}
+                  title={follow ? 'Siguiendo' : 'Seguir unidad'}
+                  onclick={() => (follow = !follow)}
+                  ><FleetIcon name="crosshair" size={15} /></button
+                >
+              {/if}
+              <button
+                type="button"
+                class="icon-button card-toggle"
+                class:flipped={cardCollapsed}
+                aria-expanded={!cardCollapsed}
+                aria-label={cardCollapsed ? 'Mostrar el detalle' : 'Contraer el detalle'}
+                title={cardCollapsed ? 'Mostrar el detalle' : 'Contraer el detalle'}
+                onclick={toggleCard}><FleetIcon name="chevron" size={15} /></button
+              >
+              <button
+                type="button"
+                class="icon-button"
+                aria-label="Cerrar detalle"
+                onclick={() => select(null)}><FleetIcon name="close" size={16} /></button
+              >
+            </div>
+          </header>
+          {#if !cardCollapsed}
+            <div class="card-status">
+              <span class="status-pill {selected.status}"
+                ><span></span>{STATUS_LABELS[selected.status]}</span
+              >
+              {#if selected.vehicle?.transfer_code}
+                <span class="route-to"
+                  ><FleetIcon name="route" size={14} />{selected.vehicle.transfer_code} → {selected
+                    .vehicle.transfer_destination}</span
+                >
+              {/if}
+            </div>
+            <dl class="stats">
+              <div>
+                <dt>Velocidad</dt>
+                <dd>{Math.round(selected.speedKmh)} km/h</dd>
+              </div>
+              <div>
+                <dt>Rumbo</dt>
+                <dd>
+                  <FleetIcon name="navigation" size={13} class="course-icon" />
+                  {selected.status === 'moving' ? compassPoint(selected.course) : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>Última señal</dt>
+                <dd>{timeAgo(selected.fixTime, now)}</dd>
+              </div>
+              <div>
+                <dt>Motor</dt>
+                <dd>
+                  {selected.ignition === null ? '—' : selected.ignition ? 'Encendido' : 'Apagado'}
+                </dd>
+              </div>
+              {#if selected.vehicle}
+                <div>
+                  <dt>Conductor</dt>
+                  <dd>{selected.vehicle.driver_name ?? 'Sin asignar'}</dd>
+                </div>
+                <div>
+                  <dt>Sucursal</dt>
+                  <dd>{selected.vehicle.branch_name}</dd>
+                </div>
+              {/if}
+              {#if selected.battery !== null}
+                <div>
+                  <dt>Batería GPS</dt>
+                  <dd>{Math.round(selected.battery)}%</dd>
+                </div>
+              {/if}
+            </dl>
+            <p class="coords">
+              <FleetIcon name="pin" size={13} />{selected.address ??
+                `${selected.latitude.toFixed(5)}, ${selected.longitude.toFixed(5)}`}
+            </p>
+            <div class="card-actions">
+              <button
+                type="button"
+                class:active={follow}
+                aria-pressed={follow}
+                onclick={() => (follow = !follow)}
+                ><FleetIcon name="crosshair" size={15} />{follow
+                  ? 'Siguiendo'
+                  : 'Seguir unidad'}</button
+              >
+              {#if selected.vehicle}
+                <a href={`/fleet/${selected.vehicle.id}`}
+                  ><FleetIcon name="truck" size={15} />Ver en Flota</a
+                >
+              {/if}
+            </div>
+          {/if}
+        </section>
+      {/if}
+    {/if}
     <SimulatorDock
       vehicles={visible}
       bind:picking={simPicking}
@@ -627,6 +1176,7 @@
       bind:pilots
       bind:routes={simRoutes}
       onfocus={(key) => {
+        viewCount = 1;
         if (activeTrack) selectTransfer(null);
         select(key);
       }}
@@ -654,481 +1204,6 @@
         {/each}
       </div>
     {/if}
-
-    <aside
-      class="device-panel"
-      class:panel-collapsed={panelCollapsed}
-      aria-label="Seguimiento de unidades"
-    >
-      <header class="panel-header">
-        <div class="panel-heading">
-          <FleetIcon name="list" size={17} />
-          <div>
-            <h2>Seguimiento</h2>
-            <p>
-              {mode === 'loading'
-                ? 'Conectando GPS…'
-                : `${counts.all} ${counts.all === 1 ? 'unidad' : 'unidades'} · ${counts.moving} en movimiento`}
-            </p>
-          </div>
-        </div>
-        <div class="panel-tools">
-          {#if panelCollapsed && unread + trackingAlerts.unacknowledged > 0}
-            <span
-              class="unread"
-              aria-label={`${unread + trackingAlerts.unacknowledged} eventos y alertas pendientes`}
-              title="Eventos y alertas pendientes"
-              >{unread + trackingAlerts.unacknowledged > 99
-                ? '99+'
-                : unread + trackingAlerts.unacknowledged}</span
-            >
-          {/if}
-          <button
-            type="button"
-            class="icon-button panel-toggle"
-            class:flipped={panelCollapsed}
-            aria-expanded={!panelCollapsed}
-            aria-controls="tracking-panel-content"
-            aria-label={panelCollapsed
-              ? 'Expandir panel de seguimiento'
-              : 'Contraer panel de seguimiento'}
-            title={panelCollapsed
-              ? 'Expandir panel de seguimiento'
-              : 'Contraer panel de seguimiento'}
-            onclick={() => setPanelCollapsed(!panelCollapsed)}
-            ><FleetIcon name="chevron" size={15} /></button
-          >
-        </div>
-      </header>
-      <div id="tracking-panel-content" class="panel-content" hidden={panelCollapsed}>
-        <div class="tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'units'}
-            class:active={tab === 'units'}
-            onclick={() => openTab('units')}>Unidades</button
-          >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'transfers'}
-            class:active={tab === 'transfers'}
-            onclick={() => openTab('transfers')}>Traslados</button
-          >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'geofences'}
-            class:active={tab === 'geofences'}
-            onclick={() => openTab('geofences')}>Geocercas</button
-          >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'events'}
-            class:active={tab === 'events'}
-            onclick={() => openTab('events')}
-            >Eventos{#if unread}<span class="unread">{unread > 99 ? '99+' : unread}</span
-              >{/if}</button
-          >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'alerts'}
-            class:active={tab === 'alerts'}
-            onclick={() => openTab('alerts')}
-            >Alertas{#if trackingAlerts.unacknowledged}<span class="unread alert-count"
-                >{trackingAlerts.unacknowledged > 99 ? '99+' : trackingAlerts.unacknowledged}</span
-              >{/if}</button
-          >
-        </div>
-        {#if tab === 'geofences'}
-          <GeofencePanel
-            geofences={manualGeofences}
-            sites={sitesData}
-            canSync={permissions.hasPermission('tracking:geofences')}
-            syncing={syncingSites}
-            onsync={syncSites}
-            onfocussite={(site) =>
-              mapView?.fitRing(circleRing([site.longitude, site.latitude], site.radius_m, 32))}
-            canManage={canManageGeofences}
-            {draft}
-            saving={savingGeofence}
-            error={geofenceError}
-            highlighted={highlightedGeofence}
-            onstartdraw={startDraw}
-            onundo={undoDraftPoint}
-            onradius={(radiusM) => draft && (draft = { ...draft, radiusM })}
-            oncancel={() => (draft = null)}
-            onsave={saveGeofence}
-            ondelete={deleteGeofence}
-            onfocus={focusGeofence}
-          />
-        {:else if tab === 'transfers'}
-          <TransfersPanel
-            transfers={transferList}
-            selectedId={selectedTransferId}
-            loading={transfersLoading}
-            error={transferError}
-            {now}
-            onselect={(id) => selectTransfer(id === selectedTransferId ? null : id)}
-          />
-        {:else if tab === 'alerts'}
-          <AlertsPanel
-            alerts={trackingAlerts.items}
-            {now}
-            monitorActive={trackingAlerts.monitorActive}
-            error={trackingAlerts.error}
-            onopen={openAlert}
-            onacknowledge={acknowledgeAlert}
-          />
-        {:else if tab === 'events'}
-          <EventsPanel {events} {now} focusedId={focusedEvent?.id ?? null} onfocus={focusEvent} />
-        {:else}
-          <div class="panel-search">
-            <FleetIcon name="search" size={16} />
-            <input
-              bind:value={query}
-              type="search"
-              placeholder="Buscar unidad, placa o conductor"
-              aria-label="Buscar unidades"
-            />
-          </div>
-          <div class="filters" role="group" aria-label="Filtrar por estado">
-            {#each filters as item (item.id)}
-              <button
-                type="button"
-                class:active={filter === item.id}
-                aria-pressed={filter === item.id}
-                onclick={() => (filter = item.id)}
-                >{item.label}<span>{counts[item.id]}</span></button
-              >
-            {/each}
-          </div>
-          <ul class="device-list">
-            {#each visible as vehicle (vehicle.key)}
-              <li>
-                <button
-                  type="button"
-                  class="device-row"
-                  class:selected={vehicle.key === selectedKey}
-                  aria-pressed={vehicle.key === selectedKey}
-                  onclick={() => select(vehicle.key)}
-                >
-                  <span class="device-avatar {vehicle.status}"
-                    ><FleetIcon name="truck" size={17} /></span
-                  >
-                  <span class="device-main">
-                    <strong
-                      >{vehicle.name}{#if vehicle.simulated}<span
-                          class="sim-tag"
-                          title="Posición del GPS virtual del simulador">SIM</span
-                        >{/if}</strong
-                    >
-                    <span
-                      >{vehicle.vehicle
-                        ? [vehicle.vehicle.plate, vehicle.vehicle.driver_name ?? 'Sin conductor']
-                            .filter(Boolean)
-                            .join(' · ')
-                        : 'Dispositivo GPS'}</span
-                    >
-                  </span>
-                  <span class="device-side">
-                    <span class="status-text {vehicle.status}">{STATUS_LABELS[vehicle.status]}</span
-                    >
-                    <span
-                      >{vehicle.status === 'moving'
-                        ? `${Math.round(vehicle.speedKmh)} km/h`
-                        : timeAgo(vehicle.fixTime, now)}</span
-                    >
-                  </span>
-                </button>
-              </li>
-            {:else}
-              <li class="empty">
-                {mode === 'loading'
-                  ? 'Conectando con el servidor GPS…'
-                  : vehicles.length
-                    ? 'Ninguna unidad coincide con la búsqueda.'
-                    : mode === 'unconfigured'
-                      ? 'El servidor GPS no está configurado. Los traslados siguen disponibles en su pestaña.'
-                      : coverage && coverage.withGps === 0
-                        ? coverage.total
-                          ? 'Ningún vehículo tiene GPS vinculado. Vincúlalo desde su ficha en Flota.'
-                          : 'No hay vehículos registrados en Flota para esta sucursal.'
-                        : 'Las unidades con GPS aún no reportan posición.'}
-              </li>
-            {/each}
-          </ul>
-        {/if}
-        {#if mode === 'live' && coverage && coverage.withGps < coverage.total}
-          <p class="panel-note">
-            <FleetIcon name="info" size={13} />{coverage.withGps} de {coverage.total} vehículos tienen
-            GPS vinculado. <a href="/fleet">Vincular en Flota</a>
-          </p>
-        {/if}
-      </div>
-    </aside>
-
-    {#if selectedTransferId}
-      {@const track = activeTrack}
-      <section class="vehicle-card transfer-card" aria-label="Recorrido del traslado">
-        <header>
-          <div>
-            <h2>{track?.code ?? 'Cargando traslado…'}</h2>
-            {#if track}<p>
-                {track.vehicleCode ?? 'Sin vehículo asignado'}{track.vehiclePlate
-                  ? ` · ${track.vehiclePlate}`
-                  : ''}{track.driverName ? ` · ${track.driverName}` : ''}
-              </p>{/if}
-          </div>
-          <button
-            type="button"
-            class="icon-button"
-            aria-label="Cerrar recorrido"
-            onclick={() => selectTransfer(null)}><FleetIcon name="close" size={16} /></button
-          >
-        </header>
-        {#if track}
-          <ol class="legs">
-            <li><span class="leg-pin">A</span>{track.origin.branch}</li>
-            <li><span class="leg-pin destination">B</span>{track.destination.branch}</li>
-          </ol>
-          {#if track.alerts.length}
-            <ul class="trip-alerts" aria-label="Alertas del traslado">
-              {#each track.alerts as alert (alert.id)}
-                <li class={alert.severity}>
-                  <strong>{ALERT_KIND_LABELS[alert.kind]}</strong>
-                  <span>{alert.message}</span>
-                  {#if !alert.acknowledged_at}
-                    <button type="button" onclick={() => acknowledgeAlert(alert)}>Reconocer</button>
-                  {/if}
-                </li>
-              {/each}
-            </ul>
-          {/if}
-          {#if track.simulated}
-            <p class="flag sim">
-              <FleetIcon name="info" size={14} />Viaje leído del simulador: alertas y recorrido
-              quedan marcados como simulados
-            </p>
-          {/if}
-          {#if track.trackStored}
-            <p class="flag success">
-              <FleetIcon name="check" size={14} />Recibido · recorrido guardado en el ERP
-            </p>
-          {:else if track.arrived}
-            <p class="flag success">
-              <FleetIcon name="check" size={14} />Llegó a la sucursal de destino
-            </p>
-          {:else if track.rerouted}
-            <p class="flag warning">
-              <FleetIcon name="route" size={14} />Ruta recalculada: la unidad tomó otro camino
-            </p>
-          {:else if track.offRoute}
-            <p class="flag danger"><FleetIcon name="alert" size={14} />Fuera de la ruta planeada</p>
-          {/if}
-          <div class="progress-line">
-            <span>Avance</span><strong>{Math.round(track.progress * 100)}%</strong>
-          </div>
-          <div class="progress-track"><span style:width="{track.progress * 100}%"></span></div>
-          <dl class="stats">
-            <div>
-              <dt>Restante</dt>
-              <dd>{formatDistance(track.remainingM)}</dd>
-            </div>
-            <div>
-              <dt>Llegada est.</dt>
-              <dd>{track.arrived ? 'Llegó' : formatClock(track.eta)}</dd>
-            </div>
-            <div>
-              <dt>Velocidad</dt>
-              <dd>{track.position ? `${Math.round(track.position.speedKmh)} km/h` : '—'}</dd>
-            </div>
-            <div>
-              <dt>Salida</dt>
-              <dd>{formatClock(track.dispatchedAt)}</dd>
-            </div>
-            <div>
-              <dt>Distancia</dt>
-              <dd>{formatDistance(track.distanceM)}</dd>
-            </div>
-            <div>
-              <dt>Última señal</dt>
-              <dd>{timeAgo(track.position?.fixTime ?? null, now)}</dd>
-            </div>
-          </dl>
-          {#if !track.origin.point || !track.destination.point}
-            <p class="note">
-              Una de las sucursales no tiene coordenadas; regístralas para ver la ruta.
-            </p>
-          {:else if mode === 'live' && !track.gpsConfigured}
-            <p class="note">
-              El servidor GPS no está configurado; solo se muestra la ruta planeada.
-            </p>
-          {:else if mode === 'live' && !track.deviceFound}
-            <p class="note">
-              {track.vehicleCode
-                ? `Ningún dispositivo de Traccar se llama “${track.vehicleCode}”. Usa el código del vehículo como nombre o identificador del GPS.`
-                : 'El traslado no tiene vehículo asignado.'}
-            </p>
-          {:else if mode === 'live' && track.trail.length > 1 && !track.trailMatched}
-            <p class="note">
-              Parte del recorrido no se pudo ajustar a las calles; se muestra el trazo del GPS.
-            </p>
-          {:else if track.routeSource === 'straight'}
-            <p class="note">Ruta aproximada en línea recta; el servicio de rutas no respondió.</p>
-          {/if}
-          <div class="card-actions">
-            <button
-              type="button"
-              class:active={follow}
-              aria-pressed={follow}
-              disabled={!track.position}
-              onclick={() => (follow = !follow)}
-              ><FleetIcon name="crosshair" size={15} />{follow
-                ? 'Siguiendo'
-                : 'Seguir unidad'}</button
-            >
-            <a href="/transfers"><FleetIcon name="route" size={15} />Ver traslados</a>
-          </div>
-        {/if}
-      </section>
-    {:else if selected}
-      <section
-        class="vehicle-card"
-        class:collapsed={cardCollapsed}
-        aria-label={`Detalle de ${selected.name}`}
-      >
-        <header>
-          <div class="card-title">
-            <h2>
-              {selected.name}{#if selected.simulated}<span
-                  class="sim-tag"
-                  title="Posición del GPS virtual del simulador; el GPS real sigue reportando"
-                  >SIM</span
-                >{/if}
-            </h2>
-            {#if cardCollapsed}
-              <p class="card-summary">
-                <span class="status-pill {selected.status}"
-                  ><span></span>{STATUS_LABELS[selected.status]}</span
-                >
-                <span>{Math.round(selected.speedKmh)} km/h</span>
-                <span>{timeAgo(selected.fixTime, now)}</span>
-              </p>
-            {:else}
-              <p>
-                {selected.vehicle
-                  ? `${selected.vehicle.brand} ${selected.vehicle.model} · ${selected.vehicle.plate}`
-                  : 'Dispositivo sin vehículo asociado'}
-              </p>
-            {/if}
-          </div>
-          <div class="card-tools">
-            {#if cardCollapsed}
-              <button
-                type="button"
-                class="icon-button"
-                class:active={follow}
-                aria-pressed={follow}
-                aria-label={follow ? 'Dejar de seguir la unidad' : 'Seguir unidad'}
-                title={follow ? 'Siguiendo' : 'Seguir unidad'}
-                onclick={() => (follow = !follow)}><FleetIcon name="crosshair" size={15} /></button
-              >
-            {/if}
-            <button
-              type="button"
-              class="icon-button card-toggle"
-              class:flipped={cardCollapsed}
-              aria-expanded={!cardCollapsed}
-              aria-label={cardCollapsed ? 'Mostrar el detalle' : 'Contraer el detalle'}
-              title={cardCollapsed ? 'Mostrar el detalle' : 'Contraer el detalle'}
-              onclick={toggleCard}><FleetIcon name="chevron" size={15} /></button
-            >
-            <button
-              type="button"
-              class="icon-button"
-              aria-label="Cerrar detalle"
-              onclick={() => select(null)}><FleetIcon name="close" size={16} /></button
-            >
-          </div>
-        </header>
-        {#if !cardCollapsed}
-          <div class="card-status">
-            <span class="status-pill {selected.status}"
-              ><span></span>{STATUS_LABELS[selected.status]}</span
-            >
-            {#if selected.vehicle?.transfer_code}
-              <span class="route-to"
-                ><FleetIcon name="route" size={14} />{selected.vehicle.transfer_code} → {selected
-                  .vehicle.transfer_destination}</span
-              >
-            {/if}
-          </div>
-          <dl class="stats">
-            <div>
-              <dt>Velocidad</dt>
-              <dd>{Math.round(selected.speedKmh)} km/h</dd>
-            </div>
-            <div>
-              <dt>Rumbo</dt>
-              <dd>
-                <FleetIcon name="navigation" size={13} class="course-icon" />
-                {selected.status === 'moving' ? compassPoint(selected.course) : '—'}
-              </dd>
-            </div>
-            <div>
-              <dt>Última señal</dt>
-              <dd>{timeAgo(selected.fixTime, now)}</dd>
-            </div>
-            <div>
-              <dt>Motor</dt>
-              <dd>
-                {selected.ignition === null ? '—' : selected.ignition ? 'Encendido' : 'Apagado'}
-              </dd>
-            </div>
-            {#if selected.vehicle}
-              <div>
-                <dt>Conductor</dt>
-                <dd>{selected.vehicle.driver_name ?? 'Sin asignar'}</dd>
-              </div>
-              <div>
-                <dt>Sucursal</dt>
-                <dd>{selected.vehicle.branch_name}</dd>
-              </div>
-            {/if}
-            {#if selected.battery !== null}
-              <div>
-                <dt>Batería GPS</dt>
-                <dd>{Math.round(selected.battery)}%</dd>
-              </div>
-            {/if}
-          </dl>
-          <p class="coords">
-            <FleetIcon name="pin" size={13} />{selected.address ??
-              `${selected.latitude.toFixed(5)}, ${selected.longitude.toFixed(5)}`}
-          </p>
-          <div class="card-actions">
-            <button
-              type="button"
-              class:active={follow}
-              aria-pressed={follow}
-              onclick={() => (follow = !follow)}
-              ><FleetIcon name="crosshair" size={15} />{follow
-                ? 'Siguiendo'
-                : 'Seguir unidad'}</button
-            >
-            {#if selected.vehicle}
-              <a href={`/fleet/${selected.vehicle.id}`}
-                ><FleetIcon name="truck" size={15} />Ver en Flota</a
-              >
-            {/if}
-          </div>
-        {/if}
-      </section>
-    {/if}
   </div>
 </div>
 
@@ -1154,9 +1229,7 @@
     color: rgb(var(--foreground));
   }
   .status-chip {
-    position: absolute;
-    top: 12px;
-    left: 50%;
+    position: relative;
     z-index: 3;
     display: inline-flex;
     align-items: center;
@@ -1170,7 +1243,6 @@
     font-size: 12px;
     font-weight: 500;
     white-space: nowrap;
-    transform: translateX(-50%);
     backdrop-filter: blur(6px);
   }
   .status-chip span {
@@ -1197,6 +1269,7 @@
     animation: pulse 1.6s ease-in-out infinite;
   }
   .tracking-shell {
+    --tracking-panel-width: 330px;
     position: relative;
     height: 100%;
     min-height: 480px;
@@ -1210,7 +1283,7 @@
     z-index: 2;
     display: flex;
     flex-direction: column;
-    width: 330px;
+    width: var(--tracking-panel-width);
     overflow: hidden;
     border: 1px solid rgb(var(--border));
     border-radius: 12px;
@@ -1765,8 +1838,8 @@
     }
   }
   @media (max-width: 1200px) {
-    .device-panel {
-      width: 300px;
+    .tracking-shell {
+      --tracking-panel-width: 300px;
     }
     .vehicle-card {
       left: 324px;
@@ -1803,7 +1876,7 @@
     .tracking-shell > :global(.tracking-map) {
       position: relative;
       height: 55dvh;
-      min-height: 320px;
+      min-height: 360px;
       overflow: hidden;
     }
     .vehicle-card {
@@ -1883,5 +1956,210 @@
   }
   .alert-count {
     background: rgb(var(--danger));
+  }
+  .single-map-status {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    z-index: 3;
+    display: flex;
+    justify-content: center;
+    width: calc(100% - 24px);
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+  .single-map-status .status-chip {
+    flex-shrink: 0;
+    justify-content: center;
+    max-width: 100%;
+    font-variant-numeric: tabular-nums;
+  }
+  .single-map-status .status-chip span {
+    flex-shrink: 0;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .single-map-status .status-chip .muted {
+    display: inline;
+  }
+  @media (max-width: 1000px) {
+    .single-map-status {
+      top: 66px;
+    }
+  }
+  .tracking-toolbar {
+    position: absolute;
+    top: 190px;
+    right: 10px;
+    z-index: 3;
+  }
+  .tracking-toolbar .view-controls {
+    width: 29px;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: #fff;
+    color: #333;
+    box-shadow: 0 0 0 2px rgb(0 0 0 / 0.1);
+    overflow: hidden;
+  }
+  .tracking-toolbar .view-controls > span {
+    display: none;
+  }
+  .tracking-toolbar .view-controls > :global(svg) {
+    box-sizing: content-box;
+    margin: 0;
+    padding: 7px;
+    color: #666;
+  }
+  .tracking-toolbar .view-controls button {
+    width: 29px;
+    height: 29px;
+    border-top: 1px solid #ddd;
+    border-radius: 0;
+    color: #333;
+  }
+  .tracking-toolbar .view-controls button:hover {
+    background: #f2f2f2;
+  }
+  .tracking-toolbar .view-controls button.active {
+    background: #333;
+    color: #fff;
+  }
+  .view-controls {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 3px;
+    padding: 4px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 9px;
+    background: rgb(var(--surface) / 0.97);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.1);
+    pointer-events: auto;
+  }
+  .view-controls > :global(svg) {
+    margin-left: 5px;
+    color: rgb(var(--foreground-muted));
+  }
+  .view-controls > span {
+    margin: 0 7px 0 3px;
+    font-size: 12px;
+    color: rgb(var(--foreground-muted));
+  }
+  .view-controls button {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 32px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgb(var(--foreground-muted));
+  }
+  .view-controls button:hover {
+    background: rgb(var(--surface-hover));
+    color: rgb(var(--foreground));
+  }
+  .view-controls button.active {
+    background: rgb(var(--foreground));
+    color: rgb(var(--surface));
+  }
+  .tracking-workspace.multi-view {
+    min-height: 580px;
+    background: rgb(var(--surface-muted));
+  }
+  .tracking-shell.split-mode {
+    display: flex;
+    flex-direction: column;
+    min-height: 580px;
+  }
+  .split-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    gap: 12px;
+    min-height: 70px;
+    padding: 10px 14px;
+  }
+  .split-heading h2 {
+    font-size: 14px;
+    font-weight: 650;
+  }
+  .split-heading p {
+    margin-top: 3px;
+    font-size: 11px;
+    color: rgb(var(--foreground-muted));
+  }
+  .split-toolbar-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+  .split-mode .status-chip {
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+    max-width: 240px;
+  }
+  .split-mode .view-controls {
+    box-shadow: none;
+  }
+  .split-mode :global(.sim-dock) {
+    top: auto;
+    left: auto;
+    right: 20px;
+    bottom: 46px;
+    max-height: calc(100% - 110px);
+  }
+  @media (max-width: 1100px) {
+    .status-chip .muted {
+      display: none;
+    }
+  }
+  @media (min-width: 701px) and (max-width: 900px) {
+    .tracking-workspace.multi-view {
+      height: 100%;
+    }
+    .tracking-shell.split-mode {
+      height: 100%;
+      overflow: hidden;
+      padding-bottom: 0;
+      gap: 0;
+    }
+  }
+  @media (max-width: 700px) {
+    .tracking-workspace.multi-view {
+      height: auto;
+      min-height: 0;
+    }
+    .tracking-shell.split-mode {
+      height: auto;
+      min-height: 0;
+      padding-bottom: 0;
+      gap: 0;
+    }
+    .split-toolbar {
+      flex-wrap: wrap;
+    }
+    .split-toolbar-actions {
+      width: 100%;
+      flex-direction: row-reverse;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .view-controls button {
+      width: 36px;
+      height: 36px;
+    }
+    .split-mode .status-chip {
+      font-size: 11px;
+    }
   }
 </style>

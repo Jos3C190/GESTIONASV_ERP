@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TrackingWorkspace from '../../src/lib/features/tracking/TrackingWorkspace.svelte';
+import { api } from '$lib/api/client';
 
 const currentRoute = vi.hoisted(() => ({ search: '' }));
 
@@ -79,6 +80,7 @@ vi.mock('$lib/api/client', () => ({
 
 describe('Tracking panels', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     localStorage.clear();
     currentRoute.search = '';
   });
@@ -103,6 +105,20 @@ describe('Tracking panels', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Mostrar el detalle' }));
     expect(await screen.findByText('Velocidad')).toBeInTheDocument();
+  });
+
+  it('shares a single position feed between four views and returns to the original panel', async () => {
+    render(TrackingWorkspace);
+    await screen.findByRole('button', { name: /VEH-ET-01 SIM/ });
+    await fireEvent.click(screen.getByRole('button', { name: 'Mostrar 4 vistas' }));
+    expect(await screen.findAllByRole('combobox', { name: /Vehículo de la vista/ })).toHaveLength(
+      4
+    );
+    expect(api.tracking.positions).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('searchbox', { name: 'Buscar unidades' })).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Mostrar un mapa' }));
+    expect(screen.getByRole('searchbox', { name: 'Buscar unidades' })).toBeVisible();
+    expect(api.tracking.positions).toHaveBeenCalledTimes(1);
   });
 
   it('collapses the units panel without losing selection, search, filters or focus', async () => {
