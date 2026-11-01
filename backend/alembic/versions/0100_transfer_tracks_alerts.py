@@ -1,5 +1,6 @@
 """Stored transfer trails and tracking alerts."""
 
+import sqlalchemy as sa
 from alembic import op
 
 revision = "0100"
@@ -66,4 +67,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError("0100 is not reversible: it would drop stored trails and alert history.")
+    # Empty installations can be rolled back; operational history must never be discarded.
+    op.execute("LOCK TABLE inventory_transfer_tracks, tracking_alerts IN ACCESS EXCLUSIVE MODE")
+    populated = op.get_bind().scalar(
+        sa.text(
+            "SELECT EXISTS (SELECT 1 FROM inventory_transfer_tracks) "
+            "OR EXISTS (SELECT 1 FROM tracking_alerts)"
+        )
+    )
+    if populated:
+        raise RuntimeError("0100 is not reversible: it would drop stored trails and alert history.")
+    op.drop_table("tracking_alerts")
+    op.drop_table("inventory_transfer_tracks")
