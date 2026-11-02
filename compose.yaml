@@ -228,6 +228,7 @@ services:
       TRACCAR_URL: ${TRACCAR_URL:-}
       TRACCAR_USER: ${TRACCAR_USER:-}
       TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-}
+      TRACCAR_PUBLIC_URL: ${TRACCAR_PUBLIC_URL:-}
       # Servidor público de demostración de OSRM; en producción usa uno propio.
       OSRM_URL: ${OSRM_URL:-https://router.project-osrm.org}
       # Herramientas de simulación de Seguimiento (nunca se activan en producción).
@@ -719,6 +720,13 @@ services:
       - "127.0.0.1:8082:8082"
       # Protocolo OsmAnd (app Traccar Client). Abierto en la red para que llegue el celular.
       - "5055:5055"
+      # GPS instalados: un puerto por protocolo (catálogo en tracking/device_setup.py).
+      - "5001:5001"
+      - "5002:5002"
+      - "5004:5004"
+      - "5013:5013"
+      - "5023:5023"
+      - "5027:5027"
     depends_on:
       traccar-db-init:
         condition: service_completed_successfully

@@ -118,6 +118,8 @@ class Settings(BaseSettings):
     TRACCAR_URL: str | None = None
     TRACCAR_USER: str | None = None
     TRACCAR_PASSWORD: str | None = Field(default=None, repr=False)
+    #: Dirección a la que reportan los equipos, tal como ellos la alcanzan.
+    TRACCAR_PUBLIC_URL: str | None = None
     # Servicio de rutas OSRM para la ruta planeada de los traslados; vacío = línea recta.
     OSRM_URL: str | None = "https://router.project-osrm.org"
     #: How often the tracking monitor evaluates transfers in transit for alerts.
