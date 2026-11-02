@@ -21,6 +21,7 @@
   } from './api';
   import DriverAvatar from './DriverAvatar.svelte';
   import DriverLicensePreview from './DriverLicensePreview.svelte';
+  import LicenseCaptureDialog from './capture/LicenseCaptureDialog.svelte';
 
   let {
     driver,
@@ -36,6 +37,16 @@
   let historyAttempt = $state(0);
   const owner = $derived(driversApi.documents(driver.id));
   const canUpload = $derived(permissions.hasPermission('drivers:documents'));
+  let captureAvailable = $state(false);
+  let captureOpen = $state(false);
+
+  $effect(() => {
+    if (!canUpload) return;
+    driversApi
+      .captureCapabilities()
+      .then((result) => (captureAvailable = result.enabled))
+      .catch(() => (captureAvailable = false));
+  });
   const fitness = $derived(
     driver.compliance.state === 'blocked'
       ? 'No apto'
@@ -153,6 +164,11 @@
               : 'Sin vencimiento registrado'}
           </p>
         {:else}<p class="missing"><FleetIcon name="file" size={28} />Sin documento cargado</p>{/if}
+        {#if canUpload && captureAvailable}
+          <Button size="sm" onclick={() => (captureOpen = true)}
+            >{driver.license.document_id ? 'Actualizar con fotos' : 'Capturar con fotos'}</Button
+          >
+        {/if}
         <button class="text-action" type="button" onclick={() => (tab = 'documents')}
           ><FleetIcon
             name={canUpload && !driver.license.document_id ? 'upload' : 'file'}
@@ -262,6 +278,10 @@
     <p>Edición, estado y sucursal desde el expediente.</p>
   </footer>
 </aside>
+
+{#if captureAvailable}
+  <LicenseCaptureDialog bind:open={captureOpen} {driver} onconfirmed={() => onchanged()} />
+{/if}
 
 <style>
   .inspector {

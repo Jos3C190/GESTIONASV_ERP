@@ -16,6 +16,7 @@
   import MoveToTrashDialog from '$lib/features/fleet/MoveToTrashDialog.svelte';
   import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
+  import LicenseCaptureDialog from './capture/LicenseCaptureDialog.svelte';
   import {
     DRIVER_STATUS_META,
     driversApi,
@@ -46,6 +47,17 @@
   let actionError = $state<string | null>(null);
 
   const canUpdate = $derived(permissions.hasPermission('drivers:update'));
+  const canCapture = $derived(permissions.hasPermission('drivers:documents'));
+  let captureAvailable = $state(false);
+  let captureOpen = $state(false);
+
+  $effect(() => {
+    if (!canCapture) return;
+    driversApi
+      .captureCapabilities()
+      .then((result) => (captureAvailable = result.enabled))
+      .catch(() => (captureAvailable = false));
+  });
   // La papelera es administrativa: requiere alcance de todas las sucursales.
   const canDelete = $derived(
     permissions.hasPermission('drivers:delete') && branch.accessAllBranches
@@ -249,6 +261,14 @@
         </section>
       </div>
     {:else if tab === 'license'}
+      {#if canCapture && captureAvailable}
+        <div class="capture-action">
+          <Button onclick={() => (captureOpen = true)}
+            >{driver.license.document_id ? 'Actualizar con fotos' : 'Capturar con fotos'}</Button
+          >
+        </div>
+        <LicenseCaptureDialog bind:open={captureOpen} {driver} onconfirmed={() => void load()} />
+      {/if}
       <OwnedDocumentsPanel
         owner={driversApi.documents(driver.id)}
         title="Licencia de conducir"
@@ -404,6 +424,11 @@
 {/if}
 
 <style>
+  .capture-action {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+  }
   .profile {
     max-width: 1300px;
     margin: 0 auto;

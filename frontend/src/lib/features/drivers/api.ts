@@ -1,4 +1,4 @@
-import { apiFetch } from '$lib/api/client';
+import { apiFetch, type DocumentUploadTicket } from '$lib/api/client';
 import { ownedDocuments } from '$lib/api/owned-documents';
 import type { Compliance, FleetPage } from '$lib/features/fleet/api';
 import type { LicenseClass, VehicleKind } from '$lib/features/fleet/catalog';
@@ -47,6 +47,40 @@ export interface Driver {
   compliance: Compliance;
   created_at: string;
   updated_at: string;
+}
+
+export type CaptureSide = 'front' | 'back';
+export type CaptureStatus =
+  'draft' | 'pending' | 'processing' | 'ready' | 'failed' | 'confirmed' | 'cancelled' | 'expired';
+
+export interface LicenseValues {
+  license_class: string | null;
+  expires: string | null;
+  number: string | null;
+  surnames: string | null;
+  given_names: string | null;
+  dui: string | null;
+  issued: string | null;
+  birth: string | null;
+  control_number: string | null;
+}
+
+export interface LicenseIssue {
+  code: string;
+  severity: 'error' | 'mismatch' | 'warning';
+  field: string;
+  message: string;
+}
+
+export interface LicenseCapture {
+  id: string;
+  status: CaptureStatus;
+  failure_code: string | null;
+  extraction_available: boolean;
+  front: { document_id: string | null; status: string | null; extracted: boolean };
+  back: { document_id: string | null; status: string | null; extracted: boolean };
+  values: LicenseValues;
+  issues: LicenseIssue[];
 }
 
 export interface DriversSummary {
@@ -135,6 +169,50 @@ export const driversApi = {
   assignments: (id: string) => apiFetch<Assignment[]>(`/drivers/${id}/assignments`),
   trips: (id: string) => apiFetch<DriverTrip[]>(`/drivers/${id}/trips`),
   documents: (id: string) => ownedDocuments(`/drivers/${id}`),
+  captureCapabilities: () =>
+    apiFetch<{ enabled: boolean; extraction_available: boolean }>(
+      '/drivers/license-captures/capabilities'
+    ),
+  openCapture: (id: string) =>
+    apiFetch<LicenseCapture>(`/drivers/${id}/license-captures`, json('POST')),
+  getCapture: (id: string, captureId: string, signal?: AbortSignal) =>
+    apiFetch<LicenseCapture>(`/drivers/${id}/license-captures/${captureId}`, { signal }),
+  startCaptureUpload: (
+    id: string,
+    captureId: string,
+    side: CaptureSide,
+    data: { content_type: string; size_bytes: number; checksum_sha256: string }
+  ) =>
+    apiFetch<DocumentUploadTicket>(
+      `/drivers/${id}/license-captures/${captureId}/sides/${side}/upload`,
+      json('POST', data)
+    ),
+  completeCaptureUpload: (id: string, captureId: string, side: CaptureSide) =>
+    apiFetch<LicenseCapture>(
+      `/drivers/${id}/license-captures/${captureId}/sides/${side}/complete`,
+      json('POST')
+    ),
+  capturePreview: (id: string, captureId: string, side: CaptureSide) =>
+    apiFetch<{ url: string; expires_at: string }>(
+      `/drivers/${id}/license-captures/${captureId}/sides/${side}/preview-url`,
+      json('POST')
+    ),
+  checkCapture: (id: string, captureId: string, values: LicenseValues) =>
+    apiFetch<LicenseIssue[]>(
+      `/drivers/${id}/license-captures/${captureId}/check`,
+      json('POST', values)
+    ),
+  confirmCapture: (
+    id: string,
+    captureId: string,
+    data: {
+      values: LicenseValues;
+      acknowledged_warnings: string[];
+      override_reason?: string | null;
+    }
+  ) => apiFetch<Driver>(`/drivers/${id}/license-captures/${captureId}/confirm`, json('POST', data)),
+  cancelCapture: (id: string, captureId: string) =>
+    apiFetch<void>(`/drivers/${id}/license-captures/${captureId}`, json('DELETE')),
   assign: (vehicleId: string, driverId: string, overrideReason?: string) =>
     apiFetch<Assignment>(
       `/fleet/vehicles/${vehicleId}/assignment`,

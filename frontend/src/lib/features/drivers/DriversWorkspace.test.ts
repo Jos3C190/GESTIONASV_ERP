@@ -8,6 +8,7 @@ const apiMock = vi.hoisted(() => ({
   candidates: vi.fn(),
   create: vi.fn(),
   documents: vi.fn(),
+  captureCapabilities: vi.fn().mockResolvedValue({ enabled: false, extraction_available: false }),
   assignments: vi.fn(),
   trips: vi.fn()
 }));
