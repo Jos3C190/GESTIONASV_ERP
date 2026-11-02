@@ -2,6 +2,7 @@
   import type { DocumentRecordOut } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
   import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
+  import { isCaptureOnly } from '$lib/features/documents/document-upload';
   import { isBrowserPreviewable } from '$lib/features/documents/open-document';
 
   interface Props {
@@ -18,6 +19,7 @@
     canDelete?: boolean;
     canDeleteDocument?: (document: DocumentRecordOut) => boolean;
     viewMode?: 'grid' | 'table';
+    emptyHint?: string;
     openingDocumentId?: string | null;
     ondownload?: (document: DocumentRecordOut) => void;
     onocrdownload?: (document: DocumentRecordOut) => void;
@@ -32,6 +34,7 @@
 
   let {
     documents,
+    emptyHint = 'Cargue el primer documento para iniciar el expediente.',
     loading = false,
     canDownload = true,
     canDownloadDocument,
@@ -129,11 +132,17 @@
     ) {
       items.push({ id: 'ocr-retry', label: 'Reintentar OCR', icon: 'custom', onClick: () => onretry?.(document) });
     }
-    if (allowed(canUpdate, canUpdateDocument, document) && document.business_status !== 'deleted' && onupdate) {
+    if (
+      allowed(canUpdate, canUpdateDocument, document) &&
+      !isCaptureOnly(document) &&
+      document.business_status !== 'deleted' &&
+      onupdate
+    ) {
       items.push({ id: 'edit', label: 'Editar metadatos', icon: 'edit', onClick: () => onupdate?.(document) });
     }
     if (
       allowed(canReplace, canReplaceDocument, document) &&
+      !isCaptureOnly(document) &&
       document.business_status === 'current' &&
       document.technical_status === 'active' &&
       onreplace
@@ -175,9 +184,7 @@
       >
     </div>
     <p class="mt-3 text-sm font-medium text-foreground">Aún no hay documentos</p>
-    <p class="mt-1 text-xs text-foreground-muted">
-      Cargue el primer documento para iniciar el expediente.
-    </p>
+    <p class="mt-1 text-xs text-foreground-muted">{emptyHint}</p>
   </div>
 {:else if viewMode === 'grid'}
   <div class="grid gap-3 md:grid-cols-2">

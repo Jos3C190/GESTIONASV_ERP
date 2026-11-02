@@ -404,4 +404,6 @@ async def test_capture_is_the_only_way_to_register_a_license(e2e_client: Any, st
     listed = await e2e_client.get(documents, headers=admin)
     download = await e2e_client.post(f"{documents}/{document_id}/download-url", headers=admin)
     assert [item["id"] for item in listed.json()["items"]] == [document_id]
+    # La interfaz usa este código para no ofrecer acciones que el servidor rechazaría.
+    assert listed.json()["items"][0]["category_code"] == "driver_license"
     assert download.status_code == 200, download.text

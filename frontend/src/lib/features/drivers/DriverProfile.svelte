@@ -256,6 +256,7 @@
         title="Licencia de conducir"
         description="Licencia registrada con la captura guiada. Se guarda en el expediente del empleado y una licencia vencida impide conducir."
         readOnly
+        emptyHint="La licencia se registra con la captura guiada: usa el botón de fotos."
         permissionCodes={{
           read: 'drivers:read',
           upload: 'drivers:documents',

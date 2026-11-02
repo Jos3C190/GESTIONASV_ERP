@@ -19,6 +19,8 @@
     onchanged?: () => void;
     /** Los documentos se crean en otro flujo: aquí solo se consultan y descargan. */
     readOnly?: boolean;
+    /** Texto de la lista vacía cuando la carga ocurre en otro lugar. */
+    emptyHint?: string;
   }
   let {
     owner,
@@ -27,7 +29,8 @@
     permissionPrefix,
     permissionCodes,
     onchanged,
-    readOnly = false
+    readOnly = false,
+    emptyHint
   }: Props = $props();
   const codes = $derived(
     permissionCodes ?? {
@@ -191,6 +194,7 @@
       {canUpdate}
       canReplace={canUpload}
       viewMode="table"
+      {emptyHint}
       {openingDocumentId}
       ondownload={(document) => openUrl(document, false)}
       onopenbrowser={(document) => openUrl(document, true)}

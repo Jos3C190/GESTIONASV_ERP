@@ -52,6 +52,7 @@ class DocumentRecord:
     created_at: datetime | None = None
     updated_at: datetime | None = None
     asset: DocumentAsset | None = None
+    category_code: str | None = None
     category_name: str | None = None
     category_group: str | None = None
     owner_label: str | None = None

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import type { DocumentRecordOut } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
+  import { isCaptureOnly } from '$lib/features/documents/document-upload';
   import { isBrowserPreviewable } from '$lib/features/documents/open-document';
 
   interface Props {
@@ -270,13 +271,13 @@
           class="min-h-11"
           onclick={() => onocrdownload?.(document)}>Descargar OCR</Button
         >{/if}
-      {#if onupdate && document.business_status !== 'deleted'}<Button
+      {#if onupdate && !isCaptureOnly(document) && document.business_status !== 'deleted'}<Button
           variant="ghost"
           size="sm"
           class="min-h-11"
           onclick={() => onupdate?.(document)}>Editar</Button
         >{/if}
-      {#if onreplace && document.business_status === 'current' && document.technical_status === 'active'}<Button
+      {#if onreplace && !isCaptureOnly(document) && document.business_status === 'current' && document.technical_status === 'active'}<Button
           variant="ghost"
           size="sm"
           class="min-h-11"

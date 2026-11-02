@@ -99,6 +99,7 @@ def _record_to_domain(
         created_at=model.created_at,
         updated_at=model.updated_at,
         asset=_asset_to_domain(asset) if asset is not None else None,
+        category_code=category.code if category is not None else None,
         category_name=category.name if category is not None else None,
         category_group=category.group_name if category is not None else None,
         owner_label=owner_label,

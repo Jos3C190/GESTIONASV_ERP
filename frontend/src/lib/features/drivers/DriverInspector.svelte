@@ -11,7 +11,6 @@
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import VehicleImage from '$lib/features/fleet/VehicleImage.svelte';
   import ComplianceList from '$lib/features/fleet/ComplianceList.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
   import {
     driversApi,
     DRIVER_STATUS_META,
@@ -206,6 +205,7 @@
         title="Licencia de conducir"
         description="Consulta la licencia de este conductor. Sus datos y vencimiento actualizan la aptitud para conducir."
         readOnly
+        emptyHint="La licencia se registra con la captura guiada: usa el botón de fotos."
         permissionCodes={{
           read: 'drivers:read',
           upload: 'drivers:documents',

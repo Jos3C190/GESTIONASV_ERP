@@ -107,6 +107,7 @@ class DocumentOut(BaseModel):
     owner_label: str | None = None
     owner_deleted: bool = False
     category_id: uuid.UUID | None = None
+    category_code: str | None = None
     category_name: str | None = None
     category_group: str | None = None
     title: str | None = None
@@ -183,6 +184,7 @@ class DocumentRecordOut(BaseModel):
     owner_label: str | None
     owner_deleted: bool
     category_id: uuid.UUID
+    category_code: str | None = None
     category_name: str | None
     category_group: str | None
     title: str

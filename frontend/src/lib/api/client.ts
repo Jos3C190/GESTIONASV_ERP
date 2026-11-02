@@ -369,6 +369,7 @@ export interface DocumentRecordOut {
   owner_label: string | null;
   owner_deleted: boolean;
   category_id: string;
+  category_code?: string | null;
   category_name: string | null;
   category_group: string | null;
   title: string;
