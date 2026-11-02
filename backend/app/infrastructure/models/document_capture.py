@@ -34,7 +34,9 @@ class DocumentCaptureModel(UUIDPKMixin, TimestampMixin, Base):
         PGUUID(as_uuid=True), ForeignKey("document_assets.id", ondelete="SET NULL"), nullable=True
     )
     #: ``{side: {"document_id": str, "values": {...}}}``; erased when the capture ends.
-    extracted: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    extracted: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

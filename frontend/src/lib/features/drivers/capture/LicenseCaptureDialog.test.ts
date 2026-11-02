@@ -8,6 +8,7 @@ const apiMock = vi.hoisted(() => ({
   getCapture: vi.fn(),
   startCaptureUpload: vi.fn(),
   completeCaptureUpload: vi.fn(),
+  capturePreview: vi.fn(),
   checkCapture: vi.fn(),
   confirmCapture: vi.fn(),
   cancelCapture: vi.fn()
@@ -91,6 +92,7 @@ describe('LicenseCaptureDialog', () => {
     apiMock.openCapture.mockResolvedValue(capture());
     apiMock.getCapture.mockResolvedValue(capture());
     apiMock.startCaptureUpload.mockResolvedValue({ upload_url: 'u' });
+    apiMock.capturePreview.mockResolvedValue({ url: 'http://storage/foto', expires_at: '' });
     uploadDirect.mockResolvedValue(undefined);
     URL.createObjectURL = vi.fn(() => 'blob:foto');
     URL.revokeObjectURL = vi.fn();
@@ -170,6 +172,42 @@ describe('LicenseCaptureDialog', () => {
     await fireEvent.input(reason, { target: { value: 'Error en expediente' } });
 
     expect(confirm).toBeEnabled();
+  });
+
+  it('blocks confirming while a value is invalid, even with no warnings', async () => {
+    const invalid: LicenseIssue = {
+      code: 'expiry_invalid',
+      severity: 'error',
+      field: 'expires',
+      message: 'Indica el vencimiento como MM-AAAA.'
+    };
+    await reachReview({ status: 'ready', issues: [invalid] }, [invalid]);
+
+    await screen.findByText(invalid.message);
+
+    expect(screen.getByRole('button', { name: 'Confirmar licencia' })).toBeDisabled();
+  });
+
+  it('resumes an unfinished capture with its photos at the review step', async () => {
+    apiMock.openCapture.mockResolvedValue(capture({ ...bothSides, status: 'ready' }));
+    apiMock.checkCapture.mockResolvedValue([]);
+
+    render(LicenseCaptureDialog, { open: true, driver, onconfirmed: vi.fn() });
+
+    expect(await screen.findByRole('button', { name: 'Confirmar licencia' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByAltText('Reverso')).toBeInTheDocument());
+    expect(screen.getByAltText('Frente')).toHaveAttribute('src', 'http://storage/foto');
+  });
+
+  it('retaking the front does not force retaking the back', async () => {
+    await reachReview({ status: 'ready' });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Repetir fotos' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Continuar con esta foto' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Continuar con esta foto' }));
+
+    expect(await screen.findByRole('button', { name: 'Confirmar licencia' })).toBeInTheDocument();
+    expect(apiMock.startCaptureUpload).toHaveBeenCalledTimes(2);
   });
 
   it('does not offer confirmation until both photos are in', async () => {

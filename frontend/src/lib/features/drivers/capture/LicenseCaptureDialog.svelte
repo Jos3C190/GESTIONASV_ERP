@@ -61,6 +61,7 @@
     !busy &&
       capture?.front.status === 'active' &&
       capture?.back.status === 'active' &&
+      errors.length === 0 &&
       (warnings.length === 0 || acknowledged) &&
       (mismatches.length === 0 || (canOverride && overrideReason.trim().length >= 3))
   );
@@ -106,6 +107,19 @@
     previews = { front: null, back: null };
   }
 
+  // Reabrir una captura sin terminar recupera sus fotos en vez de pedirlas otra vez.
+  async function resume(opened: LicenseCapture, current: number) {
+    for (const side of ['front', 'back'] as const) {
+      if (opened[side].status !== 'active') continue;
+      const signed = await driversApi.capturePreview(driver.id, opened.id, side).catch(() => null);
+      if (signed && current === generation) previews = { ...previews, [side]: signed.url };
+    }
+    if (current !== generation) return;
+    if (opened.front.status === 'active') {
+      step = opened.back.status === 'active' ? 'review' : 'back';
+    }
+  }
+
   function apply(next: LicenseCapture) {
     capture = next;
     values = mergeExtracted(values, next.values, touched);
@@ -123,7 +137,9 @@
       driversApi
         .openCapture(driver.id)
         .then((opened) => {
-          if (current === generation) apply(opened);
+          if (current !== generation) return;
+          apply(opened);
+          void resume(opened, current);
         })
         .catch((err: unknown) => {
           if (current === generation)
@@ -278,6 +294,9 @@
           </div>
         {/if}
         {#if cameraIssue}<p class="hint" role="status">{cameraIssue}</p>{/if}
+        {#if capture?.[step].status === 'active' && photoWarnings.length === 0}
+          <Button variant="secondary" onclick={advance}>Continuar con esta foto</Button>
+        {/if}
         <div class="sources">
           <Button onclick={() => (mode = 'camera')}>Usar cámara</Button>
           <label class="file-button">

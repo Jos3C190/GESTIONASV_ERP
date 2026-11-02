@@ -14,7 +14,7 @@ from app.infrastructure.db.session import async_session_factory
 from app.infrastructure.models.audit import AuditLog
 from app.infrastructure.models.document_capture import DocumentCaptureModel
 from app.infrastructure.models.employee import Employee
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
 from tests.e2e.test_documents import E2EScanner, _enable_fake_services, _headers
 from tests.e2e.test_fleet_drivers import _employee
@@ -161,6 +161,13 @@ async def test_confirming_turns_photos_into_the_current_license(
     assert capture is not None
     assert capture.status == "confirmed"
     assert capture.extracted is None
+    async with async_session_factory() as session:
+        # Debe ser NULL en SQL: un null de JSON no se distingue de datos al consultar.
+        erased = await session.scalar(
+            text("SELECT extracted IS NULL FROM document_captures WHERE id = :id"),
+            {"id": uuid.UUID(capture_id)},
+        )
+    assert erased is True
     assert audit is not None
     # La auditoría guarda ids y nombres de campos, nunca los valores de la licencia.
     assert "0101-010101-101-1" not in str(audit.after_state)
