@@ -2,23 +2,28 @@
   import Button from '$lib/components/ui/Button.svelte';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import CameraCapture from './CameraCapture.svelte';
+  import { QUALITY_MESSAGES, type QualityIssue } from './image-prep';
 
   let {
     side,
     preview,
     uploading,
-    warnings,
+    issue,
     canContinue,
     onphoto,
-    oncontinue
+    oncontinue,
+    onretry,
+    onuseanyway
   }: {
     side: 'front' | 'back';
     preview: string | null;
     uploading: boolean;
-    warnings: string[];
+    issue: QualityIssue | null;
     canContinue: boolean;
     onphoto: (photo: Blob) => void;
     oncontinue: () => void;
+    onretry: () => void;
+    onuseanyway: () => void;
   } = $props();
 
   const fileAction =
@@ -30,6 +35,7 @@
   const title = $derived(side === 'front' ? 'Frente de la licencia' : 'Reverso de la licencia');
 
   let cameraOpen = $state(false);
+  let fromCamera = $state(false);
   let cameraIssue = $state<string | null>(null);
   let dragging = $state(false);
   let stage = $state<HTMLDivElement | null>(null);
@@ -42,7 +48,14 @@
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
+    fromCamera = false;
     if (file) onphoto(file);
+  }
+
+  /** Quien venía de la cámara vuelve directo a ella: es lo que estaba intentando hacer. */
+  function retry() {
+    onretry();
+    if (fromCamera && liveCamera && !cameraIssue) cameraOpen = true;
   }
 
   $effect(() => {
@@ -75,6 +88,7 @@
     {label}
     oncapture={(photo) => {
       cameraOpen = false;
+      fromCamera = true;
       onphoto(photo);
     }}
     onunavailable={(reason) => {
@@ -106,11 +120,12 @@
       {/if}
     </div>
 
-    {#if warnings.length > 0}
-      <div class="notice warn" role="status">
+    {#if issue}
+      <div class="notice warn" role="alert">
         <FleetIcon name="alert" size={16} />
         <div>
-          {#each warnings as message (message)}<p>{message}</p>{/each}
+          <strong>{QUALITY_MESSAGES[issue].title}</strong>
+          <p>{QUALITY_MESSAGES[issue].hint}</p>
         </div>
       </div>
     {/if}
@@ -121,47 +136,48 @@
       </div>
     {/if}
 
-    <div class="actions" class:reverse={!touchFirst && !preview}>
-      {#if canContinue && !uploading}
-        {#if warnings.length > 0}
-          <Button variant="secondary" size="lg" onclick={oncontinue}
-            >Usar esta foto de todos modos</Button
-          >
-        {:else}
+    {#if issue}
+      <div class="actions">
+        <Button size="lg" onclick={retry}>Intentar de nuevo</Button>
+        <button class="anyway" type="button" onclick={onuseanyway}>Usar de todos modos</button>
+      </div>
+    {:else}
+      <div class="actions" class:reverse={!touchFirst && !preview}>
+        {#if canContinue && !uploading}
           <Button size="lg" onclick={oncontinue}>Continuar con esta foto</Button>
         {/if}
-      {/if}
-      {#if liveCamera && !cameraIssue}
-        <Button
-          variant={preview || !touchFirst ? 'secondary' : 'primary'}
-          size="lg"
-          disabled={uploading}
-          onclick={() => (cameraOpen = true)}
-        >
-          <FleetIcon name="camera" size={16} />{preview ? 'Tomar otra foto' : 'Tomar foto'}
-        </Button>
-      {:else if touchFirst}
-        <label class={preview ? fileSecondary : filePrimary}>
-          <FleetIcon name="camera" size={16} />{preview ? 'Tomar otra foto' : 'Tomar foto'}
+        {#if liveCamera && !cameraIssue}
+          <Button
+            variant={preview || !touchFirst ? 'secondary' : 'primary'}
+            size="lg"
+            disabled={uploading}
+            onclick={() => (cameraOpen = true)}
+          >
+            <FleetIcon name="camera" size={16} />{preview ? 'Tomar otra foto' : 'Tomar foto'}
+          </Button>
+        {:else if touchFirst}
+          <label class={preview ? fileSecondary : filePrimary}>
+            <FleetIcon name="camera" size={16} />{preview ? 'Tomar otra foto' : 'Tomar foto'}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              disabled={uploading}
+              onchange={onFile}
+            />
+          </label>
+        {/if}
+        <label class={!touchFirst && !preview ? filePrimary : fileSecondary}>
+          <FleetIcon name="upload" size={16} />Subir archivo
           <input
             type="file"
-            accept="image/*"
-            capture="environment"
+            accept="image/jpeg,image/png,image/webp"
             disabled={uploading}
             onchange={onFile}
           />
         </label>
-      {/if}
-      <label class={!touchFirst && !preview ? filePrimary : fileSecondary}>
-        <FleetIcon name="upload" size={16} />Subir archivo
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          disabled={uploading}
-          onchange={onFile}
-        />
-      </label>
-    </div>
+      </div>
+    {/if}
   </div>
 {/if}
 
@@ -260,6 +276,23 @@
   }
   .notice p {
     margin: 0;
+  }
+  .notice strong {
+    display: block;
+    font-weight: 600;
+  }
+  /* Discreto a propósito: el detector puede equivocarse, pero repetir es lo recomendable. */
+  .anyway {
+    min-height: 44px;
+    border-radius: var(--driver-radius);
+    color: rgb(var(--foreground-muted));
+    font-size: 14px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .anyway:focus-visible {
+    outline: 2px solid rgb(var(--foreground));
+    outline-offset: 2px;
   }
   .actions {
     display: grid;

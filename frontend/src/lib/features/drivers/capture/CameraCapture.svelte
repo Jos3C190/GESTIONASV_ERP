@@ -1,5 +1,15 @@
 <script lang="ts">
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
+  import {
+    assessDrawable,
+    cameraCropSize,
+    guideCrop,
+    QUALITY_MESSAGES,
+    type QualityIssue
+  } from './image-prep';
+
+  /** Often enough to feel live, without working the phone's processor all the time. */
+  const LIVE_CHECK_MS = 800;
 
   let {
     label,
@@ -14,7 +24,16 @@
   } = $props();
 
   let video = $state<HTMLVideoElement | null>(null);
+  let guide = $state<HTMLDivElement | null>(null);
   let ready = $state(false);
+  let liveIssue = $state<QualityIssue | null>(null);
+
+  const guidance = $derived.by(() => {
+    if (!ready) return 'Abriendo la cámara…';
+    if (liveIssue)
+      return `${QUALITY_MESSAGES[liveIssue].title}. ${QUALITY_MESSAGES[liveIssue].hint}`;
+    return `Encuadra ${label} dentro del marco, sin reflejos.`;
+  });
 
   function denied(error: unknown): string {
     const name = error instanceof DOMException ? error.name : '';
@@ -54,13 +73,46 @@
     };
   });
 
-  function shoot() {
-    if (!video || !video.videoWidth) return;
+  /** Only what is inside the guide: the rest would just be table and background. */
+  function cropped(): HTMLCanvasElement | null {
+    if (!video || !guide || !video.videoWidth) return null;
+    const area = guideCrop(
+      { width: video.videoWidth, height: video.videoHeight },
+      video.getBoundingClientRect(),
+      guide.getBoundingClientRect()
+    );
+    const size = cameraCropSize(area.width, area.height);
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d')?.drawImage(video, 0, 0);
-    canvas.toBlob(
+    canvas.width = size.width;
+    canvas.height = size.height;
+    canvas
+      .getContext('2d')
+      ?.drawImage(
+        video,
+        area.x,
+        area.y,
+        area.width,
+        area.height,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+    return canvas;
+  }
+
+  $effect(() => {
+    if (!ready) return;
+    const timer = setInterval(() => {
+      const frame = cropped();
+      if (!frame) return;
+      liveIssue = assessDrawable(frame, frame.width, frame.height)[0] ?? null;
+    }, LIVE_CHECK_MS);
+    return () => clearInterval(timer);
+  });
+
+  function shoot() {
+    cropped()?.toBlob(
       (blob) => {
         if (blob) oncapture(blob);
       },
@@ -74,10 +126,8 @@
   <div class="viewfinder">
     <video bind:this={video} autoplay playsinline muted onloadedmetadata={() => (ready = true)}
     ></video>
-    <div class="guide" aria-hidden="true"></div>
-    <p role="status">
-      {ready ? `Encuadra ${label} dentro del marco, sin reflejos.` : 'Abriendo la cámara…'}
-    </p>
+    <div class="guide" class:good={ready && !liveIssue} bind:this={guide} aria-hidden="true"></div>
+    <p role="status" class:problem={!!liveIssue}>{guidance}</p>
   </div>
   <div class="controls">
     <button class="back" type="button" onclick={onback}>
@@ -119,17 +169,26 @@
     border: 2px solid rgb(255 255 255 / 92%);
     border-radius: var(--driver-radius-lg);
     box-shadow: 0 0 0 100vmax rgb(0 0 0 / 45%);
+    transition: border-color 0.2s;
+  }
+  /* El verde no es la única señal: el texto de abajo dice qué falta. */
+  .guide.good {
+    border-color: rgb(74 222 128);
   }
   p {
     position: absolute;
-    right: 0;
+    right: var(--driver-space-3);
     bottom: var(--driver-space-3);
-    left: 0;
+    left: var(--driver-space-3);
     margin: 0;
-    padding: 0 var(--driver-space-4);
+    padding: var(--driver-space-2) var(--driver-space-3);
+    border-radius: var(--driver-radius);
+    background: rgb(0 0 0 / 62%);
     font-size: 14px;
     text-align: center;
-    text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+  }
+  p.problem {
+    font-weight: 600;
   }
   .controls {
     display: grid;
@@ -166,5 +225,10 @@
   .shutter:focus-visible {
     outline: 2px solid #fff;
     outline-offset: 3px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .guide {
+      transition: none;
+    }
   }
 </style>

@@ -68,6 +68,38 @@ export function fieldsToReview(issues: LicenseIssue[]): FieldKey[] {
   return FIELD_GROUPS.flatMap((group) => group.fields).filter((field) => flagged.has(field));
 }
 
+/** Codes meaning the model returned something, but not a usable value. */
+const UNREADABLE_CODES: ReadonlySet<string> = new Set([
+  'expiry_invalid',
+  'number_missing',
+  'number_format',
+  'dui_missing',
+  'dui_format',
+  'issued_invalid'
+]);
+
+/**
+ * What the model could not read on a photo it did process. That is a better sign of a
+ * bad photo than any image metric, including the small reflections those metrics miss.
+ */
+export function unreadFields(
+  values: LicenseValues,
+  issues: LicenseIssue[],
+  capture: { front: { extracted: boolean }; back: { extracted: boolean } },
+  touched: ReadonlySet<FieldKey>
+): FieldKey[] {
+  const expected: FieldKey[] = [
+    ...(capture.front.extracted ? (['expires', 'number', 'dui'] as const) : []),
+    ...(capture.back.extracted ? (['issued'] as const) : [])
+  ];
+  return expected.filter(
+    (field) =>
+      !touched.has(field) &&
+      (values[field] === null ||
+        issues.some((issue) => issue.field === field && UNREADABLE_CODES.has(issue.code)))
+  );
+}
+
 /** Says what stands between the user and confirming; a disabled button alone explains nothing. */
 export function confirmBlocker(state: {
   photosReady: boolean;

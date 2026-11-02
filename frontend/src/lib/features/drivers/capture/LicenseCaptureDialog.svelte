@@ -16,8 +16,15 @@
   import LicenseReviewForm from './LicenseReviewForm.svelte';
   import PhotoStep from './PhotoStep.svelte';
   import { checksumOf, prepareForUpload } from './upload';
-  import { qualityMessages } from './image-prep';
-  import { confirmBlocker, EMPTY_VALUES, isWaiting, mergeExtracted, warningCodes } from './review';
+  import type { QualityIssue } from './image-prep';
+  import {
+    confirmBlocker,
+    EMPTY_VALUES,
+    isWaiting,
+    mergeExtracted,
+    unreadFields,
+    warningCodes
+  } from './review';
 
   const POLL_MS = 1200;
   const MANUAL_OFFER_MS = 60000;
@@ -39,7 +46,13 @@
   let busy = $state(false);
   let uploading = $state<CaptureSide | null>(null);
   let error = $state<string | null>(null);
-  let photoWarnings = $state<string[]>([]);
+  /** Foto con un problema: aún no se sube, a la espera de que el usuario decida. */
+  let held = $state<{
+    side: CaptureSide;
+    file: File;
+    issue: QualityIssue;
+    previous: string | null;
+  } | null>(null);
   let previews = $state<Record<CaptureSide, string | null>>({ front: null, back: null });
   let values = $state<LicenseValues>({ ...EMPTY_VALUES });
   let touched = $state(new Set<keyof LicenseValues>());
@@ -62,6 +75,7 @@
       overrideReason
     })
   );
+  const unread = $derived(capture ? unreadFields(values, serverIssues, capture, touched) : []);
   const reading = $derived.by(() => {
     if (analyzing) return waitedTooLong ? 'slow' : 'analyzing';
     if (capture?.status === 'failed') return 'failed';
@@ -79,7 +93,7 @@
     busy = false;
     uploading = null;
     error = null;
-    photoWarnings = [];
+    held = null;
     revokePreviews();
     values = { ...EMPTY_VALUES };
     touched = new Set();
@@ -172,49 +186,86 @@
     };
   });
 
+  // La calidad se revisa antes de subir: el aviso es inmediato y no se escanea ni se
+  // guarda una foto que el usuario probablemente va a repetir.
   async function usePhoto(source: Blob) {
     if (!capture || step === 'review' || busy) return;
     const side = step;
     const previous = previews[side];
     busy = true;
-    uploading = side;
     error = null;
-    photoWarnings = [];
-    let shown: string | null = null;
+    held = null;
     try {
       const prepared = await prepareForUpload(source, side);
-      shown = URL.createObjectURL(prepared.file);
-      previews = { ...previews, [side]: shown };
+      previews = { ...previews, [side]: URL.createObjectURL(prepared.file) };
+      const [issue] = prepared.issues;
+      if (issue) {
+        held = { side, file: prepared.file, issue, previous };
+        return;
+      }
+      await upload(side, prepared.file, previous);
+    } catch {
+      error = 'No se pudo procesar la foto. Prueba con otra imagen en JPG o PNG.';
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function upload(side: CaptureSide, file: File, previous: string | null) {
+    if (!capture) return;
+    uploading = side;
+    error = null;
+    try {
       const ticket = await driversApi.startCaptureUpload(driver.id, capture.id, side, {
-        content_type: prepared.file.type,
-        size_bytes: prepared.file.size,
-        checksum_sha256: await checksumOf(prepared.file)
+        content_type: file.type,
+        size_bytes: file.size,
+        checksum_sha256: await checksumOf(file)
       });
-      await api.documents.uploadDirect(ticket, prepared.file);
+      await api.documents.uploadDirect(ticket, file);
       apply(await driversApi.completeCaptureUpload(driver.id, capture.id, side));
       if (previous) URL.revokeObjectURL(previous);
-      photoWarnings = qualityMessages(prepared.quality);
-      if (photoWarnings.length === 0) advance();
+      advance();
     } catch (err) {
-      if (shown) URL.revokeObjectURL(shown);
-      previews = { ...previews, [side]: previous };
+      restorePreview(side, previous);
       error =
         err instanceof HttpError
           ? err.message
-          : 'No se pudo procesar la foto. Prueba con otra imagen en JPG o PNG.';
+          : 'No se pudo cargar la foto. Revisa tu conexión e inténtalo de nuevo.';
     } finally {
-      busy = false;
       uploading = null;
     }
   }
 
+  function restorePreview(side: CaptureSide, previous: string | null) {
+    const shown = previews[side];
+    if (shown && shown !== previous) URL.revokeObjectURL(shown);
+    previews = { ...previews, [side]: previous };
+  }
+
+  function retryPhoto() {
+    if (!held) return;
+    restorePreview(held.side, held.previous);
+    held = null;
+  }
+
+  async function useHeldPhoto() {
+    if (!held || busy) return;
+    const { side, file, previous } = held;
+    held = null;
+    busy = true;
+    try {
+      await upload(side, file, previous);
+    } finally {
+      busy = false;
+    }
+  }
+
   function advance() {
-    photoWarnings = [];
     step = step === 'front' ? 'back' : 'review';
   }
 
   function goBack() {
-    photoWarnings = [];
+    retryPhoto();
     error = null;
     step = 'front';
   }
@@ -288,10 +339,12 @@
           side={step}
           preview={previews[step]}
           uploading={uploading === step}
-          warnings={photoWarnings}
+          issue={held?.side === step ? held.issue : null}
           canContinue={capture?.[step].status === 'active'}
           onphoto={(photo) => void usePhoto(photo)}
           oncontinue={advance}
+          onretry={retryPhoto}
+          onuseanyway={() => void useHeldPhoto()}
         />
       {/key}
     {:else}
@@ -300,6 +353,7 @@
         issues={serverIssues}
         {previews}
         {reading}
+        {unread}
         {touched}
         {canOverride}
         bind:acknowledged

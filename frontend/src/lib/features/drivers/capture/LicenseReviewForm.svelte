@@ -12,6 +12,7 @@
     issues,
     previews,
     reading,
+    unread,
     touched,
     canOverride,
     acknowledged = $bindable(false),
@@ -23,6 +24,7 @@
     issues: LicenseIssue[];
     previews: Record<CaptureSide, string | null>;
     reading: Reading;
+    unread: (keyof LicenseValues)[];
     touched: ReadonlySet<keyof LicenseValues>;
     canOverride: boolean;
     acknowledged?: boolean;
@@ -93,6 +95,16 @@
     <p class="status" class:busy={reading === 'analyzing' || reading === 'slow'} role="status">
       {STATUS[reading]}
     </p>
+
+    {#if unread.length > 0}
+      <div class="unread" role="status">
+        <p>
+          No pudimos leer: {unread.map((key) => FIELD_LABELS[key].label).join(', ')}. Repite la foto
+          o escríbelos revisando la imagen.
+        </p>
+        <Button variant="secondary" size="sm" onclick={onretake}>Repetir foto</Button>
+      </div>
+    {/if}
 
     {#if flagged.length > 0}
       <nav class="to-review" aria-label="Datos por revisar">
@@ -250,6 +262,21 @@
     color: rgb(var(--foreground-muted));
     background: rgb(var(--surface-muted));
     font-size: 14px;
+  }
+  .unread {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--driver-space-2);
+    padding: var(--driver-space-3);
+    border-left: 3px solid rgb(var(--warning));
+    border-radius: var(--driver-radius);
+    color: rgb(var(--foreground));
+    background: rgb(var(--warning) / 10%);
+    font-size: 14px;
+  }
+  .unread p {
+    margin: 0;
   }
   .to-review {
     display: flex;

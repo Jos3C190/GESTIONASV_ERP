@@ -27,13 +27,18 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 vi.mock('$lib/stores/permissions.svelte', () => ({
   permissions: { hasPermission: (code: string) => permissionMock.codes.has(code) }
 }));
+const prepareMock = vi.hoisted(() => vi.fn());
 vi.mock('./upload', () => ({
   checksumOf: vi.fn().mockResolvedValue('a'.repeat(64)),
-  prepareForUpload: vi.fn(async (_source: Blob, side: string) => ({
-    file: new File(['x'], `licencia-${side}.jpg`, { type: 'image/jpeg' }),
-    quality: { blurry: false, dark: false, tooSmall: false }
-  }))
+  prepareForUpload: prepareMock
 }));
+
+function preparedWith(issues: string[]) {
+  return async (_source: Blob, side: string) => ({
+    file: new File(['x'], `licencia-${side}.jpg`, { type: 'image/jpeg' }),
+    issues
+  });
+}
 
 const driver = { id: 'driver-1' } as Driver;
 const EMPTY = {
@@ -67,19 +72,23 @@ const bothSides = {
   back: { document_id: 'b', status: 'active', extracted: true }
 };
 
+async function pickFile(side: string) {
+  await screen.findByText(new RegExp(`Carga el ${side}`));
+  const input = screen.getByText('Subir archivo').querySelector('input') as HTMLInputElement;
+  Object.defineProperty(input, 'files', {
+    value: [new File(['x'], 'foto.jpg', { type: 'image/jpeg' })],
+    configurable: true
+  });
+  await fireEvent.change(input);
+}
+
 async function reachReview(result: Partial<LicenseCapture>, issues: LicenseIssue[] = []) {
   apiMock.completeCaptureUpload.mockResolvedValue(capture({ ...bothSides, ...result }));
   apiMock.checkCapture.mockResolvedValue(issues);
   render(LicenseCaptureDialog, { open: true, driver, onconfirmed: vi.fn() });
   await waitFor(() => expect(apiMock.openCapture).toHaveBeenCalled());
   for (const side of ['frente', 'reverso']) {
-    await screen.findByText(new RegExp(`Carga el ${side}`));
-    const input = screen.getByText('Subir archivo').querySelector('input') as HTMLInputElement;
-    Object.defineProperty(input, 'files', {
-      value: [new File(['x'], 'foto.jpg', { type: 'image/jpeg' })],
-      configurable: true
-    });
-    await fireEvent.change(input);
+    await pickFile(side);
     await waitFor(() => expect(screen.queryByText(new RegExp(`Carga el ${side}`))).toBeNull());
   }
   await screen.findByRole('button', { name: 'Confirmar licencia' });
@@ -94,6 +103,7 @@ describe('LicenseCaptureDialog', () => {
     apiMock.startCaptureUpload.mockResolvedValue({ upload_url: 'u' });
     apiMock.capturePreview.mockResolvedValue({ url: 'http://storage/foto', expires_at: '' });
     apiMock.cancelCapture.mockResolvedValue(undefined);
+    prepareMock.mockImplementation(preparedWith([]));
     uploadDirect.mockResolvedValue(undefined);
     URL.createObjectURL = vi.fn(() => 'blob:foto');
     URL.revokeObjectURL = vi.fn();
@@ -231,6 +241,49 @@ describe('LicenseCaptureDialog', () => {
     await screen.findByText(/Carga el frente/);
 
     expect(screen.getByText('Frente', { selector: 'li' })).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('stops a bad photo before uploading it and asks to try again', async () => {
+    prepareMock.mockImplementationOnce(preparedWith(['blurry', 'dark']));
+    render(LicenseCaptureDialog, { open: true, driver, onconfirmed: vi.fn() });
+    await pickFile('frente');
+
+    // Una sola instrucción: la más importante.
+    expect(await screen.findByText('Foto borrosa')).toBeInTheDocument();
+    expect(screen.queryByText('Poca luz')).toBeNull();
+    expect(apiMock.startCaptureUpload).not.toHaveBeenCalled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Intentar de nuevo' }));
+
+    expect(screen.queryByText('Foto borrosa')).toBeNull();
+    expect(screen.getByText(/Carga el frente/)).toBeInTheDocument();
+    expect(screen.queryByAltText(/Foto de el frente/)).toBeNull();
+    expect(apiMock.startCaptureUpload).not.toHaveBeenCalled();
+  });
+
+  it('lets the user keep a flagged photo, because the check can be wrong', async () => {
+    prepareMock.mockImplementationOnce(preparedWith(['glare']));
+    apiMock.completeCaptureUpload.mockResolvedValue(capture());
+    render(LicenseCaptureDialog, { open: true, driver, onconfirmed: vi.fn() });
+    await pickFile('frente');
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Usar de todos modos' }));
+
+    await screen.findByText(/Carga el reverso/);
+    expect(apiMock.startCaptureUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers to retake the photo when the model could not read a value', async () => {
+    await reachReview({
+      status: 'ready',
+      values: { ...EMPTY, number: '0101-010101-101-1', dui: '12345678-4', issued: '25.02.2023' }
+    });
+
+    expect(await screen.findByText(/No pudimos leer: Vence/)).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Repetir foto' }));
+
+    expect(await screen.findByText(/Carga el frente/)).toBeInTheDocument();
   });
 
   it('does not offer confirmation until both photos are in', async () => {
