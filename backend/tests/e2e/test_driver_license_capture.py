@@ -16,7 +16,7 @@ from app.infrastructure.models.document_capture import DocumentCaptureModel
 from app.infrastructure.models.employee import Employee
 from sqlalchemy import select, update
 
-from tests.e2e.test_documents import E2EScanner, _enable_fake_services
+from tests.e2e.test_documents import E2EScanner, _enable_fake_services, _headers
 from tests.e2e.test_fleet_drivers import _employee
 from tests.e2e.test_fleet_vehicles import _admin, _branch_manager, _branches
 
@@ -307,3 +307,37 @@ async def test_capture_requires_permission_and_scope(e2e_client: Any, storage: A
     )
 
     assert reached.status_code == 404
+
+
+async def test_typed_values_are_checked_before_confirming(e2e_client: Any, storage: Any) -> None:
+    admin = await _admin(e2e_client)
+    driver, employee = await _driver(e2e_client, admin)
+    capture_id = await _capture_with_photos(e2e_client, storage, admin, driver["id"])
+
+    checked = await e2e_client.post(
+        f"/api/v1/drivers/{driver['id']}/license-captures/{capture_id}/check",
+        headers=admin,
+        json=_values(employee, expires="10-2021", issued="25.02.2016", dui="98765432-1"),
+    )
+
+    assert checked.status_code == 200, checked.text
+    codes = {item["code"] for item in checked.json()}
+    assert {"license_expired", "dui_check_digit"} <= codes
+
+
+async def test_user_without_permission_cannot_capture_or_see_the_back(
+    e2e_client: Any, storage: Any
+) -> None:
+    admin = await _admin(e2e_client)
+    driver, _ = await _driver(e2e_client, admin)
+    outsider = await _headers(e2e_client, superuser=False)
+
+    opened = await e2e_client.post(
+        f"/api/v1/drivers/{driver['id']}/license-captures", headers=outsider
+    )
+    back = await e2e_client.post(
+        f"/api/v1/drivers/{driver['id']}/license-back/preview-url", headers=outsider
+    )
+
+    assert opened.status_code == 403
+    assert back.status_code == 403

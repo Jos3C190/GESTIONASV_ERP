@@ -61,6 +61,17 @@ groups:
         for: 2m
         labels: {severity: warning}
         annotations: {summary: "Hay trabajos OCR pendientes por más de 20 minutos"}
+      - alert: ERPVlmFailuresIncreasing
+        expr: increase(erp_erp_vlm_jobs_total{status=~"retry|engine_unavailable"}[15m]) > 2
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Aumentaron los fallos al leer licencias con el modelo"}
+      # Sin alerta por worker ausente: es opcional y la captura manual sigue disponible.
+      - alert: ERPVlmPendingTooOld
+        expr: erp_erp_vlm_pending_age{service_name="erp-vlm-worker"} > 300
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Hay licencias esperando lectura por más de 5 minutos"}
   - name: observability-stack
     rules:
       - alert: ObservabilityTargetDown

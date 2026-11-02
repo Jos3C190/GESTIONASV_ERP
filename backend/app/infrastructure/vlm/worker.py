@@ -228,6 +228,7 @@ async def process_capture(ctx: dict[str, Any], raw_id: str) -> None:
             record_counter("erp.vlm.jobs", attributes={"status": "gpu_busy"})
             raise Retry(defer=_GPU_BUSY_RETRY_SECONDS) from exc
         except ModelStartError as exc:
+            log.warning("vlm_model_start_failed", capture_id=raw_id)
             record_counter("erp.vlm.jobs", attributes={"status": "engine_unavailable"})
             raise Retry(defer=_ENGINE_RETRY_SECONDS) from exc
         except (VisionExtractionError, InfrastructureError, TimeoutError, OSError) as exc:

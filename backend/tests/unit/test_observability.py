@@ -73,3 +73,14 @@ def test_initialization_failure_is_non_fatal(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr(observability, "_initialize_observability_impl", _failure)
     assert observability.initialize_observability("test-service") is False
+
+
+def test_license_data_never_reaches_telemetry() -> None:
+    message = "lectura 12345678-4 con licencia 0101-010101-101-1"
+
+    assert "12345678-4" not in redact_value(message)
+    assert "0101-010101-101-1" not in redact_value(message)
+    for key in ("dui", "extracted", "license_number", "surnames", "given_names"):
+        assert redact_value("valor", key=key) != "valor"
+    # Los identificadores internos siguen siendo útiles para diagnosticar.
+    assert redact_value("valor", key="document_id") == "valor"

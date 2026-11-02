@@ -34,6 +34,7 @@ from app.domain.entities.document import DocumentAsset
 from app.infrastructure.models.document_capture import OPEN_CAPTURE_STATUSES, DocumentCaptureModel
 from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.fleet import DriverModel
+from app.infrastructure.observability import record_counter
 from app.infrastructure.repositories.fleet_repository import FleetRepository
 
 KIND = "driver_license"
@@ -336,6 +337,10 @@ class LicenseCaptureService:
             driver, check.license_class, can_update_driver=can_update_driver
         )
         corrected = _corrected_fields(fields_from_extracted(capture.extracted), values)
+        for field_name in corrected:
+            record_counter(
+                "erp.license_capture.field_corrections", attributes={"field": field_name}
+            )
         async with self._session.begin_nested():
             await self._records.adopt_asset(
                 capture.company_id,

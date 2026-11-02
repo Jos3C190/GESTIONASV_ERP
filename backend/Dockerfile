@@ -76,6 +76,43 @@ USER erp
 # the non-root worker user in CI. Invoke the installed worker directly.
 CMD ["/opt/venv/bin/arq", "app.infrastructure.ocr_worker.WorkerSettings"]
 
+# ---------------- Vision model worker ----------------
+# Starts from the official llama.cpp build for CUDA 12, pinned by digest: its
+# libraries need that image's Ubuntu glibc. The CUDA 13 variant asks for a newer
+# driver than the RTX 4060 host runs. The engine stays in /app, so the project
+# lives in /srv/erp. Model weights are mounted read-only, never baked in.
+FROM ghcr.io/ggml-org/llama.cpp@sha256:0a9f6c7cfe5a6b90b6c048b7a86865bf55a88af34bada927482eab2ef5f25b4a AS vlm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON=/usr/bin/python3 \
+    UV_PYTHON_DOWNLOADS=never \
+    PATH="/opt/venv/bin:$PATH"
+
+RUN apt-get update && apt-get -y upgrade && rm -rf /var/lib/apt/lists/*
+
+COPY --from=base /usr/local/bin/uv /usr/local/bin/uv
+WORKDIR /srv/erp
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev --extra vlm
+COPY . .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --extra vlm
+
+RUN groupadd --system --gid 1001 erp && \
+    useradd --system --uid 1001 --gid erp --home-dir /srv/erp --shell /usr/sbin/nologin erp && \
+    chown -R erp:erp /srv/erp
+USER erp
+
+# The engine only finds its libraries from /app, and the worker runs from /srv/erp.
+ENV LD_LIBRARY_PATH=/app:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64
+ENTRYPOINT []
+HEALTHCHECK NONE
+CMD ["/opt/venv/bin/arq", "app.infrastructure.vlm.worker.WorkerSettings"]
+
 # ---------------- prod (default/Render target) ----------------
 # Keep this stage last: Render builds the Dockerfile without an explicit target.
 FROM base AS prod

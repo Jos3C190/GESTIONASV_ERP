@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from app.api.v1.routers import driver_license_captures as captures_router
 from app.core.config import settings
 from app.domain.ports.malware_scanner import ScanResult
 from app.domain.ports.vision_extractor import VisionExtractionError
@@ -82,7 +83,27 @@ class FakeSupervisor:
 
 
 @pytest.fixture
-def storage(e2e_client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+def queue(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Records what the API hands over; otherwise it would wake the real local worker."""
+    calls: list[str] = []
+
+    async def enqueue(capture_id: uuid.UUID) -> None:
+        calls.append(str(capture_id))
+
+    async def warm_up() -> None:
+        calls.append("warm_up")
+
+    async def available() -> bool:
+        return True
+
+    monkeypatch.setattr(captures_router, "enqueue_capture", enqueue)
+    monkeypatch.setattr(captures_router, "request_warmup", warm_up)
+    monkeypatch.setattr(captures_router, "worker_available", available)
+    return calls
+
+
+@pytest.fixture
+def storage(e2e_client: Any, monkeypatch: pytest.MonkeyPatch, queue: list[str]) -> Any:
     monkeypatch.setattr(settings, "LICENSE_CAPTURE_ENABLED", True)
     monkeypatch.setattr(settings, "VLM_ENABLED", True)
     return _enable_fake_services(e2e_client, monkeypatch, E2EScanner(ScanResult(clean=True)))
@@ -132,12 +153,15 @@ async def _row(capture_id: str) -> DocumentCaptureModel:
 
 
 async def test_front_is_read_as_soon_as_scanned_and_back_later(
-    e2e_client: Any, storage: Any, ctx: dict[str, Any]
+    e2e_client: Any, storage: Any, ctx: dict[str, Any], queue: list[str]
 ) -> None:
     admin, driver_id, capture_id, _ = await _start(e2e_client)
+    # Abrir el asistente adelanta la carga del modelo.
+    assert queue == ["warm_up"]
 
     uploaded = await _upload(e2e_client, storage, admin, driver_id, capture_id, "front")
     assert uploaded["status"] == "pending"
+    assert queue == ["warm_up", capture_id]
 
     await vlm_worker.process_capture(ctx, capture_id)
     view = await e2e_client.get(
