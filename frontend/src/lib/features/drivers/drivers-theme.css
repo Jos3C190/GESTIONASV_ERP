@@ -1,7 +1,8 @@
 /* Shared local scale for the Drivers workspace and its dialogs. */
 .drivers,
 .driver-inspector,
-.driver-create {
+.driver-create,
+.license-capture {
   --driver-radius-sm: 6px;
   --driver-radius: 8px;
   --driver-radius-lg: 12px;

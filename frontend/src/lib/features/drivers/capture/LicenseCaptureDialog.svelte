@@ -3,6 +3,7 @@
   import { api, HttpError } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import {
     driversApi,
@@ -12,21 +13,20 @@
     type LicenseIssue,
     type LicenseValues
   } from '../api';
-  import CameraCapture from './CameraCapture.svelte';
+  import LicenseReviewForm from './LicenseReviewForm.svelte';
+  import PhotoStep from './PhotoStep.svelte';
   import { checksumOf, prepareForUpload } from './upload';
   import { qualityMessages } from './image-prep';
-  import {
-    EMPTY_VALUES,
-    FIELD_LABELS,
-    issuesFor,
-    isWaiting,
-    mergeExtracted,
-    warningCodes
-  } from './review';
+  import { confirmBlocker, EMPTY_VALUES, isWaiting, mergeExtracted, warningCodes } from './review';
 
   const POLL_MS = 1200;
   const MANUAL_OFFER_MS = 60000;
   const CHECK_DEBOUNCE_MS = 350;
+  const STEPS: { key: CaptureSide | 'review'; label: string }[] = [
+    { key: 'front', label: 'Frente' },
+    { key: 'back', label: 'Reverso' },
+    { key: 'review', label: 'Revisión' }
+  ];
 
   let {
     open = $bindable(false),
@@ -34,14 +34,11 @@
     onconfirmed
   }: { open?: boolean; driver: Driver; onconfirmed: (driver: Driver) => void } = $props();
 
-  type Mode = 'choose' | 'camera';
   let step = $state<CaptureSide | 'review'>('front');
-  let mode = $state<Mode>('choose');
   let capture = $state<LicenseCapture | null>(null);
   let busy = $state(false);
   let uploading = $state<CaptureSide | null>(null);
   let error = $state<string | null>(null);
-  let cameraIssue = $state<string | null>(null);
   let photoWarnings = $state<string[]>([]);
   let previews = $state<Record<CaptureSide, string | null>>({ front: null, back: null });
   let values = $state<LicenseValues>({ ...EMPTY_VALUES });
@@ -50,32 +47,38 @@
   let overrideReason = $state('');
   let serverIssues = $state<LicenseIssue[]>([]);
   let waitedTooLong = $state(false);
+  let discarding = $state(false);
   let generation = 0;
 
   const canOverride = $derived(permissions.hasPermission('drivers:license_override'));
-  const mismatches = $derived(serverIssues.filter((issue) => issue.severity === 'mismatch'));
-  const warnings = $derived(serverIssues.filter((issue) => issue.severity === 'warning'));
-  const errors = $derived(serverIssues.filter((issue) => issue.severity === 'error'));
   const analyzing = $derived(capture !== null && isWaiting(capture.status));
-  const canConfirm = $derived(
-    !busy &&
-      capture?.front.status === 'active' &&
-      capture?.back.status === 'active' &&
-      errors.length === 0 &&
-      (warnings.length === 0 || acknowledged) &&
-      (mismatches.length === 0 || (canOverride && overrideReason.trim().length >= 3))
+  const hasPhotos = $derived(!!capture?.front.document_id || !!capture?.back.document_id);
+  const blocker = $derived(
+    confirmBlocker({
+      photosReady: capture?.front.status === 'active' && capture?.back.status === 'active',
+      issues: serverIssues,
+      acknowledged,
+      canOverride,
+      overrideReason
+    })
   );
-  const sideLabel = $derived(step === 'back' ? 'el reverso' : 'el frente');
-  const fieldKeys = Object.keys(FIELD_LABELS) as (keyof LicenseValues)[];
+  const reading = $derived.by(() => {
+    if (analyzing) return waitedTooLong ? 'slow' : 'analyzing';
+    if (capture?.status === 'failed') return 'failed';
+    if (capture && !capture.extraction_available && !capture.front.extracted) return 'unavailable';
+    return 'done';
+  });
+
+  function isDone(key: CaptureSide | 'review'): boolean {
+    return key !== 'review' && step !== key && !!capture?.[key].document_id;
+  }
 
   function reset() {
     step = 'front';
-    mode = 'choose';
     capture = null;
     busy = false;
     uploading = null;
     error = null;
-    cameraIssue = null;
     photoWarnings = [];
     revokePreviews();
     values = { ...EMPTY_VALUES };
@@ -84,6 +87,7 @@
     overrideReason = '';
     serverIssues = [];
     waitedTooLong = false;
+    discarding = false;
   }
 
   // Lo escrito se valida en el servidor mientras se edita: confirmar no da sorpresas.
@@ -171,12 +175,16 @@
   async function usePhoto(source: Blob) {
     if (!capture || step === 'review' || busy) return;
     const side = step;
+    const previous = previews[side];
     busy = true;
     uploading = side;
     error = null;
     photoWarnings = [];
+    let shown: string | null = null;
     try {
       const prepared = await prepareForUpload(source, side);
+      shown = URL.createObjectURL(prepared.file);
+      previews = { ...previews, [side]: shown };
       const ticket = await driversApi.startCaptureUpload(driver.id, capture.id, side, {
         content_type: prepared.file.type,
         size_bytes: prepared.file.size,
@@ -184,12 +192,12 @@
       });
       await api.documents.uploadDirect(ticket, prepared.file);
       apply(await driversApi.completeCaptureUpload(driver.id, capture.id, side));
-      if (previews[side]) URL.revokeObjectURL(previews[side]);
-      previews = { ...previews, [side]: URL.createObjectURL(prepared.file) };
+      if (previous) URL.revokeObjectURL(previous);
       photoWarnings = qualityMessages(prepared.quality);
-      mode = 'choose';
       if (photoWarnings.length === 0) advance();
     } catch (err) {
+      if (shown) URL.revokeObjectURL(shown);
+      previews = { ...previews, [side]: previous };
       error =
         err instanceof HttpError
           ? err.message
@@ -202,16 +210,13 @@
 
   function advance() {
     photoWarnings = [];
-    cameraIssue = null;
-    mode = 'choose';
     step = step === 'front' ? 'back' : 'review';
   }
 
-  function onFile(event: Event) {
-    const input = event.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (file) void usePhoto(file);
+  function goBack() {
+    photoWarnings = [];
+    error = null;
+    step = 'front';
   }
 
   function edit(key: keyof LicenseValues, value: string) {
@@ -221,7 +226,7 @@
   }
 
   async function confirm() {
-    if (!capture || !canConfirm) return;
+    if (!capture || blocker || busy) return;
     busy = true;
     error = null;
     try {
@@ -251,312 +256,217 @@
 <Modal
   {open}
   title="Capturar licencia de conducir"
-  size="lg"
+  size={step === 'review' ? 'xl' : 'lg'}
   mobileFullScreen
+  flush
   preventClose={busy}
   onclose={() => {
     if (!busy) open = false;
   }}
 >
-  <div class="capture">
-    <ol class="steps" aria-label="Pasos">
-      <li class:current={step === 'front'} class:done={!!capture?.front.document_id}>Frente</li>
-      <li class:current={step === 'back'} class:done={!!capture?.back.document_id}>Reverso</li>
-      <li class:current={step === 'review'}>Revisión</li>
+  <div class="license-capture">
+    <ol class="steps">
+      {#each STEPS as item, index (item.key)}
+        <li
+          class:current={step === item.key}
+          class:done={isDone(item.key)}
+          aria-current={step === item.key ? 'step' : undefined}
+        >
+          <span class="dot" aria-hidden="true">
+            {#if isDone(item.key)}<FleetIcon name="check" size={12} />{:else}{index + 1}{/if}
+          </span>
+          {item.label}
+        </li>
+      {/each}
     </ol>
 
     {#if error}<p class="alert" role="alert">{error}</p>{/if}
 
     {#if step !== 'review'}
-      {#if uploading}
-        <div class="progress" role="status">Preparando y revisando la foto…</div>
-      {:else if mode === 'camera'}
-        <CameraCapture
-          label={sideLabel}
-          oncapture={(photo) => void usePhoto(photo)}
-          onunavailable={(reason) => {
-            cameraIssue = reason;
-            mode = 'choose';
-          }}
+      {#key step}
+        <PhotoStep
+          side={step}
+          preview={previews[step]}
+          uploading={uploading === step}
+          warnings={photoWarnings}
+          canContinue={capture?.[step].status === 'active'}
+          onphoto={(photo) => void usePhoto(photo)}
+          oncontinue={advance}
         />
-        <Button variant="ghost" onclick={() => (mode = 'choose')}>Volver</Button>
-      {:else}
-        <p class="lead">Carga {sideLabel} de la licencia completa y bien iluminada.</p>
-        {#if previews[step]}
-          <img class="photo" src={previews[step]} alt={`Foto de ${sideLabel} de la licencia`} />
-        {/if}
-        {#if photoWarnings.length > 0}
-          <div class="warning-box" role="status">
-            {#each photoWarnings as message (message)}<p>{message}</p>{/each}
-            <Button variant="secondary" size="sm" onclick={advance}
-              >Usar esta foto de todos modos</Button
-            >
-          </div>
-        {/if}
-        {#if cameraIssue}<p class="hint" role="status">{cameraIssue}</p>{/if}
-        {#if capture?.[step].status === 'active' && photoWarnings.length === 0}
-          <Button variant="secondary" onclick={advance}>Continuar con esta foto</Button>
-        {/if}
-        <div class="sources">
-          <Button onclick={() => (mode = 'camera')}>Usar cámara</Button>
-          <label class="file-button">
-            Tomar con el teléfono
-            <input type="file" accept="image/*" capture="environment" onchange={onFile} />
-          </label>
-          <label class="file-button">
-            Subir archivo
-            <input type="file" accept="image/jpeg,image/png,image/webp" onchange={onFile} />
-          </label>
-        </div>
-      {/if}
+      {/key}
     {:else}
-      <div class="review">
-        <div class="images">
-          {#each ['front', 'back'] as const as side (side)}
-            {#if previews[side]}
-              <img src={previews[side]} alt={side === 'front' ? 'Frente' : 'Reverso'} />
-            {/if}
-          {/each}
-          <Button variant="ghost" size="sm" onclick={() => (step = 'front')}>Repetir fotos</Button>
-        </div>
-        <div class="fields">
-          {#if analyzing}
-            <p class="status" role="status">
-              Analizando la licencia. Puedes escribir los datos mientras tanto.
-              {#if waitedTooLong}<br />Está tardando más de lo normal; continúa manualmente si lo
-                prefieres.{/if}
-            </p>
-          {:else if capture?.status === 'failed'}
-            <p class="status" role="status">
-              No se pudieron leer los datos. Escríbelos revisando la foto.
-            </p>
-          {:else if capture && !capture.extraction_available && !capture.front.extracted}
-            <p class="status" role="status">
-              La lectura automática no está disponible. Escribe los datos revisando la foto.
-            </p>
-          {:else}
-            <p class="status" role="status">Revisa cada dato contra la foto antes de confirmar.</p>
-          {/if}
-
-          {#each fieldKeys as key (key)}
-            {@const fieldIssues = issuesFor(serverIssues, key)}
-            <label>
-              <span
-                >{FIELD_LABELS[key].label}{#if FIELD_LABELS[key].hint}<small
-                    >{FIELD_LABELS[key].hint}</small
-                  >{/if}</span
-              >
-              <input
-                value={values[key] ?? ''}
-                autocomplete="off"
-                aria-invalid={fieldIssues.some((issue) => issue.severity !== 'warning')}
-                oninput={(event) => edit(key, event.currentTarget.value)}
-              />
-              {#each fieldIssues as issue (issue.code)}
-                <small class={`issue ${issue.severity}`}>{issue.message}</small>
-              {/each}
-            </label>
-          {/each}
-
-          {#if errors.length > 0}
-            <p class="hint">Corrige los campos marcados para poder confirmar.</p>
-          {/if}
-
-          {#if mismatches.length > 0}
-            {#if canOverride}
-              <label>
-                <span>Motivo de la excepción</span>
-                <textarea rows="2" bind:value={overrideReason} maxlength="500"></textarea>
-              </label>
-            {:else}
-              <p class="alert" role="alert">
-                Estos datos no coinciden con el empleado. Corrígelos o pide autorización a un
-                administrador.
-              </p>
-            {/if}
-          {/if}
-
-          {#if warnings.length > 0}
-            <label class="check">
-              <input type="checkbox" bind:checked={acknowledged} />
-              <span>Revisé los avisos y los datos coinciden con la licencia.</span>
-            </label>
-          {/if}
-
-          <p class="hint">
-            Estas comprobaciones revisan que los datos sean coherentes; no certifican que el
-            documento sea auténtico.
-          </p>
-        </div>
-      </div>
+      <LicenseReviewForm
+        {values}
+        issues={serverIssues}
+        {previews}
+        {reading}
+        {touched}
+        {canOverride}
+        bind:acknowledged
+        bind:overrideReason
+        onedit={edit}
+        onretake={() => (step = 'front')}
+      />
     {/if}
   </div>
 
   {#snippet footer()}
-    <Button variant="ghost" disabled={busy} onclick={() => void cancel()}>Descartar captura</Button>
-    {#if step === 'review'}
-      <Button disabled={!canConfirm} onclick={() => void confirm()}>
-        {busy ? 'Confirmando…' : 'Confirmar licencia'}
-      </Button>
-    {/if}
+    <div class="license-capture footer">
+      {#if discarding}
+        <p class="hint" role="status">¿Descartar las fotos y los datos de esta captura?</p>
+        <div class="buttons">
+          <Button variant="secondary" size="lg" class="grow" onclick={() => (discarding = false)}>
+            Conservar
+          </Button>
+          <Button variant="danger" size="lg" class="grow" onclick={() => void cancel()}>
+            Sí, descartar
+          </Button>
+        </div>
+      {:else}
+        {#if step === 'review'}
+          <p class="hint" role="status">{blocker ?? 'Todo listo para confirmar.'}</p>
+        {/if}
+        <div class="buttons">
+          {#if hasPhotos}
+            <Button variant="ghost" size="lg" disabled={busy} onclick={() => (discarding = true)}>
+              <FleetIcon name="trash" size={16} /><span class="discard-label"
+                >Descartar captura</span
+              >
+            </Button>
+          {:else}
+            <Button variant="ghost" size="lg" disabled={busy} onclick={() => (open = false)}>
+              Cancelar
+            </Button>
+          {/if}
+          <span class="spacer"></span>
+          {#if step === 'back'}
+            <Button variant="secondary" size="lg" disabled={busy} onclick={goBack}>Atrás</Button>
+          {/if}
+          {#if step === 'review'}
+            <Button
+              size="lg"
+              class="grow sm:grow-0"
+              disabled={!!blocker || busy}
+              onclick={() => void confirm()}
+            >
+              {busy ? 'Confirmando…' : 'Confirmar licencia'}
+            </Button>
+          {/if}
+        </div>
+      {/if}
+    </div>
   {/snippet}
 </Modal>
 
 <style>
-  .capture {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
   .steps {
     display: flex;
-    gap: 6px;
+    gap: var(--driver-space-1);
     margin: 0;
-    padding: 0;
+    padding: var(--driver-space-3) var(--driver-space-4);
+    border-bottom: 1px solid rgb(var(--border));
     list-style: none;
-    font-size: 12px;
   }
   .steps li {
+    display: flex;
     flex: 1;
-    padding: 6px 8px;
-    border-radius: 8px;
-    text-align: center;
+    align-items: center;
+    justify-content: center;
+    gap: var(--driver-space-2);
     color: rgb(var(--foreground-muted));
-    background: rgb(var(--surface-muted, var(--surface)));
+    font-size: 13px;
   }
   .steps li.done {
     color: rgb(var(--foreground));
   }
   .steps li.current {
-    color: rgb(var(--primary-foreground, 255 255 255));
-    background: rgb(var(--primary));
-  }
-  .lead,
-  .hint,
-  .status {
-    margin: 0;
-    font-size: 13px;
-    color: rgb(var(--foreground-muted));
-  }
-  .status {
-    padding: 8px 10px;
-    border-radius: 8px;
-    background: rgb(var(--surface-muted, var(--surface)));
-  }
-  .alert {
-    margin: 0;
-    padding: 8px 10px;
-    border-radius: 8px;
-    font-size: 13px;
-    color: rgb(var(--danger, 185 28 28));
-    background: rgb(var(--danger, 185 28 28) / 10%);
-  }
-  .warning-box {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    align-items: flex-start;
-    padding: 8px 10px;
-    border-radius: 8px;
-    font-size: 13px;
-    background: rgb(var(--warning, 180 83 9) / 12%);
-  }
-  .warning-box p {
-    margin: 0;
-  }
-  .progress {
-    padding: 32px 12px;
-    text-align: center;
-    color: rgb(var(--foreground-muted));
-  }
-  .photo {
-    width: 100%;
-    max-height: 40dvh;
-    object-fit: contain;
-    border-radius: 10px;
-  }
-  .sources {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .file-button {
-    display: inline-flex;
-    align-items: center;
-    padding: 8px 14px;
-    border: 1px solid rgb(var(--border));
-    border-radius: 8px;
-    font-size: 14px;
-    cursor: pointer;
-  }
-  .file-button:focus-within {
-    outline: 2px solid rgb(var(--primary));
-  }
-  .file-button input {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-  }
-  .review {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 16px;
-  }
-  .images {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .images img {
-    width: 100%;
-    border-radius: 8px;
-  }
-  .fields {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .fields label {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    font-size: 13px;
-  }
-  .fields label span small {
-    margin-left: 6px;
-    color: rgb(var(--foreground-muted));
-  }
-  .fields input:not([type='checkbox']),
-  .fields textarea {
-    width: 100%;
-    padding: 7px 9px;
-    border: 1px solid rgb(var(--border));
-    border-radius: 7px;
     color: rgb(var(--foreground));
-    background: rgb(var(--surface));
+    font-weight: 600;
   }
-  .fields input[aria-invalid='true'] {
-    border-color: rgb(var(--danger, 185 28 28));
-  }
-  .fields .check {
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  .issue {
+  .dot {
+    display: inline-flex;
+    width: 22px;
+    height: 22px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgb(var(--border-strong));
+    border-radius: 50%;
     font-size: 12px;
   }
-  .issue.error,
-  .issue.mismatch {
-    color: rgb(var(--danger, 185 28 28));
+  .current .dot {
+    border-color: rgb(var(--foreground));
+    color: rgb(var(--surface));
+    background: rgb(var(--foreground));
   }
-  .issue.warning {
-    color: rgb(var(--warning, 180 83 9));
+  .done .dot {
+    border-color: rgb(var(--success));
+    color: rgb(var(--success));
   }
-  @media (max-width: 640px) {
-    .review {
-      grid-template-columns: minmax(0, 1fr);
+  .alert {
+    margin: var(--driver-space-3) var(--driver-space-4) 0;
+    padding: var(--driver-space-2) var(--driver-space-3);
+    border-left: 3px solid rgb(var(--danger));
+    border-radius: var(--driver-radius);
+    color: rgb(var(--foreground));
+    background: rgb(var(--danger) / 10%);
+    font-size: 14px;
+  }
+  .footer {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    gap: var(--driver-space-2);
+  }
+  .hint {
+    margin: 0;
+    color: rgb(var(--foreground-muted));
+    font-size: 13px;
+  }
+  .buttons {
+    display: flex;
+    align-items: center;
+    gap: var(--driver-space-2);
+  }
+  .spacer {
+    flex: 1;
+  }
+  /* En móvil queda como icono para dar todo el ancho a la acción principal; sigue teniendo nombre. */
+  .discard-label {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .footer :global(.grow) {
+    flex: 1 1 auto;
+  }
+  @media (min-width: 640px) {
+    .footer {
+      flex-direction: row;
+      align-items: center;
+      gap: var(--driver-space-4);
+    }
+    .hint {
+      flex: 1;
+    }
+    .buttons {
+      flex: 1;
+    }
+    .hint + .buttons {
+      flex: none;
+    }
+    .discard-label {
+      position: static;
+      width: auto;
+      height: auto;
+      clip-path: none;
+    }
+    .footer :global(.sm\:grow-0),
+    .footer :global(.grow) {
+      flex: 0 0 auto;
     }
   }
 </style>

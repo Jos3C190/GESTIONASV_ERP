@@ -7,7 +7,15 @@ import {
   qualityMessages,
   toGrey
 } from './image-prep';
-import { EMPTY_VALUES, issuesFor, isWaiting, mergeExtracted, warningCodes } from './review';
+import {
+  confirmBlocker,
+  EMPTY_VALUES,
+  fieldsToReview,
+  issuesFor,
+  isWaiting,
+  mergeExtracted,
+  warningCodes
+} from './review';
 
 function checker(width: number, height: number): Uint8ClampedArray {
   const grey = new Uint8ClampedArray(width * height);
@@ -111,5 +119,61 @@ describe('review helpers', () => {
     expect(isWaiting('pending')).toBe(true);
     expect(isWaiting('processing')).toBe(true);
     expect(isWaiting('ready')).toBe(false);
+  });
+});
+
+describe('fieldsToReview', () => {
+  it('lists flagged fields once, in form order', () => {
+    const issues = [
+      { code: 'a', severity: 'warning', field: 'expires', message: 'x' },
+      { code: 'b', severity: 'warning', field: 'dui', message: 'y' },
+      { code: 'c', severity: 'mismatch', field: 'dui', message: 'z' }
+    ] as const;
+
+    expect(fieldsToReview([...issues])).toEqual(['dui', 'expires']);
+  });
+});
+
+describe('confirmBlocker', () => {
+  const ready = {
+    photosReady: true,
+    issues: [],
+    acknowledged: false,
+    canOverride: false,
+    overrideReason: ''
+  };
+  const issue = (severity: 'error' | 'mismatch' | 'warning') => ({
+    code: severity,
+    severity,
+    field: 'dui',
+    message: ''
+  });
+
+  it('allows confirming when nothing is pending', () => {
+    expect(confirmBlocker(ready)).toBeNull();
+  });
+
+  it('explains each thing that blocks, most serious first', () => {
+    expect(confirmBlocker({ ...ready, photosReady: false })).toMatch(/fotos/);
+    expect(confirmBlocker({ ...ready, issues: [issue('error'), issue('warning')] })).toMatch(
+      /Corrige/
+    );
+    expect(confirmBlocker({ ...ready, issues: [issue('mismatch')] })).toMatch(/no coinciden/);
+    expect(confirmBlocker({ ...ready, issues: [issue('mismatch')], canOverride: true })).toMatch(
+      /motivo/
+    );
+    expect(confirmBlocker({ ...ready, issues: [issue('warning')] })).toMatch(/avisos/);
+  });
+
+  it('clears once warnings are acknowledged and a reason is given', () => {
+    expect(
+      confirmBlocker({
+        ...ready,
+        issues: [issue('mismatch'), issue('warning')],
+        acknowledged: true,
+        canOverride: true,
+        overrideReason: 'Error en expediente'
+      })
+    ).toBeNull();
   });
 });

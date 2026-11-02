@@ -11,10 +11,12 @@
     onclose?: () => void;
     children?: Snippet;
     footer?: Snippet;
-    size?: 'sm' | 'md' | 'lg';
+    size?: 'sm' | 'md' | 'lg' | 'xl';
     inline?: boolean;
     preventClose?: boolean;
     mobileFullScreen?: boolean;
+    /** The content manages its own padding and scrolls between a fixed header and footer. */
+    flush?: boolean;
   }
 
   let {
@@ -26,7 +28,8 @@
     size = 'md',
     inline = false,
     preventClose = false,
-    mobileFullScreen = false
+    mobileFullScreen = false,
+    flush = false
   }: Props = $props();
   const titleId = $props.id();
   let dialogEl = $state<HTMLDivElement | null>(null);
@@ -35,7 +38,8 @@
   let sizes: Record<string, string> = {
     sm: 'max-w-md',
     md: 'max-w-lg',
-    lg: 'max-w-2xl'
+    lg: 'max-w-2xl',
+    xl: 'max-w-4xl'
   };
 
   function focusableElements(): HTMLElement[] {
@@ -132,6 +136,7 @@
         ? 'rounded-2xl border border-border bg-surface-elevated shadow-soft'
         : `${sizes[size]} animate-fade-scale rounded-3xl border border-border bg-surface-elevated shadow-floating`}"
       class:modal-mobile-fullscreen={mobileFullScreen}
+      class:modal-flush={flush}
       role={inline ? 'region' : 'dialog'}
       bind:this={dialogEl}
       aria-modal={inline ? undefined : 'true'}
@@ -164,7 +169,7 @@
           >
         </button>
       </div>
-      <div class="px-6 py-5">
+      <div class={flush ? 'modal-flush-body' : 'px-6 py-5'}>
         {@render children?.()}
       </div>
       {#if footer}
@@ -179,6 +184,16 @@
 {/if}
 
 <style>
+  .modal-flush {
+    display: flex;
+    max-height: calc(100dvh - 5rem);
+    flex-direction: column;
+  }
+  .modal-flush-body {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+  }
   @media (max-width: 640px) {
     .modal-mobile-backdrop {
       padding: 0;
@@ -193,6 +208,14 @@
     .modal-mobile-fullscreen > div:nth-child(2) {
       flex: 1 1 auto;
       overflow-y: auto;
+    }
+    .modal-mobile-fullscreen > div:nth-child(3) {
+      padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+      border-radius: 0;
+    }
+    .modal-flush > div:nth-child(1),
+    .modal-flush > div:nth-child(3) {
+      padding-inline: 1rem;
     }
   }
 </style>

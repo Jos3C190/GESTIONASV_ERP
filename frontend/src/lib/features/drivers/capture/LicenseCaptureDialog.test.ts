@@ -93,6 +93,7 @@ describe('LicenseCaptureDialog', () => {
     apiMock.getCapture.mockResolvedValue(capture());
     apiMock.startCaptureUpload.mockResolvedValue({ upload_url: 'u' });
     apiMock.capturePreview.mockResolvedValue({ url: 'http://storage/foto', expires_at: '' });
+    apiMock.cancelCapture.mockResolvedValue(undefined);
     uploadDirect.mockResolvedValue(undefined);
     URL.createObjectURL = vi.fn(() => 'blob:foto');
     URL.revokeObjectURL = vi.fn();
@@ -208,6 +209,28 @@ describe('LicenseCaptureDialog', () => {
 
     expect(await screen.findByRole('button', { name: 'Confirmar licencia' })).toBeInTheDocument();
     expect(apiMock.startCaptureUpload).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks before discarding photos and says why confirming is blocked', async () => {
+    await reachReview({ status: 'ready' });
+
+    expect(await screen.findByText('Todo listo para confirmar.')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Descartar captura' }));
+    expect(apiMock.cancelCapture).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Conservar' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Descartar captura' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Sí, descartar' }));
+
+    expect(apiMock.cancelCapture).toHaveBeenCalledWith('driver-1', 'capture-1');
+  });
+
+  it('marks the current step for assistive technology', async () => {
+    render(LicenseCaptureDialog, { open: true, driver, onconfirmed: vi.fn() });
+
+    await screen.findByText(/Carga el frente/);
+
+    expect(screen.getByText('Frente', { selector: 'li' })).toHaveAttribute('aria-current', 'step');
   });
 
   it('does not offer confirmation until both photos are in', async () => {
