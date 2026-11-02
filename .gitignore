@@ -71,6 +71,7 @@ reports/*-report.html
 backend/uploads/
 backups/documents/
 object-storage/backups/
+output/vlm-fixtures/
 
 # ===== Database dumps =====
 *.dump
