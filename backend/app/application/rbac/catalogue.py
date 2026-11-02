@@ -235,6 +235,11 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("drivers:restore", "Restaurar conductores", "drivers"),
     PermissionSpec("drivers:assign", "Asignar conductores a vehículos", "drivers"),
     PermissionSpec("drivers:documents", "Gestionar licencias de conducir", "drivers"),
+    PermissionSpec(
+        "drivers:license_override",
+        "Confirmar licencias que no coinciden con el empleado",
+        "drivers",
+    ),
     # --- tracking ---
     PermissionSpec("tracking:read", "Consultar el seguimiento GPS", "tracking"),
     PermissionSpec(

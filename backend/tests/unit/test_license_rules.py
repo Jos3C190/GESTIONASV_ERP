@@ -136,6 +136,7 @@ def test_valid_license_has_no_issues_and_returns_parsed_values() -> None:
         ({"expires": "2028"}, "expiry_invalid"),
         ({"expires": None}, "expiry_invalid"),
         ({"number": " "}, "number_missing"),
+        ({"issued": "25.02.2029"}, "issued_after_expiry"),
         ({"surnames": None, "given_names": None}, "name_missing"),
     ],
 )
@@ -234,11 +235,10 @@ def test_bad_check_digit_warns_without_blocking() -> None:
         ({"dui": "123456784"}, "dui_format"),
         ({"number": "12345"}, "number_format"),
         ({"issued": "2023-02-25"}, "issued_invalid"),
-        ({"issued": "25.02.2029"}, "issued_after_expiry"),
         ({"birth": "1990"}, "birth_invalid"),
         ({"birth": "21.05.1990"}, "birth_mismatch"),
         ({"control_number": "X-1"}, "control_format"),
-        ({"expires": "10-2021"}, "license_expired"),
+        ({"expires": "10-2021", "issued": "25.02.2016"}, "license_expired"),
     ],
 )
 def test_soft_problems_only_warn(changes: dict[str, str | None], code: str) -> None:

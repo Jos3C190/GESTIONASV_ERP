@@ -714,6 +714,13 @@ class DocumentService:
         document.object_deleted_at = datetime.now(UTC)
         await self._repository.save(document)
 
+    async def discard(self, company_id: uuid.UUID, document_id: uuid.UUID) -> None:
+        """Drop an asset that never got a record, such as a retaken capture photo."""
+        document = await self._repository.get(document_id)
+        if document is None or document.company_id != company_id:
+            return
+        await self._reject_and_delete(document, "document_discarded")
+
     async def _validate_object_info(self, document: DocumentAsset, info: StoredObjectInfo) -> None:
         if (
             info.size_bytes != document.size_bytes

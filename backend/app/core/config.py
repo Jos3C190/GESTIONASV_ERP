@@ -87,6 +87,24 @@ class Settings(BaseSettings):
     OCR_STALE_MINUTES: int = Field(default=20, ge=5, le=1440)
     OCR_RECONCILE_SECONDS: int = Field(default=15, ge=5, le=60)
 
+    # --- Guided document capture / vision model ---
+    LICENSE_CAPTURE_ENABLED: bool = False
+    LICENSE_CAPTURE_RETENTION_HOURS: int = Field(default=24, ge=1, le=168)
+    VLM_ENABLED: bool = False
+    VLM_SERVER_BIN: str = "/app/llama-server"
+    VLM_MODEL_DIR: str = "/models"
+    VLM_MODEL_FILE: str = "hyocr-f16.gguf"
+    VLM_MMPROJ_FILE: str = "mmproj-hyocr-f16.gguf"
+    VLM_PORT: int = Field(default=18080, ge=1024, le=65535)
+    VLM_IDLE_SECONDS: int = Field(default=300, ge=30, le=86400)
+    VLM_STARTUP_TIMEOUT_SECONDS: int = Field(default=90, ge=5, le=600)
+    VLM_INFERENCE_TIMEOUT_SECONDS: int = Field(default=45, ge=5, le=300)
+    VLM_MAX_EDGE: int = Field(default=1280, ge=640, le=2048)
+    VLM_MAX_ATTEMPTS: int = Field(default=3, ge=1, le=10)
+    VLM_MIN_FREE_VRAM_MIB: int = Field(default=3200, ge=0, le=64000)
+    VLM_RECONCILE_SECONDS: int = Field(default=10, ge=5, le=60)
+    VLM_STALE_SECONDS: int = Field(default=300, ge=60, le=3600)
+
     # --- Media / Cloudinary ---
     UPLOADS_DIR: str = "/app/uploads"
     CLOUDINARY_CLOUD_NAME: str | None = None
@@ -218,6 +236,10 @@ class Settings(BaseSettings):
             raise ValueError("REDIS_URL es obligatorio cuando REDIS_ENABLED=true.")
         if self.OCR_ENABLED and not self.REDIS_ENABLED:
             raise ValueError("OCR_ENABLED requiere REDIS_ENABLED=true.")
+        if self.LICENSE_CAPTURE_ENABLED and not self.OBJECT_STORAGE_ENABLED:
+            raise ValueError("LICENSE_CAPTURE_ENABLED requiere OBJECT_STORAGE_ENABLED=true.")
+        if self.VLM_ENABLED and not (self.REDIS_ENABLED and self.LICENSE_CAPTURE_ENABLED):
+            raise ValueError("VLM_ENABLED requiere REDIS_ENABLED y LICENSE_CAPTURE_ENABLED.")
         if self.OBSERVABILITY_ENABLED and not self.OTEL_EXPORTER_OTLP_ENDPOINT:
             raise ValueError(
                 "OTEL_EXPORTER_OTLP_ENDPOINT es obligatorio cuando OBSERVABILITY_ENABLED=true."

@@ -14,6 +14,7 @@ from app.infrastructure.models.catalog import (
     UnitModel,
 )
 from app.infrastructure.models.document import DocumentAssetModel
+from app.infrastructure.models.document_capture import DocumentCaptureModel
 from app.infrastructure.models.document_derivative import DocumentDerivativeModel
 from app.infrastructure.models.document_general_entry import (
     DocumentGeneralDeletionBatchModel,
@@ -209,6 +210,7 @@ __all__: list[str] = [
     "DepartmentBranchAssignment",
     "District",
     "DocumentAssetModel",
+    "DocumentCaptureModel",
     "DocumentCategoryModel",
     "DocumentDerivativeModel",
     "DocumentGeneralDeletionBatchModel",

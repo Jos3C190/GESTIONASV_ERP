@@ -15,6 +15,7 @@ from app.core.logging import configure_logging, get_logger
 from app.infrastructure.db.session import session_scope
 from app.infrastructure.models.audit import AuditLog
 from app.infrastructure.models.document import DocumentAssetModel
+from app.infrastructure.models.document_capture import OPEN_CAPTURE_STATUSES, DocumentCaptureModel
 from app.infrastructure.models.document_derivative import DocumentDerivativeModel
 from app.infrastructure.models.document_general_import import (
     DocumentGeneralImportItemModel,
@@ -106,6 +107,39 @@ async def _expire_imports(session: AsyncSession, now: datetime) -> int:
     return len(rows)
 
 
+async def _expire_captures(session: AsyncSession, now: datetime) -> None:
+    """A capture never confirmed expires whole: its photos hold personal data.
+
+    Rejecting them leaves the objects to the regular purge.
+    """
+    captures = (
+        (
+            await session.execute(
+                select(DocumentCaptureModel)
+                .where(
+                    DocumentCaptureModel.status.in_(OPEN_CAPTURE_STATUSES),
+                    DocumentCaptureModel.expires_at < now,
+                )
+                .with_for_update(skip_locked=True)
+                .limit(100)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for capture in captures:
+        photos = [item for item in (capture.front_document_id, capture.back_document_id) if item]
+        if photos:
+            await session.execute(
+                update(DocumentAssetModel)
+                .where(DocumentAssetModel.id.in_(photos))
+                .values(status="rejected", failure_code="license_capture_expired")
+            )
+        capture.status = "expired"
+        capture.extracted = None
+    await session.flush()
+
+
 async def run_once() -> None:
     started = asyncio.get_running_loop().time()
     result = "ok"
@@ -169,6 +203,8 @@ async def _run_once_impl() -> None:
                 )
             ),
         )
+
+        await _expire_captures(session, now)
 
         pending_before = now - timedelta(hours=settings.DOCUMENT_PENDING_RETENTION_HOURS)
         quarantine_before = now - timedelta(days=settings.DOCUMENT_QUARANTINE_RETENTION_DAYS)

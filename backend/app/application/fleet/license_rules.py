@@ -248,7 +248,7 @@ def _check_back(
         issues.append(
             LicenseIssue(
                 "issued_after_expiry",
-                "warning",
+                "error",
                 "issued",
                 "La expedición debe ser anterior al vencimiento.",
             )
@@ -280,6 +280,13 @@ def _check_back(
             )
         )
     return issues
+
+
+def sides_look_swapped(fields: LicenseFields) -> bool:
+    """Each side's codes have distinct formats, so finding one on the other side gives it away."""
+    control_on_front = _CONTROL_PATTERN.fullmatch(_clean(fields.number)) is not None
+    number_on_back = _NUMBER_PATTERN.fullmatch(_clean(fields.control_number)) is not None
+    return control_on_front or number_on_back
 
 
 def check_license(

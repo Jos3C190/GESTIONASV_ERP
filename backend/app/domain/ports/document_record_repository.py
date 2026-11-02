@@ -17,6 +17,18 @@ class DocumentRecordRepository(Protocol):
 
     async def save(self, record: DocumentRecord) -> DocumentRecord: ...
 
+    async def current_for_owner(
+        self,
+        company_id: uuid.UUID,
+        *,
+        module: str,
+        owner_type: str,
+        owner_id: uuid.UUID,
+        category_id: uuid.UUID,
+    ) -> Sequence[DocumentRecord]: ...
+
+    async def retire(self, document_ids: Sequence[uuid.UUID], *, actor_id: uuid.UUID) -> None: ...
+
     async def list(
         self,
         company_id: uuid.UUID,
