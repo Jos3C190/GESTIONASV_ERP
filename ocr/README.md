@@ -26,8 +26,9 @@ En despliegues externos, `REDIS_ENABLED=false` y `OCR_ENABLED=false` hasta provi
 ## Lectura de licencias con el modelo de visión
 
 Es un flujo aparte del OCR de PDF: `vlm-worker` propone los datos de la licencia y
-una persona los confirma. El modelo solo ocupa VRAM mientras hay trabajo. Sin él, la
-captura sigue funcionando a mano.
+una persona los confirma. El modelo solo ocupa VRAM mientras hay trabajo. Es la única vía
+para registrar una licencia: las rutas de documentos de Conductores y RR. HH. rechazan esas
+categorías. Sin el modelo, la captura sigue funcionando a mano, con las mismas validaciones.
 
 ### Preparar el modelo (solo una vez)
 
@@ -40,7 +41,7 @@ captura sigue funcionando a mano.
 
 ### Encender
 
-En `.env`, pon `LICENSE_CAPTURE_ENABLED=true` y `VLM_ENABLED=true`, y luego:
+`VLM_ENABLED` viene activo en el entorno local. Basta con levantar el perfil:
 
 ```bash
 docker compose --profile vlm up -d --build vlm-worker backend

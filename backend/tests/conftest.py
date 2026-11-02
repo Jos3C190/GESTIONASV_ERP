@@ -24,7 +24,6 @@ os.environ["OBSERVABILITY_ENABLED"] = "false"
 # E2E clients must not share that durable rate-limit state across test cases.
 os.environ["REDIS_ENABLED"] = "false"
 os.environ["OCR_ENABLED"] = "false"
-os.environ["LICENSE_CAPTURE_ENABLED"] = "false"
 os.environ["VLM_ENABLED"] = "false"
 TEST_DATABASE_URL = os.environ.get(
     "DATABASE_URL_TEST",

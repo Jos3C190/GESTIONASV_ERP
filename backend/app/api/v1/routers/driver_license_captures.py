@@ -59,7 +59,7 @@ _MANAGE = [Depends(require_permission("drivers:documents"))]
 
 
 def _enabled() -> None:
-    if not settings.LICENSE_CAPTURE_ENABLED:
+    if not settings.OBJECT_STORAGE_ENABLED:
         raise NotFoundError("Función no disponible.", code="license_capture_disabled")
 
 
@@ -130,8 +130,8 @@ async def _driver(
 )
 async def capabilities() -> LicenseCaptureCapabilitiesOut:
     return LicenseCaptureCapabilitiesOut(
-        enabled=settings.LICENSE_CAPTURE_ENABLED,
-        extraction_available=settings.LICENSE_CAPTURE_ENABLED and await worker_available(),
+        enabled=settings.OBJECT_STORAGE_ENABLED,
+        extraction_available=settings.OBJECT_STORAGE_ENABLED and await worker_available(),
     )
 
 

@@ -88,7 +88,6 @@ class Settings(BaseSettings):
     OCR_RECONCILE_SECONDS: int = Field(default=15, ge=5, le=60)
 
     # --- Guided document capture / vision model ---
-    LICENSE_CAPTURE_ENABLED: bool = False
     LICENSE_CAPTURE_RETENTION_HOURS: int = Field(default=24, ge=1, le=168)
     VLM_ENABLED: bool = False
     VLM_SERVER_BIN: str = "/app/llama-server"
@@ -236,10 +235,8 @@ class Settings(BaseSettings):
             raise ValueError("REDIS_URL es obligatorio cuando REDIS_ENABLED=true.")
         if self.OCR_ENABLED and not self.REDIS_ENABLED:
             raise ValueError("OCR_ENABLED requiere REDIS_ENABLED=true.")
-        if self.LICENSE_CAPTURE_ENABLED and not self.OBJECT_STORAGE_ENABLED:
-            raise ValueError("LICENSE_CAPTURE_ENABLED requiere OBJECT_STORAGE_ENABLED=true.")
-        if self.VLM_ENABLED and not (self.REDIS_ENABLED and self.LICENSE_CAPTURE_ENABLED):
-            raise ValueError("VLM_ENABLED requiere REDIS_ENABLED y LICENSE_CAPTURE_ENABLED.")
+        if self.VLM_ENABLED and not (self.REDIS_ENABLED and self.OBJECT_STORAGE_ENABLED):
+            raise ValueError("VLM_ENABLED requiere REDIS_ENABLED y OBJECT_STORAGE_ENABLED.")
         if self.OBSERVABILITY_ENABLED and not self.OTEL_EXPORTER_OTLP_ENDPOINT:
             raise ValueError(
                 "OTEL_EXPORTER_OTLP_ENDPOINT es obligatorio cuando OBSERVABILITY_ENABLED=true."

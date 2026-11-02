@@ -254,7 +254,8 @@
       <OwnedDocumentsPanel
         owner={driversApi.documents(driver.id)}
         title="Licencia de conducir"
-        description="Escaneo de la licencia con su número y vencimiento. Se guarda en el expediente del empleado y una licencia vencida impide conducir."
+        description="Licencia registrada con la captura guiada. Se guarda en el expediente del empleado y una licencia vencida impide conducir."
+        readOnly
         permissionCodes={{
           read: 'drivers:read',
           upload: 'drivers:documents',

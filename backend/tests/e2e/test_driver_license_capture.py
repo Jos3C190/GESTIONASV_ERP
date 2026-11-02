@@ -28,7 +28,6 @@ FUTURE = datetime.now(UTC).year + 3
 
 @pytest.fixture
 def storage(e2e_client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
-    monkeypatch.setattr(settings, "LICENSE_CAPTURE_ENABLED", True)
     return _enable_fake_services(e2e_client, monkeypatch, E2EScanner(ScanResult(clean=True)))
 
 
@@ -99,8 +98,10 @@ def _values(employee: dict[str, Any], **changes: Any) -> dict[str, Any]:
 NO_DUI_ON_FILE = ["dui_not_registered"]
 
 
-async def test_feature_is_hidden_until_enabled(e2e_client: Any, monkeypatch: Any) -> None:
-    monkeypatch.setattr(settings, "LICENSE_CAPTURE_ENABLED", False)
+async def test_capture_is_unavailable_without_document_storage(
+    e2e_client: Any, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(settings, "OBJECT_STORAGE_ENABLED", False)
     admin = await _admin(e2e_client)
     driver, _ = await _driver(e2e_client, admin)
 
@@ -348,3 +349,59 @@ async def test_user_without_permission_cannot_capture_or_see_the_back(
 
     assert opened.status_code == 403
     assert back.status_code == 403
+
+
+def _plain_upload(category_id: str) -> dict[str, Any]:
+    return {
+        "file_name": "licencia.jpg",
+        "content_type": "image/jpeg",
+        "size_bytes": len(JPEG),
+        "checksum_sha256": hashlib.sha256(JPEG).hexdigest(),
+        "category_id": category_id,
+        "expires_on": f"{FUTURE}-02-28",
+    }
+
+
+async def test_capture_is_the_only_way_to_register_a_license(e2e_client: Any, storage: Any) -> None:
+    admin = await _admin(e2e_client)
+    driver, employee = await _driver(e2e_client, admin)
+    documents = f"/api/v1/drivers/{driver['id']}/documents"
+    hr_documents = f"/api/v1/employees/{employee['id']}/documents"
+    categories = await e2e_client.get(f"{documents}/categories", headers=admin)
+    category_id = categories.json()[0]["id"]
+
+    # Ni desde Conductores ni desde el expediente de RR. HH.
+    for path in (documents, hr_documents):
+        refused = await e2e_client.post(
+            f"{path}/uploads", headers=admin, json=_plain_upload(category_id)
+        )
+        assert refused.status_code == 409, f"{path}: {refused.text}"
+        assert refused.json()["code"] == "document_category_capture_only"
+
+    capture_id = await _capture_with_photos(e2e_client, storage, admin, driver["id"])
+    confirmed = await e2e_client.post(
+        f"/api/v1/drivers/{driver['id']}/license-captures/{capture_id}/confirm",
+        headers=admin,
+        json={"values": _values(employee), "acknowledged_warnings": NO_DUI_ON_FILE},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    document_id = confirmed.json()["license"]["document_id"]
+
+    # Tampoco se puede cambiar después: una nueva versión o una fecha editada no pasarían
+    # por las validaciones.
+    replaced = await e2e_client.post(
+        f"{documents}/{document_id}/replace", headers=admin, json=_plain_upload(category_id)
+    )
+    edited = await e2e_client.patch(
+        f"{documents}/{document_id}", headers=admin, json={"expires_on": f"{FUTURE + 9}-01-01"}
+    )
+    assert replaced.status_code == 409, replaced.text
+    assert replaced.json()["code"] == "document_category_capture_only"
+    assert edited.status_code == 409, edited.text
+    assert edited.json()["code"] == "document_category_capture_only"
+
+    # Se sigue pudiendo consultar y descargar.
+    listed = await e2e_client.get(documents, headers=admin)
+    download = await e2e_client.post(f"{documents}/{document_id}/download-url", headers=admin)
+    assert [item["id"] for item in listed.json()["items"]] == [document_id]
+    assert download.status_code == 200, download.text

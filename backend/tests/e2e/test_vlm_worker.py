@@ -104,7 +104,6 @@ def queue(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 @pytest.fixture
 def storage(e2e_client: Any, monkeypatch: pytest.MonkeyPatch, queue: list[str]) -> Any:
-    monkeypatch.setattr(settings, "LICENSE_CAPTURE_ENABLED", True)
     monkeypatch.setattr(settings, "VLM_ENABLED", True)
     return _enable_fake_services(e2e_client, monkeypatch, E2EScanner(ScanResult(clean=True)))
 

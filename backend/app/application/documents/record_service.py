@@ -89,6 +89,18 @@ def _clean_tags(tags: tuple[str, ...]) -> list[str]:
 #: Dueño por defecto de cada módulo con expedientes por entidad.
 _OWNER_TYPES = {"employees": "employee", "fleet": "vehicle"}
 
+#: Solo se crean al confirmar una captura guiada: de ellas depende si alguien puede
+#: conducir, y cualquier otra vía se saltaría las validaciones de esa captura.
+CAPTURE_ONLY_CATEGORY_CODES = frozenset({"driver_license", "driver_license_back"})
+
+
+def _require_not_capture_only(category: DocumentCategory) -> None:
+    if category.code in CAPTURE_ONLY_CATEGORY_CODES:
+        raise ConflictError(
+            "La licencia de conducir solo se registra con la captura guiada de Conductores.",
+            code="document_category_capture_only",
+        )
+
 
 class DocumentRecordService:
     def __init__(
@@ -276,6 +288,7 @@ class DocumentRecordService:
                 "La categoría no está disponible en este módulo.",
                 code="document_category_invalid",
             )
+        _require_not_capture_only(category)
         self._require_expiry(category, metadata.expires_on)
         ticket = await self._documents.initiate(data)
         record = await self._record_from_asset(
@@ -498,6 +511,12 @@ class DocumentRecordService:
             # active so deactivated entries cannot be reused for new data.
             allow_inactive=requested_category_id in (None, record.category_id),
         )
+        _require_not_capture_only(category)
+        current_category = await self._records.get_category(
+            record.category_id, company_id, include_inactive=True
+        )
+        if current_category is not None:
+            _require_not_capture_only(current_category)
         values = self._metadata(metadata, filename=record.asset.original_filename)
         self._require_expiry(category, values["expires_on"])
         for key, value in values.items():
@@ -570,6 +589,12 @@ class DocumentRecordService:
             metadata.category_id,
             allow_inactive=metadata.category_id in (None, previous.category_id),
         )
+        _require_not_capture_only(category)
+        previous_category = await self._records.get_category(
+            previous.category_id, company_id, include_inactive=True
+        )
+        if previous_category is not None:
+            _require_not_capture_only(previous_category)
         ticket = await self._documents.initiate(data)
         record = await self._record_from_asset(
             ticket.document,

@@ -9,6 +9,7 @@
   import FormField from '$lib/components/ui/FormField.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import type { OwnedDocumentsApi } from '$lib/api/owned-documents';
+  import { CAPTURE_ONLY_CATEGORY_CODES } from '$lib/features/documents/document-upload';
 
   interface Props {
     document: DocumentRecordOut;
@@ -19,7 +20,20 @@
     onsaved?: (document: DocumentRecordOut) => void;
   }
 
-  let { document, categories, employeeId, owner, onclose, onsaved }: Props = $props();
+  let {
+    document,
+    categories: allCategories,
+    employeeId,
+    owner,
+    onclose,
+    onsaved
+  }: Props = $props();
+  const categories = $derived(
+    allCategories.filter(
+      (category) =>
+        category.id === document.category_id || !CAPTURE_ONLY_CATEGORY_CODES.has(category.code)
+    )
+  );
   let categoryId = $state('');
   let title = $state('');
   let description = $state('');
@@ -71,8 +85,8 @@
       const updated = owner
         ? await owner.update(document.id, payload)
         : employeeId
-        ? await api.documents.updateEmployee(employeeId, document.id, payload)
-        : await api.documents.update(document.id, payload);
+          ? await api.documents.updateEmployee(employeeId, document.id, payload)
+          : await api.documents.update(document.id, payload);
       onsaved?.(updated);
       onclose();
     } catch (err) {

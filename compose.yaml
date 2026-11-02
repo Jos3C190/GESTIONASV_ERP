@@ -233,8 +233,8 @@ services:
       # Herramientas de simulación de Seguimiento (nunca se activan en producción).
       TRACKING_SIMULATOR_ENABLED: ${TRACKING_SIMULATOR_ENABLED:-false}
       TRACCAR_OSMAND_URL: ${TRACCAR_OSMAND_URL:-}
-      LICENSE_CAPTURE_ENABLED: ${LICENSE_CAPTURE_ENABLED:-false}
-      VLM_ENABLED: ${VLM_ENABLED:-false}
+      # Sin el perfil `vlm` la captura sigue disponible y los datos se escriben a mano.
+      VLM_ENABLED: ${VLM_ENABLED:-true}
       <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
@@ -318,7 +318,6 @@ services:
       DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      LICENSE_CAPTURE_ENABLED: "true"
       VLM_ENABLED: "true"
       VLM_IDLE_SECONDS: ${VLM_IDLE_SECONDS:-300}
       VLM_MIN_FREE_VRAM_MIB: ${VLM_MIN_FREE_VRAM_MIB:-3200}

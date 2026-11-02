@@ -174,12 +174,20 @@ describe('drivers workspace', () => {
     expect(screen.queryByRole('button', { name: 'Agregar documento' })).not.toBeInTheDocument();
   });
 
-  it('allows document upload with drivers:documents', async () => {
+  it('offers only the guided capture to register a license', async () => {
     permissionMock.codes.add('drivers:documents');
+    apiMock.captureCapabilities.mockResolvedValueOnce({
+      enabled: true,
+      extraction_available: true
+    });
     render(DriversWorkspace);
     await screen.findByRole('link', { name: 'Carlos Martínez' });
+
+    expect(await screen.findByRole('button', { name: /con fotos/ })).toBeVisible();
+
     await fireEvent.click(screen.getByRole('button', { name: 'Documentos' }));
-    expect(await screen.findByRole('button', { name: 'Agregar documento' })).toBeVisible();
+    await screen.findByText(/Consulta la licencia/);
+    expect(screen.queryByRole('button', { name: 'Agregar documento' })).toBeNull();
   });
 
   it('filters administrative status on the server and debounces search', async () => {
