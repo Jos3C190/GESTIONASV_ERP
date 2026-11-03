@@ -391,6 +391,7 @@ async def create_vehicle(
             year=body.year,
             color=body.color,
             capacity_kg=body.capacity_kg,
+            tank_liters=body.tank_liters,
             fuel_type=fuel_type,
             odometer_km=body.odometer_km,
             notes=body.notes,

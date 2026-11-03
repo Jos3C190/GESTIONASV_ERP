@@ -32,6 +32,7 @@
   let color = $state('');
   let capacity = $state('');
   let fuelType = $state<FuelType>('diesel');
+  let tank = $state('');
   let odometer = $state('0');
   let branchId = $state(branch.id ?? branch.branches[0]?.id ?? '');
   let notes = $state('');
@@ -53,6 +54,7 @@
     color = vehicle.color ?? '';
     capacity = vehicle.capacity_kg ? String(Number(vehicle.capacity_kg)) : '';
     fuelType = vehicle.fuel_type;
+    tank = vehicle.tank_liters ? String(Number(vehicle.tank_liters)) : '';
     branchId = vehicle.branch_id;
     notes = vehicle.notes ?? '';
   });
@@ -125,6 +127,7 @@
       color: color.trim() || null,
       capacity_kg: capacity ? String(Number(capacity)) : null,
       fuel_type: fuelType,
+      tank_liters: tank && currentType?.fuel_applicable !== false ? String(Number(tank)) : null,
       notes: notes.trim() || null
     };
     try {
@@ -267,6 +270,14 @@
             bind:value={fuelType}
             options={fuelOptions}
             required
+          />
+          <FormField
+            id="vehicle-tank"
+            label="Tanque (litros, opcional)"
+            type="number"
+            bind:value={tank}
+            min="1"
+            step="0.01"
           />
         {/if}
         {#if mode === 'create'}

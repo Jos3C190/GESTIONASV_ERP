@@ -150,6 +150,7 @@ async def build_vehicle_views(
                 "year": vehicle.year,
                 "color": vehicle.color,
                 "capacity_kg": vehicle.capacity_kg,
+                "tank_liters": vehicle.tank_liters,
                 "fuel_type": vehicle.fuel_type,
                 "odometer_km": odometer,
                 "status": vehicle.status,

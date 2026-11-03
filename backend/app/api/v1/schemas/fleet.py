@@ -160,6 +160,7 @@ class FleetVehicleOut(BaseModel):
     year: int
     color: str | None
     capacity_kg: Decimal | None
+    tank_liters: Decimal | None
     fuel_type: FuelType
     odometer_km: Decimal
     status: VehicleStatus
@@ -204,6 +205,7 @@ class _VehicleFields(BaseModel):
     capacity_kg: Decimal | None = Field(
         None, gt=0, le=Decimal("200000"), max_digits=10, decimal_places=2
     )
+    tank_liters: Decimal | None = Field(None, gt=0, le=Decimal("100000"), decimal_places=2)
     fuel_type: FuelType = "diesel"
     notes: str | None = Field(None, max_length=2000)
 
@@ -251,6 +253,7 @@ class FleetVehicleUpdate(BaseModel):
     capacity_kg: Decimal | None = Field(
         None, gt=0, le=Decimal("200000"), max_digits=10, decimal_places=2
     )
+    tank_liters: Decimal | None = Field(None, gt=0, le=Decimal("100000"), decimal_places=2)
     fuel_type: FuelType | None = None
     notes: str | None = Field(None, max_length=2000)
 
@@ -301,13 +304,17 @@ class OdometerReadingOut(BaseModel):
     source: str
     notes: str | None
     recorded_by_name: str | None
+    voided_at: datetime | None = None
+    voided_by_name: str | None = None
+    void_reason: str | None = None
 
 
 class MaintenancePlanIn(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     interval_km: int | None = Field(None, gt=0, le=1_000_000)
     interval_days: int | None = Field(None, gt=0, le=3650)
-    last_service_km: Decimal | None = Field(None, ge=0, decimal_places=1)
+    # Negativo solo si el servicio fue antes de un cambio de tablero; lo valida el router.
+    last_service_km: Decimal | None = Field(None, decimal_places=1)
     last_service_on: date | None = None
 
 
@@ -372,6 +379,10 @@ class FuelLogIn(BaseModel):
     driver_id: uuid.UUID | None = None
 
 
+class FuelCorrectionIn(FuelLogIn):
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class FuelLogOut(BaseModel):
     id: uuid.UUID
     filled_at: datetime
@@ -384,6 +395,24 @@ class FuelLogOut(BaseModel):
     driver_id: uuid.UUID | None
     driver_name: str | None
     km_per_liter: Decimal | None
+    voided_at: datetime | None = None
+    voided_by_name: str | None = None
+    void_reason: str | None = None
+
+
+class VoidRecordIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class MeterReplacementIn(BaseModel):
+    reading_km: Decimal = Field(ge=0, le=Decimal("9999999"), decimal_places=1)
+    read_at: AwareDatetime | None = None
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class OdometerTotalOut(BaseModel):
+    total: Decimal
+    replacements: int
 
 
 class FuelStatsOut(BaseModel):

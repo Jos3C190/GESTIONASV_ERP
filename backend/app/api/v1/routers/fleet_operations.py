@@ -9,6 +9,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import func, select
+from sqlalchemy.orm import aliased
 
 from app.api.v1.company_access import effective_company_id
 from app.api.v1.deps import (
@@ -111,16 +112,34 @@ async def record_odometer(
     """Store a reading after checking it against the vehicle's history."""
     if in_future(read_at, _now()):
         raise ValidationError("La fecha de la lectura no puede ser futura.", code="odometer_future")
-    minimum = await session.scalar(
-        select(func.max(OdometerReadingModel.reading_km)).where(
-            OdometerReadingModel.vehicle_id == vehicle.id, OdometerReadingModel.read_at <= read_at
+    # Un cambio de tablero reinicia la cuenta: solo se compara con las lecturas de su tramo.
+    valid = (
+        OdometerReadingModel.vehicle_id == vehicle.id,
+        OdometerReadingModel.voided_at.is_(None),
+    )
+    replacement = (*valid, OdometerReadingModel.source == "meter_replacement")
+    segment_start = await session.scalar(
+        select(func.max(OdometerReadingModel.read_at)).where(
+            *replacement, OdometerReadingModel.read_at <= read_at
         )
     )
-    maximum = await session.scalar(
-        select(func.min(OdometerReadingModel.reading_km)).where(
-            OdometerReadingModel.vehicle_id == vehicle.id, OdometerReadingModel.read_at > read_at
+    segment_end = await session.scalar(
+        select(func.min(OdometerReadingModel.read_at)).where(
+            *replacement, OdometerReadingModel.read_at > read_at
         )
     )
+    earlier = select(func.max(OdometerReadingModel.reading_km)).where(
+        *valid, OdometerReadingModel.read_at <= read_at
+    )
+    later = select(func.min(OdometerReadingModel.reading_km)).where(
+        *valid, OdometerReadingModel.read_at > read_at
+    )
+    if segment_start is not None:
+        earlier = earlier.where(OdometerReadingModel.read_at >= segment_start)
+    if segment_end is not None:
+        later = later.where(OdometerReadingModel.read_at < segment_end)
+    minimum = await session.scalar(earlier)
+    maximum = await session.scalar(later)
     error = odometer_error(Decimal(reading_km), OdometerBounds(minimum, maximum))
     if error:
         raise ConflictError(error, code="odometer_out_of_order")
@@ -135,7 +154,8 @@ async def record_odometer(
     )
     session.add(reading)
     await session.flush()
-    vehicle.odometer_km = max(Decimal(vehicle.odometer_km), Decimal(reading_km))
+    if segment_end is None:
+        vehicle.odometer_km = max(Decimal(vehicle.odometer_km), Decimal(reading_km))
     await session.flush()
     return reading
 
@@ -154,9 +174,11 @@ async def list_odometer(
 ) -> list[OdometerReadingOut]:
     _, scope, repo = await _context(request, session, current, checker)
     vehicle = await scoped_vehicle(repo, scope, vehicle_id)
+    voider = aliased(User)
     rows = await session.execute(
-        select(OdometerReadingModel, User.username)
+        select(OdometerReadingModel, User.username, voider.username)
         .outerjoin(User, User.id == OdometerReadingModel.recorded_by)
+        .outerjoin(voider, voider.id == OdometerReadingModel.voided_by)
         .where(OdometerReadingModel.vehicle_id == vehicle.id)
         .order_by(OdometerReadingModel.read_at.desc())
         .limit(100)
@@ -169,8 +191,11 @@ async def list_odometer(
             source=reading.source,
             notes=reading.notes,
             recorded_by_name=username,
+            voided_at=reading.voided_at,
+            voided_by_name=voided_by,
+            void_reason=reading.void_reason,
         )
-        for reading, username in rows.all()
+        for reading, username, voided_by in rows.all()
     ]
 
 
@@ -257,11 +282,22 @@ async def _plan(
     return plan
 
 
-def _validate_plan(body: MaintenancePlanIn, vehicle: FleetVehicleModel) -> None:
+def _validate_plan(
+    body: MaintenancePlanIn, vehicle: FleetVehicleModel, kept_km: Decimal | None = None
+) -> None:
     if body.interval_km is None and body.interval_days is None:
         raise ValidationError(
             "Defina el intervalo en kilómetros, en días o en ambos.",
             code="maintenance_interval_required",
+        )
+    if (
+        body.last_service_km is not None
+        and body.last_service_km < 0
+        and body.last_service_km != kept_km
+    ):
+        raise ValidationError(
+            "El último servicio no puede ser negativo.",
+            code="maintenance_last_km_invalid",
         )
     if body.last_service_km is not None and body.last_service_km > Decimal(vehicle.odometer_km):
         raise ValidationError(
@@ -372,7 +408,7 @@ async def update_plan(
     company_id, scope, repo = await _context(request, session, current, checker)
     vehicle = await scoped_vehicle(repo, scope, vehicle_id)
     plan = await _plan(session, vehicle, plan_id)
-    _validate_plan(body, vehicle)
+    _validate_plan(body, vehicle, kept_km=plan.last_service_km)
     before = _plan_state(plan)
     async with session.begin_nested():
         plan.name = body.name.strip()
@@ -722,6 +758,68 @@ async def cancel_order(
 # ------------------------------------------------------------------ fuel
 
 
+async def fuel_driver_name(
+    repo: FleetRepository,
+    company_id: uuid.UUID,
+    vehicle: FleetVehicleModel,
+    driver_id: uuid.UUID | None,
+) -> str | None:
+    if driver_id is None:
+        return None
+    row = await repo.driver_with_employee(company_id, driver_id)
+    if row is None or row[0].branch_id != vehicle.branch_id:
+        raise ValidationError(
+            "El conductor debe pertenecer a la sucursal del vehículo.",
+            code="fuel_driver_invalid",
+        )
+    return f"{row[1].first_name} {row[1].last_name}".strip()
+
+
+async def create_fuel_log(
+    session: SessionDep, vehicle: FleetVehicleModel, body: FuelLogIn, actor_id: uuid.UUID
+) -> FuelLogModel:
+    await record_odometer(
+        session,
+        vehicle,
+        reading_km=body.odometer_km,
+        read_at=body.filled_at,
+        source="fuel",
+        actor_id=actor_id,
+        notes="Carga de combustible",
+    )
+    log = FuelLogModel(
+        company_id=vehicle.company_id,
+        vehicle_id=vehicle.id,
+        driver_id=body.driver_id,
+        filled_at=body.filled_at,
+        liters=body.liters,
+        total_amount=body.total_amount,
+        odometer_km=body.odometer_km,
+        full_tank=body.full_tank,
+        station=(body.station or "").strip() or None,
+        recorded_by=actor_id,
+    )
+    session.add(log)
+    await session.flush()
+    return log
+
+
+def fuel_log_out(log: FuelLogModel, driver_name: str | None) -> FuelLogOut:
+    return FuelLogOut(
+        id=log.id,
+        filled_at=log.filled_at,
+        liters=log.liters,
+        total_amount=log.total_amount,
+        unit_price=unit_price(log.total_amount, log.liters),
+        odometer_km=log.odometer_km,
+        full_tank=log.full_tank,
+        station=log.station,
+        driver_id=log.driver_id,
+        driver_name=driver_name,
+        km_per_liter=None,
+    )
+
+
 @router.get(
     "/vehicles/{vehicle_id}/fuel-logs",
     response_model=dict[str, Any],
@@ -738,15 +836,17 @@ async def list_fuel(
     vehicle = await scoped_vehicle(repo, scope, vehicle_id)
     rows = (
         await session.execute(
-            select(FuelLogModel, Employee.first_name, Employee.last_name)
+            select(FuelLogModel, Employee.first_name, Employee.last_name, User.username)
             .outerjoin(DriverModel, DriverModel.id == FuelLogModel.driver_id)
             .outerjoin(Employee, Employee.id == DriverModel.employee_id)
+            .outerjoin(User, User.id == FuelLogModel.voided_by)
             .where(FuelLogModel.vehicle_id == vehicle.id)
             .execution_options(include_deleted=True)
             .order_by(FuelLogModel.filled_at)
         )
     ).all()
-    logs = [row[0] for row in rows]
+    # Lo anulado se muestra, pero no cuenta para gasto ni rendimiento.
+    logs = [row[0] for row in rows if row[0].voided_at is None]
     efficiency = fuel_efficiency(logs)
     items = [
         FuelLogOut(
@@ -761,8 +861,11 @@ async def list_fuel(
             driver_id=log.driver_id,
             driver_name=f"{first} {last}".strip() if first else None,
             km_per_liter=efficiency.get(log.id),
+            voided_at=log.voided_at,
+            voided_by_name=voided_by,
+            void_reason=log.void_reason,
         )
-        for log, first, last in rows
+        for log, first, last, voided_by in rows
     ]
     items.reverse()
     return {
@@ -789,39 +892,9 @@ async def add_fuel(
     company_id, scope, repo = await _context(request, session, current, checker)
     vehicle = await scoped_vehicle(repo, scope, vehicle_id, lock=True)
     _require_operable(vehicle)
-    driver_name: str | None = None
-    if body.driver_id is not None:
-        row = await repo.driver_with_employee(company_id, body.driver_id)
-        if row is None or row[0].branch_id != vehicle.branch_id:
-            raise ValidationError(
-                "El conductor debe pertenecer a la sucursal del vehículo.",
-                code="fuel_driver_invalid",
-            )
-        driver_name = f"{row[1].first_name} {row[1].last_name}".strip()
+    driver_name = await fuel_driver_name(repo, company_id, vehicle, body.driver_id)
     async with session.begin_nested():
-        await record_odometer(
-            session,
-            vehicle,
-            reading_km=body.odometer_km,
-            read_at=body.filled_at,
-            source="fuel",
-            actor_id=current.id,
-            notes="Carga de combustible",
-        )
-        log = FuelLogModel(
-            company_id=company_id,
-            vehicle_id=vehicle.id,
-            driver_id=body.driver_id,
-            filled_at=body.filled_at,
-            liters=body.liters,
-            total_amount=body.total_amount,
-            odometer_km=body.odometer_km,
-            full_tank=body.full_tank,
-            station=(body.station or "").strip() or None,
-            recorded_by=current.id,
-        )
-        session.add(log)
-        await session.flush()
+        log = await create_fuel_log(session, vehicle, body, current.id)
         await audit.record(
             action="FUEL_LOG",
             user_id=current.id,
@@ -831,19 +904,7 @@ async def add_fuel(
             resource_id=str(vehicle.id),
             after_state={"liters": str(log.liters), "amount": str(log.total_amount)},
         )
-    return FuelLogOut(
-        id=log.id,
-        filled_at=log.filled_at,
-        liters=log.liters,
-        total_amount=log.total_amount,
-        unit_price=unit_price(log.total_amount, log.liters),
-        odometer_km=log.odometer_km,
-        full_tank=log.full_tank,
-        station=log.station,
-        driver_id=log.driver_id,
-        driver_name=driver_name,
-        km_per_liter=None,
-    )
+    return fuel_log_out(log, driver_name)
 
 
 # ------------------------------------------------------------------ alerts

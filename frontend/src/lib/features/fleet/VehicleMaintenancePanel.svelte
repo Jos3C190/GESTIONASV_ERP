@@ -254,7 +254,9 @@
                   .filter(Boolean)
                   .join(' o ')}
                 · Último: {item.last_service_km
-                  ? `${formatNumber(item.last_service_km)} ${unit}`
+                  ? Number(item.last_service_km) < 0
+                    ? 'antes del cambio de tablero'
+                    : `${formatNumber(item.last_service_km)} ${unit}`
                   : '—'}{item.last_service_on ? `, ${formatDate(item.last_service_on)}` : ''}
               </small>
               <small>
@@ -405,8 +407,11 @@
           type="number"
           min="0"
           step="0.1"
+          disabled={Number(editingPlan?.last_service_km) < 0}
           bind:value={plan.last_km}
-        /></label
+        />{#if Number(editingPlan?.last_service_km) < 0}<small
+            >Fue antes del cambio de tablero. Se actualiza al completar una orden.</small
+          >{/if}</label
       >
       <label
         ><span>Fecha del último servicio</span><input

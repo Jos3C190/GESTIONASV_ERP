@@ -40,7 +40,7 @@ VEHICLE_STATUSES = ("active", "maintenance", "out_of_service", "retired")
 FUEL_TYPES = ("diesel", "gasoline", "lpg", "electric", "hybrid", "none")
 LICENSE_CLASSES = ("particular", "liviana", "pesada", "pesada_t", "motocicleta")
 DRIVER_STATUSES = ("active", "suspended", "inactive")
-ODOMETER_SOURCES = ("manual", "fuel", "maintenance", "gps")
+ODOMETER_SOURCES = ("manual", "fuel", "maintenance", "gps", "meter_replacement")
 MAINTENANCE_KINDS = ("preventive", "corrective")
 MAINTENANCE_STATUSES = ("scheduled", "in_progress", "completed", "cancelled")
 
@@ -116,6 +116,7 @@ class FleetVehicleModel(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     color: Mapped[str | None] = mapped_column(String(40))
     capacity_kg: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    tank_liters: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
     fuel_type: Mapped[str] = mapped_column(String(16), nullable=False, server_default="diesel")
     odometer_km: Mapped[Decimal] = mapped_column(Numeric(12, 1), nullable=False, server_default="0")
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
@@ -152,6 +153,7 @@ class FleetVehicleModel(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
         CheckConstraint(_in("fuel_type", FUEL_TYPES), name="ck_fleet_vehicles_fuel_type"),
         CheckConstraint("year BETWEEN 1950 AND 2100", name="ck_fleet_vehicles_year"),
         CheckConstraint("capacity_kg > 0", name="ck_fleet_vehicles_capacity"),
+        CheckConstraint("tank_liters IS NULL OR tank_liters > 0", name="ck_fleet_vehicles_tank"),
         CheckConstraint("odometer_km >= 0", name="ck_fleet_vehicles_odometer"),
         CheckConstraint(
             "(gps_device_unique_id IS NULL) = (traccar_device_id IS NULL)",
@@ -362,9 +364,12 @@ class OdometerReadingModel(UUIDPKMixin, TimestampMixin, Base):
     vehicle_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     reading_km: Mapped[Decimal] = mapped_column(Numeric(12, 1), nullable=False)
     read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    source: Mapped[str] = mapped_column(String(24), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
     recorded_by: Mapped[uuid.UUID | None] = _user_fk()
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    voided_by: Mapped[uuid.UUID | None] = _user_fk()
+    void_reason: Mapped[str | None] = mapped_column(String(500))
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -480,6 +485,9 @@ class FuelLogModel(UUIDPKMixin, TimestampMixin, Base):
         PGUUID(as_uuid=True), ForeignKey("document_records.id", ondelete="SET NULL")
     )
     recorded_by: Mapped[uuid.UUID | None] = _user_fk()
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    voided_by: Mapped[uuid.UUID | None] = _user_fk()
+    void_reason: Mapped[str | None] = mapped_column(String(500))
 
     __table_args__ = (
         ForeignKeyConstraint(

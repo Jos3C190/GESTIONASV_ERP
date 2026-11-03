@@ -29,6 +29,7 @@ function vehicle(patch: Partial<FleetVehicle> = {}): FleetVehicle {
     year: 2024,
     color: null,
     capacity_kg: '4000.00',
+    tank_liters: null,
     fuel_type: 'diesel',
     type: {
       code: 'refrigerated',

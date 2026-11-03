@@ -91,6 +91,7 @@ export interface FleetVehicle {
   year: number;
   color: string | null;
   capacity_kg: string | null;
+  tank_liters: string | null;
   fuel_type: FuelType;
   odometer_km: string;
   status: VehicleStatus;
@@ -139,6 +140,7 @@ export interface VehicleInput {
   year: number;
   color?: string | null;
   capacity_kg: string | null;
+  tank_liters?: string | null;
   fuel_type: FuelType;
   notes?: string | null;
 }
@@ -161,9 +163,12 @@ export interface OdometerReading {
   id: string;
   reading_km: string;
   read_at: string;
-  source: 'manual' | 'fuel' | 'maintenance' | 'gps';
+  source: 'manual' | 'fuel' | 'maintenance' | 'gps' | 'meter_replacement';
   notes: string | null;
   recorded_by_name: string | null;
+  voided_at?: string | null;
+  voided_by_name?: string | null;
+  void_reason?: string | null;
 }
 
 export type DueState = 'ok' | 'soon' | 'overdue' | 'unknown';
@@ -230,6 +235,9 @@ export interface FuelLog {
   driver_id: string | null;
   driver_name: string | null;
   km_per_liter: string | null;
+  voided_at?: string | null;
+  voided_by_name?: string | null;
+  void_reason?: string | null;
 }
 
 export interface FuelStats {
@@ -380,6 +388,22 @@ export const fleetApi = {
     apiFetch<FleetVehicle>(`/fleet/vehicles/${id}/gps-device`, { method: 'DELETE' }),
   alerts: (signal?: AbortSignal) =>
     apiFetch<FleetAlert[]>(`/fleet/alerts${query({ branch_id: branch.id })}`, { signal }),
+  voidReading: (id: string, readingId: string, reason: string) =>
+    apiFetch<FleetVehicle>(
+      `/fleet/vehicles/${id}/odometer/${readingId}/void`,
+      json('POST', { reason })
+    ),
+  replaceMeter: (id: string, data: { reading_km: string; reason: string }) =>
+    apiFetch<FleetVehicle>(`/fleet/vehicles/${id}/odometer/replace-meter`, json('POST', data)),
+  odometerTotal: (id: string) =>
+    apiFetch<{ total: string; replacements: number }>(`/fleet/vehicles/${id}/odometer/total`),
+  voidFuel: (id: string, logId: string, reason: string) =>
+    apiFetch<FleetVehicle>(
+      `/fleet/vehicles/${id}/fuel-logs/${logId}/void`,
+      json('POST', { reason })
+    ),
+  correctFuel: (id: string, logId: string, data: FuelLogInput & { reason: string }) =>
+    apiFetch<FuelLog>(`/fleet/vehicles/${id}/fuel-logs/${logId}`, json('PUT', data)),
   odometer: (id: string) => apiFetch<OdometerReading[]>(`/fleet/vehicles/${id}/odometer`),
   addOdometer: (id: string, data: { reading_km: string; read_at?: string; notes?: string }) =>
     apiFetch<OdometerReading>(`/fleet/vehicles/${id}/odometer`, json('POST', data)),

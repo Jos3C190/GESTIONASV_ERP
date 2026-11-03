@@ -220,6 +220,9 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("fleet:gps", "Vincular dispositivos GPS a vehículos", "fleet"),
     PermissionSpec("fleet:manage_types", "Administrar los tipos de vehículo", "fleet"),
     PermissionSpec(
+        "fleet:correct_records", "Corregir lecturas de uso y cargas de combustible", "fleet"
+    ),
+    PermissionSpec(
         "fleet:compliance_override",
         "Autorizar despachos con documentos o licencias no vigentes",
         "fleet",

@@ -65,6 +65,8 @@ export type FuelType = 'diesel' | 'gasoline' | 'lpg' | 'electric' | 'hybrid' | '
 
 export const meterShort = (unit: MeterUnit) => (unit === 'hours' ? 'h' : 'km');
 export const meterName = (unit: MeterUnit) => (unit === 'hours' ? 'Horómetro' : 'Odómetro');
+/** Un salto mayor suele ser un dedo de más: se pide confirmar, sin bloquear. */
+export const meterJumpLimit = (unit: MeterUnit) => (unit === 'hours' ? 500 : 5000);
 export const plateLabel = (plate: string | null | undefined) => plate || 'Sin placa';
 
 /** Un `type="number"` vacío llega como null al enlazarse, no como cadena vacía. */

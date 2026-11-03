@@ -36,6 +36,25 @@ def odometer_error(reading: Decimal, bounds: OdometerBounds) -> str | None:
     return None
 
 
+def total_distance(readings: Sequence[tuple[Decimal, str]]) -> Decimal:
+    """Distance over a vehicle's life: each meter's span, summed across replacements.
+
+    ``readings`` are the valid (reading, source) pairs ordered by date.
+    """
+    total = Decimal("0")
+    start: Decimal | None = None
+    last: Decimal | None = None
+    for reading, source in readings:
+        if source == "meter_replacement" or start is None:
+            if start is not None and last is not None:
+                total += last - start
+            start = reading
+        last = reading
+    if start is not None and last is not None:
+        total += last - start
+    return total
+
+
 def in_future(moment: datetime, now: datetime) -> bool:
     return (moment - now).total_seconds() > FUTURE_TOLERANCE_SECONDS
 
