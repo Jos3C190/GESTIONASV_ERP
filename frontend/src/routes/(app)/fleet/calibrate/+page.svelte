@@ -1,11 +1,11 @@
 <script lang="ts">
   import BrandedVehicle from '$lib/features/fleet/BrandedVehicle.svelte';
   import { VEHICLE_DECALS, type DecalZone, type Point } from '$lib/features/fleet/branding';
-  import { KIND_META, VEHICLE_KINDS, type VehicleKind } from '$lib/features/fleet/catalog';
+  import { BASE_IMAGE_KEYS, BASE_IMAGES, type BaseImage } from '$lib/features/fleet/catalog';
   import { company } from '$lib/stores/company.svelte';
 
-  const kinds = VEHICLE_KINDS;
-  let kind = $state<VehicleKind>('refrigerated');
+  const kinds = BASE_IMAGE_KEYS;
+  let kind = $state<BaseImage>('refrigerated');
   let logo = $state(company.active?.logo ?? '');
   let zones = $state<DecalZone[]>(structuredClone(VEHICLE_DECALS.refrigerated.zones));
   let svg = $state<SVGSVGElement>();
@@ -15,7 +15,7 @@
   const spec = $derived(VEHICLE_DECALS[kind]);
   const json = $derived(JSON.stringify(zones.map(({ id, quad }) => ({ id, quad }))));
 
-  function selectKind(next: VehicleKind) {
+  function selectKind(next: BaseImage) {
     kind = next;
     zones = structuredClone(VEHICLE_DECALS[next].zones);
   }
@@ -52,8 +52,8 @@
   </header>
 
   <div class="controls">
-    <select value={kind} onchange={(event) => selectKind(event.currentTarget.value as VehicleKind)}>
-      {#each kinds as option (option)}<option value={option}>{KIND_META[option].label}</option
+    <select value={kind} onchange={(event) => selectKind(event.currentTarget.value as BaseImage)}>
+      {#each kinds as option (option)}<option value={option}>{BASE_IMAGES[option].label}</option
         >{/each}
     </select>
     <input bind:value={logo} placeholder="URL del logo" />
@@ -62,7 +62,7 @@
   </div>
 
   <div class="stage">
-    <BrandedVehicle src={KIND_META[kind].image} alt={kind} {kind} logo={logo || null} {zones} />
+    <BrandedVehicle src={BASE_IMAGES[kind].image} alt={kind} {kind} logo={logo || null} {zones} />
     <svg
       bind:this={svg}
       viewBox="0 0 {spec.width} {spec.height}"

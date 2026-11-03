@@ -22,6 +22,7 @@ from app.application.fleet.views import build_vehicle_views
 HARD_BLOCKS = frozenset(
     {
         "vehicle_not_active",
+        "vehicle_not_drivable",
         "vehicle_in_maintenance",
         "vehicle_on_road",
         "vehicle_branch_mismatch",
@@ -62,6 +63,19 @@ def _issue(raw: dict[str, Any]) -> Issue:
     return Issue(raw["code"], raw["severity"], raw["message"])
 
 
+async def _trailer_issues(
+    repo: Any, company_id: uuid.UUID, trailer_id: uuid.UUID, *, today: date
+) -> list[Issue]:
+    """The trailer travels too: its documents and status stop the dispatch just the same."""
+    trailer = await repo.get_vehicle(company_id, trailer_id)
+    view = (await build_vehicle_views(repo, company_id, [trailer], today=today))[0]
+    return [
+        Issue(raw["code"], raw["severity"], f"Remolque {view['code']}: {raw['message']}")
+        for raw in view["compliance"]["issues"]
+        if raw["code"] not in IGNORED_AT_DISPATCH
+    ]
+
+
 async def evaluate_dispatch(
     repo: Any,
     company_id: uuid.UUID,
@@ -97,6 +111,19 @@ async def evaluate_dispatch(
         for raw in view["compliance"]["issues"]
         if raw["code"] not in IGNORED_AT_DISPATCH
     )
+    if view["type"]["is_towable"]:
+        evaluation.vehicle_issues.append(
+            Issue(
+                "vehicle_not_drivable",
+                "blocking",
+                "Un remolque no sale solo; despache el cabezal al que está enganchado.",
+            )
+        )
+    coupling = view["coupling"]
+    if coupling is not None and coupling["role"] == "tractor":
+        evaluation.vehicle_issues.extend(
+            await _trailer_issues(repo, company_id, coupling["vehicle_id"], today=today)
+        )
 
     if evaluation.driver_id is None and view["driver"] is not None:
         evaluation.driver_id = view["driver"]["driver_id"]

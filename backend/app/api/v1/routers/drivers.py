@@ -318,7 +318,10 @@ async def update_driver(
         vehicle_info = (await repo.open_vehicles_for_drivers([driver.id])).get(driver.id)
         if (
             vehicle_info is not None
-            and license_issue(changes["license_class"], vehicle_info["kind"]) is not None
+            and license_issue(
+                changes["license_class"], vehicle_info["kind"], await repo.license_rules(company_id)
+            )
+            is not None
         ):
             raise ConflictError(
                 f"La nueva clase de licencia no permite conducir {vehicle_info['code']}; "
@@ -515,6 +518,12 @@ async def assign_driver_to_vehicle(
     company_id = vehicle.company_id
     if vehicle.status == "retired":
         raise ConflictError("El vehículo está dado de baja.", code="vehicle_retired")
+    vehicle_type = await repo.vehicle_type(company_id, vehicle.kind)
+    if vehicle_type is not None and vehicle_type.is_towable:
+        raise ConflictError(
+            "Un remolque no lleva conductor; engánchelo a un cabezal.",
+            code="vehicle_not_drivable",
+        )
     if driver.branch_id != vehicle.branch_id:
         raise ConflictError(
             "El conductor y el vehículo deben pertenecer a la misma sucursal.",

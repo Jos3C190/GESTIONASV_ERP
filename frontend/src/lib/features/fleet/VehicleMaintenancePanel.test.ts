@@ -16,7 +16,8 @@ const vehicle = {
   id: 'v1',
   status: 'active',
   operational_status: 'available',
-  odometer_km: '6200.0'
+  odometer_km: '6200.0',
+  type: { meter_unit: 'km' }
 } as FleetVehicle;
 
 beforeEach(() => {

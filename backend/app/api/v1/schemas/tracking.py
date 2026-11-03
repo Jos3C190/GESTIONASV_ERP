@@ -25,7 +25,7 @@ class TrackedVehicleOut(BaseModel):
 
     id: uuid.UUID
     code: str
-    plate: str
+    plate: str | None
     kind: str
     brand: str
     model: str
@@ -248,7 +248,7 @@ class SitesOut(BaseModel):
 class SimulatorVehicleOut(BaseModel):
     id: uuid.UUID
     code: str
-    plate: str
+    plate: str | None
     kind: str
     branch_id: uuid.UUID
     branch_name: str
@@ -264,7 +264,7 @@ class SimulationOut(BaseModel):
     id: uuid.UUID
     vehicle_id: uuid.UUID
     vehicle_code: str
-    vehicle_plate: str
+    vehicle_plate: str | None
     branch_id: uuid.UUID
     transfer_id: uuid.UUID | None = None
     transfer_code: str | None = None

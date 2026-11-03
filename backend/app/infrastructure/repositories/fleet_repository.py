@@ -20,8 +20,10 @@ from app.infrastructure.models.document_record import DocumentCategoryModel, Doc
 from app.infrastructure.models.employee import Employee, EmployeeBranchAssignment
 from app.infrastructure.models.fleet import (
     DriverModel,
+    FleetVehicleCouplingModel,
     FleetVehicleModel,
     FleetVehiclePhotoModel,
+    FleetVehicleTypeModel,
     MaintenanceOrderModel,
     MaintenancePlanModel,
     VehicleDriverAssignmentModel,
@@ -45,6 +47,104 @@ def _like(value: str) -> str:
 class FleetRepository(DriverQueries):
     def __init__(self, session: Any) -> None:
         self._session = session
+
+    # -------------------------------------------------------- vehicle types
+
+    async def vehicle_types(
+        self, company_id: uuid.UUID, *, include_inactive: bool = True
+    ) -> list[FleetVehicleTypeModel]:
+        statement = select(FleetVehicleTypeModel).where(
+            FleetVehicleTypeModel.company_id == company_id
+        )
+        if not include_inactive:
+            statement = statement.where(FleetVehicleTypeModel.is_active.is_(True))
+        rows = await self._session.scalars(
+            statement.order_by(FleetVehicleTypeModel.sort_order, FleetVehicleTypeModel.name)
+        )
+        return list(rows)
+
+    async def vehicle_type(self, company_id: uuid.UUID, code: str) -> FleetVehicleTypeModel | None:
+        vehicle_type: FleetVehicleTypeModel | None = await self._session.scalar(
+            select(FleetVehicleTypeModel).where(
+                FleetVehicleTypeModel.company_id == company_id, FleetVehicleTypeModel.code == code
+            )
+        )
+        return vehicle_type
+
+    async def license_rules(self, company_id: uuid.UUID) -> dict[str, frozenset[str]]:
+        rows = await self._session.execute(
+            select(FleetVehicleTypeModel.code, FleetVehicleTypeModel.license_classes).where(
+                FleetVehicleTypeModel.company_id == company_id
+            )
+        )
+        return {row.code: frozenset(row.license_classes) for row in rows}
+
+    async def vehicle_type_usage(self, company_id: uuid.UUID) -> dict[str, int]:
+        rows = await self._session.execute(
+            select(FleetVehicleModel.kind, func.count())
+            .where(FleetVehicleModel.company_id == company_id)
+            .group_by(FleetVehicleModel.kind)
+        )
+        return {row[0]: row[1] for row in rows.all()}
+
+    # ------------------------------------------------------------ couplings
+
+    async def open_coupling(self, vehicle_id: uuid.UUID) -> FleetVehicleCouplingModel | None:
+        coupling: FleetVehicleCouplingModel | None = await self._session.scalar(
+            select(FleetVehicleCouplingModel).where(
+                or_(
+                    FleetVehicleCouplingModel.tractor_id == vehicle_id,
+                    FleetVehicleCouplingModel.trailer_id == vehicle_id,
+                ),
+                FleetVehicleCouplingModel.ended_at.is_(None),
+            )
+        )
+        return coupling
+
+    async def open_couplings_for_vehicles(
+        self, company_id: uuid.UUID, vehicle_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, Any]]:
+        """The unit each vehicle is hitched to, seen from either end."""
+        if not vehicle_ids:
+            return {}
+        rows = await self._session.scalars(
+            select(FleetVehicleCouplingModel).where(
+                FleetVehicleCouplingModel.company_id == company_id,
+                FleetVehicleCouplingModel.ended_at.is_(None),
+                or_(
+                    FleetVehicleCouplingModel.tractor_id.in_(list(vehicle_ids)),
+                    FleetVehicleCouplingModel.trailer_id.in_(list(vehicle_ids)),
+                ),
+            )
+        )
+        couplings = list(rows)
+        partner_ids = {item.tractor_id for item in couplings} | {
+            item.trailer_id for item in couplings
+        }
+        partners = {
+            row.id: row
+            for row in await self._session.execute(
+                select(FleetVehicleModel.id, FleetVehicleModel.code, FleetVehicleModel.plate).where(
+                    FleetVehicleModel.id.in_(partner_ids)
+                )
+            )
+        }
+        result: dict[uuid.UUID, dict[str, Any]] = {}
+        for item in couplings:
+            for own, other, role in (
+                (item.tractor_id, item.trailer_id, "tractor"),
+                (item.trailer_id, item.tractor_id, "trailer"),
+            ):
+                partner = partners[other]
+                result[own] = {
+                    "coupling_id": item.id,
+                    "role": role,
+                    "vehicle_id": other,
+                    "code": partner.code,
+                    "plate": partner.plate,
+                    "since": item.started_at,
+                }
+        return result
 
     # ------------------------------------------------------------- vehicles
 

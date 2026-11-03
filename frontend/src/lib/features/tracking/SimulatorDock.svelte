@@ -731,7 +731,7 @@
               <select bind:value={vehicleId}>
                 {#each candidates as vehicle (vehicle.id)}
                   <option value={vehicle.id} disabled={busyVehicles.has(vehicle.id)}>
-                    {vehicle.code} · {vehicle.plate} — {vehicle.branch_name}{busyVehicles.has(
+                    {vehicle.code} · {vehicle.plate ?? 'Sin placa'} — {vehicle.branch_name}{busyVehicles.has(
                       vehicle.id
                     )
                       ? ' (en simulación)'

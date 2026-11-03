@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { VehicleKind } from './catalog';
+  import type { BaseImage } from './catalog';
   import { quadToMatrix3d, VEHICLE_DECALS, zoneSize, type DecalZone } from './branding';
 
   let {
@@ -12,7 +12,7 @@
   }: {
     src: string;
     alt: string;
-    kind: VehicleKind;
+    kind: BaseImage;
     logo?: string | null;
     zones?: DecalZone[];
     onerror?: () => void;

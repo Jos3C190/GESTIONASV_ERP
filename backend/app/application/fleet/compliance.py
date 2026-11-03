@@ -25,21 +25,8 @@ ComplianceState = Literal["ok", "warning", "blocked"]
 #: Documents expiring within this window raise a warning.
 EXPIRY_WARNING_DAYS = 30
 
-#: License classes allowed to drive each vehicle kind (El Salvador classes).
-_LIGHT = frozenset({"liviana", "pesada", "pesada_t"})
-_HEAVY = frozenset({"pesada", "pesada_t"})
-_ARTICULATED = frozenset({"pesada_t"})
-LICENSE_CLASSES_BY_KIND: Mapping[str, frozenset[str]] = {
-    "pickup": _LIGHT | {"particular"},
-    "compact_van": _LIGHT,
-    "cargo_van": _LIGHT,
-    "refrigerated": _HEAVY,
-    "dry_box": _HEAVY,
-    "flatbed": _HEAVY,
-    "curtain_side": _HEAVY,
-    "semi_trailer": _ARTICULATED,
-    "tanker": _ARTICULATED,
-}
+#: License classes allowed per vehicle type code, from the company's catalogue.
+LicenseRules = Mapping[str, frozenset[str]]
 
 LICENSE_CLASS_LABELS: Mapping[str, str] = {
     "particular": "Particular",
@@ -166,9 +153,10 @@ def driver_issues(
     return issues
 
 
-def license_issue(license_class: str, vehicle_kind: str) -> Issue | None:
-    allowed = LICENSE_CLASSES_BY_KIND.get(vehicle_kind, frozenset())
-    if license_class in allowed:
+def license_issue(license_class: str, vehicle_kind: str, rules: LicenseRules) -> Issue | None:
+    """A type with no classes needs no license: a forklift inside the yard."""
+    allowed = rules.get(vehicle_kind, frozenset())
+    if not allowed or license_class in allowed:
         return None
     needed = " o ".join(
         sorted(LICENSE_CLASS_LABELS[item] for item in allowed if item in LICENSE_CLASS_LABELS)

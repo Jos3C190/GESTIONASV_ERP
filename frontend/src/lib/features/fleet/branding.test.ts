@@ -7,7 +7,7 @@ import {
   zoneSize,
   type Quad
 } from './branding';
-import { VEHICLE_KINDS } from './catalog';
+import { BASE_IMAGE_KEYS } from './catalog';
 
 describe('fleet branding', () => {
   it('maps every rectangle corner onto the matching quad corner', () => {
@@ -46,7 +46,7 @@ describe('fleet branding', () => {
   });
 
   it('declares decal zones inside the image for every vehicle type', () => {
-    for (const kind of VEHICLE_KINDS) {
+    for (const kind of BASE_IMAGE_KEYS) {
       const spec = VEHICLE_DECALS[kind];
       expect(spec.zones.length).toBeGreaterThan(0);
       for (const zone of spec.zones) {

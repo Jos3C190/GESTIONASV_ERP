@@ -3,7 +3,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { fleetApi, type FleetVehicle, type OdometerReading } from './api';
-  import { formatDateTime, formatNumber, isBlank } from './catalog';
+  import { formatDateTime, formatNumber, isBlank, meterName, meterShort } from './catalog';
 
   let { vehicle, onchanged }: { vehicle: FleetVehicle; onchanged: () => void } = $props();
 
@@ -25,6 +25,7 @@
   const canRecord = $derived(
     permissions.hasPermission('fleet:maintenance') && vehicle.status !== 'retired'
   );
+  const unit = $derived(meterShort(vehicle.type.meter_unit));
   const tooLow = $derived(!isBlank(reading) && Number(reading) < Number(vehicle.odometer_km));
 
   async function load() {
@@ -66,8 +67,8 @@
 
 <div class="panel">
   <section class="card">
-    <h2>Odómetro actual</h2>
-    <p class="current">{formatNumber(vehicle.odometer_km)} <small>km</small></p>
+    <h2>{meterName(vehicle.type.meter_unit)} actual</h2>
+    <p class="current">{formatNumber(vehicle.odometer_km)} <small>{unit}</small></p>
     <p class="muted">
       Las lecturas nunca retroceden. También se registran al cargar combustible y al cerrar un
       mantenimiento.
@@ -75,7 +76,7 @@
     {#if canRecord}
       <div class="form">
         <label>
-          <span>Nueva lectura (km)</span>
+          <span>Nueva lectura ({unit})</span>
           <input type="number" min={vehicle.odometer_km} step="0.1" bind:value={reading} />
         </label>
         <label>
@@ -115,7 +116,7 @@
                 {formatDateTime(item.read_at)}
                 {#if item.notes}<small>{item.notes}</small>{/if}
               </td>
-              <td class="num">{formatNumber(item.reading_km)} km</td>
+              <td class="num">{formatNumber(item.reading_km)} {unit}</td>
               <td>{SOURCE_LABELS[item.source]}</td>
               <td>{item.recorded_by_name ?? '—'}</td>
             </tr>

@@ -6,11 +6,19 @@ import re
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, Field, field_validator
+from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
-VehicleKind = Literal[
+#: A code from the company's vehicle type catalogue; the routers check it exists.
+VehicleKind = Annotated[str, Field(pattern=r"^[a-z0-9_]{2,24}$")]
+VehicleStatus = Literal["active", "maintenance", "out_of_service", "retired"]
+ManualVehicleStatus = Literal["active", "out_of_service", "retired"]
+OperationalStatus = Literal["available", "in_route", "maintenance", "out_of_service", "retired"]
+FuelType = Literal["diesel", "gasoline", "lpg", "electric", "hybrid", "none"]
+MeterUnit = Literal["km", "hours"]
+#: The silhouettes in the frontend's static images, calibrated to carry the logo.
+BaseImage = Literal[
     "refrigerated",
     "cargo_van",
     "dry_box",
@@ -21,10 +29,6 @@ VehicleKind = Literal[
     "semi_trailer",
     "tanker",
 ]
-VehicleStatus = Literal["active", "maintenance", "out_of_service", "retired"]
-ManualVehicleStatus = Literal["active", "out_of_service", "retired"]
-OperationalStatus = Literal["available", "in_route", "maintenance", "out_of_service", "retired"]
-FuelType = Literal["diesel", "gasoline", "lpg", "electric", "hybrid"]
 LicenseClass = Literal["particular", "liviana", "pesada", "pesada_t", "motocicleta"]
 DriverStatus = Literal["active", "suspended", "inactive"]
 ComplianceStateLiteral = Literal["ok", "warning", "blocked"]
@@ -32,7 +36,10 @@ ComplianceStateLiteral = Literal["ok", "warning", "blocked"]
 _PLATE = re.compile(r"^[A-Z0-9][A-Z0-9 -]{1,15}$")
 
 
-def normalize_plate(value: str) -> str:
+def normalize_plate(value: str | None) -> str | None:
+    """Blank means no plate; whether the vehicle may lack one depends on its type."""
+    if value is None or not value.strip():
+        return None
     normalized = re.sub(r"\s+", " ", value.strip().upper())
     if not _PLATE.match(normalized):
         raise ValueError("La placa solo admite letras, números, espacios y guiones.")
@@ -78,17 +85,81 @@ class VehicleTripOut(BaseModel):
     destination_branch: str
 
 
+class VehicleTypeOut(BaseModel):
+    code: str
+    name: str
+    plural: str
+    license_classes: list[LicenseClass]
+    base_image: BaseImage | None
+    requires_plate: bool
+    requires_capacity: bool
+    meter_unit: MeterUnit
+    fuel_applicable: bool
+    can_tow: bool
+    is_towable: bool
+    is_system: bool
+    is_active: bool
+
+
+class VehicleTypeCatalogOut(VehicleTypeOut):
+    id: uuid.UUID
+    usage_count: int
+
+
+class VehicleTypeIn(BaseModel):
+    name: str = Field(min_length=2, max_length=60)
+    plural: str | None = Field(None, max_length=60)
+    license_classes: list[LicenseClass] = Field(default_factory=list)
+    base_image: BaseImage | None = None
+    requires_plate: bool = True
+    requires_capacity: bool = True
+    meter_unit: MeterUnit = "km"
+    fuel_applicable: bool = True
+    can_tow: bool = False
+    is_towable: bool = False
+
+    @field_validator("name", "plural")
+    @classmethod
+    def _strip(cls, value: str | None) -> str | None:
+        return value.strip() or None if value else value
+
+    @model_validator(mode="after")
+    def _one_coupling_role(self) -> VehicleTypeIn:
+        if self.can_tow and self.is_towable:
+            raise ValueError("Un tipo no puede remolcar y ser remolcado a la vez.")
+        return self
+
+
+class VehicleTypeUpdate(VehicleTypeIn):
+    is_active: bool = True
+
+
+class VehicleCouplingOut(BaseModel):
+    coupling_id: uuid.UUID
+    role: Literal["tractor", "trailer"]
+    vehicle_id: uuid.UUID
+    code: str
+    plate: str | None
+    since: datetime
+
+
+class VehicleCouplingIn(BaseModel):
+    trailer_id: uuid.UUID
+
+
 class FleetVehicleOut(BaseModel):
     id: uuid.UUID
     code: str
-    plate: str
+    plate: str | None
     vin: str | None
     kind: VehicleKind
+    type: VehicleTypeOut
+    coupling: VehicleCouplingOut | None
     brand: str
     model: str
     year: int
     color: str | None
-    capacity_kg: Decimal
+    capacity_kg: Decimal | None
     fuel_type: FuelType
     odometer_km: Decimal
     status: VehicleStatus
@@ -123,20 +194,22 @@ class FleetSummaryOut(BaseModel):
 
 
 class _VehicleFields(BaseModel):
-    plate: str = Field(min_length=2, max_length=16)
+    plate: str | None = Field(None, max_length=16)
     vin: str | None = Field(None, max_length=32)
     kind: VehicleKind
     brand: str = Field(min_length=1, max_length=60)
     model: str = Field(min_length=1, max_length=80)
     year: int = Field(ge=1950, le=2100)
     color: str | None = Field(None, max_length=40)
-    capacity_kg: Decimal = Field(gt=0, le=Decimal("200000"), max_digits=10, decimal_places=2)
+    capacity_kg: Decimal | None = Field(
+        None, gt=0, le=Decimal("200000"), max_digits=10, decimal_places=2
+    )
     fuel_type: FuelType = "diesel"
     notes: str | None = Field(None, max_length=2000)
 
     @field_validator("plate")
     @classmethod
-    def _plate(cls, value: str) -> str:
+    def _plate(cls, value: str | None) -> str | None:
         return normalize_plate(value)
 
     @field_validator("vin")
@@ -168,7 +241,7 @@ class FleetVehicleCreate(_VehicleFields):
 
 
 class FleetVehicleUpdate(BaseModel):
-    plate: str | None = Field(None, min_length=2, max_length=16)
+    plate: str | None = Field(None, max_length=16)
     vin: str | None = Field(None, max_length=32)
     kind: VehicleKind | None = None
     brand: str | None = Field(None, min_length=1, max_length=60)
@@ -184,7 +257,7 @@ class FleetVehicleUpdate(BaseModel):
     @field_validator("plate")
     @classmethod
     def _plate(cls, value: str | None) -> str | None:
-        return None if value is None else normalize_plate(value)
+        return normalize_plate(value)
 
     @field_validator("vin")
     @classmethod
@@ -349,8 +422,10 @@ class DriverVehicleOut(BaseModel):
     assignment_id: uuid.UUID
     vehicle_id: uuid.UUID
     code: str
-    plate: str
+    plate: str | None
     kind: VehicleKind
+    kind_name: str
+    base_image: BaseImage | None
     since: datetime
 
 

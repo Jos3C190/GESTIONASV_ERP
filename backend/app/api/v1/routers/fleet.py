@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -53,6 +54,7 @@ from app.infrastructure.models.fleet import (
     DriverModel,
     FleetVehicleModel,
     FleetVehiclePhotoModel,
+    FleetVehicleTypeModel,
     OdometerReadingModel,
 )
 from app.infrastructure.models.inventory_transfer import InventoryVehicleModel
@@ -97,7 +99,42 @@ def _state(vehicle: FleetVehicleModel) -> dict[str, object]:
 
 
 def _inventory_name(vehicle: FleetVehicleModel) -> str:
-    return f"{vehicle.brand} {vehicle.model} ({vehicle.plate})"[:120]
+    return f"{vehicle.brand} {vehicle.model} ({vehicle.plate or vehicle.code})"[:120]
+
+
+async def _usable_type(
+    repo: FleetRepository, company_id: uuid.UUID, kind: str, *, current_kind: str | None = None
+) -> FleetVehicleTypeModel:
+    vehicle_type = await repo.vehicle_type(company_id, kind)
+    if vehicle_type is None:
+        raise ValidationError("El tipo de vehículo no existe.", code="vehicle_type_not_found")
+    # Un vehículo conserva su tipo aunque se desactive; lo nuevo no puede elegirlo.
+    if not vehicle_type.is_active and kind != current_kind:
+        raise ValidationError("El tipo de vehículo está inactivo.", code="vehicle_type_inactive")
+    return vehicle_type
+
+
+def _require_type_fields(
+    vehicle_type: FleetVehicleTypeModel,
+    *,
+    plate: str | None,
+    capacity_kg: Decimal | None,
+    fuel_type: str,
+) -> str:
+    """Check what the type demands and return the fuel the vehicle must store."""
+    if vehicle_type.requires_plate and not plate:
+        raise ValidationError(f"{vehicle_type.name} necesita placa.", code="vehicle_plate_required")
+    if vehicle_type.requires_capacity and capacity_kg is None:
+        raise ValidationError(
+            f"{vehicle_type.name} necesita capacidad de carga.", code="vehicle_capacity_required"
+        )
+    if not vehicle_type.fuel_applicable:
+        return "none"
+    if fuel_type == "none":
+        raise ValidationError(
+            f"{vehicle_type.name} necesita tipo de combustible.", code="vehicle_fuel_required"
+        )
+    return fuel_type
 
 
 async def _context(
@@ -174,6 +211,20 @@ async def _set_inventory_status(
         raise ConflictError(exc.message, code=exc.code) from exc
 
 
+async def _ensure_type_keeps_coupling(
+    repo: FleetRepository, vehicle: FleetVehicleModel, new_type: FleetVehicleTypeModel
+) -> None:
+    coupling = await repo.open_coupling(vehicle.id)
+    if coupling is None:
+        return
+    is_tractor = coupling.tractor_id == vehicle.id
+    if (is_tractor and not new_type.can_tow) or (not is_tractor and not new_type.is_towable):
+        raise ConflictError(
+            "Desenganche el remolque antes de cambiar el tipo de vehículo.",
+            code="vehicle_is_coupled",
+        )
+
+
 async def _ensure_driver_can_drive(
     session: SessionDep, repo: FleetRepository, vehicle: FleetVehicleModel, kind: str
 ) -> None:
@@ -181,7 +232,8 @@ async def _ensure_driver_can_drive(
     if assignment is None:
         return
     driver = await session.get(DriverModel, assignment.driver_id)
-    if driver is not None and license_issue(driver.license_class, kind):
+    rules = await repo.license_rules(vehicle.company_id)
+    if driver is not None and license_issue(driver.license_class, kind, rules):
         raise ConflictError(
             "La licencia del conductor asignado no permite el nuevo tipo de vehículo; "
             "finalice la asignación primero.",
@@ -320,6 +372,12 @@ async def create_vehicle(
     if branch is None or not branch.is_active:
         raise ValidationError("La sucursal no existe o no está activa.", code="branch_inactive")
     await _ensure_unique(repo, company_id, code=body.code, plate=body.plate, vin=body.vin)
+    fuel_type = _require_type_fields(
+        await _usable_type(repo, company_id, body.kind),
+        plate=body.plate,
+        capacity_kg=body.capacity_kg,
+        fuel_type=body.fuel_type,
+    )
     async with session.begin_nested():
         vehicle = FleetVehicleModel(
             company_id=company_id,
@@ -333,7 +391,7 @@ async def create_vehicle(
             year=body.year,
             color=body.color,
             capacity_kg=body.capacity_kg,
-            fuel_type=body.fuel_type,
+            fuel_type=fuel_type,
             odometer_km=body.odometer_km,
             notes=body.notes,
             status="active",
@@ -392,7 +450,7 @@ async def update_vehicle(
     if vehicle.status == "retired":
         raise ConflictError("Reactive el vehículo antes de editarlo.", code="vehicle_retired")
     changes = body.model_dump(exclude_unset=True)
-    for required in ("plate", "kind", "brand", "model", "year", "capacity_kg", "fuel_type"):
+    for required in ("kind", "brand", "model", "year", "fuel_type"):
         if required in changes and changes[required] is None:
             raise ValidationError(
                 "Complete los datos obligatorios del vehículo.", code="vehicle_invalid"
@@ -400,8 +458,17 @@ async def update_vehicle(
     await _ensure_unique(
         repo, company_id, plate=changes.get("plate"), vin=changes.get("vin"), exclude_id=vehicle.id
     )
-    if "kind" in changes and changes["kind"] != vehicle.kind:
-        await _ensure_driver_can_drive(session, repo, vehicle, changes["kind"])
+    new_kind = changes.get("kind", vehicle.kind)
+    new_type = await _usable_type(repo, company_id, new_kind, current_kind=vehicle.kind)
+    changes["fuel_type"] = _require_type_fields(
+        new_type,
+        plate=changes.get("plate", vehicle.plate),
+        capacity_kg=changes.get("capacity_kg", vehicle.capacity_kg),
+        fuel_type=changes.get("fuel_type", vehicle.fuel_type),
+    )
+    if new_kind != vehicle.kind:
+        await _ensure_driver_can_drive(session, repo, vehicle, new_kind)
+        await _ensure_type_keeps_coupling(repo, vehicle, new_type)
     before = _state(vehicle)
     async with session.begin_nested():
         for field, value in changes.items():
@@ -462,6 +529,10 @@ async def change_vehicle_status(
         not body.reason or len(body.reason.strip()) < MIN_REASON_LENGTH
     ):
         raise ValidationError("Indique el motivo del cambio de estado.", code="reason_required")
+    if body.status == "retired" and await repo.open_coupling(vehicle.id):
+        raise ConflictError(
+            "Desenganche el remolque antes de dar de baja el vehículo.", code="vehicle_is_coupled"
+        )
     if body.status == "retired" and await repo.open_assignment_for_vehicle(vehicle.id):
         raise ConflictError(
             "Finalice la asignación del conductor antes de dar de baja el vehículo.",
@@ -513,6 +584,10 @@ async def change_vehicle_branch(
     if branch is None or not branch.is_active:
         raise ValidationError("La sucursal no existe o no está activa.", code="branch_inactive")
     await _require_not_on_road(repo, vehicle, "cambiarlo de sucursal")
+    if await repo.open_coupling(vehicle.id):
+        raise ConflictError(
+            "Desenganche el remolque antes de cambiar la sucursal.", code="vehicle_is_coupled"
+        )
     if await repo.open_assignment_for_vehicle(vehicle.id):
         raise ConflictError(
             "Finalice la asignación del conductor antes de cambiar la sucursal del vehículo.",

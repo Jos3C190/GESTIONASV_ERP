@@ -1,6 +1,6 @@
 /** Vehicle kinds, statuses and formatting shared by Fleet, Drivers and Tracking. */
 
-export const VEHICLE_KINDS = [
+export const BASE_IMAGE_KEYS = [
   'refrigerated',
   'cargo_van',
   'dry_box',
@@ -11,35 +11,32 @@ export const VEHICLE_KINDS = [
   'semi_trailer',
   'tanker'
 ] as const;
-export type VehicleKind = (typeof VEHICLE_KINDS)[number];
+export type BaseImage = (typeof BASE_IMAGE_KEYS)[number];
+export type MeterUnit = 'km' | 'hours';
 
 /** Base images are shared by every company; the company's logo is applied on top. */
-export const KIND_META: Record<VehicleKind, { label: string; plural: string; image: string }> = {
+export const BASE_IMAGES: Record<BaseImage, { label: string; image: string }> = {
   refrigerated: {
     label: 'Refrigerado',
-    plural: 'Refrigerados',
     image: '/images/fleet/refrigerated-truck.png'
   },
-  cargo_van: { label: 'Furgón', plural: 'Furgones', image: '/images/fleet/cargo-van.png' },
-  dry_box: { label: 'Carga seca', plural: 'Carga seca', image: '/images/fleet/dry-box-truck.png' },
-  pickup: { label: 'Pickup', plural: 'Pickups', image: '/images/fleet/pickup.png' },
-  flatbed: { label: 'Plataforma', plural: 'Plataformas', image: '/images/fleet/flatbed-truck.png' },
+  cargo_van: { label: 'Furgón', image: '/images/fleet/cargo-van.png' },
+  dry_box: { label: 'Carga seca', image: '/images/fleet/dry-box-truck.png' },
+  pickup: { label: 'Pickup', image: '/images/fleet/pickup.png' },
+  flatbed: { label: 'Plataforma', image: '/images/fleet/flatbed-truck.png' },
   compact_van: {
     label: 'Panel compacto',
-    plural: 'Paneles compactos',
     image: '/images/fleet/compact-panel-van.png'
   },
   curtain_side: {
     label: 'Con lona',
-    plural: 'Camiones con lona',
     image: '/images/fleet/curtain-side-truck.png'
   },
   semi_trailer: {
     label: 'Tráiler',
-    plural: 'Tráileres',
     image: '/images/fleet/semi-trailer-truck.png'
   },
-  tanker: { label: 'Cisterna', plural: 'Cisternas', image: '/images/fleet/tanker-truck.png' }
+  tanker: { label: 'Cisterna', image: '/images/fleet/tanker-truck.png' }
 };
 
 export type VehicleStatus = 'active' | 'maintenance' | 'out_of_service' | 'retired';
@@ -64,7 +61,12 @@ export const VEHICLE_STATUS_LABELS: Record<VehicleStatus, string> = {
   retired: 'Dado de baja'
 };
 
-export type FuelType = 'diesel' | 'gasoline' | 'lpg' | 'electric' | 'hybrid';
+export type FuelType = 'diesel' | 'gasoline' | 'lpg' | 'electric' | 'hybrid' | 'none';
+
+export const meterShort = (unit: MeterUnit) => (unit === 'hours' ? 'h' : 'km');
+export const meterName = (unit: MeterUnit) => (unit === 'hours' ? 'Horómetro' : 'Odómetro');
+export const plateLabel = (plate: string | null | undefined) => plate || 'Sin placa';
+
 /** Un `type="number"` vacío llega como null al enlazarse, no como cadena vacía. */
 export function isBlank(value: unknown): boolean {
   return value === '' || value === null || value === undefined;
@@ -75,7 +77,8 @@ export const FUEL_LABELS: Record<FuelType, string> = {
   gasoline: 'Gasolina',
   lpg: 'Gas LP',
   electric: 'Eléctrico',
-  hybrid: 'Híbrido'
+  hybrid: 'Híbrido',
+  none: 'No aplica'
 };
 
 export type LicenseClass = 'particular' | 'liviana' | 'pesada' | 'pesada_t' | 'motocicleta';

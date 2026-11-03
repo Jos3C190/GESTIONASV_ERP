@@ -5,7 +5,8 @@ import type {
   FuelType,
   LicenseClass,
   OperationalStatus,
-  VehicleKind,
+  BaseImage,
+  MeterUnit,
   VehicleStatus
 } from './catalog';
 
@@ -33,17 +34,63 @@ export interface VehicleDriver {
   since: string;
 }
 
+export interface FleetVehicleTypeInfo {
+  code: string;
+  name: string;
+  plural: string;
+  license_classes: LicenseClass[];
+  base_image: BaseImage | null;
+  requires_plate: boolean;
+  requires_capacity: boolean;
+  meter_unit: MeterUnit;
+  fuel_applicable: boolean;
+  can_tow: boolean;
+  is_towable: boolean;
+  is_system: boolean;
+  is_active: boolean;
+}
+
+export interface FleetVehicleType extends FleetVehicleTypeInfo {
+  id: string;
+  usage_count: number;
+}
+
+export type FleetVehicleTypeInput = Pick<
+  FleetVehicleTypeInfo,
+  | 'name'
+  | 'plural'
+  | 'license_classes'
+  | 'base_image'
+  | 'requires_plate'
+  | 'requires_capacity'
+  | 'meter_unit'
+  | 'fuel_applicable'
+  | 'can_tow'
+  | 'is_towable'
+> & { is_active?: boolean };
+
+export interface VehicleCoupling {
+  coupling_id: string;
+  role: 'tractor' | 'trailer';
+  vehicle_id: string;
+  code: string;
+  plate: string | null;
+  since: string;
+}
+
 export interface FleetVehicle {
   id: string;
   code: string;
-  plate: string;
+  plate: string | null;
   vin: string | null;
-  kind: VehicleKind;
+  kind: string;
+  type: FleetVehicleTypeInfo;
+  coupling: VehicleCoupling | null;
   brand: string;
   model: string;
   year: number;
   color: string | null;
-  capacity_kg: string;
+  capacity_kg: string | null;
   fuel_type: FuelType;
   odometer_km: string;
   status: VehicleStatus;
@@ -84,14 +131,14 @@ export interface FleetPage<T> {
 }
 
 export interface VehicleInput {
-  plate: string;
+  plate: string | null;
   vin?: string | null;
-  kind: VehicleKind;
+  kind: string;
   brand: string;
   model: string;
   year: number;
   color?: string | null;
-  capacity_kg: string;
+  capacity_kg: string | null;
   fuel_type: FuelType;
   notes?: string | null;
 }
@@ -266,7 +313,7 @@ export const fleetApi = {
   list: (
     params: {
       status?: VehicleStatus | '';
-      kind?: VehicleKind | '';
+      kind?: string;
       search?: string;
       include_retired?: boolean;
       page?: number;
@@ -306,6 +353,21 @@ export const fleetApi = {
       `/fleet/vehicles/${id}/gps-device`,
       json('PUT', { unique_id: uniqueId })
     ),
+  vehicleTypes: (includeInactive = false) =>
+    apiFetch<FleetVehicleType[]>(
+      `/fleet/vehicle-types${includeInactive ? '?include_inactive=true' : ''}`
+    ),
+  createVehicleType: (data: FleetVehicleTypeInput) =>
+    apiFetch<FleetVehicleType>('/fleet/vehicle-types', json('POST', data)),
+  updateVehicleType: (id: string, data: FleetVehicleTypeInput) =>
+    apiFetch<FleetVehicleType>(`/fleet/vehicle-types/${id}`, json('PATCH', data)),
+  couple: (id: string, trailerId: string) =>
+    apiFetch<FleetVehicle>(
+      `/fleet/vehicles/${id}/coupling`,
+      json('PUT', { trailer_id: trailerId })
+    ),
+  uncouple: (id: string) =>
+    apiFetch<FleetVehicle>(`/fleet/vehicles/${id}/coupling`, { method: 'DELETE' }),
   linkPhone: (id: string, replace = false) =>
     apiFetch<FleetVehicle>(
       `/fleet/vehicles/${id}/gps-device`,

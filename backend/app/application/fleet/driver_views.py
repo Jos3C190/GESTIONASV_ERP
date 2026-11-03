@@ -59,6 +59,7 @@ async def driver_fitness(
     assigned = await repo.employees_with_assignment(
         employee_ids, list({driver.branch_id for driver, _ in rows})
     )
+    rules = await repo.license_rules(company_id) if vehicle_kinds else {}
     result: dict[uuid.UUID, tuple[list[Issue], dict[str, Any] | None]] = {}
     for driver, employee in rows:
         issues = driver_issues(
@@ -69,7 +70,7 @@ async def driver_fitness(
         )
         kind = (vehicle_kinds or {}).get(driver.id)
         if kind is not None:
-            mismatch = license_issue(driver.license_class, kind)
+            mismatch = license_issue(driver.license_class, kind, rules)
             if mismatch is not None:
                 issues.append(mismatch)
         result[driver.id] = (issues, licenses.get(employee.id))

@@ -62,6 +62,24 @@ def maintenance_issues(plans: Sequence[Any], odometer_km: Decimal, today: date) 
     return issues
 
 
+def vehicle_type_view(item: Any) -> dict[str, Any]:
+    return {
+        "code": item.code,
+        "name": item.name,
+        "plural": item.plural,
+        "license_classes": list(item.license_classes),
+        "base_image": item.base_image,
+        "requires_plate": item.requires_plate,
+        "requires_capacity": item.requires_capacity,
+        "meter_unit": item.meter_unit,
+        "fuel_applicable": item.fuel_applicable,
+        "can_tow": item.can_tow,
+        "is_towable": item.is_towable,
+        "is_system": item.is_system,
+        "is_active": item.is_active,
+    }
+
+
 async def build_vehicle_views(
     repo: Any,
     company_id: uuid.UUID,
@@ -86,12 +104,21 @@ async def build_vehicle_views(
     )
     plans, in_progress = await repo.maintenance_state(vehicle_ids)
     branches = await repo.branch_names(company_id, [vehicle.branch_id for vehicle in vehicles])
+    types = {item.code: item for item in await repo.vehicle_types(company_id)}
+    couplings = await repo.open_couplings_for_vehicles(company_id, vehicle_ids)
     views: list[dict[str, Any]] = []
     for vehicle in vehicles:
         odometer = Decimal(vehicle.odometer_km)
+        vehicle_type = types[vehicle.kind]
+        # Sin placa no circula por la vía pública: no aplican los documentos de circulación.
+        documents = (
+            document_issues(required, expiries.get(vehicle.id, {}), today=today)
+            if vehicle_type.requires_plate
+            else []
+        )
         issues = vehicle_issues(
             status=vehicle.status,
-            documents=document_issues(required, expiries.get(vehicle.id, {}), today=today),
+            documents=documents,
             maintenance=maintenance_issues(plans.get(vehicle.id, []), odometer, today),
         )
         if vehicle.inventory_vehicle_id is None and vehicle.status != "retired":
@@ -116,6 +143,8 @@ async def build_vehicle_views(
                 "plate": vehicle.plate,
                 "vin": vehicle.vin,
                 "kind": vehicle.kind,
+                "type": vehicle_type_view(vehicle_type),
+                "coupling": couplings.get(vehicle.id),
                 "brand": vehicle.brand,
                 "model": vehicle.model,
                 "year": vehicle.year,

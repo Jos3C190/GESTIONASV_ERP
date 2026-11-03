@@ -14,6 +14,7 @@ from app.infrastructure.models.employee import Employee, EmployeeBranchAssignmen
 from app.infrastructure.models.fleet import (
     DriverModel,
     FleetVehicleModel,
+    FleetVehicleTypeModel,
     VehicleDriverAssignmentModel,
 )
 from app.infrastructure.models.inventory_transfer import (
@@ -164,9 +165,18 @@ class DriverQueries:
                 FleetVehicleModel.code,
                 FleetVehicleModel.plate,
                 FleetVehicleModel.kind,
+                FleetVehicleTypeModel.name.label("kind_name"),
+                FleetVehicleTypeModel.base_image,
             )
             .join(
                 FleetVehicleModel, FleetVehicleModel.id == VehicleDriverAssignmentModel.vehicle_id
+            )
+            .join(
+                FleetVehicleTypeModel,
+                and_(
+                    FleetVehicleTypeModel.company_id == FleetVehicleModel.company_id,
+                    FleetVehicleTypeModel.code == FleetVehicleModel.kind,
+                ),
             )
             .where(
                 VehicleDriverAssignmentModel.driver_id.in_(list(driver_ids)),
@@ -180,6 +190,8 @@ class DriverQueries:
                 "code": row.code,
                 "plate": row.plate,
                 "kind": row.kind,
+                "kind_name": row.kind_name,
+                "base_image": row.base_image,
                 "since": row.starts_at,
             }
             for row in rows

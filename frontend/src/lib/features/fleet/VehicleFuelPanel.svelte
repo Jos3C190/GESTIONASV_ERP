@@ -5,9 +5,18 @@
   import { driversApi, type Driver } from '$lib/features/drivers/api';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { fleetApi, type FleetVehicle, type FuelLog, type FuelStats } from './api';
-  import { formatDateTime, formatMoney, formatNumber, isBlank } from './catalog';
+  import {
+    formatDateTime,
+    formatMoney,
+    formatNumber,
+    isBlank,
+    meterName,
+    meterShort
+  } from './catalog';
 
   let { vehicle, onchanged }: { vehicle: FleetVehicle; onchanged: () => void } = $props();
+
+  const unit = $derived(meterShort(vehicle.type.meter_unit));
 
   let logs = $state<FuelLog[]>([]);
   let stats = $state<FuelStats | null>(null);
@@ -112,12 +121,12 @@
       <span>Rendimiento promedio</span>
       <strong
         >{stats?.average_km_per_liter
-          ? `${formatNumber(stats.average_km_per_liter)} km/L`
+          ? `${formatNumber(stats.average_km_per_liter)} ${unit}/L`
           : '—'}</strong
       >
     </div>
     <div>
-      <span>Costo por km</span>
+      <span>Costo por {unit}</span>
       <strong>{stats?.cost_per_km ? formatMoney(stats.cost_per_km) : '—'}</strong>
     </div>
   </div>
@@ -145,7 +154,7 @@
             <tr>
               <th>Fecha</th><th>Estación</th><th>Conductor</th><th class="num">Odómetro</th>
               <th class="num">Litros</th><th class="num">Precio/L</th><th class="num">Total</th>
-              <th class="num">km/L</th>
+              <th class="num">{unit}/L</th>
             </tr>
           </thead>
           <tbody>
@@ -154,7 +163,7 @@
                 <td>{formatDateTime(log.filled_at)}{log.full_tank ? '' : ' · parcial'}</td>
                 <td>{log.station ?? '—'}</td>
                 <td>{log.driver_name ?? '—'}</td>
-                <td class="num">{formatNumber(log.odometer_km)} km</td>
+                <td class="num">{formatNumber(log.odometer_km)} {unit}</td>
                 <td class="num">{formatNumber(log.liters)}</td>
                 <td class="num">{formatMoney(log.unit_price)}</td>
                 <td class="num">{formatMoney(log.total_amount)}</td>
@@ -175,7 +184,7 @@
         ><span>Fecha y hora</span><input type="datetime-local" bind:value={form.filled_at} /></label
       >
       <label>
-        <span>Odómetro (km)</span>
+        <span>{meterName(vehicle.type.meter_unit)} ({unit})</span>
         <input
           type="number"
           min="0"

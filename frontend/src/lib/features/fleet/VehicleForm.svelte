@@ -4,15 +4,12 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import FormField from '$lib/components/ui/FormField.svelte';
+  import Modal from '$lib/components/ui/Modal.svelte';
   import { branch } from '$lib/stores/branch.svelte';
-  import { fleetApi, type FleetVehicle } from './api';
-  import {
-    FUEL_LABELS,
-    KIND_META,
-    VEHICLE_KINDS,
-    type FuelType,
-    type VehicleKind
-  } from './catalog';
+  import { permissions } from '$lib/stores/permissions.svelte';
+  import { fleetApi, type FleetVehicle, type FleetVehicleType } from './api';
+  import { FUEL_LABELS, meterName, meterShort, type FuelType } from './catalog';
+  import VehicleTypeForm from './VehicleTypeForm.svelte';
   import VehicleImage from './VehicleImage.svelte';
 
   interface Props {
@@ -25,7 +22,10 @@
   let code = $state('');
   let plate = $state('');
   let vin = $state('');
-  let kind = $state<VehicleKind>('cargo_van');
+  let kind = $state('cargo_van');
+  let types = $state<FleetVehicleType[]>([]);
+  let typesError = $state<string | null>(null);
+  let creatingType = $state(false);
   let brand = $state('');
   let model = $state('');
   let year = $state(String(currentYear));
@@ -44,24 +44,43 @@
     if (initialized || !vehicle) return;
     initialized = true;
     code = vehicle.code;
-    plate = vehicle.plate;
+    plate = vehicle.plate ?? '';
     vin = vehicle.vin ?? '';
     kind = vehicle.kind;
     brand = vehicle.brand;
     model = vehicle.model;
     year = String(vehicle.year);
     color = vehicle.color ?? '';
-    capacity = String(Number(vehicle.capacity_kg));
+    capacity = vehicle.capacity_kg ? String(Number(vehicle.capacity_kg)) : '';
     fuelType = vehicle.fuel_type;
     branchId = vehicle.branch_id;
     notes = vehicle.notes ?? '';
   });
 
-  const kindOptions = VEHICLE_KINDS.map((value) => ({ value, label: KIND_META[value].label }));
-  const fuelOptions = (Object.keys(FUEL_LABELS) as FuelType[]).map((value) => ({
-    value,
-    label: FUEL_LABELS[value]
-  }));
+  async function loadTypes() {
+    typesError = null;
+    try {
+      types = await fleetApi.vehicleTypes(mode === 'edit');
+    } catch (err) {
+      typesError = err instanceof HttpError ? err.message : 'No se pudieron cargar los tipos.';
+    }
+  }
+
+  $effect(() => {
+    void loadTypes();
+  });
+
+  const canManageTypes = $derived(permissions.hasPermission('fleet:manage_types'));
+  // Al editar sigue visible el tipo actual aunque se haya desactivado.
+  const kindOptions = $derived(
+    types
+      .filter((item) => item.is_active || item.code === vehicle?.kind)
+      .map((item) => ({ value: item.code, label: item.name }))
+  );
+  const currentType = $derived(types.find((item) => item.code === kind) ?? null);
+  const fuelOptions = (Object.keys(FUEL_LABELS) as FuelType[])
+    .filter((value) => value !== 'none')
+    .map((value) => ({ value, label: FUEL_LABELS[value] }));
   const branchOptions = $derived(
     branch.branches.map((item) => ({ value: item.id, label: item.name }))
   );
@@ -70,14 +89,19 @@
     const errors: Record<string, string> = {};
     if (mode === 'create' && !/^[A-Za-z0-9][A-Za-z0-9 _-]{0,31}$/.test(code.trim()))
       errors.code = 'Use letras, números y guiones (máx. 32).';
-    if (!/^[A-Za-z0-9][A-Za-z0-9 -]{1,15}$/.test(plate.trim()))
+    if (
+      plate.trim()
+        ? !/^[A-Za-z0-9][A-Za-z0-9 -]{1,15}$/.test(plate.trim())
+        : currentType?.requires_plate
+    )
       errors.plate = 'Indique la placa: letras, números, espacios y guiones.';
     if (!brand.trim()) errors.brand = 'Indique la marca.';
     if (!model.trim()) errors.model = 'Indique el modelo.';
     const yearNumber = Number(year);
     if (!Number.isInteger(yearNumber) || yearNumber < 1950 || yearNumber > currentYear + 1)
       errors.year = `Año entre 1950 y ${currentYear + 1}.`;
-    if (!(Number(capacity) > 0)) errors.capacity = 'Capacidad mayor que cero.';
+    if (capacity ? !(Number(capacity) > 0) : currentType?.requires_capacity)
+      errors.capacity = 'Capacidad mayor que cero.';
     if (mode === 'create' && !(Number(odometer) >= 0)) errors.odometer = 'Lectura no válida.';
     if (mode === 'create' && !branchId) errors.branch = 'Seleccione la sucursal base.';
     if (vin.trim() && !/^[A-HJ-NPR-Za-hj-npr-z0-9]{11,17}$/.test(vin.trim()))
@@ -92,14 +116,14 @@
     if (!validate()) return;
     saving = true;
     const fields = {
-      plate: plate.trim(),
+      plate: plate.trim() || null,
       vin: vin.trim() || null,
       kind,
       brand: brand.trim(),
       model: model.trim(),
       year: Number(year),
       color: color.trim() || null,
-      capacity_kg: String(Number(capacity)),
+      capacity_kg: capacity ? String(Number(capacity)) : null,
       fuel_type: fuelType,
       notes: notes.trim() || null
     };
@@ -129,7 +153,12 @@
 <form class="vehicle-form" onsubmit={submit} novalidate>
   <Card class="form-card">
     <div class="preview">
-      <VehicleImage {kind} label={KIND_META[kind].label} large />
+      <VehicleImage
+        image={currentType?.base_image ?? null}
+        typeName={currentType?.name ?? ''}
+        label={currentType?.name ?? ''}
+        large
+      />
       <p>La imagen base del tipo se personaliza con el logo de tu empresa.</p>
     </div>
     <div class="fields">
@@ -147,9 +176,9 @@
         />
         <FormField
           id="vehicle-plate"
-          label="Placa"
+          label={currentType?.requires_plate === false ? 'Placa (opcional)' : 'Placa'}
           bind:value={plate}
-          required
+          required={currentType?.requires_plate !== false}
           maxlength={16}
           placeholder="C 123-456"
           error={fieldErrors.plate}
@@ -175,14 +204,22 @@
       </div>
       <h2>Características</h2>
       <div class="grid">
-        <FormField
-          id="vehicle-kind"
-          label="Tipo de vehículo"
-          type="select"
-          bind:value={kind}
-          options={kindOptions}
-          required
-        />
+        <div class="kind-field">
+          <FormField
+            id="vehicle-kind"
+            label="Tipo de vehículo"
+            type="select"
+            bind:value={kind}
+            options={kindOptions}
+            required
+            error={typesError ?? undefined}
+          />
+          {#if canManageTypes}
+            <button type="button" class="new-type" onclick={() => (creatingType = true)}>
+              ¿No está en la lista? Crear un tipo
+            </button>
+          {/if}
+        </div>
         <FormField
           id="vehicle-brand"
           label="Marca"
@@ -212,26 +249,30 @@
         <FormField id="vehicle-color" label="Color" bind:value={color} maxlength={40} />
         <FormField
           id="vehicle-capacity"
-          label="Capacidad de carga (kg)"
+          label={currentType?.requires_capacity === false
+            ? 'Capacidad de carga (kg, opcional)'
+            : 'Capacidad de carga (kg)'}
           type="number"
           bind:value={capacity}
-          required
+          required={currentType?.requires_capacity !== false}
           min="1"
           step="0.01"
           error={fieldErrors.capacity}
         />
-        <FormField
-          id="vehicle-fuel"
-          label="Combustible"
-          type="select"
-          bind:value={fuelType}
-          options={fuelOptions}
-          required
-        />
+        {#if currentType?.fuel_applicable !== false}
+          <FormField
+            id="vehicle-fuel"
+            label="Combustible"
+            type="select"
+            bind:value={fuelType}
+            options={fuelOptions}
+            required
+          />
+        {/if}
         {#if mode === 'create'}
           <FormField
             id="vehicle-odometer"
-            label="Odómetro actual (km)"
+            label={`${meterName(currentType?.meter_unit ?? 'km')} actual (${meterShort(currentType?.meter_unit ?? 'km')})`}
             type="number"
             bind:value={odometer}
             min="0"
@@ -269,6 +310,25 @@
   </Card>
 </form>
 
+<Modal
+  open={creatingType}
+  title="Nuevo tipo de vehículo"
+  size="md"
+  mobileFullScreen
+  onclose={() => (creatingType = false)}
+>
+  {#if creatingType}
+    <VehicleTypeForm
+      oncancel={() => (creatingType = false)}
+      onsaved={(saved) => {
+        types = [...types, saved];
+        kind = saved.code;
+        creatingType = false;
+      }}
+    />
+  {/if}
+</Modal>
+
 <style>
   .vehicle-form :global(.form-card) {
     display: grid;
@@ -301,6 +361,16 @@
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 4px 14px;
     margin-bottom: 14px;
+  }
+  .new-type {
+    display: block;
+    min-height: 44px;
+    margin-top: -6px;
+    color: rgb(var(--foreground-muted));
+    font-size: 13px;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
   .notes {
     display: grid;

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FleetSummary, FleetVehicle } from './api';
 
 const apiMock = vi.hoisted(() => ({
+  vehicleTypes: vi.fn().mockResolvedValue([]),
   list: vi.fn(),
   summary: vi.fn(),
   alerts: vi.fn()
@@ -29,6 +30,22 @@ function vehicle(patch: Partial<FleetVehicle> = {}): FleetVehicle {
     color: null,
     capacity_kg: '4000.00',
     fuel_type: 'diesel',
+    type: {
+      code: 'refrigerated',
+      name: 'Refrigerado',
+      plural: 'Refrigerados',
+      license_classes: ['pesada'],
+      base_image: 'refrigerated',
+      requires_plate: true,
+      requires_capacity: true,
+      meter_unit: 'km',
+      fuel_applicable: true,
+      can_tow: false,
+      is_towable: false,
+      is_system: true,
+      is_active: true
+    },
+    coupling: null,
     odometer_km: '42680.0',
     status: 'active',
     operational_status: 'available',

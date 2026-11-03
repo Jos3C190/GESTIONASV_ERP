@@ -1,7 +1,7 @@
 import { apiFetch, type DocumentUploadTicket } from '$lib/api/client';
 import { ownedDocuments } from '$lib/api/owned-documents';
 import type { Compliance, FleetPage } from '$lib/features/fleet/api';
-import type { LicenseClass, VehicleKind } from '$lib/features/fleet/catalog';
+import type { BaseImage, LicenseClass } from '$lib/features/fleet/catalog';
 import { branch } from '$lib/stores/branch.svelte';
 
 export type DriverStatus = 'active' | 'suspended' | 'inactive';
@@ -40,8 +40,10 @@ export interface Driver {
     assignment_id: string;
     vehicle_id: string;
     code: string;
-    plate: string;
-    kind: VehicleKind;
+    plate: string | null;
+    kind: string;
+    kind_name: string;
+    base_image: BaseImage | null;
     since: string;
   } | null;
   compliance: Compliance;

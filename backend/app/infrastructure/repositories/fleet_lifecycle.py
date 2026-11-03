@@ -9,12 +9,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.fleet import (
     DriverModel,
+    FleetVehicleCouplingModel,
     FleetVehicleModel,
     MaintenanceOrderModel,
     VehicleDriverAssignmentModel,
@@ -43,6 +44,16 @@ async def fleet_deletion_blockers(session: AsyncSession, resource: str, record: 
             VehicleDriverAssignmentModel.ends_at.is_(None),
         ):
             blockers.append("un conductor asignado")
+        if await _exists(
+            session,
+            FleetVehicleCouplingModel,
+            or_(
+                FleetVehicleCouplingModel.tractor_id == record.id,
+                FleetVehicleCouplingModel.trailer_id == record.id,
+            ),
+            FleetVehicleCouplingModel.ended_at.is_(None),
+        ):
+            blockers.append("un remolque enganchado")
         if record.inventory_vehicle_id is not None and await _exists(
             session,
             InventoryTransferModel,

@@ -12,7 +12,7 @@
     type MaintenancePlan,
     type OrderStatus
   } from './api';
-  import { formatDate, formatMoney, formatNumber, isBlank } from './catalog';
+  import { formatDate, formatMoney, formatNumber, isBlank, meterName, meterShort } from './catalog';
 
   let { vehicle, onchanged }: { vehicle: FleetVehicle; onchanged: () => void } = $props();
 
@@ -53,6 +53,7 @@
   let closing = $state<{ order: MaintenanceOrder; mode: 'complete' | 'cancel' } | null>(null);
   let close = $state({ odometer: '', cost: '', workshop: '', notes: '', reason: '' });
 
+  const unit = $derived(meterShort(vehicle.type.meter_unit));
   const canManage = $derived(
     permissions.hasPermission('fleet:maintenance') && vehicle.status !== 'retired'
   );
@@ -224,7 +225,8 @@
         <div>
           <h2>Planes preventivos</h2>
           <p class="muted">
-            Se calculan con el odómetro actual ({formatNumber(vehicle.odometer_km)} km).
+            Se calculan con la lectura actual ({formatNumber(vehicle.odometer_km)}
+            {unit}).
           </p>
         </div>
         {#if canManage}
@@ -246,17 +248,17 @@
               <small>
                 Cada
                 {[
-                  item.interval_km ? `${formatNumber(item.interval_km)} km` : null,
+                  item.interval_km ? `${formatNumber(item.interval_km)} ${unit}` : null,
                   item.interval_days ? `${item.interval_days} días` : null
                 ]
                   .filter(Boolean)
                   .join(' o ')}
                 · Último: {item.last_service_km
-                  ? `${formatNumber(item.last_service_km)} km`
+                  ? `${formatNumber(item.last_service_km)} ${unit}`
                   : '—'}{item.last_service_on ? `, ${formatDate(item.last_service_on)}` : ''}
               </small>
               <small>
-                Próximo: {item.due_km ? `${formatNumber(item.due_km)} km` : ''}{item.due_km &&
+                Próximo: {item.due_km ? `${formatNumber(item.due_km)} ${unit}` : ''}{item.due_km &&
                 item.due_on
                   ? ' o '
                   : ''}{item.due_on ? formatDate(item.due_on) : ''}{!item.due_km && !item.due_on
@@ -355,7 +357,7 @@
                   </td>
                   <td>{ORDER_META[item.status].label}</td>
                   <td>{formatDate(item.completed_at ?? item.created_at)}</td>
-                  <td>{item.odometer_km ? `${formatNumber(item.odometer_km)} km` : '—'}</td>
+                  <td>{item.odometer_km ? `${formatNumber(item.odometer_km)} ${unit}` : '—'}</td>
                   <td>{item.workshop ?? '—'}</td>
                   <td class="num">{formatMoney(item.cost)}</td>
                 </tr>
@@ -383,7 +385,11 @@
     >
     <div class="pair">
       <label
-        ><span>Cada (km)</span><input type="number" min="1" bind:value={plan.interval_km} /></label
+        ><span>Cada ({unit})</span><input
+          type="number"
+          min="1"
+          bind:value={plan.interval_km}
+        /></label
       >
       <label
         ><span>Cada (días)</span><input
@@ -395,7 +401,7 @@
     </div>
     <div class="pair">
       <label
-        ><span>Último servicio (km)</span><input
+        ><span>Último servicio ({unit})</span><input
           type="number"
           min="0"
           step="0.1"
@@ -469,12 +475,12 @@
   <div class="form">
     {#if closing?.mode === 'complete'}
       <p class="muted">
-        Se registrará la lectura de odómetro, se actualizará el plan y el vehículo volverá a operar
-        si no tiene otras órdenes en taller.
+        Se registrará la lectura actual, se actualizará el plan y el vehículo volverá a operar si no
+        tiene otras órdenes en taller.
       </p>
       <div class="pair">
         <label
-          ><span>Odómetro (km)</span><input
+          ><span>{meterName(vehicle.type.meter_unit)} ({unit})</span><input
             type="number"
             min="0"
             step="0.1"

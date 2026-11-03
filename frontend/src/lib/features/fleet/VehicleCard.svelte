@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { FleetVehicle } from './api';
-  import { formatNumber, KIND_META } from './catalog';
+  import { formatNumber, meterShort, plateLabel } from './catalog';
   import FleetIcon from './FleetIcon.svelte';
   import VehicleImage from './VehicleImage.svelte';
   import VehicleStatus from './VehicleStatus.svelte';
@@ -39,15 +39,18 @@
   <div class="vehicle-stage">
     <div class="stage-top">
       <VehicleStatus status={vehicle.operational_status} /><span class="vehicle-kind"
-        >{KIND_META[vehicle.kind].label}</span
+        >{vehicle.type.name}</span
       >
     </div>
     <VehicleImage
-      kind={vehicle.kind}
+      image={vehicle.type.base_image}
+      typeName={vehicle.type.name}
       label={`${vehicle.brand} ${vehicle.model}, ${vehicle.code}`}
     />
     <div class="stage-bottom">
-      <span class="vehicle-code">{vehicle.code}</span><span class="plate">{vehicle.plate}</span>
+      <span class="vehicle-code">{vehicle.code}</span><span class="plate"
+        >{plateLabel(vehicle.plate)}</span
+      >
     </div>
   </div>
   <div class="card-body">
@@ -66,7 +69,9 @@
           >Sin conductor asignado</span
         >
       {/if}
-      <span class="arrival">{formatNumber(vehicle.odometer_km)} km</span>
+      <span class="arrival"
+        >{formatNumber(vehicle.odometer_km)} {meterShort(vehicle.type.meter_unit)}</span
+      >
     </div>
     {#if topIssue}
       <div

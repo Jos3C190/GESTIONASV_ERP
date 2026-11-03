@@ -12,7 +12,9 @@
     formatDateTime,
     formatNumber,
     FUEL_LABELS,
-    KIND_META,
+    meterName,
+    meterShort,
+    plateLabel,
     LICENSE_LABELS,
     VEHICLE_STATUS_LABELS,
     type VehicleStatus as StoredStatus
@@ -20,6 +22,7 @@
   import ComplianceList from './ComplianceList.svelte';
   import FleetIcon from './FleetIcon.svelte';
   import MoveToTrashDialog from './MoveToTrashDialog.svelte';
+  import VehicleCouplingCard from './VehicleCouplingCard.svelte';
   import VehicleDriverPanel from './VehicleDriverPanel.svelte';
   import VehicleFuelPanel from './VehicleFuelPanel.svelte';
   import VehicleGallery from './VehicleGallery.svelte';
@@ -60,8 +63,12 @@
       },
       { id: 'documents' as const, label: 'Documentos', visible: canReadDocuments },
       { id: 'maintenance' as const, label: 'Mantenimiento', visible: true },
-      { id: 'fuel' as const, label: 'Combustible', visible: true },
-      { id: 'odometer' as const, label: 'Odómetro', visible: true },
+      { id: 'fuel' as const, label: 'Combustible', visible: vehicle?.type.fuel_applicable ?? true },
+      {
+        id: 'odometer' as const,
+        label: meterName(vehicle?.type.meter_unit ?? 'km'),
+        visible: true
+      },
       { id: 'gps' as const, label: 'GPS', visible: true },
       { id: 'gallery' as const, label: 'Galería', visible: true }
     ].filter((item) => item.visible)
@@ -133,7 +140,12 @@
   <div class="vehicle-file">
     <header class="hero">
       <div class="hero-image">
-        <VehicleImage kind={vehicle.kind} label={`${vehicle.brand} ${vehicle.model}`} large />
+        <VehicleImage
+          image={vehicle.type.base_image}
+          typeName={vehicle.type.name}
+          label={`${vehicle.brand} ${vehicle.model}`}
+          large
+        />
       </div>
       <div class="hero-body">
         <a class="back" href="/fleet"><FleetIcon name="chevronLeft" size={14} />Flota</a>
@@ -147,8 +159,9 @@
         </p>
         <p class="meta">
           <FleetIcon name="pin" size={13} />{vehicle.branch_name}
-          <span>·</span>{KIND_META[vehicle.kind].label}
-          <span>·</span>{formatNumber(vehicle.odometer_km)} km
+          <span>·</span>{vehicle.type.name}
+          <span>·</span>{formatNumber(vehicle.odometer_km)}
+          {meterShort(vehicle.type.meter_unit)}
         </p>
         {#if canUpdate}
           <div class="actions">
@@ -235,7 +248,7 @@
               </div>
               <div>
                 <dt>Placa</dt>
-                <dd>{vehicle.plate}</dd>
+                <dd>{plateLabel(vehicle.plate)}</dd>
               </div>
               <div>
                 <dt>VIN</dt>
@@ -243,7 +256,7 @@
               </div>
               <div>
                 <dt>Tipo</dt>
-                <dd>{KIND_META[vehicle.kind].label}</dd>
+                <dd>{vehicle.type.name}</dd>
               </div>
               <div>
                 <dt>Marca y modelo</dt>
@@ -266,8 +279,8 @@
                 <dd>{FUEL_LABELS[vehicle.fuel_type]}</dd>
               </div>
               <div>
-                <dt>Odómetro</dt>
-                <dd>{formatNumber(vehicle.odometer_km)} km</dd>
+                <dt>{meterName(vehicle.type.meter_unit)}</dt>
+                <dd>{formatNumber(vehicle.odometer_km)} {meterShort(vehicle.type.meter_unit)}</dd>
               </div>
               <div>
                 <dt>Estado</dt>
@@ -284,6 +297,9 @@
             </dl>
             {#if vehicle.notes}<p class="notes">{vehicle.notes}</p>{/if}
           </section>
+          {#if vehicle.type.can_tow || vehicle.type.is_towable}
+            <VehicleCouplingCard {vehicle} onchanged={(next) => (vehicle = next)} />
+          {/if}
         </div>
       {:else if tab === 'driver'}
         <VehicleDriverPanel {vehicle} onchanged={load} />
@@ -353,7 +369,7 @@
     title="Mover vehículo a la papelera"
     resource="fleet_vehicles"
     recordId={vehicle.id}
-    description={`${vehicle.code} · ${vehicle.plate} dejará de aparecer en Flota, Traslados y Seguimiento. Debe estar sin conductor, sin traslado en ruta, sin órdenes de taller abiertas y sin GPS vinculado.`}
+    description={`${vehicle.code} · ${plateLabel(vehicle.plate)} dejará de aparecer en Flota, Traslados y Seguimiento. Debe estar sin conductor, sin traslado en ruta, sin órdenes de taller abiertas y sin GPS vinculado.`}
     onclose={() => (trashOpen = false)}
     ondone={() => goto('/fleet')}
   />

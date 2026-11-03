@@ -29,25 +29,15 @@ from sqlalchemy import (
     select,
     text,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, column_property, mapped_column
 
 from app.infrastructure.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPKMixin
 from app.infrastructure.models.employee import Employee
 
-VEHICLE_KINDS = (
-    "refrigerated",
-    "cargo_van",
-    "dry_box",
-    "pickup",
-    "flatbed",
-    "compact_van",
-    "curtain_side",
-    "semi_trailer",
-    "tanker",
-)
 VEHICLE_STATUSES = ("active", "maintenance", "out_of_service", "retired")
-FUEL_TYPES = ("diesel", "gasoline", "lpg", "electric", "hybrid")
+FUEL_TYPES = ("diesel", "gasoline", "lpg", "electric", "hybrid", "none")
 LICENSE_CLASSES = ("particular", "liviana", "pesada", "pesada_t", "motocicleta")
 DRIVER_STATUSES = ("active", "suspended", "inactive")
 ODOMETER_SOURCES = ("manual", "fuel", "maintenance", "gps")
@@ -71,20 +61,61 @@ def _user_fk(nullable: bool = True) -> Mapped[uuid.UUID | None]:
     )
 
 
+class FleetVehicleTypeModel(UUIDPKMixin, TimestampMixin, Base):
+    """What a company calls its units and the rules each kind of unit follows."""
+
+    __tablename__ = "fleet_vehicle_types"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False
+    )
+    code: Mapped[str] = mapped_column(String(24), nullable=False)
+    name: Mapped[str] = mapped_column(String(60), nullable=False)
+    plural: Mapped[str] = mapped_column(String(60), nullable=False)
+    #: Empty means no license is needed: forklifts inside a yard, trailers.
+    license_classes: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default="{}"
+    )
+    base_image: Mapped[str | None] = mapped_column(String(24))
+    #: A unit without a plate does not use public roads, so road documents do not apply.
+    requires_plate: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    requires_capacity: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    #: ``odometer_km`` and the plan intervals hold hours for units measured in ``hours``.
+    meter_unit: Mapped[str] = mapped_column(String(8), nullable=False, server_default="km")
+    fuel_applicable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    can_tow: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_towable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="100")
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "code", name="uq_fleet_vehicle_types_company_code"),
+        CheckConstraint("meter_unit IN ('km', 'hours')", name="ck_fleet_vehicle_types_meter"),
+        CheckConstraint("NOT (can_tow AND is_towable)", name="ck_fleet_vehicle_types_tow"),
+        Index(
+            "uq_fleet_vehicle_types_company_name",
+            "company_id",
+            text("lower(name)"),
+            unique=True,
+        ),
+    )
+
+
 class FleetVehicleModel(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "fleet_vehicles"
 
     company_id: Mapped[uuid.UUID] = _company_fk()
     branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     code: Mapped[str] = mapped_column(String(32), nullable=False)
-    plate: Mapped[str] = mapped_column(String(16), nullable=False)
+    plate: Mapped[str | None] = mapped_column(String(16))
     vin: Mapped[str | None] = mapped_column(String(32))
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
     brand: Mapped[str] = mapped_column(String(60), nullable=False)
     model: Mapped[str] = mapped_column(String(80), nullable=False)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     color: Mapped[str | None] = mapped_column(String(40))
-    capacity_kg: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    capacity_kg: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     fuel_type: Mapped[str] = mapped_column(String(16), nullable=False, server_default="diesel")
     odometer_km: Mapped[Decimal] = mapped_column(Numeric(12, 1), nullable=False, server_default="0")
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
@@ -111,7 +142,12 @@ class FleetVehicleModel(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             name="fk_fleet_vehicles_inventory_vehicle_company",
             ondelete="RESTRICT",
         ),
-        CheckConstraint(_in("kind", VEHICLE_KINDS), name="ck_fleet_vehicles_kind"),
+        ForeignKeyConstraint(
+            ["company_id", "kind"],
+            ["fleet_vehicle_types.company_id", "fleet_vehicle_types.code"],
+            name="fk_fleet_vehicles_kind_company",
+            ondelete="RESTRICT",
+        ),
         CheckConstraint(_in("status", VEHICLE_STATUSES), name="ck_fleet_vehicles_status"),
         CheckConstraint(_in("fuel_type", FUEL_TYPES), name="ck_fleet_vehicles_fuel_type"),
         CheckConstraint("year BETWEEN 1950 AND 2100", name="ck_fleet_vehicles_year"),
@@ -156,6 +192,50 @@ class FleetVehicleModel(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
         ),
         Index("ix_fleet_vehicles_company_branch_status", "company_id", "branch_id", "status"),
         {"comment": "Fleet vehicles with a single home branch."},
+    )
+
+
+class FleetVehicleCouplingModel(UUIDPKMixin, TimestampMixin, Base):
+    """A trailer hitched to a tractor; the open row is the current combination."""
+
+    __tablename__ = "fleet_vehicle_couplings"
+
+    company_id: Mapped[uuid.UUID] = _company_fk()
+    tractor_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    trailer_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID | None] = _user_fk()
+    ended_by: Mapped[uuid.UUID | None] = _user_fk()
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["company_id", "tractor_id"],
+            ["fleet_vehicles.company_id", "fleet_vehicles.id"],
+            name="fk_fleet_couplings_tractor",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "trailer_id"],
+            ["fleet_vehicles.company_id", "fleet_vehicles.id"],
+            name="fk_fleet_couplings_trailer",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("tractor_id <> trailer_id", name="ck_fleet_couplings_distinct"),
+        Index(
+            "uq_fleet_couplings_open_tractor",
+            "tractor_id",
+            unique=True,
+            postgresql_where=text("ended_at IS NULL"),
+        ),
+        Index(
+            "uq_fleet_couplings_open_trailer",
+            "trailer_id",
+            unique=True,
+            postgresql_where=text("ended_at IS NULL"),
+        ),
     )
 
 

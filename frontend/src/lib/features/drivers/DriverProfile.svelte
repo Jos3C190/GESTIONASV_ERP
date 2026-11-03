@@ -7,7 +7,7 @@
   import {
     formatDate,
     formatDateTime,
-    KIND_META,
+    plateLabel,
     LICENSE_LABELS,
     type LicenseClass
   } from '$lib/features/fleet/catalog';
@@ -222,8 +222,8 @@
             <a class="link-row" href={`/fleet/${driver.vehicle.vehicle_id}`}>
               <FleetIcon name="truck" size={18} />
               <span
-                ><strong>{driver.vehicle.code} · {driver.vehicle.plate}</strong><small
-                  >{KIND_META[driver.vehicle.kind].label} · desde {formatDate(
+                ><strong>{driver.vehicle.code} · {plateLabel(driver.vehicle.plate)}</strong><small
+                  >{driver.vehicle.kind_name} · desde {formatDate(
                     driver.vehicle.since
                   )}</small
                 ></span

@@ -1,4 +1,4 @@
-import type { VehicleKind } from './catalog';
+import type { BaseImage } from './catalog';
 
 /**
  * Branding de vehículos: cada imagen base declara zonas de decal (cuadriláteros en
@@ -31,7 +31,7 @@ const TRUCK_DOOR: Quad = [
   [594, 658]
 ];
 
-export const VEHICLE_DECALS: Record<VehicleKind, VehicleDecalSpec> = {
+export const VEHICLE_DECALS: Record<BaseImage, VehicleDecalSpec> = {
   refrigerated: {
     width: 1536,
     height: 1024,
