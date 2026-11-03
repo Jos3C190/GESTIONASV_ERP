@@ -193,7 +193,8 @@ async def _vehicle(
     company_id = effective_company_id(request)
     scope = await get_fleet_scope(session, current, checker, company_id)
     repo = FleetRepository(session)
-    return company_id, repo, await scoped_vehicle(repo, scope, vehicle_id, lock=lock)
+    # La sucursal que lo tiene prestado es la que debe inspeccionarlo antes de salir.
+    return company_id, repo, await scoped_vehicle(repo, scope, vehicle_id, lock=lock, borrowed=True)
 
 
 def _result_out(result: FleetInspectionResultModel, resolver: str | None) -> InspectionResultOut:

@@ -45,6 +45,7 @@ from app.api.v1.schemas.fleet import (
 from app.api.v1.traccar_sync import sync_device_branch
 from app.application.audit.audit_service import AuditService
 from app.application.fleet.compliance import license_issue
+from app.application.fleet.costs import business_today
 from app.application.fleet.views import build_vehicle_views, summarize
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -80,7 +81,7 @@ _CONFLICT_FIELDS = {
 
 
 def _today() -> Any:
-    return datetime.now(UTC).date()
+    return business_today()
 
 
 def _state(vehicle: FleetVehicleModel) -> dict[str, object]:
@@ -199,10 +200,16 @@ async def scoped_vehicle(
     vehicle_id: uuid.UUID,
     *,
     lock: bool = False,
+    borrowed: bool = False,
 ) -> FleetVehicleModel:
+    """``borrowed`` also admits the branch it is lent to, for what it needs to operate it."""
     vehicle = await repo.get_vehicle(scope.company_id, vehicle_id, lock=lock)
     if vehicle is None:
         raise NotFoundError("Vehículo no encontrado.", code="vehicle_not_found")
+    if borrowed and not scope.allows(vehicle.branch_id):
+        loan = (await repo.open_loans(scope.company_id, [vehicle.id])).get(vehicle.id)
+        if loan is not None and scope.allows(loan["to_branch_id"]):
+            return vehicle
     scope.require(vehicle.branch_id, not_found="Vehículo no encontrado.")
     return vehicle
 
@@ -241,6 +248,13 @@ async def require_not_on_road(
         raise ConflictError(
             f"No se puede {action}: el vehículo está en el traslado {trip['code']}.",
             code="vehicle_on_road",
+        )
+
+
+async def _require_not_lent(repo: FleetRepository, vehicle: FleetVehicleModel) -> None:
+    if (await repo.open_loans(vehicle.company_id, [vehicle.id])).get(vehicle.id) is not None:
+        raise ConflictError(
+            "El vehículo está prestado; registre su devolución primero.", code="vehicle_on_loan"
         )
 
 
@@ -393,7 +407,7 @@ async def get_vehicle(
     checker: Checker,
 ) -> FleetVehicleOut:
     company_id, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, borrowed=True)
     return await _view(repo, company_id, vehicle)
 
 
@@ -591,6 +605,8 @@ async def change_vehicle_status(
         not body.reason or len(body.reason.strip()) < MIN_REASON_LENGTH
     ):
         raise ValidationError("Indique el motivo del cambio de estado.", code="reason_required")
+    if body.status == "retired":
+        await _require_not_lent(repo, vehicle)
     if body.status == "retired" and await repo.open_coupling(vehicle.id):
         raise ConflictError(
             "Desenganche el remolque antes de dar de baja el vehículo.", code="vehicle_is_coupled"
@@ -646,6 +662,7 @@ async def change_vehicle_branch(
     if branch is None or not branch.is_active:
         raise ValidationError("La sucursal no existe o no está activa.", code="branch_inactive")
     await require_not_on_road(repo, vehicle, "cambiarlo de sucursal")
+    await _require_not_lent(repo, vehicle)
     if await repo.open_coupling(vehicle.id):
         raise ConflictError(
             "Desenganche el remolque antes de cambiar la sucursal.", code="vehicle_is_coupled"

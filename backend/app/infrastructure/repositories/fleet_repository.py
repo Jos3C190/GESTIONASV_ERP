@@ -9,19 +9,26 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable, Sequence
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import and_, func, or_, select
 
 from app.application.fleet.compliance import RequiredCategory
+from app.application.fleet.settings import FleetSettings, settings_from, to_kilograms
+from app.infrastructure.models.catalog import ProductModel
 from app.infrastructure.models.document import DocumentAssetModel
 from app.infrastructure.models.document_record import DocumentCategoryModel, DocumentRecordModel
 from app.infrastructure.models.employee import Employee, EmployeeBranchAssignment
 from app.infrastructure.models.fleet import (
     DriverModel,
+    FleetInspectionModel,
     FleetInspectionResultModel,
+    FleetReservationModel,
+    FleetSettingsModel,
     FleetVehicleCouplingModel,
+    FleetVehicleLoanModel,
     FleetVehicleModel,
     FleetVehiclePhotoModel,
     FleetVehicleTypeModel,
@@ -29,8 +36,13 @@ from app.infrastructure.models.fleet import (
     MaintenancePlanModel,
     VehicleDriverAssignmentModel,
 )
-from app.infrastructure.models.inventory_transfer import InventoryTransferModel
+from app.infrastructure.models.inventory import InventoryItemModel
+from app.infrastructure.models.inventory_transfer import (
+    InventoryTransferDetailModel,
+    InventoryTransferModel,
+)
 from app.infrastructure.models.organization import Branch, Warehouse
+from app.infrastructure.models.product_variant import ProductVariantModel
 from app.infrastructure.models.supplier import SupplierModel
 from app.infrastructure.repositories.fleet_driver_queries import DriverQueries
 
@@ -173,7 +185,15 @@ class FleetRepository(DriverQueries):
     ) -> list[Any]:
         conditions: list[Any] = [FleetVehicleModel.company_id == company_id]
         if branch_ids is not None:
-            conditions.append(FleetVehicleModel.branch_id.in_(branch_ids))
+            # Lo prestado a la sucursal también es suyo mientras dure el préstamo.
+            lent_in = select(FleetVehicleLoanModel.vehicle_id).where(
+                FleetVehicleLoanModel.company_id == company_id,
+                FleetVehicleLoanModel.to_branch_id.in_(branch_ids),
+                FleetVehicleLoanModel.returned_at.is_(None),
+            )
+            conditions.append(
+                or_(FleetVehicleModel.branch_id.in_(branch_ids), FleetVehicleModel.id.in_(lent_in))
+            )
         if status:
             conditions.append(FleetVehicleModel.status == status)
         elif not include_retired:
@@ -275,6 +295,160 @@ class FleetRepository(DriverQueries):
             )
         )
         return branch
+
+    async def fleet_settings(self, company_id: uuid.UUID) -> FleetSettings:
+        return settings_from(await self._session.get(FleetSettingsModel, company_id))
+
+    async def open_loans(
+        self, company_id: uuid.UUID, vehicle_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, Any]]:
+        if not vehicle_ids:
+            return {}
+        rows = await self._session.execute(
+            select(FleetVehicleLoanModel, Branch.name)
+            .join(Branch, Branch.id == FleetVehicleLoanModel.to_branch_id)
+            .where(
+                FleetVehicleLoanModel.company_id == company_id,
+                FleetVehicleLoanModel.vehicle_id.in_(list(vehicle_ids)),
+                FleetVehicleLoanModel.returned_at.is_(None),
+            )
+            .execution_options(include_deleted=True)
+        )
+        return {
+            loan.vehicle_id: {
+                "id": loan.id,
+                "to_branch_id": loan.to_branch_id,
+                "to_branch_name": name,
+                "expected_return_on": loan.expected_return_on,
+            }
+            for loan, name in rows.all()
+        }
+
+    async def dispatchable_vehicles(
+        self, company_id: uuid.UUID, branch_id: uuid.UUID
+    ) -> list[FleetVehicleModel]:
+        """The branch's vehicles, without those lent out and with those lent to it."""
+        lent_out = select(FleetVehicleLoanModel.vehicle_id).where(
+            FleetVehicleLoanModel.company_id == company_id,
+            FleetVehicleLoanModel.returned_at.is_(None),
+        )
+        lent_in = select(FleetVehicleLoanModel.vehicle_id).where(
+            FleetVehicleLoanModel.company_id == company_id,
+            FleetVehicleLoanModel.to_branch_id == branch_id,
+            FleetVehicleLoanModel.returned_at.is_(None),
+        )
+        rows = await self._session.scalars(
+            select(FleetVehicleModel)
+            .where(
+                FleetVehicleModel.company_id == company_id,
+                FleetVehicleModel.status != "retired",
+                or_(
+                    and_(
+                        FleetVehicleModel.branch_id == branch_id,
+                        FleetVehicleModel.id.not_in(lent_out),
+                    ),
+                    FleetVehicleModel.id.in_(lent_in),
+                ),
+            )
+            .order_by(FleetVehicleModel.code)
+        )
+        return list(rows)
+
+    async def driver_names(
+        self, company_id: uuid.UUID, driver_ids: Iterable[uuid.UUID]
+    ) -> dict[uuid.UUID, str]:
+        wanted = list(set(driver_ids))
+        if not wanted:
+            return {}
+        rows = await self._session.execute(
+            select(DriverModel.id, Employee.first_name, Employee.last_name)
+            .join(Employee, Employee.id == DriverModel.employee_id)
+            .where(DriverModel.company_id == company_id, DriverModel.id.in_(wanted))
+            .execution_options(include_deleted=True)
+        )
+        return {row.id: f"{row.first_name} {row.last_name}".strip() for row in rows}
+
+    async def latest_inspection_at(self, vehicle_id: uuid.UUID) -> datetime | None:
+        latest: datetime | None = await self._session.scalar(
+            select(func.max(FleetInspectionModel.inspected_at)).where(
+                FleetInspectionModel.vehicle_id == vehicle_id
+            )
+        )
+        return latest
+
+    async def next_reservation(
+        self, vehicle_id: uuid.UUID, start: datetime, end: datetime
+    ) -> dict[str, Any] | None:
+        row = await self._session.scalar(
+            select(FleetReservationModel)
+            .where(
+                FleetReservationModel.vehicle_id == vehicle_id,
+                FleetReservationModel.status == "active",
+                FleetReservationModel.starts_at < end,
+                FleetReservationModel.ends_at > start,
+            )
+            .order_by(FleetReservationModel.starts_at)
+            .limit(1)
+        )
+        if row is None:
+            return None
+        return {"starts_at": row.starts_at, "ends_at": row.ends_at, "reason": row.reason}
+
+    async def driver_active_transfer(
+        self, company_id: uuid.UUID, driver_id: uuid.UUID, exclude: uuid.UUID | None = None
+    ) -> str | None:
+        statement = select(InventoryTransferModel.code).where(
+            InventoryTransferModel.company_id == company_id,
+            InventoryTransferModel.driver_id == driver_id,
+            InventoryTransferModel.status.in_(ACTIVE_TRANSFER_STATUSES),
+        )
+        if exclude is not None:
+            statement = statement.where(InventoryTransferModel.id != exclude)
+        code: str | None = await self._session.scalar(statement.limit(1))
+        return code
+
+    async def transfer_load(
+        self, company_id: uuid.UUID, transfer_id: uuid.UUID
+    ) -> tuple[Decimal, int]:
+        """Kilograms a transfer carries, and how many of its products have no weight."""
+        rows = await self._session.execute(
+            select(
+                InventoryTransferDetailModel.quantity_planned,
+                ProductModel.id_product,
+                ProductModel.weight,
+                ProductModel.weight_unit,
+            )
+            .join(
+                InventoryItemModel,
+                and_(
+                    InventoryItemModel.company_id == InventoryTransferDetailModel.company_id,
+                    InventoryItemModel.id == InventoryTransferDetailModel.inventory_item_id,
+                ),
+            )
+            .outerjoin(
+                ProductVariantModel,
+                ProductVariantModel.id == InventoryItemModel.variant_id,
+            )
+            .outerjoin(
+                ProductModel,
+                ProductModel.id_product
+                == func.coalesce(InventoryItemModel.product_id, ProductVariantModel.product_id),
+            )
+            .where(
+                InventoryTransferDetailModel.company_id == company_id,
+                InventoryTransferDetailModel.transfer_id == transfer_id,
+            )
+            .execution_options(include_deleted=True)
+        )
+        total = Decimal("0")
+        without_weight: set[Any] = set()
+        for quantity, product_id, weight, unit in rows.all():
+            kilograms = to_kilograms(weight, unit) if weight is not None and unit else None
+            if kilograms is None:
+                without_weight.add(product_id)
+            else:
+                total += kilograms * Decimal(quantity)
+        return total, len(without_weight)
 
     async def open_critical_failures(
         self, vehicle_ids: Sequence[uuid.UUID]
@@ -395,6 +569,8 @@ class FleetRepository(DriverQueries):
                 VehicleDriverAssignmentModel.id,
                 VehicleDriverAssignmentModel.vehicle_id,
                 VehicleDriverAssignmentModel.starts_at,
+                VehicleDriverAssignmentModel.expected_end_on,
+                VehicleDriverAssignmentModel.covers_driver_id,
                 DriverModel.id.label("driver_id"),
                 DriverModel.license_class,
                 DriverModel.status.label("driver_status"),
@@ -425,6 +601,8 @@ class FleetRepository(DriverQueries):
                 "license_class": row.license_class,
                 "status": row.driver_status,
                 "since": row.starts_at,
+                "expected_end_on": row.expected_end_on,
+                "covers_driver_id": row.covers_driver_id,
             }
             for row in rows
         }

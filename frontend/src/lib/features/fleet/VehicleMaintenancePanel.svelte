@@ -160,6 +160,19 @@
     );
   }
 
+  // Un plan vencido ya dice qué hay que hacer: basta un toque para abrir su orden.
+  function createFromPlan(target: MaintenancePlan) {
+    void run(
+      () =>
+        fleetApi.createOrder(vehicle.id, {
+          kind: 'preventive',
+          title: target.name,
+          plan_id: target.id
+        }),
+      () => undefined
+    );
+  }
+
   function openOrder(fromPlan: MaintenancePlan | null) {
     order = {
       kind: 'preventive',
@@ -287,7 +300,13 @@
               </small>
               {#if canManage}
                 <div class="row-actions">
-                  <button type="button" onclick={() => openOrder(item)}>Programar orden</button>
+                  {#if item.state === 'overdue' && !openOrders.some((order) => order.plan_id === item.id)}
+                    <button type="button" disabled={saving} onclick={() => createFromPlan(item)}
+                      >Crear orden</button
+                    >
+                  {:else}
+                    <button type="button" onclick={() => openOrder(item)}>Programar orden</button>
+                  {/if}
                   <button type="button" onclick={() => openPlan(item)}>Editar</button>
                   <button type="button" onclick={() => askDeactivate(item)}>Desactivar</button>
                 </div>
@@ -646,6 +665,7 @@
   }
   .row-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
     margin-top: 6px;
   }

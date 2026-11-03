@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable
-from datetime import UTC, datetime
 from typing import Annotated, Any, TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -50,6 +49,7 @@ from app.api.v1.schemas.inventory_transfer import (
 from app.api.v1.transfer_tracking import archive_trip_on_commit
 from app.application.audit.audit_service import AuditService
 from app.application.fleet.compliance import Issue
+from app.application.fleet.costs import business_today
 from app.application.fleet.dispatch import HARD_BLOCKS as DISPATCH_HARD_BLOCKS
 from app.application.fleet.dispatch import DispatchEvaluation, evaluate_dispatch
 from app.application.fleet.driver_views import build_driver_views
@@ -519,13 +519,14 @@ async def _dispatch_subject(
     company_id: uuid.UUID,
     transfer_id: uuid.UUID,
     inventory_vehicle_id: uuid.UUID,
+    lock: bool = False,
 ) -> FleetVehicleModel:
-    vehicle = await session.scalar(
-        select(FleetVehicleModel).where(
-            FleetVehicleModel.company_id == company_id,
-            FleetVehicleModel.inventory_vehicle_id == inventory_vehicle_id,
-        )
+    statement = select(FleetVehicleModel).where(
+        FleetVehicleModel.company_id == company_id,
+        FleetVehicleModel.inventory_vehicle_id == inventory_vehicle_id,
     )
+    # Al despachar de verdad, un préstamo o un segundo despacho deben esperar su turno.
+    vehicle = await session.scalar(statement.with_for_update() if lock else statement)
     if vehicle is None:
         raise HTTPException(
             422,
@@ -537,6 +538,17 @@ async def _dispatch_subject(
     return vehicle
 
 
+async def _lock_driver(
+    session: SessionDep, vehicle: FleetVehicleModel, driver_id: uuid.UUID | None
+) -> None:
+    repo = FleetRepository(session)
+    if driver_id is None:
+        assignment = await repo.open_assignment_for_vehicle(vehicle.id)
+        driver_id = assignment.driver_id if assignment is not None else None
+    if driver_id is not None:
+        await repo.get_driver(vehicle.company_id, driver_id, lock=True)
+
+
 async def _evaluate(
     session: SessionDep,
     company_id: uuid.UUID,
@@ -544,10 +556,14 @@ async def _evaluate(
     origin_branch_id: uuid.UUID | None,
     inventory_vehicle_id: uuid.UUID,
     driver_id: uuid.UUID | None,
+    *,
+    lock: bool = False,
 ) -> DispatchEvaluation:
     if origin_branch_id is None:
         raise HTTPException(409, "La bodega de origen no pertenece a una sucursal.")
-    vehicle = await _dispatch_subject(session, company_id, transfer_id, inventory_vehicle_id)
+    vehicle = await _dispatch_subject(session, company_id, transfer_id, inventory_vehicle_id, lock)
+    if lock:
+        await _lock_driver(session, vehicle, driver_id)
     return await evaluate_dispatch(
         FleetRepository(session),
         company_id,
@@ -555,7 +571,7 @@ async def _evaluate(
         vehicle=vehicle,
         driver_id=driver_id,
         transfer_id=transfer_id,
-        today=datetime.now(UTC).date(),
+        today=business_today(),
     )
 
 
@@ -587,11 +603,11 @@ async def dispatch_options(
     if origin_branch_id is None:
         raise HTTPException(409, "La bodega de origen no pertenece a una sucursal.")
     repo = FleetRepository(session)
-    today = datetime.now(UTC).date()
+    today = business_today()
     vehicles = [
         vehicle
-        for vehicle in await repo.all_vehicles(company_id, [origin_branch_id])
-        if vehicle.inventory_vehicle_id is not None and vehicle.status != "retired"
+        for vehicle in await repo.dispatchable_vehicles(company_id, origin_branch_id)
+        if vehicle.inventory_vehicle_id is not None
     ]
     vehicle_views = await build_vehicle_views(repo, company_id, vehicles, today=today)
     rows, _ = await repo.list_drivers(
@@ -697,7 +713,7 @@ async def dispatch_transfer(
     )
     await _require_dynamic_permission(checker, current, company_id, "inventory:move")
     evaluation = await _evaluate(
-        session, company_id, transfer_id, branch_id, body.vehicle_id, body.driver_id
+        session, company_id, transfer_id, branch_id, body.vehicle_id, body.driver_id, lock=True
     )
     override_reason: str | None = None
     if evaluation.blocking:

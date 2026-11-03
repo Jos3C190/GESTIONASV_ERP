@@ -51,7 +51,11 @@
     />
     <div class="hero-footer">
       <span class="plate">{plateLabel(vehicle.plate)}</span>
-      <span class="branch"><FleetIcon name="pin" size={13} />{vehicle.branch_name}</span>
+      <span class="branch"
+        ><FleetIcon name="pin" size={13} />{vehicle.branch_name}{vehicle.loan
+          ? ` · Prestado a ${vehicle.loan.to_branch_name}`
+          : ''}</span
+      >
     </div>
   </div>
   <div class="detail-content">

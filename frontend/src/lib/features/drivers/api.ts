@@ -215,10 +215,15 @@ export const driversApi = {
   ) => apiFetch<Driver>(`/drivers/${id}/license-captures/${captureId}/confirm`, json('POST', data)),
   cancelCapture: (id: string, captureId: string) =>
     apiFetch<void>(`/drivers/${id}/license-captures/${captureId}`, json('DELETE')),
-  assign: (vehicleId: string, driverId: string, overrideReason?: string) =>
+  assign: (
+    vehicleId: string,
+    driverId: string,
+    overrideReason?: string,
+    cover?: { expected_end_on: string | null; covers_driver_id: string | null }
+  ) =>
     apiFetch<Assignment>(
       `/fleet/vehicles/${vehicleId}/assignment`,
-      json('POST', { driver_id: driverId, override_reason: overrideReason || undefined })
+      json('POST', { driver_id: driverId, override_reason: overrideReason || undefined, ...cover })
     ),
   endAssignment: (vehicleId: string, reason: string) =>
     apiFetch<void>(`/fleet/vehicles/${vehicleId}/assignment/end`, json('POST', { reason })),

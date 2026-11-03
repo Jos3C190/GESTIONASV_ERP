@@ -104,7 +104,7 @@ async def _vehicle(
     company_id = effective_company_id(request)
     scope = await get_fleet_scope(session, current, checker, company_id)
     repo = FleetRepository(session)
-    return company_id, repo, await scoped_vehicle(repo, scope, vehicle_id, lock=lock)
+    return company_id, repo, await scoped_vehicle(repo, scope, vehicle_id, lock=lock, borrowed=True)
 
 
 @router.get(

@@ -8,7 +8,7 @@ like the fleet (:mod:`app.api.v1.fleet_scope`).
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -44,6 +44,7 @@ from app.api.v1.schemas.fleet import (
 )
 from app.application.audit.audit_service import AuditService
 from app.application.fleet.compliance import Issue, license_issue
+from app.application.fleet.costs import business_today
 from app.application.fleet.driver_views import build_driver_views, driver_fitness
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -68,7 +69,7 @@ HARD_BLOCKS = frozenset({"driver_not_active", "employee_not_active"})
 
 
 def _today() -> Any:
-    return datetime.now(UTC).date()
+    return business_today()
 
 
 def _state(driver: DriverModel) -> dict[str, object]:
@@ -380,6 +381,13 @@ async def change_driver_status(
                 "El empleado ya no tiene asignación activa en la sucursal base; cámbiela primero.",
                 code="employee_branch_unassigned",
             )
+    if body.status != "active":
+        code = await repo.driver_active_transfer(driver.company_id, driver.id)
+        if code is not None:
+            raise ConflictError(
+                f"El conductor está en el traslado {code}; cámbielo cuando termine.",
+                code="driver_on_road",
+            )
     before = _state(driver)
     async with session.begin_nested():
         if body.status != "active":
@@ -503,6 +511,46 @@ async def driver_trips(
 # ------------------------------------------------------------------ assignments
 
 
+async def _require_no_trip(
+    repo: FleetRepository, vehicle: FleetVehicleModel, driver: DriverModel
+) -> None:
+    """Whoever is on the road stays in charge until the trip ends."""
+    if vehicle.inventory_vehicle_id is not None:
+        trips = await repo.active_transfers(vehicle.company_id, [vehicle.inventory_vehicle_id])
+        if trips:
+            trip = next(iter(trips.values()))
+            raise ConflictError(
+                f"No se puede reasignar: el vehículo está en el traslado {trip['code']}.",
+                code="vehicle_on_road",
+            )
+    code = await repo.driver_active_transfer(vehicle.company_id, driver.id)
+    if code is not None:
+        raise ConflictError(
+            f"No se puede reasignar: el conductor está en el traslado {code}.",
+            code="driver_on_road",
+        )
+
+
+async def _require_valid_cover(
+    repo: FleetRepository,
+    driver: DriverModel,
+    expected_end_on: date | None,
+    covers_driver_id: uuid.UUID | None,
+) -> None:
+    if expected_end_on is not None and expected_end_on < _today():
+        raise ValidationError(
+            "El fin de la asignación no puede ser una fecha pasada.",
+            code="assignment_end_past",
+        )
+    if covers_driver_id is not None and (
+        covers_driver_id == driver.id
+        or await repo.driver_with_employee(driver.company_id, covers_driver_id) is None
+    ):
+        raise ValidationError(
+            "Elija al conductor que se está cubriendo.", code="assignment_covers_invalid"
+        )
+
+
 async def assign_driver_to_vehicle(
     *,
     session: SessionDep,
@@ -513,6 +561,8 @@ async def assign_driver_to_vehicle(
     vehicle: FleetVehicleModel,
     driver: DriverModel,
     override_reason: str | None,
+    expected_end_on: date | None = None,
+    covers_driver_id: uuid.UUID | None = None,
 ) -> VehicleDriverAssignmentModel:
     """Assign a driver to a vehicle, closing their previous assignments."""
     company_id = vehicle.company_id
@@ -529,6 +579,8 @@ async def assign_driver_to_vehicle(
             "El conductor y el vehículo deben pertenecer a la misma sucursal.",
             code="driver_vehicle_branch_mismatch",
         )
+    await _require_no_trip(repo, vehicle, driver)
+    await _require_valid_cover(repo, driver, expected_end_on, covers_driver_id)
     employee = await session.get(Employee, driver.employee_id)
     issues, _ = (
         await driver_fitness(
@@ -575,6 +627,8 @@ async def assign_driver_to_vehicle(
         driver_id=driver.id,
         starts_at=datetime.now(UTC),
         assigned_by=current.id,
+        expected_end_on=expected_end_on,
+        covers_driver_id=covers_driver_id,
     )
     session.add(assignment)
     await session.flush()
@@ -623,6 +677,8 @@ async def assign_driver(
             vehicle=vehicle,
             driver=driver,
             override_reason=body.override_reason,
+            expected_end_on=body.expected_end_on,
+            covers_driver_id=body.covers_driver_id,
         )
     history = await repo.assignment_history(vehicle_id=vehicle.id)
     return AssignmentOut.model_validate(history[0])

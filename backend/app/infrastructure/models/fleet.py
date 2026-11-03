@@ -351,8 +351,17 @@ class VehicleDriverAssignmentModel(UUIDPKMixin, TimestampMixin, Base):
     assigned_by: Mapped[uuid.UUID | None] = _user_fk()
     ended_by: Mapped[uuid.UUID | None] = _user_fk()
     end_reason: Mapped[str | None] = mapped_column(Text)
+    #: A cover for someone: when it should end, and whom the vehicle goes back to.
+    expected_end_on: Mapped[date | None] = mapped_column(Date)
+    covers_driver_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
 
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["company_id", "covers_driver_id"],
+            ["drivers.company_id", "drivers.id"],
+            name="fk_vehicle_driver_assignments_covers",
+            ondelete="RESTRICT",
+        ),
         ForeignKeyConstraint(
             ["company_id", "vehicle_id"],
             ["fleet_vehicles.company_id", "fleet_vehicles.id"],
@@ -590,6 +599,128 @@ class FleetCostModel(UUIDPKMixin, TimestampMixin, Base):
         CheckConstraint("amount > 0", name="ck_fleet_costs_amount"),
         Index("ix_fleet_costs_vehicle_date", "vehicle_id", "incurred_on"),
         Index("ix_fleet_costs_company_date", "company_id", "incurred_on"),
+    )
+
+
+class FleetSettingsModel(TimestampMixin, Base):
+    """A company's fleet rules; everything that changes dispatch starts turned off."""
+
+    __tablename__ = "fleet_settings"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), primary_key=True
+    )
+    block_overdue_maintenance: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    require_inspection: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    block_overweight: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    inspection_valid_hours: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="24"
+    )
+    document_warning_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default="30")
+    maintenance_warning_km: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="500"
+    )
+    maintenance_warning_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="7"
+    )
+    updated_by: Mapped[uuid.UUID | None] = _user_fk()
+
+    __table_args__ = (
+        CheckConstraint(
+            "inspection_valid_hours BETWEEN 1 AND 720", name="ck_fleet_settings_inspection_hours"
+        ),
+        CheckConstraint(
+            "document_warning_days BETWEEN 0 AND 365", name="ck_fleet_settings_document_days"
+        ),
+        CheckConstraint(
+            "maintenance_warning_km BETWEEN 0 AND 100000", name="ck_fleet_settings_maintenance_km"
+        ),
+        CheckConstraint(
+            "maintenance_warning_days BETWEEN 0 AND 365",
+            name="ck_fleet_settings_maintenance_days",
+        ),
+    )
+
+
+class FleetVehicleLoanModel(UUIDPKMixin, TimestampMixin, Base):
+    """A vehicle working for another branch for a while; its home branch does not change."""
+
+    __tablename__ = "fleet_vehicle_loans"
+
+    company_id: Mapped[uuid.UUID] = _company_fk()
+    vehicle_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    from_branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    to_branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    starts_on: Mapped[date] = mapped_column(Date, nullable=False)
+    expected_return_on: Mapped[date] = mapped_column(Date, nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    returned_by: Mapped[uuid.UUID | None] = _user_fk()
+    created_by: Mapped[uuid.UUID | None] = _user_fk()
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["company_id", "vehicle_id"],
+            ["fleet_vehicles.company_id", "fleet_vehicles.id"],
+            name="fk_fleet_loans_vehicle",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["from_branch_id", "company_id"],
+            ["branches.id", "branches.company_id"],
+            name="fk_fleet_loans_from",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["to_branch_id", "company_id"],
+            ["branches.id", "branches.company_id"],
+            name="fk_fleet_loans_to",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("from_branch_id <> to_branch_id", name="ck_fleet_loans_branches"),
+        CheckConstraint("expected_return_on >= starts_on", name="ck_fleet_loans_dates"),
+        Index(
+            "uq_fleet_loans_open_vehicle",
+            "vehicle_id",
+            unique=True,
+            postgresql_where=text("returned_at IS NULL"),
+        ),
+        Index(
+            "ix_fleet_loans_open_to_branch",
+            "to_branch_id",
+            postgresql_where=text("returned_at IS NULL"),
+        ),
+    )
+
+
+class FleetReservationModel(UUIDPKMixin, TimestampMixin, Base):
+    """Overlaps are refused by an exclusion constraint on the table (migration 0111)."""
+
+    __tablename__ = "fleet_reservations"
+
+    company_id: Mapped[uuid.UUID] = _company_fk()
+    vehicle_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reason: Mapped[str] = mapped_column(String(300), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
+    reserved_by: Mapped[uuid.UUID | None] = _user_fk()
+    cancelled_by: Mapped[uuid.UUID | None] = _user_fk()
+    cancel_reason: Mapped[str | None] = mapped_column(String(500))
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["company_id", "vehicle_id"],
+            ["fleet_vehicles.company_id", "fleet_vehicles.id"],
+            name="fk_fleet_reservations_vehicle",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("status IN ('active', 'cancelled')", name="ck_fleet_reservations_status"),
+        CheckConstraint("ends_at > starts_at", name="ck_fleet_reservations_dates"),
     )
 
 

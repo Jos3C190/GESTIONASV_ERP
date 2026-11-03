@@ -16,6 +16,7 @@ from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.fleet import (
     DriverModel,
     FleetVehicleCouplingModel,
+    FleetVehicleLoanModel,
     FleetVehicleModel,
     MaintenanceOrderModel,
     VehicleDriverAssignmentModel,
@@ -32,6 +33,18 @@ ON_ROAD_STATUSES = ("in_transit", "incident")
 
 async def _exists(session: AsyncSession, model: type[Any], *conditions: Any) -> bool:
     return (await session.scalar(select(model).where(*conditions).limit(1))) is not None
+
+
+async def _vehicle_links(session: AsyncSession, record: Any) -> list[str]:
+    links = ["un GPS vinculado"] if record.traccar_device_id is not None else []
+    if await _exists(
+        session,
+        FleetVehicleLoanModel,
+        FleetVehicleLoanModel.vehicle_id == record.id,
+        FleetVehicleLoanModel.returned_at.is_(None),
+    ):
+        links.append("un préstamo sin devolver")
+    return links
 
 
 async def fleet_deletion_blockers(session: AsyncSession, resource: str, record: Any) -> list[str]:
@@ -68,8 +81,7 @@ async def fleet_deletion_blockers(session: AsyncSession, resource: str, record: 
             MaintenanceOrderModel.status.in_(("scheduled", "in_progress")),
         ):
             blockers.append("órdenes de mantenimiento abiertas")
-        if record.traccar_device_id is not None:
-            blockers.append("un GPS vinculado")
+        blockers.extend(await _vehicle_links(session, record))
     elif resource == "drivers":
         if await _exists(
             session,

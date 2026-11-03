@@ -81,6 +81,16 @@ class VehicleDriverOut(BaseModel):
     license_class: LicenseClass
     status: DriverStatus
     since: datetime
+    expected_end_on: date | None = None
+    covers_driver_id: uuid.UUID | None = None
+    covers_driver_name: str | None = None
+
+
+class VehicleLoanSummaryOut(BaseModel):
+    id: uuid.UUID
+    to_branch_id: uuid.UUID
+    to_branch_name: str
+    expected_return_on: date
 
 
 class VehicleTripOut(BaseModel):
@@ -186,6 +196,7 @@ class FleetVehicleOut(BaseModel):
     contract_reference: str | None
     contract_ends_on: date | None
     monthly_fee: Decimal | None
+    loan: VehicleLoanSummaryOut | None = None
     compliance: ComplianceOut
     created_at: datetime
     updated_at: datetime
@@ -515,6 +526,55 @@ class CostReportOut(BaseModel):
     other_by_category: dict[CostCategory, Decimal]
 
 
+class FleetSettingsIn(BaseModel):
+    block_overdue_maintenance: bool
+    require_inspection: bool
+    block_overweight: bool = False
+    inspection_valid_hours: int = Field(ge=1, le=720)
+    document_warning_days: int = Field(ge=0, le=365)
+    maintenance_warning_km: int = Field(ge=0, le=100_000)
+    maintenance_warning_days: int = Field(ge=0, le=365)
+
+
+class FleetSettingsOut(FleetSettingsIn):
+    pass
+
+
+class FleetLoanIn(BaseModel):
+    to_branch_id: uuid.UUID
+    expected_return_on: date
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class FleetLoanOut(BaseModel):
+    id: uuid.UUID
+    from_branch_id: uuid.UUID
+    from_branch_name: str
+    to_branch_id: uuid.UUID
+    to_branch_name: str
+    starts_on: date
+    expected_return_on: date
+    reason: str
+    returned_at: datetime | None
+    created_by_name: str | None
+
+
+class FleetReservationIn(BaseModel):
+    starts_at: AwareDatetime
+    ends_at: AwareDatetime
+    reason: str = Field(min_length=3, max_length=300)
+
+
+class FleetReservationOut(BaseModel):
+    id: uuid.UUID
+    starts_at: datetime
+    ends_at: datetime
+    reason: str
+    status: Literal["active", "cancelled"]
+    reserved_by_name: str | None
+    cancel_reason: str | None
+
+
 class FleetIncidentIn(BaseModel):
     kind: IncidentKind
     severity: IncidentSeverity
@@ -714,6 +774,8 @@ class DriverBranchIn(BaseModel):
 class AssignmentIn(BaseModel):
     driver_id: uuid.UUID
     override_reason: str | None = Field(None, min_length=5, max_length=500)
+    expected_end_on: date | None = None
+    covers_driver_id: uuid.UUID | None = None
 
 
 class AssignmentEndIn(BaseModel):

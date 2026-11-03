@@ -74,6 +74,7 @@ def document_issues(
     *,
     today: date,
     subject: str = "",
+    warning_days: int = EXPIRY_WARNING_DAYS,
 ) -> list[Issue]:
     """Issues for mandatory documents.
 
@@ -98,7 +99,7 @@ def document_issues(
                     f"{category.name}{suffix} vencida desde el {_format(expires_on)}.",
                 )
             )
-        elif (expires_on - today).days <= EXPIRY_WARNING_DAYS:
+        elif (expires_on - today).days <= warning_days:
             days = (expires_on - today).days
             when = "hoy" if days == 0 else f"en {days} días"
             issues.append(

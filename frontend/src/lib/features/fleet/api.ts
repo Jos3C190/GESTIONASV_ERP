@@ -47,6 +47,9 @@ export interface VehicleDriver {
   license_class: LicenseClass;
   status: 'active' | 'suspended' | 'inactive';
   since: string;
+  expected_end_on?: string | null;
+  covers_driver_id?: string | null;
+  covers_driver_name?: string | null;
 }
 
 export interface FleetVehicleTypeInfo {
@@ -132,6 +135,12 @@ export interface FleetVehicle {
   contract_reference: string | null;
   contract_ends_on: string | null;
   monthly_fee: string | null;
+  loan?: {
+    id: string;
+    to_branch_id: string;
+    to_branch_name: string;
+    expected_return_on: string;
+  } | null;
   compliance: Compliance;
   created_at: string;
   updated_at: string;
@@ -416,6 +425,39 @@ export interface FleetInspectionInput {
   results: { item_id: string; passed: boolean; notes?: string | null; photo_url?: string | null }[];
 }
 
+export interface FleetSettings {
+  block_overdue_maintenance: boolean;
+  require_inspection: boolean;
+  block_overweight: boolean;
+  inspection_valid_hours: number;
+  document_warning_days: number;
+  maintenance_warning_km: number;
+  maintenance_warning_days: number;
+}
+
+export interface FleetLoan {
+  id: string;
+  from_branch_id: string;
+  from_branch_name: string;
+  to_branch_id: string;
+  to_branch_name: string;
+  starts_on: string;
+  expected_return_on: string;
+  reason: string;
+  returned_at: string | null;
+  created_by_name: string | null;
+}
+
+export interface FleetReservation {
+  id: string;
+  starts_at: string;
+  ends_at: string;
+  reason: string;
+  status: 'active' | 'cancelled';
+  reserved_by_name: string | null;
+  cancel_reason: string | null;
+}
+
 export interface CostReport {
   date_from: string;
   date_to: string;
@@ -618,6 +660,22 @@ export const fleetApi = {
   addFuel: (id: string, data: FuelLogInput) =>
     apiFetch<FuelLog>(`/fleet/vehicles/${id}/fuel-logs`, json('POST', data)),
   suppliers: () => apiFetch<FleetSupplier[]>('/fleet/suppliers'),
+  settings: () => apiFetch<FleetSettings>('/fleet/settings'),
+  saveSettings: (data: FleetSettings) =>
+    apiFetch<FleetSettings>('/fleet/settings', json('PUT', data)),
+  loans: (id: string) => apiFetch<FleetLoan[]>(`/fleet/vehicles/${id}/loans`),
+  lend: (id: string, data: { to_branch_id: string; expected_return_on: string; reason: string }) =>
+    apiFetch<FleetLoan>(`/fleet/vehicles/${id}/loans`, json('POST', data)),
+  returnLoan: (id: string, loanId: string) =>
+    apiFetch<FleetLoan>(`/fleet/vehicles/${id}/loans/${loanId}/return`, json('POST')),
+  reservations: (id: string) => apiFetch<FleetReservation[]>(`/fleet/vehicles/${id}/reservations`),
+  addReservation: (id: string, data: { starts_at: string; ends_at: string; reason: string }) =>
+    apiFetch<FleetReservation>(`/fleet/vehicles/${id}/reservations`, json('POST', data)),
+  cancelReservation: (id: string, reservationId: string, reason: string) =>
+    apiFetch<FleetReservation>(
+      `/fleet/vehicles/${id}/reservations/${reservationId}/cancel`,
+      json('POST', { reason })
+    ),
   incidents: (id: string) => apiFetch<FleetIncident[]>(`/fleet/vehicles/${id}/incidents`),
   driverIncidents: (driverId: string) =>
     apiFetch<FleetIncident[]>(`/fleet/drivers/${driverId}/incidents`),

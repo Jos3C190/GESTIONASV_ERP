@@ -227,6 +227,9 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
         "fleet:incidents", "Registrar y dar seguimiento a incidentes de vehículos", "fleet"
     ),
     PermissionSpec("fleet:inspections", "Realizar inspecciones y resolver sus fallas", "fleet"),
+    PermissionSpec("fleet:settings", "Configurar las reglas de la flota", "fleet"),
+    PermissionSpec("fleet:loans", "Prestar vehículos entre sucursales", "fleet"),
+    PermissionSpec("fleet:reservations", "Reservar vehículos", "fleet"),
     PermissionSpec(
         "fleet:compliance_override",
         "Autorizar despachos con documentos o licencias no vigentes",

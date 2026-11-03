@@ -16,7 +16,9 @@
   const place = $derived(
     vehicle.current_transfer
       ? `${vehicle.current_transfer.code} → ${vehicle.current_transfer.destination_branch}`
-      : vehicle.branch_name
+      : vehicle.loan
+        ? `${vehicle.branch_name} · Prestado a ${vehicle.loan.to_branch_name}`
+        : vehicle.branch_name
   );
 </script>
 

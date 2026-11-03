@@ -250,7 +250,9 @@
         {#each visibleAlerts as alert, index (index)}
           <li class:blocking={alert.severity === 'blocking'}>
             <a
-              href={alert.vehicle_id ? `/fleet/${alert.vehicle_id}` : `/drivers/${alert.driver_id}`}
+              href={alert.vehicle_id
+                ? `/fleet/${alert.vehicle_id}${alert.code === 'maintenance_overdue' ? '?tab=maintenance' : ''}`
+                : `/drivers/${alert.driver_id}`}
             >
               <strong>{alert.subject}</strong>
               <span>{alert.message}</span>
@@ -384,7 +386,9 @@
                     ><td
                       >{vehicle.current_transfer
                         ? vehicle.current_transfer.destination_branch
-                        : vehicle.branch_name}</td
+                        : vehicle.loan
+                          ? `${vehicle.branch_name} · Prestado a ${vehicle.loan.to_branch_name}`
+                          : vehicle.branch_name}</td
                     ><td class="mileage"
                       >{formatNumber(vehicle.odometer_km)} {meterShort(vehicle.type.meter_unit)}</td
                     ><td

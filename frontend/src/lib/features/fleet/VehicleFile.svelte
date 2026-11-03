@@ -37,6 +37,7 @@
   import VehicleInspectionsPanel from './VehicleInspectionsPanel.svelte';
   import VehicleMaintenancePanel from './VehicleMaintenancePanel.svelte';
   import VehicleOdometerPanel from './VehicleOdometerPanel.svelte';
+  import VehicleSchedulePanel from './VehicleSchedulePanel.svelte';
   import VehicleStatus from './VehicleStatus.svelte';
 
   let { vehicleId }: { vehicleId: string } = $props();
@@ -51,6 +52,7 @@
     | 'costs'
     | 'incidents'
     | 'inspections'
+    | 'schedule'
     | 'gps'
     | 'gallery';
   let vehicle = $state<FleetVehicle | null>(null);
@@ -58,7 +60,11 @@
   let error = $state<string | null>(null);
   // El reporte de costos abre directo su pestaña.
   const linkedTab = page.url?.searchParams.get('tab');
-  let tab = $state<Tab>(linkedTab === 'costs' || linkedTab === 'incidents' ? linkedTab : 'summary');
+  let tab = $state<Tab>(
+    linkedTab === 'costs' || linkedTab === 'incidents' || linkedTab === 'maintenance'
+      ? linkedTab
+      : 'summary'
+  );
   let statusOpen = $state(false);
   let branchOpen = $state(false);
   let nextStatus = $state<Exclude<StoredStatus, 'maintenance'>>('active');
@@ -91,6 +97,7 @@
       { id: 'costs' as const, label: 'Costos', visible: true },
       { id: 'inspections' as const, label: 'Inspecciones', visible: true },
       { id: 'incidents' as const, label: 'Incidentes', visible: true },
+      { id: 'schedule' as const, label: 'Agenda', visible: true },
       { id: 'gps' as const, label: 'GPS', visible: true },
       { id: 'gallery' as const, label: 'Galería', visible: true }
     ].filter((item) => item.visible)
@@ -193,6 +200,7 @@
         <p class="meta">
           <FleetIcon name="pin" size={13} />{vehicle.branch_name}
           <span>·</span>{vehicle.type.name}
+          {#if vehicle.loan}<span>·</span>Prestado a {vehicle.loan.to_branch_name}{/if}
           <span>·</span>{formatNumber(vehicle.odometer_km)}
           {meterShort(vehicle.type.meter_unit)}
         </p>
@@ -381,6 +389,8 @@
         <VehicleInspectionsPanel {vehicle} onchanged={load} />
       {:else if tab === 'incidents'}
         <VehicleIncidentsPanel {vehicle} onchanged={load} />
+      {:else if tab === 'schedule'}
+        <VehicleSchedulePanel {vehicle} onchanged={load} />
       {:else if tab === 'gps'}
         <VehicleGpsPanel {vehicle} onchanged={(next) => (vehicle = next)} />
       {:else}

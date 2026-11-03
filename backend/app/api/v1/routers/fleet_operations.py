@@ -36,6 +36,7 @@ from app.api.v1.schemas.fleet import (
     OdometerReadingOut,
 )
 from app.application.audit.audit_service import AuditService
+from app.application.fleet.costs import business_today
 from app.application.fleet.driver_views import build_driver_views
 from app.application.fleet.operations import (
     OdometerBounds,
@@ -45,6 +46,7 @@ from app.application.fleet.operations import (
     odometer_error,
     unit_price,
 )
+from app.application.fleet.settings import FleetSettings
 from app.application.fleet.views import build_vehicle_views, plan_due
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -206,7 +208,7 @@ async def list_odometer(
     checker: Checker,
 ) -> list[OdometerReadingOut]:
     _, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, borrowed=True)
     voider = aliased(User)
     rows = await session.execute(
         select(OdometerReadingModel, User.username, voider.username)
@@ -248,7 +250,7 @@ async def add_odometer(
     audit: Audit,
 ) -> OdometerReadingOut:
     company_id, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id, lock=True)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, lock=True, borrowed=True)
     _require_operable(vehicle)
     async with session.begin_nested():
         reading = await record_odometer(
@@ -282,8 +284,12 @@ async def add_odometer(
 # ------------------------------------------------------------------ maintenance plans
 
 
-def _plan_out(plan: MaintenancePlanModel, vehicle: FleetVehicleModel) -> MaintenancePlanOut:
-    due = plan_due(plan, Decimal(vehicle.odometer_km), _now().date())
+def _plan_out(
+    plan: MaintenancePlanModel,
+    vehicle: FleetVehicleModel,
+    settings: FleetSettings = FleetSettings(),
+) -> MaintenancePlanOut:
+    due = plan_due(plan, Decimal(vehicle.odometer_km), business_today(), settings)
     return MaintenancePlanOut(
         id=plan.id,
         name=plan.name,
@@ -337,7 +343,7 @@ def _validate_plan(
             "El último servicio no puede superar el odómetro actual.",
             code="maintenance_last_km_invalid",
         )
-    if body.last_service_on is not None and body.last_service_on > _now().date():
+    if body.last_service_on is not None and body.last_service_on > business_today():
         raise ValidationError(
             "La fecha del último servicio no puede ser futura.",
             code="maintenance_last_date_invalid",
@@ -357,7 +363,7 @@ async def list_plans(
     checker: Checker,
 ) -> list[MaintenancePlanOut]:
     _, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, borrowed=True)
     plans = await session.scalars(
         select(MaintenancePlanModel)
         .where(
@@ -365,7 +371,8 @@ async def list_plans(
         )
         .order_by(MaintenancePlanModel.name)
     )
-    return [_plan_out(plan, vehicle) for plan in plans]
+    settings = await repo.fleet_settings(vehicle.company_id)
+    return [_plan_out(plan, vehicle, settings) for plan in plans]
 
 
 @router.post(
@@ -384,7 +391,7 @@ async def create_plan(
     audit: Audit,
 ) -> MaintenancePlanOut:
     company_id, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, borrowed=True)
     _require_operable(vehicle)
     _validate_plan(body, vehicle)
     duplicate = await session.scalar(
@@ -439,7 +446,7 @@ async def update_plan(
     audit: Audit,
 ) -> MaintenancePlanOut:
     company_id, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, borrowed=True)
     plan = await _plan(session, vehicle, plan_id)
     _validate_plan(body, vehicle, kept_km=plan.last_service_km)
     before = _plan_state(plan)
@@ -478,7 +485,7 @@ async def deactivate_plan(
     audit: Audit,
 ) -> None:
     company_id, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, borrowed=True)
     plan = await _plan(session, vehicle, plan_id)
     async with session.begin_nested():
         # Se desactiva (no se borra) porque las órdenes históricas lo referencian.
@@ -575,7 +582,7 @@ async def list_orders(
     checker: Checker,
 ) -> list[MaintenanceOrderOut]:
     _, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, borrowed=True)
     orders = await session.scalars(
         select(MaintenanceOrderModel)
         .where(MaintenanceOrderModel.vehicle_id == vehicle.id)
@@ -601,7 +608,7 @@ async def create_order(
     audit: Audit,
 ) -> MaintenanceOrderOut:
     company_id, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, borrowed=True)
     _require_operable(vehicle)
     if body.plan_id is not None:
         await _plan(session, vehicle, body.plan_id)
@@ -649,7 +656,7 @@ async def start_order(
     audit: Audit,
 ) -> MaintenanceOrderOut:
     company_id, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id, lock=True)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, lock=True, borrowed=True)
     _require_operable(vehicle)
     order = await _order(session, vehicle, order_id)
     if order.status != "scheduled":
@@ -700,7 +707,7 @@ async def complete_order(
     audit: Audit,
 ) -> MaintenanceOrderOut:
     company_id, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id, lock=True)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, lock=True, borrowed=True)
     order = await _order(session, vehicle, order_id)
     if order.status != "in_progress":
         raise ConflictError(
@@ -770,7 +777,7 @@ async def cancel_order(
     audit: Audit,
 ) -> MaintenanceOrderOut:
     company_id, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id, lock=True)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, lock=True, borrowed=True)
     order = await _order(session, vehicle, order_id)
     if order.status not in OPEN_ORDER_STATUSES:
         raise ConflictError("La orden ya está cerrada.", code="maintenance_order_state")
@@ -880,7 +887,7 @@ async def list_fuel(
     checker: Checker,
 ) -> dict[str, Any]:
     _, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, borrowed=True)
     rows = (
         await session.execute(
             select(FuelLogModel, Employee.first_name, Employee.last_name, User.username)
@@ -939,7 +946,7 @@ async def add_fuel(
     audit: Audit,
 ) -> FuelLogOut:
     company_id, scope, repo = await _context(request, session, current, checker)
-    vehicle = await scoped_vehicle(repo, scope, vehicle_id, lock=True)
+    vehicle = await scoped_vehicle(repo, scope, vehicle_id, lock=True, borrowed=True)
     _require_operable(vehicle)
     driver_name = await fuel_driver_name(repo, company_id, vehicle, body.driver_id)
     async with session.begin_nested():
@@ -976,7 +983,7 @@ async def fleet_alerts(
     branches = scope.list_filter(branch_id)
     vehicles = await repo.all_vehicles(company_id, branches)
     alerts: list[FleetAlertOut] = []
-    for view in await build_vehicle_views(repo, company_id, vehicles, today=_now().date()):
+    for view in await build_vehicle_views(repo, company_id, vehicles, today=business_today()):
         for issue in view["compliance"]["issues"]:
             alerts.append(
                 FleetAlertOut(
@@ -995,7 +1002,7 @@ async def fleet_alerts(
         rows, _ = await repo.list_drivers(
             company_id, branches, status="active", search=None, page=1, size=10_000
         )
-        for view in await build_driver_views(repo, company_id, rows, today=_now().date()):
+        for view in await build_driver_views(repo, company_id, rows, today=business_today()):
             for issue in view["compliance"]["issues"]:
                 alerts.append(
                     FleetAlertOut(

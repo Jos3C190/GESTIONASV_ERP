@@ -76,6 +76,6 @@ describe('vehicle maintenance panel', () => {
     permissionMock.codes.add('fleet:maintenance');
     render(VehicleMaintenancePanel, { vehicle, onchanged: () => undefined });
     expect(await screen.findByRole('button', { name: 'Nuevo plan' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Programar orden' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Crear orden' })).toBeVisible();
   });
 });
