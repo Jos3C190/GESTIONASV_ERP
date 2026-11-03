@@ -317,6 +317,13 @@ export const NAV_GROUPS: NavGroup[] = [
         requiredPermission: 'fleet:manage_types'
       },
       {
+        label: 'Costos de flota',
+        icon: ICONS.fleet,
+        route: '/fleet/costs',
+        implemented: true,
+        requiredPermission: 'fleet:read'
+      },
+      {
         label: 'Conductores',
         icon: ICONS.drivers,
         route: '/drivers',

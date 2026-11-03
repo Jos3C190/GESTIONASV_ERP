@@ -222,6 +222,7 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec(
         "fleet:correct_records", "Corregir lecturas de uso y cargas de combustible", "fleet"
     ),
+    PermissionSpec("fleet:costs", "Registrar y anular costos de vehículos", "fleet"),
     PermissionSpec(
         "fleet:compliance_override",
         "Autorizar despachos con documentos o licencias no vigentes",

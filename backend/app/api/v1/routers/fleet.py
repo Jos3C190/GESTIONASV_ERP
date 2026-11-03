@@ -59,6 +59,7 @@ from app.infrastructure.models.fleet import (
 )
 from app.infrastructure.models.inventory_transfer import InventoryVehicleModel
 from app.infrastructure.models.media import MediaAsset
+from app.infrastructure.models.supplier import SupplierModel
 from app.infrastructure.repositories.fleet_repository import FleetRepository
 from app.infrastructure.repositories.inventory_transfer_repository import (
     SqlAlchemyInventoryTransferRepository,
@@ -95,6 +96,11 @@ def _state(vehicle: FleetVehicleModel) -> dict[str, object]:
         "fuel_type": vehicle.fuel_type,
         "status": vehicle.status,
         "branch_id": str(vehicle.branch_id),
+        "ownership": vehicle.ownership,
+        "owner_supplier_id": vehicle.owner_supplier_id,
+        "contract_reference": vehicle.contract_reference,
+        "contract_ends_on": str(vehicle.contract_ends_on) if vehicle.contract_ends_on else None,
+        "monthly_fee": str(vehicle.monthly_fee) if vehicle.monthly_fee is not None else None,
     }
 
 
@@ -135,6 +141,48 @@ def _require_type_fields(
             f"{vehicle_type.name} necesita tipo de combustible.", code="vehicle_fuel_required"
         )
     return fuel_type
+
+
+async def active_supplier(
+    session: SessionDep, company_id: uuid.UUID, supplier_id: int
+) -> SupplierModel:
+    supplier = await session.scalar(
+        select(SupplierModel).where(
+            SupplierModel.company_id == company_id,
+            SupplierModel.id_supplier == supplier_id,
+            SupplierModel.is_active.is_(True),
+        )
+    )
+    if supplier is None:
+        raise ValidationError(
+            "El proveedor no existe o no está activo.", code="supplier_not_available"
+        )
+    return supplier
+
+
+def _contract_fields(values: dict[str, Any]) -> dict[str, Any]:
+    """A vehicle of the company's own has no contract: whatever was filled in is dropped."""
+    if values.get("ownership") != "owned":
+        return values
+    return {
+        **values,
+        "owner_supplier_id": None,
+        "contract_reference": None,
+        "contract_ends_on": None,
+        "monthly_fee": None,
+    }
+
+
+async def _contract_changes(
+    session: SessionDep, vehicle: FleetVehicleModel, changes: dict[str, Any]
+) -> dict[str, Any]:
+    if "contract_reference" in changes:
+        changes["contract_reference"] = (changes["contract_reference"] or "").strip() or None
+    changes = _contract_fields({"ownership": vehicle.ownership, **changes})
+    new_owner = changes.get("owner_supplier_id")
+    if new_owner is not None and new_owner != vehicle.owner_supplier_id:
+        await active_supplier(session, vehicle.company_id, new_owner)
+    return changes
 
 
 async def _context(
@@ -378,8 +426,20 @@ async def create_vehicle(
         capacity_kg=body.capacity_kg,
         fuel_type=body.fuel_type,
     )
+    contract = _contract_fields(
+        {
+            "ownership": body.ownership or "owned",
+            "owner_supplier_id": body.owner_supplier_id,
+            "contract_reference": (body.contract_reference or "").strip() or None,
+            "contract_ends_on": body.contract_ends_on,
+            "monthly_fee": body.monthly_fee,
+        }
+    )
+    if contract["owner_supplier_id"] is not None:
+        await active_supplier(session, company_id, contract["owner_supplier_id"])
     async with session.begin_nested():
         vehicle = FleetVehicleModel(
+            **contract,
             company_id=company_id,
             branch_id=body.branch_id,
             code=body.code,
@@ -451,7 +511,7 @@ async def update_vehicle(
     if vehicle.status == "retired":
         raise ConflictError("Reactive el vehículo antes de editarlo.", code="vehicle_retired")
     changes = body.model_dump(exclude_unset=True)
-    for required in ("kind", "brand", "model", "year", "fuel_type"):
+    for required in ("kind", "brand", "model", "year", "fuel_type", "ownership"):
         if required in changes and changes[required] is None:
             raise ValidationError(
                 "Complete los datos obligatorios del vehículo.", code="vehicle_invalid"
@@ -467,6 +527,7 @@ async def update_vehicle(
         capacity_kg=changes.get("capacity_kg", vehicle.capacity_kg),
         fuel_type=changes.get("fuel_type", vehicle.fuel_type),
     )
+    changes = await _contract_changes(session, vehicle, changes)
     if new_kind != vehicle.kind:
         await _ensure_driver_can_drive(session, repo, vehicle, new_kind)
         await _ensure_type_keeps_coupling(repo, vehicle, new_type)
@@ -789,4 +850,4 @@ documents_router = build_owned_documents_router(
     tag="fleet-documents",
 )
 
-__all__ = ["documents_router", "router", "scoped_vehicle"]
+__all__ = ["active_supplier", "documents_router", "router", "scoped_vehicle"]

@@ -14,6 +14,9 @@
     meterName,
     meterShort
   } from './catalog';
+  import ReceiptField from './ReceiptField.svelte';
+  import ReceiptLink from './ReceiptLink.svelte';
+  import SupplierField from './SupplierField.svelte';
 
   let { vehicle, onchanged }: { vehicle: FleetVehicle; onchanged: () => void } = $props();
 
@@ -36,6 +39,8 @@
     odometer_km: '',
     full_tank: true,
     station: '',
+    supplier_id: '',
+    receipt_document_id: '',
     driver_id: ''
   });
 
@@ -110,6 +115,8 @@
       odometer_km: log ? String(Number(log.odometer_km)) : '',
       full_tank: log?.full_tank ?? true,
       station: log?.station ?? '',
+      supplier_id: log?.supplier_id ? String(log.supplier_id) : '',
+      receipt_document_id: log?.receipt_document_id ?? '',
       driver_id: log ? (log.driver_id ?? '') : (vehicle.driver?.driver_id ?? '')
     };
     formError = null;
@@ -133,7 +140,9 @@
         total_amount: String(form.total_amount),
         odometer_km: String(form.odometer_km),
         full_tank: form.full_tank,
-        station: form.station.trim() || null,
+        station: form.supplier_id ? null : form.station.trim() || null,
+        supplier_id: form.supplier_id ? Number(form.supplier_id) : null,
+        receipt_document_id: form.receipt_document_id || null,
         driver_id: form.driver_id || null
       };
       if (correcting) {
@@ -208,7 +217,12 @@
                     </small>
                   {/if}
                 </td>
-                <td>{log.station ?? '—'}</td>
+                <td>
+                  {log.station ?? '—'}
+                  {#if log.receipt_document_id}
+                    <ReceiptLink vehicleId={vehicle.id} documentId={log.receipt_document_id} />
+                  {/if}
+                </td>
                 <td>{log.driver_name ?? '—'}</td>
                 <td class="num">{formatNumber(log.odometer_km)} {unit}</td>
                 <td class="num">{formatNumber(log.liters)}</td>
@@ -287,7 +301,12 @@
       </label>
     {/if}
     <div class="pair">
-      <label><span>Estación</span><input bind:value={form.station} maxlength="160" /></label>
+      <SupplierField
+        id="fuel-station"
+        label="Estación"
+        bind:supplierId={form.supplier_id}
+        bind:text={form.station}
+      />
       {#if drivers.length}
         <label>
           <span>Conductor</span>
@@ -300,6 +319,7 @@
         </label>
       {/if}
     </div>
+    <ReceiptField id="fuel-receipt" vehicleId={vehicle.id} bind:value={form.receipt_document_id} />
     <label class="check">
       <input type="checkbox" bind:checked={form.full_tank} />
       <span>Tanque lleno (necesario para calcular rendimiento)</span>

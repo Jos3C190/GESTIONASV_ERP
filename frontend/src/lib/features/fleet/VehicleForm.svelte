@@ -7,8 +7,17 @@
   import Modal from '$lib/components/ui/Modal.svelte';
   import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
-  import { fleetApi, type FleetVehicle, type FleetVehicleType } from './api';
-  import { FUEL_LABELS, meterName, meterShort, type FuelType } from './catalog';
+  import { fleetApi, type FleetSupplier, type FleetVehicle, type FleetVehicleType } from './api';
+  import {
+    FUEL_LABELS,
+    isBlank,
+    localDate,
+    meterName,
+    meterShort,
+    OWNERSHIP_LABELS,
+    type FuelType,
+    type Ownership
+  } from './catalog';
   import VehicleTypeForm from './VehicleTypeForm.svelte';
   import VehicleImage from './VehicleImage.svelte';
 
@@ -36,6 +45,13 @@
   let odometer = $state('0');
   let branchId = $state(branch.id ?? branch.branches[0]?.id ?? '');
   let notes = $state('');
+  let ownership = $state<Ownership>('owned');
+  let ownerSupplier = $state('');
+  let contractReference = $state('');
+  let contractEnds = $state('');
+  let monthlyFee = $state('');
+  let suppliers = $state<FleetSupplier[]>([]);
+  let suppliersFailed = $state(false);
   let saving = $state(false);
   let error = $state<string | null>(null);
   let fieldErrors = $state<Record<string, string>>({});
@@ -57,7 +73,21 @@
     tank = vehicle.tank_liters ? String(Number(vehicle.tank_liters)) : '';
     branchId = vehicle.branch_id;
     notes = vehicle.notes ?? '';
+    ownership = vehicle.ownership ?? 'owned';
+    ownerSupplier = vehicle.owner_supplier_id ? String(vehicle.owner_supplier_id) : '';
+    contractReference = vehicle.contract_reference ?? '';
+    contractEnds = vehicle.contract_ends_on ?? '';
+    monthlyFee = vehicle.monthly_fee ? String(Number(vehicle.monthly_fee)) : '';
   });
+
+  async function loadSuppliers() {
+    try {
+      suppliers = await fleetApi.suppliers();
+    } catch {
+      suppliers = [];
+      suppliersFailed = true;
+    }
+  }
 
   async function loadTypes() {
     typesError = null;
@@ -70,6 +100,7 @@
 
   $effect(() => {
     void loadTypes();
+    void loadSuppliers();
   });
 
   const canManageTypes = $derived(permissions.hasPermission('fleet:manage_types'));
@@ -85,6 +116,35 @@
     .map((value) => ({ value, label: FUEL_LABELS[value] }));
   const branchOptions = $derived(
     branch.branches.map((item) => ({ value: item.id, label: item.name }))
+  );
+  const ownershipOptions = (Object.keys(OWNERSHIP_LABELS) as Ownership[]).map((value) => ({
+    value,
+    label: OWNERSHIP_LABELS[value]
+  }));
+  // Al editar sigue visible el propietario actual aunque ya no esté activo.
+  const ownerOptions = $derived([
+    { value: '', label: 'Sin indicar' },
+    ...(vehicle?.owner_supplier_id &&
+    vehicle.owner_supplier_name &&
+    !suppliers.some((item) => item.id === vehicle?.owner_supplier_id)
+      ? [{ value: String(vehicle.owner_supplier_id), label: vehicle.owner_supplier_name }]
+      : []),
+    ...suppliers.map((item) => ({ value: String(item.id), label: item.name }))
+  ]);
+  const today = localDate(new Date());
+  const soonLimit = localDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+  const contractNote = $derived(
+    contractEnds && contractEnds < today
+      ? { warn: true, text: 'Este contrato ya venció: no se despachará sin una autorización.' }
+      : contractEnds && contractEnds <= soonLimit
+        ? { warn: true, text: 'Este contrato vence en menos de 30 días.' }
+        : {
+            warn: false,
+            text: 'Se avisará 30 días antes del fin del contrato. Ya vencido, no se despacha sin una autorización.'
+          }
+  );
+  const droppingContract = $derived(
+    mode === 'edit' && ownership === 'owned' && vehicle?.ownership !== 'owned'
   );
 
   function validate(): boolean {
@@ -108,6 +168,12 @@
     if (mode === 'create' && !branchId) errors.branch = 'Seleccione la sucursal base.';
     if (vin.trim() && !/^[A-HJ-NPR-Za-hj-npr-z0-9]{11,17}$/.test(vin.trim()))
       errors.vin = 'VIN de 11 a 17 caracteres (sin I, O ni Q).';
+    if (
+      ownership !== 'owned' &&
+      !isBlank(monthlyFee) &&
+      !/^\d{1,7}(\.\d{1,2})?$/.test(String(monthlyFee))
+    )
+      errors.monthlyFee = 'Cuota de hasta 9,999,999 con 2 decimales.';
     fieldErrors = errors;
     return Object.keys(errors).length === 0;
   }
@@ -128,7 +194,12 @@
       capacity_kg: capacity ? String(Number(capacity)) : null,
       fuel_type: fuelType,
       tank_liters: tank && currentType?.fuel_applicable !== false ? String(Number(tank)) : null,
-      notes: notes.trim() || null
+      notes: notes.trim() || null,
+      ownership,
+      owner_supplier_id: ownership !== 'owned' && ownerSupplier ? Number(ownerSupplier) : null,
+      contract_reference: ownership !== 'owned' ? contractReference.trim() || null : null,
+      contract_ends_on: ownership !== 'owned' ? contractEnds || null : null,
+      monthly_fee: ownership !== 'owned' && !isBlank(monthlyFee) ? String(Number(monthlyFee)) : null
     };
     try {
       const saved =
@@ -292,6 +363,57 @@
           />
         {/if}
       </div>
+      <h2>Propiedad</h2>
+      <div class="grid">
+        <FormField
+          id="vehicle-ownership"
+          label="El vehículo es"
+          type="select"
+          bind:value={ownership}
+          options={ownershipOptions}
+          required
+        />
+        {#if ownership !== 'owned'}
+          <FormField
+            id="vehicle-owner"
+            label="Propietario (opcional)"
+            type="select"
+            bind:value={ownerSupplier}
+            options={ownerOptions}
+          />
+          <FormField
+            id="vehicle-contract"
+            label="Referencia del contrato (opcional)"
+            bind:value={contractReference}
+            maxlength={80}
+          />
+          <FormField
+            id="vehicle-contract-ends"
+            label="Fin del contrato (opcional)"
+            type="date"
+            bind:value={contractEnds}
+          />
+          <FormField
+            id="vehicle-fee"
+            label="Cuota mensual en USD (opcional)"
+            type="number"
+            bind:value={monthlyFee}
+            min="0"
+            step="0.01"
+            error={fieldErrors.monthlyFee}
+          />
+        {/if}
+      </div>
+      {#if ownership !== 'owned'}
+        <p class="hint contract-hint" class:warn={contractNote.warn}>{contractNote.text}</p>
+        {#if suppliersFailed}
+          <p class="hint contract-hint warn">
+            No se pudieron cargar los proveedores; el propietario se puede indicar después.
+          </p>
+        {/if}
+      {:else if droppingContract}
+        <p class="hint contract-hint warn">Al guardar se borrarán los datos del contrato.</p>
+      {/if}
       <label class="notes" for="vehicle-notes">
         <span>Notas</span>
         <textarea id="vehicle-notes" bind:value={notes} maxlength="2000" rows="3"></textarea>
@@ -363,15 +485,26 @@
     text-align: center;
   }
   h2 {
-    margin: 4px 0 12px;
-    font-size: 13px;
+    margin: 12px 0 12px;
+    font-size: 14px;
     font-weight: 600;
   }
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 4px 14px;
+    gap: 12px 14px;
     margin-bottom: 14px;
+  }
+  .grid :global(input),
+  .grid :global(select) {
+    border-color: rgb(var(--control-border));
+    font-size: 16px;
+  }
+  @media (min-width: 768px) {
+    .grid :global(input),
+    .grid :global(select) {
+      font-size: 13px;
+    }
   }
   .new-type {
     display: block;
@@ -382,6 +515,13 @@
     text-align: left;
     text-decoration: underline;
     text-underline-offset: 2px;
+  }
+  .contract-hint {
+    margin: -6px 0 14px;
+    font-size: 12px;
+  }
+  .warn {
+    color: rgb(var(--warning));
   }
   .notes {
     display: grid;

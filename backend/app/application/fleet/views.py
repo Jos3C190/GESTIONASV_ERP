@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any
 
 from app.application.fleet.compliance import (
+    EXPIRY_WARNING_DAYS,
     Issue,
     document_issues,
     state_of,
@@ -62,6 +63,19 @@ def maintenance_issues(plans: Sequence[Any], odometer_km: Decimal, today: date) 
     return issues
 
 
+def contract_issues(ownership: str, ends_on: date | None, status: str, today: date) -> list[Issue]:
+    """A leased or rented unit past its contract may not leave without an authorized exception."""
+    if ownership == "owned" or ends_on is None or status == "retired":
+        return []
+    days = (ends_on - today).days
+    formatted = ends_on.strftime("%d/%m/%Y")
+    if days < 0:
+        return [Issue("contract_expired", "blocking", f"El contrato venció el {formatted}.")]
+    if days <= EXPIRY_WARNING_DAYS:
+        return [Issue("contract_expiring", "warning", f"El contrato vence el {formatted}.")]
+    return []
+
+
 def vehicle_type_view(item: Any) -> dict[str, Any]:
     return {
         "code": item.code,
@@ -106,6 +120,9 @@ async def build_vehicle_views(
     branches = await repo.branch_names(company_id, [vehicle.branch_id for vehicle in vehicles])
     types = {item.code: item for item in await repo.vehicle_types(company_id)}
     couplings = await repo.open_couplings_for_vehicles(company_id, vehicle_ids)
+    owners = await repo.supplier_names(
+        company_id, [v.owner_supplier_id for v in vehicles if v.owner_supplier_id is not None]
+    )
     views: list[dict[str, Any]] = []
     for vehicle in vehicles:
         odometer = Decimal(vehicle.odometer_km)
@@ -120,6 +137,9 @@ async def build_vehicle_views(
             status=vehicle.status,
             documents=documents,
             maintenance=maintenance_issues(plans.get(vehicle.id, []), odometer, today),
+        )
+        issues.extend(
+            contract_issues(vehicle.ownership, vehicle.contract_ends_on, vehicle.status, today)
         )
         if vehicle.inventory_vehicle_id is None and vehicle.status != "retired":
             issues.append(
@@ -164,6 +184,12 @@ async def build_vehicle_views(
                 "gps_device_unique_id": vehicle.gps_device_unique_id,
                 "inventory_vehicle_id": vehicle.inventory_vehicle_id,
                 "notes": vehicle.notes,
+                "ownership": vehicle.ownership,
+                "owner_supplier_id": vehicle.owner_supplier_id,
+                "owner_supplier_name": owners.get(vehicle.owner_supplier_id),
+                "contract_reference": vehicle.contract_reference,
+                "contract_ends_on": vehicle.contract_ends_on,
+                "monthly_fee": vehicle.monthly_fee,
                 "compliance": {
                     "state": state_of(issues),
                     "issues": [

@@ -49,6 +49,8 @@
       {required}
       bind:value
       onchange={handleInput}
+      aria-invalid={error ? 'true' : undefined}
+      aria-describedby={error ? `${id}-error` : undefined}
       class="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
     >
       {#each options as opt (opt.value)}

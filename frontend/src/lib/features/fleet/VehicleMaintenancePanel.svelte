@@ -13,6 +13,9 @@
     type OrderStatus
   } from './api';
   import { formatDate, formatMoney, formatNumber, isBlank, meterName, meterShort } from './catalog';
+  import ReceiptField from './ReceiptField.svelte';
+  import ReceiptLink from './ReceiptLink.svelte';
+  import SupplierField from './SupplierField.svelte';
 
   let { vehicle, onchanged }: { vehicle: FleetVehicle; onchanged: () => void } = $props();
 
@@ -46,12 +49,21 @@
     title: '',
     description: '',
     workshop: '',
+    supplier_id: '',
     scheduled_on: '',
     plan_id: ''
   });
 
   let closing = $state<{ order: MaintenanceOrder; mode: 'complete' | 'cancel' } | null>(null);
-  let close = $state({ odometer: '', cost: '', workshop: '', notes: '', reason: '' });
+  let close = $state({
+    odometer: '',
+    cost: '',
+    workshop: '',
+    supplier_id: '',
+    receipt_document_id: '',
+    notes: '',
+    reason: ''
+  });
 
   const unit = $derived(meterShort(vehicle.type.meter_unit));
   const canManage = $derived(
@@ -154,6 +166,7 @@
       title: fromPlan ? fromPlan.name : '',
       description: '',
       workshop: '',
+      supplier_id: '',
       scheduled_on: '',
       plan_id: fromPlan?.id ?? ''
     };
@@ -169,7 +182,8 @@
           kind: order.kind,
           title: order.title.trim(),
           description: order.description.trim() || null,
-          workshop: order.workshop.trim() || null,
+          workshop: order.supplier_id ? null : order.workshop.trim() || null,
+          supplier_id: order.supplier_id ? Number(order.supplier_id) : null,
           scheduled_on: order.scheduled_on || null,
           plan_id: order.plan_id || null
         }),
@@ -182,6 +196,8 @@
       odometer: vehicle.odometer_km,
       cost: '',
       workshop: target.workshop ?? '',
+      supplier_id: target.supplier_id ? String(target.supplier_id) : '',
+      receipt_document_id: '',
       notes: '',
       reason: ''
     };
@@ -198,7 +214,9 @@
           ? fleetApi.completeOrder(vehicle.id, target.order.id, {
               odometer_km: close.odometer,
               cost: close.cost,
-              workshop: close.workshop.trim() || null,
+              workshop: close.supplier_id ? null : close.workshop.trim() || null,
+              supplier_id: close.supplier_id ? Number(close.supplier_id) : null,
+              receipt_document_id: close.receipt_document_id || null,
               notes: close.notes.trim() || null
             })
           : fleetApi.cancelOrder(vehicle.id, target.order.id, close.reason.trim()),
@@ -361,7 +379,12 @@
                   <td>{formatDate(item.completed_at ?? item.created_at)}</td>
                   <td>{item.odometer_km ? `${formatNumber(item.odometer_km)} ${unit}` : '—'}</td>
                   <td>{item.workshop ?? '—'}</td>
-                  <td class="num">{formatMoney(item.cost)}</td>
+                  <td class="num">
+                    {formatMoney(item.cost)}
+                    {#if item.receipt_document_id}
+                      <ReceiptLink vehicleId={vehicle.id} documentId={item.receipt_document_id} />
+                    {/if}
+                  </td>
                 </tr>
               {/each}
             </tbody>
@@ -457,7 +480,12 @@
       ></textarea></label
     >
     <div class="pair">
-      <label><span>Taller</span><input bind:value={order.workshop} maxlength="160" /></label>
+      <SupplierField
+        id="order-workshop"
+        label="Taller"
+        bind:supplierId={order.supplier_id}
+        bind:text={order.workshop}
+      />
       <label
         ><span>Fecha programada</span><input type="date" bind:value={order.scheduled_on} /></label
       >
@@ -501,7 +529,17 @@
           /></label
         >
       </div>
-      <label><span>Taller</span><input bind:value={close.workshop} maxlength="160" /></label>
+      <SupplierField
+        id="close-workshop"
+        label="Taller"
+        bind:supplierId={close.supplier_id}
+        bind:text={close.workshop}
+      />
+      <ReceiptField
+        id="close-receipt"
+        vehicleId={vehicle.id}
+        bind:value={close.receipt_document_id}
+      />
       <label
         ><span>Trabajos realizados</span><textarea
           rows="3"

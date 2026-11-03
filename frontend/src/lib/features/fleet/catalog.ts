@@ -69,6 +69,46 @@ export const meterName = (unit: MeterUnit) => (unit === 'hours' ? 'Horómetro' :
 export const meterJumpLimit = (unit: MeterUnit) => (unit === 'hours' ? 500 : 5000);
 export const plateLabel = (plate: string | null | undefined) => plate || 'Sin placa';
 
+export type Ownership = 'owned' | 'leased' | 'rented' | 'third_party';
+export const OWNERSHIP_LABELS: Record<Ownership, string> = {
+  owned: 'Propio',
+  leased: 'Arrendado',
+  rented: 'Alquilado',
+  third_party: 'De un tercero'
+};
+
+export type CostCategory = 'insurance' | 'tax' | 'washing' | 'fee' | 'toll' | 'other';
+export const COST_CATEGORY_LABELS: Record<CostCategory, string> = {
+  insurance: 'Seguro',
+  tax: 'Impuesto',
+  washing: 'Lavado',
+  fee: 'Cuota',
+  toll: 'Peaje',
+  other: 'Otro'
+};
+
+/** A date as the user's calendar shows it, not as UTC. */
+export function localDate(date: Date): string {
+  const shifted = new Date(date);
+  shifted.setMinutes(shifted.getMinutes() - shifted.getTimezoneOffset());
+  return shifted.toISOString().slice(0, 10);
+}
+
+export type CostPeriodId = 'month' | 'last_month' | 'year';
+
+export function costPeriods(today: Date): Record<CostPeriodId, { from: string; to: string }> {
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  return {
+    month: { from: localDate(new Date(year, month, 1)), to: localDate(today) },
+    last_month: {
+      from: localDate(new Date(year, month - 1, 1)),
+      to: localDate(new Date(year, month, 0))
+    },
+    year: { from: localDate(new Date(year, 0, 1)), to: localDate(today) }
+  };
+}
+
 /** Un `type="number"` vacío llega como null al enlazarse, no como cadena vacía. */
 export function isBlank(value: unknown): boolean {
   return value === '' || value === null || value === undefined;
@@ -100,6 +140,15 @@ export const formatNumber = (value: number | string | null | undefined) =>
 
 export const formatMoney = (value: number | string | null | undefined) =>
   value === null || value === undefined || value === '' ? '—' : moneyFormat.format(Number(value));
+
+const rateFormat = new Intl.NumberFormat('es-SV', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 4
+});
+/** A cost per km can be a fraction of a cent: two decimals would round it to $0.00. */
+export const formatRate = (value: number | string) => rateFormat.format(Number(value));
 
 export function formatDate(value: string | null | undefined): string {
   if (!value) return '—';

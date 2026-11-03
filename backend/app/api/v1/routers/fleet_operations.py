@@ -20,7 +20,7 @@ from app.api.v1.deps import (
     require_permission,
 )
 from app.api.v1.fleet_scope import FleetScope, get_fleet_scope
-from app.api.v1.routers.fleet import scoped_vehicle
+from app.api.v1.routers.fleet import active_supplier, scoped_vehicle
 from app.api.v1.schemas.fleet import (
     FleetAlertOut,
     FuelLogIn,
@@ -48,6 +48,7 @@ from app.application.fleet.operations import (
 from app.application.fleet.views import build_vehicle_views, plan_due
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.infrastructure.models.document_record import DocumentRecordModel
 from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.fleet import (
     DriverModel,
@@ -94,6 +95,38 @@ def _plan_state(plan: MaintenancePlanModel) -> dict[str, str | None]:
 def _require_operable(vehicle: FleetVehicleModel) -> None:
     if vehicle.status == "retired":
         raise ConflictError("El vehículo está dado de baja.", code="vehicle_retired")
+
+
+async def supplier_text(
+    session: SessionDep, vehicle: FleetVehicleModel, supplier_id: int | None, text: str | None
+) -> str | None:
+    """The workshop or station shown: what was typed, or the name of the chosen supplier."""
+    typed = (text or "").strip() or None
+    if supplier_id is None:
+        return typed
+    supplier = await active_supplier(session, vehicle.company_id, supplier_id)
+    return typed or supplier.name[:160]
+
+
+async def require_vehicle_document(
+    session: SessionDep, vehicle: FleetVehicleModel, document_id: uuid.UUID | None
+) -> None:
+    """An invoice can only be one of the documents already in this vehicle's file."""
+    if document_id is None:
+        return
+    found = await session.scalar(
+        select(DocumentRecordModel.id).where(
+            DocumentRecordModel.id == document_id,
+            DocumentRecordModel.company_id == vehicle.company_id,
+            DocumentRecordModel.module == "fleet",
+            DocumentRecordModel.owner_type == "vehicle",
+            DocumentRecordModel.owner_id == vehicle.id,
+        )
+    )
+    if found is None:
+        raise ValidationError(
+            "El documento no pertenece a este vehículo.", code="receipt_document_invalid"
+        )
 
 
 # ------------------------------------------------------------------ odometer
@@ -501,6 +534,8 @@ async def _order_out(session: SessionDep, order: MaintenanceOrderModel) -> Maint
         title=order.title,
         description=order.description,
         workshop=order.workshop,
+        supplier_id=order.supplier_id,
+        receipt_document_id=order.receipt_document_id,
         scheduled_on=order.scheduled_on,
         started_at=order.started_at,
         completed_at=order.completed_at,
@@ -570,6 +605,7 @@ async def create_order(
     _require_operable(vehicle)
     if body.plan_id is not None:
         await _plan(session, vehicle, body.plan_id)
+    workshop = await supplier_text(session, vehicle, body.supplier_id, body.workshop)
     async with session.begin_nested():
         order = MaintenanceOrderModel(
             company_id=company_id,
@@ -579,7 +615,8 @@ async def create_order(
             status="scheduled",
             title=body.title.strip(),
             description=(body.description or "").strip() or None,
-            workshop=(body.workshop or "").strip() or None,
+            workshop=workshop,
+            supplier_id=body.supplier_id,
             scheduled_on=body.scheduled_on,
             created_by=current.id,
         )
@@ -669,6 +706,8 @@ async def complete_order(
         raise ConflictError(
             "Solo una orden en curso puede completarse.", code="maintenance_order_state"
         )
+    await require_vehicle_document(session, vehicle, body.receipt_document_id)
+    workshop = await supplier_text(session, vehicle, body.supplier_id, body.workshop)
     completed_at = _now()
     async with session.begin_nested():
         await record_odometer(
@@ -685,8 +724,10 @@ async def complete_order(
         order.odometer_km = body.odometer_km
         order.cost = body.cost
         order.closed_by = current.id
-        if body.workshop:
-            order.workshop = body.workshop.strip()
+        order.receipt_document_id = body.receipt_document_id
+        if workshop:
+            order.workshop = workshop
+            order.supplier_id = body.supplier_id
         if body.notes:
             order.description = "\n".join(filter(None, [order.description, body.notes.strip()]))
         if order.plan_id is not None:
@@ -778,6 +819,8 @@ async def fuel_driver_name(
 async def create_fuel_log(
     session: SessionDep, vehicle: FleetVehicleModel, body: FuelLogIn, actor_id: uuid.UUID
 ) -> FuelLogModel:
+    await require_vehicle_document(session, vehicle, body.receipt_document_id)
+    station = await supplier_text(session, vehicle, body.supplier_id, body.station)
     await record_odometer(
         session,
         vehicle,
@@ -796,7 +839,9 @@ async def create_fuel_log(
         total_amount=body.total_amount,
         odometer_km=body.odometer_km,
         full_tank=body.full_tank,
-        station=(body.station or "").strip() or None,
+        station=station,
+        supplier_id=body.supplier_id,
+        receipt_document_id=body.receipt_document_id,
         recorded_by=actor_id,
     )
     session.add(log)
@@ -814,6 +859,8 @@ def fuel_log_out(log: FuelLogModel, driver_name: str | None) -> FuelLogOut:
         odometer_km=log.odometer_km,
         full_tank=log.full_tank,
         station=log.station,
+        supplier_id=log.supplier_id,
+        receipt_document_id=log.receipt_document_id,
         driver_id=log.driver_id,
         driver_name=driver_name,
         km_per_liter=None,
@@ -858,6 +905,8 @@ async def list_fuel(
             odometer_km=log.odometer_km,
             full_tank=log.full_tank,
             station=log.station,
+            supplier_id=log.supplier_id,
+            receipt_document_id=log.receipt_document_id,
             driver_id=log.driver_id,
             driver_name=f"{first} {last}".strip() if first else None,
             km_per_liter=efficiency.get(log.id),
@@ -933,7 +982,7 @@ async def fleet_alerts(
                 FleetAlertOut(
                     vehicle_id=view["id"],
                     driver_id=None,
-                    subject=f"{view['code']} · {view['plate']}",
+                    subject=f"{view['code']} · {view['plate'] or 'Sin placa'}",
                     branch_name=view["branch_name"],
                     **issue,
                 )

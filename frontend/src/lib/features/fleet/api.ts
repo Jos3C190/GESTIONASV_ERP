@@ -2,13 +2,17 @@ import { apiFetch } from '$lib/api/client';
 import { ownedDocuments } from '$lib/api/owned-documents';
 import { branch } from '$lib/stores/branch.svelte';
 import type {
+  CostCategory,
   FuelType,
   LicenseClass,
   OperationalStatus,
+  Ownership,
   BaseImage,
   MeterUnit,
   VehicleStatus
 } from './catalog';
+
+export type { CostCategory, Ownership };
 
 export type ComplianceState = 'ok' | 'warning' | 'blocked';
 
@@ -111,6 +115,12 @@ export interface FleetVehicle {
   gps_device_unique_id: string | null;
   inventory_vehicle_id: string | null;
   notes: string | null;
+  ownership: Ownership;
+  owner_supplier_id: number | null;
+  owner_supplier_name: string | null;
+  contract_reference: string | null;
+  contract_ends_on: string | null;
+  monthly_fee: string | null;
   compliance: Compliance;
   created_at: string;
   updated_at: string;
@@ -143,6 +153,11 @@ export interface VehicleInput {
   tank_liters?: string | null;
   fuel_type: FuelType;
   notes?: string | null;
+  ownership?: Ownership;
+  owner_supplier_id?: number | null;
+  contract_reference?: string | null;
+  contract_ends_on?: string | null;
+  monthly_fee?: string | null;
 }
 
 export interface VehicleCreateInput extends VehicleInput {
@@ -205,6 +220,8 @@ export interface MaintenanceOrder {
   title: string;
   description: string | null;
   workshop: string | null;
+  supplier_id?: number | null;
+  receipt_document_id?: string | null;
   scheduled_on: string | null;
   started_at: string | null;
   completed_at: string | null;
@@ -219,6 +236,7 @@ export interface MaintenanceOrderInput {
   title: string;
   description?: string | null;
   workshop?: string | null;
+  supplier_id?: number | null;
   scheduled_on?: string | null;
   plan_id?: string | null;
 }
@@ -232,6 +250,8 @@ export interface FuelLog {
   odometer_km: string;
   full_tank: boolean;
   station: string | null;
+  supplier_id?: number | null;
+  receipt_document_id?: string | null;
   driver_id: string | null;
   driver_name: string | null;
   km_per_liter: string | null;
@@ -254,7 +274,62 @@ export interface FuelLogInput {
   odometer_km: string;
   full_tank: boolean;
   station?: string | null;
+  supplier_id?: number | null;
+  receipt_document_id?: string | null;
   driver_id?: string | null;
+}
+
+export interface FleetSupplier {
+  id: number;
+  code: string;
+  name: string;
+}
+
+export interface FleetCost {
+  id: string;
+  category: CostCategory;
+  incurred_on: string;
+  amount: string;
+  description: string | null;
+  supplier_id: number | null;
+  supplier_name: string | null;
+  document_id: string | null;
+  recorded_by_name: string | null;
+  voided_at: string | null;
+  voided_by_name: string | null;
+  void_reason: string | null;
+}
+
+export interface FleetCostInput {
+  category: CostCategory;
+  incurred_on: string;
+  amount: string;
+  description?: string | null;
+  supplier_id?: number | null;
+  document_id?: string | null;
+}
+
+export interface CostReportRow {
+  vehicle_id: string;
+  code: string;
+  plate: string | null;
+  kind_name: string;
+  branch_name: string;
+  meter_unit: MeterUnit;
+  fuel: string;
+  maintenance: string;
+  other: string;
+  total: string;
+  distance: string;
+  cost_per_unit: string | null;
+}
+
+export interface CostReport {
+  date_from: string;
+  date_to: string;
+  rows: CostReportRow[];
+  totals: { fuel: string; maintenance: string; other: string; total: string };
+  other_by_category: Partial<Record<CostCategory, string>>;
 }
 
 export interface TrackerModel {
@@ -428,7 +503,14 @@ export const fleetApi = {
   completeOrder: (
     id: string,
     orderId: string,
-    data: { odometer_km: string; cost: string; workshop?: string | null; notes?: string | null }
+    data: {
+      odometer_km: string;
+      cost: string;
+      workshop?: string | null;
+      supplier_id?: number | null;
+      receipt_document_id?: string | null;
+      notes?: string | null;
+    }
   ) =>
     apiFetch<MaintenanceOrder>(
       `/fleet/vehicles/${id}/maintenance-orders/${orderId}/complete`,
@@ -442,5 +524,19 @@ export const fleetApi = {
   fuel: (id: string) =>
     apiFetch<{ items: FuelLog[]; stats: FuelStats }>(`/fleet/vehicles/${id}/fuel-logs`),
   addFuel: (id: string, data: FuelLogInput) =>
-    apiFetch<FuelLog>(`/fleet/vehicles/${id}/fuel-logs`, json('POST', data))
+    apiFetch<FuelLog>(`/fleet/vehicles/${id}/fuel-logs`, json('POST', data)),
+  suppliers: () => apiFetch<FleetSupplier[]>('/fleet/suppliers'),
+  costs: (id: string) => apiFetch<FleetCost[]>(`/fleet/vehicles/${id}/costs`),
+  addCost: (id: string, data: FleetCostInput) =>
+    apiFetch<FleetCost>(`/fleet/vehicles/${id}/costs`, json('POST', data)),
+  voidCost: (id: string, costId: string, reason: string) =>
+    apiFetch<FleetCost>(`/fleet/vehicles/${id}/costs/${costId}/void`, json('POST', { reason })),
+  costReport: (
+    params: { date_from: string; date_to: string; vehicle_id?: string },
+    signal?: AbortSignal
+  ) =>
+    apiFetch<CostReport>(
+      `/fleet/cost-report${query({ ...params, branch_id: params.vehicle_id ? null : branch.id })}`,
+      { signal }
+    )
 };

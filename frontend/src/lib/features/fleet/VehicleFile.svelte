@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { HttpError } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
@@ -10,10 +12,12 @@
   import {
     formatDate,
     formatDateTime,
+    formatMoney,
     formatNumber,
     FUEL_LABELS,
     meterName,
     meterShort,
+    OWNERSHIP_LABELS,
     plateLabel,
     LICENSE_LABELS,
     VEHICLE_STATUS_LABELS,
@@ -22,6 +26,7 @@
   import ComplianceList from './ComplianceList.svelte';
   import FleetIcon from './FleetIcon.svelte';
   import MoveToTrashDialog from './MoveToTrashDialog.svelte';
+  import VehicleCostsPanel from './VehicleCostsPanel.svelte';
   import VehicleCouplingCard from './VehicleCouplingCard.svelte';
   import VehicleDriverPanel from './VehicleDriverPanel.svelte';
   import VehicleFuelPanel from './VehicleFuelPanel.svelte';
@@ -35,11 +40,20 @@
   let { vehicleId }: { vehicleId: string } = $props();
 
   type Tab =
-    'summary' | 'driver' | 'documents' | 'maintenance' | 'fuel' | 'odometer' | 'gps' | 'gallery';
+    | 'summary'
+    | 'driver'
+    | 'documents'
+    | 'maintenance'
+    | 'fuel'
+    | 'odometer'
+    | 'costs'
+    | 'gps'
+    | 'gallery';
   let vehicle = $state<FleetVehicle | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let tab = $state<Tab>('summary');
+  // El reporte de costos abre directo su pestaña.
+  let tab = $state<Tab>(page.url?.searchParams.get('tab') === 'costs' ? 'costs' : 'summary');
   let statusOpen = $state(false);
   let branchOpen = $state(false);
   let nextStatus = $state<Exclude<StoredStatus, 'maintenance'>>('active');
@@ -69,6 +83,7 @@
         label: meterName(vehicle?.type.meter_unit ?? 'km'),
         visible: true
       },
+      { id: 'costs' as const, label: 'Costos', visible: true },
       { id: 'gps' as const, label: 'GPS', visible: true },
       { id: 'gallery' as const, label: 'Galería', visible: true }
     ].filter((item) => item.visible)
@@ -78,6 +93,17 @@
   );
   const branchOptions = $derived(branch.branches.filter((item) => item.id !== vehicle?.branch_id));
   const reasonRequired = $derived(nextStatus !== 'active' || vehicle?.status === 'retired');
+
+  // Al llegar directo a una pestaña, que se vea dónde está el usuario.
+  $effect(() => {
+    if (tab === 'costs' && vehicle) {
+      void tick().then(() =>
+        document
+          .querySelector('nav.tabs button[aria-pressed="true"]')
+          ?.scrollIntoView?.({ inline: 'center', block: 'nearest' })
+      );
+    }
+  });
 
   async function load() {
     loading = true;
@@ -155,7 +181,7 @@
         </div>
         <p class="subtitle">
           {vehicle.brand}
-          {vehicle.model} · {vehicle.year} · <span class="plate">{vehicle.plate}</span>
+          {vehicle.model} · {vehicle.year} · <span class="plate">{plateLabel(vehicle.plate)}</span>
         </p>
         <p class="meta">
           <FleetIcon name="pin" size={13} />{vehicle.branch_name}
@@ -194,7 +220,10 @@
           type="button"
           class:active={tab === item.id}
           aria-pressed={tab === item.id}
-          onclick={() => (tab = item.id)}>{item.label}</button
+          onclick={(event) => {
+            tab = item.id;
+            event.currentTarget.scrollIntoView?.({ inline: 'center', block: 'nearest' });
+          }}>{item.label}</button
         >
       {/each}
     </nav>
@@ -287,6 +316,28 @@
                 <dd>{VEHICLE_STATUS_LABELS[vehicle.status]}</dd>
               </div>
               <div>
+                <dt>Propiedad</dt>
+                <dd>{OWNERSHIP_LABELS[vehicle.ownership]}</dd>
+              </div>
+              {#if vehicle.ownership !== 'owned'}
+                <div>
+                  <dt>Propietario</dt>
+                  <dd>{vehicle.owner_supplier_name ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt>Contrato</dt>
+                  <dd>{vehicle.contract_reference ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt>Fin del contrato</dt>
+                  <dd>{formatDate(vehicle.contract_ends_on)}</dd>
+                </div>
+                <div>
+                  <dt>Cuota mensual</dt>
+                  <dd>{formatMoney(vehicle.monthly_fee)}</dd>
+                </div>
+              {/if}
+              <div>
                 <dt>GPS</dt>
                 <dd>{vehicle.gps_device_unique_id ?? 'Sin GPS'}</dd>
               </div>
@@ -317,6 +368,8 @@
         <VehicleFuelPanel {vehicle} onchanged={load} />
       {:else if tab === 'odometer'}
         <VehicleOdometerPanel {vehicle} onchanged={load} />
+      {:else if tab === 'costs'}
+        <VehicleCostsPanel {vehicle} />
       {:else if tab === 'gps'}
         <VehicleGpsPanel {vehicle} onchanged={(next) => (vehicle = next)} />
       {:else}

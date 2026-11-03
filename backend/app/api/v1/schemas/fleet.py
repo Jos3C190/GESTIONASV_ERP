@@ -17,6 +17,8 @@ ManualVehicleStatus = Literal["active", "out_of_service", "retired"]
 OperationalStatus = Literal["available", "in_route", "maintenance", "out_of_service", "retired"]
 FuelType = Literal["diesel", "gasoline", "lpg", "electric", "hybrid", "none"]
 MeterUnit = Literal["km", "hours"]
+Ownership = Literal["owned", "leased", "rented", "third_party"]
+CostCategory = Literal["insurance", "tax", "washing", "fee", "toll", "other"]
 #: The silhouettes in the frontend's static images, calibrated to carry the logo.
 BaseImage = Literal[
     "refrigerated",
@@ -174,6 +176,12 @@ class FleetVehicleOut(BaseModel):
     gps_device_unique_id: str | None
     inventory_vehicle_id: uuid.UUID | None
     notes: str | None
+    ownership: Ownership
+    owner_supplier_id: int | None
+    owner_supplier_name: str | None
+    contract_reference: str | None
+    contract_ends_on: date | None
+    monthly_fee: Decimal | None
     compliance: ComplianceOut
     created_at: datetime
     updated_at: datetime
@@ -208,6 +216,11 @@ class _VehicleFields(BaseModel):
     tank_liters: Decimal | None = Field(None, gt=0, le=Decimal("100000"), decimal_places=2)
     fuel_type: FuelType = "diesel"
     notes: str | None = Field(None, max_length=2000)
+    ownership: Ownership | None = None
+    owner_supplier_id: int | None = None
+    contract_reference: str | None = Field(None, max_length=80)
+    contract_ends_on: date | None = None
+    monthly_fee: Decimal | None = Field(None, ge=0, le=Decimal("9999999"), decimal_places=2)
 
     @field_validator("plate")
     @classmethod
@@ -256,6 +269,11 @@ class FleetVehicleUpdate(BaseModel):
     tank_liters: Decimal | None = Field(None, gt=0, le=Decimal("100000"), decimal_places=2)
     fuel_type: FuelType | None = None
     notes: str | None = Field(None, max_length=2000)
+    ownership: Ownership | None = None
+    owner_supplier_id: int | None = None
+    contract_reference: str | None = Field(None, max_length=80)
+    contract_ends_on: date | None = None
+    monthly_fee: Decimal | None = Field(None, ge=0, le=Decimal("9999999"), decimal_places=2)
 
     @field_validator("plate")
     @classmethod
@@ -336,6 +354,7 @@ class MaintenanceOrderIn(BaseModel):
     title: str = Field(min_length=2, max_length=160)
     description: str | None = Field(None, max_length=4000)
     workshop: str | None = Field(None, max_length=160)
+    supplier_id: int | None = None
     scheduled_on: date | None = None
     plan_id: uuid.UUID | None = None
 
@@ -344,6 +363,8 @@ class MaintenanceCompleteIn(BaseModel):
     odometer_km: Decimal = Field(ge=0, le=Decimal("9999999"), decimal_places=1)
     cost: Decimal = Field(ge=0, le=Decimal("99999999"), decimal_places=2)
     workshop: str | None = Field(None, max_length=160)
+    supplier_id: int | None = None
+    receipt_document_id: uuid.UUID | None = None
     notes: str | None = Field(None, max_length=4000)
 
 
@@ -360,6 +381,8 @@ class MaintenanceOrderOut(BaseModel):
     title: str
     description: str | None
     workshop: str | None
+    supplier_id: int | None = None
+    receipt_document_id: uuid.UUID | None = None
     scheduled_on: date | None
     started_at: datetime | None
     completed_at: datetime | None
@@ -376,6 +399,8 @@ class FuelLogIn(BaseModel):
     odometer_km: Decimal = Field(ge=0, le=Decimal("9999999"), decimal_places=1)
     full_tank: bool = True
     station: str | None = Field(None, max_length=160)
+    supplier_id: int | None = None
+    receipt_document_id: uuid.UUID | None = None
     driver_id: uuid.UUID | None = None
 
 
@@ -392,6 +417,8 @@ class FuelLogOut(BaseModel):
     odometer_km: Decimal
     full_tank: bool
     station: str | None
+    supplier_id: int | None = None
+    receipt_document_id: uuid.UUID | None = None
     driver_id: uuid.UUID | None
     driver_name: str | None
     km_per_liter: Decimal | None
@@ -420,6 +447,66 @@ class FuelStatsOut(BaseModel):
     amount: Decimal
     average_km_per_liter: Decimal | None
     cost_per_km: Decimal | None
+
+
+class FleetSupplierOut(BaseModel):
+    id: int
+    code: str
+    name: str
+
+
+class FleetCostIn(BaseModel):
+    category: CostCategory
+    incurred_on: date
+    amount: Decimal = Field(gt=0, le=Decimal("99999999"), decimal_places=2)
+    description: str | None = Field(None, max_length=300)
+    supplier_id: int | None = None
+    document_id: uuid.UUID | None = None
+
+
+class FleetCostOut(BaseModel):
+    id: uuid.UUID
+    category: CostCategory
+    incurred_on: date
+    amount: Decimal
+    description: str | None
+    supplier_id: int | None
+    supplier_name: str | None
+    document_id: uuid.UUID | None
+    recorded_by_name: str | None
+    voided_at: datetime | None
+    voided_by_name: str | None
+    void_reason: str | None
+
+
+class CostReportRowOut(BaseModel):
+    vehicle_id: uuid.UUID
+    code: str
+    plate: str | None
+    kind_name: str
+    branch_name: str
+    meter_unit: MeterUnit
+    fuel: Decimal
+    maintenance: Decimal
+    other: Decimal
+    total: Decimal
+    distance: Decimal
+    cost_per_unit: Decimal | None
+
+
+class CostReportTotalsOut(BaseModel):
+    fuel: Decimal
+    maintenance: Decimal
+    other: Decimal
+    total: Decimal
+
+
+class CostReportOut(BaseModel):
+    date_from: date
+    date_to: date
+    rows: list[CostReportRowOut]
+    totals: CostReportTotalsOut
+    other_by_category: dict[CostCategory, Decimal]
 
 
 class FleetAlertOut(BaseModel):
@@ -528,7 +615,7 @@ class AssignmentOut(BaseModel):
     id: uuid.UUID
     vehicle_id: uuid.UUID
     vehicle_code: str
-    vehicle_plate: str
+    vehicle_plate: str | None
     driver_id: uuid.UUID
     driver_name: str
     starts_at: datetime

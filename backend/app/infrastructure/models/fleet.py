@@ -43,6 +43,8 @@ DRIVER_STATUSES = ("active", "suspended", "inactive")
 ODOMETER_SOURCES = ("manual", "fuel", "maintenance", "gps", "meter_replacement")
 MAINTENANCE_KINDS = ("preventive", "corrective")
 MAINTENANCE_STATUSES = ("scheduled", "in_progress", "completed", "cancelled")
+OWNERSHIP_KINDS = ("owned", "leased", "rented", "third_party")
+COST_CATEGORIES = ("insurance", "tax", "washing", "fee", "toll", "other")
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
@@ -126,11 +128,32 @@ class FleetVehicleModel(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     traccar_device_id: Mapped[int | None] = mapped_column(Integer)
     inventory_vehicle_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     notes: Mapped[str | None] = mapped_column(Text)
+    ownership: Mapped[str] = mapped_column(String(16), nullable=False, server_default="owned")
+    owner_supplier_id: Mapped[int | None] = mapped_column(Integer)
+    contract_reference: Mapped[str | None] = mapped_column(String(80))
+    contract_ends_on: Mapped[date | None] = mapped_column(Date)
+    #: Reference for recording the fee as a cost; nothing is charged automatically.
+    monthly_fee: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     created_by: Mapped[uuid.UUID | None] = _user_fk()
     updated_by: Mapped[uuid.UUID | None] = _user_fk()
 
     __table_args__ = (
         UniqueConstraint("company_id", "id", name="uq_fleet_vehicles_company_id"),
+        ForeignKeyConstraint(
+            ["company_id", "owner_supplier_id"],
+            ["suppliers.company_id", "suppliers.id_supplier"],
+            name="fk_fleet_vehicles_owner_supplier",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(_in("ownership", OWNERSHIP_KINDS), name="ck_fleet_vehicles_ownership"),
+        CheckConstraint(
+            "ownership <> 'owned' OR (owner_supplier_id IS NULL AND contract_reference IS NULL "
+            "AND contract_ends_on IS NULL AND monthly_fee IS NULL)",
+            name="ck_fleet_vehicles_owned_no_contract",
+        ),
+        CheckConstraint(
+            "monthly_fee IS NULL OR monthly_fee >= 0", name="ck_fleet_vehicles_monthly_fee"
+        ),
         ForeignKeyConstraint(
             ["branch_id", "company_id"],
             ["branches.id", "branches.company_id"],
@@ -434,6 +457,10 @@ class MaintenanceOrderModel(UUIDPKMixin, TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     workshop: Mapped[str | None] = mapped_column(String(160))
+    supplier_id: Mapped[int | None] = mapped_column(Integer)
+    receipt_document_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("document_records.id", ondelete="SET NULL")
+    )
     scheduled_on: Mapped[date | None] = mapped_column(Date)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -454,6 +481,12 @@ class MaintenanceOrderModel(UUIDPKMixin, TimestampMixin, Base):
             ["company_id", "plan_id"],
             ["fleet_maintenance_plans.company_id", "fleet_maintenance_plans.id"],
             name="fk_fleet_maintenance_orders_plan_company",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "supplier_id"],
+            ["suppliers.company_id", "suppliers.id_supplier"],
+            name="fk_fleet_maintenance_orders_supplier",
             ondelete="RESTRICT",
         ),
         CheckConstraint(_in("kind", MAINTENANCE_KINDS), name="ck_fleet_maintenance_orders_kind"),
@@ -481,6 +514,7 @@ class FuelLogModel(UUIDPKMixin, TimestampMixin, Base):
     odometer_km: Mapped[Decimal] = mapped_column(Numeric(12, 1), nullable=False)
     full_tank: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     station: Mapped[str | None] = mapped_column(String(160))
+    supplier_id: Mapped[int | None] = mapped_column(Integer)
     receipt_document_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("document_records.id", ondelete="SET NULL")
     )
@@ -502,8 +536,54 @@ class FuelLogModel(UUIDPKMixin, TimestampMixin, Base):
             name="fk_fleet_fuel_logs_driver_company",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["company_id", "supplier_id"],
+            ["suppliers.company_id", "suppliers.id_supplier"],
+            name="fk_fleet_fuel_logs_supplier",
+            ondelete="RESTRICT",
+        ),
         CheckConstraint("liters > 0", name="ck_fleet_fuel_logs_liters"),
         CheckConstraint("total_amount >= 0", name="ck_fleet_fuel_logs_amount"),
         CheckConstraint("odometer_km >= 0", name="ck_fleet_fuel_logs_odometer"),
         Index("ix_fleet_fuel_logs_vehicle_time", "vehicle_id", "filled_at"),
+    )
+
+
+class FleetCostModel(UUIDPKMixin, TimestampMixin, Base):
+    """What a vehicle costs besides fuel and workshop orders: insurance, taxes, fees."""
+
+    __tablename__ = "fleet_costs"
+
+    company_id: Mapped[uuid.UUID] = _company_fk()
+    vehicle_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    category: Mapped[str] = mapped_column(String(16), nullable=False)
+    incurred_on: Mapped[date] = mapped_column(Date, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(300))
+    supplier_id: Mapped[int | None] = mapped_column(Integer)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("document_records.id", ondelete="SET NULL")
+    )
+    recorded_by: Mapped[uuid.UUID | None] = _user_fk()
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    voided_by: Mapped[uuid.UUID | None] = _user_fk()
+    void_reason: Mapped[str | None] = mapped_column(String(500))
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["company_id", "vehicle_id"],
+            ["fleet_vehicles.company_id", "fleet_vehicles.id"],
+            name="fk_fleet_costs_vehicle_company",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "supplier_id"],
+            ["suppliers.company_id", "suppliers.id_supplier"],
+            name="fk_fleet_costs_supplier",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(_in("category", COST_CATEGORIES), name="ck_fleet_costs_category"),
+        CheckConstraint("amount > 0", name="ck_fleet_costs_amount"),
+        Index("ix_fleet_costs_vehicle_date", "vehicle_id", "incurred_on"),
+        Index("ix_fleet_costs_company_date", "company_id", "incurred_on"),
     )

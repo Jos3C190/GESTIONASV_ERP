@@ -30,6 +30,7 @@ from app.infrastructure.models.fleet import (
 )
 from app.infrastructure.models.inventory_transfer import InventoryTransferModel
 from app.infrastructure.models.organization import Branch, Warehouse
+from app.infrastructure.models.supplier import SupplierModel
 from app.infrastructure.repositories.fleet_driver_queries import DriverQueries
 
 ACTIVE_TRANSFER_STATUSES = ("in_transit", "incident")
@@ -224,11 +225,15 @@ class FleetRepository(DriverQueries):
         return list(rows), total
 
     async def all_vehicles(
-        self, company_id: uuid.UUID, branch_ids: list[uuid.UUID] | None
+        self,
+        company_id: uuid.UUID,
+        branch_ids: list[uuid.UUID] | None,
+        *,
+        include_retired: bool = False,
     ) -> list[FleetVehicleModel]:
         rows = await self._session.scalars(
             select(FleetVehicleModel)
-            .where(*self._vehicle_filter(company_id, branch_ids, include_retired=False))
+            .where(*self._vehicle_filter(company_id, branch_ids, include_retired=include_retired))
             .order_by(FleetVehicleModel.code)
         )
         return list(rows)
@@ -269,6 +274,18 @@ class FleetRepository(DriverQueries):
             )
         )
         return branch
+
+    async def supplier_names(self, company_id: uuid.UUID, ids: Iterable[int]) -> dict[int, str]:
+        wanted = list(set(ids))
+        if not wanted:
+            return {}
+        # Un proveedor en papelera sigue siendo el dueño o taller de lo ya registrado.
+        rows = await self._session.execute(
+            select(SupplierModel.id_supplier, SupplierModel.name)
+            .where(SupplierModel.company_id == company_id, SupplierModel.id_supplier.in_(wanted))
+            .execution_options(include_deleted=True)
+        )
+        return {row[0]: row[1] for row in rows.all()}
 
     async def branch_names(
         self, company_id: uuid.UUID, ids: Iterable[uuid.UUID]
