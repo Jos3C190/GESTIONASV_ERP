@@ -174,12 +174,16 @@
               maxlength="500"
               value={confirmation.reason}
               oninput={(event) => confirmation.setReason(event.currentTarget.value)}
-              placeholder="Explique brevemente por qué debe eliminarse este registro"
+              placeholder={confirmation.current.kind === 'delete'
+                ? 'Explique brevemente por qué debe eliminarse este registro'
+                : 'Explique brevemente el motivo'}
               class="mt-1.5 w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary focus:shadow-glow"
             ></textarea>
-            <p class="mt-1 text-[11px] text-foreground-subtle">
-              El registro irá a la papelera y podrá restaurarse.
-            </p>
+            {#if confirmation.current.kind === 'delete'}
+              <p class="mt-1 text-[11px] text-foreground-subtle">
+                El registro irá a la papelera y podrá restaurarse.
+              </p>
+            {/if}
           {/if}
         </div>
       </div>

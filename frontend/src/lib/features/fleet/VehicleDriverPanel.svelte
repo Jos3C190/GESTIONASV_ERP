@@ -391,7 +391,7 @@
   }
   @media (max-width: 900px) {
     .panel {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>

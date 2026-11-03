@@ -198,39 +198,41 @@
     {:else if readings.length === 0}
       <p class="muted">Sin lecturas registradas.</p>
     {:else}
-      <table>
-        <thead>
-          <tr>
-            <th>Fecha</th><th class="num">Lectura</th><th>Origen</th><th>Registró</th>
-            {#if canCorrect}<th><span class="sr-only">Acciones</span></th>{/if}
-          </tr>
-        </thead>
-        <tbody>
-          {#each readings as item (item.id)}
-            <tr class:voided={item.voided_at}>
-              <td>
-                {formatDateTime(item.read_at)}
-                {#if item.notes}<small>{item.notes}</small>{/if}
-                {#if item.voided_at}
-                  <small class="void-note">
-                    Anulada por {item.voided_by_name ?? '—'}: {item.void_reason}
-                  </small>
-                {/if}
-              </td>
-              <td class="num">{formatNumber(item.reading_km)} {unit}</td>
-              <td>{SOURCE_LABELS[item.source]}</td>
-              <td>{item.recorded_by_name ?? '—'}</td>
-              {#if canCorrect}
-                <td class="row-action">
-                  {#if !item.voided_at && item.source !== 'fuel'}
-                    <button type="button" onclick={() => askVoid(item)}>Anular</button>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th><th class="num">Lectura</th><th>Origen</th><th>Registró</th>
+              {#if canCorrect}<th><span class="sr-only">Acciones</span></th>{/if}
+            </tr>
+          </thead>
+          <tbody>
+            {#each readings as item (item.id)}
+              <tr class:voided={item.voided_at}>
+                <td>
+                  {formatDateTime(item.read_at)}
+                  {#if item.notes}<small>{item.notes}</small>{/if}
+                  {#if item.voided_at}
+                    <small class="void-note">
+                      Anulada por {item.voided_by_name ?? '—'}: {item.void_reason}
+                    </small>
                   {/if}
                 </td>
-              {/if}
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+                <td class="num">{formatNumber(item.reading_km)} {unit}</td>
+                <td>{SOURCE_LABELS[item.source]}</td>
+                <td>{item.recorded_by_name ?? '—'}</td>
+                {#if canCorrect}
+                  <td class="row-action">
+                    {#if !item.voided_at && item.source !== 'fuel'}
+                      <button type="button" onclick={() => askVoid(item)}>Anular</button>
+                    {/if}
+                  </td>
+                {/if}
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
     {/if}
   </section>
 </div>
@@ -345,6 +347,9 @@
     color: rgb(var(--danger));
     font-size: 12px;
   }
+  .table-wrap {
+    overflow-x: auto;
+  }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -366,7 +371,7 @@
   }
   @media (max-width: 900px) {
     .panel {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>
