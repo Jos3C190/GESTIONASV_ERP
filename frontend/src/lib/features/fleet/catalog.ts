@@ -65,6 +65,11 @@ export const VEHICLE_STATUS_LABELS: Record<VehicleStatus, string> = {
 };
 
 export type FuelType = 'diesel' | 'gasoline' | 'lpg' | 'electric' | 'hybrid';
+/** Un `type="number"` vacío llega como null al enlazarse, no como cadena vacía. */
+export function isBlank(value: unknown): boolean {
+  return value === '' || value === null || value === undefined;
+}
+
 export const FUEL_LABELS: Record<FuelType, string> = {
   diesel: 'Diésel',
   gasoline: 'Gasolina',

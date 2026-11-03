@@ -79,6 +79,17 @@ async def _context(
     return company_id, scope, FleetRepository(session)
 
 
+def _plan_state(plan: MaintenancePlanModel) -> dict[str, str | None]:
+    return {
+        "plan_id": str(plan.id),
+        "name": plan.name,
+        "interval_km": str(plan.interval_km) if plan.interval_km is not None else None,
+        "interval_days": str(plan.interval_days) if plan.interval_days is not None else None,
+        "last_service_km": str(plan.last_service_km) if plan.last_service_km is not None else None,
+        "last_service_on": plan.last_service_on.isoformat() if plan.last_service_on else None,
+    }
+
+
 def _require_operable(vehicle: FleetVehicleModel) -> None:
     if vehicle.status == "retired":
         raise ConflictError("El vehículo está dado de baja.", code="vehicle_retired")
@@ -356,17 +367,30 @@ async def update_plan(
     session: SessionDep,
     current: CurrentUser,
     checker: Checker,
+    audit: Audit,
 ) -> MaintenancePlanOut:
-    _, scope, repo = await _context(request, session, current, checker)
+    company_id, scope, repo = await _context(request, session, current, checker)
     vehicle = await scoped_vehicle(repo, scope, vehicle_id)
     plan = await _plan(session, vehicle, plan_id)
     _validate_plan(body, vehicle)
-    plan.name = body.name.strip()
-    plan.interval_km = body.interval_km
-    plan.interval_days = body.interval_days
-    plan.last_service_km = body.last_service_km
-    plan.last_service_on = body.last_service_on
-    await session.flush()
+    before = _plan_state(plan)
+    async with session.begin_nested():
+        plan.name = body.name.strip()
+        plan.interval_km = body.interval_km
+        plan.interval_days = body.interval_days
+        plan.last_service_km = body.last_service_km
+        plan.last_service_on = body.last_service_on
+        await session.flush()
+        await audit.record(
+            action="UPDATE_MAINTENANCE_PLAN",
+            user_id=current.id,
+            company_id=company_id,
+            branch_id=vehicle.branch_id,
+            resource_type="fleet_vehicles",
+            resource_id=str(vehicle.id),
+            before_state=before,
+            after_state=_plan_state(plan),
+        )
     return _plan_out(plan, vehicle)
 
 
@@ -382,13 +406,24 @@ async def deactivate_plan(
     session: SessionDep,
     current: CurrentUser,
     checker: Checker,
+    audit: Audit,
 ) -> None:
-    _, scope, repo = await _context(request, session, current, checker)
+    company_id, scope, repo = await _context(request, session, current, checker)
     vehicle = await scoped_vehicle(repo, scope, vehicle_id)
     plan = await _plan(session, vehicle, plan_id)
-    # Se desactiva (no se borra) porque las órdenes históricas lo referencian.
-    plan.is_active = False
-    await session.flush()
+    async with session.begin_nested():
+        # Se desactiva (no se borra) porque las órdenes históricas lo referencian.
+        plan.is_active = False
+        await session.flush()
+        await audit.record(
+            action="DEACTIVATE_MAINTENANCE_PLAN",
+            user_id=current.id,
+            company_id=company_id,
+            branch_id=vehicle.branch_id,
+            resource_type="fleet_vehicles",
+            resource_id=str(vehicle.id),
+            before_state=_plan_state(plan),
+        )
 
 
 # ------------------------------------------------------------------ maintenance orders
@@ -452,7 +487,8 @@ async def _release_vehicle(
         )
     )
     if other is None and vehicle.status == "maintenance":
-        vehicle.status = "active"
+        vehicle.status = vehicle.status_before_maintenance or "active"
+        vehicle.status_before_maintenance = None
 
 
 @router.get(
@@ -557,6 +593,9 @@ async def start_order(
     async with session.begin_nested():
         order.status = "in_progress"
         order.started_at = _now()
+        # Con otra orden en curso, el estado previo ya está guardado.
+        if vehicle.status != "maintenance":
+            vehicle.status_before_maintenance = vehicle.status
         vehicle.status = "maintenance"
         await session.flush()
         await audit.record(

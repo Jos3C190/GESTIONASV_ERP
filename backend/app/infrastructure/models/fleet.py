@@ -88,6 +88,8 @@ class FleetVehicleModel(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     fuel_type: Mapped[str] = mapped_column(String(16), nullable=False, server_default="diesel")
     odometer_km: Mapped[Decimal] = mapped_column(Numeric(12, 1), nullable=False, server_default="0")
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
+    #: Status to go back to when the last order in progress ends.
+    status_before_maintenance: Mapped[str | None] = mapped_column(String(16))
     gps_device_unique_id: Mapped[str | None] = mapped_column(String(64))
     traccar_device_id: Mapped[int | None] = mapped_column(Integer)
     inventory_vehicle_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))

@@ -457,8 +457,11 @@ async def change_vehicle_status(
         )
     if body.status != "active":
         await _require_not_on_road(repo, vehicle, "cambiar su estado")
-        if not body.reason or len(body.reason.strip()) < MIN_REASON_LENGTH:
-            raise ValidationError("Indique el motivo del cambio de estado.", code="reason_required")
+    # Reactivar una baja también queda explicado: vuelve a operar un vehículo retirado.
+    if (body.status != "active" or vehicle.status == "retired") and (
+        not body.reason or len(body.reason.strip()) < MIN_REASON_LENGTH
+    ):
+        raise ValidationError("Indique el motivo del cambio de estado.", code="reason_required")
     if body.status == "retired" and await repo.open_assignment_for_vehicle(vehicle.id):
         raise ConflictError(
             "Finalice la asignación del conductor antes de dar de baja el vehículo.",

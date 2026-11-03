@@ -70,6 +70,7 @@
     (['active', 'out_of_service', 'retired'] as const).filter((item) => item !== vehicle?.status)
   );
   const branchOptions = $derived(branch.branches.filter((item) => item.id !== vehicle?.branch_id));
+  const reasonRequired = $derived(nextStatus !== 'active' || vehicle?.status === 'retired');
 
   async function load() {
     loading = true;
@@ -322,7 +323,7 @@
           {/each}
         </select>
       </label>
-      {#if nextStatus !== 'active'}
+      {#if reasonRequired}
         <label>
           <span>Motivo</span>
           <textarea bind:value={reason} rows="3" maxlength="500"></textarea>
@@ -338,7 +339,7 @@
       <div class="modal-actions">
         <Button variant="secondary" onclick={() => (statusOpen = false)}>Cancelar</Button>
         <Button
-          disabled={saving || (nextStatus !== 'active' && reason.trim().length < 3)}
+          disabled={saving || (reasonRequired && reason.trim().length < 3)}
           onclick={() =>
             run(() => fleetApi.setStatus(vehicle!.id, nextStatus, reason.trim() || undefined))}
           >Confirmar</Button

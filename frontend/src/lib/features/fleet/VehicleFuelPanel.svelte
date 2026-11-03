@@ -5,7 +5,7 @@
   import { driversApi, type Driver } from '$lib/features/drivers/api';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { fleetApi, type FleetVehicle, type FuelLog, type FuelStats } from './api';
-  import { formatDateTime, formatMoney, formatNumber } from './catalog';
+  import { formatDateTime, formatMoney, formatNumber, isBlank } from './catalog';
 
   let { vehicle, onchanged }: { vehicle: FleetVehicle; onchanged: () => void } = $props();
 
@@ -229,8 +229,8 @@
         disabled={saving ||
           !form.filled_at ||
           !(Number(form.liters) > 0) ||
-          form.total_amount === '' ||
-          form.odometer_km === ''}
+          isBlank(form.total_amount) ||
+          isBlank(form.odometer_km)}
         onclick={save}>Registrar</Button
       >
     </div>

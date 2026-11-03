@@ -2,6 +2,7 @@
   import { HttpError } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import { confirmation } from '$lib/stores/confirmation.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import {
     fleetApi,
@@ -11,7 +12,7 @@
     type MaintenancePlan,
     type OrderStatus
   } from './api';
-  import { formatDate, formatMoney, formatNumber } from './catalog';
+  import { formatDate, formatMoney, formatNumber, isBlank } from './catalog';
 
   let { vehicle, onchanged }: { vehicle: FleetVehicle; onchanged: () => void } = $props();
 
@@ -100,6 +101,20 @@
     } finally {
       saving = false;
     }
+  }
+
+  function askDeactivate(target: MaintenancePlan) {
+    confirmation.request({
+      kind: 'deactivate',
+      title: 'Desactivar plan de mantenimiento',
+      description: 'Dejará de avisar cuando venza. Sus órdenes anteriores se conservan.',
+      resourceName: target.name,
+      confirmLabel: 'Desactivar',
+      execute: async () => {
+        await fleetApi.deactivatePlan(vehicle.id, target.id);
+        await load();
+      }
+    });
   }
 
   function openPlan(target: MaintenancePlan | null) {
@@ -252,14 +267,7 @@
                 <div class="row-actions">
                   <button type="button" onclick={() => openOrder(item)}>Programar orden</button>
                   <button type="button" onclick={() => openPlan(item)}>Editar</button>
-                  <button
-                    type="button"
-                    onclick={() =>
-                      run(
-                        () => fleetApi.deactivatePlan(vehicle.id, item.id),
-                        () => undefined
-                      )}>Desactivar</button
-                  >
+                  <button type="button" onclick={() => askDeactivate(item)}>Desactivar</button>
                 </div>
               {/if}
             </li>
@@ -502,7 +510,7 @@
       <Button
         disabled={saving ||
           (closing?.mode === 'complete'
-            ? close.odometer === '' || close.cost === ''
+            ? isBlank(close.odometer) || isBlank(close.cost)
             : close.reason.trim().length < 3)}
         onclick={confirmClose}>Confirmar</Button
       >

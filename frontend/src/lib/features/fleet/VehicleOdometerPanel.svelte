@@ -3,7 +3,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { fleetApi, type FleetVehicle, type OdometerReading } from './api';
-  import { formatDateTime, formatNumber } from './catalog';
+  import { formatDateTime, formatNumber, isBlank } from './catalog';
 
   let { vehicle, onchanged }: { vehicle: FleetVehicle; onchanged: () => void } = $props();
 
@@ -25,7 +25,7 @@
   const canRecord = $derived(
     permissions.hasPermission('fleet:maintenance') && vehicle.status !== 'retired'
   );
-  const tooLow = $derived(reading !== '' && Number(reading) < Number(vehicle.odometer_km));
+  const tooLow = $derived(!isBlank(reading) && Number(reading) < Number(vehicle.odometer_km));
 
   async function load() {
     loading = true;
@@ -87,7 +87,7 @@
         {/if}
         {#if formError}<p class="error" role="alert">{formError}</p>{/if}
         <div class="actions">
-          <Button size="sm" disabled={saving || reading === '' || tooLow} onclick={save}
+          <Button size="sm" disabled={saving || isBlank(reading) || tooLow} onclick={save}
             >Registrar lectura</Button
           >
         </div>

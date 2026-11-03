@@ -8,7 +8,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AwareDatetime, BaseModel, Field, field_validator
 
 VehicleKind = Literal[
     "refrigerated",
@@ -217,7 +217,7 @@ class VehiclePhotoOut(BaseModel):
 
 class OdometerReadingIn(BaseModel):
     reading_km: Decimal = Field(ge=0, le=Decimal("9999999"), decimal_places=1)
-    read_at: datetime | None = None
+    read_at: AwareDatetime | None = None
     notes: str | None = Field(None, max_length=500)
 
 
@@ -290,7 +290,7 @@ class MaintenanceOrderOut(BaseModel):
 
 
 class FuelLogIn(BaseModel):
-    filled_at: datetime
+    filled_at: AwareDatetime
     liters: Decimal = Field(gt=0, le=Decimal("5000"), decimal_places=3)
     total_amount: Decimal = Field(ge=0, le=Decimal("100000"), decimal_places=2)
     odometer_km: Decimal = Field(ge=0, le=Decimal("9999999"), decimal_places=1)

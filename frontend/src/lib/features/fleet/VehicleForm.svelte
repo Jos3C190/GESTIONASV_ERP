@@ -70,7 +70,8 @@
     const errors: Record<string, string> = {};
     if (mode === 'create' && !/^[A-Za-z0-9][A-Za-z0-9 _-]{0,31}$/.test(code.trim()))
       errors.code = 'Use letras, números y guiones (máx. 32).';
-    if (plate.trim().length < 2) errors.plate = 'Indique la placa.';
+    if (!/^[A-Za-z0-9][A-Za-z0-9 -]{1,15}$/.test(plate.trim()))
+      errors.plate = 'Indique la placa: letras, números, espacios y guiones.';
     if (!brand.trim()) errors.brand = 'Indique la marca.';
     if (!model.trim()) errors.model = 'Indique el modelo.';
     const yearNumber = Number(year);
@@ -114,7 +115,11 @@
           : await fleetApi.update(vehicle!.id, fields);
       await goto(`/fleet/${saved.id}`);
     } catch (err) {
-      error = err instanceof HttpError ? err.message : 'No se pudo guardar el vehículo.';
+      // Lo repetido se corrige en su campo, y el resto del formulario sigue a la vista.
+      const taken =
+        err instanceof HttpError ? err.code.match(/^vehicle_(code|plate|vin)_taken$/)?.[1] : null;
+      if (taken) fieldErrors = { ...fieldErrors, [taken]: (err as HttpError).message };
+      else error = err instanceof HttpError ? err.message : 'No se pudo guardar el vehículo.';
     } finally {
       saving = false;
     }

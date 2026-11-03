@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.fleet import (
     DriverModel,
+    FleetVehicleModel,
     MaintenanceOrderModel,
     VehicleDriverAssignmentModel,
 )
@@ -92,7 +93,29 @@ async def fleet_restore_blockers(session: AsyncSession, resource: str, record: A
             blockers.append("el empleado está eliminado")
         elif employee.status != "activo":
             blockers.append("el empleado no está activo")
+    elif resource == "fleet_vehicles":
+        blockers.extend(await _identity_conflicts(session, record))
     return blockers
+
+
+async def _identity_conflicts(session: AsyncSession, record: FleetVehicleModel) -> list[str]:
+    """Another vehicle may have taken its code, plate or VIN while it was in the trash."""
+    conflicts: list[str] = []
+    for label, column, value in (
+        ("el código", FleetVehicleModel.code, record.code),
+        ("la placa", FleetVehicleModel.plate, record.plate),
+        ("el VIN", FleetVehicleModel.vin, record.vin),
+    ):
+        if value is not None and await _exists(
+            session,
+            FleetVehicleModel,
+            FleetVehicleModel.company_id == record.company_id,
+            FleetVehicleModel.id != record.id,
+            FleetVehicleModel.deleted_at.is_(None),
+            column == value,
+        ):
+            conflicts.append(f"{label} {value} ya lo usa otro vehículo")
+    return conflicts
 
 
 async def on_fleet_deleted(session: AsyncSession, resource: str, record: Any) -> None:
@@ -106,7 +129,8 @@ async def on_fleet_deleted(session: AsyncSession, resource: str, record: Any) ->
 async def on_fleet_restored(session: AsyncSession, resource: str, record: Any) -> None:
     if resource == "fleet_vehicles" and record.inventory_vehicle_id is not None:
         vehicle = await session.get(InventoryVehicleModel, record.inventory_vehicle_id)
-        if vehicle is not None and record.status != "retired":
+        # En mantenimiento sigue activo para Inventario, igual que fuera de la papelera.
+        if vehicle is not None and record.status in {"active", "maintenance"}:
             vehicle.status = "active"
 
 
