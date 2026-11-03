@@ -41,7 +41,13 @@ categorías. Sin el modelo, la captura sigue funcionando a mano, con las mismas 
 
 ### Encender
 
-`VLM_ENABLED` viene activo en el entorno local. Basta con levantar el perfil:
+En `.env`, activa el lector: `.env.example` lo trae apagado para quien no tiene GPU.
+
+```dotenv
+VLM_ENABLED=true
+```
+
+Después levanta su perfil:
 
 ```bash
 docker compose --profile vlm up -d --build vlm-worker backend
