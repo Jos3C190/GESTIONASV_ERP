@@ -125,7 +125,7 @@ No se instalan con `make setup`.
 | Función | Cómo activarla | Qué necesita |
 |---------|----------------|--------------|
 | **GPS y Seguimiento** | `make setup-gps` (o `bash scripts/setup-gps.sh`) | Nada más: enciende el servidor GPS, crea su cuenta de servicio y detecta la IP de la PC |
-| **Lectura de licencias** | Pasos en [`ocr/README.md`](ocr/README.md) | GPU NVIDIA y preparar el modelo una vez. Sin ella, los datos se escriben a mano |
+| **Lectura de licencias** | `make setup-vlm` (o `bash scripts/setup-vlm.sh`); guía en [`ocr/README.md`](ocr/README.md) | GPU NVIDIA y descargar unos 3 GB una vez. Sin ella, los datos se escriben a mano |
 
 Tras `make setup-gps`, conecta un equipo desde Flota > un vehículo > pestaña GPS. Para otra IP:
 `GPS_HOST=192.168.1.50 make setup-gps`. La dirección solo sirve dentro de tu red; para llevarlo a

@@ -30,28 +30,51 @@ una persona los confirma. El modelo solo ocupa VRAM mientras hay trabajo. Es la 
 para registrar una licencia: las rutas de documentos de Conductores y RR. HH. rechazan esas
 categorías. Sin el modelo, la captura sigue funcionando a mano, con las mismas validaciones.
 
-### Preparar el modelo (solo una vez)
+### Instalar
 
-1. Descarga los pesos oficiales de `tencent/HunyuanOCR` sin `v1.0/` ni `dflash/`.
-2. Conviértelos con `convert_hf_to_gguf.py` de llama.cpp, en la misma versión del motor
-   (la imagen `vlm` de `backend/Dockerfile`), para obtener `hyocr-f16.gguf` y, con
-   `--mmproj`, `mmproj-hyocr-f16.gguf`.
-3. Cópialos al volumen `proyecto_erp_vlm-models`. Un volumen de Docker arranca el modelo
-   unas cuatro veces más rápido que un montaje desde Windows.
-
-### Encender
-
-En `.env`, activa el lector: `.env.example` lo trae apagado para quien no tiene GPU.
-
-```dotenv
-VLM_ENABLED=true
-```
-
-Después levanta su perfil:
+Con el ERP ya instalado (`make setup`), un solo comando:
 
 ```bash
-docker compose --profile vlm up -d --build vlm-worker backend
+make setup-vlm
 ```
+
+Sin Make, usa `bash scripts/setup-vlm.sh`. Te pedirá confirmar antes de descargar.
+
+**Qué necesitas:**
+- GPU NVIDIA con al menos 4 GB de memoria y Docker con acceso a ella. Se probó en una RTX 4060.
+- Unos 10 GB libres para Docker durante la instalación. Al terminar, el modelo ocupa unos 2 GB.
+- Internet para descargar unos 3 GB. Solo la primera vez.
+- Aceptar la [licencia de Tencent](https://huggingface.co/tencent/HunyuanOCR).
+
+**Qué hace:**
+1. Comprueba la GPU y el disco.
+2. Descarga los pesos oficiales y los convierte con la misma versión del motor. Todo queda fijado
+   por versión, así que el resultado es idéntico en cada instalación y se verifica con su checksum.
+3. Guarda el modelo en un volumen de Docker, que arranca unas cuatro veces más rápido que un
+   montaje desde Windows.
+4. Pone `VLM_ENABLED=true` en `.env`, enciende el worker y comprueba que el modelo cargue en la GPU.
+
+Se puede repetir: si el modelo ya está bien, no descarga nada. Si la instalación se corta, repítela
+y aprovechará lo ya descargado. Con `--no-start` solo prepara el modelo; con `--yes` no pregunta.
+
+**Comprobar que funciona:** en Conductores, abre un conductor, entra a la pestaña Licencia y usa
+**Capturar con fotos** con una licencia de muestra. Debe proponer los datos para que los revises.
+El comando prueba que el modelo carga, pero no que lea bien; eso solo lo dice esta prueba.
+
+### Si algo falla
+
+| Mensaje o síntoma | Qué hacer |
+|---|---|
+| No se encontró una GPU NVIDIA | Sin GPU no hay lector: las licencias se escriben a mano |
+| El worker no quedó sano o el modelo no carga | Revisa `docker compose --profile vlm logs vlm-worker`. La imagen usa CUDA 12: comprueba el driver y que Docker vea la GPU |
+| El checksum no coincide | No uses ese modelo; repite el comando. Si cambiaste la versión del motor, hay que actualizar también las versiones y checksums de `scripts/setup-vlm.sh` |
+| El asistente dice que la lectura automática no está disponible | Revisa que `vlm-worker` esté corriendo y que `.env` tenga `VLM_ENABLED=true` |
+
+### Actualizar el motor
+
+Si cambias la imagen `vlm` de `backend/Dockerfile`, actualiza `LLAMA_COMMIT` en
+`scripts/setup-vlm.sh`, reconvierte el modelo y actualiza sus checksums. El conversor y el motor
+deben ser de la misma versión.
 
 ### Móviles en la misma red
 
