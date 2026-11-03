@@ -12,6 +12,7 @@ from app.application.tracking.device_setup import (
     TRACKER_MODELS,
     client_config_uri,
     device_signal,
+    enabled_trackers,
     is_phone_identifier,
     is_private_host,
     new_phone_identifier,
@@ -91,6 +92,13 @@ def test_signal_waits_until_the_first_report() -> None:
 )
 def test_signal_goes_silent_after_the_window(age: timedelta, expected: str) -> None:
     assert device_signal(NOW - age, NOW) == expected
+
+
+def test_only_the_models_with_an_open_port_are_offered() -> None:
+    assert enabled_trackers(None) == TRACKER_MODELS
+    assert enabled_trackers("") == TRACKER_MODELS
+    assert [model.key for model in enabled_trackers("teltonika, gt06")] == ["gt06", "teltonika"]
+    assert enabled_trackers("none") == ()
 
 
 def test_catalogue_has_unique_keys_and_ports() -> None:

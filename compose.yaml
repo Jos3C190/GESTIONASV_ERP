@@ -229,6 +229,7 @@ services:
       TRACCAR_USER: ${TRACCAR_USER:-}
       TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-}
       TRACCAR_PUBLIC_URL: ${TRACCAR_PUBLIC_URL:-}
+      TRACCAR_TRACKER_MODELS: ${TRACCAR_TRACKER_MODELS:-}
       # Servidor público de demostración de OSRM; en producción usa uno propio.
       OSRM_URL: ${OSRM_URL:-https://router.project-osrm.org}
       # Herramientas de simulación de Seguimiento (nunca se activan en producción).

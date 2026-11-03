@@ -53,6 +53,12 @@ TRACKER_MODELS: tuple[TrackerModel, ...] = (
 )
 
 
+def enabled_trackers(setting: str | None) -> tuple[TrackerModel, ...]:
+    """Models to offer: a model whose port is closed would be a dead end. Empty means all."""
+    keys = {key.strip() for key in (setting or "").split(",") if key.strip()}
+    return tuple(model for model in TRACKER_MODELS if not keys or model.key in keys)
+
+
 def is_private_host(host: str) -> bool:
     """Whether a vehicle on mobile data could not reach this address."""
     name = host.lower()

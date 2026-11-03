@@ -30,9 +30,9 @@ from app.application.fleet.views import build_vehicle_views
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.application.tracking.device_setup import (
     PHONE_PREFIX,
-    TRACKER_MODELS,
     client_config_uri,
     device_signal,
+    enabled_trackers,
     is_phone_identifier,
     new_phone_identifier,
     public_server,
@@ -164,7 +164,7 @@ async def get_gps_setup(
                 port=model.port,
                 short_identifier=model.short_identifier,
             )
-            for model in TRACKER_MODELS
+            for model in enabled_trackers(settings.TRACCAR_TRACKER_MODELS)
         ],
     )
 
