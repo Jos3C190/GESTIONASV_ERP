@@ -60,6 +60,8 @@ class GpsDeviceIn(BaseModel):
     unique_id: str | None = Field(
         default=None, min_length=3, max_length=64, pattern=r"^[A-Za-z0-9._-]+$"
     )
+    #: A phone normally keeps its identifier; replacing it must cut off the previous phone.
+    replace: bool = False
 
     @model_validator(mode="after")
     def _matches_kind(self) -> GpsDeviceIn:
@@ -105,7 +107,8 @@ def _target_identifier(vehicle: FleetVehicleModel, body: GpsDeviceIn) -> str:
     if body.kind == "phone":
         # Repetir el paso no debe invalidar un código que ya se escaneó.
         current = vehicle.gps_device_unique_id
-        return current if current and is_phone_identifier(current) else new_phone_identifier()
+        keep = current and is_phone_identifier(current) and not body.replace
+        return current if keep and current else new_phone_identifier()
     unique_id = (body.unique_id or "").strip()
     if unique_id.startswith(PHONE_PREFIX):
         raise ConflictError(

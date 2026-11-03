@@ -66,6 +66,24 @@ async def test_phone_link_generates_an_identifier_and_keeps_it(
     assert setup["phone_config_uri"].startswith(f"{public_url}?id={unique_id}&")
 
 
+async def test_replacing_a_phone_cuts_off_the_previous_one(
+    e2e_client: Any,
+    traccar: FakeTraccar,  # noqa: F811
+    public_url: str,
+) -> None:
+    del public_url
+    admin = await _admin(e2e_client)
+    vehicle_id = await _vehicle_id(e2e_client, admin, (await _branches(e2e_client, admin))[0]["id"])
+    url = f"/api/v1/fleet/vehicles/{vehicle_id}/gps-device"
+    first = await e2e_client.put(url, headers=admin, json={"kind": "phone"})
+
+    replaced = await e2e_client.put(url, headers=admin, json={"kind": "phone", "replace": True})
+
+    assert replaced.status_code == 200, replaced.text
+    assert replaced.json()["gps_device_unique_id"] != first.json()["gps_device_unique_id"]
+    assert replaced.json()["gps_device_unique_id"].startswith("GS-")
+
+
 async def test_manual_identifier_cannot_take_the_phone_prefix(
     e2e_client: Any,
     traccar: FakeTraccar,  # noqa: F811

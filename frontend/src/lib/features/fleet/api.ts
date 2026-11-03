@@ -202,6 +202,33 @@ export interface FuelLogInput {
   driver_id?: string | null;
 }
 
+export interface TrackerModel {
+  key: string;
+  brand: string;
+  models: string;
+  port: number;
+  short_identifier: boolean;
+}
+
+export interface GpsSetup {
+  configured: boolean;
+  server_url: string | null;
+  host: string | null;
+  private_network: boolean;
+  phone_config_uri: string | null;
+  trackers: TrackerModel[];
+}
+
+export type GpsSignal = 'unlinked' | 'waiting' | 'reporting' | 'silent' | 'unavailable';
+
+export interface GpsStatus {
+  state: GpsSignal;
+  kind: 'phone' | 'tracker' | null;
+  server_configured: boolean;
+  last_update: string | null;
+  battery_level: number | null;
+}
+
 export interface FleetAlert {
   vehicle_id: string | null;
   driver_id: string | null;
@@ -270,6 +297,14 @@ export const fleetApi = {
       `/fleet/vehicles/${id}/gps-device`,
       json('PUT', { unique_id: uniqueId })
     ),
+  linkPhone: (id: string, replace = false) =>
+    apiFetch<FleetVehicle>(
+      `/fleet/vehicles/${id}/gps-device`,
+      json('PUT', { kind: 'phone', replace })
+    ),
+  gpsSetup: (id: string) => apiFetch<GpsSetup>(`/fleet/vehicles/${id}/gps-setup`),
+  gpsStatus: (id: string, signal?: AbortSignal) =>
+    apiFetch<GpsStatus>(`/fleet/vehicles/${id}/gps-status`, { signal }),
   unlinkGps: (id: string) =>
     apiFetch<FleetVehicle>(`/fleet/vehicles/${id}/gps-device`, { method: 'DELETE' }),
   alerts: (signal?: AbortSignal) =>

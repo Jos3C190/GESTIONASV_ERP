@@ -1,33 +1,101 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { HttpError } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
-  import { fleetApi, type FleetVehicle } from './api';
+  import { fleetApi, type FleetVehicle, type GpsStatus } from './api';
   import FleetIcon from './FleetIcon.svelte';
+  import GpsSetupDialog from './gps/GpsSetupDialog.svelte';
+  import {
+    CARD_POLL_MS,
+    cardView,
+    resumeStep,
+    type CardTone,
+    type DeviceKind,
+    type SetupStep
+  } from './gps/setup-flow';
 
   let { vehicle, onchanged }: { vehicle: FleetVehicle; onchanged: (next: FleetVehicle) => void } =
     $props();
 
-  let uniqueId = $state('');
+  let status = $state<GpsStatus | null>(null);
+  let loaded = $state(false);
+  let now = $state(Date.now());
   let saving = $state(false);
   let confirmUnlink = $state(false);
   let error = $state<string | null>(null);
+  let dialogOpen = $state(false);
+  let startKind = $state<DeviceKind | null>(null);
+  let startStep = $state<SetupStep>('kind');
+  let cardHeading = $state<HTMLHeadingElement | null>(null);
+  let deviceActions = $state<HTMLDivElement | null>(null);
 
-  const canManage = $derived(
-    permissions.hasPermission('fleet:gps') && vehicle.status !== 'retired'
-  );
+  const retired = $derived(vehicle.status === 'retired');
+  const canManage = $derived(permissions.hasPermission('fleet:gps') && !retired);
   const canTrack = $derived(permissions.hasPermission('tracking:read'));
-  const valid = $derived(/^[A-Za-z0-9._-]{3,64}$/.test(uniqueId.trim()));
+  const view = $derived(cardView(status, now, canManage, retired));
+  const toneIcon: Record<CardTone, 'navigation' | 'clock' | 'check' | 'alert'> = {
+    neutral: 'navigation',
+    waiting: 'clock',
+    good: 'check',
+    warning: 'alert'
+  };
 
-  async function run(action: () => Promise<FleetVehicle>) {
+  async function refresh() {
+    try {
+      status = await fleetApi.gpsStatus(vehicle.id);
+    } catch {
+      status = null;
+    } finally {
+      now = Date.now();
+      loaded = true;
+    }
+  }
+
+  $effect(() => {
+    void vehicle.id;
+    void refresh();
+    const timer = setInterval(() => {
+      if (!document.hidden && !dialogOpen) void refresh();
+    }, CARD_POLL_MS);
+    return () => clearInterval(timer);
+  });
+
+  function openWizard(kind: DeviceKind | null, step: SetupStep) {
+    startKind = kind;
+    startStep = step;
+    dialogOpen = true;
+  }
+
+  /** El botón que abrió el asistente puede ya no existir: el foco vuelve al estado. */
+  async function closeWizard(value: boolean) {
+    dialogOpen = value;
+    if (value) return;
+    await refresh();
+    await tick();
+    cardHeading?.focus();
+  }
+
+  /** El botón pulsado desaparece al cambiar de vista; el foco no debe perderse. */
+  async function askUnlink(next: boolean) {
+    confirmUnlink = next;
+    error = null;
+    await tick();
+    const buttons = deviceActions?.querySelectorAll('button');
+    (next ? buttons?.[0] : buttons?.[buttons.length - 1])?.focus();
+  }
+
+  async function unlink() {
     saving = true;
     error = null;
     try {
-      onchanged(await action());
-      uniqueId = '';
+      onchanged(await fleetApi.unlinkGps(vehicle.id));
       confirmUnlink = false;
+      await refresh();
+      await tick();
+      cardHeading?.focus();
     } catch (err) {
-      error = err instanceof HttpError ? err.message : 'No se pudo actualizar el GPS.';
+      error = err instanceof HttpError ? err.message : 'No se pudo desvincular el GPS.';
     } finally {
       saving = false;
     }
@@ -36,57 +104,88 @@
 
 <div class="panel">
   <section class="card">
-    <h2>Dispositivo GPS</h2>
-    {#if vehicle.gps_linked}
-      <p class="linked">
-        <FleetIcon name="check" size={14} />Vinculado · <code>{vehicle.gps_device_unique_id}</code>
-      </p>
-      <p class="muted">
-        El dispositivo aparece en Seguimiento con el código {vehicle.code} y solo lo ven los usuarios
-        de {vehicle.branch_name} o con acceso a todas las sucursales.
-      </p>
-      {#if canTrack}<a class="link" href="/tracking">Ver en Seguimiento</a>{/if}
+    {#if !loaded}
+      <p class="muted" role="status">Comprobando el GPS…</p>
     {:else}
-      <p class="muted">
-        Sin GPS vinculado. Registra el identificador (IMEI) que el equipo reporta al servidor GPS.
-      </p>
-    {/if}
-
-    {#if canManage}
-      <div class="form">
-        <label>
-          <span
-            >{vehicle.gps_linked
-              ? 'Reemplazar por otro dispositivo'
-              : 'Identificador del equipo'}</span
-          >
-          <input bind:value={uniqueId} maxlength="64" placeholder="Ej. 358240051111110" />
-        </label>
-        <Button
-          size="sm"
-          disabled={saving || !valid}
-          onclick={() => run(() => fleetApi.linkGps(vehicle.id, uniqueId.trim()))}
-          >{saving ? 'Guardando…' : 'Vincular'}</Button
+      <div class="status {view.tone}">
+        <span class="badge" aria-hidden="true"
+          ><FleetIcon name={toneIcon[view.tone]} size={20} /></span
         >
-      </div>
-      {#if vehicle.gps_linked}
-        <div class="unlink">
-          {#if confirmUnlink}
-            <span class="muted">El vehículo dejará de verse en Seguimiento.</span>
-            <Button size="sm" variant="secondary" onclick={() => (confirmUnlink = false)}
-              >Cancelar</Button
-            >
-            <Button
-              size="sm"
-              variant="danger"
-              disabled={saving}
-              onclick={() => run(() => fleetApi.unlinkGps(vehicle.id))}>Desvincular</Button
-            >
-          {:else}
-            <Button size="sm" variant="secondary" onclick={() => (confirmUnlink = true)}
-              >Desvincular GPS</Button
-            >
+        <div class="text">
+          <h2 tabindex="-1" bind:this={cardHeading}>{view.title}</h2>
+          <p>{view.detail}</p>
+          {#if status?.battery_level != null && status.state === 'reporting'}
+            <p class="meta">
+              <FleetIcon name="battery" size={14} />Batería {Math.round(status.battery_level)} %
+            </p>
           {/if}
+        </div>
+      </div>
+
+      {#if view.action === 'connect' && canManage}
+        <Button size="lg" class="w-full sm:w-auto" onclick={() => openWizard(null, 'kind')}>
+          Conectar GPS
+        </Button>
+      {:else if view.action === 'resume' && canManage && status?.kind}
+        <Button
+          size="lg"
+          class="w-full sm:w-auto"
+          onclick={() => openWizard(status!.kind, resumeStep(status!.kind!))}
+        >
+          Continuar configuración
+        </Button>
+      {:else if view.action === 'help' && canManage && status?.kind}
+        <Button
+          size="lg"
+          class="w-full sm:w-auto"
+          onclick={() => openWizard(status!.kind, 'signal')}
+        >
+          Ver cómo resolverlo
+        </Button>
+      {:else if view.action === 'track' && canTrack}
+        <a class="track" href="/tracking">Ver en Seguimiento</a>
+      {:else if view.action === 'retry'}
+        <Button
+          variant="secondary"
+          size="lg"
+          class="w-full sm:w-auto"
+          onclick={() => void refresh()}
+        >
+          Reintentar
+        </Button>
+      {/if}
+
+      {#if vehicle.gps_linked && canManage}
+        <div class="device">
+          <div>
+            <span class="muted">Identificador</span>
+            <code>{vehicle.gps_device_unique_id}</code>
+          </div>
+          {#if confirmUnlink}
+            <p class="muted">El vehículo dejará de verse en Seguimiento.</p>
+          {/if}
+          <div class="row" bind:this={deviceActions}>
+            {#if confirmUnlink}
+              <Button
+                size="lg"
+                variant="secondary"
+                disabled={saving}
+                onclick={() => void askUnlink(false)}
+              >
+                Cancelar
+              </Button>
+              <Button size="lg" variant="danger" disabled={saving} onclick={() => void unlink()}>
+                Desvincular
+              </Button>
+            {:else}
+              <Button size="lg" variant="secondary" onclick={() => openWizard(null, 'kind')}>
+                Conectar otro equipo
+              </Button>
+              <Button size="lg" variant="ghost" onclick={() => void askUnlink(true)}>
+                Desvincular GPS
+              </Button>
+            {/if}
+          </div>
         </div>
       {/if}
     {/if}
@@ -94,77 +193,135 @@
   </section>
 </div>
 
+{#if dialogOpen}
+  <GpsSetupDialog
+    bind:open={() => dialogOpen, closeWizard}
+    {vehicle}
+    {startKind}
+    {startStep}
+    {onchanged}
+  />
+{/if}
+
 <style>
   .panel {
     max-width: 640px;
   }
   .card {
-    padding: 18px;
+    display: grid;
+    gap: 16px;
+    padding: 16px;
     border: 1px solid rgb(var(--border));
-    border-radius: 12px;
+    border-radius: 14px;
     background: rgb(var(--surface));
+  }
+  .status {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .badge {
+    display: flex;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    color: rgb(var(--foreground));
+    background: rgb(var(--surface-muted));
+  }
+  .good .badge {
+    color: rgb(var(--success));
+    background: rgb(var(--success) / 14%);
+  }
+  .warning .badge {
+    color: rgb(var(--warning));
+    background: rgb(var(--warning) / 14%);
+  }
+  .text {
+    min-width: 0;
   }
   h2 {
-    margin-bottom: 10px;
-    font-size: 13px;
+    margin: 0;
+    color: rgb(var(--foreground));
+    font-size: 16px;
     font-weight: 600;
   }
-  .linked {
+  /* El foco aquí es para lectores de pantalla: el título no es un control. */
+  h2:focus-visible {
+    box-shadow: none;
+  }
+  .text p {
+    margin: 2px 0 0;
+    color: rgb(var(--foreground-muted));
+    font-size: 14px;
+  }
+  .text .meta {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 6px;
-    color: rgb(var(--success));
-    font-size: 13px;
-    font-weight: 500;
-  }
-  code {
-    font-family: ui-monospace, monospace;
-    color: rgb(var(--foreground));
+    margin-top: 6px;
   }
   .muted {
-    font-size: 12px;
+    margin: 0;
     color: rgb(var(--foreground-muted));
-  }
-  .link {
-    display: inline-block;
-    margin-top: 8px;
-    font-size: 12px;
-    font-weight: 500;
-    color: rgb(var(--primary));
-  }
-  .form {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
-    margin-top: 16px;
-  }
-  label {
-    display: grid;
-    flex: 1;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 500;
-  }
-  input {
-    min-height: 36px;
-    padding: 0 10px;
-    border: 1px solid rgb(var(--border));
-    border-radius: 8px;
-    background: rgb(var(--surface));
-    color: rgb(var(--foreground));
     font-size: 13px;
   }
-  .unlink {
-    display: flex;
-    flex-wrap: wrap;
+  .track {
+    display: inline-flex;
+    min-height: 44px;
     align-items: center;
+    justify-content: center;
+    padding: 0 20px;
+    border-radius: 8px;
+    color: rgb(var(--surface));
+    background: rgb(var(--foreground));
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .track:hover {
+    background: rgb(var(--foreground-muted));
+  }
+  .track:focus-visible {
+    outline: 2px solid rgb(var(--foreground));
+    outline-offset: 2px;
+  }
+  .device {
+    display: grid;
+    gap: 10px;
+    padding-top: 14px;
+    border-top: 1px solid rgb(var(--border));
+  }
+  code {
+    display: block;
+    color: rgb(var(--foreground));
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+  .row {
+    display: grid;
     gap: 8px;
-    margin-top: 14px;
+  }
+  @media (min-width: 640px) {
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+    }
   }
   .error {
-    margin-top: 10px;
+    margin: 0;
     color: rgb(var(--danger));
-    font-size: 12px;
+    font-size: 14px;
+  }
+  @media (min-width: 640px) {
+    .card {
+      justify-items: start;
+      padding: 20px;
+    }
+    .device {
+      width: 100%;
+    }
   }
 </style>

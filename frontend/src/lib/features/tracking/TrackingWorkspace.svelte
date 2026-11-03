@@ -1008,7 +1008,7 @@
             {:else if mode === 'live' && !track.deviceFound}
               <p class="note">
                 {track.vehicleCode
-                  ? `Ningún dispositivo de Traccar se llama “${track.vehicleCode}”. Usa el código del vehículo como nombre o identificador del GPS.`
+                  ? `Ningún GPS se llama “${track.vehicleCode}”. Usa el código del vehículo como nombre o identificador del GPS.`
                   : 'El traslado no tiene vehículo asignado.'}
               </p>
             {:else if mode === 'live' && track.trail.length > 1 && !track.trailMatched}
