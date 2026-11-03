@@ -44,6 +44,7 @@ def report_rows(
     maintenance: Mapping[Any, Decimal],
     other: Mapping[Any, Decimal],
     distance: Mapping[Any, Decimal],
+    incidents: Mapping[Any, Decimal] | None = None,
 ) -> list[dict[str, Any]]:
     """One row per vehicle. A retired unit only appears if it cost something in the period."""
     rows: list[dict[str, Any]] = []
@@ -52,7 +53,8 @@ def report_rows(
         row_fuel = fuel.get(vehicle_id, ZERO)
         row_maintenance = maintenance.get(vehicle_id, ZERO)
         row_other = other.get(vehicle_id, ZERO)
-        total = row_fuel + row_maintenance + row_other
+        row_incidents = (incidents or {}).get(vehicle_id, ZERO)
+        total = row_fuel + row_maintenance + row_other + row_incidents
         if vehicle["retired"] and total == 0:
             continue
         travelled = distance.get(vehicle_id, ZERO)
@@ -62,6 +64,7 @@ def report_rows(
                 "fuel": row_fuel,
                 "maintenance": row_maintenance,
                 "other": row_other,
+                "incidents": row_incidents,
                 "total": total,
                 "distance": travelled,
                 "cost_per_unit": cost_per_unit(total, travelled),
@@ -73,7 +76,7 @@ def report_rows(
 
 def report_totals(rows: Iterable[Mapping[str, Any]]) -> dict[str, Decimal]:
     """Money adds up across the fleet. Distance does not: kilometers and hours do not mix."""
-    totals = {"fuel": ZERO, "maintenance": ZERO, "other": ZERO, "total": ZERO}
+    totals = {"fuel": ZERO, "maintenance": ZERO, "other": ZERO, "incidents": ZERO, "total": ZERO}
     for row in rows:
         for key in totals:
             totals[key] += row[key]

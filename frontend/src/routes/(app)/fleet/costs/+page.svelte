@@ -90,8 +90,8 @@
     <header>
       <h1 class="text-2xl font-bold tracking-tight text-foreground">Costos de flota</h1>
       <p class="mt-1 max-w-2xl text-sm text-foreground-muted">
-        Combustible, mantenimiento completado y otros costos de cada vehículo. Es un reporte
-        operativo: no genera asientos contables.
+        Combustible, mantenimiento completado, otros costos e incidentes de cada vehículo. Es un
+        reporte operativo: no genera asientos contables.
       </p>
     </header>
 
@@ -150,6 +150,7 @@
                 <th role="columnheader" scope="col" class="num">Combustible</th>
                 <th role="columnheader" scope="col" class="num">Mantenimiento</th>
                 <th role="columnheader" scope="col" class="num">Otros</th>
+                <th role="columnheader" scope="col" class="num">Incidentes</th>
                 <th role="columnheader" scope="col" class="num">Total</th>
                 <th role="columnheader" scope="col" class="num">Recorrido</th>
                 <th role="columnheader" scope="col" class="num">Costo por km u hora</th>
@@ -176,6 +177,9 @@
                     {formatMoney(row.maintenance)}
                   </td>
                   <td role="cell" class="num" data-label="Otros">{formatMoney(row.other)}</td>
+                  <td role="cell" class="num" data-label="Incidentes">
+                    {formatMoney(row.incidents)}
+                  </td>
                   <td role="cell" class="num total-cell" data-label="Total">
                     {formatMoney(row.total)}
                   </td>

@@ -317,6 +317,13 @@ export const NAV_GROUPS: NavGroup[] = [
         requiredPermission: 'fleet:manage_types'
       },
       {
+        label: 'Puntos de inspección',
+        icon: ICONS.fleet,
+        route: '/fleet/inspection-items',
+        implemented: true,
+        requiredPermission: 'fleet:manage_types'
+      },
+      {
         label: 'Costos de flota',
         icon: ICONS.fleet,
         route: '/fleet/costs',

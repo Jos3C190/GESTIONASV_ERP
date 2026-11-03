@@ -87,6 +87,40 @@ export const COST_CATEGORY_LABELS: Record<CostCategory, string> = {
   other: 'Otro'
 };
 
+export type IncidentKind = 'accident' | 'theft' | 'fine' | 'damage' | 'other';
+export const INCIDENT_KIND_LABELS: Record<IncidentKind, string> = {
+  accident: 'Accidente',
+  theft: 'Robo',
+  fine: 'Multa',
+  damage: 'Daño',
+  other: 'Otro'
+};
+export type IncidentSeverity = 'minor' | 'moderate' | 'severe';
+export const INCIDENT_SEVERITY_LABELS: Record<IncidentSeverity, string> = {
+  minor: 'Leve',
+  moderate: 'Moderada',
+  severe: 'Grave'
+};
+export type IncidentResponsible = 'company' | 'driver' | 'third_party' | 'unknown';
+export const INCIDENT_RESPONSIBLE_LABELS: Record<IncidentResponsible, string> = {
+  unknown: 'Por determinar',
+  company: 'La empresa',
+  driver: 'El conductor',
+  third_party: 'Un tercero'
+};
+export type IncidentStatus = 'open' | 'in_review' | 'closed';
+export const INCIDENT_STATUS_LABELS: Record<IncidentStatus, string> = {
+  open: 'Abierto',
+  in_review: 'En revisión',
+  closed: 'Cerrado'
+};
+
+export function localDateTime(date: Date): string {
+  const shifted = new Date(date);
+  shifted.setMinutes(shifted.getMinutes() - shifted.getTimezoneOffset());
+  return shifted.toISOString().slice(0, 16);
+}
+
 /** A date as the user's calendar shows it, not as UTC. */
 export function localDate(date: Date): string {
   const shifted = new Date(date);

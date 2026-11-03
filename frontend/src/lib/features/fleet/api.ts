@@ -4,6 +4,10 @@ import { branch } from '$lib/stores/branch.svelte';
 import type {
   CostCategory,
   FuelType,
+  IncidentKind,
+  IncidentResponsible,
+  IncidentSeverity,
+  IncidentStatus,
   LicenseClass,
   OperationalStatus,
   Ownership,
@@ -12,7 +16,14 @@ import type {
   VehicleStatus
 } from './catalog';
 
-export type { CostCategory, Ownership };
+export type {
+  CostCategory,
+  IncidentKind,
+  IncidentResponsible,
+  IncidentSeverity,
+  IncidentStatus,
+  Ownership
+};
 
 export type ComplianceState = 'ok' | 'warning' | 'blocked';
 
@@ -319,16 +330,97 @@ export interface CostReportRow {
   fuel: string;
   maintenance: string;
   other: string;
+  incidents: string;
   total: string;
   distance: string;
   cost_per_unit: string | null;
+}
+
+export interface FleetIncident {
+  id: string;
+  vehicle_id: string;
+  vehicle_code: string;
+  driver_id: string | null;
+  driver_name: string | null;
+  kind: IncidentKind;
+  severity: IncidentSeverity;
+  responsible: IncidentResponsible;
+  status: IncidentStatus;
+  occurred_at: string;
+  location: string | null;
+  description: string;
+  cost: string | null;
+  insurance_claim: string | null;
+  document_id: string | null;
+  resolution: string | null;
+  reported_by_name: string | null;
+  closed_at: string | null;
+  closed_by_name: string | null;
+  vehicle_taken_out?: boolean;
+}
+
+export interface FleetIncidentInput {
+  kind: IncidentKind;
+  severity: IncidentSeverity;
+  responsible: IncidentResponsible;
+  occurred_at: string;
+  location?: string | null;
+  description: string;
+  driver_id?: string | null;
+  cost?: string | null;
+  insurance_claim?: string | null;
+  document_id?: string | null;
+  take_out_of_service?: boolean;
+}
+
+export interface FleetIncidentUpdate {
+  status?: IncidentStatus;
+  responsible?: IncidentResponsible;
+  resolution?: string | null;
+  cost?: string | null;
+  insurance_claim?: string | null;
+  document_id?: string | null;
+}
+
+export interface InspectionItem {
+  id: string;
+  name: string;
+  is_critical: boolean;
+  is_active: boolean;
+}
+
+export interface InspectionResult {
+  id: string;
+  item_name: string;
+  is_critical: boolean;
+  passed: boolean;
+  notes: string | null;
+  photo_url: string | null;
+  resolved_at: string | null;
+  resolved_by_name: string | null;
+  resolution: string | null;
+}
+
+export interface FleetInspection {
+  id: string;
+  inspected_at: string;
+  passed: boolean;
+  notes: string | null;
+  inspected_by_name: string | null;
+  results: InspectionResult[];
+}
+
+export interface FleetInspectionInput {
+  driver_id?: string | null;
+  notes?: string | null;
+  results: { item_id: string; passed: boolean; notes?: string | null; photo_url?: string | null }[];
 }
 
 export interface CostReport {
   date_from: string;
   date_to: string;
   rows: CostReportRow[];
-  totals: { fuel: string; maintenance: string; other: string; total: string };
+  totals: { fuel: string; maintenance: string; other: string; incidents: string; total: string };
   other_by_category: Partial<Record<CostCategory, string>>;
 }
 
@@ -526,6 +618,31 @@ export const fleetApi = {
   addFuel: (id: string, data: FuelLogInput) =>
     apiFetch<FuelLog>(`/fleet/vehicles/${id}/fuel-logs`, json('POST', data)),
   suppliers: () => apiFetch<FleetSupplier[]>('/fleet/suppliers'),
+  incidents: (id: string) => apiFetch<FleetIncident[]>(`/fleet/vehicles/${id}/incidents`),
+  driverIncidents: (driverId: string) =>
+    apiFetch<FleetIncident[]>(`/fleet/drivers/${driverId}/incidents`),
+  addIncident: (id: string, data: FleetIncidentInput) =>
+    apiFetch<FleetIncident>(`/fleet/vehicles/${id}/incidents`, json('POST', data)),
+  updateIncident: (id: string, incidentId: string, data: FleetIncidentUpdate) =>
+    apiFetch<FleetIncident>(`/fleet/vehicles/${id}/incidents/${incidentId}`, json('PATCH', data)),
+  inspectionItems: (includeInactive = false) =>
+    apiFetch<InspectionItem[]>(
+      `/fleet/inspection-items${includeInactive ? '?include_inactive=true' : ''}`
+    ),
+  createInspectionItem: (data: { name: string; is_critical: boolean }) =>
+    apiFetch<InspectionItem>('/fleet/inspection-items', json('POST', data)),
+  updateInspectionItem: (
+    id: string,
+    data: { name: string; is_critical: boolean; is_active: boolean }
+  ) => apiFetch<InspectionItem>(`/fleet/inspection-items/${id}`, json('PATCH', data)),
+  inspections: (id: string) => apiFetch<FleetInspection[]>(`/fleet/vehicles/${id}/inspections`),
+  addInspection: (id: string, data: FleetInspectionInput) =>
+    apiFetch<FleetInspection>(`/fleet/vehicles/${id}/inspections`, json('POST', data)),
+  resolveInspectionResult: (id: string, resultId: string, reason: string) =>
+    apiFetch<InspectionResult>(
+      `/fleet/vehicles/${id}/inspection-results/${resultId}/resolve`,
+      json('POST', { reason })
+    ),
   costs: (id: string) => apiFetch<FleetCost[]>(`/fleet/vehicles/${id}/costs`),
   addCost: (id: string, data: FleetCostInput) =>
     apiFetch<FleetCost>(`/fleet/vehicles/${id}/costs`, json('POST', data)),

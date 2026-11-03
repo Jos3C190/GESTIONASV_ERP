@@ -120,6 +120,7 @@ async def build_vehicle_views(
     branches = await repo.branch_names(company_id, [vehicle.branch_id for vehicle in vehicles])
     types = {item.code: item for item in await repo.vehicle_types(company_id)}
     couplings = await repo.open_couplings_for_vehicles(company_id, vehicle_ids)
+    critical_failures = await repo.open_critical_failures(vehicle_ids)
     owners = await repo.supplier_names(
         company_id, [v.owner_supplier_id for v in vehicles if v.owner_supplier_id is not None]
     )
@@ -138,6 +139,15 @@ async def build_vehicle_views(
             documents=documents,
             maintenance=maintenance_issues(plans.get(vehicle.id, []), odometer, today),
         )
+        failures = critical_failures.get(vehicle.id)
+        if failures and vehicle.status != "retired":
+            issues.append(
+                Issue(
+                    "inspection_critical_failure",
+                    "blocking",
+                    f"Falla crítica sin resolver: {', '.join(failures)}.",
+                )
+            )
         issues.extend(
             contract_issues(vehicle.ownership, vehicle.contract_ends_on, vehicle.status, today)
         )

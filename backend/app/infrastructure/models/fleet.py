@@ -45,6 +45,10 @@ MAINTENANCE_KINDS = ("preventive", "corrective")
 MAINTENANCE_STATUSES = ("scheduled", "in_progress", "completed", "cancelled")
 OWNERSHIP_KINDS = ("owned", "leased", "rented", "third_party")
 COST_CATEGORIES = ("insurance", "tax", "washing", "fee", "toll", "other")
+INCIDENT_KINDS = ("accident", "theft", "fine", "damage", "other")
+INCIDENT_SEVERITIES = ("minor", "moderate", "severe")
+INCIDENT_RESPONSIBLES = ("company", "driver", "third_party", "unknown")
+INCIDENT_STATUSES = ("open", "in_review", "closed")
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
@@ -586,4 +590,153 @@ class FleetCostModel(UUIDPKMixin, TimestampMixin, Base):
         CheckConstraint("amount > 0", name="ck_fleet_costs_amount"),
         Index("ix_fleet_costs_vehicle_date", "vehicle_id", "incurred_on"),
         Index("ix_fleet_costs_company_date", "company_id", "incurred_on"),
+    )
+
+
+class FleetIncidentModel(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "fleet_incidents"
+
+    company_id: Mapped[uuid.UUID] = _company_fk()
+    vehicle_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    driver_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    responsible: Mapped[str] = mapped_column(String(16), nullable=False, server_default="unknown")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="open")
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    location: Mapped[str | None] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    insurance_claim: Mapped[str | None] = mapped_column(String(80))
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("document_records.id", ondelete="SET NULL")
+    )
+    resolution: Mapped[str | None] = mapped_column(String(1000))
+    reported_by: Mapped[uuid.UUID | None] = _user_fk()
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_by: Mapped[uuid.UUID | None] = _user_fk()
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["company_id", "vehicle_id"],
+            ["fleet_vehicles.company_id", "fleet_vehicles.id"],
+            name="fk_fleet_incidents_vehicle_company",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "driver_id"],
+            ["drivers.company_id", "drivers.id"],
+            name="fk_fleet_incidents_driver_company",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(_in("kind", INCIDENT_KINDS), name="ck_fleet_incidents_kind"),
+        CheckConstraint(_in("severity", INCIDENT_SEVERITIES), name="ck_fleet_incidents_severity"),
+        CheckConstraint(
+            _in("responsible", INCIDENT_RESPONSIBLES), name="ck_fleet_incidents_responsible"
+        ),
+        CheckConstraint(_in("status", INCIDENT_STATUSES), name="ck_fleet_incidents_status"),
+        CheckConstraint("cost IS NULL OR cost >= 0", name="ck_fleet_incidents_cost"),
+        CheckConstraint(
+            "status <> 'closed' OR (closed_at IS NOT NULL AND resolution IS NOT NULL)",
+            name="ck_fleet_incidents_closed",
+        ),
+        Index("ix_fleet_incidents_vehicle", "vehicle_id", "occurred_at"),
+        Index("ix_fleet_incidents_driver", "driver_id", "occurred_at"),
+        Index("ix_fleet_incidents_company", "company_id", "occurred_at"),
+    )
+
+
+class FleetInspectionItemModel(UUIDPKMixin, TimestampMixin, Base):
+    """A point of a company's pre-departure checklist."""
+
+    __tablename__ = "fleet_inspection_items"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    is_critical: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="100")
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "id", name="uq_fleet_inspection_items_company_id"),
+        Index(
+            "uq_fleet_inspection_items_company_name",
+            "company_id",
+            text("lower(name)"),
+            unique=True,
+        ),
+    )
+
+
+class FleetInspectionModel(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "fleet_inspections"
+
+    company_id: Mapped[uuid.UUID] = _company_fk()
+    vehicle_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    driver_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    inspected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    #: False when a critical point failed; other failures are recorded without stopping the unit.
+    passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    notes: Mapped[str | None] = mapped_column(String(1000))
+    inspected_by: Mapped[uuid.UUID | None] = _user_fk()
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "id", name="uq_fleet_inspections_company_id"),
+        ForeignKeyConstraint(
+            ["company_id", "vehicle_id"],
+            ["fleet_vehicles.company_id", "fleet_vehicles.id"],
+            name="fk_fleet_inspections_vehicle_company",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "driver_id"],
+            ["drivers.company_id", "drivers.id"],
+            name="fk_fleet_inspections_driver_company",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_fleet_inspections_vehicle", "vehicle_id", "inspected_at"),
+    )
+
+
+class FleetInspectionResultModel(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "fleet_inspection_results"
+
+    company_id: Mapped[uuid.UUID] = _company_fk()
+    inspection_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    vehicle_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    item_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    #: A copy of the point as it was: renaming it later must not rewrite past inspections.
+    item_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    is_critical: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    notes: Mapped[str | None] = mapped_column(String(500))
+    photo_url: Mapped[str | None] = mapped_column(String(2048))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[uuid.UUID | None] = _user_fk()
+    resolution: Mapped[str | None] = mapped_column(String(500))
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["company_id", "inspection_id"],
+            ["fleet_inspections.company_id", "fleet_inspections.id"],
+            name="fk_fleet_inspection_results_inspection",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "item_id"],
+            ["fleet_inspection_items.company_id", "fleet_inspection_items.id"],
+            name="fk_fleet_inspection_results_item",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "resolved_at IS NULL OR (NOT passed AND resolution IS NOT NULL)",
+            name="ck_fleet_inspection_results_resolved",
+        ),
+        Index(
+            "ix_fleet_inspection_results_open_critical",
+            "vehicle_id",
+            postgresql_where=text("is_critical AND NOT passed AND resolved_at IS NULL"),
+        ),
     )

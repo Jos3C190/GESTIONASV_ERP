@@ -230,7 +230,7 @@ async def _ensure_unique(
         raise ConflictError(_CONFLICT_FIELDS[field], code=f"vehicle_{field}_taken")
 
 
-async def _require_not_on_road(
+async def require_not_on_road(
     repo: FleetRepository, vehicle: FleetVehicleModel, action: str
 ) -> None:
     if vehicle.inventory_vehicle_id is None:
@@ -244,7 +244,7 @@ async def _require_not_on_road(
         )
 
 
-async def _set_inventory_status(
+async def set_inventory_status(
     session: SessionDep, vehicle: FleetVehicleModel, inventory_status: str
 ) -> None:
     if vehicle.inventory_vehicle_id is None:
@@ -585,7 +585,7 @@ async def change_vehicle_status(
             code="vehicle_in_maintenance",
         )
     if body.status != "active":
-        await _require_not_on_road(repo, vehicle, "cambiar su estado")
+        await require_not_on_road(repo, vehicle, "cambiar su estado")
     # Reactivar una baja también queda explicado: vuelve a operar un vehículo retirado.
     if (body.status != "active" or vehicle.status == "retired") and (
         not body.reason or len(body.reason.strip()) < MIN_REASON_LENGTH
@@ -604,7 +604,7 @@ async def change_vehicle_status(
     async with session.begin_nested():
         vehicle.status = body.status
         vehicle.updated_by = current.id
-        await _set_inventory_status(
+        await set_inventory_status(
             session, vehicle, "active" if body.status == "active" else "inactive"
         )
         await session.flush()
@@ -645,7 +645,7 @@ async def change_vehicle_branch(
     branch = await repo.branch(company_id, body.branch_id)
     if branch is None or not branch.is_active:
         raise ValidationError("La sucursal no existe o no está activa.", code="branch_inactive")
-    await _require_not_on_road(repo, vehicle, "cambiarlo de sucursal")
+    await require_not_on_road(repo, vehicle, "cambiarlo de sucursal")
     if await repo.open_coupling(vehicle.id):
         raise ConflictError(
             "Desenganche el remolque antes de cambiar la sucursal.", code="vehicle_is_coupled"

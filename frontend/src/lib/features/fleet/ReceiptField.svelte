@@ -6,8 +6,9 @@
     id,
     vehicleId,
     label = 'Factura',
+    noun = 'factura',
     value = $bindable('')
-  }: { id: string; vehicleId: string; label?: string; value?: string } = $props();
+  }: { id: string; vehicleId: string; label?: string; noun?: string; value?: string } = $props();
 
   let documents = $state<{ id: string; title: string }[]>([]);
   let status = $state<'loading' | 'ready' | 'failed'>('loading');
@@ -34,18 +35,17 @@
     {#if status === 'failed'}
       <span>{label}</span>
       <small class="failed" role="alert">
-        No se pudieron cargar los documentos. Puedes registrar sin factura.
+        No se pudieron cargar los documentos. Puedes registrar sin adjuntarlo.
       </small>
     {:else if status === 'ready' && documents.length === 0}
       <span>{label}</span>
       <small>
-        Este vehículo no tiene documentos. Para ligar una factura, súbela primero en la pestaña
-        Documentos.
+        Este vehículo no tiene documentos. Para ligarlo, súbelo primero en la pestaña Documentos.
       </small>
     {:else}
       <label for={id}>{label}</label>
       <select {id} bind:value disabled={status === 'loading'}>
-        <option value="">Sin factura</option>
+        <option value="">Sin {noun}</option>
         {#each documents as document (document.id)}
           <option value={document.id}>{document.title}</option>
         {/each}

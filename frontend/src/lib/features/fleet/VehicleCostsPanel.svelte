@@ -81,7 +81,7 @@
   const row = $derived(report?.rows[0] ?? null);
   // Sin fila en un reporte que sí cargó significa que el vehículo no costó nada.
   const totals = $derived(
-    report ? (row ?? { total: '0', fuel: '0', maintenance: '0', other: '0' }) : null
+    report ? (row ?? { total: '0', fuel: '0', maintenance: '0', other: '0', incidents: '0' }) : null
   );
   const detail = $derived.by(() => {
     if (!report) return undefined;

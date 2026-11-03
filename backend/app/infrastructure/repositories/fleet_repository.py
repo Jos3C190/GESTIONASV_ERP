@@ -20,6 +20,7 @@ from app.infrastructure.models.document_record import DocumentCategoryModel, Doc
 from app.infrastructure.models.employee import Employee, EmployeeBranchAssignment
 from app.infrastructure.models.fleet import (
     DriverModel,
+    FleetInspectionResultModel,
     FleetVehicleCouplingModel,
     FleetVehicleModel,
     FleetVehiclePhotoModel,
@@ -274,6 +275,26 @@ class FleetRepository(DriverQueries):
             )
         )
         return branch
+
+    async def open_critical_failures(
+        self, vehicle_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, list[str]]:
+        rows = await self._session.execute(
+            select(FleetInspectionResultModel.vehicle_id, FleetInspectionResultModel.item_name)
+            .where(
+                FleetInspectionResultModel.vehicle_id.in_(vehicle_ids),
+                FleetInspectionResultModel.is_critical.is_(True),
+                FleetInspectionResultModel.passed.is_(False),
+                FleetInspectionResultModel.resolved_at.is_(None),
+            )
+            .order_by(FleetInspectionResultModel.item_name)
+        )
+        failures: dict[uuid.UUID, list[str]] = {}
+        for vehicle_id, name in rows.all():
+            names = failures.setdefault(vehicle_id, [])
+            if name not in names:
+                names.append(name)
+        return failures
 
     async def supplier_names(self, company_id: uuid.UUID, ids: Iterable[int]) -> dict[int, str]:
         wanted = list(set(ids))

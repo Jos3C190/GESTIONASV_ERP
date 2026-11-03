@@ -3,7 +3,11 @@
   import { permissions } from '$lib/stores/permissions.svelte';
   import { fleetApi } from './api';
 
-  let { vehicleId, documentId }: { vehicleId: string; documentId: string } = $props();
+  let {
+    vehicleId,
+    documentId,
+    label = 'Ver factura'
+  }: { vehicleId: string; documentId: string; label?: string } = $props();
 
   let error = $state<string | null>(null);
 
@@ -23,7 +27,7 @@
 </script>
 
 {#if permissions.hasPermission('fleet_documents:read')}
-  <button type="button" onclick={view}>Ver factura</button>
+  <button type="button" onclick={view}>{label}</button>
   {#if error}<small role="alert">{error}</small>{/if}
 {/if}
 

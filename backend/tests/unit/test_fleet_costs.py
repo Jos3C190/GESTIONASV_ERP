@@ -82,6 +82,7 @@ def test_rows_add_up_and_sort_by_cost() -> None:
         "fuel": Decimal("10"),
         "maintenance": Decimal("50"),
         "other": Decimal("5"),
+        "incidents": Decimal("0"),
         "total": Decimal("65"),
     }
 

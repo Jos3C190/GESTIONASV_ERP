@@ -7,7 +7,13 @@
     detail,
     busy = false
   }: {
-    totals: { total: string; fuel: string; maintenance: string; other: string } | null;
+    totals: {
+      total: string;
+      fuel: string;
+      maintenance: string;
+      other: string;
+      incidents: string;
+    } | null;
     detail?: string;
     busy?: boolean;
   } = $props();
@@ -24,6 +30,7 @@
     <span>Mantenimiento</span><strong>{formatMoney(totals?.maintenance)}</strong>
   </div>
   <div class="tile"><span>Otros costos</span><strong>{formatMoney(totals?.other)}</strong></div>
+  <div class="tile"><span>Incidentes</span><strong>{formatMoney(totals?.incidents)}</strong></div>
 </div>
 
 <style>
@@ -67,7 +74,7 @@
   }
   @media (min-width: 640px) {
     .kpis {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px;
     }
     .tile {
@@ -85,7 +92,7 @@
   }
   @media (min-width: 1100px) {
     .kpis {
-      grid-template-columns: 1.6fr repeat(3, minmax(0, 1fr));
+      grid-template-columns: 1.6fr repeat(4, minmax(0, 1fr));
     }
     .total {
       grid-column: auto;

@@ -42,6 +42,7 @@ from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.infrastructure.models.fleet import (
     FleetCostModel,
+    FleetIncidentModel,
     FleetVehicleModel,
     FuelLogModel,
     MaintenanceOrderModel,
@@ -325,6 +326,15 @@ async def cost_report(
         )
         .group_by(MaintenanceOrderModel.vehicle_id)
     )
+    incidents = await _amounts(
+        select(FleetIncidentModel.vehicle_id, func.sum(FleetIncidentModel.cost))
+        .where(
+            FleetIncidentModel.vehicle_id.in_(ids),
+            FleetIncidentModel.occurred_at >= start,
+            FleetIncidentModel.occurred_at < end,
+        )
+        .group_by(FleetIncidentModel.vehicle_id)
+    )
     other_filter = (
         FleetCostModel.vehicle_id.in_(ids),
         FleetCostModel.voided_at.is_(None),
@@ -359,6 +369,7 @@ async def cost_report(
         fuel=fuel,
         maintenance=maintenance,
         other=other,
+        incidents=incidents,
         distance=await _distances(session, ids, start, end),
     )
     return CostReportOut.model_validate(

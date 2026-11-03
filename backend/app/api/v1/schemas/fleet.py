@@ -19,6 +19,10 @@ FuelType = Literal["diesel", "gasoline", "lpg", "electric", "hybrid", "none"]
 MeterUnit = Literal["km", "hours"]
 Ownership = Literal["owned", "leased", "rented", "third_party"]
 CostCategory = Literal["insurance", "tax", "washing", "fee", "toll", "other"]
+IncidentKind = Literal["accident", "theft", "fine", "damage", "other"]
+IncidentSeverity = Literal["minor", "moderate", "severe"]
+IncidentResponsible = Literal["company", "driver", "third_party", "unknown"]
+IncidentStatus = Literal["open", "in_review", "closed"]
 #: The silhouettes in the frontend's static images, calibrated to carry the logo.
 BaseImage = Literal[
     "refrigerated",
@@ -489,6 +493,7 @@ class CostReportRowOut(BaseModel):
     fuel: Decimal
     maintenance: Decimal
     other: Decimal
+    incidents: Decimal
     total: Decimal
     distance: Decimal
     cost_per_unit: Decimal | None
@@ -498,6 +503,7 @@ class CostReportTotalsOut(BaseModel):
     fuel: Decimal
     maintenance: Decimal
     other: Decimal
+    incidents: Decimal
     total: Decimal
 
 
@@ -507,6 +513,109 @@ class CostReportOut(BaseModel):
     rows: list[CostReportRowOut]
     totals: CostReportTotalsOut
     other_by_category: dict[CostCategory, Decimal]
+
+
+class FleetIncidentIn(BaseModel):
+    kind: IncidentKind
+    severity: IncidentSeverity
+    responsible: IncidentResponsible = "unknown"
+    occurred_at: AwareDatetime
+    location: str | None = Field(None, max_length=200)
+    description: str = Field(min_length=3, max_length=4000)
+    driver_id: uuid.UUID | None = None
+    cost: Decimal | None = Field(None, ge=0, le=Decimal("99999999"), decimal_places=2)
+    insurance_claim: str | None = Field(None, max_length=80)
+    document_id: uuid.UUID | None = None
+    take_out_of_service: bool = False
+
+
+class FleetIncidentUpdate(BaseModel):
+    status: IncidentStatus | None = None
+    resolution: str | None = Field(None, max_length=1000)
+    responsible: IncidentResponsible | None = None
+    cost: Decimal | None = Field(None, ge=0, le=Decimal("99999999"), decimal_places=2)
+    insurance_claim: str | None = Field(None, max_length=80)
+    document_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _required(self) -> FleetIncidentUpdate:
+        for field in ("status", "responsible"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError("Complete los datos del incidente.")
+        return self
+
+
+class FleetIncidentOut(BaseModel):
+    id: uuid.UUID
+    vehicle_id: uuid.UUID
+    vehicle_code: str
+    driver_id: uuid.UUID | None
+    driver_name: str | None
+    kind: IncidentKind
+    severity: IncidentSeverity
+    responsible: IncidentResponsible
+    status: IncidentStatus
+    occurred_at: datetime
+    location: str | None
+    description: str
+    cost: Decimal | None
+    insurance_claim: str | None
+    document_id: uuid.UUID | None
+    resolution: str | None
+    reported_by_name: str | None
+    closed_at: datetime | None
+    closed_by_name: str | None
+    vehicle_taken_out: bool = False
+
+
+class InspectionItemIn(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    is_critical: bool = False
+
+
+class InspectionItemUpdate(InspectionItemIn):
+    is_active: bool = True
+
+
+class InspectionItemOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    is_critical: bool
+    is_active: bool
+
+
+class InspectionAnswerIn(BaseModel):
+    item_id: uuid.UUID
+    passed: bool
+    notes: str | None = Field(None, max_length=500)
+    photo_url: str | None = Field(None, min_length=10, max_length=2048)
+
+
+class FleetInspectionIn(BaseModel):
+    driver_id: uuid.UUID | None = None
+    notes: str | None = Field(None, max_length=1000)
+    results: list[InspectionAnswerIn] = Field(min_length=1, max_length=200)
+
+
+class InspectionResultOut(BaseModel):
+    id: uuid.UUID
+    item_name: str
+    is_critical: bool
+    passed: bool
+    notes: str | None
+    photo_url: str | None
+    resolved_at: datetime | None
+    resolved_by_name: str | None
+    resolution: str | None
+
+
+class FleetInspectionOut(BaseModel):
+    id: uuid.UUID
+    inspected_at: datetime
+    passed: bool
+    notes: str | None
+    inspected_by_name: str | None
+    results: list[InspectionResultOut]
 
 
 class FleetAlertOut(BaseModel):
