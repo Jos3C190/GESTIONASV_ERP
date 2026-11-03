@@ -9,6 +9,7 @@
   import {
     CARD_POLL_MS,
     cardView,
+    readingRows,
     resumeStep,
     type CardTone,
     type DeviceKind,
@@ -34,6 +35,7 @@
   const canManage = $derived(permissions.hasPermission('fleet:gps') && !retired);
   const canTrack = $derived(permissions.hasPermission('tracking:read'));
   const view = $derived(cardView(status, now, canManage, retired));
+  const readings = $derived(readingRows(status?.readings));
   const toneIcon: Record<CardTone, 'navigation' | 'clock' | 'check' | 'alert'> = {
     neutral: 'navigation',
     waiting: 'clock',
@@ -121,6 +123,22 @@
           {/if}
         </div>
       </div>
+
+      {#if readings.length}
+        <section class="readings" aria-labelledby="gps-readings-title">
+          <h3 id="gps-readings-title">
+            {status?.state === 'silent' ? 'Datos de la última señal' : 'Datos del equipo'}
+          </h3>
+          <dl>
+            {#each readings as reading (reading.label)}
+              <div>
+                <dt>{reading.label}</dt>
+                <dd>{reading.value}</dd>
+              </div>
+            {/each}
+          </dl>
+        </section>
+      {/if}
 
       {#if view.action === 'connect' && canManage}
         <Button size="lg" class="w-full sm:w-auto" onclick={() => openWizard(null, 'kind')}>
@@ -262,6 +280,37 @@
     align-items: center;
     gap: 6px;
     margin-top: 6px;
+  }
+  .readings {
+    width: 100%;
+  }
+  h3 {
+    margin: 0 0 8px;
+    color: rgb(var(--foreground-muted));
+    font-size: 13px;
+    font-weight: 500;
+  }
+  dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+    margin: 0;
+  }
+  dl div {
+    padding: 10px 12px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 12px;
+    background: rgb(var(--surface-elevated));
+  }
+  dt {
+    color: rgb(var(--foreground-muted));
+    font-size: 13px;
+  }
+  dd {
+    margin: 2px 0 0;
+    color: rgb(var(--foreground));
+    font-size: 15px;
+    font-weight: 600;
   }
   .muted {
     margin: 0;

@@ -11,6 +11,7 @@ from app.application.tracking.device_setup import (
     REPORTING_WINDOW,
     TRACKER_MODELS,
     client_config_uri,
+    device_readings,
     device_signal,
     enabled_trackers,
     is_phone_identifier,
@@ -92,6 +93,32 @@ def test_signal_waits_until_the_first_report() -> None:
 )
 def test_signal_goes_silent_after_the_window(age: timedelta, expected: str) -> None:
     assert device_signal(NOW - age, NOW) == expected
+
+
+def test_readings_keep_only_what_the_device_sent() -> None:
+    assert device_readings({}) == {}
+    assert device_readings({"batteryLevel": 80, "motion": True, "rssi": 4}) == {}
+    assert device_readings(
+        {"ignition": True, "power": 12.6, "sat": 9, "hours": 7_200_000, "temp1": 4.5}
+    ) == {"ignition": True, "voltage": 12.6, "satellites": 9, "engine_hours": 2, "temperature": 4.5}
+
+
+@pytest.mark.parametrize(
+    "attributes",
+    [
+        {"ignition": 1.0},
+        {"power": 12600},
+        {"power": 0},
+        {"power": True},
+        {"power": "12.6"},
+        {"sat": 500},
+        {"hours": -1},
+        {"temp1": 4095},
+        {"power": float("nan")},
+    ],
+)
+def test_readings_leave_out_what_is_not_believable(attributes: dict[str, object]) -> None:
+    assert device_readings(attributes) == {}
 
 
 def test_only_the_models_with_an_open_port_are_offered() -> None:

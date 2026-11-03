@@ -141,12 +141,13 @@ async def test_status_follows_the_real_signal(
             "latitude": 13.48,
             "longitude": -88.18,
             "fixTime": _iso(now),
-            "attributes": {"batteryLevel": 80},
+            "attributes": {"batteryLevel": 80, "ignition": True, "power": 12.6, "rssi": 4},
         }
     ]
     reporting = (await e2e_client.get(url, headers=admin)).json()
     assert reporting["state"] == "reporting"
     assert reporting["battery_level"] == 80
+    assert reporting["readings"] == {"ignition": True, "voltage": 12.6}
 
     traccar.devices[device_id]["lastUpdate"] = _iso(now - timedelta(hours=3))
     assert (await e2e_client.get(url, headers=admin)).json()["state"] == "silent"

@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import ipaddress
 import secrets
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlencode, urlsplit
 
 #: Prefix of the identifiers generated for phones; it also tells which guide to show.
@@ -23,6 +24,12 @@ REPORTING_WINDOW = timedelta(minutes=10)
 _PHONE_SETTINGS = {"accuracy": "high", "distance": 50, "heartbeat": 300, "buffer": "true"}
 
 Signal = Literal["waiting", "reporting", "silent"]
+
+#: Believable limits: above them the reading is in another unit or is noise.
+MAX_VEHICLE_VOLTS = 60
+MAX_SATELLITES = 64
+MAX_ENGINE_HOURS_MS = 1_000_000 * 3_600_000
+TEMPERATURE_RANGE_C = (-50, 150)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +58,30 @@ TRACKER_MODELS: tuple[TrackerModel, ...] = (
     TrackerModel("queclink", "Queclink", "Series GL y GV", 5004),
     TrackerModel("sinotrack", "Sinotrack", "ST-901", 5013),
 )
+
+
+def _number(value: object, low: float, high: float) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return float(value) if low <= value <= high else None
+
+
+def device_readings(attributes: Mapping[str, Any]) -> dict[str, bool | float]:
+    """What a device reported that is safe to show, without guessing.
+
+    Names and units are Traccar's, but it warns the voltage unit varies by device, so a
+    value outside a believable range is left out rather than shown as if it were true.
+    """
+    ignition = attributes.get("ignition")
+    hours = _number(attributes.get("hours"), 0, MAX_ENGINE_HOURS_MS)
+    readings: dict[str, bool | float | None] = {
+        "ignition": ignition if isinstance(ignition, bool) else None,
+        "voltage": _number(attributes.get("power"), 0.1, MAX_VEHICLE_VOLTS),
+        "satellites": _number(attributes.get("sat"), 0, MAX_SATELLITES),
+        "engine_hours": None if hours is None else hours / 3_600_000,
+        "temperature": _number(attributes.get("temp1"), *TEMPERATURE_RANGE_C),
+    }
+    return {key: value for key, value in readings.items() if value is not None}
 
 
 def enabled_trackers(setting: str | None) -> tuple[TrackerModel, ...]:

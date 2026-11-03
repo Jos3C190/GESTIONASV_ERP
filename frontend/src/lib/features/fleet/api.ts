@@ -227,6 +227,15 @@ export interface GpsStatus {
   server_configured: boolean;
   last_update: string | null;
   battery_level: number | null;
+  readings?: GpsReadings;
+}
+
+export interface GpsReadings {
+  ignition?: boolean;
+  voltage?: number;
+  satellites?: number;
+  engine_hours?: number;
+  temperature?: number;
 }
 
 export interface FleetAlert {

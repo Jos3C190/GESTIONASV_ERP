@@ -1,4 +1,4 @@
-import type { GpsStatus } from '../api';
+import type { GpsReadings, GpsStatus } from '../api';
 
 export type DeviceKind = 'phone' | 'tracker';
 export type SetupStep =
@@ -165,4 +165,25 @@ export function troubleshooting(kind: DeviceKind, privateNetwork: boolean): stri
         'El identificador es el de su etiqueta. Corrígelo en “Revisar datos”.',
         ...network
       ];
+}
+
+function formatReading(value: number, digits = 1): string {
+  return value.toLocaleString('es-SV', { maximumFractionDigits: digits });
+}
+
+/** Solo lo que el equipo envió, en el orden en que más importa al leerlo. */
+export function readingRows(readings: GpsReadings | undefined): { label: string; value: string }[] {
+  if (!readings) return [];
+  const { ignition, voltage, temperature, engine_hours: hours, satellites } = readings;
+  return [
+    ignition === undefined ? null : { label: 'Motor', value: ignition ? 'Encendido' : 'Apagado' },
+    temperature === undefined
+      ? null
+      : { label: 'Temperatura', value: `${formatReading(temperature)} °C` },
+    voltage === undefined
+      ? null
+      : { label: 'Voltaje del vehículo', value: `${formatReading(voltage)} V` },
+    hours === undefined ? null : { label: 'Horas de motor', value: `${formatReading(hours, 0)} h` },
+    satellites === undefined ? null : { label: 'Satélites', value: formatReading(satellites, 0) }
+  ].filter((row) => row !== null);
 }

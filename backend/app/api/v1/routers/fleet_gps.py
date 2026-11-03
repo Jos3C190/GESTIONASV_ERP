@@ -31,6 +31,7 @@ from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.application.tracking.device_setup import (
     PHONE_PREFIX,
     client_config_uri,
+    device_readings,
     device_signal,
     enabled_trackers,
     is_phone_identifier,
@@ -95,6 +96,8 @@ class GpsStatusOut(BaseModel):
     server_configured: bool
     last_update: datetime | None = None
     battery_level: float | None = None
+    #: Only what the device actually sent; most phones send none of these.
+    readings: dict[str, bool | float] = Field(default_factory=dict)
 
 
 def _server_configured() -> bool:
@@ -205,6 +208,7 @@ async def get_gps_status(
         server_configured=configured,
         last_update=tracked["last_update"],
         battery_level=position.get("battery_level"),
+        readings=device_readings((positions[-1].get("attributes") or {}) if positions else {}),
     )
 
 

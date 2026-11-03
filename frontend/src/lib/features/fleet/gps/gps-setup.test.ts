@@ -9,6 +9,7 @@ import {
   detectPlatform,
   nextStep,
   previousStep,
+  readingRows,
   resumeStep,
   stepNumber,
   timeAgo,
@@ -117,6 +118,19 @@ describe('setup flow', () => {
     expect(cardView(status(), NOW, false).action).toBeNull();
     expect(cardView(status(), NOW, false).detail).toMatch(/quien administra la flota/);
     expect(cardView(status(), NOW, false, true).detail).toMatch(/dado de baja/);
+  });
+
+  it('turns readings into plain rows, keeping a zero and a false', () => {
+    expect(readingRows(undefined)).toEqual([]);
+    expect(readingRows({})).toEqual([]);
+    expect(
+      readingRows({ ignition: false, satellites: 0, voltage: 12.64, engine_hours: 2 })
+    ).toEqual([
+      { label: 'Motor', value: 'Apagado' },
+      { label: 'Voltaje del vehículo', value: '12.6 V' },
+      { label: 'Horas de motor', value: '2 h' },
+      { label: 'Satélites', value: '0' }
+    ]);
   });
 
   it('accepts an IMEI pasted with spaces', () => {
@@ -485,6 +499,49 @@ describe('VehicleGpsPanel', () => {
       'href',
       '/tracking'
     );
+  });
+
+  it('adds no empty section when the device sends nothing extra', async () => {
+    apiMock.gpsStatus.mockResolvedValue(
+      status({ state: 'reporting', kind: 'phone', last_update: new Date().toISOString() })
+    );
+    render(VehicleGpsPanel, { vehicle, onchanged: vi.fn() });
+
+    await screen.findByText('GPS activo');
+
+    expect(screen.queryByText('Datos del equipo')).toBeNull();
+  });
+
+  it('shows only what the device sent', async () => {
+    apiMock.gpsStatus.mockResolvedValue(
+      status({
+        state: 'reporting',
+        kind: 'tracker',
+        last_update: new Date().toISOString(),
+        readings: { ignition: true, temperature: 4.5 }
+      })
+    );
+    render(VehicleGpsPanel, { vehicle, onchanged: vi.fn() });
+
+    expect(await screen.findByText('Datos del equipo')).toBeInTheDocument();
+    expect(screen.getByText('Encendido')).toBeInTheDocument();
+    expect(screen.getByText('4.5 °C')).toBeInTheDocument();
+    expect(screen.queryByText('Voltaje del vehículo')).toBeNull();
+  });
+
+  it('says the data is old when the signal was lost', async () => {
+    apiMock.gpsStatus.mockResolvedValue(
+      status({
+        state: 'silent',
+        kind: 'tracker',
+        last_update: new Date(Date.now() - 3_600_000).toISOString(),
+        readings: { ignition: false }
+      })
+    );
+    render(VehicleGpsPanel, { vehicle, onchanged: vi.fn() });
+
+    expect(await screen.findByText('Datos de la última señal')).toBeInTheDocument();
+    expect(screen.getByText('Apagado')).toBeInTheDocument();
   });
 
   it('asks before unlinking', async () => {
