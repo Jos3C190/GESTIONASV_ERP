@@ -25,6 +25,12 @@ os.environ["OBSERVABILITY_ENABLED"] = "false"
 os.environ["REDIS_ENABLED"] = "false"
 os.environ["OCR_ENABLED"] = "false"
 os.environ["VLM_ENABLED"] = "false"
+# With the local GPS credentials, a branch or warehouse change would start a real
+# sync that outlives its test: it writes to the development Traccar and its open
+# transaction blocks the next schema rebuild forever. Tests that need Traccar fake it.
+os.environ["TRACCAR_URL"] = ""
+os.environ["TRACCAR_USER"] = ""
+os.environ["TRACCAR_PASSWORD"] = ""
 TEST_DATABASE_URL = os.environ.get(
     "DATABASE_URL_TEST",
     "postgresql+asyncpg://erp_admin:change_me_in_production_please@db:5432/erp_db_test",
