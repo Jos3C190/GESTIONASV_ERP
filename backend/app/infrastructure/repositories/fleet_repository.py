@@ -208,6 +208,9 @@ class FleetRepository(DriverQueries):
                     FleetVehicleModel.plate.ilike(pattern, escape="\\"),
                     FleetVehicleModel.brand.ilike(pattern, escape="\\"),
                     FleetVehicleModel.model.ilike(pattern, escape="\\"),
+                    FleetVehicleModel.vin.ilike(pattern, escape="\\"),
+                    FleetVehicleModel.chassis_number.ilike(pattern, escape="\\"),
+                    FleetVehicleModel.engine_number.ilike(pattern, escape="\\"),
                 )
             )
         return conditions

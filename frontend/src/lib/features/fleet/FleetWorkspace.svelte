@@ -305,7 +305,7 @@
         ><FleetIcon name="search" size={16} /><span class="sr-only">Buscar vehículos</span><input
           type="search"
           bind:value={query}
-          placeholder="Buscar por código, placa, marca o modelo…"
+          placeholder="Placa, código, VIN, chasis o motor…"
         /></label
       ><label class="kind-filter"
         ><span class="sr-only">Tipo de vehículo</span><select

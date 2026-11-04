@@ -123,7 +123,9 @@ async def build_driver_views(
                 "license": {
                     "license_class": driver.license_class,
                     "number": (license_record or {}).get("number"),
+                    "issued_on": (license_record or {}).get("issued_on"),
                     "expires_on": (license_record or {}).get("expires_on"),
+                    "control_number": (license_record or {}).get("control_number"),
                     "document_id": (license_record or {}).get("document_id"),
                 },
                 "status": driver.status,

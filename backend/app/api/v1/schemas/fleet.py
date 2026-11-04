@@ -726,7 +726,9 @@ class DriverVehicleOut(BaseModel):
 class DriverLicenseOut(BaseModel):
     license_class: LicenseClass
     number: str | None
+    issued_on: date | None = None
     expires_on: date | None
+    control_number: str | None = None
     document_id: uuid.UUID | None
 
 

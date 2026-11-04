@@ -263,6 +263,33 @@
         </section>
       </div>
     {:else if tab === 'license'}
+      {#if driver.license.document_id}
+        <section class="card license-data">
+          <h2>Datos de la licencia</h2>
+          <dl class="specs">
+            <div>
+              <dt>Clase</dt>
+              <dd>{LICENSE_LABELS[driver.license.license_class]}</dd>
+            </div>
+            <div>
+              <dt>Número</dt>
+              <dd>{driver.license.number ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Expedición</dt>
+              <dd>{formatDate(driver.license.issued_on)}</dd>
+            </div>
+            <div>
+              <dt>Vence</dt>
+              <dd>{formatDate(driver.license.expires_on)}</dd>
+            </div>
+            <div>
+              <dt>Número de control</dt>
+              <dd>{driver.license.control_number ?? '—'}</dd>
+            </div>
+          </dl>
+        </section>
+      {/if}
       <LicenseCaptureEntry {driver} onconfirmed={() => void load()} />
       <OwnedDocumentsPanel
         owner={driversApi.documents(driver.id)}
@@ -561,6 +588,9 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
+  }
+  .license-data {
+    margin-bottom: 16px;
   }
   .card {
     padding: 18px;

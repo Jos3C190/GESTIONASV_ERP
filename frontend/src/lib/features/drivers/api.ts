@@ -30,7 +30,9 @@ export interface Driver {
   license: {
     license_class: LicenseClass;
     number: string | null;
+    issued_on?: string | null;
     expires_on: string | null;
+    control_number?: string | null;
     document_id: string | null;
   };
   status: DriverStatus;

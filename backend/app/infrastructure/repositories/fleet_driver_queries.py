@@ -6,10 +6,13 @@ import uuid
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import Select, and_, exists, func, or_, select
 
 from app.infrastructure.models.document import DocumentAssetModel
-from app.infrastructure.models.document_record import DocumentRecordModel
+from app.infrastructure.models.document_record import (
+    DocumentCategoryModel,
+    DocumentRecordModel,
+)
 from app.infrastructure.models.employee import Employee, EmployeeBranchAssignment
 from app.infrastructure.models.fleet import (
     DriverModel,
@@ -27,6 +30,33 @@ from app.infrastructure.models.organization import Branch, Warehouse
 def like(value: str) -> str:
     escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{escaped}%"
+
+
+def _current_license_document(category_code: str) -> list[Any]:
+    """A driver's current, available document of that category."""
+    return [
+        DocumentCategoryModel.id == DocumentRecordModel.category_id,
+        DocumentCategoryModel.code == category_code,
+        DocumentRecordModel.module == "employees",
+        DocumentRecordModel.owner_type == "employee",
+        DocumentRecordModel.is_current.is_(True),
+        DocumentAssetModel.id == DocumentRecordModel.id,
+        DocumentAssetModel.status == "active",
+        DocumentAssetModel.deleted_at.is_(None),
+    ]
+
+
+def _license_number_matches(search: str) -> Any:
+    """Compared without hyphens: nobody types the number exactly as it is printed."""
+    digits = search.replace("-", "")
+    if not digits:
+        return None
+    return exists().where(
+        *_current_license_document("driver_license"),
+        DocumentRecordModel.company_id == DriverModel.company_id,
+        DocumentRecordModel.owner_id == DriverModel.employee_id,
+        func.replace(DocumentRecordModel.reference_code, "-", "").ilike(like(digits), escape="\\"),
+    )
 
 
 def _active_assignment() -> list[Any]:
@@ -91,14 +121,16 @@ class DriverQueries:
             conditions.append(DriverModel.status == status)
         if search and search.strip():
             pattern = like(search.strip())
-            conditions.append(
-                or_(
-                    Employee.first_name.ilike(pattern, escape="\\"),
-                    Employee.last_name.ilike(pattern, escape="\\"),
-                    Employee.employee_code.ilike(pattern, escape="\\"),
-                    Employee.document_id.ilike(pattern, escape="\\"),
-                )
-            )
+            matches = [
+                Employee.first_name.ilike(pattern, escape="\\"),
+                Employee.last_name.ilike(pattern, escape="\\"),
+                Employee.employee_code.ilike(pattern, escape="\\"),
+                Employee.document_id.ilike(pattern, escape="\\"),
+            ]
+            number = _license_number_matches(search.strip())
+            if number is not None:
+                matches.append(number)
+            conditions.append(or_(*matches))
         base = self.driver_query().where(*conditions)
         total = int(
             await self._session.scalar(select(func.count()).select_from(base.subquery())) or 0
@@ -124,6 +156,7 @@ class DriverQueries:
                 DocumentRecordModel.id,
                 DocumentRecordModel.owner_id,
                 DocumentRecordModel.reference_code,
+                DocumentRecordModel.issued_on,
                 DocumentRecordModel.expires_on,
             )
             .join(DocumentAssetModel, DocumentAssetModel.id == DocumentRecordModel.id)
@@ -146,9 +179,20 @@ class DriverQueries:
                 {
                     "document_id": row.id,
                     "number": row.reference_code,
+                    "issued_on": row.issued_on,
                     "expires_on": row.expires_on,
                 },
             )
+        # Solo el número: el resto del reverso lleva datos de salud y se queda en la foto.
+        controls = await self._session.execute(
+            select(DocumentRecordModel.owner_id, DocumentRecordModel.reference_code).where(
+                *_current_license_document("driver_license_back"),
+                DocumentRecordModel.company_id == company_id,
+                DocumentRecordModel.owner_id.in_(list(result)),
+            )
+        )
+        for row in controls:
+            result[row.owner_id]["control_number"] = row.reference_code
         return result
 
     async def open_vehicles_for_drivers(
