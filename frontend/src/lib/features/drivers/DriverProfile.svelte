@@ -16,6 +16,7 @@
   import { fleetApi, type FleetIncident } from '$lib/features/fleet/api';
   import ComplianceList from '$lib/features/fleet/ComplianceList.svelte';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
+  import ImageLightbox from '$lib/features/fleet/ImageLightbox.svelte';
   import MoveToTrashDialog from '$lib/features/fleet/MoveToTrashDialog.svelte';
   import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
@@ -50,8 +51,15 @@
   let reason = $state('');
   let saving = $state(false);
   let actionError = $state<string | null>(null);
+  let backUrl = $state<string | null>(null);
+  let backIndex = $state(0);
+  let backLoading = $state(false);
+  let backError = $state<string | null>(null);
+  let backOrigin: HTMLElement | null = null;
 
   const canUpdate = $derived(permissions.hasPermission('drivers:update'));
+  // El reverso lleva datos de salud: solo lo abre quien gestiona licencias.
+  const canSeeBack = $derived(permissions.hasPermission('drivers:documents'));
   // La papelera es administrativa: requiere alcance de todas las sucursales.
   const canDelete = $derived(
     permissions.hasPermission('drivers:delete') && branch.accessAllBranches
@@ -68,6 +76,24 @@
       incidents = await fleetApi.driverIncidents(driverId);
     } catch {
       incidentsError = true;
+    }
+  }
+
+  async function openBack() {
+    if (!driver || backLoading) return;
+    backOrigin = document.activeElement as HTMLElement | null;
+    backLoading = true;
+    backError = null;
+    try {
+      backUrl = (await driversApi.licenseBackPreview(driver.id)).url;
+      backIndex = 0;
+    } catch (err) {
+      backError =
+        err instanceof HttpError && err.status === 404
+          ? 'Esta licencia no tiene reverso registrado.'
+          : 'No se pudo abrir el reverso. Inténtalo de nuevo.';
+    } finally {
+      backLoading = false;
     }
   }
 
@@ -263,6 +289,17 @@
         </section>
       </div>
     {:else if tab === 'license'}
+      {#if backUrl}
+        <ImageLightbox
+          images={[{ src: backUrl, alt: 'Reverso de la licencia' }]}
+          bind:index={backIndex}
+          title="Reverso de la licencia"
+          onclose={() => {
+            backUrl = null;
+            requestAnimationFrame(() => backOrigin?.focus());
+          }}
+        />
+      {/if}
       {#if driver.license.document_id}
         <section class="card license-data">
           <h2>Datos de la licencia</h2>
@@ -288,6 +325,15 @@
               <dd>{driver.license.control_number ?? '—'}</dd>
             </div>
           </dl>
+          {#if canSeeBack}
+            <div class="license-back">
+              <Button variant="secondary" disabled={backLoading} onclick={() => void openBack()}>
+                <FleetIcon name="image" size={16} />{backLoading ? 'Abriendo…' : 'Ver reverso'}
+              </Button>
+              <small>Contiene datos de salud.</small>
+            </div>
+            {#if backError}<p class="back-error" role="alert">{backError}</p>{/if}
+          {/if}
         </section>
       {/if}
       <LicenseCaptureEntry {driver} onconfirmed={() => void load()} />
@@ -591,6 +637,22 @@
   }
   .license-data {
     margin-bottom: 16px;
+  }
+  .license-back {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: 16px;
+  }
+  .license-back small {
+    color: rgb(var(--foreground-muted));
+    font-size: 12px;
+  }
+  .back-error {
+    margin-top: 8px;
+    color: rgb(var(--foreground));
+    font-size: 13px;
   }
   .card {
     padding: 18px;

@@ -173,6 +173,11 @@ export const driversApi = {
   assignments: (id: string) => apiFetch<Assignment[]>(`/drivers/${id}/assignments`),
   trips: (id: string) => apiFetch<DriverTrip[]>(`/drivers/${id}/trips`),
   documents: (id: string) => ownedDocuments(`/drivers/${id}`),
+  licenseBackPreview: (id: string) =>
+    apiFetch<{ url: string; expires_at: string }>(
+      `/drivers/${id}/license-back/preview-url`,
+      json('POST')
+    ),
   captureCapabilities: () =>
     apiFetch<{ enabled: boolean; extraction_available: boolean }>(
       '/drivers/license-captures/capabilities'
