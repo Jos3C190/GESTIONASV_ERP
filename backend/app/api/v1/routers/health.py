@@ -29,6 +29,7 @@ from app.infrastructure.malware_scanner import ClamAVScanner
 from app.infrastructure.object_storage import S3ObjectStorage
 from app.infrastructure.observability import record_gauge
 from app.infrastructure.redis_client import get_redis_client, redis_health
+from app.infrastructure.vlm.job_queue import VLM_HEALTH_KEY
 
 router = APIRouter(prefix="/health", tags=["health"])
 log = logging.getLogger(__name__)
@@ -99,6 +100,20 @@ async def live() -> HealthReport:
         timestamp=_now(),
         components=[HealthComponent(name="process", status="ok")],
     )
+
+
+async def _vlm_component(redis_ok: bool) -> HealthComponent:
+    if not settings.VLM_ENABLED:
+        return HealthComponent(name="vlm_worker", status="disabled")
+    # Es opcional: con la PC del modelo apagada la captura sigue siendo manual,
+    # así que su ausencia informa pero no degrada el sistema.
+    available = False
+    if redis_ok:
+        try:
+            available = bool(await get_redis_client().exists(VLM_HEALTH_KEY))
+        except Exception:
+            available = False
+    return HealthComponent(name="vlm_worker", status="ok" if available else "standby")
 
 
 @router.get("/ready", summary="Readiness probe", status_code=status.HTTP_200_OK)
@@ -193,11 +208,13 @@ async def ready(session: SessionDep) -> HealthReport:
             external_ok = external_ok and worker_ok
         else:
             components.append(HealthComponent(name="ocr_worker", status="disabled"))
+        components.append(await _vlm_component(redis_ok))
     else:
         components.extend(
             [
                 HealthComponent(name="redis", status="disabled"),
                 HealthComponent(name="ocr_worker", status="disabled"),
+                HealthComponent(name="vlm_worker", status="disabled"),
             ]
         )
 
@@ -215,7 +232,7 @@ async def ready(session: SessionDep) -> HealthReport:
     for component in components:
         record_gauge(
             "erp.component.health",
-            1 if component.status in {"ok", "configured", "disabled"} else 0,
+            1 if component.status in {"ok", "configured", "disabled", "standby"} else 0,
             attributes={"component": component.name},
         )
     return HealthReport(

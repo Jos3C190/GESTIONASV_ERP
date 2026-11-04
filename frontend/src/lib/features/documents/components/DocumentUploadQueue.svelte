@@ -10,6 +10,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import FormField from '$lib/components/ui/FormField.svelte';
   import {
+    CAPTURE_ONLY_CATEGORY_CODES,
     DOCUMENT_ACCEPT,
     DOCUMENT_MAX_BYTES,
     documentContentType,
@@ -86,7 +87,11 @@
   let dragActive = $state(false);
   let fileInput: HTMLInputElement;
 
-  const activeCategories = $derived(categories.filter((category) => category.is_active));
+  const activeCategories = $derived(
+    categories.filter(
+      (category) => category.is_active && !CAPTURE_ONLY_CATEGORY_CODES.has(category.code)
+    )
+  );
   const allowOther = $derived(
     !owner || activeCategories.some((category) => category.code === 'other')
   );

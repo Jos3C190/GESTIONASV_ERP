@@ -32,6 +32,9 @@ try {
     Invoke-SecurityStep "Build OCR worker" {
         docker build --target ocr -t erp-security-ocr:local backend
     }
+    Invoke-SecurityStep "Build vision worker" {
+        docker build --target vlm -t erp-security-vlm:local backend
+    }
     Invoke-SecurityStep "Build Dockerfile default (Render)" {
         docker build -t erp-security-render-default:local backend
     }
@@ -63,12 +66,18 @@ try {
     Invoke-SecurityStep "Trivy OCR worker OS (Debian severity)" {
         docker compose --profile security run --rm security-trivy-ocr-os
     }
+    Invoke-SecurityStep "Trivy vision worker libraries" {
+        docker compose --profile security run --rm security-trivy-vlm
+    }
+    Invoke-SecurityStep "Trivy vision worker OS (Ubuntu severity)" {
+        docker compose --profile security run --rm security-trivy-vlm-os
+    }
 
     if ($script:ScanFailed) {
         exit 1
     }
 
-    Write-Host "All project-owned backend images passed library and Debian OS gates." -ForegroundColor Green
+    Write-Host "All project-owned backend images passed library and OS gates." -ForegroundColor Green
 } finally {
     Pop-Location
 }

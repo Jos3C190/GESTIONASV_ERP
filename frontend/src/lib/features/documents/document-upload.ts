@@ -1,5 +1,16 @@
 export const DOCUMENT_MAX_BYTES = 50 * 1024 * 1024;
 
+/** Solo se registran con la captura guiada de Conductores; el backend rechaza cualquier otra vía. */
+export const CAPTURE_ONLY_CATEGORY_CODES: ReadonlySet<string> = new Set([
+  'driver_license',
+  'driver_license_back'
+]);
+
+/** Estos documentos no se editan ni reemplazan: un cambio exige una nueva captura. */
+export function isCaptureOnly(document: { category_code?: string | null }): boolean {
+  return CAPTURE_ONLY_CATEGORY_CODES.has(document.category_code ?? '');
+}
+
 export const DOCUMENT_ACCEPT =
   '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.md,.json,.xml,.rtf,.odt,.ods,.odp,.jpg,.jpeg,.png,.webp,.gif,.svg,.tif,.tiff';
 

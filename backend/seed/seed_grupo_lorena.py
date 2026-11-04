@@ -211,6 +211,7 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
             "fleet:fuel",
             "fleet:gps",
             "fleet:compliance_override",
+            "drivers:license_override",
             "fleet_documents:read",
             "fleet_documents:upload",
             "fleet_documents:update",

@@ -99,6 +99,7 @@ def _record_to_domain(
         created_at=model.created_at,
         updated_at=model.updated_at,
         asset=_asset_to_domain(asset) if asset is not None else None,
+        category_code=category.code if category is not None else None,
         category_name=category.name if category is not None else None,
         category_group=category.group_name if category is not None else None,
         owner_label=owner_label,
@@ -708,6 +709,37 @@ class SqlAlchemyDocumentRecordRepository:
         )
         rows = (await self._session.execute(statement)).all()
         return await self._hydrate(rows)
+
+    async def current_for_owner(
+        self,
+        company_id: uuid.UUID,
+        *,
+        module: str,
+        owner_type: str,
+        owner_id: uuid.UUID,
+        category_id: uuid.UUID,
+    ) -> Sequence[DocumentRecord]:
+        """Current records of an owner, trashed ones too: restoring must not revive them."""
+        statement = self._base_statement(include_deleted=True).where(
+            DocumentRecordModel.company_id == company_id,
+            DocumentRecordModel.module == module,
+            DocumentRecordModel.owner_type == owner_type,
+            DocumentRecordModel.owner_id == owner_id,
+            DocumentRecordModel.category_id == category_id,
+            DocumentRecordModel.is_current.is_(True),
+        )
+        rows = (await self._session.execute(statement)).all()
+        return await self._hydrate(rows)
+
+    async def retire(self, document_ids: Sequence[uuid.UUID], *, actor_id: uuid.UUID) -> None:
+        if not document_ids:
+            return
+        await self._session.execute(
+            update(DocumentRecordModel)
+            .where(DocumentRecordModel.id.in_(document_ids))
+            .values(is_current=False, updated_by=actor_id)
+        )
+        await self._session.flush()
 
     async def next_version_number(self, version_group_id: uuid.UUID) -> int:
         """Reserve the next number while serializing replacements per group.

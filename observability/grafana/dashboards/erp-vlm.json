@@ -1,0 +1,13 @@
+{
+  "uid": "erp-vlm", "title": "ERP — Lectura de licencias", "tags": ["erp", "vlm"],
+  "schemaVersion": 41, "editable": false, "refresh": "15s", "time": {"from": "now-6h", "to": "now"},
+  "panels": [
+    {"id": 1, "type": "stat", "title": "Modelo cargado (0 = sin VRAM)", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "erp_erp_vlm_model_loaded", "refId": "A"}], "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0}},
+    {"id": 2, "type": "timeseries", "title": "VRAM libre (MiB)", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "erp_erp_vlm_vram_free", "refId": "A"}], "gridPos": {"h": 6, "w": 9, "x": 6, "y": 0}},
+    {"id": 3, "type": "stat", "title": "Licencias pendientes", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "erp_erp_vlm_pending", "refId": "A"}], "gridPos": {"h": 6, "w": 9, "x": 15, "y": 0}},
+    {"id": 4, "type": "timeseries", "title": "Latencia por captura p95 (frío y caliente)", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "histogram_quantile(0.95, sum by (le, result) (rate(erp_erp_vlm_job_latency_bucket[15m])))", "legendFormat": "{{result}}", "refId": "A"}], "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6}},
+    {"id": 5, "type": "timeseries", "title": "Trabajos por estado", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum by (status) (rate(erp_erp_vlm_jobs_total[5m]))", "legendFormat": "{{status}}", "refId": "A"}], "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6}},
+    {"id": 6, "type": "timeseries", "title": "Campos corregidos por el usuario", "description": "Mide la precisión real sin guardar datos personales.", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "sum by (field) (increase(erp_erp_license_capture_field_corrections_total[1d]))", "legendFormat": "{{field}}", "refId": "A"}], "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}},
+    {"id": 7, "type": "timeseries", "title": "Carga del modelo p95 (ms)", "datasource": {"uid": "prometheus"}, "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(erp_erp_vlm_model_load_duration_bucket[1h])))", "refId": "A"}], "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}}
+  ]
+}

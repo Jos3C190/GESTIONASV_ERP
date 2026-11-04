@@ -1,0 +1,26 @@
+# HTTPS for phones on the same network: browsers only open the live camera
+# over a secure origin. Local certificate; never exposed to the internet.
+{
+	local_certs
+	skip_install_trust
+	auto_https disable_redirects
+	# Quien entra por IP no envía SNI; sin esto Caddy no sabría qué certificado usar.
+	default_sni {$LAN_HOST}
+}
+
+https://{$LAN_HOST}:443 {
+	tls internal
+	@api path /api/* /health*
+	handle @api {
+		reverse_proxy backend:8000
+	}
+	handle {
+		reverse_proxy frontend:5173
+	}
+}
+
+# Signed upload URLs point here. Caddy keeps the Host header, which is part of the signature.
+https://{$LAN_HOST}:9443 {
+	tls internal
+	reverse_proxy rustfs:9000
+}

@@ -17,8 +17,21 @@
     permissionCodes?: { read: string; upload: string; update: string; download: string };
     /** Avisa al contenedor para recalcular la aptitud tras cambios. */
     onchanged?: () => void;
+    /** Los documentos se crean en otro flujo: aquí solo se consultan y descargan. */
+    readOnly?: boolean;
+    /** Texto de la lista vacía cuando la carga ocurre en otro lugar. */
+    emptyHint?: string;
   }
-  let { owner, title, description, permissionPrefix, permissionCodes, onchanged }: Props = $props();
+  let {
+    owner,
+    title,
+    description,
+    permissionPrefix,
+    permissionCodes,
+    onchanged,
+    readOnly = false,
+    emptyHint
+  }: Props = $props();
   const codes = $derived(
     permissionCodes ?? {
       read: `${permissionPrefix}:read`,
@@ -43,8 +56,8 @@
   let openingDocumentId = $state<string | null>(null);
 
   const canRead = $derived(permissions.hasPermission(codes.read));
-  const canUpload = $derived(permissions.hasPermission(codes.upload));
-  const canUpdate = $derived(permissions.hasPermission(codes.update));
+  const canUpload = $derived(!readOnly && permissions.hasPermission(codes.upload));
+  const canUpdate = $derived(!readOnly && permissions.hasPermission(codes.update));
   const canDownload = $derived(permissions.hasPermission(codes.download));
 
   /** Categorías obligatorias sin documento vigente: invitan a cargarlas directamente. */
@@ -181,6 +194,7 @@
       {canUpdate}
       canReplace={canUpload}
       viewMode="table"
+      {emptyHint}
       {openingDocumentId}
       ondownload={(document) => openUrl(document, false)}
       onopenbrowser={(document) => openUrl(document, true)}

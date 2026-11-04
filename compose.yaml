@@ -233,6 +233,8 @@ services:
       # Herramientas de simulación de Seguimiento (nunca se activan en producción).
       TRACKING_SIMULATOR_ENABLED: ${TRACKING_SIMULATOR_ENABLED:-false}
       TRACCAR_OSMAND_URL: ${TRACCAR_OSMAND_URL:-}
+      # Sin el perfil `vlm` la captura sigue disponible y los datos se escriben a mano.
+      VLM_ENABLED: ${VLM_ENABLED:-true}
       <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
@@ -294,6 +296,55 @@ services:
       - /tmp:size=1g,mode=1777
     healthcheck:
       test: ["CMD", "/opt/venv/bin/arq", "app.infrastructure.ocr_worker.WorkerSettings", "--check"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
+  # ---------------- On-demand vision model (local GPU) ----------------
+  # Off unless the `vlm` profile is requested. The worker rests in under 200 MiB
+  # and only holds VRAM while the model server it supervises is running.
+  vlm-worker:
+    profiles: [vlm]
+    build:
+      context: ./backend
+      target: vlm
+    gpus: all
+    init: true
+    environment:
+      <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      VLM_ENABLED: "true"
+      VLM_IDLE_SECONDS: ${VLM_IDLE_SECONDS:-300}
+      VLM_MIN_FREE_VRAM_MIB: ${VLM_MIN_FREE_VRAM_MIB:-3200}
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    cpus: 4.0
+    mem_limit: 6g
+    volumes:
+      # A Docker volume starts the model about four times faster than a Windows bind mount.
+      - vlm-models:/models:ro
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    healthcheck:
+      test: ["CMD", "/opt/venv/bin/arq", "app.infrastructure.vlm.worker.WorkerSettings", "--check"]
       interval: 20s
       timeout: 10s
       retries: 6
@@ -409,7 +460,7 @@ services:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
       PUBLIC_CARTO_BASEMAP_API_KEY: ${PUBLIC_CARTO_BASEMAP_API_KEY:-}
       PUBLIC_GOOGLE_MAPS_API_KEY: ${PUBLIC_GOOGLE_MAPS_API_KEY:-}
-      ORIGIN: http://localhost:5173
+      ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
       # Polling Windows bind mounts can saturate filesystem reads and stall SSR.
       # Opt in only when native file events are unavailable on the host.
       VITE_USE_POLLING: ${VITE_USE_POLLING:-false}
@@ -433,6 +484,35 @@ services:
       # La primera compilación de SvelteKit puede tardar más de un minuto con el código
       # montado desde Windows; durante el arranque los fallos del chequeo no cuentan.
       start_period: 180s
+    restart: unless-stopped
+
+  # ---------------- HTTPS for phones on the local network ----------------
+  lan-proxy:
+    profiles: [lan]
+    image: caddy:2.10.2-alpine
+    environment:
+      LAN_HOST: ${LAN_HOST:-localhost}
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+      rustfs:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    cpus: 0.5
+    mem_limit: 128m
+    ports:
+      - "443:443"
+      - "9443:9443"
+    volumes:
+      - ./caddy/Caddyfile.lan:/etc/caddy/Caddyfile:ro
+      - lan-proxy-data:/data
     restart: unless-stopped
 
   # ---------------- Local observability (OpenTelemetry + Grafana) ----------------
@@ -781,6 +861,63 @@ services:
       - ./reports:/reports:rw
       - trivy-cache:/root/.cache/trivy
 
+  security-trivy-vlm:
+    profiles: [security, security-deep]
+    image: aquasec/trivy:0.74.0
+    cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+    command:
+      - image
+      - --scanners
+      - vuln
+      - --pkg-types
+      - library
+      - --vuln-severity-source
+      - ghsa,nvd
+      - --severity
+      - HIGH,CRITICAL
+      - --exit-code
+      - "1"
+      - --format
+      - json
+      - --output
+      - /reports/trivy-vlm-report.json
+      - erp-security-vlm:local
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./reports:/reports:rw
+      - trivy-cache:/root/.cache/trivy
+
+  security-trivy-vlm-os:
+    profiles: [security, security-deep]
+    image: aquasec/trivy:0.74.0
+    cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+    command:
+      - image
+      - --scanners
+      - vuln
+      - --pkg-types
+      - os
+      # Esta imagen parte de Ubuntu, a diferencia del resto (Debian).
+      - --vuln-severity-source
+      - ubuntu
+      - --severity
+      - HIGH,CRITICAL
+      - --exit-code
+      - "1"
+      - --format
+      - json
+      - --output
+      - /reports/trivy-vlm-os-report.json
+      - erp-security-vlm:local
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./reports:/reports:rw
+      - trivy-cache:/root/.cache/trivy
+
   security-trivy-backend-dev-os:
     profiles: [security, security-deep]
     image: aquasec/trivy:0.74.0
@@ -892,3 +1029,5 @@ volumes:
   frontend-node-modules:
   traccar-logs:
   frontend-svelte-kit:
+  vlm-models:
+  lan-proxy-data:

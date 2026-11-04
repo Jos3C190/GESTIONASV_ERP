@@ -23,7 +23,7 @@ def test_merge_upgrades_each_branch_and_preserves_existing_roles(
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["0104"]
+    assert len(script.get_heads()) == 1
 
     dsn = os.environ["DATABASE_URL_SYNC"].replace("postgresql+psycopg://", "postgresql://")
     assert dsn.rsplit("/", 1)[-1].split("?", 1)[0] == "erp_db_test"
@@ -37,7 +37,7 @@ def test_merge_upgrades_each_branch_and_preserves_existing_roles(
                 "fleet_vehicles" if source_revision == "0103" else None
             )
 
-        command.upgrade(config, "head")
+        command.upgrade(config, "0104")
 
         with connect(dsn) as connection:
             assert connection.execute("SELECT version_num FROM alembic_version").fetchall() == [

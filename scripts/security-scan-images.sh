@@ -28,6 +28,8 @@ run_step "Build backend prod" \
     docker build --target prod -t erp-security-backend-prod:local backend
 run_step "Build OCR worker" \
     docker build --target ocr -t erp-security-ocr:local backend
+run_step "Build vision worker" \
+    docker build --target vlm -t erp-security-vlm:local backend
 run_step "Build Dockerfile default (Render)" \
     docker build -t erp-security-render-default:local backend
 
@@ -53,9 +55,13 @@ run_step "Trivy OCR worker libraries" \
     docker compose --profile security run --rm security-trivy-ocr
 run_step "Trivy OCR worker OS (Debian severity)" \
     docker compose --profile security run --rm security-trivy-ocr-os
+run_step "Trivy vision worker libraries" \
+    docker compose --profile security run --rm security-trivy-vlm
+run_step "Trivy vision worker OS (Ubuntu severity)" \
+    docker compose --profile security run --rm security-trivy-vlm-os
 
 if [[ "$FAILED" -ne 0 ]]; then
     exit 1
 fi
 
-echo "All project-owned backend images passed library and Debian OS gates."
+echo "All project-owned backend images passed library and OS gates."

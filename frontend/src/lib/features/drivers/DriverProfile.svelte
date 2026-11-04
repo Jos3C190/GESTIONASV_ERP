@@ -16,6 +16,7 @@
   import MoveToTrashDialog from '$lib/features/fleet/MoveToTrashDialog.svelte';
   import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
+  import LicenseCaptureEntry from './capture/LicenseCaptureEntry.svelte';
   import {
     DRIVER_STATUS_META,
     driversApi,
@@ -249,10 +250,13 @@
         </section>
       </div>
     {:else if tab === 'license'}
+      <LicenseCaptureEntry {driver} onconfirmed={() => void load()} />
       <OwnedDocumentsPanel
         owner={driversApi.documents(driver.id)}
         title="Licencia de conducir"
-        description="Escaneo de la licencia con su número y vencimiento. Se guarda en el expediente del empleado y una licencia vencida impide conducir."
+        description="Licencia registrada con la captura guiada. Se guarda en el expediente del empleado y una licencia vencida impide conducir."
+        readOnly
+        emptyHint="La licencia se registra con la captura guiada: usa el botón de fotos."
         permissionCodes={{
           read: 'drivers:read',
           upload: 'drivers:documents',

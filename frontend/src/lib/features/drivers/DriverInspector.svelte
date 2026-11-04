@@ -11,7 +11,6 @@
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import VehicleImage from '$lib/features/fleet/VehicleImage.svelte';
   import ComplianceList from '$lib/features/fleet/ComplianceList.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
   import {
     driversApi,
     DRIVER_STATUS_META,
@@ -21,6 +20,7 @@
   } from './api';
   import DriverAvatar from './DriverAvatar.svelte';
   import DriverLicensePreview from './DriverLicensePreview.svelte';
+  import LicenseCaptureEntry from './capture/LicenseCaptureEntry.svelte';
 
   let {
     driver,
@@ -35,7 +35,6 @@
   let trips = $state<DriverTrip[]>([]);
   let historyAttempt = $state(0);
   const owner = $derived(driversApi.documents(driver.id));
-  const canUpload = $derived(permissions.hasPermission('drivers:documents'));
   const fitness = $derived(
     driver.compliance.state === 'blocked'
       ? 'No apto'
@@ -153,13 +152,12 @@
               : 'Sin vencimiento registrado'}
           </p>
         {:else}<p class="missing"><FleetIcon name="file" size={28} />Sin documento cargado</p>{/if}
+        <LicenseCaptureEntry {driver} compact onconfirmed={onchanged} />
         <button class="text-action" type="button" onclick={() => (tab = 'documents')}
-          ><FleetIcon
-            name={canUpload && !driver.license.document_id ? 'upload' : 'file'}
-            size={14}
-          />{canUpload && !driver.license.document_id
-            ? 'Cargar licencia'
-            : 'Ver documentos'}<FleetIcon name="chevron" size={13} /></button
+          ><FleetIcon name="file" size={14} />Ver documentos<FleetIcon
+            name="chevron"
+            size={13}
+          /></button
         >
       </section>
       <section class="vehicle-card">
@@ -205,7 +203,9 @@
       <OwnedDocumentsPanel
         {owner}
         title="Licencia de conducir"
-        description="Carga y consulta la licencia de este conductor. Sus datos y vencimiento actualizan la aptitud para conducir."
+        description="Consulta la licencia de este conductor. Sus datos y vencimiento actualizan la aptitud para conducir."
+        readOnly
+        emptyHint="La licencia se registra con la captura guiada: usa el botón de fotos."
         permissionCodes={{
           read: 'drivers:read',
           upload: 'drivers:documents',

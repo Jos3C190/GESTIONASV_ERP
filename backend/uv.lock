@@ -436,6 +436,10 @@ ocr = [
     { name = "ocrmypdf" },
     { name = "pikepdf" },
 ]
+vlm = [
+    { name = "httpx" },
+    { name = "pillow" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -463,6 +467,7 @@ requires-dist = [
     { name = "faker", specifier = ">=25.0,<37" },
     { name = "fastapi", specifier = ">=0.141.1,<0.142" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27,<0.29" },
+    { name = "httpx", marker = "extra == 'vlm'", specifier = ">=0.27,<0.29" },
     { name = "itsdangerous", specifier = ">=2.2,<3" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10,<2" },
     { name = "ocrmypdf", marker = "extra == 'ocr'", specifier = ">=17.11,<18" },
@@ -476,6 +481,7 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-sqlalchemy", specifier = "==0.65b0" },
     { name = "opentelemetry-sdk", specifier = "==1.44.0" },
     { name = "pikepdf", marker = "extra == 'ocr'", specifier = ">=10,<11" },
+    { name = "pillow", marker = "extra == 'vlm'", specifier = ">=13,<14" },
     { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.7,<3" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<3.3" },
     { name = "pydantic", specifier = ">=2.7,<3" },
@@ -496,7 +502,7 @@ requires-dist = [
     { name = "types-python-jose", marker = "extra == 'dev'", specifier = ">=3.3,<4" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30,<0.33" },
 ]
-provides-extras = ["ocr", "dev"]
+provides-extras = ["ocr", "vlm", "dev"]
 
 [package.metadata.requires-dev]
 dev = [

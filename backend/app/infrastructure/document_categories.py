@@ -62,6 +62,7 @@ EMPLOYEE_CATEGORY_SEEDS: tuple[tuple[str, str, str], ...] = (
     ("exit_interview", "Entrevista de salida", "Finalización laboral"),
     ("employment_certificate", "Constancia laboral", "Finalización laboral"),
     ("driver_license", "Licencia de conducir", "Conducción"),
+    ("driver_license_back", "Reverso de licencia de conducir", "Conducción"),
     ("other", "Otros", "General"),
 )
 

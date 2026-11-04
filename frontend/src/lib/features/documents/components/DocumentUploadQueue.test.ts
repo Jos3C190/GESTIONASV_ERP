@@ -19,7 +19,7 @@ const license: DocumentCategoryOut = {
   id: 'license-id',
   company_id: 'company-test',
   module: 'employees',
-  code: 'driver_license',
+  code: 'work_permit',
   name: 'Licencia de conducir',
   group_name: 'Licencias',
   description: null,

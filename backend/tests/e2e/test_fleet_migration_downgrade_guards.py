@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from psycopg import connect
 
 pytestmark = pytest.mark.e2e
@@ -92,7 +93,7 @@ def test_downgrade_refuses_operational_data_and_rolls_back_the_entire_graph(popu
     with connect(dsn) as connection:
         assert connection.execute(verify_sql).fetchone() == before
         assert connection.execute("SELECT version_num FROM alembic_version").fetchall() == [
-            ("0104",)
+            (ScriptDirectory.from_config(config).get_current_head(),)
         ]
         # Changes made by 0103..0101 downgrades are rolled back too.
         assert connection.execute("SELECT to_regclass('tracking_simulations')").fetchone() == (

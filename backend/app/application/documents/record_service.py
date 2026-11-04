@@ -18,6 +18,7 @@ from typing import TypedDict
 from app.application.audit.audit_service import AuditService
 from app.application.documents.service import DocumentService, InitiateDocumentInput, UploadTicket
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.domain.entities.document import DocumentAsset
 from app.domain.entities.document_folder import DocumentFolder
 from app.domain.entities.document_record import DocumentCategory, DocumentRecord
 from app.domain.ports.document_record_repository import DocumentRecordRepository
@@ -87,6 +88,18 @@ def _clean_tags(tags: tuple[str, ...]) -> list[str]:
 
 #: Dueño por defecto de cada módulo con expedientes por entidad.
 _OWNER_TYPES = {"employees": "employee", "fleet": "vehicle"}
+
+#: Solo se crean al confirmar una captura guiada: de ellas depende si alguien puede
+#: conducir, y cualquier otra vía se saltaría las validaciones de esa captura.
+CAPTURE_ONLY_CATEGORY_CODES = frozenset({"driver_license", "driver_license_back"})
+
+
+def _require_not_capture_only(category: DocumentCategory) -> None:
+    if category.code in CAPTURE_ONLY_CATEGORY_CODES:
+        raise ConflictError(
+            "La licencia de conducir solo se registra con la captura guiada de Conductores.",
+            code="document_category_capture_only",
+        )
 
 
 class DocumentRecordService:
@@ -169,9 +182,9 @@ class DocumentRecordService:
             "tags": _clean_tags(metadata.tags),
         }
 
-    async def _record_from_ticket(
+    async def _record_from_asset(
         self,
-        ticket: UploadTicket,
+        asset: DocumentAsset,
         *,
         module: str,
         owner_type: str | None,
@@ -184,11 +197,11 @@ class DocumentRecordService:
         is_current: bool = True,
         replaces_document_id: uuid.UUID | None = None,
     ) -> DocumentRecord:
-        values = self._metadata(metadata, filename=ticket.document.original_filename)
+        values = self._metadata(metadata, filename=asset.original_filename)
         self._require_expiry(category, values["expires_on"])
         record = DocumentRecord(
-            document_id=ticket.document.id,
-            company_id=ticket.document.company_id,
+            document_id=asset.id,
+            company_id=asset.company_id,
             module=module,
             owner_type=owner_type,
             owner_id=owner_id,
@@ -223,8 +236,8 @@ class DocumentRecordService:
     ) -> DocumentRecordUpload:
         category = await self._category(data.company_id, "general", metadata.category_id)
         ticket = await self._documents.initiate(data)
-        record = await self._record_from_ticket(
-            ticket,
+        record = await self._record_from_asset(
+            ticket.document,
             module="general",
             owner_type=None,
             owner_id=None,
@@ -275,10 +288,11 @@ class DocumentRecordService:
                 "La categoría no está disponible en este módulo.",
                 code="document_category_invalid",
             )
+        _require_not_capture_only(category)
         self._require_expiry(category, metadata.expires_on)
         ticket = await self._documents.initiate(data)
-        record = await self._record_from_ticket(
-            ticket,
+        record = await self._record_from_asset(
+            ticket.document,
             module=module,
             owner_type=owner_type,
             owner_id=owner_id,
@@ -287,6 +301,90 @@ class DocumentRecordService:
             actor_id=data.actor_id,
         )
         return DocumentRecordUpload(ticket, record)
+
+    async def adopt_asset(
+        self,
+        company_id: uuid.UUID,
+        document_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        *,
+        module: str,
+        owner_type: str,
+        owner_id: uuid.UUID,
+        category_code: str,
+        metadata: DocumentMetadataInput,
+    ) -> DocumentRecord:
+        """Give an already scanned asset its record, replacing what the owner had.
+
+        The new record becomes the only current one of that owner and category:
+        compliance takes the furthest expiry among current records, so an older
+        license left current would outrank the one being confirmed.
+        """
+        asset = await self._documents.get(company_id, document_id)
+        if asset.status != "active":
+            raise ConflictError(
+                "El documento todavía no está disponible.", code="document_not_active"
+            )
+        categories = await self._records.categories(company_id, module=module)
+        category = next((item for item in categories if item.code == category_code), None)
+        if category is None:
+            raise ConflictError(
+                "La categoría no está disponible.", code="document_category_unavailable"
+            )
+        current = await self._records.current_for_owner(
+            company_id,
+            module=module,
+            owner_type=owner_type,
+            owner_id=owner_id,
+            category_id=category.id,
+        )
+        previous = max(
+            (item for item in current if item.asset and item.asset.deleted_at is None),
+            key=lambda item: item.expires_on or date.min,
+            default=None,
+        )
+        record = await self._record_from_asset(
+            asset,
+            module=module,
+            owner_type=owner_type,
+            owner_id=owner_id,
+            category=category,
+            metadata=metadata,
+            actor_id=actor_id,
+            version_group_id=previous.version_group_id if previous else None,
+            version_number=(
+                await self._records.next_version_number(previous.version_group_id)
+                if previous
+                else 1
+            ),
+            is_current=previous is None,
+            replaces_document_id=previous.document_id if previous else None,
+        )
+        if previous is not None:
+            await self._records.set_current_version(
+                version_group_id=previous.version_group_id,
+                document_id=record.document_id,
+            )
+        retired = [
+            item.document_id
+            for item in current
+            if previous is None or item.version_group_id != previous.version_group_id
+        ]
+        await self._records.retire(retired, actor_id=actor_id)
+        await self._audit.record(
+            action="DOCUMENT_ADOPTED",
+            user_id=actor_id,
+            company_id=company_id,
+            resource_type="documents",
+            resource_id=str(document_id),
+            after_state={
+                "category": category_code,
+                "replaces": str(previous.document_id) if previous else None,
+                "retired": [str(item) for item in retired],
+            },
+            required=True,
+        )
+        return await self.get(company_id, document_id)
 
     @staticmethod
     def _require_expiry(category: DocumentCategory, expires_on: object) -> None:
@@ -413,6 +511,12 @@ class DocumentRecordService:
             # active so deactivated entries cannot be reused for new data.
             allow_inactive=requested_category_id in (None, record.category_id),
         )
+        _require_not_capture_only(category)
+        current_category = await self._records.get_category(
+            record.category_id, company_id, include_inactive=True
+        )
+        if current_category is not None:
+            _require_not_capture_only(current_category)
         values = self._metadata(metadata, filename=record.asset.original_filename)
         self._require_expiry(category, values["expires_on"])
         for key, value in values.items():
@@ -485,9 +589,15 @@ class DocumentRecordService:
             metadata.category_id,
             allow_inactive=metadata.category_id in (None, previous.category_id),
         )
+        _require_not_capture_only(category)
+        previous_category = await self._records.get_category(
+            previous.category_id, company_id, include_inactive=True
+        )
+        if previous_category is not None:
+            _require_not_capture_only(previous_category)
         ticket = await self._documents.initiate(data)
-        record = await self._record_from_ticket(
-            ticket,
+        record = await self._record_from_asset(
+            ticket.document,
             module=previous.module,
             owner_type=previous.owner_type,
             owner_id=previous.owner_id,

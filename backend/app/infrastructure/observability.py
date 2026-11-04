@@ -45,14 +45,17 @@ _trace_context_propagator = TraceContextTextMapPropagator()
 
 _SENSITIVE_KEY = re.compile(
     r"(?:password|passwd|secret|token|authorization|cookie|credential|signature|"
-    r"object[_-]?key|document[_-]?path|x-amz-|aws_access)",
+    r"object[_-]?key|document[_-]?path|x-amz-|aws_access|"
+    r"\bdui\b|extracted|license[_-]?number|surnames|given[_-]?names)",
     re.IGNORECASE,
 )
 _SENSITIVE_VALUE = re.compile(
     r"(?i)(?:[a-z][a-z0-9+.-]*://[^:/\s]+:[^@\s]+@|"
     r"bearer\s+[a-z0-9._~+/-]+|x-amz-signature=[^&\s]+|"
     r"(?:password|secret|token|authorization|cookie)=[^&\s]+|"
-    r"companies/[0-9a-f-]+/documents/[0-9a-f-]+/[^\s]+)"
+    r"companies/[0-9a-f-]+/documents/[0-9a-f-]+/[^\s]+|"
+    # DUI y número de licencia salvadoreños.
+    r"\b\d{8}-\d\b|\b\d{4}-\d{6}-\d{3}-\d\b)"
 )
 _MAX_VALUE_LENGTH = 4096
 _ALLOWED_METRIC_ATTRIBUTES = frozenset(
@@ -66,6 +69,7 @@ _ALLOWED_METRIC_ATTRIBUTES = frozenset(
         "route",
         "variant",
         "store",
+        "field",
     }
 )
 P = ParamSpec("P")

@@ -19,6 +19,7 @@ from app.api.v1.routers import (
     document_general,
     document_general_import,
     documents,
+    driver_license_captures,
     drivers,
     employee_documents,
     employees,
@@ -102,6 +103,8 @@ api_router.include_router(fleet_gps.router, prefix="/api/v1")
 api_router.include_router(fleet_operations.router, prefix="/api/v1")
 api_router.include_router(fleet.router, prefix="/api/v1")
 api_router.include_router(fleet.documents_router, prefix="/api/v1")
+# Antes de drivers.router: /drivers/{driver_id} también atraparía /drivers/license-captures.
+api_router.include_router(driver_license_captures.router, prefix="/api/v1")
 api_router.include_router(drivers.router, prefix="/api/v1")
 api_router.include_router(drivers.documents_router, prefix="/api/v1")
 api_router.include_router(media.router, prefix="/api/v1")
