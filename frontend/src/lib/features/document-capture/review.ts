@@ -38,6 +38,22 @@ export function warningCodes(issues: CaptureIssue[]): string[] {
   return issues.filter((issue) => issue.severity === 'warning').map((issue) => issue.code);
 }
 
+/**
+ * While the model reads, an empty field is not a mistake yet: marking it in red
+ * would contradict the message saying the data is on its way.
+ */
+export function issuesToShow(
+  issues: CaptureIssue[],
+  values: CaptureValues,
+  touched: ReadonlySet<string>,
+  reading: boolean
+): CaptureIssue[] {
+  if (!reading) return issues;
+  return issues.filter(
+    (issue) => !(issue.severity === 'error' && !values[issue.field] && !touched.has(issue.field))
+  );
+}
+
 /** Fields with something to review, in the order they appear on the form. */
 export function fieldsToReview(issues: CaptureIssue[], groups: CaptureFieldGroup[]): string[] {
   const flagged = new Set(issues.map((issue) => issue.field));
@@ -76,11 +92,13 @@ export function confirmBlocker(
     canOverride: boolean;
     overrideReason: string;
   },
-  rules: Pick<CaptureRules, 'missingPhotos' | 'mismatchBlocked'>
+  rules: Pick<CaptureRules, 'missingPhotos' | 'mismatchBlocked' | 'blockingCodes'>
 ): string | null {
   const has = (severity: CaptureIssue['severity']) =>
     state.issues.some((issue) => issue.severity === severity);
   if (!state.photosReady) return rules.missingPhotos;
+  const blocking = state.issues.find((issue) => rules.blockingCodes?.[issue.code]);
+  if (blocking) return rules.blockingCodes?.[blocking.code] ?? null;
   if (has('error')) return 'Corrige los campos marcados.';
   if (has('mismatch')) {
     if (!state.canOverride) return rules.mismatchBlocked;

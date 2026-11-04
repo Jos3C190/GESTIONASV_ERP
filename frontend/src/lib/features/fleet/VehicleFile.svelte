@@ -23,6 +23,7 @@
     VEHICLE_STATUS_LABELS,
     type VehicleStatus as StoredStatus
   } from './catalog';
+  import CirculationCaptureEntry from './capture/CirculationCaptureEntry.svelte';
   import ComplianceList from './ComplianceList.svelte';
   import FleetIcon from './FleetIcon.svelte';
   import MoveToTrashDialog from './MoveToTrashDialog.svelte';
@@ -73,6 +74,7 @@
   let saving = $state(false);
   let actionError = $state<string | null>(null);
   let trashOpen = $state(false);
+  let documentsVersion = $state(0);
 
   const canUpdate = $derived(permissions.hasPermission('fleet:update'));
   // La papelera es administrativa: requiere alcance de todas las sucursales.
@@ -298,6 +300,18 @@
                 <dt>VIN</dt>
                 <dd>{vehicle.vin ?? '—'}</dd>
               </div>
+              {#if vehicle.chassis_number}
+                <div>
+                  <dt>Chasis</dt>
+                  <dd>{vehicle.chassis_number}</dd>
+                </div>
+              {/if}
+              {#if vehicle.engine_number}
+                <div>
+                  <dt>Motor</dt>
+                  <dd>{vehicle.engine_number}</dd>
+                </div>
+              {/if}
               <div>
                 <dt>Tipo</dt>
                 <dd>{vehicle.type.name}</dd>
@@ -370,13 +384,22 @@
       {:else if tab === 'driver'}
         <VehicleDriverPanel {vehicle} onchanged={load} />
       {:else if tab === 'documents'}
-        <OwnedDocumentsPanel
-          owner={fleetApi.documents(vehicle.id)}
-          title="Documentos del vehículo"
-          description="Tarjeta de circulación, seguro, revisión técnica y demás documentación. Los obligatorios vencidos bloquean los despachos."
-          permissionPrefix="fleet_documents"
-          onchanged={load}
+        <CirculationCaptureEntry
+          {vehicle}
+          onconfirmed={(next) => {
+            vehicle = next;
+            documentsVersion += 1;
+          }}
         />
+        {#key documentsVersion}
+          <OwnedDocumentsPanel
+            owner={fleetApi.documents(vehicle.id)}
+            title="Documentos del vehículo"
+            description="Tarjeta de circulación, seguro, revisión técnica y demás documentación. Los obligatorios vencidos bloquean los despachos."
+            permissionPrefix="fleet_documents"
+            onchanged={load}
+          />
+        {/key}
       {:else if tab === 'maintenance'}
         <VehicleMaintenancePanel {vehicle} onchanged={load} />
       {:else if tab === 'fuel'}

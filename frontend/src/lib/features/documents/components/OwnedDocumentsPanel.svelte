@@ -6,6 +6,7 @@
   import DocumentList from '$lib/features/documents/components/DocumentList.svelte';
   import DocumentMetadataModal from '$lib/features/documents/components/DocumentMetadataModal.svelte';
   import DocumentUploadQueue from '$lib/features/documents/components/DocumentUploadQueue.svelte';
+  import { CAPTURE_ONLY_CATEGORY_CODES } from '$lib/features/documents/document-upload';
   import { permissions } from '$lib/stores/permissions.svelte';
 
   interface Props {
@@ -62,15 +63,18 @@
 
   /** Categorías obligatorias sin documento vigente: invitan a cargarlas directamente. */
   const missingRequired = $derived(
-    categories.filter(
-      (category) =>
-        category.compliance_required &&
-        !documents.some(
-          (item) =>
-            item.category_id === category.id &&
-            ['current', 'expiring', 'active'].includes(item.business_status)
+    // Con un filtro puesto, la lista no dice qué falta: solo qué coincide con el filtro.
+    categoryFilter || statusFilter
+      ? []
+      : categories.filter(
+          (category) =>
+            category.compliance_required &&
+            !documents.some(
+              (item) =>
+                item.category_id === category.id &&
+                ['current', 'expiring', 'active'].includes(item.business_status)
+            )
         )
-    )
   );
 
   async function load() {
@@ -158,8 +162,11 @@
           {#each missingRequired as category (category.id)}
             <li>
               <span>{category.name}</span>
-              {#if canUpload}<button type="button" onclick={() => openUpload(category.id)}
-                  >Cargar</button
+              {#if canUpload && !CAPTURE_ONLY_CATEGORY_CODES.has(category.code)}<button
+                  type="button"
+                  onclick={() => openUpload(category.id)}>Cargar</button
+                >{:else if CAPTURE_ONLY_CATEGORY_CODES.has(category.code)}<small
+                  >Se registra con la captura guiada</small
                 >{/if}
             </li>
           {/each}
@@ -273,6 +280,7 @@
 <style>
   .owned-documents {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 14px;
   }
   header {
@@ -299,7 +307,12 @@
     font-size: 12px;
   }
   .missing strong {
-    color: rgb(var(--danger));
+    color: rgb(var(--foreground));
+  }
+  .missing small {
+    color: rgb(var(--foreground-muted));
+    font-size: 12px;
+    text-align: right;
   }
   .missing ul {
     display: grid;
@@ -315,11 +328,12 @@
     gap: 8px;
   }
   .missing button {
-    padding: 3px 9px;
+    min-height: 44px;
+    padding: 3px 12px;
     border: 1px solid rgb(var(--danger) / 0.4);
     border-radius: 6px;
-    color: rgb(var(--danger));
-    font-size: 11px;
+    color: rgb(var(--foreground));
+    font-size: 13px;
     font-weight: 600;
   }
   .filters {
@@ -334,7 +348,16 @@
     border-radius: 8px;
     background: rgb(var(--surface));
     color: rgb(var(--foreground));
-    font-size: 12px;
+    /* 16 px evita que iOS acerque la página al enfocar el filtro. */
+    font-size: 16px;
+  }
+  @media (min-width: 768px) {
+    .missing button {
+      min-height: 32px;
+    }
+    .filters select {
+      font-size: 12px;
+    }
   }
   .error {
     color: rgb(var(--danger));

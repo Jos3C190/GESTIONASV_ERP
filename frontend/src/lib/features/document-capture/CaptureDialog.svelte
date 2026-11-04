@@ -1,5 +1,5 @@
 <script lang="ts" generics="R">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { api, HttpError } from '$lib/api/client';
   import './capture-theme.css';
   import Button from '$lib/components/ui/Button.svelte';
@@ -13,6 +13,7 @@
   import {
     confirmBlocker,
     emptyValues,
+    issuesToShow,
     isWaiting,
     mergeExtracted,
     unreadFields,
@@ -63,6 +64,11 @@
   let waitedTooLong = $state(false);
   let discarding = $state(false);
   let generation = 0;
+  let checkRound = 0;
+  let acknowledgedWarnings = '';
+  let shownStep: CaptureSide | 'review' = 'front';
+  let root = $state<HTMLDivElement | null>(null);
+  let footerRoot = $state<HTMLDivElement | null>(null);
 
   const canOverride = $derived(
     !!config.overridePermission && permissions.hasPermission(config.overridePermission)
@@ -91,6 +97,13 @@
     return 'done';
   });
 
+  const visibleIssues = $derived(issuesToShow(serverIssues, values, touched, analyzing));
+  const hint = $derived(
+    visibleIssues.length < serverIssues.length
+      ? `Leyendo ${config.documentName}…`
+      : (blocker ?? 'Todo listo para confirmar.')
+  );
+
   function isDone(key: CaptureSide | 'review'): boolean {
     return key !== 'review' && step !== key && !!capture?.[key].document_id;
   }
@@ -113,16 +126,40 @@
     discarding = false;
   }
 
+  // Marcar la casilla vale para los avisos que se veían: uno nuevo pide revisarlo otra vez.
+  $effect(() => {
+    const key = warningCodes(serverIssues).join('|');
+    if (key === acknowledgedWarnings) return;
+    acknowledgedWarnings = key;
+    acknowledged = false;
+  });
+
+  // Al cambiar de paso desaparece el botón pulsado: el foco no debe caer al vacío.
+  $effect(() => {
+    if (step === shownStep) return;
+    shownStep = step;
+    void tick().then(() =>
+      root?.querySelector<HTMLElement>('[data-step-title]')?.focus({ preventScroll: true })
+    );
+  });
+
+  function setDiscarding(next: boolean) {
+    discarding = next;
+    void tick().then(() => footerRoot?.querySelector('button')?.focus());
+  }
+
   // Lo escrito se valida en el servidor mientras se edita: confirmar no da sorpresas.
   $effect(() => {
     if (!open || step !== 'review' || !capture) return;
     const id = capture.id;
     const snapshot = { ...values };
     const timer = setTimeout(() => {
+      // Una respuesta lenta no debe pisar la de lo último que se escribió.
+      const round = ++checkRound;
       config.api
         .check(id, snapshot)
         .then((checked) => {
-          if (!open) return;
+          if (!open || round !== checkRound) return;
           serverIssues = checked.issues;
           serverFills = checked.fills ?? [];
         })
@@ -212,7 +249,8 @@
     try {
       const prepared = await prepareForUpload(source, side, config.filePrefix);
       previews = { ...previews, [side]: URL.createObjectURL(prepared.file) };
-      const [issue] = prepared.issues;
+      const ignored = config.ignoredQuality?.[side] ?? [];
+      const [issue] = prepared.issues.filter((item) => !ignored.includes(item));
       if (issue) {
         held = { side, file: prepared.file, issue, previous };
         return;
@@ -329,7 +367,7 @@
     if (!busy) open = false;
   }}
 >
-  <div class="document-capture">
+  <div class="document-capture" bind:this={root}>
     <ol class="steps">
       {#each STEPS as item, index (item.key)}
         <li
@@ -345,15 +383,16 @@
       {/each}
     </ol>
 
-    {#if error}<p class="alert" role="alert">{error}</p>{/if}
+    {#if error && step !== 'review'}<p class="alert" role="alert">{error}</p>{/if}
 
     {#if step !== 'review'}
       {#key step}
         <PhotoStep
           side={step}
           documentName={config.documentName}
+          ignoredQuality={config.ignoredQuality?.[step]}
           preview={previews[step]}
-          uploading={uploading === step}
+          uploading={busy || uploading === step}
           issue={held?.side === step ? held.issue : null}
           canContinue={capture?.[step].status === 'active'}
           onphoto={(photo) => void usePhoto(photo)}
@@ -366,7 +405,7 @@
       <CaptureReviewForm
         {config}
         {values}
-        issues={serverIssues}
+        issues={visibleIssues}
         fills={serverFills}
         {previews}
         {reading}
@@ -376,17 +415,19 @@
         bind:acknowledged
         bind:overrideReason
         onedit={edit}
-        onretake={() => (step = 'front')}
+        onretake={(side) => (step = side)}
       />
     {/if}
   </div>
 
   {#snippet footer()}
-    <div class="document-capture footer">
+    <div class="document-capture footer" bind:this={footerRoot}>
+      <!-- Junto al botón: quien bajó hasta aquí no vería un error en lo alto del formulario. -->
+      {#if error && step === 'review'}<p class="alert footer-alert" role="alert">{error}</p>{/if}
       {#if discarding}
         <p class="hint" role="status">¿Descartar las fotos y los datos de esta captura?</p>
         <div class="buttons">
-          <Button variant="secondary" size="lg" class="grow" onclick={() => (discarding = false)}>
+          <Button variant="secondary" size="lg" class="grow" onclick={() => setDiscarding(false)}>
             Conservar
           </Button>
           <Button variant="danger" size="lg" class="grow" onclick={() => void cancel()}>
@@ -395,11 +436,11 @@
         </div>
       {:else}
         {#if step === 'review'}
-          <p class="hint" role="status">{blocker ?? 'Todo listo para confirmar.'}</p>
+          <p class="hint" role="status">{hint}</p>
         {/if}
         <div class="buttons">
           {#if hasPhotos}
-            <Button variant="ghost" size="lg" disabled={busy} onclick={() => (discarding = true)}>
+            <Button variant="ghost" size="lg" disabled={busy} onclick={() => setDiscarding(true)}>
               <FleetIcon name="trash" size={16} /><span class="discard-label"
                 >Descartar captura</span
               >
@@ -489,6 +530,9 @@
     flex-direction: column;
     gap: var(--capture-space-2);
   }
+  .footer-alert {
+    margin: 0;
+  }
   .hint {
     margin: 0;
     color: rgb(var(--foreground-muted));
@@ -517,8 +561,12 @@
   @media (min-width: 640px) {
     .footer {
       flex-direction: row;
+      flex-wrap: wrap;
       align-items: center;
       gap: var(--capture-space-4);
+    }
+    .footer-alert {
+      flex-basis: 100%;
     }
     .hint {
       flex: 1;

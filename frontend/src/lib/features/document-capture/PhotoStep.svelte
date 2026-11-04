@@ -7,6 +7,7 @@
   let {
     side,
     documentName,
+    ignoredQuality = [],
     preview,
     uploading,
     issue,
@@ -18,6 +19,7 @@
   }: {
     side: 'front' | 'back';
     documentName: string;
+    ignoredQuality?: readonly QualityIssue[];
     preview: string | null;
     uploading: boolean;
     issue: QualityIssue | null;
@@ -85,9 +87,22 @@
   });
 </script>
 
+{#snippet fileInput()}
+  <label class={!touchFirst && !preview ? filePrimary : fileSecondary} aria-disabled={uploading}>
+    <FleetIcon name="upload" size={16} />Subir archivo
+    <input
+      type="file"
+      accept="image/jpeg,image/png,image/webp"
+      disabled={uploading}
+      onchange={onFile}
+    />
+  </label>
+{/snippet}
+
 {#if cameraOpen}
   <CameraCapture
     {label}
+    ignored={ignoredQuality}
     oncapture={(photo) => {
       cameraOpen = false;
       fromCamera = true;
@@ -102,13 +117,18 @@
 {:else}
   <div class="photo-step">
     <header>
-      <h3>{title}</h3>
+      <h3 tabindex="-1" data-step-title>{title}</h3>
       <p>Carga {label} completo, con las cuatro esquinas visibles y sin reflejos.</p>
     </header>
 
     <div class="stage" class:dragging class:filled={!!preview} bind:this={stage}>
       {#if preview}
-        <img src={preview} alt={`Foto de ${label} de ${documentName}`} width="856" height="540" />
+        <img
+          src={preview}
+          alt={`Foto ${side === 'front' ? 'del frente' : 'del reverso'} de ${documentName}`}
+          width="856"
+          height="540"
+        />
       {:else}
         <div class="placeholder">
           <FleetIcon name="image" size={28} />
@@ -144,7 +164,9 @@
         <button class="anyway" type="button" onclick={onuseanyway}>Usar de todos modos</button>
       </div>
     {:else}
-      <div class="actions" class:reverse={!touchFirst && !preview}>
+      <!-- En un PC lo natural es subir un archivo: va primero, también al tabular. -->
+      <div class="actions">
+        {#if !touchFirst && !preview}{@render fileInput()}{/if}
         {#if canContinue && !uploading}
           <Button size="lg" onclick={oncontinue}>Continuar con esta foto</Button>
         {/if}
@@ -158,7 +180,7 @@
             <FleetIcon name="camera" size={16} />{preview ? 'Tomar otra foto' : 'Tomar foto'}
           </Button>
         {:else if touchFirst}
-          <label class={preview ? fileSecondary : filePrimary}>
+          <label class={preview ? fileSecondary : filePrimary} aria-disabled={uploading}>
             <FleetIcon name="camera" size={16} />{preview ? 'Tomar otra foto' : 'Tomar foto'}
             <input
               type="file"
@@ -169,15 +191,7 @@
             />
           </label>
         {/if}
-        <label class={!touchFirst && !preview ? filePrimary : fileSecondary}>
-          <FleetIcon name="upload" size={16} />Subir archivo
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            disabled={uploading}
-            onchange={onFile}
-          />
-        </label>
+        {#if touchFirst || preview}{@render fileInput()}{/if}
       </div>
     {/if}
   </div>
@@ -189,6 +203,9 @@
     flex-direction: column;
     gap: var(--capture-space-4);
     padding: var(--capture-space-4);
+  }
+  h3:focus {
+    outline: none;
   }
   h3 {
     margin: 0;
@@ -303,6 +320,10 @@
   .actions label {
     position: relative;
   }
+  .actions label[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
   .actions input {
     position: absolute;
     width: 1px;
@@ -317,9 +338,6 @@
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-    }
-    .actions.reverse {
-      flex-direction: row-reverse;
     }
   }
   @media (hover: hover) and (pointer: fine) {

@@ -285,6 +285,25 @@ describe('fieldsToReview', () => {
 });
 
 describe('confirmBlocker', () => {
+  it('explains an issue that fixing a typo would not solve', () => {
+    const issues: CaptureIssue[] = [
+      { code: 'plate_mismatch', severity: 'error', field: 'plate', message: 'x' }
+    ];
+    const state = {
+      photosReady: true,
+      issues,
+      acknowledged: false,
+      canOverride: false,
+      overrideReason: ''
+    };
+    expect(
+      confirmBlockerFor(state, {
+        ...licenseCaptureRules,
+        blockingCodes: { plate_mismatch: 'Es de otro vehículo.' }
+      })
+    ).toBe('Es de otro vehículo.');
+  });
+
   const ready = {
     photosReady: true,
     issues: [],

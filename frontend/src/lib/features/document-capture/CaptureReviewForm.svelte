@@ -24,7 +24,14 @@
   }: {
     config: Pick<
       CaptureConfig<unknown>,
-      'documentName' | 'title' | 'fields' | 'groups' | 'mismatchStop' | 'acknowledge' | 'fillNote'
+      | 'documentName'
+      | 'title'
+      | 'fields'
+      | 'groups'
+      | 'mismatchStop'
+      | 'acknowledge'
+      | 'fillNote'
+      | 'expected'
     >;
     values: CaptureValues;
     issues: CaptureIssue[];
@@ -37,7 +44,7 @@
     acknowledged?: boolean;
     overrideReason?: string;
     onedit: (key: string, value: string) => void;
-    onretake: () => void;
+    onretake: (side: CaptureSide) => void;
   } = $props();
 
   const uid = $props.id();
@@ -57,6 +64,9 @@
   const mismatches = $derived(issues.filter((issue) => issue.severity === 'mismatch'));
   const warnings = $derived(issues.filter((issue) => issue.severity === 'warning'));
   const flagged = $derived(fieldsToReview(issues, config.groups));
+  const unreadSide = $derived<CaptureSide>(
+    unread.some((key) => config.expected.front.includes(key)) ? 'front' : 'back'
+  );
   let zoomed = $state<number | null>(null);
   let zoomOrigin: HTMLButtonElement | null = null;
 
@@ -96,23 +106,25 @@
         </button>
       {/each}
     </div>
-    <Button variant="ghost" size="sm" onclick={onretake}>
+    <Button variant="ghost" size="sm" onclick={() => onretake('front')}>
       <FleetIcon name="refresh" size={14} />Repetir fotos
     </Button>
   </div>
 
   <div class="form">
-    <p class="status" class:busy={reading === 'analyzing' || reading === 'slow'} role="status">
+    <p class="status" role="status" tabindex="-1" data-step-title>
       {STATUS[reading]}
     </p>
 
     {#if unread.length > 0}
       <div class="unread" role="status">
         <p>
-          No pudimos leer: {unread.map((key) => field(key).label).join(', ')}. Repite la
-          foto o escríbelos revisando la imagen.
+          No pudimos leer: {unread.map((key) => field(key).label).join(', ')}. Repite la foto o
+          escríbelos revisando la imagen.
         </p>
-        <Button variant="secondary" size="sm" onclick={onretake}>Repetir foto</Button>
+        <Button variant="secondary" size="sm" onclick={() => onretake(unreadSide)}
+          >Repetir foto</Button
+        >
       </div>
     {/if}
 
@@ -131,7 +143,7 @@
         <div class="grid">
           {#each group.fields as key (key)}
             {@const fieldIssues = issuesFor(issues, key)}
-            <div class="field">
+            <div class="field" class:wide={field(key).wide}>
               <label for={`${uid}-${key}`}>{field(key).label}</label>
               <input
                 id={`${uid}-${key}`}
@@ -267,11 +279,11 @@
   }
   .status {
     margin: 0;
-    padding: var(--capture-space-2) var(--capture-space-3);
-    border-radius: var(--capture-radius);
     color: rgb(var(--foreground-muted));
-    background: rgb(var(--surface-muted));
     font-size: 14px;
+  }
+  .status:focus {
+    outline: none;
   }
   .unread {
     display: flex;
@@ -346,6 +358,8 @@
   .field input,
   .field textarea {
     width: 100%;
+    /* Al tabular, el campo no debe quedar debajo de las miniaturas fijas. */
+    scroll-margin-top: 96px;
     min-height: 44px;
     padding: var(--capture-space-2) var(--capture-space-3);
     border: 1px solid rgb(var(--control-border));
@@ -417,6 +431,9 @@
   @media (min-width: 480px) {
     .grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .field.wide {
+      grid-column: 1 / -1;
     }
   }
   /* Con espacio de sobra, fotos grandes en columna fija junto al formulario. */

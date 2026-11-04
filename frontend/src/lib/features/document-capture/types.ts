@@ -1,4 +1,5 @@
 import type { DocumentUploadTicket } from '$lib/api/client';
+import type { QualityIssue } from './image-prep';
 
 export type CaptureSide = 'front' | 'back';
 export type CaptureStatus =
@@ -39,6 +40,8 @@ export interface CaptureCheck {
 export interface CaptureField {
   label: string;
   hint?: string;
+  /** Takes the whole row of the form. */
+  wide?: boolean;
 }
 
 export interface CaptureFieldGroup {
@@ -55,6 +58,8 @@ export interface CaptureRules {
   unreadableCodes: ReadonlySet<string>;
   missingPhotos: string;
   mismatchBlocked: string;
+  /** What to say when an issue cannot be solved by fixing a typo. */
+  blockingCodes?: Readonly<Record<string, string>>;
 }
 
 export interface CaptureApi<R> {
@@ -86,6 +91,11 @@ export interface CaptureConfig<R> extends CaptureRules {
   /** With its article, to build sentences: "la licencia". */
   documentName: string;
   filePrefix: string;
+  /**
+   * Checks a side's design would trip by itself, such as glare on a large blank area.
+   * A real reflection over the text still shows up as a value the model could not read.
+   */
+  ignoredQuality?: Partial<Record<CaptureSide, readonly QualityIssue[]>>;
   fields: Record<string, CaptureField>;
   /** Permission that may confirm a mismatch; null when none can. */
   overridePermission: string | null;

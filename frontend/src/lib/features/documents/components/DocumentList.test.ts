@@ -43,6 +43,8 @@ describe('capture-only documents', () => {
   it('recognises the license categories', () => {
     expect(isCaptureOnly({ category_code: 'driver_license' })).toBe(true);
     expect(isCaptureOnly({ category_code: 'driver_license_back' })).toBe(true);
+    expect(isCaptureOnly({ category_code: 'circulation_card' })).toBe(true);
+    expect(isCaptureOnly({ category_code: 'circulation_card_back' })).toBe(true);
     expect(isCaptureOnly({ category_code: 'dui' })).toBe(false);
     expect(isCaptureOnly({})).toBe(false);
   });

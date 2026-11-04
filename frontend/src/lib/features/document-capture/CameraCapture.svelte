@@ -13,11 +13,13 @@
 
   let {
     label,
+    ignored = [],
     oncapture,
     onunavailable,
     onback
   }: {
     label: string;
+    ignored?: readonly QualityIssue[];
     oncapture: (photo: Blob) => void;
     onunavailable: (reason: string) => void;
     onback: () => void;
@@ -106,7 +108,9 @@
     const timer = setInterval(() => {
       const frame = cropped();
       if (!frame) return;
-      liveIssue = assessDrawable(frame, frame.width, frame.height)[0] ?? null;
+      liveIssue =
+        assessDrawable(frame, frame.width, frame.height).find((item) => !ignored.includes(item)) ??
+        null;
     }, LIVE_CHECK_MS);
     return () => clearInterval(timer);
   });
@@ -157,13 +161,13 @@
     height: 100%;
     object-fit: cover;
   }
-  /* Proporción real de una licencia: así la tarjeta llena el marco y se lee mejor. */
+  /* Proporción real de la tarjeta: así llena el marco y se lee mejor. El ancho también
+     depende de la altura para no deformar el marco con el teléfono en horizontal. */
   .guide {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: min(86%, 560px);
-    max-height: 76%;
+    width: min(86%, 560px, 118dvh);
     aspect-ratio: 85.6 / 54;
     transform: translate(-50%, -50%);
     border: 2px solid rgb(255 255 255 / 92%);

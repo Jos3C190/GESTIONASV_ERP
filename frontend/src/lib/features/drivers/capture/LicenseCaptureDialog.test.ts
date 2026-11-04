@@ -257,7 +257,7 @@ describe('LicenseCaptureDialog', () => {
 
     expect(screen.queryByText('Foto borrosa')).toBeNull();
     expect(screen.getByText(/Carga el frente/)).toBeInTheDocument();
-    expect(screen.queryByAltText(/Foto de el frente/)).toBeNull();
+    expect(screen.queryByAltText(/Foto del frente/)).toBeNull();
     expect(apiMock.startCaptureUpload).not.toHaveBeenCalled();
   });
 
