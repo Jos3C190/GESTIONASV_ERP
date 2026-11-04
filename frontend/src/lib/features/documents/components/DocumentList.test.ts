@@ -88,6 +88,6 @@ describe('capture-only documents', () => {
     render(DocumentList, { documents: [], emptyHint: 'Usa la captura guiada.' });
 
     expect(screen.getByText('Usa la captura guiada.')).toBeInTheDocument();
-    expect(screen.queryByText(/Cargue el primer documento/)).toBeNull();
+    expect(screen.queryByText(/Carga el primer documento/)).toBeNull();
   });
 });

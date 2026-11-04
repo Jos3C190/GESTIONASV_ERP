@@ -23,6 +23,7 @@ from app.infrastructure.models.document_capture import OPEN_CAPTURE_STATUSES, Do
 
 CAPTURE_MAX_BYTES = 15 * 1024 * 1024
 _EXTENSIONS = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+_SIDE_NAMES = {"front": "frente", "back": "reverso"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,7 +133,7 @@ class CaptureSessions:
             InitiateDocumentInput(
                 company_id=capture.company_id,
                 actor_id=actor_id,
-                filename=f"{self._config.file_prefix}-{side}.{_EXTENSIONS[content_type]}",
+                filename=f"{self._config.file_prefix}-{_SIDE_NAMES[side]}.{_EXTENSIONS[content_type]}",
                 content_type=content_type,
                 size_bytes=size_bytes,
                 checksum_sha256=checksum_sha256,

@@ -6,6 +6,8 @@ import type {
   CaptureValues
 } from './types';
 
+export const ACKNOWLEDGE_BLOCKER = 'Marca que revisaste los avisos.';
+
 export function emptyValues(fields: Record<string, CaptureField>): CaptureValues {
   return Object.fromEntries(Object.keys(fields).map((key) => [key, null]));
 }
@@ -104,6 +106,6 @@ export function confirmBlocker(
     if (!state.canOverride) return rules.mismatchBlocked;
     if (state.overrideReason.trim().length < 3) return 'Indica el motivo de la excepción.';
   }
-  if (has('warning') && !state.acknowledged) return 'Marca que revisaste los avisos.';
+  if (has('warning') && !state.acknowledged) return ACKNOWLEDGE_BLOCKER;
   return null;
 }

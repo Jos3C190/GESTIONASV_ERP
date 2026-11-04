@@ -395,7 +395,9 @@
           <OwnedDocumentsPanel
             owner={fleetApi.documents(vehicle.id)}
             title="Documentos del vehículo"
-            description="Tarjeta de circulación, seguro, revisión técnica y demás documentación. Los obligatorios vencidos bloquean los despachos."
+            description="Seguro, revisión técnica y demás documentación. Los obligatorios vencidos bloquean los despachos."
+            quietUpload
+            showPending={!!vehicle.plate}
             permissionPrefix="fleet_documents"
             onchanged={load}
           />

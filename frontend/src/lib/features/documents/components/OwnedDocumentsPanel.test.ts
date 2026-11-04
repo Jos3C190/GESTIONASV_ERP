@@ -23,6 +23,20 @@ const owner = {
 describe('OwnedDocumentsPanel', () => {
   afterEach(() => cleanup());
 
+  it('lists nothing as pending when the required documents do not apply', async () => {
+    render(OwnedDocumentsPanel, {
+      owner,
+      title: 'Documentos',
+      description: 'Del vehículo',
+      permissionPrefix: 'fleet_documents',
+      showPending: false
+    });
+
+    await screen.findByLabelText('Filtrar por categoría');
+
+    expect(screen.queryByText('Documentos obligatorios pendientes')).toBeNull();
+  });
+
   it('lists a capture-only document as pending without offering to upload it', async () => {
     render(OwnedDocumentsPanel, {
       owner,
@@ -37,6 +51,6 @@ describe('OwnedDocumentsPanel', () => {
 
     expect(within(card).queryByRole('button', { name: 'Cargar' })).toBeNull();
     expect(within(policy).getByRole('button', { name: 'Cargar' })).toBeInTheDocument();
-    expect(within(card).getByText(/captura guiada/)).toBeInTheDocument();
+    expect(within(card).getByText(/Capturar con fotos/)).toBeInTheDocument();
   });
 });

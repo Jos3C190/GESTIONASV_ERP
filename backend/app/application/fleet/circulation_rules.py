@@ -135,8 +135,8 @@ def _check_plate(fields: CirculationFields, vehicle: RegisteredVehicle) -> list[
             "plate_mismatch",
             "error",
             "plate",
-            f"La placa de la tarjeta no coincide con {vehicle.plate}: es de otro vehículo. "
-            "Si la placa registrada está mal, corrígela en la ficha.",
+            f"La placa no coincide con {vehicle.plate}. Corrígela si se leyó mal; si la registrada está mal, "
+            "corrígela en la ficha. Si no, esta tarjeta es de otro vehículo.",
         )
     ]
 

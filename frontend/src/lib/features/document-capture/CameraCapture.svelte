@@ -29,6 +29,13 @@
   let guide = $state<HTMLDivElement | null>(null);
   let ready = $state(false);
   let liveIssue = $state<QualityIssue | null>(null);
+  let lastReading: QualityIssue | null = null;
+  let backButton = $state<HTMLButtonElement | null>(null);
+
+  // El botón que abrió la cámara ya no existe: el foco no debe caer fuera del diálogo.
+  $effect(() => {
+    backButton?.focus();
+  });
 
   const guidance = $derived.by(() => {
     if (!ready) return 'Abriendo la cámara…';
@@ -108,9 +115,12 @@
     const timer = setInterval(() => {
       const frame = cropped();
       if (!frame) return;
-      liveIssue =
+      const reading =
         assessDrawable(frame, frame.width, frame.height).find((item) => !ignored.includes(item)) ??
         null;
+      // Dos lecturas iguales: una sola haría parpadear el aviso con cada movimiento.
+      if (reading === lastReading) liveIssue = reading;
+      lastReading = reading;
     }, LIVE_CHECK_MS);
     return () => clearInterval(timer);
   });
@@ -134,7 +144,7 @@
     <p role="status" class:problem={!!liveIssue}>{guidance}</p>
   </div>
   <div class="controls">
-    <button class="back" type="button" onclick={onback}>
+    <button class="back" type="button" bind:this={backButton} onclick={onback}>
       <FleetIcon name="chevronLeft" size={18} />Volver
     </button>
     <button class="shutter" type="button" aria-label="Tomar foto" disabled={!ready} onclick={shoot}
@@ -151,8 +161,10 @@
     background: #000;
     color: #fff;
   }
+  /* Recorta el velo del marco: sin esto oscurece también el obturador. */
   .viewfinder {
     position: relative;
+    overflow: hidden;
     height: min(62dvh, 560px);
   }
   video {
@@ -167,7 +179,8 @@
     position: absolute;
     top: 50%;
     left: 50%;
-    width: min(86%, 560px, 118dvh);
+    width: min(86%, 560px, 90dvh);
+    pointer-events: none;
     aspect-ratio: 85.6 / 54;
     transform: translate(-50%, -50%);
     border: 2px solid rgb(255 255 255 / 92%);

@@ -53,7 +53,7 @@
     slow: 'La lectura está tardando más de lo normal. Puedes continuar a mano.',
     failed: 'No se pudieron leer los datos. Escríbelos revisando la foto.',
     unavailable: 'La lectura automática no está disponible. Escribe los datos revisando la foto.',
-    done: 'Revisa cada dato contra la foto antes de confirmar.'
+    done: 'Revisa cada dato contra la foto antes de confirmar. Toca una foto para ampliarla.'
   });
   const images = $derived(
     (['front', 'back'] as const).flatMap((side) => {
@@ -63,7 +63,10 @@
   );
   const mismatches = $derived(issues.filter((issue) => issue.severity === 'mismatch'));
   const warnings = $derived(issues.filter((issue) => issue.severity === 'warning'));
-  const flagged = $derived(fieldsToReview(issues, config.groups));
+  // Lo que está en el recuadro de no leídos no se repite en esta lista.
+  const flagged = $derived(
+    fieldsToReview(issues, config.groups).filter((key) => !unread.includes(key))
+  );
   const unreadSide = $derived<CaptureSide>(
     unread.some((key) => config.expected.front.includes(key)) ? 'front' : 'back'
   );
@@ -71,6 +74,17 @@
   let zoomOrigin: HTMLButtonElement | null = null;
 
   const field = (key: string) => config.fields[key] ?? { label: key, hint: undefined };
+
+  /** Whoever types all the data by hand moves on with the keyboard's own key. */
+  function nextField(event: KeyboardEvent) {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const input = event.currentTarget as HTMLInputElement;
+    const inputs = [...(input.closest('.form')?.querySelectorAll('.field input') ?? [])];
+    const next = inputs[inputs.indexOf(input) + 1] as HTMLInputElement | undefined;
+    if (next) next.focus();
+    else input.blur();
+  }
 
   function focusField(key: string) {
     const input = document.getElementById(`${uid}-${key}`);
@@ -148,6 +162,7 @@
               <input
                 id={`${uid}-${key}`}
                 value={values[key] ?? ''}
+                inputmode={field(key).numeric ? 'numeric' : undefined}
                 class:reading={reading === 'analyzing' && !values[key] && !touched.has(key)}
                 autocomplete="off"
                 autocapitalize="characters"
@@ -157,6 +172,7 @@
                 aria-invalid={fieldIssues.some((issue) => issue.severity !== 'warning')}
                 aria-describedby={describedBy(key)}
                 oninput={(event) => onedit(key, event.currentTarget.value)}
+                onkeydown={nextField}
               />
               {#if field(key).hint}
                 <small id={`${uid}-${key}-hint`}>{field(key).hint}</small>
@@ -191,7 +207,7 @@
 
     {#if warnings.length > 0}
       <label class="check">
-        <input type="checkbox" bind:checked={acknowledged} />
+        <input type="checkbox" data-acknowledge bind:checked={acknowledged} />
         <span>{config.acknowledge}</span>
       </label>
     {/if}
@@ -244,7 +260,7 @@
     position: relative;
     overflow: hidden;
     flex: 1;
-    max-width: 128px;
+    max-width: 168px;
     min-height: 44px;
     border: 1px solid rgb(var(--border));
     border-radius: var(--capture-radius);
@@ -254,12 +270,13 @@
     outline: 2px solid rgb(var(--foreground));
     outline-offset: 2px;
   }
+  /* Sin recortar: los bordes pueden tener justo el dato que se compara. */
   .thumb img {
     display: block;
     width: 100%;
     height: auto;
     aspect-ratio: 85.6 / 54;
-    object-fit: cover;
+    object-fit: contain;
   }
   .thumb span {
     position: absolute;
@@ -311,7 +328,7 @@
     color: rgb(var(--foreground-muted));
   }
   .to-review button {
-    min-height: 32px;
+    min-height: 44px;
     padding: 0 var(--capture-space-2);
     border: 1px solid rgb(var(--border-strong));
     border-radius: var(--capture-radius);
@@ -328,14 +345,21 @@
     padding: 0;
     border: 0;
   }
+  fieldset + fieldset {
+    padding-top: var(--capture-space-4);
+    border-top: 1px solid rgb(var(--border));
+  }
   legend {
+    float: left;
+    width: 100%;
     margin-bottom: var(--capture-space-3);
     padding: 0;
     color: rgb(var(--foreground));
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
   }
   .grid {
+    clear: both;
     display: grid;
     gap: var(--capture-space-3);
   }
@@ -359,7 +383,7 @@
   .field textarea {
     width: 100%;
     /* Al tabular, el campo no debe quedar debajo de las miniaturas fijas. */
-    scroll-margin-top: 96px;
+    scroll-margin-top: 136px;
     min-height: 44px;
     padding: var(--capture-space-2) var(--capture-space-3);
     border: 1px solid rgb(var(--control-border));
@@ -437,13 +461,25 @@
     }
   }
   /* Con espacio de sobra, fotos grandes en columna fija junto al formulario. */
+  /* El dedo necesita más que el puntero. */
+  @media (max-width: 767px) {
+    .photos :global(button),
+    .unread :global(button) {
+      min-height: 44px;
+    }
+  }
   @media (min-width: 768px) {
+    .to-review button {
+      min-height: 32px;
+    }
     .review {
       display: grid;
       grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
       align-items: start;
     }
+    /* En pantallas bajas, las fotos se desplazan dentro de la columna y el botón sigue a la vista. */
     .photos {
+      max-height: calc(100dvh - 220px);
       flex-direction: column;
       align-items: stretch;
       padding: var(--capture-space-5);
@@ -451,9 +487,11 @@
       border-bottom: 0;
     }
     .thumbs {
+      overflow-y: auto;
       flex-direction: column;
     }
     .thumb {
+      flex: none;
       max-width: none;
     }
     .thumb span {

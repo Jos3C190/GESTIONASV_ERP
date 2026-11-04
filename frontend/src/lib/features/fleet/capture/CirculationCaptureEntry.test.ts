@@ -16,6 +16,7 @@ const captureApi = vi.hoisted(() => ({
   cancel: vi.fn()
 }));
 const capabilities = vi.hoisted(() => vi.fn());
+const documentList = vi.hoisted(() => vi.fn());
 const permissionMock = vi.hoisted(() => ({ codes: new Set<string>(['fleet_documents:upload']) }));
 
 vi.mock('../api', async (importOriginal) => {
@@ -25,6 +26,7 @@ vi.mock('../api', async (importOriginal) => {
     fleetApi: {
       ...original.fleetApi,
       circulationCaptures: () => captureApi,
+      documents: () => ({ list: documentList }),
       circulationCaptureCapabilities: capabilities
     }
   };
@@ -90,6 +92,7 @@ describe('CirculationCaptureEntry', () => {
     vi.clearAllMocks();
     permissionMock.codes = new Set(['fleet_documents:upload']);
     capabilities.mockResolvedValue({ enabled: true, extraction_available: true });
+    documentList.mockResolvedValue({ items: [] });
     captureApi.preview.mockResolvedValue({ url: 'http://storage/foto', expires_at: '' });
   });
 
@@ -103,6 +106,21 @@ describe('CirculationCaptureEntry', () => {
 
     await waitFor(() => expect(capabilities).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: /Capturar con fotos/ })).toBeNull();
+  });
+
+  it.each([
+    ['2099-05-31', /Registrada\. Vence 05-2099/, /Capturar de nuevo/],
+    ['2020-05-31', /Venció en 05-2020/, /Capturar con fotos/]
+  ])('says how the current card stands (%s)', async (expires_on, status, action) => {
+    permissionMock.codes = new Set(['fleet_documents:upload', 'fleet_documents:read']);
+    documentList.mockResolvedValue({
+      items: [{ category_code: 'circulation_card', expires_on }]
+    });
+
+    render(CirculationCaptureEntry, { vehicle, onconfirmed: vi.fn() });
+
+    expect(await screen.findByText(status)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: action })).toBeInTheDocument();
   });
 
   it('is not offered without permission to upload', async () => {
@@ -136,7 +154,7 @@ describe('CirculationCaptureEntry', () => {
     await screen.findByText(issue.message);
     expect(screen.queryByLabelText(/Motivo de la excepción/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Confirmar tarjeta' })).toBeDisabled();
-    expect(screen.getByText(/Esta tarjeta es de otro vehículo/)).toBeInTheDocument();
+    expect(screen.getByText(/La placa no coincide con la del vehículo/)).toBeInTheDocument();
   });
 
   it('does not mark empty fields as mistakes while the model is reading', async () => {
@@ -158,6 +176,26 @@ describe('CirculationCaptureEntry', () => {
     expect(await screen.findByText('Leyendo la tarjeta…')).toBeInTheDocument();
     expect(screen.queryByText(issue.message)).toBeNull();
     expect(confirm).toBeDisabled();
+  });
+
+  it('offers to retry when the capture could not start, and blocks photos meanwhile', async () => {
+    captureApi.open.mockRejectedValueOnce(new Error('sin red'));
+    captureApi.open.mockResolvedValue(
+      capture({
+        status: 'draft',
+        front: { document_id: null, status: null, extracted: false },
+        back: { document_id: null, status: null, extracted: false }
+      })
+    );
+    render(CirculationCaptureEntry, { vehicle, onconfirmed: vi.fn() });
+    await fireEvent.click(await screen.findByRole('button', { name: /Capturar con fotos/ }));
+    const retry = await screen.findByRole('button', { name: 'Reintentar' });
+    expect(screen.getByText('Subir archivo').querySelector('input')).toBeDisabled();
+
+    await fireEvent.click(retry);
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Reintentar' })).toBeNull());
+    expect(screen.getByText('Subir archivo').querySelector('input')).toBeEnabled();
   });
 
   it('asks to acknowledge a difference with the vehicle', async () => {

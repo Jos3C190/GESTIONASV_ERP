@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import CameraCapture from './CameraCapture.svelte';
@@ -7,9 +8,11 @@
   let {
     side,
     documentName,
+    oncamera,
     ignoredQuality = [],
     preview,
     uploading,
+    ready = true,
     issue,
     canContinue,
     onphoto,
@@ -19,9 +22,12 @@
   }: {
     side: 'front' | 'back';
     documentName: string;
+    oncamera?: (active: boolean) => void;
     ignoredQuality?: readonly QualityIssue[];
     preview: string | null;
     uploading: boolean;
+    /** False until the capture exists: a photo chosen before that would be lost. */
+    ready?: boolean;
     issue: QualityIssue | null;
     canContinue: boolean;
     onphoto: (photo: Blob) => void;
@@ -38,7 +44,10 @@
   const label = $derived(side === 'front' ? 'el frente' : 'el reverso');
   const title = $derived(`${side === 'front' ? 'Frente' : 'Reverso'} de ${documentName}`);
 
+  const locked = $derived(uploading || !ready);
   let cameraOpen = $state(false);
+  let heading = $state<HTMLHeadingElement | null>(null);
+  let wasCamera = false;
   let fromCamera = $state(false);
   let cameraIssue = $state<string | null>(null);
   let dragging = $state(false);
@@ -48,18 +57,25 @@
   // La cámara en vivo exige HTTPS; sin ella queda la cámara nativa del teléfono.
   const liveCamera = Boolean(navigator.mediaDevices?.getUserMedia);
 
+  $effect(() => {
+    oncamera?.(cameraOpen);
+    if (wasCamera && !cameraOpen) void tick().then(() => heading?.focus());
+    wasCamera = cameraOpen;
+  });
+
   function onFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
     fromCamera = false;
-    if (file) onphoto(file);
+    if (file && !locked) onphoto(file);
   }
 
   /** Quien venía de la cámara vuelve directo a ella: es lo que estaba intentando hacer. */
   function retry() {
     onretry();
     if (fromCamera && liveCamera && !cameraIssue) cameraOpen = true;
+    else void tick().then(() => heading?.focus());
   }
 
   $effect(() => {
@@ -74,7 +90,7 @@
       event.preventDefault();
       dragging = false;
       const file = event.dataTransfer?.files?.[0];
-      if (file) onphoto(file);
+      if (file && !locked) onphoto(file);
     };
     element.addEventListener('dragover', over);
     element.addEventListener('dragleave', leave);
@@ -88,12 +104,12 @@
 </script>
 
 {#snippet fileInput()}
-  <label class={!touchFirst && !preview ? filePrimary : fileSecondary} aria-disabled={uploading}>
+  <label class={!touchFirst && !preview ? filePrimary : fileSecondary} aria-disabled={locked}>
     <FleetIcon name="upload" size={16} />Subir archivo
     <input
       type="file"
       accept="image/jpeg,image/png,image/webp"
-      disabled={uploading}
+      disabled={locked}
       onchange={onFile}
     />
   </label>
@@ -117,7 +133,7 @@
 {:else}
   <div class="photo-step">
     <header>
-      <h3 tabindex="-1" data-step-title>{title}</h3>
+      <h3 tabindex="-1" data-step-title bind:this={heading}>{title}</h3>
       <p>Carga {label} completo, con las cuatro esquinas visibles y sin reflejos.</p>
     </header>
 
@@ -129,6 +145,16 @@
           width="856"
           height="540"
         />
+      {:else if touchFirst && liveCamera && !cameraIssue}
+        <button
+          type="button"
+          class="placeholder tap"
+          disabled={locked}
+          onclick={() => (cameraOpen = true)}
+        >
+          <FleetIcon name="camera" size={28} />
+          <span>Toca para tomar la foto</span>
+        </button>
       {:else}
         <div class="placeholder">
           <FleetIcon name="image" size={28} />
@@ -174,19 +200,19 @@
           <Button
             variant={preview || !touchFirst ? 'secondary' : 'primary'}
             size="lg"
-            disabled={uploading}
+            disabled={locked}
             onclick={() => (cameraOpen = true)}
           >
             <FleetIcon name="camera" size={16} />{preview ? 'Tomar otra foto' : 'Tomar foto'}
           </Button>
         {:else if touchFirst}
-          <label class={preview ? fileSecondary : filePrimary} aria-disabled={uploading}>
+          <label class={preview ? fileSecondary : filePrimary} aria-disabled={locked}>
             <FleetIcon name="camera" size={16} />{preview ? 'Tomar otra foto' : 'Tomar foto'}
             <input
               type="file"
               accept="image/*"
               capture="environment"
-              disabled={uploading}
+              disabled={locked}
               onchange={onFile}
             />
           </label>
@@ -252,6 +278,9 @@
     gap: var(--capture-space-2);
     color: rgb(var(--foreground-muted));
     font-size: 14px;
+  }
+  .placeholder.tap {
+    width: 100%;
   }
   .drop-hint {
     display: none;

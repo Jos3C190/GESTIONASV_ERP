@@ -20,6 +20,10 @@
     onchanged?: () => void;
     /** Los documentos se crean en otro flujo: aquí solo se consultan y descargan. */
     readOnly?: boolean;
+    /** Sin esto no se listan los obligatorios: al dueño no le aplican. */
+    showPending?: boolean;
+    /** La acción principal de la pantalla está fuera del panel. */
+    quietUpload?: boolean;
     /** Texto de la lista vacía cuando la carga ocurre en otro lugar. */
     emptyHint?: string;
   }
@@ -29,6 +33,8 @@
     description,
     permissionPrefix,
     permissionCodes,
+    showPending = true,
+    quietUpload = false,
     onchanged,
     readOnly = false,
     emptyHint
@@ -64,7 +70,7 @@
   /** Categorías obligatorias sin documento vigente: invitan a cargarlas directamente. */
   const missingRequired = $derived(
     // Con un filtro puesto, la lista no dice qué falta: solo qué coincide con el filtro.
-    categoryFilter || statusFilter
+    !showPending || categoryFilter || statusFilter
       ? []
       : categories.filter(
           (category) =>
@@ -152,7 +158,11 @@
         <h3>{title}</h3>
         <p>{description}</p>
       </div>
-      {#if canUpload}<Button size="sm" onclick={() => openUpload()}>Agregar documento</Button>{/if}
+      {#if canUpload}<Button
+          size="sm"
+          variant={quietUpload ? 'secondary' : 'primary'}
+          onclick={() => openUpload()}>Agregar documento</Button
+        >{/if}
     </header>
 
     {#if missingRequired.length}
@@ -166,7 +176,7 @@
                   type="button"
                   onclick={() => openUpload(category.id)}>Cargar</button
                 >{:else if CAPTURE_ONLY_CATEGORY_CODES.has(category.code)}<small
-                  >Se registra con la captura guiada</small
+                  >Usa Capturar con fotos</small
                 >{/if}
             </li>
           {/each}
@@ -274,7 +284,7 @@
     </Modal>
   {/if}
 {:else}
-  <p class="no-access">No tiene permiso para consultar estos documentos.</p>
+  <p class="no-access">No tienes permiso para consultar estos documentos.</p>
 {/if}
 
 <style>
@@ -342,9 +352,9 @@
     gap: 8px;
   }
   .filters select {
-    min-height: 38px;
+    min-height: 44px;
     padding: 0 10px;
-    border: 1px solid rgb(var(--border));
+    border: 1px solid rgb(var(--control-border));
     border-radius: 8px;
     background: rgb(var(--surface));
     color: rgb(var(--foreground));
@@ -356,6 +366,7 @@
       min-height: 32px;
     }
     .filters select {
+      min-height: 38px;
       font-size: 12px;
     }
   }

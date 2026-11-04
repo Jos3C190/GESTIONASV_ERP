@@ -10,7 +10,7 @@ const FIELDS: CaptureConfig<CirculationConfirmed>['fields'] = {
   plate: { label: 'Placa', wide: true },
   expires: { label: 'Vence', hint: 'MM-AAAA' },
   issued: { label: 'Emisión', hint: 'MM-DD-AAAA' },
-  year: { label: 'Año' },
+  year: { label: 'Año', numeric: true },
   brand: { label: 'Marca' },
   model: { label: 'Modelo' },
   color: { label: 'Color' },
@@ -74,7 +74,8 @@ export const circulationCaptureRules: CaptureRules = {
   missingPhotos: 'Faltan fotos de la tarjeta.',
   mismatchBlocked: 'Los datos no coinciden con el vehículo.',
   blockingCodes: {
-    plate_mismatch: 'Esta tarjeta es de otro vehículo. Descártala o corrige la placa en la ficha.'
+    plate_mismatch:
+      'La placa no coincide con la del vehículo. Corrígela si se leyó mal o descarta la captura.'
   }
 };
 

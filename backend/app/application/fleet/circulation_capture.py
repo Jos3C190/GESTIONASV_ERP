@@ -320,6 +320,9 @@ class CirculationCaptureService:
                 metadata=DocumentMetadataInput(
                     title="Reverso de tarjeta de circulación",
                     reference_code=vehicle.plate,
+                    # Es el mismo documento: no debe figurar como si no venciera.
+                    issued_on=check.issued_on,
+                    expires_on=check.expires_on,
                     confidentiality="internal",
                 ),
             )

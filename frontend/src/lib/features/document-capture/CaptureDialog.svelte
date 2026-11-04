@@ -11,6 +11,7 @@
   import { checksumOf, prepareForUpload } from './upload';
   import type { QualityIssue } from './image-prep';
   import {
+    ACKNOWLEDGE_BLOCKER,
     confirmBlocker,
     emptyValues,
     issuesToShow,
@@ -63,6 +64,9 @@
   let serverFills = $state<readonly string[]>([]);
   let waitedTooLong = $state(false);
   let discarding = $state(false);
+  let resumed = $state(false);
+  let openFailed = $state(false);
+  let cameraActive = $state(false);
   let generation = 0;
   let checkRound = 0;
   let acknowledgedWarnings = '';
@@ -110,6 +114,8 @@
 
   function reset() {
     step = 'front';
+    resumed = false;
+    openFailed = false;
     capture = null;
     busy = false;
     uploading = null;
@@ -138,10 +144,18 @@
   $effect(() => {
     if (step === shownStep) return;
     shownStep = step;
+    resumed = false;
     void tick().then(() =>
       root?.querySelector<HTMLElement>('[data-step-title]')?.focus({ preventScroll: true })
     );
   });
+
+  /** The checkbox sits below every field: this takes the user straight to it. */
+  function goToAcknowledge() {
+    const box = root?.querySelector<HTMLInputElement>('[data-acknowledge]');
+    box?.focus({ preventScroll: true });
+    box?.scrollIntoView({ block: 'center' });
+  }
 
   function setDiscarding(next: boolean) {
     discarding = next;
@@ -203,19 +217,27 @@
     const current = ++generation;
     untrack(() => {
       reset();
-      config.api
-        .open()
-        .then((opened) => {
-          if (current !== generation) return;
-          apply(opened);
-          void resume(opened, current);
-        })
-        .catch((err: unknown) => {
-          if (current === generation)
-            error = err instanceof HttpError ? err.message : 'No se pudo iniciar la captura.';
-        });
+      begin(current);
     });
   });
+
+  function begin(current: number) {
+    error = null;
+    openFailed = false;
+    config.api
+      .open()
+      .then((opened) => {
+        if (current !== generation) return;
+        apply(opened);
+        resumed = !!opened.front.document_id || !!opened.back.document_id;
+        void resume(opened, current);
+      })
+      .catch((err: unknown) => {
+        if (current !== generation) return;
+        openFailed = true;
+        error = err instanceof HttpError ? err.message : 'No se pudo iniciar la captura.';
+      });
+  }
 
   // Consulta mientras el modelo analiza: la extracción nunca bloquea el asistente.
   $effect(() => {
@@ -359,7 +381,7 @@
 <Modal
   {open}
   title={config.dialogTitle}
-  size={step === 'review' ? 'xl' : 'lg'}
+  size="xl"
   mobileFullScreen
   flush
   preventClose={busy}
@@ -378,12 +400,20 @@
           <span class="dot" aria-hidden="true">
             {#if isDone(item.key)}<FleetIcon name="check" size={12} />{:else}{index + 1}{/if}
           </span>
-          {item.label}
+          {item.label}{#if isDone(item.key)}<span class="done-label">, completado</span>{/if}
         </li>
       {/each}
     </ol>
 
+    {#if resumed}
+      <p class="resumed" role="status">Retomamos la captura que dejaste sin terminar.</p>
+    {/if}
     {#if error && step !== 'review'}<p class="alert" role="alert">{error}</p>{/if}
+    {#if openFailed}
+      <div class="retry">
+        <Button variant="secondary" onclick={() => begin(generation)}>Reintentar</Button>
+      </div>
+    {/if}
 
     {#if step !== 'review'}
       {#key step}
@@ -393,8 +423,10 @@
           ignoredQuality={config.ignoredQuality?.[step]}
           preview={previews[step]}
           uploading={busy || uploading === step}
+          ready={!!capture}
           issue={held?.side === step ? held.issue : null}
           canContinue={capture?.[step].status === 'active'}
+          oncamera={(active) => (cameraActive = active)}
           onphoto={(photo) => void usePhoto(photo)}
           oncontinue={advance}
           onretry={retryPhoto}
@@ -424,7 +456,9 @@
     <div class="document-capture footer" bind:this={footerRoot}>
       <!-- Junto al botón: quien bajó hasta aquí no vería un error en lo alto del formulario. -->
       {#if error && step === 'review'}<p class="alert footer-alert" role="alert">{error}</p>{/if}
-      {#if discarding}
+      {#if cameraActive}
+        <!-- La cámara tiene su propio botón para volver: aquí solo estorbaría. -->
+      {:else if discarding}
         <p class="hint" role="status">¿Descartar las fotos y los datos de esta captura?</p>
         <div class="buttons">
           <Button variant="secondary" size="lg" class="grow" onclick={() => setDiscarding(false)}>
@@ -436,7 +470,13 @@
         </div>
       {:else}
         {#if step === 'review'}
-          <p class="hint" role="status">{hint}</p>
+          <p class="hint" role="status">
+            {#if hint === ACKNOWLEDGE_BLOCKER}
+              <button type="button" class="hint-link" onclick={goToAcknowledge}>{hint}</button>
+            {:else}
+              {hint}
+            {/if}
+          </p>
         {/if}
         <div class="buttons">
           {#if hasPhotos}
@@ -532,6 +572,30 @@
   }
   .footer-alert {
     margin: 0;
+  }
+  .retry {
+    margin: var(--capture-space-2) var(--capture-space-4) 0;
+  }
+  .resumed {
+    margin: var(--capture-space-3) var(--capture-space-4) 0;
+    color: rgb(var(--foreground-muted));
+    font-size: 13px;
+  }
+  .hint-link {
+    min-height: 44px;
+    color: rgb(var(--foreground));
+    font-size: 13px;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .done-label {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .hint {
     margin: 0;

@@ -16,6 +16,17 @@
   let available = $state(false);
   let open = $state(false);
   let notice = $state<string | null>(null);
+  /** Último día de vigencia de la tarjeta actual, si hay una. */
+  let cardExpires = $state<string | null>(null);
+  /** Hasta saberlo, no se afirma que falte: se evita un botón principal que luego cambia. */
+  let cardKnown = $state(false);
+  const today = new Date().toLocaleDateString('en-CA');
+  const expired = $derived(cardExpires !== null && cardExpires < today);
+  const registered = $derived(cardExpires !== null && !expired);
+  // La tarjeta imprime MM-AAAA: se muestra igual para compararla de un vistazo.
+  const printedExpiry = $derived(
+    cardExpires ? `${cardExpires.slice(5, 7)}-${cardExpires.slice(0, 4)}` : ''
+  );
 
   $effect(() => {
     if (!allowed) return;
@@ -25,8 +36,31 @@
       .catch(() => (available = false));
   });
 
+  async function loadCard() {
+    const id = vehicle.id;
+    if (!permissions.hasPermission('fleet_documents:read')) {
+      cardKnown = true;
+      return;
+    }
+    const page = await fleetApi
+      .documents(id)
+      .list({ size: 100 })
+      .catch(() => null);
+    // La respuesta de un vehículo anterior no debe pintar este.
+    if (id !== vehicle.id) return;
+    const card = page?.items.find((item) => item.category_code === 'circulation_card');
+    cardExpires = card?.expires_on ?? null;
+    cardKnown = page !== null;
+  }
+
+  $effect(() => {
+    void vehicle.id;
+    void loadCard();
+  });
+
   function confirmed(result: CirculationConfirmed) {
     notice = confirmationNotice(result);
+    void loadCard();
     onconfirmed(result.vehicle);
   }
 </script>
@@ -35,16 +69,23 @@
   <section class="entry">
     <div>
       <h3>Tarjeta de circulación</h3>
-      <p>Fotografía el frente y el reverso; propondremos los datos para que los revises.</p>
+      {#if registered}
+        <p>Registrada. Vence {printedExpiry}.</p>
+      {:else if expired}
+        <p class="expired">Venció en {printedExpiry}. Fotografía la tarjeta nueva.</p>
+      {:else}
+        <p>Fotografía el frente y el reverso; propondremos los datos para que los revises.</p>
+      {/if}
     </div>
     <Button
       size="lg"
+      variant={registered || !cardKnown ? 'secondary' : 'primary'}
       onclick={() => {
         notice = null;
         open = true;
       }}
     >
-      <FleetIcon name="camera" size={16} />Capturar con fotos
+      <FleetIcon name="camera" size={16} />{registered ? 'Capturar de nuevo' : 'Capturar con fotos'}
     </Button>
     {#if notice}<p class="notice" role="status">{notice}</p>{/if}
   </section>
@@ -72,6 +113,12 @@
     margin: 4px 0 0;
     color: rgb(var(--foreground-muted));
     font-size: 14px;
+  }
+  .expired {
+    padding-left: 8px;
+    border-left: 3px solid rgb(var(--danger));
+    color: rgb(var(--foreground));
+    font-weight: 500;
   }
   .notice {
     margin: 0;

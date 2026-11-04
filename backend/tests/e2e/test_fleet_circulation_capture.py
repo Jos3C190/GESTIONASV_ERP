@@ -166,7 +166,7 @@ async def test_confirming_makes_it_the_vehicle_card(e2e_client: Any, storage: An
     assert set(by_category) == {"circulation_card", "circulation_card_back"}
     assert by_category["circulation_card"]["expires_on"] == f"{FUTURE}-05-31"
     assert by_category["circulation_card"]["issued_on"] == "2026-05-25"
-    assert by_category["circulation_card_back"]["expires_on"] is None
+    assert by_category["circulation_card_back"]["expires_on"] == f"{FUTURE}-05-31"
 
     async with async_session_factory() as session:
         capture = await session.get(DocumentCaptureModel, uuid.UUID(capture_id))

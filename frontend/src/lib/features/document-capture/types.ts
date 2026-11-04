@@ -42,6 +42,8 @@ export interface CaptureField {
   hint?: string;
   /** Takes the whole row of the form. */
   wide?: boolean;
+  /** Only digits: a phone can show its number keyboard. */
+  numeric?: boolean;
 }
 
 export interface CaptureFieldGroup {
