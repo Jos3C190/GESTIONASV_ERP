@@ -184,6 +184,28 @@ async def test_confirming_makes_it_the_vehicle_card(e2e_client: Any, storage: An
         assert "MTRZP49931FAKE" not in str(audit.after_state)
 
 
+async def test_vehicle_is_found_by_what_the_card_completed(e2e_client: Any, storage: Any) -> None:
+    admin = await _admin(e2e_client)
+    vehicle = await _car(e2e_client, admin)
+    capture_id = await _capture_with_photos(e2e_client, storage, admin, vehicle)
+    suffix = uuid.uuid4().hex[:8].upper()
+    values = _values(
+        vehicle,
+        chassis=f"CHS{suffix}",
+        engine=f"MTR{suffix}",
+        vin=f"1FAKE9X{uuid.uuid4().int % 10**10:010d}",
+    )
+    confirmed = await _confirm(e2e_client, admin, vehicle, capture_id, values)
+    assert confirmed.status_code == 200, confirmed.text
+
+    for term in (values["vin"], values["chassis"], values["engine"].lower()):
+        found = await e2e_client.get(
+            "/api/v1/fleet/vehicles", headers=admin, params={"search": term}
+        )
+        assert found.status_code == 200, found.text
+        assert [item["id"] for item in found.json()["items"]] == [vehicle["id"]], term
+
+
 async def test_other_plate_cannot_be_confirmed_by_anyone(e2e_client: Any, storage: Any) -> None:
     admin = await _admin(e2e_client)
     vehicle = await _car(e2e_client, admin)

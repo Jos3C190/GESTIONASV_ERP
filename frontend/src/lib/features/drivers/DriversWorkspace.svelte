@@ -244,7 +244,7 @@
           ><FleetIcon name="search" size={15} /><input
             type="search"
             bind:value={query}
-            placeholder="Buscar nombre, código o DUI…"
+            placeholder="Buscar nombre, código, DUI o licencia…"
             aria-label="Buscar conductores"
           /></label
         >

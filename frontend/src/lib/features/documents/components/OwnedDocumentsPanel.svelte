@@ -6,7 +6,10 @@
   import DocumentList from '$lib/features/documents/components/DocumentList.svelte';
   import DocumentMetadataModal from '$lib/features/documents/components/DocumentMetadataModal.svelte';
   import DocumentUploadQueue from '$lib/features/documents/components/DocumentUploadQueue.svelte';
-  import { CAPTURE_ONLY_CATEGORY_CODES } from '$lib/features/documents/document-upload';
+  import {
+    CAPTURE_ONLY_CATEGORY_CODES,
+    formatDocumentDate
+  } from '$lib/features/documents/document-upload';
   import { permissions } from '$lib/stores/permissions.svelte';
 
   interface Props {
@@ -276,7 +279,7 @@
         {#each versions as version (version.id)}
           <li>
             <strong>Versión {version.version_number}</strong>
-            <span>{version.title}{version.expires_on ? ` · vence ${version.expires_on}` : ''}</span>
+            <span>{version.title}{version.expires_on ? ` · vence ${formatDocumentDate(version.expires_on)}` : ''}</span>
             {#if version.is_current}<em>Vigente</em>{/if}
           </li>
         {/each}

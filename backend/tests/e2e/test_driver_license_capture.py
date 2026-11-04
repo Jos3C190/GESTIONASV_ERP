@@ -362,6 +362,35 @@ def _plain_upload(category_id: str) -> dict[str, Any]:
     }
 
 
+async def test_confirmed_license_data_can_be_read_and_searched(
+    e2e_client: Any, storage: Any
+) -> None:
+    admin = await _admin(e2e_client)
+    driver, employee = await _driver(e2e_client, admin)
+    capture_id = await _capture_with_photos(e2e_client, storage, admin, driver["id"])
+    number = f"{uuid.uuid4().int % 10000:04d}-010101-101-1"
+    confirmed = await e2e_client.post(
+        f"/api/v1/drivers/{driver['id']}/license-captures/{capture_id}/confirm",
+        headers=admin,
+        json={"values": _values(employee, number=number), "acknowledged_warnings": NO_DUI_ON_FILE},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+
+    license_data = confirmed.json()["license"]
+    assert license_data["number"] == number
+    assert license_data["issued_on"] == "2023-02-25"
+    assert license_data["control_number"] == "LD-000000001"
+
+    for term in (number, number.replace("-", "")):
+        found = await e2e_client.get("/api/v1/drivers", headers=admin, params={"search": term})
+        assert found.status_code == 200, found.text
+        assert driver["id"] in [item["id"] for item in found.json()["items"]], term
+
+    # Un número que no existe no trae a este conductor.
+    nobody = await e2e_client.get("/api/v1/drivers", headers=admin, params={"search": "9999999999"})
+    assert driver["id"] not in [item["id"] for item in nobody.json()["items"]]
+
+
 async def test_capture_is_the_only_way_to_register_a_license(e2e_client: Any, storage: Any) -> None:
     admin = await _admin(e2e_client)
     driver, employee = await _driver(e2e_client, admin)

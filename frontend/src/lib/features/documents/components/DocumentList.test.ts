@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentRecordOut } from '$lib/api/client';
-import { isCaptureOnly } from '../document-upload';
+import { formatDocumentDate, isCaptureOnly } from '../document-upload';
 import DocumentDetailPanel from './DocumentDetailPanel.svelte';
 import DocumentList from './DocumentList.svelte';
 
@@ -36,6 +36,14 @@ async function menuFor(title: string) {
   await fireEvent.click(trigger!);
   return (await screen.findAllByRole('menuitem')).map((item) => item.textContent?.trim());
 }
+
+describe('formatDocumentDate', () => {
+  it('keeps the calendar day whatever the time zone', () => {
+    expect(formatDocumentDate('2029-05-31')).toBe(
+      new Date(2029, 4, 31).toLocaleDateString('es-SV')
+    );
+  });
+});
 
 describe('capture-only documents', () => {
   afterEach(() => cleanup());

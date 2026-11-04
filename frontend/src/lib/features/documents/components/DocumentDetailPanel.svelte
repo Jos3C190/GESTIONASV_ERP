@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import type { DocumentRecordOut } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
-  import { isCaptureOnly } from '$lib/features/documents/document-upload';
+  import { formatDocumentDate, isCaptureOnly } from '$lib/features/documents/document-upload';
   import { isBrowserPreviewable } from '$lib/features/documents/open-document';
 
   interface Props {
@@ -79,7 +79,7 @@
   });
 
   function formatDate(value: string | null): string {
-    return value ? new Date(value).toLocaleDateString('es-SV') : 'Sin fecha';
+    return value ? formatDocumentDate(value) : 'Sin fecha';
   }
 
   function formatSize(bytes: number): string {

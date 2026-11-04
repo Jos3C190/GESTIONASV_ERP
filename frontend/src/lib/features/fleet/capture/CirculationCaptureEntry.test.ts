@@ -123,6 +123,30 @@ describe('CirculationCaptureEntry', () => {
     expect(screen.getByRole('button', { name: action })).toBeInTheDocument();
   });
 
+  it('shows the card data to whoever can only read it, without offering a capture', async () => {
+    permissionMock.codes = new Set(['fleet_documents:read']);
+    documentList.mockResolvedValue({
+      items: [
+        { category_code: 'circulation_card', expires_on: '2099-05-31', issued_on: '2026-05-25' }
+      ]
+    });
+
+    render(CirculationCaptureEntry, {
+      vehicle: {
+        ...vehicle,
+        vin: '1FAKE9X7K0M123456',
+        chassis_number: 'CHS7',
+        engine_number: null
+      },
+      onconfirmed: vi.fn()
+    });
+
+    expect(await screen.findByText('1FAKE9X7K0M123456')).toBeInTheDocument();
+    expect(screen.getByText('CHS7')).toBeInTheDocument();
+    expect(screen.getByText('PFAK3420')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Capturar/ })).toBeNull();
+  });
+
   it('is not offered without permission to upload', async () => {
     permissionMock.codes = new Set();
 

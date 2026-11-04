@@ -13,6 +13,15 @@ export function isCaptureOnly(document: { category_code?: string | null }): bool
   return CAPTURE_ONLY_CATEGORY_CODES.has(document.category_code ?? '');
 }
 
+/**
+ * A YYYY-MM-DD is a calendar day. `new Date` reads it as midnight UTC, which in
+ * El Salvador is still the previous day.
+ */
+export function formatDocumentDate(value: string): string {
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1).toLocaleDateString('es-SV');
+}
+
 export const DOCUMENT_ACCEPT =
   '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.md,.json,.xml,.rtf,.odt,.ods,.odp,.jpg,.jpeg,.png,.webp,.gif,.svg,.tif,.tiff';
 
