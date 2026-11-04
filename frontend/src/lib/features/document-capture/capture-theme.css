@@ -1,0 +1,11 @@
+/* Shared local scale for the guided capture wizard and its dialogs. */
+.document-capture {
+  --capture-radius-sm: 6px;
+  --capture-radius: 8px;
+  --capture-radius-lg: 12px;
+  --capture-space-1: 4px;
+  --capture-space-2: 8px;
+  --capture-space-3: 12px;
+  --capture-space-4: 16px;
+  --capture-space-5: 24px;
+}

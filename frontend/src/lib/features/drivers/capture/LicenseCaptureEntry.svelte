@@ -3,7 +3,6 @@
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { driversApi, type Driver } from '../api';
-  import '../drivers-theme.css';
   import LicenseCaptureDialog from './LicenseCaptureDialog.svelte';
 
   let {

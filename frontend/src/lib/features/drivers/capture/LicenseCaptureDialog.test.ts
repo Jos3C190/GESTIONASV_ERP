@@ -28,7 +28,7 @@ vi.mock('$lib/stores/permissions.svelte', () => ({
   permissions: { hasPermission: (code: string) => permissionMock.codes.has(code) }
 }));
 const prepareMock = vi.hoisted(() => vi.fn());
-vi.mock('./upload', () => ({
+vi.mock('$lib/features/document-capture/upload', () => ({
   checksumOf: vi.fn().mockResolvedValue('a'.repeat(64)),
   prepareForUpload: prepareMock
 }));

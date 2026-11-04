@@ -55,7 +55,7 @@ export type CaptureSide = 'front' | 'back';
 export type CaptureStatus =
   'draft' | 'pending' | 'processing' | 'ready' | 'failed' | 'confirmed' | 'cancelled' | 'expired';
 
-export interface LicenseValues {
+export type LicenseValues = {
   license_class: string | null;
   expires: string | null;
   number: string | null;
@@ -65,7 +65,7 @@ export interface LicenseValues {
   issued: string | null;
   birth: string | null;
   control_number: string | null;
-}
+};
 
 export interface LicenseIssue {
   code: string;

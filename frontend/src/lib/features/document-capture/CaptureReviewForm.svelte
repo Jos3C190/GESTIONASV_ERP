@@ -2,14 +2,16 @@
   import Button from '$lib/components/ui/Button.svelte';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import ImageLightbox from '$lib/features/fleet/ImageLightbox.svelte';
-  import type { CaptureSide, LicenseIssue, LicenseValues } from '../api';
-  import { FIELD_GROUPS, FIELD_LABELS, fieldsToReview, issuesFor } from './review';
+  import { fieldsToReview, issuesFor } from './review';
+  import type { CaptureConfig, CaptureIssue, CaptureSide, CaptureValues } from './types';
 
   type Reading = 'analyzing' | 'slow' | 'failed' | 'unavailable' | 'done';
 
   let {
+    config,
     values,
     issues,
+    fills,
     previews,
     reading,
     unread,
@@ -20,27 +22,32 @@
     onedit,
     onretake
   }: {
-    values: LicenseValues;
-    issues: LicenseIssue[];
+    config: Pick<
+      CaptureConfig<unknown>,
+      'documentName' | 'title' | 'fields' | 'groups' | 'mismatchStop' | 'acknowledge' | 'fillNote'
+    >;
+    values: CaptureValues;
+    issues: CaptureIssue[];
+    fills: readonly string[];
     previews: Record<CaptureSide, string | null>;
     reading: Reading;
-    unread: (keyof LicenseValues)[];
-    touched: ReadonlySet<keyof LicenseValues>;
+    unread: string[];
+    touched: ReadonlySet<string>;
     canOverride: boolean;
     acknowledged?: boolean;
     overrideReason?: string;
-    onedit: (key: keyof LicenseValues, value: string) => void;
+    onedit: (key: string, value: string) => void;
     onretake: () => void;
   } = $props();
 
   const uid = $props.id();
-  const STATUS: Record<Reading, string> = {
-    analyzing: 'Leyendo la licencia. Puedes escribir los datos mientras tanto.',
+  const STATUS: Record<Reading, string> = $derived({
+    analyzing: `Leyendo ${config.documentName}. Puedes escribir los datos mientras tanto.`,
     slow: 'La lectura está tardando más de lo normal. Puedes continuar a mano.',
     failed: 'No se pudieron leer los datos. Escríbelos revisando la foto.',
     unavailable: 'La lectura automática no está disponible. Escribe los datos revisando la foto.',
     done: 'Revisa cada dato contra la foto antes de confirmar.'
-  };
+  });
   const images = $derived(
     (['front', 'back'] as const).flatMap((side) => {
       const src = previews[side];
@@ -49,19 +56,22 @@
   );
   const mismatches = $derived(issues.filter((issue) => issue.severity === 'mismatch'));
   const warnings = $derived(issues.filter((issue) => issue.severity === 'warning'));
-  const flagged = $derived(fieldsToReview(issues));
+  const flagged = $derived(fieldsToReview(issues, config.groups));
   let zoomed = $state<number | null>(null);
   let zoomOrigin: HTMLButtonElement | null = null;
 
-  function focusField(key: keyof LicenseValues) {
+  const field = (key: string) => config.fields[key] ?? { label: key, hint: undefined };
+
+  function focusField(key: string) {
     const input = document.getElementById(`${uid}-${key}`);
     input?.focus();
     input?.scrollIntoView({ block: 'center' });
   }
 
-  function describedBy(key: keyof LicenseValues): string | undefined {
+  function describedBy(key: string): string | undefined {
     const ids = [
-      FIELD_LABELS[key].hint ? `${uid}-${key}-hint` : null,
+      field(key).hint ? `${uid}-${key}-hint` : null,
+      fills.includes(key) ? `${uid}-${key}-fill` : null,
       issuesFor(issues, key).length ? `${uid}-${key}-issues` : null
     ].filter(Boolean);
     return ids.length ? ids.join(' ') : undefined;
@@ -99,8 +109,8 @@
     {#if unread.length > 0}
       <div class="unread" role="status">
         <p>
-          No pudimos leer: {unread.map((key) => FIELD_LABELS[key].label).join(', ')}. Repite la foto
-          o escríbelos revisando la imagen.
+          No pudimos leer: {unread.map((key) => field(key).label).join(', ')}. Repite la
+          foto o escríbelos revisando la imagen.
         </p>
         <Button variant="secondary" size="sm" onclick={onretake}>Repetir foto</Button>
       </div>
@@ -110,19 +120,19 @@
       <nav class="to-review" aria-label="Datos por revisar">
         <span>Por revisar:</span>
         {#each flagged as key (key)}
-          <button type="button" onclick={() => focusField(key)}>{FIELD_LABELS[key].label}</button>
+          <button type="button" onclick={() => focusField(key)}>{field(key).label}</button>
         {/each}
       </nav>
     {/if}
 
-    {#each FIELD_GROUPS as group (group.title)}
+    {#each config.groups as group (group.title)}
       <fieldset>
         <legend>{group.title}</legend>
         <div class="grid">
           {#each group.fields as key (key)}
             {@const fieldIssues = issuesFor(issues, key)}
             <div class="field">
-              <label for={`${uid}-${key}`}>{FIELD_LABELS[key].label}</label>
+              <label for={`${uid}-${key}`}>{field(key).label}</label>
               <input
                 id={`${uid}-${key}`}
                 value={values[key] ?? ''}
@@ -136,8 +146,11 @@
                 aria-describedby={describedBy(key)}
                 oninput={(event) => onedit(key, event.currentTarget.value)}
               />
-              {#if FIELD_LABELS[key].hint}
-                <small id={`${uid}-${key}-hint`}>{FIELD_LABELS[key].hint}</small>
+              {#if field(key).hint}
+                <small id={`${uid}-${key}-hint`}>{field(key).hint}</small>
+              {/if}
+              {#if fills.includes(key) && config.fillNote}
+                <small id={`${uid}-${key}-fill`}>{config.fillNote}</small>
               {/if}
               {#if fieldIssues.length > 0}
                 <div id={`${uid}-${key}-issues`}>
@@ -160,17 +173,14 @@
           ></textarea>
         </div>
       {:else}
-        <p class="stop" role="alert">
-          Estos datos no coinciden con el empleado. Corrígelos o pide autorización a un
-          administrador.
-        </p>
+        <p class="stop" role="alert">{config.mismatchStop}</p>
       {/if}
     {/if}
 
     {#if warnings.length > 0}
       <label class="check">
         <input type="checkbox" bind:checked={acknowledged} />
-        <span>Revisé los avisos y los datos coinciden con la licencia.</span>
+        <span>{config.acknowledge}</span>
       </label>
     {/if}
 
@@ -185,7 +195,7 @@
   <ImageLightbox
     images={images.map((image) => ({ src: image.src, alt: image.alt }))}
     bind:index={zoomed}
-    title="Licencia de conducir"
+    title={config.title}
     layer={1100}
     onclose={() => {
       zoomed = null;
@@ -207,15 +217,15 @@
     z-index: 2;
     display: flex;
     align-items: center;
-    gap: var(--driver-space-2);
-    padding: var(--driver-space-2) var(--driver-space-4);
+    gap: var(--capture-space-2);
+    padding: var(--capture-space-2) var(--capture-space-4);
     border-bottom: 1px solid rgb(var(--border));
     background: rgb(var(--surface-elevated));
   }
   .thumbs {
     display: flex;
     flex: 1;
-    gap: var(--driver-space-2);
+    gap: var(--capture-space-2);
     min-width: 0;
   }
   .thumb {
@@ -225,7 +235,7 @@
     max-width: 128px;
     min-height: 44px;
     border: 1px solid rgb(var(--border));
-    border-radius: var(--driver-radius);
+    border-radius: var(--capture-radius);
     background: rgb(var(--surface-muted));
   }
   .thumb:focus-visible {
@@ -244,7 +254,7 @@
     bottom: 2px;
     left: 2px;
     padding: 0 4px;
-    border-radius: var(--driver-radius-sm);
+    border-radius: var(--capture-radius-sm);
     color: #fff;
     background: rgb(0 0 0 / 72%);
     font-size: 11px;
@@ -252,13 +262,13 @@
   .form {
     display: flex;
     flex-direction: column;
-    gap: var(--driver-space-4);
-    padding: var(--driver-space-4);
+    gap: var(--capture-space-4);
+    padding: var(--capture-space-4);
   }
   .status {
     margin: 0;
-    padding: var(--driver-space-2) var(--driver-space-3);
-    border-radius: var(--driver-radius);
+    padding: var(--capture-space-2) var(--capture-space-3);
+    border-radius: var(--capture-radius);
     color: rgb(var(--foreground-muted));
     background: rgb(var(--surface-muted));
     font-size: 14px;
@@ -267,10 +277,10 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--driver-space-2);
-    padding: var(--driver-space-3);
+    gap: var(--capture-space-2);
+    padding: var(--capture-space-3);
     border-left: 3px solid rgb(var(--warning));
-    border-radius: var(--driver-radius);
+    border-radius: var(--capture-radius);
     color: rgb(var(--foreground));
     background: rgb(var(--warning) / 10%);
     font-size: 14px;
@@ -282,7 +292,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--driver-space-1) var(--driver-space-2);
+    gap: var(--capture-space-1) var(--capture-space-2);
     font-size: 14px;
   }
   .to-review span {
@@ -290,9 +300,9 @@
   }
   .to-review button {
     min-height: 32px;
-    padding: 0 var(--driver-space-2);
+    padding: 0 var(--capture-space-2);
     border: 1px solid rgb(var(--border-strong));
-    border-radius: var(--driver-radius);
+    border-radius: var(--capture-radius);
     color: rgb(var(--foreground));
     font-size: 13px;
   }
@@ -307,7 +317,7 @@
     border: 0;
   }
   legend {
-    margin-bottom: var(--driver-space-3);
+    margin-bottom: var(--capture-space-3);
     padding: 0;
     color: rgb(var(--foreground));
     font-size: 14px;
@@ -315,13 +325,13 @@
   }
   .grid {
     display: grid;
-    gap: var(--driver-space-3);
+    gap: var(--capture-space-3);
   }
   .field {
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: var(--driver-space-1);
+    gap: var(--capture-space-1);
   }
   .field label {
     color: rgb(var(--foreground));
@@ -337,9 +347,9 @@
   .field textarea {
     width: 100%;
     min-height: 44px;
-    padding: var(--driver-space-2) var(--driver-space-3);
+    padding: var(--capture-space-2) var(--capture-space-3);
     border: 1px solid rgb(var(--control-border));
-    border-radius: var(--driver-radius);
+    border-radius: var(--capture-radius);
     color: rgb(var(--foreground));
     background: rgb(var(--surface));
     font-size: 16px;
@@ -358,8 +368,8 @@
   }
   /* El aviso en claro da 4.41:1 como texto: el color va en la barra y el texto queda legible. */
   .issue {
-    margin: var(--driver-space-1) 0 0;
-    padding-left: var(--driver-space-2);
+    margin: var(--capture-space-1) 0 0;
+    padding-left: var(--capture-space-2);
     border-left: 2px solid rgb(var(--warning));
     color: rgb(var(--foreground));
     font-size: 13px;
@@ -371,9 +381,9 @@
   }
   .stop {
     margin: 0;
-    padding: var(--driver-space-3);
+    padding: var(--capture-space-3);
     border-left: 3px solid rgb(var(--danger));
-    border-radius: var(--driver-radius);
+    border-radius: var(--capture-radius);
     color: rgb(var(--foreground));
     background: rgb(var(--danger) / 10%);
     font-size: 14px;
@@ -381,11 +391,11 @@
   .check {
     display: flex;
     align-items: flex-start;
-    gap: var(--driver-space-3);
+    gap: var(--capture-space-3);
     min-height: 44px;
-    padding: var(--driver-space-3);
+    padding: var(--capture-space-3);
     border: 1px solid rgb(var(--border));
-    border-radius: var(--driver-radius);
+    border-radius: var(--capture-radius);
     color: rgb(var(--foreground));
     font-size: 14px;
     cursor: pointer;
@@ -419,7 +429,7 @@
     .photos {
       flex-direction: column;
       align-items: stretch;
-      padding: var(--driver-space-5);
+      padding: var(--capture-space-5);
       border-right: 1px solid rgb(var(--border));
       border-bottom: 0;
     }
@@ -430,12 +440,12 @@
       max-width: none;
     }
     .thumb span {
-      bottom: var(--driver-space-1);
-      left: var(--driver-space-1);
+      bottom: var(--capture-space-1);
+      left: var(--capture-space-1);
       font-size: 12px;
     }
     .form {
-      padding: var(--driver-space-5);
+      padding: var(--capture-space-5);
     }
     .field input,
     .field textarea {

@@ -5,6 +5,10 @@ export async function checksumOf(file: Blob): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-export function prepareForUpload(source: Blob, side: 'front' | 'back'): Promise<PreparedImage> {
-  return prepareImage(source, side);
+export function prepareForUpload(
+  source: Blob,
+  side: 'front' | 'back',
+  filePrefix: string
+): Promise<PreparedImage> {
+  return prepareImage(source, side, filePrefix);
 }

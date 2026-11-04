@@ -6,6 +6,7 @@
 
   let {
     side,
+    documentName,
     preview,
     uploading,
     issue,
@@ -16,6 +17,7 @@
     onuseanyway
   }: {
     side: 'front' | 'back';
+    documentName: string;
     preview: string | null;
     uploading: boolean;
     issue: QualityIssue | null;
@@ -32,7 +34,7 @@
   const filePrimary = `${fileAction} bg-foreground text-surface hover:bg-foreground-muted`;
 
   const label = $derived(side === 'front' ? 'el frente' : 'el reverso');
-  const title = $derived(side === 'front' ? 'Frente de la licencia' : 'Reverso de la licencia');
+  const title = $derived(`${side === 'front' ? 'Frente' : 'Reverso'} de ${documentName}`);
 
   let cameraOpen = $state(false);
   let fromCamera = $state(false);
@@ -106,7 +108,7 @@
 
     <div class="stage" class:dragging class:filled={!!preview} bind:this={stage}>
       {#if preview}
-        <img src={preview} alt={`Foto de ${label} de la licencia`} width="856" height="540" />
+        <img src={preview} alt={`Foto de ${label} de ${documentName}`} width="856" height="540" />
       {:else}
         <div class="placeholder">
           <FleetIcon name="image" size={28} />
@@ -185,8 +187,8 @@
   .photo-step {
     display: flex;
     flex-direction: column;
-    gap: var(--driver-space-4);
-    padding: var(--driver-space-4);
+    gap: var(--capture-space-4);
+    padding: var(--capture-space-4);
   }
   h3 {
     margin: 0;
@@ -195,7 +197,7 @@
     font-weight: 600;
   }
   header p {
-    margin: var(--driver-space-1) 0 0;
+    margin: var(--capture-space-1) 0 0;
     color: rgb(var(--foreground-muted));
     font-size: 14px;
   }
@@ -208,7 +210,7 @@
     margin-inline: auto;
     aspect-ratio: 85.6 / 54;
     border: 2px dashed rgb(var(--border-strong));
-    border-radius: var(--driver-radius-lg);
+    border-radius: var(--capture-radius-lg);
     background: rgb(var(--surface-muted));
   }
   .stage.filled {
@@ -230,7 +232,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--driver-space-2);
+    gap: var(--capture-space-2);
     color: rgb(var(--foreground-muted));
     font-size: 14px;
   }
@@ -243,7 +245,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--driver-space-2);
+    gap: var(--capture-space-2);
     color: rgb(var(--foreground));
     background: rgb(var(--surface) / 82%);
     font-size: 14px;
@@ -259,10 +261,10 @@
   }
   .notice {
     display: flex;
-    gap: var(--driver-space-2);
-    padding: var(--driver-space-3);
+    gap: var(--capture-space-2);
+    padding: var(--capture-space-3);
     border: 1px solid rgb(var(--border));
-    border-radius: var(--driver-radius);
+    border-radius: var(--capture-radius);
     color: rgb(var(--foreground));
     font-size: 14px;
   }
@@ -284,7 +286,7 @@
   /* Discreto a propósito: el detector puede equivocarse, pero repetir es lo recomendable. */
   .anyway {
     min-height: 44px;
-    border-radius: var(--driver-radius);
+    border-radius: var(--capture-radius);
     color: rgb(var(--foreground-muted));
     font-size: 14px;
     text-decoration: underline;
@@ -296,7 +298,7 @@
   }
   .actions {
     display: grid;
-    gap: var(--driver-space-2);
+    gap: var(--capture-space-2);
   }
   .actions label {
     position: relative;
@@ -309,7 +311,7 @@
   }
   @media (min-width: 640px) {
     .photo-step {
-      padding: var(--driver-space-5);
+      padding: var(--capture-space-5);
     }
     .actions {
       display: flex;
