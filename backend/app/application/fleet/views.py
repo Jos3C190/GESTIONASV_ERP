@@ -9,18 +9,19 @@ from decimal import Decimal
 from typing import Any
 
 from app.application.fleet.compliance import (
+    EXPIRY_WARNING_DAYS,
     Issue,
+    Severity,
     document_issues,
     state_of,
     vehicle_issues,
 )
-
-#: Remaining distance/time that turns a maintenance plan into a "due soon" warning.
-MAINTENANCE_WARNING_KM = 500
-MAINTENANCE_WARNING_DAYS = 7
+from app.application.fleet.settings import FleetSettings
 
 
-def plan_due(plan: Any, odometer_km: Decimal, today: date) -> dict[str, Any]:
+def plan_due(
+    plan: Any, odometer_km: Decimal, today: date, settings: FleetSettings = FleetSettings()
+) -> dict[str, Any]:
     """Next service of a maintenance plan and how close it is."""
     due_km = (
         Decimal(plan.last_service_km) + plan.interval_km
@@ -36,8 +37,8 @@ def plan_due(plan: Any, odometer_km: Decimal, today: date) -> dict[str, Any]:
         due_on is not None and today >= due_on
     )
     soon = not overdue and (
-        (due_km is not None and due_km - odometer_km <= MAINTENANCE_WARNING_KM)
-        or (due_on is not None and (due_on - today).days <= MAINTENANCE_WARNING_DAYS)
+        (due_km is not None and due_km - odometer_km <= settings.maintenance_warning_km)
+        or (due_on is not None and (due_on - today).days <= settings.maintenance_warning_days)
     )
     never = plan.last_service_km is None and plan.last_service_on is None
     return {
@@ -47,19 +48,64 @@ def plan_due(plan: Any, odometer_km: Decimal, today: date) -> dict[str, Any]:
     }
 
 
-def maintenance_issues(plans: Sequence[Any], odometer_km: Decimal, today: date) -> list[Issue]:
+def maintenance_issues(
+    plans: Sequence[Any],
+    odometer_km: Decimal,
+    today: date,
+    settings: FleetSettings = FleetSettings(),
+) -> list[Issue]:
     issues: list[Issue] = []
+    overdue_severity: Severity = "blocking" if settings.block_overdue_maintenance else "warning"
     for plan in plans:
-        state = plan_due(plan, odometer_km, today)["state"]
+        state = plan_due(plan, odometer_km, today, settings)["state"]
         if state == "overdue":
             issues.append(
-                Issue("maintenance_overdue", "warning", f"Mantenimiento vencido: {plan.name}.")
+                Issue(
+                    "maintenance_overdue", overdue_severity, f"Mantenimiento vencido: {plan.name}."
+                )
             )
         elif state == "soon":
             issues.append(
                 Issue("maintenance_due_soon", "warning", f"Mantenimiento próximo: {plan.name}.")
             )
     return issues
+
+
+def contract_issues(
+    ownership: str,
+    ends_on: date | None,
+    status: str,
+    today: date,
+    warning_days: int = EXPIRY_WARNING_DAYS,
+) -> list[Issue]:
+    """A leased or rented unit past its contract may not leave without an authorized exception."""
+    if ownership == "owned" or ends_on is None or status == "retired":
+        return []
+    days = (ends_on - today).days
+    formatted = ends_on.strftime("%d/%m/%Y")
+    if days < 0:
+        return [Issue("contract_expired", "blocking", f"El contrato venció el {formatted}.")]
+    if days <= warning_days:
+        return [Issue("contract_expiring", "warning", f"El contrato vence el {formatted}.")]
+    return []
+
+
+def vehicle_type_view(item: Any) -> dict[str, Any]:
+    return {
+        "code": item.code,
+        "name": item.name,
+        "plural": item.plural,
+        "license_classes": list(item.license_classes),
+        "base_image": item.base_image,
+        "requires_plate": item.requires_plate,
+        "requires_capacity": item.requires_capacity,
+        "meter_unit": item.meter_unit,
+        "fuel_applicable": item.fuel_applicable,
+        "can_tow": item.can_tow,
+        "is_towable": item.is_towable,
+        "is_system": item.is_system,
+        "is_active": item.is_active,
+    }
 
 
 async def build_vehicle_views(
@@ -72,6 +118,7 @@ async def build_vehicle_views(
     if not vehicles:
         return []
     vehicle_ids = [vehicle.id for vehicle in vehicles]
+    settings = await repo.fleet_settings(company_id)
     required = await repo.required_categories(company_id, "fleet")
     expiries = await repo.document_expiries(
         company_id,
@@ -86,14 +133,78 @@ async def build_vehicle_views(
     )
     plans, in_progress = await repo.maintenance_state(vehicle_ids)
     branches = await repo.branch_names(company_id, [vehicle.branch_id for vehicle in vehicles])
+    types = {item.code: item for item in await repo.vehicle_types(company_id)}
+    couplings = await repo.open_couplings_for_vehicles(company_id, vehicle_ids)
+    critical_failures = await repo.open_critical_failures(vehicle_ids)
+    loans = await repo.open_loans(company_id, vehicle_ids)
+    covered = await repo.driver_names(
+        company_id,
+        [d["covers_driver_id"] for d in drivers.values() if d.get("covers_driver_id")],
+    )
+    owners = await repo.supplier_names(
+        company_id, [v.owner_supplier_id for v in vehicles if v.owner_supplier_id is not None]
+    )
     views: list[dict[str, Any]] = []
     for vehicle in vehicles:
         odometer = Decimal(vehicle.odometer_km)
+        vehicle_type = types[vehicle.kind]
+        # Sin placa no circula por la vía pública: no aplican los documentos de circulación.
+        documents = (
+            document_issues(
+                required,
+                expiries.get(vehicle.id, {}),
+                today=today,
+                warning_days=settings.document_warning_days,
+            )
+            if vehicle_type.requires_plate
+            else []
+        )
         issues = vehicle_issues(
             status=vehicle.status,
-            documents=document_issues(required, expiries.get(vehicle.id, {}), today=today),
-            maintenance=maintenance_issues(plans.get(vehicle.id, []), odometer, today),
+            documents=documents,
+            maintenance=maintenance_issues(plans.get(vehicle.id, []), odometer, today, settings),
         )
+        failures = critical_failures.get(vehicle.id)
+        if failures and vehicle.status != "retired":
+            issues.append(
+                Issue(
+                    "inspection_critical_failure",
+                    "blocking",
+                    f"Falla crítica sin resolver: {', '.join(failures)}.",
+                )
+            )
+        issues.extend(
+            contract_issues(
+                vehicle.ownership,
+                vehicle.contract_ends_on,
+                vehicle.status,
+                today,
+                settings.document_warning_days,
+            )
+        )
+        driver = drivers.get(vehicle.id)
+        if driver is not None:
+            driver = {**driver, "covers_driver_name": covered.get(driver.get("covers_driver_id"))}
+            ends = driver.get("expected_end_on")
+            if ends is not None and ends < today:
+                issues.append(
+                    Issue(
+                        "assignment_overdue",
+                        "warning",
+                        f"La asignación temporal de {driver['name']} venció el "
+                        f"{ends.strftime('%d/%m/%Y')}.",
+                    )
+                )
+        loan = loans.get(vehicle.id)
+        if loan is not None and loan["expected_return_on"] < today:
+            issues.append(
+                Issue(
+                    "loan_overdue",
+                    "warning",
+                    f"Debía volver de {loan['to_branch_name']} el "
+                    f"{loan['expected_return_on'].strftime('%d/%m/%Y')}.",
+                )
+            )
         if vehicle.inventory_vehicle_id is None and vehicle.status != "retired":
             issues.append(
                 Issue(
@@ -116,24 +227,34 @@ async def build_vehicle_views(
                 "plate": vehicle.plate,
                 "vin": vehicle.vin,
                 "kind": vehicle.kind,
+                "type": vehicle_type_view(vehicle_type),
+                "coupling": couplings.get(vehicle.id),
                 "brand": vehicle.brand,
                 "model": vehicle.model,
                 "year": vehicle.year,
                 "color": vehicle.color,
                 "capacity_kg": vehicle.capacity_kg,
+                "tank_liters": vehicle.tank_liters,
                 "fuel_type": vehicle.fuel_type,
                 "odometer_km": odometer,
                 "status": vehicle.status,
                 "operational_status": operational,
                 "branch_id": vehicle.branch_id,
                 "branch_name": branches.get(vehicle.branch_id, ""),
-                "driver": drivers.get(vehicle.id),
+                "driver": driver,
+                "loan": loan,
                 "current_transfer": trip,
                 "maintenance_in_progress": vehicle.id in in_progress,
                 "gps_linked": vehicle.traccar_device_id is not None,
                 "gps_device_unique_id": vehicle.gps_device_unique_id,
                 "inventory_vehicle_id": vehicle.inventory_vehicle_id,
                 "notes": vehicle.notes,
+                "ownership": vehicle.ownership,
+                "owner_supplier_id": vehicle.owner_supplier_id,
+                "owner_supplier_name": owners.get(vehicle.owner_supplier_id),
+                "contract_reference": vehicle.contract_reference,
+                "contract_ends_on": vehicle.contract_ends_on,
+                "monthly_fee": vehicle.monthly_fee,
                 "compliance": {
                     "state": state_of(issues),
                     "issues": [

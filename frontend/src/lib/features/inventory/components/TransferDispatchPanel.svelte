@@ -64,7 +64,7 @@
       overrideReason: needsOverride ? overrideReason.trim() : '',
       ready,
       label: vehicle
-        ? `${vehicle.code} · ${vehicle.plate}${driverName ? ` · ${driverName}` : ''}`
+        ? `${vehicle.code} · ${vehicle.plate ?? 'Sin placa'}${driverName ? ` · ${driverName}` : ''}`
         : ''
     };
   });
@@ -142,7 +142,7 @@
         <option value="">Seleccione vehículo</option>
         {#each options?.vehicles ?? [] as item (item.inventory_vehicle_id)}
           <option value={item.inventory_vehicle_id} disabled={!item.available}
-            >{item.code} · {item.plate} · {item.brand}
+            >{item.code} · {item.plate ?? 'Sin placa'} · {item.brand}
             {item.model}{item.available
               ? ` · ${STATE_LABEL[item.compliance_state]}`
               : ` · ${item.unavailable_reason}`}</option

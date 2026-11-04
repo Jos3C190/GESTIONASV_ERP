@@ -5,14 +5,14 @@
   import Button from '$lib/components/ui/Button.svelte';
   import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
-  import { fleetApi, type FleetAlert, type FleetSummary, type FleetVehicle } from './api';
   import {
-    formatNumber,
-    KIND_META,
-    VEHICLE_KINDS,
-    type VehicleKind,
-    type VehicleStatus as StoredStatus
-  } from './catalog';
+    fleetApi,
+    type FleetAlert,
+    type FleetSummary,
+    type FleetVehicleType,
+    type FleetVehicle
+  } from './api';
+  import { formatNumber, meterShort, type VehicleStatus as StoredStatus } from './catalog';
   import FleetIcon from './FleetIcon.svelte';
   import VehicleCard from './VehicleCard.svelte';
   import VehicleDetail from './VehicleDetail.svelte';
@@ -24,7 +24,8 @@
   let query = $state('');
   let debouncedQuery = $state('');
   let tab = $state<Tab>('');
-  let kind = $state<'' | VehicleKind>('');
+  let kind = $state('');
+  let vehicleTypes = $state<FleetVehicleType[]>([]);
   let view = $state<'grid' | 'list'>('grid');
   let page = $state(1);
   let selected = $state<FleetVehicle | null>(null);
@@ -129,6 +130,10 @@
 
   onMount(() => {
     mounted = true;
+    void fleetApi
+      .vehicleTypes()
+      .then((items) => (vehicleTypes = items))
+      .catch(() => undefined);
   });
 
   const ALERT_PREVIEW = 4;
@@ -245,7 +250,9 @@
         {#each visibleAlerts as alert, index (index)}
           <li class:blocking={alert.severity === 'blocking'}>
             <a
-              href={alert.vehicle_id ? `/fleet/${alert.vehicle_id}` : `/drivers/${alert.driver_id}`}
+              href={alert.vehicle_id
+                ? `/fleet/${alert.vehicle_id}${alert.code === 'maintenance_overdue' ? '?tab=maintenance' : ''}`
+                : `/drivers/${alert.driver_id}`}
             >
               <strong>{alert.subject}</strong>
               <span>{alert.message}</span>
@@ -308,8 +315,8 @@
             page = 1;
           }}
           ><option value="">Todos los tipos</option>
-          {#each VEHICLE_KINDS as vehicleKind (vehicleKind)}
-            <option value={vehicleKind}>{KIND_META[vehicleKind].plural}</option>
+          {#each vehicleTypes as item (item.code)}
+            <option value={item.code}>{item.plural}</option>
           {/each}</select
         ></label
       ><span class="result-count" aria-live="polite"
@@ -359,7 +366,7 @@
               <caption class="sr-only">Vehículos de la flota</caption><thead
                 ><tr
                   ><th>Vehículo</th><th>Estado</th><th>Conductor</th><th>Sucursal / destino</th><th
-                    >Odómetro</th
+                    >Uso</th
                   ><th><span class="sr-only">Acciones</span></th></tr
                 ></thead
               ><tbody
@@ -379,8 +386,12 @@
                     ><td
                       >{vehicle.current_transfer
                         ? vehicle.current_transfer.destination_branch
-                        : vehicle.branch_name}</td
-                    ><td class="mileage">{formatNumber(vehicle.odometer_km)} km</td><td
+                        : vehicle.loan
+                          ? `${vehicle.branch_name} · Prestado a ${vehicle.loan.to_branch_name}`
+                          : vehicle.branch_name}</td
+                    ><td class="mileage"
+                      >{formatNumber(vehicle.odometer_km)} {meterShort(vehicle.type.meter_unit)}</td
+                    ><td
                       ><button
                         id={`fleet-card-${vehicle.id}`}
                         type="button"

@@ -48,6 +48,51 @@ async def test_odometer_is_monotonic(e2e_client: Any) -> None:
     assert [item["reading_km"] for item in readings][:2] == ["1500.0", "1250.5"]
 
 
+async def test_vehicle_out_of_service_stays_so_after_the_workshop(e2e_client: Any) -> None:
+    admin = await _admin(e2e_client)
+    branch = (await _branches(e2e_client, admin))[0]["id"]
+    vehicle = await _new_vehicle(e2e_client, admin, branch)
+    base = f"/api/v1/fleet/vehicles/{vehicle['id']}"
+    parked = await e2e_client.post(
+        f"{base}/status", headers=admin, json={"status": "out_of_service", "reason": "Sin motor"}
+    )
+    assert parked.status_code == 200, parked.text
+
+    for action, payload in (
+        ("complete", {"odometer_km": "2000.0", "cost": "10.00"}),
+        ("cancel", {"reason": "Sin repuesto"}),
+    ):
+        order = await e2e_client.post(
+            f"{base}/maintenance-orders",
+            headers=admin,
+            json={"kind": "corrective", "title": "Motor"},
+        )
+        assert order.status_code == 201, order.text
+        order_url = f"{base}/maintenance-orders/{order.json()['id']}"
+        started = await e2e_client.post(f"{order_url}/start", headers=admin)
+        assert started.status_code == 200, started.text
+        assert (await e2e_client.get(base, headers=admin)).json()["status"] == "maintenance"
+
+        ended = await e2e_client.post(f"{order_url}/{action}", headers=admin, json=payload)
+
+        assert ended.status_code == 200, ended.text
+        assert (await e2e_client.get(base, headers=admin)).json()["status"] == "out_of_service"
+
+
+async def test_readings_with_no_time_zone_are_rejected_cleanly(e2e_client: Any) -> None:
+    admin = await _admin(e2e_client)
+    branch = (await _branches(e2e_client, admin))[0]["id"]
+    vehicle = await _new_vehicle(e2e_client, admin, branch)
+
+    response = await e2e_client.post(
+        f"/api/v1/fleet/vehicles/{vehicle['id']}/odometer",
+        headers=admin,
+        json={"reading_km": "100.0", "read_at": "2026-01-01T10:00:00"},
+    )
+
+    assert response.status_code == 422
+
+
 async def test_maintenance_order_lifecycle(e2e_client: Any) -> None:
     admin = await _admin(e2e_client)
     branch = (await _branches(e2e_client, admin))[0]["id"]

@@ -1,29 +1,30 @@
 <script lang="ts">
   import { company } from '$lib/stores/company.svelte';
   import BrandedVehicle from './BrandedVehicle.svelte';
-  import { KIND_META, type VehicleKind } from './catalog';
+  import { BASE_IMAGES, type BaseImage } from './catalog';
   import FleetIcon from './FleetIcon.svelte';
   let {
-    kind,
+    image,
+    typeName,
     label,
     large = false
-  }: { kind: VehicleKind; label: string; large?: boolean } = $props();
+  }: { image: BaseImage | null; typeName: string; label: string; large?: boolean } = $props();
   let failed = $state(false);
   $effect(() => {
-    if (kind) failed = false;
+    if (image) failed = false;
   });
 </script>
 
 <div class:large class="vehicle-image">
-  {#if failed}
+  {#if failed || !image}
     <div class="image-fallback">
-      <FleetIcon name="truck" size={64} /><span>{KIND_META[kind].label}</span>
+      <FleetIcon name="truck" size={64} /><span>{typeName}</span>
     </div>
   {:else}
     <BrandedVehicle
-      src={KIND_META[kind].image}
+      src={BASE_IMAGES[image].image}
       alt={label}
-      {kind}
+      kind={image}
       logo={company.active?.logo ?? null}
       onerror={() => (failed = true)}
     />
@@ -48,11 +49,5 @@
     align-items: center;
     gap: 8px;
     color: rgb(var(--foreground-muted));
-    font-size: 12px;
-  }
-  @media (max-width: 640px) {
-    .vehicle-image {
-      height: 120px;
-    }
   }
 </style>

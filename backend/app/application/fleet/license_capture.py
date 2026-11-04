@@ -301,7 +301,8 @@ class LicenseCaptureService:
             )
         repo = FleetRepository(self._session)
         vehicle = (await repo.open_vehicles_for_drivers([driver.id])).get(driver.id)
-        if vehicle is not None and license_issue(license_class, vehicle["kind"]) is not None:
+        rules = await repo.license_rules(driver.company_id)
+        if vehicle is not None and license_issue(license_class, vehicle["kind"], rules) is not None:
             raise ConflictError(
                 f"La nueva clase de licencia no permite conducir {vehicle['code']}; "
                 "finalice la asignación primero.",

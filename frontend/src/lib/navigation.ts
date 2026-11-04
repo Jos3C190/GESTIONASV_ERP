@@ -310,6 +310,34 @@ export const NAV_GROUPS: NavGroup[] = [
         requiredPermission: 'fleet:read'
       },
       {
+        label: 'Tipos de vehículo',
+        icon: ICONS.fleet,
+        route: '/fleet/types',
+        implemented: true,
+        requiredPermission: 'fleet:manage_types'
+      },
+      {
+        label: 'Puntos de inspección',
+        icon: ICONS.fleet,
+        route: '/fleet/inspection-items',
+        implemented: true,
+        requiredPermission: 'fleet:manage_types'
+      },
+      {
+        label: 'Reglas de flota',
+        icon: ICONS.fleet,
+        route: '/fleet/settings',
+        implemented: true,
+        requiredPermission: 'fleet:read'
+      },
+      {
+        label: 'Costos de flota',
+        icon: ICONS.fleet,
+        route: '/fleet/costs',
+        implemented: true,
+        requiredPermission: 'fleet:read'
+      },
+      {
         label: 'Conductores',
         icon: ICONS.drivers,
         route: '/drivers',

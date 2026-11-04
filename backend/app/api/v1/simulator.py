@@ -122,7 +122,7 @@ def _device_body(existing: dict[str, Any] | None, vehicle: FleetVehicleModel) ->
             "name": f"SIM · {vehicle.code}",
             "uniqueId": unique_id_for(vehicle.id),
             "category": "truck",
-            "contact": vehicle.plate,
+            "contact": vehicle.plate or vehicle.code,
             "attributes": attributes,
         }
     )

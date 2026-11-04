@@ -1,6 +1,6 @@
 /** Vehicle kinds, statuses and formatting shared by Fleet, Drivers and Tracking. */
 
-export const VEHICLE_KINDS = [
+export const BASE_IMAGE_KEYS = [
   'refrigerated',
   'cargo_van',
   'dry_box',
@@ -11,35 +11,32 @@ export const VEHICLE_KINDS = [
   'semi_trailer',
   'tanker'
 ] as const;
-export type VehicleKind = (typeof VEHICLE_KINDS)[number];
+export type BaseImage = (typeof BASE_IMAGE_KEYS)[number];
+export type MeterUnit = 'km' | 'hours';
 
 /** Base images are shared by every company; the company's logo is applied on top. */
-export const KIND_META: Record<VehicleKind, { label: string; plural: string; image: string }> = {
+export const BASE_IMAGES: Record<BaseImage, { label: string; image: string }> = {
   refrigerated: {
     label: 'Refrigerado',
-    plural: 'Refrigerados',
     image: '/images/fleet/refrigerated-truck.png'
   },
-  cargo_van: { label: 'Furgón', plural: 'Furgones', image: '/images/fleet/cargo-van.png' },
-  dry_box: { label: 'Carga seca', plural: 'Carga seca', image: '/images/fleet/dry-box-truck.png' },
-  pickup: { label: 'Pickup', plural: 'Pickups', image: '/images/fleet/pickup.png' },
-  flatbed: { label: 'Plataforma', plural: 'Plataformas', image: '/images/fleet/flatbed-truck.png' },
+  cargo_van: { label: 'Furgón', image: '/images/fleet/cargo-van.png' },
+  dry_box: { label: 'Carga seca', image: '/images/fleet/dry-box-truck.png' },
+  pickup: { label: 'Pickup', image: '/images/fleet/pickup.png' },
+  flatbed: { label: 'Plataforma', image: '/images/fleet/flatbed-truck.png' },
   compact_van: {
     label: 'Panel compacto',
-    plural: 'Paneles compactos',
     image: '/images/fleet/compact-panel-van.png'
   },
   curtain_side: {
     label: 'Con lona',
-    plural: 'Camiones con lona',
     image: '/images/fleet/curtain-side-truck.png'
   },
   semi_trailer: {
     label: 'Tráiler',
-    plural: 'Tráileres',
     image: '/images/fleet/semi-trailer-truck.png'
   },
-  tanker: { label: 'Cisterna', plural: 'Cisternas', image: '/images/fleet/tanker-truck.png' }
+  tanker: { label: 'Cisterna', image: '/images/fleet/tanker-truck.png' }
 };
 
 export type VehicleStatus = 'active' | 'maintenance' | 'out_of_service' | 'retired';
@@ -64,13 +61,100 @@ export const VEHICLE_STATUS_LABELS: Record<VehicleStatus, string> = {
   retired: 'Dado de baja'
 };
 
-export type FuelType = 'diesel' | 'gasoline' | 'lpg' | 'electric' | 'hybrid';
+export type FuelType = 'diesel' | 'gasoline' | 'lpg' | 'electric' | 'hybrid' | 'none';
+
+export const meterShort = (unit: MeterUnit) => (unit === 'hours' ? 'h' : 'km');
+export const meterName = (unit: MeterUnit) => (unit === 'hours' ? 'Horómetro' : 'Odómetro');
+/** Un salto mayor suele ser un dedo de más: se pide confirmar, sin bloquear. */
+export const meterJumpLimit = (unit: MeterUnit) => (unit === 'hours' ? 500 : 5000);
+export const plateLabel = (plate: string | null | undefined) => plate || 'Sin placa';
+
+export type Ownership = 'owned' | 'leased' | 'rented' | 'third_party';
+export const OWNERSHIP_LABELS: Record<Ownership, string> = {
+  owned: 'Propio',
+  leased: 'Arrendado',
+  rented: 'Alquilado',
+  third_party: 'De un tercero'
+};
+
+export type CostCategory = 'insurance' | 'tax' | 'washing' | 'fee' | 'toll' | 'other';
+export const COST_CATEGORY_LABELS: Record<CostCategory, string> = {
+  insurance: 'Seguro',
+  tax: 'Impuesto',
+  washing: 'Lavado',
+  fee: 'Cuota',
+  toll: 'Peaje',
+  other: 'Otro'
+};
+
+export type IncidentKind = 'accident' | 'theft' | 'fine' | 'damage' | 'other';
+export const INCIDENT_KIND_LABELS: Record<IncidentKind, string> = {
+  accident: 'Accidente',
+  theft: 'Robo',
+  fine: 'Multa',
+  damage: 'Daño',
+  other: 'Otro'
+};
+export type IncidentSeverity = 'minor' | 'moderate' | 'severe';
+export const INCIDENT_SEVERITY_LABELS: Record<IncidentSeverity, string> = {
+  minor: 'Leve',
+  moderate: 'Moderada',
+  severe: 'Grave'
+};
+export type IncidentResponsible = 'company' | 'driver' | 'third_party' | 'unknown';
+export const INCIDENT_RESPONSIBLE_LABELS: Record<IncidentResponsible, string> = {
+  unknown: 'Por determinar',
+  company: 'La empresa',
+  driver: 'El conductor',
+  third_party: 'Un tercero'
+};
+export type IncidentStatus = 'open' | 'in_review' | 'closed';
+export const INCIDENT_STATUS_LABELS: Record<IncidentStatus, string> = {
+  open: 'Abierto',
+  in_review: 'En revisión',
+  closed: 'Cerrado'
+};
+
+export function localDateTime(date: Date): string {
+  const shifted = new Date(date);
+  shifted.setMinutes(shifted.getMinutes() - shifted.getTimezoneOffset());
+  return shifted.toISOString().slice(0, 16);
+}
+
+/** A date as the user's calendar shows it, not as UTC. */
+export function localDate(date: Date): string {
+  const shifted = new Date(date);
+  shifted.setMinutes(shifted.getMinutes() - shifted.getTimezoneOffset());
+  return shifted.toISOString().slice(0, 10);
+}
+
+export type CostPeriodId = 'month' | 'last_month' | 'year';
+
+export function costPeriods(today: Date): Record<CostPeriodId, { from: string; to: string }> {
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  return {
+    month: { from: localDate(new Date(year, month, 1)), to: localDate(today) },
+    last_month: {
+      from: localDate(new Date(year, month - 1, 1)),
+      to: localDate(new Date(year, month, 0))
+    },
+    year: { from: localDate(new Date(year, 0, 1)), to: localDate(today) }
+  };
+}
+
+/** Un `type="number"` vacío llega como null al enlazarse, no como cadena vacía. */
+export function isBlank(value: unknown): boolean {
+  return value === '' || value === null || value === undefined;
+}
+
 export const FUEL_LABELS: Record<FuelType, string> = {
   diesel: 'Diésel',
   gasoline: 'Gasolina',
   lpg: 'Gas LP',
   electric: 'Eléctrico',
-  hybrid: 'Híbrido'
+  hybrid: 'Híbrido',
+  none: 'No aplica'
 };
 
 export type LicenseClass = 'particular' | 'liviana' | 'pesada' | 'pesada_t' | 'motocicleta';
@@ -90,6 +174,15 @@ export const formatNumber = (value: number | string | null | undefined) =>
 
 export const formatMoney = (value: number | string | null | undefined) =>
   value === null || value === undefined || value === '' ? '—' : moneyFormat.format(Number(value));
+
+const rateFormat = new Intl.NumberFormat('es-SV', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 4
+});
+/** A cost per km can be a fraction of a cent: two decimals would round it to $0.00. */
+export const formatRate = (value: number | string) => rateFormat.format(Number(value));
 
 export function formatDate(value: string | null | undefined): string {
   if (!value) return '—';

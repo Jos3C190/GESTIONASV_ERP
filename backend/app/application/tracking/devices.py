@@ -75,7 +75,7 @@ def device_body(
     existing: dict[str, Any] | None,
     unique_id: str,
     code: str,
-    plate: str,
+    plate: str | None,
     company_id: uuid.UUID,
     branch_id: uuid.UUID,
     vehicle_id: uuid.UUID,
@@ -95,7 +95,7 @@ def device_body(
             "name": code,
             "uniqueId": unique_id,
             "category": "truck",
-            "contact": plate,
+            "contact": plate or code,
             "attributes": attributes,
         }
     )

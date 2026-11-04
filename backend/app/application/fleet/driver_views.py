@@ -59,17 +59,24 @@ async def driver_fitness(
     assigned = await repo.employees_with_assignment(
         employee_ids, list({driver.branch_id for driver, _ in rows})
     )
+    rules = await repo.license_rules(company_id) if vehicle_kinds else {}
+    settings = await repo.fleet_settings(company_id)
     result: dict[uuid.UUID, tuple[list[Issue], dict[str, Any] | None]] = {}
     for driver, employee in rows:
         issues = driver_issues(
             driver_status=driver.status,
             employee_status=employee.status,
             has_home_branch_assignment=(employee.id, driver.branch_id) in assigned,
-            documents=document_issues(required, expiries.get(employee.id, {}), today=today),
+            documents=document_issues(
+                required,
+                expiries.get(employee.id, {}),
+                today=today,
+                warning_days=settings.document_warning_days,
+            ),
         )
         kind = (vehicle_kinds or {}).get(driver.id)
         if kind is not None:
-            mismatch = license_issue(driver.license_class, kind)
+            mismatch = license_issue(driver.license_class, kind, rules)
             if mismatch is not None:
                 issues.append(mismatch)
         result[driver.id] = (issues, licenses.get(employee.id))

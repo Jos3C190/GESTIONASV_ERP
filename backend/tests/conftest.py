@@ -25,6 +25,12 @@ os.environ["OBSERVABILITY_ENABLED"] = "false"
 os.environ["REDIS_ENABLED"] = "false"
 os.environ["OCR_ENABLED"] = "false"
 os.environ["VLM_ENABLED"] = "false"
+# With the local GPS credentials, a branch or warehouse change would start a real
+# sync that outlives its test: it writes to the development Traccar and its open
+# transaction blocks the next schema rebuild forever. Tests that need Traccar fake it.
+os.environ["TRACCAR_URL"] = ""
+os.environ["TRACCAR_USER"] = ""
+os.environ["TRACCAR_PASSWORD"] = ""
 TEST_DATABASE_URL = os.environ.get(
     "DATABASE_URL_TEST",
     "postgresql+asyncpg://erp_admin:change_me_in_production_please@db:5432/erp_db_test",
@@ -39,13 +45,23 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-secret-do-not-use-in-prod")
 os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
 os.environ.setdefault("SUPER_ADMIN_PASSWORD", "TestOnly!SuperAdmin2026")
 
+TEMPLATE_DATABASE_NAME = "erp_db_test_template"
+# Set once this run has migrated and seeded the template, so a new run always
+# rebuilds it from the current migrations and seed.
+_template_ready = False
+
 
 def _has_integration_tests(request: pytest.FixtureRequest) -> bool:
     return any(item.get_closest_marker("integration") is not None for item in request.session.items)
 
 
 def _prepare_postgres_database(*, revision: str = "head", seed: bool = True) -> None:
-    """Create and rebuild only the dedicated test database."""
+    """Create and rebuild only the dedicated test database.
+
+    The canonical schema and seed take about 20 seconds to build, so only the
+    first rebuild of a run does it; the others copy the saved result.
+    """
+    global _template_ready  # noqa: PLW0603
     from alembic import command
     from alembic.config import Config
     from psycopg import connect, sql
@@ -58,6 +74,18 @@ def _prepare_postgres_database(*, revision: str = "head", seed: bool = True) -> 
 
     psycopg_dsn = TEST_DATABASE_URL_SYNC.replace("postgresql+psycopg://", "postgresql://")
     admin_dsn = f"{psycopg_dsn.rsplit('/', 1)[0]}/postgres"
+    database_id = sql.Identifier(database_name)
+    template_id = sql.Identifier(TEMPLATE_DATABASE_NAME)
+    canonical = revision == "head" and seed
+
+    if canonical and _template_ready:
+        with connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(database_id))
+            admin.execute(
+                sql.SQL("CREATE DATABASE {} TEMPLATE {}").format(database_id, template_id)
+            )
+        return
+
     with connect(admin_dsn, autocommit=True) as admin:
         exists = admin.execute(
             "SELECT 1 FROM pg_database WHERE datname = %s", (database_name,)
@@ -98,6 +126,19 @@ def _prepare_postgres_database(*, revision: str = "head", seed: bool = True) -> 
         await dispose_engine()
 
     asyncio.run(seed_and_release_pool())
+
+    if canonical:
+        with connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = %s AND pid <> pg_backend_pid()",
+                (database_name,),
+            )
+            admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(template_id))
+            admin.execute(
+                sql.SQL("CREATE DATABASE {} TEMPLATE {}").format(template_id, database_id)
+            )
+        _template_ready = True
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -65,6 +65,8 @@ const driver: Driver = {
     code: 'FL-001',
     plate: 'C 123-456',
     kind: 'refrigerated',
+    kind_name: 'Tipo',
+    base_image: null,
     since: '2026-10-01T00:00:00Z'
   },
   compliance: {

@@ -2,6 +2,7 @@
   import { HttpError } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import { confirmation } from '$lib/stores/confirmation.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import {
     fleetApi,
@@ -11,7 +12,10 @@
     type MaintenancePlan,
     type OrderStatus
   } from './api';
-  import { formatDate, formatMoney, formatNumber } from './catalog';
+  import { formatDate, formatMoney, formatNumber, isBlank, meterName, meterShort } from './catalog';
+  import ReceiptField from './ReceiptField.svelte';
+  import ReceiptLink from './ReceiptLink.svelte';
+  import SupplierField from './SupplierField.svelte';
 
   let { vehicle, onchanged }: { vehicle: FleetVehicle; onchanged: () => void } = $props();
 
@@ -45,13 +49,23 @@
     title: '',
     description: '',
     workshop: '',
+    supplier_id: '',
     scheduled_on: '',
     plan_id: ''
   });
 
   let closing = $state<{ order: MaintenanceOrder; mode: 'complete' | 'cancel' } | null>(null);
-  let close = $state({ odometer: '', cost: '', workshop: '', notes: '', reason: '' });
+  let close = $state({
+    odometer: '',
+    cost: '',
+    workshop: '',
+    supplier_id: '',
+    receipt_document_id: '',
+    notes: '',
+    reason: ''
+  });
 
+  const unit = $derived(meterShort(vehicle.type.meter_unit));
   const canManage = $derived(
     permissions.hasPermission('fleet:maintenance') && vehicle.status !== 'retired'
   );
@@ -102,6 +116,20 @@
     }
   }
 
+  function askDeactivate(target: MaintenancePlan) {
+    confirmation.request({
+      kind: 'deactivate',
+      title: 'Desactivar plan de mantenimiento',
+      description: 'Dejará de avisar cuando venza. Sus órdenes anteriores se conservan.',
+      resourceName: target.name,
+      confirmLabel: 'Desactivar',
+      execute: async () => {
+        await fleetApi.deactivatePlan(vehicle.id, target.id);
+        await load();
+      }
+    });
+  }
+
   function openPlan(target: MaintenancePlan | null) {
     editingPlan = target;
     plan = {
@@ -132,12 +160,26 @@
     );
   }
 
+  // Un plan vencido ya dice qué hay que hacer: basta un toque para abrir su orden.
+  function createFromPlan(target: MaintenancePlan) {
+    void run(
+      () =>
+        fleetApi.createOrder(vehicle.id, {
+          kind: 'preventive',
+          title: target.name,
+          plan_id: target.id
+        }),
+      () => undefined
+    );
+  }
+
   function openOrder(fromPlan: MaintenancePlan | null) {
     order = {
       kind: 'preventive',
       title: fromPlan ? fromPlan.name : '',
       description: '',
       workshop: '',
+      supplier_id: '',
       scheduled_on: '',
       plan_id: fromPlan?.id ?? ''
     };
@@ -153,7 +195,8 @@
           kind: order.kind,
           title: order.title.trim(),
           description: order.description.trim() || null,
-          workshop: order.workshop.trim() || null,
+          workshop: order.supplier_id ? null : order.workshop.trim() || null,
+          supplier_id: order.supplier_id ? Number(order.supplier_id) : null,
           scheduled_on: order.scheduled_on || null,
           plan_id: order.plan_id || null
         }),
@@ -166,6 +209,8 @@
       odometer: vehicle.odometer_km,
       cost: '',
       workshop: target.workshop ?? '',
+      supplier_id: target.supplier_id ? String(target.supplier_id) : '',
+      receipt_document_id: '',
       notes: '',
       reason: ''
     };
@@ -182,7 +227,9 @@
           ? fleetApi.completeOrder(vehicle.id, target.order.id, {
               odometer_km: close.odometer,
               cost: close.cost,
-              workshop: close.workshop.trim() || null,
+              workshop: close.supplier_id ? null : close.workshop.trim() || null,
+              supplier_id: close.supplier_id ? Number(close.supplier_id) : null,
+              receipt_document_id: close.receipt_document_id || null,
               notes: close.notes.trim() || null
             })
           : fleetApi.cancelOrder(vehicle.id, target.order.id, close.reason.trim()),
@@ -209,7 +256,8 @@
         <div>
           <h2>Planes preventivos</h2>
           <p class="muted">
-            Se calculan con el odómetro actual ({formatNumber(vehicle.odometer_km)} km).
+            Se calculan con la lectura actual ({formatNumber(vehicle.odometer_km)}
+            {unit}).
           </p>
         </div>
         {#if canManage}
@@ -231,17 +279,19 @@
               <small>
                 Cada
                 {[
-                  item.interval_km ? `${formatNumber(item.interval_km)} km` : null,
+                  item.interval_km ? `${formatNumber(item.interval_km)} ${unit}` : null,
                   item.interval_days ? `${item.interval_days} días` : null
                 ]
                   .filter(Boolean)
                   .join(' o ')}
                 · Último: {item.last_service_km
-                  ? `${formatNumber(item.last_service_km)} km`
+                  ? Number(item.last_service_km) < 0
+                    ? 'antes del cambio de tablero'
+                    : `${formatNumber(item.last_service_km)} ${unit}`
                   : '—'}{item.last_service_on ? `, ${formatDate(item.last_service_on)}` : ''}
               </small>
               <small>
-                Próximo: {item.due_km ? `${formatNumber(item.due_km)} km` : ''}{item.due_km &&
+                Próximo: {item.due_km ? `${formatNumber(item.due_km)} ${unit}` : ''}{item.due_km &&
                 item.due_on
                   ? ' o '
                   : ''}{item.due_on ? formatDate(item.due_on) : ''}{!item.due_km && !item.due_on
@@ -250,16 +300,15 @@
               </small>
               {#if canManage}
                 <div class="row-actions">
-                  <button type="button" onclick={() => openOrder(item)}>Programar orden</button>
+                  {#if item.state === 'overdue' && !openOrders.some((order) => order.plan_id === item.id)}
+                    <button type="button" disabled={saving} onclick={() => createFromPlan(item)}
+                      >Crear orden</button
+                    >
+                  {:else}
+                    <button type="button" onclick={() => openOrder(item)}>Programar orden</button>
+                  {/if}
                   <button type="button" onclick={() => openPlan(item)}>Editar</button>
-                  <button
-                    type="button"
-                    onclick={() =>
-                      run(
-                        () => fleetApi.deactivatePlan(vehicle.id, item.id),
-                        () => undefined
-                      )}>Desactivar</button
-                  >
+                  <button type="button" onclick={() => askDeactivate(item)}>Desactivar</button>
                 </div>
               {/if}
             </li>
@@ -347,9 +396,14 @@
                   </td>
                   <td>{ORDER_META[item.status].label}</td>
                   <td>{formatDate(item.completed_at ?? item.created_at)}</td>
-                  <td>{item.odometer_km ? `${formatNumber(item.odometer_km)} km` : '—'}</td>
+                  <td>{item.odometer_km ? `${formatNumber(item.odometer_km)} ${unit}` : '—'}</td>
                   <td>{item.workshop ?? '—'}</td>
-                  <td class="num">{formatMoney(item.cost)}</td>
+                  <td class="num">
+                    {formatMoney(item.cost)}
+                    {#if item.receipt_document_id}
+                      <ReceiptLink vehicleId={vehicle.id} documentId={item.receipt_document_id} />
+                    {/if}
+                  </td>
                 </tr>
               {/each}
             </tbody>
@@ -375,7 +429,11 @@
     >
     <div class="pair">
       <label
-        ><span>Cada (km)</span><input type="number" min="1" bind:value={plan.interval_km} /></label
+        ><span>Cada ({unit})</span><input
+          type="number"
+          min="1"
+          bind:value={plan.interval_km}
+        /></label
       >
       <label
         ><span>Cada (días)</span><input
@@ -387,12 +445,15 @@
     </div>
     <div class="pair">
       <label
-        ><span>Último servicio (km)</span><input
+        ><span>Último servicio ({unit})</span><input
           type="number"
           min="0"
           step="0.1"
+          disabled={Number(editingPlan?.last_service_km) < 0}
           bind:value={plan.last_km}
-        /></label
+        />{#if Number(editingPlan?.last_service_km) < 0}<small
+            >Fue antes del cambio de tablero. Se actualiza al completar una orden.</small
+          >{/if}</label
       >
       <label
         ><span>Fecha del último servicio</span><input
@@ -438,7 +499,12 @@
       ></textarea></label
     >
     <div class="pair">
-      <label><span>Taller</span><input bind:value={order.workshop} maxlength="160" /></label>
+      <SupplierField
+        id="order-workshop"
+        label="Taller"
+        bind:supplierId={order.supplier_id}
+        bind:text={order.workshop}
+      />
       <label
         ><span>Fecha programada</span><input type="date" bind:value={order.scheduled_on} /></label
       >
@@ -461,12 +527,12 @@
   <div class="form">
     {#if closing?.mode === 'complete'}
       <p class="muted">
-        Se registrará la lectura de odómetro, se actualizará el plan y el vehículo volverá a operar
-        si no tiene otras órdenes en taller.
+        Se registrará la lectura actual, se actualizará el plan y el vehículo volverá a operar si no
+        tiene otras órdenes en taller.
       </p>
       <div class="pair">
         <label
-          ><span>Odómetro (km)</span><input
+          ><span>{meterName(vehicle.type.meter_unit)} ({unit})</span><input
             type="number"
             min="0"
             step="0.1"
@@ -482,7 +548,17 @@
           /></label
         >
       </div>
-      <label><span>Taller</span><input bind:value={close.workshop} maxlength="160" /></label>
+      <SupplierField
+        id="close-workshop"
+        label="Taller"
+        bind:supplierId={close.supplier_id}
+        bind:text={close.workshop}
+      />
+      <ReceiptField
+        id="close-receipt"
+        vehicleId={vehicle.id}
+        bind:value={close.receipt_document_id}
+      />
       <label
         ><span>Trabajos realizados</span><textarea
           rows="3"
@@ -502,7 +578,7 @@
       <Button
         disabled={saving ||
           (closing?.mode === 'complete'
-            ? close.odometer === '' || close.cost === ''
+            ? isBlank(close.odometer) || isBlank(close.cost)
             : close.reason.trim().length < 3)}
         onclick={confirmClose}>Confirmar</Button
       >
@@ -589,6 +665,7 @@
   }
   .row-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
     margin-top: 6px;
   }
@@ -661,7 +738,7 @@
   @media (max-width: 900px) {
     .panel,
     .pair {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>

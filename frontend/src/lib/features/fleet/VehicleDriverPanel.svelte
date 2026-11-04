@@ -2,9 +2,10 @@
   import { HttpError } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
   import { driversApi, type Assignment, type Driver } from '$lib/features/drivers/api';
+  import { confirmation } from '$lib/stores/confirmation.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type { FleetVehicle } from './api';
-  import { formatDate, LICENSE_LABELS } from './catalog';
+  import { formatDate, LICENSE_LABELS, localDate } from './catalog';
   import FleetIcon from './FleetIcon.svelte';
 
   let { vehicle, onchanged }: { vehicle: FleetVehicle; onchanged: () => void } = $props();
@@ -13,6 +14,8 @@
   let history = $state<Assignment[]>([]);
   let selectedDriver = $state('');
   let overrideReason = $state('');
+  let temporary = $state(false);
+  let expectedEnd = $state('');
   let endReason = $state('');
   let ending = $state(false);
   let saving = $state(false);
@@ -20,6 +23,10 @@
 
   const canAssign = $derived(permissions.hasPermission('drivers:assign'));
   const canOverride = $derived(permissions.hasPermission('fleet:compliance_override'));
+  const today = localDate(new Date());
+  const overdueCover = $derived(
+    Boolean(vehicle.driver?.expected_end_on && vehicle.driver.expected_end_on < today)
+  );
   const candidate = $derived(drivers.find((item) => item.id === selectedDriver) ?? null);
   const candidateBlocking = $derived(
     candidate?.compliance.issues.filter((issue) => issue.severity === 'blocking') ?? []
@@ -51,15 +58,42 @@
     saving = true;
     error = null;
     try {
-      await driversApi.assign(vehicle.id, selectedDriver, overrideReason.trim() || undefined);
+      await driversApi.assign(vehicle.id, selectedDriver, overrideReason.trim() || undefined, {
+        expected_end_on: temporary ? expectedEnd : null,
+        // Se cubre a quien tiene el vehículo ahora; a él vuelve después.
+        // Si ya era una cobertura, el titular sigue siendo el mismo.
+        covers_driver_id: temporary
+          ? (vehicle.driver?.covers_driver_id ?? vehicle.driver?.driver_id ?? null)
+          : null
+      });
       selectedDriver = '';
       overrideReason = '';
+      temporary = false;
+      expectedEnd = '';
       onchanged();
     } catch (err) {
       error = err instanceof HttpError ? err.message : 'No se pudo asignar el conductor.';
     } finally {
       saving = false;
     }
+  }
+
+  function giveBack() {
+    const titular = vehicle.driver?.covers_driver_id;
+    if (!titular) return;
+    confirmation.request({
+      kind: 'restore',
+      title: 'Devolver el vehículo',
+      description:
+        'Termina la cobertura. Si el titular tiene otro vehículo asignado, esa asignación se cierra.',
+      resourceName: vehicle.driver?.covers_driver_name ?? undefined,
+      confirmLabel: 'Devolver',
+      // No se revierte sola: el titular puede no estar disponible, y el diálogo dice por qué.
+      execute: async () => {
+        await driversApi.assign(vehicle.id, titular);
+        onchanged();
+      }
+    });
   }
 
   async function end() {
@@ -92,7 +126,20 @@
               vehicle.driver.since
             )}</small
           >
+          {#if vehicle.driver.expected_end_on}
+            <small class:late={overdueCover}>
+              Temporal hasta el {formatDate(vehicle.driver.expected_end_on)}{vehicle.driver
+                .covers_driver_name
+                ? ` · cubre a ${vehicle.driver.covers_driver_name}`
+                : ''}
+            </small>
+          {/if}
         </span>
+        {#if canAssign && !ending && vehicle.driver.covers_driver_id}
+          <Button size="sm" onclick={giveBack}>
+            Devolver a {vehicle.driver.covers_driver_name}
+          </Button>
+        {/if}
         {#if canAssign && !ending}
           <Button size="sm" variant="secondary" onclick={() => (ending = true)}
             >Finalizar asignación</Button
@@ -158,11 +205,25 @@
             <p class="muted">Solo un usuario autorizado para excepciones puede asignarlo.</p>
           {/if}
         {/if}
+        <label class="temporary">
+          <input type="checkbox" bind:checked={temporary} />
+          <span>Es temporal{vehicle.driver ? `: cubre a ${vehicle.driver.name}` : ''}</span>
+        </label>
+        {#if temporary}
+          <label class="field">
+            <span>Hasta</span>
+            <input type="date" min={today} bind:value={expectedEnd} />
+          </label>
+          {#if !expectedEnd || expectedEnd < today}
+            <p class="muted">Indica hasta cuándo dura, desde hoy en adelante.</p>
+          {/if}
+        {/if}
         <div class="actions">
           <Button
             size="sm"
             disabled={saving ||
               !selectedDriver ||
+              (temporary && (!expectedEnd || expectedEnd < today)) ||
               (candidateBlocking.length > 0 && (!canOverride || overrideReason.trim().length < 5))}
             onclick={assign}>{saving ? 'Asignando…' : 'Asignar'}</Button
           >
@@ -198,6 +259,16 @@
 </div>
 
 <style>
+  .late {
+    color: rgb(var(--warning));
+  }
+  .temporary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    font-size: 13px;
+  }
   .panel {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -320,7 +391,7 @@
   }
   @media (max-width: 900px) {
     .panel {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>

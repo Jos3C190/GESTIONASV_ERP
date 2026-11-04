@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { HttpError } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
@@ -10,9 +12,13 @@
   import {
     formatDate,
     formatDateTime,
+    formatMoney,
     formatNumber,
     FUEL_LABELS,
-    KIND_META,
+    meterName,
+    meterShort,
+    OWNERSHIP_LABELS,
+    plateLabel,
     LICENSE_LABELS,
     VEHICLE_STATUS_LABELS,
     type VehicleStatus as StoredStatus
@@ -20,23 +26,45 @@
   import ComplianceList from './ComplianceList.svelte';
   import FleetIcon from './FleetIcon.svelte';
   import MoveToTrashDialog from './MoveToTrashDialog.svelte';
+  import VehicleCostsPanel from './VehicleCostsPanel.svelte';
+  import VehicleCouplingCard from './VehicleCouplingCard.svelte';
   import VehicleDriverPanel from './VehicleDriverPanel.svelte';
   import VehicleFuelPanel from './VehicleFuelPanel.svelte';
   import VehicleGallery from './VehicleGallery.svelte';
   import VehicleGpsPanel from './VehicleGpsPanel.svelte';
   import VehicleImage from './VehicleImage.svelte';
+  import VehicleIncidentsPanel from './VehicleIncidentsPanel.svelte';
+  import VehicleInspectionsPanel from './VehicleInspectionsPanel.svelte';
   import VehicleMaintenancePanel from './VehicleMaintenancePanel.svelte';
   import VehicleOdometerPanel from './VehicleOdometerPanel.svelte';
+  import VehicleSchedulePanel from './VehicleSchedulePanel.svelte';
   import VehicleStatus from './VehicleStatus.svelte';
 
   let { vehicleId }: { vehicleId: string } = $props();
 
   type Tab =
-    'summary' | 'driver' | 'documents' | 'maintenance' | 'fuel' | 'odometer' | 'gps' | 'gallery';
+    | 'summary'
+    | 'driver'
+    | 'documents'
+    | 'maintenance'
+    | 'fuel'
+    | 'odometer'
+    | 'costs'
+    | 'incidents'
+    | 'inspections'
+    | 'schedule'
+    | 'gps'
+    | 'gallery';
   let vehicle = $state<FleetVehicle | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let tab = $state<Tab>('summary');
+  // El reporte de costos abre directo su pestaña.
+  const linkedTab = page.url?.searchParams.get('tab');
+  let tab = $state<Tab>(
+    linkedTab === 'costs' || linkedTab === 'incidents' || linkedTab === 'maintenance'
+      ? linkedTab
+      : 'summary'
+  );
   let statusOpen = $state(false);
   let branchOpen = $state(false);
   let nextStatus = $state<Exclude<StoredStatus, 'maintenance'>>('active');
@@ -60,8 +88,16 @@
       },
       { id: 'documents' as const, label: 'Documentos', visible: canReadDocuments },
       { id: 'maintenance' as const, label: 'Mantenimiento', visible: true },
-      { id: 'fuel' as const, label: 'Combustible', visible: true },
-      { id: 'odometer' as const, label: 'Odómetro', visible: true },
+      { id: 'fuel' as const, label: 'Combustible', visible: vehicle?.type.fuel_applicable ?? true },
+      {
+        id: 'odometer' as const,
+        label: meterName(vehicle?.type.meter_unit ?? 'km'),
+        visible: true
+      },
+      { id: 'costs' as const, label: 'Costos', visible: true },
+      { id: 'inspections' as const, label: 'Inspecciones', visible: true },
+      { id: 'incidents' as const, label: 'Incidentes', visible: true },
+      { id: 'schedule' as const, label: 'Agenda', visible: true },
       { id: 'gps' as const, label: 'GPS', visible: true },
       { id: 'gallery' as const, label: 'Galería', visible: true }
     ].filter((item) => item.visible)
@@ -70,6 +106,18 @@
     (['active', 'out_of_service', 'retired'] as const).filter((item) => item !== vehicle?.status)
   );
   const branchOptions = $derived(branch.branches.filter((item) => item.id !== vehicle?.branch_id));
+  const reasonRequired = $derived(nextStatus !== 'active' || vehicle?.status === 'retired');
+
+  // Al llegar directo a una pestaña, que se vea dónde está el usuario.
+  $effect(() => {
+    if (linkedTab && tab === linkedTab && vehicle) {
+      void tick().then(() =>
+        document
+          .querySelector('nav.tabs button[aria-pressed="true"]')
+          ?.scrollIntoView?.({ inline: 'center', block: 'nearest' })
+      );
+    }
+  });
 
   async function load() {
     loading = true;
@@ -132,7 +180,12 @@
   <div class="vehicle-file">
     <header class="hero">
       <div class="hero-image">
-        <VehicleImage kind={vehicle.kind} label={`${vehicle.brand} ${vehicle.model}`} large />
+        <VehicleImage
+          image={vehicle.type.base_image}
+          typeName={vehicle.type.name}
+          label={`${vehicle.brand} ${vehicle.model}`}
+          large
+        />
       </div>
       <div class="hero-body">
         <a class="back" href="/fleet"><FleetIcon name="chevronLeft" size={14} />Flota</a>
@@ -142,12 +195,14 @@
         </div>
         <p class="subtitle">
           {vehicle.brand}
-          {vehicle.model} · {vehicle.year} · <span class="plate">{vehicle.plate}</span>
+          {vehicle.model} · {vehicle.year} · <span class="plate">{plateLabel(vehicle.plate)}</span>
         </p>
         <p class="meta">
           <FleetIcon name="pin" size={13} />{vehicle.branch_name}
-          <span>·</span>{KIND_META[vehicle.kind].label}
-          <span>·</span>{formatNumber(vehicle.odometer_km)} km
+          <span>·</span>{vehicle.type.name}
+          {#if vehicle.loan}<span>·</span>Prestado a {vehicle.loan.to_branch_name}{/if}
+          <span>·</span>{formatNumber(vehicle.odometer_km)}
+          {meterShort(vehicle.type.meter_unit)}
         </p>
         {#if canUpdate}
           <div class="actions">
@@ -180,7 +235,10 @@
           type="button"
           class:active={tab === item.id}
           aria-pressed={tab === item.id}
-          onclick={() => (tab = item.id)}>{item.label}</button
+          onclick={(event) => {
+            tab = item.id;
+            event.currentTarget.scrollIntoView?.({ inline: 'center', block: 'nearest' });
+          }}>{item.label}</button
         >
       {/each}
     </nav>
@@ -234,7 +292,7 @@
               </div>
               <div>
                 <dt>Placa</dt>
-                <dd>{vehicle.plate}</dd>
+                <dd>{plateLabel(vehicle.plate)}</dd>
               </div>
               <div>
                 <dt>VIN</dt>
@@ -242,7 +300,7 @@
               </div>
               <div>
                 <dt>Tipo</dt>
-                <dd>{KIND_META[vehicle.kind].label}</dd>
+                <dd>{vehicle.type.name}</dd>
               </div>
               <div>
                 <dt>Marca y modelo</dt>
@@ -265,13 +323,35 @@
                 <dd>{FUEL_LABELS[vehicle.fuel_type]}</dd>
               </div>
               <div>
-                <dt>Odómetro</dt>
-                <dd>{formatNumber(vehicle.odometer_km)} km</dd>
+                <dt>{meterName(vehicle.type.meter_unit)}</dt>
+                <dd>{formatNumber(vehicle.odometer_km)} {meterShort(vehicle.type.meter_unit)}</dd>
               </div>
               <div>
                 <dt>Estado</dt>
                 <dd>{VEHICLE_STATUS_LABELS[vehicle.status]}</dd>
               </div>
+              <div>
+                <dt>Propiedad</dt>
+                <dd>{OWNERSHIP_LABELS[vehicle.ownership]}</dd>
+              </div>
+              {#if vehicle.ownership !== 'owned'}
+                <div>
+                  <dt>Propietario</dt>
+                  <dd>{vehicle.owner_supplier_name ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt>Contrato</dt>
+                  <dd>{vehicle.contract_reference ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt>Fin del contrato</dt>
+                  <dd>{formatDate(vehicle.contract_ends_on)}</dd>
+                </div>
+                <div>
+                  <dt>Cuota mensual</dt>
+                  <dd>{formatMoney(vehicle.monthly_fee)}</dd>
+                </div>
+              {/if}
               <div>
                 <dt>GPS</dt>
                 <dd>{vehicle.gps_device_unique_id ?? 'Sin GPS'}</dd>
@@ -283,6 +363,9 @@
             </dl>
             {#if vehicle.notes}<p class="notes">{vehicle.notes}</p>{/if}
           </section>
+          {#if vehicle.type.can_tow || vehicle.type.is_towable}
+            <VehicleCouplingCard {vehicle} onchanged={(next) => (vehicle = next)} />
+          {/if}
         </div>
       {:else if tab === 'driver'}
         <VehicleDriverPanel {vehicle} onchanged={load} />
@@ -300,6 +383,14 @@
         <VehicleFuelPanel {vehicle} onchanged={load} />
       {:else if tab === 'odometer'}
         <VehicleOdometerPanel {vehicle} onchanged={load} />
+      {:else if tab === 'costs'}
+        <VehicleCostsPanel {vehicle} />
+      {:else if tab === 'inspections'}
+        <VehicleInspectionsPanel {vehicle} onchanged={load} />
+      {:else if tab === 'incidents'}
+        <VehicleIncidentsPanel {vehicle} onchanged={load} />
+      {:else if tab === 'schedule'}
+        <VehicleSchedulePanel {vehicle} onchanged={load} />
       {:else if tab === 'gps'}
         <VehicleGpsPanel {vehicle} onchanged={(next) => (vehicle = next)} />
       {:else}
@@ -322,7 +413,7 @@
           {/each}
         </select>
       </label>
-      {#if nextStatus !== 'active'}
+      {#if reasonRequired}
         <label>
           <span>Motivo</span>
           <textarea bind:value={reason} rows="3" maxlength="500"></textarea>
@@ -338,7 +429,7 @@
       <div class="modal-actions">
         <Button variant="secondary" onclick={() => (statusOpen = false)}>Cancelar</Button>
         <Button
-          disabled={saving || (nextStatus !== 'active' && reason.trim().length < 3)}
+          disabled={saving || (reasonRequired && reason.trim().length < 3)}
           onclick={() =>
             run(() => fleetApi.setStatus(vehicle!.id, nextStatus, reason.trim() || undefined))}
           >Confirmar</Button
@@ -352,7 +443,7 @@
     title="Mover vehículo a la papelera"
     resource="fleet_vehicles"
     recordId={vehicle.id}
-    description={`${vehicle.code} · ${vehicle.plate} dejará de aparecer en Flota, Traslados y Seguimiento. Debe estar sin conductor, sin traslado en ruta, sin órdenes de taller abiertas y sin GPS vinculado.`}
+    description={`${vehicle.code} · ${plateLabel(vehicle.plate)} dejará de aparecer en Flota, Traslados y Seguimiento. Debe estar sin conductor, sin traslado en ruta, sin órdenes de taller abiertas y sin GPS vinculado.`}
     onclose={() => (trashOpen = false)}
     ondone={() => goto('/fleet')}
   />

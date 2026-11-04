@@ -1,7 +1,7 @@
 import { apiFetch, type DocumentUploadTicket } from '$lib/api/client';
 import { ownedDocuments } from '$lib/api/owned-documents';
 import type { Compliance, FleetPage } from '$lib/features/fleet/api';
-import type { LicenseClass, VehicleKind } from '$lib/features/fleet/catalog';
+import type { BaseImage, LicenseClass } from '$lib/features/fleet/catalog';
 import { branch } from '$lib/stores/branch.svelte';
 
 export type DriverStatus = 'active' | 'suspended' | 'inactive';
@@ -40,8 +40,10 @@ export interface Driver {
     assignment_id: string;
     vehicle_id: string;
     code: string;
-    plate: string;
-    kind: VehicleKind;
+    plate: string | null;
+    kind: string;
+    kind_name: string;
+    base_image: BaseImage | null;
     since: string;
   } | null;
   compliance: Compliance;
@@ -213,10 +215,15 @@ export const driversApi = {
   ) => apiFetch<Driver>(`/drivers/${id}/license-captures/${captureId}/confirm`, json('POST', data)),
   cancelCapture: (id: string, captureId: string) =>
     apiFetch<void>(`/drivers/${id}/license-captures/${captureId}`, json('DELETE')),
-  assign: (vehicleId: string, driverId: string, overrideReason?: string) =>
+  assign: (
+    vehicleId: string,
+    driverId: string,
+    overrideReason?: string,
+    cover?: { expected_end_on: string | null; covers_driver_id: string | null }
+  ) =>
     apiFetch<Assignment>(
       `/fleet/vehicles/${vehicleId}/assignment`,
-      json('POST', { driver_id: driverId, override_reason: overrideReason || undefined })
+      json('POST', { driver_id: driverId, override_reason: overrideReason || undefined, ...cover })
     ),
   endAssignment: (vehicleId: string, reason: string) =>
     apiFetch<void>(`/fleet/vehicles/${vehicleId}/assignment/end`, json('POST', { reason })),

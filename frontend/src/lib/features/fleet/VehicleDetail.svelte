@@ -1,6 +1,14 @@
 <script lang="ts">
   import type { FleetVehicle } from './api';
-  import { formatDateTime, formatNumber, FUEL_LABELS, KIND_META, LICENSE_LABELS } from './catalog';
+  import {
+    formatDateTime,
+    formatNumber,
+    FUEL_LABELS,
+    meterName,
+    meterShort,
+    plateLabel,
+    LICENSE_LABELS
+  } from './catalog';
   import ComplianceList from './ComplianceList.svelte';
   import FleetIcon from './FleetIcon.svelte';
   import VehicleImage from './VehicleImage.svelte';
@@ -35,10 +43,19 @@
       </div>
       <VehicleStatus status={vehicle.operational_status} />
     </div>
-    <VehicleImage kind={vehicle.kind} label={`${vehicle.brand} ${vehicle.model}`} large />
+    <VehicleImage
+      image={vehicle.type.base_image}
+      typeName={vehicle.type.name}
+      label={`${vehicle.brand} ${vehicle.model}`}
+      large
+    />
     <div class="hero-footer">
-      <span class="plate">{vehicle.plate}</span>
-      <span class="branch"><FleetIcon name="pin" size={13} />{vehicle.branch_name}</span>
+      <span class="plate">{plateLabel(vehicle.plate)}</span>
+      <span class="branch"
+        ><FleetIcon name="pin" size={13} />{vehicle.branch_name}{vehicle.loan
+          ? ` · Prestado a ${vehicle.loan.to_branch_name}`
+          : ''}</span
+      >
     </div>
   </div>
   <div class="detail-content">
@@ -83,15 +100,15 @@
       <dl class="specs">
         <div>
           <dt>Tipo</dt>
-          <dd>{KIND_META[vehicle.kind].label}</dd>
+          <dd>{vehicle.type.name}</dd>
         </div>
         <div>
           <dt>Capacidad</dt>
           <dd>{formatNumber(vehicle.capacity_kg)} kg</dd>
         </div>
         <div>
-          <dt>Odómetro</dt>
-          <dd>{formatNumber(vehicle.odometer_km)} km</dd>
+          <dt>{meterName(vehicle.type.meter_unit)}</dt>
+          <dd>{formatNumber(vehicle.odometer_km)} {meterShort(vehicle.type.meter_unit)}</dd>
         </div>
         <div>
           <dt>Combustible</dt>

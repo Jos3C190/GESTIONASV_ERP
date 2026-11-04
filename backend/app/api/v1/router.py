@@ -25,8 +25,14 @@ from app.api.v1.routers import (
     employees,
     expense_types,
     fleet,
+    fleet_corrections,
+    fleet_costs,
     fleet_gps,
+    fleet_incidents,
+    fleet_inspections,
     fleet_operations,
+    fleet_schedule,
+    fleet_vehicle_types,
     health,
     inventory,
     inventory_adjustments,
@@ -99,7 +105,13 @@ api_router.include_router(operational_context.router, prefix="/api/v1")
 api_router.include_router(dashboard.router, prefix="/api/v1")
 api_router.include_router(tracking_simulator.router, prefix="/api/v1")
 api_router.include_router(tracking.router, prefix="/api/v1")
+api_router.include_router(fleet_corrections.router, prefix="/api/v1")
+api_router.include_router(fleet_costs.router, prefix="/api/v1")
+api_router.include_router(fleet_incidents.router, prefix="/api/v1")
+api_router.include_router(fleet_inspections.router, prefix="/api/v1")
+api_router.include_router(fleet_schedule.router, prefix="/api/v1")
 api_router.include_router(fleet_gps.router, prefix="/api/v1")
+api_router.include_router(fleet_vehicle_types.router, prefix="/api/v1")
 api_router.include_router(fleet_operations.router, prefix="/api/v1")
 api_router.include_router(fleet.router, prefix="/api/v1")
 api_router.include_router(fleet.documents_router, prefix="/api/v1")

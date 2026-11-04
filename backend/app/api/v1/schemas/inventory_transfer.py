@@ -85,7 +85,7 @@ class DispatchVehicleOptionOut(StrictModel):
     inventory_vehicle_id: uuid.UUID
     fleet_vehicle_id: uuid.UUID
     code: str
-    plate: str
+    plate: str | None
     kind: str
     brand: str
     model: str

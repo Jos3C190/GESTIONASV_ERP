@@ -6,11 +6,25 @@ import re
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
-VehicleKind = Literal[
+#: A code from the company's vehicle type catalogue; the routers check it exists.
+VehicleKind = Annotated[str, Field(pattern=r"^[a-z0-9_]{2,24}$")]
+VehicleStatus = Literal["active", "maintenance", "out_of_service", "retired"]
+ManualVehicleStatus = Literal["active", "out_of_service", "retired"]
+OperationalStatus = Literal["available", "in_route", "maintenance", "out_of_service", "retired"]
+FuelType = Literal["diesel", "gasoline", "lpg", "electric", "hybrid", "none"]
+MeterUnit = Literal["km", "hours"]
+Ownership = Literal["owned", "leased", "rented", "third_party"]
+CostCategory = Literal["insurance", "tax", "washing", "fee", "toll", "other"]
+IncidentKind = Literal["accident", "theft", "fine", "damage", "other"]
+IncidentSeverity = Literal["minor", "moderate", "severe"]
+IncidentResponsible = Literal["company", "driver", "third_party", "unknown"]
+IncidentStatus = Literal["open", "in_review", "closed"]
+#: The silhouettes in the frontend's static images, calibrated to carry the logo.
+BaseImage = Literal[
     "refrigerated",
     "cargo_van",
     "dry_box",
@@ -21,10 +35,6 @@ VehicleKind = Literal[
     "semi_trailer",
     "tanker",
 ]
-VehicleStatus = Literal["active", "maintenance", "out_of_service", "retired"]
-ManualVehicleStatus = Literal["active", "out_of_service", "retired"]
-OperationalStatus = Literal["available", "in_route", "maintenance", "out_of_service", "retired"]
-FuelType = Literal["diesel", "gasoline", "lpg", "electric", "hybrid"]
 LicenseClass = Literal["particular", "liviana", "pesada", "pesada_t", "motocicleta"]
 DriverStatus = Literal["active", "suspended", "inactive"]
 ComplianceStateLiteral = Literal["ok", "warning", "blocked"]
@@ -32,7 +42,10 @@ ComplianceStateLiteral = Literal["ok", "warning", "blocked"]
 _PLATE = re.compile(r"^[A-Z0-9][A-Z0-9 -]{1,15}$")
 
 
-def normalize_plate(value: str) -> str:
+def normalize_plate(value: str | None) -> str | None:
+    """Blank means no plate; whether the vehicle may lack one depends on its type."""
+    if value is None or not value.strip():
+        return None
     normalized = re.sub(r"\s+", " ", value.strip().upper())
     if not _PLATE.match(normalized):
         raise ValueError("La placa solo admite letras, números, espacios y guiones.")
@@ -68,6 +81,16 @@ class VehicleDriverOut(BaseModel):
     license_class: LicenseClass
     status: DriverStatus
     since: datetime
+    expected_end_on: date | None = None
+    covers_driver_id: uuid.UUID | None = None
+    covers_driver_name: str | None = None
+
+
+class VehicleLoanSummaryOut(BaseModel):
+    id: uuid.UUID
+    to_branch_id: uuid.UUID
+    to_branch_name: str
+    expected_return_on: date
 
 
 class VehicleTripOut(BaseModel):
@@ -78,17 +101,82 @@ class VehicleTripOut(BaseModel):
     destination_branch: str
 
 
+class VehicleTypeOut(BaseModel):
+    code: str
+    name: str
+    plural: str
+    license_classes: list[LicenseClass]
+    base_image: BaseImage | None
+    requires_plate: bool
+    requires_capacity: bool
+    meter_unit: MeterUnit
+    fuel_applicable: bool
+    can_tow: bool
+    is_towable: bool
+    is_system: bool
+    is_active: bool
+
+
+class VehicleTypeCatalogOut(VehicleTypeOut):
+    id: uuid.UUID
+    usage_count: int
+
+
+class VehicleTypeIn(BaseModel):
+    name: str = Field(min_length=2, max_length=60)
+    plural: str | None = Field(None, max_length=60)
+    license_classes: list[LicenseClass] = Field(default_factory=list)
+    base_image: BaseImage | None = None
+    requires_plate: bool = True
+    requires_capacity: bool = True
+    meter_unit: MeterUnit = "km"
+    fuel_applicable: bool = True
+    can_tow: bool = False
+    is_towable: bool = False
+
+    @field_validator("name", "plural")
+    @classmethod
+    def _strip(cls, value: str | None) -> str | None:
+        return value.strip() or None if value else value
+
+    @model_validator(mode="after")
+    def _one_coupling_role(self) -> VehicleTypeIn:
+        if self.can_tow and self.is_towable:
+            raise ValueError("Un tipo no puede remolcar y ser remolcado a la vez.")
+        return self
+
+
+class VehicleTypeUpdate(VehicleTypeIn):
+    is_active: bool = True
+
+
+class VehicleCouplingOut(BaseModel):
+    coupling_id: uuid.UUID
+    role: Literal["tractor", "trailer"]
+    vehicle_id: uuid.UUID
+    code: str
+    plate: str | None
+    since: datetime
+
+
+class VehicleCouplingIn(BaseModel):
+    trailer_id: uuid.UUID
+
+
 class FleetVehicleOut(BaseModel):
     id: uuid.UUID
     code: str
-    plate: str
+    plate: str | None
     vin: str | None
     kind: VehicleKind
+    type: VehicleTypeOut
+    coupling: VehicleCouplingOut | None
     brand: str
     model: str
     year: int
     color: str | None
-    capacity_kg: Decimal
+    capacity_kg: Decimal | None
+    tank_liters: Decimal | None
     fuel_type: FuelType
     odometer_km: Decimal
     status: VehicleStatus
@@ -102,6 +190,13 @@ class FleetVehicleOut(BaseModel):
     gps_device_unique_id: str | None
     inventory_vehicle_id: uuid.UUID | None
     notes: str | None
+    ownership: Ownership
+    owner_supplier_id: int | None
+    owner_supplier_name: str | None
+    contract_reference: str | None
+    contract_ends_on: date | None
+    monthly_fee: Decimal | None
+    loan: VehicleLoanSummaryOut | None = None
     compliance: ComplianceOut
     created_at: datetime
     updated_at: datetime
@@ -123,20 +218,28 @@ class FleetSummaryOut(BaseModel):
 
 
 class _VehicleFields(BaseModel):
-    plate: str = Field(min_length=2, max_length=16)
+    plate: str | None = Field(None, max_length=16)
     vin: str | None = Field(None, max_length=32)
     kind: VehicleKind
     brand: str = Field(min_length=1, max_length=60)
     model: str = Field(min_length=1, max_length=80)
     year: int = Field(ge=1950, le=2100)
     color: str | None = Field(None, max_length=40)
-    capacity_kg: Decimal = Field(gt=0, le=Decimal("200000"), max_digits=10, decimal_places=2)
+    capacity_kg: Decimal | None = Field(
+        None, gt=0, le=Decimal("200000"), max_digits=10, decimal_places=2
+    )
+    tank_liters: Decimal | None = Field(None, gt=0, le=Decimal("100000"), decimal_places=2)
     fuel_type: FuelType = "diesel"
     notes: str | None = Field(None, max_length=2000)
+    ownership: Ownership | None = None
+    owner_supplier_id: int | None = None
+    contract_reference: str | None = Field(None, max_length=80)
+    contract_ends_on: date | None = None
+    monthly_fee: Decimal | None = Field(None, ge=0, le=Decimal("9999999"), decimal_places=2)
 
     @field_validator("plate")
     @classmethod
-    def _plate(cls, value: str) -> str:
+    def _plate(cls, value: str | None) -> str | None:
         return normalize_plate(value)
 
     @field_validator("vin")
@@ -168,7 +271,7 @@ class FleetVehicleCreate(_VehicleFields):
 
 
 class FleetVehicleUpdate(BaseModel):
-    plate: str | None = Field(None, min_length=2, max_length=16)
+    plate: str | None = Field(None, max_length=16)
     vin: str | None = Field(None, max_length=32)
     kind: VehicleKind | None = None
     brand: str | None = Field(None, min_length=1, max_length=60)
@@ -178,13 +281,19 @@ class FleetVehicleUpdate(BaseModel):
     capacity_kg: Decimal | None = Field(
         None, gt=0, le=Decimal("200000"), max_digits=10, decimal_places=2
     )
+    tank_liters: Decimal | None = Field(None, gt=0, le=Decimal("100000"), decimal_places=2)
     fuel_type: FuelType | None = None
     notes: str | None = Field(None, max_length=2000)
+    ownership: Ownership | None = None
+    owner_supplier_id: int | None = None
+    contract_reference: str | None = Field(None, max_length=80)
+    contract_ends_on: date | None = None
+    monthly_fee: Decimal | None = Field(None, ge=0, le=Decimal("9999999"), decimal_places=2)
 
     @field_validator("plate")
     @classmethod
     def _plate(cls, value: str | None) -> str | None:
-        return None if value is None else normalize_plate(value)
+        return normalize_plate(value)
 
     @field_validator("vin")
     @classmethod
@@ -217,7 +326,7 @@ class VehiclePhotoOut(BaseModel):
 
 class OdometerReadingIn(BaseModel):
     reading_km: Decimal = Field(ge=0, le=Decimal("9999999"), decimal_places=1)
-    read_at: datetime | None = None
+    read_at: AwareDatetime | None = None
     notes: str | None = Field(None, max_length=500)
 
 
@@ -228,13 +337,17 @@ class OdometerReadingOut(BaseModel):
     source: str
     notes: str | None
     recorded_by_name: str | None
+    voided_at: datetime | None = None
+    voided_by_name: str | None = None
+    void_reason: str | None = None
 
 
 class MaintenancePlanIn(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     interval_km: int | None = Field(None, gt=0, le=1_000_000)
     interval_days: int | None = Field(None, gt=0, le=3650)
-    last_service_km: Decimal | None = Field(None, ge=0, decimal_places=1)
+    # Negativo solo si el servicio fue antes de un cambio de tablero; lo valida el router.
+    last_service_km: Decimal | None = Field(None, decimal_places=1)
     last_service_on: date | None = None
 
 
@@ -256,6 +369,7 @@ class MaintenanceOrderIn(BaseModel):
     title: str = Field(min_length=2, max_length=160)
     description: str | None = Field(None, max_length=4000)
     workshop: str | None = Field(None, max_length=160)
+    supplier_id: int | None = None
     scheduled_on: date | None = None
     plan_id: uuid.UUID | None = None
 
@@ -264,6 +378,8 @@ class MaintenanceCompleteIn(BaseModel):
     odometer_km: Decimal = Field(ge=0, le=Decimal("9999999"), decimal_places=1)
     cost: Decimal = Field(ge=0, le=Decimal("99999999"), decimal_places=2)
     workshop: str | None = Field(None, max_length=160)
+    supplier_id: int | None = None
+    receipt_document_id: uuid.UUID | None = None
     notes: str | None = Field(None, max_length=4000)
 
 
@@ -280,6 +396,8 @@ class MaintenanceOrderOut(BaseModel):
     title: str
     description: str | None
     workshop: str | None
+    supplier_id: int | None = None
+    receipt_document_id: uuid.UUID | None = None
     scheduled_on: date | None
     started_at: datetime | None
     completed_at: datetime | None
@@ -290,13 +408,19 @@ class MaintenanceOrderOut(BaseModel):
 
 
 class FuelLogIn(BaseModel):
-    filled_at: datetime
+    filled_at: AwareDatetime
     liters: Decimal = Field(gt=0, le=Decimal("5000"), decimal_places=3)
     total_amount: Decimal = Field(ge=0, le=Decimal("100000"), decimal_places=2)
     odometer_km: Decimal = Field(ge=0, le=Decimal("9999999"), decimal_places=1)
     full_tank: bool = True
     station: str | None = Field(None, max_length=160)
+    supplier_id: int | None = None
+    receipt_document_id: uuid.UUID | None = None
     driver_id: uuid.UUID | None = None
+
+
+class FuelCorrectionIn(FuelLogIn):
+    reason: str = Field(min_length=3, max_length=500)
 
 
 class FuelLogOut(BaseModel):
@@ -308,9 +432,29 @@ class FuelLogOut(BaseModel):
     odometer_km: Decimal
     full_tank: bool
     station: str | None
+    supplier_id: int | None = None
+    receipt_document_id: uuid.UUID | None = None
     driver_id: uuid.UUID | None
     driver_name: str | None
     km_per_liter: Decimal | None
+    voided_at: datetime | None = None
+    voided_by_name: str | None = None
+    void_reason: str | None = None
+
+
+class VoidRecordIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class MeterReplacementIn(BaseModel):
+    reading_km: Decimal = Field(ge=0, le=Decimal("9999999"), decimal_places=1)
+    read_at: AwareDatetime | None = None
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class OdometerTotalOut(BaseModel):
+    total: Decimal
+    replacements: int
 
 
 class FuelStatsOut(BaseModel):
@@ -318,6 +462,220 @@ class FuelStatsOut(BaseModel):
     amount: Decimal
     average_km_per_liter: Decimal | None
     cost_per_km: Decimal | None
+
+
+class FleetSupplierOut(BaseModel):
+    id: int
+    code: str
+    name: str
+
+
+class FleetCostIn(BaseModel):
+    category: CostCategory
+    incurred_on: date
+    amount: Decimal = Field(gt=0, le=Decimal("99999999"), decimal_places=2)
+    description: str | None = Field(None, max_length=300)
+    supplier_id: int | None = None
+    document_id: uuid.UUID | None = None
+
+
+class FleetCostOut(BaseModel):
+    id: uuid.UUID
+    category: CostCategory
+    incurred_on: date
+    amount: Decimal
+    description: str | None
+    supplier_id: int | None
+    supplier_name: str | None
+    document_id: uuid.UUID | None
+    recorded_by_name: str | None
+    voided_at: datetime | None
+    voided_by_name: str | None
+    void_reason: str | None
+
+
+class CostReportRowOut(BaseModel):
+    vehicle_id: uuid.UUID
+    code: str
+    plate: str | None
+    kind_name: str
+    branch_name: str
+    meter_unit: MeterUnit
+    fuel: Decimal
+    maintenance: Decimal
+    other: Decimal
+    incidents: Decimal
+    total: Decimal
+    distance: Decimal
+    cost_per_unit: Decimal | None
+
+
+class CostReportTotalsOut(BaseModel):
+    fuel: Decimal
+    maintenance: Decimal
+    other: Decimal
+    incidents: Decimal
+    total: Decimal
+
+
+class CostReportOut(BaseModel):
+    date_from: date
+    date_to: date
+    rows: list[CostReportRowOut]
+    totals: CostReportTotalsOut
+    other_by_category: dict[CostCategory, Decimal]
+
+
+class FleetSettingsIn(BaseModel):
+    block_overdue_maintenance: bool
+    require_inspection: bool
+    block_overweight: bool = False
+    inspection_valid_hours: int = Field(ge=1, le=720)
+    document_warning_days: int = Field(ge=0, le=365)
+    maintenance_warning_km: int = Field(ge=0, le=100_000)
+    maintenance_warning_days: int = Field(ge=0, le=365)
+
+
+class FleetSettingsOut(FleetSettingsIn):
+    pass
+
+
+class FleetLoanIn(BaseModel):
+    to_branch_id: uuid.UUID
+    expected_return_on: date
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class FleetLoanOut(BaseModel):
+    id: uuid.UUID
+    from_branch_id: uuid.UUID
+    from_branch_name: str
+    to_branch_id: uuid.UUID
+    to_branch_name: str
+    starts_on: date
+    expected_return_on: date
+    reason: str
+    returned_at: datetime | None
+    created_by_name: str | None
+
+
+class FleetReservationIn(BaseModel):
+    starts_at: AwareDatetime
+    ends_at: AwareDatetime
+    reason: str = Field(min_length=3, max_length=300)
+
+
+class FleetReservationOut(BaseModel):
+    id: uuid.UUID
+    starts_at: datetime
+    ends_at: datetime
+    reason: str
+    status: Literal["active", "cancelled"]
+    reserved_by_name: str | None
+    cancel_reason: str | None
+
+
+class FleetIncidentIn(BaseModel):
+    kind: IncidentKind
+    severity: IncidentSeverity
+    responsible: IncidentResponsible = "unknown"
+    occurred_at: AwareDatetime
+    location: str | None = Field(None, max_length=200)
+    description: str = Field(min_length=3, max_length=4000)
+    driver_id: uuid.UUID | None = None
+    cost: Decimal | None = Field(None, ge=0, le=Decimal("99999999"), decimal_places=2)
+    insurance_claim: str | None = Field(None, max_length=80)
+    document_id: uuid.UUID | None = None
+    take_out_of_service: bool = False
+
+
+class FleetIncidentUpdate(BaseModel):
+    status: IncidentStatus | None = None
+    resolution: str | None = Field(None, max_length=1000)
+    responsible: IncidentResponsible | None = None
+    cost: Decimal | None = Field(None, ge=0, le=Decimal("99999999"), decimal_places=2)
+    insurance_claim: str | None = Field(None, max_length=80)
+    document_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _required(self) -> FleetIncidentUpdate:
+        for field in ("status", "responsible"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError("Complete los datos del incidente.")
+        return self
+
+
+class FleetIncidentOut(BaseModel):
+    id: uuid.UUID
+    vehicle_id: uuid.UUID
+    vehicle_code: str
+    driver_id: uuid.UUID | None
+    driver_name: str | None
+    kind: IncidentKind
+    severity: IncidentSeverity
+    responsible: IncidentResponsible
+    status: IncidentStatus
+    occurred_at: datetime
+    location: str | None
+    description: str
+    cost: Decimal | None
+    insurance_claim: str | None
+    document_id: uuid.UUID | None
+    resolution: str | None
+    reported_by_name: str | None
+    closed_at: datetime | None
+    closed_by_name: str | None
+    vehicle_taken_out: bool = False
+
+
+class InspectionItemIn(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    is_critical: bool = False
+
+
+class InspectionItemUpdate(InspectionItemIn):
+    is_active: bool = True
+
+
+class InspectionItemOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    is_critical: bool
+    is_active: bool
+
+
+class InspectionAnswerIn(BaseModel):
+    item_id: uuid.UUID
+    passed: bool
+    notes: str | None = Field(None, max_length=500)
+    photo_url: str | None = Field(None, min_length=10, max_length=2048)
+
+
+class FleetInspectionIn(BaseModel):
+    driver_id: uuid.UUID | None = None
+    notes: str | None = Field(None, max_length=1000)
+    results: list[InspectionAnswerIn] = Field(min_length=1, max_length=200)
+
+
+class InspectionResultOut(BaseModel):
+    id: uuid.UUID
+    item_name: str
+    is_critical: bool
+    passed: bool
+    notes: str | None
+    photo_url: str | None
+    resolved_at: datetime | None
+    resolved_by_name: str | None
+    resolution: str | None
+
+
+class FleetInspectionOut(BaseModel):
+    id: uuid.UUID
+    inspected_at: datetime
+    passed: bool
+    notes: str | None
+    inspected_by_name: str | None
+    results: list[InspectionResultOut]
 
 
 class FleetAlertOut(BaseModel):
@@ -349,8 +707,10 @@ class DriverVehicleOut(BaseModel):
     assignment_id: uuid.UUID
     vehicle_id: uuid.UUID
     code: str
-    plate: str
+    plate: str | None
     kind: VehicleKind
+    kind_name: str
+    base_image: BaseImage | None
     since: datetime
 
 
@@ -414,6 +774,8 @@ class DriverBranchIn(BaseModel):
 class AssignmentIn(BaseModel):
     driver_id: uuid.UUID
     override_reason: str | None = Field(None, min_length=5, max_length=500)
+    expected_end_on: date | None = None
+    covers_driver_id: uuid.UUID | None = None
 
 
 class AssignmentEndIn(BaseModel):
@@ -424,7 +786,7 @@ class AssignmentOut(BaseModel):
     id: uuid.UUID
     vehicle_id: uuid.UUID
     vehicle_code: str
-    vehicle_plate: str
+    vehicle_plate: str | None
     driver_id: uuid.UUID
     driver_name: str
     starts_at: datetime

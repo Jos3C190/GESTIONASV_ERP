@@ -3,11 +3,24 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import { driversApi, type Driver } from '$lib/features/drivers/api';
+  import { confirmation } from '$lib/stores/confirmation.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import { fleetApi, type FleetVehicle, type FuelLog, type FuelStats } from './api';
-  import { formatDateTime, formatMoney, formatNumber } from './catalog';
+  import {
+    formatDateTime,
+    formatMoney,
+    formatNumber,
+    isBlank,
+    meterName,
+    meterShort
+  } from './catalog';
+  import ReceiptField from './ReceiptField.svelte';
+  import ReceiptLink from './ReceiptLink.svelte';
+  import SupplierField from './SupplierField.svelte';
 
   let { vehicle, onchanged }: { vehicle: FleetVehicle; onchanged: () => void } = $props();
+
+  const unit = $derived(meterShort(vehicle.type.meter_unit));
 
   let logs = $state<FuelLog[]>([]);
   let stats = $state<FuelStats | null>(null);
@@ -15,6 +28,8 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let open = $state(false);
+  let correcting = $state<FuelLog | null>(null);
+  let reason = $state('');
   let saving = $state(false);
   let formError = $state<string | null>(null);
   let form = $state({
@@ -24,10 +39,18 @@
     odometer_km: '',
     full_tank: true,
     station: '',
+    supplier_id: '',
+    receipt_document_id: '',
     driver_id: ''
   });
 
   const canLog = $derived(permissions.hasPermission('fleet:fuel') && vehicle.status !== 'retired');
+  const canCorrect = $derived(
+    permissions.hasPermission('fleet:correct_records') && vehicle.status !== 'retired'
+  );
+  const overTank = $derived(
+    Boolean(vehicle.tank_liters) && Number(form.liters) > Number(vehicle.tank_liters)
+  );
   const unitPrice = $derived(
     Number(form.liters) > 0 && form.total_amount !== ''
       ? Number(form.total_amount) / Number(form.liters)
@@ -59,15 +82,42 @@
     void load();
   });
 
-  async function openForm() {
+  function toLocal(iso: string): string {
+    const date = new Date(iso);
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+    return date.toISOString().slice(0, 16);
+  }
+
+  function askVoid(log: FuelLog) {
+    confirmation.request({
+      kind: 'revoke',
+      title: 'Anular carga',
+      description:
+        'Dejará de contar en gasto y rendimiento, y también su lectura. Queda en el historial, tachada.',
+      confirmLabel: 'Anular',
+      requireReason: true,
+      reasonLabel: 'Motivo',
+      execute: async (why) => {
+        await fleetApi.voidFuel(vehicle.id, log.id, why ?? '');
+        await load();
+        onchanged();
+      }
+    });
+  }
+
+  async function openForm(log: FuelLog | null = null) {
+    correcting = log;
+    reason = '';
     form = {
-      filled_at: localNow(),
-      liters: '',
-      total_amount: '',
-      odometer_km: '',
-      full_tank: true,
-      station: '',
-      driver_id: vehicle.driver?.driver_id ?? ''
+      filled_at: log ? toLocal(log.filled_at) : localNow(),
+      liters: log ? String(Number(log.liters)) : '',
+      total_amount: log ? String(Number(log.total_amount)) : '',
+      odometer_km: log ? String(Number(log.odometer_km)) : '',
+      full_tank: log?.full_tank ?? true,
+      station: log?.station ?? '',
+      supplier_id: log?.supplier_id ? String(log.supplier_id) : '',
+      receipt_document_id: log?.receipt_document_id ?? '',
+      driver_id: log ? (log.driver_id ?? '') : (vehicle.driver?.driver_id ?? '')
     };
     formError = null;
     open = true;
@@ -84,15 +134,22 @@
     saving = true;
     formError = null;
     try {
-      await fleetApi.addFuel(vehicle.id, {
+      const data = {
         filled_at: new Date(form.filled_at).toISOString(),
-        liters: form.liters,
-        total_amount: form.total_amount,
-        odometer_km: form.odometer_km,
+        liters: String(form.liters),
+        total_amount: String(form.total_amount),
+        odometer_km: String(form.odometer_km),
         full_tank: form.full_tank,
-        station: form.station.trim() || null,
+        station: form.supplier_id ? null : form.station.trim() || null,
+        supplier_id: form.supplier_id ? Number(form.supplier_id) : null,
+        receipt_document_id: form.receipt_document_id || null,
         driver_id: form.driver_id || null
-      });
+      };
+      if (correcting) {
+        await fleetApi.correctFuel(vehicle.id, correcting.id, { ...data, reason: reason.trim() });
+      } else {
+        await fleetApi.addFuel(vehicle.id, data);
+      }
       open = false;
       await load();
       onchanged();
@@ -112,12 +169,12 @@
       <span>Rendimiento promedio</span>
       <strong
         >{stats?.average_km_per_liter
-          ? `${formatNumber(stats.average_km_per_liter)} km/L`
+          ? `${formatNumber(stats.average_km_per_liter)} ${unit}/L`
           : '—'}</strong
       >
     </div>
     <div>
-      <span>Costo por km</span>
+      <span>Costo por {unit}</span>
       <strong>{stats?.cost_per_km ? formatMoney(stats.cost_per_km) : '—'}</strong>
     </div>
   </div>
@@ -130,7 +187,7 @@
           El rendimiento se mide entre tanques llenos. Cada carga registra también el odómetro.
         </p>
       </div>
-      {#if canLog}<Button size="sm" onclick={openForm}>Registrar carga</Button>{/if}
+      {#if canLog}<Button size="sm" onclick={() => openForm()}>Registrar carga</Button>{/if}
     </header>
     {#if loading && logs.length === 0}
       <p class="muted">Cargando…</p>
@@ -145,20 +202,41 @@
             <tr>
               <th>Fecha</th><th>Estación</th><th>Conductor</th><th class="num">Odómetro</th>
               <th class="num">Litros</th><th class="num">Precio/L</th><th class="num">Total</th>
-              <th class="num">km/L</th>
+              <th class="num">{unit}/L</th>
+              {#if canCorrect}<th><span class="sr-only">Acciones</span></th>{/if}
             </tr>
           </thead>
           <tbody>
             {#each logs as log (log.id)}
-              <tr>
-                <td>{formatDateTime(log.filled_at)}{log.full_tank ? '' : ' · parcial'}</td>
-                <td>{log.station ?? '—'}</td>
+              <tr class:voided={log.voided_at}>
+                <td>
+                  {formatDateTime(log.filled_at)}{log.full_tank ? '' : ' · parcial'}
+                  {#if log.voided_at}
+                    <small class="void-note">
+                      Anulada por {log.voided_by_name ?? '—'}: {log.void_reason}
+                    </small>
+                  {/if}
+                </td>
+                <td>
+                  {log.station ?? '—'}
+                  {#if log.receipt_document_id}
+                    <ReceiptLink vehicleId={vehicle.id} documentId={log.receipt_document_id} />
+                  {/if}
+                </td>
                 <td>{log.driver_name ?? '—'}</td>
-                <td class="num">{formatNumber(log.odometer_km)} km</td>
+                <td class="num">{formatNumber(log.odometer_km)} {unit}</td>
                 <td class="num">{formatNumber(log.liters)}</td>
                 <td class="num">{formatMoney(log.unit_price)}</td>
                 <td class="num">{formatMoney(log.total_amount)}</td>
                 <td class="num">{log.km_per_liter ? formatNumber(log.km_per_liter) : '—'}</td>
+                {#if canCorrect}
+                  <td class="row-action">
+                    {#if !log.voided_at}
+                      <button type="button" onclick={() => openForm(log)}>Corregir</button>
+                      <button type="button" onclick={() => askVoid(log)}>Anular</button>
+                    {/if}
+                  </td>
+                {/if}
               </tr>
             {/each}
           </tbody>
@@ -168,14 +246,18 @@
   </section>
 </div>
 
-<Modal {open} title="Registrar carga de combustible" onclose={() => (open = false)}>
+<Modal
+  {open}
+  title={correcting ? 'Corregir carga' : 'Registrar carga de combustible'}
+  onclose={() => (open = false)}
+>
   <div class="form">
     <div class="pair">
       <label
         ><span>Fecha y hora</span><input type="datetime-local" bind:value={form.filled_at} /></label
       >
       <label>
-        <span>Odómetro (km)</span>
+        <span>{meterName(vehicle.type.meter_unit)} ({unit})</span>
         <input
           type="number"
           min="0"
@@ -204,8 +286,27 @@
       >
     </div>
     {#if unitPrice !== null}<p class="muted">Precio por litro: {formatMoney(unitPrice)}</p>{/if}
+    {#if overTank}
+      <p class="warn">
+        Supera el tanque de este vehículo ({formatNumber(vehicle.tank_liters)} L). Revisa los litros.
+      </p>
+    {/if}
+    {#if vehicle.fuel_type === 'electric'}
+      <p class="warn">Este vehículo está registrado como eléctrico. Revisa que sea correcto.</p>
+    {/if}
+    {#if correcting}
+      <label>
+        <span>Motivo de la corrección</span>
+        <input bind:value={reason} maxlength="500" placeholder="Ej. Litros mal digitados" />
+      </label>
+    {/if}
     <div class="pair">
-      <label><span>Estación</span><input bind:value={form.station} maxlength="160" /></label>
+      <SupplierField
+        id="fuel-station"
+        label="Estación"
+        bind:supplierId={form.supplier_id}
+        bind:text={form.station}
+      />
       {#if drivers.length}
         <label>
           <span>Conductor</span>
@@ -218,6 +319,7 @@
         </label>
       {/if}
     </div>
+    <ReceiptField id="fuel-receipt" vehicleId={vehicle.id} bind:value={form.receipt_document_id} />
     <label class="check">
       <input type="checkbox" bind:checked={form.full_tank} />
       <span>Tanque lleno (necesario para calcular rendimiento)</span>
@@ -229,15 +331,41 @@
         disabled={saving ||
           !form.filled_at ||
           !(Number(form.liters) > 0) ||
-          form.total_amount === '' ||
-          form.odometer_km === ''}
-        onclick={save}>Registrar</Button
+          isBlank(form.total_amount) ||
+          isBlank(form.odometer_km) ||
+          (correcting !== null && reason.trim().length < 3)}
+        onclick={save}>{correcting ? 'Guardar corrección' : 'Registrar'}</Button
       >
     </div>
   </div>
 </Modal>
 
 <style>
+  .voided td {
+    color: rgb(var(--foreground-muted));
+  }
+  .voided .num {
+    text-decoration: line-through;
+  }
+  .void-note {
+    display: block;
+  }
+  .warn {
+    margin: 0;
+    color: rgb(var(--warning));
+    font-size: 13px;
+  }
+  .row-action {
+    white-space: nowrap;
+  }
+  .row-action button {
+    min-height: 44px;
+    margin-right: 8px;
+    color: rgb(var(--foreground-muted));
+    font-size: 13px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
   .panel {
     display: grid;
     gap: 16px;
@@ -352,7 +480,7 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .pair {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>

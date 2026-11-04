@@ -83,3 +83,53 @@ async def test_vehicle_and_driver_go_to_trash_only_when_released(e2e_client: Any
     back = await e2e_client.get(f"/api/v1/fleet/vehicles/{vehicle['id']}", headers=admin)
     assert back.status_code == 200
     assert back.json()["driver"] is None
+
+
+async def test_restore_says_when_its_plate_was_taken_meanwhile(e2e_client: Any) -> None:
+    admin = await _admin(e2e_client)
+    branch = (await _branches(e2e_client, admin))[0]["id"]
+    suffix = uuid.uuid4().hex[:5].upper()
+    plate = f"R {suffix}"
+    first = (
+        await e2e_client.post(
+            "/api/v1/fleet/vehicles", headers=admin, json=_vehicle(branch, f"RA-{suffix}", plate)
+        )
+    ).json()
+    assert (await _delete(e2e_client, admin, "fleet_vehicles", first["id"])).status_code == 200
+    second = await e2e_client.post(
+        "/api/v1/fleet/vehicles", headers=admin, json=_vehicle(branch, f"RB-{suffix}", plate)
+    )
+    assert second.status_code == 201, second.text
+
+    restored = await e2e_client.post(
+        f"/api/v1/lifecycle/fleet_vehicles/{first['id']}/restore", headers=admin
+    )
+
+    assert restored.status_code == 409, restored.text
+    assert plate in restored.json()["message"]
+
+
+async def test_reactivating_a_retired_vehicle_needs_a_reason(e2e_client: Any) -> None:
+    admin = await _admin(e2e_client)
+    branch = (await _branches(e2e_client, admin))[0]["id"]
+    suffix = uuid.uuid4().hex[:5].upper()
+    vehicle = (
+        await e2e_client.post(
+            "/api/v1/fleet/vehicles",
+            headers=admin,
+            json=_vehicle(branch, f"RC-{suffix}", f"C {suffix}"),
+        )
+    ).json()
+    url = f"/api/v1/fleet/vehicles/{vehicle['id']}/status"
+    retired = await e2e_client.post(
+        url, headers=admin, json={"status": "retired", "reason": "Venta del vehículo"}
+    )
+    assert retired.status_code == 200, retired.text
+
+    no_reason = await e2e_client.post(url, headers=admin, json={"status": "active"})
+    assert no_reason.status_code == 422, no_reason.text
+
+    back = await e2e_client.post(
+        url, headers=admin, json={"status": "active", "reason": "Se canceló la venta"}
+    )
+    assert back.status_code == 200, back.text

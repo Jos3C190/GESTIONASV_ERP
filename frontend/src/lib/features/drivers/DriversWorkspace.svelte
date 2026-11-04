@@ -4,7 +4,7 @@
   import { HttpError } from '$lib/api/client';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
-  import { formatDate, KIND_META, LICENSE_LABELS } from '$lib/features/fleet/catalog';
+  import { BASE_IMAGES, formatDate, LICENSE_LABELS, plateLabel } from '$lib/features/fleet/catalog';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
@@ -323,7 +323,7 @@
                       <dt>Vehículo</dt>
                       <dd>
                         {#if driver.vehicle}<a href={`/fleet/${driver.vehicle.vehicle_id}`}
-                            >{driver.vehicle.code} · {driver.vehicle.plate}</a
+                            >{driver.vehicle.code} · {plateLabel(driver.vehicle.plate)}</a
                           >{:else}Sin asignar{/if}
                       </dd>
                     </div>
@@ -398,13 +398,13 @@
                       >{#if driver.vehicle}<a
                           class="vehicle"
                           href={`/fleet/${driver.vehicle.vehicle_id}`}
-                          ><img
-                            src={KIND_META[driver.vehicle.kind].image}
+                          >{#if driver.vehicle.base_image}<img
+                            src={BASE_IMAGES[driver.vehicle.base_image].image}
                             alt=""
                             width="58"
                             height="36"
-                          /><span
-                            >{driver.vehicle.code}<small class="block">{driver.vehicle.plate}</small
+                          />{/if}<span
+                            >{driver.vehicle.code}<small class="block">{plateLabel(driver.vehicle.plate)}</small
                             ></span
                           ></a
                         >{:else}<span class="muted">Sin asignar</span>{/if}</td

@@ -218,6 +218,18 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("fleet:maintenance", "Gestionar mantenimiento y odómetro", "fleet"),
     PermissionSpec("fleet:fuel", "Registrar cargas de combustible", "fleet"),
     PermissionSpec("fleet:gps", "Vincular dispositivos GPS a vehículos", "fleet"),
+    PermissionSpec("fleet:manage_types", "Administrar los tipos de vehículo", "fleet"),
+    PermissionSpec(
+        "fleet:correct_records", "Corregir lecturas de uso y cargas de combustible", "fleet"
+    ),
+    PermissionSpec("fleet:costs", "Registrar y anular costos de vehículos", "fleet"),
+    PermissionSpec(
+        "fleet:incidents", "Registrar y dar seguimiento a incidentes de vehículos", "fleet"
+    ),
+    PermissionSpec("fleet:inspections", "Realizar inspecciones y resolver sus fallas", "fleet"),
+    PermissionSpec("fleet:settings", "Configurar las reglas de la flota", "fleet"),
+    PermissionSpec("fleet:loans", "Prestar vehículos entre sucursales", "fleet"),
+    PermissionSpec("fleet:reservations", "Reservar vehículos", "fleet"),
     PermissionSpec(
         "fleet:compliance_override",
         "Autorizar despachos con documentos o licencias no vigentes",

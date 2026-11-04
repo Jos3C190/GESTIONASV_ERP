@@ -16,7 +16,8 @@ const vehicle = {
   id: 'v1',
   status: 'active',
   operational_status: 'available',
-  odometer_km: '6200.0'
+  odometer_km: '6200.0',
+  type: { meter_unit: 'km' }
 } as FleetVehicle;
 
 beforeEach(() => {
@@ -75,6 +76,6 @@ describe('vehicle maintenance panel', () => {
     permissionMock.codes.add('fleet:maintenance');
     render(VehicleMaintenancePanel, { vehicle, onchanged: () => undefined });
     expect(await screen.findByRole('button', { name: 'Nuevo plan' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Programar orden' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Crear orden' })).toBeVisible();
   });
 });

@@ -7,10 +7,13 @@
   import {
     formatDate,
     formatDateTime,
-    KIND_META,
+    plateLabel,
     LICENSE_LABELS,
+    INCIDENT_KIND_LABELS,
+    INCIDENT_STATUS_LABELS,
     type LicenseClass
   } from '$lib/features/fleet/catalog';
+  import { fleetApi, type FleetIncident } from '$lib/features/fleet/api';
   import ComplianceList from '$lib/features/fleet/ComplianceList.svelte';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import MoveToTrashDialog from '$lib/features/fleet/MoveToTrashDialog.svelte';
@@ -35,6 +38,8 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let tab = $state<Tab>('summary');
+  let incidents = $state<FleetIncident[]>([]);
+  let incidentsError = $state(false);
 
   let modal = $state<'edit' | 'status' | 'branch' | null>(null);
   let trashOpen = $state(false);
@@ -57,6 +62,15 @@
   );
   const branchOptions = $derived(branch.branches.filter((item) => item.id !== driver?.branch_id));
 
+  async function loadIncidents() {
+    incidentsError = false;
+    try {
+      incidents = await fleetApi.driverIncidents(driverId);
+    } catch {
+      incidentsError = true;
+    }
+  }
+
   async function load() {
     loading = true;
     error = null;
@@ -69,6 +83,7 @@
       driver = profile;
       assignments = history;
       trips = travelled;
+      void loadIncidents();
     } catch (err) {
       error =
         err instanceof HttpError && err.status === 404
@@ -222,10 +237,8 @@
             <a class="link-row" href={`/fleet/${driver.vehicle.vehicle_id}`}>
               <FleetIcon name="truck" size={18} />
               <span
-                ><strong>{driver.vehicle.code} · {driver.vehicle.plate}</strong><small
-                  >{KIND_META[driver.vehicle.kind].label} · desde {formatDate(
-                    driver.vehicle.since
-                  )}</small
+                ><strong>{driver.vehicle.code} · {plateLabel(driver.vehicle.plate)}</strong><small
+                  >{driver.vehicle.kind_name} · desde {formatDate(driver.vehicle.since)}</small
                 ></span
               >
               <FleetIcon name="chevron" size={14} />
@@ -275,13 +288,36 @@
             <ol class="timeline">
               {#each assignments as item (item.id)}
                 <li>
-                  <strong>{item.vehicle_code} · {item.vehicle_plate}</strong>
+                  <strong>{item.vehicle_code} · {plateLabel(item.vehicle_plate)}</strong>
                   <small
                     >{formatDate(item.starts_at)} — {item.ends_at
                       ? formatDate(item.ends_at)
                       : 'actual'}</small
                   >
                   {#if item.end_reason}<small>{item.end_reason}</small>{/if}
+                </li>
+              {/each}
+            </ol>
+          {/if}
+        </section>
+        <section class="card">
+          <h2>Incidentes</h2>
+          {#if incidentsError}
+            <p class="muted" role="alert">No se pudieron cargar los incidentes.</p>
+          {:else if incidents.length === 0}
+            <p class="muted">Sin incidentes registrados.</p>
+          {:else}
+            <ol class="timeline">
+              {#each incidents as incident (incident.id)}
+                <li>
+                  <a href={`/fleet/${incident.vehicle_id}?tab=incidents`}>
+                    <strong>
+                      {INCIDENT_KIND_LABELS[incident.kind]} · {incident.vehicle_code}
+                    </strong>
+                  </a>
+                  <small>
+                    {formatDate(incident.occurred_at)} · {INCIDENT_STATUS_LABELS[incident.status]}
+                  </small>
                 </li>
               {/each}
             </ol>

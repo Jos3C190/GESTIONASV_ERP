@@ -5,7 +5,7 @@
   import {
     formatDate,
     formatDateTime,
-    KIND_META,
+    plateLabel,
     LICENSE_LABELS
   } from '$lib/features/fleet/catalog';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
@@ -168,12 +168,13 @@
         {#if driver.vehicle}
           <a class="vehicle" href={`/fleet/${driver.vehicle.vehicle_id}`}
             ><VehicleImage
-              kind={driver.vehicle.kind}
-              label={`${KIND_META[driver.vehicle.kind].label}, ${driver.vehicle.code}`}
+              image={driver.vehicle.base_image}
+              typeName={driver.vehicle.kind_name}
+              label={`${driver.vehicle.kind_name}, ${driver.vehicle.code}`}
             />
             <div>
               <strong>{driver.vehicle.code}</strong>
-              <p>{driver.vehicle.plate} · {KIND_META[driver.vehicle.kind].label}</p>
+              <p>{plateLabel(driver.vehicle.plate)} · {driver.vehicle.kind_name}</p>
               <span class="text-action">Ver vehículo <FleetIcon name="chevron" size={13} /></span>
             </div></a
           >
