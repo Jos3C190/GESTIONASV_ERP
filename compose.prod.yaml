@@ -50,6 +50,8 @@ services:
       OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-false}
       OTEL_TRACE_SAMPLE_RATIO: ${OTEL_TRACE_SAMPLE_RATIO:-0.1}
       OBSERVABILITY_HEALTH_URL: ${OBSERVABILITY_HEALTH_URL:-}
+      # Ningún GPS instalado hasta abrir su puerto en `traccar` (docs/gps-produccion.md).
+      TRACCAR_TRACKER_MODELS: ${TRACCAR_TRACKER_MODELS:-none}
     depends_on: !override
       db:
         condition: service_healthy
@@ -119,6 +121,19 @@ services:
     ports: !reset []
     expose:
       - "3000"
+
+  # Servidor GPS (se activa con --profile tracking). Los teléfonos entran por Nginx con
+  # HTTPS; la interfaz web y el puerto de la app no se exponen. Abre solo el puerto de los
+  # modelos que uses y nómbralos en TRACCAR_TRACKER_MODELS (docs/gps-produccion.md).
+  traccar:
+    restart: unless-stopped
+    ports: !override []
+    #  - "5023:5023"  # gt06: Concox / Jimi
+    #  - "5027:5027"  # teltonika
+    #  - "5001:5001"  # gps103: Coban TK103-2B, GPS-103
+    #  - "5002:5002"  # tk103: Coban TK103A, TK103B
+    #  - "5004:5004"  # queclink
+    #  - "5013:5013"  # sinotrack
 
   # Minimal reverse proxy. Configure certs/headers for your domain at deploy time.
   nginx:

@@ -49,7 +49,9 @@ jobs:
           PY
 
       - name: Validate optional compose profiles
-        run: docker compose --profile vlm --profile lan config -q
+        run: |
+          docker compose --profile vlm --profile lan config -q
+          docker compose -f compose.yaml -f compose.prod.yaml --profile prod --profile tracking config -q
       - name: Start ERP services
         run: docker compose up -d --build
       - name: Wait for ERP readiness

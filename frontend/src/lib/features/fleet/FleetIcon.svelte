@@ -33,7 +33,10 @@
     navigation: 'M12 3l7 18-7-4-7 4z',
     battery: 'M3 7h15v10H3z M21 11v2',
     power: 'M12 3v9 M6.5 7a8 8 0 1011 0',
-    crosshair: 'M12 2v4 M12 18v4 M2 12h4 M18 12h4 M19 12a7 7 0 11-14 0 7 7 0 0114 0'
+    crosshair: 'M12 2v4 M12 18v4 M2 12h4 M18 12h4 M19 12a7 7 0 11-14 0 7 7 0 0114 0',
+    phone: 'M7 2h10a1 1 0 011 1v18a1 1 0 01-1 1H7a1 1 0 01-1-1V3a1 1 0 011-1z M11 18h2',
+    copy: 'M9 9h11v11H9z M5 15H4V4h11v1',
+    external: 'M14 4h6v6 M20 4l-9 9 M18 14v6H4V6h6'
   };
   let {
     name,

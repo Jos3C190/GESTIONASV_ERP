@@ -3,7 +3,7 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help up down restart logs ps build seed reset-db test test-backend test-frontend \
-        test-unit test-integration test-e2e lint fmt clean setup db-shell backend-shell frontend-shell \
+        test-unit test-integration test-e2e lint fmt clean setup setup-gps setup-vlm db-shell backend-shell frontend-shell \
         security-scan security-scan-images security-scan-deep storage-backup storage-restore observability-status observability-logs \
         observability-validate observability-restart
 
@@ -15,6 +15,12 @@ help: ## Show this help
 
 setup: ## One-command setup: copy .env, build, start, migrate, seed
 	@./scripts/setup.sh
+
+setup-gps: ## Start the local GPS server and connect it to the ERP (optional)
+	@./scripts/setup-gps.sh
+
+setup-vlm: ## Prepare the license-reading model and start its worker (optional, needs an NVIDIA GPU)
+	@./scripts/setup-vlm.sh
 
 up: ## Start dev stack and run the first-setup bootstrap when needed
 	$(COMPOSE) up -d --build

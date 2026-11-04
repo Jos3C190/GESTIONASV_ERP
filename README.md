@@ -52,22 +52,21 @@ como mockups en el sidebar.
 
 ## Quick start — un solo comando
 
-Requisitos: **Docker** (con Compose v2) y **Git**. Nada más.
+Requisitos: **Docker** (con Compose v2), **Git** y **Bash**. En Windows, Bash viene con Git
+for Windows; abre esa terminal, Git Bash, para estos comandos.
 
 ```bash
 git clone <repo-url> erp-system && cd erp-system
 make setup
 ```
 
-O sin Make:
+O sin Make, con las mismas credenciales locales generadas:
 
 ```bash
 git clone <repo-url> erp-system && cd erp-system
-cp .env.example .env
-docker compose up -d --build
+bash scripts/setup.sh
 ```
 
-En Windows PowerShell, use `Copy-Item .env.example .env` en lugar de `cp`.
 Docker Compose
 espera las migraciones, ejecuta la semilla de primer setup y levanta el frontend
 solamente cuando la base queda lista.
@@ -118,6 +117,19 @@ o eliminar medios desde la aplicación.
 
 Los usuarios operativos de la semilla tienen contraseñas aleatorias no
 recuperables. Un administrador debe asignarles una contraseña antes de usarlos.
+
+### Funciones opcionales
+
+No se instalan con `make setup`.
+
+| Función | Cómo activarla | Qué necesita |
+|---------|----------------|--------------|
+| **GPS y Seguimiento** | `make setup-gps` (o `bash scripts/setup-gps.sh`) | Nada más: enciende el servidor GPS, crea su cuenta de servicio y detecta la IP de la PC |
+| **Lectura de licencias** | `make setup-vlm` (o `bash scripts/setup-vlm.sh`); guía en [`ocr/README.md`](ocr/README.md) | GPU NVIDIA y descargar unos 3 GB una vez. Sin ella, los datos se escriben a mano |
+
+Tras `make setup-gps`, conecta un equipo desde Flota > un vehículo > pestaña GPS. Para otra IP:
+`GPS_HOST=192.168.1.50 make setup-gps`. La dirección solo sirve dentro de tu red; para llevarlo a
+un servidor, ver [`docs/gps-produccion.md`](docs/gps-produccion.md).
 
 ---
 
