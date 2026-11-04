@@ -116,6 +116,8 @@ class FleetVehicleModel(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     code: Mapped[str] = mapped_column(String(32), nullable=False)
     plate: Mapped[str | None] = mapped_column(String(16))
     vin: Mapped[str | None] = mapped_column(String(32))
+    chassis_number: Mapped[str | None] = mapped_column(String(32))
+    engine_number: Mapped[str | None] = mapped_column(String(32))
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
     brand: Mapped[str] = mapped_column(String(60), nullable=False)
     model: Mapped[str] = mapped_column(String(80), nullable=False)

@@ -10,6 +10,8 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
+from app.application.fleet.vehicle_identifiers import normalize_serial, normalize_vin
+
 #: A code from the company's vehicle type catalogue; the routers check it exists.
 VehicleKind = Annotated[str, Field(pattern=r"^[a-z0-9_]{2,24}$")]
 VehicleStatus = Literal["active", "maintenance", "out_of_service", "retired"]
@@ -49,15 +51,6 @@ def normalize_plate(value: str | None) -> str | None:
     normalized = re.sub(r"\s+", " ", value.strip().upper())
     if not _PLATE.match(normalized):
         raise ValueError("La placa solo admite letras, números, espacios y guiones.")
-    return normalized
-
-
-def normalize_vin(value: str | None) -> str | None:
-    if value is None or not value.strip():
-        return None
-    normalized = value.strip().upper()
-    if not re.fullmatch(r"[A-HJ-NPR-Z0-9]{11,17}", normalized):
-        raise ValueError("El VIN debe tener entre 11 y 17 caracteres válidos.")
     return normalized
 
 
@@ -168,6 +161,8 @@ class FleetVehicleOut(BaseModel):
     code: str
     plate: str | None
     vin: str | None
+    chassis_number: str | None
+    engine_number: str | None
     kind: VehicleKind
     type: VehicleTypeOut
     coupling: VehicleCouplingOut | None
@@ -220,6 +215,8 @@ class FleetSummaryOut(BaseModel):
 class _VehicleFields(BaseModel):
     plate: str | None = Field(None, max_length=16)
     vin: str | None = Field(None, max_length=32)
+    chassis_number: str | None = Field(None, max_length=32)
+    engine_number: str | None = Field(None, max_length=32)
     kind: VehicleKind
     brand: str = Field(min_length=1, max_length=60)
     model: str = Field(min_length=1, max_length=80)
@@ -247,6 +244,11 @@ class _VehicleFields(BaseModel):
     def _vin(cls, value: str | None) -> str | None:
         return normalize_vin(value)
 
+    @field_validator("chassis_number", "engine_number")
+    @classmethod
+    def _serial(cls, value: str | None) -> str | None:
+        return normalize_serial(value)
+
     @field_validator("brand", "model", "color", "notes")
     @classmethod
     def _strip(cls, value: str | None) -> str | None:
@@ -273,6 +275,8 @@ class FleetVehicleCreate(_VehicleFields):
 class FleetVehicleUpdate(BaseModel):
     plate: str | None = Field(None, max_length=16)
     vin: str | None = Field(None, max_length=32)
+    chassis_number: str | None = Field(None, max_length=32)
+    engine_number: str | None = Field(None, max_length=32)
     kind: VehicleKind | None = None
     brand: str | None = Field(None, min_length=1, max_length=60)
     model: str | None = Field(None, min_length=1, max_length=80)
@@ -299,6 +303,11 @@ class FleetVehicleUpdate(BaseModel):
     @classmethod
     def _vin(cls, value: str | None) -> str | None:
         return normalize_vin(value)
+
+    @field_validator("chassis_number", "engine_number")
+    @classmethod
+    def _serial(cls, value: str | None) -> str | None:
+        return normalize_serial(value)
 
 
 class VehicleStatusIn(BaseModel):

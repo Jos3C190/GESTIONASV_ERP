@@ -28,6 +28,9 @@ def clean_values(raw: str, keys: tuple[str, ...]) -> dict[str, str | None]:
     for key in keys:
         value = parsed.get(key)
         text = value.strip() if isinstance(value, str) else ""
+        # El modelo a veces escribe la palabra null en lugar del valor nulo.
+        if text.casefold() == "null":
+            text = ""
         # Un texto largo no es un campo de licencia: es el modelo divagando.
         values[key] = text if text and len(text) <= _MAX_VALUE_LENGTH else None
     return values

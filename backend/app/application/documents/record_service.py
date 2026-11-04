@@ -90,16 +90,22 @@ def _clean_tags(tags: tuple[str, ...]) -> list[str]:
 _OWNER_TYPES = {"employees": "employee", "fleet": "vehicle"}
 
 #: Solo se crean al confirmar una captura guiada: de ellas depende si alguien puede
-#: conducir, y cualquier otra vía se saltaría las validaciones de esa captura.
-CAPTURE_ONLY_CATEGORY_CODES = frozenset({"driver_license", "driver_license_back"})
+#: conducir o si un vehículo puede salir, y cualquier otra vía se saltaría sus validaciones.
+_LICENSE_ONLY = "La licencia de conducir solo se registra con la captura guiada de Conductores."
+_CARD_ONLY = "La tarjeta de circulación solo se registra con la captura guiada del vehículo."
+_CAPTURE_ONLY_MESSAGES = {
+    "driver_license": _LICENSE_ONLY,
+    "driver_license_back": _LICENSE_ONLY,
+    "circulation_card": _CARD_ONLY,
+    "circulation_card_back": _CARD_ONLY,
+}
+CAPTURE_ONLY_CATEGORY_CODES = frozenset(_CAPTURE_ONLY_MESSAGES)
 
 
 def _require_not_capture_only(category: DocumentCategory) -> None:
-    if category.code in CAPTURE_ONLY_CATEGORY_CODES:
-        raise ConflictError(
-            "La licencia de conducir solo se registra con la captura guiada de Conductores.",
-            code="document_category_capture_only",
-        )
+    message = _CAPTURE_ONLY_MESSAGES.get(category.code)
+    if message is not None:
+        raise ConflictError(message, code="document_category_capture_only")
 
 
 class DocumentRecordService:

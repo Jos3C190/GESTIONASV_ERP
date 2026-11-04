@@ -226,6 +226,8 @@ async def build_vehicle_views(
                 "code": vehicle.code,
                 "plate": vehicle.plate,
                 "vin": vehicle.vin,
+                "chassis_number": vehicle.chassis_number,
+                "engine_number": vehicle.engine_number,
                 "kind": vehicle.kind,
                 "type": vehicle_type_view(vehicle_type),
                 "coupling": couplings.get(vehicle.id),

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 FIELD_INSTRUCTIONS = (
-    "Extrae de esta licencia estos campos y devuelve JSON. Copia exactamente lo impreso, "
+    "Extrae de esta {document} estos campos y devuelve JSON. Copia exactamente lo impreso, "
     "sin corregir nada. Usa null si un campo no se puede leer. Campos: "
 )
 
@@ -22,10 +22,11 @@ class CaptureSide:
     #: Output key -> where to find it. Order matters: the model fills keys in sequence,
     #: and asking for the DUI before the name lines stopped it from mixing them up.
     fields: Mapping[str, str]
+    document: str = "licencia"
 
     def prompt(self) -> str:
         listed = "; ".join(f"{key}: {hint}" for key, hint in self.fields.items())
-        return f"{FIELD_INSTRUCTIONS}{listed}"
+        return f"{FIELD_INSTRUCTIONS.format(document=self.document)}{listed}"
 
     def response_format(self) -> dict[str, Any]:
         return {
@@ -75,4 +76,37 @@ DRIVER_LICENSE = CaptureProfile(
     },
 )
 
-PROFILES: Mapping[str, CaptureProfile] = {DRIVER_LICENSE.kind: DRIVER_LICENSE}
+_CIRCULATION_DOCUMENT = "tarjeta de circulación"
+
+#: The owner's name, DUI and address are printed on the front and are never requested.
+#: The key is ``vto`` because the model took ``vence`` for the DUI printed beside it.
+CIRCULATION_CARD = CaptureProfile(
+    kind="circulation_card",
+    sides={
+        "front": CaptureSide(
+            {
+                "placa": "código grande en negrita debajo del nombre",
+                "vto": "texto junto a VTO, formato MM-AAAA",
+                "emision": "fecha junto a EMISIÓN, formato MM-DD-AAAA",
+            },
+            document=_CIRCULATION_DOCUMENT,
+        ),
+        "back": CaptureSide(
+            {
+                "anio": "número bajo AÑO",
+                "marca": "texto bajo MARCA",
+                "modelo": "texto bajo MODELO",
+                "color": "texto bajo COLOR",
+                "chasis": "código bajo Nº CHASIS",
+                "motor": "código bajo Nº MOTOR",
+                "vin": "código bajo Nº VIN",
+            },
+            document=_CIRCULATION_DOCUMENT,
+        ),
+    },
+)
+
+PROFILES: Mapping[str, CaptureProfile] = {
+    DRIVER_LICENSE.kind: DRIVER_LICENSE,
+    CIRCULATION_CARD.kind: CIRCULATION_CARD,
+}
