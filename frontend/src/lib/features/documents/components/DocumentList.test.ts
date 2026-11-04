@@ -43,6 +43,8 @@ describe('capture-only documents', () => {
   it('recognises the license categories', () => {
     expect(isCaptureOnly({ category_code: 'driver_license' })).toBe(true);
     expect(isCaptureOnly({ category_code: 'driver_license_back' })).toBe(true);
+    expect(isCaptureOnly({ category_code: 'circulation_card' })).toBe(true);
+    expect(isCaptureOnly({ category_code: 'circulation_card_back' })).toBe(true);
     expect(isCaptureOnly({ category_code: 'dui' })).toBe(false);
     expect(isCaptureOnly({})).toBe(false);
   });
@@ -86,6 +88,6 @@ describe('capture-only documents', () => {
     render(DocumentList, { documents: [], emptyHint: 'Usa la captura guiada.' });
 
     expect(screen.getByText('Usa la captura guiada.')).toBeInTheDocument();
-    expect(screen.queryByText(/Cargue el primer documento/)).toBeNull();
+    expect(screen.queryByText(/Carga el primer documento/)).toBeNull();
   });
 });

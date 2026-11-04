@@ -1,4 +1,4 @@
-/** Checks and prepares a license photo in the browser, before anything is uploaded. */
+/** Checks and prepares a document photo in the browser, before anything is uploaded. */
 
 export const MAX_EDGE = 2000;
 export const MIN_EDGE = 640;
@@ -47,11 +47,11 @@ export const QUALITY_MESSAGES: Record<QualityIssue, { title: string; hint: strin
     title: 'Foto muy pequeña',
     hint: 'Acércate o usa una imagen de mayor tamaño.'
   },
-  too_far: { title: 'Estás muy lejos', hint: 'Acércate: la licencia debe llenar el marco.' },
+  too_far: { title: 'Estás muy lejos', hint: 'Acércate: el documento debe llenar el marco.' },
   blurry: { title: 'Foto borrosa', hint: 'Sostén firme la cámara e inténtalo de nuevo.' },
   dark: { title: 'Poca luz', hint: 'Busca un lugar más iluminado.' },
   overexposed: { title: 'Demasiada luz', hint: 'Aléjate de la lámpara o del sol.' },
-  glare: { title: 'Hay un reflejo sobre la licencia', hint: 'Inclínala un poco.' }
+  glare: { title: 'Hay un reflejo sobre el documento', hint: 'Inclínalo un poco.' }
 };
 
 /** Scale down only; a small photo is not improved by enlarging it here. */
@@ -267,7 +267,11 @@ export function guideCrop(
  * Re-encoding always yields a clean JPEG: it drops EXIF data such as the GPS
  * position, avoids the trailing bytes some phones add, and keeps uploads small.
  */
-export async function prepareImage(source: Blob, side: 'front' | 'back'): Promise<PreparedImage> {
+export async function prepareImage(
+  source: Blob,
+  side: 'front' | 'back',
+  filePrefix: string
+): Promise<PreparedImage> {
   // `from-image` respeta la orientación con que el teléfono guardó la foto.
   const bitmap = await createImageBitmap(source, { imageOrientation: 'from-image' });
   try {
@@ -279,7 +283,7 @@ export async function prepareImage(source: Blob, side: 'front' | 'back'): Promis
       canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY)
     );
     if (!blob) throw new Error('image_encode_failed');
-    return { file: new File([blob], `licencia-${side}.jpg`, { type: 'image/jpeg' }), issues };
+    return { file: new File([blob], `${filePrefix}-${side}.jpg`, { type: 'image/jpeg' }), issues };
   } finally {
     bitmap.close();
   }

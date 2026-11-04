@@ -222,11 +222,11 @@ async def test_vehicle_documents_follow_category_rules(e2e_client: Any) -> None:
         f"/api/v1/fleet/vehicles/{vehicle['id']}/documents/uploads",
         headers=admin,
         json={
-            "file_name": "tarjeta.pdf",
+            "file_name": "revision.pdf",
             "content_type": "application/pdf",
             "size_bytes": 1024,
             "checksum_sha256": "a" * 64,
-            "category_id": by_code["circulation_card"]["id"],
+            "category_id": by_code["technical_inspection"]["id"],
         },
     )
     assert missing_expiry.status_code == 422

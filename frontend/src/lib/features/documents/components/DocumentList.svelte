@@ -34,7 +34,7 @@
 
   let {
     documents,
-    emptyHint = 'Cargue el primer documento para iniciar el expediente.',
+    emptyHint = 'Carga el primer documento para iniciar el expediente.',
     loading = false,
     canDownload = true,
     canDownloadDocument,

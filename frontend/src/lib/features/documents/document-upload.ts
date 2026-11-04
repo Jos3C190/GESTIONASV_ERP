@@ -1,9 +1,11 @@
 export const DOCUMENT_MAX_BYTES = 50 * 1024 * 1024;
 
-/** Solo se registran con la captura guiada de Conductores; el backend rechaza cualquier otra vía. */
+/** Solo se registran con su captura guiada; el backend rechaza cualquier otra vía. */
 export const CAPTURE_ONLY_CATEGORY_CODES: ReadonlySet<string> = new Set([
   'driver_license',
-  'driver_license_back'
+  'driver_license_back',
+  'circulation_card',
+  'circulation_card_back'
 ]);
 
 /** Estos documentos no se editan ni reemplazan: un cambio exige una nueva captura. */

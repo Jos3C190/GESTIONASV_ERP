@@ -8,17 +8,29 @@ import {
   QUALITY_MESSAGES,
   toGrey,
   type ImageMetrics
-} from './image-prep';
+} from '$lib/features/document-capture/image-prep';
 import {
-  confirmBlocker,
-  EMPTY_VALUES,
-  fieldsToReview,
+  confirmBlocker as confirmBlockerFor,
+  fieldsToReview as fieldsToReviewIn,
   issuesFor,
   isWaiting,
   mergeExtracted,
-  unreadFields,
+  unreadFields as unreadFieldsFor,
   warningCodes
-} from './review';
+} from '$lib/features/document-capture/review';
+import type { CaptureIssue, CaptureValues } from '$lib/features/document-capture/types';
+import { EMPTY_VALUES, licenseCaptureRules } from './license-config';
+
+const fieldsToReview = (issues: CaptureIssue[]) =>
+  fieldsToReviewIn(issues, licenseCaptureRules.groups);
+const confirmBlocker = (state: Parameters<typeof confirmBlockerFor>[0]) =>
+  confirmBlockerFor(state, licenseCaptureRules);
+const unreadFields = (
+  values: CaptureValues,
+  issues: CaptureIssue[],
+  capture: { front: { extracted: boolean }; back: { extracted: boolean } },
+  touched: ReadonlySet<string>
+) => unreadFieldsFor(values, issues, capture, touched, licenseCaptureRules);
 
 /** Mostly white card with dark text in the middle, as the camera would see a license. */
 function card(width = 240, height = 160, paper = 250, ink = 20): Uint8ClampedArray {
@@ -273,6 +285,25 @@ describe('fieldsToReview', () => {
 });
 
 describe('confirmBlocker', () => {
+  it('explains an issue that fixing a typo would not solve', () => {
+    const issues: CaptureIssue[] = [
+      { code: 'plate_mismatch', severity: 'error', field: 'plate', message: 'x' }
+    ];
+    const state = {
+      photosReady: true,
+      issues,
+      acknowledged: false,
+      canOverride: false,
+      overrideReason: ''
+    };
+    expect(
+      confirmBlockerFor(state, {
+        ...licenseCaptureRules,
+        blockingCodes: { plate_mismatch: 'Es de otro vehículo.' }
+      })
+    ).toBe('Es de otro vehículo.');
+  });
+
   const ready = {
     photosReady: true,
     issues: [],

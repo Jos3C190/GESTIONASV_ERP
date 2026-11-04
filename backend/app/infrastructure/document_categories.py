@@ -68,6 +68,7 @@ EMPLOYEE_CATEGORY_SEEDS: tuple[tuple[str, str, str], ...] = (
 
 FLEET_CATEGORY_SEEDS: tuple[tuple[str, str, str], ...] = (
     ("circulation_card", "Tarjeta de circulación", "Documentos legales"),
+    ("circulation_card_back", "Reverso de tarjeta de circulación", "Documentos legales"),
     ("insurance_policy", "Póliza de seguro", "Documentos legales"),
     ("technical_inspection", "Revisión técnica", "Documentos legales"),
     ("transport_permit", "Permiso de transporte", "Documentos legales"),

@@ -31,6 +31,8 @@
   let code = $state('');
   let plate = $state('');
   let vin = $state('');
+  let chassisNumber = $state('');
+  let engineNumber = $state('');
   let kind = $state('cargo_van');
   let types = $state<FleetVehicleType[]>([]);
   let typesError = $state<string | null>(null);
@@ -63,6 +65,8 @@
     code = vehicle.code;
     plate = vehicle.plate ?? '';
     vin = vehicle.vin ?? '';
+    chassisNumber = vehicle.chassis_number ?? '';
+    engineNumber = vehicle.engine_number ?? '';
     kind = vehicle.kind;
     brand = vehicle.brand;
     model = vehicle.model;
@@ -186,6 +190,8 @@
     const fields = {
       plate: plate.trim() || null,
       vin: vin.trim() || null,
+      chassis_number: chassisNumber.trim() || null,
+      engine_number: engineNumber.trim() || null,
       kind,
       brand: brand.trim(),
       model: model.trim(),
@@ -263,6 +269,18 @@
           bind:value={vin}
           maxlength={17}
           error={fieldErrors.vin}
+        />
+        <FormField
+          id="vehicle-chassis"
+          label="Chasis (opcional)"
+          bind:value={chassisNumber}
+          maxlength={32}
+        />
+        <FormField
+          id="vehicle-engine"
+          label="Motor (opcional)"
+          bind:value={engineNumber}
+          maxlength={32}
         />
         {#if mode === 'create'}
           <FormField

@@ -9,16 +9,16 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, fields
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit.audit_service import AuditService
+from app.application.document_capture.sessions import CaptureConfig, CaptureSessions
 from app.application.documents import DocumentMetadataInput, DocumentRecordService
-from app.application.documents.service import DocumentService, InitiateDocumentInput, UploadTicket
+from app.application.documents.service import DocumentService, UploadTicket
 from app.application.fleet.compliance import license_issue
 from app.application.fleet.license_rules import (
     EmployeeIdentity,
@@ -28,22 +28,25 @@ from app.application.fleet.license_rules import (
     check_license,
     sides_look_swapped,
 )
-from app.core.config import settings
 from app.core.exceptions import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from app.domain.entities.document import DocumentAsset
-from app.infrastructure.models.document_capture import OPEN_CAPTURE_STATUSES, DocumentCaptureModel
+from app.infrastructure.models.document_capture import DocumentCaptureModel
 from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.fleet import DriverModel
 from app.infrastructure.observability import record_counter
 from app.infrastructure.repositories.fleet_repository import FleetRepository
 
-KIND = "driver_license"
-OWNER_TYPE = "driver"
-CAPTURE_MAX_BYTES = 15 * 1024 * 1024
 OVERRIDE_PERMISSION = "drivers:license_override"
 MIN_REASON_LENGTH = 3
 _BUSINESS_TZ = ZoneInfo("America/El_Salvador")
-_EXTENSIONS = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+_CONFIG = CaptureConfig(
+    kind="driver_license",
+    owner_type="driver",
+    file_prefix="licencia",
+    code_prefix="license_capture",
+    cancel_action="DRIVER_LICENSE_CAPTURE_CANCELLED",
+    resource_type="drivers",
+)
 
 
 def business_today() -> Any:
@@ -98,64 +101,16 @@ class LicenseCaptureService:
         self._documents = documents
         self._records = records
         self._audit = audit
+        self._sessions = CaptureSessions(session, documents, audit, _CONFIG)
 
     async def open(self, driver: DriverModel, actor_id: uuid.UUID) -> DocumentCaptureModel:
         """Resume the driver's open capture, or start one."""
-        existing = await self._open_capture(driver.company_id, driver.id)
-        if existing is not None:
-            return existing
-        capture = DocumentCaptureModel(
-            company_id=driver.company_id,
-            kind=KIND,
-            owner_type=OWNER_TYPE,
-            owner_id=driver.id,
-            status="draft",
-            expires_at=datetime.now(UTC)
-            + timedelta(hours=settings.LICENSE_CAPTURE_RETENTION_HOURS),
-            created_by=actor_id,
-        )
-        self._session.add(capture)
-        await self._session.flush()
-        return capture
-
-    async def _open_capture(
-        self, company_id: uuid.UUID, driver_id: uuid.UUID
-    ) -> DocumentCaptureModel | None:
-        capture: DocumentCaptureModel | None = await self._session.scalar(
-            select(DocumentCaptureModel).where(
-                DocumentCaptureModel.company_id == company_id,
-                DocumentCaptureModel.kind == KIND,
-                DocumentCaptureModel.owner_type == OWNER_TYPE,
-                DocumentCaptureModel.owner_id == driver_id,
-                DocumentCaptureModel.status.in_(OPEN_CAPTURE_STATUSES),
-            )
-        )
-        return capture
+        return await self._sessions.open(driver.company_id, driver.id, actor_id)
 
     async def get_capture(
         self, driver: DriverModel, capture_id: uuid.UUID, *, lock: bool = False
     ) -> DocumentCaptureModel:
-        statement = select(DocumentCaptureModel).where(
-            DocumentCaptureModel.id == capture_id,
-            DocumentCaptureModel.company_id == driver.company_id,
-            DocumentCaptureModel.owner_type == OWNER_TYPE,
-            DocumentCaptureModel.owner_id == driver.id,
-        )
-        if lock:
-            statement = statement.with_for_update()
-        capture = await self._session.scalar(statement)
-        if capture is None:
-            raise NotFoundError("Captura no encontrada.", code="license_capture_not_found")
-        return capture
-
-    @staticmethod
-    def _require_open(capture: DocumentCaptureModel) -> None:
-        if capture.status not in OPEN_CAPTURE_STATUSES:
-            raise ConflictError("Esta captura ya terminó.", code="license_capture_closed")
-
-    @staticmethod
-    def _side_id(capture: DocumentCaptureModel, side: str) -> uuid.UUID | None:
-        return capture.front_document_id if side == "front" else capture.back_document_id
+        return await self._sessions.get(driver.company_id, driver.id, capture_id, lock=lock)
 
     async def initiate_side(
         self,
@@ -167,57 +122,20 @@ class LicenseCaptureService:
         checksum_sha256: str,
         actor_id: uuid.UUID,
     ) -> UploadTicket:
-        self._require_open(capture)
-        if size_bytes > CAPTURE_MAX_BYTES:
-            raise ValidationError(
-                "La foto supera el tamaño permitido.", code="license_capture_too_large"
-            )
-        ticket = await self._documents.initiate(
-            InitiateDocumentInput(
-                company_id=capture.company_id,
-                actor_id=actor_id,
-                # Nombre fijo: el nombre original quedaría en la auditoría y podría traer datos.
-                filename=f"licencia-{side}.{_EXTENSIONS[content_type]}",
-                content_type=content_type,
-                size_bytes=size_bytes,
-                checksum_sha256=checksum_sha256,
-            )
+        return await self._sessions.initiate_side(
+            capture,
+            side,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            checksum_sha256=checksum_sha256,
+            actor_id=actor_id,
         )
-        previous = self._side_id(capture, side)
-        if side == "front":
-            capture.front_document_id = ticket.document.id
-        else:
-            capture.back_document_id = ticket.document.id
-        if capture.extracted and side in capture.extracted:
-            capture.extracted = {k: v for k, v in capture.extracted.items() if k != side}
-        await self._session.flush()
-        if previous is not None:
-            await self._documents.discard(capture.company_id, previous)
-        return ticket
 
     async def complete_side(
         self, capture: DocumentCaptureModel, side: str, actor_id: uuid.UUID
     ) -> bool:
         """Scan the uploaded photo. Returns whether the capture now awaits extraction."""
-        self._require_open(capture)
-        document_id = self._side_id(capture, side)
-        if document_id is None:
-            raise ConflictError("Primero carga la foto.", code="license_capture_side_missing")
-        await self._documents.complete(capture.company_id, document_id, actor_id)
-        if not settings.VLM_ENABLED:
-            return False
-        capture.status = "pending"
-        capture.attempts = 0
-        capture.failure_code = None
-        capture.started_at = None
-        await self._session.flush()
-        return True
-
-    async def _asset(self, capture: DocumentCaptureModel, side: str) -> DocumentAsset | None:
-        document_id = self._side_id(capture, side)
-        if document_id is None:
-            return None
-        return await self._documents.get(capture.company_id, document_id)
+        return await self._sessions.complete_side(capture, side, actor_id)
 
     async def _identity(self, driver: DriverModel) -> EmployeeIdentity:
         employee = await self._session.get(Employee, driver.employee_id)
@@ -248,8 +166,8 @@ class LicenseCaptureService:
                 )
         return CaptureView(
             capture,
-            await self._asset(capture, "front"),
-            await self._asset(capture, "back"),
+            await self._sessions.asset(capture, "front"),
+            await self._sessions.asset(capture, "back"),
             values,
             issues,
         )
@@ -321,7 +239,7 @@ class LicenseCaptureService:
         can_override: bool,
         can_update_driver: bool,
     ) -> None:
-        self._require_open(capture)
+        self._sessions.require_open(capture)
         check, reason = await self._validate_confirmation(
             driver,
             values,
@@ -402,21 +320,4 @@ class LicenseCaptureService:
             )
 
     async def cancel(self, capture: DocumentCaptureModel, actor_id: uuid.UUID) -> None:
-        self._require_open(capture)
-        for document_id in (capture.front_document_id, capture.back_document_id):
-            if document_id is not None:
-                await self._documents.discard(capture.company_id, document_id)
-        capture.status = "cancelled"
-        capture.extracted = None
-        capture.front_document_id = None
-        capture.back_document_id = None
-        await self._session.flush()
-        await self._audit.record(
-            action="DRIVER_LICENSE_CAPTURE_CANCELLED",
-            user_id=actor_id,
-            company_id=capture.company_id,
-            resource_type="drivers",
-            resource_id=str(capture.owner_id),
-            after_state={"capture_id": str(capture.id)},
-            required=True,
-        )
+        await self._sessions.cancel(capture, actor_id)

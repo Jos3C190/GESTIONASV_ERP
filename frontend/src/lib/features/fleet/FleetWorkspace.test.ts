@@ -23,6 +23,8 @@ function vehicle(patch: Partial<FleetVehicle> = {}): FleetVehicle {
     code: 'FL-001',
     plate: 'C 123-456',
     vin: null,
+    chassis_number: null,
+    engine_number: null,
     kind: 'refrigerated',
     brand: 'Isuzu',
     model: 'ELF 400',

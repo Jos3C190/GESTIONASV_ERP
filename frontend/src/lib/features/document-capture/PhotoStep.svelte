@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
   import CameraCapture from './CameraCapture.svelte';
@@ -6,8 +7,12 @@
 
   let {
     side,
+    documentName,
+    oncamera,
+    ignoredQuality = [],
     preview,
     uploading,
+    ready = true,
     issue,
     canContinue,
     onphoto,
@@ -16,8 +21,13 @@
     onuseanyway
   }: {
     side: 'front' | 'back';
+    documentName: string;
+    oncamera?: (active: boolean) => void;
+    ignoredQuality?: readonly QualityIssue[];
     preview: string | null;
     uploading: boolean;
+    /** False until the capture exists: a photo chosen before that would be lost. */
+    ready?: boolean;
     issue: QualityIssue | null;
     canContinue: boolean;
     onphoto: (photo: Blob) => void;
@@ -32,9 +42,12 @@
   const filePrimary = `${fileAction} bg-foreground text-surface hover:bg-foreground-muted`;
 
   const label = $derived(side === 'front' ? 'el frente' : 'el reverso');
-  const title = $derived(side === 'front' ? 'Frente de la licencia' : 'Reverso de la licencia');
+  const title = $derived(`${side === 'front' ? 'Frente' : 'Reverso'} de ${documentName}`);
 
+  const locked = $derived(uploading || !ready);
   let cameraOpen = $state(false);
+  let heading = $state<HTMLHeadingElement | null>(null);
+  let wasCamera = false;
   let fromCamera = $state(false);
   let cameraIssue = $state<string | null>(null);
   let dragging = $state(false);
@@ -44,18 +57,25 @@
   // La cámara en vivo exige HTTPS; sin ella queda la cámara nativa del teléfono.
   const liveCamera = Boolean(navigator.mediaDevices?.getUserMedia);
 
+  $effect(() => {
+    oncamera?.(cameraOpen);
+    if (wasCamera && !cameraOpen) void tick().then(() => heading?.focus());
+    wasCamera = cameraOpen;
+  });
+
   function onFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
     fromCamera = false;
-    if (file) onphoto(file);
+    if (file && !locked) onphoto(file);
   }
 
   /** Quien venía de la cámara vuelve directo a ella: es lo que estaba intentando hacer. */
   function retry() {
     onretry();
     if (fromCamera && liveCamera && !cameraIssue) cameraOpen = true;
+    else void tick().then(() => heading?.focus());
   }
 
   $effect(() => {
@@ -70,7 +90,7 @@
       event.preventDefault();
       dragging = false;
       const file = event.dataTransfer?.files?.[0];
-      if (file) onphoto(file);
+      if (file && !locked) onphoto(file);
     };
     element.addEventListener('dragover', over);
     element.addEventListener('dragleave', leave);
@@ -83,9 +103,22 @@
   });
 </script>
 
+{#snippet fileInput()}
+  <label class={!touchFirst && !preview ? filePrimary : fileSecondary} aria-disabled={locked}>
+    <FleetIcon name="upload" size={16} />Subir archivo
+    <input
+      type="file"
+      accept="image/jpeg,image/png,image/webp"
+      disabled={locked}
+      onchange={onFile}
+    />
+  </label>
+{/snippet}
+
 {#if cameraOpen}
   <CameraCapture
     {label}
+    ignored={ignoredQuality}
     oncapture={(photo) => {
       cameraOpen = false;
       fromCamera = true;
@@ -100,13 +133,28 @@
 {:else}
   <div class="photo-step">
     <header>
-      <h3>{title}</h3>
+      <h3 tabindex="-1" data-step-title bind:this={heading}>{title}</h3>
       <p>Carga {label} completo, con las cuatro esquinas visibles y sin reflejos.</p>
     </header>
 
     <div class="stage" class:dragging class:filled={!!preview} bind:this={stage}>
       {#if preview}
-        <img src={preview} alt={`Foto de ${label} de la licencia`} width="856" height="540" />
+        <img
+          src={preview}
+          alt={`Foto ${side === 'front' ? 'del frente' : 'del reverso'} de ${documentName}`}
+          width="856"
+          height="540"
+        />
+      {:else if touchFirst && liveCamera && !cameraIssue}
+        <button
+          type="button"
+          class="placeholder tap"
+          disabled={locked}
+          onclick={() => (cameraOpen = true)}
+        >
+          <FleetIcon name="camera" size={28} />
+          <span>Toca para tomar la foto</span>
+        </button>
       {:else}
         <div class="placeholder">
           <FleetIcon name="image" size={28} />
@@ -142,7 +190,9 @@
         <button class="anyway" type="button" onclick={onuseanyway}>Usar de todos modos</button>
       </div>
     {:else}
-      <div class="actions" class:reverse={!touchFirst && !preview}>
+      <!-- En un PC lo natural es subir un archivo: va primero, también al tabular. -->
+      <div class="actions">
+        {#if !touchFirst && !preview}{@render fileInput()}{/if}
         {#if canContinue && !uploading}
           <Button size="lg" onclick={oncontinue}>Continuar con esta foto</Button>
         {/if}
@@ -150,32 +200,24 @@
           <Button
             variant={preview || !touchFirst ? 'secondary' : 'primary'}
             size="lg"
-            disabled={uploading}
+            disabled={locked}
             onclick={() => (cameraOpen = true)}
           >
             <FleetIcon name="camera" size={16} />{preview ? 'Tomar otra foto' : 'Tomar foto'}
           </Button>
         {:else if touchFirst}
-          <label class={preview ? fileSecondary : filePrimary}>
+          <label class={preview ? fileSecondary : filePrimary} aria-disabled={locked}>
             <FleetIcon name="camera" size={16} />{preview ? 'Tomar otra foto' : 'Tomar foto'}
             <input
               type="file"
               accept="image/*"
               capture="environment"
-              disabled={uploading}
+              disabled={locked}
               onchange={onFile}
             />
           </label>
         {/if}
-        <label class={!touchFirst && !preview ? filePrimary : fileSecondary}>
-          <FleetIcon name="upload" size={16} />Subir archivo
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            disabled={uploading}
-            onchange={onFile}
-          />
-        </label>
+        {#if touchFirst || preview}{@render fileInput()}{/if}
       </div>
     {/if}
   </div>
@@ -185,8 +227,11 @@
   .photo-step {
     display: flex;
     flex-direction: column;
-    gap: var(--driver-space-4);
-    padding: var(--driver-space-4);
+    gap: var(--capture-space-4);
+    padding: var(--capture-space-4);
+  }
+  h3:focus {
+    outline: none;
   }
   h3 {
     margin: 0;
@@ -195,7 +240,7 @@
     font-weight: 600;
   }
   header p {
-    margin: var(--driver-space-1) 0 0;
+    margin: var(--capture-space-1) 0 0;
     color: rgb(var(--foreground-muted));
     font-size: 14px;
   }
@@ -208,7 +253,7 @@
     margin-inline: auto;
     aspect-ratio: 85.6 / 54;
     border: 2px dashed rgb(var(--border-strong));
-    border-radius: var(--driver-radius-lg);
+    border-radius: var(--capture-radius-lg);
     background: rgb(var(--surface-muted));
   }
   .stage.filled {
@@ -230,9 +275,12 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--driver-space-2);
+    gap: var(--capture-space-2);
     color: rgb(var(--foreground-muted));
     font-size: 14px;
+  }
+  .placeholder.tap {
+    width: 100%;
   }
   .drop-hint {
     display: none;
@@ -243,7 +291,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--driver-space-2);
+    gap: var(--capture-space-2);
     color: rgb(var(--foreground));
     background: rgb(var(--surface) / 82%);
     font-size: 14px;
@@ -259,10 +307,10 @@
   }
   .notice {
     display: flex;
-    gap: var(--driver-space-2);
-    padding: var(--driver-space-3);
+    gap: var(--capture-space-2);
+    padding: var(--capture-space-3);
     border: 1px solid rgb(var(--border));
-    border-radius: var(--driver-radius);
+    border-radius: var(--capture-radius);
     color: rgb(var(--foreground));
     font-size: 14px;
   }
@@ -284,7 +332,7 @@
   /* Discreto a propósito: el detector puede equivocarse, pero repetir es lo recomendable. */
   .anyway {
     min-height: 44px;
-    border-radius: var(--driver-radius);
+    border-radius: var(--capture-radius);
     color: rgb(var(--foreground-muted));
     font-size: 14px;
     text-decoration: underline;
@@ -296,10 +344,14 @@
   }
   .actions {
     display: grid;
-    gap: var(--driver-space-2);
+    gap: var(--capture-space-2);
   }
   .actions label {
     position: relative;
+  }
+  .actions label[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
   .actions input {
     position: absolute;
@@ -309,15 +361,12 @@
   }
   @media (min-width: 640px) {
     .photo-step {
-      padding: var(--driver-space-5);
+      padding: var(--capture-space-5);
     }
     .actions {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-    }
-    .actions.reverse {
-      flex-direction: row-reverse;
     }
   }
   @media (hover: hover) and (pointer: fine) {

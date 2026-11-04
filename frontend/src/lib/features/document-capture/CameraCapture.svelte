@@ -13,11 +13,13 @@
 
   let {
     label,
+    ignored = [],
     oncapture,
     onunavailable,
     onback
   }: {
     label: string;
+    ignored?: readonly QualityIssue[];
     oncapture: (photo: Blob) => void;
     onunavailable: (reason: string) => void;
     onback: () => void;
@@ -27,6 +29,13 @@
   let guide = $state<HTMLDivElement | null>(null);
   let ready = $state(false);
   let liveIssue = $state<QualityIssue | null>(null);
+  let lastReading: QualityIssue | null = null;
+  let backButton = $state<HTMLButtonElement | null>(null);
+
+  // El botón que abrió la cámara ya no existe: el foco no debe caer fuera del diálogo.
+  $effect(() => {
+    backButton?.focus();
+  });
 
   const guidance = $derived.by(() => {
     if (!ready) return 'Abriendo la cámara…';
@@ -106,7 +115,12 @@
     const timer = setInterval(() => {
       const frame = cropped();
       if (!frame) return;
-      liveIssue = assessDrawable(frame, frame.width, frame.height)[0] ?? null;
+      const reading =
+        assessDrawable(frame, frame.width, frame.height).find((item) => !ignored.includes(item)) ??
+        null;
+      // Dos lecturas iguales: una sola haría parpadear el aviso con cada movimiento.
+      if (reading === lastReading) liveIssue = reading;
+      lastReading = reading;
     }, LIVE_CHECK_MS);
     return () => clearInterval(timer);
   });
@@ -130,7 +144,7 @@
     <p role="status" class:problem={!!liveIssue}>{guidance}</p>
   </div>
   <div class="controls">
-    <button class="back" type="button" onclick={onback}>
+    <button class="back" type="button" bind:this={backButton} onclick={onback}>
       <FleetIcon name="chevronLeft" size={18} />Volver
     </button>
     <button class="shutter" type="button" aria-label="Tomar foto" disabled={!ready} onclick={shoot}
@@ -147,8 +161,10 @@
     background: #000;
     color: #fff;
   }
+  /* Recorta el velo del marco: sin esto oscurece también el obturador. */
   .viewfinder {
     position: relative;
+    overflow: hidden;
     height: min(62dvh, 560px);
   }
   video {
@@ -157,17 +173,18 @@
     height: 100%;
     object-fit: cover;
   }
-  /* Proporción real de una licencia: así la tarjeta llena el marco y se lee mejor. */
+  /* Proporción real de la tarjeta: así llena el marco y se lee mejor. El ancho también
+     depende de la altura para no deformar el marco con el teléfono en horizontal. */
   .guide {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: min(86%, 560px);
-    max-height: 76%;
+    width: min(86%, 560px, 90dvh);
+    pointer-events: none;
     aspect-ratio: 85.6 / 54;
     transform: translate(-50%, -50%);
     border: 2px solid rgb(255 255 255 / 92%);
-    border-radius: var(--driver-radius-lg);
+    border-radius: var(--capture-radius-lg);
     box-shadow: 0 0 0 100vmax rgb(0 0 0 / 45%);
     transition: border-color 0.2s;
   }
@@ -177,12 +194,12 @@
   }
   p {
     position: absolute;
-    right: var(--driver-space-3);
-    bottom: var(--driver-space-3);
-    left: var(--driver-space-3);
+    right: var(--capture-space-3);
+    bottom: var(--capture-space-3);
+    left: var(--capture-space-3);
     margin: 0;
-    padding: var(--driver-space-2) var(--driver-space-3);
-    border-radius: var(--driver-radius);
+    padding: var(--capture-space-2) var(--capture-space-3);
+    border-radius: var(--capture-radius);
     background: rgb(0 0 0 / 62%);
     font-size: 14px;
     text-align: center;
@@ -194,16 +211,16 @@
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    padding: var(--driver-space-3) var(--driver-space-4);
+    padding: var(--capture-space-3) var(--capture-space-4);
   }
   .back {
     display: inline-flex;
     align-items: center;
     justify-self: start;
-    gap: var(--driver-space-1);
+    gap: var(--capture-space-1);
     min-height: 44px;
-    padding: 0 var(--driver-space-2);
-    border-radius: var(--driver-radius);
+    padding: 0 var(--capture-space-2);
+    border-radius: var(--capture-radius);
     color: inherit;
     font-size: 14px;
   }

@@ -28,7 +28,7 @@ vi.mock('$lib/stores/permissions.svelte', () => ({
   permissions: { hasPermission: (code: string) => permissionMock.codes.has(code) }
 }));
 const prepareMock = vi.hoisted(() => vi.fn());
-vi.mock('./upload', () => ({
+vi.mock('$lib/features/document-capture/upload', () => ({
   checksumOf: vi.fn().mockResolvedValue('a'.repeat(64)),
   prepareForUpload: prepareMock
 }));
@@ -257,7 +257,7 @@ describe('LicenseCaptureDialog', () => {
 
     expect(screen.queryByText('Foto borrosa')).toBeNull();
     expect(screen.getByText(/Carga el frente/)).toBeInTheDocument();
-    expect(screen.queryByAltText(/Foto de el frente/)).toBeNull();
+    expect(screen.queryByAltText(/Foto del frente/)).toBeNull();
     expect(apiMock.startCaptureUpload).not.toHaveBeenCalled();
   });
 

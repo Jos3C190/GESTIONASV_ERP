@@ -1,5 +1,11 @@
-import { apiFetch } from '$lib/api/client';
+import { apiFetch, type DocumentUploadTicket } from '$lib/api/client';
 import { ownedDocuments } from '$lib/api/owned-documents';
+import type {
+  CaptureCheck,
+  CaptureSide,
+  CaptureState,
+  CaptureValues
+} from '$lib/features/document-capture/types';
 import { branch } from '$lib/stores/branch.svelte';
 import type {
   CostCategory,
@@ -101,6 +107,8 @@ export interface FleetVehicle {
   code: string;
   plate: string | null;
   vin: string | null;
+  chassis_number: string | null;
+  engine_number: string | null;
   kind: string;
   type: FleetVehicleTypeInfo;
   coupling: VehicleCoupling | null;
@@ -161,9 +169,17 @@ export interface FleetPage<T> {
   meta: { page: number; size: number; total: number; pages: number };
 }
 
+export interface CirculationConfirmed {
+  vehicle: FleetVehicle;
+  filled_fields: string[];
+  skipped_fields: string[];
+}
+
 export interface VehicleInput {
   plate: string | null;
   vin?: string | null;
+  chassis_number?: string | null;
+  engine_number?: string | null;
   kind: string;
   brand: string;
   model: string;
@@ -565,6 +581,40 @@ export const fleetApi = {
   deletePhoto: (id: string, photoId: string) =>
     apiFetch<void>(`/fleet/vehicles/${id}/photos/${photoId}`, { method: 'DELETE' }),
   documents: (id: string) => ownedDocuments(`/fleet/vehicles/${id}`),
+  circulationCaptureCapabilities: () =>
+    apiFetch<{ enabled: boolean; extraction_available: boolean }>(
+      '/fleet/circulation-captures/capabilities'
+    ),
+  circulationCaptures: (id: string) => {
+    const base = `/fleet/vehicles/${id}/circulation-captures`;
+    return {
+      open: () => apiFetch<CaptureState>(base, json('POST')),
+      get: (captureId: string) => apiFetch<CaptureState>(`${base}/${captureId}`),
+      startUpload: (
+        captureId: string,
+        side: CaptureSide,
+        data: { content_type: string; size_bytes: number; checksum_sha256: string }
+      ) =>
+        apiFetch<DocumentUploadTicket>(
+          `${base}/${captureId}/sides/${side}/upload`,
+          json('POST', data)
+        ),
+      completeUpload: (captureId: string, side: CaptureSide) =>
+        apiFetch<CaptureState>(`${base}/${captureId}/sides/${side}/complete`, json('POST')),
+      preview: (captureId: string, side: CaptureSide) =>
+        apiFetch<{ url: string; expires_at: string }>(
+          `${base}/${captureId}/sides/${side}/preview-url`,
+          json('POST')
+        ),
+      check: (captureId: string, values: CaptureValues) =>
+        apiFetch<CaptureCheck>(`${base}/${captureId}/check`, json('POST', values)),
+      confirm: (
+        captureId: string,
+        data: { values: CaptureValues; acknowledged_warnings: string[] }
+      ) => apiFetch<CirculationConfirmed>(`${base}/${captureId}/confirm`, json('POST', data)),
+      cancel: (captureId: string) => apiFetch<void>(`${base}/${captureId}`, json('DELETE'))
+    };
+  },
   linkGps: (id: string, uniqueId: string) =>
     apiFetch<FleetVehicle>(
       `/fleet/vehicles/${id}/gps-device`,
