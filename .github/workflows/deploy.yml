@@ -1,0 +1,25 @@
+name: Deploy Automático a AWS EC2
+
+on:
+  push:
+    branches:
+      - develop
+
+concurrency:
+  group: deploy-aws-develop
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Desplegar en EC2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conectar por SSH y ejecutar despliegue
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            bash /home/ec2-user/GESTIONASV_ERP/scripts/deploy.sh
+
