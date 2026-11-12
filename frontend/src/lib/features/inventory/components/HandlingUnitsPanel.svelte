@@ -23,6 +23,9 @@
     canVerifyRetaceos?: boolean;
     canRelease?: boolean;
     canTransfer?: boolean;
+    /** Button text for starting a transfer; a branch warehouse may send to any enabled route. */
+    transferLabel?: string;
+    transferHint?: string;
     canPrepareSplit?: boolean;
     onverified?: () => void;
   }
@@ -50,6 +53,8 @@
     canVerifyRetaceos = false,
     canRelease = false,
     canTransfer = false,
+    transferLabel = 'Trasladar a sucursal',
+    transferHint = 'Desde la bodega madre puedes trasladar unidades completas a una bodega de sucursal.',
     canPrepareSplit = false,
     onverified
   }: Props = $props();
@@ -789,8 +794,7 @@
       </p>
       {#if canTransfer || canPrepareSplit}
         <p class="mt-1 max-w-3xl text-xs leading-5 text-foreground-muted">
-          {#if canTransfer}Desde la bodega madre puedes trasladar unidades completas a una bodega de
-            sucursal.
+          {#if canTransfer}{transferHint}
           {/if}
           {#if canPrepareSplit}Disponible indica que la revisión terminó. Dividir es opcional: úsalo
             solo si vas a separar físicamente el contenido.{/if}
@@ -1180,7 +1184,7 @@
                             onclick={() => startTransfer(unit)}
                             title={transferBlockReason(unit) ?? undefined}
                           >
-                            Trasladar a sucursal
+                            {transferLabel}
                           </button>
                           {#if transferBlockReason(unit)}
                             <span class="w-full text-right text-[11px] text-warning"

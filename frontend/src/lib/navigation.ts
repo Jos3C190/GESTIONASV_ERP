@@ -270,6 +270,13 @@ export const NAV_GROUPS: NavGroup[] = [
         route: '/transfers',
         implemented: true,
         requiredPermission: 'inventory:read'
+      },
+      {
+        label: 'Reglas de traslados',
+        icon: ICONS.transfers,
+        route: '/transfers/settings',
+        implemented: true,
+        requiredPermission: 'inventory:transfer_settings'
       }
     ]
   },

@@ -1646,4 +1646,29 @@ describe('HandlingUnitsPanel', () => {
     expect(inventoryMocks.transferHandlingUnit).not.toHaveBeenCalled();
     expect(inventoryMocks.prepareHandlingUnitSplit).not.toHaveBeenCalled();
   });
+  it('nombra la acción de traslado según la bodega y conserva el mismo flujo', async () => {
+    const unit = handlingUnit({
+      stock_status: 'available',
+      measurement_status: 'verified'
+    });
+    inventoryMocks.listHandlingUnits.mockResolvedValueOnce([unit]);
+
+    render(HandlingUnitsPanel, {
+      props: {
+        warehouseId: 'warehouse-1',
+        canTransfer: true,
+        transferLabel: 'Trasladar a otra bodega',
+        transferHint: 'Puedes trasladar unidades completas a otra bodega.'
+      }
+    });
+
+    expect(screen.queryByRole('button', { name: 'Trasladar a sucursal' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Puedes trasladar unidades completas a otra bodega.')).toBeInTheDocument();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Trasladar a otra bodega' }));
+    await waitFor(() =>
+      expect(navigationMocks.goto).toHaveBeenCalledWith(
+        '/transfers?warehouse_id=warehouse-1&handling_unit_id=hu-1'
+      )
+    );
+  });
 });

@@ -345,6 +345,13 @@ select optgroup { color: rgb(var(--foreground)); background-color: rgb(var(--sur
   border: 1px solid rgb(var(--primary) / 0.15);
 }
 
+/* Text controls shared by forms built outside the ui kit (transfers, dispatch). */
+@layer components {
+  .field-control {
+    @apply w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
+  }
+}
+
 /* View Transitions API — quick, purposeful theme feedback */
 ::view-transition-group(root) {
   animation-duration: 360ms;

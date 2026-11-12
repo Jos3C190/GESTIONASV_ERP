@@ -24,6 +24,7 @@ const TITLES: Record<string, string> = {
   '/inventory/adjustments': 'Ajustes de inventario',
   '/inventory': 'Inventario',
   '/transfers': 'Traslados',
+  '/transfers/settings': 'Reglas de traslados',
   '/purchase-consolidations': 'Consolidados de compra',
   '/expense-types': 'Tipos de gasto',
   '/trash': 'Papelera',

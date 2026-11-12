@@ -5,6 +5,7 @@
     TransferStatus
   } from '$lib/features/inventory/transfer-documents';
   import { transferStatusLabel } from '$lib/features/inventory/transfer-operations';
+  import TransferRouteBadge from './TransferRouteBadge.svelte';
 
   type CollectionState = 'loading' | 'loaded' | 'empty' | 'error';
   interface StatusOption {
@@ -21,6 +22,11 @@
     hasMore: boolean;
     loadingMore: boolean;
     busy?: boolean;
+    /** Shows the "Todos / Por aprobar" switch to people who can approve. */
+    canApprove?: boolean;
+    awaitingApproval?: boolean;
+    pendingApprovalCount?: number;
+    onAwaitingApproval?: (value: boolean) => void;
     formatDate: (value: string | null | undefined) => string;
     documentSummary: (transfer: InventoryTransfer) => string;
     onFilter: (value: string) => void;
@@ -38,6 +44,10 @@
     hasMore,
     loadingMore,
     busy = false,
+    canApprove = false,
+    awaitingApproval = false,
+    pendingApprovalCount = 0,
+    onAwaitingApproval,
     formatDate,
     documentSummary,
     onFilter,
@@ -45,6 +55,19 @@
     onOpen,
     onLoadMore
   }: Props = $props();
+
+  const STATUS_TONE: Record<string, string> = {
+    in_transit: 'border-primary/30 bg-primary/10 text-primary',
+    approved: 'border-primary/30 bg-primary/10 text-primary',
+    incident: 'border-warning/30 bg-warning/10 text-warning',
+    pending_approval: 'border-warning/30 bg-warning/10 text-warning',
+    received: 'border-success/30 bg-success/10 text-success'
+  };
+  const NEUTRAL_TONE = 'border-border bg-surface-muted text-foreground-muted';
+  const scopeOptions = $derived([
+    { value: false, label: 'Todos' },
+    { value: true, label: `Por aprobar (${pendingApprovalCount})` }
+  ]);
 </script>
 
 <section class="space-y-5" aria-labelledby="documents-heading">
@@ -57,18 +80,40 @@
         La lista respeta el alcance de empresa y sucursal del servidor.
       </p>
     </div>
-    <label class="min-w-52 space-y-1 text-sm font-medium text-foreground">
+    <div class="flex w-full flex-wrap items-end gap-3 sm:w-auto">
+      {#if canApprove}
+        <div
+          class="flex max-w-full flex-wrap gap-1 rounded-lg border border-border bg-surface-muted p-1"
+          role="group"
+          aria-label="Qué documentos mostrar"
+        >
+          {#each scopeOptions as option (option.label)}
+            <button
+              type="button"
+              class="min-h-10 rounded-md px-3 text-xs font-medium transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 {awaitingApproval ===
+              option.value
+                ? 'bg-surface-elevated text-foreground shadow-soft'
+                : 'text-foreground-muted'}"
+              aria-pressed={awaitingApproval === option.value}
+              disabled={busy}
+              onclick={() => onAwaitingApproval?.(option.value)}>{option.label}</button
+            >
+          {/each}
+        </div>
+      {/if}
+    <label class="min-w-52 flex-1 space-y-1 text-sm font-medium text-foreground sm:flex-none">
       Estado
       <select
-        class="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        disabled={busy}
-        value={filter}
+        class="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+        disabled={busy || awaitingApproval}
+        value={awaitingApproval ? 'pending_approval' : filter}
         onchange={(event) => onFilter(event.currentTarget.value)}
       >
         {#each statuses as status (status.value)}<option value={status.value}>{status.label}</option
           >{/each}
       </select>
     </label>
+    </div>
   </div>
 
   {#if error}<div
@@ -94,10 +139,17 @@
     </div>
   {:else if transfers.length === 0}
     <div class="rounded-2xl border border-border border-dashed bg-surface p-8 text-center">
-      <p class="font-medium text-foreground">No hay documentos en este estado</p>
-      <p class="mt-1 text-sm text-foreground-muted">
-        Al guardar una preparación aparecerá aquí sin mover existencias.
-      </p>
+      {#if awaitingApproval}
+        <p class="font-medium text-foreground">No tienes traslados por aprobar</p>
+        <p class="mt-1 text-sm text-foreground-muted">
+          Cuando alguien envíe un traslado de tus sucursales a aprobación, aparecerá aquí.
+        </p>
+      {:else}
+        <p class="font-medium text-foreground">No hay documentos en este estado</p>
+        <p class="mt-1 text-sm text-foreground-muted">
+          Al guardar una preparación aparecerá aquí sin mover existencias.
+        </p>
+      {/if}
     </div>
   {:else}
     <div class="grid gap-3 xl:grid-cols-2">
@@ -116,17 +168,17 @@
                   {transfer.origin_warehouse_name} → {transfer.destination_warehouse_name}
                 </p>
               </div>
-              <span
-                class="inline-flex rounded-full border px-2.5 py-1 text-xs font-medium {transfer.status ===
-                'in_transit'
-                  ? 'border-primary/30 bg-primary/10 text-primary'
-                  : transfer.status === 'incident'
-                    ? 'border-warning/30 bg-warning/10 text-warning'
-                    : transfer.status === 'received'
-                      ? 'border-success/30 bg-success/10 text-success'
-                      : 'border-border bg-surface-muted text-foreground-muted'}"
-                data-status={transfer.status}>{transferStatusLabel(transfer.status)}</span
-              >
+              <div class="flex flex-wrap items-center justify-end gap-1.5">
+                {#if transfer.route_type && transfer.route_type !== 'central_distribution'}
+                  <TransferRouteBadge route={transfer.route_type} />
+                {/if}
+                <span
+                  class="inline-flex rounded-full border px-2.5 py-1 text-xs font-medium {STATUS_TONE[
+                    transfer.status
+                  ] ?? NEUTRAL_TONE}"
+                  data-status={transfer.status}>{transferStatusLabel(transfer.status)}</span
+                >
+              </div>
             </div>
             <p class="mt-3 text-sm text-foreground-muted">{documentSummary(transfer)}</p>
             <p class="mt-3 text-xs text-foreground-muted">

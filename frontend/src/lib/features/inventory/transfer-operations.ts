@@ -1,4 +1,9 @@
-import type { TransferDecimal, TransferDemandRecord } from './transfer-documents';
+import type {
+  TransferDecimal,
+  TransferDemandRecord,
+  TransferRouteType,
+  TransferStatus
+} from './transfer-documents';
 
 const SCALE = 1_000_000n;
 
@@ -130,6 +135,8 @@ export function formatQuantity(raw: TransferDecimal | null | undefined): string 
 export function transferStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     preparation: 'En preparación',
+    pending_approval: 'Pendiente de aprobación',
+    approved: 'Aprobado',
     in_transit: 'En tránsito',
     received: 'Recibido',
     closed_with_adjustment: 'Cerrado con ajuste',
@@ -137,6 +144,42 @@ export function transferStatusLabel(status: string): string {
     cancelled: 'Cancelado'
   };
   return labels[status] ?? 'Estado desconocido';
+}
+
+/** Options of the status filter, in the order a transfer goes through them. */
+export const TRANSFER_STATUS_OPTIONS: Array<{ value: TransferStatus | ''; label: string }> = [
+  { value: '', label: 'Todos los estados' },
+  { value: 'preparation', label: 'En preparación' },
+  { value: 'pending_approval', label: 'Pendientes de aprobación' },
+  { value: 'approved', label: 'Aprobados' },
+  { value: 'in_transit', label: 'En tránsito' },
+  { value: 'received', label: 'Recibidos' },
+  { value: 'closed_with_adjustment', label: 'Cerrado con ajuste' },
+  { value: 'incident', label: 'Con incidencia' },
+  { value: 'cancelled', label: 'Cancelados' }
+];
+
+export function transferRouteLabel(route: string): string {
+  const labels: Record<string, string> = {
+    central_distribution: 'Distribución desde matriz',
+    branch_to_branch: 'Entre sucursales',
+    branch_to_central: 'Retorno a matriz'
+  };
+  return labels[route] ?? 'Ruta desconocida';
+}
+
+/** Whether the company's rules currently allow working on a transfer of this route. */
+export function isRouteEnabled(
+  route: TransferRouteType,
+  policy: { allow_branch_to_branch: boolean; allow_branch_to_central: boolean } | null
+): boolean {
+  if (!policy || route === 'central_distribution') return true;
+  return route === 'branch_to_branch' ? policy.allow_branch_to_branch : policy.allow_branch_to_central;
+}
+
+/** Statuses a rule change freezes: nothing moves them forward while the route is off. */
+export function isFrozenWhenRouteOff(status: TransferStatus): boolean {
+  return status === 'preparation' || status === 'pending_approval' || status === 'approved';
 }
 
 export function demandProgressLabel(demand: TransferDemandRecord): string {

@@ -2,24 +2,27 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, expect, it, vi } from 'vitest';
 import TransferOperationsPage from '../../src/lib/features/inventory/components/TransferOperationsPage.svelte';
 import type { InventoryTransfer } from '../../src/lib/features/inventory/transfer-documents';
+import { transferDefaults } from './fixtures/inventory-transfer';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(), list: vi.fn(), openIncident: vi.fn(), resolveIncident: vi.fn(), receive: vi.fn(),
-  getWarehouses: vi.fn(), listLocations: vi.fn(), listTransferUnits: vi.fn(), listDemand: vi.fn(), listVehicles: vi.fn(),
+  routeOptions: vi.fn(), pendingApprovalCount: vi.fn(), settings: vi.fn(),
+  listLocations: vi.fn(), listTransferUnits: vi.fn(), listDemand: vi.fn(), listVehicles: vi.fn(),
   canOperate: true
 }));
 vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1' } }));
 vi.mock('$lib/stores/branch.svelte', () => ({ branch: { id: null, ready: true, accessAllBranches: true, branches: [] } }));
 vi.mock('$lib/stores/permissions.svelte', () => ({ permissions: { hasPermission: () => mocks.canOperate } }));
-vi.mock('$lib/services/warehouses', () => ({ getWarehouses: mocks.getWarehouses }));
 vi.mock('$lib/features/locations/services', () => ({ listLocations: mocks.listLocations }));
 vi.mock('$lib/features/inventory/services', () => ({ inventoryApi: { listTransferUnits: mocks.listTransferUnits } }));
 vi.mock('$lib/features/inventory/transfer-documents', () => ({ inventoryTransfersApi: {
   get: mocks.get, list: mocks.list, openIncident: mocks.openIncident, resolveIncident: mocks.resolveIncident,
-  receive: mocks.receive, listDemand: mocks.listDemand, listVehicles: mocks.listVehicles
+  receive: mocks.receive, listDemand: mocks.listDemand, listVehicles: mocks.listVehicles,
+  routeOptions: mocks.routeOptions, pendingApprovalCount: mocks.pendingApprovalCount, settings: mocks.settings
 } }));
 
 const transfer: InventoryTransfer = {
+  ...transferDefaults,
   id: 'transfer-a', company_id: 'company-1', code: 'TR-DEMO-A',
   origin_warehouse_id: 'origin', origin_warehouse_name: 'Central', origin_branch_id: 'matrix',
   destination_warehouse_id: 'destination', destination_warehouse_name: 'Sucursal', destination_branch_id: 'branch',
@@ -35,7 +38,15 @@ beforeEach(() => {
   mocks.openIncident.mockReset();
   mocks.resolveIncident.mockReset();
   mocks.receive.mockReset();
-  mocks.getWarehouses.mockReset().mockResolvedValue({ items: [], meta: { pages: 1 } });
+  mocks.routeOptions.mockReset().mockResolvedValue({
+    policy: { allow_branch_to_branch: false, allow_branch_to_central: false, require_approval: true },
+    origins: [], destinations: []
+  });
+  mocks.pendingApprovalCount.mockReset().mockResolvedValue(0);
+  mocks.settings.mockReset().mockResolvedValue({
+    allow_branch_to_branch: false, allow_branch_to_central: false, require_approval: true,
+    updated_at: null, pending_count: 0, approved_count: 0
+  });
   mocks.listLocations.mockReset().mockResolvedValue({ items: [], meta: { pages: 1 } });
   mocks.listTransferUnits.mockReset().mockResolvedValue([]);
   mocks.listDemand.mockReset().mockResolvedValue([]);

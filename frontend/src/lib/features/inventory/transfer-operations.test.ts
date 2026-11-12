@@ -7,10 +7,15 @@ import {
   demandProgressLabel,
   formatQuantity,
   getOrCreateTransferAttempt,
+  isFrozenWhenRouteOff,
+  isRouteEnabled,
   quantityFromScaled,
   quantityString,
   remainingAssignment,
   scaledQuantity,
+  TRANSFER_STATUS_OPTIONS,
+  transferRouteLabel,
+  transferStatusLabel,
   type TransferAttempt
 } from './transfer-operations';
 
@@ -98,5 +103,28 @@ describe('transfer-operations', () => {
     expect(retry.idempotencyKey).toBe(first.idempotencyKey);
     expect(next.idempotencyKey).not.toBe(first.idempotencyKey);
     expect(nextKey).toBe(2);
+  });
+  it('nombra los estados de aprobación y las tres rutas', () => {
+    expect(transferStatusLabel('pending_approval')).toBe('Pendiente de aprobación');
+    expect(transferStatusLabel('approved')).toBe('Aprobado');
+    expect(transferRouteLabel('central_distribution')).toBe('Distribución desde matriz');
+    expect(transferRouteLabel('branch_to_branch')).toBe('Entre sucursales');
+    expect(transferRouteLabel('branch_to_central')).toBe('Retorno a matriz');
+    const values = TRANSFER_STATUS_OPTIONS.map((option) => option.value);
+    expect(values).toContain('pending_approval');
+    expect(values).toContain('approved');
+    expect(new Set(values).size).toBe(values.length);
+  });
+
+  it('sabe si las reglas permiten trabajar una ruta y qué estados congela', () => {
+    const rules = { allow_branch_to_branch: true, allow_branch_to_central: false };
+    expect(isRouteEnabled('central_distribution', { ...rules, allow_branch_to_branch: false })).toBe(true);
+    expect(isRouteEnabled('branch_to_branch', rules)).toBe(true);
+    expect(isRouteEnabled('branch_to_central', rules)).toBe(false);
+    expect(isRouteEnabled('branch_to_central', null)).toBe(true);
+    expect(isFrozenWhenRouteOff('pending_approval')).toBe(true);
+    expect(isFrozenWhenRouteOff('approved')).toBe(true);
+    expect(isFrozenWhenRouteOff('in_transit')).toBe(false);
+    expect(isFrozenWhenRouteOff('incident')).toBe(false);
   });
 });

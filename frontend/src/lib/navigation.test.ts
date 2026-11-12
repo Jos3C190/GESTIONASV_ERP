@@ -100,4 +100,17 @@ describe('catalog navigation', () => {
     expect(routeTitle('/fleet/v1/edit')).toBe('Editar vehículo');
     expect(routeTitle('/drivers/d1')).toBe('Conductores');
   });
+  it('exposes the transfer rules only to people who can configure them', () => {
+    expect(itemByRoute('/transfers')).toMatchObject({
+      label: 'Traslados',
+      requiredPermission: 'inventory:read'
+    });
+    expect(itemByRoute('/transfers/settings')).toMatchObject({
+      label: 'Reglas de traslados',
+      implemented: true,
+      requiredPermission: 'inventory:transfer_settings'
+    });
+    expect(routeTitle('/transfers/settings')).toBe('Reglas de traslados');
+    expect(routeTitle('/transfers')).toBe('Traslados');
+  });
 });
