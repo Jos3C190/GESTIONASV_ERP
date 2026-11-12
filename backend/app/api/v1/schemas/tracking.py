@@ -294,7 +294,7 @@ class SimulationOut(BaseModel):
 
 
 class SimulatorOut(BaseModel):
-    #: The deployment allows simulation (never in production).
+    #: The deployment allows simulation, including the explicit production opt-in.
     enabled: bool
     #: Server clock, so the browser can line up ``advanced_at`` with its own clock.
     server_time: datetime | None = None

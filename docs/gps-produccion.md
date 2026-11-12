@@ -59,6 +59,30 @@ Hay que decidir esto; el repositorio no lo resuelve:
 - **Límite compartido:** si hay un proxy delante de Nginx, todos llegan con su misma IP y comparten ese límite. Para unos 14 vehículos sobra; con muchos más, hay que configurar la IP real.
 - **GPS sin cifrar:** los puertos de GPS van directo a Traccar, sin límite ni cifrado propios.
 
+## Simulador para demostraciones
+
+El simulador permanece apagado por defecto. Para habilitarlo manteniendo
+`ENVIRONMENT=production`, configure ambas variables en el backend y en
+`tracking-monitor`, y recree esos servicios con la nueva versión del código:
+
+```dotenv
+TRACKING_SIMULATOR_ENABLED=true
+TRACKING_SIMULATOR_ALLOW_PRODUCTION=true
+```
+
+El panel conserva el permiso `tracking:simulate` y el alcance por empresa y
+sucursal. Las posiciones, recorridos y alertas simuladas siguen identificadas
+como tales; durante una sesión, el seguimiento del vehículo usa su GPS virtual.
+Utilice vehículos destinados a pruebas y finalice las sesiones al terminar.
+Para deshabilitarlo, establezca `TRACKING_SIMULATOR_ENABLED=false` en ambos
+servicios; el monitor cierra las sesiones abiertas en su siguiente ciclo.
+
+En el VPS local de esta instalación, `python -B scripts/enable-vps-tracking-simulator.py`
+habilita la opción sobre la imagen actual y comprueba que producción y las cookies
+seguras sigan activas. `--disable` revierte las banderas. Para mantener la opción
+después de las actualizaciones automáticas, los cambios de configuración del código
+deben publicarse también en `develop`; el script no publica commits.
+
 ## Pendiente
 
 - **Borrado de posiciones antiguas.** La [referencia de configuración de Traccar](https://www.traccar.org/configuration-file/) no documenta una opción para esto, y `database.positionPeriod` solo limita consultas, no borra. La tabla crecerá hasta que se defina una tarea propia, con respaldo previo y probada con datos de copia.

@@ -3,7 +3,8 @@
 A session owns a *virtual* Traccar device per vehicle (``erp-sim-…``). While a
 session is open, tracking reads that vehicle from the virtual device; its real
 GPS keeps reporting to Traccar and comes back as the source when the session
-ends. Nothing here exists in production (``settings.simulator_enabled``).
+ends. Availability is controlled by ``settings.simulator_enabled``; production
+requires an additional explicit opt-in.
 """
 
 from __future__ import annotations
