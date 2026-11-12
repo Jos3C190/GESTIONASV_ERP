@@ -46,11 +46,32 @@ En las recepciones, **Guardar borrador** prepara el documento y abre ahora su de
 
 Las cifras orientan la revisión. Si la aplicación usa una precisión decimal documentada distinta, comparar con el valor de servidor y explicar el redondeo de presentación; no aprobar una discrepancia calculada desde valores redondeados en pantalla.
 
+## Demostración de rutas entre sucursales con aprobación
+
+Complementa el paso 6 (distribución desde la matriz, que no cambia). Usa el artículo ficticio de la demostración, con existencias liberadas en la bodega de una sucursal (por ejemplo, las 8 unidades recibidas en el paso 6), una segunda sucursal con bodega activa y un vehículo activo. Las rutas de sucursal vienen apagadas, así que el primer paso es encenderlas. Se puede hacer con el superusuario, que puede aprobar lo que él mismo envió; para mostrar la separación de funciones use dos perfiles: un operador de la sucursal origen con permiso de movimiento y un aprobador con el permiso `inventory:transfer_approve` (los permisos nuevos solo los tiene el rol `SUPER_ADMIN`; un administrador los concede a otros roles desde la configuración de roles).
+
+| Paso | Pantalla/acción | Resultado esperado |
+| --- | --- | --- |
+| A. Comprobar el estado inicial | Con las rutas todavía apagadas, abrir Inventario → Traslados con el operador de la sucursal. | La bodega de la sucursal **no** aparece como origen; la distribución desde la matriz funciona como siempre. |
+| B. Encender las rutas | Con quien tenga `inventory:transfer_settings`, abrir **Reglas de traslados** (enlace en la cabecera de Traslados o menú). Activar **Permitir traslados entre sucursales** y **Permitir retornos a la bodega central**; dejar activa **Exigir aprobación para traslados que salen de una sucursal**. **Guardar cambios**. | Mensaje de guardado. Sin el permiso, la página es de solo lectura. La acción queda en auditoría. |
+| C. Preparar A→B | Con el operador de la sucursal A: Traslados → origen = bodega de A (el panel dice **Preparar traslado desde sucursal**, sin tabla de demanda), destino = bodega de la sucursal B. Verificar la insignia **Entre sucursales**. Agregar 3 unidades con **Motivo del traslado** y vehículo. **Guardar en preparación**. | Estado **En preparación**. Aviso «Este traslado sale de {sucursal} y necesita aprobación antes de despacharse». No hay botón de despacho. Stock sin cambios: empresa **15/USD 200** y sucursal A igual que antes. |
+| D. Enviar a aprobación | **Enviar a aprobación**. | Estado **Pendiente de aprobación**, «Enviado por {usuario}… Esperando aprobación». El autor solo ve **Retirar solicitud**. Stock sin cambios. |
+| E. Rechazar con motivo | Con el aprobador: la cabecera muestra «Tienes 1 traslado por aprobar»; abrir **Documentos → Por aprobar**, abrir el documento, **Rechazar**. Probar un motivo de 2 caracteres (debe pedir mínimo 5) y luego un motivo válido; **Confirmar rechazo**. | Vuelve a **En preparación** con «Rechazado por {aprobador}…: {motivo}». El motivo es visible para quien lo corrige. |
+| F. Corregir y reenviar | Con el operador: corregir la cantidad y **Enviar a aprobación** otra vez. | Nuevo envío con ronda siguiente; el aviso de rechazo desaparece. |
+| G. Aprobar | Con el aprobador: **Aprobar traslado** y confirmar (se revalidan las existencias). Si lo intenta el operador que preparó el documento, ve «No puedes aprobar un traslado que tú preparaste o enviaste». | Estado **Aprobado**, «Aprobado por {aprobador} el {fecha}». Aparece el panel de despacho. Stock aún sin cambios. |
+| H. Despachar y recibir | El operador de A elige vehículo y **Confirmar despacho**; el receptor de B recibe 3 en cuarentena y verifica/libera la HU. | Despacho: A baja 3, tránsito 3. Recepción: B sube 3, tránsito 0. El total de la empresa permanece **15/USD 200**. |
+| I. Retorno a matriz | Con las rutas encendidas, preparar desde la bodega de B hacia la bodega central (insignia **Retorno a matriz**), enviar, aprobar, despachar y recibir. | Misma secuencia de estados. Si la matriz no tiene coordenadas, Seguimiento muestra «Una de las sucursales no tiene coordenadas; regístralas para ver la ruta» y conserva el recorrido. |
+| J. Apagar una ruta con un pendiente | Preparar y enviar otro A→B (queda **Pendiente de aprobación**). En **Reglas de traslados**, apagar **Permitir traslados entre sucursales**. | La página advierte de los traslados pendientes/aprobados. El traslado pendiente ya no se puede aprobar ni despachar («Los traslados entre sucursales no están habilitados en esta empresa»); sí se puede rechazar, retirar o cancelar. Volver a encender la ruta lo reactiva. |
+| K. Limpiar | **Cancelar traslado** el documento pendiente de J. | Estado **Cancelado**, sin movimiento. |
+
+Los totales del artículo permanecen en **15/USD 200** durante todo el recorrido; el traslado es neutro en valor. Para el caso J no despache ni reciba: solo demuestra el bloqueo.
+
 ## Casos negativos que se deben probar
 
 - Intentar recibir/devolver más de lo entregado pendiente, aceptar más de lo recibido o resolver más de la cantidad pendiente: el servidor debe rechazar sin cambios parciales.
 - Probar stock en tránsito, cuarentena, ubicación incompatible, HU cerrada, saldo insuficiente, sucursal ajena y empresa ajena: ninguna debe quedar disponible o contabilizada por error.
 - Repetir con la misma clave una recepción, entrega, aceptación o ajuste; no se duplica. Repetir la clave con otro cuerpo debe dar conflicto.
+- Traslado entre sucursales: intentar despachar un documento **Pendiente de aprobación**, aprobar con una vista vieja (ronda anterior), aprobar sin acceso a la sucursal de origen, aprobar el propio con un perfil que no sea superusuario, y poner la misma HU en dos traslados pendientes. El servidor debe rechazar cada intento sin cambios parciales.
 - Abrir/cerrar/cancelar formulario de división y revisar/reimprimir etiqueta: no modifica la cantidad. Confirmar una división explícita: la suma de nueva unidad + remanente conserva el saldo.
 - Provocar una operación con una segunda línea inválida: documento, saldo, valoración y auditoría de éxito deben revertirse juntos.
 - Una entrega confirmada no se edita; una devolución no reabre el pendiente de venta; corregir con documento compensatorio autorizado.

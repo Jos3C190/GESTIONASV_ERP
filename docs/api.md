@@ -567,7 +567,7 @@ Origins from `CORS_ORIGINS` env. Credentials allowed. `*` never used with creden
   handling-unit relation where available; rows with no reliable relation stay
   explicitly unattributed. No origin is inferred from free-text movement data.
 
-## 18. Transfer documents, vehicles and branch demand (revision 0086)
+## 18. Transfer documents, vehicles and branch demand (revision 0086; routes and approval in 0114)
 
 All routes are under `/api/v1/inventory/transfers`. Transfer commands use an
 idempotency key, a company-scoped document, a database transaction/savepoint,
@@ -584,14 +584,113 @@ receipt event so clients do not have to infer the product from the HU code.
 | `GET /vehicles` | List company vehicles | `inventory:read` and headquarters branch access |
 | `POST /vehicles` | Create a vehicle and its mobile location | `inventory:read` + `inventory:move` and headquarters branch access |
 | `PATCH /vehicles/{vehicle_id}` | Activate/deactivate a vehicle | `inventory:read` + `inventory:move` and headquarters branch access |
+| `GET /settings` | Company transfer rules plus the count of transfers a rule change would freeze | `inventory:read` |
+| `PUT /settings` | Save the route switches and the approval rule | `inventory:transfer_settings` |
+| `GET /route-options?origin_warehouse_id=...` | Warehouses the caller may ship from; with an origin, the destinations that classify to a valid route | `inventory:read`; origins limited to the caller's branch scope and warehouse assignment |
+| `GET /pending-approval-count` | Number of transfers the caller could approve right now | `inventory:read`; returns `{"count": 0}` without `inventory:transfer_approve` |
 | `GET /` and `GET /{transfer_id}` | List or read documents within the caller's branch scope | `inventory:read` |
 | `POST /` | Create a preparation | `inventory:read` + `inventory:move` and origin branch access |
-| `PUT /{transfer_id}` | Edit preparation lines/destination/vehicle | `inventory:read` + `inventory:move` and origin branch access |
-| `POST /{transfer_id}/cancel` | Cancel a preparation | `inventory:read` + `inventory:move` and origin branch access |
-| `POST /{transfer_id}/dispatch` | Move stock from central warehouse to its assigned vehicle | `inventory:read` + `inventory:move` and origin branch access |
+| `PUT /{transfer_id}` | Edit preparation lines/destination/vehicle | `inventory:read` + `inventory:move` and origin branch access; moving the document to another origin also requires access to the new origin |
+| `POST /{transfer_id}/cancel` | Cancel a preparation, pending or approved transfer | `inventory:read` + `inventory:move` and origin branch access |
+| `POST /{transfer_id}/submit` | Send a branch-route preparation to approval | `inventory:read` + `inventory:move` and origin branch access |
+| `POST /{transfer_id}/withdraw` | Take a pending transfer back to preparation | `inventory:read` + `inventory:move` and origin branch access |
+| `POST /{transfer_id}/approve` | Approve a pending transfer | `inventory:transfer_approve` and origin branch access; not the creator/submitter unless superuser |
+| `POST /{transfer_id}/reject` | Reject a pending transfer with a reason; it returns to preparation | `inventory:transfer_approve` and origin branch access; same segregation as approve |
+| `POST /{transfer_id}/dispatch` | Move stock from the origin warehouse to its assigned vehicle | `inventory:read` + `inventory:move` and origin branch access |
 | `POST /{transfer_id}/receive` | Receive all or part into a destination quarantine location | `inventory:read` + `inventory:receive` and destination branch access |
 | `POST /{transfer_id}/incidents` | Open an incident with reason and optional evidence reference | `inventory:read` plus either authorized origin/`inventory:move` or destination/`inventory:receive` |
 | `POST /{transfer_id}/incidents/resolve` | Resume transit or close receipt when no unresolved quantity remains | Same authorized origin or destination scope as incident handling |
+
+The static paths (`/demand`, `/vehicles`, `/settings`, `/route-options`,
+`/pending-approval-count`) are declared before `/{transfer_id}`.
+`GET /` accepts `branch_id` (matches origin **or** destination branch),
+`status` (`preparation`, `pending_approval`, `approved`, `in_transit`,
+`received`, `closed_with_adjustment`, `incident`, `cancelled`), `route_type`
+(`central_distribution`, `branch_to_branch`, `branch_to_central`),
+`side` (`origin` or `destination`, relative to `branch_id`),
+`awaiting_my_approval` (boolean; empty list when the caller lacks
+`inventory:transfer_approve`), `page` and `size`.
+
+### Routes and company rules (revision 0114)
+
+Every document has a `route_type` computed from its origin and destination:
+
+| `route_type` | Origin | Destination | Approval |
+| --- | --- | --- | --- |
+| `central_distribution` | Central warehouse (headquarters) | Active branch warehouse | Never |
+| `branch_to_branch` | Branch warehouse | Warehouse of another branch | When `require_approval` is on |
+| `branch_to_central` | Branch warehouse | Central warehouse | When `require_approval` is on |
+
+Rules live in `inventory_transfer_settings`, one row per company. Without a
+row the defaults apply: both branch routes off and `require_approval` on, so
+existing behaviour does not change until a company turns a route on.
+
+```json
+// GET or PUT /settings
+{
+  "allow_branch_to_branch": true,
+  "allow_branch_to_central": false,
+  "require_approval": true
+}
+```
+
+`GET` additionally returns `updated_at`, `pending_count` (transfers in
+`pending_approval`) and `approved_count` (transfers in `approved`) so a client
+can warn that switching a route off freezes them. `PUT` takes exactly the three
+booleans, locks the row, and writes the audit entry
+`UPDATE_INVENTORY_TRANSFER_SETTINGS` with the before and after values.
+
+`GET /route-options` returns:
+
+```json
+{
+  "policy": {"allow_branch_to_branch": true, "allow_branch_to_central": false, "require_approval": true},
+  "origins": [{"id": "<uuid>", "code": "ALM-01", "name": "Bodega Central", "branch_id": "<uuid>", "branch_name": "Casa matriz", "is_central": true}],
+  "destinations": [{"id": "<uuid>", "code": "ALM-02", "name": "Bodega Sur", "branch_id": "<uuid>", "branch_name": "Sucursal Sur", "is_central": false, "route_type": "central_distribution"}]
+}
+```
+
+`origins` carry no `route_type`; `destinations` (empty unless
+`origin_warehouse_id` is sent) do. The central warehouse is an origin only when
+it belongs to the headquarters branch; branch warehouses are origins only when at
+least one branch route is on. An `origin_warehouse_id` outside the caller's
+allowed origins returns `403`. `GET /pending-approval-count` returns
+`{"count": 3}`.
+
+Transfer responses add: `route_type`, `requires_approval`, `approval_round`,
+`submitted_by_id/_name/_at`, `approved_by_id/_name/_at`,
+`rejected_by_id/_name/_at`, `rejection_reason`, `origin_branch_name`,
+`origin_is_central`, `destination_branch_name` and `destination_is_central`.
+`requires_approval` is recalculated on create, update and submit; for a
+document in `preparation` it reflects the current company rule.
+
+### Approval commands
+
+`submit` and `withdraw` take only `idempotency_key`. `approve` and `reject`
+also take the round the person saw:
+
+```json
+// POST /{transfer_id}/approve
+{"idempotency_key": "transfer-approve-demo-001", "expected_round": 1}
+
+// POST /{transfer_id}/reject  (reason: 5 to 1000 characters)
+{"idempotency_key": "transfer-reject-demo-001", "expected_round": 1,
+ "reason": "Faltan 2 unidades por confirmar en la sucursal destino"}
+```
+
+`approval_round` increases by one on every `submit`. A decision whose
+`expected_round` differs from the current one fails with
+`409 transfer_approval_stale`, so nobody approves a version they did not see.
+The creator and the submitter cannot approve or reject their own transfer
+(`403 transfer_approval_self_forbidden`) unless the caller is a superuser.
+`submit` and `approve` revalidate the route, the company rule, available stock
+and units already committed to another transfer; `reject` and `withdraw` do not
+require the route to be enabled. `reject` and `withdraw` return the document to
+`preparation`; `reject` stores the reason and the rejecting user, and the next
+`submit` clears the rejection and approval data. Each of these commands is
+audited as `SUBMIT_TRANSFER`, `WITHDRAW_TRANSFER`, `APPROVE_TRANSFER` or
+`REJECT_TRANSFER`. Idempotency keys are unique per company and action, and
+replays follow the rules of the other transfer commands.
 
 ### State and stock rules
 
@@ -599,14 +698,45 @@ receipt event so clients do not have to infer the product from the HU code.
 | --- | --- | --- |
 | `preparation` | Edit | Revalidates company, branch, product, HU, lot, quantity and request demand; no reservation or stock movement |
 | `preparation` | Cancel | `cancelled`; no stock movement |
-| `preparation` | Dispatch | `in_transit`; central stock moves to the vehicle location once |
+| `preparation` | Submit (branch route with approval) | `pending_approval`; `approval_round + 1`; no stock movement |
+| `pending_approval` | Approve | `approved`; stock, route, rule and committed units are revalidated |
+| `pending_approval` | Reject | `preparation` with `rejection_reason`; the next submit starts a new round |
+| `pending_approval` | Withdraw | `preparation` |
+| `pending_approval` / `approved` | Cancel | `cancelled`; no stock movement |
+| `approved` | Dispatch | `in_transit`; origin stock moves to the vehicle location once |
+| `preparation` | Dispatch | `in_transit` for `central_distribution`, or for a branch route when the rule does not require approval; otherwise `409 transfer_approval_required` |
 | `in_transit` | Partial receipt | Remains `in_transit`; received quantity moves into the destination in `quarantine`, remainder stays in the vehicle |
 | `in_transit` | Final receipt | `received` when all dispatched quantity has been received or explicitly returned through a future authorized flow |
 | `in_transit` | Open incident | `incident`; stock remains in transit and the incident keeps reason/evidence/history |
 | `incident` | Resolve `resume_transit` | Returns to `in_transit` only after the remaining quantity is confirmed still present |
 | `incident` | Resolve `close_received` | Allowed only when no unexplained quantity remains; loss/damage must first use the B05 adjustment |
 
-Cancellation is allowed only before dispatch. No command silently removes stock.
+Cancellation is allowed only before dispatch (`preparation`, `pending_approval`
+and `approved`). Cancelling an `in_transit` central transfer still returns
+`409 transfer_not_in_preparation`; for branch routes the error is
+`409 transfer_not_cancellable`. Dispatch of a `central_distribution` document
+outside `preparation` still returns `409 transfer_not_dispatchable`; branch
+routes return `transfer_approval_required` for a `preparation`/`pending_approval`
+document that needs approval and `transfer_not_dispatchable` for other states.
+Only `preparation` is editable.
+
+When a company changes its rules, a branch-route transfer whose route is now
+off cannot be created, edited, submitted, approved or dispatched and fails
+with `409 transfer_route_disabled`; reject, withdraw and cancel remain
+available, and transfers already `in_transit` or in `incident` are unaffected.
+A transfer saved from a branch warehouse while both branch routes are off
+returns `transfer_route_disabled`; a new document in that situation still gets
+`422 transfer_origin_not_central`. Turning approval off lets pending documents
+be withdrawn and dispatched, or approved; turning it on makes branch-route
+drafts require `submit`.
+
+Units are locked `FOR UPDATE` on submit, approve and dispatch. A handling unit
+already included in another `pending_approval` or `approved` transfer is
+refused with `409 transfer_handling_unit_committed`; drafts in `preparation`
+do not commit units. Purchase-request demand is linked only on
+`central_distribution`: lines on a branch route that send `demand_allocations`
+fail with `422 transfer_demand_not_allowed_for_route` and need a line reason.
+No command silently removes stock.
 Transfer movements preserve the handling unit's canonical receipt-detail lot
 identity and use the inventory engine, so the company/product weighted-average
 quantity and value remain unchanged. The vehicle warehouse is technical: it is
@@ -694,6 +824,27 @@ Common stable errors include `transfer_not_in_preparation`,
 `transfer_receipt_location_invalid`, and
 `inventory_transfer_integrity_conflict`. B04 should consume these contracts;
 this revision does not add the transfer screens.
+
+Errors added with routes and approval (revision 0114):
+
+| Code | HTTP | When |
+| --- | --- | --- |
+| `transfer_route_disabled` | 409 | The route is off for the company (branch to branch or return to central); also for a saved branch transfer when both routes were turned off |
+| `transfer_origin_not_central` | 422 | A new transfer leaves a non-central warehouse while both branch routes are off (unchanged contract) |
+| `transfer_same_branch` | 422 | Origin and destination belong to the same branch on a branch route |
+| `transfer_destination_invalid` / `transfer_origin_invalid` | 422 / 409 | The warehouse is inactive, in transit, or not eligible to store/dispatch |
+| `transfer_demand_not_allowed_for_route` | 422 | A branch-route line sends purchase-request `demand_allocations` |
+| `transfer_approval_not_applicable` | 422 | `submit` on a central distribution or on a route whose approval is off |
+| `transfer_approval_required` | 409 | Dispatch of a branch-route transfer that is not yet `approved` |
+| `transfer_not_pending_approval` | 409 | `approve`, `reject` or `withdraw` when the transfer is not `pending_approval` |
+| `transfer_approval_stale` | 409 | `expected_round` is not the current `approval_round` |
+| `transfer_approval_self_forbidden` | 403 | The creator or submitter tries to approve or reject (superuser exempt) |
+| `transfer_rejection_reason_required` | 422 | The rejection reason is shorter than 5 or longer than 1000 characters |
+| `transfer_handling_unit_committed` | 409 | The unit is already in another `pending_approval` or `approved` transfer |
+| `transfer_not_cancellable` | 409 | Cancel of a branch-route transfer that already left (central routes keep `transfer_not_in_preparation`) |
+
+`transfer_dispatch_blocked` and `transfer_override_reason_required` come from
+the dispatch compliance check, which is independent of approval.
 
 ## ERS-B05: authorized inventory adjustments (revision 0087)
 
