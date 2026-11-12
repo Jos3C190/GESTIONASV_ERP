@@ -2,8 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { expect, it, vi } from 'vitest';
 import TransferDocumentList from '../../src/lib/features/inventory/components/TransferDocumentList.svelte';
 import type { InventoryTransfer } from '../../src/lib/features/inventory/transfer-documents';
+import { transferDefaults } from './fixtures/inventory-transfer';
 
 const transfer: InventoryTransfer = {
+  ...transferDefaults,
   id: 'transfer-a', company_id: 'company-1', code: 'TR-DEMO-A',
   origin_warehouse_id: 'origin', origin_warehouse_name: 'Central', origin_branch_id: 'matrix',
   destination_warehouse_id: 'destination', destination_warehouse_name: 'Sucursal', destination_branch_id: 'branch',

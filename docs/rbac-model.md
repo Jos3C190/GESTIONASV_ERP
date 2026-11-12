@@ -1,6 +1,6 @@
 # RBAC Model
 
-> **Versión:** `v1.0.0` | **Última actualización:** `20/10/2026`
+> **Versión:** `v1.0.0` | **Última actualización:** `12/11/2026`
 > Dynamic Role-Based Access Control model and permission matrix design.
 
 ## 1. Goals
@@ -159,6 +159,8 @@ generic movement route remains usable for unrelated operations but cannot
 write into a registered vehicle transit location; new transit movement must
 use the transfer document and its state machine.
 
+Transfers that leave a branch warehouse, their approval and the two permissions they add are covered in section 12.
+
 ## 10. Inventory adjustment authorization (ERS-B05 / revision 0087)
 
 `inventory:adjust` permits creating/editing drafts, managing their draft
@@ -245,3 +247,68 @@ remain server-side; responses include traceability IDs and quantities only.
 See the B08 endpoint table in `docs/api.md` and
 `tmp/ers-v1/bloque-08/aceptacion-integrada/evidencia-2026-10-19.md` for the
 verification actually performed.
+
+## 12. Transfer routes and approval authorization (revision 0114)
+
+Revision `0114` adds two company-scoped permissions in the `inventory` module
+and grants them **only to the system `SUPER_ADMIN` role**. An administrator
+gives them to other roles through the normal role configuration; no other
+role receives them by migration.
+
+| Permission | Responsibility |
+| --- | --- |
+| `inventory:transfer_approve` | Approve or reject a transfer that is `pending_approval`; sees the pending count and the "Por aprobar" inbox. |
+| `inventory:transfer_settings` | Save the company's transfer rules (`PUT /inventory/transfers/settings`) and see the "Reglas de traslados" menu entry and link. |
+
+`inventory:read` stays the route and module gate. Reading the rules
+(`GET /settings`) needs only `inventory:read`, so the screens can adapt to the
+company's policy; without `inventory:transfer_settings` the page is read-only.
+
+**Who can prepare and send.** Creating, editing, submitting, withdrawing,
+cancelling and dispatching still need `inventory:move` plus access to the
+**origin** warehouse (branch scope and warehouse assignment). Creating or
+editing no longer requires the origin to be the central warehouse: a user
+assigned only to a branch can prepare transfers from that branch when the
+company has turned the route on. Moving a document to a different origin
+through `PUT /{transfer_id}` re-authorizes the new origin, exactly as creating
+one would. Receiving is unchanged: `inventory:receive` plus the destination
+branch/warehouse.
+
+**Approver scope.** An approver needs `inventory:transfer_approve` **and**
+access to the **origin** branch of the transfer (`access_all_branches` counts).
+Access to the destination alone is not enough. The same scope drives
+`GET /pending-approval-count` and `awaiting_my_approval`: a caller without the
+permission gets `{"count": 0}` and an empty list rather than an error.
+`GET /route-options` limits origins to the caller's branch scope and
+assignment, and answers `403` for an origin outside them.
+
+**Segregation of duties.** The creator, the person who submitted a transfer
+and the person who last edited it (`inventory_transfers.last_edited_by_id`,
+migration 0115, set by every `PUT`) cannot approve or reject it
+(`403 transfer_approval_self_forbidden`). A
+superuser (`is_superuser`) is exempt so a single-person demonstration company
+can complete the flow, and counts such transfers in their own inbox. Unlike
+adjustments (section 10), where one user may create, approve and apply, transfer
+approval is a deliberate separation. `withdraw` is not an approval: it needs
+only `inventory:move` and origin access. Approve and reject run the permission
+and scope checks before an idempotent replay is returned, like the other
+transfer commands, and compare the `expected_round` the person saw with the
+current `approval_round` (`409 transfer_approval_stale`).
+
+**Rules that are not permissions.** Which routes exist is a company rule, not
+a role: `branch_to_branch` and `branch_to_central` are off by default and
+`require_approval` is on by default. Distribution from the central warehouse
+never needs approval. A route being off blocks create, edit, submit, approve
+and dispatch for everyone, superusers included; reject, withdraw and cancel
+remain available.
+
+**Audit.** The new actions are `UPDATE_INVENTORY_TRANSFER_SETTINGS` (with before
+and after values), `SUBMIT_TRANSFER`, `WITHDRAW_TRANSFER`, `APPROVE_TRANSFER`
+and `REJECT_TRANSFER`; the transfer commands record the origin branch.
+
+**Migration.** `0114` creates `inventory_transfer_settings`, adds the route,
+approval and rejection columns to `inventory_transfers`, extends the status and
+command constraints, and inserts the two permissions with their `SUPER_ADMIN`
+grant. Its downgrade refuses to run while any transfer is `pending_approval`,
+`approved` or on a route other than central distribution, then removes the
+columns, the table and the permissions.

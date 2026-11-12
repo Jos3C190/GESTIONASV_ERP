@@ -1,21 +1,25 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { HttpError } from '$lib/api/client';
   import { onDestroy, tick } from 'svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Callout from '$lib/components/ui/Callout.svelte';
+  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
   import { inventoryApi } from '$lib/features/inventory/services';
   import type { TransferHandlingUnit } from '$lib/features/inventory/types';
   import { listLocations } from '$lib/features/locations/services';
   import type { LocationOut } from '$lib/features/locations/types';
-  import { getWarehouses } from '$lib/services/warehouses';
-  import type { Warehouse } from '$lib/features/warehouses/types';
   import { company } from '$lib/stores/company.svelte';
   import { branch } from '$lib/stores/branch.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
+  import { session } from '$lib/stores/session.svelte';
   import TransferDemandOverview from './TransferDemandOverview.svelte';
   import TransferPreparationDialog from './TransferPreparationDialog.svelte';
   import TransferDocumentList from './TransferDocumentList.svelte';
   import TransferLifecycleProgress from './TransferLifecycleProgress.svelte';
   import TransferDispatchPanel from './TransferDispatchPanel.svelte';
+  import TransferApprovalPanel from './TransferApprovalPanel.svelte';
+  import TransferRouteBadge from './TransferRouteBadge.svelte';
   import TransferVehicleCatalog from './TransferVehicleCatalog.svelte';
   import {
     inventoryTransfersApi,
@@ -23,9 +27,13 @@
     type InventoryTransfer,
     type TransferCreateInput,
     type TransferDemandRecord,
+    type TransferDestinationOption,
     type TransferLineInput,
+    type TransferPolicyFlags,
+    type TransferRouteType,
     type TransferStatus,
-    type TransferVehicle
+    type TransferVehicle,
+    type TransferWarehouseOption
   } from '../transfer-documents';
   import {
     allocateDemandQuantity,
@@ -33,9 +41,13 @@
     compareQuantities,
     formatQuantity,
     getOrCreateTransferAttempt,
+    isFrozenWhenRouteOff,
+    isRouteEnabled,
     quantityFromScaled,
     quantityString,
     scaledQuantity,
+    TRANSFER_STATUS_OPTIONS,
+    transferRouteLabel,
     transferStatusLabel,
     type TransferAttempt
   } from '../transfer-operations';
@@ -56,22 +68,36 @@
     excessReason: string;
     notes: string;
   };
-  const statuses: Array<{ value: TransferStatus | ''; label: string }> = [
-    { value: '', label: 'Todos los estados' },
-    { value: 'preparation', label: 'En preparación' },
-    { value: 'in_transit', label: 'En tránsito' },
-    { value: 'received', label: 'Recibidos' },
-    { value: 'closed_with_adjustment', label: 'Cerrado con ajuste' },
-    { value: 'incident', label: 'Con incidencia' },
-    { value: 'cancelled', label: 'Cancelados' }
-  ];
+  const statuses = TRANSFER_STATUS_OPTIONS;
+  type DestinationChoice = {
+    value: string;
+    label: string;
+    group?: string;
+    description?: string;
+  };
+
+  /** Branch by name, then its warehouses with the central one first. */
+  function sortByBranchThenWarehouse<
+    T extends { branch_name: string; name: string; is_central: boolean }
+  >(items: T[]): T[] {
+    return [...items].sort(
+      (left, right) =>
+        left.branch_name.localeCompare(right.branch_name, 'es-SV') ||
+        Number(right.is_central) - Number(left.is_central) ||
+        left.name.localeCompare(right.name, 'es-SV')
+    );
+  }
 
   let activeTab = $state<Tab>('supply');
   let contextKey = $state('');
   let contextVersion = 0;
   let sourceLoadSequence = 0;
   let workspaceLoadContext = '';
-  let warehouses = $state<Warehouse[]>([]);
+  let origins = $state<TransferWarehouseOption[]>([]);
+  let originsLoaded = $state(false);
+  let policy = $state<TransferPolicyFlags | null>(null);
+  let pendingApprovalCount = $state(0);
+  let awaitingApproval = $state(false);
   let sourceWarehouseId = $state('');
   let availableUnits = $state<TransferHandlingUnit[]>([]);
   let demands = $state<TransferDemandRecord[]>([]);
@@ -88,7 +114,9 @@
   let vehicles = $state<TransferVehicle[]>([]);
   let vehicleState = $state<CollectionState>('loading');
   let vehicleError = $state<string | null>(null);
-  let destinations = $state<Warehouse[]>([]);
+  let destinations = $state<TransferDestinationOption[]>([]);
+  let destinationsState = $state<CollectionState>('loading');
+  let destinationsError = $state<string | null>(null);
   let demandBranchErrors = $state<string[]>([]);
 
   let selectedProductKey = $state('');
@@ -151,8 +179,35 @@
       ? `/warehouses/${encodeURIComponent(selectedTransfer.destination_warehouse_id)}?tab=inventario`
       : null
   );
-  const centralWarehouses = $derived(
-    warehouses.filter((item) => item.isCentral && item.storageEligible)
+  const canApproveTransfers = $derived(permissions.hasPermission('inventory:transfer_approve'));
+  const canConfigureRules = $derived(permissions.hasPermission('inventory:transfer_settings'));
+  const currentUserId = $derived(session.user?.id ?? null);
+  const isSuperuser = $derived(session.user?.is_superuser === true);
+  // Deciding on a transfer needs coverage of its origin branch, as the server checks.
+  const canAccessSelectedOrigin = $derived(
+    branch.accessAllBranches ||
+      (selectedTransfer?.origin_branch_id != null &&
+        branch.branches.some((item) => item.id === selectedTransfer?.origin_branch_id))
+  );
+  const sourceOrigin = $derived(origins.find((item) => item.id === sourceWarehouseId) ?? null);
+  // A branch origin has no purchase demand to plan against; the central warehouse does.
+  const sourceIsCentral = $derived(
+    sourceOrigin ? sourceOrigin.is_central : (selectedTransfer?.origin_is_central ?? true)
+  );
+  const selectedRouteEnabled = $derived(
+    selectedTransfer ? isRouteEnabled(selectedTransfer.route_type, policy) : true
+  );
+  const routeRulesFreezeSelected = $derived(
+    Boolean(
+      selectedTransfer && isFrozenWhenRouteOff(selectedTransfer.status) && !selectedRouteEnabled
+    )
+  );
+  // Dispatch is open to approved transfers and to those the company lets leave unapproved.
+  const selectedDispatchable = $derived(
+    selectedTransfer
+      ? selectedTransfer.status === 'approved' ||
+          (selectedTransfer.status === 'preparation' && !selectedTransfer.requires_approval)
+      : false
   );
   const activeDemand = $derived(
     demands.find((item) => item.purchase_request_detail_id === selectedDemandDetailId) ?? null
@@ -245,9 +300,63 @@
   );
   const preparationDestinations = $derived(
     activeDemand
-      ? destinations.filter((item) => item.branchId === activeDemand.branch_id)
+      ? destinations.filter((item) => item.branch_id === activeDemand.branch_id)
       : destinations
   );
+  const originOptions = $derived(
+    sortByBranchThenWarehouse(origins).map((item) => ({
+      value: item.id,
+      label: `${item.code ? `${item.code} · ` : ''}${item.name}`,
+      group: item.branch_name,
+      description: item.is_central ? 'Casa matriz' : undefined
+    }))
+  );
+  const preparationOriginLabel = $derived(
+    sourceOrigin
+      ? `${sourceOrigin.branch_name} · ${sourceOrigin.name}`
+      : [selectedTransfer?.origin_branch_name, selectedTransfer?.origin_warehouse_name]
+          .filter(Boolean)
+          .join(' · ')
+  );
+  const destinationOptions = $derived.by(() => {
+    const options: DestinationChoice[] = sortByBranchThenWarehouse(preparationDestinations).map((item) => ({
+      value: item.id,
+      label: item.name,
+      group: item.branch_name,
+      description: transferRouteLabel(item.route_type)
+    }));
+    // Editing keeps the saved destination visible even if the rules no longer offer it.
+    if (
+      editingTransferId &&
+      destinationWarehouseId &&
+      selectedTransfer &&
+      !options.some((item) => item.value === destinationWarehouseId)
+    ) {
+      options.unshift({
+        value: selectedTransfer.destination_warehouse_id,
+        label: selectedTransfer.destination_warehouse_name,
+        group: selectedTransfer.destination_branch_name ?? undefined,
+        description: transferRouteLabel(selectedTransfer.route_type)
+      });
+    }
+    return options;
+  });
+  const draftRoute = $derived<TransferRouteType | null>(
+    preparationDestinations.find((item) => item.id === destinationWarehouseId)?.route_type ??
+      (editingTransferId && selectedTransfer?.destination_warehouse_id === destinationWarehouseId
+        ? selectedTransfer.route_type
+        : null)
+  );
+  const draftIsBranchRoute = $derived(
+    draftRoute ? draftRoute !== 'central_distribution' : !sourceIsCentral
+  );
+  const draftNeedsApproval = $derived(
+    Boolean(draftRoute && draftRoute !== 'central_distribution' && policy?.require_approval)
+  );
+  const branchRoutesEnabled = $derived(
+    Boolean(policy?.allow_branch_to_branch || policy?.allow_branch_to_central)
+  );
+  const reasonLabel = $derived(draftIsBranchRoute ? 'Motivo del traslado' : null);
 
   $effect(() => {
     const dialog = confirmationDialog;
@@ -291,8 +400,13 @@
     sourceLoadSequence += 1;
     preparationSavedMessage = null;
     sourceWarehouseId = '';
-    warehouses = [];
+    origins = [];
+    originsLoaded = false;
+    policy = null;
+    pendingApprovalCount = 0;
+    awaitingApproval = false;
     destinations = [];
+    destinationsState = 'loading';
     availableUnits = [];
     demands = [];
     demandState = 'loading';
@@ -332,48 +446,26 @@
 
   async function loadWorkspace(key: string, version: number) {
     try {
-      const all: Warehouse[] = [];
-      const scopedBranchId = branch.accessAllBranches
-        ? undefined
-        : (branch.id ?? branch.branches[0]?.id);
-      if (!branch.accessAllBranches && !scopedBranchId) {
-        throw new Error('Tu usuario no tiene sucursales autorizadas para consultar traslados.');
-      }
-      let pageNumber = 1;
-      let pages = 1;
-      do {
-        const pageResult = await getWarehouses({
-          branchId: scopedBranchId,
-          page: pageNumber,
-          size: 100,
-          status: 'active'
-        });
-        all.push(...pageResult.items);
-        pages = Math.max(1, pageResult.meta.pages);
-        pageNumber += 1;
-      } while (pageNumber <= pages && isCurrent(key, version));
+      const options = await inventoryTransfersApi.routeOptions();
       if (!isCurrent(key, version)) return;
+      origins = options.origins;
+      originsLoaded = true;
+      policy = options.policy;
 
-      warehouses = all.filter((item) => item.status === 'active');
-      destinations = warehouses
-        .filter((item) => !item.isCentral && item.branchId && item.storageEligible)
-        .sort((left, right) =>
-          `${left.branchName} ${left.name}`.localeCompare(
-            `${right.branchName} ${right.name}`,
-            'es-SV'
-          )
-        );
       const query = browser ? new URLSearchParams(window.location.search) : new URLSearchParams();
       const preferredSource = query.get('warehouse_id');
-      const nextSource = centralWarehouses.some((item) => item.id === preferredSource)
+      const nextSource = origins.some((item) => item.id === preferredSource)
         ? preferredSource!
-        : (centralWarehouses[0]?.id ?? '');
+        : (origins.find((item) => item.is_central)?.id ?? origins[0]?.id ?? '');
       sourceWarehouseId = nextSource;
       requestedHandlingUnitId = query.get('handling_unit_id') ?? '';
 
       await Promise.all([
         loadTransferPage(key, version, 1, true),
-        loadSourceData(nextSource, key, version)
+        loadPendingApprovalCount(key, version),
+        loadDestinations(nextSource, key, version).then(() =>
+          loadSourceData(nextSource, key, version)
+        )
       ]);
       if (!isCurrent(key, version)) return;
 
@@ -393,7 +485,7 @@
             'La unidad del enlace ya no está disponible en esta bodega. Selecciona otra unidad disponible para preparar el traslado.';
         }
       }
-      if (canMoveInventory && centralWarehouses.length > 0) void loadVehicles(key, version);
+      if (canMoveInventory && origins.length > 0) void loadVehicles(key, version);
     } catch (cause) {
       if (!isCurrent(key, version)) return;
       supplyError = message(cause, 'No se pudieron cargar las bodegas disponibles.');
@@ -401,6 +493,53 @@
       demandState = 'error';
       transfersState = 'error';
       transferError = supplyError;
+    }
+  }
+
+  /** Where the chosen origin can send to, as the server's rules allow today. */
+  async function loadDestinations(originId: string, key = contextKey, version = contextVersion) {
+    if (!originId) {
+      destinations = [];
+      destinationsState = 'empty';
+      return;
+    }
+    destinationsState = 'loading';
+    destinationsError = null;
+    try {
+      const result = await inventoryTransfersApi.routeOptions(originId);
+      if (!isCurrent(key, version) || originId !== sourceWarehouseId) return;
+      destinations = result.destinations;
+      policy = result.policy;
+      destinationsState = destinations.length ? 'loaded' : 'empty';
+    } catch (cause) {
+      if (!isCurrent(key, version) || originId !== sourceWarehouseId) return;
+      destinations = [];
+      destinationsState = 'error';
+      destinationsError = message(cause, 'No se pudieron consultar los destinos de esta bodega.');
+    }
+  }
+
+  /** The rules in force today, after the server said ours were out of date. */
+  async function reloadPolicy(key: string, version: number) {
+    try {
+      const options = await inventoryTransfersApi.routeOptions();
+      if (isCurrent(key, version)) policy = options.policy;
+    } catch {
+      // The screen keeps the rules it had; the next load will catch up.
+    }
+  }
+
+  /** Only people who can decide see the count; a failure just hides it. */
+  async function loadPendingApprovalCount(key = contextKey, version = contextVersion) {
+    if (!canApproveTransfers) {
+      pendingApprovalCount = 0;
+      return;
+    }
+    try {
+      const count = await inventoryTransfersApi.pendingApprovalCount();
+      if (isCurrent(key, version)) pendingApprovalCount = count;
+    } catch {
+      if (isCurrent(key, version)) pendingApprovalCount = 0;
     }
   }
 
@@ -457,20 +596,20 @@
       demandState = 'empty';
       return;
     }
+    // Purchase demand is planned from the central warehouse only.
+    const planDemand = canMoveInventory && (origins.find((item) => item.id === warehouseId)?.is_central ?? false);
     stockState = 'loading';
-    demandState = 'loading';
+    demandState = planDemand ? 'loading' : 'empty';
     supplyError = null;
     demandBranchErrors = [];
     availableUnits = [];
     demands = [];
     const demandBranches = [
-      ...new Set(
-        destinations.map((item) => item.branchId).filter((id): id is string => Boolean(id))
-      )
+      ...new Set(destinations.filter((item) => !item.is_central).map((item) => item.branch_id))
     ];
     const [stockResult, ...demandResults] = await Promise.allSettled([
       inventoryApi.listTransferUnits(warehouseId, 'available'),
-      ...(canMoveInventory
+      ...(planDemand
         ? demandBranches.map((branchId) => inventoryTransfersApi.listDemand(branchId))
         : [])
     ]);
@@ -488,7 +627,7 @@
       supplyError = message(stockResult.reason, 'No se pudo cargar el inventario liberado.');
     }
 
-    if (!canMoveInventory) {
+    if (!planDemand) {
       demands = [];
       demandState = 'empty';
     } else {
@@ -542,7 +681,8 @@
     } else loadingMoreTransfers = true;
     try {
       const result = await inventoryTransfersApi.list({
-        status: transferStatusFilter || undefined,
+        status: awaitingApproval ? undefined : transferStatusFilter || undefined,
+        awaitingMyApproval: awaitingApproval || undefined,
         page: pageNumber,
         size: 50
       });
@@ -566,8 +706,10 @@
   }
 
   async function chooseSource(warehouseId: string) {
+    if (warehouseId === sourceWarehouseId) return;
     sourceWarehouseId = warehouseId;
     clearDraft();
+    await loadDestinations(warehouseId);
     await loadSourceData(warehouseId);
   }
 
@@ -595,7 +737,7 @@
     selectedProductKey = productKeyValue;
     selectedDemandDetailId = demand?.purchase_request_detail_id ?? '';
     destinationWarehouseId = demand
-      ? (destinations.find((item) => item.branchId === demand.branch_id)?.id ?? '')
+      ? (destinations.find((item) => item.branch_id === demand.branch_id)?.id ?? '')
       : '';
     draftNotes = '';
     draftLines = [];
@@ -765,8 +907,13 @@
       draftError = 'Seleccione una bodega de origen y un destino diferente.';
       return null;
     }
-    if (!preparationDestinations.some((item) => item.id === destinationWarehouseId)) {
-      draftError = 'Selecciona una bodega habilitada de la sucursal destino de esta preparación.';
+    if (
+      !destinationOptions.some((item) => item.value === destinationWarehouseId) ||
+      (!editingTransferId && !draftRoute)
+    ) {
+      draftError = activeDemand
+        ? 'Selecciona una bodega habilitada de la sucursal destino de esta preparación.'
+        : 'Selecciona una bodega destino habilitada para esta ruta.';
       return null;
     }
     if (draftLines.length === 0) {
@@ -813,7 +960,9 @@
       if (allocationTotal < planned && line.excessReason.trim().length < 3) {
         draftError = activeDemand
           ? `Documenta el motivo del excedente de ${line.code}.`
-          : `Indica el motivo del envío manual de ${line.code}.`;
+          : draftIsBranchRoute
+            ? `Indica el motivo del traslado de ${line.code}.`
+            : `Indica el motivo del envío manual de ${line.code}.`;
         return null;
       }
       lines.push({
@@ -885,7 +1034,8 @@
     transfers = [authoritative, ...transfers.filter((item) => item.id !== authoritative.id)];
     await Promise.all([
       loadTransferPage(contextKey, contextVersion, 1, true),
-      loadSourceData(sourceWarehouseId)
+      loadSourceData(sourceWarehouseId),
+      loadPendingApprovalCount()
     ]);
     if (authoritative.status === 'in_transit') await loadDestinationLocationsFor(authoritative);
     return authoritative;
@@ -918,7 +1068,9 @@
       clearAttempt(actionName);
       clearDraft();
       activeTab = 'documents';
-      preparationSavedMessage = `${authoritative.code}: preparación guardada. El despacho se confirma por separado.`;
+      preparationSavedMessage = authoritative.requires_approval
+        ? `${authoritative.code}: preparación guardada. Envíala a aprobación cuando esté lista.`
+        : `${authoritative.code}: preparación guardada. El despacho se confirma por separado.`;
       await tick();
       if (expectedContext === contextKey && activeTab === 'documents') {
         const heading = document.getElementById('detail-heading');
@@ -1032,9 +1184,82 @@
 
   async function cancelPreparation() {
     const transfer = selectedTransfer;
-    if (!transfer || transfer.status !== 'preparation' || actionSaving || !canMoveInventory) return;
+    if (
+      !transfer ||
+      !['preparation', 'pending_approval', 'approved'].includes(transfer.status) ||
+      actionSaving ||
+      !canMoveInventory
+    )
+      return;
     await runTransferCommand('cancel', transfer, (key) =>
       inventoryTransfersApi.cancel(transfer.id, key)
+    );
+  }
+
+  async function submitForApproval() {
+    const transfer = selectedTransfer;
+    if (
+      !transfer ||
+      transfer.status !== 'preparation' ||
+      !transfer.requires_approval ||
+      actionSaving ||
+      !canMoveInventory
+    )
+      return;
+    await runTransferCommand(
+      'submit',
+      transfer,
+      (key) => inventoryTransfersApi.submit(transfer.id, key),
+      { round: transfer.approval_round }
+    );
+  }
+
+  async function withdrawRequest() {
+    const transfer = selectedTransfer;
+    if (!transfer || transfer.status !== 'pending_approval' || actionSaving || !canMoveInventory)
+      return;
+    await runTransferCommand(
+      'withdraw',
+      transfer,
+      (key) => inventoryTransfersApi.withdraw(transfer.id, key),
+      { round: transfer.approval_round }
+    );
+  }
+
+  async function approveTransfer() {
+    const transfer = selectedTransfer;
+    if (
+      !transfer ||
+      transfer.status !== 'pending_approval' ||
+      actionSaving ||
+      !canApproveTransfers
+    )
+      return;
+    // The round the person saw: if it was sent again meanwhile, the server refuses.
+    const round = transfer.approval_round;
+    await runTransferCommand(
+      'approve',
+      transfer,
+      (key) => inventoryTransfersApi.approve(transfer.id, key, round),
+      { round }
+    );
+  }
+
+  async function rejectTransfer(reason: string) {
+    const transfer = selectedTransfer;
+    if (
+      !transfer ||
+      transfer.status !== 'pending_approval' ||
+      actionSaving ||
+      !canApproveTransfers
+    )
+      return;
+    const round = transfer.approval_round;
+    await runTransferCommand(
+      'reject',
+      transfer,
+      (key) => inventoryTransfersApi.reject(transfer.id, key, round, reason),
+      { round, reason }
     );
   }
 
@@ -1042,7 +1267,10 @@
     const transfer = selectedTransfer;
     if (
       !transfer ||
-      transfer.status !== 'preparation' ||
+      !(
+        transfer.status === 'approved' ||
+        (transfer.status === 'preparation' && !transfer.requires_approval)
+      ) ||
       !dispatchSelection.ready ||
       actionSaving ||
       !canMoveInventory
@@ -1070,7 +1298,7 @@
     transfer: InventoryTransfer,
     command: (key: string) => Promise<InventoryTransfer>,
     fingerprintData: unknown = null
-  ) {
+  ): Promise<boolean> {
     const expectedContext = contextKey;
     const fingerprint = JSON.stringify({ transfer_id: transfer.id, data: fingerprintData });
     const attempt = attemptFor(`${actionName}:${transfer.id}`, fingerprint);
@@ -1081,6 +1309,10 @@
       (
         {
           cancel: 'Cancelando preparación…',
+          submit: 'Enviando a aprobación…',
+          withdraw: 'Retirando la solicitud…',
+          approve: 'Aprobando y revalidando existencias…',
+          reject: 'Registrando el rechazo…',
           dispatch: 'Confirmando despacho…',
           incident: 'Registrando incidencia…',
           'resolve-incident': 'Guardando resolución…'
@@ -1088,9 +1320,19 @@
       )[actionName] ?? 'Procesando traslado…';
     try {
       const result = await command(attempt.idempotencyKey);
-      if (expectedContext !== contextKey) return;
+      if (expectedContext !== contextKey) return false;
       const authoritative = await refreshAfterCommand(result.id, expectedContext);
-      if (authoritative) clearAttempt(`${actionName}:${transfer.id}`);
+      if (authoritative) {
+        clearAttempt(`${actionName}:${transfer.id}`);
+        const confirmation = approvalConfirmation(actionName, authoritative);
+        if (confirmation) {
+          actionNotice = confirmation;
+          // The buttons that ran the command are gone: leave the reader at the document.
+          await tick();
+          document.getElementById('detail-heading')?.focus({ preventScroll: true });
+        }
+        return true;
+      }
     } catch (cause) {
       if (expectedContext === contextKey) {
         const failure = message(cause, 'No se pudo completar la operación.');
@@ -1107,20 +1349,60 @@
           } catch {
             actionError = `${failure} No se pudo confirmar el estado. La clave de reintento se conserva; actualiza el documento antes de decidir si reintentas.`;
           }
-        } else actionError = failure;
+        } else {
+          actionError = failure;
+          // The document moved on without this person (decided, withdrawn, rules changed): show it.
+          const rulesChanged =
+            cause instanceof HttpError &&
+            ((cause.status === 422 && cause.code === 'transfer_approval_not_applicable') ||
+              (cause.status === 409 && cause.code === 'transfer_route_disabled'));
+          if (cause instanceof HttpError && (cause.status === 409 || rulesChanged)) {
+            try {
+              await refreshAfterCommand(transfer.id, expectedContext);
+            } catch {
+              // The message above already says what happened; a later refresh will catch up.
+            }
+          }
+          // The company's rules changed under this screen: learn the ones in force today.
+          if (rulesChanged) await reloadPolicy(expectedContext, contextVersion);
+        }
       }
     } finally {
       actionSaving = false;
       actionProgressMessage = '';
     }
+    return false;
+  }
+
+  function approvalConfirmation(actionName: string, transfer: InventoryTransfer): string | null {
+    return (
+      (
+        {
+          submit: `${transfer.code} quedó pendiente de aprobación.`,
+          withdraw: `${transfer.code} volvió a preparación. Puedes corregirlo y enviarlo de nuevo.`,
+          approve: `${transfer.code} fue aprobado. Ya puedes despacharlo.`,
+          reject: `${transfer.code} volvió a preparación con el motivo del rechazo.`
+        } as Record<string, string>
+      )[actionName] ?? null
+    );
   }
 
   function requestCancel() {
     if (!selectedTransfer) return;
+    const inPreparation = selectedTransfer.status === 'preparation';
     confirmAction(
-      'Cancelar preparación',
-      `se cancelará ${selectedTransfer.code}; no se moverá inventario y el registro permanecerá en el historial`,
+      inPreparation ? 'Cancelar preparación' : 'Cancelar traslado',
+      `Se cancelará ${selectedTransfer.code}; no se moverá inventario y el registro permanecerá en el historial`,
       cancelPreparation
+    );
+  }
+
+  function requestApprove() {
+    if (!selectedTransfer) return;
+    confirmAction(
+      'Aprobar traslado',
+      `Se revalidarán las existencias de ${selectedTransfer.code} antes de dejarlo listo para despachar`,
+      approveTransfer
     );
   }
 
@@ -1144,7 +1426,7 @@
     );
   }
 
-  function editPreparation(transfer: InventoryTransfer) {
+  async function editPreparation(transfer: InventoryTransfer) {
     if (transfer.status !== 'preparation' || !canMoveInventory || draftSaving) return;
     editingTransferId = transfer.id;
     sourceWarehouseId = transfer.origin_warehouse_id;
@@ -1174,7 +1456,9 @@
     activeTab = 'supply';
     draftError = null;
     preparationOpen = true;
-    void refreshPreparationStock();
+    // Demand is planned per destination branch, so the destinations must be known first.
+    await loadDestinations(transfer.origin_warehouse_id);
+    await refreshPreparationStock();
   }
 
   async function confirmReceipt() {
@@ -1308,6 +1592,27 @@
     }
   }
 
+  async function refreshAll() {
+    const key = contextKey;
+    const version = contextVersion;
+    try {
+      const options = await inventoryTransfersApi.routeOptions();
+      if (isCurrent(key, version)) {
+        origins = options.origins;
+        policy = options.policy;
+      }
+    } catch {
+      // The page keeps what it had; each list below reports its own failure.
+    }
+    await Promise.all([
+      loadTransferPage(key, version, 1, true),
+      loadPendingApprovalCount(key, version),
+      loadDestinations(sourceWarehouseId, key, version).then(() =>
+        loadSourceData(sourceWarehouseId, key, version)
+      )
+    ]);
+  }
+
   function formatDate(value: string | null | undefined): string {
     if (!value) return 'Sin fecha indicada';
     const date = new Date(value);
@@ -1327,13 +1632,23 @@
       .join(' · ');
   }
 
-  function branchWarehouseName(warehouse: Warehouse): string {
-    return [warehouse.branchName, warehouse.name].filter(Boolean).join(' · ');
-  }
-
   function chooseDocumentFilter(value: string) {
     transferStatusFilter = value as TransferStatus | '';
     void loadTransferPage(contextKey, contextVersion, 1, true);
+  }
+
+  function chooseAwaitingApproval(value: boolean) {
+    if (awaitingApproval === value) return;
+    awaitingApproval = value;
+    void loadTransferPage(contextKey, contextVersion, 1, true);
+  }
+
+  function openApprovalInbox() {
+    activeTab = 'documents';
+    selectedTransferId = '';
+    selectedTransfer = null;
+    preparationSavedMessage = null;
+    chooseAwaitingApproval(true);
   }
 </script>
 
@@ -1355,20 +1670,32 @@
         Traslados entre bodegas
       </h1>
       <p class="max-w-3xl text-sm text-foreground-muted sm:text-base">
-        Prepara un documento desde la matriz, despacha con vehículo y registra en destino solo lo
-        que llegó. Recibir deja la mercancía en cuarentena para su revisión.
+        Prepara un documento de traslado, despacha con vehículo y registra en destino solo lo que
+        llegó. Recibir deja la mercancía en cuarentena para su revisión.
       </p>
+      {#if pendingApprovalCount > 0}
+        <button
+          type="button"
+          class="inline-flex min-h-11 items-center gap-2 rounded-full border border-warning/30 bg-warning/10 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-warning/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          onclick={openApprovalInbox}
+        >
+          <span class="size-2 rounded-full bg-warning" aria-hidden="true"></span>
+          {pendingApprovalCount === 1
+            ? 'Tienes 1 traslado por aprobar'
+            : `Tienes ${pendingApprovalCount} traslados por aprobar`}
+        </button>
+      {/if}
     </div>
-    <Button
-      variant="secondary"
-      onclick={() =>
-        void Promise.all([
-          loadTransferPage(contextKey, contextVersion, 1, true),
-          loadSourceData(sourceWarehouseId)
-        ])}
-    >
-      Actualizar información
-    </Button>
+    <div class="flex flex-wrap items-center gap-2">
+      {#if canConfigureRules}
+        <a
+          href="/transfers/settings"
+          class="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-surface-elevated px-3.5 text-sm font-medium text-foreground shadow-soft transition-colors hover:border-border-strong hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          >Reglas de traslados</a
+        >
+      {/if}
+      <Button variant="secondary" onclick={() => void refreshAll()}>Actualizar información</Button>
+    </div>
   </header>
 
   <nav
@@ -1389,7 +1716,7 @@
       aria-pressed={activeTab === 'documents'}
       onclick={() => (activeTab = 'documents')}>Documentos</button
     >
-    {#if canMoveInventory && centralWarehouses.length > 0}
+    {#if canMoveInventory && origins.length > 0}
       <button
         class:active-tab={activeTab === 'vehicles'}
         class="tab-button"
@@ -1419,36 +1746,42 @@
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="supply-heading" class="text-lg font-semibold text-foreground">
-            Planificar abastecimiento
+            {sourceIsCentral ? 'Planificar abastecimiento' : 'Preparar traslado desde sucursal'}
           </h2>
           <p class="mt-1 text-sm text-foreground-muted">
-            Consulta las existencias de la matriz y prepara el envío para cada sucursal.
+            {sourceIsCentral
+              ? 'Consulta las existencias de la bodega de origen y prepara el envío para cada sucursal.'
+              : 'Elige qué unidades salen de esta bodega y a cuál van. Si la empresa lo exige, el traslado se aprueba antes de despacharse.'}
           </p>
         </div>
-        {#if centralWarehouses.length > 0 && canMoveInventory}
-          <label class="w-full space-y-1 text-sm font-medium text-foreground sm:w-auto sm:min-w-64">
-            Bodega de origen
-            <select
-              class="field-control"
+        {#if origins.length > 1 && canMoveInventory}
+          <div class="w-full sm:w-auto sm:min-w-96">
+            <SmartSelect
+              id="transfer-origin"
+              label="Bodega de origen"
               value={sourceWarehouseId}
-              onchange={(event) => void chooseSource(event.currentTarget.value)}
+              options={originOptions}
+              placeholder="Buscar bodega…"
+              onselect={(value) => void chooseSource(value)}
+            />
+          </div>
+        {:else if origins.length === 1 && canMoveInventory}
+          <p class="text-sm text-foreground-muted">
+            Bodega de origen: <span class="font-medium text-foreground"
+              >{originOptions[0]?.label}</span
             >
-              {#each centralWarehouses as warehouse (warehouse.id)}
-                <option value={warehouse.id}>{warehouse.code} · {warehouse.name}</option>
-              {/each}
-            </select>
-          </label>
+          </p>
         {/if}
       </div>
 
       {#if !canMoveInventory}
         <div class="notice notice-info" role="status">
-          Tu perfil puede consultar y recibir traslados autorizados. Para preparar o despachar desde
-          la matriz se requiere el permiso de movimiento y el alcance correspondiente.
+          Tu perfil puede consultar y recibir traslados autorizados. Para preparar o despachar se
+          requiere el permiso de movimiento y el alcance correspondiente.
         </div>
-      {:else if centralWarehouses.length === 0 && warehouses.length > 0}
+      {:else if originsLoaded && origins.length === 0}
         <div class="notice notice-info" role="status">
-          No hay una bodega central disponible en tu alcance. Puedes consultar los documentos que
+          No hay una bodega de origen disponible en tu alcance. Puedes consultar los documentos que
           correspondan a tu sucursal desde la sección Documentos.
         </div>
       {/if}
@@ -1474,10 +1807,11 @@
           {preparationNotice}
         </div>{/if}
 
-      {#if canMoveInventory && centralWarehouses.length > 0}
+      {#if canMoveInventory && origins.length > 0}
         <TransferDemandOverview
           products={supplyProducts}
           {selectedProductKey}
+          demandEnabled={sourceIsCentral}
           demandIncomplete={demandBranchErrors.length > 0}
           {stockState}
           {demandState}
@@ -1553,32 +1887,49 @@
           >
             <legend class="sr-only">Destino y unidades del traslado</legend>
             <div class="grid gap-4 lg:grid-cols-2">
-              <label class="space-y-1 text-sm font-medium text-foreground"
-                >Bodega de origen
-                <select class="field-control" value={sourceWarehouseId} disabled>
-                  {#each centralWarehouses as warehouse (warehouse.id)}<option value={warehouse.id}
-                      >{warehouse.code} · {warehouse.name}</option
-                    >{/each}
-                </select>
-              </label>
-              <label class="space-y-1 text-sm font-medium text-foreground"
-                >Bodega de sucursal destino
-                <select
-                  class="field-control"
-                  bind:value={destinationWarehouseId}
-                  disabled={preparationDestinations.length === 0}
+              <div class="space-y-1">
+                <p class="text-sm font-medium text-foreground" id="preparation-origin-label">
+                  Bodega de origen
+                </p>
+                <p
+                  class="rounded-lg border border-border bg-surface-muted px-3 py-2.5 text-sm text-foreground"
+                  aria-labelledby="preparation-origin-label"
                 >
-                  <option value="">Seleccione destino</option>
-                  {#each preparationDestinations as warehouse (warehouse.id)}<option
-                      value={warehouse.id}>{branchWarehouseName(warehouse)}</option
-                    >{/each}
-                </select>
-              </label>
+                  {preparationOriginLabel}
+                </p>
+              </div>
+              <div class="space-y-2">
+                <SmartSelect
+                  id="transfer-destination"
+                  label="Bodega destino"
+                  bind:value={destinationWarehouseId}
+                  options={destinationOptions}
+                  placeholder="Buscar bodega destino…"
+                  disabled={destinationOptions.length === 0}
+                />
+                {#if draftRoute && (draftRoute !== 'central_distribution' || branchRoutesEnabled)}
+                  <TransferRouteBadge route={draftRoute} />
+                {/if}
+              </div>
             </div>
-            {#if preparationDestinations.length === 0}<p class="notice notice-warning" role="alert">
-                No hay una bodega de destino habilitada{activeDemand
+            {#if draftNeedsApproval}
+              <Callout variant="info" dismissible={false} class="mb-0">
+                <p>Después de guardar, envíalo a aprobación para poder despacharlo.</p>
+              </Callout>
+            {/if}
+            {#if destinationsState === 'error'}<p class="notice notice-danger" role="alert">
+                {destinationsError}
+              </p>{:else if destinationsState !== 'loading' && destinationOptions.length === 0}<p
+                class="notice notice-warning"
+                role="alert"
+              >
+                No hay una bodega destino habilitada para esta ruta{activeDemand
                   ? ` en ${activeDemand.branch_name}`
-                  : ''}. Revisa su configuración en Almacenes antes de guardar.
+                  : ''}. Revisa
+                {#if canConfigureRules}<a class="font-medium underline" href="/transfers/settings"
+                    >Reglas de traslados</a
+                  >{:else}Reglas de traslados{/if}
+                o Almacenes.
               </p>{/if}
             {#if selectedProduct && !editingTransferId}
               <div class="space-y-3">
@@ -1671,7 +2022,9 @@
                       {/if}
                       {#if (scaledQuantity(draftLines[index]?.quantity) ?? 0n) > (scaledQuantity(draftLines[index]?.allocations[0]?.quantity || '0') ?? 0n)}
                         <label class="text-xs font-medium text-foreground-muted lg:col-span-full"
-                          >{activeDemand ? 'Motivo del excedente' : 'Motivo del envío manual'}
+                          >{activeDemand
+                            ? 'Motivo del excedente'
+                            : (reasonLabel ?? 'Motivo del envío manual')}
                           <input
                             class="field-control mt-1"
                             type="text"
@@ -1679,7 +2032,11 @@
                             value={draftLines[index]?.excessReason ?? ''}
                             placeholder={activeDemand
                               ? 'Explica la cantidad adicional a lo solicitado'
-                              : 'Ej. Abastecimiento preventivo de sucursal'}
+                              : draftRoute === 'branch_to_central'
+                                ? 'Ej. Sobrante o devolución a la matriz'
+                                : draftIsBranchRoute
+                                  ? 'Ej. Rebalanceo de inventario entre sucursales'
+                                  : 'Ej. Abastecimiento preventivo de sucursal'}
                             oninput={(event) =>
                               updateDraftLine(index, { excessReason: event.currentTarget.value })}
                           />
@@ -1757,13 +2114,15 @@
                           </p>{/if}
                       {:else}
                         <p class="text-xs text-foreground-muted">
-                          Sin solicitud vinculada. Indica el motivo del envío manual.
+                          Sin solicitud vinculada. Indica {draftIsBranchRoute
+                            ? 'el motivo del traslado'
+                            : 'el motivo del envío manual'}.
                         </p>
                       {/each}
                     </div>
                     {#if (scaledQuantity(line.quantity) ?? 0n) > line.allocations.reduce((sum, allocation) => sum + (scaledQuantity(allocation.quantity) ?? 0n), 0n)}
                       <label class="text-xs font-medium text-foreground-muted lg:col-span-full"
-                        >Motivo del excedente
+                        >{reasonLabel ?? 'Motivo del excedente'}
                         <input
                           class="field-control mt-1"
                           type="text"
@@ -1834,6 +2193,10 @@
         hasMore={transfersHaveMore}
         loadingMore={loadingMoreTransfers}
         busy={actionSaving || draftSaving}
+        canApprove={canApproveTransfers}
+        {awaitingApproval}
+        {pendingApprovalCount}
+        onAwaitingApproval={chooseAwaitingApproval}
         {formatDate}
         {documentSummary}
         onFilter={chooseDocumentFilter}
@@ -1862,10 +2225,15 @@
                 >
                   {selectedTransfer.origin_warehouse_name} → {selectedTransfer.destination_warehouse_name}
                 </h2>
-                <p class="mt-1 text-sm text-foreground-muted">
-                  Creado {formatDate(selectedTransfer.created_at)} · {transferStatusLabel(
-                    selectedTransfer.status
-                  )}
+                <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground-muted">
+                  <span
+                    >Creado {formatDate(selectedTransfer.created_at)} · {transferStatusLabel(
+                      selectedTransfer.status
+                    )}</span
+                  >
+                  {#if selectedTransfer.route_type && selectedTransfer.route_type !== 'central_distribution'}
+                    <TransferRouteBadge route={selectedTransfer.route_type} />
+                  {/if}
                 </p>
               </div>
               <button
@@ -1877,8 +2245,14 @@
                 }}>Cerrar detalle</button
               >
             </header>
-            {#if selectedTransfer.status === 'preparation' || selectedTransfer.status === 'in_transit' || selectedTransfer.status === 'received'}
-              <TransferLifecycleProgress status={selectedTransfer.status} />
+            {#if ['preparation', 'pending_approval', 'approved', 'in_transit', 'received'].includes(selectedTransfer.status)}
+              <TransferLifecycleProgress
+                status={selectedTransfer.status}
+                withApproval={selectedTransfer.requires_approval ||
+                  selectedTransfer.approved_at != null ||
+                  selectedTransfer.status === 'pending_approval' ||
+                  selectedTransfer.status === 'approved'}
+              />
             {/if}
             {#if selectedTransfer.notes}<p
                 class="rounded-xl bg-surface-muted p-3 text-sm text-foreground-muted"
@@ -1946,34 +2320,83 @@
               {/each}
             </div>
 
-            {#if selectedTransfer.status === 'preparation'}
-              <div
-                class="grid gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4 lg:grid-cols-[1fr_auto] lg:items-end"
-              >
-                <TransferDispatchPanel
-                  transfer={selectedTransfer}
-                  disabled={!canMoveInventory || actionSaving}
-                  bind:selection={dispatchSelection}
-                />
+            {#if selectedTransfer.status === 'preparation' || selectedTransfer.status === 'pending_approval' || selectedTransfer.status === 'approved'}
+              {#if selectedTransfer.status !== 'preparation' || selectedTransfer.requires_approval}
+                {#key `${selectedTransfer.id}:${selectedTransfer.status}:${selectedTransfer.approval_round}`}
+                  <TransferApprovalPanel
+                    transfer={selectedTransfer}
+                    canMove={canMoveInventory}
+                    canApprove={canApproveTransfers}
+                    {currentUserId}
+                    {isSuperuser}
+                    canAccessOrigin={canAccessSelectedOrigin}
+                    routeEnabled={selectedRouteEnabled}
+                    busy={actionSaving}
+                    {formatDate}
+                    onSubmit={() => void submitForApproval()}
+                    onWithdraw={() => void withdrawRequest()}
+                    onApprove={requestApprove}
+                    onReject={(reason) => void rejectTransfer(reason)}
+                  />
+                {/key}
+              {:else if routeRulesFreezeSelected}
+                <Callout variant="warning" dismissible={false} class="mb-0">
+                  <p>
+                    Esta ruta está desactivada en las reglas de traslados, así que no se puede
+                    editar ni despachar. Todavía puedes cancelar el traslado.
+                  </p>
+                </Callout>
+              {/if}
+              {#if selectedDispatchable}
+                <div
+                  class="grid gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4 lg:grid-cols-[1fr_auto] lg:items-end"
+                >
+                  <TransferDispatchPanel
+                    transfer={selectedTransfer}
+                    disabled={!canMoveInventory || actionSaving || !selectedRouteEnabled}
+                    bind:selection={dispatchSelection}
+                  />
+                  <div class="flex flex-wrap gap-2">
+                    {#if selectedTransfer.status === 'preparation'}<Button
+                        variant="secondary"
+                        disabled={!canMoveInventory || actionSaving || !selectedRouteEnabled}
+                        onclick={() => void editPreparation(selectedTransfer!)}>Editar preparación</Button
+                      >{/if}<Button
+                      variant="secondary"
+                      disabled={!canMoveInventory || actionSaving}
+                      onclick={requestCancel}
+                      >{selectedTransfer.status === 'preparation'
+                        ? 'Cancelar preparación'
+                        : 'Cancelar traslado'}</Button
+                    ><Button
+                      disabled={!canMoveInventory ||
+                        actionSaving ||
+                        !selectedRouteEnabled ||
+                        !dispatchSelection.ready}
+                      onclick={requestDispatch}>Confirmar despacho</Button
+                    >
+                  </div>
+                </div>
+                <p class="text-xs text-foreground-muted">
+                  El despacho valida la disponibilidad de nuevo. La cantidad se moverá a tránsito
+                  solo después de confirmar esta acción.
+                </p>
+              {:else}
                 <div class="flex flex-wrap gap-2">
-                  <Button
+                  {#if selectedTransfer.status === 'preparation'}<Button
+                      variant="secondary"
+                      disabled={!canMoveInventory || actionSaving || !selectedRouteEnabled}
+                      onclick={() => void editPreparation(selectedTransfer!)}>Editar preparación</Button
+                    >{/if}<Button
                     variant="secondary"
                     disabled={!canMoveInventory || actionSaving}
-                    onclick={() => editPreparation(selectedTransfer!)}>Editar preparación</Button
-                  ><Button
-                    variant="secondary"
-                    disabled={!canMoveInventory || actionSaving}
-                    onclick={requestCancel}>Cancelar preparación</Button
-                  ><Button
-                    disabled={!canMoveInventory || actionSaving || !dispatchSelection.ready}
-                    onclick={requestDispatch}>Confirmar despacho</Button
+                    onclick={requestCancel}
+                    >{selectedTransfer.status === 'preparation'
+                      ? 'Cancelar preparación'
+                      : 'Cancelar traslado'}</Button
                   >
                 </div>
-              </div>
-              <p class="text-xs text-foreground-muted">
-                El despacho valida la disponibilidad de nuevo. La cantidad se moverá a tránsito solo
-                después de confirmar esta acción.
-              </p>
+              {/if}
             {:else if selectedTransfer.status === 'in_transit'}
               <div class="rounded-xl border border-warning/30 bg-warning/5 p-4">
                 <p class="font-medium text-foreground">Recepción en destino</p>
@@ -2316,9 +2739,6 @@
 {/if}
 
 <style>
-  .field-control {
-    @apply w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
-  }
   .tab-button {
     @apply min-h-11 shrink-0 rounded-xl px-4 py-2 text-sm font-medium text-foreground-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
   }

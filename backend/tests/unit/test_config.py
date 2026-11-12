@@ -28,6 +28,23 @@ def test_settings_test_env_flag() -> None:
     assert s.is_test is True
 
 
+@pytest.mark.parametrize("environment", ["development", "test", "staging", "production"])
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("allow_production", [False, True])
+def test_simulator_requires_explicit_production_opt_in(
+    environment: str, enabled: bool, allow_production: bool
+) -> None:
+    configured = Settings(
+        _env_file=None,
+        ENVIRONMENT=environment,
+        TRACKING_SIMULATOR_ENABLED=enabled,
+        TRACKING_SIMULATOR_ALLOW_PRODUCTION=allow_production,
+    )
+    expected = enabled and (environment != "production" or allow_production)
+    assert configured.simulator_enabled is expected
+    assert configured.is_production is (environment == "production")
+
+
 def test_environment_variable_taken_from_os(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("JWT_SECRET_KEY", "x")

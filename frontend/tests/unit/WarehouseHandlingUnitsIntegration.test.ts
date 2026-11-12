@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   listReceiptLots: vi.fn(),
   listLocations: vi.fn(),
   prepareHandlingUnitSplit: vi.fn(),
+  transferSettings: vi.fn(),
   permissions: new Set<string>()
 }));
 
@@ -40,6 +41,9 @@ vi.mock('$lib/features/inventory/services', () => ({
     recordInventoryLabelPrint: vi.fn(),
     confirmInventoryLabelPlacement: vi.fn()
   }
+}));
+vi.mock('$lib/features/inventory/transfer-documents', () => ({
+  inventoryTransfersApi: { settings: mocks.transferSettings }
 }));
 vi.mock('$lib/features/locations/services', () => ({
   listLocations: mocks.listLocations
@@ -155,11 +159,24 @@ function availableUnit() {
   };
 }
 
+function transferRules(overrides: Record<string, unknown> = {}) {
+  return {
+    allow_branch_to_branch: false,
+    allow_branch_to_central: false,
+    require_approval: true,
+    updated_at: null,
+    pending_count: 0,
+    approved_count: 0,
+    ...overrides
+  };
+}
+
 describe('warehouse detail → HandlingUnitsPanel permissions', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.permissions.clear();
     mocks.getWarehouse.mockResolvedValue(branchWarehouse());
+    mocks.transferSettings.mockResolvedValue(transferRules());
     mocks.getWarehouses.mockResolvedValue({
       items: [],
       meta: { page: 1, size: 100, total: 0, pages: 0 }
@@ -223,5 +240,27 @@ describe('warehouse detail → HandlingUnitsPanel permissions', () => {
     expect(screen.queryByRole('button', { name: 'Dividir unidad' })).not.toBeInTheDocument();
     expect(mocks.prepareHandlingUnitSplit).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Trasladar a sucursal' })).not.toBeInTheDocument();
+  });
+  it('ofrece trasladar desde una bodega de sucursal solo si la empresa activó una ruta de sucursal', async () => {
+    mocks.permissions.add('inventory:read');
+    mocks.permissions.add('inventory:move');
+    mocks.transferSettings.mockResolvedValue(transferRules({ allow_branch_to_central: true }));
+    render(WarehouseDetailPage);
+
+    expect(await screen.findByText('HU-BRANCH-001')).toBeInTheDocument();
+    await fireEvent.click(screen.getByText('Otras acciones'));
+    expect(
+      await screen.findByRole('button', { name: 'Trasladar a otra bodega' })
+    ).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Trasladar a sucursal' })).not.toBeInTheDocument();
+  });
+
+  it('no consulta las reglas de traslado ni ofrece trasladar sin permiso de movimiento', async () => {
+    mocks.permissions.add('inventory:read');
+    render(WarehouseDetailPage);
+
+    expect(await screen.findByText('HU-BRANCH-001')).toBeInTheDocument();
+    expect(mocks.transferSettings).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Trasladar a otra bodega' })).not.toBeInTheDocument();
   });
 });

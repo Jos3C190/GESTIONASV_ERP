@@ -8,7 +8,9 @@ from typing import Any
 
 from app.domain.entities.inventory_transfer import (
     TransferDomainError,
+    TransferPolicy,
     validate_positive_quantity,
+    validate_rejection_reason,
 )
 from app.domain.ports.inventory_transfer_repository import InventoryTransferRepository
 
@@ -152,6 +154,29 @@ class InventoryTransferUseCases:
 
     async def cancel_transfer(self, **kwargs: Any) -> dict[str, Any]:
         return await self._repository.cancel_transfer(**kwargs)
+
+    async def submit_transfer(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._repository.submit_transfer(**kwargs)
+
+    async def withdraw_transfer(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._repository.withdraw_transfer(**kwargs)
+
+    async def approve_transfer(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._repository.approve_transfer(**kwargs)
+
+    async def reject_transfer(self, *, reason: str, **kwargs: Any) -> dict[str, Any]:
+        return await self._repository.reject_transfer(
+            reason=validate_rejection_reason(reason), **kwargs
+        )
+
+    async def get_policy(self, company_id: uuid.UUID) -> TransferPolicy:
+        return await self._repository.get_policy(company_id)
+
+    async def route_options(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._repository.route_options(**kwargs)
+
+    async def pending_approval_count(self, **kwargs: Any) -> int:
+        return await self._repository.pending_approval_count(**kwargs)
 
     async def get_transfer(
         self, company_id: uuid.UUID, transfer_id: uuid.UUID

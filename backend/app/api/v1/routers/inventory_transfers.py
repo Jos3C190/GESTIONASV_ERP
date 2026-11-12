@@ -9,10 +9,12 @@ from typing import Annotated, Any, TypeVar
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.company_access import (
+    assigned_warehouse_ids,
     authorize_warehouse_assignment,
     effective_company_id,
     get_branch_context,
@@ -37,13 +39,19 @@ from app.api.v1.schemas.inventory_transfer import (
     DispatchVehicleOptionOut,
     InventoryTransferOut,
     InventoryVehicleOut,
+    PendingApprovalCountOut,
+    TransferApproveIn,
     TransferCommandIn,
     TransferCreateIn,
     TransferDemandOut,
     TransferDispatchIn,
     TransferIncidentIn,
     TransferIncidentResolveIn,
+    TransferPolicyIn,
+    TransferPolicyOut,
     TransferReceiveIn,
+    TransferRejectIn,
+    TransferRouteOptionsOut,
     TransferUpdateIn,
 )
 from app.api.v1.transfer_tracking import archive_trip_on_commit
@@ -55,13 +63,17 @@ from app.application.fleet.dispatch import DispatchEvaluation, evaluate_dispatch
 from app.application.fleet.driver_views import build_driver_views
 from app.application.fleet.views import build_vehicle_views
 from app.application.inventory import InventoryApplicationError
+from app.application.inventory_transfers.settings import policy_from
 from app.application.inventory_transfers.use_cases import InventoryTransferUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.exceptions import AuthorizationError
 from app.domain.entities.inventory import InventoryOperationError
 from app.domain.entities.inventory_transfer import TransferDomainError
 from app.infrastructure.models.fleet import FleetVehicleModel
-from app.infrastructure.models.inventory_transfer import InventoryTransferModel
+from app.infrastructure.models.inventory_transfer import (
+    InventoryTransferModel,
+    InventoryTransferSettingsModel,
+)
 from app.infrastructure.models.organization import Branch, Warehouse
 from app.infrastructure.repositories.fleet_repository import FleetRepository
 from app.infrastructure.repositories.inventory_transfer_repository import (
@@ -71,6 +83,7 @@ from app.infrastructure.repositories.inventory_transfer_repository import (
 router = APIRouter(prefix="/inventory/transfers", tags=["inventory transfers"])
 T = TypeVar("T", bound=BaseModel)
 DISPATCH_OVERRIDE_PERMISSION = "fleet:compliance_override"
+APPROVE_PERMISSION = "inventory:transfer_approve"
 #: A transfer in these states has finished its trip (or never started it).
 CLOSED_TRANSFER_STATUSES = ("received", "closed_with_adjustment", "cancelled")
 
@@ -85,24 +98,6 @@ async def _require_dynamic_permission(
     decision = await checker.execute(current.id, company_id, code)
     if not decision.allowed:
         raise AuthorizationError(f"Permiso requerido: {code}", code="forbidden")
-
-
-async def _require_headquarters_scope(
-    session: SessionDep, current: CurrentUser, company_id: uuid.UUID
-) -> uuid.UUID:
-    headquarters_id = await session.scalar(
-        select(Branch.id).where(
-            Branch.company_id == company_id,
-            Branch.is_headquarters.is_(True),
-            Branch.is_active.is_(True),
-            Branch.operational_status == "active",
-            Branch.deleted_at.is_(None),
-        )
-    )
-    if headquarters_id is None:
-        raise HTTPException(409, "La empresa no tiene una sucursal matriz activa.")
-    await resolve_branch_scope(session, current, company_id, headquarters_id)
-    return headquarters_id
 
 
 async def _authorize_origin_warehouse(
@@ -120,11 +115,59 @@ async def _authorize_origin_warehouse(
     )
     if warehouse is None:
         raise HTTPException(404, "Bodega de origen no encontrada.")
-    if not warehouse.is_central or warehouse.is_transit or warehouse.branch_id is None:
-        raise HTTPException(422, "El traslado debe salir de una bodega central activa.")
+    if warehouse.is_transit or warehouse.branch_id is None:
+        raise HTTPException(422, "El traslado debe salir de una bodega operativa.")
     await resolve_branch_scope(session, current, company_id, warehouse.branch_id)
     await authorize_warehouse_assignment(session, current, company_id, warehouse.id)
     return warehouse
+
+
+def _domain_http_error(exc: TransferDomainError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code, detail={"code": exc.code, "message": exc.message}
+    )
+
+
+async def _approver_scope(
+    session: SessionDep,
+    current: CurrentUser,
+    checker: CheckPermissionUseCase,
+    company_id: uuid.UUID,
+) -> tuple[bool, list[uuid.UUID] | None]:
+    """Whether the user can decide on transfers, and from which origin branches."""
+    allowed = (await checker.execute(current.id, company_id, APPROVE_PERMISSION)).allowed
+    if not allowed:
+        return False, None
+    context = await get_branch_context(session, current, company_id)
+    return True, None if context.access_all_branches else [b.id for b in context.branches]
+
+
+async def _policy_out(
+    session: SessionDep, company_id: uuid.UUID, row: InventoryTransferSettingsModel | None
+) -> TransferPolicyOut:
+    policy = policy_from(row)
+    counts = dict(
+        (
+            await session.execute(
+                select(InventoryTransferModel.status, func.count(InventoryTransferModel.id))
+                .where(
+                    InventoryTransferModel.company_id == company_id,
+                    InventoryTransferModel.status.in_(("pending_approval", "approved")),
+                )
+                .group_by(InventoryTransferModel.status)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    return TransferPolicyOut(
+        allow_branch_to_branch=policy.allow_branch_to_branch,
+        allow_branch_to_central=policy.allow_branch_to_central,
+        require_approval=policy.require_approval,
+        updated_at=row.updated_at if row is not None else None,
+        pending_count=counts.get("pending_approval", 0),
+        approved_count=counts.get("approved", 0),
+    )
 
 
 async def _transfer_branch_scope(
@@ -318,6 +361,119 @@ async def list_vehicles(
 
 
 @router.get(
+    "/settings",
+    response_model=TransferPolicyOut,
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def get_transfer_settings(request: Request, session: SessionDep) -> TransferPolicyOut:
+    company_id = effective_company_id(request)
+    row = await session.get(InventoryTransferSettingsModel, company_id)
+    return await _policy_out(session, company_id, row)
+
+
+@router.put(
+    "/settings",
+    response_model=TransferPolicyOut,
+    dependencies=[Depends(require_permission("inventory:transfer_settings"))],
+)
+async def save_transfer_settings(
+    body: TransferPolicyIn,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    audit: AuditService = Depends(get_audit_service),
+) -> TransferPolicyOut:
+    company_id = effective_company_id(request)
+    # La primera vez, dos guardados a la vez no deben chocar al crear la fila.
+    await session.execute(
+        insert(InventoryTransferSettingsModel)
+        .values(company_id=company_id)
+        .on_conflict_do_nothing()
+    )
+    row = await session.get(
+        InventoryTransferSettingsModel, company_id, with_for_update=True, populate_existing=True
+    )
+    assert row is not None
+    # What was saved is read after the lock, so a concurrent save is not reported as "before".
+    before = policy_from(row)
+    async with session.begin_nested():
+        for field, value in body.model_dump().items():
+            setattr(row, field, value)
+        row.updated_by = current.id
+        await session.flush()
+        await audit.record(
+            action="UPDATE_INVENTORY_TRANSFER_SETTINGS",
+            user_id=current.id,
+            company_id=company_id,
+            resource_type="inventory_transfer_settings",
+            resource_id=str(company_id),
+            before_state={
+                "allow_branch_to_branch": before.allow_branch_to_branch,
+                "allow_branch_to_central": before.allow_branch_to_central,
+                "require_approval": before.require_approval,
+            },
+            after_state=body.model_dump(),
+            required=True,
+        )
+    return await _policy_out(session, company_id, row)
+
+
+@router.get(
+    "/route-options",
+    response_model=TransferRouteOptionsOut,
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def transfer_route_options(
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
+    origin_warehouse_id: uuid.UUID | None = None,
+) -> TransferRouteOptionsOut:
+    """Warehouses the user may ship from and, for a chosen origin, where it can go."""
+    company_id = effective_company_id(request)
+    context = await get_branch_context(session, current, company_id)
+    can_move = (await checker.execute(current.id, company_id, "inventory:move")).allowed
+    try:
+        options = await _use_cases(session).route_options(
+            company_id=company_id,
+            can_move=can_move,
+            branch_ids=None
+            if context.access_all_branches
+            else [branch.id for branch in context.branches],
+            warehouse_ids=await assigned_warehouse_ids(session, current, company_id),
+            origin_warehouse_id=origin_warehouse_id,
+        )
+    except TransferDomainError as exc:
+        raise _domain_http_error(exc) from exc
+    return TransferRouteOptionsOut.model_validate(options)
+
+
+@router.get(
+    "/pending-approval-count",
+    response_model=PendingApprovalCountOut,
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def pending_approval_count(
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
+) -> PendingApprovalCountOut:
+    company_id = effective_company_id(request)
+    can_approve, branch_ids = await _approver_scope(session, current, checker, company_id)
+    if not can_approve:
+        return PendingApprovalCountOut(count=0)
+    count = await _use_cases(session).pending_approval_count(
+        company_id=company_id,
+        actor_id=current.id,
+        allow_self_approval=current.is_superuser,
+        approver_branch_ids=branch_ids,
+    )
+    return PendingApprovalCountOut(count=count)
+
+
+@router.get(
     "",
     response_model=list[InventoryTransferOut],
     dependencies=[Depends(require_permission("inventory:read"))],
@@ -326,12 +482,21 @@ async def list_transfers(
     request: Request,
     session: SessionDep,
     current: CurrentUser,
+    checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
     branch_id: uuid.UUID | None = None,
     status_filter: str | None = Query(
         None,
         alias="status",
-        pattern="^(preparation|in_transit|received|closed_with_adjustment|incident|cancelled)$",
+        pattern=(
+            "^(preparation|pending_approval|approved|in_transit|received|"
+            "closed_with_adjustment|incident|cancelled)$"
+        ),
     ),
+    route_type: str | None = Query(
+        None, pattern="^(central_distribution|branch_to_branch|branch_to_central)$"
+    ),
+    side: str | None = Query(None, pattern="^(origin|destination)$"),
+    awaiting_my_approval: bool = False,
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=200),
 ) -> list[InventoryTransferOut]:
@@ -347,9 +512,22 @@ async def list_transfers(
             if context.access_all_branches
             else [branch.id for branch in context.branches]
         }
+    if awaiting_my_approval:
+        can_approve, approver_branch_ids = await _approver_scope(
+            session, current, checker, company_id
+        )
+        if not can_approve:
+            return []
+        filters.update(
+            awaiting_approval_by=current.id,
+            allow_self_approval=current.is_superuser,
+            approver_branch_ids=approver_branch_ids,
+        )
     rows = await _use_cases(session).list_transfers(
         company_id=company_id,
         status_filter=status_filter,
+        route_type=route_type,
+        side=side,
         page=page,
         size=size,
         **filters,
@@ -438,6 +616,15 @@ async def update_transfer(
         session, current, company_id, transfer_id, side="origin"
     )
     await _require_dynamic_permission(checker, current, company_id, "inventory:move")
+    current_origin_id = await session.scalar(
+        select(InventoryTransferModel.origin_warehouse_id).where(
+            InventoryTransferModel.company_id == company_id,
+            InventoryTransferModel.id == transfer_id,
+        )
+    )
+    if body.origin_warehouse_id != current_origin_id:
+        # Moving the transfer to another origin is the same act as creating one from it.
+        await _authorize_origin_warehouse(session, current, company_id, body.origin_warehouse_id)
     return await _persist_command(
         session=session,
         audit=audit,
@@ -497,6 +684,163 @@ async def cancel_transfer(
             transfer_id=transfer_id,
             idempotency_key=body.idempotency_key,
             actor_id=current.id,
+        ),
+        response_model=InventoryTransferOut,
+    )
+
+
+@router.post(
+    "/{transfer_id}/submit",
+    response_model=InventoryTransferOut,
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def submit_transfer(
+    transfer_id: uuid.UUID,
+    body: TransferCommandIn,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
+    audit: AuditService = Depends(get_audit_service),
+) -> InventoryTransferOut:
+    company_id = effective_company_id(request)
+    branch_id, _ = await _transfer_branch_scope(
+        session, current, company_id, transfer_id, side="origin"
+    )
+    await _require_dynamic_permission(checker, current, company_id, "inventory:move")
+    return await _persist_command(
+        session=session,
+        audit=audit,
+        current=current,
+        request=request,
+        company_id=company_id,
+        branch_id=branch_id,
+        action="SUBMIT_TRANSFER",
+        resource_type="inventory_transfers",
+        resource_id=str(transfer_id),
+        operation=_use_cases(session).submit_transfer(
+            company_id=company_id,
+            transfer_id=transfer_id,
+            idempotency_key=body.idempotency_key,
+            actor_id=current.id,
+        ),
+        response_model=InventoryTransferOut,
+    )
+
+
+@router.post(
+    "/{transfer_id}/withdraw",
+    response_model=InventoryTransferOut,
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def withdraw_transfer(
+    transfer_id: uuid.UUID,
+    body: TransferCommandIn,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
+    audit: AuditService = Depends(get_audit_service),
+) -> InventoryTransferOut:
+    company_id = effective_company_id(request)
+    branch_id, _ = await _transfer_branch_scope(
+        session, current, company_id, transfer_id, side="origin"
+    )
+    await _require_dynamic_permission(checker, current, company_id, "inventory:move")
+    return await _persist_command(
+        session=session,
+        audit=audit,
+        current=current,
+        request=request,
+        company_id=company_id,
+        branch_id=branch_id,
+        action="WITHDRAW_TRANSFER",
+        resource_type="inventory_transfers",
+        resource_id=str(transfer_id),
+        operation=_use_cases(session).withdraw_transfer(
+            company_id=company_id,
+            transfer_id=transfer_id,
+            idempotency_key=body.idempotency_key,
+            actor_id=current.id,
+        ),
+        response_model=InventoryTransferOut,
+    )
+
+
+@router.post(
+    "/{transfer_id}/approve",
+    response_model=InventoryTransferOut,
+    dependencies=[Depends(require_permission(APPROVE_PERMISSION))],
+)
+async def approve_transfer(
+    transfer_id: uuid.UUID,
+    body: TransferApproveIn,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    audit: AuditService = Depends(get_audit_service),
+) -> InventoryTransferOut:
+    company_id = effective_company_id(request)
+    branch_id, _ = await _transfer_branch_scope(
+        session, current, company_id, transfer_id, side="origin"
+    )
+    return await _persist_command(
+        session=session,
+        audit=audit,
+        current=current,
+        request=request,
+        company_id=company_id,
+        branch_id=branch_id,
+        action="APPROVE_TRANSFER",
+        resource_type="inventory_transfers",
+        resource_id=str(transfer_id),
+        operation=_use_cases(session).approve_transfer(
+            company_id=company_id,
+            transfer_id=transfer_id,
+            idempotency_key=body.idempotency_key,
+            actor_id=current.id,
+            expected_round=body.expected_round,
+            allow_self_approval=current.is_superuser,
+        ),
+        response_model=InventoryTransferOut,
+    )
+
+
+@router.post(
+    "/{transfer_id}/reject",
+    response_model=InventoryTransferOut,
+    dependencies=[Depends(require_permission(APPROVE_PERMISSION))],
+)
+async def reject_transfer(
+    transfer_id: uuid.UUID,
+    body: TransferRejectIn,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    audit: AuditService = Depends(get_audit_service),
+) -> InventoryTransferOut:
+    company_id = effective_company_id(request)
+    branch_id, _ = await _transfer_branch_scope(
+        session, current, company_id, transfer_id, side="origin"
+    )
+    return await _persist_command(
+        session=session,
+        audit=audit,
+        current=current,
+        request=request,
+        company_id=company_id,
+        branch_id=branch_id,
+        action="REJECT_TRANSFER",
+        resource_type="inventory_transfers",
+        resource_id=str(transfer_id),
+        operation=_use_cases(session).reject_transfer(
+            company_id=company_id,
+            transfer_id=transfer_id,
+            idempotency_key=body.idempotency_key,
+            actor_id=current.id,
+            expected_round=body.expected_round,
+            reason=body.reason,
+            allow_self_approval=current.is_superuser,
         ),
         response_model=InventoryTransferOut,
     )

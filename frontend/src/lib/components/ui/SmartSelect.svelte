@@ -6,6 +6,8 @@
     label: string;
     description?: string;
     disabled?: boolean;
+    /** Optional heading; consecutive options with the same group are listed under it. */
+    group?: string;
   }
   interface Props {
     id: string;
@@ -38,9 +40,12 @@
   let active = $state(0);
   let root: HTMLDivElement;
   let selected = $derived(options.find((option) => option.value === value));
+  let selectedText = $derived(
+    selected ? (selected.group ? `${selected.group} · ${selected.label}` : selected.label) : ''
+  );
   let filtered = $derived(
     options.filter((option) =>
-      `${option.label} ${option.description ?? ''}`
+      `${option.group ?? ''} ${option.label} ${option.description ?? ''}`
         .toLocaleLowerCase('es')
         .includes(query.trim().toLocaleLowerCase('es'))
     )
@@ -54,7 +59,12 @@
   }
   function keydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
-      open = false;
+      if (open) {
+        // Only the list closes; a surrounding dialog or form keeps its own Escape.
+        event.preventDefault();
+        event.stopPropagation();
+        open = false;
+      }
       return;
     }
     if (event.key === 'ArrowDown') {
@@ -96,7 +106,7 @@
       aria-describedby={error ? `${id}-error` : undefined}
       aria-label={ariaLabel || label || undefined}
       {disabled}
-      value={open ? query : (selected?.label ?? '')}
+      value={open ? query : selectedText}
       {placeholder}
       autocomplete="off"
       onfocus={() => {
@@ -140,7 +150,12 @@
       {#if filtered.length === 0}<p class="px-3 py-6 text-center text-xs text-foreground-muted">
           Sin resultados
         </p>{/if}
-      {#each filtered as option, index (option.value)}<button
+      {#each filtered as option, index (option.value)}{#if option.group && option.group !== filtered[index - 1]?.group}<div
+            role="presentation"
+            class="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted"
+          >
+            {option.group}
+          </div>{/if}<button
           id={`${id}-option-${index}`}
           type="button"
           role="option"

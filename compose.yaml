@@ -232,8 +232,9 @@ services:
       TRACCAR_TRACKER_MODELS: ${TRACCAR_TRACKER_MODELS:-}
       # Servidor público de demostración de OSRM; en producción usa uno propio.
       OSRM_URL: ${OSRM_URL:-https://router.project-osrm.org}
-      # Herramientas de simulación de Seguimiento (nunca se activan en producción).
+      # Production additionally requires the explicit demonstration opt-in.
       TRACKING_SIMULATOR_ENABLED: ${TRACKING_SIMULATOR_ENABLED:-false}
+      TRACKING_SIMULATOR_ALLOW_PRODUCTION: ${TRACKING_SIMULATOR_ALLOW_PRODUCTION:-false}
       TRACCAR_OSMAND_URL: ${TRACCAR_OSMAND_URL:-}
       # Sin el perfil `vlm` la captura sigue disponible y los datos se escriben a mano.
       VLM_ENABLED: ${VLM_ENABLED:-true}
@@ -397,6 +398,7 @@ services:
       OSRM_URL: ${OSRM_URL:-https://router.project-osrm.org}
       TRACKING_MONITOR_INTERVAL_SECONDS: ${TRACKING_MONITOR_INTERVAL_SECONDS:-60}
       TRACKING_SIMULATOR_ENABLED: ${TRACKING_SIMULATOR_ENABLED:-false}
+      TRACKING_SIMULATOR_ALLOW_PRODUCTION: ${TRACKING_SIMULATOR_ALLOW_PRODUCTION:-false}
       TRACCAR_OSMAND_URL: ${TRACCAR_OSMAND_URL:-}
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"

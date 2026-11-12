@@ -2,7 +2,51 @@ import { apiFetch } from '$lib/api/client';
 
 export type TransferDecimal = string | number;
 export type TransferStatus =
-  'preparation' | 'in_transit' | 'received' | 'closed_with_adjustment' | 'incident' | 'cancelled';
+  | 'preparation'
+  | 'pending_approval'
+  | 'approved'
+  | 'in_transit'
+  | 'received'
+  | 'closed_with_adjustment'
+  | 'incident'
+  | 'cancelled';
+
+/** How the two warehouses of a transfer relate; the server decides it from the pair. */
+export type TransferRouteType = 'central_distribution' | 'branch_to_branch' | 'branch_to_central';
+
+/** The company's transfer rules. */
+export interface TransferPolicyFlags {
+  allow_branch_to_branch: boolean;
+  allow_branch_to_central: boolean;
+  require_approval: boolean;
+}
+
+export interface TransferPolicy extends TransferPolicyFlags {
+  updated_at: string | null;
+  /** Transfers that turning a route off would freeze. */
+  pending_count: number;
+  approved_count: number;
+}
+
+export interface TransferWarehouseOption {
+  id: string;
+  code: string | null;
+  name: string;
+  branch_id: string;
+  branch_name: string;
+  is_central: boolean;
+}
+
+export interface TransferDestinationOption extends TransferWarehouseOption {
+  /** The route that would join this warehouse to the chosen origin. */
+  route_type: TransferRouteType;
+}
+
+export interface TransferRouteOptions {
+  policy: TransferPolicyFlags;
+  origins: TransferWarehouseOption[];
+  destinations: TransferDestinationOption[];
+}
 
 export interface TransferDemandRecord {
   purchase_request_detail_id: string;
@@ -184,13 +228,35 @@ export interface InventoryTransfer {
   origin_warehouse_id: string;
   origin_warehouse_name: string;
   origin_branch_id: string | null;
+  origin_branch_name: string | null;
+  origin_is_central: boolean;
   destination_warehouse_id: string;
   destination_warehouse_name: string;
   destination_branch_id: string | null;
+  destination_branch_name: string | null;
+  destination_is_central: boolean;
   vehicle: TransferVehicleReference | null;
   driver?: { id: string; name: string; employee_code: string } | null;
   compliance_override_reason?: string | null;
   status: TransferStatus;
+  route_type: TransferRouteType;
+  /** Whether it must be approved before dispatch, under the rules in force. */
+  requires_approval: boolean;
+  /** Goes up every time the transfer is sent to approval again. */
+  approval_round: number;
+  submitted_by_id: string | null;
+  submitted_by_name: string | null;
+  submitted_at: string | null;
+  /** Whoever last edited the preparation; like the author, they cannot decide on it. */
+  last_edited_by_id?: string | null;
+  last_edited_by_name?: string | null;
+  approved_by_id: string | null;
+  approved_by_name: string | null;
+  approved_at: string | null;
+  rejected_by_id: string | null;
+  rejected_by_name: string | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
   notes: string | null;
   created_by_id: string;
   created_at: string;
@@ -247,14 +313,45 @@ export const inventoryTransfersApi = {
       body: JSON.stringify({ vehicle_id: vehicleId, driver_id: driverId || null })
     }),
 
-  list: (filters: { status?: TransferStatus; page?: number; size?: number } = {}) => {
+  list: (
+    filters: {
+      status?: TransferStatus;
+      routeType?: TransferRouteType;
+      /** Only transfers leaving from (origin) or arriving at (destination) the user's branches. */
+      side?: 'origin' | 'destination';
+      /** Only what the signed-in user can decide on now. */
+      awaitingMyApproval?: boolean;
+      page?: number;
+      size?: number;
+    } = {}
+  ) => {
     const query = new URLSearchParams({
       page: String(filters.page ?? 1),
       size: String(filters.size ?? 50)
     });
     if (filters.status) query.set('status', filters.status);
+    if (filters.routeType) query.set('route_type', filters.routeType);
+    if (filters.side) query.set('side', filters.side);
+    if (filters.awaitingMyApproval) query.set('awaiting_my_approval', 'true');
     return apiFetch<InventoryTransfer[]>(`${root}?${query.toString()}`);
   },
+
+  settings: () => apiFetch<TransferPolicy>(`${root}/settings`),
+
+  saveSettings: (body: TransferPolicyFlags) =>
+    apiFetch<TransferPolicy>(`${root}/settings`, { method: 'PUT', body: JSON.stringify(body) }),
+
+  /** Origins the user may ship from; with an origin, also where it can go. */
+  routeOptions: (originWarehouseId?: string) => {
+    const query = originWarehouseId
+      ? `?${new URLSearchParams({ origin_warehouse_id: originWarehouseId }).toString()}`
+      : '';
+    return apiFetch<TransferRouteOptions>(`${root}/route-options${query}`);
+  },
+
+  /** How many transfers wait for the signed-in user's decision. */
+  pendingApprovalCount: async () =>
+    (await apiFetch<{ count: number }>(`${root}/pending-approval-count`)).count,
 
   get: (transferId: string) =>
     apiFetch<InventoryTransfer>(`${root}/${encodeURIComponent(transferId)}`),
@@ -272,6 +369,35 @@ export const inventoryTransfersApi = {
     apiFetch<InventoryTransfer>(`${root}/${encodeURIComponent(transferId)}/cancel`, {
       method: 'POST',
       body: JSON.stringify({ idempotency_key: idempotencyKey })
+    }),
+
+  submit: (transferId: string, idempotencyKey: string) =>
+    apiFetch<InventoryTransfer>(`${root}/${encodeURIComponent(transferId)}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ idempotency_key: idempotencyKey })
+    }),
+
+  withdraw: (transferId: string, idempotencyKey: string) =>
+    apiFetch<InventoryTransfer>(`${root}/${encodeURIComponent(transferId)}/withdraw`, {
+      method: 'POST',
+      body: JSON.stringify({ idempotency_key: idempotencyKey })
+    }),
+
+  /** `expectedRound` is the round the person saw; a newer one makes the server refuse. */
+  approve: (transferId: string, idempotencyKey: string, expectedRound: number) =>
+    apiFetch<InventoryTransfer>(`${root}/${encodeURIComponent(transferId)}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ idempotency_key: idempotencyKey, expected_round: expectedRound })
+    }),
+
+  reject: (transferId: string, idempotencyKey: string, expectedRound: number, reason: string) =>
+    apiFetch<InventoryTransfer>(`${root}/${encodeURIComponent(transferId)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({
+        idempotency_key: idempotencyKey,
+        expected_round: expectedRound,
+        reason
+      })
     }),
 
   dispatch: (

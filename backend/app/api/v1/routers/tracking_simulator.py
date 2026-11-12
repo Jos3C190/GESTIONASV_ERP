@@ -1,7 +1,8 @@
 """Tracking simulator: drive virtual GPS devices to test tracking end to end.
 
-Only available when ``TRACKING_SIMULATOR_ENABLED`` is on and never in
-production. A session stands in for one vehicle of the user's branch scope:
+Available when ``TRACKING_SIMULATOR_ENABLED`` is on; production additionally
+requires ``TRACKING_SIMULATOR_ALLOW_PRODUCTION``. A session stands in for one
+vehicle of the user's branch scope:
 either following a route on its own (a transfer's trip or points on the map)
 or driven live with the joystick. Reports reach Traccar over OsmAnd like a
 driver's phone, so geofence events, alerts and trails are the real ones,

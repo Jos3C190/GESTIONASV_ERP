@@ -29,6 +29,8 @@
     search: string;
     selectedProductKey?: string;
     demandIncomplete?: boolean;
+    /** False when the origin is a branch: purchase demand is planned from the central warehouse. */
+    demandEnabled?: boolean;
     canMoveInventory: boolean;
     onSearch: (value: string) => void;
     onPrepareManual: (productKey: string) => void;
@@ -42,6 +44,7 @@
     search,
     selectedProductKey = '',
     demandIncomplete = false,
+    demandEnabled = true,
     canMoveInventory,
     onSearch,
     onPrepareManual,
@@ -53,7 +56,9 @@
   let detailHeading = $state<HTMLHeadingElement | null>(null);
   const stockReady = $derived(stockState === 'loaded' || stockState === 'empty');
   const demandReady = $derived(demandState === 'loaded' || demandState === 'empty');
-  const loading = $derived(stockState === 'loading' || demandState === 'loading');
+  const loading = $derived(
+    stockState === 'loading' || (demandEnabled && demandState === 'loading')
+  );
   const pendingDemands = $derived(
     products
       .flatMap((product) => product.demands)
@@ -73,13 +78,15 @@
     const query = search.trim().toLocaleLowerCase('es-SV');
     return products.filter((product) => {
       if (filter === 'available' && product.units.length === 0) return false;
-      if (filter === 'pending' && pendingQuantity(product) <= 0n) return false;
+      if (demandEnabled && filter === 'pending' && pendingQuantity(product) <= 0n) return false;
       return (
         !query ||
         [
           product.productName,
           product.sku,
-          ...product.demands.flatMap((demand) => [demand.branch_name, demand.request_code])
+          ...(demandEnabled
+            ? product.demands.flatMap((demand) => [demand.branch_name, demand.request_code])
+            : [])
         ].some((value) => value?.toLocaleLowerCase('es-SV').includes(query))
       );
     });
@@ -90,7 +97,7 @@
       visibleProducts[0] ??
       null
   );
-  const metrics = $derived([
+  const baseMetrics = $derived([
     {
       label: 'Productos disponibles',
       value: stockReady ? String(stockedCount) : '—',
@@ -100,7 +107,9 @@
       label: 'Unidades logísticas',
       value: stockReady ? String(unitCount) : '—',
       hint: 'En la bodega de origen'
-    },
+    }
+  ]);
+  const demandMetrics = $derived([
     {
       label: 'Solicitudes pendientes',
       value: demandReady ? `${demandIncomplete ? '≥ ' : ''}${requestCount}` : '—',
@@ -112,6 +121,7 @@
       hint: demandIncomplete ? 'Consulta parcial de sucursales' : 'Esperando abastecimiento'
     }
   ]);
+  const metrics = $derived(demandEnabled ? [...baseMetrics, ...demandMetrics] : baseMetrics);
 
   function pendingQuantity(product: ProductRow): bigint {
     return product.demands.reduce(
@@ -155,7 +165,7 @@
 </script>
 
 <section class="space-y-4" aria-label="Dashboard de abastecimiento">
-  <dl class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+  <dl class="grid grid-cols-2 gap-3 {demandEnabled ? 'xl:grid-cols-4' : ''}">
     {#each metrics as metric (metric.label)}
       <div class="min-w-0 rounded-xl border border-border bg-surface-elevated p-4">
         <dt class="text-xs font-medium text-foreground-muted">{metric.label}</dt>
@@ -176,16 +186,18 @@
   <div class="rounded-2xl border border-border bg-surface">
     <div class="flex flex-wrap items-end justify-between gap-3 border-b border-border p-4">
       <label class="block w-full space-y-1.5 text-sm font-medium text-foreground lg:max-w-lg">
-        Buscar producto, SKU, sucursal o solicitud
+        {demandEnabled ? 'Buscar producto, SKU, sucursal o solicitud' : 'Buscar producto o SKU'}
         <input
           class="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-foreground placeholder:text-foreground-muted focus-visible:ring-2 focus-visible:ring-primary"
           type="search"
           value={search}
           oninput={(event) => onSearch(event.currentTarget.value)}
-          placeholder="Ej. Harina, PRD-HAR-003 o SCR-00016"
+          placeholder={demandEnabled
+            ? 'Ej. Harina, PRD-HAR-003 o SCR-00016'
+            : 'Ej. Harina o PRD-HAR-003'}
         />
       </label>
-      <div
+      {#if demandEnabled}<div
         class="flex max-w-full flex-wrap gap-1 rounded-lg border border-border bg-surface-muted p-1"
         role="group"
         aria-label="Filtrar productos"
@@ -202,7 +214,7 @@
             onclick={() => (filter = option.value as typeof filter)}>{option.label}</button
           >
         {/each}
-      </div>
+      </div>{/if}
     </div>
 
     {#if loading}
@@ -232,14 +244,18 @@
             ? 'No hay productos que coincidan'
             : demandIncomplete
               ? 'No hay productos entre los datos consultados'
-              : 'Sin existencias ni solicitudes para mostrar'}
+              : demandEnabled
+                ? 'Sin existencias ni solicitudes para mostrar'
+                : 'Sin existencias para mostrar'}
         </h3>
         <p class="text-sm text-foreground-muted">
           {products.length
             ? 'Prueba otro nombre, SKU o sucursal, o muestra todos los productos.'
             : demandIncomplete
               ? 'Faltan sucursales por consultar. Actualiza la información para completar la demanda.'
-              : 'Libera las unidades recibidas en la matriz y actualiza la información.'}
+              : demandEnabled
+                ? 'Libera las unidades recibidas en la matriz y actualiza la información.'
+                : 'Libera las unidades recibidas en esta bodega y actualiza la información.'}
         </p>
         {#if search || filter !== 'all'}<Button
             variant="secondary"
@@ -337,32 +353,34 @@
                 onclick={() => {
                   inspectedKey = activeProduct.key;
                   onPrepareManual(activeProduct.key);
-                }}>Envío manual</Button
+                }}>{demandEnabled ? 'Envío manual' : 'Preparar traslado'}</Button
               >
             </header>
             <dl
               class="grid grid-cols-2 gap-3 rounded-xl border border-border bg-surface-muted/50 p-4"
             >
               <div>
-                <dt class="text-xs text-foreground-muted">Disponible en matriz</dt>
+                <dt class="text-xs text-foreground-muted">
+                  {demandEnabled ? 'Disponible en matriz' : 'Disponible en esta bodega'}
+                </dt>
                 <dd class="mt-1 font-mono text-lg font-semibold text-foreground">
                   {formatQuantity(quantityFromScaled(activeProduct.availableQuantity))}
                   <span class="text-sm font-normal">{activeProduct.unitLabel}</span>
                 </dd>
               </div>
-              <div>
+              {#if demandEnabled}<div>
                 <dt class="text-xs text-foreground-muted">Pendiente en sucursales</dt>
                 <dd class="mt-1 font-mono text-lg font-semibold text-foreground">
                   {demandReady
                     ? `${demandIncomplete ? '≥ ' : ''}${formatQuantity(quantityFromScaled(pendingQuantity(activeProduct)))} ${activeProduct.unitLabel}`
                     : 'Sin consultar'}
                 </dd>
-              </div>
+              </div>{/if}
             </dl>
             {#if prepareIssue(activeProduct)}<p class="text-xs leading-5 text-foreground-muted">
                 {prepareIssue(activeProduct)}
               </p>{/if}
-            <div class="flex flex-wrap items-center justify-between gap-2">
+            {#if demandEnabled}<div class="flex flex-wrap items-center justify-between gap-2">
               <h4 class="text-sm font-semibold text-foreground">Sucursales solicitantes</h4>
               <span class="text-xs text-foreground-muted">Cantidades en unidad base</span>
             </div>
@@ -471,6 +489,7 @@
                   </article>
                 {/each}
               </div>
+            {/if}
             {/if}
           </section>
         {/if}

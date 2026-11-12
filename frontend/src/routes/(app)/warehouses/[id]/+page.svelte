@@ -6,6 +6,7 @@
   import { HttpError } from '$lib/api/client';
   import { getWarehouse } from '$lib/services/warehouses';
   import { inventoryApi } from '$lib/features/inventory/services';
+  import { inventoryTransfersApi } from '$lib/features/inventory/transfer-documents';
   import type { CapacitySummary, InventoryMovementHistory } from '$lib/features/inventory/types';
   import {
     formatMovementDate,
@@ -47,6 +48,29 @@
   let selectedMovement = $state<InventoryMovementHistory | null>(null);
   let movementsLoading = $state(false);
   let movementsError = $state<string | null>(null);
+
+  // A branch warehouse can start a transfer only when the company enabled a branch route.
+  let branchRoutesEnabled = $state(false);
+  let branchRoutesCheckedFor = '';
+  $effect(() => {
+    const current = warehouse;
+    if (
+      !current ||
+      current.isCentral ||
+      !permissions.hasPermission('inventory:move') ||
+      branchRoutesCheckedFor === current.id
+    )
+      return;
+    branchRoutesCheckedFor = current.id;
+    inventoryTransfersApi
+      .settings()
+      .then((rules) => {
+        branchRoutesEnabled = rules.allow_branch_to_branch || rules.allow_branch_to_central;
+      })
+      .catch(() => {
+        branchRoutesEnabled = false;
+      });
+  });
 
   let warehouseId = $derived(page.params.id ?? '');
   let inventoryContextKey = $derived(
@@ -942,10 +966,14 @@
               canPrepareSplit={warehouse.status === 'active' &&
                 warehouse.storageEligible &&
                 permissions.hasPermission('inventory:move')}
-              canTransfer={warehouse.isCentral &&
+              canTransfer={(warehouse.isCentral || branchRoutesEnabled) &&
                 warehouse.status === 'active' &&
                 warehouse.storageEligible &&
                 permissions.hasPermission('inventory:move')}
+              transferLabel={warehouse.isCentral ? 'Trasladar a sucursal' : 'Trasladar a otra bodega'}
+              transferHint={warehouse.isCentral
+                ? 'Desde la bodega madre puedes trasladar unidades completas a una bodega de sucursal.'
+                : 'Puedes trasladar unidades completas a otra bodega según las rutas que tu empresa habilitó.'}
             />
           {:else}
             <Card class="p-5">
