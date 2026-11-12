@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -65,6 +66,26 @@ class InventoryVehicleModel(UUIDPKMixin, TimestampMixin, Base):
     )
 
 
+class InventoryTransferSettingsModel(TimestampMixin, Base):
+    """A company's transfer rules; branch routes start turned off and approval on."""
+
+    __tablename__ = "inventory_transfer_settings"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), primary_key=True
+    )
+    allow_branch_to_branch: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    allow_branch_to_central: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    require_approval: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+
+
 class InventoryTransferModel(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "inventory_transfers"
 
@@ -93,6 +114,18 @@ class InventoryTransferModel(UUIDPKMixin, TimestampMixin, Base):
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
     compliance_override_reason: Mapped[str | None] = mapped_column(Text)
+    route_type: Mapped[str] = mapped_column(
+        String(24), nullable=False, server_default="central_distribution"
+    )
+    requires_approval: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    approval_round: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    submitted_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejected_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (
         UniqueConstraint("company_id", "id", name="uq_inventory_transfers_company_id"),
@@ -144,16 +177,56 @@ class InventoryTransferModel(UUIDPKMixin, TimestampMixin, Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint(
-            "status IN ('preparation','in_transit','received','closed_with_adjustment','incident','cancelled')",
+            "status IN ('preparation','pending_approval','approved','in_transit','received',"
+            "'closed_with_adjustment','incident','cancelled')",
             name="ck_inventory_transfers_status",
         ),
         CheckConstraint(
             "origin_warehouse_id <> destination_warehouse_id",
             name="ck_inventory_transfers_distinct_warehouses",
         ),
+        CheckConstraint(
+            "route_type IN ('central_distribution','branch_to_branch','branch_to_central')",
+            name="ck_inventory_transfers_route_type",
+        ),
+        CheckConstraint("approval_round >= 0", name="ck_inventory_transfers_approval_round"),
+        CheckConstraint(
+            "(submitted_by_id IS NULL) = (submitted_at IS NULL)",
+            name="ck_inventory_transfers_submitted_pair",
+        ),
+        CheckConstraint(
+            "(approved_by_id IS NULL) = (approved_at IS NULL)",
+            name="ck_inventory_transfers_approved_pair",
+        ),
+        CheckConstraint(
+            "(rejected_by_id IS NULL) = (rejected_at IS NULL)",
+            name="ck_inventory_transfers_rejected_pair",
+        ),
+        CheckConstraint(
+            "rejection_reason IS NULL OR (rejected_by_id IS NOT NULL "
+            "AND char_length(btrim(rejection_reason)) >= 5)",
+            name="ck_inventory_transfers_rejection_reason",
+        ),
+        CheckConstraint(
+            "status NOT IN ('pending_approval','approved') OR "
+            "(route_type <> 'central_distribution' AND requires_approval "
+            "AND submitted_by_id IS NOT NULL AND approval_round >= 1)",
+            name="ck_inventory_transfers_approval_state",
+        ),
+        CheckConstraint(
+            "status <> 'approved' OR approved_by_id IS NOT NULL",
+            name="ck_inventory_transfers_approved_state",
+        ),
         Index("ix_inventory_transfers_company_status", "company_id", "status", "created_at"),
         Index(
             "ix_inventory_transfers_destination", "company_id", "destination_warehouse_id", "status"
+        ),
+        Index("ix_inventory_transfers_origin", "company_id", "origin_warehouse_id", "status"),
+        Index(
+            "ix_inventory_transfers_pending_approval",
+            "company_id",
+            "origin_warehouse_id",
+            postgresql_where=text("status = 'pending_approval'"),
         ),
     )
 
@@ -312,7 +385,8 @@ class InventoryTransferCommandModel(UUIDPKMixin, Base):
             "company_id", "action", "idempotency_key", name="uq_inventory_transfer_commands_key"
         ),
         CheckConstraint(
-            "action IN ('create','update','cancel','dispatch','receive','incident','resolve','resolve_adjustment','return')",
+            "action IN ('create','update','cancel','dispatch','receive','incident','resolve',"
+            "'resolve_adjustment','return','submit','approve','reject','withdraw')",
             name="ck_inventory_transfer_commands_action",
         ),
         Index("ix_inventory_transfer_commands_transfer", "company_id", "transfer_id", "created_at"),

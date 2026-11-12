@@ -8,18 +8,31 @@ import re
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, NoReturn
+from typing import Any, NamedTuple, NoReturn
 
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from app.application.inventory import InventoryUseCases
+from app.application.inventory_transfers.settings import policy_from
 from app.domain.entities.inventory_transfer import (
     TransferDomainError,
+    TransferPolicy,
+    TransferRoute,
+    TransferStatus,
+    WarehouseFacts,
+    approval_required,
+    classify_route,
+    require_cancellable,
+    require_current_round,
     require_dispatchable,
+    require_independent_approver,
+    require_pending_approval,
     require_preparation,
     require_receivable,
+    require_submittable,
+    route_disabled_error,
     validate_dispatch_quantity,
     validate_receipt_quantity,
 )
@@ -39,6 +52,7 @@ from app.infrastructure.models.inventory_transfer import (
     InventoryTransferIncidentModel,
     InventoryTransferModel,
     InventoryTransferReceiptModel,
+    InventoryTransferSettingsModel,
     InventoryVehicleModel,
 )
 from app.infrastructure.models.organization import Branch, Location, Warehouse
@@ -47,6 +61,7 @@ from app.infrastructure.models.purchase_request import (
     PurchaseRequestDetailModel,
     PurchaseRequestModel,
 )
+from app.infrastructure.models.user import User
 from app.infrastructure.repositories.inventory_repository import SqlAlchemyInventoryRepository
 
 _TRANSFERABLE_REQUEST_STATUSES = {
@@ -57,6 +72,15 @@ _TRANSFERABLE_REQUEST_STATUSES = {
     "completed",
 }
 MAX_VEHICLE_CODE_LENGTH = 32
+#: Transfers that hold their handling units while they wait to be dispatched.
+_COMMITTING_STATUSES = (TransferStatus.PENDING_APPROVAL, TransferStatus.APPROVED)
+
+
+class _Pair(NamedTuple):
+    origin: Warehouse
+    destination: Warehouse
+    route: TransferRoute
+    policy: TransferPolicy
 
 
 class SqlAlchemyInventoryTransferRepository:
@@ -183,13 +207,57 @@ class SqlAlchemyInventoryTransferRepository:
         await self._session.flush()
         return response
 
+    async def _policy(self, company_id: uuid.UUID, *, lock_share: bool = False) -> TransferPolicy:
+        """The company's rules; ``lock_share`` keeps them from changing until commit."""
+        statement = (
+            select(InventoryTransferSettingsModel)
+            .where(InventoryTransferSettingsModel.company_id == company_id)
+            .execution_options(populate_existing=True)
+        )
+        if lock_share:
+            statement = statement.with_for_update(read=True)
+        return policy_from(await self._session.scalar(statement))
+
+    async def get_policy(self, company_id: uuid.UUID) -> TransferPolicy:
+        return await self._policy(company_id)
+
+    @staticmethod
+    def _facts(warehouse: Warehouse, branches: dict[uuid.UUID, Branch]) -> WarehouseFacts:
+        branch = branches.get(warehouse.branch_id) if warehouse.branch_id is not None else None
+        return WarehouseFacts(
+            id=warehouse.id,
+            branch_id=warehouse.branch_id,
+            is_central=warehouse.is_central,
+            is_transit=warehouse.is_transit,
+            is_active=warehouse.is_active,
+            operational_status=warehouse.operational_status,
+            storage_eligible=warehouse.storage_eligible,
+            branch_active=branch is not None
+            and branch.is_active
+            and branch.operational_status == "active",
+            branch_is_headquarters=branch is not None and branch.is_headquarters,
+        )
+
+    async def _branches_by_id(
+        self, company_id: uuid.UUID, branch_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, Branch]:
+        rows = await self._session.scalars(
+            select(Branch).where(
+                Branch.company_id == company_id,
+                Branch.id.in_(branch_ids),
+                Branch.deleted_at.is_(None),
+            )
+        )
+        return {branch.id: branch for branch in rows.all()}
+
     async def _warehouse_pair(
         self,
         *,
         company_id: uuid.UUID,
         origin_id: uuid.UUID,
         destination_id: uuid.UUID,
-    ) -> tuple[Warehouse, Warehouse]:
+        saved_route: str | None = None,
+    ) -> _Pair:
         rows = list(
             (
                 await self._session.scalars(
@@ -212,57 +280,25 @@ class SqlAlchemyInventoryTransferRepository:
                 "transfer_warehouse_not_found",
                 404,
             )
-        if origin.id == destination.id:
-            self._raise(
-                "El origen y el destino deben ser distintos.", "transfer_same_warehouse", 422
-            )
-        if not origin.is_active or origin.operational_status != "active" or origin.is_transit:
-            self._raise(
-                "La bodega de origen no está habilitada para despachos.", "transfer_origin_invalid"
-            )
-        if not origin.is_central:
-            self._raise(
-                "El traslado a sucursal debe salir de la bodega central.",
-                "transfer_origin_not_central",
-                422,
-            )
-        if (
-            not destination.is_active
-            or destination.operational_status != "active"
-            or destination.is_central
-            or destination.is_transit
-            or destination.branch_id is None
-        ):
-            self._raise(
-                "El destino debe ser una bodega activa de sucursal.",
-                "transfer_destination_invalid",
-                422,
-            )
-        source_branch = await self._session.scalar(
-            select(Branch).where(
-                Branch.id == origin.branch_id,
-                Branch.company_id == company_id,
-                Branch.is_headquarters.is_(True),
-                Branch.is_active.is_(True),
-                Branch.operational_status == "active",
-                Branch.deleted_at.is_(None),
-            )
+        # The rules are read after the warehouses are locked and stay locked until commit.
+        policy = await self._policy(company_id, lock_share=True)
+        branches = await self._branches_by_id(
+            company_id, [b for b in {origin.branch_id, destination.branch_id} if b is not None]
         )
-        destination_branch = await self._session.scalar(
-            select(Branch).where(
-                Branch.id == destination.branch_id,
-                Branch.company_id == company_id,
-                Branch.is_active.is_(True),
-                Branch.operational_status == "active",
-                Branch.deleted_at.is_(None),
+        try:
+            route = classify_route(
+                self._facts(origin, branches), self._facts(destination, branches), policy
             )
-        )
-        if source_branch is None or destination_branch is None:
-            self._raise(
-                "El origen o destino no está asociado a una sucursal activa.",
-                "transfer_branch_invalid",
-            )
-        return origin, destination
+        except TransferDomainError as exc:
+            if (
+                saved_route is not None
+                and saved_route != TransferRoute.CENTRAL_DISTRIBUTION
+                and exc.code == "transfer_origin_not_central"
+            ):
+                # A saved branch transfer whose routes were all turned off is not "not central".
+                raise route_disabled_error(saved_route) from exc
+            raise
+        return _Pair(origin, destination, route, policy)
 
     async def _validate_lines(
         self,
@@ -271,8 +307,17 @@ class SqlAlchemyInventoryTransferRepository:
         origin: Warehouse,
         destination: Warehouse,
         lines: list[dict[str, Any]],
+        route: TransferRoute = TransferRoute.CENTRAL_DISTRIBUTION,
         exclude_transfer_id: uuid.UUID | None = None,
     ) -> None:
+        if route != TransferRoute.CENTRAL_DISTRIBUTION and any(
+            line.get("demand_allocations") for line in lines
+        ):
+            self._raise(
+                "Los traslados entre sucursales o de retorno no se vinculan a solicitudes de compra.",
+                "transfer_demand_not_allowed_for_route",
+                422,
+            )
         units_by_id, request_details = await self._load_line_validation_context(
             company_id=company_id, lines=lines
         )
@@ -288,6 +333,7 @@ class SqlAlchemyInventoryTransferRepository:
                 line=line,
                 item=item,
                 request_details=request_details,
+                route=route,
             )
         await self._validate_demand_allocation_totals(
             company_id=company_id,
@@ -371,7 +417,7 @@ class SqlAlchemyInventoryTransferRepository:
             or unit.location_id is None
         ):
             self._raise(
-                "La unidad debe estar disponible en la bodega central de origen.",
+                "La unidad debe estar disponible en la bodega de origen.",
                 "transfer_handling_unit_unavailable",
             )
         if quantity > unit.quantity_base:
@@ -408,6 +454,7 @@ class SqlAlchemyInventoryTransferRepository:
         line: dict[str, Any],
         item: InventoryItemModel,
         request_details: dict[uuid.UUID, tuple[PurchaseRequestDetailModel, PurchaseRequestModel]],
+        route: TransferRoute = TransferRoute.CENTRAL_DISTRIBUTION,
     ) -> None:
         allocations = line.get("demand_allocations", [])
         quantity = Decimal(line["quantity_base"])
@@ -423,7 +470,9 @@ class SqlAlchemyInventoryTransferRepository:
             )
         if allocated_sum < quantity and not str(line.get("excess_reason") or "").strip():
             self._raise(
-                "Documente el motivo de la cantidad enviada sin una solicitud vinculada.",
+                "Documente el motivo de la cantidad enviada sin una solicitud vinculada."
+                if route == TransferRoute.CENTRAL_DISTRIBUTION
+                else "Indica el motivo del traslado en cada línea.",
                 "transfer_excess_reason_required",
                 422,
             )
@@ -615,13 +664,17 @@ class SqlAlchemyInventoryTransferRepository:
         )
         if replay is not None:
             return replay
-        origin, destination = await self._warehouse_pair(
+        origin, destination, route, policy = await self._warehouse_pair(
             company_id=company_id,
             origin_id=origin_warehouse_id,
             destination_id=destination_warehouse_id,
         )
         await self._validate_lines(
-            company_id=company_id, origin=origin, destination=destination, lines=clean_lines
+            company_id=company_id,
+            origin=origin,
+            destination=destination,
+            lines=clean_lines,
+            route=route,
         )
         await self._validate_vehicle(company_id, vehicle_id)
         transfer_id = uuid.uuid4()
@@ -633,6 +686,8 @@ class SqlAlchemyInventoryTransferRepository:
             destination_warehouse_id=destination.id,
             vehicle_id=vehicle_id,
             status="preparation",
+            route_type=route.value,
+            requires_approval=approval_required(route, policy),
             notes=(notes.strip() if notes and notes.strip() else None),
             created_by_id=actor_id,
         )
@@ -691,7 +746,7 @@ class SqlAlchemyInventoryTransferRepository:
         require_preparation(transfer.status)
         origin_id = origin_warehouse_id or transfer.origin_warehouse_id
         destination_id = destination_warehouse_id or transfer.destination_warehouse_id
-        origin, destination = await self._warehouse_pair(
+        origin, destination, route, policy = await self._warehouse_pair(
             company_id=company_id, origin_id=origin_id, destination_id=destination_id
         )
         clean_lines = [dict(line) for line in lines]
@@ -700,11 +755,14 @@ class SqlAlchemyInventoryTransferRepository:
             origin=origin,
             destination=destination,
             lines=clean_lines,
+            route=route,
             exclude_transfer_id=transfer.id,
         )
         await self._validate_vehicle(company_id, vehicle_id)
         transfer.origin_warehouse_id = origin.id
         transfer.destination_warehouse_id = destination.id
+        transfer.route_type = route.value
+        transfer.requires_approval = approval_required(route, policy)
         transfer.vehicle_id = vehicle_id
         transfer.notes = notes.strip() if notes and notes.strip() else None
         old_details = list(
@@ -755,12 +813,336 @@ class SqlAlchemyInventoryTransferRepository:
         )
         if transfer is None:
             self._raise("Traslado no encontrado.", "transfer_not_found", 404)
-        require_preparation(transfer.status)
+        require_cancellable(transfer.status, transfer.route_type)
         transfer.status = "cancelled"
         command = await self._record_command(
             company_id=company_id,
             transfer_id=transfer.id,
             action="cancel",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+            actor_id=actor_id,
+        )
+        return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
+
+    async def _lock_transfer(
+        self, company_id: uuid.UUID, transfer_id: uuid.UUID
+    ) -> InventoryTransferModel:
+        transfer = await self._session.scalar(
+            select(InventoryTransferModel)
+            .where(
+                InventoryTransferModel.company_id == company_id,
+                InventoryTransferModel.id == transfer_id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if transfer is None:
+            self._raise("Traslado no encontrado.", "transfer_not_found", 404)
+        return transfer
+
+    async def _lock_details(
+        self, company_id: uuid.UUID, transfer_id: uuid.UUID
+    ) -> list[InventoryTransferDetailModel]:
+        return list(
+            (
+                await self._session.scalars(
+                    select(InventoryTransferDetailModel)
+                    .where(
+                        InventoryTransferDetailModel.company_id == company_id,
+                        InventoryTransferDetailModel.transfer_id == transfer_id,
+                    )
+                    .order_by(InventoryTransferDetailModel.line_number)
+                    .with_for_update()
+                )
+            ).all()
+        )
+
+    async def _lines_from_details(
+        self, company_id: uuid.UUID, details: list[InventoryTransferDetailModel]
+    ) -> list[dict[str, Any]]:
+        """Rebuild the lines of a saved transfer so they can be validated again."""
+        allocations: dict[uuid.UUID, list[dict[str, Any]]] = {}
+        if details:
+            rows = await self._session.scalars(
+                select(InventoryTransferDemandAllocationModel)
+                .where(
+                    InventoryTransferDemandAllocationModel.company_id == company_id,
+                    InventoryTransferDemandAllocationModel.transfer_detail_id.in_(
+                        [detail.id for detail in details]
+                    ),
+                )
+                .order_by(InventoryTransferDemandAllocationModel.id)
+            )
+            for allocation in rows.all():
+                allocations.setdefault(allocation.transfer_detail_id, []).append(
+                    {
+                        "purchase_request_detail_id": allocation.purchase_request_detail_id,
+                        "allocated_quantity": allocation.allocated_quantity,
+                    }
+                )
+        return [
+            {
+                "handling_unit_id": detail.source_handling_unit_id,
+                "quantity_base": Decimal(detail.quantity_planned),
+                "inventory_lot_detail_id": detail.inventory_lot_detail_id,
+                "excess_reason": detail.excess_reason,
+                "notes": detail.notes,
+                "demand_allocations": allocations.get(detail.id, []),
+            }
+            for detail in details
+        ]
+
+    async def _ensure_units_not_committed(
+        self,
+        company_id: uuid.UUID,
+        unit_ids: list[uuid.UUID],
+        transfer_id: uuid.UUID,
+    ) -> None:
+        """Lock the handling units and refuse any already promised to another transfer.
+
+        Drafts in preparation promise nothing; only transfers waiting for approval
+        or already approved hold their units until they leave or are called off.
+        """
+        if not unit_ids:
+            return
+        ordered = sorted(set(unit_ids), key=str)
+        await self._session.scalars(
+            select(InventoryHandlingUnitModel)
+            .where(
+                InventoryHandlingUnitModel.company_id == company_id,
+                InventoryHandlingUnitModel.id.in_(ordered),
+            )
+            .order_by(InventoryHandlingUnitModel.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        clash = (
+            await self._session.execute(
+                select(InventoryHandlingUnitModel.code, InventoryTransferModel.code)
+                .select_from(InventoryTransferDetailModel)
+                .join(
+                    InventoryTransferModel,
+                    (InventoryTransferModel.company_id == InventoryTransferDetailModel.company_id)
+                    & (InventoryTransferModel.id == InventoryTransferDetailModel.transfer_id),
+                )
+                .join(
+                    InventoryHandlingUnitModel,
+                    (
+                        InventoryHandlingUnitModel.company_id
+                        == InventoryTransferDetailModel.company_id
+                    )
+                    & (
+                        InventoryHandlingUnitModel.id
+                        == InventoryTransferDetailModel.source_handling_unit_id
+                    ),
+                )
+                .where(
+                    InventoryTransferDetailModel.company_id == company_id,
+                    InventoryTransferDetailModel.source_handling_unit_id.in_(ordered),
+                    InventoryTransferModel.id != transfer_id,
+                    InventoryTransferModel.status.in_([s.value for s in _COMMITTING_STATUSES]),
+                )
+                .order_by(InventoryTransferModel.code)
+                .limit(1)
+            )
+        ).first()
+        if clash is not None:
+            self._raise(
+                f"La unidad {clash[0]} ya está comprometida en el traslado {clash[1]} "
+                "pendiente de despacho.",
+                "transfer_handling_unit_committed",
+            )
+
+    async def submit_transfer(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        fingerprint = self._fingerprint("submit", {"transfer_id": transfer_id})
+        replay = await self._replay_command(
+            company_id=company_id, action="submit", key=idempotency_key, fingerprint=fingerprint
+        )
+        if replay is not None:
+            return replay
+        transfer = await self._lock_transfer(company_id, transfer_id)
+        details = await self._lock_details(company_id, transfer_id)
+        pair = await self._warehouse_pair(
+            company_id=company_id,
+            origin_id=transfer.origin_warehouse_id,
+            destination_id=transfer.destination_warehouse_id,
+            saved_route=transfer.route_type,
+        )
+        require_submittable(transfer.status, pair.route, approval_required(pair.route, pair.policy))
+        if not details:
+            self._raise(
+                "Agregue al menos una unidad logística al traslado.",
+                "transfer_lines_required",
+                422,
+            )
+        await self._revalidate(transfer=transfer, details=details, pair=pair)
+        transfer.route_type = pair.route.value
+        transfer.requires_approval = True
+        transfer.status = TransferStatus.PENDING_APPROVAL.value
+        transfer.submitted_by_id = actor_id
+        transfer.submitted_at = datetime.now(UTC)
+        transfer.approval_round = transfer.approval_round + 1
+        transfer.rejected_by_id = None
+        transfer.rejected_at = None
+        transfer.rejection_reason = None
+        transfer.approved_by_id = None
+        transfer.approved_at = None
+        command = await self._record_command(
+            company_id=company_id,
+            transfer_id=transfer.id,
+            action="submit",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+            actor_id=actor_id,
+        )
+        return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
+
+    async def _revalidate(
+        self,
+        *,
+        transfer: InventoryTransferModel,
+        details: list[InventoryTransferDetailModel],
+        pair: _Pair,
+    ) -> None:
+        """Check a saved transfer against the current stock and the units promised elsewhere."""
+        # The units are locked first so the stock read below cannot go stale.
+        await self._ensure_units_not_committed(
+            transfer.company_id, [detail.source_handling_unit_id for detail in details], transfer.id
+        )
+        lines = await self._lines_from_details(transfer.company_id, details)
+        await self._validate_lines(
+            company_id=transfer.company_id,
+            origin=pair.origin,
+            destination=pair.destination,
+            lines=lines,
+            route=pair.route,
+            exclude_transfer_id=transfer.id,
+        )
+
+    async def withdraw_transfer(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        fingerprint = self._fingerprint("withdraw", {"transfer_id": transfer_id})
+        replay = await self._replay_command(
+            company_id=company_id, action="withdraw", key=idempotency_key, fingerprint=fingerprint
+        )
+        if replay is not None:
+            return replay
+        transfer = await self._lock_transfer(company_id, transfer_id)
+        require_pending_approval(transfer.status)
+        transfer.status = TransferStatus.PREPARATION.value
+        transfer.submitted_by_id = None
+        transfer.submitted_at = None
+        command = await self._record_command(
+            company_id=company_id,
+            transfer_id=transfer.id,
+            action="withdraw",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+            actor_id=actor_id,
+        )
+        return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
+
+    async def approve_transfer(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        expected_round: int,
+        allow_self_approval: bool = False,
+    ) -> dict[str, Any]:
+        fingerprint = self._fingerprint(
+            "approve", {"transfer_id": transfer_id, "expected_round": expected_round}
+        )
+        replay = await self._replay_command(
+            company_id=company_id, action="approve", key=idempotency_key, fingerprint=fingerprint
+        )
+        if replay is not None:
+            return replay
+        transfer = await self._lock_transfer(company_id, transfer_id)
+        require_pending_approval(transfer.status)
+        require_current_round(expected_round, transfer.approval_round)
+        require_independent_approver(
+            actor_id=actor_id,
+            created_by_id=transfer.created_by_id,
+            submitted_by_id=transfer.submitted_by_id,
+            allow_self_approval=allow_self_approval,
+        )
+        details = await self._lock_details(company_id, transfer_id)
+        pair = await self._warehouse_pair(
+            company_id=company_id,
+            origin_id=transfer.origin_warehouse_id,
+            destination_id=transfer.destination_warehouse_id,
+            saved_route=transfer.route_type,
+        )
+        await self._revalidate(transfer=transfer, details=details, pair=pair)
+        transfer.status = TransferStatus.APPROVED.value
+        transfer.approved_by_id = actor_id
+        transfer.approved_at = datetime.now(UTC)
+        command = await self._record_command(
+            company_id=company_id,
+            transfer_id=transfer.id,
+            action="approve",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+            actor_id=actor_id,
+        )
+        return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
+
+    async def reject_transfer(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        expected_round: int,
+        reason: str,
+        allow_self_approval: bool = False,
+    ) -> dict[str, Any]:
+        fingerprint = self._fingerprint(
+            "reject",
+            {"transfer_id": transfer_id, "expected_round": expected_round, "reason": reason},
+        )
+        replay = await self._replay_command(
+            company_id=company_id, action="reject", key=idempotency_key, fingerprint=fingerprint
+        )
+        if replay is not None:
+            return replay
+        transfer = await self._lock_transfer(company_id, transfer_id)
+        require_pending_approval(transfer.status)
+        require_current_round(expected_round, transfer.approval_round)
+        require_independent_approver(
+            actor_id=actor_id,
+            created_by_id=transfer.created_by_id,
+            submitted_by_id=transfer.submitted_by_id,
+            allow_self_approval=allow_self_approval,
+        )
+        transfer.status = TransferStatus.PREPARATION.value
+        transfer.rejected_by_id = actor_id
+        transfer.rejected_at = datetime.now(UTC)
+        transfer.rejection_reason = reason
+        transfer.submitted_by_id = None
+        transfer.submitted_at = None
+        command = await self._record_command(
+            company_id=company_id,
+            transfer_id=transfer.id,
+            action="reject",
             key=idempotency_key,
             fingerprint=fingerprint,
             actor_id=actor_id,
@@ -810,12 +1192,15 @@ class SqlAlchemyInventoryTransferRepository:
                 )
             ).all()
         )
-        require_dispatchable(transfer.status, len(details))
-        await self._warehouse_pair(
+        # A state that can never be dispatched is reported before touching anything else.
+        require_dispatchable(transfer.status, len(details), transfer.route_type, False)
+        _, _, route, policy = await self._warehouse_pair(
             company_id=company_id,
             origin_id=transfer.origin_warehouse_id,
             destination_id=transfer.destination_warehouse_id,
+            saved_route=transfer.route_type,
         )
+        require_dispatchable(transfer.status, len(details), route, approval_required(route, policy))
         vehicle = await self._session.scalar(
             select(InventoryVehicleModel)
             .where(
@@ -837,6 +1222,9 @@ class SqlAlchemyInventoryTransferRepository:
                 "transfer_vehicle_mismatch",
                 422,
             )
+        await self._ensure_units_not_committed(
+            company_id, [detail.source_handling_unit_id for detail in details], transfer.id
+        )
         lines: list[dict[str, Any]] = []
         for detail in details:
             unit = await self._session.scalar(
@@ -1315,10 +1703,47 @@ class SqlAlchemyInventoryTransferRepository:
         )
         return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
 
-    async def _transfer_payload(self, transfer: InventoryTransferModel) -> dict[str, Any]:  # noqa: C901 - assembles the normalized transfer read projection
+    async def _transfer_payload(  # noqa: C901 - assembles the normalized transfer read projection
+        self, transfer: InventoryTransferModel, policy: TransferPolicy | None = None
+    ) -> dict[str, Any]:
         origin, destination = await self._warehouse_pair_for_read(
             transfer.company_id, transfer.origin_warehouse_id, transfer.destination_warehouse_id
         )
+        branch_names = {
+            row[0]: row[1]
+            for row in (
+                await self._session.execute(
+                    select(Branch.id, Branch.name).where(
+                        Branch.company_id == transfer.company_id,
+                        Branch.id.in_([origin.branch_id, destination.branch_id]),
+                    )
+                )
+            ).all()
+        }
+        actor_ids = {
+            actor
+            for actor in (
+                transfer.submitted_by_id,
+                transfer.approved_by_id,
+                transfer.rejected_by_id,
+            )
+            if actor is not None
+        }
+        actor_names: dict[uuid.UUID, str] = {}
+        if actor_ids:
+            actor_names = {
+                row[0]: row[1]
+                for row in (
+                    await self._session.execute(
+                        select(User.id, User.username).where(User.id.in_(actor_ids))
+                    )
+                ).all()
+            }
+        requires_approval = transfer.requires_approval
+        if transfer.status == TransferStatus.PREPARATION:
+            # A draft follows the rules in force today; later states keep what was decided.
+            live_policy = policy or await self._policy(transfer.company_id)
+            requires_approval = approval_required(transfer.route_type, live_policy)
         vehicle = None
         if transfer.vehicle_id is not None:
             record = await self._session.scalar(
@@ -1639,13 +2064,36 @@ class SqlAlchemyInventoryTransferRepository:
             "origin_warehouse_id": transfer.origin_warehouse_id,
             "origin_warehouse_name": origin.name,
             "origin_branch_id": origin.branch_id,
+            "origin_branch_name": branch_names.get(origin.branch_id),
+            "origin_is_central": origin.is_central,
             "destination_warehouse_id": transfer.destination_warehouse_id,
             "destination_warehouse_name": destination.name,
             "destination_branch_id": destination.branch_id,
+            "destination_branch_name": branch_names.get(destination.branch_id),
+            "destination_is_central": destination.is_central,
             "vehicle": vehicle,
             "driver": driver,
             "compliance_override_reason": transfer.compliance_override_reason,
             "status": transfer.status,
+            "route_type": transfer.route_type,
+            "requires_approval": requires_approval,
+            "approval_round": transfer.approval_round,
+            "submitted_by_id": transfer.submitted_by_id,
+            "submitted_by_name": actor_names.get(transfer.submitted_by_id)
+            if transfer.submitted_by_id
+            else None,
+            "submitted_at": transfer.submitted_at,
+            "approved_by_id": transfer.approved_by_id,
+            "approved_by_name": actor_names.get(transfer.approved_by_id)
+            if transfer.approved_by_id
+            else None,
+            "approved_at": transfer.approved_at,
+            "rejected_by_id": transfer.rejected_by_id,
+            "rejected_by_name": actor_names.get(transfer.rejected_by_id)
+            if transfer.rejected_by_id
+            else None,
+            "rejected_at": transfer.rejected_at,
+            "rejection_reason": transfer.rejection_reason,
             "notes": transfer.notes,
             "created_by_id": transfer.created_by_id,
             "created_at": transfer.created_at,
@@ -1708,6 +2156,28 @@ class SqlAlchemyInventoryTransferRepository:
             return None
         return await self._transfer_payload(transfer)
 
+    @staticmethod
+    def _awaiting_approval_filters(
+        *,
+        origin_warehouse: Any,
+        actor_id: uuid.UUID,
+        allow_self_approval: bool,
+        approver_branch_ids: list[uuid.UUID] | None,
+    ) -> list[Any]:
+        """The transfers this actor could decide on: waiting, from a branch they cover."""
+        filters: list[Any] = [InventoryTransferModel.status == TransferStatus.PENDING_APPROVAL]
+        if approver_branch_ids is not None:
+            filters.append(origin_warehouse.branch_id.in_(approver_branch_ids))
+        if not allow_self_approval:
+            filters.append(InventoryTransferModel.created_by_id != actor_id)
+            filters.append(
+                or_(
+                    InventoryTransferModel.submitted_by_id.is_(None),
+                    InventoryTransferModel.submitted_by_id != actor_id,
+                )
+            )
+        return filters
+
     async def list_transfers(
         self,
         *,
@@ -1715,6 +2185,11 @@ class SqlAlchemyInventoryTransferRepository:
         branch_id: uuid.UUID | None = None,
         branch_ids: list[uuid.UUID] | None = None,
         status_filter: str | None = None,
+        route_type: str | None = None,
+        side: str | None = None,
+        awaiting_approval_by: uuid.UUID | None = None,
+        allow_self_approval: bool = False,
+        approver_branch_ids: list[uuid.UUID] | None = None,
         page: int = 1,
         size: int = 50,
     ) -> list[dict[str, Any]]:
@@ -1734,19 +2209,34 @@ class SqlAlchemyInventoryTransferRepository:
             )
             .where(InventoryTransferModel.company_id == company_id)
         )
-        if branch_id is not None:
-            stmt = stmt.where(destination_warehouse.branch_id == branch_id)
-        if branch_ids is not None:
-            if not branch_ids:
+        scope_ids = [branch_id] if branch_id is not None else branch_ids
+        if scope_ids is not None:
+            if not scope_ids:
                 return []
+            on_origin = origin_warehouse.branch_id.in_(scope_ids)
+            on_destination = destination_warehouse.branch_id.in_(scope_ids)
             stmt = stmt.where(
-                or_(
-                    origin_warehouse.branch_id.in_(branch_ids),
-                    destination_warehouse.branch_id.in_(branch_ids),
-                )
+                on_origin
+                if side == "origin"
+                else on_destination
+                if side == "destination"
+                else or_(on_origin, on_destination)
             )
         if status_filter:
             stmt = stmt.where(InventoryTransferModel.status == status_filter)
+        if route_type:
+            stmt = stmt.where(InventoryTransferModel.route_type == route_type)
+        if awaiting_approval_by is not None:
+            if approver_branch_ids is not None and not approver_branch_ids:
+                return []
+            stmt = stmt.where(
+                *self._awaiting_approval_filters(
+                    origin_warehouse=origin_warehouse,
+                    actor_id=awaiting_approval_by,
+                    allow_self_approval=allow_self_approval,
+                    approver_branch_ids=approver_branch_ids,
+                )
+            )
         records = list(
             (
                 await self._session.scalars(
@@ -1758,12 +2248,123 @@ class SqlAlchemyInventoryTransferRepository:
                 )
             ).all()
         )
-        output = []
-        for record in records:
-            payload = await self._transfer_payload(record)
-            # Keep listing lightweight while retaining product names and demand context.
-            output.append(payload)
-        return output
+        policy = await self._policy(company_id)
+        return [await self._transfer_payload(record, policy) for record in records]
+
+    async def pending_approval_count(
+        self,
+        *,
+        company_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        allow_self_approval: bool = False,
+        approver_branch_ids: list[uuid.UUID] | None = None,
+    ) -> int:
+        """How many waiting transfers this actor could decide on (the inbox badge)."""
+        if approver_branch_ids is not None and not approver_branch_ids:
+            return 0
+        origin_warehouse = aliased(Warehouse)
+        count = await self._session.scalar(
+            select(func.count(InventoryTransferModel.id))
+            .join(
+                origin_warehouse,
+                (origin_warehouse.company_id == InventoryTransferModel.company_id)
+                & (origin_warehouse.id == InventoryTransferModel.origin_warehouse_id),
+            )
+            .where(
+                InventoryTransferModel.company_id == company_id,
+                *self._awaiting_approval_filters(
+                    origin_warehouse=origin_warehouse,
+                    actor_id=actor_id,
+                    allow_self_approval=allow_self_approval,
+                    approver_branch_ids=approver_branch_ids,
+                ),
+            )
+        )
+        return int(count or 0)
+
+    @staticmethod
+    def _option(warehouse: Warehouse, branch: Branch) -> dict[str, Any]:
+        return {
+            "id": warehouse.id,
+            "code": warehouse.code,
+            "name": warehouse.name,
+            "branch_id": branch.id,
+            "branch_name": branch.name,
+            "is_central": warehouse.is_central,
+        }
+
+    async def route_options(
+        self,
+        *,
+        company_id: uuid.UUID,
+        can_move: bool,
+        branch_ids: list[uuid.UUID] | None = None,
+        warehouse_ids: list[uuid.UUID] | None = None,
+        origin_warehouse_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
+        """Where a user may ship from and, once an origin is chosen, where it may go.
+
+        ``branch_ids`` and ``warehouse_ids`` are the user's scope (``None`` means all).
+        """
+        policy = await self._policy(company_id)
+        rows = (
+            await self._session.execute(
+                select(Warehouse, Branch)
+                .join(
+                    Branch,
+                    (Branch.company_id == Warehouse.company_id)
+                    & (Branch.id == Warehouse.branch_id),
+                )
+                .where(
+                    Warehouse.company_id == company_id,
+                    Warehouse.deleted_at.is_(None),
+                    Warehouse.is_transit.is_(False),
+                    Branch.deleted_at.is_(None),
+                )
+                .order_by(Branch.name, Warehouse.name, Warehouse.id)
+            )
+        ).all()
+        branches = {branch.id: branch for _, branch in rows}
+        facts = {warehouse.id: self._facts(warehouse, branches) for warehouse, _ in rows}
+        branch_routes_on = policy.allow_branch_to_branch or policy.allow_branch_to_central
+        origins: list[dict[str, Any]] = []
+        if can_move:
+            for warehouse, branch in rows:
+                fact = facts[warehouse.id]
+                if (
+                    not fact.operable
+                    or not fact.branch_active
+                    or (branch_ids is not None and branch.id not in branch_ids)
+                    or (warehouse_ids is not None and warehouse.id not in warehouse_ids)
+                ):
+                    continue
+                if warehouse.is_central:
+                    eligible = fact.branch_is_headquarters
+                else:
+                    eligible = warehouse.storage_eligible and branch_routes_on
+                if eligible:
+                    origins.append(self._option(warehouse, branch))
+        destinations: list[dict[str, Any]] = []
+        if origin_warehouse_id is not None:
+            if origin_warehouse_id not in {origin["id"] for origin in origins}:
+                self._raise(
+                    "No tienes acceso a esta bodega de origen.", "transfer_origin_forbidden", 403
+                )
+            for warehouse, branch in rows:
+                try:
+                    route = classify_route(facts[origin_warehouse_id], facts[warehouse.id], policy)
+                except TransferDomainError:
+                    continue
+                destinations.append({**self._option(warehouse, branch), "route_type": route.value})
+        return {
+            "policy": {
+                "allow_branch_to_branch": policy.allow_branch_to_branch,
+                "allow_branch_to_central": policy.allow_branch_to_central,
+                "require_approval": policy.require_approval,
+            },
+            "origins": origins,
+            "destinations": destinations,
+        }
 
     async def list_demand(
         self,

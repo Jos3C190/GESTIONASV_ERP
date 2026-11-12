@@ -315,6 +315,14 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec(
         "inventory:adjust_approve", "Aprobar y aplicar ajustes de inventario", "inventory"
     ),
+    PermissionSpec(
+        "inventory:transfer_approve", "Aprobar o rechazar traslados entre sucursales", "inventory"
+    ),
+    PermissionSpec(
+        "inventory:transfer_settings",
+        "Configurar las rutas y aprobaciones de traslados",
+        "inventory",
+    ),
     PermissionSpec("inventory:capacity", "Consultar proyecciones de capacidad", "inventory"),
     PermissionSpec("inventory:reserve", "Reservar y confirmar capacidad", "inventory"),
     PermissionSpec(

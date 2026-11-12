@@ -12,6 +12,18 @@ from pydantic import Field
 from app.api.v1.schemas.common import ORMOut
 from app.api.v1.schemas.inventory import StrictModel
 
+TransferRouteType = Literal["central_distribution", "branch_to_branch", "branch_to_central"]
+TransferStatusValue = Literal[
+    "preparation",
+    "pending_approval",
+    "approved",
+    "in_transit",
+    "received",
+    "closed_with_adjustment",
+    "incident",
+    "cancelled",
+]
+
 
 class TransferDemandAllocationIn(StrictModel):
     purchase_request_detail_id: uuid.UUID
@@ -49,6 +61,58 @@ class TransferUpdateIn(StrictModel):
 
 class TransferCommandIn(StrictModel):
     idempotency_key: str = Field(min_length=8, max_length=120)
+
+
+class TransferApproveIn(TransferCommandIn):
+    #: The approval round the person saw; it changes every time the transfer is sent again.
+    expected_round: int = Field(ge=1)
+
+
+class TransferRejectIn(TransferApproveIn):
+    reason: str = Field(min_length=5, max_length=1000)
+
+
+class TransferPolicyIn(StrictModel):
+    allow_branch_to_branch: bool
+    allow_branch_to_central: bool
+    require_approval: bool
+
+
+class TransferPolicyFlagsOut(StrictModel):
+    allow_branch_to_branch: bool
+    allow_branch_to_central: bool
+    require_approval: bool
+
+
+class TransferPolicyOut(TransferPolicyFlagsOut):
+    updated_at: datetime | None = None
+    #: Transfers that a rule change would freeze.
+    pending_count: int = 0
+    approved_count: int = 0
+
+
+class TransferWarehouseOptionOut(StrictModel):
+    id: uuid.UUID
+    code: str | None
+    name: str
+    branch_id: uuid.UUID
+    branch_name: str
+    is_central: bool
+
+
+class TransferDestinationOptionOut(TransferWarehouseOptionOut):
+    #: The route that would join this warehouse to the chosen origin.
+    route_type: TransferRouteType
+
+
+class TransferRouteOptionsOut(StrictModel):
+    policy: TransferPolicyFlagsOut
+    origins: list[TransferWarehouseOptionOut]
+    destinations: list[TransferDestinationOptionOut] = Field(default_factory=list)
+
+
+class PendingApprovalCountOut(StrictModel):
+    count: int
 
 
 class TransferDispatchIn(TransferCommandIn):
@@ -237,15 +301,30 @@ class InventoryTransferOut(ORMOut):
     origin_warehouse_id: uuid.UUID
     origin_warehouse_name: str
     origin_branch_id: uuid.UUID | None
+    origin_branch_name: str | None = None
+    origin_is_central: bool = False
     destination_warehouse_id: uuid.UUID
     destination_warehouse_name: str
     destination_branch_id: uuid.UUID | None
+    destination_branch_name: str | None = None
+    destination_is_central: bool = False
     vehicle: TransferVehicleReferenceOut | None
     driver: TransferDriverReferenceOut | None = None
     compliance_override_reason: str | None = None
-    status: Literal[
-        "preparation", "in_transit", "received", "closed_with_adjustment", "incident", "cancelled"
-    ]
+    status: TransferStatusValue
+    route_type: TransferRouteType = "central_distribution"
+    requires_approval: bool = False
+    approval_round: int = 0
+    submitted_by_id: uuid.UUID | None = None
+    submitted_by_name: str | None = None
+    submitted_at: datetime | None = None
+    approved_by_id: uuid.UUID | None = None
+    approved_by_name: str | None = None
+    approved_at: datetime | None = None
+    rejected_by_id: uuid.UUID | None = None
+    rejected_by_name: str | None = None
+    rejected_at: datetime | None = None
+    rejection_reason: str | None = None
     notes: str | None
     created_by_id: uuid.UUID
     created_at: datetime
