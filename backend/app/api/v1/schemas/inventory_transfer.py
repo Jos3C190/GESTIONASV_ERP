@@ -318,6 +318,8 @@ class InventoryTransferOut(ORMOut):
     submitted_by_id: uuid.UUID | None = None
     submitted_by_name: str | None = None
     submitted_at: datetime | None = None
+    last_edited_by_id: uuid.UUID | None = None
+    last_edited_by_name: str | None = None
     approved_by_id: uuid.UUID | None = None
     approved_by_name: str | None = None
     approved_at: datetime | None = None

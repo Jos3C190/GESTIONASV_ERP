@@ -747,7 +747,11 @@ class SqlAlchemyInventoryTransferRepository:
         origin_id = origin_warehouse_id or transfer.origin_warehouse_id
         destination_id = destination_warehouse_id or transfer.destination_warehouse_id
         origin, destination, route, policy = await self._warehouse_pair(
-            company_id=company_id, origin_id=origin_id, destination_id=destination_id
+            company_id=company_id,
+            origin_id=origin_id,
+            destination_id=destination_id,
+            # A saved branch transfer whose routes were turned off reports that, not "not central".
+            saved_route=transfer.route_type if origin_id == transfer.origin_warehouse_id else None,
         )
         clean_lines = [dict(line) for line in lines]
         await self._validate_lines(
@@ -763,6 +767,7 @@ class SqlAlchemyInventoryTransferRepository:
         transfer.destination_warehouse_id = destination.id
         transfer.route_type = route.value
         transfer.requires_approval = approval_required(route, policy)
+        transfer.last_edited_by_id = actor_id
         transfer.vehicle_id = vehicle_id
         transfer.notes = notes.strip() if notes and notes.strip() else None
         old_details = list(
@@ -979,7 +984,7 @@ class SqlAlchemyInventoryTransferRepository:
         require_submittable(transfer.status, pair.route, approval_required(pair.route, pair.policy))
         if not details:
             self._raise(
-                "Agregue al menos una unidad logística al traslado.",
+                "Agrega al menos una unidad logística al traslado.",
                 "transfer_lines_required",
                 422,
             )
@@ -1081,6 +1086,7 @@ class SqlAlchemyInventoryTransferRepository:
             actor_id=actor_id,
             created_by_id=transfer.created_by_id,
             submitted_by_id=transfer.submitted_by_id,
+            last_edited_by_id=transfer.last_edited_by_id,
             allow_self_approval=allow_self_approval,
         )
         details = await self._lock_details(company_id, transfer_id)
@@ -1131,6 +1137,7 @@ class SqlAlchemyInventoryTransferRepository:
             actor_id=actor_id,
             created_by_id=transfer.created_by_id,
             submitted_by_id=transfer.submitted_by_id,
+            last_edited_by_id=transfer.last_edited_by_id,
             allow_self_approval=allow_self_approval,
         )
         transfer.status = TransferStatus.PREPARATION.value
@@ -1283,6 +1290,9 @@ class SqlAlchemyInventoryTransferRepository:
             for allocation in allocations:
                 allocation.quantity_dispatched = allocation.allocated_quantity
         transfer.vehicle_id = vehicle.id
+        if transfer.status == TransferStatus.PREPARATION:
+            # A draft sent straight out records the rules it was dispatched under.
+            transfer.requires_approval = approval_required(route, policy)
         transfer.driver_id = driver_id
         transfer.compliance_override_by = actor_id if compliance_override_reason else None
         transfer.compliance_override_reason = compliance_override_reason
@@ -1724,6 +1734,7 @@ class SqlAlchemyInventoryTransferRepository:
             actor
             for actor in (
                 transfer.submitted_by_id,
+                transfer.last_edited_by_id,
                 transfer.approved_by_id,
                 transfer.rejected_by_id,
             )
@@ -2083,6 +2094,10 @@ class SqlAlchemyInventoryTransferRepository:
             if transfer.submitted_by_id
             else None,
             "submitted_at": transfer.submitted_at,
+            "last_edited_by_id": transfer.last_edited_by_id,
+            "last_edited_by_name": actor_names.get(transfer.last_edited_by_id)
+            if transfer.last_edited_by_id
+            else None,
             "approved_by_id": transfer.approved_by_id,
             "approved_by_name": actor_names.get(transfer.approved_by_id)
             if transfer.approved_by_id
@@ -2174,6 +2189,12 @@ class SqlAlchemyInventoryTransferRepository:
                 or_(
                     InventoryTransferModel.submitted_by_id.is_(None),
                     InventoryTransferModel.submitted_by_id != actor_id,
+                )
+            )
+            filters.append(
+                or_(
+                    InventoryTransferModel.last_edited_by_id.is_(None),
+                    InventoryTransferModel.last_edited_by_id != actor_id,
                 )
             )
         return filters
@@ -2293,6 +2314,13 @@ class SqlAlchemyInventoryTransferRepository:
             "is_central": warehouse.is_central,
         }
 
+    @staticmethod
+    def _can_ship_from(warehouse: Warehouse, fact: WarehouseFacts, branch_routes_on: bool) -> bool:
+        """Only warehouses that store stock leave anything; branch ones need a route on."""
+        if not warehouse.storage_eligible:
+            return False
+        return fact.branch_is_headquarters if warehouse.is_central else branch_routes_on
+
     async def route_options(
         self,
         *,
@@ -2338,11 +2366,7 @@ class SqlAlchemyInventoryTransferRepository:
                     or (warehouse_ids is not None and warehouse.id not in warehouse_ids)
                 ):
                     continue
-                if warehouse.is_central:
-                    eligible = fact.branch_is_headquarters
-                else:
-                    eligible = warehouse.storage_eligible and branch_routes_on
-                if eligible:
+                if self._can_ship_from(warehouse, fact, branch_routes_on):
                     origins.append(self._option(warehouse, branch))
         destinations: list[dict[str, Any]] = []
         if origin_warehouse_id is not None:
@@ -2351,6 +2375,8 @@ class SqlAlchemyInventoryTransferRepository:
                     "No tienes acceso a esta bodega de origen.", "transfer_origin_forbidden", 403
                 )
             for warehouse, branch in rows:
+                if not warehouse.storage_eligible:
+                    continue
                 try:
                     route = classify_route(facts[origin_warehouse_id], facts[warehouse.id], policy)
                 except TransferDomainError:

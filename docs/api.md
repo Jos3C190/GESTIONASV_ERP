@@ -567,7 +567,7 @@ Origins from `CORS_ORIGINS` env. Credentials allowed. `*` never used with creden
   handling-unit relation where available; rows with no reliable relation stay
   explicitly unattributed. No origin is inferred from free-text movement data.
 
-## 18. Transfer documents, vehicles and branch demand (revision 0086; routes and approval in 0114)
+## 18. Transfer documents, vehicles and branch demand (revision 0086; routes and approval in 0114; last editor in 0115)
 
 All routes are under `/api/v1/inventory/transfers`. Transfer commands use an
 idempotency key, a company-scoped document, a database transaction/savepoint,
@@ -653,16 +653,25 @@ booleans, locks the row, and writes the audit entry
 `origins` carry no `route_type`; `destinations` (empty unless
 `origin_warehouse_id` is sent) do. The central warehouse is an origin only when
 it belongs to the headquarters branch; branch warehouses are origins only when at
-least one branch route is on. An `origin_warehouse_id` outside the caller's
-allowed origins returns `403`. `GET /pending-approval-count` returns
+least one branch route is on. Every origin and every destination must also be
+`storage_eligible`: a warehouse that cannot store stock is never offered. The
+create and update commands apply the same rule on the central route
+(`409 transfer_origin_invalid` for the origin, `422 transfer_destination_invalid`
+for the destination), as they already did on branch routes. An
+`origin_warehouse_id` outside the caller's allowed origins returns `403`. `GET /pending-approval-count` returns
 `{"count": 3}`.
 
 Transfer responses add: `route_type`, `requires_approval`, `approval_round`,
-`submitted_by_id/_name/_at`, `approved_by_id/_name/_at`,
+`submitted_by_id/_name/_at`, `last_edited_by_id/_name` (null until someone
+edits the preparation; migration 0115 adds the nullable column
+`inventory_transfers.last_edited_by_id`, a foreign key to `users` with
+`ON DELETE RESTRICT`), `approved_by_id/_name/_at`,
 `rejected_by_id/_name/_at`, `rejection_reason`, `origin_branch_name`,
 `origin_is_central`, `destination_branch_name` and `destination_is_central`.
 `requires_approval` is recalculated on create, update and submit; for a
-document in `preparation` it reflects the current company rule.
+document in `preparation` it reflects the current company rule, and a draft
+dispatched directly (approval turned off in the meantime) is stored with
+`requires_approval = false`, so it never claims an approval it did not have.
 
 ### Approval commands
 
@@ -681,8 +690,11 @@ also take the round the person saw:
 `approval_round` increases by one on every `submit`. A decision whose
 `expected_round` differs from the current one fails with
 `409 transfer_approval_stale`, so nobody approves a version they did not see.
-The creator and the submitter cannot approve or reject their own transfer
-(`403 transfer_approval_self_forbidden`) unless the caller is a superuser.
+The creator, the submitter and the last editor cannot approve or reject
+their own transfer (`403 transfer_approval_self_forbidden`) unless the caller
+is a superuser. Every `PUT /{transfer_id}` records the caller in
+`last_edited_by_id`; the same three people are left out of
+`GET /pending-approval-count` and `awaiting_my_approval`.
 `submit` and `approve` revalidate the route, the company rule, available stock
 and units already committed to another transfer; `reject` and `withdraw` do not
 require the route to be enabled. `reject` and `withdraw` return the document to
@@ -725,8 +737,12 @@ off cannot be created, edited, submitted, approved or dispatched and fails
 with `409 transfer_route_disabled`; reject, withdraw and cancel remain
 available, and transfers already `in_transit` or in `incident` are unaffected.
 A transfer saved from a branch warehouse while both branch routes are off
-returns `transfer_route_disabled`; a new document in that situation still gets
-`422 transfer_origin_not_central`. Turning approval off lets pending documents
+returns `transfer_route_disabled`, also when it is edited (`PUT`) keeping its
+origin; a new document in that situation still gets
+`422 transfer_origin_not_central`. That error and the other route errors reach
+the client as `{ "code", "message" }` (after the origin scope check), no longer
+as a plain-text `detail` as the old "debe salir de una bodega central activa"
+message did. Turning approval off lets pending documents
 be withdrawn and dispatched, or approved; turning it on makes branch-route
 drafts require `submit`.
 
@@ -832,13 +848,13 @@ Errors added with routes and approval (revision 0114):
 | `transfer_route_disabled` | 409 | The route is off for the company (branch to branch or return to central); also for a saved branch transfer when both routes were turned off |
 | `transfer_origin_not_central` | 422 | A new transfer leaves a non-central warehouse while both branch routes are off (unchanged contract) |
 | `transfer_same_branch` | 422 | Origin and destination belong to the same branch on a branch route |
-| `transfer_destination_invalid` / `transfer_origin_invalid` | 422 / 409 | The warehouse is inactive, in transit, or not eligible to store/dispatch |
+| `transfer_destination_invalid` / `transfer_origin_invalid` | 422 / 409 | The warehouse is inactive, in transit, or not eligible to store/dispatch (`storage_eligible`), on every route including `central_distribution` |
 | `transfer_demand_not_allowed_for_route` | 422 | A branch-route line sends purchase-request `demand_allocations` |
 | `transfer_approval_not_applicable` | 422 | `submit` on a central distribution or on a route whose approval is off |
 | `transfer_approval_required` | 409 | Dispatch of a branch-route transfer that is not yet `approved` |
 | `transfer_not_pending_approval` | 409 | `approve`, `reject` or `withdraw` when the transfer is not `pending_approval` |
 | `transfer_approval_stale` | 409 | `expected_round` is not the current `approval_round` |
-| `transfer_approval_self_forbidden` | 403 | The creator or submitter tries to approve or reject (superuser exempt) |
+| `transfer_approval_self_forbidden` | 403 | The creator, submitter or last editor tries to approve or reject (superuser exempt) |
 | `transfer_rejection_reason_required` | 422 | The rejection reason is shorter than 5 or longer than 1000 characters |
 | `transfer_handling_unit_committed` | 409 | The unit is already in another `pending_approval` or `approved` transfer |
 | `transfer_not_cancellable` | 409 | Cancel of a branch-route transfer that already left (central routes keep `transfer_not_in_preparation`) |

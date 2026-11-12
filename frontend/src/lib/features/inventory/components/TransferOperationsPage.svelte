@@ -69,6 +69,24 @@
     notes: string;
   };
   const statuses = TRANSFER_STATUS_OPTIONS;
+  type DestinationChoice = {
+    value: string;
+    label: string;
+    group?: string;
+    description?: string;
+  };
+
+  /** Branch by name, then its warehouses with the central one first. */
+  function sortByBranchThenWarehouse<
+    T extends { branch_name: string; name: string; is_central: boolean }
+  >(items: T[]): T[] {
+    return [...items].sort(
+      (left, right) =>
+        left.branch_name.localeCompare(right.branch_name, 'es-SV') ||
+        Number(right.is_central) - Number(left.is_central) ||
+        left.name.localeCompare(right.name, 'es-SV')
+    );
+  }
 
   let activeTab = $state<Tab>('supply');
   let contextKey = $state('');
@@ -165,6 +183,12 @@
   const canConfigureRules = $derived(permissions.hasPermission('inventory:transfer_settings'));
   const currentUserId = $derived(session.user?.id ?? null);
   const isSuperuser = $derived(session.user?.is_superuser === true);
+  // Deciding on a transfer needs coverage of its origin branch, as the server checks.
+  const canAccessSelectedOrigin = $derived(
+    branch.accessAllBranches ||
+      (selectedTransfer?.origin_branch_id != null &&
+        branch.branches.some((item) => item.id === selectedTransfer?.origin_branch_id))
+  );
   const sourceOrigin = $derived(origins.find((item) => item.id === sourceWarehouseId) ?? null);
   // A branch origin has no purchase demand to plan against; the central warehouse does.
   const sourceIsCentral = $derived(
@@ -280,16 +304,25 @@
       : destinations
   );
   const originOptions = $derived(
-    origins.map((item) => ({
+    sortByBranchThenWarehouse(origins).map((item) => ({
       value: item.id,
       label: `${item.code ? `${item.code} · ` : ''}${item.name}`,
-      description: item.is_central ? `${item.branch_name} · Casa matriz` : item.branch_name
+      group: item.branch_name,
+      description: item.is_central ? 'Casa matriz' : undefined
     }))
   );
+  const preparationOriginLabel = $derived(
+    sourceOrigin
+      ? `${sourceOrigin.branch_name} · ${sourceOrigin.name}`
+      : [selectedTransfer?.origin_branch_name, selectedTransfer?.origin_warehouse_name]
+          .filter(Boolean)
+          .join(' · ')
+  );
   const destinationOptions = $derived.by(() => {
-    const options = preparationDestinations.map((item) => ({
+    const options: DestinationChoice[] = sortByBranchThenWarehouse(preparationDestinations).map((item) => ({
       value: item.id,
-      label: `${item.branch_name} · ${item.name}`,
+      label: item.name,
+      group: item.branch_name,
       description: transferRouteLabel(item.route_type)
     }));
     // Editing keeps the saved destination visible even if the rules no longer offer it.
@@ -301,9 +334,8 @@
     ) {
       options.unshift({
         value: selectedTransfer.destination_warehouse_id,
-        label: [selectedTransfer.destination_branch_name, selectedTransfer.destination_warehouse_name]
-          .filter(Boolean)
-          .join(' · '),
+        label: selectedTransfer.destination_warehouse_name,
+        group: selectedTransfer.destination_branch_name ?? undefined,
         description: transferRouteLabel(selectedTransfer.route_type)
       });
     }
@@ -484,6 +516,16 @@
       destinations = [];
       destinationsState = 'error';
       destinationsError = message(cause, 'No se pudieron consultar los destinos de esta bodega.');
+    }
+  }
+
+  /** The rules in force today, after the server said ours were out of date. */
+  async function reloadPolicy(key: string, version: number) {
+    try {
+      const options = await inventoryTransfersApi.routeOptions();
+      if (isCurrent(key, version)) policy = options.policy;
+    } catch {
+      // The screen keeps the rules it had; the next load will catch up.
     }
   }
 
@@ -1310,13 +1352,19 @@
         } else {
           actionError = failure;
           // The document moved on without this person (decided, withdrawn, rules changed): show it.
-          if (cause instanceof HttpError && cause.status === 409) {
+          const rulesChanged =
+            cause instanceof HttpError &&
+            ((cause.status === 422 && cause.code === 'transfer_approval_not_applicable') ||
+              (cause.status === 409 && cause.code === 'transfer_route_disabled'));
+          if (cause instanceof HttpError && (cause.status === 409 || rulesChanged)) {
             try {
               await refreshAfterCommand(transfer.id, expectedContext);
             } catch {
               // The message above already says what happened; a later refresh will catch up.
             }
           }
+          // The company's rules changed under this screen: learn the ones in force today.
+          if (rulesChanged) await reloadPolicy(expectedContext, contextVersion);
         }
       }
     } finally {
@@ -1344,7 +1392,7 @@
     const inPreparation = selectedTransfer.status === 'preparation';
     confirmAction(
       inPreparation ? 'Cancelar preparación' : 'Cancelar traslado',
-      `se cancelará ${selectedTransfer.code}; no se moverá inventario y el registro permanecerá en el historial`,
+      `Se cancelará ${selectedTransfer.code}; no se moverá inventario y el registro permanecerá en el historial`,
       cancelPreparation
     );
   }
@@ -1353,7 +1401,7 @@
     if (!selectedTransfer) return;
     confirmAction(
       'Aprobar traslado',
-      `se revalidarán las existencias de ${selectedTransfer.code} antes de dejarlo listo para despachar`,
+      `Se revalidarán las existencias de ${selectedTransfer.code} antes de dejarlo listo para despachar`,
       approveTransfer
     );
   }
@@ -1378,7 +1426,7 @@
     );
   }
 
-  function editPreparation(transfer: InventoryTransfer) {
+  async function editPreparation(transfer: InventoryTransfer) {
     if (transfer.status !== 'preparation' || !canMoveInventory || draftSaving) return;
     editingTransferId = transfer.id;
     sourceWarehouseId = transfer.origin_warehouse_id;
@@ -1408,8 +1456,9 @@
     activeTab = 'supply';
     draftError = null;
     preparationOpen = true;
-    void loadDestinations(transfer.origin_warehouse_id);
-    void refreshPreparationStock();
+    // Demand is planned per destination branch, so the destinations must be known first.
+    await loadDestinations(transfer.origin_warehouse_id);
+    await refreshPreparationStock();
   }
 
   async function confirmReceipt() {
@@ -1706,7 +1755,7 @@
           </p>
         </div>
         {#if origins.length > 1 && canMoveInventory}
-          <div class="w-full sm:w-auto sm:min-w-72">
+          <div class="w-full sm:w-auto sm:min-w-96">
             <SmartSelect
               id="transfer-origin"
               label="Bodega de origen"
@@ -1838,16 +1887,17 @@
           >
             <legend class="sr-only">Destino y unidades del traslado</legend>
             <div class="grid gap-4 lg:grid-cols-2">
-              <label class="space-y-1 text-sm font-medium text-foreground"
-                >Bodega de origen
-                <select class="field-control" value={sourceWarehouseId} disabled>
-                  {#each originOptions as option (option.value)}<option value={option.value}
-                      >{option.label}</option
-                    >{:else}<option value={sourceWarehouseId}
-                      >{selectedTransfer?.origin_warehouse_name ?? ''}</option
-                    >{/each}
-                </select>
-              </label>
+              <div class="space-y-1">
+                <p class="text-sm font-medium text-foreground" id="preparation-origin-label">
+                  Bodega de origen
+                </p>
+                <p
+                  class="rounded-lg border border-border bg-surface-muted px-3 py-2.5 text-sm text-foreground"
+                  aria-labelledby="preparation-origin-label"
+                >
+                  {preparationOriginLabel}
+                </p>
+              </div>
               <div class="space-y-2">
                 <SmartSelect
                   id="transfer-destination"
@@ -1982,9 +2032,11 @@
                             value={draftLines[index]?.excessReason ?? ''}
                             placeholder={activeDemand
                               ? 'Explica la cantidad adicional a lo solicitado'
-                              : draftIsBranchRoute
-                                ? 'Ej. Rebalanceo de inventario entre sucursales'
-                                : 'Ej. Abastecimiento preventivo de sucursal'}
+                              : draftRoute === 'branch_to_central'
+                                ? 'Ej. Sobrante o devolución a la matriz'
+                                : draftIsBranchRoute
+                                  ? 'Ej. Rebalanceo de inventario entre sucursales'
+                                  : 'Ej. Abastecimiento preventivo de sucursal'}
                             oninput={(event) =>
                               updateDraftLine(index, { excessReason: event.currentTarget.value })}
                           />
@@ -2277,6 +2329,7 @@
                     canApprove={canApproveTransfers}
                     {currentUserId}
                     {isSuperuser}
+                    canAccessOrigin={canAccessSelectedOrigin}
                     routeEnabled={selectedRouteEnabled}
                     busy={actionSaving}
                     {formatDate}
@@ -2307,7 +2360,7 @@
                     {#if selectedTransfer.status === 'preparation'}<Button
                         variant="secondary"
                         disabled={!canMoveInventory || actionSaving || !selectedRouteEnabled}
-                        onclick={() => editPreparation(selectedTransfer!)}>Editar preparación</Button
+                        onclick={() => void editPreparation(selectedTransfer!)}>Editar preparación</Button
                       >{/if}<Button
                       variant="secondary"
                       disabled={!canMoveInventory || actionSaving}
@@ -2333,7 +2386,7 @@
                   {#if selectedTransfer.status === 'preparation'}<Button
                       variant="secondary"
                       disabled={!canMoveInventory || actionSaving || !selectedRouteEnabled}
-                      onclick={() => editPreparation(selectedTransfer!)}>Editar preparación</Button
+                      onclick={() => void editPreparation(selectedTransfer!)}>Editar preparación</Button
                     >{/if}<Button
                     variant="secondary"
                     disabled={!canMoveInventory || actionSaving}

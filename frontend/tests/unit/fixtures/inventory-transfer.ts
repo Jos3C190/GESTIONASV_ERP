@@ -12,6 +12,8 @@ export const transferDefaults = {
   submitted_by_id: null,
   submitted_by_name: null,
   submitted_at: null,
+  last_edited_by_id: null,
+  last_edited_by_name: null,
   approved_by_id: null,
   approved_by_name: null,
   approved_at: null,

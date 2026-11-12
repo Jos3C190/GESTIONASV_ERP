@@ -385,8 +385,6 @@ async def save_transfer_settings(
 ) -> TransferPolicyOut:
     company_id = effective_company_id(request)
     # La primera vez, dos guardados a la vez no deben chocar al crear la fila.
-    existed = await session.get(InventoryTransferSettingsModel, company_id)
-    before = policy_from(existed)
     await session.execute(
         insert(InventoryTransferSettingsModel)
         .values(company_id=company_id)
@@ -396,6 +394,8 @@ async def save_transfer_settings(
         InventoryTransferSettingsModel, company_id, with_for_update=True, populate_existing=True
     )
     assert row is not None
+    # What was saved is read after the lock, so a concurrent save is not reported as "before".
+    before = policy_from(row)
     async with session.begin_nested():
         for field, value in body.model_dump().items():
             setattr(row, field, value)

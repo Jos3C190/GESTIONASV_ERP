@@ -26,11 +26,22 @@ const mocks = vi.hoisted(() => ({
   listDemand: vi.fn(),
   listVehicles: vi.fn(),
   permissions: new Set<string>(),
-  user: { id: 'user-approver', is_superuser: false } as { id: string; is_superuser: boolean }
+  user: { id: 'user-approver', is_superuser: false } as { id: string; is_superuser: boolean },
+  accessAllBranches: true,
+  branches: [] as Array<{ id: string }>
 }));
 vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1' } }));
 vi.mock('$lib/stores/branch.svelte', () => ({
-  branch: { id: null, ready: true, accessAllBranches: true, branches: [] }
+  branch: {
+    id: null,
+    ready: true,
+    get accessAllBranches() {
+      return mocks.accessAllBranches;
+    },
+    get branches() {
+      return mocks.branches;
+    }
+  }
 }));
 vi.mock('$lib/stores/permissions.svelte', () => ({
   permissions: { hasPermission: (code: string) => mocks.permissions.has(code) }
@@ -121,6 +132,8 @@ async function openDocument() {
 beforeEach(() => {
   mocks.permissions = new Set(['inventory:read', 'inventory:move']);
   mocks.user = { id: 'user-approver', is_superuser: false };
+  mocks.accessAllBranches = true;
+  mocks.branches = [];
   for (const mock of [
     mocks.get,
     mocks.list,
@@ -170,7 +183,7 @@ describe('aprobación de traslados en la página', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Aprobar traslado' }));
     expect(
-      await screen.findByText(/se revalidarán las existencias de TR-DEMO-A/)
+      await screen.findByText(/Se revalidarán las existencias de TR-DEMO-A/)
     ).toBeInTheDocument();
     mocks.get.mockResolvedValue(approved);
     await fireEvent.click(screen.getByRole('button', { name: 'Confirmar acción' }));
@@ -231,7 +244,7 @@ describe('aprobación de traslados en la página', () => {
     await openDocument();
 
     expect(
-      await screen.findByText('No puedes aprobar un traslado que tú preparaste o enviaste.')
+      await screen.findByText('No puedes aprobar un traslado que tú preparaste, editaste o enviaste.')
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Aprobar traslado' })).not.toBeInTheDocument();
 
@@ -241,6 +254,87 @@ describe('aprobación de traslados en la página', () => {
       expect(mocks.withdraw).toHaveBeenCalledWith('transfer-a', expect.any(String))
     );
     expect(await screen.findByText(/TR-DEMO-A volvió a preparación/)).toBeInTheDocument();
+  });
+
+  it('no ofrece decidir a quien no cubre la sucursal de origen', async () => {
+    mocks.permissions.add('inventory:transfer_approve');
+    mocks.accessAllBranches = false;
+    mocks.branches = [{ id: 'branch-south' }];
+    openAs(branchTransfer({ origin_branch_id: 'branch-north' }));
+    await openDocument();
+
+    expect(
+      await screen.findByText(
+        'No tienes acceso a la sucursal de origen para decidir este traslado.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Aprobar traslado' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rechazar' })).not.toBeInTheDocument();
+  });
+
+  it('ofrece decidir a quien cubre la sucursal de origen aunque no vea todas', async () => {
+    mocks.permissions.add('inventory:transfer_approve');
+    mocks.accessAllBranches = false;
+    mocks.branches = [{ id: 'branch-north' }];
+    openAs(branchTransfer({ origin_branch_id: 'branch-north' }));
+    await openDocument();
+    expect(await screen.findByRole('button', { name: 'Aprobar traslado' })).toBeEnabled();
+  });
+
+  it('no deja decidir a quien editó la preparación', async () => {
+    mocks.permissions.add('inventory:transfer_approve');
+    mocks.user = { id: 'user-editor', is_superuser: false };
+    openAs(branchTransfer({ last_edited_by_id: 'user-editor', last_edited_by_name: 'Eva Editora' }));
+    await openDocument();
+    expect(
+      await screen.findByText('No puedes aprobar un traslado que tú preparaste, editaste o enviaste.')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Aprobar traslado' })).not.toBeInTheDocument();
+  });
+
+  it('si la empresa ya no exige aprobación, relee el documento y las reglas', async () => {
+    mocks.permissions.add('inventory:transfer_approve');
+    openAs(branchTransfer());
+    mocks.approve.mockRejectedValue(
+      new HttpError(
+        'transfer_approval_not_applicable',
+        'Esta empresa no exige aprobación para esta ruta; puedes despachar directamente.',
+        422
+      )
+    );
+    await openDocument();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Aprobar traslado' }));
+    const readsBefore = mocks.get.mock.calls.length;
+    const rulesBefore = mocks.routeOptions.mock.calls.length;
+    mocks.routeOptions.mockResolvedValue(
+      routeOptions({ policy: { ...policy, require_approval: false } })
+    );
+    await fireEvent.click(await screen.findByRole('button', { name: 'Confirmar acción' }));
+
+    expect(await screen.findByText(/no exige aprobación para esta ruta/)).toBeInTheDocument();
+    await waitFor(() => expect(mocks.get.mock.calls.length).toBeGreaterThan(readsBefore));
+    await waitFor(() => expect(mocks.routeOptions.mock.calls.length).toBeGreaterThan(rulesBefore));
+  });
+
+  it('si la ruta se apagó mientras tanto, relee el documento y muestra la ruta desactivada', async () => {
+    mocks.permissions.add('inventory:transfer_approve');
+    openAs(branchTransfer());
+    mocks.approve.mockRejectedValue(
+      new HttpError(
+        'transfer_route_disabled',
+        'Los traslados entre sucursales no están habilitados en esta empresa.',
+        409
+      )
+    );
+    await openDocument();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Aprobar traslado' }));
+    mocks.routeOptions.mockResolvedValue(
+      routeOptions({ policy: { ...policy, allow_branch_to_branch: false } })
+    );
+    await fireEvent.click(await screen.findByRole('button', { name: 'Confirmar acción' }));
+
+    expect(await screen.findByText(/Esta ruta está desactivada/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Aprobar traslado' })).toBeDisabled();
   });
 
   it('el superusuario ve aprobar aunque haya preparado el traslado', async () => {
@@ -332,6 +426,33 @@ describe('aprobación de traslados en la página', () => {
     expect(await screen.findByRole('button', { name: 'Aprobar traslado' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Rechazar' })).toBeEnabled();
     expect(screen.getByText(/Esta ruta está desactivada/)).toBeInTheDocument();
+  });
+});
+
+describe('edición de una preparación', () => {
+  it('espera los destinos de la bodega antes de consultar la demanda', async () => {
+    let originCalls = 0;
+    mocks.routeOptions.mockImplementation(async (origin?: string) => {
+      if (!origin) return routeOptions({ origins: [centralWarehouse] });
+      originCalls += 1;
+      // La primera lectura aún no conoce destinos; la de la edición sí.
+      return routeOptions({
+        origins: [centralWarehouse],
+        destinations: originCalls > 1 ? [{ ...northBranchWarehouse, route_type: 'central_distribution' }] : []
+      });
+    });
+    openAs(makeTransfer({ status: 'preparation', origin_warehouse_id: 'wh-central' }));
+    await openDocument();
+    expect(mocks.listDemand).not.toHaveBeenCalled();
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Editar preparación' }));
+
+    await waitFor(() => expect(mocks.listDemand).toHaveBeenCalledWith('branch-north'));
+    // La bodega de origen se ve como texto, no como un selector deshabilitado.
+    expect(document.getElementById('preparation-origin-label')).toHaveTextContent(
+      'Bodega de origen'
+    );
+    expect(document.querySelector('dialog select')).toBeNull();
   });
 });
 

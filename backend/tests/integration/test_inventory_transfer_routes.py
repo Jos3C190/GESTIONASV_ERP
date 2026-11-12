@@ -642,7 +642,10 @@ async def test_nobody_approves_their_own_transfer_unless_allowed() -> None:
                 "transfer_approval_self_forbidden",
                 403,
             )
-            assert error.message == "No puedes aprobar un traslado que tú preparaste o enviaste."
+            assert (
+                error.message
+                == "No puedes aprobar un traslado que tú preparaste, editaste o enviaste."
+            )
             await _expect(
                 _command(
                     ctx,
@@ -1135,5 +1138,188 @@ async def test_database_refuses_an_inconsistent_approval_state() -> None:
                 rejected_by_id=ctx.approver_id,
                 rejected_at=created_at,
             )
+
+    await _run(body, **ALL_ROUTES)
+
+
+@pytest.mark.asyncio
+async def test_the_last_editor_cannot_decide_and_is_exposed() -> None:
+    async def body(session: Any, ctx: BranchRouteFixture) -> None:
+        editor_id = await _new_user(session, "route-editor", ctx.suffix)
+        draft = await _create(ctx, ctx.branch_b, "editor")
+        assert draft["last_edited_by_id"] is None
+        assert draft["last_edited_by_name"] is None
+        edited = await ctx.use_cases.update_transfer(
+            company_id=ctx.company_id,
+            transfer_id=draft["id"],
+            origin_warehouse_id=ctx.branch_a.id,
+            destination_warehouse_id=ctx.branch_b.id,
+            vehicle_id=ctx.base.vehicle_id,
+            notes="Corregido por otra persona",
+            lines=_lines(ctx.unit_a),
+            idempotency_key=f"editor-update-{ctx.suffix}",
+            actor_id=editor_id,
+        )
+        assert edited["last_edited_by_id"] == editor_id
+        assert edited["last_edited_by_name"] == f"route-editor-{ctx.suffix[:12]}"
+        pending = await _submit(ctx, draft["id"], "editor-submit")
+        round_ = pending["approval_round"]
+        assert pending["last_edited_by_id"] == editor_id
+        error = await _expect(
+            _approve(ctx, draft["id"], round_, "editor-approve", actor_id=editor_id),
+            "transfer_approval_self_forbidden",
+            403,
+        )
+        assert (
+            error.message == "No puedes aprobar un traslado que tú preparaste, editaste o enviaste."
+        )
+        await _expect(
+            _command(
+                ctx,
+                "reject",
+                draft["id"],
+                "editor-reject",
+                actor_id=editor_id,
+                expected_round=round_,
+                reason="Intento de rechazo del editor",
+            ),
+            "transfer_approval_self_forbidden",
+            403,
+        )
+
+        async def awaiting_ids(actor_id: uuid.UUID, **extra: Any) -> set[uuid.UUID]:
+            rows = await ctx.use_cases.list_transfers(
+                company_id=ctx.company_id, awaiting_approval_by=actor_id, **extra
+            )
+            return {row["id"] for row in rows}
+
+        assert draft["id"] not in await awaiting_ids(editor_id)
+        assert draft["id"] in await awaiting_ids(editor_id, allow_self_approval=True)
+        assert draft["id"] in await awaiting_ids(ctx.approver_id)
+        mine = {"company_id": ctx.company_id, "actor_id": editor_id}
+        without = await ctx.use_cases.pending_approval_count(**mine)
+        with_self = await ctx.use_cases.pending_approval_count(**mine, allow_self_approval=True)
+        assert with_self == without + 1
+        approved = await _approve(
+            ctx,
+            draft["id"],
+            round_,
+            "editor-approve-superuser",
+            actor_id=editor_id,
+            allow_self=True,
+        )
+        assert approved["status"] == "approved"
+
+    await _run(body, **ALL_ROUTES)
+
+
+@pytest.mark.asyncio
+async def test_route_options_only_offer_warehouses_that_can_store_stock() -> None:
+    async def body(session: Any, ctx: BranchRouteFixture) -> None:
+        company = ctx.company_id
+        await _flush_in_savepoint(session, ctx.branch_b, storage_eligible=False)
+        origins = await ctx.use_cases.route_options(company_id=company, can_move=True)
+        assert ctx.branch_b.id not in {origin["id"] for origin in origins["origins"]}
+        from_a = await ctx.use_cases.route_options(
+            company_id=company, can_move=True, origin_warehouse_id=ctx.branch_a.id
+        )
+        assert ctx.branch_b.id not in {row["id"] for row in from_a["destinations"]}
+        assert ctx.central.id in {row["id"] for row in from_a["destinations"]}
+
+        await _flush_in_savepoint(session, ctx.central, storage_eligible=False)
+        origins = await ctx.use_cases.route_options(company_id=company, can_move=True)
+        assert ctx.central.id not in {origin["id"] for origin in origins["origins"]}
+        from_a = await ctx.use_cases.route_options(
+            company_id=company, can_move=True, origin_warehouse_id=ctx.branch_a.id
+        )
+        assert ctx.central.id not in {row["id"] for row in from_a["destinations"]}
+        # The server refuses the same warehouses on the central route.
+        await _expect(
+            _create(
+                ctx, ctx.branch_a, "central-origin", origin=ctx.central, unit_id=ctx.central_unit
+            ),
+            "transfer_origin_invalid",
+            409,
+        )
+        await _flush_in_savepoint(session, ctx.central, storage_eligible=True)
+        await _flush_in_savepoint(session, ctx.branch_a, storage_eligible=False)
+        await _expect(
+            _create(
+                ctx,
+                ctx.branch_a,
+                "central-destination",
+                origin=ctx.central,
+                unit_id=ctx.central_unit,
+            ),
+            "transfer_destination_invalid",
+            422,
+        )
+
+    await _run(body, **ALL_ROUTES)
+
+
+@pytest.mark.asyncio
+async def test_dispatching_a_draft_refuses_a_unit_promised_to_a_waiting_transfer() -> None:
+    async def body(session: Any, ctx: BranchRouteFixture) -> None:
+        first = await _create(ctx, ctx.branch_b, "dispatch-commit-first")
+        second = await _create(ctx, ctx.branch_b, "dispatch-commit-second")
+        await _submit(ctx, first["id"], "dispatch-commit-submit")
+        await _write_policy(session, ctx.company_id, require_approval=False)
+        error = await _expect(
+            ctx.use_cases.dispatch_transfer(
+                company_id=ctx.company_id,
+                transfer_id=second["id"],
+                vehicle_id=ctx.base.vehicle_id,
+                idempotency_key=f"dispatch-commit-{ctx.suffix}",
+                actor_id=ctx.creator_id,
+            ),
+            "transfer_handling_unit_committed",
+            409,
+        )
+        assert first["code"] in error.message
+
+    await _run(body, **ALL_ROUTES)
+
+
+@pytest.mark.asyncio
+async def test_a_draft_dispatched_after_approval_was_turned_off_does_not_claim_approval() -> None:
+    async def body(session: Any, ctx: BranchRouteFixture) -> None:
+        draft = await _create(ctx, ctx.branch_b, "no-claim")
+        assert draft["requires_approval"] is True
+        await _write_policy(session, ctx.company_id, require_approval=False)
+        dispatched = await ctx.use_cases.dispatch_transfer(
+            company_id=ctx.company_id,
+            transfer_id=draft["id"],
+            vehicle_id=ctx.base.vehicle_id,
+            idempotency_key=f"no-claim-dispatch-{ctx.suffix}",
+            actor_id=ctx.creator_id,
+        )
+        assert dispatched["status"] == "in_transit"
+        assert dispatched["requires_approval"] is False
+        assert dispatched["approved_by_id"] is None
+
+    await _run(body, **ALL_ROUTES)
+
+
+@pytest.mark.asyncio
+async def test_editing_a_saved_branch_transfer_with_its_routes_off_reports_the_route() -> None:
+    async def body(session: Any, ctx: BranchRouteFixture) -> None:
+        draft = await _create(ctx, ctx.branch_b, "edit-off")
+        await _write_policy(
+            session, ctx.company_id, allow_branch_to_branch=False, allow_branch_to_central=False
+        )
+        await _expect(
+            ctx.use_cases.update_transfer(
+                company_id=ctx.company_id,
+                transfer_id=draft["id"],
+                vehicle_id=ctx.base.vehicle_id,
+                notes="Sigue en preparación",
+                lines=_lines(ctx.unit_a),
+                idempotency_key=f"edit-off-update-{ctx.suffix}",
+                actor_id=ctx.creator_id,
+            ),
+            "transfer_route_disabled",
+            409,
+        )
 
     await _run(body, **ALL_ROUTES)

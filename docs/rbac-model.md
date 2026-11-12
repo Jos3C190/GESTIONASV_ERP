@@ -282,8 +282,10 @@ permission gets `{"count": 0}` and an empty list rather than an error.
 `GET /route-options` limits origins to the caller's branch scope and
 assignment, and answers `403` for an origin outside them.
 
-**Segregation of duties.** The creator and the person who submitted a transfer
-cannot approve or reject it (`403 transfer_approval_self_forbidden`). A
+**Segregation of duties.** The creator, the person who submitted a transfer
+and the person who last edited it (`inventory_transfers.last_edited_by_id`,
+migration 0115, set by every `PUT`) cannot approve or reject it
+(`403 transfer_approval_self_forbidden`). A
 superuser (`is_superuser`) is exempt so a single-person demonstration company
 can complete the flow, and counts such transfers in their own inbox. Unlike
 adjustments (section 10), where one user may create, approve and apply, transfer

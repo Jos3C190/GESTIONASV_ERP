@@ -13,6 +13,8 @@
     currentUserId: string | null;
     /** The server lets a superuser decide on their own transfers. */
     isSuperuser?: boolean;
+    /** Only people who cover the origin branch may decide; false hides the decision buttons. */
+    canAccessOrigin?: boolean;
     /** False when the company turned this route off: it can only be rejected, withdrawn or cancelled. */
     routeEnabled?: boolean;
     busy?: boolean;
@@ -32,6 +34,7 @@
     canApprove,
     currentUserId,
     isSuperuser = false,
+    canAccessOrigin = true,
     routeEnabled = true,
     busy = false,
     formatDate,
@@ -46,12 +49,26 @@
   let reasonError = $state<string | null>(null);
   let reasonField = $state<HTMLTextAreaElement | null>(null);
 
+  // Whoever prepared, edited or sent the transfer cannot decide on it (the server enforces it).
   const isAuthor = $derived(
+    currentUserId != null &&
+      (transfer.created_by_id === currentUserId ||
+        transfer.submitted_by_id === currentUserId ||
+        transfer.last_edited_by_id === currentUserId)
+  );
+  const isRequester = $derived(
     currentUserId != null &&
       (transfer.created_by_id === currentUserId || transfer.submitted_by_id === currentUserId)
   );
-  const canDecide = $derived(canApprove && (!isAuthor || isSuperuser));
+  const canDecide = $derived(canApprove && canAccessOrigin && (!isAuthor || isSuperuser));
+  // Someone who could decide can still take back what they sent, even as a superuser.
+  const canWithdraw = $derived(canMove && (!canDecide || isRequester));
   const originName = $derived(transfer.origin_branch_name ?? transfer.origin_warehouse_name);
+  // A rejection reason may already end in punctuation; the sentence adds its own.
+  const rejectionReason = $derived.by(() => {
+    const text = (transfer.rejection_reason ?? '').trim();
+    return text.replace(/[\s.,;:!?¡¿…]+$/u, '') || text;
+  });
 
   async function openRejection() {
     rejecting = true;
@@ -87,23 +104,30 @@
         <p>
           Rechazado por {transfer.rejected_by_name ?? 'un aprobador'} el {formatDate(
             transfer.rejected_at
-          )}: {transfer.rejection_reason}. Corrige la preparación y vuelve a enviarla.
+          )}: {rejectionReason}. Corrige la preparación y vuelve a enviarla.
         </p>
       </Callout>
     {/if}
-    <Callout variant="info" dismissible={false} class="mb-0">
-      <p>Este traslado sale de {originName} y necesita aprobación antes de despacharse.</p>
-    </Callout>
-    {#if !routeEnabled}
-      <Callout variant="warning" dismissible={false} class="mb-0">
-        <p>
-          Esta ruta está desactivada en las reglas de traslados, así que no se puede enviar a
-          aprobación. Todavía puedes cancelar el traslado.
-        </p>
+    {#if routeEnabled}
+      <Callout variant="info" dismissible={false} class="mb-0">
+        <p>Este traslado sale de {originName} y necesita aprobación antes de despacharse.</p>
       </Callout>
+    {:else}
+      <div id="transfer-route-disabled-note">
+        <Callout variant="warning" dismissible={false} class="mb-0">
+          <p>
+            Esta ruta está desactivada en las reglas de traslados, así que no se puede enviar a
+            aprobación. Todavía puedes cancelar el traslado.
+          </p>
+        </Callout>
+      </div>
     {/if}
     <div class="flex flex-wrap items-center gap-2">
-      <Button disabled={!canMove || busy || !routeEnabled} onclick={onSubmit}>
+      <Button
+        disabled={!canMove || busy || !routeEnabled}
+        describedby={routeEnabled ? undefined : 'transfer-route-disabled-note'}
+        onclick={onSubmit}
+      >
         Enviar a aprobación
       </Button>
       {#if !canMove}
@@ -121,21 +145,31 @@
       </p>
     </Callout>
     {#if !routeEnabled}
-      <Callout variant="warning" dismissible={false} class="mb-0">
-        <p>
-          Esta ruta está desactivada en las reglas de traslados, así que no se puede aprobar. Aún
-          puedes rechazarlo, retirarlo o cancelarlo.
-        </p>
-      </Callout>
+      <div id="transfer-route-disabled-note">
+        <Callout variant="warning" dismissible={false} class="mb-0">
+          <p>
+            Esta ruta está desactivada en las reglas de traslados, así que no se puede aprobar. Aún
+            puedes rechazarlo, retirarlo o cancelarlo.
+          </p>
+        </Callout>
+      </div>
     {/if}
-    {#if canApprove && !canDecide}
+    {#if canApprove && !canAccessOrigin}
       <p class="text-sm text-foreground-muted" role="note">
-        No puedes aprobar un traslado que tú preparaste o enviaste.
+        No tienes acceso a la sucursal de origen para decidir este traslado.
+      </p>
+    {:else if canApprove && !canDecide}
+      <p class="text-sm text-foreground-muted" role="note">
+        No puedes aprobar un traslado que tú preparaste, editaste o enviaste.
       </p>
     {/if}
     {#if canDecide}
       <div class="flex flex-wrap items-center gap-2">
-        <Button disabled={busy || !routeEnabled} onclick={onApprove}>Aprobar traslado</Button>
+        <Button
+          disabled={busy || !routeEnabled}
+          describedby={routeEnabled ? undefined : 'transfer-route-disabled-note'}
+          onclick={onApprove}>Aprobar traslado</Button
+        >
         <Button
           id="transfer-reject-open"
           variant="secondary"
@@ -183,7 +217,7 @@
         </form>
       {/if}
     {/if}
-    {#if canMove && !canDecide}
+    {#if canWithdraw}
       <div class="flex flex-wrap items-center gap-2">
         <Button variant="secondary" disabled={busy} onclick={onWithdraw}>Retirar solicitud</Button>
         <p class="text-xs text-foreground-muted">

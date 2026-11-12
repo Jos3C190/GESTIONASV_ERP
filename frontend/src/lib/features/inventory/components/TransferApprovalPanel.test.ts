@@ -28,6 +28,7 @@ function mount(
     canApprove: boolean;
     currentUserId: string | null;
     isSuperuser: boolean;
+    canAccessOrigin: boolean;
     routeEnabled: boolean;
     busy: boolean;
   }> = {}
@@ -82,6 +83,35 @@ describe('TransferApprovalPanel', () => {
     expect(screen.getByText(/Esta ruta está desactivada/)).toBeInTheDocument();
   });
 
+  it('con la ruta apagada solo muestra el aviso de ruta desactivada, no el de aprobación', () => {
+    mount(makeTransfer({ route_type: 'branch_to_central', requires_approval: true }), {
+      routeEnabled: false
+    });
+    expect(screen.getByText(/Esta ruta está desactivada/)).toBeInTheDocument();
+    expect(screen.queryByText(/necesita aprobación antes de despacharse/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar a aprobación' })).toHaveAttribute(
+      'aria-describedby',
+      'transfer-route-disabled-note'
+    );
+  });
+
+  it('no duplica la puntuación final del motivo de rechazo', () => {
+    mount(
+      makeTransfer({
+        route_type: 'branch_to_branch',
+        requires_approval: true,
+        rejected_by_name: 'Luis Jefe',
+        rejected_at: '2026-10-21T09:00:00Z',
+        rejection_reason: 'Falta el sello del encargado.  '
+      })
+    );
+    expect(
+      screen.getByText(
+        'Rechazado por Luis Jefe el 20 oct 2026: Falta el sello del encargado. Corrige la preparación y vuelve a enviarla.'
+      )
+    ).toBeInTheDocument();
+  });
+
   it('muestra quién rechazó, cuándo y por qué', () => {
     mount(
       makeTransfer({
@@ -119,7 +149,7 @@ describe('TransferApprovalPanel', () => {
   it('explica por qué un aprobador no puede aprobar lo que él mismo preparó o envió', () => {
     mount(pending(), { canApprove: true, currentUserId: 'user-author' });
     expect(
-      screen.getByText('No puedes aprobar un traslado que tú preparaste o enviaste.')
+      screen.getByText('No puedes aprobar un traslado que tú preparaste, editaste o enviaste.')
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Aprobar traslado' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rechazar' })).not.toBeInTheDocument();
@@ -133,15 +163,64 @@ describe('TransferApprovalPanel', () => {
     expect(screen.queryByRole('button', { name: 'Aprobar traslado' })).not.toBeInTheDocument();
   });
 
+  it('quien editó la preparación tampoco decide sobre ella', () => {
+    mount(pending({ last_edited_by_id: 'user-editor' }), {
+      canApprove: true,
+      currentUserId: 'user-editor'
+    });
+    expect(
+      screen.getByText('No puedes aprobar un traslado que tú preparaste, editaste o enviaste.')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Aprobar traslado' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rechazar' })).not.toBeInTheDocument();
+    cleanup();
+    mount(pending({ last_edited_by_id: 'user-editor' }), {
+      canApprove: true,
+      currentUserId: 'user-editor',
+      isSuperuser: true
+    });
+    expect(screen.getByRole('button', { name: 'Aprobar traslado' })).toBeEnabled();
+  });
+
+  it('sin acceso a la sucursal de origen no ofrece decidir y lo explica', () => {
+    mount(pending(), { canApprove: true, canAccessOrigin: false });
+    expect(
+      screen.getByText('No tienes acceso a la sucursal de origen para decidir este traslado.')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Aprobar traslado' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rechazar' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retirar solicitud' })).toBeInTheDocument();
+  });
+
   it('el superusuario puede decidir sobre lo suyo', () => {
     mount(pending(), { canApprove: true, currentUserId: 'user-author', isSuperuser: true });
     expect(screen.getByRole('button', { name: 'Aprobar traslado' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Rechazar' })).toBeEnabled();
   });
 
+  it('el superusuario que envió el traslado también puede retirar su solicitud', async () => {
+    const handlers = mount(pending(), {
+      canApprove: true,
+      currentUserId: 'user-author',
+      isSuperuser: true
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Retirar solicitud' }));
+    expect(handlers.onWithdraw).toHaveBeenCalledTimes(1);
+    cleanup();
+    // Un aprobador que no lo envió no ve retirar.
+    mount(pending(), { canApprove: true, currentUserId: 'user-other', isSuperuser: true });
+    expect(screen.queryByRole('button', { name: 'Retirar solicitud' })).not.toBeInTheDocument();
+  });
+
   it('con la ruta apagada deja rechazar pero no aprobar', () => {
     mount(pending(), { canApprove: true, routeEnabled: false });
     expect(screen.getByRole('button', { name: 'Aprobar traslado' })).toBeDisabled();
+    const note = document.getElementById('transfer-route-disabled-note');
+    expect(note).toHaveTextContent(/no se puede aprobar/);
+    expect(screen.getByRole('button', { name: 'Aprobar traslado' })).toHaveAttribute(
+      'aria-describedby',
+      'transfer-route-disabled-note'
+    );
     expect(screen.getByRole('button', { name: 'Rechazar' })).toBeEnabled();
     expect(screen.getByText(/no se puede aprobar/)).toBeInTheDocument();
   });

@@ -247,6 +247,9 @@ export interface InventoryTransfer {
   submitted_by_id: string | null;
   submitted_by_name: string | null;
   submitted_at: string | null;
+  /** Whoever last edited the preparation; like the author, they cannot decide on it. */
+  last_edited_by_id?: string | null;
+  last_edited_by_name?: string | null;
   approved_by_id: string | null;
   approved_by_name: string | null;
   approved_at: string | null;

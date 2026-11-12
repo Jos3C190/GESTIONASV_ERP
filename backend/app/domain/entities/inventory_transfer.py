@@ -113,6 +113,14 @@ def _classify_central_origin(origin: WarehouseFacts, destination: WarehouseFacts
         )
     if not (origin.branch_active and origin.branch_is_headquarters and destination.branch_active):
         raise TransferDomainError(_BRANCH_INVALID, code="transfer_branch_invalid")
+    if not origin.storage_eligible:
+        raise TransferDomainError(
+            "La bodega de origen no está habilitada para despachos.", code="transfer_origin_invalid"
+        )
+    if not destination.storage_eligible:
+        raise TransferDomainError(
+            _DESTINATION_NOT_STORABLE, code="transfer_destination_invalid", status_code=422
+        )
     return TransferRoute.CENTRAL_DISTRIBUTION
 
 
@@ -249,13 +257,14 @@ def require_independent_approver(
     actor_id: uuid.UUID,
     created_by_id: uuid.UUID,
     submitted_by_id: uuid.UUID | None,
+    last_edited_by_id: uuid.UUID | None = None,
     allow_self_approval: bool,
 ) -> None:
     if allow_self_approval:
         return
-    if actor_id == created_by_id or (submitted_by_id is not None and actor_id == submitted_by_id):
+    if actor_id in (created_by_id, submitted_by_id, last_edited_by_id):
         raise TransferDomainError(
-            "No puedes aprobar un traslado que tú preparaste o enviaste.",
+            "No puedes aprobar un traslado que tú preparaste, editaste o enviaste.",
             code="transfer_approval_self_forbidden",
             status_code=403,
         )
@@ -298,7 +307,7 @@ def require_dispatchable(
         )
     if line_count < 1:
         raise TransferDomainError(
-            "Agregue al menos una unidad logística al traslado.",
+            "Agrega al menos una unidad logística al traslado.",
             code="transfer_lines_required",
             status_code=422,
         )

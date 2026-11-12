@@ -11,6 +11,8 @@
     disabled?: boolean;
     type?: 'button' | 'submit' | 'reset';
     form?: string;
+    /** Id of the element that explains why the button is disabled or what it does. */
+    describedby?: string;
     onclick?: (e: MouseEvent) => void;
     children: Snippet;
     class?: string;
@@ -23,6 +25,7 @@
     disabled = false,
     type = 'button',
     form,
+    describedby,
     onclick,
     children,
     class: className = ''
@@ -50,6 +53,6 @@
   const classes = $derived(`${base} ${variants[variant]} ${sizes[size]} ${className}`);
 </script>
 
-<button {id} {type} {form} {disabled} {onclick} class={classes}>
+<button {id} {type} {form} {disabled} aria-describedby={describedby} {onclick} class={classes}>
   {@render children()}
 </button>
