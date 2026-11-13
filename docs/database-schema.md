@@ -797,3 +797,118 @@ Applied locally after a full database backup. Storage and legacy correction
 simulations were rolled back. COM-00024's confirmed correction is documented in
 `docs/ers-v1/com-00024-correccion-documentada-2026-10-27.md`; it has not been posted
 as a real retaceo because its actual freight/DAI/VAT must still be captured.
+
+## 26. Transfer transport, partial reception and discrepancies (0116)
+
+Revision `0116` (revises `0115`) adds the transport chosen at preparation, the
+`partially_received` and `discrepancy` states, and a single register of
+reception differences. It is a database-only description; endpoints are in
+`docs/api.md` section 18.
+
+**`inventory_transfers`**
+
+- `ck_inventory_transfers_status` now also accepts `partially_received` and
+  `discrepancy`.
+- New columns: `approved_vehicle_id` and `approved_driver_id` (copy of the
+  transport the approver authorised; compound foreign keys
+  `(company_id, approved_vehicle_id)` to `inventory_vehicles` and
+  `(company_id, approved_driver_id)` to `drivers`, both `ON DELETE RESTRICT`),
+  `assignment_substitution_code`, `assignment_substitution_reason`,
+  `assignment_substitution_by_id` (foreign key to `users`, `RESTRICT`),
+  `assignment_substitution_at`, and `closed_at timestamptz`.
+- `ck_inventory_transfers_assignment_substitution`: the four substitution
+  fields are all null or all set; the code is one of `vehicle_unfit`,
+  `vehicle_unavailable`, `driver_unfit`, `driver_unavailable`, `load_change`,
+  `other`; the trimmed reason has at least 10 characters.
+- No check forces vehicle and driver to exist: the route-guard tests insert
+  pending transfers without them, and the rule is enforced by the submit and
+  approve commands.
+- Backfill: `closed_at = COALESCE(received_at, updated_at)` for transfers in
+  `received`, `closed_with_adjustment` or `cancelled`; and every `in_transit`
+  transfer with some quantity already received becomes `partially_received`.
+
+**Quantities and receipts**
+
+- `inventory_transfer_details`: `quantity_received_damaged` and
+  `quantity_surplus` (`numeric(18,6) NOT NULL DEFAULT 0`) with
+  `ck_inventory_transfer_details_condition_quantities` (both non-negative and
+  damaged not above `quantity_received`). `quantity_received` still counts
+  everything physically received.
+- `inventory_transfer_demand_allocations`: `quantity_damaged` (default 0) with
+  `ck_transfer_demand_allocations_damaged` (between 0 and `quantity_received`).
+- `inventory_transfer_receipts`: `condition` (`good` or `damaged`, default
+  `good`, `ck_inventory_transfer_receipts_condition`) and
+  `uq_inventory_transfer_receipts_company_id (company_id, id)` so discrepancies
+  can reference a receipt with a compound key.
+
+**`inventory_transfer_discrepancies`** (new): one row per transfer detail, kind
+and event.
+
+| Group | Columns |
+| --- | --- |
+| Identity | `id`, `company_id`, `transfer_id`, `transfer_detail_id` |
+| Classification | `kind` (`shortage`, `surplus`, `damage`), `status` (`open`, `in_claim`, `resolved`, `cancelled`; default `open`), `source` (`receipt`, `reception_close`, `incident`), `quantity` (> 0), `damage_type`, `notes`, `evidence_reference` |
+| Links | `location_id`, `handling_unit_id`, `receipt_id`, `command_id`, `incident_id` |
+| Opening | `opened_by_id`, `opened_at` |
+| Claim | `claim_reference`, `claimed_by_id`, `claimed_at` |
+| Resolution | `resolution` (`written_off`, `found`, `released`, `regularized`, `dismissed`), `resolution_notes`, `resolved_by_id`, `resolved_at` |
+| Origin count | `origin_count_required` (default false), `origin_counted_by_id`, `origin_counted_at`, `origin_count_notes` |
+| Audit | `created_at`, `updated_at` |
+
+- Uniqueness: `uq_inventory_transfer_discrepancies_company_id (company_id, id)`
+  and `uq_inventory_transfer_discrepancies_transfer_identity
+  (company_id, transfer_id, id)`.
+- Foreign keys, all `ON DELETE RESTRICT`: compound `(company_id, transfer_id)`,
+  `(company_id, transfer_detail_id)`, `(company_id, handling_unit_id)`,
+  `(company_id, receipt_id)`, `(company_id, command_id)` and
+  `(company_id, transfer_id, incident_id)` (the incident must belong to the same
+  transfer); `location_id` to `locations`; and the four actor columns to
+  `users`.
+- Checks: valid `kind`, `status` and `source`; `quantity > 0`; trimmed `notes`
+  of at least 5 characters; `damage_type` present if and only if `kind` is
+  `damage` and one of `broken`, `crushed`, `wet`, `contaminated`, `packaging`,
+  `tampered`, `temperature`, `other`; `location_id` required unless the kind is
+  `shortage`; resolution valid for the kind (shortage: `written_off`/`found`,
+  damage: `written_off`/`released`, surplus: `regularized`/`dismissed`); claim
+  fields all set or all null and only for damage; lifecycle coherent with the
+  status (`open` has no resolution or claim; `in_claim` is damage with a claim and
+  no resolution; `resolved` has resolver data and `written_off`, `released` or
+  `regularized`; `cancelled` has resolver data and `found` or `dismissed`);
+  origin count fields all set or all null, only when required, and never required
+  for damage.
+- Indexes: `ix_inventory_transfer_discrepancies_transfer (company_id,
+  transfer_id, status)`; the partial unique
+  `uq_inventory_transfer_discrepancies_open_shortage (company_id,
+  transfer_detail_id) WHERE kind = 'shortage' AND status = 'open'` (one open
+  shortage per detail); and the partial
+  `ix_inventory_transfer_discrepancies_origin_count (company_id, transfer_id)
+  WHERE origin_count_required AND origin_counted_at IS NULL`.
+
+**`inventory_adjustments`**
+
+- New column `transfer_discrepancy_id` with compound foreign keys
+  `(company_id, transfer_discrepancy_id)` and
+  `(company_id, transfer_id, transfer_discrepancy_id)` to the discrepancy
+  (`RESTRICT`).
+- `ck_inventory_adjustments_transfer_context` is replaced: either there is no
+  transfer link, or `transfer_id` is set with exactly one of
+  `transfer_incident_id` and `transfer_discrepancy_id`. Damage and surplus
+  adjustments carry only the discrepancy (no `transfer_id`), so the second
+  foreign key only applies when both are present.
+- `uq_inventory_adjustments_active_discrepancy (company_id,
+  transfer_discrepancy_id) WHERE transfer_discrepancy_id IS NOT NULL AND status
+  <> 'cancelled'`: one non-cancelled adjustment per discrepancy.
+
+**`inventory_transfer_commands`**: `ck_inventory_transfer_commands_action` adds
+`close_reception`, `discrepancy_adjust`, `discrepancy_claim`,
+`discrepancy_release`, `discrepancy_found`, `discrepancy_dismiss`,
+`resolve_discrepancy` and `origin_count`.
+
+**Downgrade.** It refuses with a `RuntimeError` ("Hay {n} registros de recepción
+parcial, discrepancias o sustituciones de transporte que se perderían…") while
+there is any discrepancy, any transfer in `discrepancy` or with a substitution,
+any detail with damaged or surplus quantity, or any receipt that is not `good`.
+Otherwise it returns `partially_received` transfers to `in_transit`, deletes the
+new commands, and drops everything added here in reverse order. The model classes
+mirror the migration, including `InventoryTransferDiscrepancyModel`, without
+`relationship()`.
