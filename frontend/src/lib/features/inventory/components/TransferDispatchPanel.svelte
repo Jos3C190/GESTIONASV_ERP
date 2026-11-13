@@ -1,14 +1,17 @@
 <script lang="ts">
-  import { HttpError } from '$lib/api/client';
+  import { untrack } from 'svelte';
+  import Callout from '$lib/components/ui/Callout.svelte';
   import {
     inventoryTransfersApi,
-    type DispatchCheck,
-    type DispatchIssue,
-    type DispatchOptions,
+    type AssignmentCheck,
+    type AssignmentOptions,
     type DispatchSelection,
-    type FitnessState,
-    type InventoryTransfer
+    type InventoryTransfer,
+    type SubstitutionCode,
+    type TransportJudgement
   } from '$lib/features/inventory/transfer-documents';
+  import { SUBSTITUTION_CODE_OPTIONS } from '$lib/features/inventory/transfer-operations';
+  import TransferAssignmentPicker from './TransferAssignmentPicker.svelte';
 
   interface Props {
     transfer: InventoryTransfer;
@@ -18,50 +21,93 @@
 
   let { transfer, disabled, selection = $bindable() }: Props = $props();
 
-  const STATE_LABEL: Record<FitnessState, string> = {
-    ok: 'Apto',
-    warning: 'Con advertencias',
-    blocked: 'No apto'
-  };
   const MIN_REASON = 5;
+  const MIN_SUBSTITUTION = 10;
 
-  let options = $state<DispatchOptions | null>(null);
-  let check = $state<DispatchCheck | null>(null);
   let vehicleId = $state('');
   let driverId = $state('');
   let overrideReason = $state('');
-  let loadError = $state<string | null>(null);
+  let substitutionCode = $state<SubstitutionCode | ''>('');
+  let substitutionReason = $state('');
+  let judgement = $state<TransportJudgement | null>(null);
   let checking = $state(false);
-  let checkSequence = 0;
+  let options = $state<AssignmentOptions | null>(null);
+  let approvedCheck = $state<AssignmentCheck | null>(null);
+  let approvedCheckFor = '';
 
-  const vehicle = $derived(
-    options?.vehicles.find((item) => item.inventory_vehicle_id === vehicleId) ?? null
+  const approvedVehicle = $derived(transfer.approved_vehicle ?? null);
+  const approvedDriver = $derived(transfer.approved_driver ?? null);
+  const isApproved = $derived(transfer.status === 'approved' && approvedVehicle != null);
+  const effectiveDriverId = $derived(driverId || judgement?.driverId || '');
+  const needsSubstitution = $derived(
+    isApproved &&
+      Boolean(vehicleId) &&
+      (vehicleId !== approvedVehicle?.id ||
+        (approvedDriver != null && effectiveDriverId !== '' && effectiveDriverId !== approvedDriver.id))
   );
-  const issues = $derived<DispatchIssue[]>(
-    check ? [...check.vehicle_issues, ...check.driver_issues] : []
-  );
-  const blocking = $derived(issues.filter((issue) => issue.severity === 'blocking'));
-  const warnings = $derived(issues.filter((issue) => issue.severity === 'warning'));
   const needsOverride = $derived(
-    Boolean(check?.blocked && !check.hard_blocked && check.can_override)
+    Boolean(judgement?.blocked && !judgement.hardBlocked && judgement.canOverride)
+  );
+  const substitutionReady = $derived(
+    !needsSubstitution ||
+      (substitutionCode !== '' && substitutionReason.trim().length >= MIN_SUBSTITUTION)
   );
   const ready = $derived(
     Boolean(
       vehicleId &&
-      check &&
+      judgement &&
       !checking &&
-      !check.hard_blocked &&
-      (!check.blocked || (check.can_override && overrideReason.trim().length >= MIN_REASON))
+      !judgement.hardBlocked &&
+      (!judgement.blocked || (judgement.canOverride && overrideReason.trim().length >= MIN_REASON)) &&
+      substitutionReady
     )
   );
+  const vehicle = $derived(
+    options?.vehicles.find((item) => item.inventory_vehicle_id === vehicleId) ?? null
+  );
+  const approvedLabel = $derived.by(() => {
+    if (!approvedVehicle) return '';
+    const car = `${approvedVehicle.code} · ${approvedVehicle.plate ?? 'Sin placa'}`;
+    return approvedDriver ? `${car} y ${approvedDriver.name}` : car;
+  });
+  const vehicleFallbackLabel = $derived(
+    transfer.approved_vehicle || transfer.vehicle
+      ? `${(transfer.approved_vehicle ?? transfer.vehicle)!.code} · ${(transfer.approved_vehicle ?? transfer.vehicle)!.plate ?? 'Sin placa'} · no figura entre las opciones`
+      : ''
+  );
+  const driverFallbackLabel = $derived(
+    (transfer.approved_driver ?? transfer.driver)
+      ? `${(transfer.approved_driver ?? transfer.driver)!.name} · no figura entre las opciones`
+      : ''
+  );
+
+  // Dispatch starts from what was approved or saved, even if it is no longer available: the
+  // verdict below says why, and changing it is an explicit, audited decision.
+  $effect(() => {
+    const id = transfer.id;
+    untrack(() => {
+      void id;
+      vehicleId = transfer.approved_vehicle?.id ?? transfer.vehicle?.id ?? '';
+      driverId = transfer.approved_driver?.id ?? transfer.driver?.id ?? '';
+      overrideReason = '';
+      substitutionCode = '';
+      substitutionReason = '';
+      approvedCheck = null;
+      approvedCheckFor = '';
+    });
+  });
 
   $effect(() => {
     const driverName =
-      options?.drivers.find((item) => item.id === (driverId || check?.driver_id))?.name ?? '';
+      options?.drivers.find((item) => item.id === effectiveDriverId)?.name ??
+      (effectiveDriverId === transfer.driver?.id ? transfer.driver?.name : '') ??
+      '';
     selection = {
       vehicleId,
-      driverId: driverId || check?.driver_id || '',
+      driverId: effectiveDriverId,
       overrideReason: needsOverride ? overrideReason.trim() : '',
+      substitutionCode: needsSubstitution ? substitutionCode : '',
+      substitutionReason: needsSubstitution ? substitutionReason.trim() : '',
       ready,
       label: vehicle
         ? `${vehicle.code} · ${vehicle.plate ?? 'Sin placa'}${driverName ? ` · ${driverName}` : ''}`
@@ -69,157 +115,119 @@
     };
   });
 
-  async function loadOptions(transferId: string, presetVehicle: string | null) {
-    loadError = null;
-    options = null;
-    check = null;
-    try {
-      const result = await inventoryTransfersApi.dispatchOptions(transferId);
-      if (transfer.id !== transferId) return;
-      options = result;
-      const preset = result.vehicles.find(
-        (item) => item.inventory_vehicle_id === presetVehicle && item.available
-      );
-      vehicleId =
-        preset?.inventory_vehicle_id ??
-        result.vehicles.find((item) => item.available)?.inventory_vehicle_id ??
-        '';
-      driverId = '';
-    } catch (cause) {
-      loadError =
-        cause instanceof HttpError
-          ? cause.message
-          : 'No se pudieron consultar vehículos y conductores.';
-    }
-  }
-
+  // When the approved transport is being replaced, say whether it was still fit.
   $effect(() => {
-    void loadOptions(transfer.id, transfer.vehicle?.id ?? null);
-  });
-
-  async function runCheck(transferId: string, vehicle: string, driver: string) {
-    const sequence = ++checkSequence;
-    if (!vehicle) {
-      check = null;
-      return;
-    }
-    checking = true;
-    try {
-      const result = await inventoryTransfersApi.dispatchCheck(transferId, vehicle, driver || null);
-      if (sequence === checkSequence) check = result;
-    } catch (cause) {
-      if (sequence === checkSequence) {
-        check = null;
-        loadError = cause instanceof HttpError ? cause.message : 'No se pudo validar la selección.';
+    const id = transfer.id;
+    if (!needsSubstitution || approvedCheckFor === id) return;
+    approvedCheckFor = id;
+    void (async () => {
+      try {
+        const result = await inventoryTransfersApi.transferAssignmentCheck(id);
+        if (approvedCheckFor === id) approvedCheck = result;
+      } catch {
+        // The notice is optional; the server still enforces the rules.
       }
-    } finally {
-      if (sequence === checkSequence) checking = false;
-    }
-  }
-
-  $effect(() => {
-    if (!options) return;
-    void runCheck(transfer.id, vehicleId, driverId);
+    })();
   });
 
-  function chooseVehicle(value: string) {
-    vehicleId = value;
-    driverId = '';
-    overrideReason = '';
-  }
+  const approvedStillFit = $derived(approvedCheck != null && !approvedCheck.planning_blocked);
 </script>
 
 <div class="space-y-3">
-  <div class="grid gap-3 sm:grid-cols-2">
-    <label class="space-y-1 text-sm font-medium text-foreground"
-      >Vehículo de {options?.origin_branch_name || 'la sucursal de origen'}
-      <select
-        class="field-control"
-        value={vehicleId}
-        onchange={(event) => chooseVehicle(event.currentTarget.value)}
-        disabled={disabled || !options}
-      >
-        <option value="">Seleccione vehículo</option>
-        {#each options?.vehicles ?? [] as item (item.inventory_vehicle_id)}
-          <option value={item.inventory_vehicle_id} disabled={!item.available}
-            >{item.code} · {item.plate ?? 'Sin placa'} · {item.brand}
-            {item.model}{item.available
-              ? ` · ${STATE_LABEL[item.compliance_state]}`
-              : ` · ${item.unavailable_reason}`}</option
-          >
-        {/each}
-      </select>
-    </label>
-    <label class="space-y-1 text-sm font-medium text-foreground"
-      >Conductor
-      <select class="field-control" bind:value={driverId} disabled={disabled || !vehicleId}>
-        <option value=""
-          >{vehicle?.driver_name
-            ? `Asignado: ${vehicle.driver_name}`
-            : 'Seleccione conductor'}</option
-        >
-        {#each options?.drivers ?? [] as item (item.id)}
-          {#if item.id !== vehicle?.driver_id}
-            <option value={item.id}
-              >{item.name} · {STATE_LABEL[item.compliance_state]}{item.current_vehicle_code
-                ? ` · conduce ${item.current_vehicle_code}`
-                : ''}</option
-            >
-          {/if}
-        {/each}
-      </select>
-    </label>
-  </div>
-
-  {#if options && options.vehicles.length === 0}
-    <p class="text-sm text-foreground-muted">
-      La sucursal de origen no tiene vehículos de traslado. Regístralos en <a
-        class="font-medium text-primary"
-        href="/fleet">Flota</a
-      >.
+  {#if isApproved && !needsSubstitution}
+    <p class="text-sm text-foreground-muted" id="dispatch-approved-note">
+      Aprobado con {approvedLabel}. Puedes cambiarlos si lo necesitas; el cambio exige un motivo y
+      queda registrado.
     </p>
   {/if}
 
-  {#if checking}
-    <p class="text-xs text-foreground-muted" role="status">Validando vehículo y conductor…</p>
-  {:else if check}
-    {#if blocking.length}
-      <ul
-        class="space-y-1 rounded-xl border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger"
-        aria-label="Impedimentos para despachar"
-      >
-        {#each blocking as issue, index (index)}
-          <li>
-            {issue.message}{issue.overridable ? '' : ' (no admite excepción)'}
-          </li>
-        {/each}
-      </ul>
-    {:else}
-      <p class="text-sm font-medium text-success">Vehículo y conductor aptos para el despacho.</p>
-    {/if}
-    {#if warnings.length}
-      <ul
-        class="space-y-1 rounded-xl border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-foreground"
-      >
-        {#each warnings as issue, index (index)}<li>{issue.message}</li>{/each}
-      </ul>
-    {/if}
+  <TransferAssignmentPicker
+    mode="dispatch"
+    transferId={transfer.id}
+    idPrefix="dispatch"
+    bind:vehicleId
+    bind:driverId
+    bind:judgement
+    bind:checking
+    bind:options
+    {disabled}
+    {vehicleFallbackLabel}
+    {driverFallbackLabel}
+  />
+
+  {#if judgement}
     {#if needsOverride}
-      <label class="block space-y-1 text-sm font-medium text-foreground"
-        >Motivo de la excepción (queda registrado en la auditoría)
-        <textarea
-          class="field-control min-h-[72px]"
-          maxlength="500"
-          bind:value={overrideReason}
-          {disabled}
-        ></textarea>
-      </label>
-    {:else if check.blocked && !check.hard_blocked}
+      <label class="block space-y-1 text-sm font-medium text-foreground" for="dispatch-override"
+        >Motivo de la excepción (queda registrado en la auditoría)</label
+      >
+      <textarea
+        id="dispatch-override"
+        class="field-control min-h-[72px]"
+        maxlength="500"
+        bind:value={overrideReason}
+        {disabled}
+      ></textarea>
+    {:else if judgement.blocked && !judgement.hardBlocked}
       <p class="text-xs text-foreground-muted">
         Solo un usuario autorizado para excepciones puede despachar con estos impedimentos.
       </p>
     {/if}
   {/if}
 
-  {#if loadError}<p class="text-sm text-danger" role="alert">{loadError}</p>{/if}
+  {#if needsSubstitution}
+    <section class="space-y-3 rounded-xl border border-warning/30 bg-warning/5 p-3" aria-labelledby="dispatch-substitution-title">
+      <Callout variant="warning" dismissible={false} class="mb-0">
+        <p id="dispatch-substitution-title">
+          Se aprobó con {approvedLabel}. El cambio quedará registrado y auditado.
+        </p>
+        {#if approvedCheck}
+          <p class="mt-1 text-xs text-foreground-muted">
+            {approvedStillFit
+              ? 'Lo aprobado todavía está apto; cambia solo si es necesario.'
+              : 'Lo aprobado ya no está apto para el traslado.'}
+          </p>
+        {/if}
+      </Callout>
+      <div class="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div class="space-y-1">
+          <label class="block text-sm font-medium text-foreground" for="dispatch-substitution-code"
+            >Motivo del cambio</label
+          >
+          <select
+            id="dispatch-substitution-code"
+            class="field-control"
+            value={substitutionCode}
+            onchange={(event) => (substitutionCode = event.currentTarget.value as SubstitutionCode | '')}
+            {disabled}
+          >
+            <option value="">Elige el motivo</option>
+            {#each SUBSTITUTION_CODE_OPTIONS as option (option.value)}
+              <option value={option.value}>{option.label}</option>
+            {/each}
+          </select>
+        </div>
+        <div class="space-y-1">
+          <label class="block text-sm font-medium text-foreground" for="dispatch-substitution-reason"
+            >Explica el cambio</label
+          >
+          <textarea
+            id="dispatch-substitution-reason"
+            class="field-control min-h-[72px]"
+            maxlength="500"
+            aria-describedby="dispatch-substitution-help"
+            bind:value={substitutionReason}
+            {disabled}
+          ></textarea>
+          <p
+            id="dispatch-substitution-help"
+            class="text-xs {substitutionReason.trim().length >= MIN_SUBSTITUTION
+              ? 'text-foreground-muted'
+              : 'text-foreground'}"
+          >
+            Mínimo {MIN_SUBSTITUTION} caracteres ({substitutionReason.trim().length}).
+          </p>
+        </div>
+      </div>
+    </section>
+  {/if}
 </div>

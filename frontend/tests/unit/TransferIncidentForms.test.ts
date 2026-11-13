@@ -102,6 +102,7 @@ it('distingue la cantidad recibida del faltante autorizado al cerrar con ajuste'
     source_handling_unit_id: 'hu-source', source_handling_unit_code: 'HU-SOURCE', transit_handling_unit_id: 'hu-transit',
     transit_handling_unit_code: 'HU-TRANSIT', quantity_planned: '3', quantity_dispatched: '3',
     quantity_received: '2', quantity_in_transit: '0', quantity_returned: '0', quantity_adjusted_out: '1',
+    quantity_received_damaged: '0', quantity_surplus: '0', quantity_short_open: '0', quantity_pending_reception: '0',
     excess_reason: null, notes: null, demand_allocations: [], receipts: []
   }] });
   await openDocument();
@@ -117,11 +118,12 @@ it('recupera una recepción parcial cuya respuesta se perdió y permite completa
     source_handling_unit_id: 'hu-source', source_handling_unit_code: 'HU-SOURCE', transit_handling_unit_id: 'hu-transit',
     transit_handling_unit_code: 'HU-TRANSIT', quantity_planned: '3', quantity_dispatched: '3',
     quantity_received: '0', quantity_in_transit: '3', quantity_returned: '0', quantity_adjusted_out: '0',
+    quantity_received_damaged: '0', quantity_surplus: '0', quantity_short_open: '0', quantity_pending_reception: '3',
     excess_reason: null, notes: null, demand_allocations: [], receipts: []
   };
   const initial = { ...transfer, lines: [line] };
-  const partial = { ...initial, lines: [{ ...line, quantity_received: '2', quantity_in_transit: '1' }] };
-  const final = { ...partial, status: 'received' as const, lines: [{ ...line, quantity_received: '3', quantity_in_transit: '0' }] };
+  const partial = { ...initial, lines: [{ ...line, quantity_received: '2', quantity_in_transit: '1', quantity_pending_reception: '1' }] };
+  const final = { ...partial, status: 'received' as const, lines: [{ ...line, quantity_received: '3', quantity_in_transit: '0', quantity_pending_reception: '0' }] };
   mocks.get.mockReset().mockResolvedValueOnce(initial).mockResolvedValueOnce(partial).mockResolvedValueOnce(final);
   mocks.list.mockResolvedValue([initial]);
   mocks.listLocations.mockResolvedValue({ items: [{

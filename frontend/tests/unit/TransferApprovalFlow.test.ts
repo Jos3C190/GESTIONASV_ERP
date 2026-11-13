@@ -6,7 +6,7 @@ import type {
   InventoryTransfer,
   TransferRouteOptions
 } from '../../src/lib/features/inventory/transfer-documents';
-import { makeTransfer } from './fixtures/inventory-transfer';
+import { makeLine, makeTransfer } from './fixtures/inventory-transfer';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -19,6 +19,10 @@ const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
   dispatchOptions: vi.fn(),
   dispatchCheck: vi.fn(),
+  transferAssignmentCheck: vi.fn(),
+  assignmentOptions: vi.fn(),
+  assignmentCheck: vi.fn(),
+  update: vi.fn(),
   routeOptions: vi.fn(),
   pendingApprovalCount: vi.fn(),
   listLocations: vi.fn(),
@@ -69,6 +73,10 @@ vi.mock('$lib/features/inventory/transfer-documents', () => ({
     dispatch: mocks.dispatch,
     dispatchOptions: mocks.dispatchOptions,
     dispatchCheck: mocks.dispatchCheck,
+    transferAssignmentCheck: mocks.transferAssignmentCheck,
+    assignmentOptions: mocks.assignmentOptions,
+    assignmentCheck: mocks.assignmentCheck,
+    update: mocks.update,
     routeOptions: mocks.routeOptions,
     pendingApprovalCount: mocks.pendingApprovalCount,
     listDemand: mocks.listDemand,
@@ -104,6 +112,8 @@ function routeOptions(patch: Partial<TransferRouteOptions> = {}): TransferRouteO
 
 const branchTransfer = (patch: Partial<InventoryTransfer> = {}) =>
   makeTransfer({
+    vehicle: { id: 'vehicle-1', code: 'FL-001', name: 'Hiace', status: 'active', plate: 'C 123' },
+    driver: { id: 'driver-1', name: 'Carlos Martínez', employee_code: 'EMP-1' },
     route_type: 'branch_to_branch',
     origin_is_central: false,
     origin_branch_name: 'Sucursal Norte',
@@ -145,6 +155,10 @@ beforeEach(() => {
     mocks.dispatch,
     mocks.dispatchOptions,
     mocks.dispatchCheck,
+    mocks.transferAssignmentCheck,
+    mocks.assignmentOptions,
+    mocks.assignmentCheck,
+    mocks.update,
     mocks.routeOptions,
     mocks.pendingApprovalCount,
     mocks.listLocations,
@@ -153,6 +167,34 @@ beforeEach(() => {
     mocks.listVehicles
   ])
     mock.mockReset();
+  mocks.transferAssignmentCheck.mockResolvedValue({
+    vehicle_id: 'vehicle-1',
+    driver_id: 'driver-1',
+    vehicle_issues: [],
+    driver_issues: [],
+    planning_blocked: false,
+    warnings: 0,
+    conflicts: [],
+    load_kg: null,
+    load_missing_weight: 0
+  });
+  mocks.assignmentOptions.mockResolvedValue({
+    origin_branch_id: 'branch-matrix',
+    origin_branch_name: 'Casa matriz',
+    vehicles: [],
+    drivers: []
+  });
+  mocks.assignmentCheck.mockResolvedValue({
+    vehicle_id: 'vehicle-1',
+    driver_id: 'driver-1',
+    vehicle_issues: [],
+    driver_issues: [],
+    planning_blocked: false,
+    warnings: 0,
+    conflicts: [],
+    load_kg: null,
+    load_missing_weight: 0
+  });
   mocks.routeOptions.mockResolvedValue(routeOptions());
   mocks.pendingApprovalCount.mockResolvedValue(0);
   mocks.list.mockResolvedValue([]);
@@ -452,7 +494,75 @@ describe('edición de una preparación', () => {
     expect(document.getElementById('preparation-origin-label')).toHaveTextContent(
       'Bodega de origen'
     );
-    expect(document.querySelector('dialog select')).toBeNull();
+    expect(document.querySelector('#transfer-origin')).toBeNull();
+  });
+
+  it('al editar conserva el vehículo y el conductor guardados en lugar de borrarlos', async () => {
+    const saved = makeTransfer({
+      status: 'preparation',
+      origin_warehouse_id: 'wh-central',
+      destination_warehouse_id: 'wh-north',
+      vehicle: { id: 'vehicle-1', code: 'FL-001', name: 'Hiace', status: 'active', plate: 'C 123' },
+      driver: { id: 'driver-1', name: 'Carlos Martínez', employee_code: 'EMP-1' },
+      lines: [
+        makeLine({
+          id: 'line-1',
+          source_handling_unit_id: 'hu-1',
+          quantity_planned: '2',
+          excess_reason: 'Reposición'
+        })
+      ]
+    });
+    mocks.routeOptions.mockImplementation(async (origin?: string) =>
+      routeOptions({
+        origins: [centralWarehouse],
+        destinations: origin
+          ? [{ ...northBranchWarehouse, route_type: 'central_distribution' }]
+          : []
+      })
+    );
+    mocks.listTransferUnits.mockResolvedValue([
+      {
+        id: 'hu-1',
+        code: 'HU-1',
+        product_id: 1,
+        inventory_item_id: 'item-1',
+        base_unit_id: 1,
+        base_unit_symbol: 'u',
+        product_name: 'Producto de prueba',
+        product_sku: 'SKU-DEMO',
+        quantity_base: '10',
+        lot_code: null,
+        receipt_lot_code: null
+      }
+    ]);
+    mocks.assignmentOptions.mockResolvedValue({
+      origin_branch_id: 'branch-matrix',
+      origin_branch_name: 'Casa matriz',
+      vehicles: [],
+      drivers: []
+    });
+    mocks.update.mockResolvedValue(saved);
+    openAs(saved);
+    await openDocument();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Editar preparación' }));
+
+    await waitFor(() =>
+      expect(mocks.assignmentOptions).toHaveBeenCalledWith('wh-central', 'transfer-a')
+    );
+    await waitFor(() =>
+      expect(mocks.assignmentCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ vehicle_id: 'vehicle-1', driver_id: 'driver-1' })
+      )
+    );
+    const save = await screen.findByRole('button', { name: 'Guardar cambios' });
+    await waitFor(() => expect(save).toBeEnabled());
+    await fireEvent.click(save);
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(1));
+    expect(mocks.update).toHaveBeenCalledWith(
+      'transfer-a',
+      expect.objectContaining({ vehicle_id: 'vehicle-1', driver_id: 'driver-1' })
+    );
   });
 });
 

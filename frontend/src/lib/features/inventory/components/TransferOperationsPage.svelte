@@ -1,5 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { goto } from '$app/navigation';
   import { HttpError } from '$lib/api/client';
   import { onDestroy, tick } from 'svelte';
   import Button from '$lib/components/ui/Button.svelte';
@@ -19,6 +20,9 @@
   import TransferLifecycleProgress from './TransferLifecycleProgress.svelte';
   import TransferDispatchPanel from './TransferDispatchPanel.svelte';
   import TransferApprovalPanel from './TransferApprovalPanel.svelte';
+  import TransferAssignmentPicker from './TransferAssignmentPicker.svelte';
+  import TransferDiscrepancyPanel from './TransferDiscrepancyPanel.svelte';
+  import TransferTransportCard from './TransferTransportCard.svelte';
   import TransferRouteBadge from './TransferRouteBadge.svelte';
   import TransferVehicleCatalog from './TransferVehicleCatalog.svelte';
   import {
@@ -28,8 +32,10 @@
     type TransferCreateInput,
     type TransferDemandRecord,
     type TransferDestinationOption,
+    type DamageType,
     type TransferLineInput,
     type TransferPolicyFlags,
+    type TransferReceiptLineInput,
     type TransferRouteType,
     type TransferStatus,
     type TransferVehicle,
@@ -39,16 +45,22 @@
     allocateDemandQuantity,
     clearTransferAttempt,
     compareQuantities,
+    DAMAGE_TYPE_OPTIONS,
     formatQuantity,
     getOrCreateTransferAttempt,
+    isDiscrepancyActive,
     isFrozenWhenRouteOff,
+    isReceivable,
     isRouteEnabled,
+    pendingReceptionQuantity,
     quantityFromScaled,
     quantityString,
     scaledQuantity,
     TRANSFER_STATUS_OPTIONS,
     transferRouteLabel,
+    transferErrorMessage,
     transferStatusLabel,
+    type DiscrepancyRequest,
     type TransferAttempt
   } from '../transfer-operations';
 
@@ -98,6 +110,7 @@
   let policy = $state<TransferPolicyFlags | null>(null);
   let pendingApprovalCount = $state(0);
   let awaitingApproval = $state(false);
+  let originCountFilter = $state(false);
   let sourceWarehouseId = $state('');
   let availableUnits = $state<TransferHandlingUnit[]>([]);
   let demands = $state<TransferDemandRecord[]>([]);
@@ -124,6 +137,8 @@
   let destinationWarehouseId = $state('');
   let draftNotes = $state('');
   let draftLines = $state<DraftLine[]>([]);
+  let draftVehicleId = $state('');
+  let draftDriverId = $state('');
   let editingTransferId = $state('');
   let draftError = $state<string | null>(null);
   let draftSaving = $state(false);
@@ -140,6 +155,8 @@
     vehicleId: '',
     driverId: '',
     overrideReason: '',
+    substitutionCode: '',
+    substitutionReason: '',
     ready: false,
     label: ''
   });
@@ -151,6 +168,21 @@
   let destinationLocationState = $state<CollectionState>('loaded');
   let receiptQuantities = $state<Record<string, string>>({});
   let receiptLocationIds = $state<Record<string, string>>({});
+  // Per line: what arrived damaged or extra, declared with "Registrar avería o sobrante".
+  type ReceiptExtras = {
+    open: boolean;
+    damaged: string;
+    damageType: DamageType | '';
+    damageNotes: string;
+    damageLocationId: string;
+    surplus: string;
+    surplusNotes: string;
+    evidence: string;
+  };
+  let receiptExtras = $state<Record<string, ReceiptExtras>>({});
+  let showCloseReception = $state(false);
+  let closeReceptionReason = $state('');
+  let closeReceptionEvidence = $state('');
   let incidentReason = $state('');
   let incidentEvidence = $state('');
   let incidentResolution = $state<'resume_transit' | 'close_received'>('resume_transit');
@@ -167,6 +199,8 @@
   const canMoveInventory = $derived(permissions.hasPermission('inventory:move'));
   const canReceiveInventory = $derived(permissions.hasPermission('inventory:receive'));
   const canCreateAdjustment = $derived(permissions.hasPermission('inventory:adjust'));
+  const canApproveAdjustment = $derived(permissions.hasPermission('inventory:adjust_approve'));
+  const canSeeCost = $derived(permissions.hasPermission('inventory:valuation'));
   const canReadDestinationInventory = $derived(
     permissions.hasPermission('inventory:read') && permissions.hasPermission('warehouses.view')
   );
@@ -188,6 +222,11 @@
     branch.accessAllBranches ||
       (selectedTransfer?.origin_branch_id != null &&
         branch.branches.some((item) => item.id === selectedTransfer?.origin_branch_id))
+  );
+  const canAccessSelectedDestination = $derived(
+    branch.accessAllBranches ||
+      (selectedTransfer?.destination_branch_id != null &&
+        branch.branches.some((item) => item.id === selectedTransfer?.destination_branch_id))
   );
   const sourceOrigin = $derived(origins.find((item) => item.id === sourceWarehouseId) ?? null);
   // A branch origin has no purchase demand to plan against; the central warehouse does.
@@ -221,6 +260,28 @@
       (total, line) => total + (scaledQuantity(line.quantity_in_transit) ?? 0n),
       0n
     ) ?? 0n
+  );
+  const receivableLines = $derived(
+    selectedTransfer && isReceivable(selectedTransfer.status)
+      ? selectedTransfer.lines.filter((line) => pendingReceptionQuantity(line) > 0n)
+      : []
+  );
+  // After a partial reception the rest may still arrive; this is what the person decides about.
+  const pendingReceptionTotal = $derived(
+    receivableLines.reduce((total, line) => total + pendingReceptionQuantity(line), 0n)
+  );
+  const pendingReceptionLabel = $derived.by(() => {
+    const [only] = receivableLines;
+    return receivableLines.length === 1 && only
+      ? `${formatQuantity(quantityFromScaled(pendingReceptionTotal))} ${only.base_unit_symbol ?? only.base_unit_name ?? 'unidades'}`
+      : `${receivableLines.length} productos`;
+  });
+  // The draft lines with a valid quantity give the weight of the load to the transport check.
+  const transportLines = $derived(
+    draftLines.flatMap((line) => {
+      const quantity = quantityString(line.quantity);
+      return quantity ? [{ handling_unit_id: line.handlingUnitId, quantity_base: quantity }] : [];
+    })
   );
 
   let supplyProducts = $derived.by(() => {
@@ -405,6 +466,7 @@
     policy = null;
     pendingApprovalCount = 0;
     awaitingApproval = false;
+    originCountFilter = false;
     destinations = [];
     destinationsState = 'loading';
     availableUnits = [];
@@ -428,6 +490,8 @@
     destinationLocationState = 'loading';
     receiptQuantities = {};
     receiptLocationIds = {};
+    receiptExtras = {};
+    showCloseReception = false;
     showIncidentForm = false;
     showResolutionForm = false;
     confirmationText = '';
@@ -486,6 +550,12 @@
         }
       }
       if (canMoveInventory && origins.length > 0) void loadVehicles(key, version);
+      // A link from an adjustment (or any other screen) opens that document straight away.
+      const linkedTransfer = query.get('transfer');
+      if (linkedTransfer) {
+        activeTab = 'documents';
+        await openTransfer(linkedTransfer);
+      }
     } catch (cause) {
       if (!isCurrent(key, version)) return;
       supplyError = message(cause, 'No se pudieron cargar las bodegas disponibles.');
@@ -548,7 +618,7 @@
   }
 
   function message(cause: unknown, fallback: string): string {
-    return cause instanceof Error ? cause.message : fallback;
+    return transferErrorMessage(cause, fallback);
   }
 
   function mayHaveCommitted(cause: unknown): boolean {
@@ -562,20 +632,23 @@
   function receiptWasApplied(
     before: InventoryTransfer,
     after: InventoryTransfer,
-    receivedLines: Array<{ transfer_detail_id: string; quantity_base: string }>
+    receivedLines: TransferReceiptLineInput[]
   ): boolean {
     return (
       receivedLines.length > 0 &&
       receivedLines.every((received) => {
         const previousLine = before.lines.find((line) => line.id === received.transfer_detail_id);
         const currentLine = after.lines.find((line) => line.id === received.transfer_detail_id);
-        const requested = scaledQuantity(received.quantity_base);
+        // What leaves the road is everything that arrived, in good condition or damaged.
+        const requested =
+          (scaledQuantity(received.quantity_base) ?? 0n) +
+          (scaledQuantity(received.damaged_quantity ?? '0') ?? 0n);
         const previousReceived = scaledQuantity(previousLine?.quantity_received);
         const currentReceived = scaledQuantity(currentLine?.quantity_received);
         const previousTransit = scaledQuantity(previousLine?.quantity_in_transit);
         const currentTransit = scaledQuantity(currentLine?.quantity_in_transit);
         return (
-          requested != null &&
+          requested > 0n &&
           previousReceived != null &&
           currentReceived != null &&
           previousTransit != null &&
@@ -683,6 +756,7 @@
       const result = await inventoryTransfersApi.list({
         status: awaitingApproval ? undefined : transferStatusFilter || undefined,
         awaitingMyApproval: awaitingApproval || undefined,
+        originCountPending: originCountFilter || undefined,
         page: pageNumber,
         size: 50
       });
@@ -741,6 +815,8 @@
       : '';
     draftNotes = '';
     draftLines = [];
+    draftVehicleId = '';
+    draftDriverId = '';
     editingTransferId = '';
     draftError = null;
     selectedTransferId = '';
@@ -872,6 +948,8 @@
     draftNotes = '';
     draftLines = [];
     editingTransferId = '';
+    draftVehicleId = '';
+    draftDriverId = '';
     draftError = null;
   }
 
@@ -988,7 +1066,9 @@
     return {
       origin_warehouse_id: sourceWarehouseId,
       destination_warehouse_id: destinationWarehouseId,
-      vehicle_id: null,
+      // The update replaces the whole document: send the transport that is chosen, never null.
+      vehicle_id: draftVehicleId || null,
+      driver_id: draftDriverId || null,
       notes: draftNotes.trim() || null,
       lines
     };
@@ -1037,7 +1117,7 @@
       loadSourceData(sourceWarehouseId),
       loadPendingApprovalCount()
     ]);
-    if (authoritative.status === 'in_transit') await loadDestinationLocationsFor(authoritative);
+    if (needsDestinationLocations(authoritative)) await loadDestinationLocationsFor(authoritative);
     return authoritative;
   }
 
@@ -1102,11 +1182,13 @@
     actionNotice = null;
     receiptQuantities = {};
     receiptLocationIds = {};
+    receiptExtras = {};
+    showCloseReception = false;
     try {
       const result = await inventoryTransfersApi.get(transferId);
       if (!isCurrent(expectedContext, expectedVersion) || selectedTransferId !== transferId) return;
       selectedTransfer = result;
-      if (result.status === 'in_transit' || result.status === 'incident') {
+      if (needsDestinationLocations(result) || result.status === 'incident') {
         await loadDestinationLocationsFor(result, expectedContext, expectedVersion);
       }
     } catch (cause) {
@@ -1117,6 +1199,15 @@
       if (isCurrent(expectedContext, expectedVersion) && selectedTransferId === transferId)
         detailLoading = false;
     }
+  }
+
+  /** Receiving, and releasing damaged goods later, both need the destination's locations. */
+  function needsDestinationLocations(transfer: InventoryTransfer): boolean {
+    return (
+      isReceivable(transfer.status) ||
+      transfer.status === 'discrepancy' ||
+      transfer.discrepancies.some((item) => item.kind === 'damage' && isDiscrepancyActive(item))
+    );
   }
 
   async function loadDestinationLocationsFor(
@@ -1283,12 +1374,16 @@
       (key) =>
         inventoryTransfersApi.dispatch(transfer.id, selection.vehicleId, key, {
           driverId: selection.driverId,
-          overrideReason: selection.overrideReason
+          overrideReason: selection.overrideReason,
+          substitutionCode: selection.substitutionCode,
+          substitutionReason: selection.substitutionReason
         }),
       {
         vehicle_id: selection.vehicleId,
         driver_id: selection.driverId,
-        override_reason: selection.overrideReason
+        override_reason: selection.overrideReason,
+        substitution_code: selection.substitutionCode,
+        substitution_reason: selection.substitutionReason
       }
     );
   }
@@ -1315,7 +1410,13 @@
           reject: 'Registrando el rechazo…',
           dispatch: 'Confirmando despacho…',
           incident: 'Registrando incidencia…',
-          'resolve-incident': 'Guardando resolución…'
+          'resolve-incident': 'Guardando resolución…',
+          'close-reception': 'Registrando el faltante y cerrando la recepción…',
+          'discrepancy-claim': 'Registrando el reclamo…',
+          'discrepancy-release': 'Liberando la mercancía a cuarentena…',
+          'discrepancy-found': 'Anulando el faltante…',
+          'discrepancy-dismiss': 'Descartando el sobrante…',
+          'discrepancy-origin-count': 'Registrando el conteo en origen…'
         } as Record<string, string>
       )[actionName] ?? 'Procesando traslado…';
     try {
@@ -1381,7 +1482,13 @@
           submit: `${transfer.code} quedó pendiente de aprobación.`,
           withdraw: `${transfer.code} volvió a preparación. Puedes corregirlo y enviarlo de nuevo.`,
           approve: `${transfer.code} fue aprobado. Ya puedes despacharlo.`,
-          reject: `${transfer.code} volvió a preparación con el motivo del rechazo.`
+          reject: `${transfer.code} volvió a preparación con el motivo del rechazo.`,
+          'close-reception': `${transfer.code} quedó con discrepancia. Resuelve cada diferencia para cerrarlo.`,
+          'discrepancy-claim': 'Reclamo registrado. La mercancía sigue como avería hasta resolverla.',
+          'discrepancy-release': 'La mercancía pasó a cuarentena en la bodega de destino.',
+          'discrepancy-found': `El faltante se anuló. ${transfer.code} vuelve a esperar la mercadería.`,
+          'discrepancy-dismiss': 'Sobrante descartado.',
+          'discrepancy-origin-count': 'Conteo en origen registrado.'
         } as Record<string, string>
       )[actionName] ?? null
     );
@@ -1432,6 +1539,8 @@
     sourceWarehouseId = transfer.origin_warehouse_id;
     destinationWarehouseId = transfer.destination_warehouse_id;
     draftNotes = transfer.notes ?? '';
+    draftVehicleId = transfer.vehicle?.id ?? '';
+    draftDriverId = transfer.driver?.id ?? '';
     selectedDemandDetailId = '';
     selectedProductKey = '';
     draftLines = transfer.lines.map((line) => ({
@@ -1463,21 +1572,44 @@
 
   async function confirmReceipt() {
     const transfer = selectedTransfer;
-    if (!transfer || transfer.status !== 'in_transit' || actionSaving || !canReceiveInventory)
+    if (!transfer || !isReceivable(transfer.status) || actionSaving || !canReceiveInventory)
       return;
-    const lines: Array<{
-      transfer_detail_id: string;
-      destination_location_id: string;
-      quantity_base: string;
-    }> = [];
+    const lines: TransferReceiptLineInput[] = [];
     for (const line of transfer.lines) {
       const raw = receiptQuantities[line.id]?.trim() ?? '';
-      if (!raw) continue;
-      const quantity = quantityString(raw);
-      const remaining = scaledQuantity(line.quantity_in_transit);
-      const planned = quantity ? scaledQuantity(quantity) : null;
-      if (!quantity || planned == null || remaining == null || planned > remaining) {
-        actionError = `La cantidad recibida de ${line.product_name} debe ser positiva y no superar lo que sigue en tránsito.`;
+      // Damaged and extra units only count when the line's "Registrar avería o sobrante" is open.
+      const extras = receiptExtras[line.id]?.open ? receiptExtras[line.id] : undefined;
+      const damagedRaw = extras?.damaged.trim() ?? '';
+      const surplusRaw = extras?.surplus.trim() ?? '';
+      if (!raw && !damagedRaw && !surplusRaw) continue;
+      const quantity = raw ? quantityString(raw) : null;
+      const damaged = damagedRaw ? quantityString(damagedRaw) : null;
+      const surplus = surplusRaw ? quantityString(surplusRaw) : null;
+      if ((raw && !quantity) || (damagedRaw && !damaged) || (surplusRaw && !surplus)) {
+        actionError = `Las cantidades de ${line.product_name} deben ser números positivos con hasta seis decimales.`;
+        return;
+      }
+      const good = quantity ? (scaledQuantity(quantity) ?? 0n) : 0n;
+      const bad = damaged ? (scaledQuantity(damaged) ?? 0n) : 0n;
+      const pending = pendingReceptionQuantity(line);
+      if (good + bad <= 0n) {
+        actionError = `Indica cuánto recibiste de ${line.product_name}: lo que llegó bien, lo averiado o ambos.`;
+        return;
+      }
+      if (good + bad > pending) {
+        actionError = `Lo recibido de ${line.product_name} (bueno y averiado) no puede superar lo que falta por llegar: ${formatQuantity(quantityFromScaled(pending))}.`;
+        return;
+      }
+      if (surplus && good + bad !== pending) {
+        actionError = `Declara sobrante de ${line.product_name} solo cuando registras todo lo pendiente de la línea.`;
+        return;
+      }
+      if (damaged && (!extras?.damageType || extras.damageNotes.trim().length < 5)) {
+        actionError = `Indica el tipo de avería de ${line.product_name} y descríbela (mínimo 5 caracteres).`;
+        return;
+      }
+      if (surplus && (extras?.surplusNotes.trim().length ?? 0) < 5) {
+        actionError = `Describe el sobrante de ${line.product_name} (mínimo 5 caracteres).`;
         return;
       }
       const locationId = receiptLocationIds[line.id];
@@ -1485,11 +1617,26 @@
         actionError = `Seleccione una ubicación válida para ${line.product_name}.`;
         return;
       }
-      lines.push({
+      const damagedLocation = extras?.damageLocationId || '';
+      const receiptLine: TransferReceiptLineInput = {
         transfer_detail_id: line.id,
         destination_location_id: locationId,
-        quantity_base: quantity
-      });
+        quantity_base: quantity ?? '0'
+      };
+      // Only what was declared is sent, so a plain receipt keeps its old request.
+      if (damaged && extras) {
+        receiptLine.damaged_quantity = damaged;
+        receiptLine.damage_type = extras.damageType || null;
+        receiptLine.damage_notes = extras.damageNotes.trim();
+        if (damagedLocation) receiptLine.damaged_location_id = damagedLocation;
+      }
+      if (surplus && extras) {
+        receiptLine.surplus_quantity = surplus;
+        receiptLine.surplus_notes = extras.surplusNotes.trim();
+      }
+      if ((damaged || surplus) && extras?.evidence.trim())
+        receiptLine.evidence_reference = extras.evidence.trim();
+      lines.push(receiptLine);
     }
     if (!lines.length) {
       actionError = 'Escriba al menos una cantidad contada para registrar la recepción.';
@@ -1592,6 +1739,180 @@
     }
   }
 
+  async function openCloseReception() {
+    showCloseReception = true;
+    showIncidentForm = false;
+    await tick();
+    document.getElementById('close-reception-reason')?.focus();
+  }
+
+  /** "Seguir esperando": nothing changes; the person goes back to registering arrivals. */
+  async function keepWaiting() {
+    showCloseReception = false;
+    await tick();
+    const first = receivableLines[0];
+    if (first) document.getElementById(`receipt-qty-${first.id}`)?.focus();
+  }
+
+  /** Stops waiting for what has not arrived: it becomes a shortage that someone resolves. */
+  async function closeReception() {
+    const transfer = selectedTransfer;
+    if (!transfer || !isReceivable(transfer.status) || !canReceiveInventory || actionSaving) return;
+    const reason = closeReceptionReason.trim();
+    if (reason.length < 5) return;
+    const body = { reason, evidence_reference: closeReceptionEvidence.trim() || null };
+    await runTransferCommand(
+      'close-reception',
+      transfer,
+      (key) => inventoryTransfersApi.closeReception(transfer.id, { ...body, idempotency_key: key }),
+      body
+    );
+    if (!actionError) {
+      closeReceptionReason = '';
+      closeReceptionEvidence = '';
+      showCloseReception = false;
+    }
+  }
+
+  /** Runs what a person asked of one difference; resolves to a message when it failed. */
+  async function runDiscrepancy(request: DiscrepancyRequest): Promise<string | null> {
+    const transfer = selectedTransfer;
+    if (!transfer) return 'Abre el traslado de nuevo para continuar.';
+    const id = request.discrepancy.id;
+    if (request.action === 'adjust') return prepareDiscrepancyAdjustment(transfer, request);
+    let command: (key: string) => Promise<InventoryTransfer>;
+    let data: Record<string, string | null>;
+    switch (request.action) {
+      case 'claim': {
+        const claimReference = request.claimReference;
+        data = { claim_reference: claimReference };
+        command = (key) =>
+          inventoryTransfersApi.claimDiscrepancy(transfer.id, id, {
+            idempotency_key: key,
+            claim_reference: claimReference
+          });
+        break;
+      }
+      case 'release': {
+        const { notes, locationId } = request;
+        data = { notes, destination_location_id: locationId || null };
+        command = (key) =>
+          inventoryTransfersApi.releaseDamage(transfer.id, id, {
+            idempotency_key: key,
+            notes,
+            destination_location_id: locationId || null
+          });
+        break;
+      }
+      default: {
+        const { notes, action } = request;
+        data = { notes };
+        command = (key) => {
+          const body = { idempotency_key: key, notes };
+          return action === 'found'
+            ? inventoryTransfersApi.markShortageFound(transfer.id, id, body)
+            : action === 'dismiss'
+              ? inventoryTransfersApi.dismissSurplus(transfer.id, id, body)
+              : inventoryTransfersApi.recordOriginCount(transfer.id, id, body);
+        };
+      }
+    }
+    const ok = await runTransferCommand(`discrepancy-${request.action}`, transfer, command, {
+      discrepancy_id: id,
+      ...data
+    });
+    if (ok) return null;
+    // The form shows the failure next to the fields; the page does not repeat it.
+    const failure = actionError;
+    actionError = null;
+    return failure;
+  }
+
+  async function prepareDiscrepancyAdjustment(
+    transfer: InventoryTransfer,
+    request: Extract<DiscrepancyRequest, { action: 'adjust' }>
+  ): Promise<string | null> {
+    const { discrepancy, form } = request;
+    const surplus = discrepancy.kind === 'surplus';
+    const body = {
+      operational_date: form.operationalDate,
+      accounting_date: form.accountingDate,
+      reason: form.reason.trim(),
+      document_reference: form.documentReference.trim(),
+      notes: form.notes.trim() || null,
+      // Only an entry (a surplus) needs to say how the units are packed and what they cost.
+      ...(surplus && form.packaging === 'definition'
+        ? { packaging_definition_id: form.packagingId }
+        : {}),
+      ...(surplus && form.packaging === 'measures'
+        ? {
+            actual_gross_weight_kg: quantityString(form.weightKg),
+            actual_volume_m3: quantityString(form.volumeM3)
+          }
+        : {}),
+      ...(surplus && canSeeCost && form.costMode === 'unit'
+        ? { documented_unit_cost: form.cost.trim() }
+        : {}),
+      ...(surplus && canSeeCost && form.costMode === 'total'
+        ? { documented_total_cost: form.cost.trim() }
+        : {})
+    };
+    const actionName = `discrepancy-adjust:${discrepancy.id}`;
+    const attempt = attemptFor(actionName, JSON.stringify({ transfer_id: transfer.id, body }));
+    const expectedContext = contextKey;
+    actionSaving = true;
+    actionProgressMessage = 'Preparando el borrador del ajuste…';
+    try {
+      const adjustment = await inventoryTransfersApi.prepareDiscrepancyAdjustment(
+        transfer.id,
+        discrepancy.id,
+        { ...body, idempotency_key: attempt.idempotencyKey }
+      );
+      clearAttempt(actionName);
+      if (expectedContext === contextKey)
+        await goto(`/inventory/adjustments/${encodeURIComponent(adjustment.id)}`);
+      return null;
+    } catch (cause) {
+      return message(
+        cause,
+        'No se pudo preparar el ajuste. Puedes reintentar sin cambiar los datos.'
+      );
+    } finally {
+      actionSaving = false;
+      actionProgressMessage = '';
+    }
+  }
+
+  function receiptExtrasFor(lineId: string): ReceiptExtras {
+    return (
+      receiptExtras[lineId] ?? {
+        open: false,
+        damaged: '',
+        damageType: '',
+        damageNotes: '',
+        damageLocationId: '',
+        surplus: '',
+        surplusNotes: '',
+        evidence: ''
+      }
+    );
+  }
+
+  function updateReceiptExtras(lineId: string, patch: Partial<ReceiptExtras>) {
+    receiptExtras = { ...receiptExtras, [lineId]: { ...receiptExtrasFor(lineId), ...patch } };
+  }
+
+  /** Whether any line of the reception form has something declared to send. */
+  function hasReceiptInput(transfer: InventoryTransfer): boolean {
+    return transfer.lines.some((line) => {
+      const extras = receiptExtras[line.id];
+      return Boolean(
+        receiptQuantities[line.id]?.trim() ||
+          (extras?.open && (extras.damaged.trim() || extras.surplus.trim()))
+      );
+    });
+  }
+
   async function refreshAll() {
     const key = contextKey;
     const version = contextVersion;
@@ -1640,6 +1961,12 @@
   function chooseAwaitingApproval(value: boolean) {
     if (awaitingApproval === value) return;
     awaitingApproval = value;
+    void loadTransferPage(contextKey, contextVersion, 1, true);
+  }
+
+  function chooseOriginCount(value: boolean) {
+    if (originCountFilter === value) return;
+    originCountFilter = value;
     void loadTransferPage(contextKey, contextVersion, 1, true);
   }
 
@@ -1917,6 +2244,29 @@
                 <p>Después de guardar, envíalo a aprobación para poder despacharlo.</p>
               </Callout>
             {/if}
+            <section
+              class="space-y-3 rounded-xl border border-border p-3 sm:p-4"
+              aria-labelledby="preparation-transport-title"
+            >
+              <h3 id="preparation-transport-title" class="font-medium text-foreground">
+                Transporte
+              </h3>
+              <TransferAssignmentPicker
+                mode="planning"
+                idPrefix="planning"
+                originWarehouseId={sourceWarehouseId}
+                transferId={editingTransferId || null}
+                draftLines={transportLines}
+                required={draftNeedsApproval}
+                disabled={draftSaving}
+                vehicleFallbackLabel={editingTransferId && selectedTransfer?.vehicle
+                  ? `${selectedTransfer.vehicle.code} · ${selectedTransfer.vehicle.plate ?? 'Sin placa'}`
+                  : ''}
+                driverFallbackLabel={editingTransferId ? (selectedTransfer?.driver?.name ?? '') : ''}
+                bind:vehicleId={draftVehicleId}
+                bind:driverId={draftDriverId}
+              />
+            </section>
             {#if destinationsState === 'error'}<p class="notice notice-danger" role="alert">
                 {destinationsError}
               </p>{:else if destinationsState !== 'loading' && destinationOptions.length === 0}<p
@@ -2197,6 +2547,8 @@
         {awaitingApproval}
         {pendingApprovalCount}
         onAwaitingApproval={chooseAwaitingApproval}
+        originCountPending={originCountFilter}
+        onOriginCountPending={chooseOriginCount}
         {formatDate}
         {documentSummary}
         onFilter={chooseDocumentFilter}
@@ -2245,7 +2597,7 @@
                 }}>Cerrar detalle</button
               >
             </header>
-            {#if ['preparation', 'pending_approval', 'approved', 'in_transit', 'received'].includes(selectedTransfer.status)}
+            {#if selectedTransfer.status !== 'cancelled'}
               <TransferLifecycleProgress
                 status={selectedTransfer.status}
                 withApproval={selectedTransfer.requires_approval ||
@@ -2286,7 +2638,12 @@
                           line.quantity_returned
                         )}
                         {line.base_unit_symbol ?? line.base_unit_name ?? 'base'}</span
-                      >
+                      >{#if (scaledQuantity(line.quantity_received_damaged) ?? 0n) > 0n || (scaledQuantity(line.quantity_surplus) ?? 0n) > 0n || (scaledQuantity(line.quantity_short_open) ?? 0n) > 0n}<span
+                          class="block text-xs text-foreground-muted"
+                          >Con avería {formatQuantity(line.quantity_received_damaged)} · Sobrante {formatQuantity(
+                            line.quantity_surplus
+                          )} · Faltante por resolver {formatQuantity(line.quantity_short_open)}</span
+                        >{/if}
                     </p>
                   </div>
                   {#if line.demand_allocations.length}<ul
@@ -2310,7 +2667,10 @@
                       <ul class="mt-2 space-y-1 text-xs text-foreground-muted">
                         {#each line.receipts as receipt (receipt.id)}<li>
                             {formatQuantity(receipt.quantity_received)}
-                            {line.base_unit_symbol ?? line.base_unit_name ?? 'base'} · {formatDate(
+                            {line.base_unit_symbol ?? line.base_unit_name ?? 'base'}{receipt.condition ===
+                            'damaged'
+                              ? ' con avería'
+                              : ''} · {formatDate(
                               receipt.received_at
                             )} · {receipt.handling_unit_code ?? 'HU creada por recepción'}
                           </li>{/each}
@@ -2319,6 +2679,10 @@
                 </article>
               {/each}
             </div>
+
+            {#if selectedTransfer.dispatched_at}
+              <TransferTransportCard transfer={selectedTransfer} {formatDate} />
+            {/if}
 
             {#if selectedTransfer.status === 'preparation' || selectedTransfer.status === 'pending_approval' || selectedTransfer.status === 'approved'}
               {#if selectedTransfer.status !== 'preparation' || selectedTransfer.requires_approval}
@@ -2397,12 +2761,97 @@
                   >
                 </div>
               {/if}
-            {:else if selectedTransfer.status === 'in_transit'}
+            {:else if isReceivable(selectedTransfer.status)}
+              {#if selectedTransfer.status === 'partially_received'}
+                <Callout variant="warning" dismissible={false} class="mb-0">
+                  <p class="font-medium text-foreground">
+                    Recepción parcial: faltan {pendingReceptionLabel} por llegar. ¿Llegará el resto?
+                  </p>
+                  <p class="mt-1 text-foreground-muted">
+                    Si todavía viene en camino, registra lo que llegue cuando llegue. Si ya no va a
+                    llegar, registra el faltante y cierra la recepción para resolverlo.
+                  </p>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <Button variant="secondary" size="sm" disabled={actionSaving} onclick={keepWaiting}
+                      >Seguir esperando</Button
+                    >
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={actionSaving || !canReceiveInventory || showCloseReception}
+                      onclick={() => void openCloseReception()}
+                      >Registrar faltante y cerrar recepción</Button
+                    >
+                  </div>
+                </Callout>
+              {/if}
+              {#if showCloseReception}
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                <form
+                  class="space-y-3 rounded-xl border border-warning/30 bg-warning/5 p-4"
+                  aria-labelledby="close-reception-title"
+                  onsubmit={(event) => {
+                    event.preventDefault();
+                    void closeReception();
+                  }}
+                  onkeydown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.stopPropagation();
+                      showCloseReception = false;
+                    }
+                  }}
+                >
+                  <h3 id="close-reception-title" class="text-sm font-semibold text-foreground">
+                    Registrar faltante y cerrar recepción
+                  </h3>
+                  <p class="text-sm text-foreground-muted">
+                    Lo que no llegó quedará como faltante por resolver y el traslado pasará a «Con
+                    discrepancia». Podrás darlo de baja con un ajuste, o marcarlo como llegado si
+                    aparece.
+                  </p>
+                  <div class="space-y-1">
+                    <label class="block text-sm font-medium text-foreground" for="close-reception-reason"
+                      >Motivo del faltante</label
+                    >
+                    <textarea
+                      id="close-reception-reason"
+                      class="field-control min-h-20"
+                      minlength="5"
+                      maxlength="4000"
+                      required
+                      bind:value={closeReceptionReason}
+                    ></textarea>
+                  </div>
+                  <div class="space-y-1">
+                    <label class="block text-sm font-medium text-foreground" for="close-reception-evidence"
+                      >Referencia de evidencia (opcional)</label
+                    >
+                    <input
+                      id="close-reception-evidence"
+                      class="field-control"
+                      maxlength="500"
+                      bind:value={closeReceptionEvidence}
+                    />
+                  </div>
+                  <div class="flex flex-wrap justify-end gap-2">
+                    <Button variant="secondary" onclick={() => (showCloseReception = false)}
+                      >Volver</Button
+                    >
+                    <Button
+                      type="submit"
+                      disabled={actionSaving ||
+                        !canReceiveInventory ||
+                        closeReceptionReason.trim().length < 5}>Confirmar faltante y cerrar</Button
+                    >
+                  </div>
+                </form>
+              {/if}
               <div class="rounded-xl border border-warning/30 bg-warning/5 p-4">
                 <p class="font-medium text-foreground">Recepción en destino</p>
                 <p class="mt-1 text-sm text-foreground-muted">
                   Deja vacías las cantidades que todavía no llegaron. Cada cantidad registrada pasa
-                  a cuarentena; después se verifica la HU y su etiqueta desde Almacenes.
+                  a cuarentena; después se verifica la HU y su etiqueta desde Almacenes. Si algo
+                  llegó dañado o de más, márcalo en la línea con «Registrar avería o sobrante».
                 </p>
               </div>
               {#if !canReceiveInventory}<div class="notice notice-warning" role="status">
@@ -2424,9 +2873,13 @@
                   La bodega destino no tiene ubicaciones activas disponibles para recepción.
                 </p>{/if}
               <div class="space-y-3">
-                {#each selectedTransfer.lines.filter((line) => compareQuantities(line.quantity_in_transit, '0') > 0) as line (line.id)}
+                {#each receivableLines as line (line.id)}
+                  {@const extras = receiptExtrasFor(line.id)}
+                  {@const pending = quantityFromScaled(pendingReceptionQuantity(line))}
+                  {@const unit = line.base_unit_symbol ?? line.base_unit_name ?? 'base'}
                   <article
                     class="grid gap-3 rounded-xl border border-border p-3 lg:grid-cols-[minmax(220px,1.2fr)_150px_minmax(220px,1fr)] lg:items-end"
+                    aria-label="Recepción de {line.product_name}"
                   >
                     <div>
                       <p class="font-medium text-foreground">{line.product_name}</p>
@@ -2436,16 +2889,17 @@
                       </p>
                       <p class="mt-1 text-xs text-foreground-muted">
                         En tránsito: {formatQuantity(line.quantity_in_transit)}
-                        {line.base_unit_symbol ?? line.base_unit_name ?? 'base'}
+                        {unit}
                       </p>
                     </div>
                     <label class="text-xs font-medium text-foreground-muted"
                       >Cantidad contada ahora
                       <input
+                        id="receipt-qty-{line.id}"
                         class="field-control mt-1"
                         type="number"
                         min="0.000001"
-                        max={line.quantity_in_transit}
+                        max={pending}
                         step="0.000001"
                         value={receiptQuantities[line.id] ?? ''}
                         oninput={(event) =>
@@ -2471,6 +2925,138 @@
                           >{/each}</select
                       >
                     </label>
+                    <div class="lg:col-span-full">
+                      <label class="flex min-h-11 items-center gap-2 text-sm text-foreground">
+                        <input
+                          type="checkbox"
+                          class="size-4"
+                          checked={extras.open}
+                          disabled={!canReceiveInventory}
+                          aria-controls="receipt-extras-{line.id}"
+                          onchange={(event) =>
+                            updateReceiptExtras(line.id, { open: event.currentTarget.checked })}
+                        />
+                        Registrar avería o sobrante
+                      </label>
+                      <p class="text-xs text-foreground-muted">
+                        {extras.open
+                          ? 'La cantidad contada es solo lo que llegó en buen estado.'
+                          : 'Solo si parte de la línea llegó dañada o llegó mercadería de más.'}
+                      </p>
+                    </div>
+                    {#if extras.open}
+                      <div
+                        id="receipt-extras-{line.id}"
+                        class="grid gap-3 rounded-xl border border-border bg-surface-muted/40 p-3 sm:grid-cols-2 lg:col-span-full lg:grid-cols-3"
+                      >
+                        <label class="text-xs font-medium text-foreground-muted"
+                          >Cantidad con avería
+                          <input
+                            class="field-control mt-1"
+                            type="number"
+                            min="0.000001"
+                            max={pending}
+                            step="0.000001"
+                            value={extras.damaged}
+                            oninput={(event) =>
+                              updateReceiptExtras(line.id, { damaged: event.currentTarget.value })}
+                          />
+                        </label>
+                        <label class="text-xs font-medium text-foreground-muted"
+                          >Tipo de avería
+                          <select
+                            class="field-control mt-1"
+                            value={extras.damageType}
+                            onchange={(event) =>
+                              updateReceiptExtras(line.id, {
+                                damageType: event.currentTarget.value as DamageType | ''
+                              })}
+                          >
+                            <option value="">Selecciona el tipo</option>
+                            {#each DAMAGE_TYPE_OPTIONS as option (option.value)}
+                              <option value={option.value}>{option.label}</option>
+                            {/each}
+                          </select>
+                        </label>
+                        <label class="text-xs font-medium text-foreground-muted"
+                          >Ubicación para averías
+                          <select
+                            class="field-control mt-1"
+                            value={extras.damageLocationId}
+                            onchange={(event) =>
+                              updateReceiptExtras(line.id, {
+                                damageLocationId: event.currentTarget.value
+                              })}
+                          >
+                            <option value="">La ubicación de recepción</option>
+                            {#each destinationLocations as location (location.id)}
+                              <option value={location.id}
+                                >{location.code} · {location.location_type}</option
+                              >
+                            {/each}
+                          </select>
+                        </label>
+                        <label class="text-xs font-medium text-foreground-muted sm:col-span-2 lg:col-span-3"
+                          >Describe el daño
+                          <input
+                            class="field-control mt-1"
+                            maxlength="2000"
+                            value={extras.damageNotes}
+                            placeholder="Qué se dañó y cómo llegó"
+                            oninput={(event) =>
+                              updateReceiptExtras(line.id, {
+                                damageNotes: event.currentTarget.value
+                              })}
+                          />
+                        </label>
+                        <label class="text-xs font-medium text-foreground-muted"
+                          >Cantidad sobrante
+                          <input
+                            class="field-control mt-1"
+                            type="number"
+                            min="0.000001"
+                            step="0.000001"
+                            value={extras.surplus}
+                            aria-describedby="receipt-surplus-help-{line.id}"
+                            oninput={(event) =>
+                              updateReceiptExtras(line.id, { surplus: event.currentTarget.value })}
+                          />
+                        </label>
+                        <label class="text-xs font-medium text-foreground-muted sm:col-span-1 lg:col-span-2"
+                          >Describe el sobrante
+                          <input
+                            class="field-control mt-1"
+                            maxlength="2000"
+                            value={extras.surplusNotes}
+                            placeholder="Qué llegó de más y cómo se identificó"
+                            oninput={(event) =>
+                              updateReceiptExtras(line.id, {
+                                surplusNotes: event.currentTarget.value
+                              })}
+                          />
+                        </label>
+                        <p
+                          id="receipt-surplus-help-{line.id}"
+                          class="text-xs text-foreground-muted sm:col-span-2 lg:col-span-3"
+                        >
+                          El sobrante se declara al registrar todo lo pendiente de la línea ({formatQuantity(
+                            pending
+                          )}
+                          {unit}); la parte con avería cuenta como recibida.
+                        </p>
+                        <label class="text-xs font-medium text-foreground-muted sm:col-span-2 lg:col-span-3"
+                          >Referencia de evidencia (opcional)
+                          <input
+                            class="field-control mt-1"
+                            maxlength="500"
+                            value={extras.evidence}
+                            placeholder="Foto, acta o número de informe"
+                            oninput={(event) =>
+                              updateReceiptExtras(line.id, { evidence: event.currentTarget.value })}
+                          />
+                        </label>
+                      </div>
+                    {/if}
                   </article>
                 {/each}
               </div>
@@ -2486,9 +3072,7 @@
                   disabled={!canReceiveInventory ||
                     actionSaving ||
                     destinationLocationState !== 'loaded' ||
-                    !selectedTransfer.lines.some((line) =>
-                      Boolean(receiptQuantities[line.id]?.trim())
-                    )}
+                    !hasReceiptInput(selectedTransfer)}
                   onclick={() => void confirmReceipt()}
                   >{actionSaving ? 'Registrando…' : 'Confirmar cantidades recibidas'}</Button
                 >
@@ -2634,6 +3218,22 @@
               <div class="notice notice-info" role="status">
                 Preparación cancelada. No produjo movimientos y queda consultable en el historial.
               </div>
+            {/if}
+
+            {#if selectedTransfer.discrepancies.length}
+              <TransferDiscrepancyPanel
+                transfer={selectedTransfer}
+                canReceive={canReceiveInventory}
+                canAdjust={canCreateAdjustment}
+                canApproveAdjust={canApproveAdjustment}
+                {canSeeCost}
+                canAccessOrigin={canAccessSelectedOrigin}
+                canAccessDestination={canAccessSelectedDestination}
+                busy={actionSaving}
+                locations={destinationLocations}
+                {formatDate}
+                onRun={runDiscrepancy}
+              />
             {/if}
 
             {#if hasReceivedStock}

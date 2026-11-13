@@ -1,14 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import type { TransferDemandRecord } from './transfer-documents';
+import type {
+  AssignmentCheck,
+  TransferDemandRecord,
+  TransferDiscrepancy
+} from './transfer-documents';
 import {
   allocateDemandQuantity,
+  assignmentFitness,
+  businessToday,
   clearTransferAttempt,
   compareQuantities,
+  DAMAGE_TYPE_OPTIONS,
+  damageTypeLabel,
   demandProgressLabel,
+  discrepancyKindLabel,
+  discrepancyResolutionLabel,
+  discrepancySummary,
   formatQuantity,
   getOrCreateTransferAttempt,
+  isDiscrepancyActive,
   isFrozenWhenRouteOff,
+  isOnRoad,
+  isReceivable,
   isRouteEnabled,
+  pendingReceptionQuantity,
+  substitutionCodeLabel,
+  SUBSTITUTION_CODE_OPTIONS,
   quantityFromScaled,
   quantityString,
   remainingAssignment,
@@ -126,5 +143,145 @@ describe('transfer-operations', () => {
     expect(isFrozenWhenRouteOff('approved')).toBe(true);
     expect(isFrozenWhenRouteOff('in_transit')).toBe(false);
     expect(isFrozenWhenRouteOff('incident')).toBe(false);
+  });
+});
+
+function discrepancy(patch: Partial<TransferDiscrepancy>): TransferDiscrepancy {
+  return {
+    id: 'd-1',
+    transfer_detail_id: 'line-1',
+    line_number: 1,
+    product_name: 'Producto',
+    sku: 'SKU',
+    base_unit_symbol: 'u',
+    kind: 'damage',
+    status: 'open',
+    source: 'receipt',
+    quantity: '1',
+    damage_type: 'broken',
+    notes: 'Caja rota',
+    evidence_reference: null,
+    location_id: null,
+    location_code: null,
+    handling_unit_id: null,
+    handling_unit_code: null,
+    receipt_id: null,
+    incident_id: null,
+    opened_by_id: 'u-1',
+    opened_by_name: null,
+    opened_at: '2026-10-20T12:00:00Z',
+    claim_reference: null,
+    claimed_by_id: null,
+    claimed_by_name: null,
+    claimed_at: null,
+    resolution: null,
+    resolution_notes: null,
+    resolved_by_id: null,
+    resolved_by_name: null,
+    resolved_at: null,
+    origin_count_required: false,
+    origin_counted_by_id: null,
+    origin_counted_by_name: null,
+    origin_counted_at: null,
+    origin_count_notes: null,
+    adjustment: null,
+    ...patch
+  };
+}
+
+describe('recepción parcial y discrepancias', () => {
+  it('nombra los estados nuevos y los ofrece en el filtro', () => {
+    expect(transferStatusLabel('partially_received')).toBe('Recepción parcial');
+    expect(transferStatusLabel('discrepancy')).toBe('Con discrepancia');
+    const options = Object.fromEntries(
+      TRANSFER_STATUS_OPTIONS.map((item) => [item.value, item.label])
+    );
+    expect(options.partially_received).toBe('Con recepción parcial');
+    expect(options.discrepancy).toBe('Con discrepancia');
+  });
+
+  it('sabe cuándo el vehículo está en ruta y cuándo se puede recibir', () => {
+    for (const status of ['in_transit', 'partially_received', 'incident'])
+      expect(isOnRoad(status)).toBe(true);
+    for (const status of ['approved', 'discrepancy', 'received', 'closed_with_adjustment'])
+      expect(isOnRoad(status)).toBe(false);
+    expect(isReceivable('in_transit')).toBe(true);
+    expect(isReceivable('partially_received')).toBe(true);
+    expect(isReceivable('incident')).toBe(false);
+    expect(isReceivable('discrepancy')).toBe(false);
+  });
+
+  it('usa lo pendiente de recepción y, sin él, lo que sigue en tránsito', () => {
+    expect(
+      pendingReceptionQuantity({ quantity_in_transit: '5', quantity_pending_reception: '2' })
+    ).toBe(2_000_000n);
+    expect(pendingReceptionQuantity({ quantity_in_transit: '5' })).toBe(5_000_000n);
+  });
+
+  it('nombra los tipos de avería, de diferencia y de sustitución', () => {
+    expect(DAMAGE_TYPE_OPTIONS).toHaveLength(8);
+    expect(damageTypeLabel('temperature')).toBe('Cadena de frío rota');
+    expect(damageTypeLabel('tampered')).toBe('Empaque abierto o sello violado');
+    expect(discrepancyKindLabel('shortage')).toBe('Faltante');
+    expect(discrepancyKindLabel('damage')).toBe('Avería');
+    expect(discrepancyKindLabel('surplus')).toBe('Sobrante');
+    expect(discrepancyResolutionLabel('shortage', 'found')).toBe('Llegó la mercadería');
+    expect(discrepancyResolutionLabel('damage', 'released')).toBe('Liberada a cuarentena');
+    expect(SUBSTITUTION_CODE_OPTIONS.map((item) => item.value)).toEqual([
+      'vehicle_unfit',
+      'vehicle_unavailable',
+      'driver_unfit',
+      'driver_unavailable',
+      'load_change',
+      'other'
+    ]);
+    expect(substitutionCodeLabel('load_change')).toBe('Cambió la carga');
+  });
+
+  it('resume el cierre por tipo y resolución', () => {
+    expect(
+      discrepancySummary([
+        discrepancy({ id: 'a', kind: 'damage', status: 'in_claim' }),
+        discrepancy({ id: 'b', kind: 'surplus', status: 'resolved', resolution: 'regularized' })
+      ])
+    ).toBe('1 avería en reclamo · 1 sobrante regularizado');
+    expect(
+      discrepancySummary([
+        discrepancy({ id: 'a', kind: 'damage', status: 'resolved', resolution: 'written_off' }),
+        discrepancy({ id: 'b', kind: 'damage', status: 'resolved', resolution: 'written_off' }),
+        discrepancy({ id: 'c', kind: 'shortage', status: 'open' }),
+        discrepancy({ id: 'd', kind: 'shortage', status: 'resolved', resolution: 'written_off' })
+      ])
+    ).toBe('2 averías dadas de baja · 1 faltante por resolver · 1 faltante dado de baja');
+    expect(discrepancySummary([])).toBe('');
+  });
+
+  it('distingue lo que aún se atiende de lo ya resuelto o anulado', () => {
+    expect(isDiscrepancyActive({ status: 'open' })).toBe(true);
+    expect(isDiscrepancyActive({ status: 'in_claim' })).toBe(true);
+    expect(isDiscrepancyActive({ status: 'resolved' })).toBe(false);
+    expect(isDiscrepancyActive({ status: 'cancelled' })).toBe(false);
+  });
+
+  it('resume la aptitud de un transporte planificado', () => {
+    const base: AssignmentCheck = {
+      vehicle_id: 'v',
+      driver_id: 'd',
+      vehicle_issues: [],
+      driver_issues: [],
+      planning_blocked: false,
+      warnings: 0,
+      conflicts: [],
+      load_kg: null,
+      load_missing_weight: 0
+    };
+    expect(assignmentFitness(null)).toBeNull();
+    expect(assignmentFitness(base)).toBe('ok');
+    expect(assignmentFitness({ ...base, warnings: 1 })).toBe('warning');
+    expect(assignmentFitness({ ...base, planning_blocked: true })).toBe('blocked');
+  });
+
+  it('da la fecha de hoy en el calendario de la empresa', () => {
+    expect(businessToday(new Date('2026-10-21T03:30:00Z'))).toBe('2026-10-20');
   });
 });

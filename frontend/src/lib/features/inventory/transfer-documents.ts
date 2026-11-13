@@ -1,4 +1,5 @@
 import { apiFetch } from '$lib/api/client';
+import type { InventoryAdjustment } from './adjustments';
 
 export type TransferDecimal = string | number;
 export type TransferStatus =
@@ -6,6 +7,8 @@ export type TransferStatus =
   | 'pending_approval'
   | 'approved'
   | 'in_transit'
+  | 'partially_received'
+  | 'discrepancy'
   | 'received'
   | 'closed_with_adjustment'
   | 'incident'
@@ -109,40 +112,133 @@ export interface DispatchCheck {
 
 export type FitnessState = 'ok' | 'warning' | 'blocked';
 
+/** Why the vehicle or the driver of an approved transfer was replaced at dispatch. */
+export type SubstitutionCode =
+  | 'vehicle_unfit'
+  | 'vehicle_unavailable'
+  | 'driver_unfit'
+  | 'driver_unavailable'
+  | 'load_change'
+  | 'other';
+
 /** Vehicle, driver and exception chosen in the dispatch panel. */
 export interface DispatchSelection {
   vehicleId: string;
   driverId: string;
   overrideReason: string;
+  /** Only when the approved vehicle or driver was changed. */
+  substitutionCode: SubstitutionCode | '';
+  substitutionReason: string;
   /** True when the server will accept the dispatch as selected. */
   ready: boolean;
   label: string;
 }
 
+export interface TransportVehicleOption {
+  inventory_vehicle_id: string;
+  fleet_vehicle_id: string;
+  code: string;
+  plate: string | null;
+  kind: string;
+  brand: string;
+  model: string;
+  compliance_state: FitnessState;
+  available: boolean;
+  unavailable_reason: string | null;
+  /** Something to know that does not stop the choice (e.g. it is on the road now). */
+  note?: string | null;
+  driver_id: string | null;
+  driver_name: string | null;
+}
+
+export interface TransportDriverOption {
+  id: string;
+  name: string;
+  license_class: string;
+  compliance_state: FitnessState;
+  current_vehicle_code: string | null;
+}
+
 export interface DispatchOptions {
   origin_branch_id: string;
   origin_branch_name: string;
-  vehicles: Array<{
-    inventory_vehicle_id: string;
-    fleet_vehicle_id: string;
-    code: string;
-    plate: string;
-    kind: string;
-    brand: string;
-    model: string;
-    compliance_state: FitnessState;
-    available: boolean;
-    unavailable_reason: string | null;
-    driver_id: string | null;
-    driver_name: string | null;
-  }>;
-  drivers: Array<{
-    id: string;
-    name: string;
-    license_class: string;
-    compliance_state: FitnessState;
-    current_vehicle_code: string | null;
-  }>;
+  vehicles: TransportVehicleOption[];
+  drivers: TransportDriverOption[];
+  /** What was saved at preparation, and what the approver authorised. */
+  planned_vehicle_id?: string | null;
+  planned_driver_id?: string | null;
+  approved_vehicle_id?: string | null;
+  approved_driver_id?: string | null;
+}
+
+/** Vehicles and drivers of the origin branch that can be chosen while preparing. */
+export type AssignmentOptions = DispatchOptions;
+
+export interface PlanningConflict {
+  transfer_id: string;
+  code: string;
+  status: string;
+  same_vehicle: boolean;
+  same_driver: boolean;
+  message: string;
+}
+
+/** The judgement of a transport chosen ahead of time (departure-time problems are warnings). */
+export interface AssignmentCheck {
+  vehicle_id: string | null;
+  driver_id: string | null;
+  vehicle_issues: DispatchIssue[];
+  driver_issues: DispatchIssue[];
+  /** The transport cannot be planned at all. */
+  planning_blocked: boolean;
+  warnings: number;
+  conflicts: PlanningConflict[];
+  load_kg: TransferDecimal | null;
+  load_missing_weight: number;
+}
+
+/** What the transport picker concluded about the vehicle and driver currently chosen. */
+export interface TransportJudgement {
+  mode: 'planning' | 'dispatch';
+  fitness: FitnessState;
+  vehicleIssues: DispatchIssue[];
+  driverIssues: DispatchIssue[];
+  /** The transport cannot be used (planning: cannot be planned; dispatch: cannot leave as is). */
+  blocked: boolean;
+  /** Dispatch only: not even an authorised exception lets it leave. */
+  hardBlocked: boolean;
+  /** Dispatch only: an authorised user may leave with a documented exception. */
+  canOverride: boolean;
+  conflicts: PlanningConflict[];
+  loadKg: TransferDecimal | null;
+  missingWeight: number;
+  /** The driver the server will use (the chosen one or the one assigned in Fleet). */
+  driverId: string | null;
+}
+
+export interface AssignmentCheckInput {
+  origin_warehouse_id: string;
+  vehicle_id: string;
+  driver_id: string | null;
+  /** The saved transfer being edited, if any. */
+  transfer_id?: string | null;
+  /** The draft's lines give the weight; without them, the saved transfer's. */
+  lines?: Array<{ handling_unit_id: string; quantity_base: string }>;
+}
+
+export interface TransferDriverReference {
+  id: string;
+  name: string;
+  employee_code: string;
+}
+
+/** Set when the approved vehicle or driver was replaced at dispatch. */
+export interface TransferAssignmentSubstitution {
+  code: SubstitutionCode;
+  reason: string;
+  by_id: string;
+  by_name?: string | null;
+  at: string;
 }
 
 export interface TransferVehicleReference {
@@ -166,7 +262,10 @@ export interface TransferDemandAllocation {
   quantity_dispatched: TransferDecimal;
   quantity_received: TransferDecimal;
   quantity_adjusted_out: TransferDecimal;
+  quantity_damaged: TransferDecimal;
 }
+
+export type ReceiptCondition = 'good' | 'damaged';
 
 export interface TransferReceipt {
   id: string;
@@ -174,6 +273,7 @@ export interface TransferReceipt {
   handling_unit_id: string;
   handling_unit_code: string | null;
   quantity_received: TransferDecimal;
+  condition: ReceiptCondition;
   received_by_id: string;
   received_at: string;
 }
@@ -202,6 +302,13 @@ export interface TransferLine {
   quantity_in_transit: TransferDecimal;
   quantity_returned: TransferDecimal;
   quantity_adjusted_out: TransferDecimal;
+  /** Part of `quantity_received` that arrived damaged. */
+  quantity_received_damaged: TransferDecimal;
+  quantity_surplus: TransferDecimal;
+  /** Declared missing when the reception was closed, still to be resolved. */
+  quantity_short_open: TransferDecimal;
+  /** What has not arrived yet and is still being waited for. */
+  quantity_pending_reception: TransferDecimal;
   excess_reason: string | null;
   notes: string | null;
   demand_allocations: TransferDemandAllocation[];
@@ -221,6 +328,65 @@ export interface TransferIncident {
   resolved_at: string | null;
 }
 
+export type DiscrepancyKind = 'shortage' | 'surplus' | 'damage';
+export type DiscrepancyStatus = 'open' | 'in_claim' | 'resolved' | 'cancelled';
+export type DiscrepancySource = 'receipt' | 'reception_close' | 'incident';
+export type DiscrepancyResolution =
+  | 'written_off'
+  | 'found'
+  | 'released'
+  | 'regularized'
+  | 'dismissed';
+export type DamageType =
+  | 'broken'
+  | 'crushed'
+  | 'wet'
+  | 'contaminated'
+  | 'packaging'
+  | 'tampered'
+  | 'temperature'
+  | 'other';
+
+export interface TransferDiscrepancy {
+  id: string;
+  transfer_detail_id: string;
+  line_number: number | null;
+  product_name: string;
+  sku: string | null;
+  base_unit_symbol: string | null;
+  kind: DiscrepancyKind;
+  status: DiscrepancyStatus;
+  source: DiscrepancySource;
+  quantity: TransferDecimal;
+  damage_type: DamageType | null;
+  notes: string;
+  evidence_reference: string | null;
+  location_id: string | null;
+  location_code: string | null;
+  handling_unit_id: string | null;
+  handling_unit_code: string | null;
+  receipt_id: string | null;
+  incident_id: string | null;
+  opened_by_id: string;
+  opened_by_name: string | null;
+  opened_at: string;
+  claim_reference: string | null;
+  claimed_by_id: string | null;
+  claimed_by_name: string | null;
+  claimed_at: string | null;
+  resolution: DiscrepancyResolution | null;
+  resolution_notes: string | null;
+  resolved_by_id: string | null;
+  resolved_by_name: string | null;
+  resolved_at: string | null;
+  origin_count_required: boolean;
+  origin_counted_by_id: string | null;
+  origin_counted_by_name: string | null;
+  origin_counted_at: string | null;
+  origin_count_notes: string | null;
+  adjustment: { id: string; code: string; status: string } | null;
+}
+
 export interface InventoryTransfer {
   id: string;
   company_id: string;
@@ -236,7 +402,11 @@ export interface InventoryTransfer {
   destination_branch_name: string | null;
   destination_is_central: boolean;
   vehicle: TransferVehicleReference | null;
-  driver?: { id: string; name: string; employee_code: string } | null;
+  driver?: TransferDriverReference | null;
+  /** The transport the approver authorised; null until the transfer is approved. */
+  approved_vehicle: TransferVehicleReference | null;
+  approved_driver: TransferDriverReference | null;
+  assignment_substitution: TransferAssignmentSubstitution | null;
   compliance_override_reason?: string | null;
   status: TransferStatus;
   route_type: TransferRouteType;
@@ -264,7 +434,13 @@ export interface InventoryTransfer {
   dispatched_at: string | null;
   received_by_id: string | null;
   received_at: string | null;
+  /** When it reached a final status (received, closed with adjustment or cancelled). */
+  closed_at: string | null;
   dispatch_movement_id: string | null;
+  /** A shortage or a surplus whose count at the origin warehouse is still missing. */
+  origin_count_pending: boolean;
+  has_open_discrepancies: boolean;
+  discrepancies: TransferDiscrepancy[];
   lines: TransferLine[];
   incidents: TransferIncident[];
 }
@@ -285,14 +461,53 @@ export interface TransferCreateInput {
   idempotency_key: string;
   origin_warehouse_id: string;
   destination_warehouse_id: string;
+  /** The update is a full replace: always send the vehicle and driver that are saved. */
   vehicle_id: string | null;
+  driver_id: string | null;
   notes: string | null;
   lines: TransferLineInput[];
 }
 
 export type TransferUpdateInput = TransferCreateInput;
 
+/** One reception line: what arrived well, damaged and extra. Only what is declared is sent. */
+export interface TransferReceiptLineInput {
+  transfer_detail_id: string;
+  destination_location_id: string;
+  /** Received in good condition (zero when everything that arrived is damaged). */
+  quantity_base: string;
+  damaged_quantity?: string;
+  damage_type?: DamageType | null;
+  damage_notes?: string | null;
+  /** Where the damaged goods are kept; the receiving location by default. */
+  damaged_location_id?: string | null;
+  surplus_quantity?: string;
+  surplus_notes?: string | null;
+  surplus_location_id?: string | null;
+  evidence_reference?: string | null;
+}
+
+/** A surplus enters stock as an adjustment: packaging or measures, lot and an optional cost. */
+export interface DiscrepancyAdjustmentInput {
+  idempotency_key: string;
+  operational_date: string;
+  accounting_date: string;
+  reason: string;
+  document_reference: string;
+  notes?: string | null;
+  packaging_definition_id?: string | null;
+  actual_gross_weight_kg?: string | null;
+  actual_volume_m3?: string | null;
+  inventory_lot_detail_id?: string | null;
+  documented_unit_cost?: string | null;
+  documented_total_cost?: string | null;
+}
+
 const root = '/inventory/transfers';
+
+function discrepancyRoot(transferId: string, discrepancyId: string): string {
+  return `${root}/${encodeURIComponent(transferId)}/discrepancies/${encodeURIComponent(discrepancyId)}`;
+}
 
 export const inventoryTransfersApi = {
   listDemand: (branchId: string, productId?: number) => {
@@ -306,6 +521,30 @@ export const inventoryTransfersApi = {
 
   dispatchOptions: (transferId: string) =>
     apiFetch<DispatchOptions>(`${root}/${encodeURIComponent(transferId)}/dispatch-options`),
+
+  /** Vehicles and drivers of the origin branch that can be chosen while preparing. */
+  assignmentOptions: (originWarehouseId: string, transferId?: string | null) => {
+    const query = new URLSearchParams({ origin_warehouse_id: originWarehouseId });
+    if (transferId) query.set('transfer_id', transferId);
+    return apiFetch<AssignmentOptions>(`${root}/assignment-options?${query.toString()}`);
+  },
+
+  /** Judges a transport chosen for a draft that may not be saved yet. */
+  assignmentCheck: (body: AssignmentCheckInput) =>
+    apiFetch<AssignmentCheck>(`${root}/assignment-check`, {
+      method: 'POST',
+      body: JSON.stringify({
+        origin_warehouse_id: body.origin_warehouse_id,
+        vehicle_id: body.vehicle_id,
+        driver_id: body.driver_id || null,
+        transfer_id: body.transfer_id || null,
+        lines: body.lines ?? []
+      })
+    }),
+
+  /** What the approver needs: is the transport saved in the transfer fit to be planned? */
+  transferAssignmentCheck: (transferId: string) =>
+    apiFetch<AssignmentCheck>(`${root}/${encodeURIComponent(transferId)}/assignment-check`),
 
   dispatchCheck: (transferId: string, vehicleId: string, driverId?: string | null) =>
     apiFetch<DispatchCheck>(`${root}/${encodeURIComponent(transferId)}/dispatch-check`, {
@@ -321,6 +560,10 @@ export const inventoryTransfersApi = {
       side?: 'origin' | 'destination';
       /** Only what the signed-in user can decide on now. */
       awaitingMyApproval?: boolean;
+      /** Only transfers with a shortage or a surplus not yet counted at the origin warehouse. */
+      originCountPending?: boolean;
+      /** Only transfers with differences still to be resolved. */
+      withOpenDiscrepancies?: boolean;
       page?: number;
       size?: number;
     } = {}
@@ -333,6 +576,8 @@ export const inventoryTransfersApi = {
     if (filters.routeType) query.set('route_type', filters.routeType);
     if (filters.side) query.set('side', filters.side);
     if (filters.awaitingMyApproval) query.set('awaiting_my_approval', 'true');
+    if (filters.originCountPending) query.set('origin_count_pending', 'true');
+    if (filters.withOpenDiscrepancies) query.set('with_open_discrepancies', 'true');
     return apiFetch<InventoryTransfer[]>(`${root}?${query.toString()}`);
   },
 
@@ -404,7 +649,12 @@ export const inventoryTransfersApi = {
     transferId: string,
     vehicleId: string,
     idempotencyKey: string,
-    options: { driverId?: string | null; overrideReason?: string | null } = {}
+    options: {
+      driverId?: string | null;
+      overrideReason?: string | null;
+      substitutionCode?: SubstitutionCode | '' | null;
+      substitutionReason?: string | null;
+    } = {}
   ) =>
     apiFetch<InventoryTransfer>(`${root}/${encodeURIComponent(transferId)}/dispatch`, {
       method: 'POST',
@@ -412,22 +662,99 @@ export const inventoryTransfersApi = {
         vehicle_id: vehicleId,
         idempotency_key: idempotencyKey,
         driver_id: options.driverId || null,
-        override_reason: options.overrideReason?.trim() || null
+        override_reason: options.overrideReason?.trim() || null,
+        substitution_code: options.substitutionCode || null,
+        substitution_reason: options.substitutionReason?.trim() || null
       })
     }),
 
   receive: (
     transferId: string,
     idempotencyKey: string,
-    lines: Array<{
-      transfer_detail_id: string;
-      destination_location_id: string;
-      quantity_base: string;
-    }>
+    lines: TransferReceiptLineInput[]
   ) =>
     apiFetch<InventoryTransfer>(`${root}/${encodeURIComponent(transferId)}/receive`, {
       method: 'POST',
       body: JSON.stringify({ idempotency_key: idempotencyKey, lines })
+    }),
+
+  /** Stop waiting for what has not arrived: it becomes a shortage to resolve. */
+  closeReception: (
+    transferId: string,
+    body: { idempotency_key: string; reason: string; evidence_reference: string | null }
+  ) =>
+    apiFetch<InventoryTransfer>(`${root}/${encodeURIComponent(transferId)}/close-reception`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+
+  /** Prepares, as a draft, the adjustment that regularises a shortage, damage or surplus. */
+  prepareDiscrepancyAdjustment: (
+    transferId: string,
+    discrepancyId: string,
+    body: DiscrepancyAdjustmentInput
+  ) =>
+    apiFetch<InventoryAdjustment>(`${discrepancyRoot(transferId, discrepancyId)}/adjustment`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+
+  /** Damage only: the goods stay as damaged while the claim runs. */
+  claimDiscrepancy: (
+    transferId: string,
+    discrepancyId: string,
+    body: { idempotency_key: string; claim_reference: string }
+  ) =>
+    apiFetch<InventoryTransfer>(`${discrepancyRoot(transferId, discrepancyId)}/claim`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+
+  /** After inspection, the damaged goods go to quarantine. */
+  releaseDamage: (
+    transferId: string,
+    discrepancyId: string,
+    body: { idempotency_key: string; notes: string; destination_location_id?: string | null }
+  ) =>
+    apiFetch<InventoryTransfer>(`${discrepancyRoot(transferId, discrepancyId)}/release`, {
+      method: 'POST',
+      body: JSON.stringify({
+        idempotency_key: body.idempotency_key,
+        notes: body.notes,
+        destination_location_id: body.destination_location_id || null
+      })
+    }),
+
+  /** The missing goods turned up: the shortage is cancelled and the transfer waits for them. */
+  markShortageFound: (
+    transferId: string,
+    discrepancyId: string,
+    body: { idempotency_key: string; notes: string }
+  ) =>
+    apiFetch<InventoryTransfer>(`${discrepancyRoot(transferId, discrepancyId)}/found`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+
+  dismissSurplus: (
+    transferId: string,
+    discrepancyId: string,
+    body: { idempotency_key: string; notes: string }
+  ) =>
+    apiFetch<InventoryTransfer>(`${discrepancyRoot(transferId, discrepancyId)}/dismiss`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+
+  /** The origin warehouse counted its stock after a shortage or a surplus. */
+  recordOriginCount: (
+    transferId: string,
+    discrepancyId: string,
+    body: { idempotency_key: string; notes: string }
+  ) =>
+    apiFetch<InventoryTransfer>(`${discrepancyRoot(transferId, discrepancyId)}/origin-count`, {
+      method: 'POST',
+      body: JSON.stringify(body)
     }),
 
   openIncident: (

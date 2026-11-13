@@ -27,6 +27,9 @@
     awaitingApproval?: boolean;
     pendingApprovalCount?: number;
     onAwaitingApproval?: (value: boolean) => void;
+    /** Only transfers with a shortage or surplus not yet counted at the origin warehouse. */
+    originCountPending?: boolean;
+    onOriginCountPending?: (value: boolean) => void;
     formatDate: (value: string | null | undefined) => string;
     documentSummary: (transfer: InventoryTransfer) => string;
     onFilter: (value: string) => void;
@@ -48,6 +51,8 @@
     awaitingApproval = false,
     pendingApprovalCount = 0,
     onAwaitingApproval,
+    originCountPending = false,
+    onOriginCountPending,
     formatDate,
     documentSummary,
     onFilter,
@@ -60,6 +65,8 @@
     in_transit: 'border-primary/30 bg-primary/10 text-primary',
     approved: 'border-primary/30 bg-primary/10 text-primary',
     incident: 'border-warning/30 bg-warning/10 text-warning',
+    partially_received: 'border-warning/30 bg-warning/10 text-warning',
+    discrepancy: 'border-warning/30 bg-warning/10 text-warning',
     pending_approval: 'border-warning/30 bg-warning/10 text-warning',
     received: 'border-success/30 bg-success/10 text-success'
   };
@@ -113,6 +120,18 @@
           >{/each}
       </select>
     </label>
+    <label
+      class="flex min-h-10 items-center gap-2 rounded-lg border border-border bg-surface-muted px-3 text-xs font-medium text-foreground"
+    >
+      <input
+        type="checkbox"
+        class="size-4"
+        checked={originCountPending}
+        disabled={busy || awaitingApproval}
+        onchange={(event) => onOriginCountPending?.(event.currentTarget.checked)}
+      />
+      Conteo pendiente en origen
+    </label>
     </div>
   </div>
 
@@ -145,7 +164,9 @@
           Cuando alguien envíe un traslado de tus sucursales a aprobación, aparecerá aquí.
         </p>
       {:else}
-        <p class="font-medium text-foreground">No hay documentos en este estado</p>
+        <p class="font-medium text-foreground">
+          {originCountPending ? 'Ningún traslado espera un conteo en origen' : 'No hay documentos en este estado'}
+        </p>
         <p class="mt-1 text-sm text-foreground-muted">
           Al guardar una preparación aparecerá aquí sin mover existencias.
         </p>
@@ -178,6 +199,12 @@
                   ] ?? NEUTRAL_TONE}"
                   data-status={transfer.status}>{transferStatusLabel(transfer.status)}</span
                 >
+                {#if transfer.origin_count_pending}
+                  <span
+                    class="inline-flex rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+                    >Conteo pendiente en origen</span
+                  >
+                {/if}
               </div>
             </div>
             <p class="mt-3 text-sm text-foreground-muted">{documentSummary(transfer)}</p>
@@ -187,7 +214,7 @@
                 : ''}
             </p>
           </button>
-          {#if transfer.status === 'in_transit' || transfer.status === 'incident'}
+          {#if transfer.status === 'in_transit' || transfer.status === 'partially_received' || transfer.status === 'incident'}
             <a
               class="absolute bottom-3 right-4 inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-surface px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               href={`/tracking?transfer=${transfer.id}`}>Ver en mapa</a
