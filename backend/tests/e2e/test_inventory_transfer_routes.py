@@ -522,6 +522,7 @@ async def test_changing_the_origin_of_a_draft_needs_access_to_the_new_origin(e2e
                     "origin_warehouse_id": str(origin_id),
                     "destination_warehouse_id": str(destination_id),
                     "vehicle_id": None,
+                    "driver_id": None,
                     "notes": None,
                     "lines": [
                         {

@@ -385,7 +385,8 @@ def require_dispatchable(
 def require_receivable(status: str) -> None:
     if status not in (TransferStatus.IN_TRANSIT, TransferStatus.PARTIALLY_RECEIVED):
         raise TransferDomainError(
-            "Solo se reciben traslados que están en tránsito.", code="transfer_not_receivable"
+            "Solo se reciben traslados en tránsito o con recepción parcial.",
+            code="transfer_not_receivable",
         )
 
 

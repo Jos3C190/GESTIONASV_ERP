@@ -515,6 +515,17 @@ async def _load_transfer(
     return transfer
 
 
+def _require_same_origin(transfer: InventoryTransferModel, origin_warehouse_id: uuid.UUID) -> None:
+    if transfer.origin_warehouse_id != origin_warehouse_id:
+        raise HTTPException(
+            422,
+            detail={
+                "code": "transfer_assignment_transfer_mismatch",
+                "message": "El traslado indicado no sale de la bodega de origen elegida.",
+            },
+        )
+
+
 def _planning_issues_out(issues: list[Issue]) -> list[DispatchIssueOut]:
     # Nothing found while planning can be waived: it is either a warning or a hard stop.
     return [
@@ -685,6 +696,7 @@ async def assignment_options(
     if transfer_id is not None:
         await _transfer_branch_scope(session, current, company_id, transfer_id, side="origin")
         transfer = await _load_transfer(session, company_id, transfer_id)
+        _require_same_origin(transfer, origin_warehouse_id)
     assert origin.branch_id is not None
     options = await _transport_options(
         session, company_id, origin.branch_id, transfer=transfer, planning=True
@@ -710,6 +722,9 @@ async def assignment_check(
     )
     if body.transfer_id is not None:
         await _transfer_branch_scope(session, current, company_id, body.transfer_id, side="origin")
+        _require_same_origin(
+            await _load_transfer(session, company_id, body.transfer_id), body.origin_warehouse_id
+        )
     requested_units = {line.handling_unit_id for line in body.lines}
     if requested_units:
         in_origin = set(

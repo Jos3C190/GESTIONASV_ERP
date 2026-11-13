@@ -81,7 +81,7 @@ class TransferUpdateIn(StrictModel):
     origin_warehouse_id: uuid.UUID
     destination_warehouse_id: uuid.UUID
     vehicle_id: uuid.UUID | None
-    driver_id: uuid.UUID | None = None
+    driver_id: uuid.UUID | None
     notes: str | None = Field(max_length=4000)
     lines: list[TransferLineIn] = Field(min_length=1, max_length=500)
 
@@ -402,6 +402,8 @@ class TransferLineOut(StrictModel):
     presentation_name: str | None
     inventory_lot_detail_id: uuid.UUID | None
     inventory_lot_detail_code: str | None
+    #: Lot written on the handling unit (it can exist without a receipt lot detail).
+    lot_code: str | None = None
     source_handling_unit_id: uuid.UUID
     source_handling_unit_code: str | None
     transit_handling_unit_id: uuid.UUID | None
@@ -537,6 +539,8 @@ class InventoryTransferOut(ORMOut):
     received_by_id: uuid.UUID | None
     received_at: datetime | None
     closed_at: datetime | None = None
+    #: The company's valuation opening is approved, so adjustments can be applied.
+    valuation_ready: bool = False
     dispatch_movement_id: uuid.UUID | None
     #: A shortage or a surplus whose origin count has not been recorded yet.
     origin_count_pending: bool = False

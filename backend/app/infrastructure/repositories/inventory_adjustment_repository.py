@@ -33,6 +33,7 @@ from app.infrastructure.models.inventory_adjustment import (
     InventoryAdjustmentEventModel,
     InventoryAdjustmentModel,
 )
+from app.infrastructure.models.inventory_lot import InventoryLotDetailModel
 from app.infrastructure.models.inventory_transfer import (
     InventoryTransferCommandModel,
     InventoryTransferDemandAllocationModel,
@@ -41,7 +42,10 @@ from app.infrastructure.models.inventory_transfer import (
     InventoryTransferIncidentModel,
     InventoryTransferModel,
 )
-from app.infrastructure.models.inventory_valuation import InventoryValuationEntryModel
+from app.infrastructure.models.inventory_valuation import (
+    InventoryValuationEntryModel,
+    InventoryValuationSettingModel,
+)
 from app.infrastructure.models.organization import Location, Warehouse
 from app.infrastructure.models.product_variant import ProductVariantModel
 from app.infrastructure.repositories.inventory_repository import SqlAlchemyInventoryRepository
@@ -480,6 +484,16 @@ class SqlAlchemyInventoryAdjustmentRepository:
                 if detail.handling_unit_id
                 else None
             )
+            lot_detail_code = (
+                await self._session.scalar(
+                    select(InventoryLotDetailModel.code).where(
+                        InventoryLotDetailModel.company_id == adjustment.company_id,
+                        InventoryLotDetailModel.id == detail.inventory_lot_detail_id,
+                    )
+                )
+                if detail.inventory_lot_detail_id
+                else None
+            )
             line_outputs.append(
                 {
                     "id": detail.id,
@@ -505,6 +519,8 @@ class SqlAlchemyInventoryAdjustmentRepository:
                     "direction": detail.direction,
                     "quantity_base": detail.quantity_base,
                     "inventory_lot_detail_id": detail.inventory_lot_detail_id,
+                    "inventory_lot_detail_code": lot_detail_code,
+                    "lot_code": hu.lot_code if hu else lot_detail_code,
                     "handling_unit_id": detail.handling_unit_id,
                     "handling_unit_code": hu.code if hu else None,
                     "packaging_definition_id": detail.packaging_definition_id,
@@ -1537,6 +1553,11 @@ class SqlAlchemyInventoryAdjustmentRepository:
         )
         if discrepancy is None:
             _err("Diferencia del traslado no encontrada.", "transfer_discrepancy_not_found", 404)
+        if await self._session.get(InventoryValuationSettingModel, company_id) is None:
+            _err(
+                "Aprueba el saldo inicial de valuación antes de preparar ajustes de inventario.",
+                "valuation_opening_required",
+            )
         if not self._discrepancy_adjustable(discrepancy):
             _err(
                 "La diferencia del traslado ya no está abierta.",

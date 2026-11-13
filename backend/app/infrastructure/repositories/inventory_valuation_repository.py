@@ -382,7 +382,7 @@ class SqlAlchemyInventoryValuationRepository:
                 )
             ):
                 error(
-                    "Apruebe el saldo inicial antes de registrar valores o devoluciones valoradas.",
+                    "Aprueba el saldo inicial antes de registrar valores o devoluciones valoradas.",
                     "valuation_opening_required",
                 )
             return

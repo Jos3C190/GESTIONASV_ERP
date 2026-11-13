@@ -14,6 +14,7 @@ from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from app.application.fleet.costs import business_today
 from app.application.inventory import InventoryUseCases
 from app.application.inventory_transfers.settings import policy_from
 from app.domain.entities.inventory_transfer import (
@@ -67,6 +68,7 @@ from app.infrastructure.models.inventory_transfer import (
     InventoryTransferSettingsModel,
     InventoryVehicleModel,
 )
+from app.infrastructure.models.inventory_valuation import InventoryValuationSettingModel
 from app.infrastructure.models.organization import Branch, Location, Warehouse
 from app.infrastructure.models.product_variant import ProductVariantModel
 from app.infrastructure.models.purchase_request import (
@@ -729,7 +731,7 @@ class SqlAlchemyInventoryTransferRepository:
         transfer = InventoryTransferModel(
             id=transfer_id,
             company_id=company_id,
-            code=f"TR-{datetime.now(UTC):%Y%m%d}-{transfer_id.hex[:8].upper()}",
+            code=f"TR-{business_today():%Y%m%d}-{transfer_id.hex[:8].upper()}",
             origin_warehouse_id=origin.id,
             destination_warehouse_id=destination.id,
             vehicle_id=vehicle_id,
@@ -1539,6 +1541,14 @@ class SqlAlchemyInventoryTransferRepository:
         )
         if transfer is None:
             self._raise("Traslado no encontrado.", "transfer_not_found", 404)
+        if transfer.status == TransferStatus.DISCREPANCY and await self._open_shortages_by_detail(
+            company_id, transfer.id
+        ):
+            self._raise(
+                "La recepción se cerró con faltantes abiertos; marca «Llegó la mercadería» "
+                "en el faltante para seguir recibiendo.",
+                "transfer_discrepancy_open",
+            )
         require_receivable(transfer.status)
         destination = await self._session.scalar(
             select(Warehouse).where(
@@ -2297,6 +2307,9 @@ class SqlAlchemyInventoryTransferRepository:
         now = datetime.now(UTC)
         discrepancy.status = DiscrepancyStatus.CANCELLED.value
         discrepancy.resolution = DiscrepancyResolution.FOUND.value
+        if discrepancy.origin_counted_at is None:
+            # A shortage that arrived has nothing left to count at the origin.
+            discrepancy.origin_count_required = False
         discrepancy.resolution_notes = notes.strip()
         discrepancy.resolved_by_id = actor_id
         discrepancy.resolved_at = now
@@ -2358,6 +2371,8 @@ class SqlAlchemyInventoryTransferRepository:
         )
         discrepancy.status = DiscrepancyStatus.CANCELLED.value
         discrepancy.resolution = DiscrepancyResolution.DISMISSED.value
+        if discrepancy.origin_counted_at is None:
+            discrepancy.origin_count_required = False
         discrepancy.resolution_notes = notes.strip()
         discrepancy.resolved_by_id = actor_id
         discrepancy.resolved_at = now
@@ -2953,6 +2968,8 @@ class SqlAlchemyInventoryTransferRepository:
                     "base_unit_symbol": item.base_unit_symbol if item else None,
                     "presentation_name": snapshot.get("name") or snapshot.get("packaging_name"),
                     "inventory_lot_detail_id": detail.inventory_lot_detail_id,
+                    "lot_code": (source_hu.lot_code if source_hu else None)
+                    or (transit_hu.lot_code if transit_hu else None),
                     "inventory_lot_detail_code": lot_codes.get(detail.inventory_lot_detail_id)
                     if detail.inventory_lot_detail_id is not None
                     else None,
@@ -3047,9 +3064,15 @@ class SqlAlchemyInventoryTransferRepository:
             "received_by_id": transfer.received_by_id,
             "received_at": transfer.received_at,
             "closed_at": transfer.closed_at,
+            "valuation_ready": await self._session.get(
+                InventoryValuationSettingModel, transfer.company_id
+            )
+            is not None,
             "dispatch_movement_id": transfer.dispatch_movement_id,
             "origin_count_pending": any(
-                row.origin_count_required and row.origin_counted_at is None
+                row.origin_count_required
+                and row.origin_counted_at is None
+                and row.status != DiscrepancyStatus.CANCELLED
                 for row in discrepancy_rows
             ),
             "has_open_discrepancies": any(
@@ -3199,6 +3222,7 @@ class SqlAlchemyInventoryTransferRepository:
                     *discrepancy_match,
                     InventoryTransferDiscrepancyModel.origin_count_required.is_(True),
                     InventoryTransferDiscrepancyModel.origin_counted_at.is_(None),
+                    InventoryTransferDiscrepancyModel.status != DiscrepancyStatus.CANCELLED.value,
                 )
                 .exists()
             )

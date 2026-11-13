@@ -29,6 +29,7 @@ from tests.e2e.test_inventory_block4_closure import _branch_profile_headers
 from tests.e2e.test_inventory_transfer_routes import (
     BASE,
     _branch_route_context,
+    _cancel,
     _create_between,
     _key,
     _post,
@@ -867,3 +868,82 @@ async def test_a_closed_discrepancy_refuses_a_stale_adjustment_over_http(e2e_cli
     )
     assert generic.status_code == 422, generic.text
     assert "transfer_discrepancy_id" in generic.text
+
+
+async def test_units_show_their_commitments_and_planning_checks_the_transfer_origin(
+    e2e_client,
+) -> None:
+    suffix = uuid.uuid4().hex
+    values, admin = await _branch_route_context(e2e_client, suffix)
+    people = await _profiles(e2e_client, values, suffix)
+    route = values.route
+    async with _transfer_policy(e2e_client, admin, allow_branch_to_branch=True):
+
+        async def committed() -> str | None:
+            response = await e2e_client.get(
+                f"/api/v1/inventory/warehouses/{route.branch_a_id}/transfer-units",
+                params={"stock_status": "available"},
+                headers=admin,
+            )
+            assert response.status_code == 200, response.text
+            unit = next(row for row in response.json() if row["id"] == str(route.unit_id))
+            return unit["committed_transfer_code"]
+
+        assert await committed() is None
+        created = await _create_between(e2e_client, values, people.creator)
+        assert created.status_code == 201, created.text
+        transfer = created.json()
+        # A draft promises nothing; a request waiting for approval does.
+        assert await committed() is None
+        submitted = await _post(e2e_client, people.creator, transfer["id"], "submit")
+        assert submitted.status_code == 200, submitted.text
+        assert await committed() == transfer["code"]
+
+        # The transfer given to the planning endpoints must leave from the chosen origin.
+        mismatch = await e2e_client.get(
+            f"{BASE}/assignment-options",
+            params={"origin_warehouse_id": str(route.branch_b_id), "transfer_id": transfer["id"]},
+            headers=admin,
+        )
+        assert mismatch.status_code == 422, mismatch.text
+        assert mismatch.json()["detail"]["code"] == "transfer_assignment_transfer_mismatch"
+        check = await e2e_client.post(
+            f"{BASE}/assignment-check",
+            headers=admin,
+            json={
+                "origin_warehouse_id": str(route.branch_b_id),
+                "vehicle_id": str(values.vehicle_id),
+                "driver_id": str(values.driver_id),
+                "transfer_id": transfer["id"],
+            },
+        )
+        assert check.status_code == 422, check.text
+        assert check.json()["detail"]["code"] == "transfer_assignment_transfer_mismatch"
+
+        withdrawn = await _post(e2e_client, people.creator, transfer["id"], "withdraw")
+        assert withdrawn.status_code == 200, withdrawn.text
+        assert await committed() is None
+
+        # Updating a draft names its driver (or null): leaving it out is refused.
+        update = await e2e_client.put(
+            f"{BASE}/{transfer['id']}",
+            headers=people.creator,
+            json={
+                "idempotency_key": _key("rt-update"),
+                "origin_warehouse_id": str(route.branch_a_id),
+                "destination_warehouse_id": str(route.branch_b_id),
+                "vehicle_id": str(values.vehicle_id),
+                "notes": None,
+                "lines": [
+                    {
+                        "handling_unit_id": str(route.unit_id),
+                        "quantity_base": "10",
+                        "demand_allocations": [],
+                        "excess_reason": "Reubicación por quiebre de existencias",
+                    }
+                ],
+            },
+        )
+        assert update.status_code == 422, update.text
+        assert "driver_id" in update.text
+        await _cancel(e2e_client, people.creator, transfer["id"])

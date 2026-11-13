@@ -95,7 +95,9 @@ class Ctx:
     def key(self, name: str) -> str:
         return f"{name}-{self.suffix}"
 
-    async def restock(self, tag: str, quantity: str = "10") -> uuid.UUID:
+    async def restock(
+        self, tag: str, quantity: str = "10", lot_code: str | None = None
+    ) -> uuid.UUID:
         """More stock in the origin (a new handling unit), valued like the first one."""
         receipt = await SqlAlchemyInventoryRepository(self.session).post_movement(
             company_id=self.company_id,
@@ -111,6 +113,7 @@ class Ctx:
                     "valuation_value": D(quantity) * D("2.5"),
                     "valuation_currency": "USD",
                     "handling_unit_code": f"RS-{tag}-{self.suffix}",
+                    **({"lot_code": lot_code} if lot_code else {}),
                     "actual_measures": {
                         "gross_weight_kg": D("10"),
                         "length_m": D("0.5"),
@@ -1245,16 +1248,8 @@ async def test_listing_filters_find_open_discrepancies_and_pending_origin_counts
             discrepancy_id=surplus["id"],
             notes="Error de conteo.",
         )
-        # Dismissed, nothing is open; the origin still has to be counted.
+        # Dismissed: nothing is open and there is nothing left to count at the origin.
         assert extra["id"] not in await ids(with_open_discrepancies=True)
-        assert extra["id"] in await ids(origin_count_pending=True)
-        await ctx.command(
-            "acknowledge_origin_count",
-            extra,
-            "count",
-            discrepancy_id=surplus["id"],
-            notes="Origen contado: sin diferencias.",
-        )
         assert extra["id"] not in await ids(origin_count_pending=True)
 
     await _run(body)
