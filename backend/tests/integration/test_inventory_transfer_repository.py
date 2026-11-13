@@ -530,7 +530,7 @@ async def test_transfer_preparation_dispatch_partial_receipt_and_idempotent_repl
                 idempotency_key=receive_key,
                 actor_id=context.actor_id,
             )
-            assert partial["status"] == "in_transit"
+            assert partial["status"] == "partially_received"
             assert partial["lines"][0]["quantity_received"] == Decimal("8")
             assert partial["lines"][0]["quantity_in_transit"] == Decimal("2")
 
@@ -547,7 +547,7 @@ async def test_transfer_preparation_dispatch_partial_receipt_and_idempotent_repl
                 idempotency_key=receive_key,
                 actor_id=context.actor_id,
             )
-            assert replayed_partial["status"] == "in_transit"
+            assert replayed_partial["status"] == "partially_received"
             assert replayed_partial["lines"][0]["quantity_received"] == "8.000000"
 
             with pytest.raises(TransferDomainError, match="supera"):

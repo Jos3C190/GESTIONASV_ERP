@@ -73,6 +73,10 @@ from app.infrastructure.models.inventory import (
     InventoryMovementModel,
 )
 from app.infrastructure.models.inventory_lot import InventoryLotDetailModel, InventoryLotModel
+from app.infrastructure.models.inventory_transfer import (
+    InventoryTransferDetailModel,
+    InventoryTransferModel,
+)
 from app.infrastructure.models.organization import Branch, Location, Warehouse
 from app.infrastructure.models.product_variant import ProductVariantModel
 from app.infrastructure.repositories.inventory_repository import (
@@ -1157,6 +1161,26 @@ async def list_transfer_units(
         .correlate(InventoryHandlingUnitModel)
         .scalar_subquery()
     )
+    # Another transfer waiting to leave that already promised this unit.
+    committed_transfer = (
+        select(InventoryTransferModel.code)
+        .join(
+            InventoryTransferDetailModel,
+            and_(
+                InventoryTransferDetailModel.company_id == InventoryTransferModel.company_id,
+                InventoryTransferDetailModel.transfer_id == InventoryTransferModel.id,
+            ),
+        )
+        .where(
+            InventoryTransferModel.company_id == company_id,
+            InventoryTransferModel.status.in_(("pending_approval", "approved")),
+            InventoryTransferDetailModel.source_handling_unit_id == InventoryHandlingUnitModel.id,
+        )
+        .order_by(InventoryTransferModel.created_at, InventoryTransferModel.code)
+        .limit(1)
+        .correlate(InventoryHandlingUnitModel)
+        .scalar_subquery()
+    )
     origin_unit = aliased(InventoryHandlingUnitModel)
     rows = (
         await session.execute(
@@ -1176,6 +1200,7 @@ async def list_transfer_units(
                 Branch.name.label("branch_name"),
                 Location.code.label("location_code"),
                 latest_reference.label("source_reference"),
+                committed_transfer.label("committed_transfer_code"),
                 origin_unit.code.label("origin_handling_unit_code"),
                 InventoryLotDetailModel.code.label("receipt_lot_code"),
                 InventoryLotModel.code.label("receipt_lot_header_code"),
@@ -1286,6 +1311,7 @@ async def list_transfer_units(
                 location_code=row.location_code,
                 source_reference=row.source_reference,
                 origin_handling_unit_code=row.origin_handling_unit_code,
+                committed_transfer_code=row.committed_transfer_code,
                 receipt_lot_code=row.receipt_lot_code,
                 receipt_lot_header_code=row.receipt_lot_header_code,
                 received_at=row.received_at,

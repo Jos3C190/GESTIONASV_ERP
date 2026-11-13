@@ -43,9 +43,9 @@ from app.api.v1.simulator import open_simulations, simulation_devices_since, tra
 from app.api.v1.site_sync import load_sites, run_site_sync, sync_if_stale, sync_state
 from app.api.v1.traccar_access import UNAVAILABLE, traccar, traccar_credentials
 from app.api.v1.transfer_tracking import (
-    ACTIVE_TRANSFER_STATUSES,
     capture_track,
     compute_trip,
+    on_road_clause,
     stored_track,
     transfer_query,
     trip_context,
@@ -444,7 +444,7 @@ async def list_tracked_transfers(
     rows = (
         await session.execute(
             _scoped_transfers(scope)
-            .where(InventoryTransferModel.status.in_(ACTIVE_TRANSFER_STATUSES))
+            .where(on_road_clause())
             .order_by(InventoryTransferModel.dispatched_at.desc().nulls_last())
             .limit(100)
         )

@@ -366,6 +366,7 @@ class DriverQueries:
             .where(
                 InventoryTransferModel.company_id == company_id,
                 InventoryTransferModel.driver_id == driver_id,
+                InventoryTransferModel.dispatched_at.is_not(None),
             )
             .order_by(InventoryTransferModel.dispatched_at.desc().nulls_last())
             .limit(50)

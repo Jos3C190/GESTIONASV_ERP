@@ -37,6 +37,7 @@ from app.application.tracking.transfers import (
     resolve_active_route,
 )
 from app.core.config import settings
+from app.domain.entities.inventory_transfer import ON_ROAD_STATUSES, TRIP_FINISHED_STATUSES
 from app.infrastructure.db.session import async_session_factory
 from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.fleet import DriverModel, FleetVehicleModel
@@ -50,12 +51,17 @@ from app.infrastructure.models.tracking import (
     TrackingSimulationModel,
     TransferTrackModel,
 )
+from app.infrastructure.repositories.inventory_transfer_settlement import (
+    is_on_road,
+    on_road_clause,
+)
 
 logger = logging.getLogger(__name__)
 
-ACTIVE_TRANSFER_STATUSES = ("in_transit", "incident")
+#: Kept for importers; queries use ``on_road_clause`` (a finished trip stays finished).
+ACTIVE_TRANSFER_STATUSES = ON_ROAD_STATUSES
 #: Closed after the trip: their trail ends at reception and is stored by the ERP.
-FINAL_TRANSFER_STATUSES = ("received", "closed_with_adjustment")
+FINAL_TRANSFER_STATUSES = TRIP_FINISHED_STATUSES
 #: Without a recorded reception time, a trail is never read beyond this.
 MAX_TRIP = timedelta(days=3)
 
@@ -74,7 +80,9 @@ class TripContext:
 
     @property
     def final(self) -> bool:
-        return self.transfer.status in FINAL_TRANSFER_STATUSES
+        return (
+            self.transfer.status in FINAL_TRANSFER_STATUSES or self.transfer.received_at is not None
+        )
 
     @property
     def window(self) -> tuple[datetime, datetime]:
@@ -442,7 +450,7 @@ async def archive_trip(company_id: uuid.UUID, transfer_id: uuid.UUID) -> None:
         if row is None:
             return
         ctx = trip_context(row)
-        if ctx.transfer.status in ACTIVE_TRANSFER_STATUSES:
+        if is_on_road(ctx.transfer):
             return
         await close_alerts(session, transfer_id)
         try:
@@ -472,6 +480,8 @@ __all__ = [
     "close_alerts",
     "compute_trip",
     "device_positions",
+    "is_on_road",
+    "on_road_clause",
     "stored_track",
     "transfer_query",
     "trip_context",

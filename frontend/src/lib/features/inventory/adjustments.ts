@@ -91,6 +91,12 @@ export interface InventoryAdjustment {
   correction_of_id: string | null;
   transfer_id: string | null;
   transfer_incident_id: string | null;
+  /** The shortage, damage or surplus of a transfer this adjustment regularises. */
+  transfer_discrepancy_id: string | null;
+  transfer_discrepancy_kind: 'shortage' | 'surplus' | 'damage' | null;
+  /** Code of the linked transfer (through its incident or its discrepancy). */
+  transfer_reference: string | null;
+  linked_transfer_id: string | null;
   created_by_id: string;
   approved_by_id: string | null;
   applied_by_id: string | null;

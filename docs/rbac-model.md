@@ -312,3 +312,49 @@ command constraints, and inserts the two permissions with their `SUPER_ADMIN`
 grant. Its downgrade refuses to run while any transfer is `pending_approval`,
 `approved` or on a route other than central distribution, then removes the
 columns, the table and the permissions.
+
+## 13. Transfer transport, reception differences and their authorization (revision 0116)
+
+Revision `0116` adds **no permission and no migration grant**. The new routes
+reuse `inventory:read` as the module gate plus the permissions that already
+exist, each with the branch scope that fits the side of the trip that acts. In
+every route the branch/warehouse scope check runs before the permission check and
+before an idempotent replay, so nobody learns what a transfer holds without
+access to it.
+
+| Route | Permission | Branch scope |
+| --- | --- | --- |
+| `GET /assignment-options`, `POST /assignment-check` | `inventory:read` | Origin warehouse (branch scope and warehouse assignment); the saved transfer, when sent, by its origin branch |
+| `GET /{id}/assignment-check` | `inventory:read` | Origin branch of the transfer (the approver's view) |
+| `POST /{id}/close-reception`, `.../discrepancies/{did}/found` | `inventory:receive` | Destination |
+| `.../discrepancies/{did}/adjustment` | `inventory:adjust` | Shortage: origin **or** destination; damage and surplus: destination |
+| `.../discrepancies/{did}/claim`, `.../release`, `.../dismiss` | `inventory:adjust_approve` | Destination |
+| `.../discrepancies/{did}/origin-count` | `inventory:adjust` | Origin |
+
+Receiving with damage or surplus is the ordinary receipt: `inventory:receive`
+plus the destination. Dispatching with a substitute vehicle or driver is the
+ordinary dispatch (`inventory:move` plus the origin); the reason and code are
+part of the request, and the compliance exception
+(`fleet:compliance_override`) remains a separate, audited authority that is not
+needed to substitute transport. Submitting and approving now also need the
+saved transport to be fit to be planned (`409 transfer_assignment_unfit`
+otherwise); approval keeps its section 12 scope and segregation rules.
+
+Resolving a difference mirrors the adjustment model of section 10: preparing the
+draft needs `inventory:adjust`; approving and applying it needs
+`inventory:adjust_approve` through the ordinary adjustment routes. Claim,
+release and dismiss need `inventory:adjust_approve` because they decide the
+fate of goods without a second approval document. The people who may decide on a
+difference are the destination warehouse's; the origin only records its count.
+`found` needs `inventory:receive` because it puts the line back into reception.
+While a draft or approved adjustment is linked to a difference, release, found,
+dismiss and claim are refused (`409 transfer_discrepancy_has_adjustment`), and a
+linked adjustment cannot be edited or corrected. Adjustment cost fields keep
+being redacted without `inventory:valuation`, including the cost a surplus
+adjustment takes.
+
+Audit: `DISPATCH_TRANSFER_SUBSTITUTION`, `CLOSE_TRANSFER_RECEPTION`,
+`CREATE_DISCREPANCY_ADJUSTMENT`, `CLAIM_TRANSFER_DISCREPANCY`,
+`RELEASE_TRANSFER_DAMAGE`, `MARK_TRANSFER_SHORTAGE_FOUND`,
+`DISMISS_TRANSFER_SURPLUS` and `RECORD_TRANSFER_ORIGIN_COUNT`, each recording
+the branch of the side that acted.

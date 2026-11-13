@@ -567,7 +567,7 @@ Origins from `CORS_ORIGINS` env. Credentials allowed. `*` never used with creden
   handling-unit relation where available; rows with no reliable relation stay
   explicitly unattributed. No origin is inferred from free-text movement data.
 
-## 18. Transfer documents, vehicles and branch demand (revision 0086; routes and approval in 0114; last editor in 0115)
+## 18. Transfer documents, vehicles and branch demand (revision 0086; routes and approval in 0114; last editor in 0115; transport, partial reception and discrepancies in 0116)
 
 All routes are under `/api/v1/inventory/transfers`. Transfer commands use an
 idempotency key, a company-scoped document, a database transaction/savepoint,
@@ -589,27 +589,40 @@ receipt event so clients do not have to infer the product from the HU code.
 | `GET /route-options?origin_warehouse_id=...` | Warehouses the caller may ship from; with an origin, the destinations that classify to a valid route | `inventory:read`; origins limited to the caller's branch scope and warehouse assignment |
 | `GET /pending-approval-count` | Number of transfers the caller could approve right now | `inventory:read`; returns `{"count": 0}` without `inventory:transfer_approve` |
 | `GET /` and `GET /{transfer_id}` | List or read documents within the caller's branch scope | `inventory:read` |
-| `POST /` | Create a preparation | `inventory:read` + `inventory:move` and origin branch access |
-| `PUT /{transfer_id}` | Edit preparation lines/destination/vehicle | `inventory:read` + `inventory:move` and origin branch access; moving the document to another origin also requires access to the new origin |
+| `POST /` | Create a preparation (vehicle and driver optional) | `inventory:read` + `inventory:move` and origin branch access |
+| `PUT /{transfer_id}` | Edit preparation lines/destination/vehicle/driver | `inventory:read` + `inventory:move` and origin branch access; moving the document to another origin also requires access to the new origin |
 | `POST /{transfer_id}/cancel` | Cancel a preparation, pending or approved transfer | `inventory:read` + `inventory:move` and origin branch access |
-| `POST /{transfer_id}/submit` | Send a branch-route preparation to approval | `inventory:read` + `inventory:move` and origin branch access |
+| `POST /{transfer_id}/submit` | Send a branch-route preparation to approval; needs vehicle and driver, and a transport fit to be planned | `inventory:read` + `inventory:move` and origin branch access |
 | `POST /{transfer_id}/withdraw` | Take a pending transfer back to preparation | `inventory:read` + `inventory:move` and origin branch access |
 | `POST /{transfer_id}/approve` | Approve a pending transfer | `inventory:transfer_approve` and origin branch access; not the creator/submitter unless superuser |
 | `POST /{transfer_id}/reject` | Reject a pending transfer with a reason; it returns to preparation | `inventory:transfer_approve` and origin branch access; same segregation as approve |
-| `POST /{transfer_id}/dispatch` | Move stock from the origin warehouse to its assigned vehicle | `inventory:read` + `inventory:move` and origin branch access |
-| `POST /{transfer_id}/receive` | Receive all or part into a destination quarantine location | `inventory:read` + `inventory:receive` and destination branch access |
-| `POST /{transfer_id}/incidents` | Open an incident with reason and optional evidence reference | `inventory:read` plus either authorized origin/`inventory:move` or destination/`inventory:receive` |
+| `POST /{transfer_id}/dispatch` | Move stock from the origin warehouse to its assigned vehicle; a different vehicle or driver than the approved ones needs a coded, audited reason | `inventory:read` + `inventory:move` and origin branch access |
+| `POST /{transfer_id}/receive` | Receive all or part; each line splits into good (quarantine), damaged (`damaged` stock) and surplus (0116) | `inventory:read` + `inventory:receive` and destination branch access |
+| `POST /{transfer_id}/incidents` | Open an incident (from `in_transit` or `partially_received`) with reason and optional evidence reference | `inventory:read` plus either authorized origin/`inventory:move` or destination/`inventory:receive` |
 | `POST /{transfer_id}/incidents/resolve` | Resume transit or close receipt when no unresolved quantity remains | Same authorized origin or destination scope as incident handling |
+| `GET /assignment-options?origin_warehouse_id=...&transfer_id=...` | Vehicles and drivers of the origin branch that can be chosen while preparing (0116) | `inventory:read` and origin warehouse scope |
+| `POST /assignment-check` | Judge the vehicle and driver chosen for a draft, with the weight of its lines and planning conflicts (0116) | `inventory:read` and origin warehouse scope (and origin branch scope of `transfer_id`, if sent) |
+| `GET /{transfer_id}/assignment-check` | The same judgement for the transport saved in a transfer, for the approver (0116) | `inventory:read` and origin branch access |
+| `POST /{transfer_id}/close-reception` | Stop waiting for what has not arrived: it becomes open shortages and the transfer goes to `discrepancy` (0116) | `inventory:read` + `inventory:receive` and destination branch access |
+| `POST /{transfer_id}/discrepancies/{discrepancy_id}/adjustment` | Prepare, as a draft, the adjustment that regularises a shortage, damage or surplus; answers `201` with the adjustment (0116) | `inventory:read` + `inventory:adjust`; shortage: origin **or** destination branch access, damage and surplus: destination |
+| `POST /{transfer_id}/discrepancies/{discrepancy_id}/claim` | Hand a damage to the carrier or insurer (`in_claim`); it stops blocking the transfer (0116) | `inventory:read` + `inventory:adjust_approve` and destination branch access |
+| `POST /{transfer_id}/discrepancies/{discrepancy_id}/release` | After inspection, move a damaged unit to quarantine (0116) | `inventory:read` + `inventory:adjust_approve` and destination branch access |
+| `POST /{transfer_id}/discrepancies/{discrepancy_id}/found` | The missing goods arrived after all: the shortage is cancelled and reception resumes (0116) | `inventory:read` + `inventory:receive` and destination branch access |
+| `POST /{transfer_id}/discrepancies/{discrepancy_id}/dismiss` | The surplus was a counting mistake: nothing enters stock (0116) | `inventory:read` + `inventory:adjust_approve` and destination branch access |
+| `POST /{transfer_id}/discrepancies/{discrepancy_id}/origin-count` | The origin warehouse counted its stock after a shortage or a surplus (0116) | `inventory:read` + `inventory:adjust` and origin branch access |
 
 The static paths (`/demand`, `/vehicles`, `/settings`, `/route-options`,
-`/pending-approval-count`) are declared before `/{transfer_id}`.
+`/pending-approval-count`, `/assignment-options`, `/assignment-check`) are
+declared before `/{transfer_id}`.
 `GET /` accepts `branch_id` (matches origin **or** destination branch),
 `status` (`preparation`, `pending_approval`, `approved`, `in_transit`,
-`received`, `closed_with_adjustment`, `incident`, `cancelled`), `route_type`
+`partially_received`, `discrepancy`, `received`, `closed_with_adjustment`,
+`incident`, `cancelled`), `route_type`
 (`central_distribution`, `branch_to_branch`, `branch_to_central`),
 `side` (`origin` or `destination`, relative to `branch_id`),
 `awaiting_my_approval` (boolean; empty list when the caller lacks
-`inventory:transfer_approve`), `page` and `size`.
+`inventory:transfer_approve`), `origin_count_pending` and
+`with_open_discrepancies` (booleans, 0116), `page` and `size`.
 
 ### Routes and company rules (revision 0114)
 
@@ -717,10 +730,13 @@ replays follow the rules of the other transfer commands.
 | `pending_approval` / `approved` | Cancel | `cancelled`; no stock movement |
 | `approved` | Dispatch | `in_transit`; origin stock moves to the vehicle location once |
 | `preparation` | Dispatch | `in_transit` for `central_distribution`, or for a branch route when the rule does not require approval; otherwise `409 transfer_approval_required` |
-| `in_transit` | Partial receipt | Remains `in_transit`; received quantity moves into the destination in `quarantine`, remainder stays in the vehicle |
-| `in_transit` | Final receipt | `received` when all dispatched quantity has been received or explicitly returned through a future authorized flow |
-| `in_transit` | Open incident | `incident`; stock remains in transit and the incident keeps reason/evidence/history |
-| `incident` | Resolve `resume_transit` | Returns to `in_transit` only after the remaining quantity is confirmed still present |
+| `in_transit` / `partially_received` | Partial receipt (0116) | `partially_received`; received quantity moves into the destination (good part in `quarantine`, damaged part in `damaged`), remainder stays in the vehicle. Before 0116 this stayed `in_transit` |
+| `in_transit` / `partially_received` | Final receipt | `received` when all dispatched quantity has been received or explicitly returned through a future authorized flow; `discrepancy` if damage or surplus is still open; `closed_with_adjustment` if differences existed and none is open (see "Status settlement") |
+| `partially_received` | `close-reception` (0116) | `discrepancy`: what has not arrived becomes open shortages |
+| `discrepancy` | `found` on a shortage (0116) | `partially_received`: the shortage is cancelled and the line can be received again |
+| `discrepancy` | Last open difference resolved, or damage handed to a claim (0116) | `closed_with_adjustment` |
+| `in_transit` / `partially_received` | Open incident | `incident`; stock remains in transit and the incident keeps reason/evidence/history |
+| `incident` | Resolve `resume_transit` | Returns to `partially_received` if something was already received, otherwise `in_transit`; only after the remaining quantity is confirmed still present |
 | `incident` | Resolve `close_received` | Allowed only when no unexplained quantity remains; loss/damage must first use the B05 adjustment |
 
 Cancellation is allowed only before dispatch (`preparation`, `pending_approval`
@@ -862,6 +878,288 @@ Errors added with routes and approval (revision 0114):
 `transfer_dispatch_blocked` and `transfer_override_reason_required` come from
 the dispatch compliance check, which is independent of approval.
 
+### Transport at preparation (revision 0116)
+
+`POST /` and `PUT /{transfer_id}` accept `driver_id` next to `vehicle_id`; both
+are optional while the transfer is in `preparation`. An edit that omits them
+clears them, so clients resend what they loaded. `driver_id` must be an active
+driver of the company (`422 transfer_driver_unavailable`). Idempotency
+fingerprints include the driver only when it is not null, so a retry from a
+client that does not know the field still replays.
+
+`GET /assignment-options?origin_warehouse_id=...&transfer_id=...` returns the
+same shape as `GET /{id}/dispatch-options` (`vehicles`, `drivers`,
+`origin_branch_id`, `origin_branch_name`, `planned_vehicle_id`,
+`planned_driver_id`, `approved_vehicle_id`, `approved_driver_id`). The
+difference is the viewpoint: while planning, a vehicle that is on the road now
+or in the workshop is still offered (`available = true`) and carries a `note`,
+because departure may be hours away; only a vehicle that is not `active` is
+unavailable. At dispatch the option list keeps excluding vehicles that are busy
+now.
+
+```json
+// POST /assignment-check
+{
+  "origin_warehouse_id": "<uuid>",
+  "vehicle_id": "<inventory-vehicle-uuid>",
+  "driver_id": "<driver-uuid>",
+  "transfer_id": "<uuid or null: the saved transfer being edited>",
+  "lines": [{"handling_unit_id": "<uuid>", "quantity_base": "10.000000"}]
+}
+```
+
+The response (`AssignmentCheckOut`, also returned by
+`GET /{id}/assignment-check`) has `vehicle_id`, `driver_id`, `vehicle_issues`
+and `driver_issues` (`code`, `severity` `blocking|warning`, `message`,
+`overridable`, always `false` while planning), `planning_blocked`, `warnings`,
+`conflicts` (`transfer_id`, `code`, `status`, `same_vehicle`, `same_driver`,
+`message`, such as "El vehículo también está asignado a TR-... (aprobado)"),
+`load_kg` and `load_missing_weight`. A unit that is not in the origin warehouse
+answers `422 transfer_assignment_units_invalid`. Without `lines`, the weight
+comes from the saved transfer. `GET /{id}/assignment-check` adds the issue
+`vehicle_required` (and `driver_required`) when the saved transfer lacks them.
+
+Planning rules (`evaluate_dispatch(stage="planning")`):
+
+- Only these issue codes block: `vehicle_not_active`, `vehicle_not_drivable`,
+  `vehicle_branch_mismatch`, `driver_required`, `driver_branch_mismatch`,
+  `driver_not_active`, `employee_not_active` and `transfer_vehicle_not_in_fleet`.
+  While planning, the driver is chosen, never inferred from Fleet, so a missing
+  driver is `driver_required`.
+- `vehicle_overweight` blocks only when the company rule `block_overweight` is on
+  and the load is known; otherwise it is a warning.
+- What depends on the moment of departure (`inspection_required`,
+  `vehicle_on_road`, `driver_on_road`, `vehicle_in_maintenance`,
+  `vehicle_reserved`) becomes a warning with the prefix "Al despachar: ".
+  Expired documents are warnings for the approver; they still block at dispatch,
+  with the usual authorized exception.
+- Planning conflicts are only advice: another `pending_approval` or `approved`
+  transfer with the same vehicle or driver. A vehicle or driver counts as busy
+  only while a transfer is on the road, that is, its status is `in_transit`,
+  `partially_received` or `incident` **and** `received_at` is null. A shortage
+  marked as found brings a transfer back to `partially_received` but does not
+  put the vehicle back on the road.
+
+`submit` and `approve` judge the saved transport the same way. A blocked
+transport answers `409 transfer_assignment_unfit` ("El vehículo o el conductor
+no es apto para el traslado: ..."). `submit` without vehicle or driver answers
+`422 transfer_assignment_required` ("Elige vehículo y conductor antes de enviar
+el traslado a aprobación."); if the transport changed while the request was
+reviewed, `409 transfer_assignment_changed`. `submit` stores a summary of the
+review (warnings, conflicting codes) in the command snapshot. `approve` of a
+legacy pending transfer sent without vehicle or driver answers
+`409 transfer_assignment_required` with its own message. Approving copies the
+transport into `approved_vehicle_id` and `approved_driver_id`; `reject`,
+`withdraw` and a new `submit` clear the copy. Central distribution never
+approves, so it has no copy: the vehicle and driver chosen at preparation are
+only the preselection at dispatch and can be changed without a reason.
+
+Dispatch (`POST /{id}/dispatch`) takes two new optional fields:
+
+```json
+{
+  "vehicle_id": "<vehicle-uuid>",
+  "driver_id": "<driver-uuid or omitted>",
+  "substitution_code": "vehicle_unfit",
+  "substitution_reason": "El camión aprobado no arrancó; sale con el de respaldo.",
+  "idempotency_key": "transfer-dispatch-demo-002"
+}
+```
+
+The driver is the one in the request, then the one saved at preparation, then
+the one assigned in Fleet (`dispatch-check` uses the same default). When the
+transfer is `approved` and the vehicle or the driver differs from the approved
+ones, `substitution_code` (`vehicle_unfit`, `vehicle_unavailable`,
+`driver_unfit`, `driver_unavailable`, `load_change` or `other`) and a reason of
+at least 10 characters are required; otherwise `422
+transfer_substitution_reason_required` ("Indica por qué cambias el vehículo o el
+conductor aprobado (mínimo 10 caracteres).") or `422
+transfer_substitution_code_invalid`. No new approval round is needed. The four
+`assignment_substitution_*` columns are stored and the dispatch is audited as
+`DISPATCH_TRANSFER_SUBSTITUTION`; when it also carries a compliance exception the
+action stays `DISPATCH_TRANSFER_OVERRIDE` and a separate
+`DISPATCH_TRANSFER_SUBSTITUTION` entry records the change. Dispatch no longer
+answers `transfer_vehicle_mismatch` for a vehicle different from the saved one.
+
+The transfer response adds `approved_vehicle`, `approved_driver`,
+`assignment_substitution` (`code`, `reason`, `by_id`, `by_name`, `at`) and
+`closed_at` (set when the transfer reaches `received`, `closed_with_adjustment`
+or `cancelled`).
+
+### Reception with damage and surplus (revision 0116)
+
+Each receipt line describes one transfer detail; the same detail still cannot
+appear twice in one request:
+
+```json
+{
+  "idempotency_key": "transfer-receive-demo-002",
+  "lines": [{
+    "transfer_detail_id": "<uuid>",
+    "destination_location_id": "<receiving-location-uuid>",
+    "quantity_base": "6.000000",
+    "damaged_quantity": "2.000000",
+    "damage_type": "crushed",
+    "damage_notes": "Cajas aplastadas en la parte baja del camión",
+    "damaged_location_id": "<optional-location-uuid>",
+    "surplus_quantity": "1.000000",
+    "surplus_notes": "Llegó una caja de más sin documento",
+    "surplus_location_id": "<optional-location-uuid>",
+    "evidence_reference": "FOTO-001"
+  }]
+}
+```
+
+`quantity_base` is what arrived in good condition (it may be `0` when
+everything that arrived is damaged); `damaged_quantity` and `surplus_quantity`
+default to `0`. Damage or surplus data without its quantity is rejected by the
+schema (`422`). `damage_type` is one of `broken`, `crushed`, `wet`,
+`contaminated`, `packaging`, `tampered`, `temperature` or `other`. The damaged
+and surplus locations default to the receiving location; every location must be
+an active receiving location of the destination warehouse
+(`422 transfer_receipt_location_invalid`).
+
+Line rules: `transfer_receipt_empty` (good plus damaged is zero),
+`transfer_over_receipt` (good plus damaged exceeds what is pending, `409`),
+`transfer_surplus_requires_full_receipt` ("Declara sobrante solo cuando
+registras todo lo pendiente de la línea."), `transfer_damage_details_required`
+(type and notes of at least 5 characters) and
+`transfer_surplus_notes_required`, all `422` except over-receipt. A line that
+has an open shortage cannot be received (`409 transfer_discrepancy_open`) until
+the shortage is marked as found.
+
+Stock: one inventory movement per receipt. The damaged part goes first, from
+in transit to `damaged` stock in `damaged_location_id`, so the original unit
+keeps what arrived well; then the good part goes to `quarantine`. The inventory
+engine accepts a split of a labelled lot toward `damaged` (before, a partial
+receipt only accepted quarantine). Neither affects valuation. A surplus does not
+touch stock when it is declared. One receipt row is stored per condition
+(`good` or `damaged`).
+
+Counters: `quantity_received` is everything physically received, good or
+damaged; `quantity_received_damaged` (never above received) and
+`quantity_surplus` (informative) are new per line, and demand allocations gain
+`quantity_damaged`. Lines also report `quantity_short_open` (declared missing
+and not yet resolved) and `quantity_pending_reception` (still being waited
+for). Receipt responses carry `condition`. The proportional weight estimate of
+damaged units is kept (`split_estimate`), so releasing them to available stock
+still requires the usual verification of measures and label.
+
+### Discrepancy register (revision 0116)
+
+`inventory_transfer_discrepancies` is the single register of differences, one
+row per detail, kind and event. The transfer response lists them in
+`discrepancies`, plus `has_open_discrepancies` and `origin_count_pending`.
+
+| Field | Values |
+| --- | --- |
+| `kind` | `shortage` (stock is still in transit in the system), `surplus` (no stock in the system yet), `damage` (already `damaged` stock at the destination) |
+| `source` | `receipt`, `reception_close`, `incident` (legacy loss path, stored already resolved) |
+| `status` | `open` → `in_claim` (damage only) → `resolved`, or `cancelled` (`found` and `dismissed` end here) |
+| `resolution` | shortage: `written_off`, `found`; damage: `written_off`, `released` (both also from claim); surplus: `regularized`, `dismissed` |
+
+Each item has `kind`, `status`, `source`, `quantity`, `damage_type`, `notes`,
+`evidence_reference`, location and handling unit (id and code), receipt and
+incident ids, opened/claimed/resolved actors and timestamps, `claim_reference`,
+`resolution`, `resolution_notes`, the origin count fields
+(`origin_count_required`, `origin_counted_by_id/_name`, `origin_counted_at`,
+`origin_count_notes`), product name, SKU, base unit and
+`adjustment` (`id`, `code`, `status` of the linked adjustment).
+
+Command bodies (all take `idempotency_key`):
+
+| Endpoint | Body | Effect |
+| --- | --- | --- |
+| `close-reception` | `reason` (5 to 4000), optional `evidence_reference` | Creates one open shortage per detail for what is pending and not yet declared, with `origin_count_required`; the transfer settles to `discrepancy`. `409 transfer_reception_close_not_allowed` outside `in_transit`/`partially_received`; `409 transfer_reception_close_requires_receipt` ("Si no llegó nada, reporta una incidencia del traslado.") when nothing was received; `409 transfer_no_pending_transit` when nothing is left to declare |
+| `.../adjustment` | `operational_date`, `accounting_date`, `reason`, `document_reference`, optional `notes`; surplus only: `packaging_definition_id`, `actual_gross_weight_kg`, `actual_volume_m3`, `inventory_lot_detail_id`, `documented_unit_cost` **or** `documented_total_cost` | Creates a draft adjustment built by the server from the kind: shortage, a decrease from in transit in the origin warehouse; damage, a decrease from `damaged` in the destination warehouse (where the unit is now); surplus, an increase into quarantine in the destination, at the documented cost or the average cost. Idempotent per discrepancy; one active adjustment per discrepancy. Applying it resolves the discrepancy and settles the transfer |
+| `claim` | `claim_reference` (3 to 500) | Damage only; `open` → `in_claim` |
+| `release` | `notes` (5 to 4000), optional `destination_location_id` | Damage only, from `open` or `in_claim`; moves the damaged unit to quarantine, in its current location or the one given inside the destination warehouse; resolution `released`. The goods are not available until their handling unit is verified and released from Almacenes |
+| `found` | `notes` | Shortage only; the discrepancy ends `cancelled` with resolution `found` and the transfer goes back to `partially_received` |
+| `dismiss` | `notes` | Surplus only; ends `cancelled` with resolution `dismissed` and subtracts the quantity from `quantity_surplus` |
+| `origin-count` | `notes` | Records the count at the origin; only for a difference with `origin_count_required` (shortage or surplus). It never blocks closing the transfer |
+
+A claim stops blocking the transfer: the goods remain `damaged` and can be
+released or written off later. A mixed inspection (part usable, part not) has
+no special command: release everything to quarantine and write the unusable part
+off with an ordinary adjustment.
+
+Release, found, dismiss and claim are refused while a draft or approved
+adjustment is linked to the discrepancy (`409
+transfer_discrepancy_has_adjustment`: "...: tiene el ajuste {code} en curso.
+Cancela el ajuste {code} primero."). The damaged unit is followed wherever it
+was moved inside the destination warehouse, and a write-off takes it from where
+it is now; if it changed status, left the warehouse, was closed or consumed in
+part, release and write-off answer `409 transfer_discrepancy_unit_changed`.
+Audit actions: `CLOSE_TRANSFER_RECEPTION`, `CREATE_DISCREPANCY_ADJUSTMENT`,
+`CLAIM_TRANSFER_DISCREPANCY`, `RELEASE_TRANSFER_DAMAGE`,
+`MARK_TRANSFER_SHORTAGE_FOUND`, `DISMISS_TRANSFER_SURPLUS` and
+`RECORD_TRANSFER_ORIGIN_COUNT`. The transfer command actions are `close_reception`,
+`discrepancy_adjust`, `discrepancy_claim`, `discrepancy_release`,
+`discrepancy_found`, `discrepancy_dismiss`, `resolve_discrepancy` and
+`origin_count`; each is idempotent with the usual conflict on a different body.
+
+### Status settlement (revision 0116)
+
+After a dispatch, one function, `settle_transfer`, applies the pure domain rule
+`settle_transfer_status` and is the only writer of the status. It receives
+`uncovered_pending` (dispatched minus received, returned, adjusted out and open
+shortages), whether open discrepancies exist (`in_claim` damage does not count
+as open), whether any discrepancy existed (cancelled ones excluded), whether
+there was a loss, whether anything was received and whether an incident is open.
+In order:
+
+1. Open incident: `incident`.
+2. Something still pending: `partially_received` if something was already
+   received, otherwise `in_transit`.
+3. Open discrepancies: `discrepancy`.
+4. A discrepancy or a loss existed: `closed_with_adjustment`.
+5. Otherwise `received`.
+
+A final state (`received`, `closed_with_adjustment`, `cancelled`) is never
+reopened. `received_at` is set the first time nothing is pending (also when the
+transfer ends in `discrepancy`), and `closed_at` when it reaches `received` or
+`closed_with_adjustment`. Tracking archives the trip, and releases the vehicle
+and driver, in `discrepancy`, `received` and `closed_with_adjustment`; the
+adjustment `apply` route archives it when the loss or write-off ends the
+transfer. The legacy loss path (incident plus an adjustment of the transit
+quantity) still closes as `closed_with_adjustment` and now leaves a resolved
+shortage with source `incident`.
+
+Migration `0116` converts transfers that were `in_transit` with something
+already received into `partially_received`.
+
+Errors added with transport and discrepancies (revision 0116):
+
+| Code | HTTP | When |
+| --- | --- | --- |
+| `transfer_assignment_required` | 422 / 409 | `submit` without vehicle or driver (422); `approve` of a legacy pending transfer without them (409) |
+| `transfer_assignment_unfit` | 409 | `submit` or `approve` with a transport blocked at planning |
+| `transfer_assignment_changed` | 409 | The vehicle or driver changed between the review and the `submit` |
+| `transfer_assignment_units_invalid` | 422 | `assignment-check` with a unit outside the origin warehouse |
+| `transfer_driver_unavailable` | 422 | The driver is not an active driver of the company |
+| `transfer_substitution_reason_required` | 422 | Dispatch with another vehicle or driver than the approved ones, reason shorter than 10 characters |
+| `transfer_substitution_code_invalid` | 422 | Dispatch substitution without a valid code |
+| `transfer_receipt_empty` | 422 | A receipt line with no good and no damaged quantity |
+| `transfer_surplus_requires_full_receipt` | 422 | Surplus declared without receiving everything pending on the line |
+| `transfer_damage_details_required` | 422 | Damage without type or notes (5 characters) |
+| `transfer_surplus_notes_required` | 422 | Surplus without notes (5 characters) |
+| `transfer_discrepancy_open` | 409 | Receiving a line that has an open shortage |
+| `transfer_reception_close_not_allowed` | 409 | `close-reception` outside `in_transit`/`partially_received` |
+| `transfer_reception_close_requires_receipt` | 409 | `close-reception` when nothing has been received |
+| `transfer_no_pending_transit` | 409 | `close-reception` with nothing left to declare; also resuming transit with nothing pending |
+| `transfer_discrepancy_not_found` | 404 | The discrepancy does not belong to the transfer |
+| `transfer_discrepancy_not_open` | 409 | The discrepancy is no longer open (or in claim, where allowed) |
+| `transfer_discrepancy_action_invalid` | 409 | The action does not fit the kind (claim or release on a shortage, found on a damage, origin count where none is required) |
+| `transfer_discrepancy_has_adjustment` | 409 | Release, found, dismiss or claim while a draft or approved adjustment is linked |
+| `transfer_discrepancy_unit_changed` | 409 | The damaged unit changed status, left the destination warehouse, was closed or was consumed in part |
+| `transfer_origin_count_already_recorded` | 409 | The origin count was already recorded |
+| `transfer_incident_not_allowed` | 409 | An incident from a state other than `in_transit`/`partially_received` |
+| `adjustment_transfer_discrepancy_closed` | 409 | Preparing, approving or applying an adjustment against a discrepancy that is no longer open; cancel the adjustment |
+| `adjustment_linked_document_immutable` | 409 | Editing an adjustment linked to a transfer, discrepancy or correction |
+| `adjustment_cost_ambiguous` | 422 | A surplus adjustment with both documented unit and total cost |
+| `adjustment_surplus_measures_required` | 422 | A surplus adjustment without packaging or without weight and volume together |
+| `valuation_cost_required` | 409 | Applying a surplus with no documented cost and no average cost to use |
+
 ## ERS-B05: authorized inventory adjustments (revision 0087)
 
 All routes below are under `/api/v1/inventory/adjustments` and require
@@ -905,7 +1203,31 @@ valued operations make the original cost ambiguous.
 
 An applied transfer loss increments `quantity_adjusted_out` separately from
 received quantity. When nothing remains in transit, the transfer becomes
-`closed_with_adjustment`, not `received`. Public generic inventory movement
+`closed_with_adjustment`, not `received`. Since revision 0116 the loss is also
+registered as a resolved shortage of the transfer (source `incident`).
+
+Adjustments linked to a transfer difference (revision 0116) are created with
+`POST /inventory/transfers/{id}/discrepancies/{discrepancy_id}/adjustment` (see
+section 18), not with `POST /`. The adjustment response adds
+`transfer_discrepancy_id`, `transfer_discrepancy_kind` (`shortage`, `surplus` or
+`damage`), `transfer_reference` (code of the linked transfer, through its
+incident or its discrepancy) and `linked_transfer_id` (used for the deep link
+`/transfers?transfer={id}`). `transfer_id` and `transfer_incident_id` stay for
+the incident path; a discrepancy adjustment for a shortage keeps `transfer_id`,
+while damage and surplus adjustments carry only the discrepancy. The database
+check requires either no transfer link, or a `transfer_id` with exactly one of
+incident and discrepancy. A linked adjustment is immutable (`PUT` answers
+`409 adjustment_linked_document_immutable`; a correction answers
+`409 adjustment_correction_not_supported`): cancel the draft and prepare a new
+one. There is at most one non-cancelled adjustment per discrepancy. Approving or
+applying it after the discrepancy was closed another way fails with
+`409 adjustment_transfer_discrepancy_closed`. Applying it resolves the
+discrepancy (`written_off` for shortage and damage, `regularized` for surplus,
+whose resulting handling unit is then linked to the discrepancy), records the
+`resolve_discrepancy` command and settles the transfer status. A write-off of a
+damage is a decrease from `damaged` stock at the average cost; a surplus enters
+quarantine at the documented cost or the average cost, and
+`409 valuation_cost_required` appears if there is neither. Public generic inventory movement
 routes reject `adjustment_in` and `adjustment_out`; they cannot bypass the
 approved adjustment document. Users without `inventory:valuation` receive
 adjustment data with documented cost fields redacted. Evidence download also

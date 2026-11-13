@@ -11,6 +11,8 @@ import pytest
 from app.application.inventory_transfers.use_cases import InventoryTransferUseCases
 from app.domain.entities.inventory_transfer import TransferDomainError, TransferPolicy
 from app.infrastructure.db.session import async_session_factory, dispose_engine
+from app.infrastructure.models.employee import Employee
+from app.infrastructure.models.fleet import DriverModel
 from app.infrastructure.models.inventory import (
     InventoryBalanceModel,
     InventoryHandlingUnitModel,
@@ -51,6 +53,7 @@ class BranchRouteFixture:
     central_location: Location
     creator_id: uuid.UUID
     approver_id: uuid.UUID
+    driver_id: uuid.UUID
     use_cases: InventoryTransferUseCases
     suffix: str
 
@@ -82,6 +85,30 @@ async def _new_user(session: Any, label: str, suffix: str) -> uuid.UUID:
     session.add(user)
     await session.flush()
     return user.id
+
+
+async def _new_driver(
+    session: Any, company_id: uuid.UUID, branch_id: uuid.UUID, tag: str
+) -> uuid.UUID:
+    """An active driver of ``branch_id`` (the transport a branch transfer must name)."""
+    employee = Employee(
+        company_id=company_id,
+        employee_code=f"RT-{tag[:12].upper()}",
+        first_name=f"conductor-{tag[:8]}",
+        last_name="Prueba",
+        status="activo",
+    )
+    session.add(employee)
+    await session.flush()
+    driver = DriverModel(
+        company_id=company_id,
+        employee_id=employee.id,
+        branch_id=branch_id,
+        license_class="liviana",
+    )
+    session.add(driver)
+    await session.flush()
+    return driver.id
 
 
 async def _create_branch_route_context(
@@ -171,6 +198,7 @@ async def _create_branch_route_context(
         central_location=base.source_location,
         creator_id=base.actor_id,
         approver_id=await _new_user(session, "route-approver", suffix),
+        driver_id=await _new_driver(session, company_id, base.destination.branch_id, suffix),
         use_cases=InventoryTransferUseCases(SqlAlchemyInventoryTransferRepository(session)),
         suffix=suffix,
     )
@@ -201,6 +229,7 @@ async def _create(
         origin_warehouse_id=(origin or ctx.branch_a).id,
         destination_warehouse_id=destination.id,
         vehicle_id=ctx.base.vehicle_id,
+        driver_id=ctx.driver_id,
         lines=_lines(unit_id or ctx.unit_a),
         idempotency_key=f"{key}-{ctx.suffix}",
         actor_id=actor_id or ctx.creator_id,
@@ -1155,6 +1184,7 @@ async def test_the_last_editor_cannot_decide_and_is_exposed() -> None:
             origin_warehouse_id=ctx.branch_a.id,
             destination_warehouse_id=ctx.branch_b.id,
             vehicle_id=ctx.base.vehicle_id,
+            driver_id=ctx.driver_id,
             notes="Corregido por otra persona",
             lines=_lines(ctx.unit_a),
             idempotency_key=f"editor-update-{ctx.suffix}",

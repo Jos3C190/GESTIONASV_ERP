@@ -483,6 +483,8 @@ class TransferHandlingUnitOut(HandlingUnitOut):
     location_code: str
     source_reference: str | None
     origin_handling_unit_code: str | None = None
+    #: Code of a transfer waiting for approval or dispatch that already uses this unit.
+    committed_transfer_code: str | None = None
 
 
 class HandlingUnitTraceEventOut(BaseModel):

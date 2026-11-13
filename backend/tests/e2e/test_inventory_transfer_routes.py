@@ -192,6 +192,7 @@ async def _create_between(client, values, headers, *, destination_id=None, key=N
             "origin_warehouse_id": str(values.route.branch_a_id),
             "destination_warehouse_id": str(destination_id or values.route.branch_b_id),
             "vehicle_id": str(values.vehicle_id),
+            "driver_id": str(values.driver_id),
             "notes": "Rebalanceo por quiebre de existencias.",
             "lines": [
                 {
@@ -521,6 +522,7 @@ async def test_changing_the_origin_of_a_draft_needs_access_to_the_new_origin(e2e
                     "origin_warehouse_id": str(origin_id),
                     "destination_warehouse_id": str(destination_id),
                     "vehicle_id": None,
+                    "driver_id": None,
                     "notes": None,
                     "lines": [
                         {

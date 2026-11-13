@@ -17,6 +17,7 @@ from sqlalchemy import and_, func, or_, select
 
 from app.application.fleet.compliance import RequiredCategory
 from app.application.fleet.settings import FleetSettings, settings_from, to_kilograms
+from app.domain.entities.inventory_transfer import ON_ROAD_STATUSES
 from app.infrastructure.models.catalog import ProductModel
 from app.infrastructure.models.document import DocumentAssetModel
 from app.infrastructure.models.document_record import DocumentCategoryModel, DocumentRecordModel
@@ -36,7 +37,7 @@ from app.infrastructure.models.fleet import (
     MaintenancePlanModel,
     VehicleDriverAssignmentModel,
 )
-from app.infrastructure.models.inventory import InventoryItemModel
+from app.infrastructure.models.inventory import InventoryHandlingUnitModel, InventoryItemModel
 from app.infrastructure.models.inventory_transfer import (
     InventoryTransferDetailModel,
     InventoryTransferModel,
@@ -45,8 +46,9 @@ from app.infrastructure.models.organization import Branch, Warehouse
 from app.infrastructure.models.product_variant import ProductVariantModel
 from app.infrastructure.models.supplier import SupplierModel
 from app.infrastructure.repositories.fleet_driver_queries import DriverQueries
+from app.infrastructure.repositories.inventory_transfer_settlement import on_road_clause
 
-ACTIVE_TRANSFER_STATUSES = ("in_transit", "incident")
+ACTIVE_TRANSFER_STATUSES = ON_ROAD_STATUSES
 
 
 def initials(first_name: str, last_name: str) -> str:
@@ -403,7 +405,7 @@ class FleetRepository(DriverQueries):
         statement = select(InventoryTransferModel.code).where(
             InventoryTransferModel.company_id == company_id,
             InventoryTransferModel.driver_id == driver_id,
-            InventoryTransferModel.status.in_(ACTIVE_TRANSFER_STATUSES),
+            on_road_clause(),
         )
         if exclude is not None:
             statement = statement.where(InventoryTransferModel.id != exclude)
@@ -443,15 +445,108 @@ class FleetRepository(DriverQueries):
             )
             .execution_options(include_deleted=True)
         )
+        return self._weigh(rows.all())
+
+    @staticmethod
+    def _weigh(rows: Iterable[Any]) -> tuple[Decimal, int]:
         total = Decimal("0")
         without_weight: set[Any] = set()
-        for quantity, product_id, weight, unit in rows.all():
+        for quantity, product_id, weight, unit in rows:
             kilograms = to_kilograms(weight, unit) if weight is not None and unit else None
             if kilograms is None:
                 without_weight.add(product_id)
             else:
                 total += kilograms * Decimal(quantity)
         return total, len(without_weight)
+
+    async def load_for_units(
+        self, company_id: uuid.UUID, lines: Sequence[tuple[uuid.UUID, Decimal]]
+    ) -> tuple[Decimal, int]:
+        """Like :meth:`transfer_load`, for a draft: ``(handling_unit_id, quantity)`` pairs."""
+        quantities: dict[uuid.UUID, Decimal] = {}
+        for unit_id, quantity in lines:
+            quantities[unit_id] = quantities.get(unit_id, Decimal("0")) + Decimal(quantity)
+        if not quantities:
+            return Decimal("0"), 0
+        rows = await self._session.execute(
+            select(
+                InventoryHandlingUnitModel.id,
+                ProductModel.id_product,
+                ProductModel.weight,
+                ProductModel.weight_unit,
+            )
+            .join(
+                InventoryItemModel,
+                and_(
+                    InventoryItemModel.company_id == InventoryHandlingUnitModel.company_id,
+                    InventoryItemModel.id == InventoryHandlingUnitModel.inventory_item_id,
+                ),
+            )
+            .outerjoin(
+                ProductVariantModel,
+                ProductVariantModel.id == InventoryItemModel.variant_id,
+            )
+            .outerjoin(
+                ProductModel,
+                ProductModel.id_product
+                == func.coalesce(InventoryItemModel.product_id, ProductVariantModel.product_id),
+            )
+            .where(
+                InventoryHandlingUnitModel.company_id == company_id,
+                InventoryHandlingUnitModel.id.in_(list(quantities)),
+            )
+            .execution_options(include_deleted=True)
+        )
+        return self._weigh(
+            (quantities[unit_id], product_id, weight, unit)
+            for unit_id, product_id, weight, unit in rows.all()
+        )
+
+    async def planned_transfers(
+        self,
+        company_id: uuid.UUID,
+        *,
+        inventory_vehicle_id: uuid.UUID | None,
+        driver_id: uuid.UUID | None,
+        exclude: uuid.UUID | None = None,
+    ) -> list[dict[str, Any]]:
+        """Transfers still waiting to leave that already hold this vehicle or driver."""
+        conditions = []
+        if inventory_vehicle_id is not None:
+            conditions.append(InventoryTransferModel.vehicle_id == inventory_vehicle_id)
+        if driver_id is not None:
+            conditions.append(InventoryTransferModel.driver_id == driver_id)
+        if not conditions:
+            return []
+        statement = (
+            select(
+                InventoryTransferModel.id,
+                InventoryTransferModel.code,
+                InventoryTransferModel.status,
+                InventoryTransferModel.vehicle_id,
+                InventoryTransferModel.driver_id,
+            )
+            .where(
+                InventoryTransferModel.company_id == company_id,
+                InventoryTransferModel.status.in_(("pending_approval", "approved")),
+                or_(*conditions),
+            )
+            .order_by(InventoryTransferModel.created_at, InventoryTransferModel.id)
+        )
+        if exclude is not None:
+            statement = statement.where(InventoryTransferModel.id != exclude)
+        rows = await self._session.execute(statement)
+        return [
+            {
+                "transfer_id": row.id,
+                "code": row.code,
+                "status": row.status,
+                "same_vehicle": inventory_vehicle_id is not None
+                and row.vehicle_id == inventory_vehicle_id,
+                "same_driver": driver_id is not None and row.driver_id == driver_id,
+            }
+            for row in rows
+        ]
 
     async def open_critical_failures(
         self, vehicle_ids: Sequence[uuid.UUID]
@@ -659,7 +754,7 @@ class FleetRepository(DriverQueries):
             .where(
                 InventoryTransferModel.company_id == company_id,
                 InventoryTransferModel.vehicle_id.in_(list(inventory_vehicle_ids)),
-                InventoryTransferModel.status.in_(ACTIVE_TRANSFER_STATUSES),
+                on_road_clause(),
             )
             .order_by(InventoryTransferModel.dispatched_at.desc().nulls_last())
         )

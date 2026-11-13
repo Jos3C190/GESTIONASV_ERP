@@ -1,6 +1,15 @@
 import type {
+  AssignmentCheck,
+  DamageType,
+  DiscrepancyKind,
+  DiscrepancyResolution,
+  DiscrepancyStatus,
+  FitnessState,
+  SubstitutionCode,
   TransferDecimal,
   TransferDemandRecord,
+  TransferDiscrepancy,
+  TransferLine,
   TransferRouteType,
   TransferStatus
 } from './transfer-documents';
@@ -37,7 +46,11 @@ export function getOrCreateTransferAttempt(
       const raw = storage.getItem(key);
       if (raw) {
         const saved = JSON.parse(raw) as TransferAttempt;
-        if (saved.contextKey === contextKey && saved.fingerprint === fingerprint && saved.idempotencyKey) {
+        if (
+          saved.contextKey === contextKey &&
+          saved.fingerprint === fingerprint &&
+          saved.idempotencyKey
+        ) {
           memory.set(key, saved);
           return saved;
         }
@@ -47,7 +60,8 @@ export function getOrCreateTransferAttempt(
     }
   }
   const remembered = memory.get(key);
-  if (remembered?.contextKey === contextKey && remembered.fingerprint === fingerprint) return remembered;
+  if (remembered?.contextKey === contextKey && remembered.fingerprint === fingerprint)
+    return remembered;
 
   const attempt = { contextKey, fingerprint, idempotencyKey: createIdempotencyKey() };
   memory.set(key, attempt);
@@ -92,14 +106,18 @@ export function quantityString(raw: string): string | null {
   const parsed = scaledQuantity(value);
   if (parsed == null || parsed <= 0n) return null;
   const whole = parsed / SCALE;
-  const fraction = String(parsed % SCALE).padStart(6, '0').replace(/0+$/, '');
+  const fraction = String(parsed % SCALE)
+    .padStart(6, '0')
+    .replace(/0+$/, '');
   return fraction ? `${whole}.${fraction}` : String(whole);
 }
 
 export function quantityFromScaled(value: bigint): string {
   if (value <= 0n) return '0';
   const whole = value / SCALE;
-  const fraction = String(value % SCALE).padStart(6, '0').replace(/0+$/, '');
+  const fraction = String(value % SCALE)
+    .padStart(6, '0')
+    .replace(/0+$/, '');
   return fraction ? `${whole}.${fraction}` : String(whole);
 }
 
@@ -138,6 +156,8 @@ export function transferStatusLabel(status: string): string {
     pending_approval: 'Pendiente de aprobación',
     approved: 'Aprobado',
     in_transit: 'En tránsito',
+    partially_received: 'Recepción parcial',
+    discrepancy: 'Con discrepancia',
     received: 'Recibido',
     closed_with_adjustment: 'Cerrado con ajuste',
     incident: 'Con incidencia',
@@ -153,6 +173,8 @@ export const TRANSFER_STATUS_OPTIONS: Array<{ value: TransferStatus | ''; label:
   { value: 'pending_approval', label: 'Pendientes de aprobación' },
   { value: 'approved', label: 'Aprobados' },
   { value: 'in_transit', label: 'En tránsito' },
+  { value: 'partially_received', label: 'Con recepción parcial' },
+  { value: 'discrepancy', label: 'Con discrepancia' },
   { value: 'received', label: 'Recibidos' },
   { value: 'closed_with_adjustment', label: 'Cerrado con ajuste' },
   { value: 'incident', label: 'Con incidencia' },
@@ -174,12 +196,166 @@ export function isRouteEnabled(
   policy: { allow_branch_to_branch: boolean; allow_branch_to_central: boolean } | null
 ): boolean {
   if (!policy || route === 'central_distribution') return true;
-  return route === 'branch_to_branch' ? policy.allow_branch_to_branch : policy.allow_branch_to_central;
+  return route === 'branch_to_branch'
+    ? policy.allow_branch_to_branch
+    : policy.allow_branch_to_central;
 }
 
 /** Statuses a rule change freezes: nothing moves them forward while the route is off. */
 export function isFrozenWhenRouteOff(status: TransferStatus): boolean {
   return status === 'preparation' || status === 'pending_approval' || status === 'approved';
+}
+
+/** The vehicle and the driver are busy and the GPS is watched while a transfer is in these. */
+const ON_ROAD: readonly string[] = ['in_transit', 'partially_received', 'incident'];
+
+export function isOnRoad(status: string): boolean {
+  return ON_ROAD.includes(status);
+}
+
+/** Part of the load may still arrive: the destination can register quantities. */
+export function isReceivable(status: string): boolean {
+  return status === 'in_transit' || status === 'partially_received';
+}
+
+/** What is still on its way and not declared missing; older payloads fall back to in transit. */
+export function pendingReceptionQuantity(
+  line: Pick<TransferLine, 'quantity_in_transit'> & { quantity_pending_reception?: TransferDecimal }
+): bigint {
+  return scaledQuantity(line.quantity_pending_reception ?? line.quantity_in_transit) ?? 0n;
+}
+
+export const FITNESS_LABEL: Record<FitnessState, string> = {
+  ok: 'Apto',
+  warning: 'Con advertencias',
+  blocked: 'No apto'
+};
+
+/** The overall fitness of a transport judgement made ahead of departure. */
+export function assignmentFitness(check: AssignmentCheck | null): FitnessState | null {
+  if (!check) return null;
+  if (check.planning_blocked) return 'blocked';
+  const hasIssues = check.vehicle_issues.length > 0 || check.driver_issues.length > 0;
+  return hasIssues || check.warnings > 0 || check.conflicts.length > 0 ? 'warning' : 'ok';
+}
+
+export const DAMAGE_TYPE_OPTIONS: Array<{ value: DamageType; label: string }> = [
+  { value: 'broken', label: 'Rotura' },
+  { value: 'crushed', label: 'Golpe o aplastamiento' },
+  { value: 'wet', label: 'Humedad o mojado' },
+  { value: 'contaminated', label: 'Derrame o contaminación' },
+  { value: 'packaging', label: 'Empaque dañado' },
+  { value: 'tampered', label: 'Empaque abierto o sello violado' },
+  { value: 'temperature', label: 'Cadena de frío rota' },
+  { value: 'other', label: 'Otro' }
+];
+
+export function damageTypeLabel(type: string | null | undefined): string {
+  return DAMAGE_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? 'Otro';
+}
+
+export function discrepancyKindLabel(kind: DiscrepancyKind): string {
+  return { shortage: 'Faltante', damage: 'Avería', surplus: 'Sobrante' }[kind] ?? 'Diferencia';
+}
+
+export function discrepancyStatusLabel(status: DiscrepancyStatus): string {
+  const labels: Record<DiscrepancyStatus, string> = {
+    open: 'Abierta',
+    in_claim: 'En reclamo',
+    resolved: 'Resuelta',
+    cancelled: 'Anulada'
+  };
+  return labels[status] ?? 'Estado desconocido';
+}
+
+export function discrepancyResolutionLabel(
+  kind: DiscrepancyKind,
+  resolution: DiscrepancyResolution | null
+): string {
+  switch (resolution) {
+    case 'written_off':
+      return kind === 'damage' ? 'Dada de baja' : 'Dado de baja';
+    case 'found':
+      return 'Llegó la mercadería';
+    case 'released':
+      return 'Liberada a cuarentena';
+    case 'regularized':
+      return 'Regularizado con ajuste';
+    case 'dismissed':
+      return 'Descartado';
+    default:
+      return 'Sin resolver';
+  }
+}
+
+export const SUBSTITUTION_CODE_OPTIONS: Array<{ value: SubstitutionCode; label: string }> = [
+  { value: 'vehicle_unfit', label: 'El vehículo aprobado ya no está apto' },
+  { value: 'vehicle_unavailable', label: 'El vehículo aprobado no está disponible' },
+  { value: 'driver_unfit', label: 'El conductor aprobado ya no está apto' },
+  { value: 'driver_unavailable', label: 'El conductor aprobado no está disponible' },
+  { value: 'load_change', label: 'Cambió la carga' },
+  { value: 'other', label: 'Otro motivo' }
+];
+
+export function substitutionCodeLabel(code: string | null | undefined): string {
+  return SUBSTITUTION_CODE_OPTIONS.find((option) => option.value === code)?.label ?? 'Otro motivo';
+}
+
+/** A difference somebody still has to act on (a claim stays active until it is resolved). */
+export function isDiscrepancyActive(discrepancy: Pick<TransferDiscrepancy, 'status'>): boolean {
+  return discrepancy.status === 'open' || discrepancy.status === 'in_claim';
+}
+
+const KIND_NOUN: Record<DiscrepancyKind, [string, string]> = {
+  shortage: ['faltante', 'faltantes'],
+  damage: ['avería', 'averías'],
+  surplus: ['sobrante', 'sobrantes']
+};
+
+/** "dado de baja", "liberadas", … agreeing in gender and number with the noun. */
+function resolvedPhrase(kind: DiscrepancyKind, count: number, resolution: string): string {
+  const ending = `${kind === 'damage' ? 'a' : 'o'}${count === 1 ? '' : 's'}`;
+  switch (resolution) {
+    case 'written_off':
+      return `dad${ending} de baja`;
+    case 'released':
+      return `liberad${ending}`;
+    case 'regularized':
+      return `regularizad${ending}`;
+    case 'found':
+      return `encontrad${ending}`;
+    case 'dismissed':
+      return `descartad${ending}`;
+    default:
+      return `resuelt${ending}`;
+  }
+}
+
+/** "1 avería en reclamo · 1 sobrante regularizado": what became of each difference. */
+export function discrepancySummary(discrepancies: TransferDiscrepancy[]): string {
+  const groups = new Map<string, { kind: DiscrepancyKind; state: string; count: number }>();
+  for (const item of discrepancies) {
+    const state =
+      item.status === 'open' || item.status === 'in_claim'
+        ? item.status
+        : (item.resolution ?? item.status);
+    const key = `${item.kind}:${state}`;
+    const group = groups.get(key) ?? { kind: item.kind, state, count: 0 };
+    group.count += 1;
+    groups.set(key, group);
+  }
+  return [...groups.values()]
+    .map(({ kind, state, count }) => {
+      const noun = KIND_NOUN[kind][count === 1 ? 0 : 1];
+      const phrase =
+        state === 'open'
+          ? 'por resolver'
+          : state === 'in_claim'
+            ? 'en reclamo'
+            : resolvedPhrase(kind, count, state);
+      return `${count} ${noun} ${phrase}`;
+    })
+    .join(' · ');
 }
 
 export function demandProgressLabel(demand: TransferDemandRecord): string {
@@ -190,4 +366,145 @@ export function demandProgressLabel(demand: TransferDemandRecord): string {
   )} · Recibido ${formatQuantity(demand.quantity_received)} · Pendiente de asignar ${formatQuantity(
     demand.quantity_pending
   )}`;
+}
+
+/** What a person asks of one difference of a transfer, gathered by the discrepancy panel. */
+export interface DiscrepancyAdjustmentForm {
+  operationalDate: string;
+  accountingDate: string;
+  reason: string;
+  documentReference: string;
+  notes: string;
+  /** Surplus only: how the extra units are packed when they enter stock. */
+  packaging: 'source' | 'definition' | 'measures';
+  packagingId: string;
+  weightKg: string;
+  volumeM3: string;
+  /** Surplus only, and only for people who can see costs. */
+  costMode: 'none' | 'unit' | 'total';
+  cost: string;
+}
+
+export type DiscrepancyRequest =
+  | { action: 'claim'; discrepancy: TransferDiscrepancy; claimReference: string }
+  | { action: 'release'; discrepancy: TransferDiscrepancy; notes: string; locationId: string }
+  | {
+      action: 'found' | 'dismiss' | 'origin-count';
+      discrepancy: TransferDiscrepancy;
+      notes: string;
+    }
+  | { action: 'adjust'; discrepancy: TransferDiscrepancy; form: DiscrepancyAdjustmentForm };
+
+/** Today in the company's calendar, as `YYYY-MM-DD`. */
+export function businessToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/El_Salvador',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(now);
+}
+
+const FRIENDLY_ERRORS: Record<string, string> = {
+  transfer_assignment_units_invalid:
+    'Alguna unidad del borrador ya no está disponible para calcular la carga. Actualiza los saldos y revisa las cantidades.',
+  transfer_assignment_transfer_mismatch:
+    'El traslado en edición no coincide con la bodega de origen elegida. Cierra el formulario y vuelve a abrir la preparación.',
+  transfer_discrepancy_open:
+    'Este traslado tiene faltantes abiertos. Resuélvelos, o marca que llegó la mercadería, antes de registrar otra recepción.',
+  valuation_opening_required:
+    'Primero aprueba el saldo inicial de valuación de la empresa para poder aplicar ajustes.'
+};
+
+/** Codes whose friendly text keeps the server's own message (it names the adjustment). */
+const KEEP_SERVER_MESSAGE: Record<string, string> = {
+  transfer_discrepancy_has_adjustment:
+    'Termínalo o cancélalo desde el ajuste antes de resolverla de otra forma.'
+};
+
+/** The message of a failed request; some codes get wording that says what to do next. */
+export function transferErrorMessage(cause: unknown, fallback: string): string {
+  const code = cause && typeof cause === 'object' ? (cause as { code?: unknown }).code : undefined;
+  if (typeof code === 'string') {
+    const friendly = FRIENDLY_ERRORS[code];
+    if (friendly) return friendly;
+    const advice = KEEP_SERVER_MESSAGE[code];
+    if (advice && cause instanceof Error) {
+      const server = cause.message.trim();
+      return `${server}${/[.!?]$/.test(server) ? '' : '.'} ${advice}`;
+    }
+  }
+  return cause instanceof Error ? cause.message : fallback;
+}
+
+/** What the vehicle's documents say; the fitness chip says whether it can make the trip. */
+export const COMPLIANCE_LABEL: Record<FitnessState, string> = {
+  ok: 'Documentos al día',
+  warning: 'Documentos por vencer',
+  blocked: 'Documentos vencidos'
+};
+
+/** The vehicle's name without its plate when the registry already repeats it in parentheses. */
+export function vehicleName(vehicle: { name?: string | null; plate?: string | null }): string {
+  const name = (vehicle.name ?? '').trim();
+  const plate = (vehicle.plate ?? '').trim();
+  if (!plate) return name;
+  // Plain string work: a plate may hold characters that mean something in a pattern.
+  let result = name.split(`(${plate})`).join('');
+  if (result.startsWith(plate)) result = result.slice(plate.length).replace(/^[\s·-]+/, '');
+  return result.replace(/\s{2,}/g, ' ').trim();
+}
+
+/** "VEH-01 · C 123", with the name only when it adds something. */
+export function vehicleSummary(vehicle: {
+  code: string;
+  name?: string | null;
+  plate?: string | null;
+}): string {
+  const name = vehicleName(vehicle);
+  return [vehicle.code, vehicle.plate ?? 'Sin placa', name].filter(Boolean).join(' · ');
+}
+
+/** "Unidad (u)": the unit's name with its symbol, unless the name already carries it. */
+export function unitDisplay(
+  name: string | null | undefined,
+  symbol: string | null | undefined
+): string {
+  const base = (name ?? '').trim();
+  const mark = (symbol ?? '').trim();
+  if (!base) return mark;
+  if (!mark || base === mark || base.includes(`(${mark})`)) return base;
+  return `${base} (${mark})`;
+}
+
+/** Transit locations of a vehicle are coded "VEH-<vehicle code>"; do not repeat the prefix. */
+export function displayLocationCode(code: string | null | undefined): string {
+  return (code ?? '').replace(/^([A-Za-z]+)-\1-/, '$1-');
+}
+
+const ADJUSTMENT_EVENT_LABELS: Record<string, string> = {
+  created: 'Borrador creado',
+  updated: 'Borrador actualizado',
+  approval_revoked: 'Aprobación revocada',
+  approved: 'Aprobado',
+  cancelled: 'Cancelado',
+  applied: 'Aplicado',
+  document_linked: 'Comprobante vinculado',
+  document_detached: 'Comprobante retirado'
+};
+
+export function adjustmentEventLabel(action: string): string {
+  return ADJUSTMENT_EVENT_LABELS[action] ?? action.replaceAll('_', ' ');
+}
+
+const DOCUMENT_STATUS_LABELS: Record<string, string> = {
+  active: 'Validado',
+  pending: 'En revisión',
+  quarantined: 'En cuarentena',
+  rejected: 'Rechazado',
+  deleted: 'Eliminado'
+};
+
+export function documentStatusLabel(status: string): string {
+  return DOCUMENT_STATUS_LABELS[status] ?? status;
 }

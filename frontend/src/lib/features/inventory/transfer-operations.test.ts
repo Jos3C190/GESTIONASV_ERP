@@ -1,14 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import type { TransferDemandRecord } from './transfer-documents';
+import type {
+  AssignmentCheck,
+  TransferDemandRecord,
+  TransferDiscrepancy
+} from './transfer-documents';
 import {
   allocateDemandQuantity,
+  adjustmentEventLabel,
+  assignmentFitness,
+  businessToday,
   clearTransferAttempt,
   compareQuantities,
+  DAMAGE_TYPE_OPTIONS,
+  damageTypeLabel,
   demandProgressLabel,
+  discrepancyKindLabel,
+  discrepancyResolutionLabel,
+  discrepancySummary,
+  displayLocationCode,
+  documentStatusLabel,
   formatQuantity,
   getOrCreateTransferAttempt,
+  isDiscrepancyActive,
   isFrozenWhenRouteOff,
+  isOnRoad,
+  isReceivable,
   isRouteEnabled,
+  pendingReceptionQuantity,
+  substitutionCodeLabel,
+  transferErrorMessage,
+  unitDisplay,
+  vehicleName,
+  vehicleSummary,
+  COMPLIANCE_LABEL,
+  SUBSTITUTION_CODE_OPTIONS,
   quantityFromScaled,
   quantityString,
   remainingAssignment,
@@ -79,10 +104,38 @@ describe('transfer-operations', () => {
     let nextKey = 0;
     const createKey = () => `attempt-${++nextKey}`;
 
-    const first = getOrCreateTransferAttempt(storage, memory, 'company-a:all:all', 'dispatch:transfer-1', '{"vehicle":"v1"}', createKey);
-    const retry = getOrCreateTransferAttempt(storage, memory, 'company-a:all:all', 'dispatch:transfer-1', '{"vehicle":"v1"}', createKey);
-    const changedBody = getOrCreateTransferAttempt(storage, memory, 'company-a:all:all', 'dispatch:transfer-1', '{"vehicle":"v2"}', createKey);
-    const changedContext = getOrCreateTransferAttempt(storage, memory, 'company-b:all:all', 'dispatch:transfer-1', '{"vehicle":"v1"}', createKey);
+    const first = getOrCreateTransferAttempt(
+      storage,
+      memory,
+      'company-a:all:all',
+      'dispatch:transfer-1',
+      '{"vehicle":"v1"}',
+      createKey
+    );
+    const retry = getOrCreateTransferAttempt(
+      storage,
+      memory,
+      'company-a:all:all',
+      'dispatch:transfer-1',
+      '{"vehicle":"v1"}',
+      createKey
+    );
+    const changedBody = getOrCreateTransferAttempt(
+      storage,
+      memory,
+      'company-a:all:all',
+      'dispatch:transfer-1',
+      '{"vehicle":"v2"}',
+      createKey
+    );
+    const changedContext = getOrCreateTransferAttempt(
+      storage,
+      memory,
+      'company-b:all:all',
+      'dispatch:transfer-1',
+      '{"vehicle":"v1"}',
+      createKey
+    );
 
     expect(retry.idempotencyKey).toBe(first.idempotencyKey);
     expect(changedBody.idempotencyKey).not.toBe(first.idempotencyKey);
@@ -95,10 +148,31 @@ describe('transfer-operations', () => {
     let nextKey = 0;
     const createKey = () => `attempt-${++nextKey}`;
 
-    const first = getOrCreateTransferAttempt(null, memory, 'company-a:branch-1:scoped', 'receive:transfer-1', 'line-1:8', createKey);
-    const retry = getOrCreateTransferAttempt(null, memory, 'company-a:branch-1:scoped', 'receive:transfer-1', 'line-1:8', createKey);
+    const first = getOrCreateTransferAttempt(
+      null,
+      memory,
+      'company-a:branch-1:scoped',
+      'receive:transfer-1',
+      'line-1:8',
+      createKey
+    );
+    const retry = getOrCreateTransferAttempt(
+      null,
+      memory,
+      'company-a:branch-1:scoped',
+      'receive:transfer-1',
+      'line-1:8',
+      createKey
+    );
     clearTransferAttempt(null, memory, 'company-a:branch-1:scoped', 'receive:transfer-1');
-    const next = getOrCreateTransferAttempt(null, memory, 'company-a:branch-1:scoped', 'receive:transfer-1', 'line-1:8', createKey);
+    const next = getOrCreateTransferAttempt(
+      null,
+      memory,
+      'company-a:branch-1:scoped',
+      'receive:transfer-1',
+      'line-1:8',
+      createKey
+    );
 
     expect(retry.idempotencyKey).toBe(first.idempotencyKey);
     expect(next.idempotencyKey).not.toBe(first.idempotencyKey);
@@ -118,7 +192,9 @@ describe('transfer-operations', () => {
 
   it('sabe si las reglas permiten trabajar una ruta y qué estados congela', () => {
     const rules = { allow_branch_to_branch: true, allow_branch_to_central: false };
-    expect(isRouteEnabled('central_distribution', { ...rules, allow_branch_to_branch: false })).toBe(true);
+    expect(
+      isRouteEnabled('central_distribution', { ...rules, allow_branch_to_branch: false })
+    ).toBe(true);
     expect(isRouteEnabled('branch_to_branch', rules)).toBe(true);
     expect(isRouteEnabled('branch_to_central', rules)).toBe(false);
     expect(isRouteEnabled('branch_to_central', null)).toBe(true);
@@ -126,5 +202,211 @@ describe('transfer-operations', () => {
     expect(isFrozenWhenRouteOff('approved')).toBe(true);
     expect(isFrozenWhenRouteOff('in_transit')).toBe(false);
     expect(isFrozenWhenRouteOff('incident')).toBe(false);
+  });
+});
+
+function discrepancy(patch: Partial<TransferDiscrepancy>): TransferDiscrepancy {
+  return {
+    id: 'd-1',
+    transfer_detail_id: 'line-1',
+    line_number: 1,
+    product_name: 'Producto',
+    sku: 'SKU',
+    base_unit_symbol: 'u',
+    kind: 'damage',
+    status: 'open',
+    source: 'receipt',
+    quantity: '1',
+    damage_type: 'broken',
+    notes: 'Caja rota',
+    evidence_reference: null,
+    location_id: null,
+    location_code: null,
+    handling_unit_id: null,
+    handling_unit_code: null,
+    receipt_id: null,
+    incident_id: null,
+    opened_by_id: 'u-1',
+    opened_by_name: null,
+    opened_at: '2026-10-20T12:00:00Z',
+    claim_reference: null,
+    claimed_by_id: null,
+    claimed_by_name: null,
+    claimed_at: null,
+    resolution: null,
+    resolution_notes: null,
+    resolved_by_id: null,
+    resolved_by_name: null,
+    resolved_at: null,
+    origin_count_required: false,
+    origin_counted_by_id: null,
+    origin_counted_by_name: null,
+    origin_counted_at: null,
+    origin_count_notes: null,
+    adjustment: null,
+    ...patch
+  };
+}
+
+describe('recepción parcial y discrepancias', () => {
+  it('nombra los estados nuevos y los ofrece en el filtro', () => {
+    expect(transferStatusLabel('partially_received')).toBe('Recepción parcial');
+    expect(transferStatusLabel('discrepancy')).toBe('Con discrepancia');
+    const options = Object.fromEntries(
+      TRANSFER_STATUS_OPTIONS.map((item) => [item.value, item.label])
+    );
+    expect(options.partially_received).toBe('Con recepción parcial');
+    expect(options.discrepancy).toBe('Con discrepancia');
+  });
+
+  it('sabe cuándo el vehículo está en ruta y cuándo se puede recibir', () => {
+    for (const status of ['in_transit', 'partially_received', 'incident'])
+      expect(isOnRoad(status)).toBe(true);
+    for (const status of ['approved', 'discrepancy', 'received', 'closed_with_adjustment'])
+      expect(isOnRoad(status)).toBe(false);
+    expect(isReceivable('in_transit')).toBe(true);
+    expect(isReceivable('partially_received')).toBe(true);
+    expect(isReceivable('incident')).toBe(false);
+    expect(isReceivable('discrepancy')).toBe(false);
+  });
+
+  it('usa lo pendiente de recepción y, sin él, lo que sigue en tránsito', () => {
+    expect(
+      pendingReceptionQuantity({ quantity_in_transit: '5', quantity_pending_reception: '2' })
+    ).toBe(2_000_000n);
+    expect(pendingReceptionQuantity({ quantity_in_transit: '5' })).toBe(5_000_000n);
+  });
+
+  it('nombra los tipos de avería, de diferencia y de sustitución', () => {
+    expect(DAMAGE_TYPE_OPTIONS).toHaveLength(8);
+    expect(damageTypeLabel('temperature')).toBe('Cadena de frío rota');
+    expect(damageTypeLabel('tampered')).toBe('Empaque abierto o sello violado');
+    expect(discrepancyKindLabel('shortage')).toBe('Faltante');
+    expect(discrepancyKindLabel('damage')).toBe('Avería');
+    expect(discrepancyKindLabel('surplus')).toBe('Sobrante');
+    expect(discrepancyResolutionLabel('shortage', 'found')).toBe('Llegó la mercadería');
+    expect(discrepancyResolutionLabel('damage', 'released')).toBe('Liberada a cuarentena');
+    expect(SUBSTITUTION_CODE_OPTIONS.map((item) => item.value)).toEqual([
+      'vehicle_unfit',
+      'vehicle_unavailable',
+      'driver_unfit',
+      'driver_unavailable',
+      'load_change',
+      'other'
+    ]);
+    expect(substitutionCodeLabel('load_change')).toBe('Cambió la carga');
+  });
+
+  it('resume el cierre por tipo y resolución', () => {
+    expect(
+      discrepancySummary([
+        discrepancy({ id: 'a', kind: 'damage', status: 'in_claim' }),
+        discrepancy({ id: 'b', kind: 'surplus', status: 'resolved', resolution: 'regularized' })
+      ])
+    ).toBe('1 avería en reclamo · 1 sobrante regularizado');
+    expect(
+      discrepancySummary([
+        discrepancy({ id: 'a', kind: 'damage', status: 'resolved', resolution: 'written_off' }),
+        discrepancy({ id: 'b', kind: 'damage', status: 'resolved', resolution: 'written_off' }),
+        discrepancy({ id: 'c', kind: 'shortage', status: 'open' }),
+        discrepancy({ id: 'd', kind: 'shortage', status: 'resolved', resolution: 'written_off' })
+      ])
+    ).toBe('2 averías dadas de baja · 1 faltante por resolver · 1 faltante dado de baja');
+    expect(discrepancySummary([])).toBe('');
+  });
+
+  it('distingue lo que aún se atiende de lo ya resuelto o anulado', () => {
+    expect(isDiscrepancyActive({ status: 'open' })).toBe(true);
+    expect(isDiscrepancyActive({ status: 'in_claim' })).toBe(true);
+    expect(isDiscrepancyActive({ status: 'resolved' })).toBe(false);
+    expect(isDiscrepancyActive({ status: 'cancelled' })).toBe(false);
+  });
+
+  it('resume la aptitud de un transporte planificado', () => {
+    const base: AssignmentCheck = {
+      vehicle_id: 'v',
+      driver_id: 'd',
+      vehicle_issues: [],
+      driver_issues: [],
+      planning_blocked: false,
+      warnings: 0,
+      conflicts: [],
+      load_kg: null,
+      load_missing_weight: 0
+    };
+    expect(assignmentFitness(null)).toBeNull();
+    expect(assignmentFitness(base)).toBe('ok');
+    expect(assignmentFitness({ ...base, warnings: 1 })).toBe('warning');
+    expect(assignmentFitness({ ...base, planning_blocked: true })).toBe('blocked');
+  });
+
+  it('da la fecha de hoy en el calendario de la empresa', () => {
+    expect(businessToday(new Date('2026-10-21T03:30:00Z'))).toBe('2026-10-20');
+  });
+});
+
+describe('textos de pantalla', () => {
+  it('no repite la placa que el nombre del vehículo ya trae entre paréntesis', () => {
+    const vehicle = { code: 'VEH-SM-01', plate: 'C 118-402', name: 'Isuzu NPR (C 118-402)' };
+    expect(vehicleName(vehicle)).toBe('Isuzu NPR');
+    expect(vehicleSummary(vehicle)).toBe('VEH-SM-01 · C 118-402 · Isuzu NPR');
+    expect(vehicleSummary({ code: 'FL-1', plate: null, name: '' })).toBe('FL-1 · Sin placa');
+    expect(vehicleName({ name: 'C 123 Hiace', plate: 'C 123' })).toBe('Hiace');
+  });
+
+  it('muestra la unidad con su símbolo solo una vez', () => {
+    expect(unitDisplay('Unidad (u)', 'u')).toBe('Unidad (u)');
+    expect(unitDisplay('Unidad', 'u')).toBe('Unidad (u)');
+    expect(unitDisplay('Caja', null)).toBe('Caja');
+    expect(unitDisplay(null, 'kg')).toBe('kg');
+  });
+
+  it('no repite el prefijo de las ubicaciones de tránsito de un vehículo', () => {
+    expect(displayLocationCode('VEH-VEH-SM-01')).toBe('VEH-SM-01');
+    expect(displayLocationCode('QUA-01')).toBe('QUA-01');
+    expect(displayLocationCode(null)).toBe('');
+  });
+
+  it('traduce el historial del ajuste y el estado de sus comprobantes', () => {
+    expect(adjustmentEventLabel('created')).toBe('Borrador creado');
+    expect(adjustmentEventLabel('approved')).toBe('Aprobado');
+    expect(adjustmentEventLabel('cancelled')).toBe('Cancelado');
+    expect(adjustmentEventLabel('applied')).toBe('Aplicado');
+    expect(adjustmentEventLabel('algo_nuevo')).toBe('algo nuevo');
+    expect(documentStatusLabel('active')).toBe('Validado');
+    expect(documentStatusLabel('otro')).toBe('otro');
+  });
+
+  it('distingue lo que dicen los documentos de la aptitud para el viaje', () => {
+    expect(COMPLIANCE_LABEL.ok).toBe('Documentos al día');
+    expect(COMPLIANCE_LABEL.warning).toBe('Documentos por vencer');
+    expect(COMPLIANCE_LABEL.blocked).toBe('Documentos vencidos');
+  });
+
+  it('da textos claros a los errores nuevos del servidor y conserva el código del ajuste', () => {
+    const error = (code: string, message: string) => Object.assign(new Error(message), { code });
+    expect(transferErrorMessage(error('valuation_opening_required', 'x'), 'f')).toBe(
+      'Primero aprueba el saldo inicial de valuación de la empresa para poder aplicar ajustes.'
+    );
+    expect(transferErrorMessage(error('transfer_discrepancy_open', 'x'), 'f')).toMatch(
+      /faltantes abiertos/
+    );
+    expect(transferErrorMessage(error('transfer_assignment_transfer_mismatch', 'x'), 'f')).toMatch(
+      /no coincide con la bodega de origen/
+    );
+    expect(transferErrorMessage(error('transfer_assignment_units_invalid', 'x'), 'f')).toMatch(
+      /ya no está disponible/
+    );
+    const withAdjustment = transferErrorMessage(
+      error(
+        'transfer_discrepancy_has_adjustment',
+        'La diferencia ya tiene el ajuste AJ-0042 en curso.'
+      ),
+      'f'
+    );
+    expect(withAdjustment).toContain('AJ-0042');
+    expect(withAdjustment).toMatch(/Termínalo o cancélalo desde el ajuste/);
+    expect(transferErrorMessage(new Error('Otro fallo'), 'f')).toBe('Otro fallo');
+    expect(transferErrorMessage('???', 'Respaldo')).toBe('Respaldo');
   });
 });

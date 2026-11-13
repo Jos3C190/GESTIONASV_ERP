@@ -1,13 +1,44 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeTransfer } from '../../../../../tests/unit/fixtures/inventory-transfer';
-import type { InventoryTransfer } from '../transfer-documents';
+import type { AssignmentCheck, InventoryTransfer } from '../transfer-documents';
+
+const apiMock = vi.hoisted(() => ({ transferAssignmentCheck: vi.fn() }));
+vi.mock('$lib/features/inventory/transfer-documents', () => ({ inventoryTransfersApi: apiMock }));
+
 import TransferApprovalPanel from './TransferApprovalPanel.svelte';
 
-afterEach(cleanup);
+const transport = {
+  vehicle: { id: 'iv1', code: 'FL-001', name: 'Hiace', status: 'active', plate: 'C 123' },
+  driver: { id: 'd1', name: 'Carlos Martínez', employee_code: 'EMP-1' }
+} satisfies Partial<InventoryTransfer>;
+
+function fit(patch: Partial<AssignmentCheck> = {}): AssignmentCheck {
+  return {
+    vehicle_id: 'iv1',
+    driver_id: 'd1',
+    vehicle_issues: [],
+    driver_issues: [],
+    planning_blocked: false,
+    warnings: 0,
+    conflicts: [],
+    load_kg: null,
+    load_missing_weight: 0,
+    ...patch
+  };
+}
+
+beforeEach(() => {
+  apiMock.transferAssignmentCheck.mockResolvedValue(fit());
+});
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 const pending = (patch: Partial<InventoryTransfer> = {}) =>
   makeTransfer({
+    ...transport,
     route_type: 'branch_to_branch',
     origin_is_central: false,
     origin_branch_name: 'Sucursal Norte',
@@ -55,6 +86,7 @@ describe('TransferApprovalPanel', () => {
   it('pide enviar a aprobación una preparación que lo necesita', async () => {
     const handlers = mount(
       makeTransfer({
+        ...transport,
         route_type: 'branch_to_central',
         origin_is_central: false,
         origin_branch_name: 'Sucursal Norte',
@@ -71,22 +103,31 @@ describe('TransferApprovalPanel', () => {
   });
 
   it('no deja enviar sin permiso de movimiento ni con la ruta apagada', () => {
-    mount(makeTransfer({ route_type: 'branch_to_central', requires_approval: true }), {
-      canMove: false
-    });
+    mount(
+      makeTransfer({ ...transport, route_type: 'branch_to_central', requires_approval: true }),
+      {
+        canMove: false
+      }
+    );
     expect(screen.getByRole('button', { name: 'Enviar a aprobación' })).toBeDisabled();
     cleanup();
-    mount(makeTransfer({ route_type: 'branch_to_central', requires_approval: true }), {
-      routeEnabled: false
-    });
+    mount(
+      makeTransfer({ ...transport, route_type: 'branch_to_central', requires_approval: true }),
+      {
+        routeEnabled: false
+      }
+    );
     expect(screen.getByRole('button', { name: 'Enviar a aprobación' })).toBeDisabled();
     expect(screen.getByText(/Esta ruta está desactivada/)).toBeInTheDocument();
   });
 
   it('con la ruta apagada solo muestra el aviso de ruta desactivada, no el de aprobación', () => {
-    mount(makeTransfer({ route_type: 'branch_to_central', requires_approval: true }), {
-      routeEnabled: false
-    });
+    mount(
+      makeTransfer({ ...transport, route_type: 'branch_to_central', requires_approval: true }),
+      {
+        routeEnabled: false
+      }
+    );
     expect(screen.getByText(/Esta ruta está desactivada/)).toBeInTheDocument();
     expect(screen.queryByText(/necesita aprobación antes de despacharse/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Enviar a aprobación' })).toHaveAttribute(
@@ -270,5 +311,176 @@ describe('TransferApprovalPanel', () => {
     );
     expect(screen.getByText('Aprobado por Luis Jefe el 20 oct 2026.')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  describe('transporte asignado', () => {
+    it('muestra el vehículo, el conductor y su aptitud en vivo', async () => {
+      mount(pending());
+      expect(screen.getByRole('heading', { name: 'Transporte asignado' })).toBeInTheDocument();
+      expect(screen.getByText(/FL-001 · C 123/)).toBeInTheDocument();
+      expect(screen.getByText(/Carlos Martínez/)).toBeInTheDocument();
+      expect(await screen.findByText('Apto')).toBeInTheDocument();
+      expect(apiMock.transferAssignmentCheck).toHaveBeenCalledWith('transfer-a');
+    });
+
+    it('lista advertencias y los conflictos de planificación', async () => {
+      apiMock.transferAssignmentCheck.mockResolvedValue(
+        fit({
+          warnings: 1,
+          vehicle_issues: [
+            {
+              code: 'inspection_required',
+              severity: 'warning',
+              message: 'Al despachar: requiere inspección.',
+              overridable: false
+            }
+          ],
+          conflicts: [
+            {
+              transfer_id: 'other',
+              code: 'TR-9',
+              status: 'approved',
+              same_vehicle: true,
+              same_driver: false,
+              message: 'También está asignado a TR-9 (aprobado).'
+            }
+          ]
+        })
+      );
+      mount(pending(), { canApprove: true });
+      expect(await screen.findByText('Con advertencias')).toBeInTheDocument();
+      expect(screen.getByText('Al despachar: requiere inspección.')).toBeInTheDocument();
+      expect(screen.getByText('También está asignado a TR-9 (aprobado).')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Aprobar traslado' })).toBeEnabled();
+    });
+
+    it('deshabilita aprobar cuando el transporte no es apto y lo explica', async () => {
+      apiMock.transferAssignmentCheck.mockResolvedValue(
+        fit({
+          planning_blocked: true,
+          vehicle_issues: [
+            {
+              code: 'vehicle_not_active',
+              severity: 'blocking',
+              message: 'El vehículo no está activo.',
+              overridable: false
+            }
+          ]
+        })
+      );
+      mount(pending(), { canApprove: true });
+      expect(await screen.findByText('No apto')).toBeInTheDocument();
+      expect(screen.getByText('El vehículo no está activo.')).toBeInTheDocument();
+      const approve = screen.getByRole('button', { name: 'Aprobar traslado' });
+      expect(approve).toBeDisabled();
+      expect(approve).toHaveAttribute('aria-describedby', 'transfer-decision-note');
+      expect(document.getElementById('transfer-decision-note')).toHaveTextContent(/no sea apto/);
+      // Rejecting stays possible so the author can fix it.
+      expect(screen.getByRole('button', { name: 'Rechazar' })).toBeEnabled();
+    });
+
+    it('sin vehículo o sin conductor no deja enviar ni aprobar y explica por qué', () => {
+      mount(
+        makeTransfer({
+          route_type: 'branch_to_branch',
+          requires_approval: true,
+          vehicle: transport.vehicle,
+          driver: null
+        })
+      );
+      const send = screen.getByRole('button', { name: 'Enviar a aprobación' });
+      expect(send).toBeDisabled();
+      expect(send).toHaveAttribute('aria-describedby', 'transfer-transport-note');
+      expect(document.getElementById('transfer-transport-note')).toHaveTextContent(
+        'Elige vehículo y conductor antes de enviar el traslado a aprobación.'
+      );
+      expect(screen.getAllByText('Sin asignar')).toHaveLength(1);
+      expect(apiMock.transferAssignmentCheck).not.toHaveBeenCalled();
+      cleanup();
+      mount(pending({ vehicle: null, driver: null }), { canApprove: true });
+      expect(screen.getByRole('button', { name: 'Aprobar traslado' })).toBeDisabled();
+      expect(screen.getAllByText('Sin asignar')).toHaveLength(2);
+    });
+
+    it('deshabilita enviar cuando la revisión del transporte lo bloquea', async () => {
+      apiMock.transferAssignmentCheck.mockResolvedValue(fit({ planning_blocked: true }));
+      mount(
+        makeTransfer({ ...transport, route_type: 'branch_to_branch', requires_approval: true })
+      );
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Enviar a aprobación' })).toBeDisabled()
+      );
+      expect(document.getElementById('transfer-transport-note')).toHaveTextContent(
+        /no es apto para planificar/
+      );
+    });
+
+    it('si no se puede revisar el transporte, no impide decidir: el servidor lo valida', async () => {
+      apiMock.transferAssignmentCheck.mockRejectedValue(new Error('sin red'));
+      mount(pending(), { canApprove: true });
+      expect(await screen.findByText(/No se pudo revisar el transporte/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Aprobar traslado' })).toBeEnabled();
+    });
+
+    it('un traslado aprobado muestra lo aprobado sin volver a consultar', () => {
+      mount(
+        makeTransfer({
+          route_type: 'branch_to_branch',
+          requires_approval: true,
+          status: 'approved',
+          approved_by_name: 'Luis Jefe',
+          approved_at: '2026-10-21T09:00:00Z',
+          vehicle: transport.vehicle,
+          driver: transport.driver,
+          approved_vehicle: transport.vehicle,
+          approved_driver: transport.driver
+        })
+      );
+      expect(screen.getByText(/FL-001 · C 123/)).toBeInTheDocument();
+      expect(apiMock.transferAssignmentCheck).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('revisión del transporte: indicador', () => {
+  it('el aviso «Revisando el transporte…» se apaga con la respuesta o con el fallo y no reaparece al refrescar igual', async () => {
+    apiMock.transferAssignmentCheck.mockRejectedValue(new Error('sin red'));
+    const transfer = pending();
+    const view = render(TransferApprovalPanel, {
+      transfer,
+      canMove: true,
+      canApprove: true,
+      currentUserId: 'user-other',
+      formatDate: () => '20 oct 2026',
+      onSubmit: vi.fn(),
+      onWithdraw: vi.fn(),
+      onApprove: vi.fn(),
+      onReject: vi.fn()
+    });
+    await waitFor(() =>
+      expect(screen.queryByText('Revisando el transporte…')).not.toBeInTheDocument()
+    );
+    expect(await screen.findByText(/No se pudo revisar el transporte/)).toBeInTheDocument();
+    expect(apiMock.transferAssignmentCheck).toHaveBeenCalledTimes(1);
+    // The page refreshes the same transfer after a refused command: nothing changed, no new spinner.
+    await view.rerender({ transfer: { ...transfer } });
+    expect(screen.queryByText('Revisando el transporte…')).not.toBeInTheDocument();
+    expect(apiMock.transferAssignmentCheck).toHaveBeenCalledTimes(1);
+  });
+
+  it('no repite el nombre de la placa del vehículo', () => {
+    mount(
+      pending({
+        vehicle: {
+          id: 'iv1',
+          code: 'VEH-SM-01',
+          name: 'Isuzu NPR (C 118-402)',
+          status: 'active',
+          plate: 'C 118-402'
+        }
+      })
+    );
+    expect(screen.getByText('Isuzu NPR')).toBeInTheDocument();
+    expect(screen.queryByText(/\(C 118-402\)/)).not.toBeInTheDocument();
   });
 });
