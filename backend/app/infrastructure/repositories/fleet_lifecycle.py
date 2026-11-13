@@ -26,9 +26,9 @@ from app.infrastructure.models.inventory_transfer import (
     InventoryVehicleModel,
 )
 from app.infrastructure.models.organization import Branch
+from app.infrastructure.repositories.inventory_transfer_settlement import on_road_clause
 
 FLEET_RESOURCES = frozenset({"fleet_vehicles", "drivers"})
-ON_ROAD_STATUSES = ("in_transit", "incident")
 
 
 async def _exists(session: AsyncSession, model: type[Any], *conditions: Any) -> bool:
@@ -71,7 +71,7 @@ async def fleet_deletion_blockers(session: AsyncSession, resource: str, record: 
             session,
             InventoryTransferModel,
             InventoryTransferModel.vehicle_id == record.inventory_vehicle_id,
-            InventoryTransferModel.status.in_(ON_ROAD_STATUSES),
+            on_road_clause(),
         ):
             blockers.append("un traslado en ruta")
         if await _exists(
@@ -94,7 +94,7 @@ async def fleet_deletion_blockers(session: AsyncSession, resource: str, record: 
             session,
             InventoryTransferModel,
             InventoryTransferModel.driver_id == record.id,
-            InventoryTransferModel.status.in_(ON_ROAD_STATUSES),
+            on_road_clause(),
         ):
             blockers.append("un traslado en ruta")
     return blockers

@@ -23,11 +23,11 @@ from sqlalchemy import exists, select, text
 from app.api.v1.site_sync import load_sites
 from app.api.v1.traccar_access import traccar_credentials
 from app.api.v1.transfer_tracking import (
-    ACTIVE_TRANSFER_STATUSES,
     FINAL_TRANSFER_STATUSES,
     apply_conditions,
     archive_trip,
     compute_trip,
+    on_road_clause,
     transfer_query,
     trip_context,
     trip_snapshot,
@@ -54,11 +54,7 @@ async def _watch_company(company_id: uuid.UUID) -> int:
             for site in (await load_sites(session, company_id))[0]
         ]
         rows = (
-            await session.execute(
-                transfer_query(company_id, None).where(
-                    InventoryTransferModel.status.in_(ACTIVE_TRANSFER_STATUSES)
-                )
-            )
+            await session.execute(transfer_query(company_id, None).where(on_road_clause()))
         ).all()
     evaluated = 0
     for row in rows:
@@ -97,7 +93,7 @@ async def _archive_pending() -> int:
                         & (InventoryTransferModel.received_at >= since)
                         & missing_track
                     )
-                    | (~InventoryTransferModel.status.in_(ACTIVE_TRANSFER_STATUSES) & open_alert)
+                    | (~on_road_clause() & open_alert)
                 )
             )
         ).all()
@@ -121,9 +117,7 @@ async def run_once() -> None:
         try:
             companies = (
                 await lock_session.scalars(
-                    select(InventoryTransferModel.company_id)
-                    .where(InventoryTransferModel.status.in_(ACTIVE_TRANSFER_STATUSES))
-                    .distinct()
+                    select(InventoryTransferModel.company_id).where(on_road_clause()).distinct()
                 )
             ).all()
             evaluated = 0

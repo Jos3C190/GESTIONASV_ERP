@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from decimal import Decimal
 from typing import Any, Protocol
 
 
@@ -36,6 +37,28 @@ class InventoryAdjustmentRepository(Protocol):
         correction_of_id: uuid.UUID | None = None,
         transfer_id: uuid.UUID | None = None,
         transfer_incident_id: uuid.UUID | None = None,
+        transfer_discrepancy_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]: ...
+
+    async def create_discrepancy_adjustment(
+        self,
+        *,
+        company_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        discrepancy_id: uuid.UUID,
+        idempotency_key: str,
+        operational_date: date,
+        accounting_date: date,
+        reason: str,
+        document_reference: str,
+        notes: str | None = None,
+        packaging_definition_id: uuid.UUID | None = None,
+        actual_gross_weight_kg: Decimal | None = None,
+        actual_volume_m3: Decimal | None = None,
+        inventory_lot_detail_id: uuid.UUID | None = None,
+        documented_unit_cost: Decimal | None = None,
+        documented_total_cost: Decimal | None = None,
     ) -> dict[str, Any]: ...
 
     async def update_adjustment(

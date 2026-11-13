@@ -13,6 +13,8 @@ class TransferStatus(StrEnum):
     PENDING_APPROVAL = "pending_approval"
     APPROVED = "approved"
     IN_TRANSIT = "in_transit"
+    PARTIALLY_RECEIVED = "partially_received"
+    DISCREPANCY = "discrepancy"
     RECEIVED = "received"
     CLOSED_WITH_ADJUSTMENT = "closed_with_adjustment"
     INCIDENT = "incident"
@@ -31,8 +33,75 @@ CANCELLABLE_STATUSES = (
     TransferStatus.PENDING_APPROVAL,
     TransferStatus.APPROVED,
 )
+#: The vehicle and the driver are busy and the GPS is watched while a transfer is here.
+ON_ROAD_STATUSES = (
+    TransferStatus.IN_TRANSIT,
+    TransferStatus.PARTIALLY_RECEIVED,
+    TransferStatus.INCIDENT,
+)
+#: The trip is over (even if differences are still open): its trail is archived.
+TRIP_FINISHED_STATUSES = (
+    TransferStatus.DISCREPANCY,
+    TransferStatus.RECEIVED,
+    TransferStatus.CLOSED_WITH_ADJUSTMENT,
+)
+#: Nothing changes the status of a transfer in one of these.
+FINAL_STATUSES = (
+    TransferStatus.RECEIVED,
+    TransferStatus.CLOSED_WITH_ADJUSTMENT,
+    TransferStatus.CANCELLED,
+)
 MIN_REJECTION_REASON_LENGTH = 5
 MAX_REJECTION_REASON_LENGTH = 1000
+MIN_DISCREPANCY_NOTES_LENGTH = 5
+MIN_SUBSTITUTION_REASON_LENGTH = 10
+
+
+class DiscrepancyKind(StrEnum):
+    SHORTAGE = "shortage"
+    SURPLUS = "surplus"
+    DAMAGE = "damage"
+
+
+class DiscrepancyStatus(StrEnum):
+    OPEN = "open"
+    IN_CLAIM = "in_claim"
+    RESOLVED = "resolved"
+    CANCELLED = "cancelled"
+
+
+class DiscrepancySource(StrEnum):
+    RECEIPT = "receipt"
+    RECEPTION_CLOSE = "reception_close"
+    INCIDENT = "incident"
+
+
+class DamageType(StrEnum):
+    BROKEN = "broken"
+    CRUSHED = "crushed"
+    WET = "wet"
+    CONTAMINATED = "contaminated"
+    PACKAGING = "packaging"
+    TAMPERED = "tampered"
+    TEMPERATURE = "temperature"
+    OTHER = "other"
+
+
+class DiscrepancyResolution(StrEnum):
+    WRITTEN_OFF = "written_off"
+    FOUND = "found"
+    RELEASED = "released"
+    REGULARIZED = "regularized"
+    DISMISSED = "dismissed"
+
+
+class SubstitutionCode(StrEnum):
+    VEHICLE_UNFIT = "vehicle_unfit"
+    VEHICLE_UNAVAILABLE = "vehicle_unavailable"
+    DRIVER_UNFIT = "driver_unfit"
+    DRIVER_UNAVAILABLE = "driver_unavailable"
+    LOAD_CHANGE = "load_change"
+    OTHER = "other"
 
 
 class TransferDomainError(Exception):
@@ -314,10 +383,61 @@ def require_dispatchable(
 
 
 def require_receivable(status: str) -> None:
-    if status != TransferStatus.IN_TRANSIT:
+    if status not in (TransferStatus.IN_TRANSIT, TransferStatus.PARTIALLY_RECEIVED):
         raise TransferDomainError(
             "Solo se reciben traslados que están en tránsito.", code="transfer_not_receivable"
         )
+
+
+def require_incident_openable(status: str) -> None:
+    if status not in (TransferStatus.IN_TRANSIT, TransferStatus.PARTIALLY_RECEIVED):
+        raise TransferDomainError(
+            "Solo puede abrir una incidencia de un traslado en tránsito.",
+            code="transfer_incident_not_allowed",
+        )
+
+
+def require_reception_closable(status: str, *, received_any: bool) -> None:
+    """Closing a reception only makes sense once part of the load has arrived."""
+    if status not in (TransferStatus.IN_TRANSIT, TransferStatus.PARTIALLY_RECEIVED):
+        raise TransferDomainError(
+            "Solo se cierra la recepción de un traslado en recepción parcial.",
+            code="transfer_reception_close_not_allowed",
+        )
+    if not received_any:
+        raise TransferDomainError(
+            "Si no llegó nada, reporta una incidencia del traslado.",
+            code="transfer_reception_close_requires_receipt",
+        )
+
+
+def require_assignment_for_submission(
+    vehicle_id: uuid.UUID | None, driver_id: uuid.UUID | None
+) -> None:
+    if vehicle_id is None or driver_id is None:
+        raise TransferDomainError(
+            "Elige vehículo y conductor antes de enviar el traslado a aprobación.",
+            code="transfer_assignment_required",
+            status_code=422,
+        )
+
+
+def require_substitution(*, code: str | None, reason: str | None) -> tuple[str, str]:
+    """A different vehicle or driver than the approved ones needs a code and a reason."""
+    normalized = (reason or "").strip()
+    if len(normalized) < MIN_SUBSTITUTION_REASON_LENGTH:
+        raise TransferDomainError(
+            "Indica por qué cambias el vehículo o el conductor aprobado (mínimo 10 caracteres).",
+            code="transfer_substitution_reason_required",
+            status_code=422,
+        )
+    if code not in {item.value for item in SubstitutionCode}:
+        raise TransferDomainError(
+            "Elige el motivo del cambio de vehículo o conductor.",
+            code="transfer_substitution_code_invalid",
+            status_code=422,
+        )
+    return str(code), normalized
 
 
 def validate_positive_quantity(quantity: Decimal) -> None:
@@ -335,6 +455,110 @@ def validate_receipt_quantity(*, requested: Decimal, remaining: Decimal) -> None
         raise TransferDomainError(
             "La recepción supera la cantidad todavía en tránsito.",
             code="transfer_over_receipt",
+        )
+
+
+def _non_negative(value: Decimal) -> bool:
+    return value.is_finite() and value >= 0
+
+
+def validate_receipt_line(
+    *,
+    good: Decimal,
+    damaged: Decimal = Decimal("0"),
+    surplus: Decimal = Decimal("0"),
+    pending: Decimal,
+    damage_type: str | None = None,
+    damage_notes: str | None = None,
+    surplus_notes: str | None = None,
+) -> None:
+    """One receipt line: what arrived well, what arrived damaged and what is extra."""
+    if not (_non_negative(good) and _non_negative(damaged) and _non_negative(surplus)):
+        raise TransferDomainError(
+            "Las cantidades deben ser decimales positivos o cero.",
+            code="transfer_quantity_invalid",
+            status_code=422,
+        )
+    received = good + damaged
+    if received <= 0:
+        raise TransferDomainError(
+            "Indica cuánto recibiste de esta línea.",
+            code="transfer_receipt_empty",
+            status_code=422,
+        )
+    if received > pending:
+        raise TransferDomainError(
+            "La recepción supera la cantidad todavía en tránsito.",
+            code="transfer_over_receipt",
+        )
+    if surplus > 0 and received != pending:
+        raise TransferDomainError(
+            "Declara sobrante solo cuando registras todo lo pendiente de la línea.",
+            code="transfer_surplus_requires_full_receipt",
+            status_code=422,
+        )
+    if damaged > 0 and (
+        damage_type not in {item.value for item in DamageType}
+        or len((damage_notes or "").strip()) < MIN_DISCREPANCY_NOTES_LENGTH
+    ):
+        raise TransferDomainError(
+            "Indica el tipo de avería y descríbela (mínimo 5 caracteres).",
+            code="transfer_damage_details_required",
+            status_code=422,
+        )
+    if surplus > 0 and len((surplus_notes or "").strip()) < MIN_DISCREPANCY_NOTES_LENGTH:
+        raise TransferDomainError(
+            "Describe el sobrante (mínimo 5 caracteres).",
+            code="transfer_surplus_notes_required",
+            status_code=422,
+        )
+
+
+def settle_transfer_status(
+    *,
+    current_status: str,
+    uncovered_pending: Decimal,
+    has_open_discrepancies: bool,
+    had_discrepancy: bool,
+    had_loss: bool,
+    received_any: bool,
+    incident_open: bool,
+) -> TransferStatus:
+    """The status a dispatched transfer takes once its quantities and differences are known.
+
+    ``uncovered_pending`` is what was dispatched minus what was received, returned,
+    adjusted out or already declared missing. A final state is never reopened.
+    """
+    if current_status in FINAL_STATUSES:
+        return TransferStatus(current_status)
+    if incident_open:
+        return TransferStatus.INCIDENT
+    if uncovered_pending > 0:
+        return TransferStatus.PARTIALLY_RECEIVED if received_any else TransferStatus.IN_TRANSIT
+    if has_open_discrepancies:
+        return TransferStatus.DISCREPANCY
+    if had_discrepancy or had_loss:
+        return TransferStatus.CLOSED_WITH_ADJUSTMENT
+    return TransferStatus.RECEIVED
+
+
+def require_discrepancy_open(status: str, *, allow_claim: bool = False) -> None:
+    allowed = (
+        (DiscrepancyStatus.OPEN, DiscrepancyStatus.IN_CLAIM)
+        if allow_claim
+        else (DiscrepancyStatus.OPEN,)
+    )
+    if status not in allowed:
+        raise TransferDomainError(
+            "Esta diferencia ya no está abierta.", code="transfer_discrepancy_not_open"
+        )
+
+
+def require_discrepancy_kind(kind: str, *allowed: DiscrepancyKind) -> None:
+    if kind not in allowed:
+        raise TransferDomainError(
+            "Esta acción no corresponde al tipo de diferencia.",
+            code="transfer_discrepancy_action_invalid",
         )
 
 

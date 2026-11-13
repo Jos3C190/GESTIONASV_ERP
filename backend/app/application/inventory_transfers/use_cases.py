@@ -15,6 +15,7 @@ from app.domain.entities.inventory_transfer import (
 from app.domain.ports.inventory_transfer_repository import InventoryTransferRepository
 
 MIN_INCIDENT_REASON_LENGTH = 5
+MIN_CLOSE_REASON_LENGTH = 5
 
 
 class InventoryTransferUseCases:
@@ -130,8 +131,50 @@ class InventoryTransferUseCases:
                     status_code=422,
                 )
             seen_details.add(line["transfer_detail_id"])
-            validate_positive_quantity(Decimal(str(line["quantity_base"])))
+            try:
+                good = Decimal(str(line["quantity_base"]))
+                extras = [
+                    Decimal(str(line.get(key) or 0))
+                    for key in ("damaged_quantity", "surplus_quantity")
+                ]
+            except (InvalidOperation, TypeError, ValueError) as exc:
+                raise TransferDomainError(
+                    "La cantidad recibida no es válida.",
+                    code="transfer_quantity_invalid",
+                    status_code=422,
+                ) from exc
+            if any(not value.is_finite() or value < 0 for value in (good, *extras)):
+                raise TransferDomainError(
+                    "Las cantidades deben ser decimales positivos o cero.",
+                    code="transfer_quantity_invalid",
+                    status_code=422,
+                )
         return await self._repository.receive_transfer(lines=lines, **kwargs)
+
+    async def close_reception(self, *, reason: str, **kwargs: Any) -> dict[str, Any]:
+        normalized = reason.strip()
+        if len(normalized) < MIN_CLOSE_REASON_LENGTH:
+            raise TransferDomainError(
+                "Indica el motivo del faltante (mínimo 5 caracteres).",
+                code="transfer_reception_close_reason_required",
+                status_code=422,
+            )
+        return await self._repository.close_reception(reason=normalized, **kwargs)
+
+    async def claim_discrepancy(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._repository.claim_discrepancy(**kwargs)
+
+    async def release_damage(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._repository.release_damage(**kwargs)
+
+    async def mark_shortage_found(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._repository.mark_shortage_found(**kwargs)
+
+    async def dismiss_surplus(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._repository.dismiss_surplus(**kwargs)
+
+    async def acknowledge_origin_count(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._repository.acknowledge_origin_count(**kwargs)
 
     async def open_incident(self, *, reason: str, **kwargs: Any) -> dict[str, Any]:
         normalized_reason = reason.strip()

@@ -129,9 +129,41 @@ class InventoryTransferModel(UUIDPKMixin, TimestampMixin, Base):
     rejected_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rejection_reason: Mapped[str | None] = mapped_column(Text)
+    approved_vehicle_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    approved_driver_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    assignment_substitution_code: Mapped[str | None] = mapped_column(String(24))
+    assignment_substitution_reason: Mapped[str | None] = mapped_column(Text)
+    assignment_substitution_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    assignment_substitution_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
         UniqueConstraint("company_id", "id", name="uq_inventory_transfers_company_id"),
+        ForeignKeyConstraint(
+            ["company_id", "approved_vehicle_id"],
+            ["inventory_vehicles.company_id", "inventory_vehicles.id"],
+            name="fk_inventory_transfers_approved_vehicle_company",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "approved_driver_id"],
+            ["drivers.company_id", "drivers.id"],
+            name="fk_inventory_transfers_approved_driver_company",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "(assignment_substitution_code IS NULL AND assignment_substitution_reason IS NULL "
+            "AND assignment_substitution_by_id IS NULL AND assignment_substitution_at IS NULL) "
+            "OR (assignment_substitution_code IN ('vehicle_unfit','vehicle_unavailable',"
+            "'driver_unfit','driver_unavailable','load_change','other') "
+            "AND assignment_substitution_reason IS NOT NULL "
+            "AND char_length(btrim(assignment_substitution_reason)) >= 10 "
+            "AND assignment_substitution_by_id IS NOT NULL "
+            "AND assignment_substitution_at IS NOT NULL)",
+            name="ck_inventory_transfers_assignment_substitution",
+        ),
         ForeignKeyConstraint(
             ["company_id", "driver_id"],
             ["drivers.company_id", "drivers.id"],
@@ -180,8 +212,9 @@ class InventoryTransferModel(UUIDPKMixin, TimestampMixin, Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint(
-            "status IN ('preparation','pending_approval','approved','in_transit','received',"
-            "'closed_with_adjustment','incident','cancelled')",
+            "status IN ('preparation','pending_approval','approved','in_transit',"
+            "'partially_received','discrepancy','received','closed_with_adjustment',"
+            "'incident','cancelled')",
             name="ck_inventory_transfers_status",
         ),
         CheckConstraint(
@@ -257,6 +290,12 @@ class InventoryTransferDetailModel(UUIDPKMixin, TimestampMixin, Base):
     quantity_adjusted_out: Mapped[Decimal] = mapped_column(
         Numeric(18, 6), nullable=False, server_default="0"
     )
+    quantity_received_damaged: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6), nullable=False, server_default="0"
+    )
+    quantity_surplus: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6), nullable=False, server_default="0"
+    )
     excess_reason: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
 
@@ -308,6 +347,11 @@ class InventoryTransferDetailModel(UUIDPKMixin, TimestampMixin, Base):
             "AND quantity_received + quantity_returned + quantity_adjusted_out <= quantity_dispatched",
             name="ck_inventory_transfer_details_quantities",
         ),
+        CheckConstraint(
+            "quantity_received_damaged >= 0 AND quantity_surplus >= 0 "
+            "AND quantity_received_damaged <= quantity_received",
+            name="ck_inventory_transfer_details_condition_quantities",
+        ),
         Index("ix_inventory_transfer_details_company_transfer", "company_id", "transfer_id"),
         Index("ix_inventory_transfer_details_transit_hu", "company_id", "transit_handling_unit_id"),
     )
@@ -329,6 +373,9 @@ class InventoryTransferDemandAllocationModel(UUIDPKMixin, TimestampMixin, Base):
         Numeric(18, 6), nullable=False, server_default="0"
     )
     quantity_adjusted_out: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6), nullable=False, server_default="0"
+    )
+    quantity_damaged: Mapped[Decimal] = mapped_column(
         Numeric(18, 6), nullable=False, server_default="0"
     )
 
@@ -355,6 +402,10 @@ class InventoryTransferDemandAllocationModel(UUIDPKMixin, TimestampMixin, Base):
             "AND quantity_adjusted_out >= 0 AND quantity_received + quantity_adjusted_out <= quantity_dispatched "
             "AND quantity_dispatched <= allocated_quantity",
             name="ck_transfer_demand_allocations_quantities",
+        ),
+        CheckConstraint(
+            "quantity_damaged >= 0 AND quantity_damaged <= quantity_received",
+            name="ck_transfer_demand_allocations_damaged",
         ),
         Index(
             "ix_transfer_demand_allocations_request_detail",
@@ -389,7 +440,9 @@ class InventoryTransferCommandModel(UUIDPKMixin, Base):
         ),
         CheckConstraint(
             "action IN ('create','update','cancel','dispatch','receive','incident','resolve',"
-            "'resolve_adjustment','return','submit','approve','reject','withdraw')",
+            "'resolve_adjustment','return','submit','approve','reject','withdraw',"
+            "'close_reception','discrepancy_adjust','discrepancy_claim','discrepancy_release',"
+            "'discrepancy_found','discrepancy_dismiss','resolve_discrepancy','origin_count')",
             name="ck_inventory_transfer_commands_action",
         ),
         Index("ix_inventory_transfer_commands_transfer", "company_id", "transfer_id", "created_at"),
@@ -408,8 +461,13 @@ class InventoryTransferReceiptModel(UUIDPKMixin, Base):
     quantity_received: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     received_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    condition: Mapped[str] = mapped_column(String(8), nullable=False, server_default="good")
 
     __table_args__ = (
+        UniqueConstraint("company_id", "id", name="uq_inventory_transfer_receipts_company_id"),
+        CheckConstraint(
+            "condition IN ('good','damaged')", name="ck_inventory_transfer_receipts_condition"
+        ),
         ForeignKeyConstraint(
             ["company_id", "transfer_id"],
             ["inventory_transfers.company_id", "inventory_transfers.id"],
@@ -489,5 +547,178 @@ class InventoryTransferIncidentModel(UUIDPKMixin, TimestampMixin, Base):
             "transfer_id",
             unique=True,
             postgresql_where=text("status = 'open'"),
+        ),
+    )
+
+
+class InventoryTransferDiscrepancyModel(UUIDPKMixin, TimestampMixin, Base):
+    """One difference found while receiving: missing, extra or damaged goods."""
+
+    __tablename__ = "inventory_transfer_discrepancies"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    transfer_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    transfer_detail_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="open")
+    source: Mapped[str] = mapped_column(String(24), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    damage_type: Mapped[str | None] = mapped_column(String(16))
+    notes: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_reference: Mapped[str | None] = mapped_column(String(500))
+    location_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    handling_unit_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    receipt_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    command_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    incident_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    opened_by_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    claim_reference: Mapped[str | None] = mapped_column(Text)
+    claimed_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolution: Mapped[str | None] = mapped_column(String(16))
+    resolution_notes: Mapped[str | None] = mapped_column(Text)
+    resolved_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    origin_count_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    origin_counted_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    origin_counted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    origin_count_notes: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "id", name="uq_inventory_transfer_discrepancies_company_id"),
+        UniqueConstraint(
+            "company_id",
+            "transfer_id",
+            "id",
+            name="uq_inventory_transfer_discrepancies_transfer_identity",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "transfer_id"],
+            ["inventory_transfers.company_id", "inventory_transfers.id"],
+            name="fk_inventory_transfer_discrepancies_transfer",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "transfer_detail_id"],
+            ["inventory_transfer_details.company_id", "inventory_transfer_details.id"],
+            name="fk_inventory_transfer_discrepancies_detail",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["location_id"],
+            ["locations.id"],
+            name="fk_inventory_transfer_discrepancies_location",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "handling_unit_id"],
+            ["inventory_handling_units.company_id", "inventory_handling_units.id"],
+            name="fk_inventory_transfer_discrepancies_handling_unit",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "receipt_id"],
+            ["inventory_transfer_receipts.company_id", "inventory_transfer_receipts.id"],
+            name="fk_inventory_transfer_discrepancies_receipt",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "command_id"],
+            ["inventory_transfer_commands.company_id", "inventory_transfer_commands.id"],
+            name="fk_inventory_transfer_discrepancies_command",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "transfer_id", "incident_id"],
+            [
+                "inventory_transfer_incidents.company_id",
+                "inventory_transfer_incidents.transfer_id",
+                "inventory_transfer_incidents.id",
+            ],
+            name="fk_inventory_transfer_discrepancies_incident",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "kind IN ('shortage','surplus','damage')",
+            name="ck_inventory_transfer_discrepancies_kind",
+        ),
+        CheckConstraint(
+            "status IN ('open','in_claim','resolved','cancelled')",
+            name="ck_inventory_transfer_discrepancies_status",
+        ),
+        CheckConstraint(
+            "source IN ('receipt','reception_close','incident')",
+            name="ck_inventory_transfer_discrepancies_source",
+        ),
+        CheckConstraint("quantity > 0", name="ck_inventory_transfer_discrepancies_quantity"),
+        CheckConstraint(
+            "char_length(btrim(notes)) >= 5", name="ck_inventory_transfer_discrepancies_notes"
+        ),
+        CheckConstraint(
+            "(kind = 'damage') = (damage_type IS NOT NULL) AND (damage_type IS NULL OR "
+            "damage_type IN ('broken','crushed','wet','contaminated','packaging','tampered',"
+            "'temperature','other'))",
+            name="ck_inventory_transfer_discrepancies_damage_type",
+        ),
+        CheckConstraint(
+            "kind = 'shortage' OR location_id IS NOT NULL",
+            name="ck_inventory_transfer_discrepancies_location",
+        ),
+        CheckConstraint(
+            "resolution IS NULL "
+            "OR (kind = 'shortage' AND resolution IN ('written_off','found')) "
+            "OR (kind = 'damage' AND resolution IN ('written_off','released')) "
+            "OR (kind = 'surplus' AND resolution IN ('regularized','dismissed'))",
+            name="ck_inventory_transfer_discrepancies_resolution",
+        ),
+        CheckConstraint(
+            "((claim_reference IS NULL) = (claimed_by_id IS NULL)) "
+            "AND ((claimed_by_id IS NULL) = (claimed_at IS NULL)) "
+            "AND (claimed_at IS NULL OR kind = 'damage')",
+            name="ck_inventory_transfer_discrepancies_claim",
+        ),
+        CheckConstraint(
+            "(status = 'open' AND resolution IS NULL AND resolved_by_id IS NULL "
+            "AND resolved_at IS NULL AND claimed_at IS NULL) "
+            "OR (status = 'in_claim' AND kind = 'damage' AND resolution IS NULL "
+            "AND resolved_by_id IS NULL AND resolved_at IS NULL AND claimed_at IS NOT NULL) "
+            "OR (status = 'resolved' AND resolved_by_id IS NOT NULL AND resolved_at IS NOT NULL "
+            "AND resolution IN ('written_off','released','regularized')) "
+            "OR (status = 'cancelled' AND resolved_by_id IS NOT NULL AND resolved_at IS NOT NULL "
+            "AND resolution IN ('found','dismissed'))",
+            name="ck_inventory_transfer_discrepancies_lifecycle",
+        ),
+        CheckConstraint(
+            "((origin_counted_by_id IS NULL) = (origin_counted_at IS NULL)) "
+            "AND (origin_counted_at IS NULL OR origin_count_required) "
+            "AND (NOT origin_count_required OR kind <> 'damage')",
+            name="ck_inventory_transfer_discrepancies_origin_count",
+        ),
+        Index(
+            "ix_inventory_transfer_discrepancies_transfer", "company_id", "transfer_id", "status"
+        ),
+        Index(
+            "uq_inventory_transfer_discrepancies_open_shortage",
+            "company_id",
+            "transfer_detail_id",
+            unique=True,
+            postgresql_where=text("kind = 'shortage' AND status = 'open'"),
+        ),
+        Index(
+            "ix_inventory_transfer_discrepancies_origin_count",
+            "company_id",
+            "transfer_id",
+            postgresql_where=text("origin_count_required AND origin_counted_at IS NULL"),
         ),
     )

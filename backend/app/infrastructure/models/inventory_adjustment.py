@@ -47,6 +47,7 @@ class InventoryAdjustmentModel(UUIDPKMixin, TimestampMixin, Base):
     correction_of_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     transfer_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     transfer_incident_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    transfer_discrepancy_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     created_by_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -107,6 +108,25 @@ class InventoryAdjustmentModel(UUIDPKMixin, TimestampMixin, Base):
             ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(
+            ["company_id", "transfer_discrepancy_id"],
+            [
+                "inventory_transfer_discrepancies.company_id",
+                "inventory_transfer_discrepancies.id",
+            ],
+            name="fk_inventory_adjustments_discrepancy_company",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "transfer_id", "transfer_discrepancy_id"],
+            [
+                "inventory_transfer_discrepancies.company_id",
+                "inventory_transfer_discrepancies.transfer_id",
+                "inventory_transfer_discrepancies.id",
+            ],
+            name="fk_inventory_adjustments_discrepancy_transfer",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
             ["approved_by_id", "company_id"],
             ["user_companies.user_id", "user_companies.company_id"],
             name="fk_inventory_adjustments_approver_company",
@@ -140,8 +160,16 @@ class InventoryAdjustmentModel(UUIDPKMixin, TimestampMixin, Base):
         ),
         CheckConstraint(
             "(transfer_id IS NULL AND transfer_incident_id IS NULL) OR "
-            "(transfer_id IS NOT NULL AND transfer_incident_id IS NOT NULL)",
+            "(transfer_id IS NOT NULL AND ((transfer_incident_id IS NOT NULL) "
+            "<> (transfer_discrepancy_id IS NOT NULL)))",
             name="ck_inventory_adjustments_transfer_context",
+        ),
+        Index(
+            "uq_inventory_adjustments_active_discrepancy",
+            "company_id",
+            "transfer_discrepancy_id",
+            unique=True,
+            postgresql_where=text("transfer_discrepancy_id IS NOT NULL AND status <> 'cancelled'"),
         ),
         Index("ix_inventory_adjustments_company_status", "company_id", "status", "created_at"),
         Index(

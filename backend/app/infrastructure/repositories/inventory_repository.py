@@ -114,7 +114,7 @@ def _require_labelled_split_in_quarantine(
     is_partial_transfer_receipt = (
         from_status == StockStatus.IN_TRANSIT.value
         and movement_type == "transfer"
-        and to_status == StockStatus.QUARANTINE.value
+        and to_status in (StockStatus.QUARANTINE.value, StockStatus.DAMAGED.value)
     )
     if label_confirmation_required and not (is_quarantine_putaway or is_partial_transfer_receipt):
         raise InventoryOperationError(
@@ -3037,6 +3037,8 @@ class SqlAlchemyInventoryRepository:
                         movement_type=movement_type,
                         to_status=to_status,
                     )
+                # Only quarantine may hold a unit without measures (a database rule), so
+                # damaged goods split off a receipt keep the proportional estimate instead.
                 unmeasured_transfer_receipt = (
                     from_status == StockStatus.IN_TRANSIT.value
                     and to_status == StockStatus.QUARANTINE.value

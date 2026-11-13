@@ -39,6 +39,7 @@ from app.api.v1.schemas.inventory_adjustment import (
     InventoryAdjustmentPage,
     InventoryAdjustmentUpdateIn,
 )
+from app.api.v1.transfer_tracking import archive_trip_on_commit
 from app.application.audit.audit_service import AuditService
 from app.application.documents import DocumentService, InitiateDocumentInput
 from app.application.inventory_adjustments import InventoryAdjustmentUseCases
@@ -46,6 +47,7 @@ from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.core.exceptions import AuthorizationError
 from app.domain.entities.inventory import InventoryOperationError
 from app.domain.entities.inventory_adjustment import InventoryAdjustmentError
+from app.domain.entities.inventory_transfer import TRIP_FINISHED_STATUSES
 from app.infrastructure.models.inventory_adjustment import (
     InventoryAdjustmentDocumentModel,
     InventoryAdjustmentModel,
@@ -891,6 +893,16 @@ async def apply_adjustment(
         ),
         model=InventoryAdjustmentOut,
     )
+    if response.linked_transfer_id is not None:
+        # A loss or a write-off can end the trip: store its trail and close its alerts.
+        linked_status = await session.scalar(
+            select(InventoryTransferModel.status).where(
+                InventoryTransferModel.company_id == company_id,
+                InventoryTransferModel.id == response.linked_transfer_id,
+            )
+        )
+        if linked_status in TRIP_FINISHED_STATUSES:
+            archive_trip_on_commit(session, company_id, response.linked_transfer_id)
     if not (await checker.execute(current.id, company_id, "inventory:valuation")).allowed:
         _redact_adjustment_costs(response)
     return response

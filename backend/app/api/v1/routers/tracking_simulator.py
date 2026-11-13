@@ -48,7 +48,8 @@ from app.api.v1.simulator import (
 )
 from app.api.v1.traccar_access import traccar_credentials
 from app.api.v1.transfer_tracking import (
-    ACTIVE_TRANSFER_STATUSES,
+    is_on_road,
+    on_road_clause,
     transfer_query,
     trip_context,
 )
@@ -137,7 +138,7 @@ async def _active_transfers(
         .where(
             InventoryTransferModel.company_id == company_id,
             InventoryTransferModel.vehicle_id.in_(inventory_ids),
-            InventoryTransferModel.status.in_(ACTIVE_TRANSFER_STATUSES),
+            on_road_clause(),
         )
         .order_by(InventoryTransferModel.dispatched_at.desc().nulls_last())
     )
@@ -343,7 +344,7 @@ async def _transfer_route(
     if row is None:
         raise NotFoundError("Traslado no encontrado.", code="transfer_not_found")
     ctx = trip_context(row)
-    if ctx.transfer.status not in ACTIVE_TRANSFER_STATUSES:
+    if not is_on_road(ctx.transfer):
         raise ConflictError("El traslado no está en tránsito.", code="transfer_not_in_transit")
     if ctx.fleet is None or ctx.fleet.id != vehicle.id:
         raise ConflictError(

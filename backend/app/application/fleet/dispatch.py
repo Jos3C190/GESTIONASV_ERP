@@ -40,6 +40,32 @@ HARD_BLOCKS = frozenset(
 )
 #: Informative only at dispatch time.
 IGNORED_AT_DISPATCH = frozenset({"transfers_not_enabled"})
+#: When a transfer is only being planned, these are the only problems that stop it.
+PLANNING_BLOCKS = frozenset(
+    {
+        "vehicle_not_active",
+        "vehicle_not_drivable",
+        "vehicle_branch_mismatch",
+        "driver_required",
+        "driver_branch_mismatch",
+        "driver_not_active",
+        "employee_not_active",
+        "transfer_vehicle_not_in_fleet",
+    }
+)
+#: Blocks at planning only when the company turned the rule on (it is a warning otherwise).
+PLANNING_CONDITIONAL_BLOCKS = frozenset({"vehicle_overweight"})
+#: What depends on the moment of departure: while planning it is only a heads-up.
+PLANNING_TIMING_CODES = frozenset(
+    {
+        "inspection_required",
+        "vehicle_on_road",
+        "driver_on_road",
+        "vehicle_in_maintenance",
+        "vehicle_reserved",
+    }
+)
+WHEN_DISPATCHING_PREFIX = "Al despachar: "
 
 
 @dataclass(slots=True)
@@ -48,10 +74,25 @@ class DispatchEvaluation:
     driver_id: uuid.UUID | None
     vehicle_issues: list[Issue] = field(default_factory=list)
     driver_issues: list[Issue] = field(default_factory=list)
+    stage: str = "dispatch"
 
     @property
     def issues(self) -> list[Issue]:
         return [*self.vehicle_issues, *self.driver_issues]
+
+    @property
+    def planning_blocked(self) -> bool:
+        """The transport cannot even be planned (as opposed to departing right now)."""
+        return any(
+            issue.severity == "blocking"
+            and (issue.code in PLANNING_BLOCKS or issue.code in PLANNING_CONDITIONAL_BLOCKS)
+            for issue in self.issues
+        )
+
+    def relax_for_planning(self) -> None:
+        """Planning keeps the structural blocks and turns the rest into warnings."""
+        self.vehicle_issues = [_planning_issue(issue) for issue in self.vehicle_issues]
+        self.driver_issues = [_planning_issue(issue) for issue in self.driver_issues]
 
     @property
     def blocking(self) -> list[Issue]:
@@ -63,6 +104,19 @@ class DispatchEvaluation:
 
     def summary(self) -> str:
         return " ".join(issue.message for issue in self.blocking)
+
+
+def _planning_issue(issue: Issue) -> Issue:
+    if issue.code in PLANNING_TIMING_CODES:
+        return Issue(issue.code, "warning", WHEN_DISPATCHING_PREFIX + issue.message)
+    if (
+        issue.severity == "blocking"
+        and issue.code not in PLANNING_BLOCKS
+        # Over capacity is only "blocking" when the company's rule is on and the load is known.
+        and issue.code not in PLANNING_CONDITIONAL_BLOCKS
+    ):
+        return Issue(issue.code, "warning", issue.message)
+    return issue
 
 
 def weight_issues(
@@ -94,7 +148,12 @@ def weight_issues(
 
 
 async def _operation_issues(
-    repo: Any, company_id: uuid.UUID, vehicle: Any, transfer_id: uuid.UUID | None, capacity: Any
+    repo: Any,
+    company_id: uuid.UUID,
+    vehicle: Any,
+    transfer_id: uuid.UUID | None,
+    capacity: Any,
+    load: tuple[Decimal, int] | None = None,
 ) -> list[Issue]:
     """What depends on this dispatch and not on the vehicle's standing."""
     now = datetime.now(UTC)
@@ -126,8 +185,10 @@ async def _operation_issues(
                 f"{ends.strftime('%d/%m/%Y %H:%M')} ({reservation['reason']}).",
             )
         )
-    if transfer_id is not None:
-        load_kg, missing = await repo.transfer_load(company_id, transfer_id)
+    if load is None and transfer_id is not None:
+        load = await repo.transfer_load(company_id, transfer_id)
+    if load is not None:
+        load_kg, missing = load
         issues.extend(weight_issues(load_kg, missing, capacity, block=settings.block_overweight))
     return issues
 
@@ -158,10 +219,17 @@ async def evaluate_dispatch(
     driver_id: uuid.UUID | None,
     transfer_id: uuid.UUID | None,
     today: date,
+    stage: str = "dispatch",
+    load: tuple[Decimal, int] | None = None,
 ) -> DispatchEvaluation:
-    """Evaluate ``vehicle`` and ``driver_id`` (default: the assigned driver)."""
+    """Evaluate ``vehicle`` and ``driver_id`` (default: the assigned driver).
+
+    ``stage="planning"`` judges a transport chosen ahead of time: what depends on
+    the moment of departure becomes a warning. ``load`` (kilograms and products
+    without weight) replaces the weight of the saved transfer, for a draft.
+    """
     view = (await build_vehicle_views(repo, company_id, [vehicle], today=today))[0]
-    evaluation = DispatchEvaluation(vehicle_id=vehicle.id, driver_id=driver_id)
+    evaluation = DispatchEvaluation(vehicle_id=vehicle.id, driver_id=driver_id, stage=stage)
     # Prestado, trabaja para la sucursal que lo tiene, no para la suya.
     loan = view["loan"]
     working_branch = loan["to_branch_id"] if loan is not None else vehicle.branch_id
@@ -205,13 +273,15 @@ async def evaluate_dispatch(
         trailer = await repo.get_vehicle(company_id, coupling["vehicle_id"])
         capacity = trailer.capacity_kg if trailer.capacity_kg is not None else capacity
     evaluation.vehicle_issues.extend(
-        await _operation_issues(repo, company_id, vehicle, transfer_id, capacity)
+        await _operation_issues(repo, company_id, vehicle, transfer_id, capacity, load)
     )
     if evaluation.driver_id is None and view["driver"] is not None:
         evaluation.driver_id = view["driver"]["driver_id"]
     await _evaluate_driver(
         repo, company_id, evaluation, vehicle, origin_branch_id, transfer_id, today
     )
+    if stage == "planning":
+        evaluation.relax_for_planning()
     return evaluation
 
 

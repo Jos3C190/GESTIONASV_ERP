@@ -82,6 +82,23 @@ class InventoryAdjustmentUseCases:
             )
         return await self._repository.create_adjustment(lines=normalized, **kwargs)
 
+    async def create_for_discrepancy(self, **kwargs: Any) -> dict[str, Any]:
+        if len((kwargs.get("reason") or "").strip()) < MIN_ADJUSTMENT_REASON_LENGTH:
+            raise InventoryAdjustmentError(
+                "Describa el motivo del ajuste.", code="adjustment_reason_required"
+            )
+        if not (kwargs.get("document_reference") or "").strip():
+            raise InventoryAdjustmentError(
+                "Indique la referencia del documento que respalda el ajuste.",
+                code="adjustment_reference_required",
+            )
+        if kwargs["accounting_date"] < kwargs["operational_date"]:
+            raise InventoryAdjustmentError(
+                "La fecha contable no puede ser anterior a la fecha operativa.",
+                code="adjustment_accounting_date_invalid",
+            )
+        return await self._repository.create_discrepancy_adjustment(**kwargs)
+
     async def update(
         self, *, lines: builtins.list[dict[str, Any]], **kwargs: Any
     ) -> dict[str, Any]:

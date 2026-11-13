@@ -20,6 +20,7 @@ class InventoryTransferRepository(Protocol):
         actor_id: uuid.UUID,
         notes: str | None = None,
         vehicle_id: uuid.UUID | None = None,
+        driver_id: uuid.UUID | None = None,
     ) -> dict[str, Any]: ...
 
     async def update_transfer(
@@ -34,6 +35,7 @@ class InventoryTransferRepository(Protocol):
         destination_warehouse_id: uuid.UUID | None = None,
         vehicle_id: uuid.UUID | None = None,
         notes: str | None = None,
+        driver_id: uuid.UUID | None = None,
     ) -> dict[str, Any]: ...
 
     async def cancel_transfer(
@@ -52,6 +54,9 @@ class InventoryTransferRepository(Protocol):
         transfer_id: uuid.UUID,
         idempotency_key: str,
         actor_id: uuid.UUID,
+        expected_vehicle_id: uuid.UUID | None = None,
+        expected_driver_id: uuid.UUID | None = None,
+        assignment_review: dict[str, Any] | None = None,
     ) -> dict[str, Any]: ...
 
     async def withdraw_transfer(
@@ -96,6 +101,8 @@ class InventoryTransferRepository(Protocol):
         actor_id: uuid.UUID,
         driver_id: uuid.UUID | None = None,
         compliance_override_reason: str | None = None,
+        substitution_code: str | None = None,
+        substitution_reason: str | None = None,
     ) -> dict[str, Any]: ...
 
     async def receive_transfer(
@@ -106,6 +113,73 @@ class InventoryTransferRepository(Protocol):
         idempotency_key: str,
         actor_id: uuid.UUID,
         lines: list[dict[str, Any]],
+    ) -> dict[str, Any]: ...
+
+    async def close_reception(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        reason: str,
+        evidence_reference: str | None = None,
+    ) -> dict[str, Any]: ...
+
+    async def claim_discrepancy(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        discrepancy_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        claim_reference: str,
+    ) -> dict[str, Any]: ...
+
+    async def release_damage(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        discrepancy_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        notes: str,
+        destination_location_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]: ...
+
+    async def mark_shortage_found(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        discrepancy_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        notes: str,
+    ) -> dict[str, Any]: ...
+
+    async def dismiss_surplus(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        discrepancy_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        notes: str,
+    ) -> dict[str, Any]: ...
+
+    async def acknowledge_origin_count(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        discrepancy_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        notes: str,
     ) -> dict[str, Any]: ...
 
     async def open_incident(
@@ -146,6 +220,8 @@ class InventoryTransferRepository(Protocol):
         awaiting_approval_by: uuid.UUID | None = None,
         allow_self_approval: bool = False,
         approver_branch_ids: list[uuid.UUID] | None = None,
+        origin_count_pending: bool = False,
+        with_open_discrepancies: bool = False,
         page: int = 1,
         size: int = 50,
     ) -> list[dict[str, Any]]: ...

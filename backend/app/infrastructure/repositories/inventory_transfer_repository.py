@@ -17,6 +17,10 @@ from sqlalchemy.orm import aliased
 from app.application.inventory import InventoryUseCases
 from app.application.inventory_transfers.settings import policy_from
 from app.domain.entities.inventory_transfer import (
+    DiscrepancyKind,
+    DiscrepancyResolution,
+    DiscrepancySource,
+    DiscrepancyStatus,
     TransferDomainError,
     TransferPolicy,
     TransferRoute,
@@ -24,17 +28,23 @@ from app.domain.entities.inventory_transfer import (
     WarehouseFacts,
     approval_required,
     classify_route,
+    require_assignment_for_submission,
     require_cancellable,
     require_current_round,
+    require_discrepancy_kind,
+    require_discrepancy_open,
     require_dispatchable,
+    require_incident_openable,
     require_independent_approver,
     require_pending_approval,
     require_preparation,
     require_receivable,
+    require_reception_closable,
     require_submittable,
+    require_substitution,
     route_disabled_error,
     validate_dispatch_quantity,
-    validate_receipt_quantity,
+    validate_receipt_line,
 )
 from app.infrastructure.models.catalog import CompanyUnitModel, ProductModel, UnitModel
 from app.infrastructure.models.employee import Employee
@@ -44,11 +54,13 @@ from app.infrastructure.models.inventory import (
     InventoryHandlingUnitModel,
     InventoryItemModel,
 )
+from app.infrastructure.models.inventory_adjustment import InventoryAdjustmentModel
 from app.infrastructure.models.inventory_lot import InventoryLotDetailModel
 from app.infrastructure.models.inventory_transfer import (
     InventoryTransferCommandModel,
     InventoryTransferDemandAllocationModel,
     InventoryTransferDetailModel,
+    InventoryTransferDiscrepancyModel,
     InventoryTransferIncidentModel,
     InventoryTransferModel,
     InventoryTransferReceiptModel,
@@ -63,6 +75,11 @@ from app.infrastructure.models.purchase_request import (
 )
 from app.infrastructure.models.user import User
 from app.infrastructure.repositories.inventory_repository import SqlAlchemyInventoryRepository
+from app.infrastructure.repositories.inventory_transfer_settlement import (
+    detail_pending,
+    locked_damaged_unit,
+    settle_transfer,
+)
 
 _TRANSFERABLE_REQUEST_STATUSES = {
     "approved",
@@ -72,6 +89,17 @@ _TRANSFERABLE_REQUEST_STATUSES = {
     "completed",
 }
 MAX_VEHICLE_CODE_LENGTH = 32
+#: Receipt line fields a client that predates damages and surpluses never sends.
+_RECEIPT_LINE_DEFAULTS: dict[str, Any] = {
+    "damaged_quantity": Decimal("0"),
+    "damage_type": None,
+    "damage_notes": None,
+    "damaged_location_id": None,
+    "surplus_quantity": Decimal("0"),
+    "surplus_notes": None,
+    "surplus_location_id": None,
+    "evidence_reference": None,
+}
 #: Transfers that hold their handling units while they wait to be dispatched.
 _COMMITTING_STATUSES = (TransferStatus.PENDING_APPROVAL, TransferStatus.APPROVED)
 
@@ -597,6 +625,23 @@ class SqlAlchemyInventoryTransferRepository:
                 422,
             )
 
+    async def _validate_driver(self, company_id: uuid.UUID, driver_id: uuid.UUID | None) -> None:
+        if driver_id is None:
+            return
+        driver = await self._session.scalar(
+            select(DriverModel).where(
+                DriverModel.company_id == company_id,
+                DriverModel.id == driver_id,
+                DriverModel.status == "active",
+            )
+        )
+        if driver is None:
+            self._raise(
+                "Seleccione un conductor activo de esta empresa.",
+                "transfer_driver_unavailable",
+                422,
+            )
+
     async def _insert_details(
         self,
         *,
@@ -644,18 +689,20 @@ class SqlAlchemyInventoryTransferRepository:
         actor_id: uuid.UUID,
         notes: str | None = None,
         vehicle_id: uuid.UUID | None = None,
+        driver_id: uuid.UUID | None = None,
     ) -> dict[str, Any]:
         clean_lines = [dict(line) for line in lines]
-        fingerprint = self._fingerprint(
-            "create",
-            {
-                "origin_warehouse_id": origin_warehouse_id,
-                "destination_warehouse_id": destination_warehouse_id,
-                "vehicle_id": vehicle_id,
-                "notes": notes,
-                "lines": clean_lines,
-            },
-        )
+        values: dict[str, Any] = {
+            "origin_warehouse_id": origin_warehouse_id,
+            "destination_warehouse_id": destination_warehouse_id,
+            "vehicle_id": vehicle_id,
+            "notes": notes,
+            "lines": clean_lines,
+        }
+        if driver_id is not None:
+            # Retries of clients that never sent a driver keep their original fingerprint.
+            values["driver_id"] = driver_id
+        fingerprint = self._fingerprint("create", values)
         replay = await self._replay_command(
             company_id=company_id,
             action="create",
@@ -677,6 +724,7 @@ class SqlAlchemyInventoryTransferRepository:
             route=route,
         )
         await self._validate_vehicle(company_id, vehicle_id)
+        await self._validate_driver(company_id, driver_id)
         transfer_id = uuid.uuid4()
         transfer = InventoryTransferModel(
             id=transfer_id,
@@ -685,6 +733,7 @@ class SqlAlchemyInventoryTransferRepository:
             origin_warehouse_id=origin.id,
             destination_warehouse_id=destination.id,
             vehicle_id=vehicle_id,
+            driver_id=driver_id,
             status="preparation",
             route_type=route.value,
             requires_approval=approval_required(route, policy),
@@ -716,18 +765,19 @@ class SqlAlchemyInventoryTransferRepository:
         destination_warehouse_id: uuid.UUID | None = None,
         vehicle_id: uuid.UUID | None = None,
         notes: str | None = None,
+        driver_id: uuid.UUID | None = None,
     ) -> dict[str, Any]:
-        fingerprint = self._fingerprint(
-            "update",
-            {
-                "transfer_id": transfer_id,
-                "origin_warehouse_id": origin_warehouse_id,
-                "destination_warehouse_id": destination_warehouse_id,
-                "vehicle_id": vehicle_id,
-                "notes": notes,
-                "lines": lines,
-            },
-        )
+        values: dict[str, Any] = {
+            "transfer_id": transfer_id,
+            "origin_warehouse_id": origin_warehouse_id,
+            "destination_warehouse_id": destination_warehouse_id,
+            "vehicle_id": vehicle_id,
+            "notes": notes,
+            "lines": lines,
+        }
+        if driver_id is not None:
+            values["driver_id"] = driver_id
+        fingerprint = self._fingerprint("update", values)
         replay = await self._replay_command(
             company_id=company_id, action="update", key=idempotency_key, fingerprint=fingerprint
         )
@@ -763,12 +813,14 @@ class SqlAlchemyInventoryTransferRepository:
             exclude_transfer_id=transfer.id,
         )
         await self._validate_vehicle(company_id, vehicle_id)
+        await self._validate_driver(company_id, driver_id)
         transfer.origin_warehouse_id = origin.id
         transfer.destination_warehouse_id = destination.id
         transfer.route_type = route.value
         transfer.requires_approval = approval_required(route, policy)
         transfer.last_edited_by_id = actor_id
         transfer.vehicle_id = vehicle_id
+        transfer.driver_id = driver_id
         transfer.notes = notes.strip() if notes and notes.strip() else None
         old_details = list(
             (
@@ -820,6 +872,7 @@ class SqlAlchemyInventoryTransferRepository:
             self._raise("Traslado no encontrado.", "transfer_not_found", 404)
         require_cancellable(transfer.status, transfer.route_type)
         transfer.status = "cancelled"
+        transfer.closed_at = datetime.now(UTC)
         command = await self._record_command(
             company_id=company_id,
             transfer_id=transfer.id,
@@ -966,6 +1019,9 @@ class SqlAlchemyInventoryTransferRepository:
         transfer_id: uuid.UUID,
         idempotency_key: str,
         actor_id: uuid.UUID,
+        expected_vehicle_id: uuid.UUID | None = None,
+        expected_driver_id: uuid.UUID | None = None,
+        assignment_review: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         fingerprint = self._fingerprint("submit", {"transfer_id": transfer_id})
         replay = await self._replay_command(
@@ -988,6 +1044,16 @@ class SqlAlchemyInventoryTransferRepository:
                 "transfer_lines_required",
                 422,
             )
+        require_assignment_for_submission(transfer.vehicle_id, transfer.driver_id)
+        if (expected_vehicle_id is not None and expected_vehicle_id != transfer.vehicle_id) or (
+            expected_driver_id is not None and expected_driver_id != transfer.driver_id
+        ):
+            self._raise(
+                "El vehículo o el conductor cambió mientras se revisaba; vuelve a intentarlo.",
+                "transfer_assignment_changed",
+            )
+        await self._validate_vehicle(company_id, transfer.vehicle_id)
+        await self._validate_driver(company_id, transfer.driver_id)
         await self._revalidate(transfer=transfer, details=details, pair=pair)
         transfer.route_type = pair.route.value
         transfer.requires_approval = True
@@ -1000,6 +1066,8 @@ class SqlAlchemyInventoryTransferRepository:
         transfer.rejection_reason = None
         transfer.approved_by_id = None
         transfer.approved_at = None
+        transfer.approved_vehicle_id = None
+        transfer.approved_driver_id = None
         command = await self._record_command(
             company_id=company_id,
             transfer_id=transfer.id,
@@ -1007,6 +1075,9 @@ class SqlAlchemyInventoryTransferRepository:
             key=idempotency_key,
             fingerprint=fingerprint,
             actor_id=actor_id,
+            result={"assignment_review": self._json_value(assignment_review)}
+            if assignment_review is not None
+            else None,
         )
         return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
 
@@ -1051,6 +1122,8 @@ class SqlAlchemyInventoryTransferRepository:
         transfer.status = TransferStatus.PREPARATION.value
         transfer.submitted_by_id = None
         transfer.submitted_at = None
+        transfer.approved_vehicle_id = None
+        transfer.approved_driver_id = None
         command = await self._record_command(
             company_id=company_id,
             transfer_id=transfer.id,
@@ -1096,10 +1169,19 @@ class SqlAlchemyInventoryTransferRepository:
             destination_id=transfer.destination_warehouse_id,
             saved_route=transfer.route_type,
         )
+        if transfer.vehicle_id is None or transfer.driver_id is None:
+            self._raise(
+                "Esta solicitud se envió sin vehículo ni conductor; recházala o pide que la "
+                "retiren y la completen.",
+                "transfer_assignment_required",
+            )
         await self._revalidate(transfer=transfer, details=details, pair=pair)
         transfer.status = TransferStatus.APPROVED.value
         transfer.approved_by_id = actor_id
         transfer.approved_at = datetime.now(UTC)
+        # What the approver authorised; dispatch needs a reason to depart with anything else.
+        transfer.approved_vehicle_id = transfer.vehicle_id
+        transfer.approved_driver_id = transfer.driver_id
         command = await self._record_command(
             company_id=company_id,
             transfer_id=transfer.id,
@@ -1146,6 +1228,8 @@ class SqlAlchemyInventoryTransferRepository:
         transfer.rejection_reason = reason
         transfer.submitted_by_id = None
         transfer.submitted_at = None
+        transfer.approved_vehicle_id = None
+        transfer.approved_driver_id = None
         command = await self._record_command(
             company_id=company_id,
             transfer_id=transfer.id,
@@ -1155,6 +1239,65 @@ class SqlAlchemyInventoryTransferRepository:
             actor_id=actor_id,
         )
         return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
+
+    async def _dispatch_lines(
+        self,
+        company_id: uuid.UUID,
+        details: list[InventoryTransferDetailModel],
+        vehicle: InventoryVehicleModel,
+    ) -> list[dict[str, Any]]:
+        """The stock movement that puts each planned unit into the vehicle."""
+        lines: list[dict[str, Any]] = []
+        for detail in details:
+            unit = await self._session.scalar(
+                select(InventoryHandlingUnitModel).where(
+                    InventoryHandlingUnitModel.company_id == company_id,
+                    InventoryHandlingUnitModel.id == detail.source_handling_unit_id,
+                )
+            )
+            if unit is None:
+                self._raise(
+                    "No se encuentra una unidad logística del traslado.",
+                    "transfer_handling_unit_not_found",
+                    404,
+                )
+            validate_dispatch_quantity(
+                requested=Decimal(detail.quantity_planned), available=Decimal(unit.quantity_base)
+            )
+            lines.append(
+                {
+                    "inventory_item_id": detail.inventory_item_id,
+                    "handling_unit_id": unit.id,
+                    "from_location_id": unit.location_id,
+                    "to_location_id": vehicle.transit_location_id,
+                    "from_stock_status": "available",
+                    "to_stock_status": "in_transit",
+                    "quantity_base": detail.quantity_planned,
+                }
+            )
+        return lines
+
+    @staticmethod
+    def _required_substitution(
+        transfer: InventoryTransferModel,
+        *,
+        vehicle_id: uuid.UUID,
+        driver_id: uuid.UUID | None,
+        code: str | None,
+        reason: str | None,
+    ) -> tuple[str, str] | None:
+        """The code and reason owed when departing with other than the approved transport."""
+        if transfer.status != TransferStatus.APPROVED:
+            return None
+        vehicle_changed = (
+            transfer.approved_vehicle_id is not None and transfer.approved_vehicle_id != vehicle_id
+        )
+        driver_changed = (
+            transfer.approved_driver_id is not None and transfer.approved_driver_id != driver_id
+        )
+        if not (vehicle_changed or driver_changed):
+            return None
+        return require_substitution(code=code, reason=reason)
 
     async def dispatch_transfer(
         self,
@@ -1166,11 +1309,18 @@ class SqlAlchemyInventoryTransferRepository:
         actor_id: uuid.UUID,
         driver_id: uuid.UUID | None = None,
         compliance_override_reason: str | None = None,
+        substitution_code: str | None = None,
+        substitution_reason: str | None = None,
     ) -> dict[str, Any]:
-        fingerprint = self._fingerprint(
-            "dispatch",
-            {"transfer_id": transfer_id, "vehicle_id": vehicle_id, "driver_id": driver_id},
-        )
+        values: dict[str, Any] = {
+            "transfer_id": transfer_id,
+            "vehicle_id": vehicle_id,
+            "driver_id": driver_id,
+        }
+        if substitution_code is not None:
+            values["substitution_code"] = substitution_code
+            values["substitution_reason"] = substitution_reason
+        fingerprint = self._fingerprint("dispatch", values)
         replay = await self._replay_command(
             company_id=company_id, action="dispatch", key=idempotency_key, fingerprint=fingerprint
         )
@@ -1223,43 +1373,18 @@ class SqlAlchemyInventoryTransferRepository:
                 "transfer_vehicle_unavailable",
                 422,
             )
-        if transfer.vehicle_id is not None and transfer.vehicle_id != vehicle.id:
-            self._raise(
-                "El vehículo no coincide con el asignado a la preparación.",
-                "transfer_vehicle_mismatch",
-                422,
-            )
+        effective_driver_id = driver_id if driver_id is not None else transfer.driver_id
+        substitution = self._required_substitution(
+            transfer,
+            vehicle_id=vehicle.id,
+            driver_id=effective_driver_id,
+            code=substitution_code,
+            reason=substitution_reason,
+        )
         await self._ensure_units_not_committed(
             company_id, [detail.source_handling_unit_id for detail in details], transfer.id
         )
-        lines: list[dict[str, Any]] = []
-        for detail in details:
-            unit = await self._session.scalar(
-                select(InventoryHandlingUnitModel).where(
-                    InventoryHandlingUnitModel.company_id == company_id,
-                    InventoryHandlingUnitModel.id == detail.source_handling_unit_id,
-                )
-            )
-            if unit is None:
-                self._raise(
-                    "No se encuentra una unidad logística del traslado.",
-                    "transfer_handling_unit_not_found",
-                    404,
-                )
-            validate_dispatch_quantity(
-                requested=Decimal(detail.quantity_planned), available=Decimal(unit.quantity_base)
-            )
-            lines.append(
-                {
-                    "inventory_item_id": detail.inventory_item_id,
-                    "handling_unit_id": unit.id,
-                    "from_location_id": unit.location_id,
-                    "to_location_id": vehicle.transit_location_id,
-                    "from_stock_status": "available",
-                    "to_stock_status": "in_transit",
-                    "quantity_base": detail.quantity_planned,
-                }
-            )
+        lines = await self._dispatch_lines(company_id, details, vehicle)
         now = datetime.now(UTC)
         movement = await InventoryUseCases(
             SqlAlchemyInventoryRepository(self._session)
@@ -1293,7 +1418,12 @@ class SqlAlchemyInventoryTransferRepository:
         if transfer.status == TransferStatus.PREPARATION:
             # A draft sent straight out records the rules it was dispatched under.
             transfer.requires_approval = approval_required(route, policy)
-        transfer.driver_id = driver_id
+        transfer.driver_id = effective_driver_id
+        if substitution is not None:
+            transfer.assignment_substitution_code = substitution[0]
+            transfer.assignment_substitution_reason = substitution[1]
+            transfer.assignment_substitution_by_id = actor_id
+            transfer.assignment_substitution_at = now
         transfer.compliance_override_by = actor_id if compliance_override_reason else None
         transfer.compliance_override_reason = compliance_override_reason
         transfer.status = "in_transit"
@@ -1313,7 +1443,75 @@ class SqlAlchemyInventoryTransferRepository:
         await self._session.flush()
         return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
 
-    async def receive_transfer(  # noqa: C901 - coordinates one locked, atomic receipt workflow
+    @staticmethod
+    def _receipt_fingerprint_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Drop the fields left at their default so older clients replay identically."""
+        output: list[dict[str, Any]] = []
+        for line in lines:
+            kept = dict(line)
+            for key, default in _RECEIPT_LINE_DEFAULTS.items():
+                if key in kept and (
+                    kept[key] is None or (isinstance(default, Decimal) and kept[key] == default)
+                ):
+                    kept.pop(key)
+            output.append(kept)
+        return output
+
+    async def _receiving_location(
+        self,
+        destination: Warehouse,
+        location_id: uuid.UUID,
+        message: str = "El destino debe ser una ubicación receptora activa de la bodega destino.",
+    ) -> Location:
+        location: Location | None = await self._session.scalar(
+            select(Location).where(
+                Location.id == location_id,
+                Location.warehouse_id == destination.id,
+                Location.is_active.is_(True),
+                Location.deleted_at.is_(None),
+                Location.lifecycle_status == "active",
+                Location.storage_eligible.is_(True),
+                Location.location_type != "virtual",
+            )
+        )
+        if location is None:
+            self._raise(message, "transfer_receipt_location_invalid", 422)
+        return location
+
+    async def _allocate_receipt(
+        self,
+        allocations: list[InventoryTransferDemandAllocationModel],
+        *,
+        received: Decimal,
+        damaged: Decimal,
+    ) -> None:
+        """Credit what arrived to the demand it was dispatched for, oldest allocation first."""
+        unallocated_received = received
+        for allocation in allocations:
+            allocation_pending = (
+                Decimal(allocation.quantity_dispatched)
+                - Decimal(allocation.quantity_received)
+                - Decimal(allocation.quantity_adjusted_out)
+            )
+            assigned_receipt = min(unallocated_received, allocation_pending)
+            if assigned_receipt > 0:
+                allocation.quantity_received = (
+                    Decimal(allocation.quantity_received) + assigned_receipt
+                )
+                unallocated_received -= assigned_receipt
+            if unallocated_received <= 0:
+                break
+        unallocated_damaged = damaged
+        for allocation in allocations:
+            room = Decimal(allocation.quantity_received) - Decimal(allocation.quantity_damaged)
+            assigned_damage = min(unallocated_damaged, room)
+            if assigned_damage > 0:
+                allocation.quantity_damaged = Decimal(allocation.quantity_damaged) + assigned_damage
+                unallocated_damaged -= assigned_damage
+            if unallocated_damaged <= 0:
+                break
+
+    async def receive_transfer(  # noqa: C901 - one locked, atomic receipt workflow
         self,
         *,
         company_id: uuid.UUID,
@@ -1322,7 +1520,10 @@ class SqlAlchemyInventoryTransferRepository:
         actor_id: uuid.UUID,
         lines: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        fingerprint = self._fingerprint("receive", {"transfer_id": transfer_id, "lines": lines})
+        fingerprint = self._fingerprint(
+            "receive",
+            {"transfer_id": transfer_id, "lines": self._receipt_fingerprint_lines(lines)},
+        )
         replay = await self._replay_command(
             company_id=company_id, action="receive", key=idempotency_key, fingerprint=fingerprint
         )
@@ -1371,8 +1572,13 @@ class SqlAlchemyInventoryTransferRepository:
                 "transfer_detail_not_found",
                 404,
             )
-        inventory_lines: list[dict[str, Any]] = []
-        ordered_details: list[InventoryTransferDetailModel] = []
+        shortages = await self._open_shortages_by_detail(company_id, transfer.id)
+        if any(detail.id in shortages for detail in details):
+            self._raise(
+                "Esta línea tiene un faltante abierto; márcalo como «Llegó la mercadería» "
+                "antes de recibirla.",
+                "transfer_discrepancy_open",
+            )
         allocations_by_detail: dict[uuid.UUID, list[InventoryTransferDemandAllocationModel]] = {}
         for detail in details:
             allocations_by_detail[detail.id] = list(
@@ -1388,16 +1594,33 @@ class SqlAlchemyInventoryTransferRepository:
                     )
                 ).all()
             )
+        vehicle_transit_warehouse_id = await self._session.scalar(
+            select(InventoryVehicleModel.transit_warehouse_id).where(
+                InventoryVehicleModel.company_id == company_id,
+                InventoryVehicleModel.id == transfer.vehicle_id,
+            )
+        )
+        inventory_lines: list[dict[str, Any]] = []
+        #: What each movement line stands for, in the order they are posted.
+        planned: list[tuple[InventoryTransferDetailModel, str, Decimal]] = []
+        amounts: dict[uuid.UUID, tuple[Decimal, Decimal, Decimal]] = {}
+        surplus_locations: dict[uuid.UUID, Location] = {}
+        damaged_locations: dict[uuid.UUID, Location] = {}
         for line in lines:
             detail = by_id[line["transfer_detail_id"]]
-            remaining = (
-                Decimal(detail.quantity_dispatched)
-                - Decimal(detail.quantity_received)
-                - Decimal(detail.quantity_returned)
-                - Decimal(detail.quantity_adjusted_out)
+            good = Decimal(str(line["quantity_base"]))
+            damaged = Decimal(str(line.get("damaged_quantity") or 0))
+            surplus = Decimal(str(line.get("surplus_quantity") or 0))
+            validate_receipt_line(
+                good=good,
+                damaged=damaged,
+                surplus=surplus,
+                pending=detail_pending(detail),
+                damage_type=line.get("damage_type"),
+                damage_notes=line.get("damage_notes"),
+                surplus_notes=line.get("surplus_notes"),
             )
-            quantity = Decimal(line["quantity_base"])
-            validate_receipt_quantity(requested=quantity, remaining=remaining)
+            amounts[detail.id] = (good, damaged, surplus)
             if detail.transit_handling_unit_id is None:
                 self._raise(
                     "La unidad logística pendiente no está asociada al tránsito.",
@@ -1411,15 +1634,7 @@ class SqlAlchemyInventoryTransferRepository:
             )
             if (
                 unit is None
-                or unit.warehouse_id
-                != (
-                    await self._session.scalar(
-                        select(InventoryVehicleModel.transit_warehouse_id).where(
-                            InventoryVehicleModel.company_id == company_id,
-                            InventoryVehicleModel.id == transfer.vehicle_id,
-                        )
-                    )
-                )
+                or unit.warehouse_id != vehicle_transit_warehouse_id
                 or unit.stock_status != "in_transit"
                 or unit.location_id is None
             ):
@@ -1427,35 +1642,58 @@ class SqlAlchemyInventoryTransferRepository:
                     "La unidad no se encuentra en el vehículo asociado al traslado.",
                     "transfer_transit_unit_mismatch",
                 )
-            target_location = await self._session.scalar(
-                select(Location).where(
-                    Location.id == line["destination_location_id"],
-                    Location.warehouse_id == destination.id,
-                    Location.is_active.is_(True),
-                    Location.deleted_at.is_(None),
-                    Location.lifecycle_status == "active",
-                    Location.storage_eligible.is_(True),
-                    Location.location_type != "virtual",
-                )
+            target_location = await self._receiving_location(
+                destination, line["destination_location_id"]
             )
-            if target_location is None:
-                self._raise(
-                    "El destino debe ser una ubicación receptora activa de la bodega destino.",
-                    "transfer_receipt_location_invalid",
-                    422,
+            if damaged > 0:
+                damaged_location = (
+                    await self._receiving_location(
+                        destination,
+                        line["damaged_location_id"],
+                        "La ubicación de las averías debe ser una ubicación receptora activa "
+                        "de la bodega destino.",
+                    )
+                    if line.get("damaged_location_id")
+                    else target_location
                 )
-            inventory_lines.append(
-                {
-                    "inventory_item_id": detail.inventory_item_id,
-                    "handling_unit_id": unit.id,
-                    "from_location_id": unit.location_id,
-                    "to_location_id": target_location.id,
-                    "from_stock_status": "in_transit",
-                    "to_stock_status": "quarantine",
-                    "quantity_base": quantity,
-                }
-            )
-            ordered_details.append(detail)
+                damaged_locations[detail.id] = damaged_location
+                # The damaged part leaves first, so the original unit keeps what arrived well.
+                inventory_lines.append(
+                    {
+                        "inventory_item_id": detail.inventory_item_id,
+                        "handling_unit_id": unit.id,
+                        "from_location_id": unit.location_id,
+                        "to_location_id": damaged_location.id,
+                        "from_stock_status": "in_transit",
+                        "to_stock_status": "damaged",
+                        "quantity_base": damaged,
+                    }
+                )
+                planned.append((detail, "damaged", damaged))
+            if good > 0:
+                inventory_lines.append(
+                    {
+                        "inventory_item_id": detail.inventory_item_id,
+                        "handling_unit_id": unit.id,
+                        "from_location_id": unit.location_id,
+                        "to_location_id": target_location.id,
+                        "from_stock_status": "in_transit",
+                        "to_stock_status": "quarantine",
+                        "quantity_base": good,
+                    }
+                )
+                planned.append((detail, "good", good))
+            if surplus > 0:
+                surplus_locations[detail.id] = (
+                    await self._receiving_location(
+                        destination,
+                        line["surplus_location_id"],
+                        "La ubicación del sobrante debe ser una ubicación receptora activa "
+                        "de la bodega destino.",
+                    )
+                    if line.get("surplus_location_id")
+                    else target_location
+                )
 
         movement = await InventoryUseCases(
             SqlAlchemyInventoryRepository(self._session)
@@ -1477,65 +1715,92 @@ class SqlAlchemyInventoryTransferRepository:
             actor_id=actor_id,
             result={"movement_id": str(movement["id"])},
         )
-        for detail, requested_line, movement_line in zip(
-            ordered_details, lines, movement["lines"], strict=True
+        receipts: dict[tuple[uuid.UUID, str], InventoryTransferReceiptModel] = {}
+        for (detail, condition, quantity), movement_line in zip(
+            planned, movement["lines"], strict=True
         ):
-            qty = Decimal(requested_line["quantity_base"])
-            detail.quantity_received = Decimal(detail.quantity_received) + qty
-            unallocated_received = qty
-            for allocation in allocations_by_detail[detail.id]:
-                allocation_pending = (
-                    Decimal(allocation.quantity_dispatched)
-                    - Decimal(allocation.quantity_received)
-                    - Decimal(allocation.quantity_adjusted_out)
-                )
-                assigned_receipt = min(unallocated_received, allocation_pending)
-                if assigned_receipt > 0:
-                    allocation.quantity_received = (
-                        Decimal(allocation.quantity_received) + assigned_receipt
-                    )
-                    unallocated_received -= assigned_receipt
-                if unallocated_received <= 0:
-                    break
-            if Decimal(detail.quantity_received) + Decimal(detail.quantity_returned) + Decimal(
-                detail.quantity_adjusted_out
-            ) >= Decimal(detail.quantity_dispatched):
-                detail.transit_handling_unit_id = None
-            self._session.add(
-                InventoryTransferReceiptModel(
-                    company_id=company_id,
-                    transfer_id=transfer.id,
-                    transfer_detail_id=detail.id,
-                    command_id=command.id,
-                    movement_id=movement["id"],
-                    handling_unit_id=movement_line["handling_unit_id"],
-                    quantity_received=qty,
-                    received_by_id=actor_id,
-                    received_at=now,
-                )
+            receipt = InventoryTransferReceiptModel(
+                id=uuid.uuid4(),
+                company_id=company_id,
+                transfer_id=transfer.id,
+                transfer_detail_id=detail.id,
+                command_id=command.id,
+                movement_id=movement["id"],
+                handling_unit_id=movement_line["handling_unit_id"],
+                quantity_received=quantity,
+                received_by_id=actor_id,
+                received_at=now,
+                condition=condition,
             )
+            self._session.add(receipt)
+            receipts[(detail.id, condition)] = receipt
         await self._session.flush()
-        all_details = list(
-            (
-                await self._session.scalars(
-                    select(InventoryTransferDetailModel).where(
-                        InventoryTransferDetailModel.company_id == company_id,
-                        InventoryTransferDetailModel.transfer_id == transfer.id,
+        evidence_by_detail = {
+            line["transfer_detail_id"]: (line.get("evidence_reference") or None) for line in lines
+        }
+        notes_by_detail = {
+            line["transfer_detail_id"]: (
+                (line.get("damage_type"), line.get("damage_notes"), line.get("surplus_notes"))
+            )
+            for line in lines
+        }
+        for detail in details:
+            good, damaged, surplus = amounts[detail.id]
+            detail.quantity_received = Decimal(detail.quantity_received) + good + damaged
+            detail.quantity_received_damaged = Decimal(detail.quantity_received_damaged) + damaged
+            detail.quantity_surplus = Decimal(detail.quantity_surplus) + surplus
+            await self._allocate_receipt(
+                allocations_by_detail[detail.id], received=good + damaged, damaged=damaged
+            )
+            if detail_pending(detail) <= 0:
+                detail.transit_handling_unit_id = None
+            damage_type, damage_notes, surplus_notes = notes_by_detail[detail.id]
+            evidence = evidence_by_detail[detail.id]
+            if damaged > 0:
+                damaged_receipt = receipts[(detail.id, "damaged")]
+                self._session.add(
+                    InventoryTransferDiscrepancyModel(
+                        company_id=company_id,
+                        transfer_id=transfer.id,
+                        transfer_detail_id=detail.id,
+                        kind=DiscrepancyKind.DAMAGE.value,
+                        status=DiscrepancyStatus.OPEN.value,
+                        source=DiscrepancySource.RECEIPT.value,
+                        quantity=damaged,
+                        damage_type=damage_type,
+                        notes=str(damage_notes).strip(),
+                        evidence_reference=evidence,
+                        location_id=damaged_locations[detail.id].id,
+                        handling_unit_id=damaged_receipt.handling_unit_id,
+                        receipt_id=damaged_receipt.id,
+                        command_id=command.id,
+                        opened_by_id=actor_id,
+                        opened_at=now,
                     )
                 )
-            ).all()
-        )
-        if all(
-            Decimal(item.quantity_received)
-            + Decimal(item.quantity_returned)
-            + Decimal(item.quantity_adjusted_out)
-            >= Decimal(item.quantity_dispatched)
-            for item in all_details
-        ):
-            transfer.status = "received"
-            transfer.received_by_id = actor_id
-            transfer.received_at = now
+            if surplus > 0:
+                anchor = receipts.get((detail.id, "good")) or receipts[(detail.id, "damaged")]
+                self._session.add(
+                    InventoryTransferDiscrepancyModel(
+                        company_id=company_id,
+                        transfer_id=transfer.id,
+                        transfer_detail_id=detail.id,
+                        kind=DiscrepancyKind.SURPLUS.value,
+                        status=DiscrepancyStatus.OPEN.value,
+                        source=DiscrepancySource.RECEIPT.value,
+                        quantity=surplus,
+                        notes=str(surplus_notes).strip(),
+                        evidence_reference=evidence,
+                        location_id=surplus_locations[detail.id].id,
+                        receipt_id=anchor.id,
+                        command_id=command.id,
+                        opened_by_id=actor_id,
+                        opened_at=now,
+                        origin_count_required=True,
+                    )
+                )
         await self._session.flush()
+        await settle_transfer(self._session, transfer, actor_id, now)
         return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
 
     async def open_incident(
@@ -1571,11 +1836,7 @@ class SqlAlchemyInventoryTransferRepository:
         )
         if transfer is None:
             self._raise("Traslado no encontrado.", "transfer_not_found", 404)
-        if transfer.status != "in_transit":
-            self._raise(
-                "Solo puede abrir una incidencia de un traslado en tránsito.",
-                "transfer_incident_not_allowed",
-            )
+        require_incident_openable(transfer.status)
         incident = await self._session.scalar(
             select(InventoryTransferIncidentModel).where(
                 InventoryTransferIncidentModel.company_id == company_id,
@@ -1599,7 +1860,8 @@ class SqlAlchemyInventoryTransferRepository:
                 opened_at=now,
             )
         )
-        transfer.status = "incident"
+        await self._session.flush()
+        await settle_transfer(self._session, transfer, actor_id, now)
         command = await self._record_command(
             company_id=company_id,
             transfer_id=transfer.id,
@@ -1692,17 +1954,15 @@ class SqlAlchemyInventoryTransferRepository:
             )
         if resolution == "resume_transit":
             await self._validate_pending_transit(company_id, pending)
-            transfer.status = "in_transit"
-        else:
-            transfer.status = "received"
-            transfer.received_by_id = actor_id
-            transfer.received_at = datetime.now(UTC)
         now = datetime.now(UTC)
         incident.status = "resolved"
         incident.resolution = resolution
         incident.resolution_notes = resolution_notes.strip()
         incident.resolved_by_id = actor_id
         incident.resolved_at = now
+        await self._session.flush()
+        # The incident is closed first, so the status follows what was received.
+        await settle_transfer(self._session, transfer, actor_id, now)
         command = await self._record_command(
             company_id=company_id,
             transfer_id=transfer.id,
@@ -1712,6 +1972,659 @@ class SqlAlchemyInventoryTransferRepository:
             actor_id=actor_id,
         )
         return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
+
+    async def _lock_discrepancy(
+        self, company_id: uuid.UUID, transfer_id: uuid.UUID, discrepancy_id: uuid.UUID
+    ) -> InventoryTransferDiscrepancyModel:
+        discrepancy = await self._session.scalar(
+            select(InventoryTransferDiscrepancyModel)
+            .where(
+                InventoryTransferDiscrepancyModel.company_id == company_id,
+                InventoryTransferDiscrepancyModel.transfer_id == transfer_id,
+                InventoryTransferDiscrepancyModel.id == discrepancy_id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if discrepancy is None:
+            self._raise("Diferencia no encontrada.", "transfer_discrepancy_not_found", 404)
+        return discrepancy
+
+    async def _require_no_active_adjustment(
+        self, company_id: uuid.UUID, discrepancy_id: uuid.UUID, message: str
+    ) -> None:
+        active = await self._session.scalar(
+            select(InventoryAdjustmentModel.code).where(
+                InventoryAdjustmentModel.company_id == company_id,
+                InventoryAdjustmentModel.transfer_discrepancy_id == discrepancy_id,
+                InventoryAdjustmentModel.status.in_(("draft", "approved")),
+            )
+        )
+        if active is not None:
+            self._raise(
+                f"{message}: tiene el ajuste {active} en curso. Cancela el ajuste {active} primero.",
+                "transfer_discrepancy_has_adjustment",
+            )
+
+    async def _open_shortages_by_detail(
+        self, company_id: uuid.UUID, transfer_id: uuid.UUID
+    ) -> dict[uuid.UUID, Decimal]:
+        """What each detail has already declared missing and not yet resolved."""
+        rows = await self._session.execute(
+            select(
+                InventoryTransferDiscrepancyModel.transfer_detail_id,
+                func.sum(InventoryTransferDiscrepancyModel.quantity),
+            )
+            .where(
+                InventoryTransferDiscrepancyModel.company_id == company_id,
+                InventoryTransferDiscrepancyModel.transfer_id == transfer_id,
+                InventoryTransferDiscrepancyModel.kind == DiscrepancyKind.SHORTAGE.value,
+                InventoryTransferDiscrepancyModel.status.in_(
+                    (DiscrepancyStatus.OPEN.value, DiscrepancyStatus.IN_CLAIM.value)
+                ),
+            )
+            .group_by(InventoryTransferDiscrepancyModel.transfer_detail_id)
+        )
+        return {row[0]: Decimal(row[1]) for row in rows.all()}
+
+    async def close_reception(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        reason: str,
+        evidence_reference: str | None = None,
+    ) -> dict[str, Any]:
+        """Stop waiting for the rest: what is still missing becomes a shortage to resolve."""
+        fingerprint = self._fingerprint(
+            "close_reception",
+            {
+                "transfer_id": transfer_id,
+                "reason": reason,
+                "evidence_reference": evidence_reference,
+            },
+        )
+        replay = await self._replay_command(
+            company_id=company_id,
+            action="close_reception",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+        )
+        if replay is not None:
+            return replay
+        transfer = await self._lock_transfer(company_id, transfer_id)
+        details = await self._lock_details(company_id, transfer_id)
+        require_reception_closable(
+            transfer.status,
+            received_any=any(Decimal(detail.quantity_received) > 0 for detail in details),
+        )
+        already_short = await self._open_shortages_by_detail(company_id, transfer_id)
+        # A detail that already has a shortage open (declared earlier) is not declared twice.
+        missing = [
+            (detail, detail_pending(detail) - already_short.get(detail.id, Decimal("0")))
+            for detail in details
+        ]
+        missing = [(detail, quantity) for detail, quantity in missing if quantity > 0]
+        if not missing:
+            self._raise(
+                "No queda mercancía por llegar en este traslado.", "transfer_no_pending_transit"
+            )
+        now = datetime.now(UTC)
+        command = await self._record_command(
+            company_id=company_id,
+            transfer_id=transfer.id,
+            action="close_reception",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+            actor_id=actor_id,
+        )
+        for detail, quantity in missing:
+            self._session.add(
+                InventoryTransferDiscrepancyModel(
+                    company_id=company_id,
+                    transfer_id=transfer.id,
+                    transfer_detail_id=detail.id,
+                    kind=DiscrepancyKind.SHORTAGE.value,
+                    status=DiscrepancyStatus.OPEN.value,
+                    source=DiscrepancySource.RECEPTION_CLOSE.value,
+                    quantity=quantity,
+                    notes=reason.strip(),
+                    evidence_reference=(evidence_reference or "").strip() or None,
+                    command_id=command.id,
+                    opened_by_id=actor_id,
+                    opened_at=now,
+                    origin_count_required=True,
+                )
+            )
+        await self._session.flush()
+        await settle_transfer(self._session, transfer, actor_id, now)
+        return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
+
+    async def claim_discrepancy(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        discrepancy_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        claim_reference: str,
+    ) -> dict[str, Any]:
+        """A damage handed to the carrier or insurer no longer blocks closing the transfer."""
+        fingerprint = self._fingerprint(
+            "discrepancy_claim",
+            {
+                "transfer_id": transfer_id,
+                "discrepancy_id": discrepancy_id,
+                "claim_reference": claim_reference,
+            },
+        )
+        replay = await self._replay_command(
+            company_id=company_id,
+            action="discrepancy_claim",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+        )
+        if replay is not None:
+            return replay
+        transfer = await self._lock_transfer(company_id, transfer_id)
+        discrepancy = await self._lock_discrepancy(company_id, transfer_id, discrepancy_id)
+        require_discrepancy_kind(discrepancy.kind, DiscrepancyKind.DAMAGE)
+        require_discrepancy_open(discrepancy.status)
+        await self._require_no_active_adjustment(
+            company_id,
+            discrepancy.id,
+            "No se puede pasar a reclamo esta avería",
+        )
+        now = datetime.now(UTC)
+        discrepancy.status = DiscrepancyStatus.IN_CLAIM.value
+        discrepancy.claim_reference = claim_reference.strip()
+        discrepancy.claimed_by_id = actor_id
+        discrepancy.claimed_at = now
+        await self._session.flush()
+        await settle_transfer(self._session, transfer, actor_id, now)
+        command = await self._record_command(
+            company_id=company_id,
+            transfer_id=transfer.id,
+            action="discrepancy_claim",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+            actor_id=actor_id,
+        )
+        return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
+
+    async def release_damage(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        discrepancy_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        notes: str,
+        destination_location_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
+        """After inspection the damaged stock goes to quarantine, where it can be released."""
+        fingerprint = self._fingerprint(
+            "discrepancy_release",
+            {
+                "transfer_id": transfer_id,
+                "discrepancy_id": discrepancy_id,
+                "notes": notes,
+                "destination_location_id": destination_location_id,
+            },
+        )
+        replay = await self._replay_command(
+            company_id=company_id,
+            action="discrepancy_release",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+        )
+        if replay is not None:
+            return replay
+        transfer = await self._lock_transfer(company_id, transfer_id)
+        discrepancy = await self._lock_discrepancy(company_id, transfer_id, discrepancy_id)
+        require_discrepancy_kind(discrepancy.kind, DiscrepancyKind.DAMAGE)
+        require_discrepancy_open(discrepancy.status, allow_claim=True)
+        await self._require_no_active_adjustment(
+            company_id, discrepancy.id, "No se puede liberar esta avería"
+        )
+        # The unit is followed wherever it was moved inside the destination warehouse.
+        unit, problem = await locked_damaged_unit(
+            self._session, discrepancy, transfer.destination_warehouse_id
+        )
+        if unit is None:
+            self._raise(
+                f"{problem} No se puede liberar la avería.", "transfer_discrepancy_unit_changed"
+            )
+        warehouse_id = unit.warehouse_id
+        target = await self._session.scalar(
+            select(Location).where(
+                Location.id == (destination_location_id or unit.location_id),
+                Location.warehouse_id == warehouse_id,
+                Location.is_active.is_(True),
+                Location.deleted_at.is_(None),
+                Location.lifecycle_status == "active",
+                Location.storage_eligible.is_(True),
+                Location.location_type != "virtual",
+            )
+        )
+        if target is None:
+            self._raise(
+                "La ubicación de cuarentena debe estar activa en la bodega destino.",
+                "transfer_receipt_location_invalid",
+                422,
+            )
+        detail = await self._session.scalar(
+            select(InventoryTransferDetailModel).where(
+                InventoryTransferDetailModel.company_id == company_id,
+                InventoryTransferDetailModel.id == discrepancy.transfer_detail_id,
+            )
+        )
+        if detail is None:
+            self._raise("Detalle de traslado no encontrado.", "transfer_detail_not_found", 404)
+        now = datetime.now(UTC)
+        movement = await InventoryUseCases(
+            SqlAlchemyInventoryRepository(self._session)
+        ).post_movement(
+            company_id=company_id,
+            idempotency_key=f"transfer-release:{transfer.id}:{idempotency_key}",
+            movement_type="transfer",
+            source_reference=f"inventory_transfer:{transfer.code}:release:{discrepancy.id}",
+            lines=[
+                {
+                    "inventory_item_id": detail.inventory_item_id,
+                    "handling_unit_id": unit.id,
+                    "from_location_id": unit.location_id,
+                    "to_location_id": target.id,
+                    "from_stock_status": "damaged",
+                    "to_stock_status": "quarantine",
+                    "quantity_base": Decimal(discrepancy.quantity),
+                }
+            ],
+            actor_id=actor_id,
+        )
+        discrepancy.status = DiscrepancyStatus.RESOLVED.value
+        discrepancy.resolution = DiscrepancyResolution.RELEASED.value
+        discrepancy.resolution_notes = notes.strip()
+        discrepancy.resolved_by_id = actor_id
+        discrepancy.resolved_at = now
+        await self._session.flush()
+        await settle_transfer(self._session, transfer, actor_id, now)
+        command = await self._record_command(
+            company_id=company_id,
+            transfer_id=transfer.id,
+            action="discrepancy_release",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+            actor_id=actor_id,
+            result={"movement_id": str(movement["id"])},
+        )
+        return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
+
+    async def mark_shortage_found(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        discrepancy_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        notes: str,
+    ) -> dict[str, Any]:
+        """The missing goods turned up: the shortage is cancelled and reception resumes."""
+        fingerprint = self._fingerprint(
+            "discrepancy_found",
+            {"transfer_id": transfer_id, "discrepancy_id": discrepancy_id, "notes": notes},
+        )
+        replay = await self._replay_command(
+            company_id=company_id,
+            action="discrepancy_found",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+        )
+        if replay is not None:
+            return replay
+        transfer = await self._lock_transfer(company_id, transfer_id)
+        discrepancy = await self._lock_discrepancy(company_id, transfer_id, discrepancy_id)
+        require_discrepancy_kind(discrepancy.kind, DiscrepancyKind.SHORTAGE)
+        require_discrepancy_open(discrepancy.status)
+        await self._require_no_active_adjustment(
+            company_id, discrepancy.id, "No se puede marcar como llegado este faltante"
+        )
+        now = datetime.now(UTC)
+        discrepancy.status = DiscrepancyStatus.CANCELLED.value
+        discrepancy.resolution = DiscrepancyResolution.FOUND.value
+        discrepancy.resolution_notes = notes.strip()
+        discrepancy.resolved_by_id = actor_id
+        discrepancy.resolved_at = now
+        await self._session.flush()
+        await settle_transfer(self._session, transfer, actor_id, now)
+        command = await self._record_command(
+            company_id=company_id,
+            transfer_id=transfer.id,
+            action="discrepancy_found",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+            actor_id=actor_id,
+        )
+        return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
+
+    async def dismiss_surplus(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        discrepancy_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        notes: str,
+    ) -> dict[str, Any]:
+        """The extra goods were a counting mistake: nothing enters stock."""
+        fingerprint = self._fingerprint(
+            "discrepancy_dismiss",
+            {"transfer_id": transfer_id, "discrepancy_id": discrepancy_id, "notes": notes},
+        )
+        replay = await self._replay_command(
+            company_id=company_id,
+            action="discrepancy_dismiss",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+        )
+        if replay is not None:
+            return replay
+        transfer = await self._lock_transfer(company_id, transfer_id)
+        discrepancy = await self._lock_discrepancy(company_id, transfer_id, discrepancy_id)
+        require_discrepancy_kind(discrepancy.kind, DiscrepancyKind.SURPLUS)
+        require_discrepancy_open(discrepancy.status)
+        await self._require_no_active_adjustment(
+            company_id, discrepancy.id, "No se puede descartar este sobrante"
+        )
+        detail = await self._session.scalar(
+            select(InventoryTransferDetailModel)
+            .where(
+                InventoryTransferDetailModel.company_id == company_id,
+                InventoryTransferDetailModel.id == discrepancy.transfer_detail_id,
+            )
+            .with_for_update()
+        )
+        if detail is None:
+            self._raise("Detalle de traslado no encontrado.", "transfer_detail_not_found", 404)
+        now = datetime.now(UTC)
+        detail.quantity_surplus = max(
+            Decimal("0"), Decimal(detail.quantity_surplus) - Decimal(discrepancy.quantity)
+        )
+        discrepancy.status = DiscrepancyStatus.CANCELLED.value
+        discrepancy.resolution = DiscrepancyResolution.DISMISSED.value
+        discrepancy.resolution_notes = notes.strip()
+        discrepancy.resolved_by_id = actor_id
+        discrepancy.resolved_at = now
+        await self._session.flush()
+        await settle_transfer(self._session, transfer, actor_id, now)
+        command = await self._record_command(
+            company_id=company_id,
+            transfer_id=transfer.id,
+            action="discrepancy_dismiss",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+            actor_id=actor_id,
+        )
+        return await self._finish_command(command, company_id=company_id, transfer_id=transfer.id)
+
+    async def acknowledge_origin_count(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        discrepancy_id: uuid.UUID,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        notes: str,
+    ) -> dict[str, Any]:
+        """The origin warehouse counted its stock after a shortage or a surplus."""
+        fingerprint = self._fingerprint(
+            "origin_count",
+            {"transfer_id": transfer_id, "discrepancy_id": discrepancy_id, "notes": notes},
+        )
+        replay = await self._replay_command(
+            company_id=company_id,
+            action="origin_count",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+        )
+        if replay is not None:
+            return replay
+        await self._lock_transfer(company_id, transfer_id)
+        discrepancy = await self._lock_discrepancy(company_id, transfer_id, discrepancy_id)
+        if not discrepancy.origin_count_required:
+            self._raise(
+                "Esta diferencia no requiere un conteo en el origen.",
+                "transfer_discrepancy_action_invalid",
+            )
+        if discrepancy.origin_counted_at is not None:
+            self._raise(
+                "El conteo en el origen ya se registró.", "transfer_origin_count_already_recorded"
+            )
+        discrepancy.origin_counted_by_id = actor_id
+        discrepancy.origin_counted_at = datetime.now(UTC)
+        discrepancy.origin_count_notes = notes.strip()
+        await self._session.flush()
+        command = await self._record_command(
+            company_id=company_id,
+            transfer_id=transfer_id,
+            action="origin_count",
+            key=idempotency_key,
+            fingerprint=fingerprint,
+            actor_id=actor_id,
+        )
+        return await self._finish_command(command, company_id=company_id, transfer_id=transfer_id)
+
+    async def _vehicle_reference(
+        self, company_id: uuid.UUID, vehicle_id: uuid.UUID | None
+    ) -> dict[str, Any] | None:
+        if vehicle_id is None:
+            return None
+        record = await self._session.scalar(
+            select(InventoryVehicleModel).where(
+                InventoryVehicleModel.company_id == company_id,
+                InventoryVehicleModel.id == vehicle_id,
+            )
+        )
+        if record is None:
+            return None
+        fleet = (
+            await self._session.execute(
+                select(FleetVehicleModel.id, FleetVehicleModel.plate).where(
+                    FleetVehicleModel.company_id == company_id,
+                    FleetVehicleModel.inventory_vehicle_id == record.id,
+                )
+            )
+        ).first()
+        return {
+            "id": record.id,
+            "code": record.code,
+            "name": record.name,
+            "status": record.status,
+            "transit_warehouse_id": record.transit_warehouse_id,
+            "fleet_vehicle_id": fleet[0] if fleet else None,
+            "plate": fleet[1] if fleet else None,
+        }
+
+    async def _driver_reference(
+        self, company_id: uuid.UUID, driver_id: uuid.UUID | None
+    ) -> dict[str, Any] | None:
+        if driver_id is None:
+            return None
+        driver_row = (
+            await self._session.execute(
+                select(
+                    DriverModel.id,
+                    Employee.first_name,
+                    Employee.last_name,
+                    Employee.employee_code,
+                )
+                .join(Employee, Employee.id == DriverModel.employee_id)
+                .where(DriverModel.company_id == company_id, DriverModel.id == driver_id)
+                .execution_options(include_deleted=True)
+            )
+        ).first()
+        if driver_row is None:
+            return None
+        return {
+            "id": driver_row[0],
+            "name": f"{driver_row[1]} {driver_row[2]}".strip(),
+            "employee_code": driver_row[3],
+        }
+
+    @staticmethod
+    def _visible_adjustment(
+        row: InventoryTransferDiscrepancyModel, adjustment: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        """A closed discrepancy only shows the adjustment that was applied to it."""
+        if adjustment is None:
+            return None
+        closed = row.status in (DiscrepancyStatus.RESOLVED, DiscrepancyStatus.CANCELLED)
+        return adjustment if not closed or adjustment["status"] == "applied" else None
+
+    async def _discrepancy_payloads(
+        self,
+        transfer: InventoryTransferModel,
+        rows: list[InventoryTransferDiscrepancyModel],
+        details: list[InventoryTransferDetailModel],
+        items_by_id: dict[Any, Any],
+        units_by_id: dict[uuid.UUID, InventoryHandlingUnitModel],
+        actor_names: dict[uuid.UUID, str],
+    ) -> list[dict[str, Any]]:
+        if not rows:
+            return []
+        extra_actor_ids = {
+            actor
+            for row in rows
+            for actor in (
+                row.opened_by_id,
+                row.claimed_by_id,
+                row.resolved_by_id,
+                row.origin_counted_by_id,
+            )
+            if actor is not None and actor not in actor_names
+        }
+        names = dict(actor_names)
+        if extra_actor_ids:
+            names.update(
+                {
+                    row[0]: row[1]
+                    for row in (
+                        await self._session.execute(
+                            select(User.id, User.username).where(User.id.in_(extra_actor_ids))
+                        )
+                    ).all()
+                }
+            )
+        missing_unit_ids = {
+            row.handling_unit_id
+            for row in rows
+            if row.handling_unit_id is not None and row.handling_unit_id not in units_by_id
+        }
+        units = dict(units_by_id)
+        if missing_unit_ids:
+            units.update(
+                {
+                    unit.id: unit
+                    for unit in (
+                        await self._session.scalars(
+                            select(InventoryHandlingUnitModel).where(
+                                InventoryHandlingUnitModel.company_id == transfer.company_id,
+                                InventoryHandlingUnitModel.id.in_(missing_unit_ids),
+                            )
+                        )
+                    ).all()
+                }
+            )
+        location_ids = {row.location_id for row in rows if row.location_id is not None}
+        location_codes: dict[uuid.UUID, str] = {}
+        if location_ids:
+            location_codes = {
+                row[0]: row[1]
+                for row in (
+                    await self._session.execute(
+                        select(Location.id, Location.code).where(Location.id.in_(location_ids))
+                    )
+                ).all()
+            }
+        adjustments: dict[uuid.UUID, dict[str, Any]] = {}
+        for adjustment in (
+            await self._session.scalars(
+                select(InventoryAdjustmentModel)
+                .where(
+                    InventoryAdjustmentModel.company_id == transfer.company_id,
+                    InventoryAdjustmentModel.transfer_discrepancy_id.in_([row.id for row in rows]),
+                    InventoryAdjustmentModel.status != "cancelled",
+                )
+                .order_by(InventoryAdjustmentModel.created_at)
+            )
+        ).all():
+            assert adjustment.transfer_discrepancy_id is not None
+            adjustments[adjustment.transfer_discrepancy_id] = {
+                "id": adjustment.id,
+                "code": adjustment.code,
+                "status": adjustment.status,
+            }
+        by_detail = {detail.id: detail for detail in details}
+        payloads: list[dict[str, Any]] = []
+        for row in rows:
+            detail = by_detail.get(row.transfer_detail_id)
+            item = items_by_id.get(detail.inventory_item_id) if detail else None
+            unit = units.get(row.handling_unit_id) if row.handling_unit_id else None
+            payloads.append(
+                {
+                    "id": row.id,
+                    "transfer_detail_id": row.transfer_detail_id,
+                    "line_number": detail.line_number if detail else None,
+                    "product_name": item.product_name if item else "Producto no disponible",
+                    "sku": item.sku if item else None,
+                    "base_unit_symbol": item.base_unit_symbol if item else None,
+                    "kind": row.kind,
+                    "status": row.status,
+                    "source": row.source,
+                    "quantity": row.quantity,
+                    "damage_type": row.damage_type,
+                    "notes": row.notes,
+                    "evidence_reference": row.evidence_reference,
+                    "location_id": row.location_id,
+                    "location_code": location_codes.get(row.location_id)
+                    if row.location_id
+                    else None,
+                    "handling_unit_id": row.handling_unit_id,
+                    "handling_unit_code": unit.code if unit else None,
+                    "receipt_id": row.receipt_id,
+                    "incident_id": row.incident_id,
+                    "opened_by_id": row.opened_by_id,
+                    "opened_by_name": names.get(row.opened_by_id),
+                    "opened_at": row.opened_at,
+                    "claim_reference": row.claim_reference,
+                    "claimed_by_id": row.claimed_by_id,
+                    "claimed_by_name": names.get(row.claimed_by_id) if row.claimed_by_id else None,
+                    "claimed_at": row.claimed_at,
+                    "resolution": row.resolution,
+                    "resolution_notes": row.resolution_notes,
+                    "resolved_by_id": row.resolved_by_id,
+                    "resolved_by_name": names.get(row.resolved_by_id)
+                    if row.resolved_by_id
+                    else None,
+                    "resolved_at": row.resolved_at,
+                    "origin_count_required": row.origin_count_required,
+                    "origin_counted_by_id": row.origin_counted_by_id,
+                    "origin_counted_by_name": names.get(row.origin_counted_by_id)
+                    if row.origin_counted_by_id
+                    else None,
+                    "origin_counted_at": row.origin_counted_at,
+                    "origin_count_notes": row.origin_count_notes,
+                    "adjustment": self._visible_adjustment(row, adjustments.get(row.id)),
+                }
+            )
+        return payloads
 
     async def _transfer_payload(  # noqa: C901 - assembles the normalized transfer read projection
         self, transfer: InventoryTransferModel, policy: TransferPolicy | None = None
@@ -1737,6 +2650,7 @@ class SqlAlchemyInventoryTransferRepository:
                 transfer.last_edited_by_id,
                 transfer.approved_by_id,
                 transfer.rejected_by_id,
+                transfer.assignment_substitution_by_id,
             )
             if actor is not None
         }
@@ -1755,56 +2669,18 @@ class SqlAlchemyInventoryTransferRepository:
             # A draft follows the rules in force today; later states keep what was decided.
             live_policy = policy or await self._policy(transfer.company_id)
             requires_approval = approval_required(transfer.route_type, live_policy)
-        vehicle = None
-        if transfer.vehicle_id is not None:
-            record = await self._session.scalar(
-                select(InventoryVehicleModel).where(
-                    InventoryVehicleModel.company_id == transfer.company_id,
-                    InventoryVehicleModel.id == transfer.vehicle_id,
-                )
-            )
-            if record is not None:
-                fleet = (
-                    await self._session.execute(
-                        select(FleetVehicleModel.id, FleetVehicleModel.plate).where(
-                            FleetVehicleModel.company_id == transfer.company_id,
-                            FleetVehicleModel.inventory_vehicle_id == record.id,
-                        )
-                    )
-                ).first()
-                vehicle = {
-                    "id": record.id,
-                    "code": record.code,
-                    "name": record.name,
-                    "status": record.status,
-                    "transit_warehouse_id": record.transit_warehouse_id,
-                    "fleet_vehicle_id": fleet[0] if fleet else None,
-                    "plate": fleet[1] if fleet else None,
-                }
-        driver = None
-        if transfer.driver_id is not None:
-            driver_row = (
-                await self._session.execute(
-                    select(
-                        DriverModel.id,
-                        Employee.first_name,
-                        Employee.last_name,
-                        Employee.employee_code,
-                    )
-                    .join(Employee, Employee.id == DriverModel.employee_id)
-                    .where(
-                        DriverModel.company_id == transfer.company_id,
-                        DriverModel.id == transfer.driver_id,
-                    )
-                    .execution_options(include_deleted=True)
-                )
-            ).first()
-            if driver_row is not None:
-                driver = {
-                    "id": driver_row[0],
-                    "name": f"{driver_row[1]} {driver_row[2]}".strip(),
-                    "employee_code": driver_row[3],
-                }
+        vehicle = await self._vehicle_reference(transfer.company_id, transfer.vehicle_id)
+        driver = await self._driver_reference(transfer.company_id, transfer.driver_id)
+        approved_vehicle = (
+            await self._vehicle_reference(transfer.company_id, transfer.approved_vehicle_id)
+            if transfer.approved_vehicle_id != transfer.vehicle_id
+            else vehicle
+        )
+        approved_driver = (
+            await self._driver_reference(transfer.company_id, transfer.approved_driver_id)
+            if transfer.approved_driver_id != transfer.driver_id
+            else driver
+        )
         details = list(
             (
                 await self._session.scalars(
@@ -1911,6 +2787,7 @@ class SqlAlchemyInventoryTransferRepository:
                         InventoryTransferDemandAllocationModel.quantity_dispatched,
                         InventoryTransferDemandAllocationModel.quantity_received,
                         InventoryTransferDemandAllocationModel.quantity_adjusted_out,
+                        InventoryTransferDemandAllocationModel.quantity_damaged,
                         PurchaseRequestModel.id.label("request_id"),
                         PurchaseRequestModel.code.label("request_code"),
                         PurchaseRequestModel.branch_id,
@@ -1958,6 +2835,7 @@ class SqlAlchemyInventoryTransferRepository:
                         "quantity_dispatched": row.quantity_dispatched,
                         "quantity_received": row.quantity_received,
                         "quantity_adjusted_out": row.quantity_adjusted_out,
+                        "quantity_damaged": row.quantity_damaged,
                     }
                 )
         receipt_rows = (
@@ -2018,10 +2896,39 @@ class SqlAlchemyInventoryTransferRepository:
                     "handling_unit_id": receipt.handling_unit_id,
                     "handling_unit_code": unit.code if unit else None,
                     "quantity_received": receipt.quantity_received,
+                    "condition": receipt.condition,
                     "received_by_id": receipt.received_by_id,
                     "received_at": receipt.received_at,
                 }
             )
+        discrepancy_rows = list(
+            (
+                await self._session.scalars(
+                    select(InventoryTransferDiscrepancyModel)
+                    .where(
+                        InventoryTransferDiscrepancyModel.company_id == transfer.company_id,
+                        InventoryTransferDiscrepancyModel.transfer_id == transfer.id,
+                    )
+                    .order_by(
+                        InventoryTransferDiscrepancyModel.opened_at,
+                        InventoryTransferDiscrepancyModel.id,
+                    )
+                )
+            ).all()
+        )
+        open_shortage_by_detail: dict[uuid.UUID, Decimal] = {}
+        for discrepancy in discrepancy_rows:
+            if discrepancy.kind == DiscrepancyKind.SHORTAGE and discrepancy.status in (
+                DiscrepancyStatus.OPEN,
+                DiscrepancyStatus.IN_CLAIM,
+            ):
+                open_shortage_by_detail[discrepancy.transfer_detail_id] = (
+                    open_shortage_by_detail.get(discrepancy.transfer_detail_id, Decimal("0"))
+                    + Decimal(discrepancy.quantity)
+                )
+        discrepancy_payloads = await self._discrepancy_payloads(
+            transfer, discrepancy_rows, details, items_by_id, units_by_id, actor_names
+        )
         detail_payloads: list[dict[str, Any]] = []
         for detail in details:
             item = items_by_id.get(detail.inventory_item_id)
@@ -2062,6 +2969,14 @@ class SqlAlchemyInventoryTransferRepository:
                     - Decimal(detail.quantity_adjusted_out),
                     "quantity_adjusted_out": detail.quantity_adjusted_out,
                     "quantity_returned": detail.quantity_returned,
+                    "quantity_received_damaged": detail.quantity_received_damaged,
+                    "quantity_surplus": detail.quantity_surplus,
+                    "quantity_short_open": open_shortage_by_detail.get(detail.id, Decimal("0")),
+                    "quantity_pending_reception": max(
+                        Decimal("0"),
+                        detail_pending(detail)
+                        - open_shortage_by_detail.get(detail.id, Decimal("0")),
+                    ),
                     "excess_reason": detail.excess_reason,
                     "notes": detail.notes,
                     "demand_allocations": demand_rows.get(detail.id, []),
@@ -2084,6 +2999,21 @@ class SqlAlchemyInventoryTransferRepository:
             "destination_is_central": destination.is_central,
             "vehicle": vehicle,
             "driver": driver,
+            "approved_vehicle": approved_vehicle if transfer.approved_vehicle_id else None,
+            "approved_driver": approved_driver if transfer.approved_driver_id else None,
+            "assignment_substitution": (
+                {
+                    "code": transfer.assignment_substitution_code,
+                    "reason": transfer.assignment_substitution_reason,
+                    "by_id": transfer.assignment_substitution_by_id,
+                    "by_name": actor_names.get(transfer.assignment_substitution_by_id)
+                    if transfer.assignment_substitution_by_id
+                    else None,
+                    "at": transfer.assignment_substitution_at,
+                }
+                if transfer.assignment_substitution_code
+                else None
+            ),
             "compliance_override_reason": transfer.compliance_override_reason,
             "status": transfer.status,
             "route_type": transfer.route_type,
@@ -2116,7 +3046,16 @@ class SqlAlchemyInventoryTransferRepository:
             "dispatched_at": transfer.dispatched_at,
             "received_by_id": transfer.received_by_id,
             "received_at": transfer.received_at,
+            "closed_at": transfer.closed_at,
             "dispatch_movement_id": transfer.dispatch_movement_id,
+            "origin_count_pending": any(
+                row.origin_count_required and row.origin_counted_at is None
+                for row in discrepancy_rows
+            ),
+            "has_open_discrepancies": any(
+                row.status == DiscrepancyStatus.OPEN for row in discrepancy_rows
+            ),
+            "discrepancies": discrepancy_payloads,
             "lines": detail_payloads,
             "incidents": [
                 {
@@ -2211,6 +3150,8 @@ class SqlAlchemyInventoryTransferRepository:
         awaiting_approval_by: uuid.UUID | None = None,
         allow_self_approval: bool = False,
         approver_branch_ids: list[uuid.UUID] | None = None,
+        origin_count_pending: bool = False,
+        with_open_discrepancies: bool = False,
         page: int = 1,
         size: int = 50,
     ) -> list[dict[str, Any]]:
@@ -2247,6 +3188,29 @@ class SqlAlchemyInventoryTransferRepository:
             stmt = stmt.where(InventoryTransferModel.status == status_filter)
         if route_type:
             stmt = stmt.where(InventoryTransferModel.route_type == route_type)
+        discrepancy_match = [
+            InventoryTransferDiscrepancyModel.company_id == InventoryTransferModel.company_id,
+            InventoryTransferDiscrepancyModel.transfer_id == InventoryTransferModel.id,
+        ]
+        if origin_count_pending:
+            stmt = stmt.where(
+                select(InventoryTransferDiscrepancyModel.id)
+                .where(
+                    *discrepancy_match,
+                    InventoryTransferDiscrepancyModel.origin_count_required.is_(True),
+                    InventoryTransferDiscrepancyModel.origin_counted_at.is_(None),
+                )
+                .exists()
+            )
+        if with_open_discrepancies:
+            stmt = stmt.where(
+                select(InventoryTransferDiscrepancyModel.id)
+                .where(
+                    *discrepancy_match,
+                    InventoryTransferDiscrepancyModel.status == DiscrepancyStatus.OPEN.value,
+                )
+                .exists()
+            )
         if awaiting_approval_by is not None:
             if approver_branch_ids is not None and not approver_branch_ids:
                 return []

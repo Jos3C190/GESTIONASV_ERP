@@ -13,6 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.inventory import InventoryUseCases
 from app.domain.entities.inventory_adjustment import InventoryAdjustmentError
+from app.domain.entities.inventory_transfer import (
+    DiscrepancyKind,
+    DiscrepancyResolution,
+    DiscrepancyStatus,
+)
 from app.infrastructure.models.catalog import CompanyUnitModel, ProductModel, UnitModel
 from app.infrastructure.models.document import DocumentAssetModel
 from app.infrastructure.models.inventory import (
@@ -32,6 +37,7 @@ from app.infrastructure.models.inventory_transfer import (
     InventoryTransferCommandModel,
     InventoryTransferDemandAllocationModel,
     InventoryTransferDetailModel,
+    InventoryTransferDiscrepancyModel,
     InventoryTransferIncidentModel,
     InventoryTransferModel,
 )
@@ -39,6 +45,11 @@ from app.infrastructure.models.inventory_valuation import InventoryValuationEntr
 from app.infrastructure.models.organization import Location, Warehouse
 from app.infrastructure.models.product_variant import ProductVariantModel
 from app.infrastructure.repositories.inventory_repository import SqlAlchemyInventoryRepository
+from app.infrastructure.repositories.inventory_transfer_settlement import (
+    detail_pending,
+    locked_damaged_unit,
+    settle_transfer,
+)
 
 MIN_REASON_LENGTH = 5
 
@@ -552,6 +563,28 @@ class SqlAlchemyInventoryAdjustmentRepository:
                 )
             ).all()
         )
+        linked_transfer_id = adjustment.transfer_id
+        discrepancy_kind: str | None = None
+        if adjustment.transfer_discrepancy_id is not None:
+            discrepancy = await self._session.scalar(
+                select(InventoryTransferDiscrepancyModel).where(
+                    InventoryTransferDiscrepancyModel.company_id == adjustment.company_id,
+                    InventoryTransferDiscrepancyModel.id == adjustment.transfer_discrepancy_id,
+                )
+            )
+            if discrepancy is not None:
+                linked_transfer_id = discrepancy.transfer_id
+                discrepancy_kind = discrepancy.kind
+        transfer_reference = (
+            await self._session.scalar(
+                select(InventoryTransferModel.code).where(
+                    InventoryTransferModel.company_id == adjustment.company_id,
+                    InventoryTransferModel.id == linked_transfer_id,
+                )
+            )
+            if linked_transfer_id is not None
+            else None
+        )
         return {
             "id": adjustment.id,
             "company_id": adjustment.company_id,
@@ -570,6 +603,10 @@ class SqlAlchemyInventoryAdjustmentRepository:
             "correction_of_id": adjustment.correction_of_id,
             "transfer_id": adjustment.transfer_id,
             "transfer_incident_id": adjustment.transfer_incident_id,
+            "transfer_discrepancy_id": adjustment.transfer_discrepancy_id,
+            "transfer_discrepancy_kind": discrepancy_kind,
+            "transfer_reference": transfer_reference,
+            "linked_transfer_id": linked_transfer_id,
             "created_by_id": adjustment.created_by_id,
             "approved_by_id": adjustment.approved_by_id,
             "applied_by_id": adjustment.applied_by_id,
@@ -608,8 +645,9 @@ class SqlAlchemyInventoryAdjustmentRepository:
         correction_of_id: uuid.UUID | None = None,
         transfer_id: uuid.UUID | None = None,
         transfer_incident_id: uuid.UUID | None = None,
+        transfer_discrepancy_id: uuid.UUID | None = None,
     ) -> dict[str, Any]:
-        canonical = {
+        canonical: dict[str, Any] = {
             "warehouse_id": str(warehouse_id),
             "operational_date": operational_date.isoformat(),
             "accounting_date": accounting_date.isoformat(),
@@ -621,6 +659,9 @@ class SqlAlchemyInventoryAdjustmentRepository:
             "transfer_id": str(transfer_id) if transfer_id else None,
             "transfer_incident_id": str(transfer_incident_id) if transfer_incident_id else None,
         }
+        if transfer_discrepancy_id is not None:
+            # Requests that never linked a discrepancy keep the fingerprint they were saved with.
+            canonical["transfer_discrepancy_id"] = str(transfer_discrepancy_id)
         fingerprint = hashlib.sha256(
             json.dumps(canonical, sort_keys=True, separators=(",", ":"), default=str).encode()
         ).hexdigest()
@@ -679,6 +720,7 @@ class SqlAlchemyInventoryAdjustmentRepository:
             correction_of_id=correction_of_id,
             transfer_id=transfer_id,
             transfer_incident_id=transfer_incident_id,
+            transfer_discrepancy_id=transfer_discrepancy_id,
             created_by_id=actor_id,
             created_at=now,
             create_idempotency_key=idempotency_key,
@@ -734,7 +776,11 @@ class SqlAlchemyInventoryAdjustmentRepository:
                 "Solo se puede editar un ajuste en borrador o revocar su aprobación.",
                 "adjustment_not_editable",
             )
-        if adjustment.transfer_id is not None or adjustment.correction_of_id is not None:
+        if (
+            adjustment.transfer_id is not None
+            or adjustment.transfer_discrepancy_id is not None
+            or adjustment.correction_of_id is not None
+        ):
             _err(
                 "Los ajustes vinculados a una incidencia o corrección no se editan; cancele el borrador y cree uno nuevo.",
                 "adjustment_linked_document_immutable",
@@ -842,6 +888,8 @@ class SqlAlchemyInventoryAdjustmentRepository:
         )
         if not lines:
             _err("Agregue al menos una línea antes de aprobar.", "adjustment_lines_required", 422)
+        if adjustment.transfer_discrepancy_id is not None:
+            await self._require_discrepancy_open(adjustment)
         await self._validate_evidence(adjustment)
         adjustment.status = "approved"
         adjustment.approved_version = adjustment.version
@@ -915,8 +963,8 @@ class SqlAlchemyInventoryAdjustmentRepository:
         )
         if not lines:
             _err("El ajuste no contiene líneas.", "adjustment_lines_required")
-        if adjustment.transfer_id:
-            await self._lock_transfer_incident(adjustment, lines[0])
+        if adjustment.transfer_id or adjustment.transfer_discrepancy_id:
+            await self._lock_transit_context(adjustment, lines[0])
         inventory = InventoryUseCases(SqlAlchemyInventoryRepository(self._session))
         movement_refs = []
         for detail in lines:
@@ -943,7 +991,11 @@ class SqlAlchemyInventoryAdjustmentRepository:
                     "movement_line_id": str(movement_line_out["id"]),
                 }
             )
-            if detail.transfer_detail_id is not None:
+            if adjustment.transfer_discrepancy_id is not None:
+                await self._apply_transfer_discrepancy(
+                    adjustment, detail, quantity, actor_id, idempotency_key, movement_line_out
+                )
+            elif detail.transfer_detail_id is not None:
                 await self._apply_transfer_loss(
                     adjustment, detail, quantity, actor_id, idempotency_key
                 )
@@ -1003,7 +1055,7 @@ class SqlAlchemyInventoryAdjustmentRepository:
             movement_type = "adjustment_in"
         else:
             if detail.stock_status == "in_transit":
-                await self._lock_transfer_incident(adjustment, detail)
+                await self._lock_transit_context(adjustment, detail)
             movement_line = {
                 "inventory_item_id": detail.inventory_item_id,
                 "handling_unit_id": detail.handling_unit_id,
@@ -1025,9 +1077,16 @@ class SqlAlchemyInventoryAdjustmentRepository:
             actor_id=actor_id,
         )
 
-    async def _lock_transfer_incident(
+    async def _lock_transit_context(
         self, adjustment: InventoryAdjustmentModel, detail: InventoryAdjustmentDetailModel
     ) -> None:
+        """Lock what a transfer-linked adjustment changes and check it is still pending.
+
+        The transfer is locked first, then its incident or discrepancy, then the line.
+        """
+        if adjustment.transfer_discrepancy_id is not None:
+            await self._lock_discrepancy_context(adjustment, detail)
+            return
         if not adjustment.transfer_id or not adjustment.transfer_incident_id:
             _err(
                 "La pérdida de tránsito requiere una incidencia vinculada.",
@@ -1061,11 +1120,17 @@ class SqlAlchemyInventoryAdjustmentRepository:
                 "La incidencia ya se resolvió o el traslado no está en incidencia.",
                 "transfer_incident_not_open",
             )
+        await self._check_transit_line(adjustment, detail)
+
+    async def _check_transit_line(
+        self, adjustment: InventoryAdjustmentModel, detail: InventoryAdjustmentDetailModel
+    ) -> None:
+        transfer_id = adjustment.transfer_id
         transfer_detail = await self._session.scalar(
             select(InventoryTransferDetailModel)
             .where(
                 InventoryTransferDetailModel.company_id == adjustment.company_id,
-                InventoryTransferDetailModel.transfer_id == adjustment.transfer_id,
+                InventoryTransferDetailModel.transfer_id == transfer_id,
                 InventoryTransferDetailModel.id == detail.transfer_detail_id,
             )
             .with_for_update()
@@ -1078,37 +1143,111 @@ class SqlAlchemyInventoryAdjustmentRepository:
                 "La unidad ya no coincide con el detalle real del tránsito.",
                 "transfer_transit_unit_mismatch",
             )
-        remaining = (
-            Decimal(transfer_detail.quantity_dispatched)
-            - Decimal(transfer_detail.quantity_received)
-            - Decimal(transfer_detail.quantity_returned)
-            - Decimal(transfer_detail.quantity_adjusted_out)
-        )
-        if Decimal(detail.quantity_base) > remaining:
+        if Decimal(detail.quantity_base) > detail_pending(transfer_detail):
             _err(
                 "La cantidad perdida supera el remanente no recibido del traslado.",
                 "transfer_adjustment_exceeds_transit",
             )
 
-    async def _apply_transfer_loss(
+    async def _lock_discrepancy_context(
         self,
         adjustment: InventoryAdjustmentModel,
         detail: InventoryAdjustmentDetailModel,
-        quantity: Decimal,
-        actor_id: uuid.UUID,
-        idempotency_key: str,
-    ) -> None:
-        await self._lock_transfer_incident(adjustment, detail)
-        transfer_detail = await self._session.scalar(
-            select(InventoryTransferDetailModel)
+        *,
+        check_unit: bool = True,
+    ) -> InventoryTransferDiscrepancyModel:
+        transfer_id = await self._session.scalar(
+            select(InventoryTransferDiscrepancyModel.transfer_id).where(
+                InventoryTransferDiscrepancyModel.company_id == adjustment.company_id,
+                InventoryTransferDiscrepancyModel.id == adjustment.transfer_discrepancy_id,
+            )
+        )
+        if transfer_id is None:
+            _err("Diferencia del traslado no encontrada.", "transfer_discrepancy_not_found", 404)
+        await self._session.scalar(
+            select(InventoryTransferModel.id)
             .where(
-                InventoryTransferDetailModel.company_id == adjustment.company_id,
-                InventoryTransferDetailModel.id == detail.transfer_detail_id,
+                InventoryTransferModel.company_id == adjustment.company_id,
+                InventoryTransferModel.id == transfer_id,
             )
             .with_for_update()
         )
-        if transfer_detail is None:
-            _err("Detalle de traslado no encontrado.", "transfer_transit_unit_mismatch")
+        discrepancy = await self._session.scalar(
+            select(InventoryTransferDiscrepancyModel)
+            .where(
+                InventoryTransferDiscrepancyModel.company_id == adjustment.company_id,
+                InventoryTransferDiscrepancyModel.id == adjustment.transfer_discrepancy_id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if discrepancy is None or not self._discrepancy_adjustable(discrepancy):
+            _err(
+                "La diferencia del traslado ya no está abierta; este ajuste quedó obsoleto y "
+                "debe cancelarse.",
+                "adjustment_transfer_discrepancy_closed",
+            )
+        if discrepancy.kind == DiscrepancyKind.SHORTAGE:
+            if discrepancy.transfer_detail_id != detail.transfer_detail_id:
+                _err(
+                    "La línea del ajuste no corresponde al faltante del traslado.",
+                    "transfer_transit_unit_mismatch",
+                )
+            await self._check_transit_line(adjustment, detail)
+        elif discrepancy.kind == DiscrepancyKind.DAMAGE and check_unit:
+            # The write-off follows the damaged unit to wherever it was moved since the draft.
+            destination_id = await self._session.scalar(
+                select(InventoryTransferModel.destination_warehouse_id).where(
+                    InventoryTransferModel.company_id == adjustment.company_id,
+                    InventoryTransferModel.id == transfer_id,
+                )
+            )
+            assert destination_id is not None
+            unit, problem = await locked_damaged_unit(self._session, discrepancy, destination_id)
+            if unit is None or unit.location_id is None:
+                _err(
+                    f"{problem} No se puede aplicar la baja; cancela este ajuste.",
+                    "transfer_discrepancy_unit_changed",
+                )
+            if detail.handling_unit_id != unit.id:
+                _err(
+                    "El ajuste ya no corresponde a la unidad averiada.",
+                    "transfer_discrepancy_unit_changed",
+                )
+            if detail.location_id != unit.location_id:
+                detail.location_id = unit.location_id
+                detail.warehouse_id = unit.warehouse_id
+                await self._session.flush()
+        return discrepancy
+
+    @staticmethod
+    def _discrepancy_adjustable(discrepancy: InventoryTransferDiscrepancyModel) -> bool:
+        if discrepancy.status == DiscrepancyStatus.OPEN:
+            return True
+        # A damage handed over for a claim can still be written off.
+        return (
+            discrepancy.kind == DiscrepancyKind.DAMAGE
+            and discrepancy.status == DiscrepancyStatus.IN_CLAIM
+        )
+
+    async def _require_discrepancy_open(self, adjustment: InventoryAdjustmentModel) -> None:
+        discrepancy = await self._session.scalar(
+            select(InventoryTransferDiscrepancyModel).where(
+                InventoryTransferDiscrepancyModel.company_id == adjustment.company_id,
+                InventoryTransferDiscrepancyModel.id == adjustment.transfer_discrepancy_id,
+            )
+        )
+        if discrepancy is None or not self._discrepancy_adjustable(discrepancy):
+            _err(
+                "La diferencia del traslado ya no está abierta; este ajuste quedó obsoleto y "
+                "debe cancelarse.",
+                "adjustment_transfer_discrepancy_closed",
+            )
+
+    async def _book_transit_loss(
+        self, transfer_detail: InventoryTransferDetailModel, quantity: Decimal
+    ) -> None:
+        """Count a written-off quantity against the detail and the demand it was meant for."""
         transfer_detail.quantity_adjusted_out = (
             Decimal(transfer_detail.quantity_adjusted_out) + quantity
         )
@@ -1117,7 +1256,8 @@ class SqlAlchemyInventoryAdjustmentRepository:
                 await self._session.scalars(
                     select(InventoryTransferDemandAllocationModel)
                     .where(
-                        InventoryTransferDemandAllocationModel.company_id == adjustment.company_id,
+                        InventoryTransferDemandAllocationModel.company_id
+                        == transfer_detail.company_id,
                         InventoryTransferDemandAllocationModel.transfer_detail_id
                         == transfer_detail.id,
                     )
@@ -1141,14 +1281,30 @@ class SqlAlchemyInventoryAdjustmentRepository:
                 unallocated -= amount
             if unallocated <= 0:
                 break
-        remaining = (
-            Decimal(transfer_detail.quantity_dispatched)
-            - Decimal(transfer_detail.quantity_received)
-            - Decimal(transfer_detail.quantity_returned)
-            - Decimal(transfer_detail.quantity_adjusted_out)
-        )
-        if remaining <= 0:
+        if detail_pending(transfer_detail) <= 0:
             transfer_detail.transit_handling_unit_id = None
+
+    async def _apply_transfer_loss(
+        self,
+        adjustment: InventoryAdjustmentModel,
+        detail: InventoryAdjustmentDetailModel,
+        quantity: Decimal,
+        actor_id: uuid.UUID,
+        idempotency_key: str,
+    ) -> None:
+        """A documented loss during an incident: book it, record the shortage and settle."""
+        await self._lock_transit_context(adjustment, detail)
+        transfer_detail = await self._session.scalar(
+            select(InventoryTransferDetailModel)
+            .where(
+                InventoryTransferDetailModel.company_id == adjustment.company_id,
+                InventoryTransferDetailModel.id == detail.transfer_detail_id,
+            )
+            .with_for_update()
+        )
+        if transfer_detail is None:
+            _err("Detalle de traslado no encontrado.", "transfer_transit_unit_mismatch")
+        await self._book_transit_loss(transfer_detail, quantity)
         all_details = list(
             (
                 await self._session.scalars(
@@ -1162,13 +1318,7 @@ class SqlAlchemyInventoryAdjustmentRepository:
                 )
             ).all()
         )
-        all_resolved = all(
-            Decimal(row.quantity_dispatched)
-            <= Decimal(row.quantity_received)
-            + Decimal(row.quantity_returned)
-            + Decimal(row.quantity_adjusted_out)
-            for row in all_details
-        )
+        all_resolved = all(detail_pending(row) <= 0 for row in all_details)
         has_loss = any(Decimal(row.quantity_adjusted_out) > 0 for row in all_details)
         incident = await self._session.scalar(
             select(InventoryTransferIncidentModel)
@@ -1178,26 +1328,46 @@ class SqlAlchemyInventoryAdjustmentRepository:
             )
             .with_for_update()
         )
-        if all_resolved and has_loss:
-            transfer = await self._session.scalar(
-                select(InventoryTransferModel)
-                .where(
-                    InventoryTransferModel.company_id == adjustment.company_id,
-                    InventoryTransferModel.id == adjustment.transfer_id,
-                )
-                .with_for_update()
+        transfer = await self._session.scalar(
+            select(InventoryTransferModel)
+            .where(
+                InventoryTransferModel.company_id == adjustment.company_id,
+                InventoryTransferModel.id == adjustment.transfer_id,
             )
-            if transfer is None or incident is None:
-                _err("Incidencia de traslado no encontrada.", "transfer_incident_not_open")
-            transfer.status = "closed_with_adjustment"
+            .with_for_update()
+        )
+        if transfer is None or incident is None:
+            _err("Incidencia de traslado no encontrada.", "transfer_incident_not_open")
+        now = datetime.now(UTC)
+        # The loss stays on record as a shortage that was already written off.
+        self._session.add(
+            InventoryTransferDiscrepancyModel(
+                company_id=adjustment.company_id,
+                transfer_id=transfer.id,
+                transfer_detail_id=transfer_detail.id,
+                kind=DiscrepancyKind.SHORTAGE.value,
+                status=DiscrepancyStatus.RESOLVED.value,
+                source="incident",
+                quantity=quantity,
+                notes=f"Pérdida documentada durante la incidencia (ajuste {adjustment.code}).",
+                incident_id=incident.id,
+                opened_by_id=actor_id,
+                opened_at=now,
+                resolution=DiscrepancyResolution.WRITTEN_OFF.value,
+                resolution_notes=f"Ajuste autorizado {adjustment.code}.",
+                resolved_by_id=actor_id,
+                resolved_at=now,
+                origin_count_required=True,
+            )
+        )
+        if all_resolved and has_loss:
             incident.status = "resolved"
             incident.resolution = "close_with_adjustment"
             incident.resolution_notes = (
                 f"Cierre automático por ajuste autorizado {adjustment.code}."
             )
             incident.resolved_by_id = actor_id
-            incident.resolved_at = datetime.now(UTC)
-            now = datetime.now(UTC)
+            incident.resolved_at = now
             self._session.add(
                 InventoryTransferCommandModel(
                     company_id=adjustment.company_id,
@@ -1217,6 +1387,347 @@ class SqlAlchemyInventoryAdjustmentRepository:
                 )
             )
         await self._session.flush()
+        await settle_transfer(self._session, transfer, actor_id, now)
+
+    async def _apply_transfer_discrepancy(
+        self,
+        adjustment: InventoryAdjustmentModel,
+        detail: InventoryAdjustmentDetailModel,
+        quantity: Decimal,
+        actor_id: uuid.UUID,
+        idempotency_key: str,
+        movement_line: dict[str, Any],
+    ) -> None:
+        """An authorised adjustment resolves its discrepancy and the transfer settles."""
+        discrepancy = await self._lock_discrepancy_context(adjustment, detail, check_unit=False)
+        transfer = await self._session.scalar(
+            select(InventoryTransferModel)
+            .where(
+                InventoryTransferModel.company_id == adjustment.company_id,
+                InventoryTransferModel.id == discrepancy.transfer_id,
+            )
+            .with_for_update()
+        )
+        if transfer is None:
+            _err("Traslado no encontrado.", "transfer_not_found", 404)
+        now = datetime.now(UTC)
+        if discrepancy.kind == DiscrepancyKind.SHORTAGE:
+            transfer_detail = await self._session.scalar(
+                select(InventoryTransferDetailModel)
+                .where(
+                    InventoryTransferDetailModel.company_id == adjustment.company_id,
+                    InventoryTransferDetailModel.id == discrepancy.transfer_detail_id,
+                )
+                .with_for_update()
+            )
+            if transfer_detail is None:
+                _err("Detalle de traslado no encontrado.", "transfer_transit_unit_mismatch")
+            await self._book_transit_loss(transfer_detail, quantity)
+            resolution = DiscrepancyResolution.WRITTEN_OFF
+        elif discrepancy.kind == DiscrepancyKind.DAMAGE:
+            resolution = DiscrepancyResolution.WRITTEN_OFF
+        else:
+            resolution = DiscrepancyResolution.REGULARIZED
+            discrepancy.handling_unit_id = movement_line.get("handling_unit_id")
+        discrepancy.status = DiscrepancyStatus.RESOLVED.value
+        discrepancy.resolution = resolution.value
+        discrepancy.resolution_notes = f"Ajuste autorizado {adjustment.code}."
+        discrepancy.resolved_by_id = actor_id
+        discrepancy.resolved_at = now
+        await self._session.flush()
+        self._session.add(
+            InventoryTransferCommandModel(
+                company_id=adjustment.company_id,
+                transfer_id=transfer.id,
+                action="resolve_discrepancy",
+                idempotency_key=f"adj-disc:{idempotency_key}:{discrepancy.id}",
+                request_fingerprint=hashlib.sha256(
+                    f"{adjustment.id}:{discrepancy.id}:{quantity}".encode()
+                ).hexdigest(),
+                result={
+                    "adjustment_id": str(adjustment.id),
+                    "discrepancy_id": str(discrepancy.id),
+                    "resolution": resolution.value,
+                },
+                actor_id=actor_id,
+                created_at=now,
+            )
+        )
+        await self._session.flush()
+        await settle_transfer(self._session, transfer, actor_id, now)
+
+    async def create_discrepancy_adjustment(  # noqa: C901 - one builder per kind of difference
+        self,
+        *,
+        company_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        transfer_id: uuid.UUID,
+        discrepancy_id: uuid.UUID,
+        idempotency_key: str,
+        operational_date: date,
+        accounting_date: date,
+        reason: str,
+        document_reference: str,
+        notes: str | None = None,
+        packaging_definition_id: uuid.UUID | None = None,
+        actual_gross_weight_kg: Decimal | None = None,
+        actual_volume_m3: Decimal | None = None,
+        inventory_lot_detail_id: uuid.UUID | None = None,
+        documented_unit_cost: Decimal | None = None,
+        documented_total_cost: Decimal | None = None,
+    ) -> dict[str, Any]:
+        """Prepare the adjustment that regularises one discrepancy (the server builds the line)."""
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                {
+                    "transfer_id": str(transfer_id),
+                    "discrepancy_id": str(discrepancy_id),
+                    "operational_date": operational_date.isoformat(),
+                    "accounting_date": accounting_date.isoformat(),
+                    "reason": reason.strip(),
+                    "document_reference": document_reference.strip(),
+                    "notes": notes.strip() if notes else None,
+                    "packaging_definition_id": packaging_definition_id,
+                    "actual_gross_weight_kg": actual_gross_weight_kg,
+                    "actual_volume_m3": actual_volume_m3,
+                    "inventory_lot_detail_id": inventory_lot_detail_id,
+                    "documented_unit_cost": documented_unit_cost,
+                    "documented_total_cost": documented_total_cost,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            ).encode()
+        ).hexdigest()
+        await self._session.execute(
+            select(
+                func.pg_advisory_xact_lock(
+                    func.hashtextextended(
+                        f"transfer-discrepancy-adjust:{company_id}:{idempotency_key}", 0
+                    )
+                )
+            )
+        )
+        command = await self._session.scalar(
+            select(InventoryTransferCommandModel).where(
+                InventoryTransferCommandModel.company_id == company_id,
+                InventoryTransferCommandModel.action == "discrepancy_adjust",
+                InventoryTransferCommandModel.idempotency_key == idempotency_key,
+            )
+        )
+        if command is not None:
+            if command.request_fingerprint != fingerprint:
+                _err(
+                    "La clave de idempotencia ya se usó con otro contenido.",
+                    "adjustment_idempotency_conflict",
+                )
+            replayed = await self.get_adjustment(
+                company_id, uuid.UUID(str(command.result["adjustment_id"]))
+            )
+            assert replayed is not None
+            return replayed
+        discrepancy = await self._session.scalar(
+            select(InventoryTransferDiscrepancyModel)
+            .where(
+                InventoryTransferDiscrepancyModel.company_id == company_id,
+                InventoryTransferDiscrepancyModel.transfer_id == transfer_id,
+                InventoryTransferDiscrepancyModel.id == discrepancy_id,
+            )
+            .with_for_update()
+        )
+        if discrepancy is None:
+            _err("Diferencia del traslado no encontrada.", "transfer_discrepancy_not_found", 404)
+        if not self._discrepancy_adjustable(discrepancy):
+            _err(
+                "La diferencia del traslado ya no está abierta.",
+                "adjustment_transfer_discrepancy_closed",
+            )
+        active = await self._session.scalar(
+            select(InventoryAdjustmentModel)
+            .where(
+                InventoryAdjustmentModel.company_id == company_id,
+                InventoryAdjustmentModel.transfer_discrepancy_id == discrepancy.id,
+                InventoryAdjustmentModel.status != "cancelled",
+            )
+            .limit(1)
+        )
+        if active is not None:
+            result = await self._view(active)
+        else:
+            transfer = await self._session.scalar(
+                select(InventoryTransferModel).where(
+                    InventoryTransferModel.company_id == company_id,
+                    InventoryTransferModel.id == transfer_id,
+                )
+            )
+            transfer_detail = await self._session.scalar(
+                select(InventoryTransferDetailModel).where(
+                    InventoryTransferDetailModel.company_id == company_id,
+                    InventoryTransferDetailModel.id == discrepancy.transfer_detail_id,
+                )
+            )
+            if transfer is None or transfer_detail is None:
+                _err("Traslado no encontrado.", "transfer_not_found", 404)
+            quantity = Decimal(discrepancy.quantity)
+            header_transfer_id: uuid.UUID | None = None
+            if discrepancy.kind == DiscrepancyKind.SHORTAGE:
+                if transfer_detail.transit_handling_unit_id is None:
+                    _err(
+                        "El faltante ya no tiene una unidad en tránsito que ajustar.",
+                        "transfer_transit_unit_mismatch",
+                    )
+                transit_unit = await self._session.scalar(
+                    select(InventoryHandlingUnitModel).where(
+                        InventoryHandlingUnitModel.company_id == company_id,
+                        InventoryHandlingUnitModel.id == transfer_detail.transit_handling_unit_id,
+                    )
+                )
+                if transit_unit is None or transit_unit.location_id is None:
+                    _err(
+                        "La unidad en tránsito no está disponible.",
+                        "transfer_transit_unit_mismatch",
+                    )
+                warehouse_id = transfer.origin_warehouse_id
+                header_transfer_id = transfer.id
+                line: dict[str, Any] = {
+                    "inventory_item_id": transfer_detail.inventory_item_id,
+                    "location_id": transit_unit.location_id,
+                    "direction": "decrease",
+                    "quantity_base": quantity,
+                    "stock_status": "in_transit",
+                    "handling_unit_id": transit_unit.id,
+                    "transfer_detail_id": transfer_detail.id,
+                }
+            elif discrepancy.kind == DiscrepancyKind.DAMAGE:
+                warehouse_id = transfer.destination_warehouse_id
+                unit, problem = await locked_damaged_unit(
+                    self._session, discrepancy, transfer.destination_warehouse_id
+                )
+                if unit is None or unit.location_id is None:
+                    _err(
+                        f"{problem} No se puede preparar la baja.",
+                        "transfer_discrepancy_unit_changed",
+                    )
+                # Where the unit is now, not where it was received.
+                line = {
+                    "inventory_item_id": transfer_detail.inventory_item_id,
+                    "location_id": unit.location_id,
+                    "direction": "decrease",
+                    "quantity_base": quantity,
+                    "stock_status": "damaged",
+                    "handling_unit_id": unit.id,
+                }
+            else:
+                warehouse_id = transfer.destination_warehouse_id
+                line = await self._surplus_line(
+                    company_id=company_id,
+                    transfer_detail=transfer_detail,
+                    location_id=discrepancy.location_id,
+                    quantity=quantity,
+                    packaging_definition_id=packaging_definition_id,
+                    actual_gross_weight_kg=actual_gross_weight_kg,
+                    actual_volume_m3=actual_volume_m3,
+                    inventory_lot_detail_id=inventory_lot_detail_id,
+                    documented_unit_cost=documented_unit_cost,
+                    documented_total_cost=documented_total_cost,
+                )
+            result = await self.create_adjustment(
+                company_id=company_id,
+                actor_id=actor_id,
+                warehouse_id=warehouse_id,
+                operational_date=operational_date,
+                accounting_date=accounting_date,
+                reason=reason,
+                document_reference=document_reference,
+                notes=notes,
+                lines=[line],
+                idempotency_key=idempotency_key,
+                transfer_id=header_transfer_id,
+                transfer_discrepancy_id=discrepancy.id,
+            )
+        self._session.add(
+            InventoryTransferCommandModel(
+                company_id=company_id,
+                transfer_id=transfer_id,
+                action="discrepancy_adjust",
+                idempotency_key=idempotency_key,
+                request_fingerprint=fingerprint,
+                result={"adjustment_id": str(result["id"]), "discrepancy_id": str(discrepancy.id)},
+                actor_id=actor_id,
+                created_at=datetime.now(UTC),
+            )
+        )
+        await self._session.flush()
+        return result
+
+    async def _surplus_line(
+        self,
+        *,
+        company_id: uuid.UUID,
+        transfer_detail: InventoryTransferDetailModel,
+        location_id: uuid.UUID | None,
+        quantity: Decimal,
+        packaging_definition_id: uuid.UUID | None,
+        actual_gross_weight_kg: Decimal | None,
+        actual_volume_m3: Decimal | None,
+        inventory_lot_detail_id: uuid.UUID | None,
+        documented_unit_cost: Decimal | None,
+        documented_total_cost: Decimal | None,
+    ) -> dict[str, Any]:
+        if location_id is None:
+            _err("El sobrante no tiene ubicación de recepción.", "adjustment_location_invalid")
+        if documented_unit_cost is not None and documented_total_cost is not None:
+            _err(
+                "Indique costo unitario o costo total, no ambos.",
+                "adjustment_cost_ambiguous",
+                422,
+            )
+        if (actual_gross_weight_kg is None) != (actual_volume_m3 is None):
+            _err(
+                "El peso y el volumen deben indicarse juntos.",
+                "adjustment_surplus_measures_required",
+                422,
+            )
+        packaging_id = packaging_definition_id
+        if packaging_id is None and actual_gross_weight_kg is None:
+            # By default the surplus is packed like the unit it was sent in.
+            source = await self._session.scalar(
+                select(InventoryHandlingUnitModel).where(
+                    InventoryHandlingUnitModel.company_id == company_id,
+                    InventoryHandlingUnitModel.id == transfer_detail.source_handling_unit_id,
+                )
+            )
+            candidate = source.packaging_definition_id if source is not None else None
+            if candidate is not None and await self._session.scalar(
+                select(InventoryPackagingModel.id).where(
+                    InventoryPackagingModel.company_id == company_id,
+                    InventoryPackagingModel.inventory_item_id == transfer_detail.inventory_item_id,
+                    InventoryPackagingModel.id == candidate,
+                    InventoryPackagingModel.is_current.is_(True),
+                    InventoryPackagingModel.is_active.is_(True),
+                )
+            ):
+                packaging_id = candidate
+        if packaging_id is None and actual_gross_weight_kg is None:
+            _err(
+                "Indica la presentación física o el peso y el volumen del sobrante.",
+                "adjustment_surplus_measures_required",
+                422,
+            )
+        return {
+            "inventory_item_id": transfer_detail.inventory_item_id,
+            "location_id": location_id,
+            "direction": "increase",
+            "quantity_base": quantity,
+            "stock_status": "quarantine",
+            "inventory_lot_detail_id": inventory_lot_detail_id
+            or transfer_detail.inventory_lot_detail_id,
+            "packaging_definition_id": packaging_id,
+            "actual_gross_weight_kg": actual_gross_weight_kg,
+            "actual_volume_m3": actual_volume_m3,
+            "documented_unit_cost": documented_unit_cost,
+            "documented_total_cost": documented_total_cost,
+        }
 
     async def create_correction(
         self,
@@ -1230,7 +1741,11 @@ class SqlAlchemyInventoryAdjustmentRepository:
         accounting_date: date,
     ) -> dict[str, Any]:
         original = await self._header(company_id, adjustment_id, lock=True)
-        if original.status != "applied" or original.transfer_id is not None:
+        if (
+            original.status != "applied"
+            or original.transfer_id is not None
+            or original.transfer_discrepancy_id is not None
+        ):
             _err(
                 "Solo se admite corregir un ajuste ordinario aplicado.",
                 "adjustment_correction_not_supported",

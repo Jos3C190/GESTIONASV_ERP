@@ -159,6 +159,12 @@ class InventoryAdjustmentOut(StrictModel):
     correction_of_id: uuid.UUID | None
     transfer_id: uuid.UUID | None
     transfer_incident_id: uuid.UUID | None
+    #: The shortage, damage or surplus of a transfer this adjustment regularises.
+    transfer_discrepancy_id: uuid.UUID | None = None
+    transfer_discrepancy_kind: Literal["shortage", "surplus", "damage"] | None = None
+    #: Code of the linked transfer (through its incident or its discrepancy).
+    transfer_reference: str | None = None
+    linked_transfer_id: uuid.UUID | None = None
     created_by_id: uuid.UUID
     approved_by_id: uuid.UUID | None
     applied_by_id: uuid.UUID | None
