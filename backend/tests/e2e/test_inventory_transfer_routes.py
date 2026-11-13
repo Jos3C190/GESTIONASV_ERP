@@ -192,6 +192,7 @@ async def _create_between(client, values, headers, *, destination_id=None, key=N
             "origin_warehouse_id": str(values.route.branch_a_id),
             "destination_warehouse_id": str(destination_id or values.route.branch_b_id),
             "vehicle_id": str(values.vehicle_id),
+            "driver_id": str(values.driver_id),
             "notes": "Rebalanceo por quiebre de existencias.",
             "lines": [
                 {

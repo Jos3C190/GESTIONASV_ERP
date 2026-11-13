@@ -260,7 +260,7 @@ async def test_destination_branch_receiver_can_receive_without_global_access(e2e
     conflicts = [result for result in receipt_results if result.status_code == 409]
     assert len(successful_receipts) == 1, [result.text for result in receipt_results]
     assert len(conflicts) == 1, [result.text for result in receipt_results]
-    assert successful_receipts[0].json()["status"] == "in_transit"
+    assert successful_receipts[0].json()["status"] == "partially_received"
     assert successful_receipts[0].json()["lines"][0]["quantity_received"] == "6.000000"
     assert successful_receipts[0].json()["lines"][0]["quantity_in_transit"] == "4.000000"
     async with async_session_factory() as session:

@@ -383,7 +383,7 @@ async def test_transfer_loss_adjustment_closes_transit_without_falsifying_receip
                 idempotency_key=f"adjustment-loss-receive-{suffix}",
                 actor_id=context.actor_id,
             )
-            assert received["status"] == "in_transit"
+            assert received["status"] == "partially_received"
             incident_transfer = await transfers.open_incident(
                 company_id=context.company_id,
                 transfer_id=transfer["id"],
