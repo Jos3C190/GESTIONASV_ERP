@@ -4,7 +4,11 @@
     InventoryTransfer,
     TransferStatus
   } from '$lib/features/inventory/transfer-documents';
-  import { transferStatusLabel } from '$lib/features/inventory/transfer-operations';
+  import {
+    isOnRoad,
+    transferStatusLabel,
+    vehicleSummary
+  } from '$lib/features/inventory/transfer-operations';
   import TransferRouteBadge from './TransferRouteBadge.svelte';
 
   type CollectionState = 'loading' | 'loaded' | 'empty' | 'error';
@@ -108,30 +112,31 @@
           {/each}
         </div>
       {/if}
-    <label class="min-w-52 flex-1 space-y-1 text-sm font-medium text-foreground sm:flex-none">
-      Estado
-      <select
-        class="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
-        disabled={busy || awaitingApproval}
-        value={awaitingApproval ? 'pending_approval' : filter}
-        onchange={(event) => onFilter(event.currentTarget.value)}
+      <label class="min-w-52 flex-1 space-y-1 text-sm font-medium text-foreground sm:flex-none">
+        Estado
+        <select
+          class="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+          disabled={busy || awaitingApproval}
+          value={awaitingApproval ? 'pending_approval' : filter}
+          onchange={(event) => onFilter(event.currentTarget.value)}
+        >
+          {#each statuses as status (status.value)}<option value={status.value}
+              >{status.label}</option
+            >{/each}
+        </select>
+      </label>
+      <label
+        class="flex min-h-10 items-center gap-2 rounded-lg border border-border bg-surface-muted px-3 text-xs font-medium text-foreground"
       >
-        {#each statuses as status (status.value)}<option value={status.value}>{status.label}</option
-          >{/each}
-      </select>
-    </label>
-    <label
-      class="flex min-h-10 items-center gap-2 rounded-lg border border-border bg-surface-muted px-3 text-xs font-medium text-foreground"
-    >
-      <input
-        type="checkbox"
-        class="size-4"
-        checked={originCountPending}
-        disabled={busy || awaitingApproval}
-        onchange={(event) => onOriginCountPending?.(event.currentTarget.checked)}
-      />
-      Conteo pendiente en origen
-    </label>
+        <input
+          type="checkbox"
+          class="size-4"
+          checked={originCountPending}
+          disabled={busy || awaitingApproval}
+          onchange={(event) => onOriginCountPending?.(event.currentTarget.checked)}
+        />
+        Conteo pendiente en origen
+      </label>
     </div>
   </div>
 
@@ -165,7 +170,9 @@
         </p>
       {:else}
         <p class="font-medium text-foreground">
-          {originCountPending ? 'Ningún traslado espera un conteo en origen' : 'No hay documentos en este estado'}
+          {originCountPending
+            ? 'Ningún traslado espera un conteo en origen'
+            : 'No hay documentos en este estado'}
         </p>
         <p class="mt-1 text-sm text-foreground-muted">
           Al guardar una preparación aparecerá aquí sin mover existencias.
@@ -210,11 +217,11 @@
             <p class="mt-3 text-sm text-foreground-muted">{documentSummary(transfer)}</p>
             <p class="mt-3 text-xs text-foreground-muted">
               Creado {formatDate(transfer.created_at)}{transfer.vehicle
-                ? ` · ${transfer.vehicle.code} ${transfer.vehicle.name}`
+                ? ` · ${vehicleSummary(transfer.vehicle)}`
                 : ''}
             </p>
           </button>
-          {#if transfer.status === 'in_transit' || transfer.status === 'partially_received' || transfer.status === 'incident'}
+          {#if isOnRoad(transfer.status) && !transfer.received_at}
             <a
               class="absolute bottom-3 right-4 inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-surface px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               href={`/tracking?transfer=${transfer.id}`}>Ver en mapa</a

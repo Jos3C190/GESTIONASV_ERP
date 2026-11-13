@@ -1,7 +1,7 @@
 <script lang="ts">
   import Callout from '$lib/components/ui/Callout.svelte';
   import type { InventoryTransfer } from '$lib/features/inventory/transfer-documents';
-  import { substitutionCodeLabel } from '$lib/features/inventory/transfer-operations';
+  import { substitutionCodeLabel, vehicleName } from '$lib/features/inventory/transfer-operations';
 
   interface Props {
     transfer: InventoryTransfer;
@@ -45,7 +45,9 @@
         <dd class="font-medium text-foreground">
           {#if vehicle}
             {vehicleText(vehicle)}
-            {#if vehicle.name}<span class="font-normal text-foreground-muted">{vehicle.name}</span>{/if}
+            {#if vehicleName(vehicle)}<span class="font-normal text-foreground-muted"
+                >{vehicleName(vehicle)}</span
+              >{/if}
           {:else}
             <span class="font-normal text-foreground-muted">Sin registrar</span>
           {/if}

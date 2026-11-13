@@ -103,22 +103,31 @@ describe('TransferApprovalPanel', () => {
   });
 
   it('no deja enviar sin permiso de movimiento ni con la ruta apagada', () => {
-    mount(makeTransfer({ ...transport, route_type: 'branch_to_central', requires_approval: true }), {
-      canMove: false
-    });
+    mount(
+      makeTransfer({ ...transport, route_type: 'branch_to_central', requires_approval: true }),
+      {
+        canMove: false
+      }
+    );
     expect(screen.getByRole('button', { name: 'Enviar a aprobación' })).toBeDisabled();
     cleanup();
-    mount(makeTransfer({ ...transport, route_type: 'branch_to_central', requires_approval: true }), {
-      routeEnabled: false
-    });
+    mount(
+      makeTransfer({ ...transport, route_type: 'branch_to_central', requires_approval: true }),
+      {
+        routeEnabled: false
+      }
+    );
     expect(screen.getByRole('button', { name: 'Enviar a aprobación' })).toBeDisabled();
     expect(screen.getByText(/Esta ruta está desactivada/)).toBeInTheDocument();
   });
 
   it('con la ruta apagada solo muestra el aviso de ruta desactivada, no el de aprobación', () => {
-    mount(makeTransfer({ ...transport, route_type: 'branch_to_central', requires_approval: true }), {
-      routeEnabled: false
-    });
+    mount(
+      makeTransfer({ ...transport, route_type: 'branch_to_central', requires_approval: true }),
+      {
+        routeEnabled: false
+      }
+    );
     expect(screen.getByText(/Esta ruta está desactivada/)).toBeInTheDocument();
     expect(screen.queryByText(/necesita aprobación antes de despacharse/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Enviar a aprobación' })).toHaveAttribute(
@@ -365,9 +374,7 @@ describe('TransferApprovalPanel', () => {
       const approve = screen.getByRole('button', { name: 'Aprobar traslado' });
       expect(approve).toBeDisabled();
       expect(approve).toHaveAttribute('aria-describedby', 'transfer-decision-note');
-      expect(document.getElementById('transfer-decision-note')).toHaveTextContent(
-        /no sea apto/
-      );
+      expect(document.getElementById('transfer-decision-note')).toHaveTextContent(/no sea apto/);
       // Rejecting stays possible so the author can fix it.
       expect(screen.getByRole('button', { name: 'Rechazar' })).toBeEnabled();
     });
@@ -432,5 +439,48 @@ describe('TransferApprovalPanel', () => {
       expect(screen.getByText(/FL-001 · C 123/)).toBeInTheDocument();
       expect(apiMock.transferAssignmentCheck).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('revisión del transporte: indicador', () => {
+  it('el aviso «Revisando el transporte…» se apaga con la respuesta o con el fallo y no reaparece al refrescar igual', async () => {
+    apiMock.transferAssignmentCheck.mockRejectedValue(new Error('sin red'));
+    const transfer = pending();
+    const view = render(TransferApprovalPanel, {
+      transfer,
+      canMove: true,
+      canApprove: true,
+      currentUserId: 'user-other',
+      formatDate: () => '20 oct 2026',
+      onSubmit: vi.fn(),
+      onWithdraw: vi.fn(),
+      onApprove: vi.fn(),
+      onReject: vi.fn()
+    });
+    await waitFor(() =>
+      expect(screen.queryByText('Revisando el transporte…')).not.toBeInTheDocument()
+    );
+    expect(await screen.findByText(/No se pudo revisar el transporte/)).toBeInTheDocument();
+    expect(apiMock.transferAssignmentCheck).toHaveBeenCalledTimes(1);
+    // The page refreshes the same transfer after a refused command: nothing changed, no new spinner.
+    await view.rerender({ transfer: { ...transfer } });
+    expect(screen.queryByText('Revisando el transporte…')).not.toBeInTheDocument();
+    expect(apiMock.transferAssignmentCheck).toHaveBeenCalledTimes(1);
+  });
+
+  it('no repite el nombre de la placa del vehículo', () => {
+    mount(
+      pending({
+        vehicle: {
+          id: 'iv1',
+          code: 'VEH-SM-01',
+          name: 'Isuzu NPR (C 118-402)',
+          status: 'active',
+          plate: 'C 118-402'
+        }
+      })
+    );
+    expect(screen.getByText('Isuzu NPR')).toBeInTheDocument();
+    expect(screen.queryByText(/\(C 118-402\)/)).not.toBeInTheDocument();
   });
 });

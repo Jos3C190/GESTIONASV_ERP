@@ -286,7 +286,9 @@ describe('aprobación de traslados en la página', () => {
     await openDocument();
 
     expect(
-      await screen.findByText('No puedes aprobar un traslado que tú preparaste, editaste o enviaste.')
+      await screen.findByText(
+        'No puedes aprobar un traslado que tú preparaste, editaste o enviaste.'
+      )
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Aprobar traslado' })).not.toBeInTheDocument();
 
@@ -326,10 +328,14 @@ describe('aprobación de traslados en la página', () => {
   it('no deja decidir a quien editó la preparación', async () => {
     mocks.permissions.add('inventory:transfer_approve');
     mocks.user = { id: 'user-editor', is_superuser: false };
-    openAs(branchTransfer({ last_edited_by_id: 'user-editor', last_edited_by_name: 'Eva Editora' }));
+    openAs(
+      branchTransfer({ last_edited_by_id: 'user-editor', last_edited_by_name: 'Eva Editora' })
+    );
     await openDocument();
     expect(
-      await screen.findByText('No puedes aprobar un traslado que tú preparaste, editaste o enviaste.')
+      await screen.findByText(
+        'No puedes aprobar un traslado que tú preparaste, editaste o enviaste.'
+      )
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Aprobar traslado' })).not.toBeInTheDocument();
   });
@@ -480,7 +486,8 @@ describe('edición de una preparación', () => {
       // La primera lectura aún no conoce destinos; la de la edición sí.
       return routeOptions({
         origins: [centralWarehouse],
-        destinations: originCalls > 1 ? [{ ...northBranchWarehouse, route_type: 'central_distribution' }] : []
+        destinations:
+          originCalls > 1 ? [{ ...northBranchWarehouse, route_type: 'central_distribution' }] : []
       });
     });
     openAs(makeTransfer({ status: 'preparation', origin_warehouse_id: 'wh-central' }));

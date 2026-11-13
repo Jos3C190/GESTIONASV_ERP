@@ -1,14 +1,14 @@
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, expect, it, vi } from 'vitest';
 import AdjustmentDetail from '../../src/routes/(app)/inventory/adjustments/[id]/+page.svelte';
 
-const mocks = vi.hoisted(() => ({ get: vi.fn() }));
+const mocks = vi.hoisted(() => ({ get: vi.fn(), apply: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1' } }));
 vi.mock('$lib/stores/branch.svelte', () => ({ branch: { id: 'branch-1' } }));
 vi.mock('$lib/stores/permissions.svelte', () => ({ permissions: { hasPermission: () => true } }));
 vi.mock('$lib/features/inventory/adjustments', () => ({
-  inventoryAdjustmentsApi: { get: mocks.get }
+  inventoryAdjustmentsApi: { get: mocks.get, apply: mocks.apply }
 }));
 
 function adjustment(patch: Record<string, unknown> = {}) {
@@ -50,6 +50,13 @@ function adjustment(patch: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   mocks.get.mockReset();
+  mocks.apply.mockReset();
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
 });
 
 it.each([
@@ -98,4 +105,92 @@ it('un ajuste aplicado vinculado no ofrece corregir el movimiento', async () => 
   render(AdjustmentDetail, { data: { adjustmentId: 'adjustment-1' } });
   await screen.findByRole('heading', { name: /Vinculado a Avería/ });
   expect(screen.queryByRole('button', { name: 'Corregir movimiento…' })).not.toBeInTheDocument();
+});
+
+const line = {
+  id: 'line-1',
+  line_number: 1,
+  inventory_item_id: 'item-1',
+  warehouse_id: 'warehouse-1',
+  location_id: 'loc-1',
+  location_code: 'VEH-VEH-SM-01',
+  product_name: 'Producto de prueba',
+  sku: 'SKU-DEMO',
+  base_unit_id: 1,
+  base_unit_name: 'Unidad (u)',
+  base_unit_symbol: 'u',
+  direction: 'decrease',
+  quantity_base: '4.000000',
+  stock_status: 'quarantine',
+  handling_unit_code: null,
+  handling_unit_id: null,
+  inventory_lot_detail_id: null,
+  documented_unit_cost: null,
+  documented_total_cost: null,
+  movement_id: null
+};
+
+it('muestra cantidades, unidad y ubicación sin ruido y el historial en español', async () => {
+  mocks.get.mockResolvedValue(
+    adjustment({
+      lines: [line],
+      events: [
+        {
+          action: 'created',
+          actor_id: 'u',
+          occurred_at: '2026-10-20T12:00:00Z',
+          reason: null,
+          version: 1,
+          details: {}
+        },
+        {
+          action: 'approved',
+          actor_id: 'u',
+          occurred_at: '2026-10-20T12:05:00Z',
+          reason: null,
+          version: 1,
+          details: {}
+        }
+      ],
+      documents: [
+        {
+          document_id: 'doc-1',
+          original_filename: 'acta.pdf',
+          checksum_sha256: 'a'.repeat(64),
+          technical_status: 'active',
+          upload_completed: true,
+          linked_at: '2026-10-20T12:00:00Z',
+          detached_at: null,
+          active: true
+        }
+      ]
+    })
+  );
+  render(AdjustmentDetail, { data: { adjustmentId: 'adjustment-1' } });
+  expect(await screen.findByText('Salida · −4 u')).toBeInTheDocument();
+  expect(screen.getByText('SKU-DEMO · Unidad (u)')).toBeInTheDocument();
+  expect(screen.getByText(/Ubicación VEH-SM-01/)).toBeInTheDocument();
+  expect(screen.queryByText(/VEH-VEH/)).not.toBeInTheDocument();
+  // The label and its value are separate elements; the space between them must survive.
+  expect(document.body.textContent).toMatch(/Condición:[\s\u00a0]+Cuarentena/);
+  expect(screen.getByText('Borrador creado')).toBeInTheDocument();
+  expect(screen.getByText('Aprobado')).toBeInTheDocument();
+  expect(screen.getByText(/Vinculado · Validado/)).toBeInTheDocument();
+  expect(screen.queryByText(/^(created|approved)$|\bactive\b/)).not.toBeInTheDocument();
+});
+
+it('si aplicar falla con valuación pendiente, cierra la confirmación y muestra el error', async () => {
+  mocks.get.mockResolvedValue(adjustment({ status: 'approved', lines: [line] }));
+  mocks.apply.mockRejectedValue(
+    Object.assign(new Error('x'), { code: 'valuation_opening_required', status: 409 })
+  );
+  render(AdjustmentDetail, { data: { adjustmentId: 'adjustment-1' } });
+  await fireEvent.click(await screen.findByRole('button', { name: 'Aplicar ajuste…' }));
+  const dialog = document.querySelector('dialog')!;
+  expect(dialog.open).toBe(true);
+  await fireEvent.click(screen.getByRole('button', { name: 'Aplicar ajuste ahora' }));
+  await waitFor(() => expect(dialog.open).toBe(false));
+  expect(
+    await screen.findByText(/Primero aprueba el saldo inicial de valuación de la empresa/)
+  ).toBeInTheDocument();
 });

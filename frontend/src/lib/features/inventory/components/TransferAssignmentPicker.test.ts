@@ -33,7 +33,10 @@ function option(id: string, code: string, patch: Record<string, unknown> = {}) {
 const options: AssignmentOptions = {
   origin_branch_id: 'b1',
   origin_branch_name: 'Roosevelt',
-  vehicles: [option('v1', 'FL-001'), option('v2', 'FL-002', { driver_id: null, driver_name: null })],
+  vehicles: [
+    option('v1', 'FL-001'),
+    option('v2', 'FL-002', { driver_id: null, driver_name: null })
+  ],
   drivers: [
     {
       id: 'd1',
@@ -101,7 +104,10 @@ describe('TransferAssignmentPicker en planificación', () => {
     const vehicle = await screen.findByLabelText('Vehículo de Roosevelt');
     expect(screen.getByText('Obligatorio para enviar a aprobación')).toBeInTheDocument();
     expect(vehicle).toHaveAttribute('aria-describedby', 'transport-help');
-    expect(screen.getByLabelText('Conductor')).toHaveAttribute('aria-describedby', 'transport-help');
+    expect(screen.getByLabelText('Conductor')).toHaveAttribute(
+      'aria-describedby',
+      'transport-help'
+    );
     cleanup();
     planning({ required: false });
     expect(await screen.findByText('Opcional; se confirma al despachar')).toBeInTheDocument();
@@ -141,7 +147,9 @@ describe('TransferAssignmentPicker en planificación', () => {
     expect(await screen.findByText('Con advertencias')).toBeInTheDocument();
     expect(screen.getByText('Al despachar: requiere inspección diaria.')).toBeInTheDocument();
     expect(screen.getByText('También está asignado a TR-9 (aprobado).')).toBeInTheDocument();
-    expect(screen.getByText(/Carga estimada: 120[.,]5 kg · 2 productos sin peso registrado/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Carga estimada: 120[.,]5 kg · 2 productos sin peso registrado/)
+    ).toBeInTheDocument();
     expect(apiMock.assignmentCheck).toHaveBeenLastCalledWith({
       origin_warehouse_id: 'wh-origin',
       vehicle_id: 'v1',
@@ -253,7 +261,9 @@ describe('TransferAssignmentPicker en despacho', () => {
     await waitFor(() => expect(apiMock.dispatchOptions).toHaveBeenCalledWith('t1'));
     await waitFor(() => expect(apiMock.dispatchCheck).toHaveBeenCalledWith('t1', 'v1', null));
     expect(apiMock.assignmentOptions).not.toHaveBeenCalled();
-    expect(await screen.findByText('Vehículo y conductor aptos para el despacho.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Vehículo y conductor aptos para el despacho.')
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Obligatorio|Opcional/)).not.toBeInTheDocument();
   });
 
@@ -273,9 +283,13 @@ describe('TransferAssignmentPicker en despacho', () => {
       debounceMs: 0
     });
     const vehicle = await screen.findByLabelText('Vehículo de Roosevelt');
-    const unavailable = await within(vehicle).findByRole('option', { name: /FL-002.*En mantenimiento/ });
+    const unavailable = await within(vehicle).findByRole('option', {
+      name: /FL-002.*En mantenimiento/
+    });
     expect(unavailable).toBeDisabled();
-    expect(within(vehicle).getByRole('option', { name: /FL-001.*Apto/ })).toBeEnabled();
+    expect(
+      within(vehicle).getByRole('option', { name: /FL-001.*Documentos al día/ })
+    ).toBeEnabled();
     expect(screen.getByLabelText('Conductor')).toBeInTheDocument();
   });
 });

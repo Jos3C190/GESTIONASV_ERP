@@ -46,7 +46,11 @@ export function getOrCreateTransferAttempt(
       const raw = storage.getItem(key);
       if (raw) {
         const saved = JSON.parse(raw) as TransferAttempt;
-        if (saved.contextKey === contextKey && saved.fingerprint === fingerprint && saved.idempotencyKey) {
+        if (
+          saved.contextKey === contextKey &&
+          saved.fingerprint === fingerprint &&
+          saved.idempotencyKey
+        ) {
           memory.set(key, saved);
           return saved;
         }
@@ -56,7 +60,8 @@ export function getOrCreateTransferAttempt(
     }
   }
   const remembered = memory.get(key);
-  if (remembered?.contextKey === contextKey && remembered.fingerprint === fingerprint) return remembered;
+  if (remembered?.contextKey === contextKey && remembered.fingerprint === fingerprint)
+    return remembered;
 
   const attempt = { contextKey, fingerprint, idempotencyKey: createIdempotencyKey() };
   memory.set(key, attempt);
@@ -101,14 +106,18 @@ export function quantityString(raw: string): string | null {
   const parsed = scaledQuantity(value);
   if (parsed == null || parsed <= 0n) return null;
   const whole = parsed / SCALE;
-  const fraction = String(parsed % SCALE).padStart(6, '0').replace(/0+$/, '');
+  const fraction = String(parsed % SCALE)
+    .padStart(6, '0')
+    .replace(/0+$/, '');
   return fraction ? `${whole}.${fraction}` : String(whole);
 }
 
 export function quantityFromScaled(value: bigint): string {
   if (value <= 0n) return '0';
   const whole = value / SCALE;
-  const fraction = String(value % SCALE).padStart(6, '0').replace(/0+$/, '');
+  const fraction = String(value % SCALE)
+    .padStart(6, '0')
+    .replace(/0+$/, '');
   return fraction ? `${whole}.${fraction}` : String(whole);
 }
 
@@ -187,7 +196,9 @@ export function isRouteEnabled(
   policy: { allow_branch_to_branch: boolean; allow_branch_to_central: boolean } | null
 ): boolean {
   if (!policy || route === 'central_distribution') return true;
-  return route === 'branch_to_branch' ? policy.allow_branch_to_branch : policy.allow_branch_to_central;
+  return route === 'branch_to_branch'
+    ? policy.allow_branch_to_branch
+    : policy.allow_branch_to_central;
 }
 
 /** Statuses a rule change freezes: nothing moves them forward while the route is off. */
@@ -395,15 +406,105 @@ export function businessToday(now: Date = new Date()): string {
 }
 
 const FRIENDLY_ERRORS: Record<string, string> = {
-  transfer_discrepancy_has_adjustment:
-    'Esta diferencia ya tiene un ajuste en curso. Termínalo o cancélalo desde el ajuste antes de resolverla de otra forma.',
   transfer_assignment_units_invalid:
-    'Alguna unidad del borrador ya no está disponible para calcular la carga. Actualiza los saldos y revisa las cantidades.'
+    'Alguna unidad del borrador ya no está disponible para calcular la carga. Actualiza los saldos y revisa las cantidades.',
+  transfer_assignment_transfer_mismatch:
+    'El traslado en edición no coincide con la bodega de origen elegida. Cierra el formulario y vuelve a abrir la preparación.',
+  transfer_discrepancy_open:
+    'Este traslado tiene faltantes abiertos. Resuélvelos, o marca que llegó la mercadería, antes de registrar otra recepción.',
+  valuation_opening_required:
+    'Primero aprueba el saldo inicial de valuación de la empresa para poder aplicar ajustes.'
+};
+
+/** Codes whose friendly text keeps the server's own message (it names the adjustment). */
+const KEEP_SERVER_MESSAGE: Record<string, string> = {
+  transfer_discrepancy_has_adjustment:
+    'Termínalo o cancélalo desde el ajuste antes de resolverla de otra forma.'
 };
 
 /** The message of a failed request; some codes get wording that says what to do next. */
 export function transferErrorMessage(cause: unknown, fallback: string): string {
   const code = cause && typeof cause === 'object' ? (cause as { code?: unknown }).code : undefined;
-  if (typeof code === 'string' && FRIENDLY_ERRORS[code]) return FRIENDLY_ERRORS[code];
+  if (typeof code === 'string') {
+    const friendly = FRIENDLY_ERRORS[code];
+    if (friendly) return friendly;
+    const advice = KEEP_SERVER_MESSAGE[code];
+    if (advice && cause instanceof Error) {
+      const server = cause.message.trim();
+      return `${server}${/[.!?]$/.test(server) ? '' : '.'} ${advice}`;
+    }
+  }
   return cause instanceof Error ? cause.message : fallback;
+}
+
+/** What the vehicle's documents say; the fitness chip says whether it can make the trip. */
+export const COMPLIANCE_LABEL: Record<FitnessState, string> = {
+  ok: 'Documentos al día',
+  warning: 'Documentos por vencer',
+  blocked: 'Documentos vencidos'
+};
+
+/** The vehicle's name without its plate when the registry already repeats it in parentheses. */
+export function vehicleName(vehicle: { name?: string | null; plate?: string | null }): string {
+  const name = (vehicle.name ?? '').trim();
+  const plate = (vehicle.plate ?? '').trim();
+  if (!plate) return name;
+  // Plain string work: a plate may hold characters that mean something in a pattern.
+  let result = name.split(`(${plate})`).join('');
+  if (result.startsWith(plate)) result = result.slice(plate.length).replace(/^[\s·-]+/, '');
+  return result.replace(/\s{2,}/g, ' ').trim();
+}
+
+/** "VEH-01 · C 123", with the name only when it adds something. */
+export function vehicleSummary(vehicle: {
+  code: string;
+  name?: string | null;
+  plate?: string | null;
+}): string {
+  const name = vehicleName(vehicle);
+  return [vehicle.code, vehicle.plate ?? 'Sin placa', name].filter(Boolean).join(' · ');
+}
+
+/** "Unidad (u)": the unit's name with its symbol, unless the name already carries it. */
+export function unitDisplay(
+  name: string | null | undefined,
+  symbol: string | null | undefined
+): string {
+  const base = (name ?? '').trim();
+  const mark = (symbol ?? '').trim();
+  if (!base) return mark;
+  if (!mark || base === mark || base.includes(`(${mark})`)) return base;
+  return `${base} (${mark})`;
+}
+
+/** Transit locations of a vehicle are coded "VEH-<vehicle code>"; do not repeat the prefix. */
+export function displayLocationCode(code: string | null | undefined): string {
+  return (code ?? '').replace(/^([A-Za-z]+)-\1-/, '$1-');
+}
+
+const ADJUSTMENT_EVENT_LABELS: Record<string, string> = {
+  created: 'Borrador creado',
+  updated: 'Borrador actualizado',
+  approval_revoked: 'Aprobación revocada',
+  approved: 'Aprobado',
+  cancelled: 'Cancelado',
+  applied: 'Aplicado',
+  document_linked: 'Comprobante vinculado',
+  document_detached: 'Comprobante retirado'
+};
+
+export function adjustmentEventLabel(action: string): string {
+  return ADJUSTMENT_EVENT_LABELS[action] ?? action.replaceAll('_', ' ');
+}
+
+const DOCUMENT_STATUS_LABELS: Record<string, string> = {
+  active: 'Validado',
+  pending: 'En revisión',
+  quarantined: 'En cuarentena',
+  rejected: 'Rechazado',
+  deleted: 'Eliminado'
+};
+
+export function documentStatusLabel(status: string): string {
+  return DOCUMENT_STATUS_LABELS[status] ?? status;
 }

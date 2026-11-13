@@ -46,6 +46,7 @@
     clearTransferAttempt,
     compareQuantities,
     DAMAGE_TYPE_OPTIONS,
+    discrepancySummary,
     formatQuantity,
     getOrCreateTransferAttempt,
     isDiscrepancyActive,
@@ -228,6 +229,8 @@
       (selectedTransfer?.destination_branch_id != null &&
         branch.branches.some((item) => item.id === selectedTransfer?.destination_branch_id))
   );
+  // Receiving needs the permission and cover of the branch the goods arrive at.
+  const canReceiveHere = $derived(canReceiveInventory && canAccessSelectedDestination);
   const sourceOrigin = $derived(origins.find((item) => item.id === sourceWarehouseId) ?? null);
   // A branch origin has no purchase demand to plan against; the central warehouse does.
   const sourceIsCentral = $derived(
@@ -338,8 +341,12 @@
     return [...grouped.values()]
       .map((row) => ({
         ...row,
+        // A unit another transfer already committed is not stock this one can use.
         availableQuantity: row.units.reduce(
-          (total, unit) => total + (scaledQuantity(unit.quantity_base) ?? 0n),
+          (total, unit) =>
+            unit.committed_transfer_code
+              ? total
+              : total + (scaledQuantity(unit.quantity_base) ?? 0n),
           0n
         ),
         demands: [...row.demands].sort(
@@ -380,12 +387,14 @@
           .join(' · ')
   );
   const destinationOptions = $derived.by(() => {
-    const options: DestinationChoice[] = sortByBranchThenWarehouse(preparationDestinations).map((item) => ({
-      value: item.id,
-      label: item.name,
-      group: item.branch_name,
-      description: transferRouteLabel(item.route_type)
-    }));
+    const options: DestinationChoice[] = sortByBranchThenWarehouse(preparationDestinations).map(
+      (item) => ({
+        value: item.id,
+        label: `${item.code ? `${item.code} · ` : ''}${item.name}`,
+        group: item.branch_name,
+        description: transferRouteLabel(item.route_type)
+      })
+    );
     // Editing keeps the saved destination visible even if the rules no longer offer it.
     if (
       editingTransferId &&
@@ -670,7 +679,8 @@
       return;
     }
     // Purchase demand is planned from the central warehouse only.
-    const planDemand = canMoveInventory && (origins.find((item) => item.id === warehouseId)?.is_central ?? false);
+    const planDemand =
+      canMoveInventory && (origins.find((item) => item.id === warehouseId)?.is_central ?? false);
     stockState = 'loading';
     demandState = planDemand ? 'loading' : 'empty';
     supplyError = null;
@@ -756,7 +766,7 @@
       const result = await inventoryTransfersApi.list({
         status: awaitingApproval ? undefined : transferStatusFilter || undefined,
         awaitingMyApproval: awaitingApproval || undefined,
-        originCountPending: originCountFilter || undefined,
+        originCountPending: (originCountFilter && !awaitingApproval) || undefined,
         page: pageNumber,
         size: 50
       });
@@ -827,7 +837,7 @@
     const preferredUnit =
       product.units.find((item) => item.id === requestedHandlingUnitId) ??
       (product.units.length === 1 ? product.units[0] : null);
-    if (preferredUnit) addDraftUnit(preferredUnit.id);
+    if (preferredUnit && !preferredUnit.committed_transfer_code) addDraftUnit(preferredUnit.id);
     preparationOpen = true;
   }
 
@@ -1319,12 +1329,7 @@
 
   async function approveTransfer() {
     const transfer = selectedTransfer;
-    if (
-      !transfer ||
-      transfer.status !== 'pending_approval' ||
-      actionSaving ||
-      !canApproveTransfers
-    )
+    if (!transfer || transfer.status !== 'pending_approval' || actionSaving || !canApproveTransfers)
       return;
     // The round the person saw: if it was sent again meanwhile, the server refuses.
     const round = transfer.approval_round;
@@ -1338,12 +1343,7 @@
 
   async function rejectTransfer(reason: string) {
     const transfer = selectedTransfer;
-    if (
-      !transfer ||
-      transfer.status !== 'pending_approval' ||
-      actionSaving ||
-      !canApproveTransfers
-    )
+    if (!transfer || transfer.status !== 'pending_approval' || actionSaving || !canApproveTransfers)
       return;
     const round = transfer.approval_round;
     await runTransferCommand(
@@ -1484,7 +1484,8 @@
           approve: `${transfer.code} fue aprobado. Ya puedes despacharlo.`,
           reject: `${transfer.code} volvió a preparación con el motivo del rechazo.`,
           'close-reception': `${transfer.code} quedó con discrepancia. Resuelve cada diferencia para cerrarlo.`,
-          'discrepancy-claim': 'Reclamo registrado. La mercancía sigue como avería hasta resolverla.',
+          'discrepancy-claim':
+            'Reclamo registrado. La mercancía sigue como avería hasta resolverla.',
           'discrepancy-release': 'La mercancía pasó a cuarentena en la bodega de destino.',
           'discrepancy-found': `El faltante se anuló. ${transfer.code} vuelve a esperar la mercadería.`,
           'discrepancy-dismiss': 'Sobrante descartado.',
@@ -1499,7 +1500,7 @@
     const inPreparation = selectedTransfer.status === 'preparation';
     confirmAction(
       inPreparation ? 'Cancelar preparación' : 'Cancelar traslado',
-      `Se cancelará ${selectedTransfer.code}; no se moverá inventario y el registro permanecerá en el historial`,
+      `Se cancelará ${selectedTransfer.code}; no se moverá inventario y el registro permanecerá en el historial.`,
       cancelPreparation
     );
   }
@@ -1508,7 +1509,7 @@
     if (!selectedTransfer) return;
     confirmAction(
       'Aprobar traslado',
-      `Se revalidarán las existencias de ${selectedTransfer.code} antes de dejarlo listo para despachar`,
+      `Se revalidarán las existencias de ${selectedTransfer.code} antes de dejarlo listo para despachar.`,
       approveTransfer
     );
   }
@@ -1528,7 +1529,7 @@
       .join('; ');
     confirmAction(
       'Confirmar despacho',
-      `${selectedTransfer.origin_warehouse_name} → ${selectedTransfer.destination_warehouse_name} · ${dispatchSelection.label} · ${summary}`,
+      `${selectedTransfer.origin_warehouse_name} → ${selectedTransfer.destination_warehouse_name} · ${dispatchSelection.label} · ${summary}.`,
       dispatchPreparation
     );
   }
@@ -1572,8 +1573,7 @@
 
   async function confirmReceipt() {
     const transfer = selectedTransfer;
-    if (!transfer || !isReceivable(transfer.status) || actionSaving || !canReceiveInventory)
-      return;
+    if (!transfer || !isReceivable(transfer.status) || actionSaving || !canReceiveHere) return;
     const lines: TransferReceiptLineInput[] = [];
     for (const line of transfer.lines) {
       const raw = receiptQuantities[line.id]?.trim() ?? '';
@@ -1757,7 +1757,7 @@
   /** Stops waiting for what has not arrived: it becomes a shortage that someone resolves. */
   async function closeReception() {
     const transfer = selectedTransfer;
-    if (!transfer || !isReceivable(transfer.status) || !canReceiveInventory || actionSaving) return;
+    if (!transfer || !isReceivable(transfer.status) || !canReceiveHere || actionSaving) return;
     const reason = closeReceptionReason.trim();
     if (reason.length < 5) return;
     const body = { reason, evidence_reference: closeReceptionEvidence.trim() || null };
@@ -1873,6 +1873,14 @@
         await goto(`/inventory/adjustments/${encodeURIComponent(adjustment.id)}`);
       return null;
     } catch (cause) {
+      // The difference may have moved on (resolved, adjusted, cancelled): show what is current.
+      if (cause instanceof HttpError && cause.status === 409) {
+        try {
+          await refreshAfterCommand(transfer.id, expectedContext);
+        } catch {
+          // The message below already says what happened.
+        }
+      }
       return message(
         cause,
         'No se pudo preparar el ajuste. Puedes reintentar sin cambiar los datos.'
@@ -1908,7 +1916,7 @@
       const extras = receiptExtras[line.id];
       return Boolean(
         receiptQuantities[line.id]?.trim() ||
-          (extras?.open && (extras.damaged.trim() || extras.surplus.trim()))
+        (extras?.open && (extras.damaged.trim() || extras.surplus.trim()))
       );
     });
   }
@@ -1944,6 +1952,18 @@
     }).format(date);
   }
 
+  /** "Con avería 2 · Sobrante 1": only what is not zero. */
+  function lineExtraParts(line: InventoryTransfer['lines'][number]): string {
+    return [
+      ['Con avería', line.quantity_received_damaged],
+      ['Sobrante', line.quantity_surplus],
+      ['Faltante por resolver', line.quantity_short_open]
+    ]
+      .filter(([, quantity]) => (scaledQuantity(quantity as string) ?? 0n) > 0n)
+      .map(([label, quantity]) => `${label} ${formatQuantity(quantity as string)}`)
+      .join(' · ');
+  }
+
   function documentSummary(transfer: InventoryTransfer): string {
     return transfer.lines
       .map(
@@ -1961,6 +1981,8 @@
   function chooseAwaitingApproval(value: boolean) {
     if (awaitingApproval === value) return;
     awaitingApproval = value;
+    // The approval inbox is its own list: a count filter left on must not narrow it.
+    if (value) originCountFilter = false;
     void loadTransferPage(contextKey, contextVersion, 1, true);
   }
 
@@ -1975,6 +1997,8 @@
     selectedTransferId = '';
     selectedTransfer = null;
     preparationSavedMessage = null;
+    // The inbox is its own list: a filter left on from Documentos must not narrow it.
+    originCountFilter = false;
     chooseAwaitingApproval(true);
   }
 </script>
@@ -2262,7 +2286,10 @@
                 vehicleFallbackLabel={editingTransferId && selectedTransfer?.vehicle
                   ? `${selectedTransfer.vehicle.code} · ${selectedTransfer.vehicle.plate ?? 'Sin placa'}`
                   : ''}
-                driverFallbackLabel={editingTransferId ? (selectedTransfer?.driver?.name ?? '') : ''}
+                driverFallbackLabel={editingTransferId
+                  ? (selectedTransfer?.driver?.name ?? '')
+                  : ''}
+                savedDriverId={editingTransferId ? (selectedTransfer?.driver?.id ?? '') : ''}
                 bind:vehicleId={draftVehicleId}
                 bind:driverId={draftDriverId}
               />
@@ -2297,14 +2324,16 @@
                         class="mt-1"
                         type="checkbox"
                         checked={selected}
+                        disabled={Boolean(unit.committed_transfer_code) && !selected}
                         onchange={() => addDraftUnit(unit.id)}
                       /><span
                         ><span class="block break-all font-mono text-sm font-medium text-foreground"
                           >{unit.code}</span
                         ><span class="block break-all text-xs text-foreground-muted"
-                          >Lote {unit.receipt_lot_code ?? unit.lot_code ?? 'sin lote'} · Disponible {formatQuantity(
-                            unit.quantity_base
-                          )}
+                          >Lote {unit.receipt_lot_code ?? unit.lot_code ?? 'sin lote'} · {unit.committed_transfer_code
+                            ? `Comprometida en ${unit.committed_transfer_code}`
+                            : 'Disponible'}
+                          {formatQuantity(unit.quantity_base)}
                           {unit.base_unit_symbol ?? unit.base_unit_name ?? 'base'}</span
                         ></span
                       ></label
@@ -2577,7 +2606,9 @@
                 >
                   {selectedTransfer.origin_warehouse_name} → {selectedTransfer.destination_warehouse_name}
                 </h2>
-                <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground-muted">
+                <p
+                  class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground-muted"
+                >
                   <span
                     >Creado {formatDate(selectedTransfer.created_at)} · {transferStatusLabel(
                       selectedTransfer.status
@@ -2638,11 +2669,8 @@
                           line.quantity_returned
                         )}
                         {line.base_unit_symbol ?? line.base_unit_name ?? 'base'}</span
-                      >{#if (scaledQuantity(line.quantity_received_damaged) ?? 0n) > 0n || (scaledQuantity(line.quantity_surplus) ?? 0n) > 0n || (scaledQuantity(line.quantity_short_open) ?? 0n) > 0n}<span
-                          class="block text-xs text-foreground-muted"
-                          >Con avería {formatQuantity(line.quantity_received_damaged)} · Sobrante {formatQuantity(
-                            line.quantity_surplus
-                          )} · Faltante por resolver {formatQuantity(line.quantity_short_open)}</span
+                      >{#if lineExtraParts(line)}<span class="block text-xs text-foreground-muted"
+                          >{lineExtraParts(line)}</span
                         >{/if}
                     </p>
                   </div>
@@ -2667,10 +2695,9 @@
                       <ul class="mt-2 space-y-1 text-xs text-foreground-muted">
                         {#each line.receipts as receipt (receipt.id)}<li>
                             {formatQuantity(receipt.quantity_received)}
-                            {line.base_unit_symbol ?? line.base_unit_name ?? 'base'}{receipt.condition ===
-                            'damaged'
-                              ? ' con avería'
-                              : ''} · {formatDate(
+                            {line.base_unit_symbol ??
+                              line.base_unit_name ??
+                              'base'}{receipt.condition === 'damaged' ? ' con avería' : ''} · {formatDate(
                               receipt.received_at
                             )} · {receipt.handling_unit_code ?? 'HU creada por recepción'}
                           </li>{/each}
@@ -2712,19 +2739,18 @@
                 </Callout>
               {/if}
               {#if selectedDispatchable}
-                <div
-                  class="grid gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4 lg:grid-cols-[1fr_auto] lg:items-end"
-                >
+                <div class="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
                   <TransferDispatchPanel
                     transfer={selectedTransfer}
                     disabled={!canMoveInventory || actionSaving || !selectedRouteEnabled}
                     bind:selection={dispatchSelection}
                   />
-                  <div class="flex flex-wrap gap-2">
+                  <div class="flex flex-wrap justify-end gap-2">
                     {#if selectedTransfer.status === 'preparation'}<Button
                         variant="secondary"
                         disabled={!canMoveInventory || actionSaving || !selectedRouteEnabled}
-                        onclick={() => void editPreparation(selectedTransfer!)}>Editar preparación</Button
+                        onclick={() => void editPreparation(selectedTransfer!)}
+                        >Editar preparación</Button
                       >{/if}<Button
                       variant="secondary"
                       disabled={!canMoveInventory || actionSaving}
@@ -2750,7 +2776,8 @@
                   {#if selectedTransfer.status === 'preparation'}<Button
                       variant="secondary"
                       disabled={!canMoveInventory || actionSaving || !selectedRouteEnabled}
-                      onclick={() => void editPreparation(selectedTransfer!)}>Editar preparación</Button
+                      onclick={() => void editPreparation(selectedTransfer!)}
+                      >Editar preparación</Button
                     >{/if}<Button
                     variant="secondary"
                     disabled={!canMoveInventory || actionSaving}
@@ -2772,13 +2799,16 @@
                     llegar, registra el faltante y cierra la recepción para resolverlo.
                   </p>
                   <div class="mt-3 flex flex-wrap gap-2">
-                    <Button variant="secondary" size="sm" disabled={actionSaving} onclick={keepWaiting}
-                      >Seguir esperando</Button
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={actionSaving}
+                      onclick={keepWaiting}>Seguir esperando</Button
                     >
                     <Button
                       variant="secondary"
                       size="sm"
-                      disabled={actionSaving || !canReceiveInventory || showCloseReception}
+                      disabled={actionSaving || !canReceiveHere || showCloseReception}
                       onclick={() => void openCloseReception()}
                       >Registrar faltante y cerrar recepción</Button
                     >
@@ -2810,8 +2840,9 @@
                     aparece.
                   </p>
                   <div class="space-y-1">
-                    <label class="block text-sm font-medium text-foreground" for="close-reception-reason"
-                      >Motivo del faltante</label
+                    <label
+                      class="block text-sm font-medium text-foreground"
+                      for="close-reception-reason">Motivo del faltante</label
                     >
                     <textarea
                       id="close-reception-reason"
@@ -2823,8 +2854,9 @@
                     ></textarea>
                   </div>
                   <div class="space-y-1">
-                    <label class="block text-sm font-medium text-foreground" for="close-reception-evidence"
-                      >Referencia de evidencia (opcional)</label
+                    <label
+                      class="block text-sm font-medium text-foreground"
+                      for="close-reception-evidence">Referencia de evidencia (opcional)</label
                     >
                     <input
                       id="close-reception-evidence"
@@ -2840,7 +2872,7 @@
                     <Button
                       type="submit"
                       disabled={actionSaving ||
-                        !canReceiveInventory ||
+                        !canReceiveHere ||
                         closeReceptionReason.trim().length < 5}>Confirmar faltante y cerrar</Button
                     >
                   </div>
@@ -2857,6 +2889,12 @@
               {#if !canReceiveInventory}<div class="notice notice-warning" role="status">
                   Tu perfil puede consultar el documento, pero requiere el permiso de recepción para
                   registrar cantidades.
+                </div>{:else if !canAccessSelectedDestination}<div
+                  class="notice notice-warning"
+                  role="status"
+                >
+                  Solo quien tiene acceso a la sucursal de destino puede registrar la recepción de
+                  este traslado.
                 </div>{/if}
               {#if destinationLocationState === 'loading'}<p class="text-sm text-foreground-muted">
                   Consultando ubicaciones de la bodega destino…
@@ -2931,8 +2969,9 @@
                           type="checkbox"
                           class="size-4"
                           checked={extras.open}
-                          disabled={!canReceiveInventory}
-                          aria-controls="receipt-extras-{line.id}"
+                          disabled={!canReceiveHere}
+                          aria-expanded={extras.open}
+                          aria-controls={extras.open ? `receipt-extras-${line.id}` : undefined}
                           onchange={(event) =>
                             updateReceiptExtras(line.id, { open: event.currentTarget.checked })}
                         />
@@ -2996,7 +3035,8 @@
                             {/each}
                           </select>
                         </label>
-                        <label class="text-xs font-medium text-foreground-muted sm:col-span-2 lg:col-span-3"
+                        <label
+                          class="text-xs font-medium text-foreground-muted sm:col-span-2 lg:col-span-3"
                           >Describe el daño
                           <input
                             class="field-control mt-1"
@@ -3022,7 +3062,8 @@
                               updateReceiptExtras(line.id, { surplus: event.currentTarget.value })}
                           />
                         </label>
-                        <label class="text-xs font-medium text-foreground-muted sm:col-span-1 lg:col-span-2"
+                        <label
+                          class="text-xs font-medium text-foreground-muted sm:col-span-1 lg:col-span-2"
                           >Describe el sobrante
                           <input
                             class="field-control mt-1"
@@ -3044,7 +3085,8 @@
                           )}
                           {unit}); la parte con avería cuenta como recibida.
                         </p>
-                        <label class="text-xs font-medium text-foreground-muted sm:col-span-2 lg:col-span-3"
+                        <label
+                          class="text-xs font-medium text-foreground-muted sm:col-span-2 lg:col-span-3"
                           >Referencia de evidencia (opcional)
                           <input
                             class="field-control mt-1"
@@ -3069,7 +3111,7 @@
                     showResolutionForm = false;
                   }}>Reportar incidencia</Button
                 ><Button
-                  disabled={!canReceiveInventory ||
+                  disabled={!canReceiveHere ||
                     actionSaving ||
                     destinationLocationState !== 'loaded' ||
                     !hasReceiptInput(selectedTransfer)}
@@ -3210,9 +3252,14 @@
               </div>
             {:else if selectedTransfer.status === 'closed_with_adjustment'}
               <div class="notice notice-warning" role="status">
-                Traslado cerrado con ajuste. Las cantidades recibidas, devueltas y justificadas como
-                faltante permanecen separadas en el historial; ninguna pérdida se contó como
-                recibida.
+                {#if selectedTransfer.discrepancies.length}
+                  Traslado cerrado con ajuste: {discrepancySummary(selectedTransfer.discrepancies)}.
+                  Lo recibido, lo dado de baja y lo regularizado quedan separados en el historial.
+                {:else}
+                  Traslado cerrado con ajuste. Las cantidades recibidas, devueltas y justificadas
+                  como faltante permanecen separadas en el historial; ninguna pérdida se contó como
+                  recibida.
+                {/if}
               </div>
             {:else if selectedTransfer.status === 'cancelled'}
               <div class="notice notice-info" role="status">
@@ -3340,7 +3387,7 @@
 
 <style>
   .tab-button {
-    @apply min-h-11 shrink-0 rounded-xl px-4 py-2 text-sm font-medium text-foreground-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
+    @apply min-h-11 shrink-0 rounded-xl px-3 py-2 text-sm font-medium sm:px-4 text-foreground-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
   }
   .active-tab {
     @apply bg-primary/10 text-foreground;

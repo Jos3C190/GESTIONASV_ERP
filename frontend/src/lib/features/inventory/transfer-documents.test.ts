@@ -36,11 +36,13 @@ describe('inventoryTransfersApi', () => {
 
   it('envía solo las cantidades y ubicaciones parciales confirmadas, sin autocompletar remanentes', async () => {
     apiFetchMock.mockResolvedValue({ id: 'transfer-1' });
-    const lines = [{
-      transfer_detail_id: 'detail-1',
-      destination_location_id: 'quarantine-1',
-      quantity_base: '8'
-    }];
+    const lines = [
+      {
+        transfer_detail_id: 'detail-1',
+        destination_location_id: 'quarantine-1',
+        quantity_base: '8'
+      }
+    ];
     await inventoryTransfersApi.receive('transfer-1', 'receive-attempt-1', lines);
     expect(apiFetchMock).toHaveBeenCalledWith('/inventory/transfers/transfer-1/receive', {
       method: 'POST',

@@ -27,6 +27,7 @@ export const transferDefaults = {
   closed_at: null,
   origin_count_pending: false,
   has_open_discrepancies: false,
+  valuation_ready: true,
   discrepancies: []
 } as const satisfies Partial<InventoryTransfer>;
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Callout from '$lib/components/ui/Callout.svelte';
@@ -10,7 +10,11 @@
     type DispatchIssue,
     type InventoryTransfer
   } from '$lib/features/inventory/transfer-documents';
-  import { assignmentFitness, FITNESS_LABEL } from '$lib/features/inventory/transfer-operations';
+  import {
+    assignmentFitness,
+    FITNESS_LABEL,
+    vehicleName
+  } from '$lib/features/inventory/transfer-operations';
 
   interface Props {
     transfer: InventoryTransfer;
@@ -57,7 +61,6 @@
   let reasonError = $state<string | null>(null);
   let reasonField = $state<HTMLTextAreaElement | null>(null);
   let check = $state<AssignmentCheck | null>(null);
-  let checking = $state(false);
   let checkError = $state<string | null>(null);
   let checkSequence = 0;
 
@@ -76,7 +79,9 @@
   const warningIssues = $derived(issues.filter((issue) => issue.severity === 'warning'));
   // The transport the approver authorised, or the one saved while still being prepared.
   const shownVehicle = $derived(
-    transfer.status === 'approved' ? (transfer.approved_vehicle ?? transfer.vehicle) : transfer.vehicle
+    transfer.status === 'approved'
+      ? (transfer.approved_vehicle ?? transfer.vehicle)
+      : transfer.vehicle
   );
   const shownDriver = $derived(
     transfer.status === 'approved' ? (transfer.approved_driver ?? transfer.driver) : transfer.driver
@@ -96,19 +101,26 @@
         : ''
   );
 
+  // One verdict per transport and stage: a refresh that changes nothing does not ask again, and
+  // the spinner is "no verdict yet for this key", so it cannot stay on after an answer or failure.
+  const checkKey = $derived(
+    liveCheck && transfer.vehicle?.id && transfer.driver?.id
+      ? `${transfer.id}:${transfer.status}:${transfer.approval_round}:${transfer.vehicle.id}:${transfer.driver.id}`
+      : ''
+  );
+  let checkedKey = $state('');
+  const checking = $derived(checkKey !== '' && checkedKey !== checkKey);
+
   $effect(() => {
-    const id = transfer.id;
-    // Re-judge when somebody changes the vehicle or the driver of the saved preparation.
-    const vehicleKey = transfer.vehicle?.id;
-    const driverKey = transfer.driver?.id;
+    const key = checkKey;
+    const id = untrack(() => transfer.id);
     const sequence = ++checkSequence;
     check = null;
     checkError = null;
-    if (!liveCheck || !vehicleKey || !driverKey) {
-      checking = false;
+    if (!key) {
+      checkedKey = '';
       return;
     }
-    checking = true;
     void (async () => {
       try {
         const result = await inventoryTransfersApi.transferAssignmentCheck(id);
@@ -120,7 +132,7 @@
               ? cause.message
               : 'No se pudo revisar el transporte. El servidor lo validará de todos modos.';
       } finally {
-        if (sequence === checkSequence) checking = false;
+        if (sequence === checkSequence) checkedKey = key;
       }
     })();
   });
@@ -185,7 +197,8 @@
       {#if liveCheck && checking}
         <span class="text-xs text-foreground-muted" role="status">Revisando el transporte…</span>
       {:else if fitness}
-        <Badge variant={fitness === 'blocked' ? 'danger' : fitness === 'warning' ? 'warning' : 'success'}
+        <Badge
+          variant={fitness === 'blocked' ? 'danger' : fitness === 'warning' ? 'warning' : 'success'}
           >{FITNESS_LABEL[fitness]}</Badge
         >
       {/if}
@@ -196,8 +209,8 @@
         <dd class="font-medium text-foreground">
           {#if shownVehicle}
             {shownVehicle.code} · {shownVehicle.plate ?? 'Sin placa'}
-            {#if shownVehicle.name}<span class="font-normal text-foreground-muted"
-                >{shownVehicle.name}</span
+            {#if vehicleName(shownVehicle)}<span class="font-normal text-foreground-muted"
+                >{vehicleName(shownVehicle)}</span
               >{/if}
           {:else}
             <span class="text-danger">Sin asignar</span>

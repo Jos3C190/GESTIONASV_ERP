@@ -3,7 +3,7 @@
   import Callout from '$lib/components/ui/Callout.svelte';
   import {
     inventoryTransfersApi,
-    type AssignmentCheck,
+    type DispatchCheck,
     type AssignmentOptions,
     type DispatchSelection,
     type InventoryTransfer,
@@ -32,7 +32,7 @@
   let judgement = $state<TransportJudgement | null>(null);
   let checking = $state(false);
   let options = $state<AssignmentOptions | null>(null);
-  let approvedCheck = $state<AssignmentCheck | null>(null);
+  let approvedCheck = $state<DispatchCheck | null>(null);
   let approvedCheckFor = '';
 
   const approvedVehicle = $derived(transfer.approved_vehicle ?? null);
@@ -43,7 +43,9 @@
     isApproved &&
       Boolean(vehicleId) &&
       (vehicleId !== approvedVehicle?.id ||
-        (approvedDriver != null && effectiveDriverId !== '' && effectiveDriverId !== approvedDriver.id))
+        (approvedDriver != null &&
+          effectiveDriverId !== '' &&
+          effectiveDriverId !== approvedDriver.id))
   );
   const needsOverride = $derived(
     Boolean(judgement?.blocked && !judgement.hardBlocked && judgement.canOverride)
@@ -58,7 +60,8 @@
       judgement &&
       !checking &&
       !judgement.hardBlocked &&
-      (!judgement.blocked || (judgement.canOverride && overrideReason.trim().length >= MIN_REASON)) &&
+      (!judgement.blocked ||
+        (judgement.canOverride && overrideReason.trim().length >= MIN_REASON)) &&
       substitutionReady
     )
   );
@@ -122,7 +125,12 @@
     approvedCheckFor = id;
     void (async () => {
       try {
-        const result = await inventoryTransfersApi.transferAssignmentCheck(id);
+        // The verdict of the approved transport as if it left now, not the planning-stage one.
+        const result = await inventoryTransfersApi.dispatchCheck(
+          id,
+          approvedVehicle?.id ?? '',
+          approvedDriver?.id ?? null
+        );
         if (approvedCheckFor === id) approvedCheck = result;
       } catch {
         // The notice is optional; the server still enforces the rules.
@@ -130,7 +138,7 @@
     })();
   });
 
-  const approvedStillFit = $derived(approvedCheck != null && !approvedCheck.planning_blocked);
+  const approvedStillFit = $derived(approvedCheck != null && !approvedCheck.blocked);
 </script>
 
 <div class="space-y-3">
@@ -153,6 +161,7 @@
     {disabled}
     {vehicleFallbackLabel}
     {driverFallbackLabel}
+    savedDriverId={transfer.approved_driver?.id ?? transfer.driver?.id ?? ''}
   />
 
   {#if judgement}
@@ -175,7 +184,10 @@
   {/if}
 
   {#if needsSubstitution}
-    <section class="space-y-3 rounded-xl border border-warning/30 bg-warning/5 p-3" aria-labelledby="dispatch-substitution-title">
+    <section
+      class="space-y-3 rounded-xl border border-warning/30 bg-warning/5 p-3"
+      aria-labelledby="dispatch-substitution-title"
+    >
       <Callout variant="warning" dismissible={false} class="mb-0">
         <p id="dispatch-substitution-title">
           Se aprobó con {approvedLabel}. El cambio quedará registrado y auditado.
@@ -197,7 +209,8 @@
             id="dispatch-substitution-code"
             class="field-control"
             value={substitutionCode}
-            onchange={(event) => (substitutionCode = event.currentTarget.value as SubstitutionCode | '')}
+            onchange={(event) =>
+              (substitutionCode = event.currentTarget.value as SubstitutionCode | '')}
             {disabled}
           >
             <option value="">Elige el motivo</option>
@@ -207,8 +220,9 @@
           </select>
         </div>
         <div class="space-y-1">
-          <label class="block text-sm font-medium text-foreground" for="dispatch-substitution-reason"
-            >Explica el cambio</label
+          <label
+            class="block text-sm font-medium text-foreground"
+            for="dispatch-substitution-reason">Explica el cambio</label
           >
           <textarea
             id="dispatch-substitution-reason"

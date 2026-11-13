@@ -379,6 +379,8 @@ export interface TransferHandlingUnit extends HandlingUnit {
   location_code: string;
   source_reference: string | null;
   origin_handling_unit_code?: string | null;
+  /** Code of the transfer that already committed this unit (it cannot be prepared again). */
+  committed_transfer_code?: string | null;
 }
 
 export interface HandlingUnitTraceEvent {

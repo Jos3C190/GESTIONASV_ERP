@@ -332,11 +332,7 @@ export type DiscrepancyKind = 'shortage' | 'surplus' | 'damage';
 export type DiscrepancyStatus = 'open' | 'in_claim' | 'resolved' | 'cancelled';
 export type DiscrepancySource = 'receipt' | 'reception_close' | 'incident';
 export type DiscrepancyResolution =
-  | 'written_off'
-  | 'found'
-  | 'released'
-  | 'regularized'
-  | 'dismissed';
+  'written_off' | 'found' | 'released' | 'regularized' | 'dismissed';
 export type DamageType =
   | 'broken'
   | 'crushed'
@@ -440,6 +436,8 @@ export interface InventoryTransfer {
   /** A shortage or a surplus whose count at the origin warehouse is still missing. */
   origin_count_pending: boolean;
   has_open_discrepancies: boolean;
+  /** False until the company approves its opening valuation; adjustments cannot be applied before. */
+  valuation_ready: boolean;
   discrepancies: TransferDiscrepancy[];
   lines: TransferLine[];
   incidents: TransferIncident[];
@@ -668,11 +666,7 @@ export const inventoryTransfersApi = {
       })
     }),
 
-  receive: (
-    transferId: string,
-    idempotencyKey: string,
-    lines: TransferReceiptLineInput[]
-  ) =>
+  receive: (transferId: string, idempotencyKey: string, lines: TransferReceiptLineInput[]) =>
     apiFetch<InventoryTransfer>(`${root}/${encodeURIComponent(transferId)}/receive`, {
       method: 'POST',
       body: JSON.stringify({ idempotency_key: idempotencyKey, lines })

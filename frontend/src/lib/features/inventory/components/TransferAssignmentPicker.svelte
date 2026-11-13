@@ -7,7 +7,11 @@
     type DispatchIssue,
     type TransportJudgement
   } from '$lib/features/inventory/transfer-documents';
-  import { FITNESS_LABEL, transferErrorMessage } from '$lib/features/inventory/transfer-operations';
+  import {
+    COMPLIANCE_LABEL,
+    FITNESS_LABEL,
+    transferErrorMessage
+  } from '$lib/features/inventory/transfer-operations';
 
   /**
    * Vehicle and driver of a transfer, with a live verdict. In planning mode it judges a draft
@@ -31,6 +35,8 @@
     /** Names for a saved choice the list no longer offers (e.g. a vehicle that went inactive). */
     vehicleFallbackLabel?: string;
     driverFallbackLabel?: string;
+    /** The driver saved in the transfer; changing vehicle moves a driver that was only that one. */
+    savedDriverId?: string;
     judgement?: TransportJudgement | null;
     checking?: boolean;
     options?: AssignmentOptions | null;
@@ -50,6 +56,7 @@
     idPrefix = 'transport',
     vehicleFallbackLabel = '',
     driverFallbackLabel = '',
+    savedDriverId = '',
     judgement = $bindable(null),
     checking = $bindable(false),
     options = $bindable(null),
@@ -66,12 +73,8 @@
   );
   const availableVehicles = $derived(options?.vehicles.filter((item) => item.available) ?? []);
   const unavailableVehicles = $derived(options?.vehicles.filter((item) => !item.available) ?? []);
-  const driverChoices = $derived(
-    (options?.drivers ?? []).filter(
-      // In dispatch, the empty choice already stands for the driver assigned in Fleet.
-      (item) => mode === 'planning' || item.id !== vehicle?.driver_id || item.id === driverId
-    )
-  );
+  // Every driver is a real choice; nothing is left to a server-side default.
+  const driverChoices = $derived(options?.drivers ?? []);
   const blockingIssues = $derived<DispatchIssue[]>(
     judgement
       ? [...judgement.vehicleIssues, ...judgement.driverIssues].filter(
@@ -143,7 +146,11 @@
     try {
       let next: TransportJudgement;
       if (currentMode === 'dispatch') {
-        const result = await inventoryTransfersApi.dispatchCheck(id as string, vehicleChoice, driverChoice || null);
+        const result = await inventoryTransfersApi.dispatchCheck(
+          id as string,
+          vehicleChoice,
+          driverChoice || null
+        );
         const hasIssues = result.vehicle_issues.length + result.driver_issues.length > 0;
         next = {
           mode: currentMode,
@@ -224,16 +231,21 @@
   });
 
   function chooseVehicle(value: string) {
+    const previous = vehicle;
     vehicleId = value;
-    // Keep a driver already chosen; otherwise offer the one assigned to the vehicle in Fleet.
-    if (mode === 'planning' && !driverId) {
-      driverId = options?.vehicles.find((item) => item.inventory_vehicle_id === value)?.driver_id ?? '';
-    }
+    const next = options?.vehicles.find((item) => item.inventory_vehicle_id === value);
+    // The driver follows the vehicle when nobody chose one, or the current one was only the
+    // previous vehicle's (or the saved) driver; a driver picked on purpose is kept.
+    const followsVehicle =
+      !driverId ||
+      (previous?.driver_id != null && driverId === previous.driver_id) ||
+      (savedDriverId !== '' && driverId === savedDriverId);
+    if (followsVehicle && next?.driver_id) driverId = next.driver_id;
   }
 
   function vehicleLabel(item: AssignmentOptions['vehicles'][number]): string {
     const status = item.available
-      ? FITNESS_LABEL[item.compliance_state]
+      ? COMPLIANCE_LABEL[item.compliance_state]
       : (item.unavailable_reason ?? 'No disponible');
     return `${item.code} · ${item.plate ?? 'Sin placa'} · ${item.brand} ${item.model} · ${status}`;
   }
@@ -253,7 +265,7 @@
         disabled={disabled || !options}
         aria-describedby={helpText ? `${idPrefix}-help` : undefined}
       >
-        <option value="">Seleccione vehículo</option>
+        <option value="">Selecciona vehículo</option>
         {#if vehicleId && !vehicle && vehicleFallbackLabel}
           <option value={vehicleId}>{vehicleFallbackLabel}</option>
         {/if}
@@ -290,17 +302,13 @@
         disabled={disabled || !options}
         aria-describedby={helpText ? `${idPrefix}-help` : undefined}
       >
-        <option value=""
-          >{mode === 'dispatch' && vehicle?.driver_name
-            ? `Asignado: ${vehicle.driver_name}`
-            : 'Seleccione conductor'}</option
-        >
+        <option value="">Selecciona conductor</option>
         {#if driverId && !options?.drivers.some((item) => item.id === driverId) && driverFallbackLabel}
           <option value={driverId}>{driverFallbackLabel}</option>
         {/if}
         {#each driverChoices as item (item.id)}
           <option value={item.id}
-            >{item.name} · {FITNESS_LABEL[item.compliance_state]}{item.current_vehicle_code
+            >{item.name} · {COMPLIANCE_LABEL[item.compliance_state]}{item.current_vehicle_code
               ? ` · conduce ${item.current_vehicle_code}`
               : ''}</option
           >

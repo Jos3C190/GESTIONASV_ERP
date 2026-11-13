@@ -83,3 +83,38 @@ it('explica una bandeja vacía de aprobaciones sin confundirla con un estado vac
   expect(screen.getByText('No tienes traslados por aprobar')).toBeInTheDocument();
   expect(screen.queryByText('No hay documentos en este estado')).not.toBeInTheDocument();
 });
+
+it('muestra «Ver en mapa» solo mientras el vehículo sigue en ruta', () => {
+  const road = (status: InventoryTransfer['status'], received_at: string | null = null) =>
+    makeTransfer({
+      id: status,
+      code: `TR-${status}`,
+      status,
+      received_at,
+      vehicle: {
+        id: 'v',
+        code: 'VEH-SM-01',
+        name: 'Isuzu NPR (C 118-402)',
+        status: 'active',
+        plate: 'C 118-402'
+      }
+    });
+  render(TransferDocumentList, {
+    ...listProps,
+    transfers: [
+      road('in_transit'),
+      road('partially_received'),
+      road('incident'),
+      road('discrepancy', '2026-10-21T10:00:00Z'),
+      road('received', '2026-10-21T10:00:00Z'),
+      road('approved')
+    ]
+  });
+  expect(screen.getAllByRole('link', { name: 'Ver en mapa' })).toHaveLength(3);
+  // A finished trip, even with open differences, is not on the road any more.
+  const finished = screen.getByRole('button', { name: /TR-discrepancy/ });
+  expect(finished.parentElement?.querySelector('a')).toBeNull();
+  // The plate is not repeated when the vehicle's name already carries it.
+  expect(screen.getAllByText(/VEH-SM-01 · C 118-402 · Isuzu NPR$/).length).toBeGreaterThan(0);
+  expect(screen.queryByText(/\(C 118-402\)/)).not.toBeInTheDocument();
+});

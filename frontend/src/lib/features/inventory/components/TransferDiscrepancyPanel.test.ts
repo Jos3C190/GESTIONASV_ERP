@@ -190,7 +190,9 @@ describe('TransferDiscrepancyPanel', () => {
     it('sin acceso al destino no ofrece nada sobre una avería y lo explica', () => {
       mount([damage()], { ...everything, canAccessDestination: false });
       expect(buttons()).toEqual([]);
-      expect(screen.getByText(/permiso de ajustes y acceso a la sucursal de destino/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/permiso de ajustes y acceso a la sucursal de destino/)
+      ).toBeInTheDocument();
     });
 
     it('un faltante se puede ajustar desde cualquiera de los dos lados', () => {
@@ -242,7 +244,11 @@ describe('TransferDiscrepancyPanel', () => {
       cleanup();
       // A cancelled adjustment no longer blocks anything.
       mount([damage({ adjustment: { id: 'adj-4', code: 'AJ-DEMO-4', status: 'cancelled' } })]);
-      expect(buttons()).toEqual(['Preparar ajuste de baja', 'Registrar reclamo', 'Liberar a cuarentena']);
+      expect(buttons()).toEqual([
+        'Preparar ajuste de baja',
+        'Registrar reclamo',
+        'Liberar a cuarentena'
+      ]);
     });
   });
 
@@ -253,7 +259,9 @@ describe('TransferDiscrepancyPanel', () => {
         canAccessOrigin: true,
         canAccessDestination: false
       });
-      expect(screen.getByText(/Conteo pendiente en origen: cuenta las existencias de Casa matriz/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Conteo pendiente en origen: cuenta las existencias de Casa matriz/)
+      ).toBeInTheDocument();
       expect(screen.getAllByText('Conteo pendiente en origen').length).toBeGreaterThan(0);
       await fireEvent.click(screen.getByRole('button', { name: 'Registrar conteo en origen' }));
       const notes = await screen.findByLabelText('Resultado del conteo en origen');
@@ -286,7 +294,9 @@ describe('TransferDiscrepancyPanel', () => {
         })
       ]);
       expect(buttons()).not.toContain('Registrar conteo en origen');
-      expect(screen.getByText(/Conteo en origen registrado el 20 oct 2026 por Mario Bodega/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Conteo en origen registrado el 20 oct 2026 por Mario Bodega/)
+      ).toBeInTheDocument();
     });
   });
 
@@ -410,10 +420,20 @@ describe('TransferDiscrepancyPanel', () => {
 
       await fireEvent.click(screen.getByLabelText('Indicar peso y volumen reales'));
       await fireEvent.click(screen.getByRole('button', { name: 'Crear borrador del ajuste' }));
+      // The problem appears next to the field it belongs to, which is marked and focused.
+      const weight = screen.getByLabelText('Peso bruto (kg)');
       expect(await screen.findByRole('alert')).toHaveTextContent(
-        'Indica el peso bruto (kg) y el volumen (m³) del sobrante.'
+        'Indica el peso bruto (kg) del sobrante.'
       );
-      await fireEvent.input(screen.getByLabelText('Peso bruto (kg)'), { target: { value: '12.5' } });
+      expect(weight).toHaveAttribute('aria-invalid', 'true');
+      expect(weight.getAttribute('aria-describedby')).toBe(screen.getByRole('alert').id);
+      await waitFor(() => expect(weight).toHaveFocus());
+      await fireEvent.input(weight, { target: { value: '12.5' } });
+      await fireEvent.click(screen.getByRole('button', { name: 'Crear borrador del ajuste' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Indica el volumen (m³) del sobrante.'
+      );
+      expect(screen.getByLabelText('Volumen (m³)')).toHaveAttribute('aria-invalid', 'true');
       await fireEvent.input(screen.getByLabelText('Volumen (m³)'), { target: { value: '0.08' } });
 
       await fireEvent.change(screen.getByLabelText('Costo documentado'), {
@@ -483,5 +503,96 @@ describe('TransferDiscrepancyPanel', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent(/al menos 5 caracteres/);
       expect(onRun).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('TransferDiscrepancyPanel: valuación, formularios vencidos y textos', () => {
+  it('sin saldo inicial de valuación no deja preparar ajustes y lo explica con un enlace', () => {
+    mount([damage(), surplus()], { ...everything, canSeeCost: true }, { valuation_ready: false });
+    const note = screen.getByText(/Primero aprueba el saldo inicial de valuación de la empresa/);
+    expect(note).toHaveAttribute('id', 'disc-valuation-note');
+    expect(screen.getByRole('link', { name: 'Ir a valuación' })).toHaveAttribute(
+      'href',
+      '/inventory/valuation'
+    );
+    for (const name of ['Preparar ajuste de baja', 'Preparar ajuste de ingreso']) {
+      const button = screen.getByRole('button', { name });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('aria-describedby', 'disc-valuation-note');
+    }
+    // What does not need the valuation stays available.
+    expect(screen.getByRole('button', { name: 'Registrar reclamo' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Descartar sobrante' })).toBeEnabled();
+  });
+
+  it('sin permiso de costos no ofrece el enlace de valuación y con valuación lista no hay aviso', () => {
+    mount([damage()], everything, { valuation_ready: false });
+    expect(screen.queryByRole('link', { name: 'Ir a valuación' })).not.toBeInTheDocument();
+    cleanup();
+    mount([damage()], everything, { valuation_ready: true });
+    expect(screen.queryByText(/saldo inicial de valuación/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preparar ajuste de baja' })).toBeEnabled();
+  });
+
+  it('el aviso de valuación no aparece si no hay ningún ajuste que preparar', () => {
+    mount([damage({ adjustment: { id: 'a', code: 'AJ-1', status: 'draft' } })], everything, {
+      valuation_ready: false
+    });
+    expect(screen.queryByText(/saldo inicial de valuación/)).not.toBeInTheDocument();
+  });
+
+  it('cierra el formulario y lo explica cuando el traslado se actualizó y la acción ya no cabe', async () => {
+    const onRun = vi.fn().mockResolvedValue('La diferencia ya no está abierta.');
+    const view = render(TransferDiscrepancyPanel, {
+      transfer: transferWith([damage()]),
+      canReceive: true,
+      canAdjust: true,
+      canApproveAdjust: true,
+      canAccessOrigin: true,
+      canAccessDestination: true,
+      formatDate: () => '20 oct 2026',
+      onRun
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Registrar reclamo' }));
+    await fireEvent.input(await screen.findByLabelText('Referencia del reclamo'), {
+      target: { value: 'REC-8' }
+    });
+    // The server refused (409) and the page refreshed the transfer: the claim is already in place.
+    onRun.mockImplementationOnce(async () => {
+      await view.rerender({
+        transfer: transferWith([damage({ status: 'in_claim', claim_reference: 'REC-0' })])
+      });
+      return 'La diferencia ya no está abierta.';
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Guardar reclamo' }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Referencia del reclamo')).not.toBeInTheDocument()
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'La diferencia ya no está abierta. Se actualizó el traslado: esta diferencia ya no admite esa acción.'
+    );
+    expect(screen.getByText(/En reclamo: REC-0/)).toBeInTheDocument();
+  });
+
+  it('un faltante dice que lo resuelve cualquiera de los dos lados, no solo el destino', () => {
+    mount([shortage()], {
+      canReceive: false,
+      canAdjust: false,
+      canApproveAdjust: false,
+      canAccessOrigin: true,
+      canAccessDestination: true
+    });
+    expect(screen.getByText(/acceso a la sucursal de origen o de destino/)).toBeInTheDocument();
+    cleanup();
+    mount([damage()], { ...everything, canAdjust: false, canApproveAdjust: false });
+    expect(screen.getByText(/acceso a la sucursal de destino\./)).toBeInTheDocument();
+    expect(screen.queryByText(/origen o de destino/)).not.toBeInTheDocument();
+  });
+
+  it('escribe la cantidad con su unidad y el tipo de avería bien separados y sin repetir el prefijo de la ubicación', () => {
+    mount([damage({ location_code: 'VEH-VEH-SM-01', quantity: '3', damage_type: 'wet' })]);
+    expect(screen.getByText('3 u · Humedad o mojado')).toBeInTheDocument();
+    expect(screen.getByText(/Ubicación VEH-SM-01/)).toBeInTheDocument();
+    expect(screen.queryByText(/VEH-VEH-SM-01/)).not.toBeInTheDocument();
   });
 });
