@@ -10,5 +10,5 @@
     <SalesQuotationDetail {id} />
   {/key}
 {:else}
-  <p class="p-6 text-sm text-danger">No se encontró el identificador de la cotización.</p>
+  <p class="text-sm text-danger">No se encontró el identificador de la cotización.</p>
 {/if}

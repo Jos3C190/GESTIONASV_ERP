@@ -75,7 +75,7 @@
   });
 </script>
 
-<div class="rfq-page min-h-full bg-background px-4 pb-8 pt-4 sm:px-6 sm:pt-6 md:px-8 md:pt-8">
+<div class="rfq-page min-h-full">
   <div class="print-controls mb-5 flex flex-wrap items-center justify-between gap-3">
     <a
       href={`/purchase-quotations/${id}${consolidationId ? `?consolidation_id=${consolidationId}` : ''}`}

@@ -163,7 +163,7 @@
 
 <svelte:head><title>Inventario | GestionaSV</title></svelte:head>
 
-<div class="mx-auto max-w-[1600px] space-y-4 p-3 sm:space-y-6 sm:p-4 md:p-6 lg:p-8">
+<div class="space-y-4 sm:space-y-6">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div>
       <p class="hidden text-xs font-semibold uppercase tracking-wider text-primary sm:block">

@@ -250,7 +250,7 @@
 
 <svelte:head><title>Almacenes — GestionaSV</title></svelte:head>
 
-<div class="space-y-5 p-4 sm:p-6 md:p-8">
+<div class="space-y-5">
   <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <div>
       <h1 class="text-xl font-bold text-foreground">Almacenes</h1>
@@ -386,7 +386,7 @@
   {/if}
 
   {#if loading}
-    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
       {#each Array(6) as _}<div class="h-72 rounded-xl skeleton"></div>{/each}
     </div>
   {:else if warehouses.length === 0}
@@ -402,7 +402,7 @@
   {:else}
     <div
       class={viewMode === 'grid'
-        ? 'grid gap-4 md:grid-cols-2 xl:grid-cols-3'
+        ? 'grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'
         : 'flex flex-col gap-3'}
     >
       {#each warehouses as warehouse (warehouse.id)}

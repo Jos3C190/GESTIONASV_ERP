@@ -130,7 +130,7 @@
 
 <svelte:head><title>Categorías documentales — GestionaSV</title></svelte:head>
 
-<div class="p-6 md:p-8">
+<div>
   <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
     <div>
       <a href="/documents" class="text-xs font-medium text-primary hover:underline">← Documentos</a>

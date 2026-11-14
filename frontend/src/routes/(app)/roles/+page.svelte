@@ -323,12 +323,12 @@
 
 <svelte:head><title>Roles — GestionaSV</title></svelte:head>
 
-<div class="p-6 md:p-8">
-  <div class="mb-5 flex items-center justify-between gap-4">
+<div>
+  <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
     <p class="text-sm text-foreground-muted">
       {meta?.total ?? 0} rol(es) · {allPermissions.length} permisos
     </p>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <select
         bind:value={systemFilter}
         class="h-8 rounded-md border border-border bg-surface-muted px-2.5 text-[13px] text-foreground focus:border-primary focus:shadow-glow focus:outline-none"
@@ -387,7 +387,7 @@
   {/if}
 
   {#if loading}
-    <div class="grid gap-5 md:grid-cols-2">
+    <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
       {#each Array(4) as _}
         <div class="h-44 rounded-2xl border border-border skeleton"></div>
       {/each}
@@ -399,7 +399,7 @@
       </div>
     </Card>
   {:else}
-    <div class="grid gap-5 md:grid-cols-2">
+    <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
       {#each roles as role (role.id)}
         {@const visiblePermissions = role.permissions.slice(0, 5)}
         {@const hiddenPermissionCount = role.permissions.length - visiblePermissions.length}

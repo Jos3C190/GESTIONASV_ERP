@@ -502,9 +502,6 @@
   .drivers {
     --danger: 185 28 28;
     --fleet-warning-ink: 137 75 0;
-    max-width: 1920px;
-    margin: 0 auto;
-    padding: var(--driver-space-5) var(--driver-space-6) var(--driver-space-6);
     color: rgb(var(--foreground));
   }
   .heading {
@@ -964,9 +961,6 @@
     outline-offset: 3px;
   }
   @media (max-width: 1350px) {
-    .drivers {
-      padding: var(--driver-space-5);
-    }
     .metrics > div {
       gap: var(--driver-space-3);
       padding: 0 var(--driver-space-4);
@@ -1006,9 +1000,6 @@
     }
   }
   @media (max-width: 1000px) {
-    .drivers {
-      padding: var(--driver-space-5) var(--driver-space-3);
-    }
     .heading {
       align-items: flex-start;
       flex-wrap: wrap;

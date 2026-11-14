@@ -35,12 +35,6 @@
   };
 
   const EMPTY_COUNT: QueueCount = { value: null, loading: false, error: false };
-  const toneClasses = {
-    warning: 'bg-warning/10 text-warning',
-    primary: 'bg-primary/10 text-primary',
-    info: 'bg-surface-muted text-foreground',
-    success: 'bg-success/10 text-success'
-  };
   const workflowSteps = [
     { title: 'Solicitud', text: 'El empleado registra la necesidad y el responsable la aprueba.' },
     { title: 'Consolidado', text: 'Compras reúne solicitudes aprobadas y, si aplica, agrega demanda central.' },
@@ -312,7 +306,7 @@
             ? 'Conteo incompleto'
             : totalCount === 0
               ? 'Sin pendientes'
-              : `${totalCount} pendientes`;
+              : `${totalCount} ${totalCount === 1 ? 'pendiente' : 'pendientes'}`;
 
         return { label, cards: groupCards, countText };
       })
@@ -597,13 +591,13 @@
 </script>
 
 {#if cards.length > 0}
-  <section class="mb-6 space-y-3" aria-labelledby="procurement-queue-title">
-    <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h2 id="procurement-queue-title" class="text-base font-semibold text-foreground">
+  <section class="space-y-4" aria-labelledby="procurement-queue-title">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div class="min-w-0">
+        <h2 id="procurement-queue-title" class="text-heading font-semibold text-foreground">
           Cola de compras
         </h2>
-        <p class="text-sm text-foreground-muted">
+        <p class="mt-1 text-body text-foreground-muted">
           Los conteos respetan la empresa, tus permisos y el alcance de sucursal: {branch.label}.
         </p>
       </div>
@@ -612,7 +606,7 @@
           type="button"
           onclick={retryCounts}
           disabled={refreshing}
-          class="inline-flex min-h-9 items-center justify-center rounded-lg border border-border bg-surface px-3 text-sm font-medium text-foreground hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          class="inline-flex min-h-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface px-3 text-body font-medium text-foreground hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           {refreshing ? 'Actualizando conteos…' : 'Reintentar conteos'}
         </button>
@@ -620,88 +614,98 @@
         <button
           type="button"
           onclick={showAllBranches}
-          class="inline-flex min-h-9 items-center justify-center rounded-lg border border-border bg-surface px-3 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          class="inline-flex min-h-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface px-3 text-body font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Ver todas las sucursales
         </button>
-      {:else}
-        <span class="text-xs text-foreground-subtle">Las tarjetas abren sus módulos.</span>
       {/if}
     </div>
 
-    <details class="rounded-xl border border-border bg-surface/50 p-3">
-      <summary class="min-h-10 cursor-pointer rounded-md text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+    <details class="workflow-guide">
+      <summary
+        class="inline-flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md text-body font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      >
+        <span class="queue-chevron" aria-hidden="true">›</span>
         Ver recorrido completo: de la solicitud al retaceo
       </summary>
-      <ol class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <ol class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {#each workflowSteps as step, index (step.title)}
-          <li class="flex gap-3 rounded-lg border border-border bg-surface p-3">
-            <span class="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-              {String(index + 1).padStart(2, '0')}
+          <li class="flex gap-3 rounded-lg border border-border bg-surface p-4">
+            <span
+              class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-caption font-semibold text-primary"
+            >
+              {index + 1}
             </span>
             <div class="min-w-0">
-              <h3 class="text-sm font-semibold text-foreground">{step.title}</h3>
-              <p class="mt-1 text-xs leading-5 text-foreground-muted">{step.text}</p>
+              <h3 class="text-body font-semibold text-foreground">{step.title}</h3>
+              <p class="mt-1 text-caption text-foreground-muted">{step.text}</p>
             </div>
           </li>
         {/each}
       </ol>
-      <p class="mt-3 text-xs text-foreground-muted">
-        Las acciones disponibles dependen de los permisos del perfil y de la sucursal operativa seleccionada arriba.
+      <p class="mt-3 text-caption text-foreground-muted">
+        Las acciones disponibles dependen de los permisos del perfil y de la sucursal operativa
+        seleccionada arriba.
       </p>
     </details>
 
-    <div class="space-y-5">
+    <div class="border-t border-border">
       {#each cardGroups as group (group.label)}
         <details
           open={group.label === 'Solicitudes' || group.label === 'Cotizaciones'}
-          class="queue-group rounded-xl border border-border bg-surface/50 p-3"
+          class="queue-group border-b border-border"
         >
-          <summary class="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-            <span class="flex min-w-0 items-center gap-2">
-              <span class="text-sm font-semibold text-foreground">{group.label}</span>
-              <span class="text-xs text-foreground-muted" aria-live="polite">{group.countText}</span>
+          <summary
+            class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-md py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <span class="flex min-w-0 flex-wrap items-baseline gap-x-2">
+              <span class="text-body font-semibold text-foreground">{group.label}</span>
+              <span class="text-caption text-foreground-muted" aria-live="polite"
+                >{group.countText}</span
+              >
             </span>
-            <span class="queue-chevron shrink-0 text-foreground-muted" aria-hidden="true">⌄</span>
+            <span class="queue-chevron shrink-0 text-foreground-muted" aria-hidden="true">›</span>
           </summary>
           <div
-            class="mt-3 grid gap-3"
+            class="grid gap-3 pb-4"
             style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));"
           >
             {#each group.cards as card (card.key)}
+              {@const pending =
+                !!card.count &&
+                !card.count.loading &&
+                !card.count.error &&
+                (card.count.value ?? 0) > 0}
               <a
                 href={card.href}
-                class="group flex min-h-36 flex-col rounded-xl border border-border bg-surface-elevated p-3.5 transition-colors hover:border-primary/40 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                class="group flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 <div class="flex items-start justify-between gap-3">
-                  <div class="flex min-w-0 items-center gap-2.5">
-                    <span
-                      class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg {toneClasses[
-                        card.tone
-                      ]}"
-                      aria-hidden="true"
+                  <div class="flex min-w-0 items-center gap-2">
+                    <svg
+                      class="shrink-0 text-foreground-muted"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"><path d={card.icon} /></svg
                     >
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.8"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"><path d={card.icon} /></svg
-                      >
-                    </span>
-                    <span class="text-sm font-semibold leading-5 text-foreground">{card.title}</span>
+                    <span class="text-body font-semibold text-foreground">{card.title}</span>
                   </div>
                   {#if card.count?.loading}
                     <span aria-live="polite" aria-atomic="true">
                       <span class="sr-only">Cargando conteo…</span>
-                      <span class="skeleton block h-7 w-10 rounded" aria-hidden="true"></span>
+                      <span class="skeleton block h-7 w-8 rounded" aria-hidden="true"></span>
                     </span>
                   {:else if card.count}
                     <span
-                      class="queue-count font-mono text-2xl font-semibold tabular-nums text-foreground"
+                      class="queue-count text-title font-semibold tabular-nums {pending
+                        ? 'text-foreground'
+                        : 'text-foreground-muted'}"
                       aria-live="polite"
                       aria-atomic="true"
                       aria-label={card.count.error
@@ -713,20 +717,16 @@
                   {/if}
                 </div>
 
-                <p class="mt-3 text-sm leading-5 text-foreground-muted">{card.description}</p>
-
-                {#if card.count && !card.count.loading && !card.count.error && card.count.value === 0}
-                  <p class="mt-2 text-xs font-medium text-success">Sin pendientes en este alcance.</p>
-                {/if}
+                <p class="text-body text-foreground-muted">{card.description}</p>
 
                 {#if card.count?.error}
-                  <p class="mt-2 text-xs leading-5 text-warning" role="status" aria-live="polite">
+                  <p class="text-caption text-warning" role="status" aria-live="polite">
                     No se pudo cargar el conteo. Puedes abrir la lista o reintentar las tarjetas.
                   </p>
                 {/if}
 
                 <span
-                  class="mt-auto inline-flex items-center gap-1 pt-3 text-sm font-medium text-primary group-hover:underline"
+                  class="mt-auto inline-flex items-center gap-1 pt-1 text-body font-medium text-primary group-hover:underline"
                 >
                   {card.count?.error ? 'Abrir módulo' : card.action}
                   <span aria-hidden="true">→</span>
@@ -745,9 +745,18 @@
     animation: queue-count-in 180ms ease-out;
   }
 
-  .queue-group > summary::-webkit-details-marker { display: none; }
-  .queue-chevron { transition: transform 160ms ease-out; }
-  .queue-group[open] .queue-chevron { transform: rotate(180deg); }
+  .queue-group > summary::-webkit-details-marker,
+  .workflow-guide > summary::-webkit-details-marker {
+    display: none;
+  }
+  .queue-chevron {
+    display: inline-block;
+    transition: transform 160ms ease-out;
+  }
+  .queue-group[open] .queue-chevron,
+  .workflow-guide[open] .queue-chevron {
+    transform: rotate(90deg);
+  }
 
   @keyframes queue-count-in {
     from {

@@ -437,7 +437,7 @@
 
 <svelte:head><title>Ubicaciones de almacenamiento — GestionaSV</title></svelte:head>
 
-<div class="p-6 md:p-8">
+<div>
   <div class="w-full">
     <header class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-3">
       <a

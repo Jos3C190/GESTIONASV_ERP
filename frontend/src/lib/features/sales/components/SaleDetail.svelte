@@ -131,7 +131,7 @@
 </script>
 
 <svelte:head><title>Venta | GestionaSV</title></svelte:head>
-<main class="mx-auto max-w-6xl space-y-5 px-4 pb-10 pt-6 sm:px-6">
+<div class="mx-auto max-w-6xl space-y-5">
   <a class="text-sm text-primary hover:underline" href="/sales">← Ventas</a>
   {#if error}
     <div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-foreground" role="alert">
@@ -222,4 +222,4 @@
       <p class="text-xs text-foreground-muted">La venta confirmada conserva sus términos; cada entrega registra una salida física separada. Una venta con entrega confirmada no se puede cancelar: debe gestionarse mediante el flujo de devoluciones.</p>
     </section>
   {/if}
-</main>
+</div>

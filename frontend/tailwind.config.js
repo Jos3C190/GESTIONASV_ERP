@@ -43,6 +43,21 @@ export default {
           foreground: 'rgb(var(--warning-foreground) / <alpha-value>)'
         }
       },
+      spacing: {
+        'page-x': 'var(--page-gutter-x)',
+        'page-y': 'var(--page-gutter-y)',
+        section: 'var(--section-gap)'
+      },
+      maxWidth: {
+        page: 'var(--page-max-width)'
+      },
+      fontSize: {
+        caption: ['0.75rem', { lineHeight: '1rem' }],
+        body: ['0.875rem', { lineHeight: '1.25rem' }],
+        heading: ['1rem', { lineHeight: '1.5rem' }],
+        title: ['1.25rem', { lineHeight: '1.75rem' }],
+        display: ['1.5rem', { lineHeight: '2rem', letterSpacing: '-0.015em' }]
+      },
       fontFamily: {
         sans: ['Geist Sans', 'Geist', 'Inter', 'system-ui', 'sans-serif'],
         mono: ['Geist Mono', 'Geist', 'JetBrains Mono', 'ui-monospace', 'monospace']

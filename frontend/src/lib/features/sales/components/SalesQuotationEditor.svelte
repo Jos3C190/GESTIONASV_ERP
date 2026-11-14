@@ -128,7 +128,7 @@
 </script>
 
 <svelte:head><title>{quotationId ? 'Editar cotización' : 'Nueva cotización'} | GestionaSV</title></svelte:head>
-<main class="mx-auto max-w-5xl space-y-5 px-4 pb-10 pt-6 sm:px-6">
+<div class="mx-auto max-w-5xl space-y-5">
   <a class="text-sm text-primary hover:underline" href="/sales/quotations">← Cotizaciones de venta</a>
   <header><p class="text-xs font-semibold uppercase tracking-widest text-primary">Ventas · USD</p><h1 class="mt-1 text-2xl font-bold text-foreground">{quotationId ? `Editar ${quotation?.code ?? 'cotización'}` : 'Nueva cotización'}</h1><p class="mt-1 text-sm text-foreground-muted">Los precios se capturan aquí. Los totales los calcula el servidor; esta acción no verifica ni reserva existencias.</p></header>
   {#if error}<div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger" role="alert">{error}</div>{/if}
@@ -156,4 +156,4 @@
       <div class="flex flex-wrap justify-end gap-2"><a class="rounded-md border border-border px-4 py-2 text-sm text-foreground" href={quotationId ? `/sales/quotations/${quotationId}` : '/sales/quotations'}>Cancelar</a><button class="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50" disabled={saving || loading || customers.length === 0 || catalog.length === 0}>{saving ? 'Guardando…' : 'Guardar borrador'}</button></div>
     </form>
   {/if}
-</main>
+</div>

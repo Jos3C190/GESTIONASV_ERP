@@ -75,7 +75,7 @@
 </script>
 
 <svelte:head><title>Cotización de venta | GestionaSV</title></svelte:head>
-<main class="mx-auto max-w-6xl space-y-5 px-4 pb-10 pt-6 sm:px-6">
+<div class="mx-auto max-w-6xl space-y-5">
   <a class="text-sm text-primary hover:underline" href="/sales/quotations">← Cotizaciones de venta</a>
   {#if error}<div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger" role="alert">{error}<button class="ml-3 underline" onclick={() => void load()}>Recargar</button></div>{/if}
   {#if loading}<section class="rounded-xl border border-border bg-surface p-10 text-center text-sm text-foreground-muted">Cargando cotización…</section>{:else if quote}<header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p class="text-xs font-semibold uppercase tracking-widest text-primary">Cotización de venta · {quote.code}</p><h1 class="mt-1 text-2xl font-bold text-foreground">{quote.customer_name}</h1><p class="mt-1 text-sm text-foreground-muted">{quote.customer_code} · {quote.quotation_date} · válida hasta {quote.valid_until}</p></div><span class="w-fit rounded-full bg-surface-muted px-3 py-1 text-sm text-foreground">{statusNames[quote.status]}</span></header>
@@ -88,4 +88,4 @@
       <p class="text-xs text-foreground-muted">La conversión es única e idempotente. No hay acción de entrega en esta etapa; las ventas confirmadas quedan pendientes de entrega.</p>
     </section>
   {/if}
-</main>
+</div>

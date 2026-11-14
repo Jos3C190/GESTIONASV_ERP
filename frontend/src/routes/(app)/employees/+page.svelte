@@ -176,7 +176,7 @@
 
 <svelte:head><title>Empleados — GestionaSV</title></svelte:head>
 
-<div class="p-6 md:p-8">
+<div>
   <!-- Header -->
   <div class="mb-5 flex items-center justify-between gap-4">
     <p class="text-sm text-foreground-muted">

@@ -67,7 +67,15 @@
     '/trash'
   ];
 
+  // Screens that draw edge to edge (live map) opt out of the shared gutter.
+  const FULL_BLEED_ROUTES = ['/tracking'];
+
   let showSearch = $derived(SEARCHABLE_ROUTES.includes(page.url.pathname));
+  let fullBleed = $derived(
+    FULL_BLEED_ROUTES.some(
+      (route) => page.url.pathname === route || page.url.pathname.startsWith(`${route}/`)
+    )
+  );
   let title = $derived(routeTitle(page.url.pathname));
 
   async function handleLogout() {
@@ -358,25 +366,33 @@
 
     <main class="min-h-0 flex-1 overflow-y-auto" data-app-scroll-container>
       {#if contextLoading}
-        <div class="p-6" aria-label="Cargando contexto operativo">
+        <div class="app-page" aria-label="Cargando contexto operativo">
           <div class="h-24 rounded-xl border border-border skeleton"></div>
         </div>
       {:else if contextError}
-        <div
-          class="m-6 rounded-xl border border-danger/30 bg-danger/10 p-5 text-sm text-danger"
-          role="alert"
-        >
-          <p class="font-semibold">No se puede abrir el panel</p>
-          <p class="mt-1">{contextError}</p>
-          <div class="mt-4">
-            <Button variant="secondary" size="sm" onclick={() => goto('/companies')}
-              >Cambiar empresa</Button
-            >
+        <div class="app-page">
+          <div
+            class="rounded-xl border border-danger/30 bg-danger/10 p-6 text-sm text-danger"
+            role="alert"
+          >
+            <p class="font-semibold">No se puede abrir el panel</p>
+            <p class="mt-1">{contextError}</p>
+            <div class="mt-4">
+              <Button variant="secondary" size="sm" onclick={() => goto('/companies')}
+                >Cambiar empresa</Button
+              >
+            </div>
           </div>
         </div>
       {:else}
         {#key `${company.id ?? 'none'}:${branch.id ?? 'all'}`}
-          {@render children()}
+          {#if fullBleed}
+            {@render children()}
+          {:else}
+            <div class="app-page" data-app-page>
+              {@render children()}
+            </div>
+          {/if}
         {/key}
       {/if}
     </main>

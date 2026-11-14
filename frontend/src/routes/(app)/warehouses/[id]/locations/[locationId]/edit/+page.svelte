@@ -49,7 +49,7 @@
 
 <svelte:head><title>Editar ubicación — GestionaSV</title></svelte:head>
 
-<div class="space-y-5 p-6 md:p-8">
+<div class="space-y-5">
   <header class="flex items-start gap-3">
     <a
       href={`/warehouses/${warehouseId}/locations`}

@@ -394,7 +394,7 @@
   }
 </script>
 
-<div class="min-h-full bg-background px-4 pb-8 pt-4 sm:px-6 sm:pt-6 md:px-8 md:pt-8">
+<div class="min-h-full">
   <header class="mb-6 flex items-center gap-3 border-b border-border pb-4">
     <a
       href={`/purchase-quotations/${id}${consolidationId ? `?consolidation_id=${consolidationId}` : ''}`}

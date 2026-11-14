@@ -191,7 +191,7 @@
   >
 </svelte:head>
 
-<div class="p-6 md:p-8">
+<div>
   {#if loading}
     <div class="space-y-5" aria-busy="true" role="status">
       <span class="sr-only">Cargando detalle de variante…</span>

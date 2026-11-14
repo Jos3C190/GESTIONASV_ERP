@@ -113,7 +113,7 @@
   />
 </svelte:head>
 
-<main class="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
+<div class="mx-auto max-w-6xl space-y-6">
   <a
     href={trace
       ? `/warehouses/${encodeURIComponent(trace.handling_unit.warehouse_id)}`
@@ -336,4 +336,4 @@
       </p>
     </section>
   {/if}
-</main>
+</div>

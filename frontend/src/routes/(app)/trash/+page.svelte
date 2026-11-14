@@ -221,7 +221,7 @@
 
 <svelte:head><title>Papelera · GestionaSV</title></svelte:head>
 
-<div class="mx-auto w-full max-w-[1500px] p-4 md:p-8">
+<div>
   <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
     <p class="text-sm text-foreground-muted">
       {meta.total} registro(s) eliminado(s) · Ocultos de la operación diaria

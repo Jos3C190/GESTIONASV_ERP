@@ -218,7 +218,7 @@
   <title>{role ? `Permisos de ${role.name} — Roles` : 'Matriz de permisos — Roles'}</title>
 </svelte:head>
 
-<div class="min-h-full p-6 md:p-8">
+<div class="min-h-full">
   <div class="mx-auto max-w-[1440px]">
     <header class="mb-7 flex flex-wrap items-start justify-between gap-4">
       <div class="flex min-w-0 items-start gap-3">

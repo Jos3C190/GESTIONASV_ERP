@@ -306,7 +306,7 @@
   });
 </script>
 
-<div class="purchase-work-queue min-h-full bg-background px-4 pb-8 pt-4 sm:px-6 sm:pt-6 md:px-8 md:pt-8">
+<div class="purchase-work-queue min-h-full">
   <header class="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
     <div>
       <p class="text-xs font-semibold uppercase tracking-wider text-primary">Compras</p>

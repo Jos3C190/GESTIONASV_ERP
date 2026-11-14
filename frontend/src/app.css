@@ -186,6 +186,48 @@
   color-scheme: dark;
 }
 
+/*
+ * Layout tokens — shared by every authenticated screen (theme independent).
+ *
+ * Spacing scale (4 px base): 4 · 8 · 12 · 16 · 24 · 32 · 48
+ *   = Tailwind 1 · 2 · 3 · 4 · 6 · 8 · 12. Nothing in page chrome uses
+ *   values outside this list.
+ * Type scale: caption 12 · body 14 · heading 16 · title 20 · display 24
+ *   (Tailwind `text-caption`, `text-body`, `text-heading`, `text-title`,
+ *   `text-display`).
+ * Colour roles for page chrome (no gradients): surface (canvas and cards),
+ *   border (separation), foreground (primary text), foreground-muted
+ *   (secondary text) and primary (links and actions). Status colours stay
+ *   reserved for state, never for hierarchy.
+ */
+:root {
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  /* Page gutter: 16 px on phones, 24 px on tablets, 32 px on desktop. */
+  --page-gutter-x: var(--space-4);
+  --page-gutter-y: var(--space-6);
+  --page-max-width: 90rem;
+  --section-gap: var(--space-6);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --page-gutter-x: var(--space-6);
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --page-gutter-x: var(--space-8);
+    --page-gutter-y: var(--space-8);
+  }
+}
+
 html,
 body {
   height: 100%;
@@ -347,6 +389,22 @@ select optgroup { color: rgb(var(--foreground)); background-color: rgb(var(--sur
 
 /* Text controls shared by forms built outside the ui kit (transfers, dispatch). */
 @layer components {
+  /* Shared content container of the (app) layout: gutter + max width. */
+  .app-page {
+    width: 100%;
+    min-width: 0;
+    max-width: var(--page-max-width);
+    margin-inline: auto;
+    padding: var(--page-gutter-y) var(--page-gutter-x) var(--space-12);
+  }
+
+  @media print {
+    .app-page {
+      max-width: none;
+      padding: 0;
+    }
+  }
+
   .field-control {
     @apply w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
   }

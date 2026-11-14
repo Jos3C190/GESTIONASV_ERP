@@ -74,7 +74,7 @@
 
 <svelte:head><title>Devoluciones | GestionaSV</title></svelte:head>
 
-<main class="mx-auto max-w-7xl space-y-5 px-4 pb-10 pt-6 sm:px-6">
+<div class="space-y-5">
   <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <p class="text-xs font-semibold uppercase tracking-widest text-primary">Ventas</p>
@@ -148,4 +148,4 @@
       {/each}
     </section>
   {/if}
-</main>
+</div>

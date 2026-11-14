@@ -86,7 +86,7 @@
 
 <svelte:head><title>Clientes | GestionaSV</title></svelte:head>
 
-<main class="mx-auto max-w-7xl space-y-5 px-4 pb-10 pt-6 sm:px-6">
+<div class="space-y-5">
   <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
     <div><p class="text-xs font-semibold uppercase tracking-widest text-primary">Ventas</p><h1 class="mt-1 text-2xl font-bold text-foreground">Clientes</h1><p class="mt-1 text-sm text-foreground-muted">Catálogo comercial de esta empresa. Desactivar conserva cotizaciones y ventas anteriores.</p></div>
     <p class="text-sm text-foreground-muted">{customers.length} cliente(s)</p>
@@ -113,4 +113,4 @@
     <div class="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between"><h2 class="font-semibold text-foreground">Directorio</h2><div class="flex gap-2"><input aria-label="Buscar clientes" placeholder="Código o nombre" class="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground" bind:value={search} onkeydown={(e) => e.key === 'Enter' && void load()} /><button class="rounded-md border border-border px-3 text-sm text-foreground" onclick={() => void load()}>Buscar</button></div></div>
     {#if loading}<p class="p-8 text-center text-sm text-foreground-muted">Cargando clientes…</p>{:else if customers.length === 0}<p class="p-8 text-center text-sm text-foreground-muted">No hay clientes para mostrar. Registra uno arriba para iniciar una cotización.</p>{:else}<div class="overflow-x-auto"><table class="w-full min-w-[700px] text-left text-sm"><thead class="bg-surface-muted text-xs uppercase text-foreground-muted"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Cliente</th><th class="px-4 py-3">Contacto</th><th class="px-4 py-3">Estado</th><th class="px-4 py-3 text-right">Acciones</th></tr></thead><tbody class="divide-y divide-border">{#each customers as customer (customer.id)}<tr><td class="px-4 py-3 font-mono text-xs text-foreground">{customer.code}</td><td class="px-4 py-3 font-medium text-foreground">{customer.name}</td><td class="px-4 py-3 text-foreground-muted">{customer.phone || '—'}<br />{customer.email || ''}</td><td class="px-4 py-3"><span class={customer.is_active ? 'rounded-full bg-success/10 px-2 py-1 text-xs text-success' : 'rounded-full bg-surface-muted px-2 py-1 text-xs text-foreground-muted'}>{customer.is_active ? 'Activo' : 'Inactivo'}</span></td><td class="px-4 py-3 text-right"><button class="mr-3 text-primary hover:underline" onclick={() => beginEdit(customer)}>Editar</button><button class="text-foreground-muted hover:text-foreground" onclick={() => void toggleActive(customer)}>{customer.is_active ? 'Desactivar' : 'Activar'}</button></td></tr>{/each}</tbody></table></div>{/if}
   </section>
-</main>
+</div>

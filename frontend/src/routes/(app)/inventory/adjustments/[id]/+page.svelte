@@ -367,7 +367,7 @@
   ></svelte:head
 >
 
-<main class="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
+<div class="mx-auto w-full max-w-6xl space-y-6">
   <header class="space-y-2">
     <a class="text-sm font-medium text-primary hover:underline" href="/inventory/adjustments"
       >← Ajustes de inventario</a
@@ -830,7 +830,7 @@
       </div>
     </section>
   {/if}
-</main>
+</div>
 
 <dialog
   bind:this={applyDialog}

@@ -41,7 +41,7 @@
   >
 </svelte:head>
 
-<div class="space-y-5 p-6 md:p-8">
+<div class="space-y-5">
   <header class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
     <div class="flex min-w-0 items-start gap-3">
       <a
