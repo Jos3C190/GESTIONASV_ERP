@@ -107,6 +107,7 @@ services:
       target: prod
     environment:
       AUTO_SEED: "false"
+      SEED_DEMO_OPERATIONS: "false"
 
   frontend:
     build:

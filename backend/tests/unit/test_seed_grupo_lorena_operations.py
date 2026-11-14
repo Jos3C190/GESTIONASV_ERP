@@ -136,6 +136,19 @@ def test_awards_cover_closed_consolidations_with_quoted_offers() -> None:
     assert len(keys) == len(set(keys))
 
 
+def test_soft_flour_is_bought_by_the_sack_without_conversion() -> None:
+    setup = PRODUCTS["PRD-HAR-001"]
+    assert (setup.base_unit, setup.per_purchase_unit, setup.packaging_code) == ("UNIT", 1, None)
+    flour = next(seed for seed in CONSOLIDATIONS if seed.key == "F")
+    assert set(demand(flour)) == {"PRD-HAR-001"}
+    assert flour.awards == {"PRD-HAR-001": "PROV-001"}
+    # Its own keys: a rerun creates this cycle without touching A-D.
+    earlier = {r.key for seed in CONSOLIDATIONS if seed.key != "F" for r in seed.requests}
+    assert {request.key for request in flour.requests}.isdisjoint(earlier)
+    assert [seed.key for seed in CONSOLIDATIONS][-1] == "F"
+    assert received_quantities()["PRD-HAR-001"] == demand(flour)["PRD-HAR-001"]
+
+
 def test_the_import_carries_dai_on_the_cif_value() -> None:
     imported = next(seed for seed in CONSOLIDATIONS if seed.key == "C")
     order = next(order for order in imported.orders if order.supplier == "PROV-IMP-001")

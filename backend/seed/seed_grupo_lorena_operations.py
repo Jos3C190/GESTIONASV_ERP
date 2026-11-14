@@ -81,6 +81,7 @@ from seed.grupo_lorena_operations_data import (
     pallet_measures,
     validate_operations_seed,
 )
+from seed.seed_catalog import ensure_soft_flour_units
 from seed.seed_grupo_lorena import HEADQUARTERS, SUPER_ADMIN_USERNAME, _session_factory
 
 BUSINESS_TZ = ZoneInfo("America/El_Salvador")
@@ -1847,6 +1848,8 @@ async def seed() -> None:
         )
         await session.commit()
         await _document_and_assign_fleet(session, pairs, actor_id, report)
+        # Harina suave is bought by the 50 lb sack; fix databases seeded with kilograms.
+        report.notes.extend(await ensure_soft_flour_units(session))
 
         tokens = await _tokens(session)
         app = create_app()

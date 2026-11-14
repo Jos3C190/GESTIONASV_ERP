@@ -413,6 +413,9 @@ services:
   # ---------------- One-shot database bootstrap ----------------
   # Runs after Alembic finishes. A durable app_meta marker makes ordinary
   # restarts no-ops, preserving records intentionally sent to the trash.
+  # seed_data then runs its follow-up steps once each (fleet with demonstration
+  # documents; demo operation only with SEED_DEMO_OPERATIONS=true), so it gets
+  # the same document storage and antivirus as the backend.
   seed:
     build:
       context: ./backend
@@ -436,9 +439,15 @@ services:
       ARGON2_PARALLELISM: ${ARGON2_PARALLELISM:-4}
       AUTO_SEED: ${AUTO_SEED:-true}
       FORCE_SEED: ${FORCE_SEED:-false}
+      # Purchases, receipts and transfers of the demo company: opt-in only.
+      SEED_DEMO_OPERATIONS: ${SEED_DEMO_OPERATIONS:-false}
       SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-superadmin}
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-superadmin@erp-system.dev}
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}
+      # The demo operation calls the API in process as each employee.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SUPPLIER_DATA_ENCRYPTION_KEY: ${SUPPLIER_DATA_ENCRYPTION_KEY}
+      <<: [*document-storage-environment, *redis-ocr-environment]
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
     depends_on:

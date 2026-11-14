@@ -16,16 +16,19 @@ vehicles and ``P`` for private pickups.
 The seed follows the same rules as the Fleet and Drivers screens: the
 department is opened in the branch before hiring, the driver keeps an active
 assignment in their home branch, and the license class allows the vehicle kind
-in the company's catalogue of vehicle types. Store vehicles have no mandatory
-documents (driver license, circulation card, insurance...): they must be
-uploaded through Documents, so each is assigned to its driver with a recorded
-compliance override, exactly as a user with ``fleet:compliance_override`` would
-do it. The headquarters vehicles and drivers get demonstration documents through
-the real document pipeline, so they can dispatch transfers without exceptions.
+in the company's catalogue of vehicle types. Every vehicle (stores and
+headquarters) and every driver gets demonstration documents through the real
+document pipeline (circulation card front and back, insurance and technical
+inspection; driver license front and back), so they can dispatch transfers
+without exceptions. Only when the document storage or the antivirus is not
+available is a pair assigned with a recorded compliance override, exactly as a
+user with ``fleet:compliance_override`` would do it; a later run uploads the
+missing documents.
 
 Existing vehicles are never moved or rewritten; they only get their transit
 location for transfers when it is missing. Run inside the backend container:
-``python -m seed.seed_grupo_lorena_fleet``.
+``python -m seed.seed_grupo_lorena_fleet``. ``seed.seed_data`` also runs it once
+after the first bootstrap.
 """
 
 from __future__ import annotations
@@ -41,7 +44,12 @@ from typing import Any
 
 from sqlalchemy import func, select
 
-from seed.grupo_lorena_documents import driver_documents, ensure_documents, vehicle_documents
+from seed.grupo_lorena_documents import (
+    document_pipeline_ready,
+    driver_documents,
+    ensure_documents,
+    vehicle_documents,
+)
 from seed.grupo_lorena_media import COMPANY_ID
 from seed.seed_grupo_lorena import (
     EMPLOYEES,
@@ -58,7 +66,6 @@ DRIVER_ROLE = "EMPLEADO"
 OVERRIDE_REASON = (
     "Datos de desarrollo: licencia y documentos del vehículo pendientes de cargar en Documentos."
 )
-
 #: Default license classes of the system vehicle types (migration 0107). At run
 #: time the seed checks the company's own catalogue, which an admin may edit.
 DEFAULT_LICENSE_CLASSES: Mapping[str, frozenset[str]] = {
@@ -106,7 +113,7 @@ class BranchFleetSeed:
     vehicles: tuple[VehicleSeed, ...]
     drivers: tuple[DriverSeed, ...]
     #: Upload demonstration documents so vehicles and drivers pass compliance.
-    documents: bool = False
+    documents: bool = True
 
 
 REFRIGERATED_NOTE = "Furgón refrigerado para pasteles y producto de cadena de frío."
@@ -217,7 +224,6 @@ HEADQUARTERS_FLEET = BranchFleetSeed(
             "GL-0047", "Elmer Geovany", "Barahona Soriano", "elmer.barahona", "liviana", "VEH-HQ-03"
         ),
     ),
-    documents=True,
 )
 
 
@@ -348,14 +354,94 @@ class _Pair:
     branch_id: Any
     vehicle: Any
     driver: Any
-    override: str | None
+    override: str | None = None
 
 
-async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed atomic
-    from app.api.v1.routers.fleet import ensure_inventory_vehicle
+def override_for(pair_owners: set[Any], documented: set[Any]) -> str | None:
+    """No exception when the vehicle and its driver have their documents; else the reason."""
+    return None if pair_owners <= documented else OVERRIDE_REASON
+
+
+_Documented = list[tuple[BranchFleetSeed, dict[str, Any], list[tuple[Any, DriverSeed]]]]
+
+
+async def _upload_documents(
+    session: Any, documented: _Documented, actor_id: Any
+) -> tuple[set[Any], int]:
+    """Upload what is missing; return the fully documented owners and how many were added.
+
+    Without document storage or antivirus nothing is uploaded and nobody counts as
+    documented: the caller then assigns with a compliance override and a later
+    run uploads the documents. A failure halfway keeps what was already uploaded.
+    """
     from app.application.fleet.costs import BUSINESS_TZ
     from app.application.fleet.settings import settings_from
     from app.core.config import settings
+    from app.infrastructure.models.fleet import FleetSettingsModel
+
+    if not documented:
+        return set(), 0
+    if not settings.OBJECT_STORAGE_ENABLED:
+        print("Sin almacenamiento de documentos: los vehículos se asignan con excepción.")
+        return set(), 0
+    if not await document_pipeline_ready():
+        print("Almacenamiento o antivirus no disponibles: los vehículos se asignan con excepción.")
+        return set(), 0
+    today = datetime.now(BUSINESS_TZ).date()
+    warning_days = settings_from(
+        await session.get(FleetSettingsModel, COMPANY_ID)
+    ).document_warning_days
+    complete: set[Any] = set()
+    added = 0
+    try:
+        for item, by_code, staff in documented:
+            for vehicle_seed in item.vehicles:
+                vehicle = by_code[vehicle_seed.code]
+                added += await ensure_documents(
+                    session,
+                    company_id=COMPANY_ID,
+                    actor_id=actor_id,
+                    module="fleet",
+                    owner_type="vehicle",
+                    owner_id=vehicle.id,
+                    documents=vehicle_documents(
+                        vehicle_seed.code,
+                        vehicle.plate or vehicle_seed.plate,
+                        vehicle_seed.brand,
+                        vehicle_seed.model,
+                        today,
+                    ),
+                    today=today,
+                    warning_days=warning_days,
+                )
+                complete.add(vehicle.id)
+            for employee, driver_seed in staff:
+                added += await ensure_documents(
+                    session,
+                    company_id=COMPANY_ID,
+                    actor_id=actor_id,
+                    module="employees",
+                    owner_type="employee",
+                    owner_id=employee.id,
+                    documents=driver_documents(
+                        driver_seed.code,
+                        f"{driver_seed.first} {driver_seed.last}",
+                        driver_seed.license_class,
+                        today,
+                    ),
+                    today=today,
+                    warning_days=warning_days,
+                )
+                complete.add(employee.id)
+    except Exception as exc:  # storage or antivirus failed halfway: keep what was uploaded
+        await session.rollback()
+        print(f"No se cargaron todos los documentos ({exc}); el resto se asigna con excepción.")
+    return complete, added
+
+
+async def seed() -> bool:  # noqa: C901 - explicit orchestration keeps the seed atomic
+    """Run the fleet seed; return whether every pair has its documents (no exceptions)."""
+    from app.api.v1.routers.fleet import ensure_inventory_vehicle
     from app.core.security import hash_password
     from app.infrastructure.models.audit import AuditLog
     from app.infrastructure.models.employee import (
@@ -366,7 +452,6 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
     )
     from app.infrastructure.models.fleet import (
         DriverModel,
-        FleetSettingsModel,
         FleetVehicleModel,
         FleetVehicleTypeModel,
         OdometerReadingModel,
@@ -436,7 +521,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
         created = {"vehicles": 0, "drivers": 0, "users": 0, "assignments": 0, "documents": 0}
         linked = 0
         pairs: list[_Pair] = []
-        documented: list[tuple[BranchFleetSeed, dict[str, Any], list[tuple[Any, DriverSeed]]]] = []
+        documented: _Documented = []
         for item in FLEET:
             if item.branch == HEADQUARTERS:
                 branch = await session.scalar(
@@ -696,64 +781,18 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     )
                     created["drivers"] += 1
                 drivers.append((employee, driver_seed))
-                pairs.append(
-                    _Pair(
-                        branch.id,
-                        vehicles[driver_seed.vehicle],
-                        driver,
-                        None if item.documents else OVERRIDE_REASON,
-                    )
-                )
+                pairs.append(_Pair(branch.id, vehicles[driver_seed.vehicle], driver))
             if item.documents:
                 documented.append((item, dict(vehicles), drivers))
 
         # Documents go through storage and the antivirus, which commit on their own.
         await session.commit()
-        if documented and not settings.OBJECT_STORAGE_ENABLED:
-            print("Sin almacenamiento de documentos: la matriz se asigna con excepción.")
-            for pair in pairs:
-                pair.override = OVERRIDE_REASON
-        elif documented:
-            today = datetime.now(BUSINESS_TZ).date()
-            warning_days = settings_from(
-                await session.get(FleetSettingsModel, COMPANY_ID)
-            ).document_warning_days
-            for item, by_code, staff in documented:
-                for vehicle_seed in item.vehicles:
-                    created["documents"] += await ensure_documents(
-                        session,
-                        company_id=COMPANY_ID,
-                        actor_id=actor_id,
-                        module="fleet",
-                        owner_type="vehicle",
-                        owner_id=by_code[vehicle_seed.code].id,
-                        documents=vehicle_documents(
-                            vehicle_seed.code,
-                            by_code[vehicle_seed.code].plate or vehicle_seed.plate,
-                            vehicle_seed.brand,
-                            vehicle_seed.model,
-                            today,
-                        ),
-                        today=today,
-                        warning_days=warning_days,
-                    )
-                for employee, driver_seed in staff:
-                    created["documents"] += await ensure_documents(
-                        session,
-                        company_id=COMPANY_ID,
-                        actor_id=actor_id,
-                        module="employees",
-                        owner_type="employee",
-                        owner_id=employee.id,
-                        documents=driver_documents(
-                            driver_seed.code,
-                            f"{driver_seed.first} {driver_seed.last}",
-                            driver_seed.license_class,
-                            today,
-                        ),
-                        today=today,
-                        warning_days=warning_days,
-                    )
+        complete, created["documents"] = await _upload_documents(session, documented, actor_id)
+        for pair in pairs:
+            # After a rollback the rows must be read again before deciding.
+            await session.refresh(pair.vehicle)
+            await session.refresh(pair.driver)
+            pair.override = override_for({pair.vehicle.id, pair.driver.employee_id}, complete)
 
         for pair in pairs:
             # Assign only free pairs: never take over an assignment made by a user.
@@ -795,12 +834,15 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             created["assignments"] += 1
 
         await session.commit()
+    pending = sum(1 for pair in pairs if pair.override)
     print(
         f"Flota de Grupo Lorena lista: {len(FLEET)} sedes; nuevos: "
         f"{created['vehicles']} vehículos, {created['drivers']} conductores, "
         f"{created['users']} usuarios, {created['assignments']} asignaciones y "
-        f"{created['documents']} documentos; {linked} vehículos enlazados a tránsito."
+        f"{created['documents']} documentos; {linked} vehículos enlazados a tránsito; "
+        f"{pending} parejas sin documentos completos."
     )
+    return pending == 0
 
 
 def main() -> None:
