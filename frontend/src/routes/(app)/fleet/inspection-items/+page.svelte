@@ -121,7 +121,9 @@
     <a href="/fleet" class="back">← Flota</a>
     <header class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div>
-        <h1 class="text-2xl font-bold tracking-tight text-foreground">Puntos de inspección</h1>
+        <h1 class="page-title-echo text-2xl font-bold tracking-tight text-foreground">
+          Puntos de inspección
+        </h1>
         <p class="mt-1 max-w-2xl text-sm text-foreground-muted">
           Lo que se revisa antes de salir. Si un punto crítico falla, el vehículo no se despacha
           hasta resolverlo o autorizarlo.

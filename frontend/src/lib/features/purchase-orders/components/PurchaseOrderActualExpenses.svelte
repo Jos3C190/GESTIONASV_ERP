@@ -119,7 +119,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="flex flex-wrap items-center gap-2">
         <h2 id="actual-expenses-heading" class="font-semibold text-foreground">
-          Bitácora de otros gastos reales
+          Bitácora de gastos adicionales reales
         </h2>
         <span
           class="rounded-full border border-border bg-surface-muted px-2 py-0.5 text-xs font-medium text-foreground-muted"
@@ -142,10 +142,10 @@
     </p>
     <div id="actual-expenses-content" hidden={!expanded}>
       <p class="mt-1 text-sm leading-6 text-foreground-muted">
-        Si no hubo otros gastos, puedes continuar con la recepción y el retaceo sin llenar esta
-        sección. Si registras un gasto, completa sus datos y relaciónalo con el retaceo antes de
-        cerrarlo; registrarlo aquí no lo suma automáticamente al costo. FOB, flete y DAI se capturan
-        en sus campos del retaceo.
+        Si no hubo gastos adicionales, puedes continuar con la recepción y el retaceo sin llenar
+        esta sección. Si registras un gasto, completa sus datos y relaciónalo con el retaceo antes
+        de cerrarlo; registrarlo aquí no lo suma automáticamente al costo. FOB, flete y DAI se
+        capturan en sus campos del retaceo.
       </p>
       {#if loading}<div class="mt-4 space-y-2" aria-label="Cargando gastos reales">
           <div class="skeleton h-16 rounded-lg"></div>
@@ -234,7 +234,7 @@
               >
             </fieldset>
             {#if categories.length === 0}<p class="text-sm text-warning">
-                Registra una categoría activa de otros gastos para continuar.
+                Registra una categoría activa de gastos adicionales para continuar.
               </p>{/if}
             <Button type="submit" disabled={saving || categories.length === 0}
               >{saving ? 'Registrando…' : 'Registrar gasto real'}</Button

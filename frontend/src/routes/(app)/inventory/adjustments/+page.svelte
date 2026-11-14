@@ -95,7 +95,7 @@
 
 <div class="space-y-6">
   <header class="flex flex-wrap items-end justify-between gap-4">
-    <div><p class="text-xs font-semibold uppercase tracking-wider text-primary">Inventario</p><h1 class="mt-1 text-2xl font-semibold text-foreground">Ajustes de inventario</h1><p class="mt-1 max-w-3xl text-sm text-foreground-muted">Corrige cantidades con motivo, documento de respaldo, aprobación e historial. Crear o aprobar no modifica existencias.</p></div>
+    <div><p class="text-xs font-semibold uppercase tracking-wider text-primary">Inventario</p><h1 class="page-title-echo mt-1 text-2xl font-semibold text-foreground">Ajustes de inventario</h1><p class="mt-1 max-w-3xl text-sm text-foreground-muted">Corrige cantidades con motivo, documento de respaldo, aprobación e historial. Crear o aprobar no modifica existencias.</p></div>
     {#if canCreate}<Button onclick={() => void goto('/inventory/adjustments/new')}>Nuevo ajuste</Button>{/if}
   </header>
 

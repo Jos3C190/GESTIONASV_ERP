@@ -566,7 +566,9 @@
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div class="max-w-3xl">
       <p class="text-sm text-foreground-muted">Inventario</p>
-      <h1 class="mt-2 text-2xl font-semibold tracking-tight text-foreground">Kardex</h1>
+      <h1 class="page-title-echo mt-2 text-2xl font-semibold tracking-tight text-foreground">
+        Kardex
+      </h1>
       <p class="mt-2 text-sm leading-6 text-foreground-muted">
         {canValue
           ? 'Consulta cada movimiento físico por bodega y revisa los costos desde el registro de valoración de la empresa.'

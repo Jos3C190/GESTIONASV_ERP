@@ -62,7 +62,9 @@
         >
       </a>
       <div class="min-w-0">
-        <h1 class="text-xl font-bold text-foreground">Estructuras y límites compartidos</h1>
+        <h1 class="page-title-echo text-xl font-bold text-foreground">
+          Estructuras y límites compartidos
+        </h1>
         <p class="mt-1 text-sm text-foreground-muted">
           {#if loading}
             Cargando almacén…

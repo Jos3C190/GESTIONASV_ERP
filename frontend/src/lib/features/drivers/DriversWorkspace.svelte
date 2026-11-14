@@ -170,7 +170,7 @@
 <div class="drivers">
   <header class="heading">
     <div>
-      <h1>Conductores</h1>
+      <h1 class="page-title-echo">Conductores</h1>
       <p>
         Personas, documentación y disponibilidad<span class="scope"
           ><FleetIcon name="pin" size={12} />{branch.id

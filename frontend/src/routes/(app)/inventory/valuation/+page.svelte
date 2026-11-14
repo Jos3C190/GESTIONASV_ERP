@@ -111,7 +111,9 @@
 <div class="space-y-6">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <h1 class="text-2xl font-semibold tracking-tight">Valoración de inventario</h1>
+      <h1 class="page-title-echo text-2xl font-semibold tracking-tight">
+        Valoración de inventario
+      </h1>
       <p class="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
         Promedio por producto de {company.active?.commercial_name ?? 'la empresa'}, compartido entre
         todos sus almacenes. Los traslados internos conservan el valor.

@@ -253,7 +253,7 @@
 <div class="space-y-5">
   <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <div>
-      <h1 class="text-xl font-bold text-foreground">Almacenes</h1>
+      <h1 class="page-title-echo text-xl font-bold text-foreground">Almacenes</h1>
       <p class="text-sm text-foreground-muted">
         {meta?.total ?? 0} registrados en {branches.length} sucursal(es)
       </p>

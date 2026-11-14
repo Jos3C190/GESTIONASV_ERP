@@ -364,7 +364,11 @@
       </div>
     </header>
 
-    <main class="min-h-0 flex-1 overflow-y-auto" data-app-scroll-container>
+    <main
+      class="min-h-0 flex-1 overflow-y-auto"
+      data-app-scroll-container
+      data-navbar-title={title && !operationalWorkspace ? '' : undefined}
+    >
       {#if contextLoading}
         <div class="app-page" aria-label="Cargando contexto operativo">
           <div class="h-24 rounded-xl border border-border skeleton"></div>

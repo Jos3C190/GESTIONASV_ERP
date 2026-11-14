@@ -78,7 +78,7 @@
   <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <p class="text-xs font-semibold uppercase tracking-widest text-primary">Ventas</p>
-      <h1 class="mt-1 text-2xl font-bold text-foreground">Devoluciones</h1>
+      <h1 class="page-title-echo mt-1 text-2xl font-bold text-foreground">Devoluciones</h1>
       <p class="mt-1 max-w-3xl text-sm text-foreground-muted">Consulta las devoluciones de la sucursal seleccionada y abre la venta de origen para recibir, revisar, aceptar o rechazar sus productos.</p>
     </div>
     <a class="w-fit rounded-md border border-border px-3 py-2 text-sm text-foreground hover:bg-surface-hover" href="/sales">Ver ventas</a>

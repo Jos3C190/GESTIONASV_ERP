@@ -175,7 +175,9 @@
   <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <p class="text-sm font-medium text-primary">Compras</p>
-      <h1 class="text-2xl font-semibold tracking-tight text-foreground">Órdenes de compra</h1>
+      <h1 class="page-title-echo text-2xl font-semibold tracking-tight text-foreground">
+        Órdenes de compra
+      </h1>
       <p class="mt-1 text-sm text-foreground-muted">
         Consulta las órdenes generadas desde cotizaciones seleccionadas y su estado operativo.
       </p>

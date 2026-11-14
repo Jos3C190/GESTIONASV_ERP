@@ -146,11 +146,11 @@ class SqlAlchemyInventoryValuationRepository:
         await self.lock(company_id)
         if not await self.enabled(company_id):
             error(
-                "Registre y apruebe el corte inicial de valoración de la empresa.",
+                "Registra y aprueba el corte inicial de valoración de la empresa.",
                 "valuation_opening_required",
             )
         if not reference.strip():
-            error("Indique el documento de origen del valor.", "valuation_reference_required")
+            error("Indica el documento de origen del valor.", "valuation_reference_required")
         digest = fingerprint(
             [
                 item_id,
@@ -279,7 +279,7 @@ class SqlAlchemyInventoryValuationRepository:
             return existing
         currency_row = await self.session.get(CurrencyModel, currency)
         if currency_row is None or not currency_row.is_active:
-            error("Seleccione una moneda activa del catálogo.", "valuation_currency_invalid")
+            error("Selecciona una moneda activa del catálogo.", "valuation_currency_invalid")
         pending_retaceos = await self.session.scalar(
             select(func.count())
             .select_from(RetaceoModel)
@@ -290,13 +290,13 @@ class SqlAlchemyInventoryValuationRepository:
         )
         if pending_retaceos:
             error(
-                f"Hay {pending_retaceos} retaceos en proceso. Finalícelos antes de aprobar el saldo inicial y use sus costos en la conciliación.",
+                f"Hay {pending_retaceos} retaceos en proceso. Finalízalos antes de aprobar el saldo inicial y usa sus costos en la conciliación.",
                 "valuation_opening_pending_retaceos",
             )
         snapshot = await self.physical_snapshot(company_id)
         if fingerprint(snapshot) != snapshot_fingerprint:
             error(
-                "Las existencias cambiaron desde el conteo. Actualice el corte antes de aprobar.",
+                "Las existencias cambiaron desde el conteo. Actualiza el corte antes de aprobar.",
                 "valuation_opening_snapshot_changed",
             )
         totals: dict[uuid.UUID, Decimal] = {}
@@ -306,7 +306,7 @@ class SqlAlchemyInventoryValuationRepository:
         supplied = {row["inventory_item_id"]: row["quantity_base"] for row in lines}
         if len(supplied) != len(lines) or supplied != totals:
             error(
-                "El corte debe incluir exactamente todas las existencias actuales, incluida cuarentena y tránsito. Actualice el conteo.",
+                "El corte debe incluir exactamente todas las existencias actuales, incluida cuarentena y tránsito. Actualiza el conteo.",
                 "valuation_opening_quantity_mismatch",
             )
         setting = InventoryValuationSettingModel(
@@ -423,7 +423,7 @@ class SqlAlchemyInventoryValuationRepository:
                 )
             value = amount(balance.inventory_value * row.quantity_base / balance.quantity_base)
         if kind in {"opening", "receipt", "adjustment_in"} and value is None:
-            error("Indique el costo provisional total de la entrada.", "valuation_cost_required")
+            error("Indica el costo provisional total de la entrada.", "valuation_cost_required")
         original_id = data.get("valuation_original_entry_id")
         initial_retaceo_id = await self._initial_receipt_retaceo(
             row.company_id, kind, data.get("purchase_detail_id")
@@ -535,7 +535,7 @@ class SqlAlchemyInventoryValuationRepository:
                 )
                 if applied is None:
                     error(
-                        "Aplique el retaceo de esta recepción antes de liberar la mercancía a disponible.",
+                        "Aplica el retaceo de esta recepción antes de liberar la mercancía a disponible.",
                         "inventory_retaceo_application_required",
                     )
                 return
@@ -586,7 +586,7 @@ class SqlAlchemyInventoryValuationRepository:
         await self.lock(retaceo.company_id)
         setting = await self.settings(retaceo.company_id)
         if setting is None:
-            error("Apruebe primero el corte inicial de valoración.", "valuation_opening_required")
+            error("Aprueba primero el corte inicial de valoración.", "valuation_opening_required")
         existing = await self.session.scalar(
             select(InventoryRetaceoApplicationModel).where(
                 InventoryRetaceoApplicationModel.company_id == retaceo.company_id,
@@ -627,7 +627,7 @@ class SqlAlchemyInventoryValuationRepository:
             original_fob = sum((row.source_value for row in rows), ZERO)
             if original_fob != cost_fob:
                 error(
-                    "El FOB aceptado no coincide con el costo provisional de la recepción. Revise el origen antes de aplicar.",
+                    "El FOB aceptado no coincide con el costo provisional de la recepción. Revisa el origen antes de aplicar.",
                     "retaceo_receipt_cost_mismatch",
                 )
             total_quantity = sum((row.quantity_base for row in rows), ZERO)

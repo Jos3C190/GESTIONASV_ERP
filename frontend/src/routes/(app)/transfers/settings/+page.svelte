@@ -85,7 +85,9 @@
   <div class="space-y-5">
     <a href="/transfers" class="back">← Traslados</a>
     <header>
-      <h1 class="text-2xl font-bold tracking-tight text-foreground">Reglas de traslados</h1>
+      <h1 class="page-title-echo text-2xl font-bold tracking-tight text-foreground">
+        Reglas de traslados
+      </h1>
       <p class="mt-1 max-w-2xl text-sm text-foreground-muted">
         La distribución desde la bodega central siempre está habilitada y no necesita aprobación.
         Aquí decides si las sucursales también pueden mover mercancía y quién la autoriza.

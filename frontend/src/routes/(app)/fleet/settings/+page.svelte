@@ -120,7 +120,9 @@
   <div class="space-y-5">
     <a href="/fleet" class="back">← Flota</a>
     <header>
-      <h1 class="text-2xl font-bold tracking-tight text-foreground">Reglas de flota</h1>
+      <h1 class="page-title-echo text-2xl font-bold tracking-tight text-foreground">
+        Reglas de flota
+      </h1>
       <p class="mt-1 max-w-2xl text-sm text-foreground-muted">
         Lo que se exige antes de despachar en esta empresa. Quien tenga el permiso de excepciones
         puede autorizar la salida indicando el motivo.

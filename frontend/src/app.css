@@ -406,6 +406,17 @@ select optgroup { color: rgb(var(--foreground)); background-color: rgb(var(--sur
     }
   }
 
+  /*
+   * The navbar title has priority over the content header. While the navbar
+   * shows the page title (from `sm`), a header title that only repeats it keeps
+   * being the page's h1 for assistive technology but is not drawn twice.
+   */
+  @media screen and (min-width: 640px) {
+    [data-navbar-title] .page-title-echo {
+      @apply sr-only;
+    }
+  }
+
   .field-control {
     @apply w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
   }

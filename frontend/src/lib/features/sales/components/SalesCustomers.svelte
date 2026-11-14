@@ -88,7 +88,7 @@
 
 <div class="space-y-5">
   <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-    <div><p class="text-xs font-semibold uppercase tracking-widest text-primary">Ventas</p><h1 class="mt-1 text-2xl font-bold text-foreground">Clientes</h1><p class="mt-1 text-sm text-foreground-muted">Catálogo comercial de esta empresa. Desactivar conserva cotizaciones y ventas anteriores.</p></div>
+    <div><p class="text-xs font-semibold uppercase tracking-widest text-primary">Ventas</p><h1 class="page-title-echo mt-1 text-2xl font-bold text-foreground">Clientes</h1><p class="mt-1 text-sm text-foreground-muted">Catálogo comercial de esta empresa. Desactivar conserva cotizaciones y ventas anteriores.</p></div>
     <p class="text-sm text-foreground-muted">{customers.length} cliente(s)</p>
   </header>
 
