@@ -436,9 +436,6 @@
   .fleet-workspace {
     --fleet-route-ink: 0 85 186;
     --fleet-warning-ink: 137 75 0;
-    max-width: 1840px;
-    margin: 0 auto;
-    padding: 22px 30px;
     color: rgb(var(--foreground));
   }
   .page-heading {
@@ -863,9 +860,6 @@
     .has-detail .catalog-content {
       display: none;
     }
-    .fleet-workspace {
-      padding: 24px;
-    }
     .metric {
       padding: 0 15px;
     }
@@ -879,9 +873,6 @@
     }
   }
   @media (max-width: 640px) {
-    .fleet-workspace {
-      padding: 22px 16px;
-    }
     .page-heading {
       display: block;
       margin-bottom: 18px;

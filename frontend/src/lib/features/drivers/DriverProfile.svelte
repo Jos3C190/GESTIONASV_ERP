@@ -520,7 +520,6 @@
   .profile {
     max-width: 1300px;
     margin: 0 auto;
-    padding: 22px 30px;
   }
   .state {
     padding: 48px;
@@ -759,9 +758,6 @@
     gap: 8px;
   }
   @media (max-width: 900px) {
-    .profile {
-      padding: 16px;
-    }
     .hero {
       flex-direction: column;
     }

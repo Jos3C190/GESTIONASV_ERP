@@ -108,7 +108,7 @@
 </script>
 
 <svelte:head><title>Valoración de inventario | GestionaSV</title></svelte:head>
-<main class="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+<div class="space-y-6">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div>
       <h1 class="text-2xl font-semibold tracking-tight">Valoración de inventario</h1>
@@ -389,7 +389,7 @@
       {/if}
     {/if}
   {/if}
-</main>
+</div>
 
 <style>
   dd,

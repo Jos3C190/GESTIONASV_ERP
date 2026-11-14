@@ -8,7 +8,7 @@
 
 <svelte:head><title>{moduleName} — GestionaSV</title></svelte:head>
 
-<div class="flex min-h-full items-center justify-center p-6">
+<div class="flex min-h-full items-center justify-center">
   <div class="w-full max-w-lg animate-fade-scale">
     <Card class="p-8">
       <div class="flex flex-col items-center text-center">

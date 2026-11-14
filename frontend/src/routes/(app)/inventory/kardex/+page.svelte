@@ -562,7 +562,7 @@
 
 <svelte:head><title>Kardex | GestionaSV</title></svelte:head>
 
-<main class="kardex-workspace mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+<div class="kardex-workspace space-y-6">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div class="max-w-3xl">
       <p class="text-sm text-foreground-muted">Inventario</p>
@@ -1268,7 +1268,7 @@
       </section>
     {/if}
   {/if}
-</main>
+</div>
 
 <style>
   .kardex-workspace :global(button) {

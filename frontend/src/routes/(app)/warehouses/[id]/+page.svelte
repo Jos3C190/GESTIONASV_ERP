@@ -240,7 +240,7 @@
   ></svelte:head
 >
 
-<div class="p-6 md:p-8">
+<div>
   <!-- Header con back -->
   <div class="mb-6 flex items-center gap-3">
     <a

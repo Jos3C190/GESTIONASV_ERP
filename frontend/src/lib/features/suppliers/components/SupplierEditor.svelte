@@ -397,10 +397,10 @@
   ></svelte:head
 >
 
-<div class="min-h-full bg-background px-4 pb-8 sm:px-6 md:px-8">
+<div class="min-h-full">
   <header
     bind:this={editorHeader}
-    class="sticky top-0 z-30 mb-6 flex items-center gap-3 border-b border-border bg-background/95 pb-3 pt-5 backdrop-blur md:pt-8"
+    class="sticky top-0 z-30 -mx-page-x -mt-page-y mb-6 flex items-center gap-3 border-b border-border bg-surface/95 px-page-x pb-3 pt-page-y backdrop-blur"
   >
     <button
       type="button"

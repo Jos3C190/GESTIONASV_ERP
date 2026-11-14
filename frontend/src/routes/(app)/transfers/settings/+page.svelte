@@ -78,14 +78,11 @@
 </svelte:head>
 
 {#if !canRead}
-  <div
-    class="m-4 rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
-    role="alert"
-  >
+  <div class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger" role="alert">
     No tienes permiso para ver los traslados.
   </div>
 {:else}
-  <div class="space-y-5 p-4 sm:p-6 md:p-8">
+  <div class="space-y-5">
     <a href="/transfers" class="back">← Traslados</a>
     <header>
       <h1 class="text-2xl font-bold tracking-tight text-foreground">Reglas de traslados</h1>

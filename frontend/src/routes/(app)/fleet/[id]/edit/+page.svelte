@@ -36,7 +36,6 @@
   .page {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 22px 30px;
   }
   .back,
   .muted {

@@ -177,7 +177,7 @@
 
 <svelte:head><title>Proveedores — GestionaSV</title></svelte:head>
 
-<div class="min-h-full bg-background px-4 pb-8 pt-4 sm:px-6 sm:pt-6 md:px-8 md:pt-8">
+<div class="min-h-full">
   <header
     class="mb-5 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4"
   >

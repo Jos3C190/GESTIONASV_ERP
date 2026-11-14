@@ -136,11 +136,11 @@
 </svelte:head>
 
 {#if !canManage}
-  <div class="m-4 rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger" role="alert">
+  <div class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger" role="alert">
     No tienes permiso para administrar los tipos de gasto.
   </div>
 {:else}
-  <div class="space-y-5 p-4 sm:p-6 md:p-8">
+  <div class="space-y-5">
     <header class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div>
         <p class="text-xs font-semibold uppercase tracking-wider text-primary">Compras</p>

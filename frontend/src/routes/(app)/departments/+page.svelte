@@ -232,7 +232,7 @@
 
 <svelte:head><title>Departamentos — GestionaSV</title></svelte:head>
 
-<div class="p-6 md:p-8">
+<div>
   <div class="mb-5 flex items-center justify-between gap-4">
     <p class="text-sm text-foreground-muted">{meta?.total ?? 0} departamento(s)</p>
     <div class="flex items-center gap-2">

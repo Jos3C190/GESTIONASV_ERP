@@ -298,7 +298,7 @@
 
 <svelte:head><title>Categorías de Productos — GestionaSV</title></svelte:head>
 
-<div class="p-6 md:p-8 animate-fade-scale">
+<div class="animate-fade-scale">
   <div class="mb-5 flex items-center justify-between gap-4">
     <p class="text-sm text-foreground-muted">
       {loading

@@ -2011,7 +2011,7 @@
   />
 </svelte:head>
 
-<main class="mx-auto w-full max-w-[1600px] space-y-6 p-4 sm:p-6 xl:p-8">
+<div class="space-y-6">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div class="space-y-2">
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
@@ -3351,7 +3351,7 @@
       canManageFleet={permissions.hasPermission('fleet:read')}
     />
   {/if}
-</main>
+</div>
 
 {#if confirmationText}
   <dialog

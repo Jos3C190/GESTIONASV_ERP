@@ -233,7 +233,7 @@
 
 <svelte:head><title>Catálogo de productos — GestionaSV</title></svelte:head>
 
-<div class="p-6 md:p-8">
+<div>
   <div
     class="mb-6 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4"
   >
@@ -330,7 +330,7 @@
       {successMsg}
     </div>{/if}
 
-  <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_330px] lg:items-stretch">
+  <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_330px] lg:items-stretch">
     <div class="flex min-h-0 flex-col">
       <Card class="flex-1 overflow-hidden p-0">
         {#if loading}

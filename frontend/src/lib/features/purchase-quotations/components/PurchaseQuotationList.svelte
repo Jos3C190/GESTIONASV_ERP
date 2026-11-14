@@ -153,24 +153,19 @@
   });
 </script>
 
-<section class="space-y-6">
+<section class="space-y-section">
   <header
-    class="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between"
+    class="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between"
   >
-    <div>
-      <p class="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-foreground-subtle">
-        Compras
-      </p>
-      <h1 class="text-2xl font-semibold tracking-tight text-foreground">Cotizaciones de compra</h1>
-      <p class="mt-1.5 text-sm text-foreground-muted">
+    <div class="min-w-0">
+      <p class="text-caption font-medium uppercase tracking-wider text-foreground-muted">Compras</p>
+      <h1 class="mt-1 text-display font-semibold text-foreground">Cotizaciones de compra</h1>
+      <p class="mt-1 text-body text-foreground-muted">
         Consulta y filtra las solicitudes de cotización enviadas a proveedores.
       </p>
     </div>
-    <div class="flex flex-wrap items-center gap-2.5 sm:pb-0.5">
-      <p
-        class="rounded-full border border-border bg-surface-muted px-3 py-1.5 text-xs font-medium text-foreground-muted"
-        aria-live="polite"
-      >
+    <div class="flex flex-wrap items-center gap-3">
+      <p class="text-caption tabular-nums text-foreground-muted" aria-live="polite">
         {total}
         {total === 1 ? 'cotización' : 'cotizaciones'}
       </p>

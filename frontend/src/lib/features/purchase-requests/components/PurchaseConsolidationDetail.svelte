@@ -604,7 +604,7 @@
   });
 </script>
 
-<div class="purchase-consolidation-detail min-h-full bg-background px-4 pb-8 pt-4 sm:px-6 sm:pt-6 md:px-8 md:pt-8">
+<div class="purchase-consolidation-detail min-h-full">
   <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
     <div>
       <a href="/purchase-requests" class="text-sm text-primary hover:underline">← Solicitudes y consolidados</a>

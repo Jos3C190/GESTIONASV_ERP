@@ -180,7 +180,7 @@
 
 <svelte:head><title>Unidades de medida — GestionaSV</title></svelte:head>
 
-<div class="space-y-5 p-4 sm:p-6 md:p-8">
+<div class="space-y-5">
   <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
     <div>
       <p class="text-sm text-foreground-muted">

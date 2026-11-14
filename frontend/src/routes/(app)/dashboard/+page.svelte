@@ -72,7 +72,7 @@
 
 <svelte:head><title>Dashboard — GestionaSV</title></svelte:head>
 
-<div class="p-6 md:p-8">
+<div>
   <!-- Header -->
   <div class="mb-5">
     <h1 class="text-xl font-bold tracking-tight text-foreground">
@@ -107,7 +107,7 @@
   </div>
 
   <!-- Row 2: chart + donut -->
-  <div class="mb-6 grid gap-4 lg:grid-cols-3">
+  <div class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
     <div class="rounded-xl border border-border bg-surface-elevated p-5 lg:col-span-2">
       <div class="mb-4 flex items-center justify-between">
         <div>
@@ -149,7 +149,7 @@
   </div>
 
   <!-- Row 3: activity (altura fija con scroll) + progress + team -->
-  <div class="mb-6 grid gap-4 lg:grid-cols-3">
+  <div class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
     <!-- Activity feed: altura fija con scroll interno + mask inferior -->
     <div class="rounded-xl border border-border bg-surface-elevated p-5 lg:col-span-2">
       <div class="mb-4 flex items-center justify-between">

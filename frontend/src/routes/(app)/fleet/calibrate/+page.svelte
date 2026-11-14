@@ -97,7 +97,6 @@
   .calibrate {
     display: grid;
     gap: 16px;
-    padding: 24px;
   }
   h1 {
     font-size: 20px;

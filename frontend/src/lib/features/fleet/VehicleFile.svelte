@@ -508,7 +508,6 @@
   .vehicle-file {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 22px 30px;
   }
   .state {
     padding: 48px;
@@ -716,9 +715,6 @@
     gap: 8px;
   }
   @media (max-width: 900px) {
-    .vehicle-file {
-      padding: 16px;
-    }
     .hero,
     .summary-grid {
       grid-template-columns: 1fr;

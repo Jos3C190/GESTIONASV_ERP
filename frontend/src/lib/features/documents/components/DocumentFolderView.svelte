@@ -514,7 +514,7 @@
 
 <svelte:head><title>{heading} — GestionaSV</title></svelte:head>
 
-<div class="document-library-view p-6 md:p-8">
+<div class="document-library-view">
   {#if scope !== 'root'}
     <DocumentBreadcrumbs items={breadcrumbs.slice(0, -1)} current={breadcrumbs.at(-1)?.label} />
   {/if}

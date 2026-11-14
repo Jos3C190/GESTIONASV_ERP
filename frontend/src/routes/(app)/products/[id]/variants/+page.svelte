@@ -356,7 +356,7 @@
   >
 </svelte:head>
 
-<div class="p-6 md:p-8">
+<div>
   <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
     <div class="flex min-w-0 items-start gap-3">
       <button

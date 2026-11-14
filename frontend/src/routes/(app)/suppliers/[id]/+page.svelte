@@ -73,7 +73,7 @@
   ></svelte:head
 >
 
-<div class="min-h-full bg-background px-4 pb-8 sm:px-6 md:px-8">
+<div class="min-h-full">
   <header class="mb-6 flex items-center gap-3 border-b border-border pb-4 pt-5 md:pt-8">
     <button
       type="button"

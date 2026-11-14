@@ -198,7 +198,7 @@
 
 <svelte:head><title>Bitácora — GestionaSV</title></svelte:head>
 
-<div class="p-6 md:p-8">
+<div>
   <div class="mb-5 flex items-center justify-between gap-4">
     <p class="text-sm text-foreground-muted">{meta ? `${meta.total} evento(s)` : 'Cargando...'}</p>
     {#if permissions.hasPermission('logs.export')}

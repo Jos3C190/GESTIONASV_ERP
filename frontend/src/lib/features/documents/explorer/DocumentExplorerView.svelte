@@ -554,7 +554,7 @@
 <svelte:head><title>General · Documentos · GestionaSV</title></svelte:head>
 <svelte:window onkeydown={handleWindowKeydown} />
 
-<div class="explorer-page-shell mx-auto w-full max-w-[1600px] p-4 md:p-8">
+<div class="explorer-page-shell">
   <header class="explorer-page-heading mb-5" inert={modalOpen || mobileNavigationOpen} aria-hidden={modalOpen || mobileNavigationOpen ? 'true' : undefined}>
     <div class="explorer-heading-copy min-w-0">
       <div class="explorer-heading-eyebrow"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M3.5 9h17"/></svg><span>Biblioteca empresarial</span><span aria-hidden="true">/</span><strong>General</strong></div>
