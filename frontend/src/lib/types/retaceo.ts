@@ -1,5 +1,4 @@
 export type RetaceoStatus = 'draft' | 'calculated' | 'verified' | 'closed' | 'cancelled';
-export type RetaceoCalculationMode = 'automatic' | 'manual';
 export interface RetaceoImportData {
   origin_country: string | null;
   import_invoice_number: string | null;
@@ -7,7 +6,7 @@ export interface RetaceoImportData {
   import_policy_number: string | null;
   import_policy_date: string | null;
 }
-export type RetaceoCostClass = 'freight' | 'expense' | 'dai' | 'import_vat';
+export type RetaceoCostClass = 'freight' | 'expense' | 'dai';
 
 export interface RetaceoAverageComparison {
   value_only?: boolean;
@@ -73,7 +72,6 @@ export interface RetaceoCostDraftInput {
   title: string;
   description: string | null;
   amount: string;
-  allocations: RetaceoCostAllocation[];
 }
 
 export interface RetaceoCostDocumentUpload {
@@ -107,9 +105,6 @@ export interface RetaceoDetail {
 }
 
 export interface Retaceo extends Partial<RetaceoImportData> {
-  calculation_mode?: RetaceoCalculationMode;
-  dai_rate?: string | null;
-  vat_rate?: string | null;
   manual_entry?: boolean;
   id: string;
   company_id: string;
@@ -124,7 +119,6 @@ export interface Retaceo extends Partial<RetaceoImportData> {
   total_freight: string;
   total_expenses: string;
   total_dai: string;
-  import_vat: string;
   total_cost: string;
   freight_percentage: string;
   expense_percentage: string;
@@ -138,29 +132,19 @@ export interface Retaceo extends Partial<RetaceoImportData> {
 }
 
 export interface RetaceoCreateInput {
-  calculation_mode?: RetaceoCalculationMode;
-  dai_rate?: string | null;
-  vat_rate?: string | null;
   import_data?: RetaceoImportData;
-  fob_lines?: Array<{ purchase_detail_id: string; amount: string }>;
   purchase_id: string;
   total_freight: string;
   total_expenses: string;
   total_dai: string;
-  import_vat: string;
   notes: string | null;
 }
 
 export interface RetaceoUpdateInput {
-  calculation_mode?: RetaceoCalculationMode;
-  dai_rate?: string | null;
-  vat_rate?: string | null;
   import_data?: RetaceoImportData;
-  fob_lines?: Array<{ purchase_detail_id: string; amount: string }>;
   total_freight: string;
   total_expenses: string;
   total_dai: string;
-  import_vat: string;
   notes: string | null;
   costs?: RetaceoCostDraftInput[];
 }

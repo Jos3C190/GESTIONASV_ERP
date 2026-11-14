@@ -18,12 +18,12 @@ revalora un Kardex anterior para imponer el nuevo orden de pasos.
 ## Recorrido para presentar la funcionalidad
 
 1. Crear una compra nueva desde su orden y confirmar su documento recibido.
-2. Desde esa compra, abrir **Crear retaceo**. Capturar el FOB total de cada
-   renglón; la compra solo aparece como referencia. Registrar origen, factura y
+2. Desde esa compra, abrir **Crear retaceo**. El FOB de cada
+   renglón sale de la factura de compra y es fijo (solo lectura). Escribir el
+   flete y seguro y el DAI (0 si no aplican). Registrar origen, factura y
    póliza con sus fechas cuando correspondan.
-3. Agregar gastos reales: flete, otros gastos, DAI e IVA de importación.
-   Guardar el borrador, adjuntar comprobantes y distribuir los costos entre
-   los productos. Guardar conserva el editor abierto. **Revisar y calcular**
+3. Agregar gastos adicionales reales por categoría. Guardar el borrador y
+   adjuntar comprobantes; flete, DAI y gastos se reparten solos según el FOB. Guardar conserva el editor abierto. **Revisar y calcular**
    abre el detalle con las acciones de cálculo y verificación.
 4. Consultar gastos previstos de la orden frente a los reales de esta compra.
    La comparación advierte que el presupuesto pertenece a toda la orden;
@@ -41,8 +41,11 @@ revalora un Kardex anterior para imponer el nuevo orden de pasos.
    haya compras posteriores. Una recepción sin unidades aceptadas no genera
    una entrada física.
 
-La política existente mantiene el IVA de importación como dato informativo,
-separado del costo aterrizado. Esta entrega no cambia esa política contable.
+Regla vigente (revisión 0117, ERS p. 81-82, CA-COM-021/022/024): costo = FOB (automático y fijo, de la factura de compra) + flete y seguro (importe tecleado) + DAI (importe tecleado) + gastos adicionales; todo se reparte según el FOB de cada línea.
+El IVA de importación ya no se registra en el retaceo; el modo automático por
+porcentajes, el FOB tecleado y la corrección histórica del FOB con motivo se
+retiraron. Las secciones anteriores de este documento describen la entrega del
+23 de octubre.
 
 ## Bodeguero principal creado
 

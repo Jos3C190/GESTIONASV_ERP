@@ -23,7 +23,7 @@ from tests.unit.test_retaceo_use_cases import FakeRetaceoRepository, _create, _i
 
 
 @pytest.mark.asyncio
-async def test_retaceo_export_preserves_saved_costs_and_separates_import_vat():
+async def test_retaceo_export_preserves_saved_costs_without_import_vat():
     purchase = _purchase(_ids())
     item = await _create(FakeRetaceoRepository(), purchase)
     context = ProcurementReportContext(
@@ -36,7 +36,14 @@ async def test_retaceo_export_preserves_saved_costs_and_separates_import_vat():
     assert report.sections[0].rows[0][9] == item.details[0].unit_cost
     summary = dict(zip(report.sections[1].columns, report.sections[1].rows[0], strict=True))
     assert summary["Costo aterrizado"] == item.total_cost
-    assert summary["IVA de importación (fuera del costo)"] == item.import_vat
+    assert list(summary) == [
+        "FOB",
+        "Flete y seguro",
+        "Gastos adicionales",
+        "DAI",
+        "Costo aterrizado",
+    ]
+    assert not any("IVA" in column for column in report.sections[1].columns)
     assert (
         item.total_cost
         == item.total_fob + item.total_freight + item.total_expenses + item.total_dai

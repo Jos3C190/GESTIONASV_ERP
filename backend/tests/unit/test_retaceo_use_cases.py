@@ -193,7 +193,6 @@ async def _create(
         total_freight=Decimal("5125"),
         total_expenses=Decimal("1500"),
         total_dai=Decimal("8927"),
-        import_vat=Decimal("8367"),
     )
 
 
@@ -225,7 +224,6 @@ async def test_create_draft_uses_exact_purchase_details_and_excludes_tax_from_fo
 
     assert item.total_fob == Decimal("55780.000000")
     assert item.total_cost == Decimal("71332.000000")
-    assert item.import_vat == Decimal("8367.000000")
     assert {detail.purchase_detail_id for detail in item.details} == {
         detail.id for detail in purchase.details
     }
@@ -268,7 +266,7 @@ async def test_create_draft_rejects_zero_total_fob() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_draft_rejects_invalid_import_vat() -> None:
+async def test_manual_create_rejects_negative_fixed_amounts() -> None:
     ids = _ids()
     purchase = _purchase(ids)
     use_cases = RetaceoUseCases(
@@ -278,17 +276,17 @@ async def test_create_draft_rejects_invalid_import_vat() -> None:
 
     with pytest.raises(ValidationError) as exc_info:
         await use_cases.create_draft(
-            manual_entry=False,
+            manual_entry=True,
             company_id=ids["company"],
             created_by_id=ids["user"],
             purchase_id=ids["purchase"],
-            total_freight=Decimal("0"),
+            total_freight=Decimal("-1"),
             total_expenses=Decimal("0"),
             total_dai=Decimal("0"),
-            import_vat=Decimal("-1"),
         )
 
-    assert exc_info.value.code == "retaceo_import_vat_invalid"
+    assert exc_info.value.code == "retaceo_fixed_amount_invalid"
+    assert "mayor o igual a cero" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -305,7 +303,6 @@ async def test_update_draft_recalculates_and_preserves_identity() -> None:
         total_freight=Decimal("100"),
         total_expenses=Decimal("200"),
         total_dai=Decimal("300"),
-        import_vat=Decimal("400"),
         notes="Ajustado",
     )
 
@@ -313,7 +310,6 @@ async def test_update_draft_recalculates_and_preserves_identity() -> None:
     assert updated.code == created.code
     assert updated.purchase_id == created.purchase_id
     assert updated.total_cost == Decimal("56380.000000")
-    assert updated.import_vat == Decimal("400.000000")
     assert updated.notes == "Ajustado"
 
 
@@ -333,7 +329,6 @@ async def test_update_non_draft_is_rejected() -> None:
             total_freight=Decimal("1"),
             total_expenses=Decimal("1"),
             total_dai=Decimal("1"),
-            import_vat=Decimal("1"),
         )
 
     assert exc_info.value.code == "retaceo_not_editable"

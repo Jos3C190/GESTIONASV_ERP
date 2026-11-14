@@ -37,7 +37,6 @@ const retaceo = {
   total_freight: '10.000000',
   total_expenses: '5.000000',
   total_dai: '3.000000',
-  import_vat: '15.340000',
   total_cost: '118.000000',
   freight_percentage: '10.000000',
   expense_percentage: '5.000000',

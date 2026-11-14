@@ -74,7 +74,6 @@ const record: Retaceo = {
   total_fob: '100',
   total_freight: '10',
   total_dai: '0',
-  import_vat: '0',
   total_expenses: '0',
   total_cost: '110',
   freight_percentage: '10',
@@ -138,11 +137,11 @@ describe('Manual retaceo and actual spending', () => {
   it('keeps fixed classes separate and sends categorized, dated other expenses', async () => {
     const { container } = render(RetaceoDraftEditor, { retaceoId: 'ret' });
     await screen.findByRole('heading', { name: 'Costos y comprobantes' });
-    await fireEvent.click(screen.getByRole('button', { name: '+ Agregar otro gasto' }));
+    await fireEvent.click(screen.getByRole('button', { name: '+ Agregar gasto adicional' }));
     await fireEvent.input(screen.getByLabelText('Concepto'), {
       target: { value: 'Gasolina del viaje' }
     });
-    await fireEvent.change(screen.getByLabelText('Categoría del otro gasto'), {
+    await fireEvent.change(screen.getByLabelText('Categoría del gasto adicional'), {
       target: { value: 'gas' }
     });
     await fireEvent.input(screen.getByLabelText('Fecha del gasto'), {
@@ -152,8 +151,11 @@ describe('Manual retaceo and actual spending', () => {
     await fireEvent.input(screen.getByLabelText('Descripción o referencia'), {
       target: { value: 'Recibo GAS-25' }
     });
-    await fireEvent.click(screen.getByRole('button', { name: 'Distribuir según FOB' }));
+    expect(screen.queryByRole('button', { name: /Distribuir/ })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Clasificación')).not.toBeInTheDocument();
+    // The split by FOB is shown read-only; the server stays the authority.
+    const split = screen.getAllByRole('list', { name: 'Reparto por producto' });
+    expect(split.some((list) => list.textContent?.includes('25.00'))).toBe(true);
     saveRetaceoPreview('editar-retaceo', container);
     await fireEvent.submit(container.querySelector('form')!);
     await waitFor(() => expect(mocks.update).toHaveBeenCalled());
@@ -166,24 +168,26 @@ describe('Manual retaceo and actual spending', () => {
           classification: 'expense',
           expense_type_id: 'gas',
           incurred_on: '2026-10-27',
-          amount: '25',
-          allocations: [{ purchase_detail_id: 'line', amount: '25.000000' }]
+          amount: '25'
         })
       ])
     });
+    for (const sent of mocks.update.mock.calls[0]![1].costs)
+      expect(sent).not.toHaveProperty('allocations');
   });
 
   it('retrying reference data preserves captured financial amounts', async () => {
     mocks.categories.mockRejectedValueOnce(new Error('Catálogo temporalmente no disponible'));
     render(RetaceoDraftEditor, { retaceoId: 'ret' });
     await screen.findByText('Catálogo temporalmente no disponible');
-    const fob = screen.getByRole('spinbutton', { name: /FOB total/ });
-    await fireEvent.input(fob, { target: { value: '125' } });
+    const freight = screen.getByRole('spinbutton', { name: /Flete y seguro/ });
+    expect(screen.queryByRole('spinbutton', { name: /FOB/ })).not.toBeInTheDocument();
+    await fireEvent.input(freight, { target: { value: '125' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Reintentar categorías y bitácora' }));
     await waitFor(() =>
       expect(screen.queryByText('Catálogo temporalmente no disponible')).not.toBeInTheDocument()
     );
-    expect(fob).toHaveValue(125);
+    expect(freight).toHaveValue(125);
   });
 
   it('identifies attachments as optional and allows a draft without files', async () => {
@@ -218,7 +222,7 @@ describe('Manual retaceo and actual spending', () => {
       });
       const { container } = render(RetaceoDraftEditor, { retaceoId: 'ret' });
       await screen.findByText('Flete.pdf');
-      const field = screen.getByRole('spinbutton', { name: /Flete total/ });
+      const field = screen.getByRole('spinbutton', { name: /Flete y seguro/ });
       await fireEvent.input(field, { target: { value: '0' } });
       expect(screen.getByText('Flete.pdf')).toBeInTheDocument();
       await fireEvent.input(field, { target: { value } });
@@ -236,11 +240,11 @@ describe('Manual retaceo and actual spending', () => {
   it('associates validation messages with fixed fields and other expense controls', async () => {
     const { container } = render(RetaceoDraftEditor, { retaceoId: 'ret' });
     await screen.findByRole('heading', { name: 'Costos y comprobantes' });
-    await fireEvent.click(screen.getByRole('button', { name: '+ Agregar otro gasto' }));
-    const dai = screen.getByRole('spinbutton', { name: /DAI total/ });
+    await fireEvent.click(screen.getByRole('button', { name: '+ Agregar gasto adicional' }));
+    const dai = screen.getByRole('spinbutton', { name: /^DAI/ });
     await fireEvent.input(dai, { target: { value: '' } });
     await fireEvent.submit(container.querySelector('form')!);
-    const category = screen.getByRole('combobox', { name: /Categoría del otro gasto/ });
+    const category = screen.getByRole('combobox', { name: /Categoría del gasto adicional/ });
     const date = screen.getByLabelText(/^Fecha del gasto/);
     const description = screen.getByLabelText(/^Descripción o referencia/);
     for (const field of [dai, category, date, description]) {

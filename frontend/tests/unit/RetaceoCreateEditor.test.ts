@@ -93,59 +93,102 @@ describe('RetaceoCreateEditor', () => {
     mocks.getPurchase.mockResolvedValue(purchase);
   });
 
-  it('defaults to automatic FOB and computes taxes from the entered percentages', async () => {
-    mocks.create.mockResolvedValue({ id: 'automatic-retaceo' });
-    const { container } = render(RetaceoCreateEditor, { purchaseId: purchase.id });
-    expect(await screen.findByRole('radio', { name: /^Automático/ })).toBeChecked();
-    expect(
-      screen.queryByRole('spinbutton', { name: /FOB total de la línea/ })
-    ).not.toBeInTheDocument();
-    await fireEvent.input(screen.getByRole('spinbutton', { name: /Flete y seguro total/ }), {
-      target: { value: '10' }
-    });
-    await fireEvent.input(screen.getByRole('spinbutton', { name: 'DAI (%)' }), {
-      target: { value: '10' }
-    });
-    await fireEvent.input(screen.getByRole('spinbutton', { name: 'IVA (%)' }), {
-      target: { value: '13' }
-    });
-    saveRetaceoPreview('retaceo-automatico', container);
-    await fireEvent.submit(container.querySelector('form')!);
-    await waitFor(() =>
-      expect(mocks.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          calculation_mode: 'automatic',
-          dai_rate: '10',
-          vat_rate: '13',
-          total_freight: '10',
-          total_dai: '11.000000',
-          import_vat: '15.730000'
-        })
-      )
-    );
-    expect(mocks.create.mock.calls[0]![0]).not.toHaveProperty('fob_lines');
+  it('shows the invoice FOB as read-only and has no calculation mode or tax rates', async () => {
+    render(RetaceoCreateEditor, { purchaseId: purchase.id });
+    expect(await screen.findByText('FOB desde la factura (fijo)')).toBeInTheDocument();
+    expect(screen.getByText('FOB por producto (desde la factura)')).toBeInTheDocument();
+    expect(screen.getByText('PROD-10 · Producto A')).toBeInTheDocument();
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.queryByText(/IVA/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/porcentaje/i)).not.toBeInTheDocument();
+    // Freight and DAI are the only typed amounts; the FOB is never an input.
+    expect(screen.getAllByRole('spinbutton').map((input) => input.id)).toEqual([
+      'fixed-freight',
+      'fixed-dai'
+    ]);
+    expect(screen.getByRole('spinbutton', { name: 'Flete y seguro (USD)' })).toBeRequired();
+    expect(screen.getByRole('spinbutton', { name: 'DAI (USD)' })).toBeRequired();
+    expect(screen.getByText('Los registrarás después de crear el retaceo.')).toBeInTheDocument();
   });
 
-  it('keeps manually entered values when switching to automatic and back', async () => {
+  it('adds FOB, freight, DAI and additional expenses into the total cost', async () => {
     render(RetaceoCreateEditor, { purchaseId: purchase.id });
-    await fireEvent.click(await screen.findByRole('radio', { name: /^Manual/ }));
-    await fireEvent.input(screen.getByRole('spinbutton', { name: /FOB total de la línea/ }), {
-      target: { value: '80' }
+    await screen.findByText('FOB desde la factura (fijo)');
+    await fireEvent.input(screen.getByRole('spinbutton', { name: 'Flete y seguro (USD)' }), {
+      target: { value: '10' }
     });
-    await fireEvent.input(screen.getByRole('spinbutton', { name: /Flete total/ }), {
-      target: { value: '7' }
+    await fireEvent.input(screen.getByRole('spinbutton', { name: 'DAI (USD)' }), {
+      target: { value: '11.5' }
     });
-    await fireEvent.input(screen.getByRole('spinbutton', { name: /DAI total/ }), {
-      target: { value: '4' }
+    expect(screen.getByText('Costo total').nextElementSibling).toHaveTextContent('121.50');
+  });
+
+  it('blocks an empty freight or DAI and explains that zero is allowed', async () => {
+    const { container } = render(RetaceoCreateEditor, { purchaseId: purchase.id });
+    await screen.findByText('FOB desde la factura (fijo)');
+    await fireEvent.input(screen.getByRole('spinbutton', { name: 'DAI (USD)' }), {
+      target: { value: '0' }
     });
-    await fireEvent.input(screen.getByRole('spinbutton', { name: /IVA de importación/ }), {
-      target: { value: '3' }
+    await fireEvent.submit(container.querySelector('form')!);
+    expect(await screen.findAllByRole('alert')).not.toHaveLength(0);
+    expect(
+      screen.getByText('Completa el flete y seguro y el DAI; escribe 0 cuando no apliquen.')
+    ).toBeInTheDocument();
+    const freight = screen.getByRole('spinbutton', { name: 'Flete y seguro (USD)' });
+    expect(freight).toBeInvalid();
+    expect(freight.getAttribute('aria-describedby')).toContain('fixed-freight-error');
+    expect(screen.getByText('Escribe un importe; usa 0 si no aplica.')).toBeInTheDocument();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it('uses its own validation, not the browser bubbles, when the button is clicked empty', async () => {
+    const { container } = render(RetaceoCreateEditor, { purchaseId: purchase.id });
+    await screen.findByText('FOB desde la factura (fijo)');
+    expect(container.querySelector('form')).toHaveAttribute('novalidate');
+    await fireEvent.click(screen.getByRole('button', { name: 'Crear retaceo' }));
+    expect(
+      await screen.findByText('Completa el flete y seguro y el DAI; escribe 0 cuando no apliquen.')
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Escribe un importe; usa 0 si no aplica.')).toHaveLength(2);
+    expect(screen.getByRole('spinbutton', { name: 'DAI (USD)' })).toBeRequired();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects negative amounts and more than six decimals without calling the API', async () => {
+    const { container } = render(RetaceoCreateEditor, { purchaseId: purchase.id });
+    await screen.findByText('FOB desde la factura (fijo)');
+    await fireEvent.input(screen.getByRole('spinbutton', { name: 'Flete y seguro (USD)' }), {
+      target: { value: '-1' }
     });
-    await fireEvent.click(screen.getByRole('radio', { name: /^Automático/ }));
-    await fireEvent.click(screen.getByRole('radio', { name: /^Manual/ }));
-    expect(screen.getByRole('spinbutton', { name: /FOB total de la línea/ })).toHaveValue(80);
-    expect(screen.getByRole('spinbutton', { name: /DAI total/ })).toHaveValue(4);
-    expect(screen.getByRole('spinbutton', { name: /IVA de importación/ })).toHaveValue(3);
+    await fireEvent.input(screen.getByRole('spinbutton', { name: 'DAI (USD)' }), {
+      target: { value: '1.1234567' }
+    });
+    await fireEvent.submit(container.querySelector('form')!);
+    expect(await screen.findByText('El importe no puede ser negativo.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Escribe un importe válido con hasta 6 decimales.')
+    ).toBeInTheDocument();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts zero for freight and DAI and sends the exact payload', async () => {
+    mocks.create.mockResolvedValue({ id: 'zero-retaceo' });
+    const { container } = render(RetaceoCreateEditor, { purchaseId: purchase.id });
+    await screen.findByText('FOB desde la factura (fijo)');
+    await fillAmounts('0', '0');
+    saveRetaceoPreview('retaceo-importes-fijos', container);
+    await fireEvent.submit(container.querySelector('form')!);
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
+    const payload = mocks.create.mock.calls[0]![0];
+    expect(Object.keys(payload).sort()).toEqual([
+      'import_data',
+      'notes',
+      'purchase_id',
+      'total_dai',
+      'total_expenses',
+      'total_freight'
+    ]);
+    expect(payload).toMatchObject({ total_freight: '0', total_dai: '0', total_expenses: '0' });
   });
 
   it('creates a retaceo from the selected purchase and redirects to detail', async () => {
@@ -163,16 +206,13 @@ describe('RetaceoCreateEditor', () => {
     await fireEvent.input(screen.getByLabelText('Notas'), {
       target: { value: 'Importación septiembre' }
     });
-    await fillManualAmounts();
+    await fillAmounts('12.5', '0');
 
     await fireEvent.submit(screen.getByRole('button', { name: 'Crear retaceo' }).closest('form')!);
 
     await waitFor(() => {
       expect(mocks.create).toHaveBeenCalledWith({
         purchase_id: purchase.id,
-        calculation_mode: 'manual',
-        dai_rate: null,
-        vat_rate: null,
         import_data: {
           origin_country: null,
           import_invoice_number: 'FAC-001',
@@ -180,11 +220,9 @@ describe('RetaceoCreateEditor', () => {
           import_policy_number: null,
           import_policy_date: null
         },
-        fob_lines: [{ purchase_detail_id: purchase.details[0]!.id, amount: '100' }],
-        total_freight: '0',
-        total_expenses: '0',
+        total_freight: '12.5',
         total_dai: '0',
-        import_vat: '0',
+        total_expenses: '0',
         notes: 'Importación septiembre'
       });
     });
@@ -215,7 +253,7 @@ describe('RetaceoCreateEditor', () => {
 
     expect(await screen.findByText('COM-0001')).toBeInTheDocument();
 
-    await fillManualAmounts();
+    await fillAmounts('0', '0');
     await fireEvent.submit(screen.getByRole('button', { name: 'Crear retaceo' }).closest('form')!);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -224,15 +262,11 @@ describe('RetaceoCreateEditor', () => {
   });
 });
 
-async function fillManualAmounts() {
-  await fireEvent.click(await screen.findByRole('radio', { name: /^Manual/ }));
-  for (const label of ['Flete total (USD)', 'DAI total (USD)', 'IVA de importación (USD)']) {
-    await fireEvent.input(
-      screen.getByRole('spinbutton', { name: new RegExp(label.replace(/[()]/g, '\\$&')) }),
-      { target: { value: '0' } }
-    );
-  }
-  await fireEvent.input(screen.getByRole('spinbutton', { name: /FOB total de la línea/ }), {
-    target: { value: '100' }
+async function fillAmounts(freight: string, dai: string) {
+  await fireEvent.input(await screen.findByRole('spinbutton', { name: 'Flete y seguro (USD)' }), {
+    target: { value: freight }
+  });
+  await fireEvent.input(screen.getByRole('spinbutton', { name: 'DAI (USD)' }), {
+    target: { value: dai }
   });
 }

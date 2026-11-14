@@ -87,8 +87,6 @@ async def _staged_receipt(client):
             "total_freight": "5.123457",
             "total_dai": "3",
             "total_expenses": "0",
-            "import_vat": "0",
-            "fob_lines": [{"purchase_detail_id": purchase["details"][0]["id"], "amount": "100"}],
         },
     )
     assert response.status_code == 201, response.text
@@ -345,7 +343,7 @@ async def test_pending_receipt_posts_only_when_each_prepared_unit_is_placed(e2e_
             )
         ).one()
         assert quantity == Decimal("50")
-        assert value == Decimal("108.123457")
+        assert value == Decimal("633.123457")  # 50 x 12.50 invoice FOB + 5.123457 + 3
         assert await session.scalar(select(func.count()).select_from(InventoryMovementModel)) == 2
         stored = list(await session.scalars(select(InventoryHandlingUnitModel)))
         assert all(row.inventory_posted_at is not None for row in stored)

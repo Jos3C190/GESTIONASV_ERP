@@ -156,7 +156,8 @@
       <p class="text-sm font-medium text-primary">Compras</p>
       <h1 class="text-2xl font-semibold tracking-tight text-foreground">Retaceo de importación</h1>
       <p class="mt-1 text-sm text-foreground-muted">
-        Consulta la distribución de flete, gastos y DAI aplicada sobre compras recibidas.
+        Consulta el reparto del flete y seguro, el DAI y los gastos adicionales en las compras
+        recibidas.
       </p>
     </div>
 
@@ -257,7 +258,6 @@
             <th class="px-4 py-3 font-medium">Compra origen</th>
             <th class="px-4 py-3 font-medium">FOB</th>
             <th class="px-4 py-3 font-medium">Costo total</th>
-            <th class="px-4 py-3 font-medium">IVA importación</th>
             <th class="px-4 py-3 font-medium">Estado</th>
           </tr>
         </thead>
@@ -298,10 +298,6 @@
 
               <td class="whitespace-nowrap px-4 py-3 font-medium">
                 {formatMoney(item.total_cost, item.currency)}
-              </td>
-
-              <td class="whitespace-nowrap px-4 py-3 text-foreground-muted">
-                {formatMoney(item.import_vat, item.currency)}
               </td>
 
               <td class="whitespace-nowrap px-4 py-3">

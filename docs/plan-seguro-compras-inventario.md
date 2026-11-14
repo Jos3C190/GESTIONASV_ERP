@@ -85,7 +85,7 @@ Para una mejora histórica posterior, el panel puede mostrar datos de retaceos c
 
 En la comparación de cotizaciones, otra mejora puede mostrar ofertas anteriores del mismo proveedor y producto junto con la última compra efectivamente recibida. La vista debe conservar fecha, unidad, cantidad, moneda, impuestos y condiciones de entrega/pago disponibles, y enlazar el documento de origen. Solo debe comparar importes cuando unidad y moneda se puedan normalizar; una oferta no equivale a un precio pagado ni debe seleccionar automáticamente al proveedor.
 
-En el código actual, flete, gastos y DAI se distribuyen entre líneas en proporción al FOB. El IVA de importación se guarda aparte y se excluye del total del costo aterrizado. Cualquier cambio de base de reparto o tratamiento del IVA requiere una decisión del responsable contable/logístico; por ejemplo, algunos gastos pueden depender de peso o volumen. No se recomienda inventar porcentajes por familias generales como “harina” o “computadora”.
+En el código actual (revisión 0117), flete y seguro, DAI y gastos adicionales se distribuyen entre líneas en proporción al FOB, que sale de la factura de compra; el IVA de importación ya no se registra en el retaceo (ERS p. 81-82, CA-COM-021/022/024). Cualquier cambio de base de reparto requiere una decisión del responsable contable/logístico; por ejemplo, algunos gastos pueden depender de peso o volumen. No se recomienda inventar porcentajes por familias generales como “harina” o “computadora”.
 
 Fuentes oficiales para consulta:
 

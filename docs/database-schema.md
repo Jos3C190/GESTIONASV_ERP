@@ -368,6 +368,9 @@ revisions:
 - `0083_inventory_label_confirmation_and_receipt_origin.py`
 - `0084_explicit_headquarters_branch.py`
 - `0085_receipt_detail_lot_identity.py`
+- `0095_retaceo_manual_components.py`
+- `0098_retaceo_calculation_mode.py` (columns removed again by `0117`)
+- `0117_retaceo_fixed_amounts_without_vat.py`
 
 ### Purchasing flow tables
 
@@ -912,3 +915,32 @@ Otherwise it returns `partially_received` transfers to `in_transit`, deletes the
 new commands, and drops everything added here in reverse order. The model classes
 mirror the migration, including `InventoryTransferDiscrepancyModel`, without
 `relationship()`.
+
+## 27. Retaceo with fixed amounts and without import VAT (0117)
+
+Revision `0117` (revises `0116`). Landed cost is FOB + freight and insurance +
+DAI + additional expenses, all distributed by FOB on the server; import VAT and the
+automatic (percentage) mode leave the model.
+
+**Upgrade**
+
+1. `DELETE FROM retaceo_costs WHERE classification = 'import_vat'`. Their
+   `retaceo_cost_allocations` and `retaceo_cost_documents` rows go away by
+   `ON DELETE CASCADE`. The uploaded files in `document_assets` are not deleted.
+   The stored VAT was test data and is lost for good.
+2. `ck_retaceo_costs_classification` becomes `classification IN
+   ('freight','expense','dai')`.
+3. `ck_retaceos_calculation_rates` and `ck_retaceos_calculation_mode` are dropped.
+4. `ck_retaceos_amounts_nonnegative` is recreated without `import_vat`;
+   `ck_retaceos_total_cost` is unchanged.
+5. Columns `retaceos.import_vat`, `vat_rate`, `dai_rate` and `calculation_mode`
+   are dropped.
+
+**Downgrade.** Re-adds `calculation_mode VARCHAR(16) NOT NULL DEFAULT 'manual'`,
+`dai_rate` and `vat_rate` (`NUMERIC(10,6) NULL`) and `import_vat NUMERIC(18,6) NOT
+NULL DEFAULT 0`, and recreates the checks of `0098` and the four-value
+classification. Deleted VAT costs, amounts, rates and modes are not restored.
+
+`RetaceoModel` mirrors the migration exactly (tests run with
+`-W error::SAWarning`); `manual_entry` is kept. Covered by
+`backend/tests/integration/test_retaceo_without_vat_migration.py`.

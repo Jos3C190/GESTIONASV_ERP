@@ -625,7 +625,7 @@ class SqlAlchemyInventoryValuationRepository:
             cost_fob = conversion.convert(detail.cost_fob) if conversion else detail.cost_fob
             total_cost = conversion.convert(detail.total_cost) if conversion else detail.total_cost
             original_fob = sum((row.source_value for row in rows), ZERO)
-            if original_fob != cost_fob and not retaceo.documents_historical_fob_correction:
+            if original_fob != cost_fob:
                 error(
                     "El FOB aceptado no coincide con el costo provisional de la recepción. Revise el origen antes de aplicar.",
                     "retaceo_receipt_cost_mismatch",
@@ -664,9 +664,6 @@ class SqlAlchemyInventoryValuationRepository:
                         ),
                         "receipt_fob": str(original_fob),
                         "documented_fob": str(cost_fob),
-                        "fob_correction_reason": retaceo.notes
-                        if original_fob != cost_fob
-                        else None,
                     }
                 )
         now = datetime.now(UTC)

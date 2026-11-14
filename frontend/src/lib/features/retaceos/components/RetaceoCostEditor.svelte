@@ -13,7 +13,6 @@
     onExpenseTypeChange?: (value: string) => void;
     onIncurredOnChange?: (value: string) => void;
     onSourceChange?: (value: string) => void;
-    onDistribute?: () => void;
     cost: EditableRetaceoCost;
     index: number;
     currency: string;
@@ -24,9 +23,6 @@
     uploading: boolean;
     deletingDocumentId: string | null;
     downloadingDocumentId: string | null;
-    allocatedAmount: number;
-    remainingAmount: number;
-    allocatedPercent: number;
     classLabel: (value: RetaceoCostClass) => string;
     formatMoney: (value: string | number, currency: string) => string;
     formatQuantity: (value: string) => string;
@@ -37,7 +33,6 @@
     onClassificationChange: (value: RetaceoCostClass) => void;
     onAmountInput: (value: string) => void;
     onDescriptionInput: (value: string) => void;
-    onAllocationInput: (purchaseDetailId: string, value: string) => void;
     onRemove: () => void;
     onChooseFile: (event: Event) => void | Promise<void>;
     onDownload: (document: RetaceoCostDocument) => void;
@@ -51,7 +46,6 @@
     onExpenseTypeChange,
     onIncurredOnChange,
     onSourceChange,
-    onDistribute,
     cost,
     index,
     currency,
@@ -62,9 +56,6 @@
     uploading,
     deletingDocumentId,
     downloadingDocumentId,
-    allocatedAmount,
-    remainingAmount,
-    allocatedPercent,
     classLabel,
     formatMoney,
     formatQuantity,
@@ -75,7 +66,6 @@
     onClassificationChange,
     onAmountInput,
     onDescriptionInput,
-    onAllocationInput,
     onRemove,
     onChooseFile,
     onDownload,
@@ -84,10 +74,9 @@
   const fixed = $derived(manualEntry && cost.classification !== 'expense');
 
   const COST_CLASSES: { value: RetaceoCostClass; label: string }[] = [
-    { value: 'freight', label: 'Flete' },
-    { value: 'expense', label: 'Otro gasto' },
-    { value: 'dai', label: 'DAI' },
-    { value: 'import_vat', label: 'IVA de importación' }
+    { value: 'freight', label: 'Flete y seguro' },
+    { value: 'expense', label: 'Gasto adicional' },
+    { value: 'dai', label: 'DAI' }
   ];
 
   function hasValidationIssue(): boolean {
@@ -100,8 +89,6 @@
         return 'border-primary/30 bg-primary/10 text-foreground';
       case 'dai':
         return 'border-warning/30 bg-warning/10 text-foreground';
-      case 'import_vat':
-        return 'border-primary/30 bg-primary/10 text-foreground';
       default:
         return 'border-border bg-surface-muted text-foreground-muted';
     }
@@ -148,12 +135,7 @@
           {/if}
         </div>
         <p class="mt-1 text-xs text-foreground-muted">
-          {#if cost.classification === 'import_vat'}
-            IVA informativo · {cost.documents.length} comprobante(s)
-          {:else}
-            Asignado {formatMoney(allocatedAmount, currency)} · Pendiente
-            {formatMoney(remainingAmount, currency)} · {cost.documents.length} comprobante(s)
-          {/if}
+          Se reparte según el FOB · {cost.documents.length} comprobante(s)
         </p>
       </div>
     </div>
@@ -162,9 +144,7 @@
         <p class="text-sm font-semibold text-foreground">
           {cost.amount ? formatMoney(cost.amount, currency) : 'Monto pendiente'}
         </p>
-        <p class="mt-0.5 text-xs text-foreground-muted">
-          {cost.classification === 'import_vat' ? 'Importe informativo' : 'Monto del gasto'}
-        </p>
+        <p class="mt-0.5 text-xs text-foreground-muted">Monto del gasto</p>
       </div>
       <span class="text-xs font-medium text-primary">
         {cost.expanded ? 'Ocultar' : 'Editar gasto'}
@@ -184,12 +164,12 @@
         class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-surface-muted p-3 text-sm"
       >
         <p class="text-foreground-muted">
-          {cost.classification === 'import_vat' ? 'IVA separado del costo' : 'Reparto según FOB'} ·
+          Reparto según FOB ·
           <strong class="font-mono text-foreground">{formatMoney(cost.amount, currency)}</strong>
         </p>
         <a
           class="rounded font-medium text-primary underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-primary"
-          href={`#fixed-${cost.classification === 'freight' ? 'freight' : cost.classification === 'dai' ? 'dai' : 'vat'}`}
+          href={`#fixed-${cost.classification === 'freight' ? 'freight' : 'dai'}`}
           >Editar {classLabel(cost.classification)}</a
         >
       </div>
@@ -214,7 +194,7 @@
                 ? `${cost.key}-title-error`
                 : undefined}
               class="h-10 w-full rounded-md border border-border-control bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
-              placeholder="Ej. Flete internacional"
+              placeholder="Ej. Manejo en aduana"
             />
             {#if validation[`${cost.key}-title`]}
               <span id={`${cost.key}-title-error`} class="block text-xs text-foreground">
@@ -225,26 +205,20 @@
 
           {#if !manualEntry}<label class="space-y-1.5 text-sm font-medium text-foreground">
               <span>Clasificación</span>
-              {#if manualEntry}<p
-                  class="flex h-10 items-center rounded-md border border-border bg-surface-muted px-3 text-sm"
-                >
-                  {classLabel(cost.classification)}
-                </p>{:else}<select
-                  value={cost.classification}
-                  onchange={(event) =>
-                    onClassificationChange(event.currentTarget.value as RetaceoCostClass)}
-                  disabled={saving}
-                  class="h-10 w-full rounded-md border border-border-control bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
-                >
-                  {#each COST_CLASSES as option (option.value)}
-                    <option value={option.value}>{option.label}</option>
-                  {/each}
-                </select>{/if}
+              <select
+                value={cost.classification}
+                onchange={(event) =>
+                  onClassificationChange(event.currentTarget.value as RetaceoCostClass)}
+                disabled={saving}
+                class="h-10 w-full rounded-md border border-border-control bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
+              >
+                {#each COST_CLASSES as option (option.value)}
+                  <option value={option.value}>{option.label}</option>
+                {/each}
+              </select>
               {#if cost.sourcePurchaseOrderExpenseId}
                 <span class="block text-xs text-foreground-muted"
-                  >{manualEntry
-                    ? 'Relacionado manualmente con un gasto real'
-                    : 'Importado de la orden de compra'}</span
+                  >Importado de la orden de compra</span
                 >
               {/if}
             </label>{/if}
@@ -257,28 +231,15 @@
               min="0.000001"
               step="0.000001"
               value={cost.amount}
-              readonly={fixed}
               oninput={(event) => onAmountInput(event.currentTarget.value)}
               disabled={saving}
               aria-invalid={validation[`${cost.key}-amount`] ? 'true' : undefined}
-              aria-describedby={[
-                validation[`${cost.key}-amount`] ? `${cost.key}-amount-error` : '',
-                fixed ? `${cost.key}-amount-help` : ''
-              ]
-                .filter(Boolean)
-                .join(' ') || undefined}
-              class="h-10 w-full rounded-md border border-border-control bg-surface px-3 text-sm text-foreground read-only:bg-surface-muted read-only:text-foreground-muted focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
+              aria-describedby={validation[`${cost.key}-amount`]
+                ? `${cost.key}-amount-error`
+                : undefined}
+              class="h-10 w-full rounded-md border border-border-control bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
               placeholder="0.00"
             />
-            {#if fixed}<span
-                id={`${cost.key}-amount-help`}
-                class="block text-xs text-foreground-muted"
-                >Editar en {cost.classification === 'freight'
-                  ? 'Flete total'
-                  : cost.classification === 'dai'
-                    ? 'DAI total'
-                    : 'IVA de importación'}.</span
-              >{/if}
             {#if validation[`${cost.key}-amount`]}
               <span id={`${cost.key}-amount-error`} class="block text-xs text-foreground">
                 {validation[`${cost.key}-amount`]}
@@ -303,7 +264,7 @@
       {#if manualEntry && !fixed}
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="space-y-1.5 text-sm font-medium text-foreground"
-            ><span>Categoría del otro gasto</span>
+            ><span>Categoría del gasto adicional</span>
             <select
               id={`${cost.key}-category`}
               required
@@ -389,103 +350,35 @@
             class="block text-xs text-danger">{validation[`${cost.key}-description`]}</span
           >{/if}
       </label>
-
-      {#if cost.classification === 'import_vat'}
-        <div
-          class="rounded-lg border border-primary/20 bg-primary/5 px-3 py-3 text-sm text-foreground-muted"
-        >
-          IVA informativo: no se distribuye entre los productos ni se suma al costo aterrizado.
-        </div>
-      {:else}
-        <section class="border-t border-border pt-4">
-          <div
-            class="flex flex-col gap-2 border-b border-border bg-surface-muted/50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div>
-              <h3 class="text-base font-semibold text-foreground">Distribución por producto</h3>
-              <p class="mt-1 text-sm leading-5 text-foreground-muted">
-                Asigna este gasto entre las líneas {quantityStage} de la compra.
-              </p>
-              {#if manualEntry}<Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={saving}
-                  onclick={() => onDistribute?.()}>Distribuir según FOB</Button
-                >{/if}
-            </div>
-            <p class="text-sm font-medium text-foreground">
-              Distribuido {formatMoney(allocatedAmount, currency)}
-              <span
-                class={remainingAmount < -0.000001 ? 'text-foreground' : 'text-foreground-muted'}
-              >
-                · Pendiente {formatMoney(remainingAmount, currency)}
-              </span>
-            </p>
-          </div>
-
-          <div
-            class="h-1.5 bg-surface-muted"
-            role="meter"
-            aria-label={`Porcentaje distribuido de ${cost.title || 'gasto'}`}
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow={allocatedPercent}
-            aria-valuetext={`${Math.round(allocatedPercent)}% distribuido`}
-          >
-            <div
-              class={`h-full rounded-r-full transition-[width] duration-200 motion-reduce:transition-none ${remainingAmount < -0.000001 ? 'bg-danger' : 'bg-primary'}`}
-              style:width={`${allocatedPercent}%`}
-            ></div>
-          </div>
-
-          <div class="divide-y divide-border">
-            {#each purchaseLines as line (line.purchase_detail_id)}
-              <div
-                class="grid gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)] sm:items-center"
-              >
-                <div class="min-w-0">
-                  <p class="truncate text-sm font-medium text-foreground">
-                    {productLabel(line.product_id)}
-                  </p>
-                  <p class="mt-1 text-sm text-foreground-muted">
-                    {unitLabel(line.unit_id)} · {formatQuantity(line.quantity)}
-                    {quantityStage}
-                  </p>
-                </div>
-                <label class="space-y-1 text-sm font-medium text-foreground-muted">
-                  <span>Monto asignado · {currency}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.000001"
-                    value={cost.allocations[line.purchase_detail_id] ?? '0'}
-                    oninput={(event) =>
-                      onAllocationInput(line.purchase_detail_id, event.currentTarget.value)}
-                    disabled={saving}
-                    aria-label={`Monto de ${classLabel(cost.classification)} asignado a ${productLabel(line.product_id)}`}
-                    aria-invalid={validation[`${cost.key}-allocation`] ? 'true' : undefined}
-                    aria-describedby={validation[`${cost.key}-allocation`]
-                      ? `${cost.key}-allocation-error`
-                      : undefined}
-                    class="h-9 w-full rounded-md border border-border-control bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
-                  />
-                </label>
-              </div>
-            {/each}
-          </div>
-          {#if validation[`${cost.key}-allocation`]}
-            <p
-              id={`${cost.key}-allocation-error`}
-              class="border-t border-danger/20 bg-danger/5 px-3 py-2 text-sm text-foreground"
-              role="alert"
-            >
-              {validation[`${cost.key}-allocation`]}
-            </p>
-          {/if}
-        </section>
-      {/if}
     {/if}
+    <section class="border-t border-border pt-4">
+      <div class="border-b border-border bg-surface-muted/50 px-3 py-3">
+        <h3 class="text-base font-semibold text-foreground">Reparto por producto</h3>
+        <p class="mt-1 text-sm leading-5 text-foreground-muted">
+          Este importe se reparte automáticamente entre los productos según su FOB.
+        </p>
+      </div>
+      <ul class="divide-y divide-border" aria-label="Reparto por producto">
+        {#each purchaseLines as line (line.purchase_detail_id)}
+          <li
+            class="grid gap-1 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4"
+          >
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium text-foreground">
+                {productLabel(line.product_id)}
+              </p>
+              <p class="mt-1 text-sm text-foreground-muted">
+                {unitLabel(line.unit_id)} · {formatQuantity(line.quantity)}
+                {quantityStage}
+              </p>
+            </div>
+            <p class="text-sm font-semibold tabular-nums text-foreground">
+              {formatMoney(cost.allocations[line.purchase_detail_id] ?? '0', currency)}
+            </p>
+          </li>
+        {/each}
+      </ul>
+    </section>
     <section class="border-t border-border pt-4">
       <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {uploading ? `Adjuntando comprobante a ${cost.title || 'el gasto'}.` : ''}

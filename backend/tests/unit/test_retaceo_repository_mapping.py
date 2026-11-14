@@ -41,7 +41,6 @@ def _item() -> Retaceo:
         total_freight=Decimal("10.000000"),
         total_expenses=Decimal("5.000000"),
         total_dai=Decimal("15.000000"),
-        import_vat=Decimal("13.000000"),
         total_cost=Decimal("130.000000"),
         status=RetaceoStatus.CALCULATED,
         notes="Prueba de mapeo",

@@ -144,8 +144,8 @@
       <p class="mt-1 text-sm leading-6 text-foreground-muted">
         Si no hubo otros gastos, puedes continuar con la recepción y el retaceo sin llenar esta
         sección. Si registras un gasto, completa sus datos y relaciónalo con el retaceo antes de
-        cerrarlo; registrarlo aquí no lo suma automáticamente al costo. FOB, flete, DAI e IVA se
-        capturan en sus campos de retaceo.
+        cerrarlo; registrarlo aquí no lo suma automáticamente al costo. FOB, flete y DAI se capturan
+        en sus campos del retaceo.
       </p>
       {#if loading}<div class="mt-4 space-y-2" aria-label="Cargando gastos reales">
           <div class="skeleton h-16 rounded-lg"></div>

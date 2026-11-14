@@ -32,7 +32,7 @@ async def compare_average(
     setting = await valuation.settings(retaceo.company_id)
     if setting is None:
         valuation_error(
-            "Apruebe el saldo inicial antes de comparar el costo promedio.",
+            "Aprueba el saldo inicial antes de comparar el costo promedio.",
             "valuation_opening_required",
         )
     if retaceo.applied_at is not None:

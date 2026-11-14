@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RetaceoDraftEditor from '$lib/features/retaceos/components/RetaceoDraftEditor.svelte';
 import type { Retaceo } from '$lib/types/retaceo';
@@ -75,7 +75,6 @@ const retaceo: Retaceo = {
   total_freight: '10.000000',
   total_expenses: '5.000000',
   total_dai: '3.000000',
-  import_vat: '15.340000',
   total_cost: '118.000000',
   freight_percentage: '10.000000',
   expense_percentage: '5.000000',
@@ -102,76 +101,124 @@ describe('RetaceoDraftEditor', () => {
     });
   });
 
-  it('reopens the saved automatic mode and recalculates taxes after a freight change', async () => {
-    const detail = {
-      id: 'detail',
+  it('shows the FOB read-only, previews the split by FOB and never sends allocations', async () => {
+    const detail = (id: string, product: number, fob: string) => ({
+      id: `detail-${id}`,
       retaceo_id: retaceo.id,
-      purchase_detail_id: 'line',
-      product_id: 10,
+      purchase_detail_id: id,
+      product_id: product,
       unit_id: 3,
       quantity: '1',
-      cost_fob: '100',
-      freight: '10',
+      cost_fob: fob,
+      freight: '0',
       expenses: '0',
-      dai: '11',
-      total_cost: '121',
-      unit_cost: '121',
+      dai: '0',
+      total_cost: fob,
+      unit_cost: fob,
       created_at: null,
       updated_at: null
-    };
-    const automatic: Retaceo = {
+    });
+    const cost = (id: string, classification: 'freight' | 'dai', amount: string) => ({
+      ...retaceo.costs![0]!,
+      id,
+      classification,
+      title: classification === 'dai' ? 'DAI' : 'Flete',
+      amount
+    });
+    const manual: Retaceo = {
       ...retaceo,
       manual_entry: true,
-      calculation_mode: 'automatic',
-      dai_rate: '10',
-      vat_rate: '13',
-      details: [detail],
+      details: [detail('line-a', 10, '100'), detail('line-b', 11, '300')],
+      costs: [
+        cost('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'freight', '10'),
+        cost('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'dai', '3')
+      ],
       total_expenses: '0',
-      total_dai: '11',
-      import_vat: '15.73',
-      total_cost: '121'
+      total_fob: '400'
     };
-    mocks.getRetaceo.mockResolvedValue(automatic);
-    mocks.getPurchase.mockResolvedValue({
-      id: retaceo.purchase_id,
-      code: 'COM-0001',
-      details: [
-        {
-          id: 'line',
-          product_id: 10,
-          subtotal: '100',
-          discount: '0',
-          quantity_received: '1',
-          quantity_accepted: null
-        }
-      ]
-    });
-    mocks.update.mockResolvedValue(automatic);
+    mocks.getRetaceo.mockResolvedValue(manual);
+    mocks.update.mockResolvedValue(manual);
     render(RetaceoDraftEditor, { retaceoId: retaceo.id });
-    expect(await screen.findByRole('radio', { name: /^Automático/ })).toBeChecked();
-    expect(screen.getByRole('spinbutton', { name: 'DAI (%)' })).toHaveValue(10);
-    expect(screen.getByRole('spinbutton', { name: 'IVA (%)' })).toHaveValue(13);
-    expect(screen.queryByRole('spinbutton', { name: /FOB total/ })).not.toBeInTheDocument();
-    await fireEvent.input(screen.getByRole('spinbutton', { name: /Flete y seguro total/ }), {
+
+    expect(await screen.findByText('FOB desde la factura (fijo)')).toBeInTheDocument();
+    expect(screen.getByText('FOB por producto (desde la factura)')).toBeInTheDocument();
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.queryByText(/IVA/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Distribuir/ })).not.toBeInTheDocument();
+    // Only freight, DAI and the cost amounts are numeric inputs; no FOB or per-line allocation input.
+    expect(screen.queryByRole('spinbutton', { name: /FOB|asignado/i })).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        'Este importe se reparte automáticamente entre los productos según su FOB.'
+      ).length
+    ).toBeGreaterThan(0);
+
+    await fireEvent.input(screen.getByRole('spinbutton', { name: 'Flete y seguro (USD)' }), {
       target: { value: '20' }
     });
+    const split = within(screen.getAllByRole('list', { name: 'Reparto por producto' })[0]!);
+    const rows = split.getAllByRole('listitem').map((row) => row.textContent ?? '');
+    expect(rows[0]).toContain('5.00');
+    expect(rows[1]).toContain('15.00');
+
     await fireEvent.submit(
       screen.getByRole('button', { name: 'Guardar borrador' }).closest('form')!
     );
-    await waitFor(() =>
-      expect(mocks.update).toHaveBeenCalledWith(
-        retaceo.id,
-        expect.objectContaining({
-          calculation_mode: 'automatic',
-          dai_rate: '10',
-          vat_rate: '13',
-          total_freight: '20',
-          total_dai: '12.000000',
-          import_vat: '17.160000'
-        })
-      )
-    );
-    expect(mocks.update.mock.calls[0]![1]).not.toHaveProperty('fob_lines');
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(1));
+    const payload = mocks.update.mock.calls[0]![1];
+    expect(payload).toMatchObject({ total_freight: '20', total_dai: '3.000000' });
+    for (const retired of ['calculation_mode', 'dai_rate', 'vat_rate', 'import_vat', 'fob_lines']) {
+      expect(payload).not.toHaveProperty(retired);
+    }
+    for (const sent of payload.costs) expect(sent).not.toHaveProperty('allocations');
+  });
+
+  it('blocks saving a draft with an empty freight and accepts zero', async () => {
+    const manual: Retaceo = {
+      ...retaceo,
+      manual_entry: true,
+      details: [
+        {
+          id: 'detail-a',
+          retaceo_id: retaceo.id,
+          purchase_detail_id: 'line-a',
+          product_id: 10,
+          unit_id: 3,
+          quantity: '1',
+          cost_fob: '100',
+          freight: '10',
+          expenses: '0',
+          dai: '3',
+          total_cost: '113',
+          unit_cost: '113',
+          created_at: null,
+          updated_at: null
+        }
+      ],
+      total_expenses: '0'
+    };
+    mocks.getRetaceo.mockResolvedValue(manual);
+    mocks.update.mockResolvedValue(manual);
+    render(RetaceoDraftEditor, { retaceoId: retaceo.id });
+    const freight = await screen.findByRole('spinbutton', { name: 'Flete y seguro (USD)' });
+    const form = screen.getByRole('button', { name: 'Guardar borrador' }).closest('form')!;
+
+    expect(form).toHaveAttribute('novalidate');
+    await fireEvent.input(freight, { target: { value: '' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Guardar borrador' }));
+    expect(await screen.findByText('Escribe un importe; usa 0 si no aplica.')).toBeInTheDocument();
+    expect(freight).toBeInvalid();
+    expect(mocks.update).not.toHaveBeenCalled();
+
+    await fireEvent.input(freight, { target: { value: '-5' } });
+    await fireEvent.submit(form);
+    expect(await screen.findByText('El importe no puede ser negativo.')).toBeInTheDocument();
+    expect(mocks.update).not.toHaveBeenCalled();
+
+    await fireEvent.input(freight, { target: { value: '0' } });
+    await fireEvent.submit(form);
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(1));
+    expect(mocks.update.mock.calls[0]![1]).toMatchObject({ total_freight: '0' });
   });
 
   it('updates the itemized draft cost and opens the calculation step', async () => {
@@ -208,9 +255,6 @@ describe('RetaceoDraftEditor', () => {
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(retaceo.id, {
-        calculation_mode: 'manual',
-        dai_rate: null,
-        vat_rate: null,
         import_data: {
           origin_country: null,
           import_invoice_number: null,
@@ -221,7 +265,6 @@ describe('RetaceoDraftEditor', () => {
         total_freight: '10.000000',
         total_expenses: '5.000000',
         total_dai: '3.000000',
-        import_vat: '15.340000',
         notes: 'Inicial',
         costs: [
           {
@@ -229,8 +272,7 @@ describe('RetaceoDraftEditor', () => {
             classification: 'freight',
             title: 'Flete internacional',
             description: null,
-            amount: '12.000000',
-            allocations: []
+            amount: '12.000000'
           }
         ]
       });

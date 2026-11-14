@@ -75,8 +75,6 @@ async def test_labels_preserve_receipt_identity_and_stock_after_manual_retaceo(
             "total_freight": "5",
             "total_dai": "3",
             "total_expenses": "0",
-            "import_vat": "0",
-            "fob_lines": [{"purchase_detail_id": purchase["details"][0]["id"], "amount": "100"}],
         },
     )
     assert response.status_code == 201, response.text

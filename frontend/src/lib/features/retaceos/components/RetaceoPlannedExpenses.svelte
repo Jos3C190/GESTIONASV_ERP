@@ -70,7 +70,7 @@
         <p class="mt-1 font-semibold tabular-nums text-foreground">{money(planned)}</p>
       </div>
       <div>
-        <p class="text-xs text-foreground-muted">Reales de este retaceo · sin IVA</p>
+        <p class="text-xs text-foreground-muted">Gastos reales de este retaceo</p>
         <p class="mt-1 font-semibold tabular-nums text-foreground">{money(actualExpenses)}</p>
       </div>
       <div>

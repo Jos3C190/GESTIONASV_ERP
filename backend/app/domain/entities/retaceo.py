@@ -8,15 +8,12 @@ from datetime import date, datetime
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 from enum import StrEnum
 
-from app.domain.entities.retaceo_calculation import CalculationMode, validate_tax_rate
-
 MONEY_QUANTUM = Decimal("0.000001")
 PERCENT_QUANTUM = Decimal("0.000001")
 ISO_CURRENCY_CODE_LENGTH = 3
 RETACEO_COST_FILE_NAME_MAX_LENGTH = 255
 RETACEO_COST_FILE_TYPE_MAX_LENGTH = 160
 RETACEO_COST_TITLE_MAX_LENGTH = 160
-FOB_CORRECTION_REASON_MIN_LENGTH = 20
 
 
 class RetaceoStatus(StrEnum):
@@ -35,7 +32,6 @@ class RetaceoCostClass(StrEnum):
     FREIGHT = "freight"
     EXPENSE = "expense"
     DAI = "dai"
-    IMPORT_VAT = "import_vat"
 
 
 RETACEO_TRANSITIONS: dict[RetaceoStatus, frozenset[RetaceoStatus]] = {
@@ -193,7 +189,6 @@ class ManualRetaceoAllocation:
     total_freight: Decimal
     total_expenses: Decimal
     total_dai: Decimal
-    import_vat: Decimal
     total_cost: Decimal
 
 
@@ -202,7 +197,6 @@ def _apply_manual_retaceo_cost(
     *,
     source_ids: set[uuid.UUID],
     allocated: dict[uuid.UUID, dict[RetaceoCostClass, Decimal]],
-    totals: dict[RetaceoCostClass, Decimal],
     seen_costs: set[uuid.UUID],
 ) -> None:
     if not cost.is_active:
@@ -212,13 +206,6 @@ def _apply_manual_retaceo_cost(
     seen_costs.add(cost.id)
     amount = _money(cost.amount)
     _ensure_positive(amount, "El monto del gasto")
-    totals[cost.classification] += amount
-    if cost.classification is RetaceoCostClass.IMPORT_VAT:
-        if cost.allocations:
-            raise ValueError(
-                "El IVA de importación es informativo y no se distribuye por producto."
-            )
-        return
 
     allocated_for_cost = Decimal("0")
     for allocation in cost.allocations:
@@ -236,7 +223,7 @@ def calculate_manual_retaceo_allocation(
     sources: tuple[RetaceoSourceLine, ...],
     costs: tuple[RetaceoCost, ...],
 ) -> ManualRetaceoAllocation:
-    """Build item costs from explicit per-line allocations without auto-splitting."""
+    """Build item costs from the per-line allocations carried by each cost."""
 
     if not sources:
         raise ValueError("El retaceo debe contener al menos un detalle de compra.")
@@ -252,7 +239,6 @@ def calculate_manual_retaceo_allocation(
         }
         for source in sources
     }
-    totals = {kind: Decimal("0") for kind in RetaceoCostClass}
     seen_costs: set[uuid.UUID] = set()
 
     for cost in costs:
@@ -260,7 +246,6 @@ def calculate_manual_retaceo_allocation(
             cost,
             source_ids=source_ids,
             allocated=allocated,
-            totals=totals,
             seen_costs=seen_costs,
         )
 
@@ -298,7 +283,6 @@ def calculate_manual_retaceo_allocation(
         total_freight=total_freight,
         total_expenses=total_expenses,
         total_dai=total_dai,
-        import_vat=_money(totals[RetaceoCostClass.IMPORT_VAT]),
         total_cost=total_cost,
     )
 
@@ -464,7 +448,6 @@ class Retaceo:
     total_freight: Decimal
     total_expenses: Decimal
     total_dai: Decimal
-    import_vat: Decimal
     total_cost: Decimal
     status: RetaceoStatus = RetaceoStatus.DRAFT
     notes: str | None = None
@@ -479,30 +462,10 @@ class Retaceo:
     import_policy_number: str | None = None
     import_policy_date: date | None = None
     manual_entry: bool = False
-    calculation_mode: CalculationMode = "manual"
-    dai_rate: Decimal | None = None
-    vat_rate: Decimal | None = None
-
-    @property
-    def documents_historical_fob_correction(self) -> bool:
-        """A manual retaceo can regularize value, never rewrite its source receipt."""
-        return (
-            self.manual_entry
-            and len((self.notes or "").strip()) >= FOB_CORRECTION_REASON_MIN_LENGTH
-        )
 
     def __post_init__(self) -> None:
         if not self.code.strip():
             raise ValueError("El código del retaceo es obligatorio.")
-        if self.calculation_mode == "automatic":
-            validate_tax_rate(self.dai_rate)
-            validate_tax_rate(self.vat_rate)
-        elif (
-            self.calculation_mode != "manual"
-            or self.dai_rate is not None
-            or self.vat_rate is not None
-        ):
-            raise ValueError("El modo manual conserva importes, sin porcentajes automáticos.")
         if (
             len(self.currency) != ISO_CURRENCY_CODE_LENGTH
             or not self.currency.isalpha()
@@ -529,7 +492,6 @@ class Retaceo:
             (self.total_freight, "El flete total"),
             (self.total_expenses, "Los gastos totales"),
             (self.total_dai, "El DAI total"),
-            (self.import_vat, "El IVA de importación"),
             (self.total_cost, "El costo total"),
         ):
             _ensure_nonnegative(value, label)

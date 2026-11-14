@@ -60,7 +60,6 @@ const retaceo: Retaceo = {
   total_freight: '10.000000',
   total_expenses: '5.000000',
   total_dai: '3.000000',
-  import_vat: '15.340000',
   total_cost: '118.000000',
   freight_percentage: '10.000000',
   expense_percentage: '5.000000',
@@ -118,13 +117,12 @@ describe('RetaceoDetail', () => {
     expect(screen.getByText('UND — Unidad')).toBeInTheDocument();
 
     expect(screen.getByText('Calculado')).toBeInTheDocument();
-    expect(screen.getByText(/Flete · 10/)).toBeInTheDocument();
-    expect(screen.getByText(/Gastos · 5/)).toBeInTheDocument();
+    expect(screen.getByText(/Flete y seguro · 10/)).toBeInTheDocument();
+    expect(screen.getByText(/Gastos adicionales · 5/)).toBeInTheDocument();
     expect(screen.getByText(/DAI · 3/)).toBeInTheDocument();
 
-    expect(
-      screen.getByText('Informativo. No forma parte del costo aterrizado.')
-    ).toBeInTheDocument();
+    expect(screen.getByText('DAI total')).toBeInTheDocument();
+    expect(screen.queryByText(/IVA/)).not.toBeInTheDocument();
 
     expect(screen.getByText('Importación septiembre')).toBeInTheDocument();
   });

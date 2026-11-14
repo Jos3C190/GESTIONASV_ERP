@@ -23,12 +23,30 @@ class ActualExpenseAvailability:
     closed_retaceo_code: str | None = None
 
 
-def is_fixed_retaceo_category(name: str) -> bool:
-    normalized = "".join(
+def _normalized(name: str) -> str:
+    return "".join(
         char
         for char in unicodedata.normalize("NFKD", name.casefold())
         if not unicodedata.combining(char)
     ).strip()
+
+
+def is_insurance_category(name: str) -> bool:
+    """Insurance belongs to the freight and insurance amount of the retaceo."""
+    return _normalized(name).startswith("seguro")
+
+
+def is_excluded_retaceo_expense_category(name: str) -> bool:
+    """Categories that cannot be an additional expense of a retaceo.
+
+    The order's actual-expense log still accepts insurance; only the retaceo selection excludes
+    it, so it is not counted twice (once typed as freight and insurance, once as an expense).
+    """
+    return is_fixed_retaceo_category(name) or is_insurance_category(name)
+
+
+def is_fixed_retaceo_category(name: str) -> bool:
+    normalized = _normalized(name)
     return normalized.startswith("flete") or normalized in {
         "fob",
         "dai",

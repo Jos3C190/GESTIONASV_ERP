@@ -110,7 +110,6 @@ const record: Retaceo = {
   total_freight: '120.000000',
   total_expenses: '0.000000',
   total_dai: '0.000000',
-  import_vat: '0.000000',
   total_cost: '220.000000',
   freight_percentage: '120.000000',
   expense_percentage: '0.000000',
