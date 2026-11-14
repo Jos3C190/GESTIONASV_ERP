@@ -488,7 +488,7 @@
       <div class="h-[620px] rounded-xl skeleton"></div>
     </div>
   {:else}
-    <div class="mx-auto grid max-w-[1280px] gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+    <div class="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
       <EditorSectionNav {sections} {activeSection} onselect={scrollToSection} />
       <main class="min-w-0 space-y-6">
         <Card id="identity" class="scroll-mt-24 p-6">

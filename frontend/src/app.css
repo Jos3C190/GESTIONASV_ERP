@@ -211,7 +211,8 @@
   /* Page gutter: 16 px on phones, 24 px on tablets, 32 px on desktop. */
   --page-gutter-x: var(--space-4);
   --page-gutter-y: var(--space-6);
-  --page-max-width: 90rem;
+  /* 1920 px: fills a 1920 px monitor beside the sidebar; caps only ultra-wide screens. */
+  --page-max-width: 120rem;
   --section-gap: var(--space-6);
 }
 

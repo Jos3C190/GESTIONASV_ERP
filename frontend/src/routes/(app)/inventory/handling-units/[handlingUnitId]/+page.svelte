@@ -113,7 +113,7 @@
   />
 </svelte:head>
 
-<div class="mx-auto max-w-6xl space-y-6">
+<div class="space-y-6">
   <a
     href={trace
       ? `/warehouses/${encodeURIComponent(trace.handling_unit.warehouse_id)}`

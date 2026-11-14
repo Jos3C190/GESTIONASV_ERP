@@ -424,7 +424,7 @@
       {error}
     </div>
   {:else if product}
-    <div class="mx-auto max-w-[1280px] space-y-5">
+    <div class="space-y-5">
       <Card class="p-5">
         <div class="flex flex-wrap items-center gap-4">
           <div
