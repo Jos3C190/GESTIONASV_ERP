@@ -349,6 +349,22 @@ def _json_safe(value: Any) -> Any:
     return json.loads(json.dumps(value, ensure_ascii=False, default=str))
 
 
+def _staged_location_data(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Restore typed values from a batch row staged in JSONB.
+
+    ``_json_safe`` stores UUIDs as text, while capacity validation, preview
+    diffs and ORM writes compare the capacity structure against ``uuid.UUID``.
+    """
+
+    restored = dict(data)
+    group_id = restored.get("capacity_group_id")
+    if group_id in (None, ""):
+        restored["capacity_group_id"] = None
+    elif not isinstance(group_id, uuid.UUID):
+        restored["capacity_group_id"] = uuid.UUID(str(group_id))
+    return restored
+
+
 _DECIMAL_LOCATION_FIELDS = frozenset(
     {
         "certified_max_weight_kg",
@@ -1345,9 +1361,10 @@ class SqlAlchemyLocationRepository:
         # structural resistance.
         has_positive_impact = False
         validated_targets: dict[uuid.UUID, Location] = {}
+        staged_data = {row.id: _staged_location_data(row.normalized_data) for row in rows}
         for row in rows:
             operation, _code, current_diff, errors, existing = self._preview_operation(
-                row.normalized_data, indexes
+                staged_data[row.id], indexes
             )
             if operation in {"error", "conflict"}:
                 raise ConflictError(
@@ -1368,7 +1385,7 @@ class SqlAlchemyLocationRepository:
                 operation, current_diff
             )
             if operation in {"update", "unchanged"}:
-                data = row.normalized_data
+                data = staged_data[row.id]
                 if existing is None:
                     raise ConflictError(
                         f"La fila {row.row_number} ya no tiene un destino actualizable.",
@@ -1392,10 +1409,10 @@ class SqlAlchemyLocationRepository:
             )
 
         group_ids = {
-            uuid.UUID(str(row.normalized_data["capacity_group_id"]))
+            staged_data[row.id]["capacity_group_id"]
             for row in rows
             if row.operation in {"create", "update"}
-            and row.normalized_data.get("capacity_group_id")
+            and staged_data[row.id]["capacity_group_id"] is not None
         }
         if group_ids:
             available_groups = set(
@@ -1421,7 +1438,7 @@ class SqlAlchemyLocationRepository:
             async with self._session.begin_nested():
                 job.status = "publishing"
                 for row in rows:
-                    data = dict(row.normalized_data)
+                    data = staged_data[row.id]
                     projection = CodeProjection(
                         code=str(data["code"]),
                         normalized_components={

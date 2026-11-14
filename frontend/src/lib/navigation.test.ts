@@ -113,4 +113,20 @@ describe('catalog navigation', () => {
     expect(routeTitle('/transfers/settings')).toBe('Reglas de traslados');
     expect(routeTitle('/transfers')).toBe('Traslados');
   });
+
+  it('gives every implemented module its sidebar label as the navbar title', () => {
+    const implemented = NAV_GROUPS.flatMap((group) => group.items).filter(
+      (item) => item.implemented
+    );
+    for (const item of implemented) {
+      expect(routeTitle(item.route), item.route).toBe(item.label);
+    }
+  });
+
+  it('keeps the module title on purchase sub-pages', () => {
+    expect(routeTitle('/purchase-quotations/q1/response')).toBe('Cotizaciones de compra');
+    expect(routeTitle('/purchase-orders/o1/edit')).toBe('Órdenes de compra');
+    expect(routeTitle('/purchases/new')).toBe('Compras');
+    expect(routeTitle('/retaceos/r1')).toBe('Retaceo');
+  });
 });

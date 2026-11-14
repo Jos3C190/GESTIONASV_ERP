@@ -33,7 +33,7 @@ proyección del promedio. Forma parte del plan maestro de seis bloques.
 
 ## Recorrido para utilizarlo
 
-1. En una orden aprobada/enviada, abrir **Bitácora de otros gastos reales**.
+1. En una orden aprobada/enviada, abrir **Bitácora de gastos adicionales reales**.
    Registrar cada gasto conocido; adjuntar su comprobante es opcional.
 2. Registrar y confirmar la recepción documental; mantener el conteo parcial,
    aceptado/rechazado y los pendientes del flujo existente.

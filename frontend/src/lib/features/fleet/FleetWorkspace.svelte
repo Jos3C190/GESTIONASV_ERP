@@ -193,7 +193,7 @@
   <header class="page-heading">
     <div>
       <div class="title-line">
-        <h1>Flota</h1>
+        <h1 class="page-title-echo">Flota</h1>
       </div>
       <p>Los vehículos de {scopeLabel}, su aptitud para operar y su estado en tiempo real.</p>
     </div>

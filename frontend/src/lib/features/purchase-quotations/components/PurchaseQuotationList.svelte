@@ -159,7 +159,9 @@
   >
     <div class="min-w-0">
       <p class="text-caption font-medium uppercase tracking-wider text-foreground-muted">Compras</p>
-      <h1 class="mt-1 text-display font-semibold text-foreground">Cotizaciones de compra</h1>
+      <h1 class="page-title-echo mt-1 text-display font-semibold text-foreground">
+        Cotizaciones de compra
+      </h1>
       <p class="mt-1 text-body text-foreground-muted">
         Consulta y filtra las solicitudes de cotización enviadas a proveedores.
       </p>

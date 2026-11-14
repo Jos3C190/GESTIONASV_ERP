@@ -69,7 +69,7 @@
       >
     </a>
     <div>
-      <h1 class="text-xl font-bold text-foreground">Editar ubicación</h1>
+      <h1 class="page-title-echo text-xl font-bold text-foreground">Editar ubicación</h1>
       <p class="mt-1 text-sm text-foreground-muted">
         Actualice la configuración sin perder la trazabilidad de la ubicación.
       </p>

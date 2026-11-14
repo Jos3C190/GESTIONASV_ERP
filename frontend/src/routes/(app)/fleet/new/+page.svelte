@@ -6,7 +6,7 @@
 
 <div class="page">
   <a class="back" href="/fleet">← Flota</a>
-  <h1>Nuevo vehículo</h1>
+  <h1 class="page-title-echo">Nuevo vehículo</h1>
   <p>Al registrarlo queda disponible en su sucursal base y habilitado para traslados.</p>
   <VehicleForm mode="create" />
 </div>

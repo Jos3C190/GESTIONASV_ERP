@@ -27,7 +27,7 @@ class ActualExpenseUseCases:
         if closure is not None:
             return ActualExpenseAvailability(
                 can_record=False,
-                reason=f"{closure.retaceo_code} está cerrado. Ya no se pueden registrar otros gastos reales para esta orden.",
+                reason=f"{closure.retaceo_code} está cerrado. Ya no se pueden registrar gastos adicionales reales para esta orden.",
                 closed_retaceo_id=closure.retaceo_id,
                 closed_retaceo_code=closure.retaceo_code,
             )
@@ -38,7 +38,8 @@ class ActualExpenseUseCases:
             PurchaseOrderStatus.RECEIVED,
         }:
             return ActualExpenseAvailability(
-                False, "Registre gastos reales desde la aprobación y antes del cierre de la orden."
+                False,
+                "Registra gastos adicionales reales desde la aprobación y antes del cierre de la orden.",
             )
         return ActualExpenseAvailability(True)
 

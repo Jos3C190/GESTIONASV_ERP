@@ -299,7 +299,7 @@ describe('Manual retaceo and actual spending', () => {
     mocks.availability.mockResolvedValue({
       can_record: false,
       reason:
-        'RET-00021 está cerrado. Ya no se pueden registrar otros gastos reales para esta orden.',
+        'RET-00021 está cerrado. Ya no se pueden registrar gastos adicionales reales para esta orden.',
       closed_retaceo_id: 'ret',
       closed_retaceo_code: 'RET-00021'
     });

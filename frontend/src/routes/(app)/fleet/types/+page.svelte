@@ -100,7 +100,9 @@
     <a href="/fleet" class="text-sm text-foreground-muted hover:text-foreground">← Flota</a>
     <header class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div>
-        <h1 class="text-2xl font-bold tracking-tight text-foreground">Tipos de vehículo</h1>
+        <h1 class="page-title-echo text-2xl font-bold tracking-tight text-foreground">
+          Tipos de vehículo
+        </h1>
         <p class="mt-1 max-w-2xl text-sm text-foreground-muted">
           Define qué unidades maneja tu empresa y qué se exige a cada una.
         </p>

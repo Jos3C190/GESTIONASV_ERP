@@ -965,6 +965,64 @@ async def test_batch_preview_canonicalizes_uuid_values_for_jsonb(
 
 
 @pytest.mark.asyncio
+async def test_generated_batch_publishes_locations_inside_capacity_structure(
+    location_session: AsyncSession,
+) -> None:
+    """Staged rows keep the structure id as JSON text; publish must restore it."""
+    context = await _add_context(location_session)
+    group = await _add_capacity_group(location_session, context, code="RACK-A")
+    repository = SqlAlchemyLocationRepository(location_session)
+    source_rows = []
+    for row_number, position in enumerate(("01", "02"), start=2):
+        projection = _projection(
+            context, code=f"A01-R01-N01-P{position}", aisle="01", position=position
+        )
+        row = _source_row(projection, operational_weight_kg=2, row_number=row_number)
+        row["capacity_group_id"] = group.id
+        source_rows.append(row)
+    job = await repository.create_batch_preview(
+        context.warehouse_id,
+        kind="generate",
+        idempotency_key=f"structure-{_suffix()}",
+        input_checksum="b" * 64,
+        scheme=context.scheme,
+        source_rows=source_rows,
+        actor_id=context.actor_id,
+    )
+    assert job.create_count == 2
+    staged = await location_session.scalars(
+        select(LocationBatchRow.normalized_data).where(LocationBatchRow.job_id == job.id)
+    )
+    assert {data["capacity_group_id"] for data in staged} == {str(group.id)}
+
+    published = await repository.publish_batch(job.id, actor_id=context.actor_id)
+
+    assert published.status == "published"
+    assigned = await location_session.scalars(
+        select(Location.capacity_group_id).where(
+            Location.warehouse_id == context.warehouse_id,
+            Location.deleted_at.is_(None),
+        )
+    )
+    assert list(assigned) == [group.id, group.id]
+
+    # Re-importing the same rows must stay "unchanged" at publish time instead
+    # of reading the text id as a structure change (stale preview).
+    reimport = await repository.create_batch_preview(
+        context.warehouse_id,
+        kind="import",
+        idempotency_key=f"structure-reimport-{_suffix()}",
+        input_checksum="c" * 64,
+        scheme=context.scheme,
+        source_rows=source_rows,
+        actor_id=context.actor_id,
+    )
+    assert reimport.unchanged_count == 2
+    republished = await repository.publish_batch(reimport.id, actor_id=context.actor_id)
+    assert republished.status == "published"
+
+
+@pytest.mark.asyncio
 async def test_location_restore_conflict_keeps_original_in_trash(
     location_session: AsyncSession,
 ) -> None:

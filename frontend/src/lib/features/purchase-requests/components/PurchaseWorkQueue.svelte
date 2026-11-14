@@ -310,7 +310,7 @@
   <header class="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
     <div>
       <p class="text-xs font-semibold uppercase tracking-wider text-primary">Compras</p>
-      <h1 class="mt-1 text-xl font-semibold text-foreground">Solicitudes y consolidados</h1>
+      <h1 class="page-title-echo mt-1 text-xl font-semibold text-foreground">Solicitudes y consolidados</h1>
       <p class="mt-1 text-sm text-foreground-muted">
         {totalItems} registros · La demanda original se conserva en cada consolidado.
       </p>

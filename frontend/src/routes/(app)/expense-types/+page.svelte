@@ -144,7 +144,7 @@
     <header class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div>
         <p class="text-xs font-semibold uppercase tracking-wider text-primary">Compras</p>
-        <h1 class="mt-1 text-2xl font-bold tracking-tight text-foreground">Tipos de gasto</h1>
+        <h1 class="page-title-echo mt-1 text-2xl font-bold tracking-tight text-foreground">Tipos de gasto</h1>
         <p class="mt-1 max-w-2xl text-sm text-foreground-muted">
           Administra los cargos disponibles para cotizaciones y órdenes de compra de esta empresa.
         </p>

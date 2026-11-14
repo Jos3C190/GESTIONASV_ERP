@@ -169,7 +169,9 @@
       <p class="hidden text-xs font-semibold uppercase tracking-wider text-primary sm:block">
         Operación de bodega
       </p>
-      <h1 class="text-xl font-semibold tracking-tight text-foreground sm:mt-2 sm:text-2xl">
+      <h1
+        class="page-title-echo text-xl font-semibold tracking-tight text-foreground sm:mt-2 sm:text-2xl"
+      >
         Inventario
       </h1>
       <p class="mt-2 hidden max-w-2xl text-sm leading-6 text-foreground-muted sm:block">

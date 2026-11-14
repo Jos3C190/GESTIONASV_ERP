@@ -64,7 +64,9 @@
       >
     </a>
     <div>
-      <h1 class="text-xl font-bold text-foreground">Generar ubicaciones por rangos</h1>
+      <h1 class="page-title-echo text-xl font-bold text-foreground">
+        Generar ubicaciones por rangos
+      </h1>
       <p class="mt-1 text-sm text-foreground-muted">
         Diseñe la matriz, revise el impacto y publique el lote en pasos separados.
       </p>

@@ -85,7 +85,9 @@
   <div class="space-y-5">
     <a href="/fleet" class="back">← Flota</a>
     <header>
-      <h1 class="text-2xl font-bold tracking-tight text-foreground">Costos de flota</h1>
+      <h1 class="page-title-echo text-2xl font-bold tracking-tight text-foreground">
+        Costos de flota
+      </h1>
       <p class="mt-1 max-w-2xl text-sm text-foreground-muted">
         Combustible, mantenimiento completado, otros costos e incidentes de cada vehículo. Es un
         reporte operativo: no genera asientos contables.

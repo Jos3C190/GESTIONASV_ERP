@@ -2017,7 +2017,7 @@
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
         Inventario · logística
       </p>
-      <h1 class="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+      <h1 class="page-title-echo text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
         Traslados entre bodegas
       </h1>
       <p class="max-w-3xl text-sm text-foreground-muted sm:text-base">
