@@ -201,17 +201,18 @@ def _retaceo_from_reference() -> Retaceo:
         total_freight=allocation.total_freight,
         total_expenses=allocation.total_expenses,
         total_dai=allocation.total_dai,
-        import_vat=Decimal("8367"),
         total_cost=allocation.total_cost,
         status=RetaceoStatus.CALCULATED,
     )
 
 
-def test_retaceo_keeps_import_vat_outside_landed_cost() -> None:
+def test_retaceo_landed_cost_is_fob_plus_freight_expenses_and_dai() -> None:
     item = _retaceo_from_reference()
 
     assert item.total_cost == Decimal("71332.000000")
-    assert item.import_vat == Decimal("8367")
+    assert item.total_cost == (
+        item.total_fob + item.total_freight + item.total_expenses + item.total_dai
+    )
     assert item.freight_percentage == Decimal("9.187881")
     assert item.expense_percentage == Decimal("2.689136")
     assert item.dai_percentage == Decimal("16.003944")
@@ -234,7 +235,6 @@ def test_retaceo_rejects_total_that_does_not_match_details() -> None:
             total_freight=item.total_freight,
             total_expenses=item.total_expenses,
             total_dai=item.total_dai,
-            import_vat=item.import_vat,
             total_cost=item.total_cost + Decimal("1"),
             status=item.status,
         )

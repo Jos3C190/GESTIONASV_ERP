@@ -36,7 +36,6 @@ describe('retaceosApi', () => {
       total_freight: '10.000000',
       total_expenses: '5.000000',
       total_dai: '3.000000',
-      import_vat: '2.340000',
       notes: 'Importación septiembre'
     };
 
@@ -44,7 +43,6 @@ describe('retaceosApi', () => {
       total_freight: '12.000000',
       total_expenses: '5.000000',
       total_dai: '3.000000',
-      import_vat: '2.340000',
       notes: null
     };
 

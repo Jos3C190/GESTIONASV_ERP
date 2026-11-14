@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import cast as type_cast
 
 from sqlalchemy import Integer, Select, and_, func, select
 from sqlalchemy import cast as sa_cast
@@ -20,7 +19,6 @@ from app.domain.entities.retaceo import (
     RetaceoDetail,
     RetaceoStatus,
 )
-from app.domain.entities.retaceo_calculation import CalculationMode
 from app.domain.ports.retaceo_repository import RetaceoCostDocumentReference, RetaceoCostReference
 from app.infrastructure.models.retaceo import (
     RetaceoCostAllocationModel,
@@ -108,7 +106,6 @@ def _to_entity(model: RetaceoModel) -> Retaceo:
         total_freight=model.total_freight,
         total_expenses=model.total_expenses,
         total_dai=model.total_dai,
-        import_vat=model.import_vat,
         total_cost=model.total_cost,
         status=RetaceoStatus(model.status),
         applied_at=model.applied_at,
@@ -120,9 +117,6 @@ def _to_entity(model: RetaceoModel) -> Retaceo:
         import_policy_number=model.import_policy_number,
         import_policy_date=model.import_policy_date,
         manual_entry=bool(model.manual_entry),
-        calculation_mode=type_cast(CalculationMode, model.calculation_mode),
-        dai_rate=model.dai_rate,
-        vat_rate=model.vat_rate,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
@@ -305,7 +299,6 @@ class SqlAlchemyRetaceoRepository:
         model.total_freight = retaceo.total_freight
         model.total_expenses = retaceo.total_expenses
         model.total_dai = retaceo.total_dai
-        model.import_vat = retaceo.import_vat
         model.total_cost = retaceo.total_cost
         model.notes = retaceo.notes
         model.origin_country = retaceo.origin_country
@@ -314,9 +307,6 @@ class SqlAlchemyRetaceoRepository:
         model.import_policy_number = retaceo.import_policy_number
         model.import_policy_date = retaceo.import_policy_date
         model.manual_entry = retaceo.manual_entry
-        model.calculation_mode = retaceo.calculation_mode
-        model.dai_rate = retaceo.dai_rate
-        model.vat_rate = retaceo.vat_rate
         self._replace_draft_details(model, retaceo)
         existing_costs = {cost.id: cost for cost in model.costs}
         replacement_costs = {cost.id: cost for cost in retaceo.costs}
@@ -575,7 +565,6 @@ class SqlAlchemyRetaceoRepository:
             total_freight=retaceo.total_freight,
             total_expenses=retaceo.total_expenses,
             total_dai=retaceo.total_dai,
-            import_vat=retaceo.import_vat,
             total_cost=retaceo.total_cost,
             status=retaceo.status.value,
             notes=retaceo.notes,
@@ -585,9 +574,6 @@ class SqlAlchemyRetaceoRepository:
             import_policy_number=retaceo.import_policy_number,
             import_policy_date=retaceo.import_policy_date,
             manual_entry=retaceo.manual_entry,
-            calculation_mode=retaceo.calculation_mode,
-            dai_rate=retaceo.dai_rate,
-            vat_rate=retaceo.vat_rate,
             details=[cls._detail_model(retaceo.company_id, detail) for detail in retaceo.details],
             costs=[cls._cost_model(retaceo.company_id, cost) for cost in retaceo.costs],
         )

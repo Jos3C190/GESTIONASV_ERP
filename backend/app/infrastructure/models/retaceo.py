@@ -31,11 +31,6 @@ from app.infrastructure.db.base import Base, TimestampMixin, UUIDPKMixin
 
 class RetaceoModel(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "retaceos"
-    calculation_mode: Mapped[str] = mapped_column(
-        String(16), nullable=False, server_default="manual", default="manual"
-    )
-    dai_rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 6), nullable=True)
-    vat_rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 6), nullable=True)
     manual_entry: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false", default=False
     )
@@ -74,9 +69,6 @@ class RetaceoModel(UUIDPKMixin, TimestampMixin, Base):
     total_dai: Mapped[Decimal] = mapped_column(
         Numeric(18, 6), nullable=False, default=Decimal("0"), server_default="0"
     )
-    import_vat: Mapped[Decimal] = mapped_column(
-        Numeric(18, 6), nullable=False, default=Decimal("0"), server_default="0"
-    )
     total_cost: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="draft")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -99,13 +91,6 @@ class RetaceoModel(UUIDPKMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
-        CheckConstraint(
-            "calculation_mode IN ('automatic', 'manual')", name="ck_retaceos_calculation_mode"
-        ),
-        CheckConstraint(
-            "(calculation_mode = 'manual' AND dai_rate IS NULL AND vat_rate IS NULL) OR (calculation_mode = 'automatic' AND dai_rate IS NOT NULL AND vat_rate IS NOT NULL AND dai_rate BETWEEN 0 AND 1000 AND vat_rate BETWEEN 0 AND 1000)",
-            name="ck_retaceos_calculation_rates",
-        ),
         CheckConstraint(
             "(applied_at IS NULL AND applied_by IS NULL) OR (applied_at IS NOT NULL AND applied_by IS NOT NULL AND status IN ('verified', 'closed'))",
             name="ck_retaceos_application",
@@ -132,8 +117,7 @@ class RetaceoModel(UUIDPKMixin, TimestampMixin, Base):
         ),
         CheckConstraint("total_fob > 0", name="ck_retaceos_fob_positive"),
         CheckConstraint(
-            "total_freight >= 0 AND total_expenses >= 0 AND total_dai >= 0 "
-            "AND import_vat >= 0 AND total_cost >= 0",
+            "total_freight >= 0 AND total_expenses >= 0 AND total_dai >= 0 AND total_cost >= 0",
             name="ck_retaceos_amounts_nonnegative",
         ),
         CheckConstraint(
@@ -276,7 +260,7 @@ class RetaceoCostModel(UUIDPKMixin, TimestampMixin, Base):
         ),
         UniqueConstraint("id", "company_id", name="uq_retaceo_costs_id_company"),
         CheckConstraint(
-            "classification IN ('freight','expense','dai','import_vat')",
+            "classification IN ('freight','expense','dai')",
             name="ck_retaceo_costs_classification",
         ),
         CheckConstraint("amount > 0", name="ck_retaceo_costs_amount_positive"),

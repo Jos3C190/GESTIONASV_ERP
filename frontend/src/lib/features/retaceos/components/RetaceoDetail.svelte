@@ -68,10 +68,9 @@
   });
 
   const COST_CLASS_LABELS: Record<RetaceoCostClass, string> = {
-    freight: 'Flete',
-    expense: 'Otro gasto',
-    dai: 'DAI',
-    import_vat: 'IVA de importación'
+    freight: 'Flete y seguro',
+    expense: 'Gasto adicional',
+    dai: 'DAI'
   };
 
   function errorMessage(cause: unknown): string {
@@ -314,17 +313,13 @@
       </article>
 
       <article class="rounded-xl border border-border bg-surface p-4">
-        <p class="text-xs font-medium uppercase tracking-wide text-foreground-muted">
-          IVA de importación
-        </p>
+        <p class="text-xs font-medium uppercase tracking-wide text-foreground-muted">DAI total</p>
 
         <p class="mt-2 font-semibold text-foreground">
-          {formatMoney(item.import_vat, item.currency)}
+          {formatMoney(item.total_dai, item.currency)}
         </p>
 
-        <p class="mt-1 text-xs text-foreground-muted">
-          Informativo. No forma parte del costo aterrizado.
-        </p>
+        <p class="mt-1 text-xs text-foreground-muted">Se reparte según el FOB de cada producto.</p>
       </article>
     </div>
 
@@ -454,7 +449,7 @@
           <div>
             <h2 class="font-semibold text-foreground">Gastos reales y comprobantes</h2>
             <p class="mt-1 text-sm text-foreground-muted">
-              Origen, distribución manual por producto y respaldo documental conservado.
+              Origen, reparto según el FOB y respaldo documental conservado.
             </p>
           </div>
           <span class="text-sm text-foreground-muted">{costs.length} registro(s)</span>
@@ -512,13 +507,7 @@
                 </p>
               </div>
 
-              {#if cost.classification === 'import_vat'}
-                <p
-                  class="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground-muted"
-                >
-                  IVA informativo; no forma parte del costo aterrizado.
-                </p>
-              {:else if cost.allocations.length > 0}
+              {#if cost.allocations.length > 0}
                 <div class="rounded-lg border border-border">
                   <h4
                     class="border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted"
@@ -624,7 +613,7 @@
                   >Desglose del costo</summary
                 >
                 <dl class="mt-3 space-y-3 text-sm">
-                  {#each [['Flete', detail.freight], ['Gastos', detail.expenses], ['DAI', detail.dai], ['Costo unitario', detail.unit_cost]] as cost (cost[0])}<div
+                  {#each [['Flete y seguro', detail.freight], ['Gastos adicionales', detail.expenses], ['DAI', detail.dai], ['Costo unitario', detail.unit_cost]] as cost (cost[0])}<div
                       class="flex justify-between gap-3"
                     >
                       <dt class="text-foreground-muted">{cost[0]}</dt>
@@ -647,8 +636,8 @@
                 <th class="px-4 py-3 font-medium">Unidad</th>
                 <th class="px-4 py-3 font-medium">Cantidad</th>
                 <th class="px-4 py-3 font-medium">FOB</th>
-                <th class="px-4 py-3 font-medium">Flete</th>
-                <th class="px-4 py-3 font-medium">Gastos</th>
+                <th class="px-4 py-3 font-medium">Flete y seguro</th>
+                <th class="px-4 py-3 font-medium">Gastos adicionales</th>
                 <th class="px-4 py-3 font-medium">DAI</th>
                 <th class="px-4 py-3 font-medium">Costo total</th>
                 <th class="px-4 py-3 font-medium">Costo unitario</th>
@@ -707,7 +696,7 @@
           <dl class="mt-4 space-y-3 text-sm">
             <div class="flex justify-between gap-4">
               <dt class="text-foreground-muted">
-                Flete · {formatPercentage(item.freight_percentage)}
+                Flete y seguro · {formatPercentage(item.freight_percentage)}
               </dt>
 
               <dd class="font-medium text-foreground">
@@ -717,7 +706,7 @@
 
             <div class="flex justify-between gap-4">
               <dt class="text-foreground-muted">
-                Gastos · {formatPercentage(item.expense_percentage)}
+                Gastos adicionales · {formatPercentage(item.expense_percentage)}
               </dt>
 
               <dd class="font-medium text-foreground">

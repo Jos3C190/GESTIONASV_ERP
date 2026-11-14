@@ -1,4 +1,4 @@
-"""Validation and arithmetic for explicitly entered fixed retaceo components."""
+"""Validation and by-FOB arithmetic for the fixed retaceo components."""
 
 from dataclasses import replace
 from decimal import Decimal
@@ -35,59 +35,64 @@ def protected_invoice(purchase: Purchase, data: RetaceoImportData | None) -> Ret
     )
 
 
-def fixed_allocations(
+def distribute_by_fob(
     sources: tuple[RetaceoSourceLine, ...],
     costs: tuple[RetaceoCost, ...],
     *,
     freight: Decimal,
     dai: Decimal,
-    vat: Decimal,
+    enforce_fixed: bool = True,
 ) -> tuple[RetaceoCost, ...]:
-    # Inputs are amounts typed by the operator. Only distribution arithmetic is automatic.
+    """Distribute every active cost across the received lines in proportion to their FOB.
+
+    Freight and DAI are amounts typed by the operator; they must match their single
+    component. Nothing else is entered per line: the split is always arithmetic.
+    """
+    if enforce_fixed:
+        for kind, value in (
+            (RetaceoCostClass.FREIGHT, freight),
+            (RetaceoCostClass.DAI, dai),
+        ):
+            if not value.is_finite() or value < 0:
+                raise ValidationError(
+                    "Flete y seguro y DAI requieren un importe mayor o igual a cero; escribe 0 si no aplican.",
+                    code="retaceo_fixed_amount_invalid",
+                )
+            rows = [row for row in costs if row.is_active and row.classification is kind]
+            if len(rows) > 1 or sum((row.amount for row in rows), Decimal("0")) != value:
+                raise ValidationError(
+                    "Flete y seguro y DAI deben coincidir con su único componente; no los dupliques como gastos adicionales.",
+                    code="retaceo_fixed_amount_mismatch",
+                )
     result = []
-    for kind, value in (
-        (RetaceoCostClass.FREIGHT, freight),
-        (RetaceoCostClass.DAI, dai),
-        (RetaceoCostClass.IMPORT_VAT, vat),
-    ):
-        if not value.is_finite() or value < 0:
-            raise ValidationError(
-                "Flete, DAI e IVA requieren un importe explícito mayor o igual a cero.",
-                code="retaceo_fixed_amount_invalid",
-            )
-        rows = [row for row in costs if row.is_active and row.classification is kind]
-        if len(rows) > 1 or sum((row.amount for row in rows), Decimal("0")) != value:
-            raise ValidationError(
-                "Flete, DAI e IVA deben coincidir con su único componente. Evite duplicarlos como otros gastos.",
-                code="retaceo_fixed_amount_mismatch",
-            )
     for cost in costs:
-        result_cost = cost
-        if cost.is_active and cost.classification in {
-            RetaceoCostClass.FREIGHT,
-            RetaceoCostClass.DAI,
-        }:
-            allocation = calculate_retaceo_allocation(
-                sources,
-                total_freight=cost.amount
-                if cost.classification is RetaceoCostClass.FREIGHT
-                else Decimal("0"),
-                total_dai=cost.amount
-                if cost.classification is RetaceoCostClass.DAI
-                else Decimal("0"),
-                total_expenses=Decimal("0"),
-            )
-            result_cost = replace(
+        if not cost.is_active:
+            result.append(cost)
+            continue
+        allocation = calculate_retaceo_allocation(
+            sources,
+            total_freight=cost.amount
+            if cost.classification is RetaceoCostClass.FREIGHT
+            else Decimal("0"),
+            total_dai=cost.amount if cost.classification is RetaceoCostClass.DAI else Decimal("0"),
+            total_expenses=cost.amount
+            if cost.classification is RetaceoCostClass.EXPENSE
+            else Decimal("0"),
+        )
+        result.append(
+            replace(
                 cost,
                 allocations=tuple(
                     RetaceoCostAllocation(
                         line.purchase_detail_id,
                         line.freight
                         if cost.classification is RetaceoCostClass.FREIGHT
-                        else line.dai,
+                        else line.dai
+                        if cost.classification is RetaceoCostClass.DAI
+                        else line.expenses,
                     )
                     for line in allocation.lines
                 ),
             )
-        result.append(result_cost)
+        )
     return tuple(result)

@@ -121,17 +121,9 @@ async def _measured_receipt(
             headers=headers,
             json={
                 "purchase_id": purchase["id"],
-                "fob_lines": [
-                    {
-                        "purchase_detail_id": row["id"],
-                        "amount": str(Decimal(row["subtotal"]) - Decimal(row["discount"])),
-                    }
-                    for row in purchase["details"]
-                ],
                 "total_freight": "5.000000",
                 "total_expenses": "0.000000",
                 "total_dai": "3.000000",
-                "import_vat": "13.000000",
                 "notes": "Retaceo pendiente para regresión B4-02",
             },
         )

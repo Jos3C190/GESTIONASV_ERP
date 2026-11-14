@@ -19,10 +19,9 @@ STATUS = {
     "cancelled": "Cancelado",
 }
 CLASSES = {
-    "freight": "Flete",
-    "expense": "Otro gasto",
+    "freight": "Flete y seguro",
+    "expense": "Gasto adicional",
     "dai": "DAI",
-    "import_vat": "IVA de importación",
 }
 
 
@@ -88,8 +87,8 @@ def retaceo_report(item: Retaceo, context: ProcurementReportContext) -> TabularR
                     "Unidad",
                     "Cantidad",
                     "FOB",
-                    "Flete",
-                    "Otros gastos",
+                    "Flete y seguro",
+                    "Gastos adicionales",
                     "DAI",
                     "Costo total",
                     "Costo unitario",
@@ -102,11 +101,10 @@ def retaceo_report(item: Retaceo, context: ProcurementReportContext) -> TabularR
                 "Resumen del retaceo",
                 (
                     "FOB",
-                    "Flete",
-                    "Otros gastos",
+                    "Flete y seguro",
+                    "Gastos adicionales",
                     "DAI",
                     "Costo aterrizado",
-                    "IVA de importación (fuera del costo)",
                 ),
                 (
                     (
@@ -115,11 +113,10 @@ def retaceo_report(item: Retaceo, context: ProcurementReportContext) -> TabularR
                         item.total_expenses,
                         item.total_dai,
                         item.total_cost,
-                        item.import_vat,
                     ),
                 ),
-                (1, 1, 1, 1, 1.5, 2),
-                {index: MONEY for index in range(6)},
+                (1, 1.3, 1.4, 1, 1.5),
+                {index: MONEY for index in range(5)},
             ),
             ReportSection(
                 "Gastos reales y respaldo",
@@ -138,7 +135,7 @@ def retaceo_report(item: Retaceo, context: ProcurementReportContext) -> TabularR
         ),
         notes=(
             "Importes tomados del cálculo guardado. Descargar este reporte no modifica el retaceo ni el inventario.",
-            "El IVA de importación se muestra por separado y no integra el costo aterrizado.",
+            "El costo aterrizado suma el FOB, el flete y seguro, el DAI y los gastos adicionales; cada importe se reparte según el FOB de cada producto.",
             "El costo unitario de esta entrada y el costo promedio global del producto son datos distintos. Consulte la comparación de promedio en el sistema.",
             *((f"Observaciones: {item.notes}",) if item.notes else ()),
         ),

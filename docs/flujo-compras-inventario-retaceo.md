@@ -94,7 +94,7 @@ La orden se prepara a partir de una oferta seleccionada. Su aprobación y envío
 
 **El retaceo distribuye costo; Inventario controla cantidades y movimientos.**
 
-El retaceo se crea desde una compra o recepción elegible, no directamente desde una orden. Distribuye flete, gastos y DAI entre líneas proporcionalmente al FOB. El IVA de importación se conserva por separado y no forma parte del costo total calculado por el retaceo.
+El retaceo se crea desde una compra o recepción elegible, no directamente desde una orden. Regla vigente: costo = FOB (automático y fijo, de la factura de compra) + flete y seguro (importe tecleado) + DAI (importe tecleado) + gastos adicionales; todo se reparte según el FOB de cada línea (ERS p. 81-82, CA-COM-021/022/024). El FOB sale siempre de la factura de compra y no se edita en el retaceo; el costo unitario es el costo total de la línea entre su cantidad. El IVA de importación no forma parte del retaceo: no se captura ni se almacena.
 
 | Estado del retaceo | Significado |
 |---|---|

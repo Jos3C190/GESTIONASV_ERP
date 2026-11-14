@@ -1,7 +1,7 @@
 import { decimalMicros, fromMicros } from '$lib/features/inventory/valuation';
 import type { PurchaseDetail } from '$lib/types/purchase';
 
-export type FixedAmounts = { freight: string; dai: string; vat: string };
+export type FixedAmounts = { freight: string; dai: string };
 
 function roundRatio(numerator: bigint, denominator: bigint): bigint {
   if (denominator <= 0n) throw new Error('La cantidad recibida debe ser mayor que cero.');
@@ -20,25 +20,22 @@ export function receiptFob(
   return fromMicros(roundRatio(net * accepted, decimalMicros(line.quantity_received)));
 }
 
-/** Freight includes insurance. Match the backend's six-decimal half-up arithmetic. */
-export function calculateImportAmounts(
-  fob: string,
-  freight: string,
-  daiRate: string,
-  vatRate: string
-): FixedAmounts {
-  const baseFob = decimalMicros(fob);
-  const transport = decimalMicros(freight);
-  const daiPercent = decimalMicros(daiRate);
-  const vatPercent = decimalMicros(vatRate);
-  if (baseFob <= 0n || daiPercent > 1000000000n || vatPercent > 1000000000n)
-    throw new Error('Completa el FOB y porcentajes válidos de DAI e IVA.');
-  const basis = baseFob + transport;
-  const dai = roundRatio(basis * daiPercent, 100000000n);
-  const vat = roundRatio((basis + dai) * vatPercent, 100000000n);
-  if ([dai, vat, basis + dai].some((amount) => amount > 999999999999999999n))
-    throw new Error('Los importes calculados superan el máximo permitido para el retaceo.');
-  return { freight: fromMicros(transport), dai: fromMicros(dai), vat: fromMicros(vat) };
+const INVALID_AMOUNT = 'Escribe un importe válido con hasta 6 decimales.';
+
+/**
+ * Validates a typed freight or DAI amount. Zero is a valid amount; an empty field is not.
+ * Returns the message to show under the field, or null when the value can be sent.
+ */
+export function validateImportAmount(value: string): string | null {
+  const text = value.trim();
+  if (!text) return 'Escribe un importe; usa 0 si no aplica.';
+  const match = /^(-?)(\d+)(?:\.(\d*))?$/.exec(text);
+  if (!match) return INVALID_AMOUNT;
+  if (match[1]) return 'El importe no puede ser negativo.';
+  // The API stores amounts as NUMERIC(18, 6): twelve integer digits and six decimals.
+  if ((match[3] ?? '').length > 6 || match[2]!.replace(/^0+(?=\d)/, '').length > 12)
+    return INVALID_AMOUNT;
+  return null;
 }
 
 export function otherExpenseCategory(name: string): boolean {
@@ -51,6 +48,16 @@ export function otherExpenseCategory(name: string): boolean {
     !value.startsWith('flete') &&
     !['fob', 'dai', 'aranceles', 'aranceles de importacion', 'iva de importacion'].includes(value)
   );
+}
+
+/** Categories that can be an additional expense of a retaceo: also excludes insurance. */
+export function retaceoExpenseCategory(name: string): boolean {
+  const value = name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+  return otherExpenseCategory(name) && !value.startsWith('seguro');
 }
 
 export function totalAmounts(values: string[]): string {
@@ -77,9 +84,12 @@ export function distributeByFob(
     row.remainder = (total * row.weight) % base;
   }
   let residual = total - rows.reduce((sum, row) => sum + row.value, 0n);
-  const ranked = [...rows].sort((a, b) =>
-    a.remainder === b.remainder ? a.index - b.index : a.remainder > b.remainder ? -1 : 1
-  );
+  // Same tie-break as the backend: larger fraction, then larger weight, then earlier line.
+  const ranked = [...rows].sort((a, b) => {
+    if (a.remainder !== b.remainder) return a.remainder > b.remainder ? -1 : 1;
+    if (a.weight !== b.weight) return a.weight > b.weight ? -1 : 1;
+    return a.index - b.index;
+  });
   for (const row of ranked) {
     if (residual <= 0n) break;
     row.value++;

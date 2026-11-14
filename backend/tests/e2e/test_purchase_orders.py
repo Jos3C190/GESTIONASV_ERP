@@ -1546,17 +1546,9 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
         headers=headers,
         json={
             "purchase_id": purchase_id,
-            "fob_lines": [
-                {
-                    "purchase_detail_id": row["id"],
-                    "amount": str(Decimal(row["subtotal"]) - Decimal(row["discount"])),
-                }
-                for row in purchase["details"]
-            ],
             "total_freight": "5.000000",
             "total_expenses": "0.000000",
             "total_dai": "3.000000",
-            "import_vat": "13.000000",
             "notes": "Retaceo E2E",
         },
     )
@@ -1571,9 +1563,10 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
     assert retaceo["branch_id"] == str(branch_id)
     assert retaceo["details"][0]["purchase_detail_id"] == purchase_detail["id"]
     assert Decimal(retaceo["total_fob"]) == expected_fob
-    # Explicit fixed amounts are distributed across the manually entered FOB.
+    # Typed freight and DAI are distributed by the FOB taken from the purchase invoice.
     assert Decimal(retaceo["total_cost"]) == expected_fob + Decimal("8")
-    assert Decimal(retaceo["import_vat"]) == Decimal("13")
+    assert "import_vat" not in retaceo
+    assert "calculation_mode" not in retaceo
 
     def allocated_costs(
         costs: list[dict[str, object]], *, freight_amount: str = "5.000000"
@@ -1594,16 +1587,6 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
                         "source_purchase_order_expense_id"
                     ),
                     "amount": amount,
-                    "allocations": (
-                        []
-                        if classification == "import_vat"
-                        else [
-                            {
-                                "purchase_detail_id": purchase_detail["id"],
-                                "amount": amount,
-                            }
-                        ]
-                    ),
                 }
             )
         return allocations
@@ -1625,7 +1608,6 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
         "expense_type_id": expense_type_id,
         "incurred_on": datetime.now(UTC).date().isoformat(),
         "amount": "2.000000",
-        "allocations": [{"purchase_detail_id": purchase_detail["id"], "amount": "2.000000"}],
     }
 
     updated = await purchase_order_client.put(
@@ -1635,7 +1617,6 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
             "total_freight": "5.000000",
             "total_expenses": "2.000000",
             "total_dai": "3.000000",
-            "import_vat": "13.000000",
             "notes": "Retaceo con costos distribuidos",
             "costs": [*allocated_costs(created_costs), extra_expense],
         },
@@ -1655,7 +1636,6 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
             "total_freight": "6.000000",
             "total_expenses": "2.000000",
             "total_dai": "3.000000",
-            "import_vat": "13.000000",
             "notes": "Retaceo ajustado",
             "costs": allocated_costs(updated_costs, freight_amount="6.000000"),
         },
@@ -1706,7 +1686,6 @@ async def test_retaceo_workflow_uses_purchase_details_and_audits(
             "total_freight": "1.000000",
             "total_expenses": "1.000000",
             "total_dai": "1.000000",
-            "import_vat": "1.000000",
         },
     )
     assert immutable.status_code == 422

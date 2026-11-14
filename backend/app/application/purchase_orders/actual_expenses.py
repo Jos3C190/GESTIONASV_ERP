@@ -72,7 +72,7 @@ class ActualExpenseUseCases:
             )
         if is_fixed_retaceo_category(category.name):
             raise ValidationError(
-                "FOB, flete, DAI e IVA tienen campos propios en retaceo. Seleccione la categoría del otro gasto.",
+                "FOB, flete y DAI tienen campos propios en el retaceo y el IVA de importación no forma parte del costo. Selecciona la categoría del gasto adicional.",
                 code="actual_expense_fixed_category",
             )
         expense = ActualPurchaseExpense(

@@ -1,10 +1,11 @@
-"""Legacy correction appends value; existing stock and original events stay intact."""
+"""A retaceo never rewrites the receipt FOB; value-only comparisons keep stock intact."""
 
 import uuid
 from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
+from app.domain.entities.inventory import InventoryOperationError
 from app.domain.entities.inventory_valuation import ValuationEvent
 from app.infrastructure.repositories.retaceo_average_comparison import _existing_receipt_comparison
 
@@ -14,14 +15,14 @@ D = Decimal
 
 
 @pytest.mark.asyncio
-async def test_documented_fob_correction_posts_delta_without_rewriting_receipt():
+async def test_fob_that_differs_from_the_receipt_is_rejected_even_with_a_long_note():
+    """The historical FOB correction was removed: notes can no longer bypass the check."""
     retaceo = SimpleNamespace(
         id=uuid.uuid4(),
         company_id=uuid.uuid4(),
         purchase_id=uuid.uuid4(),
         currency="CRC",
         code="RET-CORRECCION",
-        documents_historical_fob_correction=True,
         notes="Descuento corregido según confirmación del responsable y factura original.",
         details=[
             SimpleNamespace(
@@ -31,12 +32,10 @@ async def test_documented_fob_correction_posts_delta_without_rewriting_receipt()
     )
     session = RetaceoSession(retaceo.company_id, retaceo.purchase_id)
     session.receipt.source_value = D("0")
-    await RetaceoValuation(session).apply_retaceo(retaceo, uuid.uuid4())
-    line = session.added[0].summary["lines"][0]
-    assert D(line["total_adjustment"]) == D("2.4")
-    assert line["receipt_fob"] == "0"
-    assert D(line["documented_fob"]) == D("2")
-    assert line["fob_correction_reason"] == retaceo.notes
+    with pytest.raises(InventoryOperationError) as failure:
+        await RetaceoValuation(session).apply_retaceo(retaceo, uuid.uuid4())
+    assert failure.value.code == "retaceo_receipt_cost_mismatch"
+    assert session.added == []
     assert session.receipt.source_value == D("0")
 
 

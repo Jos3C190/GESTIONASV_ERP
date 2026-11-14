@@ -42,8 +42,18 @@ async def _balances(ctx):
         )
 
 
-async def _receive_and_place(client, ctx, index, quantity, value, *, ordered_quantity=None):
-    """Manual FOB is authoritative; no helper bypasses the business writes."""
+UNIT_PRICE = Decimal("12.5")  # Unit price of the quotation used by _sent_order.
+FREIGHT = DAI = Decimal("5")
+
+
+def _landed(quantity):
+    """FOB comes from the purchase invoice; freight and DAI are the typed amounts."""
+    return quantity * UNIT_PRICE + FREIGHT + DAI
+
+
+async def _receive_and_place(client, ctx, index, quantity, *, ordered_quantity=None):
+    """The FOB is the purchase invoice value; no helper bypasses the business writes."""
+    value = _landed(quantity)
     before = await _balances(ctx)
     order = await _sent_order(
         client,
@@ -104,23 +114,16 @@ async def _receive_and_place(client, ctx, index, quantity, value, *, ordered_qua
         json=verification,
     )
     assert premature.status_code == 409, premature.text
-    # The three documented acquisition components are captured explicitly.
+    # Freight and DAI are typed amounts; the FOB always comes from the purchase invoice.
     retaceo = await client.post(
         "/api/v1/retaceos",
         headers=ctx.admin,
         json={
             "purchase_id": purchase["id"],
-            "fob_lines": [
-                {
-                    "purchase_detail_id": purchase["details"][0]["id"],
-                    "amount": str(value - 10),
-                }
-            ],
-            "total_freight": "5",
-            "total_dai": "5",
+            "total_freight": str(FREIGHT),
+            "total_dai": str(DAI),
             "total_expenses": "0",
-            "import_vat": "0",
-            "notes": "FOB manual de factura de prueba; no reutilizar el precio de la oferta.",
+            "notes": "Flete y DAI tecleados; el FOB sale de la factura de compra.",
         },
     )
     assert retaceo.status_code == 201, retaceo.text
@@ -241,7 +244,7 @@ async def _sell_all(client, ctx, units):
         json={"expected_version": converted.json()["version"]},
     )
     assert sale.status_code == 200, sale.text
-    assert await _balances(ctx) == (30, 30, 500)
+    assert await _balances(ctx) == (30, 30, 405)
     delivery = await client.post(
         f"/api/v1/sales/{sale.json()['id']}/deliveries",
         headers={**ctx.admin, "Idempotency-Key": "final-delivery"},
@@ -253,7 +256,7 @@ async def _sell_all(client, ctx, units):
         },
     )
     assert delivery.status_code == 201, delivery.text
-    assert await _balances(ctx) == (30, 30, 500)
+    assert await _balances(ctx) == (30, 30, 405)
     response = await client.post(
         f"/api/v1/sales/deliveries/{delivery.json()['id']}/confirm",
         headers={**ctx.admin, "Idempotency-Key": "final-delivery-confirm"},
@@ -312,8 +315,8 @@ async def test_full_receipts_weighted_average_exhaustion_and_reports(e2e_client)
         )
     ctx.operator = await _operator_headers(client, company, warehouse)
     units = [
-        await _receive_and_place(client, ctx, i, Decimal(qty), Decimal(value))
-        for i, (qty, value) in enumerate(((5, 50), (10, 150), (15, 300)), 1)
+        await _receive_and_place(client, ctx, i, Decimal(qty))
+        for i, qty in enumerate((5, 10, 15), 1)
     ]
     root = "/api/v1/inventory/kardex"
     params = {"inventory_item_id": str(ctx.item), "period_from": ctx.today, "period_to": ctx.today}
@@ -321,11 +324,15 @@ async def test_full_receipts_weighted_average_exhaustion_and_reports(e2e_client)
     assert valued.status_code == 200, valued.text
     original_entries = valued.json()["entries"]
     assert [Decimal(e["average_unit_cost"]) for e in original_entries] == [
-        Decimal("10"),
-        Decimal("13.333333"),
-        Decimal("16.666667"),
+        Decimal("14.5"),
+        Decimal("13.833333"),
+        Decimal("13.5"),
     ]
-    assert [Decimal(e["balance_value"]) for e in original_entries] == [50, 200, 500]
+    assert [Decimal(e["balance_value"]) for e in original_entries] == [
+        Decimal("72.5"),
+        Decimal("207.5"),
+        Decimal("405"),
+    ]
     assert len({u["inventory_lot_detail_id"] for u in units}) == 3
     physical = await client.get(
         f"{root}/physical", headers=ctx.operator, params={**params, "warehouse_id": str(warehouse)}
@@ -336,18 +343,18 @@ async def test_full_receipts_weighted_average_exhaustion_and_reports(e2e_client)
     assert all(row["document_reference"].startswith("COM-") for row in physical.json()["items"])
     await _sell_all(client, ctx, units)
     # With no remaining stock/value the next receipt takes its own landed cost.
-    await _receive_and_place(client, ctx, 4, Decimal(4), Decimal(100), ordered_quantity=Decimal(6))
+    await _receive_and_place(client, ctx, 4, Decimal(4), ordered_quantity=Decimal(6))
     final = await client.get(f"{root}/valuation", headers=admin, params=params)
     assert final.status_code == 200, final.text
     assert final.json()["entries"][:3] == original_entries
-    assert Decimal(final.json()["entries"][-1]["average_unit_cost"]) == 25
-    assert await _balances(ctx) == (4, 4, 100)
+    assert Decimal(final.json()["entries"][-1]["average_unit_cost"]) == 15
+    assert await _balances(ctx) == (4, 4, 60)
     reconciliation = await client.get(f"{root}/reconciliation", headers=admin)
     assert reconciliation.status_code == 200, reconciliation.text
     row = next(r for r in reconciliation.json()["items"] if r["inventory_item_id"] == str(ctx.item))
     assert Decimal(row["physical_quantity"]) == Decimal(row["valued_quantity"]) == 4
     assert Decimal(row["quantity_difference"]) == 0
-    assert Decimal(row["inventory_value"]) == 100
+    assert Decimal(row["inventory_value"]) == 60
     for extension in ("pdf", "xlsx"):
         exported = await client.get(
             f"{root}/valuation/export", headers=admin, params={**params, "format": extension}
@@ -358,8 +365,8 @@ async def test_full_receipts_weighted_average_exhaustion_and_reports(e2e_client)
         else:
             sheet = load_workbook(BytesIO(exported.content))["Historial del costo"]
             assert sheet.max_row == 8  # 4 receipts plus 3 issued logistical units.
-            assert sheet["J2"].value == 10
-            assert sheet.cell(sheet.max_row, 10).value == 25
+            assert sheet["J2"].value == 14.5
+            assert sheet.cell(sheet.max_row, 10).value == 15
     denied = await client.get(f"{root}/valuation", headers=ctx.operator, params=params)
     assert denied.status_code == 403
     assert (

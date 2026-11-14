@@ -65,8 +65,8 @@
       </div>
 
       <p class="mt-3 text-xs leading-5 text-foreground-subtle">
-        Consulta el porcentaje que corresponde a tus productos. En modo automático el sistema
-        calcula los importes con las tasas que ingreses; en modo manual conserva tus importes.
+        Consulta el arancel que corresponde a tus productos y escribe aquí el importe del DAI que
+        figura en tu póliza o declaración.
       </p>
     </div>
   </div>

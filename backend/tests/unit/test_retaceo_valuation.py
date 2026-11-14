@@ -54,7 +54,7 @@ async def setup():
 
 async def test_apply_rejects_unverified_draft():
     _, gateway, use_cases, retaceo = await setup()
-    with pytest.raises(BusinessRuleError, match="Verifique"):
+    with pytest.raises(BusinessRuleError, match="Verifica"):
         await use_cases.apply_retaceo(retaceo.company_id, retaceo.id, uuid4())
     assert gateway.applications == 0
 

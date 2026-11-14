@@ -330,9 +330,10 @@ Reglas principales:
 - El Retaceo pertenece a una compra real, no directamente a una orden de compra.
 - La compra debe estar en estado `received`, `verified` o `closed`.
 - Los retaceos históricos se conservan; las nuevas capturas permiten un retaceo activo por compra.
-- Desde la revisión 0095 el FOB de cada línea se captura manualmente; los registros anteriores conservan su política.
-- Flete y DAI se distribuyen según FOB. Los otros gastos se desglosan y asignan por producto.
-- El IVA de importación (`import_vat`) se almacena y muestra por separado y no forma parte del landed cost (`total_cost`).
+- Regla vigente (ERS p. 81-82, CA-COM-021/022/024; revisión 0117): costo = FOB + flete y seguro + DAI + gastos adicionales. El FOB es automático y fijo: sale siempre de la factura de compra (subtotal menos descuento, proporcional a la cantidad aceptada) y nunca se envía en la solicitud.
+- Flete y seguro y DAI son importes fijos tecleados (`total_freight`, `total_dai`, ambos obligatorios y mayores o iguales a 0; `0` es válido). Los gastos adicionales se desglosan por categoría.
+- Todos los componentes (flete, DAI y gastos adicionales) se reparten en el servidor según el FOB de cada línea (mayor residuo a 6 decimales); el costo unitario es el costo total de la línea entre su cantidad. No se aceptan repartos por línea.
+- El IVA de importación no forma parte del retaceo: no se captura, almacena ni muestra.
 - El flujo es `draft -> calculated -> verified -> closed`; desde `draft` o `calculated` también puede pasar a `cancelled`.
 - Guardar/calcular no mueve stock. El flujo anterior puede aplicar un ajuste de valor al Kardex; el flujo nuevo incorpora el costo con el registro de recepción.
 
@@ -1538,10 +1539,9 @@ Purchase DTOs expose `inventory_workflow`: existing documents use
   warehouse/branch authorization. Returns `required`, `ready`, nullable
   `retaceo_id`, `retaceo_code`, `retaceo_status`. New purchases require exactly
   one active closed retaceo before verification can create stock.
-- Retaceo create/update accept `fob_lines: [{purchase_detail_id, amount}]` for
-  the new workflow. Creation requires exactly one positive, finite manually
-  documented FOB per received detail. Update preserves existing FOB when omitted.
-  Legacy documents cannot use this input to rewrite historic receipt FOB.
+- The FOB of every retaceo line is taken from the purchase receipt on each create
+  and update of a draft; it is not an input (`fob_lines` was removed, see
+  "Retaceo with fixed amounts and without VAT" below).
 - Retaceo create/update accept optional `import_data` with nullable
   `origin_country`, `import_invoice_number/date`, `import_policy_number/date`.
   The response exposes these five fields. Actual cost concepts, classifications,
@@ -1578,8 +1578,9 @@ company, branch, permission and warehouse checks remain authoritative.
 
 ### Manual fixed amounts and actual expense log (2026-10-27, revision 0095)
 
-- New `POST /retaceos` records always use `manual_entry=true`. FOB lines,
-  freight, DAI and import VAT are explicitly entered; no financial amounts or
+- New `POST /retaceos` records always use `manual_entry=true`. (Superseded by
+  revision 0117: the FOB comes from the invoice and import VAT no longer exists.)
+  Freight and DAI are explicitly entered; no financial amounts or
   planned expenses are copied from an order. A missing fixed amount is rejected;
   explicit zero is accepted for a non-applicable charge. Other expenses start at
   zero and must be itemized through the draft editor.
@@ -1589,8 +1590,8 @@ company, branch, permission and warehouse checks remain authoritative.
   `source_purchase_order_expense_id`. Other expenses require category, date and
   description. Attachments are optional for every retaceo cost. An upload already
   started must finish or be removed; absence of files never blocks calculation.
-  Exact allocation checks remain required. Freight and DAI are distributed proportionally to typed FOB;
-  import VAT is separate and never capitalized.
+  Freight, DAI and other expenses are distributed by the server proportionally
+  to the invoice FOB (revision 0117); import VAT is not part of the retaceo.
 - `GET /purchase-orders/{order_id}/actual-expenses` requires
   `purchase_orders:read`. `POST` requires `purchase_orders:manage` and accepts
   `expense_type_id`, `amount`, `incurred_on`, `reference`, `description`.
@@ -1637,13 +1638,55 @@ company, branch, permission and warehouse checks remain authoritative.
   while validating/saving to serialize competing assignments.
 - Confirmed supplier invoice number/date are read-only in manual retaceos.
   Existing historical retaceos keep their prior policy. New manual drafts are
-  unique per purchase while active. A changed legacy FOB requires a documented
-  reason of at least 20 characters in `notes`. Application appends a zero-quantity
-  cost adjustment, retaining original receipt values and historic balances. Its
-  summary records original FOB, typed FOB and reason; it does not rewrite the
-  closed purchase or earlier ledger entries.
+  unique per purchase while active. Since revision 0117 the FOB can no longer be
+  corrected from a retaceo (no typed FOB and no reason in `notes`; a long note no
+  longer bypasses anything). Applying a retaceo whose FOB differs from the
+  provisional receipt cost is rejected with `retaceo_receipt_cost_mismatch`.
+  Application still appends a zero-quantity cost adjustment, retaining original
+  receipt values and historic balances; it does not rewrite the closed purchase or
+  earlier ledger entries. The application summary keeps `receipt_fob` and
+  `documented_fob` (now always equal) and no longer has `fob_correction_reason`.
 - Average comparison adds `value_only`. An already posted legacy receipt is
   projected with value adjustments and zero incoming quantity, including effects
   on intervening issues/returns. Future receipts continue showing incoming stock.
   Applied comparisons use recorded receipt or adjustment entries. This block does
   not move the final stock-posting point; that remains part of the placement block.
+
+### Retaceo with fixed amounts and without VAT (revision 0117)
+
+Rule (ERS p. 81-82, CA-COM-021/022/024): landed cost = FOB (fixed, from the
+purchase invoice) + freight and insurance (typed fixed amount) + DAI (typed fixed
+amount) + additional expenses. Every component is distributed on the server by the
+FOB of each line (largest remainder at six decimals) and the unit cost is the line
+total divided by its quantity. Import VAT is recoverable tax and is not part of the
+retaceo. Inventory valuation is unchanged (it already excluded VAT).
+
+Request contract (`POST /retaceos`, `PUT /retaceos/{id}`, `extra=forbid`):
+
+- Create: `purchase_id`, optional `import_data`, `total_freight` (>= 0, required),
+  `total_dai` (>= 0, required), `total_expenses` (>= 0), `notes`.
+- Update: the same without `purchase_id`, plus optional `costs`. Each cost has
+  `id`, `classification` (`freight`, `expense` or `dai`), `title`, `description`,
+  `amount`, `expense_type_id`, `source_purchase_order_expense_id`, `incurred_on`.
+  For `manual_entry` retaceos (every retaceo created through this API) at most
+  one active freight cost and one active DAI cost may exist and each must equal
+  its typed amount; `0` needs no cost row. Older non-manual drafts are not held to
+  this rule but still have every cost distributed by FOB.
+- On `calculate`, a draft whose stored FOB or cost distribution no longer matches
+  the purchase receipt is rejected with `retaceo_cost_allocation_incomplete`;
+  saving the draft again rebuilds both.
+- Responses no longer contain `import_vat`, `calculation_mode`, `dai_rate` or
+  `vat_rate`. Costs still return their server-computed `allocations`.
+
+**Breaking change.** These now fail with `422`: the fields `calculation_mode`,
+`dai_rate`, `vat_rate`, `import_vat`, `fob_lines`; `costs[].allocations`; and the
+cost classification `import_vat`. The automatic (percentage) mode, the manual FOB
+and the historical FOB correction with a reason were removed.
+
+Removed error codes: `retaceo_import_vat_invalid`, `retaceo_import_vat_not_allocated`,
+`retaceo_automatic_fob_locked`, `retaceo_fob_required`, `retaceo_fob_lines_invalid`,
+`retaceo_fob_invalid`, `retaceo_historical_fob_locked`, `retaceo_calculation_invalid`.
+Messages changed for `retaceo_fixed_amount_invalid`, `retaceo_fixed_amount_mismatch`,
+`retaceo_fixed_category_invalid`, `retaceo_expense_category_invalid`,
+`retaceo_cost_allocation_incomplete` and `actual_expense_fixed_category`.
+The retaceo export no longer has the VAT column.

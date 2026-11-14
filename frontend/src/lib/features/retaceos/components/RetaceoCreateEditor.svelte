@@ -8,13 +8,14 @@
   import CustomsReferencePanel from '$lib/features/retaceos/components/CustomsReferencePanel.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
   import type { Purchase } from '$lib/types/purchase';
-  import type { RetaceoImportData, RetaceoCalculationMode } from '$lib/types/retaceo';
+  import type { RetaceoImportData } from '$lib/types/retaceo';
   import RetaceoImportFields from './RetaceoImportFields.svelte';
   import RetaceoFixedAmounts from './RetaceoFixedAmounts.svelte';
+  import RetaceoFobLines from './RetaceoFobLines.svelte';
   import {
-    calculateImportAmounts,
     receiptFob,
     totalAmounts,
+    validateImportAmount,
     type FixedAmounts
   } from '../manual-costs';
 
@@ -37,25 +38,33 @@
     import_policy_number: null,
     import_policy_date: null
   });
-  let fobAmounts = $state<Record<string, string>>({});
-  let calculationMode = $state<RetaceoCalculationMode>('automatic');
-  let daiRate = $state('');
-  let vatRate = $state('');
-  let manualBackup: FixedAmounts | null = null;
-  const manualFob = $derived(calculationMode === 'manual');
-  const fobTotal = $derived.by(() => {
-    try {
-      return totalAmounts(manualFob ? Object.values(fobAmounts) : receivedLines.map(receiptFob));
-    } catch {
-      return '';
-    }
-  });
-  let fixedAmounts = $state<FixedAmounts>({ freight: '', dai: '', vat: '' });
+  let fixedAmounts = $state<FixedAmounts>({ freight: '', dai: '' });
+  let submitted = $state(false);
   let receivedLines = $derived(
     purchase?.details.filter(
       (line) => Number(line.quantity_accepted ?? line.quantity_received) > 0
     ) ?? []
   );
+  // The FOB is fixed: it is the net value of the purchase invoice lines, never typed here.
+  const fobLines = $derived.by(() => {
+    try {
+      return receivedLines.map((line, index) => ({
+        key: line.id,
+        label: productLabels.get(line.product_id) ?? `Producto de la línea ${index + 1}`,
+        detail: `Cantidad: ${line.quantity_accepted ?? line.quantity_received}`,
+        amount: receiptFob(line)
+      }));
+    } catch {
+      return [];
+    }
+  });
+  const fobTotal = $derived.by(() => {
+    try {
+      return totalAmounts(fobLines.map((line) => line.amount));
+    } catch {
+      return '';
+    }
+  });
   let productLabels = $state<Map<number, string>>(new Map());
   let loading = $state(true);
   let saving = $state(false);
@@ -86,11 +95,8 @@
     error = null;
     purchase = null;
     notes = '';
-    fixedAmounts = { freight: '', dai: '', vat: '' };
-    calculationMode = 'automatic';
-    daiRate = '';
-    vatRate = '';
-    manualBackup = null;
+    fixedAmounts = { freight: '', dai: '' };
+    submitted = false;
     importData = {
       origin_country: null,
       import_invoice_number: null,
@@ -110,7 +116,6 @@
         import_invoice_number: current.supplier_invoice_number,
         import_invoice_date: current.supplier_invoice_date
       };
-      fobAmounts = {};
       const products = await Promise.all(
         [...new Set(current.details.map((line) => line.product_id))].map((id) =>
           catalogApi.getProduct(id).catch(() => null)
@@ -132,25 +137,6 @@
     }
   }
 
-  function changeCalculationMode(mode: RetaceoCalculationMode) {
-    if (mode === calculationMode) return;
-    if (mode === 'automatic') manualBackup = { ...fixedAmounts };
-    else if (manualBackup) fixedAmounts = { ...manualBackup };
-    calculationMode = mode;
-  }
-
-  $effect(() => {
-    if (calculationMode !== 'automatic') return;
-    try {
-      const calculated = calculateImportAmounts(fobTotal, fixedAmounts.freight, daiRate, vatRate);
-      fixedAmounts.dai = calculated.dai;
-      fixedAmounts.vat = calculated.vat;
-    } catch {
-      fixedAmounts.dai = '';
-      fixedAmounts.vat = '';
-    }
-  });
-
   async function submit() {
     if (!canManage || !purchase || saving) return;
 
@@ -161,29 +147,9 @@
       saving = false;
       return;
     }
-    if (
-      Object.values(fixedAmounts).some(
-        (value) => !value.trim() || !Number.isFinite(Number(value)) || Number(value) < 0
-      )
-    ) {
-      error =
-        calculationMode === 'automatic'
-          ? 'Completa el flete y los porcentajes de DAI e IVA; escribe 0 cuando no apliquen.'
-          : 'Completa flete, DAI e IVA; escribe 0 cuando no apliquen.';
-      saving = false;
-      return;
-    }
-
-    if (
-      manualFob &&
-      receivedLines.some(
-        (line) =>
-          !fobAmounts[line.id]?.trim() ||
-          !Number.isFinite(Number(fobAmounts[line.id])) ||
-          Number(fobAmounts[line.id]) <= 0
-      )
-    ) {
-      error = 'Escribe el FOB documentado de cada producto; debe ser mayor que cero.';
+    submitted = true;
+    if (Object.values(fixedAmounts).some((value) => validateImportAmount(value) !== null)) {
+      error = 'Completa el flete y seguro y el DAI; escribe 0 cuando no apliquen.';
       saving = false;
       return;
     }
@@ -191,22 +157,10 @@
     try {
       const created = await retaceosApi.create({
         purchase_id: purchase.id,
-        calculation_mode: calculationMode,
-        dai_rate: manualFob ? null : daiRate,
-        vat_rate: manualFob ? null : vatRate,
         import_data: importData,
-        ...(manualFob
-          ? {
-              fob_lines: receivedLines.map((line) => ({
-                purchase_detail_id: line.id,
-                amount: fobAmounts[line.id] ?? ''
-              }))
-            }
-          : {}),
         total_freight: fixedAmounts.freight,
-        total_expenses: '0',
         total_dai: fixedAmounts.dai,
-        import_vat: fixedAmounts.vat,
+        total_expenses: '0',
         notes: notes.trim() || null
       });
 
@@ -344,19 +298,8 @@
       <div class="mt-4"><CustomsReferencePanel /></div>
     </details>
 
-    {#if !['retaceo_before_inventory', 'placement_before_inventory'].includes(purchase.inventory_workflow ?? '')}
-      <div
-        class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm leading-6 text-foreground"
-        role="note"
-      >
-        Esta recepción pertenece al flujo anterior y puede estar en inventario. Si corriges su FOB,
-        explica el importe anterior, el correcto y el respaldo en Notas (mínimo 20 caracteres). Al
-        aplicar el retaceo se añadirá un ajuste de valor; se conserva la recepción original y no se
-        suman unidades otra vez.
-      </div>
-    {/if}
-
     <form
+      novalidate
       class="space-y-5"
       onsubmit={(event) => {
         event.preventDefault();
@@ -370,55 +313,15 @@
         invoiceLocked
       />
       <RetaceoFixedAmounts
-        mode={calculationMode}
-        {daiRate}
-        {vatRate}
         fob={fobTotal}
-        onmodechange={changeCalculationMode}
-        onrateinput={(key, value) => {
-          if (key === 'dai') daiRate = value;
-          else vatRate = value;
-        }}
+        creating
+        showErrors={submitted}
         value={fixedAmounts}
         currency={purchase.currency}
         disabled={saving}
         oninput={(key, value) => (fixedAmounts[key] = value)}
       />
-      {#if manualFob}
-        <article class="space-y-4 rounded-xl border border-border bg-surface p-4">
-          <h2 class="font-semibold text-foreground">FOB documentado por producto</h2>
-          <p class="max-w-prose text-sm leading-6 text-foreground-muted">
-            Importe total documentado de cada producto, sin flete ni DAI.
-          </p>
-          {#each receivedLines as line, index (line.id)}
-            <label class="block rounded-lg border border-border p-4">
-              <span class="block text-sm font-medium text-foreground"
-                >{productLabels.get(line.product_id) ?? `Producto de la línea ${index + 1}`}</span
-              >
-              <span class="mt-1 block text-xs text-foreground-muted"
-                >Cantidad: {line.quantity_received} · Subtotal: {formatMoney(
-                  line.subtotal,
-                  purchase.currency
-                )} · Descuento: {formatMoney(line.discount, purchase.currency)} · Impuesto de compra:
-                {formatMoney(line.tax_amount, purchase.currency)}</span
-              >
-              <span class="mb-1 mt-3 block text-xs font-medium text-foreground"
-                >FOB total de la línea ({purchase.currency})</span
-              >
-              <input
-                type="number"
-                required
-                min="0.000001"
-                step="0.000001"
-                value={fobAmounts[line.id] ?? ''}
-                oninput={(event) => (fobAmounts[line.id] = event.currentTarget.value)}
-                disabled={saving}
-                class="h-10 w-full rounded-lg border border-border-control bg-surface px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              />
-            </label>
-          {/each}
-        </article>
-      {/if}
+      <RetaceoFobLines lines={fobLines} currency={purchase.currency} />
 
       <article class="space-y-4 rounded-xl border border-border bg-surface p-4">
         <div class="rounded-xl border border-primary/20 bg-primary/5 p-4">
@@ -426,7 +329,7 @@
             Siguiente paso: registrar costos y comprobantes
           </h2>
           <p class="mt-1 max-w-prose text-sm leading-6 text-foreground-muted">
-            Guarda para desglosar otros gastos y, si lo deseas, adjuntar comprobantes. El
+            Guarda para registrar los gastos adicionales y, si lo deseas, adjuntar comprobantes. El
             presupuesto no se carga automáticamente.
           </p>
         </div>

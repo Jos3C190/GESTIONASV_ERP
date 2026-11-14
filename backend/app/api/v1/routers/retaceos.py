@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -48,8 +47,8 @@ from app.application.retaceos.cost_documents import (
     RetaceoCostDocumentService,
     RetaceoCostDocumentView,
 )
-from app.application.retaceos.use_cases import RetaceoCostDraft, RetaceoFobDraft
-from app.domain.entities.retaceo import Retaceo, RetaceoCostAllocation, RetaceoStatus
+from app.application.retaceos.use_cases import RetaceoCostDraft
+from app.domain.entities.retaceo import Retaceo, RetaceoStatus
 from app.infrastructure.procurement_report_renderer import render_pdf, render_xlsx
 from app.infrastructure.repositories.procurement_report_repository import (
     ProcurementReportRepository,
@@ -187,13 +186,9 @@ def _retaceo_audit_state(item: Retaceo) -> dict[str, object]:
         "currency": item.currency,
         "total_fob": str(item.total_fob),
         "manual_entry": item.manual_entry,
-        "calculation_mode": item.calculation_mode,
-        "dai_rate": str(item.dai_rate) if item.dai_rate is not None else None,
-        "vat_rate": str(item.vat_rate) if item.vat_rate is not None else None,
         "total_freight": str(item.total_freight),
         "total_expenses": str(item.total_expenses),
         "total_dai": str(item.total_dai),
-        "import_vat": str(item.import_vat),
         "total_cost": str(item.total_cost),
         "status": item.status.value,
         "applied_at": item.applied_at.isoformat() if item.applied_at else None,
@@ -402,18 +397,9 @@ async def create_retaceo(
         created_by_id=current.id,
         purchase_id=payload.purchase_id,
         import_data=payload.import_data.to_domain() if payload.import_data is not None else None,
-        fob_lines=tuple(
-            RetaceoFobDraft(line.purchase_detail_id, line.amount) for line in payload.fob_lines
-        )
-        if payload.fob_lines is not None
-        else None,
         total_freight=payload.total_freight,
         total_expenses=payload.total_expenses,
-        total_dai=payload.total_dai if payload.total_dai is not None else Decimal("0"),
-        calculation_mode=payload.calculation_mode,
-        dai_rate=payload.dai_rate,
-        vat_rate=payload.vat_rate,
-        import_vat=payload.import_vat if payload.import_vat is not None else Decimal("0"),
+        total_dai=payload.total_dai,
         notes=payload.notes,
     )
     await _audit_change(
@@ -455,17 +441,8 @@ async def update_retaceo(
         retaceo_id=retaceo_id,
         import_data=payload.import_data.to_domain() if payload.import_data is not None else None,
         total_freight=payload.total_freight,
-        fob_lines=tuple(
-            RetaceoFobDraft(line.purchase_detail_id, line.amount) for line in payload.fob_lines
-        )
-        if payload.fob_lines is not None
-        else None,
         total_expenses=payload.total_expenses,
-        total_dai=payload.total_dai if payload.total_dai is not None else Decimal("0"),
-        calculation_mode=payload.calculation_mode,
-        dai_rate=payload.dai_rate,
-        vat_rate=payload.vat_rate,
-        import_vat=payload.import_vat if payload.import_vat is not None else Decimal("0"),
+        total_dai=payload.total_dai,
         notes=payload.notes,
         costs=(
             tuple(
@@ -478,13 +455,6 @@ async def update_retaceo(
                     expense_type_id=cost.expense_type_id,
                     source_purchase_order_expense_id=cost.source_purchase_order_expense_id,
                     incurred_on=cost.incurred_on,
-                    allocations=tuple(
-                        RetaceoCostAllocation(
-                            purchase_detail_id=allocation.purchase_detail_id,
-                            amount=allocation.amount,
-                        )
-                        for allocation in cost.allocations
-                    ),
                 )
                 for cost in payload.costs
             )

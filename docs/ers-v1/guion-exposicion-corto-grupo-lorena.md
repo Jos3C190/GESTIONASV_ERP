@@ -32,10 +32,10 @@ forma coherente. Imprimir etiquetas o repetir una consulta no aumenta existencia
 ## Seis ideas para recordar
 
 1. **Consolidado:** agrupa necesidades; la RFQ reúne lo que se pide a cada proveedor.
-2. **FOB del formulario:** valor documentado de la mercancía de cada línea, sin
-   volver a sumar flete ni DAI. El descuento debe poder explicarse.
-3. **Retaceo:** costo de la entrada = mercancía + flete + DAI + otros gastos que
-   correspondan al costo. El IVA de importación se registra separado en este flujo.
+2. **FOB:** valor neto de la factura de compra de cada línea (subtotal menos
+   descuento), automático y fijo; no se vuelve a sumar flete ni DAI.
+3. **Retaceo:** costo de la entrada = FOB + flete y seguro + DAI + gastos
+   adicionales, repartidos según el FOB (ERS p. 81-82). No incluye IVA.
 4. **Lote:** distingue recepciones y permite rastrear el producto hasta su compra.
 5. **Promedio:** combina el valor restante anterior y el costo de la nueva entrada,
    dividido entre las cantidades correspondientes. Con existencia y valor anteriores
@@ -93,7 +93,7 @@ la valoración, cambia a la cuenta administrativa.
 
 | Pregunta | Respuesta breve |
 |---|---|
-| ¿Dónde ingresas FOB, flete y DAI? | «Manualmente en retaceo. Los ceros son explícitos cuando no aplican; los otros gastos tienen su desglose.» |
+| ¿Dónde ingresas FOB, flete y DAI? | «El FOB sale de la factura. El flete y seguro y el DAI se escriben en el retaceo (0 si no aplican); los gastos adicionales tienen su desglose.» |
 | ¿Qué pasa con los gastos previstos? | «Son presupuesto. Los reales se registran aparte y se relacionan con el retaceo; no se suman dos veces.» |
 | ¿Se puede agregar otro gasto después de cerrar? | «El cierre bloquea nuevos gastos reales de la orden y conserva el cálculo cerrado.» |
 | ¿Es obligatorio adjuntar un PDF a cada gasto? | «Es opcional. Si inicié una carga, debo terminarla o quitarla; los montos y su distribución sí se validan.» |
