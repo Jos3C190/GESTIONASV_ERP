@@ -39,6 +39,9 @@ dependencies = [
     "reportlab>=4.2,<5",
     "defusedxml>=0.7.1,<1",
     "boto3>=1.40,<2",
+    # In-process API client used by the operations seed (seed.seed_grupo_lorena_operations),
+    # which also runs in the production image.
+    "httpx>=0.27,<0.29",
     # ARQ 0.28 currently requires redis-py < 6; it remains compatible with Redis 7.4 server.
     "redis>=5.3,<6",
     "arq>=0.28,<0.29",
