@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
+from decimal import Decimal
 
 from app.infrastructure.db.session import session_scope
 from app.infrastructure.models.catalog import (
@@ -24,6 +26,15 @@ from seed.seed_grupo_lorena import COMPANY_ID, _restore_seed_record
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("seed_catalog")
+
+#: Harina suave: one 50 lb sack is its purchase, sale and inventory base unit.
+#: 50 lb = 22.6796185 kg (1 lb = 0.45359237 kg exactly) needs seven decimals,
+#: more than presentation factors store, so the sack itself is the unit.
+SOFT_FLOUR_SKU = "PRD-HAR-001"
+SOFT_FLOUR_SACK_LB = Decimal("50")
+SOFT_FLOUR_SACK_KG = SOFT_FLOUR_SACK_LB * Decimal("0.45359237")
+#: Sack length, width and height in centimetres (same as its handling unit).
+SOFT_FLOUR_SACK_CM = (Decimal("80"), Decimal("50"), Decimal("18"))
 
 # Comprehensive ISO 3166-1 Country List (Latin American Spanish names es-SV)
 COUNTRIES_DATA = [
@@ -575,10 +586,19 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
             "id_sub_category": sub_harina,
             "original_code": "HAR-SV-50",
             "internal_code": "INT-001",
-            "purchase_unit": unit_kg,
+            # One 50 lb sack is the purchase, sale and inventory unit: exact, no
+            # conversion (50 lb = 22.6796185 kg does not fit six decimals).
+            "purchase_unit": unit_u,
             "sale_unit": unit_u,
             "presentation": "Saco 50lb",
             "description": "Harina especial para elaboración de pan dulce y repostería artesanal.",
+            "weight": SOFT_FLOUR_SACK_LB,
+            "weight_unit": "lb",
+            "dimension_length": SOFT_FLOUR_SACK_CM[0],
+            "dimension_width": SOFT_FLOUR_SACK_CM[1],
+            "dimension_height": SOFT_FLOUR_SACK_CM[2],
+            "dimension_unit": "cm",
+            "variant_mode": "standalone",
         },
         {
             "sku": "PRD-LAC-002",
@@ -811,6 +831,7 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
     # Keeping these links in the seed makes the product and supplier screens
     # useful together without creating any product variants.
     sourcing_data = [
+        ("PRD-HAR-001", "PROV-001", 24.50),
         ("PRD-HAR-003", "PROV-001", 18.50),
         ("PRD-AZU-004", "PROV-003", 12.75),
         ("PRD-LEV-005", "PROV-004", 9.40),
@@ -875,6 +896,165 @@ async def seed_catalog_data(db: AsyncSession) -> None:  # noqa: C901
     await db.flush()
     await db.commit()
     logger.info("Products seeded successfully.")
+
+
+@dataclass(frozen=True, slots=True)
+class SoftFlourState:
+    """What the correction of PRD-HAR-001 needs to know about an existing database."""
+
+    purchase_unit: str | None
+    base_unit: str | None
+    has_history: bool
+    weight: Decimal | None
+    dimensions: tuple[Decimal | None, Decimal | None, Decimal | None]
+
+
+def plan_soft_flour_correction(state: SoftFlourState) -> tuple[dict[str, object], list[str]]:
+    """Changes that make the 50 lb sack the purchase unit, and why anything is left alone.
+
+    Only the value the old catalogue seeded (kilogram) is replaced, and only while
+    nothing was requested, quoted, ordered, received or moved with it. The
+    inventory base unit is never changed: it must already be the unit (one sack).
+    Weight and dimensions are filled only when empty.
+    """
+    if state.base_unit not in (None, "UNIT"):
+        return {}, [
+            f"{SOFT_FLOUR_SKU}: su unidad base de inventario es {state.base_unit}; "
+            "no se corrige automáticamente."
+        ]
+    changes: dict[str, object] = {}
+    notes: list[str] = []
+    if state.purchase_unit == "KILOGRAM":
+        if state.has_history:
+            notes.append(
+                f"{SOFT_FLOUR_SKU}: ya tiene documentos o movimientos; "
+                "la unidad de compra se deja como está."
+            )
+        else:
+            changes["purchase_unit_id"] = "UNIT"
+    if state.weight is None:
+        changes["weight"] = SOFT_FLOUR_SACK_LB
+        changes["weight_unit"] = "lb"
+    if all(value is None for value in state.dimensions):
+        length, width, height = SOFT_FLOUR_SACK_CM
+        changes.update(
+            dimension_length=length,
+            dimension_width=width,
+            dimension_height=height,
+            dimension_unit="cm",
+        )
+    return changes, notes
+
+
+#: Tables whose rows mean the product already took part in a business document.
+_SOFT_FLOUR_HISTORY_TABLES = (
+    "purchase_request_details",
+    "purchase_consolidation_lines",
+    "purchase_quotation_details",
+    "purchase_order_details",
+    "purchase_details",
+    "inventory_lot_details",
+    "sales_quotation_lines",
+    "sales_lines",
+)
+
+
+async def ensure_soft_flour_units(db: AsyncSession) -> list[str]:
+    """Idempotent correction of PRD-HAR-001 in an existing database; returns what it did.
+
+    Uses the catalogue use case (the same validation as the Products screen) and
+    records an audit entry. Commits only when something changed.
+    """
+    from app.application.audit.audit_service import AuditService
+    from app.application.catalog.use_cases import CatalogUseCases
+    from app.infrastructure.models.inventory import (
+        InventoryItemModel,
+        InventoryMovementLineModel,
+    )
+    from app.infrastructure.repositories.audit_repository import SqlAlchemyAuditRepository
+    from app.infrastructure.repositories.catalog_repository import SqlAlchemyCatalogRepository
+    from sqlalchemy import text
+
+    product = await db.scalar(
+        select(ProductModel).where(
+            ProductModel.company_id == COMPANY_ID,
+            func.lower(ProductModel.sku) == SOFT_FLOUR_SKU.casefold(),
+            ProductModel.deleted_at.is_(None),
+        )
+    )
+    if product is None:
+        return [f"{SOFT_FLOUR_SKU}: no existe; nada que corregir."]
+    codes = {
+        row.id_unit: row.code
+        for row in await db.scalars(select(UnitModel).where(UnitModel.owner_company_id.is_(None)))
+    }
+    unit_ids = {code: unit_id for unit_id, code in codes.items()}
+    item = await db.scalar(
+        select(InventoryItemModel).where(
+            InventoryItemModel.company_id == COMPANY_ID,
+            InventoryItemModel.product_id == product.id_product,
+        )
+    )
+    has_history = False
+    if item is not None:
+        has_history = bool(
+            await db.scalar(
+                select(func.count())
+                .select_from(InventoryMovementLineModel)
+                .where(InventoryMovementLineModel.inventory_item_id == item.id)
+            )
+        )
+    for table in _SOFT_FLOUR_HISTORY_TABLES:
+        if has_history:
+            break
+        # Fixed table names from the allowlist above; values are bound.
+        has_history = bool(
+            await db.scalar(
+                text(f"SELECT EXISTS (SELECT 1 FROM {table} WHERE product_id = :product)"),
+                {"product": product.id_product},
+            )
+        )
+    state = SoftFlourState(
+        purchase_unit=codes.get(product.purchase_unit),
+        base_unit=codes.get(item.base_unit_id) if item is not None else None,
+        has_history=has_history,
+        weight=product.weight,
+        dimensions=(product.dimension_length, product.dimension_width, product.dimension_height),
+    )
+    changes, notes = plan_soft_flour_correction(state)
+    if not changes:
+        return notes or [f"{SOFT_FLOUR_SKU}: unidades ya correctas."]
+    if "purchase_unit_id" in changes:
+        changes["purchase_unit_id"] = unit_ids[str(changes["purchase_unit_id"])]
+
+    def audited(*values: object) -> dict[str, str | None]:
+        keys = ("purchase_unit_id", "sale_unit_id", "weight", "weight_unit")
+        return {
+            key: None if value is None else str(value)
+            for key, value in zip(keys, values, strict=True)
+        }
+
+    before = audited(product.purchase_unit, product.sale_unit, product.weight, product.weight_unit)
+    updated = await CatalogUseCases(SqlAlchemyCatalogRepository(db)).update_product(
+        COMPANY_ID, product.id_product, **changes
+    )
+    await AuditService(SqlAlchemyAuditRepository(db)).record(
+        action="UPDATE",
+        company_id=COMPANY_ID,
+        resource_type="products",
+        resource_id=str(product.id_product),
+        before_state=before,
+        after_state=audited(
+            updated.purchase_unit_id, updated.sale_unit_id, updated.weight, updated.weight_unit
+        ),
+        metadata={
+            "source": "seed_catalog.ensure_soft_flour_units",
+            "reason": "Un saco de 50 lb es la unidad de compra, venta e inventario (exacta).",
+        },
+        required=True,
+    )
+    await db.commit()
+    return [*notes, f"{SOFT_FLOUR_SKU}: corregido ({', '.join(sorted(changes))})."]
 
 
 async def main():

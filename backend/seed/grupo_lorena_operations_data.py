@@ -622,6 +622,20 @@ class ProductSetup:
 PRODUCTS: Mapping[str, ProductSetup] = {
     setup.sku: setup
     for setup in (
+        # Harina suave: the 50 lb sack is the purchase and base unit (no conversion).
+        # Same measures as its handling unit in the capacity demo: 0.80 x 0.50 x 0.18 m.
+        ProductSetup(
+            "PRD-HAR-001",
+            "UNIT",
+            D("1"),
+            None,
+            None,
+            "bag",
+            D("22.9"),
+            D("0.072"),
+            20,
+            "SEC",
+        ),
         ProductSetup(
             "PRD-HAR-003",
             "KILOGRAM",
@@ -1250,6 +1264,54 @@ CONSOLIDATIONS: tuple[ConsolidationSeed, ...] = (
         awards={},
         orders=(),
         close=False,
+    ),
+    # Added after A-D: its own keys, so a rerun on a database that already has
+    # them only creates this cycle and never touches the earlier documents.
+    ConsolidationSeed(
+        key="F",
+        title="Consolidado de harina suave por saco de 50 lb para pan dulce",
+        requests=(
+            RequestSeed(
+                "F-SM",
+                "LOR-SM-01",
+                "mauricio.hernandez",
+                (("PRD-HAR-001", D("40")),),
+                "Pan dulce y repostería de la quincena: se compran sacos completos de 50 lb.",
+            ),
+            RequestSeed(
+                "F-USU",
+                "LOR-USU-01",
+                "karla.argueta",
+                (("PRD-HAR-001", D("20")),),
+                "Reposición de harina suave para semita y pan dulce del fin de semana.",
+            ),
+            RequestSeed(
+                "F-HQ",
+                HEADQUARTERS,
+                CENTRAL_MANAGER,
+                (("PRD-HAR-001", D("40")),),
+                "Existencia central de harina suave para abastecer a las tiendas.",
+            ),
+        ),
+        quotes=(
+            QuoteSeed("PROV-001", {"PRD-HAR-001": D("24.50")}, "30 días crédito", 2),
+            QuoteSeed("PROV-003", {"PRD-HAR-001": D("25.10")}, "Contado contra entrega", 1),
+        ),
+        awards={"PRD-HAR-001": "PROV-001"},
+        orders=(
+            OrderSeed(
+                "PROV-001",
+                "received",
+                2,
+                receipt=ReceiptSeed(
+                    "CCF-HES-0018790",
+                    0,
+                    RetaceoSeed(
+                        notes="Compra local por saco: entrega en bodega sin flete; sin DAI."
+                    ),
+                ),
+            ),
+        ),
     ),
 )
 

@@ -75,6 +75,13 @@ Para reconciliar deliberadamente los registros canónicos use
 `FORCE_SEED=true`; esta opción puede restaurar registros de demostración enviados
 a la papelera y no debe habilitarse de forma permanente.
 
+Los pasos complementarios (corrección de la harina suave, flota con documentos
+de demostración y, con `SEED_DEMO_OPERATIONS=true`, la operación de demostración)
+tienen sus propios marcadores `seed.catalog.soft_flour_units`,
+`seed.grupo_lorena.fleet` y `seed.grupo_lorena.operations`. Si el log del servicio
+`seed` dice `will retry`, el paso se repite en el siguiente arranque; para la
+flota suele significar que RustFS o ClamAV no respondían.
+
 ---
 
 ## 2. Problemas de Backend y Alembic (FastAPI)

@@ -5,6 +5,7 @@ import pytest
 from app.api.v1.schemas.fleet import normalize_plate
 from app.application.documents.service import inspect_document
 from app.application.fleet.compliance import license_issue
+from app.infrastructure.document_categories import CATEGORY_RULES
 from seed.grupo_lorena_documents import (
     driver_documents,
     render_demo_document,
@@ -19,8 +20,10 @@ from seed.seed_grupo_lorena_fleet import (
     DEFAULT_LICENSE_CLASSES,
     FLEET,
     HEADQUARTERS_FLEET,
+    OVERRIDE_REASON,
     PLATE_2011,
     PLATE_ALPHANUMERIC,
+    override_for,
     plate_problem,
     validate_fleet_seed,
 )
@@ -89,8 +92,38 @@ def test_headquarters_fleet_moves_stock_to_the_stores() -> None:
         assert license_issue(driver.license_class, kind, DEFAULT_LICENSE_CLASSES) is None
 
 
-def test_store_vehicles_keep_their_compliance_override() -> None:
-    assert [item.documents for item in FLEET].count(True) == 1
+def test_every_vehicle_and_driver_gets_documents() -> None:
+    assert all(item.documents for item in FLEET)
+
+
+def test_override_only_while_vehicle_or_driver_lack_documents() -> None:
+    vehicle, employee = object(), object()
+    assert override_for({vehicle, employee}, {vehicle, employee, object()}) is None
+    assert override_for({vehicle, employee}, {vehicle}) == OVERRIDE_REASON
+    assert override_for({vehicle, employee}, set()) == OVERRIDE_REASON
+
+
+def test_demo_documents_cover_every_required_category() -> None:
+    required = {
+        (module, code) for (module, code), (_expiry, needed) in CATEGORY_RULES.items() if needed
+    }
+    for item in FLEET:
+        for vehicle in item.vehicles:
+            codes = {
+                document.category_code
+                for document in vehicle_documents(
+                    vehicle.code, vehicle.plate, vehicle.brand, vehicle.model, TODAY
+                )
+            }
+            assert {code for module, code in required if module == "fleet"} <= codes
+            assert "circulation_card_back" in codes
+        for driver in item.drivers:
+            codes = {
+                document.category_code
+                for document in driver_documents(driver.code, "Nombre", driver.license_class, TODAY)
+            }
+            assert {code for module, code in required if module == "employees"} <= codes
+            assert "driver_license_back" in codes
 
 
 def test_seed_refuses_licenses_the_company_catalogue_forbids() -> None:

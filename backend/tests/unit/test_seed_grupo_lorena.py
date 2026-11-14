@@ -21,6 +21,84 @@ def test_seed_reconciliation_requires_explicit_force_flag(monkeypatch) -> None:
     assert seed_data.force_seed_enabled() is True
 
 
+def test_follow_ups_run_fleet_automatically_and_operations_only_on_request() -> None:
+    keys = [step.key for step in seed_data.FOLLOW_UPS]
+    assert keys == [
+        "seed.catalog.soft_flour_units",
+        "seed.grupo_lorena.fleet",
+        "seed.grupo_lorena.operations",
+    ]
+    enabled = {step.key: step.enabled for step in seed_data.FOLLOW_UPS}
+    assert enabled["seed.grupo_lorena.fleet"]() is True
+
+
+def test_only_the_compose_entrypoint_runs_the_follow_ups(monkeypatch) -> None:
+    received: dict[str, object] = {}
+
+    async def fake_bootstrap(**kwargs):
+        received.update(kwargs)
+        return False
+
+    monkeypatch.setattr(seed_data, "bootstrap", fake_bootstrap)
+    seed_data.main()
+    assert received == {"follow_ups": True}
+
+
+def test_demo_operations_need_the_flag_and_never_run_in_production(monkeypatch) -> None:
+    monkeypatch.delenv("SEED_DEMO_OPERATIONS", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    assert seed_data.demo_operations_enabled() is False
+    monkeypatch.setenv("SEED_DEMO_OPERATIONS", "true")
+    assert seed_data.demo_operations_enabled() is True
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    assert seed_data.demo_operations_enabled() is False
+
+
+async def _run_follow_ups(monkeypatch, steps, markers, *, force=False):
+    written: dict[str, str] = {}
+
+    async def read_marker(_session, key):
+        return markers.get(key)
+
+    async def write_marker(_session, key, value):
+        written[key] = value
+
+    monkeypatch.setattr(seed_data, "FOLLOW_UPS", steps)
+    monkeypatch.setattr(seed_data, "_read_marker", read_marker)
+    monkeypatch.setattr(seed_data, "_write_marker", write_marker)
+    await seed_data._follow_ups(object(), force)
+    return written
+
+
+async def test_follow_ups_mark_only_finished_steps_and_survive_failures(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def step(key, result, enabled=True):
+        async def run():
+            calls.append(key)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        return seed_data.FollowUp(key, "v1", run, lambda: enabled)
+
+    steps = (
+        step("done", True),
+        step("incomplete", False),
+        step("broken", RuntimeError("antivirus caído")),
+        step("disabled", True, enabled=False),
+        step("already", True),
+    )
+    written = await _run_follow_ups(monkeypatch, steps, {"already": "v0"})
+    assert calls == ["done", "incomplete", "broken"]
+    assert written == {"done": "v1"}
+
+    calls.clear()
+    written = await _run_follow_ups(monkeypatch, steps, {"already": "v0"}, force=True)
+    assert calls == ["done", "incomplete", "broken", "already"]
+    assert written == {"done": "v1", "already": "v1"}
+
+
 def test_grupo_lorena_seed_data_is_consistent() -> None:
     validate_seed_data()
     assert len(BRANCHES) == 7

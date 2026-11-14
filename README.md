@@ -88,6 +88,22 @@ departamentos, empleados, usuarios operativos, categorías, almacenes y
 ubicaciones. Tras completarse guarda un marcador en `app_meta`; los reinicios
 posteriores la omiten para no resucitar registros eliminados intencionalmente.
 
+Después, el mismo servicio `seed` ejecuta una sola vez cada paso complementario,
+con su propio marcador (también en bases sembradas antes de que existiera):
+
+| Paso | Marcador | Cuándo |
+|------|----------|--------|
+| Harina suave por saco de 50 lb (`PRD-HAR-001`: unidad de compra, venta e inventario = saco, sin conversión) | `seed.catalog.soft_flour_units` | Siempre; no cambia la unidad si el producto ya tiene documentos o movimientos |
+| Flota (`seed_grupo_lorena_fleet`): vehículos, conductores y documentos de demostración (tarjeta de circulación, seguro, revisión técnica, licencia) | `seed.grupo_lorena.fleet` | Siempre. Si el almacenamiento o el antivirus no responden, asigna con excepción registrada y reintenta los documentos en el siguiente arranque |
+| Operación de demostración (`seed_grupo_lorena_operations`): compras, recepciones, ubicación y traslados | `seed.grupo_lorena.operations` | Solo con `SEED_DEMO_OPERATIONS=true`, nunca con `ENVIRONMENT=production` |
+
+Un paso complementario que falla se informa en el log y se reintenta en el
+siguiente arranque; no detiene el stack. Cada seed también puede ejecutarse a
+mano, de forma idempotente: `docker compose exec backend python -m
+seed.seed_grupo_lorena_fleet` o `... -m seed.seed_grupo_lorena_operations`.
+En producción el servicio no siembra (`compose.prod.yaml` fija `AUTO_SEED=false`
+y `SEED_DEMO_OPERATIONS=false`; el despliegue a EC2 no ejecuta seeds).
+
 También registra el logo de la empresa y las galerías de sus siete sucursales
 mediante un manifiesto versionado de 36 activos públicos de Cloudinary. La
 semilla no contiene credenciales ni binarios: para visualizar las imágenes se
@@ -145,6 +161,7 @@ make test-backend    # tests backend
 make test-frontend   # tests frontend
 make seed            # ejecutar solo si el bootstrap todavía no fue completado
 # FORCE_SEED=true make seed  # reconciliación explícita (puede restaurar canónicos)
+# SEED_DEMO_OPERATIONS=true make seed  # además crea la operación de demostración
 make reset-db        # wipe + migrar (destructivo)
 make clean           # remover todo (contenedores, volúmenes, imágenes)
 make storage-backup  # respaldar objetos y manifiesto con checksums

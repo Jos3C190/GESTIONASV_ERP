@@ -147,6 +147,31 @@ def render_demo_document(seed: DocumentSeed) -> bytes:
     return buffer.getvalue()
 
 
+async def document_pipeline_ready() -> bool:
+    """Whether the object storage answers and the antivirus is up, before uploading.
+
+    Without this check every upload would wait for the antivirus timeout and
+    leave documents pending scan.
+    """
+    from app.core.config import settings
+    from app.infrastructure.malware_scanner import ClamAVScanner
+    from app.infrastructure.object_storage import S3ObjectStorage
+
+    if not settings.OBJECT_STORAGE_ENABLED:
+        return False
+    scanner = ClamAVScanner(
+        settings.CLAMAV_HOST, settings.CLAMAV_PORT, settings.CLAMAV_TIMEOUT_SECONDS
+    )
+    if not await scanner.health():
+        return False
+    try:
+        # A missing key answers None; an unreachable store or bucket raises.
+        await S3ObjectStorage(settings).head("seed-preflight/ready")
+    except Exception:
+        return False
+    return True
+
+
 async def _has_valid_document(
     session: AsyncSession,
     *,
