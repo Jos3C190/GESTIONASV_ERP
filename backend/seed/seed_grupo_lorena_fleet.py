@@ -1,33 +1,55 @@
 """Idempotent development seed for the Grupo Lorena fleet.
 
-Each branch gets two delivery vehicles (a refrigerated truck for cakes and a
-cargo van) and two drivers. Drivers are new fictional employees of the
-"Logística y Distribución" department with an EMPLEADO user account that has an
-unrecoverable random password, like every other seeded account.
+Each store gets two delivery vehicles (a refrigerated truck for cakes and a
+cargo van) and two drivers. The headquarters, where the central warehouse is,
+gets three 2025 vehicles for transfers to the stores (two refrigerated trucks
+and a cargo van) and their three drivers. Drivers are new fictional employees of
+the "Logística y Distribución" department with an EMPLEADO user account that has
+an unrecoverable random password, like every other seeded account.
+
+Plates follow the two formats in use in El Salvador: the 2011 format, a class
+letter and six digits (``C 118-402``), still valid for vehicles registered
+before the new series, and the alphanumeric format of new registrations, with
+digits and the letters A to F (``C 1A7-F35``). The class is ``C`` for cargo
+vehicles and ``P`` for private pickups.
 
 The seed follows the same rules as the Fleet and Drivers screens: the
 department is opened in the branch before hiring, the driver keeps an active
-assignment in their home branch, and the license class allows the vehicle kind.
-Mandatory documents (driver license, circulation card, insurance...) are not
-invented: they must be uploaded through Documents. Until then each vehicle is
-assigned to its driver with a recorded compliance override, exactly as a user
-with ``fleet:compliance_override`` would do it.
+assignment in their home branch, and the license class allows the vehicle kind
+in the company's catalogue of vehicle types. Store vehicles have no mandatory
+documents (driver license, circulation card, insurance...): they must be
+uploaded through Documents, so each is assigned to its driver with a recorded
+compliance override, exactly as a user with ``fleet:compliance_override`` would
+do it. The headquarters vehicles and drivers get demonstration documents through
+the real document pipeline, so they can dispatch transfers without exceptions.
 
-Run inside the backend container: ``python -m seed.seed_grupo_lorena_fleet``.
+Existing vehicles are never moved or rewritten; they only get their transit
+location for transfers when it is missing. Run inside the backend container:
+``python -m seed.seed_grupo_lorena_fleet``.
 """
 
 from __future__ import annotations
 
 import asyncio
+import re
 import secrets
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import func, select
 
+from seed.grupo_lorena_documents import driver_documents, ensure_documents, vehicle_documents
 from seed.grupo_lorena_media import COMPANY_ID
-from seed.seed_grupo_lorena import SUPER_ADMIN_USERNAME, _restore_seed_record, _session_factory
+from seed.seed_grupo_lorena import (
+    EMPLOYEES,
+    HEADQUARTERS,
+    SUPER_ADMIN_USERNAME,
+    _restore_seed_record,
+    _session_factory,
+)
 
 SOURCE = "seed_grupo_lorena_fleet"
 DEPARTMENT = "Logística y Distribución"
@@ -36,6 +58,20 @@ DRIVER_ROLE = "EMPLEADO"
 OVERRIDE_REASON = (
     "Datos de desarrollo: licencia y documentos del vehículo pendientes de cargar en Documentos."
 )
+
+#: Default license classes of the system vehicle types (migration 0107). At run
+#: time the seed checks the company's own catalogue, which an admin may edit.
+DEFAULT_LICENSE_CLASSES: Mapping[str, frozenset[str]] = {
+    "refrigerated": frozenset({"pesada", "pesada_t"}),
+    "cargo_van": frozenset({"liviana", "pesada", "pesada_t"}),
+    "pickup": frozenset({"particular", "liviana", "pesada", "pesada_t"}),
+}
+#: Plate class letter of each vehicle kind the seed uses.
+PLATE_CLASS_BY_KIND: Mapping[str, str] = {"refrigerated": "C", "cargo_van": "C", "pickup": "P"}
+#: Seeded vehicles of this model year onwards carry the new alphanumeric plates.
+ALPHANUMERIC_PLATE_YEAR = 2025
+PLATE_2011 = re.compile(r"^(?P<cls>[A-Z]{1,2}) \d{3}-\d{3}$")
+PLATE_ALPHANUMERIC = re.compile(r"^(?P<cls>[A-Z]{1,2}) (?=\S*[A-F])[0-9A-F]{3}-[0-9A-F]{3}$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,13 +101,23 @@ class DriverSeed:
 
 @dataclass(frozen=True, slots=True)
 class BranchFleetSeed:
+    #: Store code, or ``HEADQUARTERS`` for the company's headquarters.
     branch: str
-    vehicles: tuple[VehicleSeed, VehicleSeed]
-    drivers: tuple[DriverSeed, DriverSeed]
+    vehicles: tuple[VehicleSeed, ...]
+    drivers: tuple[DriverSeed, ...]
+    #: Upload demonstration documents so vehicles and drivers pass compliance.
+    documents: bool = False
 
 
 REFRIGERATED_NOTE = "Furgón refrigerado para pasteles y producto de cadena de frío."
 VAN_NOTE = "Panel para reparto urbano de pedidos y abastecimiento entre sucursales."
+CENTRAL_REFRIGERATED_NOTE = (
+    "Furgón refrigerado para traslados de pastelería y cadena de frío "
+    "de la bodega central a las tiendas."
+)
+CENTRAL_VAN_NOTE = (
+    "Panel para traslados de producto seco y empaque de la bodega central a las tiendas."
+)
 
 
 def _fleet(
@@ -118,6 +164,61 @@ def _fleet(
             DriverSeed(*van_driver, license_class="liviana", vehicle=van_code),
         ),
     )
+
+
+HEADQUARTERS_FLEET = BranchFleetSeed(
+    branch=HEADQUARTERS,
+    vehicles=(
+        VehicleSeed(
+            "VEH-HQ-01",
+            "C 3A8-1F4",
+            "refrigerated",
+            "Isuzu",
+            "NQR 75 Refrigerado",
+            2025,
+            "3500",
+            "diesel",
+            "18450.0",
+            CENTRAL_REFRIGERATED_NOTE,
+        ),
+        VehicleSeed(
+            "VEH-HQ-02",
+            "C 3B2-0E7",
+            "refrigerated",
+            "Hino",
+            "300 Serie 616 Refrigerado",
+            2025,
+            "3000",
+            "diesel",
+            "15320.0",
+            CENTRAL_REFRIGERATED_NOTE,
+        ),
+        VehicleSeed(
+            "VEH-HQ-03",
+            "C 4C1-D96",
+            "cargo_van",
+            "Toyota",
+            "Hiace Panel",
+            2025,
+            "1200",
+            "diesel",
+            "12780.0",
+            CENTRAL_VAN_NOTE,
+        ),
+    ),
+    drivers=(
+        DriverSeed(
+            "GL-0045", "Mario Ernesto", "Carranza Joya", "mario.carranza", "pesada", "VEH-HQ-01"
+        ),
+        DriverSeed(
+            "GL-0046", "Julio César", "Osorio Aguilar", "julio.osorio", "pesada", "VEH-HQ-02"
+        ),
+        DriverSeed(
+            "GL-0047", "Elmer Geovany", "Barahona Soriano", "elmer.barahona", "liviana", "VEH-HQ-03"
+        ),
+    ),
+    documents=True,
+)
 
 
 FLEET: tuple[BranchFleetSeed, ...] = (
@@ -177,36 +278,84 @@ FLEET: tuple[BranchFleetSeed, ...] = (
         ("GL-0039", "Henry Alberto", "Campos Molina", "henry.campos"),
         ("GL-0040", "Erick Geovanny", "Flores Amaya", "erick.flores"),
     ),
+    HEADQUARTERS_FLEET,
 )
 
 
-def validate_fleet_seed() -> None:
+def plate_problem(vehicle: VehicleSeed) -> str | None:
+    """Why a seeded plate is not a coherent Salvadoran plate for the vehicle, if it is not."""
     from app.api.v1.schemas.fleet import normalize_plate
-    from app.application.fleet.compliance import LICENSE_CLASSES_BY_KIND
 
+    if normalize_plate(vehicle.plate) != vehicle.plate:
+        return f"la placa de {vehicle.code} no está normalizada"
+    alphanumeric = vehicle.year >= ALPHANUMERIC_PLATE_YEAR
+    match = (PLATE_ALPHANUMERIC if alphanumeric else PLATE_2011).match(vehicle.plate)
+    if match is None:
+        expected = "alfanumérico (C 1A7-F35)" if alphanumeric else "de 2011 (C 118-402)"
+        return f"{vehicle.code} ({vehicle.year}) debe llevar placa con formato {expected}"
+    expected_class = PLATE_CLASS_BY_KIND.get(vehicle.kind)
+    if expected_class is None:
+        return f"no hay clase de placa definida para {vehicle.kind}"
+    if match["cls"] != expected_class:
+        return f"{vehicle.code} es {vehicle.kind}: su placa debe ser clase {expected_class}"
+    return None
+
+
+def validate_fleet_seed(rules: Mapping[str, frozenset[str]] = DEFAULT_LICENSE_CLASSES) -> None:
+    """Fail fast on duplicate or incoherent fleet data; ``rules`` are license classes per kind."""
     vehicles = [vehicle for item in FLEET for vehicle in item.vehicles]
     drivers = [driver for item in FLEET for driver in item.drivers]
+    # Drivers are employees too: their codes and users must not clash with the staff seed.
+    staff_codes = [str(employee["code"]) for employee in EMPLOYEES]
+    staff_users = [
+        str(user).casefold() for employee in EMPLOYEES if (user := employee.get("username"))
+    ]
     for label, values in (
+        ("sucursales", [item.branch for item in FLEET]),
         ("códigos de vehículo", [vehicle.code for vehicle in vehicles]),
-        ("placas", [normalize_plate(vehicle.plate) for vehicle in vehicles]),
-        ("códigos de empleado", [driver.code for driver in drivers]),
-        ("usuarios", [driver.username.casefold() for driver in drivers]),
+        ("placas", [vehicle.plate for vehicle in vehicles]),
+        ("códigos de empleado", [driver.code for driver in drivers] + staff_codes),
+        ("usuarios", [driver.username.casefold() for driver in drivers] + staff_users),
         ("vehículos asignados", [driver.vehicle for driver in drivers]),
     ):
         if len(values) != len(set(values)):
             raise ValueError(f"Hay {label} duplicados en el seed de flota.")
+    problems = [problem for vehicle in vehicles if (problem := plate_problem(vehicle))]
+    if problems:
+        raise ValueError(f"Placas incoherentes: {'; '.join(problems)}.")
     for item in FLEET:
-        kinds = {vehicle.code: vehicle.kind for vehicle in item.vehicles}
-        for driver in item.drivers:
-            kind = kinds.get(driver.vehicle)
-            if kind is None:
-                raise ValueError(f"{driver.code} tiene un vehículo de otra sucursal.")
-            if driver.license_class not in LICENSE_CLASSES_BY_KIND[kind]:
-                raise ValueError(f"La licencia de {driver.code} no permite conducir {kind}.")
+        _validate_licenses(item, rules)
+
+
+def _validate_licenses(item: BranchFleetSeed, rules: Mapping[str, frozenset[str]]) -> None:
+    from app.application.fleet.compliance import license_issue
+
+    kinds = {vehicle.code: vehicle.kind for vehicle in item.vehicles}
+    for driver in item.drivers:
+        kind = kinds.get(driver.vehicle)
+        if kind is None:
+            raise ValueError(f"{driver.code} tiene un vehículo de otra sucursal.")
+        if kind not in rules:
+            raise ValueError(f"No existe el tipo de vehículo {kind}.")
+        if license_issue(driver.license_class, kind, rules) is not None:
+            raise ValueError(f"La licencia de {driver.code} no permite conducir {kind}.")
+
+
+@dataclass(slots=True)
+class _Pair:
+    """A seeded vehicle and its driver, assigned once their documents are settled."""
+
+    branch_id: Any
+    vehicle: Any
+    driver: Any
+    override: str | None
 
 
 async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed atomic
     from app.api.v1.routers.fleet import ensure_inventory_vehicle
+    from app.application.fleet.costs import BUSINESS_TZ
+    from app.application.fleet.settings import settings_from
+    from app.core.config import settings
     from app.core.security import hash_password
     from app.infrastructure.models.audit import AuditLog
     from app.infrastructure.models.employee import (
@@ -217,7 +366,9 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
     )
     from app.infrastructure.models.fleet import (
         DriverModel,
+        FleetSettingsModel,
         FleetVehicleModel,
+        FleetVehicleTypeModel,
         OdometerReadingModel,
         VehicleDriverAssignmentModel,
     )
@@ -251,6 +402,13 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
         )
         if department is None or role is None:
             raise RuntimeError(f"Faltan el departamento {DEPARTMENT} o el rol {DRIVER_ROLE}.")
+        type_rows = await session.execute(
+            select(FleetVehicleTypeModel.code, FleetVehicleTypeModel.license_classes).where(
+                FleetVehicleTypeModel.company_id == COMPANY_ID
+            )
+        )
+        # The company's catalogue decides; the seed refuses to assign what it forbids.
+        validate_fleet_seed({row.code: frozenset(row.license_classes) for row in type_rows})
 
         def audit(
             action: str,
@@ -275,15 +433,28 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             )
 
         random_password_hash = hash_password(secrets.token_urlsafe(48))
-        created = {"vehicles": 0, "drivers": 0, "users": 0, "assignments": 0}
+        created = {"vehicles": 0, "drivers": 0, "users": 0, "assignments": 0, "documents": 0}
+        linked = 0
+        pairs: list[_Pair] = []
+        documented: list[tuple[BranchFleetSeed, dict[str, Any], list[tuple[Any, DriverSeed]]]] = []
         for item in FLEET:
-            branch = await session.scalar(
-                select(Branch).where(
-                    Branch.company_id == COMPANY_ID,
-                    Branch.code == item.branch,
-                    Branch.deleted_at.is_(None),
+            if item.branch == HEADQUARTERS:
+                branch = await session.scalar(
+                    select(Branch).where(
+                        Branch.company_id == COMPANY_ID,
+                        Branch.is_headquarters.is_(True),
+                        Branch.is_active.is_(True),
+                        Branch.deleted_at.is_(None),
+                    )
                 )
-            )
+            else:
+                branch = await session.scalar(
+                    select(Branch).where(
+                        Branch.company_id == COMPANY_ID,
+                        Branch.code == item.branch,
+                        Branch.deleted_at.is_(None),
+                    )
+                )
             if branch is None or not branch.is_active:
                 raise RuntimeError(f"La sucursal {item.branch} no existe o no está activa.")
 
@@ -365,8 +536,16 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                 else:
                     # Never move or rewrite a vehicle someone already edited.
                     _restore_seed_record(vehicle)
+                    if vehicle.inventory_vehicle_id is None:
+                        # Created before the company had a central warehouse.
+                        vehicle.inventory_vehicle_id = await ensure_inventory_vehicle(
+                            session, vehicle, actor_id
+                        )
+                        if vehicle.inventory_vehicle_id is not None:
+                            linked += 1
                 vehicles[vehicle_seed.code] = vehicle
 
+            drivers: list[tuple[Any, DriverSeed]] = []
             for driver_seed in item.drivers:
                 employee = await session.scalar(
                     select(Employee)
@@ -516,50 +695,111 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                         },
                     )
                     created["drivers"] += 1
-
-                # Assign only free pairs: never take over an assignment made by a user.
-                vehicle = vehicles[driver_seed.vehicle]
-                busy = await session.scalar(
-                    select(func.count())
-                    .select_from(VehicleDriverAssignmentModel)
-                    .where(
-                        VehicleDriverAssignmentModel.ends_at.is_(None),
-                        (VehicleDriverAssignmentModel.vehicle_id == vehicle.id)
-                        | (VehicleDriverAssignmentModel.driver_id == driver.id),
+                drivers.append((employee, driver_seed))
+                pairs.append(
+                    _Pair(
+                        branch.id,
+                        vehicles[driver_seed.vehicle],
+                        driver,
+                        None if item.documents else OVERRIDE_REASON,
                     )
                 )
-                if (
-                    busy
-                    or vehicle.status == "retired"
-                    or vehicle.deleted_at is not None
-                    or driver.status != "active"
-                    or driver.branch_id != vehicle.branch_id
-                ):
-                    continue
-                link = VehicleDriverAssignmentModel(
-                    company_id=COMPANY_ID,
-                    vehicle_id=vehicle.id,
-                    driver_id=driver.id,
-                    starts_at=datetime.now(UTC),
-                    assigned_by=actor_id,
+            if item.documents:
+                documented.append((item, dict(vehicles), drivers))
+
+        # Documents go through storage and the antivirus, which commit on their own.
+        await session.commit()
+        if documented and not settings.OBJECT_STORAGE_ENABLED:
+            print("Sin almacenamiento de documentos: la matriz se asigna con excepción.")
+            for pair in pairs:
+                pair.override = OVERRIDE_REASON
+        elif documented:
+            today = datetime.now(BUSINESS_TZ).date()
+            warning_days = settings_from(
+                await session.get(FleetSettingsModel, COMPANY_ID)
+            ).document_warning_days
+            for item, by_code, staff in documented:
+                for vehicle_seed in item.vehicles:
+                    created["documents"] += await ensure_documents(
+                        session,
+                        company_id=COMPANY_ID,
+                        actor_id=actor_id,
+                        module="fleet",
+                        owner_type="vehicle",
+                        owner_id=by_code[vehicle_seed.code].id,
+                        documents=vehicle_documents(
+                            vehicle_seed.code,
+                            by_code[vehicle_seed.code].plate or vehicle_seed.plate,
+                            vehicle_seed.brand,
+                            vehicle_seed.model,
+                            today,
+                        ),
+                        today=today,
+                        warning_days=warning_days,
+                    )
+                for employee, driver_seed in staff:
+                    created["documents"] += await ensure_documents(
+                        session,
+                        company_id=COMPANY_ID,
+                        actor_id=actor_id,
+                        module="employees",
+                        owner_type="employee",
+                        owner_id=employee.id,
+                        documents=driver_documents(
+                            driver_seed.code,
+                            f"{driver_seed.first} {driver_seed.last}",
+                            driver_seed.license_class,
+                            today,
+                        ),
+                        today=today,
+                        warning_days=warning_days,
+                    )
+
+        for pair in pairs:
+            # Assign only free pairs: never take over an assignment made by a user.
+            vehicle, driver = pair.vehicle, pair.driver
+            busy = await session.scalar(
+                select(func.count())
+                .select_from(VehicleDriverAssignmentModel)
+                .where(
+                    VehicleDriverAssignmentModel.ends_at.is_(None),
+                    (VehicleDriverAssignmentModel.vehicle_id == vehicle.id)
+                    | (VehicleDriverAssignmentModel.driver_id == driver.id),
                 )
-                session.add(link)
-                await session.flush()
-                audit(
-                    "ASSIGN_DRIVER",
-                    "fleet_vehicles",
-                    vehicle.id,
-                    branch.id,
-                    {"driver_id": str(driver.id), "assignment_id": str(link.id)},
-                    compliance_override=OVERRIDE_REASON,
-                )
-                created["assignments"] += 1
+            )
+            if (
+                busy
+                or vehicle.status == "retired"
+                or vehicle.deleted_at is not None
+                or driver.status != "active"
+                or driver.branch_id != vehicle.branch_id
+            ):
+                continue
+            link = VehicleDriverAssignmentModel(
+                company_id=COMPANY_ID,
+                vehicle_id=vehicle.id,
+                driver_id=driver.id,
+                starts_at=datetime.now(UTC),
+                assigned_by=actor_id,
+            )
+            session.add(link)
+            await session.flush()
+            audit(
+                "ASSIGN_DRIVER",
+                "fleet_vehicles",
+                vehicle.id,
+                pair.branch_id,
+                {"driver_id": str(driver.id), "assignment_id": str(link.id)},
+                **({"compliance_override": pair.override} if pair.override else {}),
+            )
+            created["assignments"] += 1
 
         await session.commit()
     print(
-        f"Flota de Grupo Lorena lista: {len(FLEET)} sucursales; nuevos: "
+        f"Flota de Grupo Lorena lista: {len(FLEET)} sedes; nuevos: "
         f"{created['vehicles']} vehículos, {created['drivers']} conductores, "
-        f"{created['users']} usuarios y {created['assignments']} asignaciones."
+        f"{created['users']} usuarios, {created['assignments']} asignaciones y "
+        f"{created['documents']} documentos; {linked} vehículos enlazados a tránsito."
     )
 
 

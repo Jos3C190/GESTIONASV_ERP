@@ -41,6 +41,12 @@ COMPANY_NIT = "1217-060102-101-1"
 SUPER_ADMIN_USERNAME = os.environ.get("SUPER_ADMIN_USERNAME", "superadmin")
 SUPER_ADMIN_EMAIL = os.environ.get("SUPER_ADMIN_EMAIL", "superadmin@erp-system.dev")
 SUPER_ADMIN_EMPLOYEE_CODE = "GL-SYS-001"
+#: Seed key of the headquarters branch. Its real code depends on the company
+#: (``HQ-XXXXXXXX``), so employees name it with this key instead.
+HEADQUARTERS = "MATRIZ"
+#: Head of the central warehouse: manages it and, while vacant, the headquarters.
+CENTRAL_WAREHOUSE_MANAGER_CODE = "GL-0041"
+CENTRAL_WAREHOUSE_DEPARTMENT = "Logística y Distribución"
 
 
 @dataclass(frozen=True, slots=True)
@@ -575,6 +581,42 @@ EMPLOYEES: tuple[dict[str, str | bool], ...] = (
         "position": "Asesora de Ventas",
         "branch": "LOR-ET-01",
     },
+    # Central warehouse team at the headquarters. Its drivers live in the fleet seed.
+    {
+        "code": CENTRAL_WAREHOUSE_MANAGER_CODE,
+        "first": "Rigoberto Antonio",
+        "last": "Cardona Mendoza",
+        "department": CENTRAL_WAREHOUSE_DEPARTMENT,
+        "position": "Jefe de Bodega Central",
+        "branch": HEADQUARTERS,
+        "username": "rigoberto.cardona",
+        "role": "JEFE DE ALMACÉN",
+        "all_branches": False,
+    },
+    {
+        "code": "GL-0042",
+        "first": "Wendy Carolina",
+        "last": "Alas Henríquez",
+        "department": CENTRAL_WAREHOUSE_DEPARTMENT,
+        "position": "Auxiliar de Bodega",
+        "branch": HEADQUARTERS,
+    },
+    {
+        "code": "GL-0043",
+        "first": "Jonathan Alexis",
+        "last": "Cañas Turcios",
+        "department": CENTRAL_WAREHOUSE_DEPARTMENT,
+        "position": "Auxiliar de Bodega",
+        "branch": HEADQUARTERS,
+    },
+    {
+        "code": "GL-0044",
+        "first": "Ana Gabriela",
+        "last": "Recinos Palacios",
+        "department": CENTRAL_WAREHOUSE_DEPARTMENT,
+        "position": "Auxiliar de Bodega",
+        "branch": HEADQUARTERS,
+    },
 )
 
 
@@ -599,11 +641,16 @@ def validate_seed_data() -> None:
         for branch in BRANCHES
     ):
         raise ValueError("Una o más coordenadas de sucursal no son válidas.")
+    if HEADQUARTERS in branch_codes:
+        raise ValueError(f"{HEADQUARTERS} está reservado para la matriz.")
     unknown_branches = {
-        str(employee["branch"]) for employee in EMPLOYEES if employee["branch"] not in branch_codes
+        str(employee["branch"])
+        for employee in EMPLOYEES
+        if employee["branch"] not in {*branch_codes, HEADQUARTERS}
     }
     if unknown_branches:
         raise ValueError(f"Empleados con sucursales desconocidas: {sorted(unknown_branches)}")
+    _validate_central_warehouse_team()
     unknown_departments = {
         str(employee["department"])
         for employee in EMPLOYEES
@@ -627,6 +674,18 @@ def validate_seed_data() -> None:
     if unknown_permissions:
         raise ValueError(f"Permisos empresariales desconocidos: {sorted(unknown_permissions)}")
     validate_media_manifest(set(branch_codes))
+
+
+def _validate_central_warehouse_team() -> None:
+    managers = [
+        employee
+        for employee in EMPLOYEES
+        if employee["code"] == CENTRAL_WAREHOUSE_MANAGER_CODE
+        and employee["branch"] == HEADQUARTERS
+        and employee.get("role") == "JEFE DE ALMACÉN"
+    ]
+    if len(managers) != 1:
+        raise ValueError("Falta el jefe de la bodega central en la matriz.")
 
 
 def _session_factory() -> async_sessionmaker[AsyncSession]:
@@ -949,6 +1008,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
         Employee,
         EmployeeBranchAssignment,
     )
+    from app.infrastructure.models.location import LocationCodeAlias
     from app.infrastructure.models.organization import (
         Branch,
         Company,
@@ -1225,8 +1285,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     )
                     .order_by(Branch.id)
                 )
-            )
-            .scalars()
+            ).scalars()
         )
         if len(active_headquarters) > 1:
             raise RuntimeError("Grupo Lorena tiene más de una sucursal matriz activa.")
@@ -1265,6 +1324,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
             headquarters_branch.is_headquarters = True
             headquarters_branch.is_active = True
             await session.flush()
+        employee_branches: dict[str, Branch] = {**branches, HEADQUARTERS: headquarters_branch}
 
         await _seed_media(
             session,
@@ -1414,7 +1474,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     )
                     session.add(membership)
                 membership.access_all_branches = bool(employee_seed.get("all_branches", False))
-                membership.last_branch_id = branches[str(employee_seed["branch"])].id
+                membership.last_branch_id = employee_branches[str(employee_seed["branch"])].id
                 await session.flush()
                 role = roles.get(str(employee_seed["role"]))
                 if role is None:
@@ -1429,7 +1489,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                         )
                     )
                 if not membership.access_all_branches:
-                    branch = branches[str(employee_seed["branch"])]
+                    branch = employee_branches[str(employee_seed["branch"])]
                     user_branch = await session.get(UserBranch, (user.id, branch.id))
                     if user_branch is None:
                         session.add(
@@ -1448,7 +1508,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     AuditLog(
                         user_id=superadmin_id,
                         company_id=company.id,
-                        branch_id=branches[str(employee_seed["branch"])].id,
+                        branch_id=employee_branches[str(employee_seed["branch"])].id,
                         action="CREATE",
                         resource_type="employees",
                         resource_id=str(employee.id),
@@ -1464,7 +1524,7 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
 
         for employee_seed in EMPLOYEES:
             employee = employees[str(employee_seed["code"])]
-            branch = branches[str(employee_seed["branch"])]
+            branch = employee_branches[str(employee_seed["branch"])]
             assignment = (
                 await session.execute(
                     select(EmployeeBranchAssignment)
@@ -1613,6 +1673,14 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                         .execution_options(include_deleted=True)
                     )
                 ).scalar_one_or_none()
+                if location is None and await session.scalar(
+                    select(LocationCodeAlias.id).where(
+                        LocationCodeAlias.warehouse_id == warehouse.id,
+                        func.lower(LocationCodeAlias.alias_code) == location_code.casefold(),
+                    )
+                ):
+                    # Someone recoded this seeded location; the old code is reserved for it.
+                    continue
                 if location is None:
                     session.add(
                         Location(
@@ -1654,11 +1722,70 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     location.notes = f"Zona de {label.lower()} de la bodega."
                     location.is_active = True
 
+        central_note = await _link_central_warehouse_team(
+            session,
+            company_id=company.id,
+            headquarters_branch=headquarters_branch,
+            manager=employees[CENTRAL_WAREHOUSE_MANAGER_CODE],
+            department=departments[CENTRAL_WAREHOUSE_DEPARTMENT],
+        )
+
         await session.commit()
         print(
             f"Grupo Lorena listo: {len(BRANCHES)} sucursales, {len(DEPARTMENTS)} departamentos, "
-            f"{len(warehouses)} almacenes y {len(EMPLOYEES)} empleados."
+            f"{len(warehouses)} almacenes y {len(EMPLOYEES)} empleados. {central_note}"
         )
+
+
+async def _link_central_warehouse_team(
+    session: AsyncSession,
+    *,
+    company_id: UUID,
+    headquarters_branch: Branch,
+    manager: Any,
+    department: Department,
+) -> str:
+    """Put the head of the central warehouse in charge of it.
+
+    The central warehouse is designated in the app, not by this seed. Existing
+    managers are respected: only empty positions are filled.
+    """
+    from app.infrastructure.models.employee import DepartmentBranchAssignment
+    from app.infrastructure.models.organization import Warehouse
+
+    if headquarters_branch.manager_employee_id is None:
+        headquarters_branch.manager_employee_id = manager.id
+    opening = await session.scalar(
+        select(DepartmentBranchAssignment).where(
+            DepartmentBranchAssignment.department_id == department.id,
+            DepartmentBranchAssignment.branch_id == headquarters_branch.id,
+        )
+    )
+    if opening is None:
+        opening = DepartmentBranchAssignment(
+            department_id=department.id, branch_id=headquarters_branch.id
+        )
+        session.add(opening)
+    opening.is_active = True
+    opening.closed_at = None
+    if opening.manager_employee_id is None:
+        opening.manager_employee_id = manager.id
+
+    central = await session.scalar(
+        select(Warehouse)
+        .where(
+            Warehouse.company_id == company_id,
+            Warehouse.is_central.is_(True),
+            Warehouse.deleted_at.is_(None),
+        )
+        .order_by((Warehouse.branch_id == headquarters_branch.id).desc(), Warehouse.code)
+        .limit(1)
+    )
+    if central is None:
+        return "Sin bodega central designada: su jefe queda asignado a la matriz."
+    if central.manager_employee_id is None:
+        central.manager_employee_id = manager.id
+    return f"Bodega central {central.code} con su equipo."
 
 
 def main() -> None:
