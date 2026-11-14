@@ -39,7 +39,7 @@
             {row.document_reference ?? row.source_reference ?? 'Sin documento de origen'}
           </p>
         </div>
-        <Badge>{movementTypeLabel(row.movement_type).label}</Badge>
+        <Badge>{movementTypeLabel(row.movement_type, row.source_reference).label}</Badge>
         {#if row.operator}<p class="mt-1 text-xs text-foreground-muted">
             Registró: {row.operator}
           </p>{/if}
@@ -127,7 +127,7 @@
             >{formatKardexDateTime(row.posted_at)}</td
           >
           <td class="px-3 py-3">
-            <Badge>{movementTypeLabel(row.movement_type).label}</Badge>
+            <Badge>{movementTypeLabel(row.movement_type, row.source_reference).label}</Badge>
             {#if row.operator}<p class="mt-1 text-xs text-foreground-muted">
                 Registró: {row.operator}
               </p>{/if}

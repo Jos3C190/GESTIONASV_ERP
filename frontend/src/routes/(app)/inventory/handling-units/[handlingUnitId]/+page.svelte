@@ -9,6 +9,7 @@
     StockStatus
   } from '$lib/features/inventory/types';
   import { page } from '$app/state';
+  import { isCustomerReturnReference } from '$lib/features/inventory/movement-presentation';
 
   let trace = $state<HandlingUnitTraceability | null>(null);
   let loading = $state(true);
@@ -44,13 +45,15 @@
     in_transit: 'En tránsito'
   };
 
-  function movementLabel(type: string): string {
+  function movementLabel(type: string, sourceReference?: string | null): string {
+    if (type === 'receipt' && isCustomerReturnReference(sourceReference))
+      return 'Entrada por devolución de cliente';
     const labels: Record<string, string> = {
-      receipt: 'Recepción',
+      receipt: 'Entrada por compra (recepción)',
       putaway: 'Ubicación o liberación',
       transfer: 'Traslado',
       pick: 'Salida para preparación',
-      shipment: 'Despacho',
+      shipment: 'Salida por venta (despacho)',
       adjustment_in: 'Ajuste de entrada',
       adjustment_out: 'Ajuste de salida',
       reversal: 'Reversión'
@@ -278,7 +281,7 @@
               <div class="min-w-0 flex-1 rounded-xl border border-border p-4">
                 <div class="flex flex-wrap items-start justify-between gap-2">
                   <h3 class="font-semibold text-foreground">
-                    {movementLabel(event.movement_type)}
+                    {movementLabel(event.movement_type, event.source_reference)}
                   </h3>
                   <time class="text-xs text-foreground-muted">{dateTime(event.posted_at)}</time>
                 </div>

@@ -113,8 +113,8 @@ export function displayDecimal(value: string, maximumFractionDigits = 6): string
 }
 export const valuationKind: Record<string, string> = {
   opening: 'Saldo inicial',
-  receipt: 'Recepción',
-  issue: 'Salida',
+  receipt: 'Compra',
+  issue: 'Venta',
   supplier_return: 'Devolución a proveedor',
   customer_return: 'Devolución de cliente',
   adjustment_in: 'Ajuste de entrada',

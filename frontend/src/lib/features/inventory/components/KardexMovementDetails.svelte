@@ -21,7 +21,7 @@
 
 <Modal open={movement !== null} title="Detalle del movimiento físico" {onclose} size="lg">
   {#if movement}
-    {@const type = movementTypeLabel(movement.movement_type)}
+    {@const type = movementTypeLabel(movement.movement_type, movement.source_reference)}
     <div class="space-y-5">
       <section class="space-y-2">
         <span class="inline-flex rounded-md {type.bg} px-2 py-1 text-xs font-semibold {type.color}">

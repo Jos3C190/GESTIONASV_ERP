@@ -793,15 +793,14 @@
                 >
                   <option value="">Todos los tipos</option><option value="opening"
                     >Saldo inicial</option
-                  ><option value="receipt">Recepción</option><option value="putaway"
-                    >Ubicación</option
-                  ><option value="transfer">Traslado</option><option value="pick"
-                    >Preparación de salida</option
-                  ><option value="shipment">Despacho</option><option value="adjustment_in"
-                    >Ajuste de entrada</option
-                  ><option value="adjustment_out">Ajuste de salida</option><option value="reversal"
-                    >Reversión</option
-                  >
+                  ><option value="receipt">Entradas por compra o devolución (recepción)</option
+                  ><option value="putaway">Ubicación</option><option value="transfer"
+                    >Traslado</option
+                  ><option value="pick">Preparación de salida</option><option value="shipment"
+                    >Salida por venta (despacho)</option
+                  ><option value="adjustment_in">Ajuste de entrada</option><option
+                    value="adjustment_out">Ajuste de salida</option
+                  ><option value="reversal">Reversión</option>
                 </select>
               </label>
               <label class="text-sm font-medium text-foreground" for="kardex-lot"

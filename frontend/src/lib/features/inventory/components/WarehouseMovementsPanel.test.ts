@@ -72,8 +72,12 @@ describe('Movimientos del bodeguero', () => {
         direction: 'incoming'
       }
     ]);
-    expect(await screen.findByRole('list', { name: 'Filtros aplicados' })).toHaveTextContent('Tipo: Recepción');
-    expect(screen.getByRole('list', { name: 'Filtros aplicados' })).toHaveTextContent('Sentido: Entradas');
+    expect(await screen.findByRole('list', { name: 'Filtros aplicados' })).toHaveTextContent(
+      'Tipo: Entradas por compra o devolución (recepción)'
+    );
+    expect(screen.getByRole('list', { name: 'Filtros aplicados' })).toHaveTextContent(
+      'Sentido: Entradas'
+    );
   });
   it('rechaza fechas invertidas sin lanzar otra consulta', async () => {
     render(Panel, { warehouseId: 'matrix' });

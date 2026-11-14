@@ -115,6 +115,15 @@ En este repositorio Inventario no está vacío: hay backend para identidad de ar
 - Recepción: evidencia de llegada física y cantidades aceptadas.
 - Retaceo: cálculo del costo importado por línea; no debe sumar unidades otra vez.
 
+### Nombres de los movimientos en el kárdex
+
+La recepción es un paso de bodega, no una operación contable. Por eso cada kárdex nombra los movimientos con un criterio distinto:
+
+- **Kárdex valorizado**: es el registro de control de inventarios (art. 142 del Código Tributario). Clasifica por la operación económica que respalda cada movimiento: **Compra**, **Venta**, **Devolución de cliente**, **Devolución a proveedor**, ajustes, **Aplicación de retaceo** y **Crédito del proveedor**. La referencia de una compra muestra el código y la factura del proveedor (por ejemplo, `COM-00001 · Factura FAC-001`).
+- **Kárdex físico** (movimientos de bodega): sigue las operaciones de almacén, indicando su origen: **Entrada por compra (recepción)**, **Entrada por devolución de cliente**, **Salida por venta (despacho)**, ubicación, traslado, preparación y ajustes.
+
+Estos nombres solo cambian lo que se muestra en pantalla y en los reportes. La base de datos guarda los mismos tipos técnicos de siempre (`receipt`, `shipment`, `issue`).
+
 ## 5. Recomendación de UX, permisos y plan seguro
 
 **Cambios graduales para simplificar el trabajo sin rehacer el proceso completo.**

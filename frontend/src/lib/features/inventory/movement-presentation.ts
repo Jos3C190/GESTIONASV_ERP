@@ -1,4 +1,25 @@
-export function movementTypeLabel(t: string): { label: string; color: string; bg: string } {
+/** Physical receipts come from purchases unless the source document is a customer return. */
+export function isCustomerReturnReference(sourceReference?: string | null): boolean {
+  return /^customer[-_]return:/.test(sourceReference ?? '');
+}
+
+/** Label for the movement-type filter, where one value covers purchases and customer returns. */
+export function movementTypeFilterLabel(t: string): string {
+  if (t === 'receipt') return 'Entradas por compra o devolución (recepción)';
+  return movementTypeLabel(t).label;
+}
+
+export function movementTypeLabel(
+  t: string,
+  sourceReference?: string | null
+): { label: string; color: string; bg: string } {
+  if (t === 'receipt' && isCustomerReturnReference(sourceReference)) {
+    return {
+      label: 'Entrada por devolución de cliente',
+      color: 'text-success',
+      bg: 'bg-success/10'
+    };
+  }
   const labels: Record<string, { label: string; color: string; bg: string }> = {
     opening: { label: 'Saldo inicial', color: 'text-foreground', bg: 'bg-primary/10' },
     inbound: { label: 'Entrada', color: 'text-success', bg: 'bg-success/10' },
@@ -9,10 +30,18 @@ export function movementTypeLabel(t: string): { label: string; color: string; bg
       color: 'text-foreground-muted',
       bg: 'bg-surface-muted/60'
     },
-    receipt: { label: 'Recepción', color: 'text-success', bg: 'bg-success/10' },
+    receipt: {
+      label: 'Entrada por compra (recepción)',
+      color: 'text-success',
+      bg: 'bg-success/10'
+    },
     putaway: { label: 'Liberación / acomodo', color: 'text-success', bg: 'bg-success/10' },
     pick: { label: 'Preparación', color: 'text-foreground', bg: 'bg-primary/10' },
-    shipment: { label: 'Despacho', color: 'text-foreground', bg: 'bg-primary/10' },
+    shipment: {
+      label: 'Salida por venta (despacho)',
+      color: 'text-foreground',
+      bg: 'bg-primary/10'
+    },
     adjustment_in: {
       label: 'Ajuste de entrada',
       color: 'text-foreground-muted',
