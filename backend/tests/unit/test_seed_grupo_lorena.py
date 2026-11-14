@@ -24,7 +24,7 @@ def test_seed_reconciliation_requires_explicit_force_flag(monkeypatch) -> None:
 def test_grupo_lorena_seed_data_is_consistent() -> None:
     validate_seed_data()
     assert len(BRANCHES) == 7
-    assert len(EMPLOYEES) == 26
+    assert len(EMPLOYEES) == 30
 
 
 def test_grupo_lorena_seed_uses_readable_business_data() -> None:
