@@ -131,7 +131,7 @@
 </script>
 
 <svelte:head><title>Venta | GestionaSV</title></svelte:head>
-<div class="mx-auto max-w-6xl space-y-5">
+<div class="space-y-5">
   <a class="text-sm text-primary hover:underline" href="/sales">← Ventas</a>
   {#if error}
     <div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-foreground" role="alert">

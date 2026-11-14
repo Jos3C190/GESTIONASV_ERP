@@ -339,7 +339,7 @@
     void verify();
   }}
 >
-  <div class="mx-auto w-full max-w-7xl">
+  <div>
     <h3 class="font-semibold text-foreground">Verificación física</h3>
     <p class="mt-1 text-sm text-foreground-muted">
       {#if preparesPlacement}
@@ -399,12 +399,12 @@
   </div>
 
   {#if loadingValuation}
-    <p class="mx-auto w-full max-w-7xl text-sm text-foreground-muted" role="status">
+    <p class="text-sm text-foreground-muted" role="status">
       Consultando moneda de valoración…
     </p>
   {:else if valuationError}
     <div
-      class="mx-auto w-full max-w-7xl rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+      class="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
       role="alert"
     >
       <p>No se pudo consultar la moneda de valoración. {valuationError}</p>
@@ -414,7 +414,7 @@
     </div>
   {:else if requiresConversion && valuationCurrency}
     <fieldset
-      class="mx-auto w-full max-w-7xl space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4"
+      class="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4"
     >
       <legend class="px-1 font-semibold text-foreground"
         >Conversión para el costo de inventario</legend
@@ -482,11 +482,11 @@
   {/if}
 
   {#if loading}
-    <p class="mx-auto w-full max-w-7xl text-sm text-foreground-muted">
+    <p class="text-sm text-foreground-muted">
       Cargando ubicaciones del almacén…
     </p>
   {:else}
-    <div class="mx-auto w-full max-w-7xl space-y-3">
+    <div class="space-y-3">
       {#each purchase.details as detail (detail.id)}
         <fieldset class="space-y-3 rounded-lg border border-border bg-surface p-3">
           <legend class="sr-only">{productLabel(detail.product_id)}</legend>
@@ -569,7 +569,7 @@
 
   {#if submitError && configurationRequired}
     <div
-      class="mx-auto w-full max-w-7xl space-y-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-3 text-sm"
+      class="space-y-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-3 text-sm"
       role="alert"
     >
       <p class="font-semibold text-foreground">Completa las presentaciones del producto</p>
@@ -594,23 +594,23 @@
     </div>
   {:else if locationError || submitError}
     <div
-      class="mx-auto w-full max-w-7xl rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"
+      class="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"
       role="alert"
     >
       {submitError ?? locationError}
     </div>
   {/if}
   {#if locationError && !hasAcceptedQuantity && !submitError}
-    <p class="mx-auto w-full max-w-7xl text-sm text-foreground-muted" role="status">
+    <p class="text-sm text-foreground-muted" role="status">
       No se requiere ubicación si rechazas todas las cantidades; las líneas aceptadas sí necesitan
       una ubicación.
     </p>
   {/if}
   {#if validationError && !loading && !locationError && !submitError}
-    <p class="mx-auto w-full max-w-7xl text-sm text-warning" role="status">{validationError}</p>
+    <p class="text-sm text-warning" role="status">{validationError}</p>
   {/if}
 
-  <div class="mx-auto flex w-full max-w-7xl flex-wrap justify-end gap-2">
+  <div class="flex w-full flex-wrap justify-end gap-2">
     <Button variant="secondary" disabled={saving} onclick={oncancel}>Cancelar</Button>
     <Button
       type="submit"

@@ -219,7 +219,7 @@
 </svelte:head>
 
 <div class="min-h-full">
-  <div class="mx-auto max-w-[1440px]">
+  <div>
     <header class="mb-7 flex flex-wrap items-start justify-between gap-4">
       <div class="flex min-w-0 items-start gap-3">
         <button
@@ -274,9 +274,9 @@
       </div>
     {:else if error && !role}
       <Card class="p-10">
-        <div class="mx-auto max-w-lg text-center">
+        <div class="max-w-lg text-center">
           <div
-            class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-danger/10 text-danger"
+            class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-danger/10 text-danger"
           >
             <svg
               width="22"
