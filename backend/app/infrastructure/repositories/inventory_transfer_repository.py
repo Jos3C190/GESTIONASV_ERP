@@ -3714,7 +3714,11 @@ class SqlAlchemyInventoryTransferRepository:
     async def list_vehicles(
         self, company_id: uuid.UUID, branch_ids: list[uuid.UUID] | None = None
     ) -> list[dict[str, Any]]:
-        """Transit vehicles with their Fleet record; ``branch_ids`` limits to those branches."""
+        """Transit vehicles with a live Fleet record; ``branch_ids`` limits to those branches.
+
+        Fleet owns the vehicle catalogue, so a transit vehicle whose Fleet record
+        was deleted (or never existed) is not offered for transfers.
+        """
         statement = (
             select(InventoryVehicleModel, Warehouse.name, FleetVehicleModel, Branch.name)
             .join(
@@ -3722,10 +3726,11 @@ class SqlAlchemyInventoryTransferRepository:
                 (Warehouse.company_id == InventoryVehicleModel.company_id)
                 & (Warehouse.id == InventoryVehicleModel.transit_warehouse_id),
             )
-            .outerjoin(
+            .join(
                 FleetVehicleModel,
                 (FleetVehicleModel.company_id == InventoryVehicleModel.company_id)
-                & (FleetVehicleModel.inventory_vehicle_id == InventoryVehicleModel.id),
+                & (FleetVehicleModel.inventory_vehicle_id == InventoryVehicleModel.id)
+                & FleetVehicleModel.deleted_at.is_(None),
             )
             .outerjoin(Branch, Branch.id == FleetVehicleModel.branch_id)
             .where(InventoryVehicleModel.company_id == company_id)
@@ -3737,14 +3742,13 @@ class SqlAlchemyInventoryTransferRepository:
         payloads = []
         for vehicle, warehouse_name, fleet, branch_name in rows:
             payload = self._vehicle_payload(vehicle, warehouse_name)
-            if fleet is not None:
-                payload.update(
-                    fleet_vehicle_id=fleet.id,
-                    plate=fleet.plate,
-                    kind=fleet.kind,
-                    branch_id=fleet.branch_id,
-                    branch_name=branch_name,
-                )
+            payload.update(
+                fleet_vehicle_id=fleet.id,
+                plate=fleet.plate,
+                kind=fleet.kind,
+                branch_id=fleet.branch_id,
+                branch_name=branch_name,
+            )
             payloads.append(payload)
         return payloads
 
