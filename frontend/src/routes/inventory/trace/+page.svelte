@@ -3,6 +3,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import { inventoryApi } from '$lib/features/inventory/services';
   import type { PublicHandlingUnitTrace, StockStatus } from '$lib/features/inventory/types';
+  import { isCustomerReturnReference } from '$lib/features/inventory/movement-presentation';
 
   let trace = $state<PublicHandlingUnitTrace | null>(null);
   let loading = $state(true);
@@ -51,13 +52,15 @@
     return 'neutral';
   }
 
-  function movementLabel(type: string): string {
+  function movementLabel(type: string, sourceReference?: string | null): string {
+    if (type === 'receipt' && isCustomerReturnReference(sourceReference))
+      return 'Entrada por devolución de cliente';
     const labels: Record<string, string> = {
-      receipt: 'Recepción',
+      receipt: 'Entrada por compra (recepción)',
       putaway: 'Ubicación o liberación',
       transfer: 'Traslado',
       pick: 'Salida para preparación',
-      shipment: 'Despacho',
+      shipment: 'Salida por venta (despacho)',
       adjustment_in: 'Ajuste de entrada',
       adjustment_out: 'Ajuste de salida',
       reversal: 'Reversión'
@@ -240,7 +243,10 @@
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p class="font-semibold text-foreground">
-                    {movementLabel(movement.movement_type)}
+                    {movementLabel(
+                      movement.movement_type,
+                      trace.handling_unit_code.startsWith('HU-RET-') ? 'customer-return:' : null
+                    )}
                   </p>
                   <p class="mt-1 text-xs text-foreground-muted">{dateTime(movement.posted_at)}</p>
                 </div>

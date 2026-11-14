@@ -8,12 +8,12 @@ from app.domain.entities.inventory_kardex import LOCAL_TZ
 from app.domain.entities.tabular_report import ReportSection, TabularReport
 
 PRECISE = "#,##0.000000"
-KINDS = {
+# The valued Kardex names each event by the economic operation behind it
+# (purchase, sale, returns, adjustments), as the inventory control record requires.
+VALUED_KINDS = {
     "opening": "Saldo inicial",
-    "receipt": "Recepción",
-    "issue": "Salida",
-    "transfer": "Traslado / reubicación",
-    "putaway": "Ubicación",
+    "receipt": "Compra",
+    "issue": "Venta",
     "adjustment_in": "Ajuste de entrada",
     "adjustment_out": "Ajuste de salida",
     "customer_return": "Devolución de cliente",
@@ -21,6 +21,27 @@ KINDS = {
     "cost_adjustment": "Aplicación de retaceo",
     "supplier_credit": "Crédito del proveedor",
 }
+# The physical Kardex follows warehouse operations, qualified by their source.
+PHYSICAL_KINDS = {
+    "opening": "Saldo inicial",
+    "receipt": "Entrada por compra (recepción)",
+    "putaway": "Ubicación",
+    "transfer": "Traslado / reubicación",
+    "pick": "Preparación de salida",
+    "shipment": "Salida por venta (despacho)",
+    "adjustment_in": "Ajuste de entrada",
+    "adjustment_out": "Ajuste de salida",
+    "reversal": "Reversión",
+}
+CUSTOMER_RETURN_RECEIPT = "Entrada por devolución de cliente"
+
+
+def physical_movement_label(movement_type: str, source_reference: str | None) -> str:
+    if movement_type == "receipt" and (source_reference or "").startswith(
+        ("customer-return:", "customer_return:")
+    ):
+        return CUSTOMER_RETURN_RECEIPT
+    return PHYSICAL_KINDS.get(movement_type, movement_type)
 
 
 def _number(value: Decimal | None) -> Decimal | str:
@@ -35,7 +56,7 @@ def _physical(data: dict[str, Any]) -> tuple[ReportSection, ...]:
     rows = tuple(
         (
             _local(row["posted_at"]),
-            KINDS.get(row["movement_type"], row["movement_type"]),
+            physical_movement_label(row["movement_type"], row.get("source_reference")),
             row.get("document_reference") or row.get("source_reference") or "Sin referencia",
             row.get("receipt_lot_code")
             or row.get("receipt_lot_header_code")
@@ -97,7 +118,7 @@ def _valued(data: dict[str, Any]) -> tuple[ReportSection, ...]:
         rows.append(
             (
                 row["accounting_date"].strftime("%d/%m/%Y"),
-                KINDS.get(row["kind"], row["kind"]),
+                VALUED_KINDS.get(row["kind"], row["kind"]),
                 document,
                 row.get("operator") or "No disponible",
                 signed,

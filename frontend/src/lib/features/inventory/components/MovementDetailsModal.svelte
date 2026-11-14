@@ -25,7 +25,7 @@
 
 <Modal open={movement !== null} title="Detalle del movimiento" {onclose} size="lg">
   {#if movement}
-    {@const typeStyle = movementTypeLabel(movement.movement_type)}
+    {@const typeStyle = movementTypeLabel(movement.movement_type, movement.source_reference)}
     <div class="space-y-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">

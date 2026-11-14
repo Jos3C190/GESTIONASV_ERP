@@ -149,3 +149,34 @@ async def test_financial_scope_rejects_a_warehouse_restricted_membership(monkeyp
     with pytest.raises(routes.HTTPException) as error:
         await read_routes._authorize_company_values(None, None, None)
     assert error.value.status_code == 403
+
+
+def test_kardex_names_movements_by_their_operation():
+    physical = _statement("physical")
+    base = physical["items"][0]
+    physical["items"] = [
+        {**base, "source_reference": "purchase-receipt:1"},
+        {**base, "source_reference": "customer-return:DEV-00001"},
+        {
+            **base,
+            "movement_type": "shipment",
+            "source_reference": "sales_delivery:1",
+            "incoming_quantity": Decimal("0"),
+            "outgoing_quantity": Decimal("2"),
+        },
+        {**base, "movement_type": "pick"},
+    ]
+    report = kardex_report("physical", physical, {})
+    labels = [row[1] for row in report.sections[1].rows]
+    assert labels == [
+        "Entrada por compra (recepción)",
+        "Entrada por devolución de cliente",
+        "Salida por venta (despacho)",
+        "Preparación de salida",
+    ]
+
+    valued = _statement("valuation")
+    entry = valued["entries"][0]
+    valued["entries"] = [entry, {**entry, "kind": "issue"}]
+    valued_rows = kardex_report("valuation", valued, {}).sections[1].rows
+    assert [row[1] for row in valued_rows] == ["Compra", "Venta"]

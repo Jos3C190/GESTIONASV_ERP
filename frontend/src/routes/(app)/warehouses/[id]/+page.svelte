@@ -1189,7 +1189,7 @@
             {:else}
               <ul class="space-y-2">
                 {#each movementHistory as movement (movement.id)}
-                  {@const movementStyle = movementTypeLabel(movement.movement_type)}
+                  {@const movementStyle = movementTypeLabel(movement.movement_type, movement.source_reference)}
                   <li
                     class="flex flex-col gap-3 rounded-lg border border-border bg-surface-muted/20 p-3 sm:flex-row sm:items-center"
                   >

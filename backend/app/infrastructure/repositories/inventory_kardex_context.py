@@ -180,6 +180,25 @@ class InventoryKardexContextRepository:
                 result.update(row)
         return result
 
+    async def _append_supplier_invoices(
+        self, company_id: uuid.UUID, purchase_ids: set[uuid.UUID], labels: dict[str, str]
+    ) -> None:
+        """Show the supplier invoice, the support document of a purchase entry."""
+        if not purchase_ids:
+            return
+        for key, invoice in (
+            await self.session.execute(
+                select(PurchaseModel.id, PurchaseModel.supplier_invoice_number).where(
+                    PurchaseModel.company_id == company_id,
+                    PurchaseModel.id.in_(purchase_ids),
+                    PurchaseModel.supplier_invoice_number.is_not(None),
+                )
+            )
+        ).all():
+            reference = f"purchase-receipt:{key}"
+            if reference in labels and invoice and invoice.strip():
+                labels[reference] = f"{labels[reference]} · Factura {invoice.strip()}"
+
     async def enrich(self, company_id: uuid.UUID, rows: list[dict[str, Any]]) -> None:
         """Resolve opaque receipt/delivery IDs in batches; keep the original reference."""
         sources: dict[str, tuple[str, uuid.UUID]] = {}
@@ -204,6 +223,11 @@ class InventoryKardexContextRepository:
                     )
                 ).all():
                     labels[f"{prefix}:{key}"] = code
+        await self._append_supplier_invoices(
+            company_id,
+            {item_id for kind, item_id in sources.values() if kind == "purchase-receipt"},
+            labels,
+        )
         retaceos = {row["retaceo_id"] for row in rows if row.get("retaceo_id")}
         retaceo_codes = (
             {

@@ -4,7 +4,11 @@
   import { inventoryApi } from '../services';
   import type { InventoryMovementHistory, WarehouseMovementFilters } from '../types';
   import { localMovementDate, localMovementPeriod, movementDirection } from '../movement-history';
-  import { formatMovementQuantity, movementTypeLabel } from '../movement-presentation';
+  import {
+    formatMovementQuantity,
+    movementTypeFilterLabel,
+    movementTypeLabel
+  } from '../movement-presentation';
   import MovementDetailsModal from './MovementDetailsModal.svelte';
 
   let { warehouseId, contextKey = '' }: { warehouseId: string; contextKey?: string } = $props();
@@ -43,7 +47,7 @@
   const appliedLabels = $derived(
     [
       applied.q ? `Producto: ${applied.q}` : '',
-      applied.movement_type ? `Tipo: ${movementTypeLabel(applied.movement_type).label}` : '',
+      applied.movement_type ? `Tipo: ${movementTypeFilterLabel(applied.movement_type)}` : '',
       applied.direction
         ? `Sentido: ${{ incoming: 'Entradas', outgoing: 'Salidas', internal: 'Dentro de esta bodega' }[applied.direction]}`
         : '',
@@ -214,7 +218,7 @@
               value={type}
               onchange={(event) => (type = event.currentTarget.value)}
               ><option value="">Todos los tipos</option>{#each movementTypes as value}<option
-                  {value}>{movementTypeLabel(value).label}</option
+                  {value}>{movementTypeFilterLabel(value)}</option
                 >{/each}</select
             >
           </div>
@@ -347,7 +351,7 @@
         <ol class="divide-y divide-border">
           {#each rows as row (row.id)}
             {@const flow = movementDirection(row, warehouseId)}
-            {@const kind = movementTypeLabel(row.movement_type)}
+            {@const kind = movementTypeLabel(row.movement_type, row.source_reference)}
             <li>
               <article
                 class="grid min-w-0 gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-[1fr_2fr_2fr_1fr_6rem] lg:gap-4"
