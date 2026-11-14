@@ -362,6 +362,34 @@ async def list_transfer_demand(
     return [TransferDemandOut.model_validate(row) for row in rows]
 
 
+async def _link_pending_fleet_vehicles(
+    session: SessionDep, company_id: uuid.UUID, actor_id: uuid.UUID
+) -> None:
+    """Give a transit location to Fleet vehicles created before the company had one.
+
+    Vehicles registered while no central warehouse existed (for example, seeded
+    ones) stay usable in Fleet only; this links them once the warehouse exists.
+    """
+    from app.api.v1.routers.fleet import ensure_inventory_vehicle
+
+    pending = (
+        await session.scalars(
+            select(FleetVehicleModel).where(
+                FleetVehicleModel.company_id == company_id,
+                FleetVehicleModel.deleted_at.is_(None),
+                FleetVehicleModel.inventory_vehicle_id.is_(None),
+            )
+        )
+    ).all()
+    for vehicle in pending:
+        linked = await ensure_inventory_vehicle(session, vehicle, actor_id)
+        if linked is None:
+            return  # No transit warehouse yet; nothing else can be linked either.
+        vehicle.inventory_vehicle_id = linked
+    if pending:
+        await session.flush()
+
+
 @router.get(
     "/vehicles",
     response_model=list[InventoryVehicleOut],
@@ -381,6 +409,7 @@ async def list_vehicles(
     await require_company_access(session, current, company_id)
     scope = await get_fleet_scope(session, current, checker, company_id)
     branch_ids = None if scope.all_branches else list(scope.branch_ids)
+    await _link_pending_fleet_vehicles(session, company_id, current.id)
     rows = await _use_cases(session).list_vehicles(company_id, branch_ids)
     return [InventoryVehicleOut.model_validate(row) for row in rows]
 
