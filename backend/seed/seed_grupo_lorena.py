@@ -910,7 +910,7 @@ async def _attach_superadmin_to_company(
         session.add(membership)
     membership.is_default = True
     membership.access_all_branches = True
-    membership.last_branch_id = headquarters_branch.id
+    _fill_empty(membership, {"last_branch_id": headquarters_branch.id})
     await session.flush()
     superadmin_role = await session.scalar(
         select(Role)
@@ -996,6 +996,114 @@ def _schedule(branch: BranchSeed) -> list[dict[str, str | None]]:
         }
     )
     return schedule
+
+
+@dataclass(frozen=True, slots=True)
+class LocationSeed:
+    label: str
+    aisle: str
+    location_type: str
+    storage_eligible: bool
+
+
+STORE_LOCATIONS: tuple[LocationSeed, ...] = (
+    LocationSeed("Recepción", "REC", "receiving", False),
+    LocationSeed("Seco", "SEC", "standard", True),
+    LocationSeed("Empaque", "EMP", "packing", False),
+)
+
+
+def _assign(record: Any, values: dict[str, Any]) -> None:
+    for field, value in values.items():
+        setattr(record, field, value)
+
+
+def _fill_empty(record: Any, values: dict[str, Any]) -> None:
+    """Fill only what nobody has set: a rerun never overrides an operator's choice."""
+    for field, value in values.items():
+        if getattr(record, field, None) in (None, ""):
+            setattr(record, field, value)
+
+
+def _store_warehouse_configuration(index: int) -> dict[str, Any]:
+    """Physical, capacity and equipment setup of a new store warehouse.
+
+    Operators tune these (capacity profile, limits, enforcement, cold chain...),
+    so the seed applies them only when it creates the warehouse.
+    """
+    return {
+        "warehouse_type": "general",
+        "operational_status": "active",
+        "area": 45 + index * 3,
+        "height": 3.2,
+        "shelves_total": 18 + index,
+        # Mock limits are expressed in canonical physical units.  They are
+        # deliberately not container counts or product quantities.
+        "certified_max_weight_kg": 15_000 + index * 1_000,
+        "operational_max_weight_kg": 12_000 + index * 800,
+        "certified_usable_volume_m3": 110 + index * 5,
+        "operational_usable_volume_m3": 90 + index * 4,
+        "capacity_profile": "general_mixed",
+        "capacity_enforcement_mode": "enforce",
+        "storage_eligible": True,
+        "shifts": ["mañana", "tarde"],
+        "cameras": 2,
+        "access_control": "teclado",
+        "has_alarm": True,
+        "fire_system": ["Extintores", "Detectores de humo"],
+        "temperature_range": "18 °C a 26 °C",
+        "humidity_range": "40 % a 65 %",
+        "cooling": "mixto",
+        "has_ventilation": True,
+    }
+
+
+def _reconcile_store_warehouse(
+    warehouse: Any, *, created: bool, index: int, branch_seed: BranchSeed, manager_id: Any
+) -> None:
+    warehouse.code = f"BOD-{branch_seed.code.removeprefix('LOR-')}"
+    warehouse.name = f"Bodega de tienda {branch_seed.district}"
+    warehouse.is_active = True
+    if created:
+        _assign(warehouse, _store_warehouse_configuration(index))
+    _fill_empty(
+        warehouse,
+        {
+            "physical_location": "Área posterior de la sucursal",
+            "manager_employee_id": manager_id,
+            "description": (
+                "Resguardo de productos terminados, empaques e insumos de atención diaria."
+            ),
+        },
+    )
+
+
+def _store_location_configuration(position: int, seed_location: LocationSeed) -> dict[str, Any]:
+    """Coordinates, type and capacity of a new seeded location (create-only)."""
+    eligible = seed_location.storage_eligible
+    return {
+        "aisle": seed_location.aisle,
+        "rack": "R01",
+        "level": "N01",
+        "position": f"P{position:02d}",
+        "location_type": seed_location.location_type,
+        "certified_max_weight_kg": 10_000 if eligible else None,
+        "operational_max_weight_kg": 8_000 if eligible else None,
+        "certified_usable_volume_m3": 75 if eligible else None,
+        "operational_usable_volume_m3": 60 if eligible else None,
+        "capacity_profile": "general_mixed" if eligible else "transit",
+        "capacity_enforcement_mode": "enforce" if eligible else "disabled",
+        "storage_eligible": eligible,
+    }
+
+
+def _reconcile_store_location(
+    location: Any, *, created: bool, position: int, seed_location: LocationSeed
+) -> None:
+    location.is_active = True
+    if created:
+        _assign(location, _store_location_configuration(position, seed_location))
+    _fill_empty(location, {"notes": f"Zona de {seed_location.label.lower()} de la bodega."})
 
 
 async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed transaction atomic
@@ -1474,7 +1582,10 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     )
                     session.add(membership)
                 membership.access_all_branches = bool(employee_seed.get("all_branches", False))
-                membership.last_branch_id = employee_branches[str(employee_seed["branch"])].id
+                _fill_empty(
+                    membership,
+                    {"last_branch_id": employee_branches[str(employee_seed["branch"])].id},
+                )
                 await session.flush()
                 role = roles.get(str(employee_seed["role"]))
                 if role is None:
@@ -1601,38 +1712,13 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                 session.add(warehouse)
             else:
                 _restore_seed_record(warehouse)
-            warehouse.code = warehouse_code
-            warehouse.name = f"Bodega de tienda {branch_seed.district}"
-            warehouse.warehouse_category_id = categories["Inventario de tienda"].id
-            warehouse.warehouse_type = "general"
-            warehouse.operational_status = "active"
-            warehouse.physical_location = "Área posterior de la sucursal"
-            warehouse.manager_employee_id = manager_by_branch[branch_seed.code].id
-            warehouse.area = 45 + index * 3
-            warehouse.height = 3.2
-            warehouse.shelves_total = 18 + index
-            # Mock limits are expressed in canonical physical units.  They are
-            # deliberately not container counts or product quantities.
-            warehouse.certified_max_weight_kg = 15_000 + index * 1_000
-            warehouse.operational_max_weight_kg = 12_000 + index * 800
-            warehouse.certified_usable_volume_m3 = 110 + index * 5
-            warehouse.operational_usable_volume_m3 = 90 + index * 4
-            warehouse.capacity_profile = "general_mixed"
-            warehouse.capacity_enforcement_mode = "enforce"
-            warehouse.storage_eligible = True
-            warehouse.shifts = ["mañana", "tarde"]
-            warehouse.cameras = 2
-            warehouse.access_control = "teclado"
-            warehouse.has_alarm = True
-            warehouse.fire_system = ["Extintores", "Detectores de humo"]
-            warehouse.temperature_range = "18 °C a 26 °C"
-            warehouse.humidity_range = "40 % a 65 %"
-            warehouse.cooling = "mixto"
-            warehouse.has_ventilation = True
-            warehouse.description = (
-                "Resguardo de productos terminados, empaques e insumos de atención diaria."
+            _reconcile_store_warehouse(
+                warehouse,
+                created=warehouse_created,
+                index=index,
+                branch_seed=branch_seed,
+                manager_id=manager_by_branch[branch_seed.code].id,
             )
-            warehouse.is_active = True
             await session.flush()
             warehouses[warehouse_code] = warehouse
             if warehouse_created:
@@ -1650,15 +1736,8 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                     )
                 )
 
-            for location_index, (label, aisle, location_type, storage_eligible) in enumerate(
-                (
-                    ("Recepción", "REC", "receiving", False),
-                    ("Seco", "SEC", "standard", True),
-                    ("Empaque", "EMP", "packing", False),
-                ),
-                start=1,
-            ):
-                location_code = f"{aisle}-{location_index:02d}"
+            for location_index, seed_location in enumerate(STORE_LOCATIONS, start=1):
+                location_code = f"{seed_location.aisle}-{location_index:02d}"
                 location = (
                     await session.execute(
                         select(Location)
@@ -1681,46 +1760,18 @@ async def seed() -> None:  # noqa: C901 - explicit orchestration keeps the seed 
                 ):
                     # Someone recoded this seeded location; the old code is reserved for it.
                     continue
+                location_created = location is None
                 if location is None:
-                    session.add(
-                        Location(
-                            warehouse_id=warehouse.id,
-                            code=location_code,
-                            aisle=aisle,
-                            rack="R01",
-                            level="N01",
-                            position=f"P{location_index:02d}",
-                            location_type=location_type,
-                            certified_max_weight_kg=10_000 if storage_eligible else None,
-                            operational_max_weight_kg=8_000 if storage_eligible else None,
-                            certified_usable_volume_m3=75 if storage_eligible else None,
-                            operational_usable_volume_m3=60 if storage_eligible else None,
-                            capacity_profile="general_mixed" if storage_eligible else "transit",
-                            capacity_enforcement_mode="enforce" if storage_eligible else "disabled",
-                            storage_eligible=storage_eligible,
-                            notes=f"Zona de {label.lower()} de la bodega.",
-                            is_active=True,
-                        )
-                    )
+                    location = Location(warehouse_id=warehouse.id, code=location_code)
+                    session.add(location)
                 else:
                     _restore_seed_record(location)
-                    location.code = location_code
-                    location.aisle = aisle
-                    location.rack = "R01"
-                    location.level = "N01"
-                    location.position = f"P{location_index:02d}"
-                    location.location_type = location_type
-                    location.certified_max_weight_kg = 10_000 if storage_eligible else None
-                    location.operational_max_weight_kg = 8_000 if storage_eligible else None
-                    location.certified_usable_volume_m3 = 75 if storage_eligible else None
-                    location.operational_usable_volume_m3 = 60 if storage_eligible else None
-                    location.capacity_profile = "general_mixed" if storage_eligible else "transit"
-                    location.capacity_enforcement_mode = (
-                        "enforce" if storage_eligible else "disabled"
-                    )
-                    location.storage_eligible = storage_eligible
-                    location.notes = f"Zona de {label.lower()} de la bodega."
-                    location.is_active = True
+                _reconcile_store_location(
+                    location,
+                    created=location_created,
+                    position=location_index,
+                    seed_location=seed_location,
+                )
 
         central_note = await _link_central_warehouse_team(
             session,
