@@ -154,15 +154,36 @@ async def test_inspection_is_required_only_when_turned_on(e2e_client: Any) -> No
 async def test_load_weight_only_matters_when_the_company_turns_the_rule_on(
     e2e_client: Any,
 ) -> None:
-    values, headers, base, _ = await _dispatch_context(e2e_client)
-    assert "load_weight_unknown" not in _codes(await _check(e2e_client, headers, base, values))
+    from app.infrastructure.db.session import async_session_factory
+    from app.infrastructure.models.catalog import ProductModel
+    from app.infrastructure.models.inventory import InventoryItemModel
 
-    await e2e_client.put(
-        f"{FLEET}/settings", headers=headers, json={**DEFAULTS, "block_overweight": True}
-    )
-    codes = _codes(await _check(e2e_client, headers, base, values))
-    assert codes.get("load_weight_unknown") == "warning"
-    assert "vehicle_overweight" not in codes
+    values, headers, base, _ = await _dispatch_context(e2e_client)
+    # The fixture picks the first seeded product; this rule is about a load whose
+    # weight is unknown, so make that explicit instead of relying on the catalogue.
+    async with async_session_factory() as session:
+        item = await session.get(InventoryItemModel, values.item_id)
+        assert item is not None
+        product = await session.get(ProductModel, item.product_id)
+        assert product is not None
+        saved = (product.weight, product.weight_unit)
+        product.weight, product.weight_unit = None, None
+        await session.commit()
+    try:
+        assert "load_weight_unknown" not in _codes(await _check(e2e_client, headers, base, values))
+
+        await e2e_client.put(
+            f"{FLEET}/settings", headers=headers, json={**DEFAULTS, "block_overweight": True}
+        )
+        codes = _codes(await _check(e2e_client, headers, base, values))
+        assert codes.get("load_weight_unknown") == "warning"
+        assert "vehicle_overweight" not in codes
+    finally:
+        async with async_session_factory() as session:
+            product = await session.get(ProductModel, item.product_id)
+            if product is not None:
+                product.weight, product.weight_unit = saved
+                await session.commit()
 
 
 def test_overweight_rule() -> None:
