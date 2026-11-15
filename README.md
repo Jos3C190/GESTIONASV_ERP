@@ -14,15 +14,24 @@
 ![Pytest](https://img.shields.io/badge/Pytest-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)
 ![OWASP ZAP](https://img.shields.io/badge/OWASP_ZAP-000000?style=for-the-badge&logo=owasp&logoColor=white)
 ![Trivy](https://img.shields.io/badge/Trivy-1904DA?style=for-the-badge&logo=trivy&logoColor=white)
-![Version](https://img.shields.io/badge/Version-1.1.0-green?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-2.0.0-green?style=for-the-badge)
 
-Sistema ERP modular construido con **FastAPI + SvelteKit 5 + PostgreSQL 16**.
-Autenticación JWT con rotación de refresh tokens, RBAC dinámico administrable,
-bitácora append-only, gestión de empleados y departamentos, catálogo de
-productos y proveedores, inventario operativo, biblioteca documental con RustFS,
-ClamAV y OCRmyPDF, además de observabilidad local con OpenTelemetry y Grafana.
-La navegación contiene 20 entradas funcionales y 10 módulos futuros preparados
-como mockups en el sidebar.
+**GestionaSV** es un ERP multiempresa y multisucursal construido con
+**FastAPI + SvelteKit 5 + PostgreSQL 16**. Cubre el ciclo completo de
+abastecimiento de una cadena de tiendas: compras con retaceo de costos,
+inventario por lotes y ubicaciones, traslados entre sucursales con flota propia
+y seguimiento GPS, además de la base administrativa (usuarios, roles, bitácora,
+documentos y recursos humanos).
+
+La empresa de demostración es **Grupo Lorena**, una cadena de panaderías de El
+Salvador con siete sucursales.
+
+| | |
+|---|---|
+| Módulos en operación | 38 de 40 entradas del menú |
+| Migraciones de base de datos | 118 |
+| Pruebas automatizadas | 1,723 de backend y 1,104 de frontend |
+| Área en construcción | Ventas y facturación electrónica (DTE) |
 
 ---
 
@@ -45,7 +54,8 @@ como mockups en el sidebar.
 | Backend     | Python 3.12, FastAPI (async), SQLAlchemy 2.0 async, Alembic, Pydantic v2, asyncpg, structlog, Argon2id, PyJWT |
 | Frontend    | SvelteKit (Svelte 5 runes), TypeScript strict, TailwindCSS, Vitest, design system Geist (Vercel) |
 | Database    | PostgreSQL 16 |
-| Infra       | Docker Compose v2, RustFS, ClamAV, Redis/ARQ, OCRmyPDF, OpenTelemetry, Grafana, Prometheus, Loki, Tempo y Nginx |
+| Infra       | Docker Compose v2, RustFS, ClamAV, Redis/ARQ, OCRmyPDF, Traccar (GPS), OpenTelemetry, Grafana, Prometheus, Loki, Tempo y Nginx |
+| Opcional    | Lectura de licencias y tarjetas de circulación con un modelo de visión local (llama.cpp, requiere GPU NVIDIA) |
 | Tooling     | `uv` (backend deps), `pnpm` (frontend deps), `make` |
 
 ---
@@ -102,7 +112,7 @@ siguiente arranque; no detiene el stack. Cada seed también puede ejecutarse a
 mano, de forma idempotente: `docker compose exec backend python -m
 seed.seed_grupo_lorena_fleet` o `... -m seed.seed_grupo_lorena_operations`.
 En producción el servicio no siembra (`compose.prod.yaml` fija `AUTO_SEED=false`
-y `SEED_DEMO_OPERATIONS=false`; el despliegue a EC2 no ejecuta seeds).
+y `SEED_DEMO_OPERATIONS=false`; el despliegue automático no ejecuta seeds).
 
 También registra el logo de la empresa y las galerías de sus siete sucursales
 mediante un manifiesto versionado de 36 activos públicos de Cloudinary. La
@@ -176,7 +186,7 @@ make prod-up         # levantar perfil producción (con Nginx)
 
 ```
 erp-system/
-├── compose.yaml              # dev stack (db + backend + frontend)
+├── compose.yaml              # stack de desarrollo (db, backend, frontend, documentos, GPS, observabilidad)
 ├── compose.prod.yaml         # prod overlay (+ Nginx, non-root)
 ├── Makefile                  # targets: up/down/test/seed/reset-db/clean
 ├── .env.example              # template de variables de entorno
@@ -185,7 +195,9 @@ erp-system/
 │   ├── seed.sh               # sembrar base de datos
 │   ├── reset-db.sh           # wipe + migrar
 │   └── run-tests.sh          # runner unificado de tests
-├── docs/                     # arquitectura, schema DB, RBAC, API, design system
+├── docs/                     # arquitectura, schema DB, RBAC, API, design system y manuales (ers-v1/)
+├── observability/            # Grafana, Prometheus, Loki, Tempo y alertas
+├── object-storage/ antivirus/ redis/ ocr/   # servicios del flujo documental
 ├── backend/                  # FastAPI (Clean / Hexagonal)
 │   ├── Dockerfile            # multi-stage (dev + prod)
 │   ├── pyproject.toml        # deps pinned, ruff, pytest, mypy
@@ -194,7 +206,7 @@ erp-system/
 │   │   ├── main.py           # app factory + lifespan (migraciones on startup)
 │   │   ├── core/             # config, security, logging, exceptions
 │   │   ├── domain/           # entidades + puertos (sin deps de framework)
-│   │   ├── application/      # casos de uso (auth, users, rbac, employees, audit)
+│   │   ├── application/      # casos de uso por módulo (compras, inventario, traslados, flota…)
 │   │   ├── infrastructure/   # DB engine, ORM models, repos concretos
 │   │   ├── api/v1/           # routers + DTOs + deps + exception handlers
 │   │   └── middlewares/      # security headers, request context, rate limit
@@ -206,13 +218,13 @@ erp-system/
 │   ├── src/
 │   │   ├── app.html          # no-FOUC theme script
 │   │   ├── app.css           # tokens Geist (claro/oscuro) + utilidades
-│   │   ├── routes/           # login, dashboard, users, roles, employees, etc.
+│   │   ├── routes/           # una carpeta por módulo del menú
 │   │   └── lib/
 │   │       ├── api/          # cliente con interceptor refresh
 │   │       ├── components/ui/  # Button, Card, Modal, Badge, Avatar, Sidebar
 │   │       ├── features/dashboard/  # KpiCard, AreaChart, DonutChart, etc.
 │   │       ├── stores/       # session, theme, permissions, search
-│   │       └── navigation.ts # sidebar metadata (20 implementados + 10 mockups)
+│   │       └── navigation.ts # menú lateral (38 módulos en operación + 2 pendientes)
 │   └── tests/                # vitest + testing-library
 └── nginx/                    # reverse proxy para prod
 ```
@@ -245,13 +257,19 @@ make test-backend      # pytest con coverage
 make test-frontend     # vitest
 ```
 
-La última validación completa realizada durante el segundo período fue:
+Última validación completa en integración continua, sobre `develop`, el
+14 de noviembre de 2026:
 
-- **Backend**: 755 pruebas aprobadas y 2 omitidas intencionalmente.
-- **Frontend**: 311 pruebas aprobadas en 83 archivos.
-- **svelte-check**: 0 errores y 0 warnings.
-- **ESLint**: OK.
+- **Backend**: 1,723 pruebas aprobadas y 2 omitidas intencionalmente.
+- **Frontend**: 1,104 pruebas aprobadas en 173 archivos.
+- **svelte-check**: 0 errores y 7 advertencias.
+- **ESLint, Ruff y mypy**: OK.
 - **Build de producción**: OK.
+
+Cada cambio entra por pull request hacia `develop` y debe pasar dos flujos de
+GitHub Actions: `ERP quality gate` (pruebas, lint, tipos y build) y
+`Security gate` (análisis de imágenes y dependencias).
+
 - **Unit**: casos de uso con repositorios in-memory (sin DB)
 - **Integration**: repositorios contra Postgres real
 - **E2e**: flujos completos via httpx contra la app FastAPI
@@ -259,33 +277,97 @@ La última validación completa realizada durante el segundo período fue:
 
 ---
 
-## Módulos implementados vs. futuros
+## Módulos
+
+### Administración y recursos humanos
 
 | Módulo | Estado |
 |--------|--------|
-| Dashboard | ✅ Mockup premium con gráficos |
-| Autenticación | ✅ Login/JWT/refresh/lockout |
-| Usuarios | ✅ CRUD completo + filtros |
-| Roles y permisos | ✅ RBAC dinámico + matriz |
-| Documentos | ✅ Biblioteca virtual, cargas, RustFS, ClamAV, OCR y expedientes de empleados |
-| Empleados | ✅ CRUD + departamentos |
-| Departamentos | ✅ Jerarquía con anti-ciclos |
-| Proveedores | ✅ CRUD, contactos, imágenes y datos maestros |
-| Productos | ✅ Catálogo, variantes, identificadores, imágenes y relaciones |
-| Categorías de productos | ✅ Gestión por empresa |
-| Unidades de medida | ✅ Gestión por empresa |
-| Solicitudes de compra | ✅ Creación, envío, aprobación, rechazo y cancelación |
-| Cotizaciones de compra | ✅ Gestión, evaluación, comparación y selección |
-| Órdenes de compra | ✅ Gestión, aprobación, envío y documentos de gastos |
-| Compras | ✅ Recepción desde órdenes, recepción parcial y verificación |
-| Retaceo | ✅ Cálculo y distribución proporcional de costos sobre compras |
-| Almacenes | ✅ CRUD, capacidad, estructuras y ubicaciones |
-| Categorías de almacén | ✅ CRUD y aislamiento por empresa |
-| Sucursales | ✅ CRUD, perfiles, galería y coordenadas |
-| Bitácora | ✅ Append-only + paginación |
+| Autenticación | ✅ Login, JWT con rotación de refresh, bloqueo progresivo |
+| Usuarios | ✅ CRUD, filtros y alcance por empresa y sucursal |
+| Roles y permisos | ✅ RBAC dinámico con matriz administrable |
+| Bitácora | ✅ Append-only con paginación |
+| Documentos | ✅ Biblioteca, cargas, RustFS, ClamAV, OCR y expedientes |
+| Empleados y departamentos | ✅ CRUD, jerarquía y expediente documental |
 | Papelera | ✅ Ciclo de vida y restauración transversal |
-| Sidebar + tema | ✅ Geist design, claro/oscuro |
-| Clientes, Asignación de precios, Inventario, Traslados, Cotizaciones de venta, Ventas, Devoluciones, Flota y conductores, Kardex y Configuración (10) | Mockup en sidebar |
+| Dashboard | ✅ Indicadores y gráficos |
+
+### Compras
+
+| Módulo | Estado |
+|--------|--------|
+| Proveedores | ✅ Contactos, imágenes, identificadores fiscales y datos maestros |
+| Productos, categorías y unidades | ✅ Catálogo, presentaciones, variantes e identificadores |
+| Solicitudes de compra | ✅ Creación, aprobación y consolidación por sucursal |
+| Cotizaciones de compra | ✅ Evaluación, comparación y selección |
+| Órdenes de compra | ✅ Aprobación, envío y documentos de gastos |
+| Compras | ✅ Recepción total o parcial, verificación y conversión de monedas |
+| Tipos de gasto | ✅ Catálogo por empresa |
+| Retaceo | ✅ Distribución de costos proporcional o por montos fijos, con reportes |
+
+### Inventario
+
+| Módulo | Estado |
+|--------|--------|
+| Inventario | ✅ Lotes, etiquetas, unidades logísticas, colocación y fraccionamiento |
+| Kardex | ✅ Movimientos por producto, lote y ubicación, con conciliación |
+| Valoración de inventario | ✅ Costo promedio con libro inmutable |
+| Ajustes de inventario | ✅ Entradas y bajas con motivo, evidencia y aprobación |
+| Almacenes y categorías | ✅ Estructuras, ubicaciones, capacidad y generador de ubicaciones |
+| Sucursales | ✅ Perfiles, galería y mapa |
+| Traslados | ✅ Preparación, aprobación, despacho, recepción parcial y discrepancias (faltante, sobrante, avería) |
+| Reglas de traslados | ✅ Rutas entre bodegas y quién aprueba |
+
+### Logística
+
+| Módulo | Estado |
+|--------|--------|
+| Flota | ✅ Vehículos, documentos, mantenimiento, inspecciones y disponibilidad |
+| Tipos de vehículo, puntos de inspección y reglas | ✅ Catálogos y reglas de aptitud para despacho |
+| Costos de flota | ✅ Registro y análisis por vehículo |
+| Conductores | ✅ Licencias, documentos y viajes |
+| Seguimiento | ✅ GPS en tiempo real con Traccar y recorrido archivado por traslado |
+| Captura de documentos | ✅ Lectura asistida de licencias y tarjetas de circulación (opcional, con GPU) |
+
+### Ventas
+
+| Módulo | Estado |
+|--------|--------|
+| Clientes, cotizaciones de venta, ventas, entregas y devoluciones | 🟡 Prototipo sin impuestos ni facturación; en rediseño |
+| Facturación electrónica (DTE), punto de venta, cobros y libros de IVA | 🔜 Planificado |
+
+### Pendientes en el menú
+
+| Módulo | Estado |
+|--------|--------|
+| Asignación de precios | Se construye con el área de Ventas |
+| Configuración | Pendiente |
+
+---
+
+## Despliegue
+
+Cada cambio integrado en `develop` dispara el flujo `deploy.yml`, que entra por
+SSH al servidor y ejecuta `scripts/deploy.sh`: actualiza el código, aplica las
+migraciones y reinicia los servicios. El perfil de producción
+(`compose.prod.yaml`) agrega Nginx, ejecuta los contenedores sin privilegios y
+no siembra datos.
+
+---
+
+## Hoja de ruta
+
+El siguiente bloque de trabajo es el área de **Ventas y facturación fiscal**
+para El Salvador:
+
+1. Base fiscal: clientes con datos fiscales, catálogos de Hacienda y emisor por
+   empresa, sucursal y caja.
+2. Precios, impuestos y un nuevo modelo de cotización y pedido.
+3. Facturación electrónica (DTE) multiemisor: cada empresa emite sus propios
+   documentos, con modo simulado, de pruebas y de producción.
+4. Pedidos, cobros y cuentas por cobrar.
+5. Punto de venta y caja.
+6. Datos fiscales de compras, libros de IVA y anexos del F-07.
 
 ---
 
@@ -305,9 +387,16 @@ La última validación completa realizada durante el segundo período fue:
 - `docs/module-creation-guide.md` — guía paso a paso para la creación de nuevos módulos
 - `docs/testing-strategy.md` — estrategia de testing (Pytest + Vitest)
 - `docs/troubleshooting-faq.md` — resolución de problemas y FAQ
+- `docs/ers-v1/guia-maestra.md` — guía maestra de compras e inventario
+- `docs/ers-v1/manual-traslados.md`, `manual-ajustes.md`, `manual-entregas.md` y `manual-ventas-base.md` — manuales de operación
+- `docs/ers-v1/manual-pruebas-y-demostracion.md` — recorrido de pruebas y demostración
+- `docs/flujo-compras-inventario-retaceo.md` — flujo de compras, inventario y retaceo
+- `docs/warehouse-capacity-operations.md` — capacidad y ubicaciones de almacenes
+- `docs/gps-produccion.md` — puesta en producción del seguimiento GPS
+- `observability/README.md` — métricas, trazas, logs y alertas
 
 ---
 
 ## Licencia
 
-Proprietary — boilerplate for internal use.
+Propietario — uso interno.
