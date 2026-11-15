@@ -162,6 +162,9 @@ async def test_sites_layer_and_automatic_geofences(e2e_client: Any, traccar: Fak
         json={**partial, "location_mode": "branch"},
     )
     assert moved.status_code == 200, moved.text
+    # La sincronización corre en segundo plano tras confirmar el cambio: hay que
+    # esperarla antes de leer el estado, o la lectura puede adelantarse al fallo.
+    await wait_for_pending_syncs()
     stale = (await e2e_client.get("/api/v1/tracking/sites", headers=admin)).json()
     assert stale["sync"]["error"]
     assert created["id"] in _site_geofences(traccar)
