@@ -14,10 +14,12 @@ const mocks = vi.hoisted(() => ({
   goto: vi.fn()
 }));
 
+// El período se fija en la URL: sin él, el componente usa los últimos 30 días
+// y la solicitud de prueba (16 de octubre de 2026) queda fuera con el paso del tiempo.
 vi.mock('$app/state', () => ({
   page: {
     url: new URL(
-      `http://localhost/purchase-consolidations/new?request_ids=11111111-1111-4111-8111-111111111111%2C22222222-2222-4222-8222-222222222222`
+      `http://localhost/purchase-consolidations/new?request_ids=11111111-1111-4111-8111-111111111111%2C22222222-2222-4222-8222-222222222222&date_from=2026-10-01&date_to=2026-10-31`
     )
   }
 }));
