@@ -166,8 +166,7 @@ export interface SalesDelivery {
   lines: SalesDeliveryLine[];
 }
 
-export type SalesReturnStatus =
-  'draft' | 'received' | 'under_review' | 'accepted' | 'rejected' | 'mixed' | 'cancelled';
+export type SalesReturnStatus = 'draft' | 'received' | 'under_review' | 'accepted' | 'rejected' | 'mixed' | 'cancelled';
 export type SalesReturnCondition = 'resalable' | 'damaged' | 'wrong_item' | 'other';
 
 export interface SalesReturnEvent {

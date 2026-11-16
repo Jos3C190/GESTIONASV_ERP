@@ -84,11 +84,11 @@ Queda fuera de V1b:
     - quitar las rutas de clientes de `sales.py`;
     - las dependencias en `deps.py`.
   - Verificar con `tests/e2e/test_customers.py`, ajustar `test_sales_base.py` y reejecutar las pruebas de ventas.
-- [ ] **Paso 5: frontend, API y tipos.**
+- [x] **Paso 5: frontend, API y tipos.**
   - `lib/api/customers.ts`, `lib/types/customer.ts` y las etiquetas.
   - El editor de cotizaciones pasa a la API nueva.
   - Verificar con vitest.
-- [ ] **Paso 6: pantallas.**
+- [x] **Paso 6: pantallas.** (la revisión en el navegador queda para el paso 9)
   - Lista de clientes con filtros, y ficha para crear y editar con estas secciones:
     - identidad fiscal;
     - dirección;
@@ -104,7 +104,7 @@ Queda fuera de V1b:
 
 ## Estado actual
 
-- **Paso en curso**: 5 (frontend: API y tipos). La API vive en `/api/v1/customers`; ya no existe `/sales/customers`. Pendiente: correr `test_sales_deliveries.py` y `test_inventory_final_acceptance.py` en la batería completa, que ya apuntan a la ruta nueva. En los checks, `IN (...)` con NULL da NULL y PostgreSQL lo acepta: exigir `IS NOT NULL` explícito.
+- **Paso en curso**: 7 (semilla). Los pasos 5 y 6 se hicieron juntos porque `SalesCustomers.svelte` dependía de las rutas viejas; se eliminó. El selector de vendedor existe en la API pero aún no en la pantalla. Prettier solo se aplica a archivos nuevos o tocados: pasarlo por una carpeta entera reformatea código ajeno. La API vive en `/api/v1/customers`; ya no existe `/sales/customers`. Pendiente: correr `test_sales_deliveries.py` y `test_inventory_final_acceptance.py` en la batería completa, que ya apuntan a la ruta nueva. En los checks, `IN (...)` con NULL da NULL y PostgreSQL lo acepta: exigir `IS NOT NULL` explícito.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería: el hook de pre-commit usa la misma base de pruebas.
