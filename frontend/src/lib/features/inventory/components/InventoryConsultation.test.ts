@@ -28,7 +28,7 @@ vi.mock('../services', () => ({
     transferUnits: mocks.transfer
   }
 }));
-vi.mock('$lib/features/locations/services', () => ({
+vi.mock('#lib/features/locations/services.ts', () => ({
   listLocations: mocks.locations,
   getLocation: mocks.location
 }));

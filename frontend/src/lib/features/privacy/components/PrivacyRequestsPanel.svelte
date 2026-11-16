@@ -2,14 +2,14 @@
   import { onMount } from 'svelte';
   import AsyncSmartSelect, {
     type AsyncSmartOption
-  } from '$lib/components/ui/AsyncSmartSelect.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  } from '#lib/components/ui/AsyncSmartSelect.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import PrivacyEmptyState from './PrivacyEmptyState.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { customersApi } from '$lib/api/customers';
-  import { privacyApi } from '$lib/api/privacy';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { customersApi } from '#lib/api/customers.ts';
+  import { privacyApi } from '#lib/api/privacy.ts';
   import {
     ACTION_LABELS,
     ACTION_TEXT,
@@ -19,16 +19,16 @@
     STATUS_TONES,
     formatDay,
     todayInElSalvador
-  } from '$lib/features/privacy/labels';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  } from '#lib/features/privacy/labels.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type {
     RequestAction,
     RightType,
     SubjectRequest,
     SubjectRequestInput,
     UserOption
-  } from '$lib/types/privacy';
+  } from '#lib/types/privacy.ts';
 
   let { canManage }: { canManage: boolean } = $props();
 

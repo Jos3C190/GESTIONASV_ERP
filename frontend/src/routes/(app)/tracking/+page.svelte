@@ -1,5 +1,5 @@
 <script lang="ts">
-  import TrackingWorkspace from '$lib/features/tracking/TrackingWorkspace.svelte';
+  import TrackingWorkspace from '#lib/features/tracking/TrackingWorkspace.svelte';
 </script>
 
 <svelte:head

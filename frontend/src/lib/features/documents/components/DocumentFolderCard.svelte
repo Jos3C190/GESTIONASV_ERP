@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { DocumentFolderOut } from '$lib/api/client';
-  import Avatar from '$lib/components/ui/Avatar.svelte';
-  import { initialsOf } from '$lib/features/employees/avatar';
+  import type { DocumentFolderOut } from '#lib/api/client.ts';
+  import Avatar from '#lib/components/ui/Avatar.svelte';
+  import { initialsOf } from '#lib/features/employees/avatar.ts';
 
   interface Props {
     folder: DocumentFolderOut;

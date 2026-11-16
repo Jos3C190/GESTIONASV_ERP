@@ -4,9 +4,9 @@
     branchProductDemandApi,
     type BranchDemandLevel,
     type BranchProductDemandItem
-  } from '$lib/api/branch-product-demand';
-  import Card from '$lib/components/ui/Card.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  } from '#lib/api/branch-product-demand.ts';
+  import Card from '#lib/components/ui/Card.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   let { branchId }: { branchId: string } = $props();
 

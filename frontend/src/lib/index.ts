@@ -1,2 +1,2 @@
-// SvelteKit aliases $lib -> ./src/lib. See svelte.config.js.
+// Subpath imports: #lib -> ./src/lib (see "imports" in package.json).
 export {};

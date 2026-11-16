@@ -1,18 +1,18 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import PurchaseRequestProductPicker from '$lib/features/purchase-requests/components/PurchaseRequestProductPicker.svelte';
-  import { api, HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import { purchaseRequestsApi } from '$lib/api/purchase-requests';
-  import { getWarehouses } from '$lib/services/warehouses';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Product } from '$lib/types/catalog';
-  import type { PurchaseRequestDetailInput } from '$lib/types/purchase-request';
-  import type { Warehouse } from '$lib/features/warehouses/types';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import PurchaseRequestProductPicker from '#lib/features/purchase-requests/components/PurchaseRequestProductPicker.svelte';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { purchaseRequestsApi } from '#lib/api/purchase-requests.ts';
+  import { getWarehouses } from '#lib/services/warehouses.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Product } from '#lib/types/catalog.ts';
+  import type { PurchaseRequestDetailInput } from '#lib/types/purchase-request.ts';
+  import type { Warehouse } from '#lib/features/warehouses/types.ts';
 
   interface DraftLine {
     productId: string;

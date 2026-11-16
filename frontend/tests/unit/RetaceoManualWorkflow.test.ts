@@ -1,10 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import RetaceoDraftEditor from '$lib/features/retaceos/components/RetaceoDraftEditor.svelte';
-import RetaceoAveragePanel from '$lib/features/retaceos/components/RetaceoAveragePanel.svelte';
-import PurchaseOrderActualExpenses from '$lib/features/purchase-orders/components/PurchaseOrderActualExpenses.svelte';
-import type { Retaceo } from '$lib/types/retaceo';
-import type { PurchaseOrder } from '$lib/types/purchase-order';
+import RetaceoDraftEditor from '#lib/features/retaceos/components/RetaceoDraftEditor.svelte';
+import RetaceoAveragePanel from '#lib/features/retaceos/components/RetaceoAveragePanel.svelte';
+import PurchaseOrderActualExpenses from '#lib/features/purchase-orders/components/PurchaseOrderActualExpenses.svelte';
+import type { Retaceo } from '#lib/types/retaceo.ts';
+import type { PurchaseOrder } from '#lib/types/purchase-order.ts';
 import { saveRetaceoPreview } from './retaceo-preview';
 
 const mocks = vi.hoisted(() => ({
@@ -16,18 +16,18 @@ const mocks = vi.hoisted(() => ({
   average: vi.fn(),
   get: vi.fn()
 }));
-vi.mock('$lib/api/client', async (original) => ({
+vi.mock('#lib/api/client.ts', async (original) => ({
   ...(await original<object>()),
   apiFetch: mocks.categories
 }));
-vi.mock('$lib/api/retaceos', () => ({
+vi.mock('#lib/api/retaceos.ts', () => ({
   retaceosApi: {
     get: mocks.get,
     update: mocks.update,
     averageComparison: mocks.average
   }
 }));
-vi.mock('$lib/api/purchases', () => ({
+vi.mock('#lib/api/purchases.ts', () => ({
   purchasesApi: {
     get: vi.fn(async () => ({
       code: 'COM-00026',
@@ -36,7 +36,7 @@ vi.mock('$lib/api/purchases', () => ({
     }))
   }
 }));
-vi.mock('$lib/api/purchase-orders', () => ({
+vi.mock('#lib/api/purchase-orders.ts', () => ({
   purchaseOrdersApi: {
     get: vi.fn(async () => ({ expenses: [], currency: 'USD' })),
     listExpenseTypes: vi.fn(async () => [
@@ -46,10 +46,10 @@ vi.mock('$lib/api/purchase-orders', () => ({
     listExpenseDocuments: vi.fn(async () => [])
   }
 }));
-vi.mock('$lib/features/purchase-orders/actual-expenses', () => ({
+vi.mock('#lib/features/purchase-orders/actual-expenses.ts', () => ({
   actualExpensesApi: { list: mocks.actuals, create: mocks.record, availability: mocks.availability }
 }));
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: {
     getProduct: vi.fn(async () => ({
       id_product: 4,
@@ -59,7 +59,7 @@ vi.mock('$lib/api/catalog', () => ({
     listUnits: vi.fn(async () => [{ id_unit: 2, code: 'cj', name: 'Caja' }])
   }
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({ permissions: { hasPermission: () => true } }));
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({ permissions: { hasPermission: () => true } }));
 
 const record: Retaceo = {
   id: 'ret',

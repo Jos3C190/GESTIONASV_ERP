@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { purchaseRequestsApi } from '$lib/api/purchase-requests';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
-  import { purchaseOrdersApi } from '$lib/api/purchase-orders';
-  import { purchasesApi } from '$lib/api/purchases';
-  import { retaceosApi } from '$lib/api/retaceos';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { purchaseRequestsApi } from '#lib/api/purchase-requests.ts';
+  import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
+  import { purchaseOrdersApi } from '#lib/api/purchase-orders.ts';
+  import { purchasesApi } from '#lib/api/purchases.ts';
+  import { retaceosApi } from '#lib/api/retaceos.ts';
 
   type QueueKey =
     | 'approval'

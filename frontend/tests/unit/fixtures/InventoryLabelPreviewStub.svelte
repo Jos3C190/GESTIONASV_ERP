@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import type { InventoryLabelLayout } from '$lib/features/inventory/types';
+  import type { InventoryLabelLayout } from '#lib/features/inventory/types.ts';
   let {
     html,
     layout,

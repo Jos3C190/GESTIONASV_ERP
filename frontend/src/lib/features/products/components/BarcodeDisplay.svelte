@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { barcodeFormat } from '$lib/features/products/identifiers';
-  import type { ProductIdentifierType } from '$lib/types/catalog';
+  import { barcodeFormat } from '#lib/features/products/identifiers.ts';
+  import type { ProductIdentifierType } from '#lib/types/catalog.ts';
 
   interface Props {
     identifierType: ProductIdentifierType;

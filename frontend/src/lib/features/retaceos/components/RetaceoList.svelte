@@ -1,11 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page as currentPage } from '$app/state';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { retaceosApi } from '$lib/api/retaceos';
-  import { branch } from '$lib/stores/branch.svelte';
-  import type { Retaceo, RetaceoStatus } from '$lib/types/retaceo';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { retaceosApi } from '#lib/api/retaceos.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import type { Retaceo, RetaceoStatus } from '#lib/types/retaceo.ts';
 
   const STATUS_OPTIONS: { value: RetaceoStatus; label: string }[] = [
     { value: 'draft', label: 'Borrador' },
@@ -73,10 +73,10 @@
   }
 
   function syncStatusInUrl(status: RetaceoStatus | '') {
-    const url = new URL(currentPage.url);
+    const url = new URL(currentPage.url.href);
     if (status) url.searchParams.set('status', status);
     else url.searchParams.delete('status');
-    void goto(url, { replaceState: true, keepFocus: true, noScroll: true });
+    void goto(url, { replace: true, reset: false });
   }
 
   async function loadRetaceos(

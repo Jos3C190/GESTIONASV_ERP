@@ -20,7 +20,7 @@ const inventoryMocks = vi.hoisted(() => ({
 
 vi.mock('../services', () => serviceMocks);
 vi.mock('../../warehouses/capacity-groups.service', () => capacityGroupMocks);
-vi.mock('$lib/services/warehouses', () => warehouseMocks);
+vi.mock('#lib/services/warehouses.ts', () => warehouseMocks);
 vi.mock('../../inventory/services', () => ({ inventoryApi: inventoryMocks }));
 
 const legacyLocation: LocationOut = {

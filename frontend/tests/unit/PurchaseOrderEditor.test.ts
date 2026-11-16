@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseOrderEditor from '$lib/features/purchase-orders/components/PurchaseOrderEditor.svelte';
+import PurchaseOrderEditor from '#lib/features/purchase-orders/components/PurchaseOrderEditor.svelte';
 
 const mocks = vi.hoisted(() => ({
   getQuotation: vi.fn(),
@@ -21,13 +21,13 @@ vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
 
-vi.mock('$lib/api/purchase-quotations', () => ({
+vi.mock('#lib/api/purchase-quotations.ts', () => ({
   purchaseQuotationsApi: {
     get: mocks.getQuotation
   }
 }));
 
-vi.mock('$lib/api/purchase-orders', () => ({
+vi.mock('#lib/api/purchase-orders.ts', () => ({
   purchaseOrdersApi: {
     create: mocks.createOrder,
     createFromConsolidation: mocks.createFromConsolidation,
@@ -35,31 +35,31 @@ vi.mock('$lib/api/purchase-orders', () => ({
   }
 }));
 
-vi.mock('$lib/api/purchase-consolidations', () => ({
+vi.mock('#lib/api/purchase-consolidations.ts', () => ({
   purchaseConsolidationsApi: {
     get: mocks.getConsolidation,
     getAwardBoard: mocks.getAwardBoard
   }
 }));
 
-vi.mock('$lib/api/suppliers', () => ({
+vi.mock('#lib/api/suppliers.ts', () => ({
   suppliersApi: {
     getSupplier: mocks.getSupplier
   }
 }));
 
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: {
     getProduct: mocks.getProduct,
     listUnits: mocks.listUnits
   }
 }));
 
-vi.mock('$lib/services/warehouses', () => ({
+vi.mock('#lib/services/warehouses.ts', () => ({
   getWarehouses: mocks.getWarehouses
 }));
 
-vi.mock('$lib/stores/branch.svelte', () => ({
+vi.mock('#lib/stores/branch.svelte.ts', () => ({
   branch: {
     id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
     branches: [
@@ -74,7 +74,7 @@ vi.mock('$lib/stores/branch.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
   }

@@ -5,17 +5,16 @@
  * prepared for the Branches module and future Fleet/Logistics modules.
  */
 
-import * as publicEnv from '$env/static/public';
+import { PUBLIC_CARTO_BASEMAP_API_KEY, PUBLIC_GOOGLE_MAPS_API_KEY } from '$app/env/public';
 
 let mapsPromise: Promise<void> | null = null;
 let leafletPromise: Promise<any> | null = null;
 
 export type CartoBasemapTheme = 'light' | 'dark';
 
-const publicMapEnv = publicEnv as Record<string, string | undefined>;
-const configuredCartoApiKey = publicMapEnv.PUBLIC_CARTO_BASEMAP_API_KEY?.trim() ?? '';
+const configuredCartoApiKey = PUBLIC_CARTO_BASEMAP_API_KEY;
 
-export const configuredGoogleMapsApiKey = publicMapEnv.PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? '';
+export const configuredGoogleMapsApiKey = PUBLIC_GOOGLE_MAPS_API_KEY;
 
 export const CARTO_BASEMAP_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>';

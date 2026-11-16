@@ -8,21 +8,21 @@
     type RoleOut,
     type RoleWithPermissions,
     type UserOut
-  } from '$lib/api/client';
-  import { search as globalSearch } from '$lib/stores/search.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
-  import KebabMenu from '$lib/components/ui/KebabMenu.svelte';
-  import Avatar from '$lib/components/ui/Avatar.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { session } from '$lib/stores/session.svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { queryClient } from '$lib/services/query-client';
+  } from '#lib/api/client.ts';
+  import { search as globalSearch } from '#lib/stores/search.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
+  import KebabMenu from '#lib/components/ui/KebabMenu.svelte';
+  import Avatar from '#lib/components/ui/Avatar.svelte';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { session } from '#lib/stores/session.svelte.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { queryClient } from '#lib/services/query-client.ts';
 
   let users = $state<UserOut[]>([]);
   let meta = $state<{ page: number; size: number; total: number; pages: number } | null>(null);

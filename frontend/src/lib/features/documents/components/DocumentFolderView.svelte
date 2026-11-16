@@ -10,11 +10,11 @@
     type DocumentFolderOut,
     type DocumentRecordOut,
     type EmployeeOut
-  } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
+  } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
   import DocumentBreadcrumbs from './DocumentBreadcrumbs.svelte';
   import DocumentDetailPanel from './DocumentDetailPanel.svelte';
   import DocumentFolderGrid from './DocumentFolderGrid.svelte';
@@ -23,12 +23,12 @@
   import DocumentMetadataModal from './DocumentMetadataModal.svelte';
   import DocumentRecentFiles from './DocumentRecentFiles.svelte';
   import DocumentUploadQueue from './DocumentUploadQueue.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
   import {
     DocumentBrowserOpenError,
     openDocumentInBrowser
-  } from '$lib/features/documents/open-document';
+  } from '#lib/features/documents/open-document.ts';
 
   export type DocumentFolderViewScope = 'root' | 'general' | 'employees' | 'employee' | 'category';
 
@@ -328,7 +328,8 @@
   // Keep browser Back/Forward and shared deep links authoritative.  SvelteKit
   // preserves this component between query-only navigations, so local filter
   // state must be refreshed after every completed navigation.
-  afterNavigate(({ to }) => {
+  afterNavigate(({ to, shallow, type }) => {
+    if (shallow && type === 'goto') return;
     if (to) applyQueryFromUrl(to.url);
   });
 
@@ -373,9 +374,8 @@
     const current = currentPage.url.search;
     if (next !== current.replace(/^\?/, '')) {
       await goto(`${currentPage.url.pathname}${next ? `?${next}` : ''}`, {
-        replaceState: true,
-        noScroll: true,
-        keepFocus: true
+        replace: true,
+        reset: false
       });
     }
   }

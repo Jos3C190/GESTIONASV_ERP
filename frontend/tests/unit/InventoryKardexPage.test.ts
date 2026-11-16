@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import KardexPage from '../../src/routes/(app)/inventory/kardex/+page.svelte';
-import { HttpError } from '$lib/api/client';
+import { HttpError } from '#lib/api/client.ts';
 
 const mocks = vi.hoisted(() => ({
   getWarehouses: vi.fn(),
@@ -12,9 +12,9 @@ const mocks = vi.hoisted(() => ({
   accessAllBranches: false
 }));
 
-vi.mock('$lib/services/warehouses', () => ({ getWarehouses: mocks.getWarehouses }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1' } }));
-vi.mock('$lib/stores/branch.svelte', () => ({
+vi.mock('#lib/services/warehouses.ts', () => ({ getWarehouses: mocks.getWarehouses }));
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: { id: 'company-1' } }));
+vi.mock('#lib/stores/branch.svelte.ts', () => ({
   branch: {
     id: 'branch-1',
     get accessAllBranches() {
@@ -22,14 +22,14 @@ vi.mock('$lib/stores/branch.svelte', () => ({
     }
   }
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: (permission: string) =>
       permission === 'inventory:read' ||
       (permission === 'inventory:valuation' && mocks.accessAllBranches)
   }
 }));
-vi.mock('$lib/features/inventory/kardex', async (importOriginal) => ({
+vi.mock('#lib/features/inventory/kardex.ts', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   kardexApi: {
     searchItems: mocks.searchItems,

@@ -1,4 +1,4 @@
-import type { GeofenceOut, GeofenceShape } from '$lib/api/client';
+import type { GeofenceOut, GeofenceShape } from '#lib/api/client.ts';
 
 type LngLat = [number, number];
 

@@ -1,22 +1,22 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { fiscalApi } from '$lib/api/fiscal';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { fiscalApi } from '#lib/api/fiscal.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
   import {
     OPERATING_MODE_HINTS,
     OPERATING_MODE_LABELS,
     PERSON_TYPE_LABELS,
     TAXPAYER_CATEGORY_LABELS
-  } from '$lib/features/fiscal/labels';
+  } from '#lib/features/fiscal/labels.ts';
   import type {
     FiscalProfile,
     OperatingMode,
     PersonType,
     TaxpayerCategory
-  } from '$lib/types/fiscal';
+  } from '#lib/types/fiscal.ts';
 
   let { canManage }: { canManage: boolean } = $props();
 

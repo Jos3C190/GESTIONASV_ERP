@@ -1,11 +1,11 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import { api, HttpError } from '$lib/api/client';
-  import { purchaseConsolidationsApi } from '$lib/api/purchase-consolidations';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import { purchaseConsolidationsApi } from '#lib/api/purchase-consolidations.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import PurchaseConsolidationAwardLineView from './PurchaseConsolidationAwardLine.svelte';
   import PurchaseConsolidationSupplierMatrix from './PurchaseConsolidationSupplierMatrix.svelte';
   import { formatQuantity } from '../adjudication-formatters';
@@ -15,7 +15,7 @@
     PurchaseConsolidationAwardLine as AwardLine,
     PurchaseConsolidationAwardOffer,
     PurchaseConsolidationStatus
-  } from '$lib/types/purchase-consolidation';
+  } from '#lib/types/purchase-consolidation.ts';
 
   let {
     consolidationId,

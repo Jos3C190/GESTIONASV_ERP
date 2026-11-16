@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { GeofenceOut, SiteOut } from '$lib/api/client';
-  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
+  import type { GeofenceOut, SiteOut } from '#lib/api/client.ts';
+  import FleetIcon from '#lib/features/fleet/FleetIcon.svelte';
   import TrackingMap from './TrackingMap.svelte';
   import { STATUS_LABELS, timeAgo, type TrackedVehicle } from './tracking';
   import { assignPane, initialAssignments, reconcileAssignments } from './split-view';

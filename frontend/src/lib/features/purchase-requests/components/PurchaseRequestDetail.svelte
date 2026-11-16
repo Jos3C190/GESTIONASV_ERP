@@ -1,11 +1,11 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import PurchaseRequestActions from '$lib/features/purchase-requests/components/PurchaseRequestActions.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import { purchaseRequestsApi } from '$lib/api/purchase-requests';
-  import type { PurchaseRequest, PurchaseRequestStatus } from '$lib/types/purchase-request';
+  import Button from '#lib/components/ui/Button.svelte';
+  import PurchaseRequestActions from '#lib/features/purchase-requests/components/PurchaseRequestActions.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { purchaseRequestsApi } from '#lib/api/purchase-requests.ts';
+  import type { PurchaseRequest, PurchaseRequestStatus } from '#lib/types/purchase-request.ts';
 
   let { requestId }: { requestId: string } = $props();
 

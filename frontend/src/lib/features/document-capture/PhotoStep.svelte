@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FleetIcon from '#lib/features/fleet/FleetIcon.svelte';
   import CameraCapture from './CameraCapture.svelte';
   import { QUALITY_MESSAGES, type QualityIssue } from './image-prep';
 

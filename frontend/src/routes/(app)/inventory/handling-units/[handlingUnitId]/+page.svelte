@@ -1,15 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import { inventoryApi } from '$lib/features/inventory/services';
-  import HandlingUnitLotIdentity from '$lib/features/inventory/components/HandlingUnitLotIdentity.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import { inventoryApi } from '#lib/features/inventory/services.ts';
+  import HandlingUnitLotIdentity from '#lib/features/inventory/components/HandlingUnitLotIdentity.svelte';
   import type {
     HandlingUnitTraceEvent,
     HandlingUnitTraceability,
     StockStatus
-  } from '$lib/features/inventory/types';
+  } from '#lib/features/inventory/types.ts';
   import { page } from '$app/state';
-  import { isCustomerReturnReference } from '$lib/features/inventory/movement-presentation';
+  import { isCustomerReturnReference } from '#lib/features/inventory/movement-presentation.ts';
 
   let trace = $state<HandlingUnitTraceability | null>(null);
   let loading = $state(true);

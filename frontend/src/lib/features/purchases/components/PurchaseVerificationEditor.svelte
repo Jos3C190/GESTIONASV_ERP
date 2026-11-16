@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchasesApi } from '$lib/api/purchases';
-  import LocationGridPicker from '$lib/features/locations/components/LocationGridPicker.svelte';
-  import { listLocations } from '$lib/features/locations/services';
-  import type { LocationOut } from '$lib/features/locations/types';
-  import type { Purchase } from '$lib/types/purchase';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchasesApi } from '#lib/api/purchases.ts';
+  import LocationGridPicker from '#lib/features/locations/components/LocationGridPicker.svelte';
+  import { listLocations } from '#lib/features/locations/services.ts';
+  import type { LocationOut } from '#lib/features/locations/types.ts';
+  import type { Purchase } from '#lib/types/purchase.ts';
 
   let {
     purchase,

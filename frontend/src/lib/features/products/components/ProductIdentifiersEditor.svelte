@@ -1,12 +1,12 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
   import {
     IDENTIFIER_TYPE_OPTIONS,
     identifierFormatHint,
     identifierFormat
-  } from '$lib/features/products/identifiers';
-  import type { ProductIdentifierDraft, ProductIdentifierType } from '$lib/types/catalog';
+  } from '#lib/features/products/identifiers.ts';
+  import type { ProductIdentifierDraft, ProductIdentifierType } from '#lib/types/catalog.ts';
 
   export type IdentifierEditorDraft = ProductIdentifierDraft & { _key?: string };
 

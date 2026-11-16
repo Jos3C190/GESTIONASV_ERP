@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { theme } from '$lib/stores/theme.svelte';
+  import { theme } from '#lib/stores/theme.svelte.ts';
 
   let label = $derived(theme.current === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
 </script>

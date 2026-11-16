@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Card from '$lib/components/ui/Card.svelte';
-  import type { ConsolidationEvent } from '$lib/types/purchase-consolidation';
+  import Card from '#lib/components/ui/Card.svelte';
+  import type { ConsolidationEvent } from '#lib/types/purchase-consolidation.ts';
 
   let { events }: { events: ConsolidationEvent[] } = $props();
 

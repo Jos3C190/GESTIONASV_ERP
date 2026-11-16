@@ -1,5 +1,5 @@
 <script lang="ts">
-  import PurchaseQuotationList from '$lib/features/purchase-quotations/components/PurchaseQuotationList.svelte';
+  import PurchaseQuotationList from '#lib/features/purchase-quotations/components/PurchaseQuotationList.svelte';
 </script>
 
 <svelte:head>

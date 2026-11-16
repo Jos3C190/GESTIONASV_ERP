@@ -2,17 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   PurchaseQuotationCreateInput,
   PurchaseQuotationRecordResponseInput
-} from '$lib/types/purchase-quotation';
+} from '#lib/types/purchase-quotation.ts';
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn()
 }));
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
   apiFetch: mocks.apiFetch
 }));
 
-import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
+import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
 
 describe('purchaseQuotationsApi', () => {
   beforeEach(() => {

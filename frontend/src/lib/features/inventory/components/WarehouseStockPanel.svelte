@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import { workspaceApi, workspaceField, type StockPage } from '../workspace';
   import { formatMovementQuantity as quantity, stockStatusLabel } from '../movement-presentation';
   import { physicalKardexHref } from '../kardex';

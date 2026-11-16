@@ -16,18 +16,18 @@ const api = vi.hoisted(() => ({
   listLocations: vi.fn(),
   qr: vi.fn()
 }));
-vi.mock('$lib/features/inventory/services', () => ({ inventoryApi: api }));
-vi.mock('$lib/features/locations/services', () => ({ listLocations: api.listLocations }));
+vi.mock('#lib/features/inventory/services.ts', () => ({ inventoryApi: api }));
+vi.mock('#lib/features/locations/services.ts', () => ({ listLocations: api.listLocations }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/features/inventory/components/LabelPrintPreview.svelte', async () => ({
+vi.mock('#lib/features/inventory/components/LabelPrintPreview.svelte', async () => ({
   default: (await import('./fixtures/InventoryLabelPreviewStub.svelte')).default
 }));
 vi.mock('qrcode', async (original) => {
   const module = await original<{ default: typeof import('qrcode') }>();
   return { ...module, default: { ...module.default, toDataURL: api.qr } };
 });
-vi.mock('$lib/features/inventory/label-printing', async (original) => {
-  const module = await original<typeof import('$lib/features/inventory/label-printing')>();
+vi.mock('#lib/features/inventory/label-printing.ts', async (original) => {
+  const module = await original<typeof import('#lib/features/inventory/label-printing.ts')>();
   return {
     ...module,
     prepareLabelPrintWindow: vi.fn(async (target: Window, html: string) => {

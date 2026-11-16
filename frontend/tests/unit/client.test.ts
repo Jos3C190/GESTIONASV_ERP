@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { HttpError, apiFetch } from '$lib/api/client';
+import { HttpError, apiFetch } from '#lib/api/client.ts';
 
 describe('HttpError', () => {
   it('carries code, message, status', () => {

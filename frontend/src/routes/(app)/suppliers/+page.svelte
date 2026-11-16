@@ -1,17 +1,17 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
-  import { api, HttpError } from '$lib/api/client';
-  import { suppliersApi, type SupplierStats } from '$lib/api/suppliers';
-  import { catalogApi } from '$lib/api/catalog';
-  import type { Currency, PaymentTerms, Supplier, SupplierGroup } from '$lib/types/supplier';
-  import type { Country } from '$lib/types/catalog';
-  import { search as globalSearch } from '$lib/stores/search.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import KebabMenu, { type KebabItem } from '#lib/components/ui/KebabMenu.svelte';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import { suppliersApi, type SupplierStats } from '#lib/api/suppliers.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import type { Currency, PaymentTerms, Supplier, SupplierGroup } from '#lib/types/supplier.ts';
+  import type { Country } from '#lib/types/catalog.ts';
+  import { search as globalSearch } from '#lib/stores/search.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
 
   let suppliers = $state<Supplier[]>([]);
   let countries = $state<Country[]>([]);

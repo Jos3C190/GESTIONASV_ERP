@@ -1,12 +1,12 @@
 <script lang="ts">
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import BarcodeDisplay from '$lib/features/products/components/BarcodeDisplay.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import BarcodeDisplay from '#lib/features/products/components/BarcodeDisplay.svelte';
   import {
     barcodeFormat,
     identifierFormat,
     identifierFormatHint
-  } from '$lib/features/products/identifiers';
-  import type { ProductIdentifier } from '$lib/types/catalog';
+  } from '#lib/features/products/identifiers.ts';
+  import type { ProductIdentifier } from '#lib/types/catalog.ts';
 
   interface Props {
     identifiers: ProductIdentifier[];

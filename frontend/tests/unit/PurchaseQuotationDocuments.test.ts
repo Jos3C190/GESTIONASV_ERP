@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseQuotationDocuments from '$lib/features/purchase-quotations/components/PurchaseQuotationDocuments.svelte';
-import type { PurchaseQuotationDocument } from '$lib/types/purchase-quotation';
+import PurchaseQuotationDocuments from '#lib/features/purchase-quotations/components/PurchaseQuotationDocuments.svelte';
+import type { PurchaseQuotationDocument } from '#lib/types/purchase-quotation.ts';
 
 const mocks = vi.hoisted(() => ({
   initiate: vi.fn(),
@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   confirmRequest: vi.fn()
 }));
 
-vi.mock('$lib/api/purchase-quotations', () => ({
+vi.mock('#lib/api/purchase-quotations.ts', () => ({
   purchaseQuotationsApi: {
     initiateDocument: mocks.initiate,
     completeDocument: mocks.complete,
@@ -23,13 +23,13 @@ vi.mock('$lib/api/purchase-quotations', () => ({
   }
 }));
 
-vi.mock('$lib/stores/confirmation.svelte', () => ({
+vi.mock('#lib/stores/confirmation.svelte.ts', () => ({
   confirmation: {
     request: mocks.confirmRequest
   }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
   }

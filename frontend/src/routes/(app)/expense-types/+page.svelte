@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseOrdersApi } from '$lib/api/purchase-orders';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { PurchaseOrderExpenseTypeCatalog } from '$lib/types/purchase-order';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseOrdersApi } from '#lib/api/purchase-orders.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { PurchaseOrderExpenseTypeCatalog } from '#lib/types/purchase-order.ts';
 
   let types = $state<PurchaseOrderExpenseTypeCatalog[]>([]);
   let loading = $state(true);

@@ -23,9 +23,9 @@ const { privacyApi } = vi.hoisted(() => ({
   }
 }));
 
-vi.mock('$lib/api/privacy', () => ({ privacyApi }));
-vi.mock('$lib/api/customers', () => ({ customersApi: { list: vi.fn() } }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/privacy.ts', () => ({ privacyApi }));
+vi.mock('#lib/api/customers.ts', () => ({ customersApi: { list: vi.fn() } }));
+vi.mock('#lib/api/client.ts', () => ({
   HttpError: class HttpError extends Error {
     constructor(
       readonly code: string,
@@ -37,10 +37,10 @@ vi.mock('$lib/api/client', () => ({
   }
 }));
 
-import { HttpError } from '$lib/api/client';
-import { fromLocalInput, todayInElSalvador, toLocalInput } from '$lib/features/privacy/labels';
-import { permissions } from '$lib/stores/permissions.svelte';
-import type { Consent, Incident, SubjectRequest } from '$lib/types/privacy';
+import { HttpError } from '#lib/api/client.ts';
+import { fromLocalInput, todayInElSalvador, toLocalInput } from '#lib/features/privacy/labels.ts';
+import { permissions } from '#lib/stores/permissions.svelte.ts';
+import type { Consent, Incident, SubjectRequest } from '#lib/types/privacy.ts';
 import CustomerConsentsPanel from './CustomerConsentsPanel.svelte';
 import PrivacyIncidentsPanel from './PrivacyIncidentsPanel.svelte';
 import PrivacyNoticePanel from './PrivacyNoticePanel.svelte';

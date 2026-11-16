@@ -17,10 +17,10 @@ vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
   fleetApi: apiMock
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: (code: string) => permissionMock.codes.has(code) }
 }));
-vi.mock('$lib/stores/confirmation.svelte', () => ({ confirmation: confirmMock }));
+vi.mock('#lib/stores/confirmation.svelte.ts', () => ({ confirmation: confirmMock }));
 
 const vehicle = {
   id: 'v1',

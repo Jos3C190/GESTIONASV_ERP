@@ -1,4 +1,4 @@
-import { apiFetch } from '$lib/api/client';
+import { apiFetch } from '#lib/api/client.ts';
 import type {
   Currency,
   PaymentTerms,
@@ -9,8 +9,8 @@ import type {
   SupplierGroup,
   SupplierImageDraft,
   SupplierTaxIdentifier
-} from '$lib/types/supplier';
-import type { PageResponse } from '$lib/api/catalog';
+} from '#lib/types/supplier.ts';
+import type { PageResponse } from '#lib/api/catalog.ts';
 
 export interface SupplierStats {
   total: number;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DocumentBreadcrumbOut } from '$lib/api/client';
+  import type { DocumentBreadcrumbOut } from '#lib/api/client.ts';
 
   interface Props {
     items: DocumentBreadcrumbOut[];

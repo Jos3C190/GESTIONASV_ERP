@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { CurrentUser } from '$lib/stores/session.svelte';
+  import type { CurrentUser } from '#lib/stores/session.svelte.ts';
   import Avatar from './Avatar.svelte';
 
   interface Props {

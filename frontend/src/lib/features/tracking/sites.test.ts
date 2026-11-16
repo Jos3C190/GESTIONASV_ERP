@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SiteOut } from '$lib/api/client';
+import type { SiteOut } from '#lib/api/client.ts';
 import { describeEvent } from './events';
 import { distanceM } from './geofences';
 import { siteAreas, siteEventTitle, sitePopup } from './sites';

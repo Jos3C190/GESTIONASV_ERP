@@ -1,17 +1,17 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import { purchaseOrdersApi } from '$lib/api/purchase-orders';
-  import { purchasesApi } from '$lib/api/purchases';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import PurchaseWorkflowActions from '$lib/features/purchases/components/PurchaseWorkflowActions.svelte';
-  import { getLocation } from '$lib/features/locations/services';
-  import type { LocationOut } from '$lib/features/locations/types';
-  import { getWarehouse } from '$lib/services/warehouses';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Purchase, PurchaseStatus } from '$lib/types/purchase';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { purchaseOrdersApi } from '#lib/api/purchase-orders.ts';
+  import { purchasesApi } from '#lib/api/purchases.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import PurchaseWorkflowActions from '#lib/features/purchases/components/PurchaseWorkflowActions.svelte';
+  import { getLocation } from '#lib/features/locations/services.ts';
+  import type { LocationOut } from '#lib/features/locations/types.ts';
+  import { getWarehouse } from '#lib/services/warehouses.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Purchase, PurchaseStatus } from '#lib/types/purchase.ts';
 
   let { id }: { id: string } = $props();
 

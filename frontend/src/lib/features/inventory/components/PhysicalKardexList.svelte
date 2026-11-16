@@ -1,12 +1,12 @@
 <script lang="ts">
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import {
     movementTypeLabel,
     stockStatusLabel
-  } from '$lib/features/inventory/movement-presentation';
-  import { formatKardexDateTime, kardexNumber } from '$lib/features/inventory/kardex-format';
-  import type { PhysicalKardex, PhysicalKardexRow } from '$lib/features/inventory/kardex';
+  } from '#lib/features/inventory/movement-presentation.ts';
+  import { formatKardexDateTime, kardexNumber } from '#lib/features/inventory/kardex-format.ts';
+  import type { PhysicalKardex, PhysicalKardexRow } from '#lib/features/inventory/kardex.ts';
 
   let {
     data,

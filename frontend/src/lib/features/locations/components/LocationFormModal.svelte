@@ -1,10 +1,10 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { getWarehouse } from '$lib/services/warehouses';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { getWarehouse } from '#lib/services/warehouses.ts';
   import CapacityScopePath from '../../inventory/components/CapacityScopePath.svelte';
   import { inventoryApi } from '../../inventory/services';
   import type { CapacitySummary } from '../../inventory/types';

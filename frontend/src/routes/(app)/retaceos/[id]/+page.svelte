@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import RetaceoDetail from '$lib/features/retaceos/components/RetaceoDetail.svelte';
+  import RetaceoDetail from '#lib/features/retaceos/components/RetaceoDetail.svelte';
 
   let retaceoId = $derived(page.params.id ?? '');
 </script>

@@ -1,4 +1,4 @@
-import { apiFetch, type Page } from '$lib/api/client';
+import { apiFetch, type Page } from '#lib/api/client.ts';
 
 export interface WarehouseReceipt {
   id: string;

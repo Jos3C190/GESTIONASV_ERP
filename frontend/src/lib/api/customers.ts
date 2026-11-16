@@ -1,4 +1,4 @@
-import { apiFetch, type Page } from '$lib/api/client';
+import { apiFetch, type Page } from '#lib/api/client.ts';
 import type {
   Customer,
   CustomerCreateInput,
@@ -7,7 +7,7 @@ import type {
   DeliveryAddress,
   DeliveryAddressInput,
   SellerOption
-} from '$lib/types/customer';
+} from '#lib/types/customer.ts';
 
 const BASE = '/customers';
 

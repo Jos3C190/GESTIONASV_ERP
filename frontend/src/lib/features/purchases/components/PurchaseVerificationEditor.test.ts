@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { HttpError } from '$lib/api/client';
-import type { Purchase } from '$lib/types/purchase';
+import { HttpError } from '#lib/api/client.ts';
+import type { Purchase } from '#lib/types/purchase.ts';
 import PurchaseVerificationEditor from './PurchaseVerificationEditor.svelte';
 
 const mocks = vi.hoisted(() => ({
@@ -10,11 +10,11 @@ const mocks = vi.hoisted(() => ({
   listLocations: vi.fn()
 }));
 
-vi.mock('$lib/api/purchases', () => ({
+vi.mock('#lib/api/purchases.ts', () => ({
   purchasesApi: { verify: mocks.verify, valuationContext: mocks.valuationContext }
 }));
 
-vi.mock('$lib/features/locations/services', () => ({
+vi.mock('#lib/features/locations/services.ts', () => ({
   listLocations: mocks.listLocations
 }));
 

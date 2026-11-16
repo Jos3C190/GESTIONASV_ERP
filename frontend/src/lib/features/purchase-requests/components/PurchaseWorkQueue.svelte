@@ -1,19 +1,19 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
   import PurchaseFlowRibbon from './PurchaseFlowRibbon.svelte';
-  import { HttpError, api } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import { purchaseConsolidationsApi } from '$lib/api/purchase-consolidations';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Category } from '$lib/types/catalog';
-  import type { PurchaseWorkItem, PurchaseWorkItemType } from '$lib/types/purchase-consolidation';
-  import type { PurchaseRequestStatus } from '$lib/types/purchase-request';
-  import type { WarehouseOut } from '$lib/api/client';
+  import { HttpError, api } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { purchaseConsolidationsApi } from '#lib/api/purchase-consolidations.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Category } from '#lib/types/catalog.ts';
+  import type { PurchaseWorkItem, PurchaseWorkItemType } from '#lib/types/purchase-consolidation.ts';
+  import type { PurchaseRequestStatus } from '#lib/types/purchase-request.ts';
+  import type { WarehouseOut } from '#lib/api/client.ts';
 
   const statusOptions: { value: string; label: string }[] = [
     { value: '', label: 'Todos los estados' },

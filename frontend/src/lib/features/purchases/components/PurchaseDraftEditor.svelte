@@ -1,11 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import { purchasesApi } from '$lib/api/purchases';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Purchase, PurchaseReceivable } from '$lib/types/purchase';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { purchasesApi } from '#lib/api/purchases.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Purchase, PurchaseReceivable } from '#lib/types/purchase.ts';
 
   interface DraftLine {
     purchaseOrderDetailId: string;

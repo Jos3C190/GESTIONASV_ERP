@@ -5,7 +5,7 @@
    * Soporte de teclado: ← → para navegar, Esc para cerrar lightbox.
    */
 
-import type { BranchImage } from '$lib/features/branches/types';
+import type { BranchImage } from '#lib/features/branches/types.ts';
 
   interface Props {
     images: BranchImage[];

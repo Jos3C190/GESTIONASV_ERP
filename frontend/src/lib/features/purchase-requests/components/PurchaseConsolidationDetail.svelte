@@ -1,28 +1,28 @@
 <script lang="ts">
   import '../consolidation-fields.css';
   import { page as currentPage } from '$app/state';
-  import Button from '$lib/components/ui/Button.svelte';
-  import ReportDownloads from '$lib/components/ui/ReportDownloads.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import ReportDownloads from '#lib/components/ui/ReportDownloads.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
   import PurchaseConsolidationHistory from './PurchaseConsolidationHistory.svelte';
   import PurchaseConsolidationInventoryPanel from './PurchaseConsolidationInventoryPanel.svelte';
-  import PurchaseConsolidationRfqs from '$lib/features/purchase-quotations/components/PurchaseConsolidationRfqs.svelte';
+  import PurchaseConsolidationRfqs from '#lib/features/purchase-quotations/components/PurchaseConsolidationRfqs.svelte';
   import PurchaseConsolidationAdjudication from './PurchaseConsolidationAdjudication.svelte';
   import PurchaseRequestProductPicker from './PurchaseRequestProductPicker.svelte';
   import PurchaseFlowRibbon from './PurchaseFlowRibbon.svelte';
-  import { api, HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import { purchaseConsolidationsApi } from '$lib/api/purchase-consolidations';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Product } from '$lib/types/catalog';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { purchaseConsolidationsApi } from '#lib/api/purchase-consolidations.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Product } from '#lib/types/catalog.ts';
   import type {
     ApprovedRequestCandidate,
     BranchDemandLevel,
     PurchaseConsolidation,
     PurchaseConsolidationInventorySnapshot
-  } from '$lib/types/purchase-consolidation';
-  import type { WarehouseOut } from '$lib/api/client';
+  } from '#lib/types/purchase-consolidation.ts';
+  import type { WarehouseOut } from '#lib/api/client.ts';
 
   interface SourceDraft {
     sourceId: string;

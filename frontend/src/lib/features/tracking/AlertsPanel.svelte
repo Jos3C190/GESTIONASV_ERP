@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { TrackingAlertOut } from '$lib/api/client';
-  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
+  import type { TrackingAlertOut } from '#lib/api/client.ts';
+  import FleetIcon from '#lib/features/fleet/FleetIcon.svelte';
   import { ALERT_KIND_LABELS } from './alerts.svelte';
   import { timeAgo } from './tracking';
 

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import type { Product } from '$lib/types/catalog';
+  import { HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import type { Product } from '#lib/types/catalog.ts';
 
   interface Props {
     id: string;

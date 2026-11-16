@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import PurchaseDraftEditor from '$lib/features/purchases/components/PurchaseDraftEditor.svelte';
+  import PurchaseDraftEditor from '#lib/features/purchases/components/PurchaseDraftEditor.svelte';
 
   let purchaseId = $derived(page.params.id ?? '');
 </script>

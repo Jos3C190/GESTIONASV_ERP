@@ -1,9 +1,9 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import DocumentUploadQueue from '$lib/features/documents/components/DocumentUploadQueue.svelte';
-  import DocumentFolderImportDialog from '$lib/features/documents/import/DocumentFolderImportDialog.svelte';
-  import type { DocumentCategoryOut } from '$lib/api/client';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import DocumentUploadQueue from '#lib/features/documents/components/DocumentUploadQueue.svelte';
+  import DocumentFolderImportDialog from '#lib/features/documents/import/DocumentFolderImportDialog.svelte';
+  import type { DocumentCategoryOut } from '#lib/api/client.ts';
   import ContextMenu from './ContextMenu.svelte';
   import MoveDialog from './MoveDialog.svelte';
   import RenameDialog from './RenameDialog.svelte';

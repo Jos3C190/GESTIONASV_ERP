@@ -4,13 +4,13 @@ import AdjustmentDraftEditor from '../../src/lib/features/inventory/components/A
 
 const mocks = vi.hoisted(() => ({ create: vi.fn(), goto: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: mocks.goto }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1' } }));
-vi.mock('$lib/stores/branch.svelte', () => ({ branch: { id: 'branch-1' } }));
-vi.mock('$lib/stores/permissions.svelte', () => ({ permissions: { hasPermission: () => true } }));
-vi.mock('$lib/services/warehouses', () => ({ getWarehouses: vi.fn().mockResolvedValue({ items: [{ id: 'origin', name: 'Central', code: 'C', type: 'general', status: 'active' }] }) }));
-vi.mock('$lib/features/inventory/services', () => ({ inventoryApi: { listHandlingUnits: vi.fn().mockResolvedValue([{ id: 'hu-1', code: 'HU-DEMO', location_id: 'vehicle-location', stock_status: 'in_transit', quantity_base: '2' }]) } }));
-vi.mock('$lib/features/inventory/adjustments', () => ({ inventoryAdjustmentsApi: { create: mocks.create } }));
-vi.mock('$lib/features/inventory/transfer-documents', () => ({ inventoryTransfersApi: {
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: { id: 'company-1' } }));
+vi.mock('#lib/stores/branch.svelte.ts', () => ({ branch: { id: 'branch-1' } }));
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({ permissions: { hasPermission: () => true } }));
+vi.mock('#lib/services/warehouses.ts', () => ({ getWarehouses: vi.fn().mockResolvedValue({ items: [{ id: 'origin', name: 'Central', code: 'C', type: 'general', status: 'active' }] }) }));
+vi.mock('#lib/features/inventory/services.ts', () => ({ inventoryApi: { listHandlingUnits: vi.fn().mockResolvedValue([{ id: 'hu-1', code: 'HU-DEMO', location_id: 'vehicle-location', stock_status: 'in_transit', quantity_base: '2' }]) } }));
+vi.mock('#lib/features/inventory/adjustments.ts', () => ({ inventoryAdjustmentsApi: { create: mocks.create } }));
+vi.mock('#lib/features/inventory/transfer-documents.ts', () => ({ inventoryTransfersApi: {
   get: vi.fn().mockResolvedValue({ id: 'transfer-1', code: 'TR-DEMO', status: 'incident', origin_warehouse_id: 'origin', vehicle: { id: 'vehicle-1', transit_warehouse_id: 'transit' },
     incidents: [{ id: 'incident-1', status: 'open', reason: 'Faltante documentado' }],
     lines: [{ id: 'detail-1', inventory_item_id: 'item-1', product_name: 'Producto de prueba', quantity_in_transit: '2', transit_handling_unit_id: 'hu-1' }] }),

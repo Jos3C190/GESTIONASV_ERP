@@ -4,7 +4,7 @@ import type {
   OperatingMode,
   PersonType,
   TaxpayerCategory
-} from '$lib/types/fiscal';
+} from '#lib/types/fiscal.ts';
 
 export const OPERATING_MODE_LABELS: Record<OperatingMode, string> = {
   simulated: 'Simulado',

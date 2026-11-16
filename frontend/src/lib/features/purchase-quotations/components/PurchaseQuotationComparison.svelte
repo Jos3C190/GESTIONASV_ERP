@@ -1,15 +1,15 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type {
     PurchaseQuotationComparison,
     PurchaseQuotationStatus
-  } from '$lib/types/purchase-quotation';
-  import type { Currency, Supplier } from '$lib/types/supplier';
+  } from '#lib/types/purchase-quotation.ts';
+  import type { Currency, Supplier } from '#lib/types/supplier.ts';
 
   let { requestId }: { requestId: string } = $props();
 

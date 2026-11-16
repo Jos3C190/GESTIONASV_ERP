@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import DocumentFolderCard from '$lib/features/documents/components/DocumentFolderCard.svelte';
+import DocumentFolderCard from '#lib/features/documents/components/DocumentFolderCard.svelte';
 
 describe('DocumentFolderCard', () => {
   it('exposes a keyboard-accessible link with safe folder summaries', () => {

@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { HttpError } from '$lib/api/client';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import type { Currency, Supplier } from '$lib/types/supplier';
-  import type { ProductSupplierDraft } from '$lib/types/catalog';
-  import Button from '$lib/components/ui/Button.svelte';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import type { Currency, Supplier } from '#lib/types/supplier.ts';
+  import type { ProductSupplierDraft } from '#lib/types/catalog.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
 
   interface Props {
     relations: ProductSupplierDraft[];

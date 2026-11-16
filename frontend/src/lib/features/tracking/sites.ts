@@ -1,4 +1,4 @@
-import type { SiteOut } from '$lib/api/client';
+import type { SiteOut } from '#lib/api/client.ts';
 import { circleRing } from './geofences';
 
 const STATUS_LABELS: Record<string, string> = {

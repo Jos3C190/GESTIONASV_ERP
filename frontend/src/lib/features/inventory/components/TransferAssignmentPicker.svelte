@@ -1,17 +1,17 @@
 <script lang="ts">
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import { HttpError } from '$lib/api/client';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import { HttpError } from '#lib/api/client.ts';
   import {
     inventoryTransfersApi,
     type AssignmentOptions,
     type DispatchIssue,
     type TransportJudgement
-  } from '$lib/features/inventory/transfer-documents';
+  } from '#lib/features/inventory/transfer-documents.ts';
   import {
     COMPLIANCE_LABEL,
     FITNESS_LABEL,
     transferErrorMessage
-  } from '$lib/features/inventory/transfer-operations';
+  } from '#lib/features/inventory/transfer-operations.ts';
 
   /**
    * Vehicle and driver of a transfer, with a live verdict. In planning mode it judges a draft

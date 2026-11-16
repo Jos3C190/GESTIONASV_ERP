@@ -3,16 +3,16 @@
 
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { getBranch } from '$lib/services/branches';
-  import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
-  import ImageGallery from '$lib/features/branches/components/ImageGallery.svelte';
-  import BranchMiniMap from '$lib/features/branches/components/BranchMiniMap.svelte';
-  import BranchProductDemandPanel from '$lib/features/branches/components/BranchProductDemandPanel.svelte';
-  import Avatar from '$lib/components/ui/Avatar.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Tabs from '$lib/components/ui/Tabs.svelte';
+  import { getBranch } from '#lib/services/branches.ts';
+  import { STATUS_MAP, type Branch } from '#lib/features/branches/types.ts';
+  import ImageGallery from '#lib/features/branches/components/ImageGallery.svelte';
+  import BranchMiniMap from '#lib/features/branches/components/BranchMiniMap.svelte';
+  import BranchProductDemandPanel from '#lib/features/branches/components/BranchProductDemandPanel.svelte';
+  import Avatar from '#lib/components/ui/Avatar.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Tabs from '#lib/components/ui/Tabs.svelte';
 
   let branch = $state<Branch | null>(null);
   let loading = $state(true);

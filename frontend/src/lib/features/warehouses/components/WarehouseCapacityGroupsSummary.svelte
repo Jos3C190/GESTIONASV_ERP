@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { HttpError } from '$lib/api/client';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
   import {
     getCapacityConfigurationDiagnostics,
     listCapacityGroups

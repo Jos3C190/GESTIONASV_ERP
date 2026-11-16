@@ -1,5 +1,5 @@
-import { apiFetch, HttpError, type PageMeta } from '$lib/api/client';
-import { listCapacityGroups } from '$lib/features/warehouses/capacity-groups.service';
+import { apiFetch, HttpError, type PageMeta } from '#lib/api/client.ts';
+import { listCapacityGroups } from '#lib/features/warehouses/capacity-groups.service.ts';
 import type {
   LocationBatchJob,
   LocationBatchRow,

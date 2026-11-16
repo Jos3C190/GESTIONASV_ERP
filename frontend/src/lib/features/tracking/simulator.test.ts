@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SimulationOut } from '$lib/api/client';
+import type { SimulationOut } from '#lib/api/client.ts';
 import {
   countdown,
   driveStep,

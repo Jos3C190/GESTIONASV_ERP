@@ -1,11 +1,11 @@
 <script lang="ts" generics="R">
   import { tick, untrack } from 'svelte';
-  import { api, HttpError } from '$lib/api/client';
+  import { api, HttpError } from '#lib/api/client.ts';
   import './capture-theme.css';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import FleetIcon from '#lib/features/fleet/FleetIcon.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import CaptureReviewForm from './CaptureReviewForm.svelte';
   import PhotoStep from './PhotoStep.svelte';
   import { checksumOf, prepareForUpload } from './upload';

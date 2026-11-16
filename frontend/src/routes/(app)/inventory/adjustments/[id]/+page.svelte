@@ -1,21 +1,21 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import {
     adjustmentInputClass,
     adjustmentNoticeClass
-  } from '$lib/features/inventory/adjustment-styles';
+  } from '#lib/features/inventory/adjustment-styles.ts';
   import {
     inventoryAdjustmentsApi,
     type AdjustmentLineInput,
     type InventoryAdjustment
-  } from '$lib/features/inventory/adjustments';
+  } from '#lib/features/inventory/adjustments.ts';
   import {
     DOCUMENT_ACCEPT,
     DOCUMENT_MAX_BYTES,
     documentContentType,
     isSupportedDocumentFile
-  } from '$lib/features/documents/document-upload';
+  } from '#lib/features/documents/document-upload.ts';
   import {
     adjustmentEventLabel,
     displayLocationCode,
@@ -24,11 +24,11 @@
     formatQuantity,
     transferErrorMessage,
     unitDisplay
-  } from '$lib/features/inventory/transfer-operations';
-  import { openResolvedDocumentInBrowser } from '$lib/features/documents/open-document';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  } from '#lib/features/inventory/transfer-operations.ts';
+  import { openResolvedDocumentInBrowser } from '#lib/features/documents/open-document.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   let { data }: { data: { adjustmentId: string } } = $props();
   const canManage = $derived(permissions.hasPermission('inventory:adjust'));

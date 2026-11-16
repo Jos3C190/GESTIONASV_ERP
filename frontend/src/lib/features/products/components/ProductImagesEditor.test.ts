@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import ProductImagesEditor from './ProductImagesEditor.svelte';
-import type { ProductImageDraft } from '$lib/types/catalog';
+import type { ProductImageDraft } from '#lib/types/catalog.ts';
 
 function gallery(): ProductImageDraft[] {
   return [

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseQuotationDetail from '$lib/features/purchase-quotations/components/PurchaseQuotationDetail.svelte';
+import PurchaseQuotationDetail from '#lib/features/purchase-quotations/components/PurchaseQuotationDetail.svelte';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -8,19 +8,19 @@ const mocks = vi.hoisted(() => ({
   getSupplier: vi.fn()
 }));
 
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: {
     getProduct: mocks.getProduct
   }
 }));
 
-vi.mock('$lib/api/purchase-quotations', () => ({
+vi.mock('#lib/api/purchase-quotations.ts', () => ({
   purchaseQuotationsApi: {
     get: mocks.get
   }
 }));
 
-vi.mock('$lib/api/suppliers', () => ({
+vi.mock('#lib/api/suppliers.ts', () => ({
   suppliersApi: {
     getSupplier: mocks.getSupplier
   }

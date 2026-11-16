@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { OwnedDocumentsApi } from '$lib/api/owned-documents';
-  import ImageLightbox from '$lib/features/fleet/ImageLightbox.svelte';
-  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
+  import type { OwnedDocumentsApi } from '#lib/api/owned-documents.ts';
+  import ImageLightbox from '#lib/features/fleet/ImageLightbox.svelte';
+  import FleetIcon from '#lib/features/fleet/FleetIcon.svelte';
 
   let { owner, documentId, name }: { owner: OwnedDocumentsApi; documentId: string; name: string } =
     $props();

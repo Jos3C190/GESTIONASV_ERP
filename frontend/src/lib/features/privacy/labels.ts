@@ -4,7 +4,7 @@ import type {
   RequestAction,
   RequestStatus,
   RightType
-} from '$lib/types/privacy';
+} from '#lib/types/privacy.ts';
 
 export const RIGHT_LABELS: Record<RightType, string> = {
   access: 'Acceso',

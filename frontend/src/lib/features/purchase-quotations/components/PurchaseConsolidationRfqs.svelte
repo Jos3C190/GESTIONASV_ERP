@@ -1,12 +1,12 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { PurchaseConsolidationStatus } from '$lib/types/purchase-consolidation';
-  import type { PurchaseQuotation, PurchaseQuotationStatus } from '$lib/types/purchase-quotation';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { PurchaseConsolidationStatus } from '#lib/types/purchase-consolidation.ts';
+  import type { PurchaseQuotation, PurchaseQuotationStatus } from '#lib/types/purchase-quotation.ts';
 
   let {
     consolidationId,

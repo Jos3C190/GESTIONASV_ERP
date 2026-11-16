@@ -1,12 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { permissions } from '$lib/stores/permissions.svelte';
-import { confirmation } from '$lib/stores/confirmation.svelte';
+import { permissions } from '#lib/stores/permissions.svelte.ts';
+import { confirmation } from '#lib/stores/confirmation.svelte.ts';
 import SalesQuotationDetail from './SalesQuotationDetail.svelte';
-import ConfirmActionDialog from '$lib/components/ui/ConfirmActionDialog.svelte';
+import ConfirmActionDialog from '#lib/components/ui/ConfirmActionDialog.svelte';
 
 const { salesApi } = vi.hoisted(() => ({ salesApi: { quotation: vi.fn(), confirmQuotation: vi.fn() } }));
-vi.mock('$lib/api/sales', () => ({ salesApi }));
+vi.mock('#lib/api/sales.ts', () => ({ salesApi }));
 
 const draft = {
   id: 'quote-ui', code: 'CV-UI', status: 'draft', version: 1, customer_name: 'Cliente ficticio',

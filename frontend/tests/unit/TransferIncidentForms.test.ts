@@ -19,18 +19,18 @@ const mocks = vi.hoisted(() => ({
   listVehicles: vi.fn(),
   canOperate: true
 }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1' } }));
-vi.mock('$lib/stores/branch.svelte', () => ({
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: { id: 'company-1' } }));
+vi.mock('#lib/stores/branch.svelte.ts', () => ({
   branch: { id: null, ready: true, accessAllBranches: true, branches: [] }
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: () => mocks.canOperate }
 }));
-vi.mock('$lib/features/locations/services', () => ({ listLocations: mocks.listLocations }));
-vi.mock('$lib/features/inventory/services', () => ({
+vi.mock('#lib/features/locations/services.ts', () => ({ listLocations: mocks.listLocations }));
+vi.mock('#lib/features/inventory/services.ts', () => ({
   inventoryApi: { listTransferUnits: mocks.listTransferUnits }
 }));
-vi.mock('$lib/features/inventory/transfer-documents', () => ({
+vi.mock('#lib/features/inventory/transfer-documents.ts', () => ({
   inventoryTransfersApi: {
     get: mocks.get,
     list: mocks.list,

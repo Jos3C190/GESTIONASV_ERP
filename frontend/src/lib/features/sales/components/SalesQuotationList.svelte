@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { HttpError } from '$lib/api/client';
-  import { salesApi } from '$lib/api/sales';
-  import { branch } from '$lib/stores/branch.svelte';
-  import type { SalesQuotation } from '$lib/types/sales';
+  import { HttpError } from '#lib/api/client.ts';
+  import { salesApi } from '#lib/api/sales.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import type { SalesQuotation } from '#lib/types/sales.ts';
 
   let items = $state<SalesQuotation[]>([]);
   let loading = $state(true);

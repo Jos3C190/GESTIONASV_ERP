@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import RetaceoDraftEditor from '$lib/features/retaceos/components/RetaceoDraftEditor.svelte';
-import type { Retaceo, RetaceoCostDocument } from '$lib/types/retaceo';
+import RetaceoDraftEditor from '#lib/features/retaceos/components/RetaceoDraftEditor.svelte';
+import type { Retaceo, RetaceoCostDocument } from '#lib/types/retaceo.ts';
 
 const mocks = vi.hoisted(() => ({
   getRetaceo: vi.fn(),
@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   hasPermission: vi.fn()
 }));
 
-vi.mock('$lib/api/retaceos', () => ({
+vi.mock('#lib/api/retaceos.ts', () => ({
   retaceosApi: {
     get: mocks.getRetaceo,
     update: mocks.update,
@@ -27,19 +27,19 @@ vi.mock('$lib/api/retaceos', () => ({
   }
 }));
 
-vi.mock('$lib/api/purchases', () => ({
+vi.mock('#lib/api/purchases.ts', () => ({
   purchasesApi: { get: mocks.getPurchase }
 }));
 
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: { listUnits: mocks.listUnits, getProduct: mocks.getProduct }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: mocks.hasPermission }
 }));
 
-vi.mock('$lib/stores/confirmation.svelte', () => ({
+vi.mock('#lib/stores/confirmation.svelte.ts', () => ({
   confirmation: { request: vi.fn() }
 }));
 

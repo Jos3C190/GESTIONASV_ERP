@@ -4,7 +4,7 @@ import { makeTransfer } from '../../../../../tests/unit/fixtures/inventory-trans
 import type { AssignmentCheck, InventoryTransfer } from '../transfer-documents';
 
 const apiMock = vi.hoisted(() => ({ transferAssignmentCheck: vi.fn() }));
-vi.mock('$lib/features/inventory/transfer-documents', () => ({ inventoryTransfersApi: apiMock }));
+vi.mock('#lib/features/inventory/transfer-documents.ts', () => ({ inventoryTransfersApi: apiMock }));
 
 import TransferApprovalPanel from './TransferApprovalPanel.svelte';
 

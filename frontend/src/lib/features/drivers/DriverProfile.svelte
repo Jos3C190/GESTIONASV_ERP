@@ -1,9 +1,9 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import OwnedDocumentsPanel from '$lib/features/documents/components/OwnedDocumentsPanel.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import OwnedDocumentsPanel from '#lib/features/documents/components/OwnedDocumentsPanel.svelte';
   import {
     formatDate,
     formatDateTime,
@@ -12,14 +12,14 @@
     INCIDENT_KIND_LABELS,
     INCIDENT_STATUS_LABELS,
     type LicenseClass
-  } from '$lib/features/fleet/catalog';
-  import { fleetApi, type FleetIncident } from '$lib/features/fleet/api';
-  import ComplianceList from '$lib/features/fleet/ComplianceList.svelte';
-  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
-  import ImageLightbox from '$lib/features/fleet/ImageLightbox.svelte';
-  import MoveToTrashDialog from '$lib/features/fleet/MoveToTrashDialog.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  } from '#lib/features/fleet/catalog.ts';
+  import { fleetApi, type FleetIncident } from '#lib/features/fleet/api.ts';
+  import ComplianceList from '#lib/features/fleet/ComplianceList.svelte';
+  import FleetIcon from '#lib/features/fleet/FleetIcon.svelte';
+  import ImageLightbox from '#lib/features/fleet/ImageLightbox.svelte';
+  import MoveToTrashDialog from '#lib/features/fleet/MoveToTrashDialog.svelte';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import LicenseCaptureEntry from './capture/LicenseCaptureEntry.svelte';
   import {
     DRIVER_STATUS_META,

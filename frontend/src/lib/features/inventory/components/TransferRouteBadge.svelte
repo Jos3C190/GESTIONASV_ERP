@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import type { TransferRouteType } from '$lib/features/inventory/transfer-documents';
-  import { transferRouteLabel } from '$lib/features/inventory/transfer-operations';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import type { TransferRouteType } from '#lib/features/inventory/transfer-documents.ts';
+  import { transferRouteLabel } from '#lib/features/inventory/transfer-operations.ts';
 
   let { route }: { route: TransferRouteType } = $props();
 

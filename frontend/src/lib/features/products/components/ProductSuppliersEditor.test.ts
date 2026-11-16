@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import ProductSuppliersEditor from './ProductSuppliersEditor.svelte';
 
-vi.mock('$lib/api/suppliers', () => ({
+vi.mock('#lib/api/suppliers.ts', () => ({
   suppliersApi: {
     listSuppliers: vi.fn().mockResolvedValue({
       items: [{ id_supplier: 7, code: 'SUP-007', name: 'Proveedor de prueba' }],

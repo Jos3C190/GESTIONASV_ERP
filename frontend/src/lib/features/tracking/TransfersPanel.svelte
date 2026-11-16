@@ -1,5 +1,5 @@
 <script lang="ts">
-  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
+  import FleetIcon from '#lib/features/fleet/FleetIcon.svelte';
   import { timeAgo } from './tracking';
   import type { TransferSummary, TransferTrack } from './transfers';
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { company } from '$lib/stores/company.svelte';
+  import { company } from '#lib/stores/company.svelte.ts';
   import BrandedVehicle from './BrandedVehicle.svelte';
   import { BASE_IMAGES, type BaseImage } from './catalog';
   import FleetIcon from './FleetIcon.svelte';

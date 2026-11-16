@@ -2,7 +2,7 @@
   import type {
     PurchaseConsolidationAwardLine,
     PurchaseConsolidationAwardOffer
-  } from '$lib/types/purchase-consolidation';
+  } from '#lib/types/purchase-consolidation.ts';
   import { formatDate, formatMoney, formatQuantity, statusLabel } from '../adjudication-formatters';
 
   let {

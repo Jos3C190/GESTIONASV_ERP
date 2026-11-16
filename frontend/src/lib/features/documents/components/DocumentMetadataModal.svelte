@@ -4,12 +4,12 @@
     HttpError,
     type DocumentCategoryOut,
     type DocumentRecordOut
-  } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import type { OwnedDocumentsApi } from '$lib/api/owned-documents';
-  import { CAPTURE_ONLY_CATEGORY_CODES } from '$lib/features/documents/document-upload';
+  } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import type { OwnedDocumentsApi } from '#lib/api/owned-documents.ts';
+  import { CAPTURE_ONLY_CATEGORY_CODES } from '#lib/features/documents/document-upload.ts';
 
   interface Props {
     document: DocumentRecordOut;

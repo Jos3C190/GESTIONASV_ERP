@@ -1,4 +1,4 @@
-import { apiFetch, type Page } from '$lib/api/client';
+import { apiFetch, type Page } from '#lib/api/client.ts';
 import type {
   Purchase,
   PurchaseCreateInput,
@@ -7,7 +7,7 @@ import type {
   PurchaseUpdateInput,
   PurchaseVerifyInput,
   PurchaseValuationContext
-} from '$lib/types/purchase';
+} from '#lib/types/purchase.ts';
 
 function queryPath(path: string, params: URLSearchParams): string {
   const query = params.toString();

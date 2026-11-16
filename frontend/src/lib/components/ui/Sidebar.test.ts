@@ -2,14 +2,14 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/drivers') } }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: () => true, hasAnyPermission: () => true }
 }));
-vi.mock('$lib/stores/session.svelte', () => ({
+vi.mock('#lib/stores/session.svelte.ts', () => ({
   session: { user: { username: 'admin', is_superuser: true } }
 }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1' } }));
-vi.mock('$lib/stores/branch.svelte', () => ({
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: { id: 'company-1' } }));
+vi.mock('#lib/stores/branch.svelte.ts', () => ({
   branch: {
     id: null,
     active: null,
@@ -19,8 +19,8 @@ vi.mock('$lib/stores/branch.svelte', () => ({
     branches: []
   }
 }));
-vi.mock('$lib/api/client', () => ({ api: {} }));
-vi.mock('$lib/services/query-client', () => ({ clearPrivateQueryCache: vi.fn() }));
+vi.mock('#lib/api/client.ts', () => ({ api: {} }));
+vi.mock('#lib/services/query-client.ts', () => ({ clearPrivateQueryCache: vi.fn() }));
 
 import Sidebar from './Sidebar.svelte';
 

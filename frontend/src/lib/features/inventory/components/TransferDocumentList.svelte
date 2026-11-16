@@ -1,14 +1,14 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import type {
     InventoryTransfer,
     TransferStatus
-  } from '$lib/features/inventory/transfer-documents';
+  } from '#lib/features/inventory/transfer-documents.ts';
   import {
     isOnRoad,
     transferStatusLabel,
     vehicleSummary
-  } from '$lib/features/inventory/transfer-operations';
+  } from '#lib/features/inventory/transfer-operations.ts';
   import TransferRouteBadge from './TransferRouteBadge.svelte';
 
   type CollectionState = 'loading' | 'loaded' | 'empty' | 'error';

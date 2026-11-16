@@ -1,12 +1,12 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { NAV_GROUPS, type NavItem } from '$lib/navigation';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { session } from '$lib/stores/session.svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { api } from '$lib/api/client';
-  import { clearPrivateQueryCache } from '$lib/services/query-client';
+  import { NAV_GROUPS, type NavItem } from '#lib/navigation.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { session } from '#lib/stores/session.svelte.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { api } from '#lib/api/client.ts';
+  import { clearPrivateQueryCache } from '#lib/services/query-client.ts';
 
   interface Props {
     id?: string;

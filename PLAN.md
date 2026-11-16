@@ -32,11 +32,11 @@ El CI de seguridad (Trivy, job «Dependencies and runtime images») falla en cua
 - [x] **Paso 1: Node 22 en la imagen.**
   - `frontend/Dockerfile` con `NODE_VERSION=22`.
   - Reconstruir el contenedor `frontend`.
-- [ ] **Paso 2: codemod y versiones.**
+- [x] **Paso 2: codemod y versiones.**
   - Correr `npx sv migrate sveltekit-3` dentro del contenedor.
   - Subir kit, adaptadores, vite, vite-plugin-svelte, svelte, typescript, svelte-check y vitest a versiones compatibles.
   - Revisar el diff del codemod.
-- [ ] **Paso 3: lo que el codemod no resuelva.**
+- [x] **Paso 3: lo que el codemod no resuelva.**
   - Pasar `pnpm check`, `pnpm lint`, `pnpm test:unit --run` y `SVELTE_ADAPTER=node pnpm build`.
 - [ ] **Paso 4: verificación.**
   - Escaneo Trivy local del repositorio sin la CVE.
@@ -47,7 +47,15 @@ El CI de seguridad (Trivy, job «Dependencies and runtime images») falla en cua
 
 ## Estado actual
 
-- **Paso en curso**: 2. La imagen `frontend` ya está en Node 22.
+- **Paso en curso**: 4 (verificación y PR).
+- **Resultado de la migración**:
+  - kit 3.2.0, Svelte 5.57.3, TypeScript 6.0.3, Vite 8.3.8, vite-plugin-svelte 7, adaptadores node 6, auto 8 y vercel 7, y vitest 4.1.12 (vitest 3 no admite Vite 8);
+  - `pnpm check` sin errores, `pnpm lint` limpio, 1,146 pruebas unitarias en verde, build con adapter-node y Trivy del repositorio sin vulnerabilidades.
+- **Decisiones**:
+  - El codemod (`sv migrate sveltekit-3`) corrió además `pnpm format` sobre todo el frontend: +16 mil líneas de puro formato y cambios de fin de línea. Se descartó ese formato. Los imports `$lib/…` → `#lib/…` con extensión y `$app/environment` → `$app/env` se rehicieron con un script sobre los archivos originales. Solo se conservaron los cambios reales del codemod: la guarda de navegación superficial en 8 manejadores `beforeNavigate`/`afterNavigate`, `tsconfig`, `vite.config.ts` y `package.json`.
+  - Variables de entorno en `src/env.ts`: `PUBLIC_API_URL` es dinámica y vale `http://localhost:8000` si falta; las claves de mapas son opcionales y estáticas, como antes.
+  - adapter-node 6 ignora `ORIGIN`. No se configuró `paths.origin` porque el frontend no tiene acciones de formulario ni endpoints con escritura (solo `GET /healthz`).
+- **Problema encontrado**: con el contenedor `frontend` encendido, Windows bloquea la escritura de archivos del bind mount desde el host (EINVAL). Hay que detenerlo para reescrituras masivas.
 - **Reglas del usuario**:
   - Commits y PR sin Co-Authored-By ni «Generated with Claude Code».
   - PR hacia `develop`.

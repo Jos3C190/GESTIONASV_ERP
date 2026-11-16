@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CaptureIssue, CaptureState } from '$lib/features/document-capture/types';
+import type { CaptureIssue, CaptureState } from '#lib/features/document-capture/types.ts';
 import type { FleetVehicle } from '../api';
 import { confirmationNotice, filledFields } from './circulation-config';
 import CirculationCaptureEntry from './CirculationCaptureEntry.svelte';
@@ -33,15 +33,15 @@ vi.mock('../api', async (importOriginal) => {
 });
 const prepareMock = vi.hoisted(() => vi.fn());
 const uploadDirect = vi.hoisted(() => vi.fn());
-vi.mock('$lib/features/document-capture/upload', () => ({
+vi.mock('#lib/features/document-capture/upload.ts', () => ({
   checksumOf: vi.fn().mockResolvedValue('a'.repeat(64)),
   prepareForUpload: prepareMock
 }));
-vi.mock('$lib/api/client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('#lib/api/client.ts')>()),
   api: { documents: { uploadDirect } }
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: (code: string) => permissionMock.codes.has(code) }
 }));
 

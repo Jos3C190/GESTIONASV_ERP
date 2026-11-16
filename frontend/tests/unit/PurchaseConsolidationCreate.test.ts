@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseConsolidationCreate from '$lib/features/purchase-requests/components/PurchaseConsolidationCreate.svelte';
+import PurchaseConsolidationCreate from '#lib/features/purchase-requests/components/PurchaseConsolidationCreate.svelte';
 
 const requestLinkedId = '11111111-1111-4111-8111-111111111111';
 const requestEligibleId = '22222222-2222-4222-8222-222222222222';
@@ -24,14 +24,14 @@ vi.mock('$app/state', () => ({
   }
 }));
 vi.mock('$app/navigation', () => ({ goto: mocks.goto }));
-vi.mock('$lib/api/purchase-consolidations', () => ({
+vi.mock('#lib/api/purchase-consolidations.ts', () => ({
   purchaseConsolidationsApi: {
     eligibleRequests: mocks.eligibleRequests,
     resolveSelectedRequests: mocks.resolveSelectedRequests,
     create: mocks.create
   }
 }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
   api: { warehouses: { catalogue: mocks.warehouses } },
   HttpError: class HttpError extends Error {
     constructor(readonly code: string, message: string, readonly status: number) {
@@ -39,7 +39,7 @@ vi.mock('$lib/api/client', () => ({
     }
   }
 }));
-vi.mock('$lib/stores/branch.svelte', () => ({
+vi.mock('#lib/stores/branch.svelte.ts', () => ({
   branch: { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', accessAllBranches: true, branches: [] }
 }));
 

@@ -8,14 +8,14 @@
  * for same-origin requests. For cross-origin (dev), the backend's CORS allows
  * credentials and the cookie is set on the /api/v1/auth path.
  */
-import { browser } from '$app/environment';
-import { env } from '$env/dynamic/public';
-import { session } from '$lib/stores/session.svelte';
-import { company } from '$lib/stores/company.svelte';
-import { branch, type OperationalContext } from '$lib/stores/branch.svelte';
-import { buildUserListQuery, type UserStatusFilter } from '$lib/features/users/list-query';
+import { browser } from '$app/env';
+import { PUBLIC_API_URL } from '$app/env/public';
+import { session } from '#lib/stores/session.svelte.ts';
+import { company } from '#lib/stores/company.svelte.ts';
+import { branch, type OperationalContext } from '#lib/stores/branch.svelte.ts';
+import { buildUserListQuery, type UserStatusFilter } from '#lib/features/users/list-query.ts';
 
-export const API_BASE_URL = env.PUBLIC_API_URL ?? 'http://localhost:8000';
+export const API_BASE_URL = PUBLIC_API_URL;
 const API_PREFIX = '/api/v1';
 const REFRESH_ENDPOINT = `${API_PREFIX}/auth/refresh`;
 

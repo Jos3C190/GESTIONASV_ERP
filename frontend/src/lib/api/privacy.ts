@@ -1,4 +1,4 @@
-import { apiFetch } from '$lib/api/client';
+import { apiFetch } from '#lib/api/client.ts';
 import type {
   Channel,
   Consent,
@@ -11,7 +11,7 @@ import type {
   SubjectRequest,
   SubjectRequestInput,
   UserOption
-} from '$lib/types/privacy';
+} from '#lib/types/privacy.ts';
 
 function json(method: string, payload: unknown): RequestInit {
   return { method, body: JSON.stringify(payload) };

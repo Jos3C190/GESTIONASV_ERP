@@ -1,10 +1,10 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import { DOCUMENT_ACCEPT } from '$lib/features/documents/document-upload';
-  import type { RetaceoDetail, RetaceoCostClass, RetaceoCostDocument } from '$lib/types/retaceo';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { DOCUMENT_ACCEPT } from '#lib/features/documents/document-upload.ts';
+  import type { RetaceoDetail, RetaceoCostClass, RetaceoCostDocument } from '#lib/types/retaceo.ts';
   import type { EditableRetaceoCost } from '../retaceo-cost-editor-types';
-  import type { PurchaseOrderExpenseType } from '$lib/types/purchase-order';
-  import type { ActualPurchaseExpense } from '$lib/features/purchase-orders/actual-expenses';
+  import type { PurchaseOrderExpenseType } from '#lib/types/purchase-order.ts';
+  import type { ActualPurchaseExpense } from '#lib/features/purchase-orders/actual-expenses.ts';
 
   type Props = {
     manualEntry?: boolean;

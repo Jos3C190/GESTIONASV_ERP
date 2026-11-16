@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import OwnedDocumentsPanel from '$lib/features/documents/components/OwnedDocumentsPanel.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import OwnedDocumentsPanel from '#lib/features/documents/components/OwnedDocumentsPanel.svelte';
   import {
     formatDate,
     formatDateTime,
     plateLabel,
     LICENSE_LABELS
-  } from '$lib/features/fleet/catalog';
-  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
-  import VehicleImage from '$lib/features/fleet/VehicleImage.svelte';
-  import ComplianceList from '$lib/features/fleet/ComplianceList.svelte';
+  } from '#lib/features/fleet/catalog.ts';
+  import FleetIcon from '#lib/features/fleet/FleetIcon.svelte';
+  import VehicleImage from '#lib/features/fleet/VehicleImage.svelte';
+  import ComplianceList from '#lib/features/fleet/ComplianceList.svelte';
   import {
     driversApi,
     DRIVER_STATUS_META,

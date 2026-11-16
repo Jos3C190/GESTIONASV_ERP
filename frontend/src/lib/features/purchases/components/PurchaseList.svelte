@@ -1,12 +1,12 @@
 <script lang="ts">
   import { page as currentPage } from '$app/state';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchasesApi } from '$lib/api/purchases';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import { branch } from '$lib/stores/branch.svelte';
-  import type { Purchase, PurchaseStatus } from '$lib/types/purchase';
-  import type { Supplier } from '$lib/types/supplier';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchasesApi } from '#lib/api/purchases.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import type { Purchase, PurchaseStatus } from '#lib/types/purchase.ts';
+  import type { Supplier } from '#lib/types/supplier.ts';
 
   const STATUS_OPTIONS: { value: PurchaseStatus; label: string }[] = [
     { value: 'draft', label: 'Borrador' },

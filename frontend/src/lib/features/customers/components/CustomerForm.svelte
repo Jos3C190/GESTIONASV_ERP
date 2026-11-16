@@ -3,15 +3,15 @@
   import { goto } from '$app/navigation';
   import AsyncSmartSelect, {
     type AsyncSmartOption
-  } from '$lib/components/ui/AsyncSmartSelect.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { customersApi } from '$lib/api/customers';
-  import { fiscalApi } from '$lib/api/fiscal';
-  import CustomerDeliveryAddresses from '$lib/features/customers/components/CustomerDeliveryAddresses.svelte';
-  import CustomerConsentsPanel from '$lib/features/privacy/components/CustomerConsentsPanel.svelte';
-  import GeographyFields from '$lib/features/customers/components/GeographyFields.svelte';
+  } from '#lib/components/ui/AsyncSmartSelect.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { customersApi } from '#lib/api/customers.ts';
+  import { fiscalApi } from '#lib/api/fiscal.ts';
+  import CustomerDeliveryAddresses from '#lib/features/customers/components/CustomerDeliveryAddresses.svelte';
+  import CustomerConsentsPanel from '#lib/features/privacy/components/CustomerConsentsPanel.svelte';
+  import GeographyFields from '#lib/features/customers/components/GeographyFields.svelte';
   import {
     CUSTOMER_TYPE_LABELS,
     DOCUMENTS_BY_TYPE,
@@ -20,11 +20,11 @@
     customerToInput,
     emptyCustomerInput,
     switchCustomerType
-  } from '$lib/features/customers/labels';
-  import { PERSON_TYPE_LABELS, TAXPAYER_CATEGORY_LABELS } from '$lib/features/fiscal/labels';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Customer, CustomerInput, CustomerType } from '$lib/types/customer';
+  } from '#lib/features/customers/labels.ts';
+  import { PERSON_TYPE_LABELS, TAXPAYER_CATEGORY_LABELS } from '#lib/features/fiscal/labels.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Customer, CustomerInput, CustomerType } from '#lib/types/customer.ts';
 
   let { customerId = null }: { customerId?: string | null } = $props();
 

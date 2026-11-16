@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LocationOut } from '$lib/features/locations/types';
+import type { LocationOut } from '#lib/features/locations/types.ts';
 import type { InventoryReceiptLot } from '../types';
 import GroupedPutawayPanel from './GroupedPutawayPanel.svelte';
 
@@ -11,7 +11,7 @@ const inventoryMocks = vi.hoisted(() => ({
 const locationMocks = vi.hoisted(() => ({ listLocations: vi.fn() }));
 
 vi.mock('../services', () => ({ inventoryApi: inventoryMocks }));
-vi.mock('$lib/features/locations/services', () => locationMocks);
+vi.mock('#lib/features/locations/services.ts', () => locationMocks);
 
 function receiptLot(): InventoryReceiptLot {
   return {

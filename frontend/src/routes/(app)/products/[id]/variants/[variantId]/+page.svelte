@@ -1,21 +1,21 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { catalogApi } from '$lib/api/catalog';
-  import { HttpError } from '$lib/api/client';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import PackagingManager from '$lib/features/inventory/components/PackagingManager.svelte';
-  import ProductIdentifiersDisplay from '$lib/features/products/components/ProductIdentifiersDisplay.svelte';
-  import { inventoryApi } from '$lib/features/inventory/services';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { HttpError } from '#lib/api/client.ts';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import PackagingManager from '#lib/features/inventory/components/PackagingManager.svelte';
+  import ProductIdentifiersDisplay from '#lib/features/products/components/ProductIdentifiersDisplay.svelte';
+  import { inventoryApi } from '#lib/features/inventory/services.ts';
   import {
     type InventoryItem,
     type InventoryItemSummary,
     type StockStatus
-  } from '$lib/features/inventory/types';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Product, ProductVariant, Unit } from '$lib/types/catalog';
+  } from '#lib/features/inventory/types.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Product, ProductVariant, Unit } from '#lib/types/catalog.ts';
 
   const STATUS_LABEL: Record<ProductVariant['lifecycle_status'], string> = {
     draft: 'Borrador',

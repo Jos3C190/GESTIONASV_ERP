@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import KardexPage from '../../src/routes/(app)/inventory/kardex/+page.svelte';
-import { branch } from '$lib/stores/branch.svelte';
-import { company } from '$lib/stores/company.svelte';
-import { permissions } from '$lib/stores/permissions.svelte';
+import { branch } from '#lib/stores/branch.svelte.ts';
+import { company } from '#lib/stores/company.svelte.ts';
+import { permissions } from '#lib/stores/permissions.svelte.ts';
 
 const mocks = vi.hoisted(() => ({
   getWarehouses: vi.fn(),
@@ -16,8 +16,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('$app/state', () => ({
   page: { url: new URL('http://localhost/inventory/kardex'), params: {} }
 }));
-vi.mock('$lib/services/warehouses', () => ({ getWarehouses: mocks.getWarehouses }));
-vi.mock('$lib/features/inventory/kardex', async (importOriginal) => ({
+vi.mock('#lib/services/warehouses.ts', () => ({ getWarehouses: mocks.getWarehouses }));
+vi.mock('#lib/features/inventory/kardex.ts', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   kardexApi: {
     searchItems: mocks.searchItems,

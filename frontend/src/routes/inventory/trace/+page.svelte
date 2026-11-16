@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import { inventoryApi } from '$lib/features/inventory/services';
-  import type { PublicHandlingUnitTrace, StockStatus } from '$lib/features/inventory/types';
-  import { isCustomerReturnReference } from '$lib/features/inventory/movement-presentation';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import { inventoryApi } from '#lib/features/inventory/services.ts';
+  import type { PublicHandlingUnitTrace, StockStatus } from '#lib/features/inventory/types.ts';
+  import { isCustomerReturnReference } from '#lib/features/inventory/movement-presentation.ts';
 
   let trace = $state<PublicHandlingUnitTrace | null>(null);
   let loading = $state(true);

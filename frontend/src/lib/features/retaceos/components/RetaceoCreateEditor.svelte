@@ -1,14 +1,14 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchasesApi } from '$lib/api/purchases';
-  import { catalogApi } from '$lib/api/catalog';
-  import { retaceosApi } from '$lib/api/retaceos';
-  import CustomsReferencePanel from '$lib/features/retaceos/components/CustomsReferencePanel.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Purchase } from '$lib/types/purchase';
-  import type { RetaceoImportData } from '$lib/types/retaceo';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchasesApi } from '#lib/api/purchases.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { retaceosApi } from '#lib/api/retaceos.ts';
+  import CustomsReferencePanel from '#lib/features/retaceos/components/CustomsReferencePanel.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Purchase } from '#lib/types/purchase.ts';
+  import type { RetaceoImportData } from '#lib/types/retaceo.ts';
   import RetaceoImportFields from './RetaceoImportFields.svelte';
   import RetaceoFixedAmounts from './RetaceoFixedAmounts.svelte';
   import RetaceoFobLines from './RetaceoFobLines.svelte';

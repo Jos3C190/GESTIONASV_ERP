@@ -3,7 +3,7 @@ import type {
   CaptureConfig,
   CaptureRules,
   CaptureState
-} from '$lib/features/document-capture/types';
+} from '#lib/features/document-capture/types.ts';
 import { fleetApi, type CirculationConfirmed } from '../api';
 
 const FIELDS: CaptureConfig<CirculationConfirmed>['fields'] = {

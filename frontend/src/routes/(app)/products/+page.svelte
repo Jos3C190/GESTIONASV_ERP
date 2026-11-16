@@ -1,20 +1,20 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import { api } from '$lib/api/client';
-  import { catalogApi, type ProductDistributionItem } from '$lib/api/catalog';
-  import type { Product, Unit } from '$lib/types/catalog';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import { api } from '#lib/api/client.ts';
+  import { catalogApi, type ProductDistributionItem } from '#lib/api/catalog.ts';
+  import type { Product, Unit } from '#lib/types/catalog.ts';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import AsyncSmartSelect, {
     type AsyncSmartOption
-  } from '$lib/components/ui/AsyncSmartSelect.svelte';
-  import DistributionDonut from '$lib/features/products/components/DistributionDonut.svelte';
-  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
-  import { search as globalSearch } from '$lib/stores/search.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  } from '#lib/components/ui/AsyncSmartSelect.svelte';
+  import DistributionDonut from '#lib/features/products/components/DistributionDonut.svelte';
+  import KebabMenu, { type KebabItem } from '#lib/components/ui/KebabMenu.svelte';
+  import { search as globalSearch } from '#lib/stores/search.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
 
   let products = $state<Product[]>([]);
   let units = $state<Unit[]>([]);

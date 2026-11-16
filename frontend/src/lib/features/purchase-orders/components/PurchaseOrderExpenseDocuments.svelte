@@ -1,20 +1,20 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseOrdersApi } from '$lib/api/purchase-orders';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseOrdersApi } from '#lib/api/purchase-orders.ts';
   import {
     DOCUMENT_ACCEPT,
     DOCUMENT_MAX_BYTES,
     documentContentType,
     isSupportedDocumentFile
-  } from '$lib/features/documents/document-upload';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  } from '#lib/features/documents/document-upload.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type {
     PurchaseOrderExpense,
     PurchaseOrderExpenseDocument,
     PurchaseOrderExpenseDocumentUpload,
     PurchaseOrderStatus
-  } from '$lib/types/purchase-order';
+  } from '#lib/types/purchase-order.ts';
 
   let {
     orderId,

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import ImageUpload from '$lib/components/ui/ImageUpload.svelte';
-  import type { MediaPurpose } from '$lib/api/client';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import type { SupplierImageDraft } from '$lib/types/supplier';
+  import Button from '#lib/components/ui/Button.svelte';
+  import ImageUpload from '#lib/components/ui/ImageUpload.svelte';
+  import type { MediaPurpose } from '#lib/api/client.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import type { SupplierImageDraft } from '#lib/types/supplier.ts';
 
   interface Props {
     image: SupplierImageDraft | null;

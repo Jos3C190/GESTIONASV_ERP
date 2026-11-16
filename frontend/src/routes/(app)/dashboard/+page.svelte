@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { session } from '$lib/stores/session.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { api, type DashboardSummary } from '$lib/api/client';
+  import { session } from '#lib/stores/session.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { api, type DashboardSummary } from '#lib/api/client.ts';
   import { onMount } from 'svelte';
-  import KpiCard from '$lib/features/dashboard/components/KpiCard.svelte';
-  import AreaChart from '$lib/features/dashboard/components/AreaChart.svelte';
-  import DonutChart from '$lib/features/dashboard/components/DonutChart.svelte';
-  import ActivityFeed from '$lib/features/dashboard/components/ActivityFeed.svelte';
-  import SummaryTable from '$lib/features/dashboard/components/SummaryTable.svelte';
-  import ProgressRing from '$lib/features/dashboard/components/ProgressRing.svelte';
-  import AvatarGroup from '$lib/components/ui/AvatarGroup.svelte';
-  import Callout from '$lib/components/ui/Callout.svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { queryClient } from '$lib/services/query-client';
+  import KpiCard from '#lib/features/dashboard/components/KpiCard.svelte';
+  import AreaChart from '#lib/features/dashboard/components/AreaChart.svelte';
+  import DonutChart from '#lib/features/dashboard/components/DonutChart.svelte';
+  import ActivityFeed from '#lib/features/dashboard/components/ActivityFeed.svelte';
+  import SummaryTable from '#lib/features/dashboard/components/SummaryTable.svelte';
+  import ProgressRing from '#lib/features/dashboard/components/ProgressRing.svelte';
+  import AvatarGroup from '#lib/components/ui/AvatarGroup.svelte';
+  import Callout from '#lib/components/ui/Callout.svelte';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { queryClient } from '#lib/services/query-client.ts';
 
   // MOCK_DATA = true — KPIs, serie temporal, distribución y tabla son simulados.
   // ActivityFeed es el único componente que consume datos reales (bitácora).

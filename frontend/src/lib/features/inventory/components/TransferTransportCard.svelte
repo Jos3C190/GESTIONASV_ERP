@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Callout from '$lib/components/ui/Callout.svelte';
-  import type { InventoryTransfer } from '$lib/features/inventory/transfer-documents';
-  import { substitutionCodeLabel, vehicleName } from '$lib/features/inventory/transfer-operations';
+  import Callout from '#lib/components/ui/Callout.svelte';
+  import type { InventoryTransfer } from '#lib/features/inventory/transfer-documents.ts';
+  import { substitutionCodeLabel, vehicleName } from '#lib/features/inventory/transfer-operations.ts';
 
   interface Props {
     transfer: InventoryTransfer;

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { beforeNavigate, goto } from '$app/navigation';
   import { onMount, tick } from 'svelte';
-  import { HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
+  import { HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
   import type {
     Category,
     Product,
@@ -11,24 +11,24 @@
     ProductSupplierDraft,
     SubCategory,
     Unit
-  } from '$lib/types/catalog';
-  import { company } from '$lib/stores/company.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
-  import EditorSectionNav from '$lib/components/editor/EditorSectionNav.svelte';
+  } from '#lib/types/catalog.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
+  import EditorSectionNav from '#lib/components/editor/EditorSectionNav.svelte';
   import ProductImagesEditor from './ProductImagesEditor.svelte';
   import ProductIdentifiersEditor from './ProductIdentifiersEditor.svelte';
   import ProductSuppliersEditor from './ProductSuppliersEditor.svelte';
-  import type { DimensionUnit, WeightUnit } from '$lib/features/products/measurements';
+  import type { DimensionUnit, WeightUnit } from '#lib/features/products/measurements.ts';
   import {
     calculateProductVolume,
     DIMENSION_UNITS,
     formatProductDimensions,
     WEIGHT_UNITS
-  } from '$lib/features/products/measurements';
+  } from '#lib/features/products/measurements.ts';
 
   interface Props {
     mode: 'create' | 'edit';
@@ -543,6 +543,7 @@
   }
 
   beforeNavigate((navigation) => {
+    if (navigation.shallow && navigation.type === 'goto') return;
     const from = navigation.from?.url;
     const to = navigation.to?.url;
     const hashOnly =

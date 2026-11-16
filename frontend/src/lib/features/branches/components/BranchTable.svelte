@@ -4,11 +4,11 @@
    * acento visual, micro-sparklines de ventas y menú Kebab (3 puntos) reutilizable.
    */
 
-  import Avatar from '$lib/components/ui/Avatar.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
+  import Avatar from '#lib/components/ui/Avatar.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import KebabMenu, { type KebabItem } from '#lib/components/ui/KebabMenu.svelte';
   import { goto } from '$app/navigation';
-  import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
+  import { STATUS_MAP, type Branch } from '#lib/features/branches/types.ts';
 
   interface Props {
     branches: Branch[];

@@ -1,20 +1,20 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { api, HttpError, type EmployeeOut, type DepartmentOut } from '$lib/api/client';
-  import { search as globalSearch } from '$lib/stores/search.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { resolvePhotoUrl, initialsOf } from '$lib/features/employees/avatar';
+  import { api, HttpError, type EmployeeOut, type DepartmentOut } from '#lib/api/client.ts';
+  import { search as globalSearch } from '#lib/stores/search.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { resolvePhotoUrl, initialsOf } from '#lib/features/employees/avatar.ts';
   import { untrack } from 'svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Avatar from '$lib/components/ui/Avatar.svelte';
-  import KebabMenu from '$lib/components/ui/KebabMenu.svelte';
-  import type { KebabItem } from '$lib/components/ui/KebabMenu.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { queryClient } from '$lib/services/query-client';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Avatar from '#lib/components/ui/Avatar.svelte';
+  import KebabMenu from '#lib/components/ui/KebabMenu.svelte';
+  import type { KebabItem } from '#lib/components/ui/KebabMenu.svelte';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { queryClient } from '#lib/services/query-client.ts';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
 
   let employees = $state<EmployeeOut[]>([]);
   let meta = $state<{ page: number; size: number; total: number; pages: number } | null>(null);

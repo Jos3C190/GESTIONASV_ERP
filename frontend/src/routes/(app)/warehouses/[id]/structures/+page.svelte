@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { getWarehouse } from '$lib/services/warehouses';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import WarehouseCapacityGroupsPanel from '$lib/features/warehouses/components/WarehouseCapacityGroupsPanel.svelte';
-  import type { Warehouse } from '$lib/features/warehouses/types';
+  import { getWarehouse } from '#lib/services/warehouses.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import WarehouseCapacityGroupsPanel from '#lib/features/warehouses/components/WarehouseCapacityGroupsPanel.svelte';
+  import type { Warehouse } from '#lib/features/warehouses/types.ts';
 
   let warehouse = $state<Warehouse | null>(null);
   let loading = $state(true);

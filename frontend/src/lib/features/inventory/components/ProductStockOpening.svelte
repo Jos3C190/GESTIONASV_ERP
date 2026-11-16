@@ -1,8 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { listLocations } from '$lib/features/locations/services';
-  import type { LocationOut } from '$lib/features/locations/types';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { listLocations } from '#lib/features/locations/services.ts';
+  import type { LocationOut } from '#lib/features/locations/types.ts';
   import AdjustmentProductPicker from './AdjustmentProductPicker.svelte';
   import type { AdjustmentItemOption } from '../adjustments';
   import { workspaceApi, workspaceField } from '../workspace';

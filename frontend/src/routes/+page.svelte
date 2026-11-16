@@ -1,8 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { session } from '$lib/stores/session.svelte';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { session } from '#lib/stores/session.svelte.ts';
 
   onMount(() => {
     const destination = !session.isAuthenticated

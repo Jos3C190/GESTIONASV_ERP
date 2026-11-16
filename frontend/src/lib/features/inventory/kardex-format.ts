@@ -1,4 +1,4 @@
-import { displayDecimal } from '$lib/features/inventory/valuation';
+import { displayDecimal } from '#lib/features/inventory/valuation.ts';
 
 export function kardexNumber(value: string | null | undefined): string {
   return value == null ? '—' : displayDecimal(value, 3);

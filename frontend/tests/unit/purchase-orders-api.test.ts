@@ -3,17 +3,17 @@ import type {
   PurchaseOrderCreateInput,
   PurchaseOrderExpenseDocumentInitiateInput,
   PurchaseOrderUpdateInput
-} from '$lib/types/purchase-order';
+} from '#lib/types/purchase-order.ts';
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn()
 }));
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
   apiFetch: mocks.apiFetch
 }));
 
-import { purchaseOrdersApi } from '$lib/api/purchase-orders';
+import { purchaseOrdersApi } from '#lib/api/purchase-orders.ts';
 
 describe('purchaseOrdersApi', () => {
   beforeEach(() => {

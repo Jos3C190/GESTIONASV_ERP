@@ -1,30 +1,30 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import AdjustmentProductPicker from './AdjustmentProductPicker.svelte';
   import {
     adjustmentInputClass,
     adjustmentNoticeClass
-  } from '$lib/features/inventory/adjustment-styles';
-  import { inventoryApi } from '$lib/features/inventory/services';
-  import type { HandlingUnit } from '$lib/features/inventory/types';
+  } from '#lib/features/inventory/adjustment-styles.ts';
+  import { inventoryApi } from '#lib/features/inventory/services.ts';
+  import type { HandlingUnit } from '#lib/features/inventory/types.ts';
   import {
     inventoryAdjustmentsApi,
     type AdjustmentDirection,
     type AdjustmentItemOption,
     type AdjustmentLineInput,
     type AdjustmentOptions
-  } from '$lib/features/inventory/adjustments';
+  } from '#lib/features/inventory/adjustments.ts';
   import {
     inventoryTransfersApi,
     type InventoryTransfer
-  } from '$lib/features/inventory/transfer-documents';
-  import { getWarehouses } from '$lib/services/warehouses';
-  import type { Warehouse } from '$lib/features/warehouses/types';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  } from '#lib/features/inventory/transfer-documents.ts';
+  import { getWarehouses } from '#lib/services/warehouses.ts';
+  import type { Warehouse } from '#lib/features/warehouses/types.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   type DraftLine = {
     key: number;

@@ -5,12 +5,12 @@
     type DeletedRecordOut,
     type GeneralDeletionBatchOut,
     type PageMeta
-  } from '$lib/api/client';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { search as globalSearch } from '$lib/stores/search.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { clearPrivateQueryCache } from '$lib/services/query-client';
+  } from '#lib/api/client.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { search as globalSearch } from '#lib/stores/search.svelte.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { clearPrivateQueryCache } from '#lib/services/query-client.ts';
 
   const RESOURCE_LABELS: Record<string, string> = {
     companies: 'Empresas',

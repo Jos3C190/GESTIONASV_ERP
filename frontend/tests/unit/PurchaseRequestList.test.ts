@@ -1,12 +1,12 @@
 import { render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseRequestList from '$lib/features/purchase-requests/components/PurchaseRequestList.svelte';
+import PurchaseRequestList from '#lib/features/purchase-requests/components/PurchaseRequestList.svelte';
 
 const apiMocks = vi.hoisted(() => ({
   list: vi.fn()
 }));
 
-vi.mock('$lib/api/purchase-requests', () => ({
+vi.mock('#lib/api/purchase-requests.ts', () => ({
   purchaseRequestsApi: {
     list: apiMocks.list
   }

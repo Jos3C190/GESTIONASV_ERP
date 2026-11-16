@@ -1,5 +1,5 @@
-import { documentContentType, isSupportedDocumentFile } from '$lib/features/documents/document-upload';
-import type { GeneralImportManifestItemInput } from '$lib/api/client';
+import { documentContentType, isSupportedDocumentFile } from '#lib/features/documents/document-upload.ts';
+import type { GeneralImportManifestItemInput } from '#lib/api/client.ts';
 
 export interface FolderFile {
   file: File;

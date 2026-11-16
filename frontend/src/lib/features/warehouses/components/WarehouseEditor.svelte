@@ -1,17 +1,17 @@
 <script lang="ts">
   import { beforeNavigate, goto } from '$app/navigation';
   import { onMount, tick } from 'svelte';
-  import { api, HttpError, type EmployeeOut } from '$lib/api/client';
-  import { getWarehouse } from '$lib/services/warehouses';
-  import { company } from '$lib/stores/company.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import ChipInput from '$lib/components/ui/ChipInput.svelte';
-  import EditorSectionNav from '$lib/components/editor/EditorSectionNav.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
-  import BranchLocationPicker from '$lib/features/branches/components/BranchLocationPicker.svelte';
+  import { api, HttpError, type EmployeeOut } from '#lib/api/client.ts';
+  import { getWarehouse } from '#lib/services/warehouses.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import ChipInput from '#lib/components/ui/ChipInput.svelte';
+  import EditorSectionNav from '#lib/components/editor/EditorSectionNav.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
+  import BranchLocationPicker from '#lib/features/branches/components/BranchLocationPicker.svelte';
   import WarehouseImagesEditor from './WarehouseImagesEditor.svelte';
   import { listCapacityGroups } from '../capacity-groups.service';
   import type { WarehouseCapacityGroup } from '../capacity-groups.types';
@@ -569,6 +569,7 @@
     else void goto(target);
   }
   beforeNavigate((navigation) => {
+    if (navigation.shallow && navigation.type === 'goto') return;
     const from = navigation.from?.url;
     const to = navigation.to?.url;
     if (

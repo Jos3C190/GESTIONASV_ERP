@@ -1,10 +1,10 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { purchasesApi } from '$lib/api/purchases';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Purchase } from '$lib/types/purchase';
-  import type { PurchaseOrder } from '$lib/types/purchase-order';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { purchasesApi } from '#lib/api/purchases.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Purchase } from '#lib/types/purchase.ts';
+  import type { PurchaseOrder } from '#lib/types/purchase-order.ts';
 
   let { order }: { order: PurchaseOrder } = $props();
   let existingDraft = $state<Purchase | null>(null);

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { fiscalApi } from '$lib/api/fiscal';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { fiscalApi } from '#lib/api/fiscal.ts';
   import {
     ESTABLISHMENT_PREFIX,
     ESTABLISHMENT_TYPE_LABELS,
@@ -12,14 +12,14 @@
     isPointOfSaleCode,
     nextEstablishmentCode,
     nextPointOfSaleCode
-  } from '$lib/features/fiscal/labels';
+  } from '#lib/features/fiscal/labels.ts';
   import type {
     BranchOption,
     EconomicActivity,
     Establishment,
     EstablishmentType,
     PointOfSale
-  } from '$lib/types/fiscal';
+  } from '#lib/types/fiscal.ts';
 
   let { canManage }: { canManage: boolean } = $props();
 

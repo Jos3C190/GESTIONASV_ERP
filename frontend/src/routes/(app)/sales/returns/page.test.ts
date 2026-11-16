@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { listReturns } = vi.hoisted(() => ({ listReturns: vi.fn() }));
 
-vi.mock('$lib/api/sales', () => ({ salesApi: { returns: listReturns } }));
-vi.mock('$lib/api/client', () => ({ HttpError: class HttpError extends Error {} }));
-vi.mock('$lib/stores/branch.svelte', () => ({ branch: { id: null, label: 'Todas las sucursales' } }));
+vi.mock('#lib/api/sales.ts', () => ({ salesApi: { returns: listReturns } }));
+vi.mock('#lib/api/client.ts', () => ({ HttpError: class HttpError extends Error {} }));
+vi.mock('#lib/stores/branch.svelte.ts', () => ({ branch: { id: null, label: 'Todas las sucursales' } }));
 
 import SalesReturnsList from './+page.svelte';
-import type { SalesReturn } from '$lib/types/sales';
+import type { SalesReturn } from '#lib/types/sales.ts';
 
 function document(status: SalesReturn['status'], code = 'DEV-00001'): SalesReturn {
   return {

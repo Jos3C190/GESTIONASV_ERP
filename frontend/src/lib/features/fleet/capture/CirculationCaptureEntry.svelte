@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import CaptureDialog from '$lib/features/document-capture/CaptureDialog.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import CaptureDialog from '#lib/features/document-capture/CaptureDialog.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import { fleetApi, type CirculationConfirmed, type FleetVehicle } from '../api';
   import { formatDate } from '../catalog';
   import FleetIcon from '../FleetIcon.svelte';

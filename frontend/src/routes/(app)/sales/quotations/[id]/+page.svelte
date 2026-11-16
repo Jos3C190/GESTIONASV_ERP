@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import SalesQuotationDetail from '$lib/features/sales/components/SalesQuotationDetail.svelte';
+  import SalesQuotationDetail from '#lib/features/sales/components/SalesQuotationDetail.svelte';
 
   let id = $derived(page.params.id);
 </script>

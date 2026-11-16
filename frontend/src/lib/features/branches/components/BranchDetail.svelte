@@ -4,9 +4,9 @@
    * de la sucursal seleccionada (Identidad, Métricas/Tendencia, Información de contacto).
    */
 
-  import Avatar from '$lib/components/ui/Avatar.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-import { STATUS_MAP, type Branch } from '$lib/features/branches/types';
+  import Avatar from '#lib/components/ui/Avatar.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+import { STATUS_MAP, type Branch } from '#lib/features/branches/types.ts';
 
   interface Props {
     branch: Branch | null;

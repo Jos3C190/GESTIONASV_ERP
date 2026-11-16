@@ -1,14 +1,14 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Callout from '$lib/components/ui/Callout.svelte';
-  import { inventoryApi } from '$lib/features/inventory/services';
-  import type { PackagingDefinition } from '$lib/features/inventory/types';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Callout from '#lib/components/ui/Callout.svelte';
+  import { inventoryApi } from '#lib/features/inventory/services.ts';
+  import type { PackagingDefinition } from '#lib/features/inventory/types.ts';
   import type {
     InventoryTransfer,
     TransferDiscrepancy
-  } from '$lib/features/inventory/transfer-documents';
+  } from '#lib/features/inventory/transfer-documents.ts';
   import {
     businessToday,
     damageTypeLabel,
@@ -22,7 +22,7 @@
     quantityString,
     type DiscrepancyAdjustmentForm,
     type DiscrepancyRequest
-  } from '$lib/features/inventory/transfer-operations';
+  } from '#lib/features/inventory/transfer-operations.ts';
 
   type Action = DiscrepancyRequest['action'];
   interface LocationChoice {

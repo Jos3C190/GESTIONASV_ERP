@@ -44,6 +44,6 @@ COPY --from=build /app/pnpm-lock.yaml* ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod --ignore-scripts
 EXPOSE 3000
-# SvelteKit's node adapter reads PORT, ORIGIN, BODY_SIZE_LIMIT from env.
+# SvelteKit's node adapter reads PORT and BODY_SIZE_LIMIT from env (since SvelteKit 3 it ignores ORIGIN).
 ENV PORT=3000
 CMD ["node", "build"]

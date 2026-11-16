@@ -1,7 +1,7 @@
 /**
  * MapLibre GL loader for the tracking module.
  *
- * Mirrors `loadLeaflet` in `$lib/services/maps`: the library is pulled once from a
+ * Mirrors `loadLeaflet` in `#lib/services/maps.ts`: the library is pulled once from a
  * pinned CDN build so the rest of the ERP does not pay for it. Basemaps come from
  * OpenFreeMap (vector tiles, no API key), the same family Traccar uses.
  */

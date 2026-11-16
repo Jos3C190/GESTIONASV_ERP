@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseOrderReceivingAction from '$lib/features/purchase-orders/components/PurchaseOrderReceivingAction.svelte';
-import type { PurchaseOrder } from '$lib/types/purchase-order';
+import PurchaseOrderReceivingAction from '#lib/features/purchase-orders/components/PurchaseOrderReceivingAction.svelte';
+import type { PurchaseOrder } from '#lib/types/purchase-order.ts';
 
 const mocks = vi.hoisted(() => ({
   goto: vi.fn(),
@@ -13,9 +13,9 @@ vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
 
-vi.mock('$lib/api/purchases', () => ({ purchasesApi: { list: mocks.list } }));
+vi.mock('#lib/api/purchases.ts', () => ({ purchasesApi: { list: mocks.list } }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
   }

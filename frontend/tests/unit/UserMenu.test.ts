@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import UserMenu from '$lib/components/ui/UserMenu.svelte';
-import type { CurrentUser } from '$lib/stores/session.svelte';
+import UserMenu from '#lib/components/ui/UserMenu.svelte';
+import type { CurrentUser } from '#lib/stores/session.svelte.ts';
 
 const user: CurrentUser = {
   id: 'user-1',

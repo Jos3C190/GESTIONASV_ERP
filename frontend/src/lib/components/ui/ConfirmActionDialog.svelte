@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
   import Button from './Button.svelte';
 
   let dialog = $state<HTMLDivElement | null>(null);

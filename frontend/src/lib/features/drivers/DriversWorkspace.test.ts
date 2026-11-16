@@ -15,7 +15,7 @@ const apiMock = vi.hoisted(() => ({
 const documentsMock = vi.hoisted(() => ({ list: vi.fn(), categories: vi.fn() }));
 const navigationMock = vi.hoisted(() => ({ goto: vi.fn() }));
 vi.mock('$app/navigation', () => navigationMock);
-vi.mock('$lib/stores/branch.svelte', () => ({
+vi.mock('#lib/stores/branch.svelte.ts', () => ({
   branch: {
     id: null,
     label: 'Todas las sucursales',
@@ -29,7 +29,7 @@ vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
   driversApi: apiMock
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: (code: string) => permissionMock.codes.has(code) }
 }));
 

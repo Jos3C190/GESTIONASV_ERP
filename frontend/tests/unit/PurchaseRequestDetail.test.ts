@@ -1,18 +1,18 @@
 import { render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseRequestDetail from '$lib/features/purchase-requests/components/PurchaseRequestDetail.svelte';
+import PurchaseRequestDetail from '#lib/features/purchase-requests/components/PurchaseRequestDetail.svelte';
 
 const apiMocks = vi.hoisted(() => ({
   get: vi.fn()
 }));
 
-vi.mock('$lib/api/purchase-requests', () => ({
+vi.mock('#lib/api/purchase-requests.ts', () => ({
   purchaseRequestsApi: {
     get: apiMocks.get
   }
 }));
 
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: {
     getProduct: vi.fn().mockResolvedValue({
       id_product: 10,

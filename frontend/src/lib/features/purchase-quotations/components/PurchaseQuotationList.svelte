@@ -1,14 +1,14 @@
 <script lang="ts">
   import { page as currentPage } from '$app/state';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import ProcurementWorkQueue from '$lib/features/purchase-quotations/components/ProcurementWorkQueue.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { PurchaseQuotation, PurchaseQuotationStatus } from '$lib/types/purchase-quotation';
-  import type { Supplier } from '$lib/types/supplier';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import ProcurementWorkQueue from '#lib/features/purchase-quotations/components/ProcurementWorkQueue.svelte';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { PurchaseQuotation, PurchaseQuotationStatus } from '#lib/types/purchase-quotation.ts';
+  import type { Supplier } from '#lib/types/supplier.ts';
 
   const STATUS_OPTIONS: { value: PurchaseQuotationStatus; label: string }[] = [
     { value: 'draft', label: 'Borrador' },

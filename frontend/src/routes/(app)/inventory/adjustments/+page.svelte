@@ -1,14 +1,14 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { adjustmentInputClass, adjustmentNoticeClass } from '$lib/features/inventory/adjustment-styles';
-  import { inventoryAdjustmentsApi, type AdjustmentStatus, type InventoryAdjustment } from '$lib/features/inventory/adjustments';
-  import { getWarehouses } from '$lib/services/warehouses';
-  import type { Warehouse } from '$lib/features/warehouses/types';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { adjustmentInputClass, adjustmentNoticeClass } from '#lib/features/inventory/adjustment-styles.ts';
+  import { inventoryAdjustmentsApi, type AdjustmentStatus, type InventoryAdjustment } from '#lib/features/inventory/adjustments.ts';
+  import { getWarehouses } from '#lib/services/warehouses.ts';
+  import type { Warehouse } from '#lib/features/warehouses/types.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   const canCreate = $derived(permissions.hasPermission('inventory:adjust'));
   let items = $state<InventoryAdjustment[]>([]);

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseReceivingEditor from '$lib/features/purchases/components/PurchaseReceivingEditor.svelte';
+import PurchaseReceivingEditor from '#lib/features/purchases/components/PurchaseReceivingEditor.svelte';
 
 const mocks = vi.hoisted(() => ({
   getReceivable: vi.fn(),
@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   goto: vi.fn()
 }));
 
-vi.mock('$lib/api/purchases', () => ({
+vi.mock('#lib/api/purchases.ts', () => ({
   purchasesApi: {
     getReceivable: mocks.getReceivable,
     list: mocks.list,
@@ -19,7 +19,7 @@ vi.mock('$lib/api/purchases', () => ({
   }
 }));
 
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: {
     listUnits: mocks.listUnits,
     getProduct: mocks.getProduct
@@ -30,7 +30,7 @@ vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: vi.fn(() => true)
   }

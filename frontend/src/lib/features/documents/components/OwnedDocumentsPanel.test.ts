@@ -1,9 +1,9 @@
 import { cleanup, render, screen, within } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { OwnedDocumentsApi } from '$lib/api/owned-documents';
+import type { OwnedDocumentsApi } from '#lib/api/owned-documents.ts';
 import OwnedDocumentsPanel from './OwnedDocumentsPanel.svelte';
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: () => true }
 }));
 

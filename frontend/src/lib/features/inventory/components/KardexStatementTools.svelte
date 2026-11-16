@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ReportDownloads from '$lib/components/ui/ReportDownloads.svelte';
+  import ReportDownloads from '#lib/components/ui/ReportDownloads.svelte';
   import type { KardexContext } from '../kardex';
   let {
     context,

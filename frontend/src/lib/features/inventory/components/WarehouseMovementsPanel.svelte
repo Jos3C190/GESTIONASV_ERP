@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import { inventoryApi } from '../services';
   import type { InventoryMovementHistory, WarehouseMovementFilters } from '../types';
   import { localMovementDate, localMovementPeriod, movementDirection } from '../movement-history';

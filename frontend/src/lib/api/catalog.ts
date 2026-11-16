@@ -1,4 +1,4 @@
-import { apiFetch } from '$lib/api/client';
+import { apiFetch } from '#lib/api/client.ts';
 import type {
   Category,
   Country,
@@ -9,8 +9,8 @@ import type {
   ProductVariantUpdateInput,
   SubCategory,
   Unit
-} from '$lib/types/catalog';
-import type { ProductIdentifier, ProductIdentifierDraft, ProductSupplier } from '$lib/types/catalog';
+} from '#lib/types/catalog.ts';
+import type { ProductIdentifier, ProductIdentifierDraft, ProductSupplier } from '#lib/types/catalog.ts';
 
 export interface PageResponse<T> {
   items: T[];

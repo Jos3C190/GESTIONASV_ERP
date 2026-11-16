@@ -2,34 +2,34 @@
   import { page as routePage } from '$app/state';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { api, HttpError, type PageMeta } from '$lib/api/client';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { queryClient } from '$lib/services/query-client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Callout from '$lib/components/ui/Callout.svelte';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
-  import type { KebabItem } from '$lib/components/ui/KebabMenu.svelte';
-  import LocationTable from '$lib/features/locations/components/LocationTable.svelte';
-  import LocationCodeSchemeModal from '$lib/features/locations/components/LocationCodeSchemeModal.svelte';
-  import { capacityGroupPath } from '$lib/features/warehouses/capacity-groups.logic';
-  import { listCapacityGroups } from '$lib/features/warehouses/capacity-groups.service';
-  import type { WarehouseCapacityGroup } from '$lib/features/warehouses/capacity-groups.types';
+  import { api, HttpError, type PageMeta } from '#lib/api/client.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { queryClient } from '#lib/services/query-client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Callout from '#lib/components/ui/Callout.svelte';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
+  import type { KebabItem } from '#lib/components/ui/KebabMenu.svelte';
+  import LocationTable from '#lib/features/locations/components/LocationTable.svelte';
+  import LocationCodeSchemeModal from '#lib/features/locations/components/LocationCodeSchemeModal.svelte';
+  import { capacityGroupPath } from '#lib/features/warehouses/capacity-groups.logic.ts';
+  import { listCapacityGroups } from '#lib/features/warehouses/capacity-groups.service.ts';
+  import type { WarehouseCapacityGroup } from '#lib/features/warehouses/capacity-groups.types.ts';
   import {
     getOptionalLocationCodeScheme,
     getLocationSummary,
     listLocations
-  } from '$lib/features/locations/services';
+  } from '#lib/features/locations/services.ts';
   import {
     LOCATION_STATUS_OPTIONS,
     LOCATION_TYPE_OPTIONS,
     type LocationCodeScheme,
     type LocationOut,
     type LocationSummary
-  } from '$lib/features/locations/types';
+  } from '#lib/features/locations/types.ts';
 
   const PAGE_SIZE = 25;
   const NO_AREA_FILTER = '__none__';
@@ -297,7 +297,7 @@
   }
 
   function syncFiltersToUrl() {
-    const params = new URLSearchParams(routePage.url.searchParams);
+    const params = new URLSearchParams(routePage.url.search);
     const setOrDelete = (key: string, value: string) => {
       if (value) params.set(key, value);
       else params.delete(key);

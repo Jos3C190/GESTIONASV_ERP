@@ -14,13 +14,13 @@ const { customersApi, fiscalApi, geography, gotoMock } = vi.hoisted(() => ({
   gotoMock: vi.fn()
 }));
 
-vi.mock('$lib/api/customers', () => ({ customersApi }));
-vi.mock('$lib/api/fiscal', () => ({ fiscalApi }));
-vi.mock('$lib/api/privacy', () => ({
+vi.mock('#lib/api/customers.ts', () => ({ customersApi }));
+vi.mock('#lib/api/fiscal.ts', () => ({ fiscalApi }));
+vi.mock('#lib/api/privacy.ts', () => ({
   privacyApi: { consents: () => Promise.resolve([]) }
 }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
   api: { geography },
   HttpError: class HttpError extends Error {
     constructor(
@@ -33,8 +33,8 @@ vi.mock('$lib/api/client', () => ({
   }
 }));
 
-import { permissions } from '$lib/stores/permissions.svelte';
-import type { Customer } from '$lib/types/customer';
+import { permissions } from '#lib/stores/permissions.svelte.ts';
+import type { Customer } from '#lib/types/customer.ts';
 import CustomerForm from './CustomerForm.svelte';
 import CustomerList from './CustomerList.svelte';
 

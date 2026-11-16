@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { TransferStatus } from '$lib/features/inventory/transfer-documents';
+  import type { TransferStatus } from '#lib/features/inventory/transfer-documents.ts';
 
   interface Props {
     status: TransferStatus;

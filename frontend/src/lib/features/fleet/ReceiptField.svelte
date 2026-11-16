@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import { fleetApi } from './api';
 
   let {

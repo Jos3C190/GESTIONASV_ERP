@@ -1,4 +1,4 @@
-import type { TrackedVehicleOut, TrackingEventOut } from '$lib/api/client';
+import type { TrackedVehicleOut, TrackingEventOut } from '#lib/api/client.ts';
 import { siteEventTitle } from './sites';
 
 export type EventGroup = 'geofence' | 'speed' | 'engine' | 'alarm' | 'stop';

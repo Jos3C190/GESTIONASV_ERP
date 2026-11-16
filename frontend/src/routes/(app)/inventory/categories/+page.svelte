@@ -1,17 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import Callout from '$lib/components/ui/Callout.svelte';
-  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
-  import { api, HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import type { Category, SubCategory } from '$lib/types/catalog';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { search as globalSearch } from '$lib/stores/search.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import Callout from '#lib/components/ui/Callout.svelte';
+  import KebabMenu, { type KebabItem } from '#lib/components/ui/KebabMenu.svelte';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import type { Category, SubCategory } from '#lib/types/catalog.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { search as globalSearch } from '#lib/stores/search.svelte.ts';
 
   // Svelte 5 Runes State
   let categories = $state<Category[]>([]);

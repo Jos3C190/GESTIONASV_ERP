@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import { fleetApi } from '$lib/features/fleet/api';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import { fleetApi } from '#lib/features/fleet/api.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   let form = $state({
     block_overdue_maintenance: false,

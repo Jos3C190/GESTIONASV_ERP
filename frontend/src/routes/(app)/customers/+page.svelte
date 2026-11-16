@@ -1,5 +1,5 @@
 <script lang="ts">
-  import CustomerList from '$lib/features/customers/components/CustomerList.svelte';
+  import CustomerList from '#lib/features/customers/components/CustomerList.svelte';
 </script>
 
 <svelte:head>

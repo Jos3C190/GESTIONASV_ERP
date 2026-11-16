@@ -1,17 +1,17 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import { purchaseOrdersApi } from '$lib/api/purchase-orders';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import PurchaseOrderExpenseDocuments from '$lib/features/purchase-orders/components/PurchaseOrderExpenseDocuments.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { purchaseOrdersApi } from '#lib/api/purchase-orders.ts';
+  import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import PurchaseOrderExpenseDocuments from '#lib/features/purchase-orders/components/PurchaseOrderExpenseDocuments.svelte';
   import PurchaseOrderActualExpenses from './PurchaseOrderActualExpenses.svelte';
-  import PurchaseOrderReceivingAction from '$lib/features/purchase-orders/components/PurchaseOrderReceivingAction.svelte';
-  import PurchaseOrderWorkflowActions from '$lib/features/purchase-orders/components/PurchaseOrderWorkflowActions.svelte';
-  import { getWarehouse } from '$lib/services/warehouses';
-  import { branch } from '$lib/stores/branch.svelte';
-  import type { PurchaseOrder, PurchaseOrderStatus } from '$lib/types/purchase-order';
+  import PurchaseOrderReceivingAction from '#lib/features/purchase-orders/components/PurchaseOrderReceivingAction.svelte';
+  import PurchaseOrderWorkflowActions from '#lib/features/purchase-orders/components/PurchaseOrderWorkflowActions.svelte';
+  import { getWarehouse } from '#lib/services/warehouses.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import type { PurchaseOrder, PurchaseOrderStatus } from '#lib/types/purchase-order.ts';
 
   let { id }: { id: string } = $props();
 

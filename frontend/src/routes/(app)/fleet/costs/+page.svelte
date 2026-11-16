@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { fleetApi, type CostCategory, type CostReport } from '$lib/features/fleet/api';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { fleetApi, type CostCategory, type CostReport } from '#lib/features/fleet/api.ts';
   import {
     COST_CATEGORY_LABELS,
     costPeriods,
@@ -12,11 +12,11 @@
     meterShort,
     plateLabel,
     type CostPeriodId
-  } from '$lib/features/fleet/catalog';
-  import CostKpis from '$lib/features/fleet/CostKpis.svelte';
-  import PeriodSwitch from '$lib/features/fleet/PeriodSwitch.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  } from '#lib/features/fleet/catalog.ts';
+  import CostKpis from '#lib/features/fleet/CostKpis.svelte';
+  import PeriodSwitch from '#lib/features/fleet/PeriodSwitch.svelte';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   const periods = costPeriods(new Date());
 

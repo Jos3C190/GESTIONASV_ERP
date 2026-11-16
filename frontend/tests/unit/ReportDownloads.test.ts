@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import ReportDownloads from '$lib/components/ui/ReportDownloads.svelte';
+import ReportDownloads from '#lib/components/ui/ReportDownloads.svelte';
 import { saveRetaceoPreview } from './retaceo-preview';
 import { tick } from 'svelte';
 
@@ -9,9 +9,9 @@ const mocks = vi.hoisted(() => ({
   company: { id: 'company' },
   branch: { id: 'branch' }
 }));
-vi.mock('$lib/api/client', () => ({ apiDownload: mocks.download }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: mocks.company }));
-vi.mock('$lib/stores/branch.svelte', () => ({ branch: mocks.branch }));
+vi.mock('#lib/api/client.ts', () => ({ apiDownload: mocks.download }));
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: mocks.company }));
+vi.mock('#lib/stores/branch.svelte.ts', () => ({ branch: mocks.branch }));
 
 describe('Report downloads', () => {
   beforeEach(() => {

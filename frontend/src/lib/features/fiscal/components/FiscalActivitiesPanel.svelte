@@ -2,13 +2,13 @@
   import { onMount } from 'svelte';
   import AsyncSmartSelect, {
     type AsyncSmartOption
-  } from '$lib/components/ui/AsyncSmartSelect.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { fiscalApi } from '$lib/api/fiscal';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import type { EconomicActivity } from '$lib/types/fiscal';
+  } from '#lib/components/ui/AsyncSmartSelect.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { fiscalApi } from '#lib/api/fiscal.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import type { EconomicActivity } from '#lib/types/fiscal.ts';
 
   let { canManage }: { canManage: boolean } = $props();
 

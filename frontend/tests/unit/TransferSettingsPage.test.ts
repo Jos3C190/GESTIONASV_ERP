@@ -8,10 +8,10 @@ const mocks = vi.hoisted(() => ({
   saveSettings: vi.fn(),
   permissions: new Set<string>()
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: (code: string) => mocks.permissions.has(code) }
 }));
-vi.mock('$lib/features/inventory/transfer-documents', () => ({
+vi.mock('#lib/features/inventory/transfer-documents.ts', () => ({
   inventoryTransfersApi: { settings: mocks.settings, saveSettings: mocks.saveSettings }
 }));
 

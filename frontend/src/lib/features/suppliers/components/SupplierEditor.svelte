@@ -1,15 +1,15 @@
 <script lang="ts">
   import { beforeNavigate, goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import EditorSectionNav from '$lib/components/editor/EditorSectionNav.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import EditorSectionNav from '#lib/components/editor/EditorSectionNav.svelte';
   import SingleImageEditor from './SingleImageEditor.svelte';
-  import { catalogApi } from '$lib/api/catalog';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import { HttpError } from '$lib/api/client';
-  import type { Country } from '$lib/types/catalog';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import { HttpError } from '#lib/api/client.ts';
+  import type { Country } from '#lib/types/catalog.ts';
   import type {
     Currency,
     PaymentTerms,
@@ -17,9 +17,9 @@
     SupplierGroup,
     SupplierImageDraft,
     SupplierStatus
-  } from '$lib/types/supplier';
-  import { company } from '$lib/stores/company.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  } from '#lib/types/supplier.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   interface Props {
     mode: 'create' | 'edit';
@@ -373,6 +373,7 @@
   }
 
   beforeNavigate((navigation) => {
+    if (navigation.shallow && navigation.type === 'goto') return;
     const from = navigation.from?.url;
     const to = navigation.to?.url;
     if (

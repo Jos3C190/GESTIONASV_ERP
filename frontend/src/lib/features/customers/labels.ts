@@ -1,4 +1,4 @@
-import type { Customer, CustomerInput, CustomerType, IdentityDocument } from '$lib/types/customer';
+import type { Customer, CustomerInput, CustomerType, IdentityDocument } from '#lib/types/customer.ts';
 
 export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
   final_consumer: 'Consumidor final',

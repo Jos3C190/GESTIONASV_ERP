@@ -1,5 +1,5 @@
-import { api, type BranchOut } from '$lib/api/client';
-import { type Branch } from '$lib/features/branches/types';
+import { api, type BranchOut } from '#lib/api/client.ts';
+import { type Branch } from '#lib/features/branches/types.ts';
 
 /**
  * Maps a backend API branch representation to the frontend's domain Branch entity.
