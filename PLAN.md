@@ -75,7 +75,7 @@ Resultado verificable:
 - [x] **Paso 1: dominio.**
   - Crear `backend/app/domain/entities/sales_tax.py` con el motor puro y `amount_in_words`.
   - Verificar con pruebas unitarias: cuadro 1, el ejemplo oficial, exentos y no sujetos, retención y percepción en su umbral y debajo de él, conversión de precio, redondeo con 5 en el 9.º decimal y errores.
-- [ ] **Paso 2: aplicación y API.**
+- [x] **Paso 2: aplicación y API.**
   - Caso de uso que arma la entrada con el emisor, el cliente y la clasificación de cada producto, y valida que el documento lo pueda recibir el cliente y esté habilitado en la empresa.
   - Endpoint `POST /sales/tax-calculation`.
   - Verificar con pruebas e2e: permisos, empresa aislada, documento no habilitado o no permitido al cliente, producto con tributos adicionales.
@@ -84,7 +84,7 @@ Resultado verificable:
 
 ## Estado actual
 
-- **Paso en curso**: 2 (aplicación y API). El motor está en `backend/app/domain/entities/sales_tax.py`, con 22 pruebas en `tests/unit/test_sales_tax.py`.
+- **Paso en curso**: 3 (documentación). API en `routers/sales_tax.py` (`POST /sales/tax-calculation`, permiso `sales_quotations:read` o `sales:read`, sin auditoría porque no guarda); caso de uso en `application/sales_tax`; 5 pruebas e2e en `tests/e2e/test_sales_tax.py`. El motor está en `backend/app/domain/entities/sales_tax.py`, con 22 pruebas en `tests/unit/test_sales_tax.py`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.

@@ -64,6 +64,7 @@ from app.api.v1.routers import (
     retaceos,
     roles,
     sales,
+    sales_tax,
     supplier_master,
     suppliers,
     tracking,
@@ -139,6 +140,7 @@ api_router.include_router(purchase_quotations.router, prefix="/api/v1")
 api_router.include_router(purchase_requests.router, prefix="/api/v1")
 api_router.include_router(purchase_consolidations.router, prefix="/api/v1")
 api_router.include_router(supplier_master.router, prefix="/api/v1")
+api_router.include_router(sales_tax.router, prefix="/api/v1")
 api_router.include_router(sales.router, prefix="/api/v1")
 api_router.include_router(suppliers.router, prefix="/api/v1")
 api_router.include_router(lifecycle.router, prefix="/api/v1")
