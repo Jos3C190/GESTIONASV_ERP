@@ -52,6 +52,7 @@ from app.application.retaceos.cost_documents import RetaceoCostDocumentService
 from app.application.sales.deliveries import SalesDeliveryService
 from app.application.sales.returns import SalesReturnService
 from app.application.sales.service import SalesService
+from app.application.sales_tax import SalesTaxUseCases
 from app.core.config import settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.domain.entities.user import User
@@ -170,6 +171,14 @@ def get_product_fiscal_use_cases(session: SessionDep) -> ProductFiscalUseCases:
 
 def get_privacy_use_cases(session: SessionDep) -> PrivacyUseCases:
     return PrivacyUseCases(SqlAlchemyPrivacyRepository(session))
+
+
+def get_sales_tax_use_cases(session: SessionDep) -> SalesTaxUseCases:
+    return SalesTaxUseCases(
+        SqlAlchemyFiscalRepository(session),
+        SqlAlchemyCustomerRepository(session),
+        SqlAlchemyProductFiscalRepository(session),
+    )
 
 
 def get_purchase_repository(session: SessionDep) -> PurchaseRepository:

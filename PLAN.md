@@ -1,144 +1,98 @@
-# Plan: Ventas V1d — Datos personales
+# Plan: Ventas V2a — Motor único de cálculo fiscal
 
-Rama: `feature/ventas-v1d-datos-personales`, desde `develop` (ya incluye V1a, V1b y V1c, PR #38 a #40).
-Fuente: `docs/plan-area-ventas-el-salvador.pdf`, sección 3.7 (Protección de datos personales) y bloque V1 («aviso de privacidad, consentimientos y solicitudes de titulares de datos»).
-Con V1d termina el bloque V1. Después viene V2 (precios e impuestos), que rehace cotizaciones y ventas.
+Rama: `feature/ventas-v2a-motor-calculo`, desde `develop` (incluye V1a, V1b y V1c; V1d está en la PR #41).
+Fuente: `docs/plan-area-ventas-el-salvador.pdf`, secciones 3.2 (IVA), 3.3 (retención y percepción), 4.5 (reglas de cálculo), módulo 5.2 y bloque V2.
 
-## Alcance
+## Decisiones del usuario (16/11/2026)
 
-Cada empresa cumple la Ley para la Protección de Datos Personales sobre los datos de sus clientes:
-- un aviso de privacidad versionado;
-- consentimientos por cliente y finalidad;
-- una bandeja de solicitudes ARCO-POL con plazo;
-- la exportación y la anonimización de los datos de un cliente;
-- un registro de vulneraciones con su plazo de 72 horas.
+- V2 se divide en cinco sub-bloques, cada uno con su PR a `develop`:
+  - **V2a**: motor único de cálculo (este plan);
+  - **V2b**: listas de precios;
+  - **V2c**: descuentos con topes por rol y venta bajo costo;
+  - **V2d**: cotización rediseñada;
+  - **V2e**: pedido de venta que sustituye a la venta actual.
+- Las promociones (2×1, combos, precio por horario) van en V6, con la caja. V2 deja el motor listo para recibirlas.
+- La cotización y la venta actuales (B06) se rehacen en su lugar, con migración. Si hubiera datos en algún entorno, la migración se niega a seguir en lugar de perderlos. Entregas y devoluciones se adaptan.
 
-Queda fuera de V1d:
-- **Enlazar el aviso en el correo del DTE y en caja.** Lo harán V3 y V6, leyendo la versión vigente que expone este bloque.
-- **Bitácora de cada consulta de datos.** El ERP ya registra los cambios; registrar cada lectura se evaluará aparte.
+## Alcance de V2a
+
+Un solo motor calcula los montos fiscales de cualquier documento de venta. Lo usarán la cotización, el pedido, el punto de venta y el DTE. Este sub-bloque no tiene migración ni pantallas: entrega el motor y un endpoint para previsualizar el cálculo.
+
+Resultado verificable:
+- el mismo producto da $1.13 con IVA incluido en la factura y $1.00 + $0.13 en el crédito fiscal (cuadro 1 del plan);
+- el ejemplo oficial de crédito fiscal con descuento global y retención (Manual Funcional, cap. XVIII) da exactamente los mismos montos.
 
 ## Hechos verificados
 
-Fuente: D.L. 144 de 2024, reformado por el D.L. 659 de 2026. Los textos están en el scratchpad de la sesión: `lpdp/d144u.txt` y `d659u.txt`.
+- **Esquemas oficiales** (`svfe-json-schemas`; `fe-f-v2` y `fe-ccf-v4`):
+  - los montos por línea admiten 8 decimales (`multipleOf 1e-08`) y los del resumen, 2;
+  - la factura lleva `ivaItem` por línea y `totalIva` en el resumen;
+  - el crédito fiscal lleva el IVA en `resumen.tributos` (código 20), más `ivaPerci` e `ivaRete`.
+- **Redondeo y holgura** (Manual Funcional, cap. XXI): media hacia arriba, en el 8.º decimal en las líneas y en el 2.º en el resumen. Hacienda tolera $0.01 en cada campo del resumen.
+- **Descuentos** (cap. XVIII):
+  - el descuento por ítem se resta de precio × cantidad;
+  - el descuento global va por naturaleza (gravada, exenta, no sujeta) en el resumen;
+  - `totalDescu` suma ambos y es informativo.
+- **Ejemplo oficial de crédito fiscal**: gravadas $775.00, descuento global gravado $77.50 → subtotal $697.50.
+  - IVA: 697.50 × 0.13 = 90.675 → $90.68.
+  - Retención: 1 % = $6.98.
+  - Monto total de la operación: $697.50 + $90.68 − $6.98 = $781.20.
+- **Lo que ya existe en el ERP**:
+  - categoría del emisor (`large`, `medium`, `other`) en el perfil fiscal (V1a);
+  - del cliente: categoría y si es agente de retención (V1b);
+  - del producto: tratamiento de IVA, tipo de ítem y tributos adicionales (V1c);
+  - documentos que puede recibir cada cliente (`receivable_documents`) y documentos habilitados por empresa (V1a).
+- No existe ningún precio de producto en el ERP: «Asignación de precios» es un marcador del menú. Lo resuelve V2b.
 
-**Derechos ARCO-POL** (art. 2 literal i, y arts. 6 a 14). Son siete: acceso, rectificación, cancelación, oposición, portabilidad, olvido y limitación.
+## Reglas del motor
 
-**Plazos:**
-| Trámite | Plazo | Artículo |
-|---|---|---|
-| Responder una solicitud | 20 días hábiles desde la recepción. Prorrogable una vez por otros 20, con causa justificada. | 20, reformado por el D.L. 659 |
-| Pedir al titular que corrija su solicitud (prevención) | Una sola vez; el titular tiene 10 días hábiles para subsanar. Si no lo hace, se archiva. | 18 |
-| Devolver una solicitud cuando no es competencia de la empresa o pide otro derecho | 5 días hábiles | 19 |
-| Notificar una negativa | Resolución motivada, dentro de 3 días hábiles desde la decisión. | 22 |
-| Atender la revocación del consentimiento | 5 días hábiles | 30 |
-| Notificar una vulneración a la ACE, a la Fiscalía y a los afectados | 72 horas desde que se conoce | 25 |
-
-**Aviso de privacidad (art. 24).** Debe indicar:
-1. el domicilio del responsable;
-2. los datos que se tratan, señalando los sensibles;
-3. el fundamento legal;
-4. las finalidades, separando las que requieren consentimiento;
-5. cómo ejercer los derechos y cómo revocar el consentimiento;
-6. dónde y cómo presentar las solicitudes (según la reforma);
-7. cómo se comunicarán los cambios al aviso;
-8. el encargado del tratamiento, si existe;
-9. el uso de cookies.
-
-**Supresión (arts. 10 y 11).** No procede si contraviene una obligación legal. Los documentos fiscales se conservan 10 años (Código Tributario, art. 147), así que la supresión se resuelve anonimizando el cliente en el maestro.
-
-**Días hábiles.** Se excluyen los sábados, los domingos y los asuetos nacionales del Código de Trabajo (art. 190):
-- 1 de enero;
-- jueves, viernes y sábado de Semana Santa;
-- 1 de mayo, 10 de mayo y 17 de junio;
-- 6 de agosto y 15 de septiembre;
-- 2 de noviembre y 25 de diciembre.
-
-## Decisiones
-
-- **Aviso de privacidad versionado** (`company_privacy_notices`).
-  - Cada publicación crea una versión nueva y la anterior queda en el historial. Los consentimientos guardan la versión vigente al otorgarse.
-  - Al publicar, el sistema exige que el texto cubra cada elemento del art. 24, con una casilla por elemento marcada por quien publica.
-  - El sistema ofrece una plantilla inicial con los datos de la empresa.
-- **Consentimientos** (`customer_consents`).
-  - Se registran por cliente y finalidad: `marketing`, `profiling` o `third_party_sharing`.
-  - Llevan el medio (en persona, teléfono, correo, web o escrito), la fecha, quién lo registró y la versión del aviso.
-  - La revocación queda con fecha y medio. Solo puede haber un consentimiento vigente por cliente y finalidad.
-  - Los datos fiscales para facturar no requieren consentimiento (art. 28 f).
-- **Solicitudes ARCO-POL** (`data_subject_requests`).
-  - Llevan:
-    - un código `SOL-00001`;
-    - el titular, que puede ser cliente o no, con su nombre, documento y medio de respuesta;
-    - el derecho y la descripción;
-    - la fecha de recepción y el plazo, calculado en días hábiles;
-    - el responsable, que es un usuario de la empresa.
-  - Estados:
-    - `received`: recibida;
-    - `in_progress`: en trámite;
-    - `awaiting_correction`: prevención, con su propio plazo de 10 días hábiles;
-    - `extended`: prorrogada, con motivo obligatorio y plazo nuevo;
-    - `resolved`: atendida;
-    - `denied`: denegada, con motivo;
-    - `returned`: devuelta por no ser competencia o pedir otro derecho;
-    - `archived`: archivada si el titular no subsanó.
-  - La resolución guarda la respuesta y la fecha.
-- **Acciones sobre un cliente:**
-  - **Exportar sus datos** en JSON, para los derechos de acceso y portabilidad: ficha, direcciones de entrega, consentimientos y referencias de sus cotizaciones y ventas.
-  - **Anonimizarlo**, para la cancelación y el olvido:
-    - borra la identidad, el contacto y la dirección, y quita las direcciones de entrega;
-    - desactiva el cliente y guarda la fecha en `anonymized_at`;
-    - exige una solicitud de cancelación u olvido en trámite y no se deshace.
-  - Los documentos fiscales emitidos se conservan; V3 guardará en cada DTE la copia de los datos del receptor.
-- **Vulneraciones** (`personal_data_incidents`).
-  - Llevan un código `INC-00001`, la fecha en que se conoció y la de ocurrencia, la descripción, los datos y titulares afectados, y las medidas.
-  - El límite de notificación es la fecha en que se conoció más 72 horas.
-  - Se registra la constancia de cada notificación: ACE, Fiscalía y titulares, con fecha y referencia.
-  - Estados: abierto y cerrado. Solo se cierra con las tres notificaciones registradas o con un motivo cuando no aplica la de titulares.
-- **Permisos nuevos** (módulo `privacy`):
-  - `privacy:read`: consultar;
-  - `privacy:manage`: aviso, solicitudes y vulneraciones;
-  - `privacy:erase`: anonimizar.
-  - Los consentimientos del cliente usan `sales_customers:manage`, porque los registra quien atiende al cliente.
-- **Interfaz.**
-  - La página «Datos personales» va en el menú de Administración, con pestañas Aviso, Solicitudes y Vulneraciones.
-  - La ficha del cliente gana un panel de consentimientos.
-  - Los textos no mencionan a otras empresas.
+- **Documentos**: factura (01) y comprobante de crédito fiscal (03). Exportación y notas vienen con el DTE (V3 y V4).
+- **Precio de cada línea**:
+  - llega con la marca `price_includes_vat`;
+  - el motor lo lleva a la forma del documento: con IVA en la factura y sin IVA en el crédito fiscal;
+  - convierte con ÷ 1.13 o × 1.13, redondeando a 8 decimales;
+  - el precio de una línea exenta o no sujeta nunca lleva IVA.
+- **Venta por línea** = cantidad × precio − descuento por ítem, a 8 decimales. Va en `venta_gravada`, `venta_exenta` o `venta_no_sujeta` según el producto.
+- **IVA**:
+  - Factura: `iva_item` = venta gravada − venta gravada ÷ 1.13, por línea. En el resumen, `total_iva` se calcula sobre la gravada neta del descuento global.
+  - Crédito fiscal: IVA = (gravada − descuento global gravado) × 0.13, redondeado a 2 decimales.
+- **Retención 1 %** (CT art. 162):
+  - aplica si el cliente es gran contribuyente o agente de retención, el emisor no es gran contribuyente y la gravada neta sin IVA llega a $100;
+  - la base es la gravada neta sin IVA;
+  - se resta del monto total.
+- **Percepción 1 %** (CT art. 163):
+  - solo en el crédito fiscal;
+  - aplica si el emisor es gran contribuyente, el cliente es contribuyente sin esa categoría y la base llega a $100;
+  - la base es la gravada neta de las líneas de bienes (tipo de ítem 1 o 3);
+  - se suma al total.
+- **Cuadre**: el descuento global de cada naturaleza no puede superar su total.
+- **Tributos adicionales**: un producto con tributos adicionales (FOVIAL, COTRANS, etc.) se rechaza con un error claro, porque sus tasas y bases no son el 13 %. Quedan para cuando una empresa los necesite.
+- **Total en letras**: en español y en mayúsculas, por ejemplo «CIENTO TRECE 50/100 DÓLARES».
 
 ## Pasos
 
-- [x] **Paso 1: migración `0121_personal_data_protection` y modelos.**
-  - Crea las cuatro tablas y `sales_customers.anonymized_at`, más los permisos.
-  - Verificar con upgrade, downgrade y upgrade, y con su prueba de integración.
-- [x] **Paso 2: dominio.**
-  - Días hábiles con los asuetos, incluida la Semana Santa calculada.
-  - Plazos, transiciones de estado de las solicitudes, plantilla y elementos del aviso, finalidades de consentimiento y reglas de las vulneraciones.
-  - Verificar con pruebas unitarias.
-- [x] **Paso 3: repositorio, casos de uso y API.** (`tests/e2e/test_privacy.py`; el cliente anonimizado expone `anonymized_at` y no se edita ni se reactiva)
-  - `/privacy/...` y `/customers/{id}/consents`.
-  - Verificar con pruebas e2e: aislamiento entre empresas, permisos, auditoría, exportación y anonimización.
-- [x] **Paso 4: frontend.** La página «Datos personales» y el panel de consentimientos. Verificar con vitest.
-- [x] **Paso 5: semilla.** El aviso de privacidad inicial de Grupo Lorena, publicado.
-- [x] **Paso 6: documentación.** `docs/api.md`, `docs/database-schema.md` y el manual.
-- [x] **Paso 7: verificación y PR.** Correr la batería completa, revisar en el navegador y abrir el PR hacia `develop`.
+- [x] **Paso 0: plan.**
+- [x] **Paso 1: dominio.**
+  - Crear `backend/app/domain/entities/sales_tax.py` con el motor puro y `amount_in_words`.
+  - Verificar con pruebas unitarias: cuadro 1, el ejemplo oficial, exentos y no sujetos, retención y percepción en su umbral y debajo de él, conversión de precio, redondeo con 5 en el 9.º decimal y errores.
+- [x] **Paso 2: aplicación y API.**
+  - Caso de uso que arma la entrada con el emisor, el cliente y la clasificación de cada producto, y valida que el documento lo pueda recibir el cliente y esté habilitado en la empresa.
+  - Endpoint `POST /sales/tax-calculation`.
+  - Verificar con pruebas e2e: permisos, empresa aislada, documento no habilitado o no permitido al cliente, producto con tributos adicionales.
+- [x] **Paso 3: documentación.** `docs/api.md` y un manual del cálculo en `docs/ers-v1/`.
+- [x] **Paso 4: verificación y PR.** Correr la batería completa y abrir el PR hacia `develop`.
 
 ## Estado actual
 
-- **Paso en curso**: ninguno; V1d terminado y en PR hacia `develop`. Batería completa: backend 1,831 y frontend 1,146 pruebas, todo en verde. Documentación en `docs/api.md`, `docs/database-schema.md` §31 y `docs/ers-v1/manual-datos-personales.md`. La semilla del aviso es el paso de seguimiento `seed.grupo_lorena.privacy_notice` (`backend/seed/seed_grupo_lorena_privacy.py`); no republica si ya hay aviso. El frontend está en `lib/features/privacy` y la ruta `/privacy`. En pruebas, los correos con dominio `.test` los rechaza `EmailStr`: usar `example.com`. En vitest, un `<select bind:value>` dentro de un modal no tomó el cambio: usar `value` + `onchange`.
-- **QA en el navegador (16/11/2026)**: aviso sembrado visible; solicitud SOL-00001 creada, en trámite, exportada y atendida; consentimiento registrado y revocado en CLI-00003; modo claro, oscuro y 375 px revisados. Correcciones de la QA:
-  - la plantilla del aviso decía «escribiendo a» un teléfono; ahora arma «escribiendo a {correo}, llamando al {teléfono} o en cualquiera de nuestras sucursales»;
-  - el selector de cliente de la solicitud no mostraba el nombre elegido;
-  - estados vacíos con icono, mensaje y botón (`PrivacyEmptyState.svelte`);
-  - botones del encabezado sin partirse en dos líneas;
-  - el consentimiento revocado muestra el canal de revocación.
+- **Paso en curso**: ninguno; V2a terminado y en PR hacia `develop`. Batería completa: backend 1,843 y frontend 1,134 pruebas en verde. Lo siguiente es V2b (listas de precios). Documentación en `docs/api.md` (Sales tax calculation) y `docs/ers-v1/manual-calculo-fiscal-ventas.md`. API en `routers/sales_tax.py` (`POST /sales/tax-calculation`, permiso `sales_quotations:read` o `sales:read`, sin auditoría porque no guarda); caso de uso en `application/sales_tax`; 5 pruebas e2e en `tests/e2e/test_sales_tax.py`. El motor está en `backend/app/domain/entities/sales_tax.py`, con 22 pruebas en `tests/unit/test_sales_tax.py`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.
   - Prettier solo se aplica a archivos nuevos o tocados.
-- **Navegador**:
-  - Iniciar sesión en `http://localhost:5173/login` con la cuenta local que dio el usuario.
-  - Navegar con el menú, sin recargar la página.
-  - Si una ruta nueva da «Not found», reiniciar el contenedor `frontend`.
+  - Los esquemas oficiales están en `D:\josec\Downloads\Documentacion DTE\svfe-json-schemas.zip`.
 - **Reglas del usuario**:
   - Commits y PR sin Co-Authored-By ni «Generated with Claude Code».
   - PR hacia `develop`.
   - Ignorar el check de Vercel.
   - Dentro de una empresa, la interfaz no menciona a otras empresas.
+  - En documentos compartidos, el servicio DTE de referencia se llama «proyecto de referencia».
