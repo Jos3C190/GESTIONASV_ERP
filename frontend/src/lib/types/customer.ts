@@ -64,6 +64,7 @@ export interface Customer {
   seller_name: string | null;
   is_active: boolean;
   is_generic: boolean;
+  anonymized_at: string | null;
   branch_id: string | null;
   receivable_documents: string[];
   tax_credit_missing: string[];

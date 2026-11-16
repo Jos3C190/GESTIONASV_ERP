@@ -13,6 +13,7 @@ const TITLES: Record<string, string> = {
   '/warehouse-categories': 'Categorías de almacén',
   '/audit-log': 'Bitácora',
   '/documents': 'Documentos',
+  '/privacy': 'Datos personales',
   '/suppliers': 'Proveedores',
   '/customers': 'Clientes',
   '/customers/new': 'Nuevo cliente',

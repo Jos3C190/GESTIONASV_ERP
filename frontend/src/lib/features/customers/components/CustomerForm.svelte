@@ -10,6 +10,7 @@
   import { customersApi } from '$lib/api/customers';
   import { fiscalApi } from '$lib/api/fiscal';
   import CustomerDeliveryAddresses from '$lib/features/customers/components/CustomerDeliveryAddresses.svelte';
+  import CustomerConsentsPanel from '$lib/features/privacy/components/CustomerConsentsPanel.svelte';
   import GeographyFields from '$lib/features/customers/components/GeographyFields.svelte';
   import {
     CUSTOMER_TYPE_LABELS,
@@ -43,7 +44,7 @@
   let geographyKey = $state(0);
 
   const canManage = $derived(permissions.hasPermission('sales_customers:manage'));
-  const editable = $derived(canManage && !customer?.is_generic);
+  const editable = $derived(canManage && !customer?.is_generic && !customer?.anonymized_at);
   const isTaxpayer = $derived(form.customer_type === 'taxpayer');
   const isForeign = $derived(form.customer_type === 'foreign');
 
@@ -198,6 +199,14 @@
               {/each}
             </ul>
           </div>
+        {/if}
+        {#if customer.anonymized_at}
+          <p
+            class="mt-3 rounded-lg border border-border bg-surface-muted/50 p-3 text-sm text-foreground-muted"
+          >
+            Cliente anonimizado por una solicitud de su titular. Se conserva solo para los
+            documentos ya emitidos; sus datos no se editan ni se reactiva.
+          </p>
         {/if}
         {#if customer.is_generic}
           <p class="mt-3 text-sm text-foreground-muted">
@@ -505,6 +514,7 @@
         canManage={editable}
         onchange={() => void load()}
       />
+      <CustomerConsentsPanel customerId={customer.id} canManage={editable} />
     {/if}
   {/if}
 </div>
