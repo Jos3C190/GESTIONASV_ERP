@@ -7,6 +7,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`, módulos 5.1 («Condiciones com
 
 - V2 se divide en V2a (motor de cálculo, ya en `develop`), V2b (listas de precios, este plan), V2c (descuentos con topes por rol y venta bajo costo), V2d (cotización rediseñada) y V2e (pedido de venta). Cada uno lleva su PR a `develop`.
 - Las promociones van en V6, con la caja.
+- V2c incluye un **precio sugerido**: costo promedio (que ya incluye el retaceo) más un margen objetivo, como punto de partida al fijar un precio en la lista. Lo pidió el usuario el 16/11/2026, al aclarar que el costo del retaceo y el precio de venta son cosas distintas.
 - La cotización y la venta actuales se rehacen en su lugar (V2d y V2e).
 - Pendiente para el inicio de V2c (16/11/2026): en el detalle de una lista de precios, mostrar junto a cada precio el «costo actual» (costo promedio de `inventory_cost_averages`, que ya incluye el retaceo) y el «margen %», y resaltar los precios que quedan bajo costo. Motivo: el precio de lista lleva la ganancia implícita, pero hoy nadie ve el margen al fijarlo. Para comparar, el precio de una lista con IVA se toma sin IVA.
 
@@ -76,11 +77,11 @@ Resultado verificable:
 - [x] **Paso 4: semilla y documentación.**
   - Listas y precios de Grupo Lorena.
   - `docs/api.md`, `docs/database-schema.md` §32 y el manual.
-- [ ] **Paso 5: verificación y PR.** Batería completa, QA en el navegador y PR a `develop`.
+- [x] **Paso 5: verificación y PR.** Batería completa, QA en el navegador y PR a `develop`.
 
 ## Estado actual
 
-- **Paso en curso**: 5 (verificación y PR). QA en navegador hecho (listas, detalle, precio programado y anulación OK). Falta: revisar el resultado de la batería completa (log en el scratchpad, `full-suite-v2b.log`), hacer commit del cambio sin commit en `PriceListDetail.svelte` (título h1 visible, sin `page-title-echo`) junto con este PLAN.md, revisar modo oscuro y 375 px, push y PR a `develop`. Semilla: paso de seguimiento `seed.grupo_lorena.price_lists` (`backend/seed/seed_grupo_lorena_price_lists.py`), idempotente. Documentación en `docs/api.md`, `docs/database-schema.md` §32 y `docs/ers-v1/manual-listas-precios.md`. Frontend en `lib/features/price-lists` y rutas `/sales/price-lists` y `/sales/price-lists/[id]`; selector de lista en la ficha del cliente; «Asignación de precios» salió del menú de Compras. Backend: `domain/entities/price_list.py`, `application/price_lists`, `repositories/price_list_repository.py`, `routers/price_lists.py` (rutas `/price-lists` y `/sales/prices/resolve`, registrado antes del router de ventas para que `/sales/{id}` no lo capture) y `price_list_id` en el cliente. Las pruebas e2e preparan un artículo de inventario porque la semilla de API no lo trae. Migración `0122_sales_price_lists.py` y modelos en `models/sales_pricing.py`; el traslape de vigencias lo garantiza `ex_sales_price_list_items_overlap` (solo en la migración).
+- **Paso en curso**: ninguno; V2b terminado y en PR hacia `develop`. Batería completa: backend 1,873 y frontend 1,154 pruebas en verde; QA en navegador (claro, oscuro y 375 px). Lo siguiente es V2c, que empieza por las notas de costo, margen y precio sugerido de las decisiones.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.
