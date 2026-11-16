@@ -64,7 +64,7 @@ Queda fuera de V1c:
 - [x] **Paso 2: dominio.**
   - `app/domain/entities/product_fiscal.py`: tratamiento, tipo de ítem efectivo, validación de tributos, unidad sugerida y requisitos.
   - Verificar con `tests/unit/test_product_fiscal_domain.py`.
-- [ ] **Paso 3: repositorio, casos de uso y API.**
+- [x] **Paso 3: repositorio, casos de uso y API.** (cubierto por `tests/e2e/test_product_fiscal.py`)
   - Archivos:
     - el puerto, el repositorio y los casos de uso;
     - los routers de productos y de configuración fiscal;
@@ -83,7 +83,7 @@ Queda fuera de V1c:
 
 ## Estado actual
 
-- **Paso en curso**: 3 (repositorio, casos de uso y API). Las unidades que una empresa habilite después quedan con `hacienda_unit_code` vacío y usan la sugerencia del dominio.
+- **Paso en curso**: 4 (frontend). Rutas: `/product-fiscal/options` (no bajo `/products/...` porque `/products/{product_id}` es entero y atraparía la ruta), `/products/{id}/fiscal` y `/fiscal/units`. Un trigger habilita las unidades globales al crear una empresa, sin código guardado. Las unidades que una empresa habilite después quedan con `hacienda_unit_code` vacío y usan la sugerencia del dominio.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.
