@@ -206,6 +206,13 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("sales_returns:receive", "Registrar recepción de devoluciones", "sales"),
     PermissionSpec("sales_returns:resolve", "Aceptar o rechazar mercancía devuelta", "sales"),
     PermissionSpec("sales_returns:cancel", "Cancelar borradores de devolución", "sales"),
+    # --- fiscal issuer (DTE) ---
+    PermissionSpec(
+        "fiscal_settings:read", "Consultar la configuración fiscal del emisor", "fiscal"
+    ),
+    PermissionSpec(
+        "fiscal_settings:manage", "Configurar el emisor, establecimientos y documentos", "fiscal"
+    ),
     # --- fleet ---
     PermissionSpec("fleet:read", "Consultar la flota", "fleet"),
     PermissionSpec("fleet:create", "Registrar vehículos", "fleet"),

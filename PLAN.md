@@ -62,7 +62,7 @@ Resultado verificable: dos empresas configuradas como emisores distintos, sin da
     - 14, 44 y 262 códigos territoriales asignados;
     - códigos únicos por departamento;
     - una muestra de distritos.
-- [ ] **Paso 2: migración `0118_fiscal_issuer_base` y modelos.**
+- [x] **Paso 2: migración `0118_fiscal_issuer_base` y modelos.**
   - La migración crea:
     - la tabla `hacienda_catalog_items`, con su carga;
     - la columna `hacienda_code` en `geographic_departments`, `municipalities` y `districts`, con su carga;
@@ -107,7 +107,7 @@ Resultado verificable: dos empresas configuradas como emisores distintos, sin da
 
 ## Estado actual
 
-- **Paso en curso**: 2 (migración y modelos). Paso 1 listo; CAT-019 tiene 774 códigos (las 885 filas del Excel incluyen títulos de sector). El generador se ejecuta en el contenedor: `docker compose cp <xlsx> backend:/tmp/catalogos.xlsx` y `uv run python scripts/generate_hacienda_catalogs.py /tmp/catalogos.xlsx`, luego `ruff format`.
+- **Paso en curso**: 3 (dominio). Pasos 1 y 2 listos; los permisos `fiscal_settings:*` ya están en `rbac/catalogue.py` (la semilla de pruebas toma los roles de ahí, no de la migración). Paso 1: CAT-019 tiene 774 códigos (las 885 filas del Excel incluyen títulos de sector). El generador se ejecuta en el contenedor: `docker compose cp <xlsx> backend:/tmp/catalogos.xlsx` y `uv run python scripts/generate_hacienda_catalogs.py /tmp/catalogos.xlsx`, luego `ruff format`.
 - **Herramientas**:
   - Los datos crudos de los catálogos, ya extraídos, están en el scratchpad de la sesión: `cats.json` y `geo_map.json`. Si se pierden, el paso 1 los regenera con el script a partir del Excel.
   - El Excel se lee con zipfile y XML, porque no hay openpyxl.
