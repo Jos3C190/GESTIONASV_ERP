@@ -1021,3 +1021,20 @@ per customer, partial unique index; must be active) and `is_active`. Composite F
 
 **Downgrade** refuses while any delivery address or customer with fiscal data exists.
 Covered by `backend/tests/integration/test_customer_migration.py`.
+
+## 30. Product fiscal classification (0120)
+
+Revision `0120` (revises `0119`).
+
+- `products` gains `tax_treatment` (`taxed` by default, `exempt`, `not_subject`),
+  `dte_item_type` (nullable, `1`/`2`/`3`; null means derived from `product_kind`) and
+  `additional_tax_codes varchar(4)[]` (empty by default). Checks: valid treatment and item
+  type, additional taxes only on taxed products, and never IVA `20` or `C3`.
+- `company_units` gains `hacienda_unit_code` (one or two digits, nullable). It stays empty
+  until the company chooses a code; meanwhile the domain applies the suggestion by unit code
+  (UNIT 59, KILOGRAM 34, GRAM 39, POUND 36, LITER 23, MILLILITER 26, GALLON 22, METER 1,
+  others 99), so suggested and chosen codes stay distinguishable.
+- Permission `products:fiscal` is inserted and granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while any product is not taxed or has an item type or additional
+taxes. Covered by `backend/tests/integration/test_product_fiscal_migration.py`.
