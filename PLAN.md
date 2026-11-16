@@ -100,11 +100,11 @@ Queda fuera de V1b:
   - Verificar con vitest y en el navegador.
 - [x] **Paso 7: semilla.** Clientes de demostración de Grupo Lorena: un contribuyente completo, uno incompleto, un consumidor final identificado y uno del extranjero. Debe poder reejecutarse.
 - [x] **Paso 8: documentación.** `docs/api.md`, `docs/database-schema.md` y `docs/ers-v1/manual-clientes.md`.
-- [ ] **Paso 9: verificación y PR.** `./scripts/run-tests.sh all`, QA en el navegador y PR hacia `develop`.
+- [x] **Paso 9: verificación y PR.** Batería completa en verde (backend 1,800; frontend 1,128; lint, tipos y build). Revisión en el navegador: lista, ficha, falta de NRC y paso a crédito fiscal al completarlo. `./scripts/run-tests.sh all`, QA en el navegador y PR hacia `develop`.
 
 ## Estado actual
 
-- **Paso en curso**: 9 (verificación y PR). Semilla: follow-up `seed.grupo_lorena.customers` con CLI-00001 a CLI-00004 y los genéricos `CF-<código de sucursal>`. Los pasos 5 y 6 se hicieron juntos porque `SalesCustomers.svelte` dependía de las rutas viejas; se eliminó. El selector de vendedor existe en la API pero aún no en la pantalla. Prettier solo se aplica a archivos nuevos o tocados: pasarlo por una carpeta entera reformatea código ajeno. La API vive en `/api/v1/customers`; ya no existe `/sales/customers`. Pendiente: correr `test_sales_deliveries.py` y `test_inventory_final_acceptance.py` en la batería completa, que ya apuntan a la ruta nueva. En los checks, `IN (...)` con NULL da NULL y PostgreSQL lo acepta: exigir `IS NOT NULL` explícito.
+- **Paso en curso**: ninguno; V1b terminado, falta el PR. Después del reinicio del frontend, las rutas nuevas se ven sin recargar la caché: si una ruta recién creada da «Not found» en el navegador, reiniciar el contenedor `frontend`. Semilla: follow-up `seed.grupo_lorena.customers` con CLI-00001 a CLI-00004 y los genéricos `CF-<código de sucursal>`. Los pasos 5 y 6 se hicieron juntos porque `SalesCustomers.svelte` dependía de las rutas viejas; se eliminó. El selector de vendedor existe en la API pero aún no en la pantalla. Prettier solo se aplica a archivos nuevos o tocados: pasarlo por una carpeta entera reformatea código ajeno. La API vive en `/api/v1/customers`; ya no existe `/sales/customers`. Pendiente: correr `test_sales_deliveries.py` y `test_inventory_final_acceptance.py` en la batería completa, que ya apuntan a la ruta nueva. En los checks, `IN (...)` con NULL da NULL y PostgreSQL lo acepta: exigir `IS NOT NULL` explícito.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería: el hook de pre-commit usa la misma base de pruebas.

@@ -183,7 +183,7 @@
           {/if}
         </div>
       {:else}
-        <div class="hidden overflow-x-auto md:block">
+        <div class="hidden overflow-x-auto lg:block">
           <table class="w-full min-w-[760px] text-sm">
             <thead class="bg-surface-muted text-xs text-foreground-muted">
               <tr>
@@ -231,7 +231,7 @@
             </tbody>
           </table>
         </div>
-        <ul class="divide-y divide-border md:hidden">
+        <ul class="divide-y divide-border lg:hidden">
           {#each customers as customer (customer.id)}
             <li>
               <a

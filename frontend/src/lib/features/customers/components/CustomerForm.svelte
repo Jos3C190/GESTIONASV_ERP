@@ -234,6 +234,7 @@
               <input
                 type="radio"
                 name="customer-type"
+                aria-label={CUSTOMER_TYPE_LABELS[type]}
                 checked={form.customer_type === type}
                 onchange={() => changeType(type)}
               />
