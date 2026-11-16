@@ -42,7 +42,7 @@ Queda fuera de V1c:
   - `additional_tax_codes`: lista de códigos de CAT-015 sin 20 ni C3; vacía por defecto.
 - **Código de Hacienda de la unidad.** Va por empresa en `company_units.hacienda_unit_code`, porque cada empresa puede tener sus propias unidades y su propio criterio.
   - Si está vacío, se usa un valor sugerido según el código de la unidad: UNIT 59, KILOGRAM 34, GRAM 39, POUND 36, LITER 23, MILLILITER 26, GALLON 22, METER 1, y 99 para las demás.
-  - La migración guarda la sugerencia en las filas que ya existen.
+  - La migración no guarda la sugerencia: el código queda vacío hasta que la empresa elija uno, para que la pantalla distinga lo sugerido de lo elegido (corregido en la revisión del navegador).
 - **Requisitos para facturar un producto vendible.**
   - Su unidad de venta debe estar habilitada en la empresa y tener código de Hacienda.
   - Si es exento o no sujeto, no puede llevar tributos adicionales: los tributos especiales solo aplican a ventas gravadas.

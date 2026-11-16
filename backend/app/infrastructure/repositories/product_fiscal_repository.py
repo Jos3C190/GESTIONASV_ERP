@@ -34,7 +34,8 @@ class SqlAlchemyProductFiscalRepository:
                 HaciendaCatalogItemModel.catalog_code == catalog_code,
                 HaciendaCatalogItemModel.is_active.is_(True),
             )
-            .order_by(HaciendaCatalogItemModel.group_code, HaciendaCatalogItemModel.sort_order)
+            # Catalog order: CAT-015 lists the summary taxes (IVA, FOVIAL, COTRANS) first.
+            .order_by(HaciendaCatalogItemModel.sort_order)
         )
         seen: dict[str, CatalogEntry] = {}
         for code, name in rows.tuples().all():

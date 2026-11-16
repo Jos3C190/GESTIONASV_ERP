@@ -6,8 +6,9 @@ Revises: 0119
 Cada producto declara su tratamiento de IVA (gravado, exento o no sujeto), un tipo de ítem
 opcional (CAT-011; si falta se deriva del tipo de producto) y los tributos adicionales que
 lleva (CAT-015, sin el IVA 20 ni el C3). Cada unidad habilitada en una empresa recibe su
-código de unidad de medida de Hacienda (CAT-014); las filas existentes toman el valor
-sugerido según el código de la unidad.
+código de unidad de medida de Hacienda (CAT-014). Queda vacío hasta que la empresa elija
+uno: mientras tanto el dominio aplica la sugerencia según el código de la unidad, y la
+pantalla distingue lo sugerido de lo elegido.
 
 El downgrade se niega si algún producto dejó de ser gravado o tiene tributos o tipo de ítem.
 """
@@ -20,17 +21,6 @@ down_revision = "0119"
 branch_labels = None
 depends_on = None
 
-#: Sugerencia de CAT-014 por código de unidad del ERP; las demás quedan como «Otra» (99).
-SUGGESTED_UNIT_CODES = {
-    "UNIT": "59",
-    "KILOGRAM": "34",
-    "GRAM": "39",
-    "POUND": "36",
-    "LITER": "23",
-    "MILLILITER": "26",
-    "GALLON": "22",
-    "METER": "1",
-}
 _PERMISSION = ("products:fiscal", "Gestionar la clasificación fiscal del producto")
 
 
@@ -55,17 +45,6 @@ def upgrade() -> None:
             ADD CONSTRAINT ck_company_units_hacienda_unit_code
                 CHECK (hacienda_unit_code IS NULL OR hacienda_unit_code ~ '^[0-9]{1,2}$')
     """)
-    connection = op.get_bind()
-    connection.execute(text("UPDATE company_units SET hacienda_unit_code = '99'"))
-    for unit_code, hacienda_code in SUGGESTED_UNIT_CODES.items():
-        connection.execute(
-            text("""
-                UPDATE company_units cu SET hacienda_unit_code = :hacienda
-                  FROM units u
-                 WHERE u.id_unit = cu.unit_id AND upper(u.code) = :code
-            """),
-            {"hacienda": hacienda_code, "code": unit_code},
-        )
     code, description = _PERMISSION
     op.execute(f"""
         INSERT INTO permissions (id, code, description, module, created_at)
