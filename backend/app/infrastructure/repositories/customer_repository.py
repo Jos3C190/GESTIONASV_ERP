@@ -180,6 +180,7 @@ class SqlAlchemyCustomerRepository:
                 updated_at=row.updated_at,
                 delivery_addresses=tuple(by_customer.get(row.id, ())),
                 seller_name=sellers.get(row.seller_employee_id) if row.seller_employee_id else None,
+                anonymized_at=row.anonymized_at,
             )
             for row in rows
         ]

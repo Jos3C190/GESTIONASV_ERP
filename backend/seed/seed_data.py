@@ -20,6 +20,7 @@ its next start:
   documents a bakery issues;
 * the demonstration customers with fiscal data and the generic «Consumidor final» of every
   branch (``seed_grupo_lorena_customers``);
+* the published privacy notice of the company (``seed_grupo_lorena_privacy``);
 * the demonstration operation (``seed_grupo_lorena_operations``), which creates
   purchase and inventory documents, only with ``SEED_DEMO_OPERATIONS=true`` and
   never when ``ENVIRONMENT=production``.
@@ -96,6 +97,12 @@ async def _customers() -> bool:
     return await seed_customers()
 
 
+async def _privacy_notice() -> bool:
+    from seed.seed_grupo_lorena_privacy import seed as seed_privacy
+
+    return await seed_privacy()
+
+
 async def _operations() -> bool:
     from seed.seed_grupo_lorena_operations import seed as seed_operations
 
@@ -118,6 +125,7 @@ FOLLOW_UPS: tuple[FollowUp, ...] = (
     FollowUp("seed.grupo_lorena.fleet", "2026-11-14-v1", _fleet),
     FollowUp("seed.grupo_lorena.fiscal_issuer", "2026-11-15-v1", _fiscal_issuer),
     FollowUp("seed.grupo_lorena.customers", "2026-11-16-v1", _customers),
+    FollowUp("seed.grupo_lorena.privacy_notice", "2026-11-16-v1", _privacy_notice),
     FollowUp("seed.grupo_lorena.operations", "2026-11-14-v1", _operations, demo_operations_enabled),
 )
 

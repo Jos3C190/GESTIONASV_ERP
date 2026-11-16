@@ -133,6 +133,7 @@ def _out(customer: Customer) -> CustomerOut:
         credit_limit=draft.credit_limit,
         seller_employee_id=draft.seller_employee_id,
         seller_name=customer.seller_name,
+        anonymized_at=customer.anonymized_at,
         is_active=customer.is_active,
         is_generic=customer.is_generic,
         branch_id=customer.branch_id,

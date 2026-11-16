@@ -16,6 +16,9 @@ const { customersApi, fiscalApi, geography, gotoMock } = vi.hoisted(() => ({
 
 vi.mock('$lib/api/customers', () => ({ customersApi }));
 vi.mock('$lib/api/fiscal', () => ({ fiscalApi }));
+vi.mock('$lib/api/privacy', () => ({
+  privacyApi: { consents: () => Promise.resolve([]) }
+}));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/api/client', () => ({
   api: { geography },
@@ -72,6 +75,7 @@ const taxpayer: Customer = {
   seller_name: null,
   is_active: true,
   is_generic: false,
+  anonymized_at: null,
   branch_id: null,
   receivable_documents: ['01'],
   tax_credit_missing: ['NRC.', 'Actividad económica.'],
