@@ -1,4 +1,9 @@
-import type { Customer, CustomerInput, CustomerType, IdentityDocument } from '#lib/types/customer.ts';
+import type {
+  Customer,
+  CustomerInput,
+  CustomerType,
+  IdentityDocument
+} from '#lib/types/customer.ts';
 
 export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
   final_consumer: 'Consumidor final',
@@ -64,7 +69,8 @@ export function emptyCustomerInput(type: CustomerType = 'final_consumer'): Custo
     credit_days: 0,
     credit_limit: null,
     seller_employee_id: null,
-    price_list_id: null
+    price_list_id: null,
+    discount_percent: '0'
   };
 }
 
@@ -96,7 +102,8 @@ export function customerToInput(customer: Customer): CustomerInput {
     credit_days: customer.credit_days,
     credit_limit: customer.credit_limit,
     seller_employee_id: customer.seller_employee_id,
-    price_list_id: customer.price_list_id
+    price_list_id: customer.price_list_id,
+    discount_percent: customer.discount_percent
   };
 }
 

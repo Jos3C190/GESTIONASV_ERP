@@ -313,6 +313,13 @@ export const NAV_GROUPS: NavGroup[] = [
         requiredPermission: 'price_lists:read'
       },
       {
+        label: 'Topes de descuento',
+        icon: ICONS.pricing,
+        route: '/sales/discount-policies',
+        implemented: true,
+        requiredPermission: 'sales_discounts:manage'
+      },
+      {
         label: 'Configuración fiscal',
         icon: ICONS.settings,
         route: '/sales/fiscal-settings',

@@ -81,7 +81,7 @@ Fuera de alcance: las promociones (V6) y el registro de la autorización (V2d y 
   - Políticas por rol.
   - Endpoint de evaluación.
   - Pruebas e2e.
-- [ ] **Paso 4: frontend.**
+- [x] **Paso 4: frontend.**
   - En el detalle de la lista: costo, margen, resaltado, precio sugerido en el modal y escalas por volumen.
   - En la edición de la lista: margen objetivo y márgenes por categoría.
   - En la ficha del cliente: descuento fijo.
@@ -94,7 +94,7 @@ Fuera de alcance: las promociones (V6) y el registro de la autorización (V2d y 
 
 ## Estado actual
 
-- **Paso en curso**: 4 (frontend). Backend: costo, margen y precio sugerido en `GET /price-lists/{id}/prices` (solo con `sales_costs:read`), `/price-lists/categories`, `/price-lists/{id}/category-margins`, escalas en `/price-lists/{id}/volume-discounts`, topes en `/sales/discount-policies`, `/sales/my-discount-policy` y `/sales/discount-evaluation` (módulo `application/sales_discounts`); `discount_percent` en el cliente. 3 pruebas e2e en `tests/e2e/test_sales_discounts.py`. Dominio en `domain/entities/sales_margin.py` con 7 pruebas en `tests/unit/test_sales_margin.py`. Migración `0123_sales_margins_and_discounts.py` aplicada también en la base local; modelos nuevos en `models/sales_pricing.py` y `discount_percent` en `sales_customers`.
+- **Paso en curso**: 5 (semilla y documentación). Frontend: costo, margen y sugerido en `PriceListDetail.svelte`, diálogos `VolumeDiscountsDialog` y `CategoryMarginsDialog`, pantalla `/sales/discount-policies` (`DiscountPoliciesPage.svelte`) y descuento fijo en la ficha del cliente. Backend: costo, margen y precio sugerido en `GET /price-lists/{id}/prices` (solo con `sales_costs:read`), `/price-lists/categories`, `/price-lists/{id}/category-margins`, escalas en `/price-lists/{id}/volume-discounts`, topes en `/sales/discount-policies`, `/sales/my-discount-policy` y `/sales/discount-evaluation` (módulo `application/sales_discounts`); `discount_percent` en el cliente. 3 pruebas e2e en `tests/e2e/test_sales_discounts.py`. Dominio en `domain/entities/sales_margin.py` con 7 pruebas en `tests/unit/test_sales_margin.py`. Migración `0123_sales_margins_and_discounts.py` aplicada también en la base local; modelos nuevos en `models/sales_pricing.py` y `discount_percent` en `sales_customers`.
 - **Contexto**: el frontend usa SvelteKit 3: imports `#lib/…` con extensión, `$app/env`, `goto(…, { replace, reset: false })`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.

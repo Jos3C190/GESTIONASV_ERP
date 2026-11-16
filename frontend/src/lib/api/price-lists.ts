@@ -1,5 +1,11 @@
 import { apiFetch } from '#lib/api/client.ts';
 import type {
+  Category,
+  CategoryMargin,
+  DiscountPolicy,
+  RolePolicy,
+  VolumeDiscount,
+  VolumeDiscountInput,
   ListedPrice,
   PriceEntry,
   PriceInput,
@@ -50,5 +56,35 @@ export const priceListsApi = {
   },
   cancelPrice(entryId: string) {
     return apiFetch<void>(`${BASE}/items/${entryId}`, { method: 'DELETE' });
+  },
+  categories() {
+    return apiFetch<Category[]>(`${BASE}/categories`);
+  },
+  categoryMargins(id: string) {
+    return apiFetch<CategoryMargin[]>(`${BASE}/${id}/category-margins`);
+  },
+  replaceCategoryMargins(id: string, margins: CategoryMargin[]) {
+    return apiFetch<CategoryMargin[]>(`${BASE}/${id}/category-margins`, json('PUT', { margins }));
+  },
+  volumeDiscounts(id: string) {
+    return apiFetch<VolumeDiscount[]>(`${BASE}/${id}/volume-discounts`);
+  },
+  addVolumeDiscount(id: string, payload: VolumeDiscountInput) {
+    return apiFetch<VolumeDiscount>(`${BASE}/${id}/volume-discounts`, json('POST', payload));
+  },
+  removeVolumeDiscount(scaleId: string) {
+    return apiFetch<void>(`${BASE}/volume-discounts/${scaleId}`, { method: 'DELETE' });
+  }
+};
+
+export const discountPoliciesApi = {
+  list() {
+    return apiFetch<RolePolicy[]>('/sales/discount-policies');
+  },
+  save(roleId: string, policy: DiscountPolicy) {
+    return apiFetch<RolePolicy>(`/sales/discount-policies/${roleId}`, json('PUT', policy));
+  },
+  mine() {
+    return apiFetch<DiscountPolicy>('/sales/my-discount-policy');
   }
 };

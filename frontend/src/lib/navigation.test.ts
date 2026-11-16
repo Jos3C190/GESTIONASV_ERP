@@ -54,6 +54,11 @@ describe('catalog navigation', () => {
     expect(routeTitle('/sales/price-lists/list-1')).toBe('Listas de precios');
     const labels = NAV_GROUPS.flatMap((group) => group.items).map((item) => item.label);
     expect(labels).not.toContain('Asignación de precios');
+    expect(itemByRoute('/sales/discount-policies')).toMatchObject({
+      label: 'Topes de descuento',
+      requiredPermission: 'sales_discounts:manage'
+    });
+    expect(routeTitle('/sales/discount-policies')).toBe('Topes de descuento');
   });
 
   it('exposes product categories with product read access', () => {
