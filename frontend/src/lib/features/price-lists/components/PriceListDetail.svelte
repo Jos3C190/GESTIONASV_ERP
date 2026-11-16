@@ -163,7 +163,7 @@
       >← Listas de precios</a
     >
     <div class="mt-1 flex flex-wrap items-center gap-2">
-      <h1 class="page-title-echo text-2xl font-bold tracking-tight text-foreground">
+      <h1 class="text-2xl font-bold tracking-tight text-foreground">
         {priceList?.name ?? 'Lista de precios'}
       </h1>
       {#if priceList?.is_default}<Badge variant="primary">Predeterminada</Badge>{/if}
