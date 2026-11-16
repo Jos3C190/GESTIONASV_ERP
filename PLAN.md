@@ -117,12 +117,12 @@ Fuente: D.L. 144 de 2024, reformado por el D.L. 659 de 2026. Los textos están e
   - Verificar con pruebas e2e: aislamiento entre empresas, permisos, auditoría, exportación y anonimización.
 - [x] **Paso 4: frontend.** La página «Datos personales» y el panel de consentimientos. Verificar con vitest.
 - [x] **Paso 5: semilla.** El aviso de privacidad inicial de Grupo Lorena, publicado.
-- [ ] **Paso 6: documentación.** `docs/api.md`, `docs/database-schema.md` y el manual.
+- [x] **Paso 6: documentación.** `docs/api.md`, `docs/database-schema.md` y el manual.
 - [ ] **Paso 7: verificación y PR.** Correr la batería completa, revisar en el navegador y abrir el PR hacia `develop`.
 
 ## Estado actual
 
-- **Paso en curso**: 6 (documentación). La semilla del aviso es el paso de seguimiento `seed.grupo_lorena.privacy_notice` (`backend/seed/seed_grupo_lorena_privacy.py`); no republica si ya hay aviso. El frontend está en `lib/features/privacy` y la ruta `/privacy`. En pruebas, los correos con dominio `.test` los rechaza `EmailStr`: usar `example.com`. En vitest, un `<select bind:value>` dentro de un modal no tomó el cambio: usar `value` + `onchange`.
+- **Paso en curso**: 7 (verificación y PR). Documentación en `docs/api.md`, `docs/database-schema.md` §31 y `docs/ers-v1/manual-datos-personales.md`. La semilla del aviso es el paso de seguimiento `seed.grupo_lorena.privacy_notice` (`backend/seed/seed_grupo_lorena_privacy.py`); no republica si ya hay aviso. El frontend está en `lib/features/privacy` y la ruta `/privacy`. En pruebas, los correos con dominio `.test` los rechaza `EmailStr`: usar `example.com`. En vitest, un `<select bind:value>` dentro de un modal no tomó el cambio: usar `value` + `onchange`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.
