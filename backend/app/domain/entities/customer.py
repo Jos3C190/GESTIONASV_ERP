@@ -224,6 +224,7 @@ class Customer:
     updated_at: datetime
     delivery_addresses: tuple[DeliveryAddress, ...] = field(default=())
     seller_name: str | None = None
+    anonymized_at: datetime | None = None
 
     @property
     def tax_credit_missing(self) -> list[str]:
@@ -263,6 +264,12 @@ def receivable_documents(draft: CustomerDraft, address: CustomerAddress) -> list
 
 
 def require_editable(customer: Customer) -> None:
+    if customer.anonymized_at is not None:
+        raise _rule(
+            "El cliente fue anonimizado por una solicitud de cancelación u olvido; sus datos "
+            "ya no se editan ni se reactiva.",
+            "customer_anonymized_locked",
+        )
     if customer.is_generic:
         raise _rule(
             "El cliente «Consumidor final» de la sucursal no se edita ni se desactiva.",

@@ -112,7 +112,7 @@ Fuente: D.L. 144 de 2024, reformado por el D.L. 659 de 2026. Los textos están e
   - Días hábiles con los asuetos, incluida la Semana Santa calculada.
   - Plazos, transiciones de estado de las solicitudes, plantilla y elementos del aviso, finalidades de consentimiento y reglas de las vulneraciones.
   - Verificar con pruebas unitarias.
-- [ ] **Paso 3: repositorio, casos de uso y API.**
+- [x] **Paso 3: repositorio, casos de uso y API.** (`tests/e2e/test_privacy.py`; el cliente anonimizado expone `anonymized_at` y no se edita ni se reactiva)
   - `/privacy/...` y `/customers/{id}/consents`.
   - Verificar con pruebas e2e: aislamiento entre empresas, permisos, auditoría, exportación y anonimización.
 - [ ] **Paso 4: frontend.** La página «Datos personales» y el panel de consentimientos. Verificar con vitest.
@@ -122,7 +122,7 @@ Fuente: D.L. 144 de 2024, reformado por el D.L. 659 de 2026. Los textos están e
 
 ## Estado actual
 
-- **Paso en curso**: 3 (repositorio, casos de uso y API).
+- **Paso en curso**: 4 (frontend). En pruebas, los correos con dominio `.test` los rechaza `EmailStr`: usar `example.com`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.

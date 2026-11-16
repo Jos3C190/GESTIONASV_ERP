@@ -119,6 +119,7 @@ class CustomerOut(BaseModel):
     credit_limit: Decimal | None
     seller_employee_id: uuid.UUID | None
     seller_name: str | None
+    anonymized_at: datetime | None
     is_active: bool
     is_generic: bool
     branch_id: uuid.UUID | None

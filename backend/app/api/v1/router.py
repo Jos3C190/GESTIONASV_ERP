@@ -54,6 +54,7 @@ from app.api.v1.routers import (
     media,
     operational_context,
     organization,
+    privacy,
     product_fiscal,
     product_master,
     purchase_consolidations,
@@ -131,6 +132,7 @@ api_router.include_router(expense_types.router, prefix="/api/v1")
 api_router.include_router(fiscal.router, prefix="/api/v1")
 api_router.include_router(customers.router, prefix="/api/v1")
 api_router.include_router(product_fiscal.router, prefix="/api/v1")
+api_router.include_router(privacy.router, prefix="/api/v1")
 api_router.include_router(purchase_orders.router, prefix="/api/v1")
 api_router.include_router(purchases.order_router, prefix="/api/v1")
 api_router.include_router(purchases.router, prefix="/api/v1")
