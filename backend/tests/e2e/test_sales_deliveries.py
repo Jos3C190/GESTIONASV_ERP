@@ -319,7 +319,7 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
     )
 
     customer = await e2e_client.post(
-        "/api/v1/sales/customers",
+        "/api/v1/customers",
         headers=headers,
         json={"code": f"B07-{uuid.uuid4().hex[:8]}", "name": "Cliente de prueba B07"},
     )

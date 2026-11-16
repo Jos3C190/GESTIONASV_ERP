@@ -13,6 +13,7 @@ from app.api.v1.routers import (
     auth,
     branch_product_demand,
     catalog,
+    customers,
     dashboard,
     departments,
     document_categories,
@@ -127,6 +128,7 @@ api_router.include_router(catalog.router, prefix="/api/v1")
 api_router.include_router(product_master.router, prefix="/api/v1")
 api_router.include_router(expense_types.router, prefix="/api/v1")
 api_router.include_router(fiscal.router, prefix="/api/v1")
+api_router.include_router(customers.router, prefix="/api/v1")
 api_router.include_router(purchase_orders.router, prefix="/api/v1")
 api_router.include_router(purchases.order_router, prefix="/api/v1")
 api_router.include_router(purchases.router, prefix="/api/v1")
