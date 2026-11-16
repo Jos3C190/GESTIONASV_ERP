@@ -5,20 +5,35 @@ import { confirmation } from '$lib/stores/confirmation.svelte';
 import SalesQuotationDetail from './SalesQuotationDetail.svelte';
 import ConfirmActionDialog from '$lib/components/ui/ConfirmActionDialog.svelte';
 
-const { salesApi } = vi.hoisted(() => ({ salesApi: { quotation: vi.fn(), confirmQuotation: vi.fn() } }));
+const { salesApi } = vi.hoisted(() => ({
+  salesApi: { quotation: vi.fn(), confirmQuotation: vi.fn() }
+}));
 vi.mock('$lib/api/sales', () => ({ salesApi }));
 
 const draft = {
-  id: 'quote-ui', code: 'CV-UI', status: 'draft', version: 1, customer_name: 'Cliente ficticio',
-  customer_code: 'DEMO', quotation_date: '2026-10-20', valid_until: '2026-10-27', currency: 'USD',
-  total: '80', converted: false, lines: [], notes: null, branch_id: 'branch-1'
+  id: 'quote-ui',
+  code: 'CV-UI',
+  status: 'draft',
+  version: 1,
+  customer_name: 'Cliente ficticio',
+  customer_code: 'DEMO',
+  quotation_date: '2026-10-20',
+  valid_until: '2026-10-27',
+  currency: 'USD',
+  total: '80',
+  converted: false,
+  lines: [],
+  notes: null,
+  branch_id: 'branch-1'
 };
 
 beforeEach(() => {
   confirmation.reset();
   permissions.set(['sales_quotations:confirm', 'sales_quotations:manage'], false);
   salesApi.quotation.mockReset().mockResolvedValue(draft);
-  salesApi.confirmQuotation.mockReset().mockResolvedValue({ ...draft, status: 'confirmed', version: 2 });
+  salesApi.confirmQuotation
+    .mockReset()
+    .mockResolvedValue({ ...draft, status: 'confirmed', version: 2 });
 });
 
 it('cancelar el diálogo conserva el borrador y confirmar lo envía una sola vez', async () => {

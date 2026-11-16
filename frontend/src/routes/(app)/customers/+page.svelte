@@ -1,5 +1,9 @@
 <script lang="ts">
-  import SalesCustomers from '$lib/features/sales/components/SalesCustomers.svelte';
+  import CustomerList from '$lib/features/customers/components/CustomerList.svelte';
 </script>
 
-<SalesCustomers />
+<svelte:head>
+  <title>Clientes | GestionaSV</title>
+</svelte:head>
+
+<CustomerList />

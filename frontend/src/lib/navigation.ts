@@ -134,13 +134,6 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Compras',
     items: [
       {
-        label: 'Clientes',
-        icon: ICONS.clients,
-        route: '/customers',
-        implemented: true,
-        requiredPermission: 'sales_customers:read'
-      },
-      {
         label: 'Proveedores',
         icon: ICONS.suppliers,
         route: '/suppliers',
@@ -283,6 +276,13 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Ventas',
     items: [
+      {
+        label: 'Clientes',
+        icon: ICONS.clients,
+        route: '/customers',
+        implemented: true,
+        requiredPermission: 'sales_customers:read'
+      },
       {
         label: 'Cotizaciones de venta',
         icon: ICONS.salesQuotes,
