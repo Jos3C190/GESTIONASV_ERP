@@ -85,3 +85,7 @@ frontend/tmp-labels/
 frontend/tmp-reports/
 /tmp/
 frontend/tmp-retaceo-automatic/
+
+# ===== AI agents (local) =====
+.claude/worktrees/
+.claude/settings.local.json
