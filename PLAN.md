@@ -69,7 +69,7 @@ Resultado verificable: dos empresas configuradas como emisores distintos, sin da
     - las tablas `company_fiscal_profiles`, `company_economic_activities`, `fiscal_establishments`, `fiscal_points_of_sale` y `company_dte_document_types`.
   - Modelos en `backend/app/infrastructure/models/fiscal.py`, más los cambios de geografía en `organization.py`.
   - Verificar que `alembic upgrade head`, `downgrade -1` y `upgrade` pasan sin errores. Agregar la prueba `tests/integration/test_fiscal_migration.py`.
-- [ ] **Paso 3: dominio.**
+- [x] **Paso 3: dominio.**
   - `backend/app/domain/entities/fiscal.py` contiene las reglas puras: códigos de establecimiento y de punto de venta, tipos, habilitación según el modo y requisitos para pasar a producción.
   - `backend/app/domain/ports/fiscal_repository.py` define el puerto.
   - Verificar con `tests/unit/test_fiscal_domain.py`.
@@ -107,7 +107,7 @@ Resultado verificable: dos empresas configuradas como emisores distintos, sin da
 
 ## Estado actual
 
-- **Paso en curso**: 3 (dominio). Pasos 1 y 2 listos; los permisos `fiscal_settings:*` ya están en `rbac/catalogue.py` (la semilla de pruebas toma los roles de ahí, no de la migración). Paso 1: CAT-019 tiene 774 códigos (las 885 filas del Excel incluyen títulos de sector). El generador se ejecuta en el contenedor: `docker compose cp <xlsx> backend:/tmp/catalogos.xlsx` y `uv run python scripts/generate_hacienda_catalogs.py /tmp/catalogos.xlsx`, luego `ruff format`.
+- **Paso en curso**: 4 (repositorio y casos de uso). Pasos 1 a 3 listos; el dominio usa `BusinessRuleError` (422) de `app.core.exceptions` y define los modelos de lectura (FiscalProfile, Establishment, etc.) que comparten puerto, casos de uso y API; los permisos `fiscal_settings:*` ya están en `rbac/catalogue.py` (la semilla de pruebas toma los roles de ahí, no de la migración). Paso 1: CAT-019 tiene 774 códigos (las 885 filas del Excel incluyen títulos de sector). El generador se ejecuta en el contenedor: `docker compose cp <xlsx> backend:/tmp/catalogos.xlsx` y `uv run python scripts/generate_hacienda_catalogs.py /tmp/catalogos.xlsx`, luego `ruff format`.
 - **Herramientas**:
   - Los datos crudos de los catálogos, ya extraídos, están en el scratchpad de la sesión: `cats.json` y `geo_map.json`. Si se pierden, el paso 1 los regenera con el script a partir del Excel.
   - El Excel se lee con zipfile y XML, porque no hay openpyxl.
