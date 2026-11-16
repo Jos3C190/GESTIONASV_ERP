@@ -4,13 +4,15 @@
   import FiscalDocumentsPanel from '$lib/features/fiscal/components/FiscalDocumentsPanel.svelte';
   import FiscalEstablishmentsPanel from '$lib/features/fiscal/components/FiscalEstablishmentsPanel.svelte';
   import FiscalProfilePanel from '$lib/features/fiscal/components/FiscalProfilePanel.svelte';
+  import FiscalUnitsPanel from '$lib/features/fiscal/components/FiscalUnitsPanel.svelte';
   import { permissions } from '$lib/stores/permissions.svelte';
 
   const TABS = [
     { id: 'emisor', label: 'Emisor' },
     { id: 'actividades', label: 'Actividades' },
     { id: 'establecimientos', label: 'Establecimientos' },
-    { id: 'documentos', label: 'Documentos' }
+    { id: 'documentos', label: 'Documentos' },
+    { id: 'unidades', label: 'Unidades' }
   ];
 
   let active = $state('emisor');
@@ -47,8 +49,10 @@
       <FiscalActivitiesPanel {canManage} />
     {:else if active === 'establecimientos'}
       <FiscalEstablishmentsPanel {canManage} />
-    {:else}
+    {:else if active === 'documentos'}
       <FiscalDocumentsPanel {canManage} />
+    {:else}
+      <FiscalUnitsPanel {canManage} />
     {/if}
   </div>
 {/if}

@@ -71,7 +71,7 @@ Queda fuera de V1c:
     - los esquemas;
     - el permiso en `rbac/catalogue.py`.
   - Verificar con las pruebas de integración y e2e: aislamiento entre empresas, permisos y auditoría.
-- [ ] **Paso 4: frontend.**
+- [x] **Paso 4: frontend.**
   - La tarjeta y el modal en la ficha del producto, y la pestaña de unidades en Configuración fiscal.
   - Verificar con vitest.
 - [ ] **Paso 5: semilla.** Clasificación de los productos de Grupo Lorena: gravados, salvo lo que el usuario indique. Debe poder reejecutarse.
@@ -83,7 +83,7 @@ Queda fuera de V1c:
 
 ## Estado actual
 
-- **Paso en curso**: 4 (frontend). Rutas: `/product-fiscal/options` (no bajo `/products/...` porque `/products/{product_id}` es entero y atraparía la ruta), `/products/{id}/fiscal` y `/fiscal/units`. Un trigger habilita las unidades globales al crear una empresa, sin código guardado. Las unidades que una empresa habilite después quedan con `hacienda_unit_code` vacío y usan la sugerencia del dominio.
+- **Paso en curso**: 5 (semilla). Rutas: `/product-fiscal/options` (no bajo `/products/...` porque `/products/{product_id}` es entero y atraparía la ruta), `/products/{id}/fiscal` y `/fiscal/units`. Un trigger habilita las unidades globales al crear una empresa, sin código guardado. Las unidades que una empresa habilite después quedan con `hacienda_unit_code` vacío y usan la sugerencia del dominio.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.

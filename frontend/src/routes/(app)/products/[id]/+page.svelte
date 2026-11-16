@@ -9,6 +9,7 @@
   import Card from '$lib/components/ui/Card.svelte';
   import PackagingManager from '$lib/features/inventory/components/PackagingManager.svelte';
   import ProductIdentifiersDisplay from '$lib/features/products/components/ProductIdentifiersDisplay.svelte';
+  import ProductFiscalCard from '$lib/features/products/components/ProductFiscalCard.svelte';
   import { supplierDisplayName } from '$lib/features/products/supplier-display';
 
   let product = $state<Product | null>(null);
@@ -344,6 +345,10 @@
           description="Códigos propios de la unidad base del producto. Las variantes mantienen sus identificadores por separado."
         />
       </Card>
+
+      {#key product.id_product}
+        <ProductFiscalCard productId={product.id_product} />
+      {/key}
 
       <div class="grid gap-5 lg:grid-cols-2">
         <Card class="p-6">
