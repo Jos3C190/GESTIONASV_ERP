@@ -7,9 +7,11 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
+    ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
@@ -18,6 +20,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -26,6 +29,12 @@ from app.infrastructure.db.base import Base, TimestampMixin, UUIDPKMixin
 
 
 class SalesCustomerModel(UUIDPKMixin, TimestampMixin, Base):
+    """Cliente con identidad fiscal (revisión 0119).
+
+    La base garantiza formatos y combinaciones; los requisitos completos del crédito
+    fiscal los calcula el dominio (``app.domain.entities.customer``).
+    """
+
     __tablename__ = "sales_customers"
 
     company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
@@ -34,6 +43,37 @@ class SalesCustomerModel(UUIDPKMixin, TimestampMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(40))
     email: Mapped[str | None] = mapped_column(String(320))
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default="true")
+    customer_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="final_consumer"
+    )
+    taxpayer_category: Mapped[str | None] = mapped_column(String(16))
+    is_withholding_agent: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    person_type: Mapped[str] = mapped_column(String(1), nullable=False, server_default="1")
+    commercial_name: Mapped[str | None] = mapped_column(String(200))
+    document_type: Mapped[str | None] = mapped_column(String(2))
+    document_number: Mapped[str | None] = mapped_column(String(20))
+    nrc: Mapped[str | None] = mapped_column(String(8))
+    activity_code: Mapped[str | None] = mapped_column(String(6))
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("geographic_departments.id", ondelete="RESTRICT")
+    )
+    municipality_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("municipalities.id", ondelete="RESTRICT")
+    )
+    district_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("districts.id", ondelete="RESTRICT")
+    )
+    address_line: Mapped[str | None] = mapped_column(String(200))
+    country_code: Mapped[str | None] = mapped_column(String(4))
+    credit_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    credit_limit: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    seller_employee_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL")
+    )
+    is_generic: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     created_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     updated_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
 
@@ -52,8 +92,140 @@ class SalesCustomerModel(UUIDPKMixin, TimestampMixin, Base):
             ondelete="RESTRICT",
             name="fk_sales_customers_updated_by_company",
         ),
+        ForeignKeyConstraint(
+            ["branch_id", "company_id"],
+            ["branches.id", "branches.company_id"],
+            ondelete="RESTRICT",
+            name="fk_sales_customers_generic_branch",
+        ),
+        CheckConstraint(
+            "customer_type IN ('final_consumer','taxpayer','foreign')",
+            name="ck_sales_customers_type",
+        ),
+        CheckConstraint(
+            "(customer_type = 'taxpayer' AND taxpayer_category IS NOT NULL "
+            "AND taxpayer_category IN ('large','medium','other')) "
+            "OR (customer_type <> 'taxpayer' AND taxpayer_category IS NULL)",
+            name="ck_sales_customers_taxpayer_category",
+        ),
+        CheckConstraint("person_type IN ('1','2')", name="ck_sales_customers_person_type"),
+        CheckConstraint(
+            "(document_type IS NULL) = (document_number IS NULL) "
+            "AND (document_type IS NULL OR document_type IN ('36','13','02','03','37')) "
+            "AND (document_number IS NULL OR char_length(btrim(document_number)) >= 3)",
+            name="ck_sales_customers_document",
+        ),
+        CheckConstraint("nrc IS NULL OR nrc ~ '^[0-9]{2,8}$'", name="ck_sales_customers_nrc"),
+        CheckConstraint(
+            "activity_code IS NULL OR activity_code ~ '^[0-9]{5,6}$'",
+            name="ck_sales_customers_activity",
+        ),
+        CheckConstraint(
+            "(department_id IS NULL) = (municipality_id IS NULL) "
+            "AND (municipality_id IS NULL) = (district_id IS NULL)",
+            name="ck_sales_customers_geography",
+        ),
+        CheckConstraint(
+            "(customer_type = 'foreign') = (country_code IS NOT NULL) "
+            "AND (customer_type <> 'foreign' OR department_id IS NULL)",
+            name="ck_sales_customers_foreign",
+        ),
+        CheckConstraint(
+            "credit_days BETWEEN 0 AND 365 AND (credit_limit IS NULL OR credit_limit >= 0)",
+            name="ck_sales_customers_credit",
+        ),
+        CheckConstraint(
+            "is_generic = (branch_id IS NOT NULL) "
+            "AND (NOT is_generic OR (customer_type = 'final_consumer' "
+            "AND document_type IS NULL AND nrc IS NULL))",
+            name="ck_sales_customers_generic",
+        ),
         Index("uq_sales_customers_company_code", "company_id", func.lower(code), unique=True),
         Index("ix_sales_customers_company_active_name", "company_id", "is_active", "name"),
+        Index(
+            "uq_sales_customers_generic_branch",
+            "company_id",
+            "branch_id",
+            unique=True,
+            postgresql_where=text("is_generic"),
+        ),
+        Index(
+            "uq_sales_customers_document",
+            "company_id",
+            "document_type",
+            "document_number",
+            unique=True,
+            postgresql_where=text("document_number IS NOT NULL"),
+        ),
+        Index(
+            "uq_sales_customers_nrc",
+            "company_id",
+            "nrc",
+            unique=True,
+            postgresql_where=text("nrc IS NOT NULL"),
+        ),
+        Index("ix_sales_customers_company_type", "company_id", "customer_type", "is_active"),
+    )
+
+
+class SalesCustomerDeliveryAddressModel(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "sales_customer_delivery_addresses"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    customer_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    label: Mapped[str] = mapped_column(String(80), nullable=False)
+    address_line: Mapped[str] = mapped_column(String(200), nullable=False)
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("geographic_departments.id", ondelete="RESTRICT")
+    )
+    municipality_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("municipalities.id", ondelete="RESTRICT")
+    )
+    district_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("districts.id", ondelete="RESTRICT")
+    )
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
+    contact_name: Mapped[str | None] = mapped_column(String(120))
+    phone: Mapped[str | None] = mapped_column(String(30))
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["company_id", "customer_id"],
+            ["sales_customers.company_id", "sales_customers.id"],
+            ondelete="CASCADE",
+            name="fk_sales_customer_delivery_addresses_customer",
+        ),
+        CheckConstraint(
+            "char_length(btrim(label)) >= 2", name="ck_sales_customer_delivery_addresses_label"
+        ),
+        CheckConstraint(
+            "char_length(btrim(address_line)) >= 3",
+            name="ck_sales_customer_delivery_addresses_line",
+        ),
+        CheckConstraint(
+            "(department_id IS NULL) = (municipality_id IS NULL) "
+            "AND (municipality_id IS NULL) = (district_id IS NULL)",
+            name="ck_sales_customer_delivery_addresses_geography",
+        ),
+        CheckConstraint(
+            "(latitude IS NULL) = (longitude IS NULL) "
+            "AND (latitude IS NULL OR latitude BETWEEN -90 AND 90) "
+            "AND (longitude IS NULL OR longitude BETWEEN -180 AND 180)",
+            name="ck_sales_customer_delivery_addresses_coordinates",
+        ),
+        CheckConstraint(
+            "NOT is_default OR is_active", name="ck_sales_customer_delivery_addresses_default"
+        ),
+        Index(
+            "uq_sales_customer_delivery_addresses_default",
+            "customer_id",
+            unique=True,
+            postgresql_where=text("is_default"),
+        ),
+        Index("ix_sales_customer_delivery_addresses_customer", "company_id", "customer_id"),
     )
 
 

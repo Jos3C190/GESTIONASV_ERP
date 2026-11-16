@@ -68,7 +68,7 @@ Queda fuera de V1b:
 
 ## Pasos
 
-- [ ] **Paso 1: migración `0119_fiscal_customers` y modelos.**
+- [x] **Paso 1: migración `0119_fiscal_customers` y modelos.**
   - La migración amplía `sales_customers` con sus columnas y checks, y crea `sales_customer_delivery_addresses`.
   - Verificar con upgrade, downgrade y upgrade, y con `tests/integration/test_customer_migration.py`.
 - [ ] **Paso 2: dominio.**
@@ -104,7 +104,7 @@ Queda fuera de V1b:
 
 ## Estado actual
 
-- **Paso en curso**: 1.
+- **Paso en curso**: 2 (dominio). En los checks, `IN (...)` con NULL da NULL y PostgreSQL lo acepta: exigir `IS NOT NULL` explícito.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería: el hook de pre-commit usa la misma base de pruebas.
