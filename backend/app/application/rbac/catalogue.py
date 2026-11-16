@@ -95,6 +95,7 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("products:identifiers", "Gestionar identificadores del producto", "products"),
     PermissionSpec("products:suppliers", "Gestionar proveedores del producto", "products"),
     PermissionSpec("products:lifecycle", "Cambiar el ciclo de vida del producto", "products"),
+    PermissionSpec("products:fiscal", "Gestionar la clasificación fiscal del producto", "products"),
     PermissionSpec("products:delete", "Eliminar productos lógicamente", "products"),
     PermissionSpec("products:restore", "Restaurar productos eliminados", "products"),
     PermissionSpec("product_categories:delete", "Eliminar categorías de productos", "products"),

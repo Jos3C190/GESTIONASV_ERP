@@ -188,7 +188,13 @@ class UnitModel(TimestampMixin, SoftDeleteMixin, Base):
 
 class CompanyUnitModel(TimestampMixin, Base):
     __tablename__ = "company_units"
-    __table_args__ = (Index("ix_company_units_company_enabled", "company_id", "is_enabled"),)
+    __table_args__ = (
+        Index("ix_company_units_company_enabled", "company_id", "is_enabled"),
+        CheckConstraint(
+            "hacienda_unit_code IS NULL OR hacienda_unit_code ~ '^[0-9]{1,2}$'",
+            name="ck_company_units_hacienda_unit_code",
+        ),
+    )
 
     company_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), primary_key=True
@@ -199,6 +205,8 @@ class CompanyUnitModel(TimestampMixin, Base):
     alias: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    #: Unidad de medida de Hacienda (CAT-014) de esta unidad en la empresa (revisión 0120).
+    hacienda_unit_code: Mapped[str | None] = mapped_column(String(2), nullable=True)
 
     unit: Mapped[UnitModel] = relationship("UnitModel")
 
@@ -248,6 +256,16 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     presentation: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
     product_kind: Mapped[str] = mapped_column(String(16), nullable=False, server_default="goods")
+    #: Clasificación fiscal (revisión 0120): gravado, exento o no sujeto.
+    tax_treatment: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="taxed", default="taxed"
+    )
+    #: Tipo de ítem del DTE (CAT-011); vacío se deriva de ``product_kind``.
+    dte_item_type: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    #: Tributos adicionales del producto (CAT-015, sin IVA 20 ni C3).
+    additional_tax_codes: Mapped[list[str]] = mapped_column(
+        ARRAY(String(4)), nullable=False, server_default=text("'{}'"), default=list
+    )
     lifecycle_status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="active"
     )
@@ -356,6 +374,21 @@ class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint("product_kind IN ('goods','service')", name="ck_products_product_kind"),
+        CheckConstraint(
+            "tax_treatment IN ('taxed','exempt','not_subject')", name="ck_products_tax_treatment"
+        ),
+        CheckConstraint(
+            "dte_item_type IS NULL OR dte_item_type IN ('1','2','3')",
+            name="ck_products_dte_item_type",
+        ),
+        CheckConstraint(
+            "tax_treatment = 'taxed' OR cardinality(additional_tax_codes) = 0",
+            name="ck_products_additional_taxes_taxed",
+        ),
+        CheckConstraint(
+            "NOT (additional_tax_codes && ARRAY['20','C3']::varchar(4)[])",
+            name="ck_products_additional_taxes_not_iva",
+        ),
         CheckConstraint(
             "variant_mode IN ('standalone','template')", name="ck_products_variant_mode"
         ),
