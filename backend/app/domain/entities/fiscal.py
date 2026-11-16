@@ -270,6 +270,25 @@ class Establishment:
 
 
 @dataclass(frozen=True, slots=True)
+class CompanyIdentity:
+    """Datos del emisor que viven en la ficha de la empresa."""
+
+    name: str
+    commercial_name: str
+    nit: str
+    nrc: str
+
+
+@dataclass(frozen=True, slots=True)
+class BranchOption:
+    id: uuid.UUID
+    name: str
+    code: str | None
+    is_headquarters: bool
+    establishment_id: uuid.UUID | None
+
+
+@dataclass(frozen=True, slots=True)
 class DocumentTypeSetting:
     document_type: str
     name: str

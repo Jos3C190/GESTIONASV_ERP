@@ -11,8 +11,10 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.domain.entities.fiscal import (
+    BranchOption,
     CatalogItem,
     CertificationStatus,
+    CompanyIdentity,
     DocumentTypeSetting,
     EconomicActivity,
     Establishment,
@@ -63,6 +65,8 @@ class FiscalRepository(Protocol):
     ) -> CatalogItem | None: ...
 
     # --- profile ---
+    async def company_identity(self, company_id: uuid.UUID) -> CompanyIdentity | None: ...
+
     async def get_profile(self, company_id: uuid.UUID) -> FiscalProfile: ...
 
     async def save_profile(
@@ -96,6 +100,8 @@ class FiscalRepository(Protocol):
     async def get_establishment(
         self, company_id: uuid.UUID, establishment_id: uuid.UUID
     ) -> Establishment | None: ...
+
+    async def branch_options(self, company_id: uuid.UUID) -> list[BranchOption]: ...
 
     async def branch_name(self, company_id: uuid.UUID, branch_id: uuid.UUID) -> str | None: ...
 

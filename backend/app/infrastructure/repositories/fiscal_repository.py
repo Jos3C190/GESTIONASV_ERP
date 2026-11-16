@@ -14,8 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.entities.fiscal import (
     ACTIVITY_CATALOG,
     DOCUMENT_TYPES,
+    BranchOption,
     CatalogItem,
     CertificationStatus,
+    CompanyIdentity,
     DocumentTypeSetting,
     EconomicActivity,
     Establishment,
@@ -117,6 +119,17 @@ class SqlAlchemyFiscalRepository:
         return _catalog_item(row) if row is not None and row.is_active else None
 
     # --- profile ---
+    async def company_identity(self, company_id: uuid.UUID) -> CompanyIdentity | None:
+        company = await self._session.get(Company, company_id)
+        if company is None or company.deleted_at is not None:
+            return None
+        return CompanyIdentity(
+            name=company.name,
+            commercial_name=company.commercial_name,
+            nit=company.nit,
+            nrc=company.nrc,
+        )
+
     async def get_profile(self, company_id: uuid.UUID) -> FiscalProfile:
         row = await self._session.get(CompanyFiscalProfileModel, company_id)
         if row is None:
@@ -390,6 +403,30 @@ class SqlAlchemyFiscalRepository:
                 points_of_sale=tuple(by_establishment.get(est.id, ())),
             )
             for est, branch, department, municipality, district, activity_code in rows
+        ]
+
+    async def branch_options(self, company_id: uuid.UUID) -> list[BranchOption]:
+        rows = (
+            await self._session.execute(
+                select(Branch, FiscalEstablishmentModel.id)
+                .outerjoin(
+                    FiscalEstablishmentModel,
+                    (FiscalEstablishmentModel.company_id == Branch.company_id)
+                    & (FiscalEstablishmentModel.branch_id == Branch.id),
+                )
+                .where(Branch.company_id == company_id, Branch.deleted_at.is_(None))
+                .order_by(Branch.is_headquarters.desc(), Branch.name)
+            )
+        ).all()
+        return [
+            BranchOption(
+                id=branch.id,
+                name=branch.name,
+                code=branch.code,
+                is_headquarters=branch.is_headquarters,
+                establishment_id=establishment_id,
+            )
+            for branch, establishment_id in rows
         ]
 
     async def branch_name(self, company_id: uuid.UUID, branch_id: uuid.UUID) -> str | None:

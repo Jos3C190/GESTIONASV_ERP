@@ -12,8 +12,10 @@ import uuid
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from app.domain.entities.fiscal import (
     ACTIVITY_CATALOG,
+    BranchOption,
     CatalogItem,
     CertificationStatus,
+    CompanyIdentity,
     DocumentTypeSetting,
     EconomicActivity,
     Establishment,
@@ -62,6 +64,12 @@ class FiscalSettingsUseCases:
         )
 
     # --- profile ---
+    async def company_identity(self, company_id: uuid.UUID) -> CompanyIdentity:
+        identity = await self._repo.company_identity(company_id)
+        if identity is None:
+            raise NotFoundError("No se encontró la empresa.", code="fiscal_company_not_found")
+        return identity
+
     async def get_profile(self, company_id: uuid.UUID) -> FiscalProfile:
         return await self._repo.get_profile(company_id)
 
@@ -143,6 +151,9 @@ class FiscalSettingsUseCases:
     # --- establishments ---
     async def list_establishments(self, company_id: uuid.UUID) -> list[Establishment]:
         return await self._repo.list_establishments(company_id)
+
+    async def branch_options(self, company_id: uuid.UUID) -> list[BranchOption]:
+        return await self._repo.branch_options(company_id)
 
     async def _establishment_or_404(
         self, company_id: uuid.UUID, establishment_id: uuid.UUID

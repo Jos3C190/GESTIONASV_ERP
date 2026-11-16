@@ -27,6 +27,7 @@ from app.application.documents import (
     DocumentRecordService,
     DocumentService,
 )
+from app.application.fiscal import FiscalSettingsUseCases
 from app.application.inventory import InventoryUseCases
 from app.application.inventory.kardex_read import InventoryKardexReadUseCases
 from app.application.password_policy import PasswordPolicy
@@ -94,6 +95,7 @@ from app.infrastructure.repositories import (
     SqlAlchemyRoleRepository,
     SqlAlchemyUserRepository,
 )
+from app.infrastructure.repositories.fiscal_repository import SqlAlchemyFiscalRepository
 from app.infrastructure.repositories.inventory_repository import SqlAlchemyInventoryRepository
 from app.infrastructure.repositories.purchase_consolidation_repository import (
     SqlAlchemyPurchaseConsolidationRepository,
@@ -144,6 +146,10 @@ def get_permission_repository(session: SessionDep) -> PermissionRepository:
 
 def get_purchase_order_repository(session: SessionDep) -> PurchaseOrderRepository:
     return SqlAlchemyPurchaseOrderRepository(session)
+
+
+def get_fiscal_settings_use_cases(session: SessionDep) -> FiscalSettingsUseCases:
+    return FiscalSettingsUseCases(SqlAlchemyFiscalRepository(session))
 
 
 def get_purchase_repository(session: SessionDep) -> PurchaseRepository:
