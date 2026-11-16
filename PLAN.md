@@ -1,98 +1,55 @@
-# Plan: Ventas V2a — Motor único de cálculo fiscal
+# Plan: subir el frontend a SvelteKit 3 (seguridad)
 
-Rama: `feature/ventas-v2a-motor-calculo`, desde `develop` (incluye V1a, V1b y V1c; V1d está en la PR #41).
-Fuente: `docs/plan-area-ventas-el-salvador.pdf`, secciones 3.2 (IVA), 3.3 (retención y percepción), 4.5 (reglas de cálculo), módulo 5.2 y bloque V2.
+Rama: `fix/sveltekit-3-security`, desde `develop` (incluye V2a, PR #42). La PR de V2b (#43) espera esta.
 
-## Decisiones del usuario (16/11/2026)
+## Motivo
 
-- V2 se divide en cinco sub-bloques, cada uno con su PR a `develop`:
-  - **V2a**: motor único de cálculo (este plan);
-  - **V2b**: listas de precios;
-  - **V2c**: descuentos con topes por rol y venta bajo costo;
-  - **V2d**: cotización rediseñada;
-  - **V2e**: pedido de venta que sustituye a la venta actual.
-- Las promociones (2×1, combos, precio por horario) van en V6, con la caja. V2 deja el motor listo para recibirlas.
-- La cotización y la venta actuales (B06) se rehacen en su lugar, con migración. Si hubiera datos en algún entorno, la migración se niega a seguir en lugar de perderlos. Entregas y devoluciones se adaptan.
+El CI de seguridad (Trivy, job «Dependencies and runtime images») falla en cualquier PR por la vulnerabilidad CVE-2026-128120 (GHSA-3r8g-jcqq-3p5j, severidad HIGH) en `@sveltejs/kit` 2.70.1, publicada el 13/11/2026.
 
-## Alcance de V2a
+- Afecta de 2.42.0 a 3.1.0 y solo se corrige en 3.1.1; la rama 2.x (2.70.4) no tiene parche.
+- El fallo solo se explota con las funciones remotas experimentales, que el proyecto no usa.
 
-Un solo motor calcula los montos fiscales de cualquier documento de venta. Lo usarán la cotización, el pedido, el punto de venta y el DTE. Este sub-bloque no tiene migración ni pantallas: entrega el motor y un endpoint para previsualizar el cálculo.
+**Decisión del usuario (16/11/2026)**: subir a SvelteKit 3 en lugar de documentar una excepción en Trivy.
 
-Resultado verificable:
-- el mismo producto da $1.13 con IVA incluido en la factura y $1.00 + $0.13 en el crédito fiscal (cuadro 1 del plan);
-- el ejemplo oficial de crédito fiscal con descuento global y retención (Manual Funcional, cap. XVIII) da exactamente los mismos montos.
+## Lo que exige SvelteKit 3 (guía oficial «Migrating to SvelteKit 3»)
 
-## Hechos verificados
-
-- **Esquemas oficiales** (`svfe-json-schemas`; `fe-f-v2` y `fe-ccf-v4`):
-  - los montos por línea admiten 8 decimales (`multipleOf 1e-08`) y los del resumen, 2;
-  - la factura lleva `ivaItem` por línea y `totalIva` en el resumen;
-  - el crédito fiscal lleva el IVA en `resumen.tributos` (código 20), más `ivaPerci` e `ivaRete`.
-- **Redondeo y holgura** (Manual Funcional, cap. XXI): media hacia arriba, en el 8.º decimal en las líneas y en el 2.º en el resumen. Hacienda tolera $0.01 en cada campo del resumen.
-- **Descuentos** (cap. XVIII):
-  - el descuento por ítem se resta de precio × cantidad;
-  - el descuento global va por naturaleza (gravada, exenta, no sujeta) en el resumen;
-  - `totalDescu` suma ambos y es informativo.
-- **Ejemplo oficial de crédito fiscal**: gravadas $775.00, descuento global gravado $77.50 → subtotal $697.50.
-  - IVA: 697.50 × 0.13 = 90.675 → $90.68.
-  - Retención: 1 % = $6.98.
-  - Monto total de la operación: $697.50 + $90.68 − $6.98 = $781.20.
-- **Lo que ya existe en el ERP**:
-  - categoría del emisor (`large`, `medium`, `other`) en el perfil fiscal (V1a);
-  - del cliente: categoría y si es agente de retención (V1b);
-  - del producto: tratamiento de IVA, tipo de ítem y tributos adicionales (V1c);
-  - documentos que puede recibir cada cliente (`receivable_documents`) y documentos habilitados por empresa (V1a).
-- No existe ningún precio de producto en el ERP: «Asignación de precios» es un marcador del menú. Lo resuelve V2b.
-
-## Reglas del motor
-
-- **Documentos**: factura (01) y comprobante de crédito fiscal (03). Exportación y notas vienen con el DTE (V3 y V4).
-- **Precio de cada línea**:
-  - llega con la marca `price_includes_vat`;
-  - el motor lo lleva a la forma del documento: con IVA en la factura y sin IVA en el crédito fiscal;
-  - convierte con ÷ 1.13 o × 1.13, redondeando a 8 decimales;
-  - el precio de una línea exenta o no sujeta nunca lleva IVA.
-- **Venta por línea** = cantidad × precio − descuento por ítem, a 8 decimales. Va en `venta_gravada`, `venta_exenta` o `venta_no_sujeta` según el producto.
-- **IVA**:
-  - Factura: `iva_item` = venta gravada − venta gravada ÷ 1.13, por línea. En el resumen, `total_iva` se calcula sobre la gravada neta del descuento global.
-  - Crédito fiscal: IVA = (gravada − descuento global gravado) × 0.13, redondeado a 2 decimales.
-- **Retención 1 %** (CT art. 162):
-  - aplica si el cliente es gran contribuyente o agente de retención, el emisor no es gran contribuyente y la gravada neta sin IVA llega a $100;
-  - la base es la gravada neta sin IVA;
-  - se resta del monto total.
-- **Percepción 1 %** (CT art. 163):
-  - solo en el crédito fiscal;
-  - aplica si el emisor es gran contribuyente, el cliente es contribuyente sin esa categoría y la base llega a $100;
-  - la base es la gravada neta de las líneas de bienes (tipo de ítem 1 o 3);
-  - se suma al total.
-- **Cuadre**: el descuento global de cada naturaleza no puede superar su total.
-- **Tributos adicionales**: un producto con tributos adicionales (FOVIAL, COTRANS, etc.) se rechaza con un error claro, porque sus tasas y bases no son el 13 %. Quedan para cuando una empresa los necesite.
-- **Total en letras**: en español y en mayúsculas, por ejemplo «CIENTO TRECE 50/100 DÓLARES».
+- Node 22.17 o superior (la imagen usa `NODE_VERSION=20`), TypeScript 6, Svelte 5.57.1, Vite 8.0.12 y `@sveltejs/vite-plugin-svelte` 7. Los adaptadores pasan a node 6, auto 8 y vercel 7.
+- `svelte.config.js` desaparece: sus opciones van al plugin `sveltekit()` en `vite.config.ts`.
+- `$lib` pasa a `#lib`, declarado en `imports` de `package.json` y con extensión en los imports. Hay 516 archivos afectados.
+- `$app/environment` pasa a `$app/env` (14 archivos).
+- `$env/...` queda en desuso a favor de `$app/env/public` y `$app/env/private` (3 archivos).
+- `goto`:
+  - `keepFocus` + `noScroll` pasan a `reset: false`, y `replaceState` a `replace`;
+  - `replaceState()` queda en desuso (8 archivos);
+  - `goto` rechaza URL externas.
+- Errores: el segundo argumento de `error()` debe ser un texto. `isHttpError`/`isRedirect` en lugar de `instanceof` sobre clases internas (6 archivos importan `@sveltejs/kit`).
+- La configuración de tsconfig extiende `$app/tsconfig`.
+- Hay un codemod oficial: `npx sv migrate sveltekit-3`.
 
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [x] **Paso 1: dominio.**
-  - Crear `backend/app/domain/entities/sales_tax.py` con el motor puro y `amount_in_words`.
-  - Verificar con pruebas unitarias: cuadro 1, el ejemplo oficial, exentos y no sujetos, retención y percepción en su umbral y debajo de él, conversión de precio, redondeo con 5 en el 9.º decimal y errores.
-- [x] **Paso 2: aplicación y API.**
-  - Caso de uso que arma la entrada con el emisor, el cliente y la clasificación de cada producto, y valida que el documento lo pueda recibir el cliente y esté habilitado en la empresa.
-  - Endpoint `POST /sales/tax-calculation`.
-  - Verificar con pruebas e2e: permisos, empresa aislada, documento no habilitado o no permitido al cliente, producto con tributos adicionales.
-- [x] **Paso 3: documentación.** `docs/api.md` y un manual del cálculo en `docs/ers-v1/`.
-- [x] **Paso 4: verificación y PR.** Correr la batería completa y abrir el PR hacia `develop`.
+- [x] **Paso 1: Node 22 en la imagen.**
+  - `frontend/Dockerfile` con `NODE_VERSION=22`.
+  - Reconstruir el contenedor `frontend`.
+- [ ] **Paso 2: codemod y versiones.**
+  - Correr `npx sv migrate sveltekit-3` dentro del contenedor.
+  - Subir kit, adaptadores, vite, vite-plugin-svelte, svelte, typescript, svelte-check y vitest a versiones compatibles.
+  - Revisar el diff del codemod.
+- [ ] **Paso 3: lo que el codemod no resuelva.**
+  - Pasar `pnpm check`, `pnpm lint`, `pnpm test:unit --run` y `SVELTE_ADAPTER=node pnpm build`.
+- [ ] **Paso 4: verificación.**
+  - Escaneo Trivy local del repositorio sin la CVE.
+  - Batería completa.
+  - QA en el navegador: inicio de sesión, menú, una pantalla con formulario y una con `goto`.
+  - PR a `develop`.
+- [ ] **Paso 5: V2b.** Llevar `develop` a la rama de V2b para que su CI pase.
 
 ## Estado actual
 
-- **Paso en curso**: ninguno; V2a terminado y en PR hacia `develop`. Batería completa: backend 1,843 y frontend 1,134 pruebas en verde. Lo siguiente es V2b (listas de precios). Documentación en `docs/api.md` (Sales tax calculation) y `docs/ers-v1/manual-calculo-fiscal-ventas.md`. API en `routers/sales_tax.py` (`POST /sales/tax-calculation`, permiso `sales_quotations:read` o `sales:read`, sin auditoría porque no guarda); caso de uso en `application/sales_tax`; 5 pruebas e2e en `tests/e2e/test_sales_tax.py`. El motor está en `backend/app/domain/entities/sales_tax.py`, con 22 pruebas en `tests/unit/test_sales_tax.py`.
-- **Comandos**:
-  - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
-  - No hacer commits mientras corre la batería.
-  - Prettier solo se aplica a archivos nuevos o tocados.
-  - Los esquemas oficiales están en `D:\josec\Downloads\Documentacion DTE\svfe-json-schemas.zip`.
+- **Paso en curso**: 2. La imagen `frontend` ya está en Node 22.
 - **Reglas del usuario**:
   - Commits y PR sin Co-Authored-By ni «Generated with Claude Code».
   - PR hacia `develop`.
   - Ignorar el check de Vercel.
-  - Dentro de una empresa, la interfaz no menciona a otras empresas.
-  - En documentos compartidos, el servicio DTE de referencia se llama «proyecto de referencia».
+  - No hacer commits mientras corre la batería completa.

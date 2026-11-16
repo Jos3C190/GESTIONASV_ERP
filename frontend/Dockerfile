@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Frontend image — multi-stage. dev = vite dev server, prod = node adapter.
 
-ARG NODE_VERSION=20
+ARG NODE_VERSION=22
 
 # ---------------- base ----------------
 FROM node:${NODE_VERSION}-slim AS base
