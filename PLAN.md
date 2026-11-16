@@ -64,7 +64,7 @@ Resultado verificable:
 - [x] **Paso 1: migración `0122_sales_price_lists` y modelos.**
   - Tablas, columna del cliente, permisos, `btree_gist` y una guarda en el downgrade.
   - Verificar con una prueba de migración.
-- [ ] **Paso 2: dominio, repositorio, casos de uso y API.**
+- [x] **Paso 2: dominio, repositorio, casos de uso y API.**
   - CRUD de listas, fijar o anular precios con vigencia, historial, precios de una lista con búsqueda, resolución y lista del cliente.
   - Verificar con pruebas unitarias y e2e (permisos, aislamiento, traslapes, resolución).
 - [ ] **Paso 3: frontend.**
@@ -79,7 +79,7 @@ Resultado verificable:
 
 ## Estado actual
 
-- **Paso en curso**: 2 (dominio, repositorio, casos de uso y API). Migración `0122_sales_price_lists.py` y modelos en `models/sales_pricing.py`; el traslape de vigencias lo garantiza `ex_sales_price_list_items_overlap` (solo en la migración).
+- **Paso en curso**: 3 (frontend). Backend: `domain/entities/price_list.py`, `application/price_lists`, `repositories/price_list_repository.py`, `routers/price_lists.py` (rutas `/price-lists` y `/sales/prices/resolve`, registrado antes del router de ventas para que `/sales/{id}` no lo capture) y `price_list_id` en el cliente. Las pruebas e2e preparan un artículo de inventario porque la semilla de API no lo trae. Migración `0122_sales_price_lists.py` y modelos en `models/sales_pricing.py`; el traslape de vigencias lo garantiza `ex_sales_price_list_items_overlap` (solo en la migración).
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.

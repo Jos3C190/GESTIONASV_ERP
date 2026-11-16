@@ -34,6 +34,7 @@ from app.infrastructure.models.sales import (
     SalesCustomerDeliveryAddressModel,
     SalesCustomerModel,
 )
+from app.infrastructure.models.sales_pricing import SalesPriceListModel
 
 _CODE = re.compile(r"^CLI-(\d+)$")
 
@@ -70,6 +71,7 @@ def _draft(row: SalesCustomerModel) -> CustomerDraft:
         credit_days=row.credit_days,
         credit_limit=row.credit_limit,
         seller_employee_id=row.seller_employee_id,
+        price_list_id=row.price_list_id,
     )
 
 
@@ -122,6 +124,16 @@ class SqlAlchemyCustomerRepository:
         )
         return {id_: f"{first} {last}".strip() for id_, first, last in rows.tuples().all()}
 
+    async def _price_list_names(self, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+        if not ids:
+            return {}
+        rows = await self._session.execute(
+            select(SalesPriceListModel.id, SalesPriceListModel.name).where(
+                SalesPriceListModel.id.in_(ids)
+            )
+        )
+        return dict(rows.tuples().all())
+
     async def _hydrate(
         self, rows: list[SalesCustomerModel], *, with_delivery: bool
     ) -> list[Customer]:
@@ -157,6 +169,9 @@ class SqlAlchemyCustomerRepository:
         sellers = await self._seller_names(
             {r.seller_employee_id for r in rows if r.seller_employee_id}
         )
+        price_lists = await self._price_list_names(
+            {r.price_list_id for r in rows if r.price_list_id}
+        )
         by_customer: dict[uuid.UUID, list[DeliveryAddress]] = {}
         for item in delivery_rows:
             by_customer.setdefault(item.customer_id, []).append(
@@ -181,6 +196,7 @@ class SqlAlchemyCustomerRepository:
                 delivery_addresses=tuple(by_customer.get(row.id, ())),
                 seller_name=sellers.get(row.seller_employee_id) if row.seller_employee_id else None,
                 anonymized_at=row.anonymized_at,
+                price_list_name=price_lists.get(row.price_list_id) if row.price_list_id else None,
             )
             for row in rows
         ]
@@ -342,6 +358,13 @@ class SqlAlchemyCustomerRepository:
             Employee.deleted_at.is_(None),
         )
 
+    async def price_list_active(self, company_id: uuid.UUID, list_id: uuid.UUID) -> bool:
+        return await self._exists(
+            SalesPriceListModel.id == list_id,
+            SalesPriceListModel.company_id == company_id,
+            SalesPriceListModel.is_active.is_(True),
+        )
+
     async def seller_options(
         self, company_id: uuid.UUID, *, search: str | None, limit: int
     ) -> list[SellerOption]:
@@ -414,6 +437,7 @@ class SqlAlchemyCustomerRepository:
         row.credit_days = draft.credit_days
         row.credit_limit = draft.credit_limit
         row.seller_employee_id = draft.seller_employee_id
+        row.price_list_id = draft.price_list_id
 
     async def create_customer(
         self,

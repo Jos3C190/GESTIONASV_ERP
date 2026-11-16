@@ -87,6 +87,13 @@ class CustomerUseCases:
             raise NotFoundError(
                 "No se encontró ese vendedor en la empresa.", code="customer_seller_not_found"
             )
+        if draft.price_list_id is not None and not await self._repo.price_list_active(
+            company_id, draft.price_list_id
+        ):
+            raise BusinessRuleError(
+                "Esa lista de precios no existe en la empresa o está inactiva.",
+                code="customer_price_list_invalid",
+            )
         return draft
 
     async def create_customer(
