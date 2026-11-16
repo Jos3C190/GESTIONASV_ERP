@@ -1090,3 +1090,24 @@ Revision `0122` (revises `0121`). Enables `btree_gist`.
 
 **Downgrade** refuses while any price list exists. Covered by
 `backend/tests/integration/test_price_lists_migration.py`.
+
+## 33. Sales margins and discounts (0123)
+
+Revision `0123` (revises `0122`).
+
+- `sales_price_lists.target_margin_percent` (0–95, nullable): target margin on the price without
+  VAT.
+- `sales_price_list_category_margins`: target margin of a product category inside a list
+  (unique per list and category; composite foreign keys keep list and category in the company;
+  deleted with the list).
+- `sales_customers.discount_percent` (0–100, default 0): fixed customer discount.
+- `sales_volume_discounts`: volume tiers per list, product, variant, unit and `min_quantity`
+  (> 0) with `discount_percent` (> 0, ≤ 100) and validity. The exclusion constraint
+  `ex_sales_volume_discounts_overlap` forbids two tiers with the same key and minimum quantity
+  in force on the same day.
+- `sales_discount_policies`: per company and role, `max_line_discount_percent`,
+  `max_global_discount_percent` (0–100) and `can_sell_below_cost`.
+- Permissions `sales_costs:read` and `sales_discounts:manage`, granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while any category margin, tier, policy, customer discount or list
+target margin exists. Covered by `backend/tests/integration/test_sales_margins_migration.py`.

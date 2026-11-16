@@ -1947,3 +1947,33 @@ Error codes (`422` unless noted): `price_list_code_invalid`, `price_list_name_re
 `price_list_end_invalid`, `customer_price_list_invalid`; not found (404):
 `price_list_not_found`, `price_list_entry_not_found`, `price_list_product_not_sellable`,
 `branch_not_found`, `sales_customer_not_found`.
+
+## Sales margins and discounts (revision 0123, block V2c)
+
+Margin is measured on the price without VAT: `(price − cost) ÷ price`. The cost is the inventory
+average cost (it already includes the retaceo) × the unit factor. Suggested price without VAT =
+`cost ÷ (1 − target margin)`; ×1.13 for a list with VAT, rounded to the cent.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/price-lists/{id}/prices` | `price_lists:read` | Now also returns `cost`, `margin_percent`, `target_margin_percent`, `suggested_price`, `below_cost` and `below_target` — only for users with `sales_costs:read`; otherwise they are `null`/`false`. |
+| POST, PUT | `/price-lists`, `/price-lists/{id}` | `price_lists:manage` | Accept `target_margin_percent` (0–95, optional). |
+| GET | `/price-lists/categories` | `price_lists:read` | Product categories of the company. |
+| GET | `/price-lists/{id}/category-margins` | `price_lists:read` | Target margin per category inside the list. |
+| PUT | `/price-lists/{id}/category-margins` | `price_lists:manage` | Body: `margins` (`category_id`, `target_margin_percent`); replaces them. Audited as `price_list_category_margins`. |
+| GET | `/price-lists/{id}/volume-discounts` | `price_lists:read` | Volume tiers with `status`. |
+| POST | `/price-lists/{id}/volume-discounts` | `price_lists:manage` | Body: `product_id`, `variant_id`, `unit_id`, `min_quantity` (> 0), `discount_percent` (> 0, ≤ 100), `valid_from` (today by default). A new tier for the same product, unit and quantity closes the one in force the day before. Audited as `sales_volume_discount`. |
+| DELETE | `/price-lists/volume-discounts/{scale_id}` | `price_lists:manage` | Cancels a scheduled tier or ends a current one today. Returns 204. |
+| GET | `/sales/discount-policies` | `sales_discounts:manage` | Every role of the company with `max_line_discount_percent`, `max_global_discount_percent`, `can_sell_below_cost` and `configured`. |
+| PUT | `/sales/discount-policies/{role_id}` | `sales_discounts:manage` | Sets the limits of a role. Audited as `sales_discount_policy`. |
+| GET | `/sales/my-discount-policy` | `sales_quotations:read`, `sales:read` or `price_lists:read` | Effective limits of the current user: the maximum of their roles; none without policies; unlimited for superusers. |
+| POST | `/sales/discount-evaluation` | same as above | Body: optional `customer_id`, `branch_id`, `on`, `global_discount_percent`, and `lines` (`product_id`, `variant_id`, `unit_id`, `quantity`, optional `discount_percent`). Each line returns the resolved list price, the suggested discount (customer or volume, the larger one, never both added), the applied discount, `net_price`, `cost` and `margin_percent` (only with `sales_costs:read`), and `reasons` (`discount_above_limit`, `below_cost`) with Spanish messages. Also returns `global_reasons` and `requires_authorization`. |
+
+Customers gain `discount_percent` (0–100, default 0).
+
+Error codes (`422` unless noted): `sales_margin_target_invalid`, `sales_volume_quantity_invalid`,
+`sales_volume_percent_invalid`, `sales_volume_backdated`, `sales_volume_future_exists` (409),
+`sales_volume_expired`, `sales_policy_invalid`, `sales_discount_percent_invalid`,
+`customer_discount_invalid`, `price_list_unit_invalid`; not found (404):
+`price_list_category_not_found`, `sales_volume_not_found`, `sales_policy_role_not_found`,
+`sales_customer_not_found`.

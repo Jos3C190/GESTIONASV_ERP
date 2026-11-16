@@ -23,6 +23,8 @@ its next start:
 * the published privacy notice of the company (``seed_grupo_lorena_privacy``);
 * the «Mostrador» and «Mayoreo» price lists with their prices
   (``seed_grupo_lorena_price_lists``);
+* target margins, volume tiers, a customer discount and discount limits per role
+  (``seed_grupo_lorena_discounts``);
 * the demonstration operation (``seed_grupo_lorena_operations``), which creates
   purchase and inventory documents, only with ``SEED_DEMO_OPERATIONS=true`` and
   never when ``ENVIRONMENT=production``.
@@ -111,6 +113,12 @@ async def _price_lists() -> bool:
     return await seed_price_lists()
 
 
+async def _sales_discounts() -> bool:
+    from seed.seed_grupo_lorena_discounts import seed as seed_discounts
+
+    return await seed_discounts()
+
+
 async def _operations() -> bool:
     from seed.seed_grupo_lorena_operations import seed as seed_operations
 
@@ -135,6 +143,7 @@ FOLLOW_UPS: tuple[FollowUp, ...] = (
     FollowUp("seed.grupo_lorena.customers", "2026-11-16-v1", _customers),
     FollowUp("seed.grupo_lorena.privacy_notice", "2026-11-16-v1", _privacy_notice),
     FollowUp("seed.grupo_lorena.price_lists", "2026-11-16-v1", _price_lists),
+    FollowUp("seed.grupo_lorena.sales_discounts", "2026-11-16-v1", _sales_discounts),
     FollowUp("seed.grupo_lorena.operations", "2026-11-14-v1", _operations, demo_operations_enabled),
 )
 
