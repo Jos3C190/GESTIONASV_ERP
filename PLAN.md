@@ -72,7 +72,7 @@ Resultado verificable:
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [ ] **Paso 1: dominio.**
+- [x] **Paso 1: dominio.**
   - Crear `backend/app/domain/entities/sales_tax.py` con el motor puro y `amount_in_words`.
   - Verificar con pruebas unitarias: cuadro 1, el ejemplo oficial, exentos y no sujetos, retención y percepción en su umbral y debajo de él, conversión de precio, redondeo con 5 en el 9.º decimal y errores.
 - [ ] **Paso 2: aplicación y API.**
@@ -84,7 +84,7 @@ Resultado verificable:
 
 ## Estado actual
 
-- **Paso en curso**: 1 (dominio).
+- **Paso en curso**: 2 (aplicación y API). El motor está en `backend/app/domain/entities/sales_tax.py`, con 22 pruebas en `tests/unit/test_sales_tax.py`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.
