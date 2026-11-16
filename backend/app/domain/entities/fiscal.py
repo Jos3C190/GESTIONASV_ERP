@@ -131,6 +131,18 @@ def validate_activity_code(code: str) -> str:
     return normalized
 
 
+def dte_nit(value: str | None) -> str | None:
+    """NIT como lo pide el DTE: 14 o 9 dígitos, sin guiones. ``None`` si no es válido."""
+    digits = re.sub(r"[\s-]", "", value or "")
+    return digits if re.fullmatch(r"[0-9]{14}|[0-9]{9}", digits) else None
+
+
+def dte_nrc(value: str | None) -> str | None:
+    """NRC como lo pide el DTE: de 2 a 8 dígitos, sin guion. ``None`` si no es válido."""
+    digits = re.sub(r"[\s-]", "", value or "")
+    return digits if re.fullmatch(r"[0-9]{2,8}", digits) else None
+
+
 def require_document_type(document_type: str) -> str:
     if document_type not in DOCUMENT_TYPES:
         raise _rule(
@@ -168,9 +180,9 @@ def production_blockers(facts: IssuerFacts) -> list[str]:
     """Motivos, en español, por los que la empresa aún no puede emitir en producción."""
     reasons: list[str] = []
     if not facts.has_nit:
-        reasons.append("Registra el NIT de la empresa.")
+        reasons.append("Registra en la ficha de la empresa un NIT válido (14 o 9 dígitos).")
     if not facts.has_nrc:
-        reasons.append("Registra el NRC de la empresa.")
+        reasons.append("Registra en la ficha de la empresa un NRC válido (de 2 a 8 dígitos).")
     if not facts.has_primary_activity:
         reasons.append("Marca una actividad económica principal.")
     if facts.establishments_with_point_of_sale == 0:

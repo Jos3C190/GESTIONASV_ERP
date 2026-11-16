@@ -6,7 +6,6 @@
   import { fiscalApi } from '$lib/api/fiscal';
   import {
     CERTIFICATION_LABELS,
-    CERTIFICATION_TONES,
     EVENT_DOCUMENT_TYPES,
     formatFiscalDate
   } from '$lib/features/fiscal/labels';
@@ -120,14 +119,11 @@
                 <Badge variant="neutral">Evento</Badge>
               {/if}
             </p>
-            <p class="mt-0.5 text-xs text-foreground-muted">
-              <Badge variant={CERTIFICATION_TONES[item.certification_status]}>
-                {CERTIFICATION_LABELS[item.certification_status]}
-              </Badge>
-              {#if item.certified_at}
-                <span class="ml-1">desde el {formatFiscalDate(item.certified_at)}</span>
-              {/if}
-            </p>
+            {#if item.certified_at}
+              <p class="mt-1 text-xs text-success">
+                Pruebas aprobadas el {formatFiscalDate(item.certified_at)}
+              </p>
+            {/if}
             {#if rowError?.code === item.document_type}
               <p class="mt-2 text-sm text-danger" role="alert">{rowError.message}</p>
             {/if}

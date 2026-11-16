@@ -209,9 +209,20 @@
       <span class="font-mono text-foreground">DTE-01-S001P001-…</span>
     </p>
     {#if canManage}
-      <Button onclick={openCreate} disabled={loading || freeBranches.length === 0}>
-        Registrar establecimiento
-      </Button>
+      <div class="flex flex-col items-start gap-1 sm:items-end">
+        <Button
+          onclick={openCreate}
+          disabled={loading || freeBranches.length === 0}
+          describedby="est-register-help"
+        >
+          Registrar establecimiento
+        </Button>
+        {#if !loading && !loadError && freeBranches.length === 0 && establishments.length > 0}
+          <p id="est-register-help" class="text-xs text-foreground-muted">
+            Todas las sucursales ya son establecimientos.
+          </p>
+        {/if}
+      </div>
     {/if}
   </div>
 

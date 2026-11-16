@@ -50,12 +50,6 @@ export const CERTIFICATION_LABELS: Record<CertificationStatus, string> = {
   approved: 'Aprobado'
 };
 
-export const CERTIFICATION_TONES: Record<CertificationStatus, 'neutral' | 'warning' | 'success'> = {
-  pending: 'neutral',
-  in_progress: 'warning',
-  approved: 'success'
-};
-
 /** Códigos de CAT-002 que son eventos y no documentos de venta. */
 export const EVENT_DOCUMENT_TYPES = new Set(['17', '18']);
 

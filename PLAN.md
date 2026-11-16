@@ -114,7 +114,9 @@ Resultado verificable: dos empresas configuradas como emisores distintos, sin da
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`.
   - Migraciones: `docker compose exec -T backend uv run alembic upgrade head`.
+- **Revisión en el navegador (paso 10)**: el NRC de Grupo Lorena en la semilla es «Pendiente de verificación». Ahora el NIT (14 o 9 dígitos) y el NRC (2 a 8 dígitos), sin guiones, se validan con el formato del DTE antes de pasar a producción; el NRC real lo aporta la empresa. La sesión del navegador vive en memoria: navegar con el menú, sin recargar.
 - **Reglas del usuario**:
   - Commits y PR sin Co-Authored-By ni «Generated with Claude Code».
   - Ignorar el check de Vercel.
   - En documentos compartidos, el servicio de referencia se nombra «proyecto de referencia».
+  - Dentro de una empresa, los textos de la interfaz no mencionan a otras empresas (corrección del 2026-11-15).

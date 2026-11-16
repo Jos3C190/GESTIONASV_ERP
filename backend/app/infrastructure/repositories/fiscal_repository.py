@@ -29,6 +29,8 @@ from app.domain.entities.fiscal import (
     PersonType,
     PointOfSale,
     TaxpayerCategory,
+    dte_nit,
+    dte_nrc,
 )
 from app.domain.ports.fiscal_repository import (
     DocumentTypeValues,
@@ -205,8 +207,8 @@ class SqlAlchemyFiscalRepository:
             )
         ).all()
         return IssuerFacts(
-            has_nit=bool(company and company.nit.strip()),
-            has_nrc=bool(company and company.nrc.strip()),
+            has_nit=bool(company and dte_nit(company.nit)),
+            has_nrc=bool(company and dte_nrc(company.nrc)),
             has_primary_activity=bool(has_primary),
             establishments_with_point_of_sale=int(with_pos or 0),
             enabled_documents=len(documents),

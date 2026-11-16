@@ -44,8 +44,8 @@ async def _second_company(user_id: str) -> tuple[uuid.UUID, uuid.UUID]:
         other = Company(
             name=f"Otra emisora {suffix}, S.A. de C.V.",
             commercial_name=f"Otra emisora {suffix}",
-            nit=f"0614-{suffix}",
-            nrc=suffix[:6],
+            nit=f"{uuid.uuid4().int % 10**14:014d}",
+            nrc=f"{uuid.uuid4().int % 10**6:06d}",
             address="Emisor aislado",
             department_id=original.department_id,
             municipality_id=original.municipality_id,
@@ -115,6 +115,12 @@ async def test_catalogs_are_served_from_hacienda_version(e2e_client: AsyncClient
 
 async def test_issuer_configuration_flow_is_audited(e2e_client: AsyncClient) -> None:
     _, headers = await _login(e2e_client, superuser=True)
+    # La semilla deja el NRC «Pendiente de verificación»: no sirve para emitir.
+    async with async_session_factory() as session:
+        company = await session.get(Company, uuid.UUID(headers["X-Company-ID"]))
+        assert company is not None
+        company.nrc = "123456-7"
+        await session.commit()
     profile = await e2e_client.get(f"{BASE}/profile", headers=headers)
     assert profile.status_code == 200, profile.text
     assert profile.json()["configured"] is False

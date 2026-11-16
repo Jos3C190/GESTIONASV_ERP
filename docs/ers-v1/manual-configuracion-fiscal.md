@@ -4,8 +4,8 @@ Pantalla: **Ventas → Configuración fiscal** (`/sales/fiscal-settings`).
 Permisos: `fiscal_settings:read` para consultar y `fiscal_settings:manage` para cambiar.
 
 Aquí se configura con qué datos emite **la empresa activa** sus documentos tributarios
-electrónicos (DTE). Cada empresa es un emisor independiente: nada de lo que configures en
-una empresa se ve ni se usa en otra.
+electrónicos (DTE). La pantalla solo muestra la configuración de esa empresa; la interfaz
+no hace referencia a otras empresas.
 
 Todavía no se emiten documentos desde esta pantalla. Esta configuración es la base que usarán
 la facturación y el punto de venta en los bloques siguientes.
@@ -46,7 +46,7 @@ venta**. Sus códigos forman el número de control del documento: `DTE-01-S001P0
 
 - Cada sucursal puede ser solo un establecimiento. Al registrarlo, la pantalla sugiere el
   siguiente código libre del tipo elegido.
-- El código es único dentro de la empresa; otra empresa puede usar el mismo.
+- El código es único dentro de la empresa.
 - El DTE lleva la **dirección de la sucursal** donde se hizo la operación, con sus códigos de
   departamento, municipio y distrito de Hacienda. Si una sucursal no tiene esos códigos, la
   tarjeta lo avisa y la dirección se corrige en **Sucursales**.

@@ -79,8 +79,8 @@ async def _issuer(db: AsyncSession, actor: uuid.UUID, label: str) -> Issuer:
         id=uuid.uuid4(),
         name=f"{label} {suffix}, S.A. de C.V.",
         commercial_name=f"{label} {suffix}",
-        nit=f"0614-{suffix}",
-        nrc=f"{suffix[:6]}",
+        nit=f"{uuid.uuid4().int % 10**14:014d}",
+        nrc=f"{uuid.uuid4().int % 10**6:06d}",
         address="Colonia Escalón",
         department_id=department,
         municipality_id=municipality,
@@ -316,6 +316,7 @@ async def test_production_needs_a_ready_issuer_and_stays_ready(
     with pytest.raises(BusinessRuleError) as not_ready:
         await use_cases.update_profile(issuer.company_id, production, actor)
     assert not_ready.value.code == "fiscal_production_not_ready"
+    assert "NIT" not in not_ready.value.message  # el NIT y el NRC de la prueba son válidos
 
     establishment_id = await _make_ready(use_cases, issuer, actor)
     # En simulado se habilita sin certificar; para producción hay que aprobar las pruebas.

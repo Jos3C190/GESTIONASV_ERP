@@ -34,8 +34,8 @@
         Configuración fiscal
       </h1>
       <p class="mt-1 max-w-3xl text-sm text-foreground-muted">
-        Datos con los que esta empresa emite sus documentos tributarios electrónicos. Cada empresa
-        es un emisor independiente: lo que configures aquí no afecta a las demás.
+        Datos con los que la empresa emite sus documentos tributarios electrónicos: perfil de
+        emisor, actividades económicas, establecimientos con sus cajas y documentos habilitados.
       </p>
     </header>
 

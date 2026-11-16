@@ -10,6 +10,8 @@ from app.domain.entities.fiscal import (
     EstablishmentType,
     IssuerFacts,
     OperatingMode,
+    dte_nit,
+    dte_nrc,
     establishment_code,
     production_blockers,
     require_can_enable,
@@ -79,6 +81,15 @@ def test_activity_code_has_five_or_six_digits() -> None:
     for bad in ("1071", "1071A", "1234567"):
         with pytest.raises(BusinessRuleError):
             validate_activity_code(bad)
+
+
+def test_nit_and_nrc_follow_the_dte_format() -> None:
+    assert dte_nit("1217-060102-101-1") == "12170601021011"
+    assert dte_nit("06141234-5") is None
+    assert dte_nit("123456789") == "123456789"
+    assert dte_nrc("123456-7") == "1234567"
+    assert dte_nrc("Pendiente de verificación") is None
+    assert dte_nrc("1") is None
 
 
 def test_document_types_follow_cat_002() -> None:
