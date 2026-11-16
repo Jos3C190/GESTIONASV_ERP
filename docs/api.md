@@ -1820,3 +1820,43 @@ POUND 36, LITER 23, MILLILITER 26, GALLON 22, METER 1, everything else 99 («Otr
 Error codes (`422` unless noted): `product_fiscal_taxes_require_taxed`,
 `product_fiscal_tax_is_iva`, `product_fiscal_tax_unknown`, `fiscal_unit_code_unknown`,
 `product_not_found` (404), `fiscal_unit_not_found` (404).
+
+## Sales tax calculation (block V2a)
+
+One calculation engine (`app/domain/entities/sales_tax.py`) computes the fiscal amounts of
+every sales document; quotation, order, point of sale and DTE all call it. This endpoint
+previews a calculation without storing anything, so it writes no audit record.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| POST | `/sales/tax-calculation` | `sales_quotations:read` or `sales:read` | Body: `document_type` (`01` invoice, `03` tax credit), optional `customer_id`, `lines` (`product_id`, `quantity`, `unit_price`, `price_includes_vat`, optional `discount` for the whole line) and optional `global_discounts` (`taxed`, `exempt`, `not_subject`). Returns each line in the document's price convention and the summary. |
+
+The issuer category comes from the fiscal profile, the customer's category and withholding
+flag from the customer, and each line's VAT treatment and item type from the product's
+fiscal classification. The caller cannot override them.
+
+Response: `prices_include_vat` (`true` for the invoice), `lines` (`unit_price`, `discount`,
+`not_subject`, `exempt`, `taxed` with 8 decimals; `vat_item` on the invoice only,
+`hacienda_unit_code`) and `summary` (`total_not_subject`, `total_exempt`, `total_taxed`,
+`subtotal_sales`, global discounts, `total_discount`, `subtotal`, `vat`, `vat_perceived`,
+`vat_withheld`, `total_operation`, `total_to_pay`, `total_in_words`), with 2 decimals.
+
+Rules (Manual Funcional v2.0, chapters XVIII and XXI; Código Tributario arts. 162 and 163):
+- prices are converted with ÷ 1.13 or × 1.13; lines round half up to 8 decimals, the summary
+  to 2;
+- invoice VAT is contained in the price; tax credit VAT is 13 % of the taxed amount net of
+  the global taxed discount;
+- 1 % withholding when the customer is a large taxpayer or a withholding agent, the issuer
+  is not a large taxpayer and the taxed base without VAT reaches $100;
+- 1 % perception on a tax credit when the issuer is a large taxpayer, the customer is not,
+  and the taxed goods base reaches $100;
+- `total_operation` = subtotal + added VAT + perception − withholding.
+
+Error codes (`422` unless noted): `sales_tax_document_disabled`,
+`sales_tax_customer_required`, `sales_tax_customer_inactive`,
+`sales_tax_document_not_receivable`, `sales_tax_credit_requires_taxpayer`,
+`sales_tax_product_not_sellable`, `sales_tax_additional_unsupported`,
+`sales_tax_untaxed_price_with_vat`, `sales_tax_lines_required`,
+`sales_tax_quantity_invalid`, `sales_tax_price_invalid`, `sales_tax_discount_invalid`,
+`sales_tax_discount_exceeds_line`, `sales_tax_global_discount_exceeds`; not found (404):
+`sales_customer_not_found`, `product_not_found`.
