@@ -52,7 +52,7 @@ Resultado verificable: dos empresas configuradas como emisores distintos, sin da
 
 ## Pasos
 
-- [ ] **Paso 1: catálogos de Hacienda como datos.**
+- [x] **Paso 1: catálogos de Hacienda como datos.**
   - Archivos:
     - `backend/app/infrastructure/catalogs/hacienda_dte.py`: los 33 catálogos, la versión y la fecha.
     - `backend/app/infrastructure/catalogs/hacienda_geography.py`: el mapa de la geografía del ERP a los códigos de Hacienda.
@@ -107,7 +107,7 @@ Resultado verificable: dos empresas configuradas como emisores distintos, sin da
 
 ## Estado actual
 
-- **Paso en curso**: 1. Todavía no hay código.
+- **Paso en curso**: 2 (migración y modelos). Paso 1 listo; CAT-019 tiene 774 códigos (las 885 filas del Excel incluyen títulos de sector). El generador se ejecuta en el contenedor: `docker compose cp <xlsx> backend:/tmp/catalogos.xlsx` y `uv run python scripts/generate_hacienda_catalogs.py /tmp/catalogos.xlsx`, luego `ruff format`.
 - **Herramientas**:
   - Los datos crudos de los catálogos, ya extraídos, están en el scratchpad de la sesión: `cats.json` y `geo_map.json`. Si se pierden, el paso 1 los regenera con el script a partir del Excel.
   - El Excel se lee con zipfile y XML, porque no hay openpyxl.
