@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import DocumentBreadcrumbs from '$lib/features/documents/components/DocumentBreadcrumbs.svelte';
+import DocumentBreadcrumbs from '#lib/features/documents/components/DocumentBreadcrumbs.svelte';
 
 describe('DocumentBreadcrumbs', () => {
   it('marks the current folder and keeps ancestor navigation', () => {

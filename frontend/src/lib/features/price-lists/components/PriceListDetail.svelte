@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { api, HttpError } from '$lib/api/client';
-  import { priceListsApi } from '$lib/api/price-lists';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import { priceListsApi } from '#lib/api/price-lists.ts';
   import {
     STATUS_LABELS,
     STATUS_TONES,
@@ -13,10 +13,10 @@
     formatPrice,
     todayInElSalvador,
     validityText
-  } from '$lib/features/price-lists/labels';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { ListedPrice, PriceEntry, PriceList } from '$lib/types/price-list';
+  } from '#lib/features/price-lists/labels.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { ListedPrice, PriceEntry, PriceList } from '#lib/types/price-list.ts';
 
   let { listId }: { listId: string } = $props();
 

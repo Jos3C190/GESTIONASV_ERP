@@ -5,8 +5,8 @@
     cartoTileLayerOptions,
     isCartoBasemapConfigured,
     loadLeaflet
-  } from '$lib/services/maps';
-  import { theme } from '$lib/stores/theme.svelte';
+  } from '#lib/services/maps.ts';
+  import { theme } from '#lib/stores/theme.svelte.ts';
 
   interface Position {
     latitude: number;

@@ -4,7 +4,7 @@
  * frontend never reads it directly — we only pass it via the API client when
  * the backend sets it as a cookie (automatic for same-origin requests).
  */
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
 export interface CurrentUser {
   id: string;

@@ -1,13 +1,13 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { PurchaseQuotation } from '$lib/types/purchase-quotation';
-  import type { Supplier } from '$lib/types/supplier';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { PurchaseQuotation } from '#lib/types/purchase-quotation.ts';
+  import type { Supplier } from '#lib/types/supplier.ts';
 
   let {
     id,

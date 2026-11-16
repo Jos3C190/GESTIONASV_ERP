@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte';
   import { page } from '$app/state';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { getWarehouse, getWarehouses } from '$lib/services/warehouses';
-  import type { Warehouse } from '$lib/features/warehouses/types';
-  import Button from '$lib/components/ui/Button.svelte';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { getWarehouse, getWarehouses } from '#lib/services/warehouses.ts';
+  import type { Warehouse } from '#lib/features/warehouses/types.ts';
+  import Button from '#lib/components/ui/Button.svelte';
   import InventoryConsultation from './InventoryConsultation.svelte';
   import WarehouseReceiptQueue from './WarehouseReceiptQueue.svelte';
   import WarehousePreparationQueue from './WarehousePreparationQueue.svelte';

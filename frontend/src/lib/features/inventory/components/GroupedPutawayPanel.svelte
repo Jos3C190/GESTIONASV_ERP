@@ -1,8 +1,8 @@
 <script lang="ts">
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { listLocations } from '$lib/features/locations/services';
-  import type { LocationOut } from '$lib/features/locations/types';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { listLocations } from '#lib/features/locations/services.ts';
+  import type { LocationOut } from '#lib/features/locations/types.ts';
   import { inventoryApi } from '../services';
   import type { InventoryReceiptLot, LegacyInventoryStock, ReceiptLotLine } from '../types';
   import {

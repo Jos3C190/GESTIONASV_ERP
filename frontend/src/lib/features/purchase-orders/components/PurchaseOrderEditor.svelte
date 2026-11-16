@@ -1,19 +1,19 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import { purchaseOrdersApi } from '$lib/api/purchase-orders';
-  import { purchaseConsolidationsApi } from '$lib/api/purchase-consolidations';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import { getWarehouses } from '$lib/services/warehouses';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Warehouse } from '$lib/features/warehouses/types';
-  import type { PurchaseQuotation } from '$lib/types/purchase-quotation';
-  import type { PurchaseOrderExpenseType } from '$lib/types/purchase-order';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { purchaseOrdersApi } from '#lib/api/purchase-orders.ts';
+  import { purchaseConsolidationsApi } from '#lib/api/purchase-consolidations.ts';
+  import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import { getWarehouses } from '#lib/services/warehouses.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Warehouse } from '#lib/features/warehouses/types.ts';
+  import type { PurchaseQuotation } from '#lib/types/purchase-quotation.ts';
+  import type { PurchaseOrderExpenseType } from '#lib/types/purchase-order.ts';
 
   interface DraftLine {
     key: string;

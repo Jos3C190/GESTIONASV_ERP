@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { HttpError } from '$lib/api/client';
-  import { salesApi } from '$lib/api/sales';
-  import { formatUnitLabel } from '$lib/features/sales/unit-label';
-  import { branch } from '$lib/stores/branch.svelte';
-  import type { SalesCatalogItem, SalesLine, SalesLineInput } from '$lib/types/sales';
-  import type { Customer } from '$lib/types/customer';
-  import { customersApi } from '$lib/api/customers';
+  import { HttpError } from '#lib/api/client.ts';
+  import { salesApi } from '#lib/api/sales.ts';
+  import { formatUnitLabel } from '#lib/features/sales/unit-label.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import type { SalesCatalogItem, SalesLine, SalesLineInput } from '#lib/types/sales.ts';
+  import type { Customer } from '#lib/types/customer.ts';
+  import { customersApi } from '#lib/api/customers.ts';
 
   type DraftLine = { key: string; option: SalesCatalogItem | null; unitId: number | null; quantity: string; unitPrice: string; sourceLineId?: string };
   let customers = $state<Customer[]>([]);

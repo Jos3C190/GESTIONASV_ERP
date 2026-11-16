@@ -9,7 +9,7 @@ import {
   type DocumentRecordOut,
   type DocumentUploadInput,
   type DocumentUploadTicket
-} from '$lib/api/client';
+} from '#lib/api/client.ts';
 
 export interface OwnedDocumentsPage {
   items: DocumentRecordOut[];

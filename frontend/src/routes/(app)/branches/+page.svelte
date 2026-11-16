@@ -8,22 +8,22 @@
    * interactivo estirado al 100% de la altura combinada mostrando todas las sucursales.
    */
 
-  import { search as globalSearch } from '$lib/stores/search.svelte';
+  import { search as globalSearch } from '#lib/stores/search.svelte.ts';
   import { goto } from '$app/navigation';
-  import { type Branch } from '$lib/features/branches/types';
-  import { getBranches } from '$lib/services/branches';
-  import { api, HttpError } from '$lib/api/client';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import BranchTable from '$lib/features/branches/components/BranchTable.svelte';
-  import BranchMap from '$lib/features/branches/components/BranchMap.svelte';
-  import BranchDetail from '$lib/features/branches/components/BranchDetail.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import { type Branch } from '#lib/features/branches/types.ts';
+  import { getBranches } from '#lib/services/branches.ts';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import BranchTable from '#lib/features/branches/components/BranchTable.svelte';
+  import BranchMap from '#lib/features/branches/components/BranchMap.svelte';
+  import BranchDetail from '#lib/features/branches/components/BranchDetail.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
   import { onMount } from 'svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch as operationalBranch } from '$lib/stores/branch.svelte';
-  import { queryClient } from '$lib/services/query-client';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch as operationalBranch } from '#lib/stores/branch.svelte.ts';
+  import { queryClient } from '#lib/services/query-client.ts';
 
   let showMap = $state(true);
   let selectedId = $state<string | null>(null);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import PurchaseOrderDetail from '$lib/features/purchase-orders/components/PurchaseOrderDetail.svelte';
+  import PurchaseOrderDetail from '#lib/features/purchase-orders/components/PurchaseOrderDetail.svelte';
 
   let orderId = $derived(page.params.id ?? '');
 </script>

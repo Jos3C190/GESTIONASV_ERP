@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import { fleetApi, type FleetVehicle, type GpsSetup } from '../api';
   import FleetIcon from '../FleetIcon.svelte';
   import Notice from './Notice.svelte';

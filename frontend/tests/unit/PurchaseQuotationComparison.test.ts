@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseQuotationComparison from '$lib/features/purchase-quotations/components/PurchaseQuotationComparison.svelte';
+import PurchaseQuotationComparison from '#lib/features/purchase-quotations/components/PurchaseQuotationComparison.svelte';
 
 const mocks = vi.hoisted(() => ({
   compare: vi.fn(),
@@ -9,20 +9,20 @@ const mocks = vi.hoisted(() => ({
   hasPermission: vi.fn()
 }));
 
-vi.mock('$lib/api/purchase-quotations', () => ({
+vi.mock('#lib/api/purchase-quotations.ts', () => ({
   purchaseQuotationsApi: {
     compare: mocks.compare
   }
 }));
 
-vi.mock('$lib/api/suppliers', () => ({
+vi.mock('#lib/api/suppliers.ts', () => ({
   suppliersApi: {
     listSuppliers: mocks.listSuppliers,
     currencies: mocks.currencies
   }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
   }

@@ -3,7 +3,7 @@
     PurchaseConsolidationAwardDecision,
     PurchaseConsolidationAwardLine as AwardLine,
     PurchaseConsolidationAwardOffer
-  } from '$lib/types/purchase-consolidation';
+  } from '#lib/types/purchase-consolidation.ts';
   import PurchaseConsolidationAwardHistory from './PurchaseConsolidationAwardHistory.svelte';
   import PurchaseConsolidationAwardOfferCard from './PurchaseConsolidationAwardOfferCard.svelte';
   import { formatMoney, formatQuantity, statusLabel } from '../adjudication-formatters';

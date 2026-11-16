@@ -1,4 +1,4 @@
-import type { PageResponse } from '$lib/api/catalog';
+import type { PageResponse } from '#lib/api/catalog.ts';
 
 export type PurchaseConsolidationStatus = 'draft' | 'frozen' | 'closed' | 'cancelled';
 export type PurchaseWorkItemType = 'individual' | 'consolidated';

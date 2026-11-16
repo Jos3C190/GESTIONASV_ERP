@@ -1,5 +1,5 @@
 <script lang="ts">
-  import CaptureDialog from '$lib/features/document-capture/CaptureDialog.svelte';
+  import CaptureDialog from '#lib/features/document-capture/CaptureDialog.svelte';
   import type { Driver } from '../api';
   import { licenseCaptureConfig } from './license-config';
 

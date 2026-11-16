@@ -1,9 +1,9 @@
 <script lang="ts">
-  import Tabs from '$lib/components/ui/Tabs.svelte';
-  import PrivacyIncidentsPanel from '$lib/features/privacy/components/PrivacyIncidentsPanel.svelte';
-  import PrivacyNoticePanel from '$lib/features/privacy/components/PrivacyNoticePanel.svelte';
-  import PrivacyRequestsPanel from '$lib/features/privacy/components/PrivacyRequestsPanel.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import Tabs from '#lib/components/ui/Tabs.svelte';
+  import PrivacyIncidentsPanel from '#lib/features/privacy/components/PrivacyIncidentsPanel.svelte';
+  import PrivacyNoticePanel from '#lib/features/privacy/components/PrivacyNoticePanel.svelte';
+  import PrivacyRequestsPanel from '#lib/features/privacy/components/PrivacyRequestsPanel.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   const TABS = [
     { id: 'aviso', label: 'Aviso de privacidad' },

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
   import {
     decimalMicros,
     displayDecimal,

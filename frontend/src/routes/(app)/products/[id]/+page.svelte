@@ -1,16 +1,16 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { catalogApi } from '$lib/api/catalog';
-  import type { Category, Product, Unit } from '$lib/types/catalog';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import PackagingManager from '$lib/features/inventory/components/PackagingManager.svelte';
-  import ProductIdentifiersDisplay from '$lib/features/products/components/ProductIdentifiersDisplay.svelte';
-  import ProductFiscalCard from '$lib/features/products/components/ProductFiscalCard.svelte';
-  import { supplierDisplayName } from '$lib/features/products/supplier-display';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import type { Category, Product, Unit } from '#lib/types/catalog.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import PackagingManager from '#lib/features/inventory/components/PackagingManager.svelte';
+  import ProductIdentifiersDisplay from '#lib/features/products/components/ProductIdentifiersDisplay.svelte';
+  import ProductFiscalCard from '#lib/features/products/components/ProductFiscalCard.svelte';
+  import { supplierDisplayName } from '#lib/features/products/supplier-display.ts';
 
   let product = $state<Product | null>(null);
   let categories = $state<Category[]>([]);

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import {
     fleetApi,
     type FleetAlert,

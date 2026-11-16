@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
-import type { DocumentRecordOut } from '$lib/api/client';
-import DocumentList from '$lib/features/documents/components/DocumentList.svelte';
+import type { DocumentRecordOut } from '#lib/api/client.ts';
+import DocumentList from '#lib/features/documents/components/DocumentList.svelte';
 
 function makeDocument(extension: string): DocumentRecordOut {
   return {

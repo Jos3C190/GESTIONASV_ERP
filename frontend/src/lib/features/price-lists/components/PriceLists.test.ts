@@ -16,8 +16,8 @@ const { priceListsApi, branchesApi } = vi.hoisted(() => ({
   branchesApi: { list: vi.fn() }
 }));
 
-vi.mock('$lib/api/price-lists', () => ({ priceListsApi }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/price-lists.ts', () => ({ priceListsApi }));
+vi.mock('#lib/api/client.ts', () => ({
   api: { branches: branchesApi },
   HttpError: class HttpError extends Error {
     constructor(
@@ -30,15 +30,15 @@ vi.mock('$lib/api/client', () => ({
   }
 }));
 
-import { HttpError } from '$lib/api/client';
+import { HttpError } from '#lib/api/client.ts';
 import {
   counterpartPrice,
   formatPrice,
   todayInElSalvador,
   validityText
-} from '$lib/features/price-lists/labels';
-import { permissions } from '$lib/stores/permissions.svelte';
-import type { ListedPrice, PriceList } from '$lib/types/price-list';
+} from '#lib/features/price-lists/labels.ts';
+import { permissions } from '#lib/stores/permissions.svelte.ts';
+import type { ListedPrice, PriceList } from '#lib/types/price-list.ts';
 import PriceListDetail from './PriceListDetail.svelte';
 import PriceListsOverview from './PriceListsOverview.svelte';
 

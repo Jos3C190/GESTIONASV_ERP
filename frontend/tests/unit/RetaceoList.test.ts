@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import RetaceoList from '$lib/features/retaceos/components/RetaceoList.svelte';
+import RetaceoList from '#lib/features/retaceos/components/RetaceoList.svelte';
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -11,13 +11,13 @@ vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
 
-vi.mock('$lib/api/retaceos', () => ({
+vi.mock('#lib/api/retaceos.ts', () => ({
   retaceosApi: {
     list: mocks.list
   }
 }));
 
-vi.mock('$lib/stores/branch.svelte', () => ({
+vi.mock('#lib/stores/branch.svelte.ts', () => ({
   branch: {
     ready: true,
     id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'

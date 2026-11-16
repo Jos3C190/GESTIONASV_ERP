@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { HttpError } from '$lib/api/client';
+  import { HttpError } from '#lib/api/client.ts';
   import { inventoryAdjustmentsApi, type AdjustmentItemOption } from '../adjustments';
 
   interface Props {

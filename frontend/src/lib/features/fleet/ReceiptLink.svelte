@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { HttpError } from '$lib/api/client';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import { fleetApi } from './api';
 
   let {

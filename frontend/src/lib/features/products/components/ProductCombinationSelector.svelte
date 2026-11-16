@@ -1,10 +1,10 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import type { ProductVariantConfig, ProductVariantDraft } from '$lib/types/catalog';
+  import Button from '#lib/components/ui/Button.svelte';
+  import type { ProductVariantConfig, ProductVariantDraft } from '#lib/types/catalog.ts';
   import {
     normalizeVariantToken,
     variantCombinationKey
-  } from '$lib/features/products/variant-config';
+  } from '#lib/features/products/variant-config.ts';
 
   interface Props {
     candidates: ProductVariantDraft[];

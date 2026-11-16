@@ -1,4 +1,4 @@
-import type { PriceStatus } from '$lib/types/price-list';
+import type { PriceStatus } from '#lib/types/price-list.ts';
 
 export const STATUS_LABELS: Record<PriceStatus, string> = {
   scheduled: 'Programado',

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import Callout from '$lib/components/ui/Callout.svelte';
+  import Callout from '#lib/components/ui/Callout.svelte';
   import {
     inventoryTransfersApi,
     type DispatchCheck,
@@ -9,8 +9,8 @@
     type InventoryTransfer,
     type SubstitutionCode,
     type TransportJudgement
-  } from '$lib/features/inventory/transfer-documents';
-  import { SUBSTITUTION_CODE_OPTIONS } from '$lib/features/inventory/transfer-operations';
+  } from '#lib/features/inventory/transfer-documents.ts';
+  import { SUBSTITUTION_CODE_OPTIONS } from '#lib/features/inventory/transfer-operations.ts';
   import TransferAssignmentPicker from './TransferAssignmentPicker.svelte';
 
   interface Props {

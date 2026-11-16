@@ -4,11 +4,11 @@ const apiMocks = vi.hoisted(() => ({
   apiFetch: vi.fn()
 }));
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
   apiFetch: apiMocks.apiFetch
 }));
 
-import { purchaseRequestsApi } from '$lib/api/purchase-requests';
+import { purchaseRequestsApi } from '#lib/api/purchase-requests.ts';
 
 describe('purchaseRequestsApi', () => {
   beforeEach(() => {

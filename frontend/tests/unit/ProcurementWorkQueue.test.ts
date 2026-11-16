@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import ProcurementWorkQueue from '$lib/features/purchase-quotations/components/ProcurementWorkQueue.svelte';
+import ProcurementWorkQueue from '#lib/features/purchase-quotations/components/ProcurementWorkQueue.svelte';
 
 const mocks = vi.hoisted(() => ({
   branchId: null as string | null,
@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   purchases: vi.fn()
 }));
 
-vi.mock('$lib/stores/branch.svelte', () => ({
+vi.mock('#lib/stores/branch.svelte.ts', () => ({
   branch: {
     get id() {
       return mocks.branchId;
@@ -30,25 +30,25 @@ vi.mock('$lib/stores/branch.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
   }
 }));
 
-vi.mock('$lib/api/purchase-requests', () => ({
+vi.mock('#lib/api/purchase-requests.ts', () => ({
   purchaseRequestsApi: {
     list: mocks.requests
   }
 }));
 
-vi.mock('$lib/api/purchase-quotations', () => ({
+vi.mock('#lib/api/purchase-quotations.ts', () => ({
   purchaseQuotationsApi: {
     list: mocks.quotations
   }
 }));
 
-vi.mock('$lib/api/purchases', () => ({
+vi.mock('#lib/api/purchases.ts', () => ({
   purchasesApi: {
     list: mocks.purchases
   }

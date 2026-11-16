@@ -3,7 +3,7 @@ import type {
   ProductVariantConfig,
   ProductVariantDraft,
   ProductVariantConfigPayload
-} from '$lib/types/catalog';
+} from '#lib/types/catalog.ts';
 
 export function toVariantConfigPayload(config: ProductVariantConfig): ProductVariantConfigPayload {
   return {

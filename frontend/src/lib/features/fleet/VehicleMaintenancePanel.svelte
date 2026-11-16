@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import {
     fleetApi,
     type DueState,

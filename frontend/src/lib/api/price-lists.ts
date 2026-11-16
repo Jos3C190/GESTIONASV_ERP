@@ -1,11 +1,11 @@
-import { apiFetch } from '$lib/api/client';
+import { apiFetch } from '#lib/api/client.ts';
 import type {
   ListedPrice,
   PriceEntry,
   PriceInput,
   PriceList,
   PriceListInput
-} from '$lib/types/price-list';
+} from '#lib/types/price-list.ts';
 
 const BASE = '/price-lists';
 

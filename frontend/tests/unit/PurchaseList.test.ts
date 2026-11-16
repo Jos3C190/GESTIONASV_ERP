@@ -1,19 +1,19 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseList from '$lib/features/purchases/components/PurchaseList.svelte';
+import PurchaseList from '#lib/features/purchases/components/PurchaseList.svelte';
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   listSuppliers: vi.fn()
 }));
 
-vi.mock('$lib/api/purchases', () => ({
+vi.mock('#lib/api/purchases.ts', () => ({
   purchasesApi: {
     list: mocks.list
   }
 }));
 
-vi.mock('$lib/api/suppliers', () => ({
+vi.mock('#lib/api/suppliers.ts', () => ({
   suppliersApi: {
     listSuppliers: mocks.listSuppliers
   }

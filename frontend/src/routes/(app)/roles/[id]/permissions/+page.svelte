@@ -2,13 +2,13 @@
   import { beforeNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
-  import { api, HttpError, type PermissionOut, type RoleWithPermissions } from '$lib/api/client';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { api, HttpError, type PermissionOut, type RoleWithPermissions } from '#lib/api/client.ts';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   let roleId = $derived(page.params.id ?? '');
   let role = $state<RoleWithPermissions | null>(null);
@@ -199,6 +199,7 @@
   }
 
   beforeNavigate((navigation) => {
+    if (navigation.shallow && navigation.type === 'goto') return;
     if (bypassNavigationGuard) {
       bypassNavigationGuard = false;
       return;

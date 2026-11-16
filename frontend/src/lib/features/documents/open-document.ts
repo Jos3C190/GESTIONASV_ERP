@@ -1,4 +1,4 @@
-import { api } from '$lib/api/client';
+import { api } from '#lib/api/client.ts';
 
 const BROWSER_PREVIEW_EXTENSIONS = new Set([
   '.pdf',

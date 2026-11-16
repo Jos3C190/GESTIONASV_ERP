@@ -1,5 +1,5 @@
-import { apiFetch, type Page } from '$lib/api/client';
-import { branch } from '$lib/stores/branch.svelte';
+import { apiFetch, type Page } from '#lib/api/client.ts';
+import { branch } from '#lib/stores/branch.svelte.ts';
 import type {
   PurchaseQuotation,
   PurchaseQuotationComparison,
@@ -11,7 +11,7 @@ import type {
   PurchaseQuotationDocumentDownloadUrl,
   PurchaseQuotationDocumentInitiateInput,
   PurchaseQuotationDocumentUpload
-} from '$lib/types/purchase-quotation';
+} from '#lib/types/purchase-quotation.ts';
 
 function queryPath(path: string, params: URLSearchParams): string {
   const query = params.toString();

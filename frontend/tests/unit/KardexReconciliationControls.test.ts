@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { expect, it, vi } from 'vitest';
-import Controls from '$lib/features/inventory/components/KardexReconciliationControls.svelte';
+import Controls from '#lib/features/inventory/components/KardexReconciliationControls.svelte';
 
 it('submits an explicit cut and product filter only when requested', async () => {
   const onquery = vi.fn();

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseQuotationEditor from '$lib/features/purchase-quotations/components/PurchaseQuotationEditor.svelte';
+import PurchaseQuotationEditor from '#lib/features/purchase-quotations/components/PurchaseQuotationEditor.svelte';
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
@@ -15,19 +15,19 @@ vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
 
-vi.mock('$lib/api/purchase-quotations', () => ({
+vi.mock('#lib/api/purchase-quotations.ts', () => ({
   purchaseQuotationsApi: {
     create: mocks.create
   }
 }));
 
-vi.mock('$lib/api/purchase-requests', () => ({
+vi.mock('#lib/api/purchase-requests.ts', () => ({
   purchaseRequestsApi: {
     list: mocks.listRequests
   }
 }));
 
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: {
     getProduct: vi.fn().mockResolvedValue({
       id_product: 10,
@@ -37,14 +37,14 @@ vi.mock('$lib/api/catalog', () => ({
   }
 }));
 
-vi.mock('$lib/api/suppliers', () => ({
+vi.mock('#lib/api/suppliers.ts', () => ({
   suppliersApi: {
     listSuppliers: mocks.listSuppliers,
     currencies: mocks.currencies
   }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
   }

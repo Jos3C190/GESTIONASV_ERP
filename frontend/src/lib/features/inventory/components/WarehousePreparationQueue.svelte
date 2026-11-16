@@ -1,10 +1,10 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import HandlingUnitLabelDialog from './HandlingUnitLabelDialog.svelte';
-  import LocationGridPicker from '$lib/features/locations/components/LocationGridPicker.svelte';
-  import { listLocations } from '$lib/features/locations/services';
-  import type { LocationOut } from '$lib/features/locations/types';
+  import LocationGridPicker from '#lib/features/locations/components/LocationGridPicker.svelte';
+  import { listLocations } from '#lib/features/locations/services.ts';
+  import type { LocationOut } from '#lib/features/locations/types.ts';
   import { inventoryApi } from '../services';
   import { preparationApi, preparationQuantityIssue, type PreparationUnit } from '../preparation';
 

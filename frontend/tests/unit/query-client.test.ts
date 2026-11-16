@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { clearPrivateQueryCache, queryClient } from '$lib/services/query-client';
+import { clearPrivateQueryCache, queryClient } from '#lib/services/query-client.ts';
 
 afterEach(async () => {
   await clearPrivateQueryCache();

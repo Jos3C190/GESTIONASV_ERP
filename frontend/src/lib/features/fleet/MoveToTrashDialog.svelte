@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { api, HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
 
   let {
     open,

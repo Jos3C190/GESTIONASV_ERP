@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DocumentCategoryOut } from '$lib/api/client';
-import { HttpError } from '$lib/api/client';
-import type { OwnedDocumentsApi } from '$lib/api/owned-documents';
+import type { DocumentCategoryOut } from '#lib/api/client.ts';
+import { HttpError } from '#lib/api/client.ts';
+import type { OwnedDocumentsApi } from '#lib/api/owned-documents.ts';
 import DocumentUploadQueue from './DocumentUploadQueue.svelte';
 
 const transport = vi.hoisted(() => ({
@@ -10,8 +10,8 @@ const transport = vi.hoisted(() => ({
   initiate: vi.fn(),
   complete: vi.fn()
 }));
-vi.mock('$lib/api/client', async (original) => ({
-  ...(await original<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (original) => ({
+  ...(await original<typeof import('#lib/api/client.ts')>()),
   api: { documents: transport }
 }));
 

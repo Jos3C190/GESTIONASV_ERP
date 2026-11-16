@@ -1,12 +1,12 @@
-import { apiFetch, type DocumentUploadTicket } from '$lib/api/client';
-import { ownedDocuments } from '$lib/api/owned-documents';
+import { apiFetch, type DocumentUploadTicket } from '#lib/api/client.ts';
+import { ownedDocuments } from '#lib/api/owned-documents.ts';
 import type {
   CaptureCheck,
   CaptureSide,
   CaptureState,
   CaptureValues
-} from '$lib/features/document-capture/types';
-import { branch } from '$lib/stores/branch.svelte';
+} from '#lib/features/document-capture/types.ts';
+import { branch } from '#lib/stores/branch.svelte.ts';
 import type {
   CostCategory,
   FuelType,

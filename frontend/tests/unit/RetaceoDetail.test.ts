@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import RetaceoDetail from '$lib/features/retaceos/components/RetaceoDetail.svelte';
-import type { Retaceo } from '$lib/types/retaceo';
+import RetaceoDetail from '#lib/features/retaceos/components/RetaceoDetail.svelte';
+import type { Retaceo } from '#lib/types/retaceo.ts';
 
 const mocks = vi.hoisted(() => ({
   getRetaceo: vi.fn(),
@@ -10,20 +10,20 @@ const mocks = vi.hoisted(() => ({
   getProduct: vi.fn()
 }));
 
-vi.mock('$lib/api/retaceos', () => ({
+vi.mock('#lib/api/retaceos.ts', () => ({
   retaceosApi: {
     get: mocks.getRetaceo,
     valuationStatus: vi.fn().mockResolvedValue({ enabled: false })
   }
 }));
 
-vi.mock('$lib/api/purchases', () => ({
+vi.mock('#lib/api/purchases.ts', () => ({
   purchasesApi: {
     get: mocks.getPurchase
   }
 }));
 
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: {
     listUnits: mocks.listUnits,
     getProduct: mocks.getProduct

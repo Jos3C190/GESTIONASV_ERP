@@ -1,12 +1,12 @@
 <script lang="ts">
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { customersApi } from '$lib/api/customers';
-  import GeographyFields from '$lib/features/customers/components/GeographyFields.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import type { DeliveryAddress, DeliveryAddressInput } from '$lib/types/customer';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { customersApi } from '#lib/api/customers.ts';
+  import GeographyFields from '#lib/features/customers/components/GeographyFields.svelte';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import type { DeliveryAddress, DeliveryAddressInput } from '#lib/types/customer.ts';
 
   interface Props {
     customerId: string;

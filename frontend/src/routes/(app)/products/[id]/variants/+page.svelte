@@ -1,23 +1,23 @@
 <script lang="ts">
   import { beforeNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { catalogApi } from '$lib/api/catalog';
-  import { HttpError } from '$lib/api/client';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import ProductCombinationSelector from '$lib/features/products/components/ProductCombinationSelector.svelte';
-  import ProductVariantsEditor from '$lib/features/products/components/ProductVariantsEditor.svelte';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { HttpError } from '#lib/api/client.ts';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import ProductCombinationSelector from '#lib/features/products/components/ProductCombinationSelector.svelte';
+  import ProductVariantsEditor from '#lib/features/products/components/ProductVariantsEditor.svelte';
   import {
     normalizeVariantToken,
     cartesianCombinationCount,
     productToVariantConfig,
     toVariantConfigPayload,
     variantCombinationKey
-  } from '$lib/features/products/variant-config';
-  import { company } from '$lib/stores/company.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Product, ProductVariantConfig, ProductVariantDraft } from '$lib/types/catalog';
+  } from '#lib/features/products/variant-config.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Product, ProductVariantConfig, ProductVariantDraft } from '#lib/types/catalog.ts';
 
   type Step = 1 | 2 | 3;
   type GenerationMode = 'all' | 'selected';
@@ -324,6 +324,7 @@
   }
 
   beforeNavigate((navigation) => {
+    if (navigation.shallow && navigation.type === 'goto') return;
     if (dirty && !saving && navigation.to?.url.pathname !== pendingTarget) {
       navigation.cancel();
       pendingTarget = navigation.to?.url.pathname ?? `/products/${productId}`;

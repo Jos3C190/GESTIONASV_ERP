@@ -6,8 +6,8 @@
     const categoryId = page.params.categoryId;
     if (categoryId) {
       void goto('/documents/general?category=' + encodeURIComponent(categoryId), {
-        replaceState: true,
-        noScroll: true
+        replace: true,
+        reset: false
       });
     }
   });

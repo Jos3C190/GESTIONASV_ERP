@@ -8,17 +8,17 @@
     type DepartmentOut,
     type EmployeeBranchAssignmentOut,
     type BranchOut
-  } from '$lib/api/client';
-  import { resolvePhotoUrl, initialsOf } from '$lib/features/employees/avatar';
-  import Avatar from '$lib/components/ui/Avatar.svelte';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import EmployeeDocumentsPanel from '$lib/features/employees/components/EmployeeDocumentsPanel.svelte';
+  } from '#lib/api/client.ts';
+  import { resolvePhotoUrl, initialsOf } from '#lib/features/employees/avatar.ts';
+  import Avatar from '#lib/components/ui/Avatar.svelte';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import EmployeeDocumentsPanel from '#lib/features/employees/components/EmployeeDocumentsPanel.svelte';
 
   let emp = $state<EmployeeOut | null>(null);
   let departments = $state<DepartmentOut[]>([]);

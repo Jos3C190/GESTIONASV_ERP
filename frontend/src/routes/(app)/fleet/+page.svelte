@@ -1,5 +1,5 @@
 <script lang="ts">
-  import FleetWorkspace from '$lib/features/fleet/FleetWorkspace.svelte';
+  import FleetWorkspace from '#lib/features/fleet/FleetWorkspace.svelte';
 </script>
 
 <svelte:head

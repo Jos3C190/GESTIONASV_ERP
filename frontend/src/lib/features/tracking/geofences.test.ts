@@ -7,7 +7,7 @@ import {
   draftShape,
   shapeAreaM2
 } from './geofences';
-import type { TrackedVehicleOut } from '$lib/api/client';
+import type { TrackedVehicleOut } from '#lib/api/client.ts';
 import { describeEvent, fromTraccarEvents } from './events';
 
 describe('geofence geometry', () => {

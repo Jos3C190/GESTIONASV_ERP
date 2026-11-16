@@ -1,4 +1,4 @@
-import { apiFetch } from '$lib/api/client';
+import { apiFetch } from '#lib/api/client.ts';
 
 export interface ValuationSetting {
   company_id: string;

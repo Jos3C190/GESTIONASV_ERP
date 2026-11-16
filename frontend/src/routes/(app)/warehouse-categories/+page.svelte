@@ -5,15 +5,15 @@
     HttpError,
     type PageMeta,
     type WarehouseCategoryOut
-  } from '$lib/api/client';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { search as globalSearch } from '$lib/stores/search.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import KebabMenu from '$lib/components/ui/KebabMenu.svelte';
-  import type { KebabItem } from '$lib/components/ui/KebabMenu.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  } from '#lib/api/client.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { search as globalSearch } from '#lib/stores/search.svelte.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import KebabMenu from '#lib/components/ui/KebabMenu.svelte';
+  import type { KebabItem } from '#lib/components/ui/KebabMenu.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
 
   type Category = WarehouseCategoryOut;
   let items = $state<Category[]>([]);

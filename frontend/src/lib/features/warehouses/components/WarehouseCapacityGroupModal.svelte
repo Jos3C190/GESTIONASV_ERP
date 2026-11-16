@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
   import {
     availableCapacityGroupParents,
     capacityGroupDraftToInput,

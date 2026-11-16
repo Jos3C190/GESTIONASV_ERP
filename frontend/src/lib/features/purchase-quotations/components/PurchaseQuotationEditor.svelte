@@ -1,16 +1,16 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import { catalogApi } from '$lib/api/catalog';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
-  import { purchaseRequestsApi } from '$lib/api/purchase-requests';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { PurchaseRequest, PurchaseRequestStatus } from '$lib/types/purchase-request';
-  import type { Currency, Supplier } from '$lib/types/supplier';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
+  import { purchaseRequestsApi } from '#lib/api/purchase-requests.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { PurchaseRequest, PurchaseRequestStatus } from '#lib/types/purchase-request.ts';
+  import type { Currency, Supplier } from '#lib/types/supplier.ts';
 
   interface DraftLine {
     detailId: string;

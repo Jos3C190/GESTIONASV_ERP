@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { api, HttpError, type MediaPurpose } from '$lib/api/client';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import { api, HttpError, type MediaPurpose } from '#lib/api/client.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
 
   interface Props {
     id: string;

@@ -1,4 +1,4 @@
-import type { PersonType, TaxpayerCategory } from '$lib/types/fiscal';
+import type { PersonType, TaxpayerCategory } from '#lib/types/fiscal.ts';
 
 /** Clientes con identidad fiscal (API `/customers`). */
 

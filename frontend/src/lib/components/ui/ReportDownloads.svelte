@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import Button from './Button.svelte';
-  import { apiDownload } from '$lib/api/client';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
+  import { apiDownload } from '#lib/api/client.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
 
   let {
     path,

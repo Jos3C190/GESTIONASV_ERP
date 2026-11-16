@@ -3,8 +3,8 @@
    * Conectado a la bitácora REAL (GET /audit-logs) — único elemento no-mock del dashboard.
    * Diferencia visualmente eventos del sistema (icono engranaje) vs usuario (avatar con iniciales). */
 
-  import { api, type AuditLogOut } from '$lib/api/client';
-  import Avatar from '$lib/components/ui/Avatar.svelte';
+  import { api, type AuditLogOut } from '#lib/api/client.ts';
+  import Avatar from '#lib/components/ui/Avatar.svelte';
 
   let activities = $state<AuditLogOut[]>([]);
   let loading = $state(true);

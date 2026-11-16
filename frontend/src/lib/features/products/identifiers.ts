@@ -1,4 +1,4 @@
-import type { ProductIdentifierType } from '$lib/types/catalog';
+import type { ProductIdentifierType } from '#lib/types/catalog.ts';
 
 export const IDENTIFIER_TYPE_OPTIONS: { value: ProductIdentifierType; label: string }[] = [
   { value: 'ean', label: 'EAN' },

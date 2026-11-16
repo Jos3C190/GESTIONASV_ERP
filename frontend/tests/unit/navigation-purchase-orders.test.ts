@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_GROUPS } from '$lib/navigation';
+import { NAV_GROUPS } from '#lib/navigation.ts';
 
 describe('purchase orders navigation', () => {
   it('exposes the implemented purchase orders route with read permission', () => {

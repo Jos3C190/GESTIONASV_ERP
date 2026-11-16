@@ -1,4 +1,4 @@
-import { apiFetch, type Page } from '$lib/api/client';
+import { apiFetch, type Page } from '#lib/api/client.ts';
 import { handlingUnit, type RawHandlingUnit } from './services';
 import type { HandlingUnit } from './types';
 

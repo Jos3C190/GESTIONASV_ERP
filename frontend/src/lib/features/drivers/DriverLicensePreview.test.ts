@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DocumentRecordOut } from '$lib/api/client';
-import type { OwnedDocumentsApi } from '$lib/api/owned-documents';
-import Modal from '$lib/components/ui/Modal.svelte';
+import type { DocumentRecordOut } from '#lib/api/client.ts';
+import type { OwnedDocumentsApi } from '#lib/api/owned-documents.ts';
+import Modal from '#lib/components/ui/Modal.svelte';
 import DriverLicensePreview from './DriverLicensePreview.svelte';
 
 const record: DocumentRecordOut = {

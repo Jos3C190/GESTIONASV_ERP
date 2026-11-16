@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { HttpError } from '$lib/api/client';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { fleetApi, type FleetVehicleType } from '$lib/features/fleet/api';
-  import { LICENSE_LABELS } from '$lib/features/fleet/catalog';
-  import VehicleTypeForm from '$lib/features/fleet/VehicleTypeForm.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { fleetApi, type FleetVehicleType } from '#lib/features/fleet/api.ts';
+  import { LICENSE_LABELS } from '#lib/features/fleet/catalog.ts';
+  import VehicleTypeForm from '#lib/features/fleet/VehicleTypeForm.svelte';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   let types = $state<FleetVehicleType[]>([]);
   let loading = $state(true);

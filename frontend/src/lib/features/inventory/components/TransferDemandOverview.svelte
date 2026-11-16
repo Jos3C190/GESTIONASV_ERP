@@ -1,14 +1,14 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import type { TransferDemandRecord } from '$lib/features/inventory/transfer-documents';
+  import Button from '#lib/components/ui/Button.svelte';
+  import type { TransferDemandRecord } from '#lib/features/inventory/transfer-documents.ts';
   import {
     compareQuantities,
     formatQuantity,
     quantityFromScaled,
     scaledQuantity
-  } from '$lib/features/inventory/transfer-operations';
-  import type { TransferHandlingUnit } from '$lib/features/inventory/types';
+  } from '#lib/features/inventory/transfer-operations.ts';
+  import type { TransferHandlingUnit } from '#lib/features/inventory/types.ts';
 
   type CollectionState = 'loading' | 'loaded' | 'empty' | 'error';
   interface ProductRow {

@@ -2,20 +2,20 @@
   import { page as appPage } from '$app/state';
   import { onDestroy } from 'svelte';
   import { untrack } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import KardexProductPicker from '$lib/features/inventory/components/KardexProductPicker.svelte';
-  import KardexMovementDetails from '$lib/features/inventory/components/KardexMovementDetails.svelte';
-  import PhysicalKardexList from '$lib/features/inventory/components/PhysicalKardexList.svelte';
-  import KardexReconciliationList from '$lib/features/inventory/components/KardexReconciliationList.svelte';
-  import ValuedKardexList from '$lib/features/inventory/components/ValuedKardexList.svelte';
-  import KardexStatementTools from '$lib/features/inventory/components/KardexStatementTools.svelte';
-  import KardexReconciliationControls from '$lib/features/inventory/components/KardexReconciliationControls.svelte';
-  import { getWarehouses } from '$lib/services/warehouses';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { displayDecimal } from '$lib/features/inventory/valuation';
-  import { kardexMoney } from '$lib/features/inventory/kardex-format';
+  import Button from '#lib/components/ui/Button.svelte';
+  import KardexProductPicker from '#lib/features/inventory/components/KardexProductPicker.svelte';
+  import KardexMovementDetails from '#lib/features/inventory/components/KardexMovementDetails.svelte';
+  import PhysicalKardexList from '#lib/features/inventory/components/PhysicalKardexList.svelte';
+  import KardexReconciliationList from '#lib/features/inventory/components/KardexReconciliationList.svelte';
+  import ValuedKardexList from '#lib/features/inventory/components/ValuedKardexList.svelte';
+  import KardexStatementTools from '#lib/features/inventory/components/KardexStatementTools.svelte';
+  import KardexReconciliationControls from '#lib/features/inventory/components/KardexReconciliationControls.svelte';
+  import { getWarehouses } from '#lib/services/warehouses.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { displayDecimal } from '#lib/features/inventory/valuation.ts';
+  import { kardexMoney } from '#lib/features/inventory/kardex-format.ts';
   import {
     kardexApi,
     kardexErrorMessage,
@@ -24,8 +24,8 @@
     type PhysicalKardex,
     type Reconciliation,
     type ValuedKardex
-  } from '$lib/features/inventory/kardex';
-  import type { Warehouse } from '$lib/features/warehouses/types';
+  } from '#lib/features/inventory/kardex.ts';
+  import type { Warehouse } from '#lib/features/warehouses/types.ts';
 
   type View = 'physical' | 'valuation' | 'reconciliation';
   const canRead = $derived(permissions.hasPermission('inventory:read'));
@@ -215,7 +215,7 @@
       )
         return;
       warehouses = all.filter((warehouse) => warehouse.status === 'active');
-      const requestedWarehouse = new URL(appPage.url).searchParams.get('warehouse_id');
+      const requestedWarehouse = appPage.url.searchParams.get('warehouse_id');
       if (
         requestedWarehouse &&
         !warehouses.some((warehouse) => warehouse.id === requestedWarehouse)

@@ -1,4 +1,4 @@
-import { api, type PageMeta, type WarehouseListSummary, type WarehouseOut } from '$lib/api/client';
+import { api, type PageMeta, type WarehouseListSummary, type WarehouseOut } from '#lib/api/client.ts';
 import {
   type Warehouse,
   type WarehouseMovement,
@@ -10,7 +10,7 @@ import {
   type CapacityProfile,
   type CapacityEnforcementMode,
   type CapacityStatus
-} from '$lib/features/warehouses/types';
+} from '#lib/features/warehouses/types.ts';
 
 const nullableNumber = (value: unknown): number | null => {
   if (value == null || value === '') return null;

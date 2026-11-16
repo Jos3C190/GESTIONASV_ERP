@@ -5,7 +5,7 @@
  * so we read the current state from the DOM at init time instead of computing it
  * here. This keeps a single source of truth and prevents flashes.
  */
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
 type Theme = 'light' | 'dark';
 

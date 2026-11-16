@@ -1,8 +1,8 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { HttpError } from '$lib/api/client';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { HttpError } from '#lib/api/client.ts';
   import { updateLocationCodeScheme } from '../services';
   import type { LocationCodeScheme, LocationCodeSegment } from '../types';
 

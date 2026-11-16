@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { GeofenceOut, SiteOut, SitesOut } from '$lib/api/client';
-  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
+  import type { GeofenceOut, SiteOut, SitesOut } from '#lib/api/client.ts';
+  import FleetIcon from '#lib/features/fleet/FleetIcon.svelte';
+  import { branch } from '#lib/stores/branch.svelte.ts';
   import { describeShape, type DraftKind, type GeofenceDraft } from './geofences';
 
   let {

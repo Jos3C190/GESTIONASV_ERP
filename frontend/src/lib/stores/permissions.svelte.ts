@@ -5,7 +5,7 @@
  * hasPermission(code) returns true for superusers (who have all permissions)
  * or for normal users whose list contains the code.
  */
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
 const PERMS_STORAGE_KEY = 'erp_permissions';
 const SUPERUSER_KEY = 'erp_is_superuser';

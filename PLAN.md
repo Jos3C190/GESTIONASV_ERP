@@ -82,6 +82,7 @@ Resultado verificable:
 ## Estado actual
 
 - **Paso en curso**: ninguno; V2b terminado y en PR hacia `develop`. Batería completa: backend 1,873 y frontend 1,154 pruebas en verde; QA en navegador (claro, oscuro y 375 px). Lo siguiente es V2c, que empieza por las notas de costo, margen y precio sugerido de las decisiones.
+- **SvelteKit 3 (16/11/2026)**: la PR #44 subió el frontend a SvelteKit 3 por la CVE-2026-128120, que bloqueaba el CI de esta PR. Se trajo `develop` y los archivos de V2b pasaron a imports `#lib/…` con extensión; check, lint, 1,154 pruebas y build en verde.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.

@@ -1,20 +1,20 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import RetaceoCreateEditor from '$lib/features/retaceos/components/RetaceoCreateEditor.svelte';
+import RetaceoCreateEditor from '#lib/features/retaceos/components/RetaceoCreateEditor.svelte';
 import { saveRetaceoPreview } from './retaceo-preview';
 
 const mocks = vi.hoisted(() => ({ getPurchase: vi.fn(), create: vi.fn(), goto: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: mocks.goto }));
-vi.mock('$lib/api/purchases', () => ({ purchasesApi: { get: mocks.getPurchase } }));
-vi.mock('$lib/api/retaceos', () => ({ retaceosApi: { create: mocks.create } }));
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/purchases.ts', () => ({ purchasesApi: { get: mocks.getPurchase } }));
+vi.mock('#lib/api/retaceos.ts', () => ({ retaceosApi: { create: mocks.create } }));
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: {
     getProduct: vi
       .fn()
       .mockResolvedValue({ id_product: 4, sku: 'PRD-AZU-004', name: 'Azúcar Glass Premium 10kg' })
   }
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({ permissions: { hasPermission: () => true } }));
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({ permissions: { hasPermission: () => true } }));
 
 const purchase = {
   id: 'purchase',

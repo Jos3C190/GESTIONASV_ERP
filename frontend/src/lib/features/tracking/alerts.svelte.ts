@@ -1,6 +1,6 @@
-import { api, type TrackingAlertKind, type TrackingAlertOut } from '$lib/api/client';
-import { company } from '$lib/stores/company.svelte';
-import { permissions } from '$lib/stores/permissions.svelte';
+import { api, type TrackingAlertKind, type TrackingAlertOut } from '#lib/api/client.ts';
+import { company } from '#lib/stores/company.svelte.ts';
+import { permissions } from '#lib/stores/permissions.svelte.ts';
 
 export const ALERT_KIND_LABELS: Record<TrackingAlertKind, string> = {
   arrived: 'Llegada',

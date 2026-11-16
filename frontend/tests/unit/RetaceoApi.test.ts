@@ -4,11 +4,11 @@ const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn()
 }));
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
   apiFetch: mocks.apiFetch
 }));
 
-import { retaceosApi } from '$lib/api/retaceos';
+import { retaceosApi } from '#lib/api/retaceos.ts';
 
 describe('retaceosApi', () => {
   beforeEach(() => {

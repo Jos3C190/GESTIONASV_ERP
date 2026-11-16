@@ -2,7 +2,7 @@ import type {
   CaptureConfig,
   CaptureRules,
   CaptureValues
-} from '$lib/features/document-capture/types';
+} from '#lib/features/document-capture/types.ts';
 import { driversApi, type Driver, type LicenseValues } from '../api';
 
 export const EMPTY_VALUES: LicenseValues = {

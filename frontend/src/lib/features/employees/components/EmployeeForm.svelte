@@ -3,14 +3,14 @@
 
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
-  import { api, HttpError, type DepartmentOut } from '$lib/api/client';
-  import Avatar from '$lib/components/ui/Avatar.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
-  import ImageUpload from '$lib/components/ui/ImageUpload.svelte';
-  import { company } from '$lib/stores/company.svelte';
+  import { api, HttpError, type DepartmentOut } from '#lib/api/client.ts';
+  import Avatar from '#lib/components/ui/Avatar.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
+  import ImageUpload from '#lib/components/ui/ImageUpload.svelte';
+  import { company } from '#lib/stores/company.svelte.ts';
 
   interface Props {
     mode: 'create' | 'edit';

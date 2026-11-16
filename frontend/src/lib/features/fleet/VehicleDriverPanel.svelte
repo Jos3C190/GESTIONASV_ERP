@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { driversApi, type Assignment, type Driver } from '$lib/features/drivers/api';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { driversApi, type Assignment, type Driver } from '#lib/features/drivers/api.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type { FleetVehicle } from './api';
   import { formatDate, LICENSE_LABELS, localDate } from './catalog';
   import FleetIcon from './FleetIcon.svelte';

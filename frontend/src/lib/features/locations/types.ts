@@ -1,9 +1,9 @@
-import type { PageMeta } from '$lib/api/client';
+import type { PageMeta } from '#lib/api/client.ts';
 import type {
   CapacityEnforcementMode,
   CapacityProfile,
   CapacityStatus
-} from '$lib/features/warehouses/types';
+} from '#lib/features/warehouses/types.ts';
 
 export type LocationType =
   | 'standard'

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import type { DocumentCategoryOut } from '$lib/api/client';
+  import Button from '#lib/components/ui/Button.svelte';
+  import type { DocumentCategoryOut } from '#lib/api/client.ts';
   import type { ExplorerSort, ExplorerStatus, ExplorerView } from './types';
   import FilterSelect, { type ExplorerFilterOption } from './FilterSelect.svelte';
 

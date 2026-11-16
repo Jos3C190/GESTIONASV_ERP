@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { priceListsApi } from '$lib/api/price-lists';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { PriceList, PriceListInput } from '$lib/types/price-list';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { priceListsApi } from '#lib/api/price-lists.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { PriceList, PriceListInput } from '#lib/types/price-list.ts';
 
   const inputClass =
     'h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary';

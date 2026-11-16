@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseQuotationWorkflowActions from '$lib/features/purchase-quotations/components/PurchaseQuotationWorkflowActions.svelte';
-import type { PurchaseQuotation } from '$lib/types/purchase-quotation';
+import PurchaseQuotationWorkflowActions from '#lib/features/purchase-quotations/components/PurchaseQuotationWorkflowActions.svelte';
+import type { PurchaseQuotation } from '#lib/types/purchase-quotation.ts';
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   hasPermission: vi.fn()
 }));
 
-vi.mock('$lib/api/purchase-quotations', () => ({
+vi.mock('#lib/api/purchase-quotations.ts', () => ({
   purchaseQuotationsApi: {
     send: mocks.send,
     evaluate: mocks.evaluate,
@@ -22,7 +22,7 @@ vi.mock('$lib/api/purchase-quotations', () => ({
   }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
   }

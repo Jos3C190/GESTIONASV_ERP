@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { api, HttpError, type DocumentCategoryOut } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { api, HttpError, type DocumentCategoryOut } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   let categories = $state<DocumentCategoryOut[]>([]);
   let loading = $state(true);

@@ -14,8 +14,8 @@ const { fiscalApi } = vi.hoisted(() => ({
   }
 }));
 
-vi.mock('$lib/api/fiscal', () => ({ fiscalApi }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/fiscal.ts', () => ({ fiscalApi }));
+vi.mock('#lib/api/client.ts', () => ({
   HttpError: class HttpError extends Error {
     constructor(
       readonly code: string,
@@ -27,7 +27,7 @@ vi.mock('$lib/api/client', () => ({
   }
 }));
 
-import type { DocumentTypeSetting, Establishment, FiscalProfile } from '$lib/types/fiscal';
+import type { DocumentTypeSetting, Establishment, FiscalProfile } from '#lib/types/fiscal.ts';
 import FiscalDocumentsPanel from './FiscalDocumentsPanel.svelte';
 import FiscalEstablishmentsPanel from './FiscalEstablishmentsPanel.svelte';
 import FiscalProfilePanel from './FiscalProfilePanel.svelte';
@@ -142,7 +142,7 @@ describe('fiscal settings panels', () => {
 
   it('enables a document and shows the server rule when it is rejected', async () => {
     fiscalApi.listDocumentTypes.mockResolvedValue([invoice]);
-    const { HttpError } = await import('$lib/api/client');
+    const { HttpError } = await import('#lib/api/client.ts');
     fiscalApi.updateDocumentType.mockRejectedValueOnce(
       new HttpError(
         'fiscal_document_not_certified',

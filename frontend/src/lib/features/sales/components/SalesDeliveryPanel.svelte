@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { HttpError } from '$lib/api/client';
-  import { salesApi } from '$lib/api/sales';
-  import { formatUnitLabel } from '$lib/features/sales/unit-label';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import type { Sale, SalesDelivery, SalesDeliveryStockLine } from '$lib/types/sales';
+  import { HttpError } from '#lib/api/client.ts';
+  import { salesApi } from '#lib/api/sales.ts';
+  import { formatUnitLabel } from '#lib/features/sales/unit-label.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import type { Sale, SalesDelivery, SalesDeliveryStockLine } from '#lib/types/sales.ts';
 
   let { sale, onChanged }: { sale: Sale; onChanged: () => Promise<void> } = $props();
   let deliveries = $state<SalesDelivery[]>([]);

@@ -1,22 +1,22 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
-  import { session } from '$lib/stores/session.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { search as globalSearch } from '$lib/stores/search.svelte';
-  import { routeTitle } from '$lib/stores/route-titles';
-  import { api } from '$lib/api/client';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
+  import { session } from '#lib/stores/session.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { search as globalSearch } from '#lib/stores/search.svelte.ts';
+  import { routeTitle } from '#lib/stores/route-titles.ts';
+  import { api } from '#lib/api/client.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import Sidebar from '$lib/components/ui/Sidebar.svelte';
-  import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
-  import TrackingAlertsBell from '$lib/features/tracking/TrackingAlertsBell.svelte';
-  import UserMenu from '$lib/components/ui/UserMenu.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { clearPrivateQueryCache } from '$lib/services/query-client';
-  import { restoreAppContext } from '$lib/auth/restore-app-context';
+  import Sidebar from '#lib/components/ui/Sidebar.svelte';
+  import ThemeToggle from '#lib/components/ui/ThemeToggle.svelte';
+  import TrackingAlertsBell from '#lib/features/tracking/TrackingAlertsBell.svelte';
+  import UserMenu from '#lib/components/ui/UserMenu.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { clearPrivateQueryCache } from '#lib/services/query-client.ts';
+  import { restoreAppContext } from '#lib/auth/restore-app-context.ts';
 
   interface Props {
     children: Snippet;

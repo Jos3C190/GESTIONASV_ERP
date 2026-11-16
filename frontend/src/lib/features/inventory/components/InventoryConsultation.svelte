@@ -4,7 +4,7 @@
   import WarehouseLotsPanel from './WarehouseLotsPanel.svelte';
   import ProductStockOpening from './ProductStockOpening.svelte';
   import HandlingUnitsPanel from './HandlingUnitsPanel.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   let {
     warehouseId,
     warehouseName,

@@ -5,9 +5,9 @@ import {
   fromMicros,
   openingQuantities,
   type ValuationOverview
-} from '$lib/features/inventory/valuation';
+} from '#lib/features/inventory/valuation.ts';
 
-vi.mock('$lib/api/client', () => ({ apiFetch: vi.fn() }));
+vi.mock('#lib/api/client.ts', () => ({ apiFetch: vi.fn() }));
 
 describe('inventory valuation exact amounts', () => {
   it('adds fractional values without floating point rounding', () => {

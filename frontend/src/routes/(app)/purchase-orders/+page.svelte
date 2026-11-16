@@ -1,5 +1,5 @@
 <script lang="ts">
-  import PurchaseOrderList from '$lib/features/purchase-orders/components/PurchaseOrderList.svelte';
+  import PurchaseOrderList from '#lib/features/purchase-orders/components/PurchaseOrderList.svelte';
 </script>
 
 <svelte:head>

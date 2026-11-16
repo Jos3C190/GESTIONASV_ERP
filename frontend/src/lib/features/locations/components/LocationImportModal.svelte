@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { HttpError } from '$lib/api/client';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { HttpError } from '#lib/api/client.ts';
   import { createIdempotencyKey } from '../schemas';
   import { previewLocationImport, publishLocationBatch } from '../services';
   import {

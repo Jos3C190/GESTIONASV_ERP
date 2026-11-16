@@ -5,7 +5,7 @@
  * backend reporta a Traccar como la app de un conductor. Aquí vive lo puro: la
  * física del joystick, el teclado y los textos del estado de una sesión.
  */
-import type { SimulationOut } from '$lib/api/client';
+import type { SimulationOut } from '#lib/api/client.ts';
 
 type LngLat = [number, number];
 

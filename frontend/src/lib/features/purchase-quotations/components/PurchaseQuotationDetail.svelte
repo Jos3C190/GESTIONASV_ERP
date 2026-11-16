@@ -1,14 +1,14 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import { catalogApi } from '$lib/api/catalog';
-  import PurchaseQuotationWorkflowActions from '$lib/features/purchase-quotations/components/PurchaseQuotationWorkflowActions.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
-  import PurchaseQuotationDocuments from '$lib/features/purchase-quotations/components/PurchaseQuotationDocuments.svelte';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import { branch } from '$lib/stores/branch.svelte';
-  import type { PurchaseQuotation, PurchaseQuotationStatus } from '$lib/types/purchase-quotation';
-  import type { Supplier } from '$lib/types/supplier';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import PurchaseQuotationWorkflowActions from '#lib/features/purchase-quotations/components/PurchaseQuotationWorkflowActions.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
+  import PurchaseQuotationDocuments from '#lib/features/purchase-quotations/components/PurchaseQuotationDocuments.svelte';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import type { PurchaseQuotation, PurchaseQuotationStatus } from '#lib/types/purchase-quotation.ts';
+  import type { Supplier } from '#lib/types/supplier.ts';
 
   let { id, consolidationId = null }: { id: string; consolidationId?: string | null } = $props();
 

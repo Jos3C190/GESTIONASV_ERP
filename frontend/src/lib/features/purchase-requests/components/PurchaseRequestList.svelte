@@ -1,13 +1,13 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page as currentPage } from '$app/state';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseRequestsApi } from '$lib/api/purchase-requests';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { PurchaseRequest, PurchaseRequestStatus } from '$lib/types/purchase-request';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseRequestsApi } from '#lib/api/purchase-requests.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { PurchaseRequest, PurchaseRequestStatus } from '#lib/types/purchase-request.ts';
 
   const statusOptions: Array<{ value: '' | PurchaseRequestStatus; label: string }> = [
     { value: '', label: 'Todos los estados' },

@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import PrivacyEmptyState from './PrivacyEmptyState.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { privacyApi } from '$lib/api/privacy';
-  import { formatMoment, fromLocalInput, toLocalInput } from '$lib/features/privacy/labels';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import type { Incident, IncidentInput } from '$lib/types/privacy';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { privacyApi } from '#lib/api/privacy.ts';
+  import { formatMoment, fromLocalInput, toLocalInput } from '#lib/features/privacy/labels.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import type { Incident, IncidentInput } from '#lib/types/privacy.ts';
 
   let { canManage }: { canManage: boolean } = $props();
 

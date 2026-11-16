@@ -6,7 +6,7 @@
     type SimulationMode,
     type SimulationOut,
     type SimulatorOut
-  } from '$lib/api/client';
+  } from '#lib/api/client.ts';
   import {
     DRIVE_KEYS,
     DRIVE_SEND_MS,

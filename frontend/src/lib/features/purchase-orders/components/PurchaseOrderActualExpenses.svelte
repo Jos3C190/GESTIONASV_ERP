@@ -1,16 +1,16 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { purchaseOrdersApi } from '$lib/api/purchase-orders';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { purchaseOrdersApi } from '#lib/api/purchase-orders.ts';
   import {
     actualExpensesApi,
     type ActualPurchaseExpense,
     type ActualExpenseAvailability
   } from '../actual-expenses';
-  import { otherExpenseCategory } from '$lib/features/retaceos/manual-costs';
+  import { otherExpenseCategory } from '#lib/features/retaceos/manual-costs.ts';
   import PurchaseOrderExpenseDocuments from './PurchaseOrderExpenseDocuments.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { PurchaseOrder, PurchaseOrderExpenseType } from '$lib/types/purchase-order';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { PurchaseOrder, PurchaseOrderExpenseType } from '#lib/types/purchase-order.ts';
 
   let { order }: { order: PurchaseOrder } = $props();
   let expenses = $state<ActualPurchaseExpense[]>([]);

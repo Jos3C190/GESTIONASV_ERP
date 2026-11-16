@@ -1,6 +1,6 @@
 <script lang="ts">
-  import ImageUpload from '$lib/components/ui/ImageUpload.svelte';
-  import type { ProductVariantImageDraft } from '$lib/types/catalog';
+  import ImageUpload from '#lib/components/ui/ImageUpload.svelte';
+  import type { ProductVariantImageDraft } from '#lib/types/catalog.ts';
 
   interface Props {
     image: ProductVariantImageDraft | null | undefined;

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import ConfirmActionDialog from '$lib/components/ui/ConfirmActionDialog.svelte';
-import { confirmation } from '$lib/stores/confirmation.svelte';
+import ConfirmActionDialog from '#lib/components/ui/ConfirmActionDialog.svelte';
+import { confirmation } from '#lib/stores/confirmation.svelte.ts';
 
 describe('ConfirmActionDialog', () => {
   beforeEach(() => confirmation.reset());

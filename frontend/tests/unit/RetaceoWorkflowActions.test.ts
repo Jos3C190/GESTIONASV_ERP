@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import RetaceoWorkflowActions from '$lib/features/retaceos/components/RetaceoWorkflowActions.svelte';
-import type { Retaceo } from '$lib/types/retaceo';
+import RetaceoWorkflowActions from '#lib/features/retaceos/components/RetaceoWorkflowActions.svelte';
+import type { Retaceo } from '#lib/types/retaceo.ts';
 
 const mocks = vi.hoisted(() => ({
   goto: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
 
-vi.mock('$lib/api/retaceos', () => ({
+vi.mock('#lib/api/retaceos.ts', () => ({
   retaceosApi: {
     calculate: mocks.calculate,
     verify: mocks.verify,
@@ -29,12 +29,12 @@ vi.mock('$lib/api/retaceos', () => ({
   }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
   }
 }));
-vi.mock('$lib/stores/branch.svelte', () => ({ branch: { accessAllBranches: true } }));
+vi.mock('#lib/stores/branch.svelte.ts', () => ({ branch: { accessAllBranches: true } }));
 
 const retaceo: Retaceo = {
   id: '11111111-1111-1111-1111-111111111111',

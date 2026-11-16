@@ -3,17 +3,17 @@ import type {
   PurchaseCreateInput,
   PurchaseUpdateInput,
   PurchaseVerifyInput
-} from '$lib/types/purchase';
+} from '#lib/types/purchase.ts';
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn()
 }));
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
   apiFetch: mocks.apiFetch
 }));
 
-import { purchasesApi } from '$lib/api/purchases';
+import { purchasesApi } from '#lib/api/purchases.ts';
 
 describe('purchasesApi', () => {
   beforeEach(() => {

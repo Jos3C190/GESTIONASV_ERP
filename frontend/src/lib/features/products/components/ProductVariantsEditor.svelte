@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import type { ProductVariantConfig } from '$lib/types/catalog';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import type { ProductVariantConfig } from '#lib/types/catalog.ts';
   import ProductVariantImageEditor from './ProductVariantImageEditor.svelte';
 
   interface Props {

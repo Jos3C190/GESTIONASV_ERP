@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import RetaceoCreateEditor from '$lib/features/retaceos/components/RetaceoCreateEditor.svelte';
-import type { Purchase } from '$lib/types/purchase';
+import RetaceoCreateEditor from '#lib/features/retaceos/components/RetaceoCreateEditor.svelte';
+import type { Purchase } from '#lib/types/purchase.ts';
 import { saveRetaceoPreview } from './retaceo-preview';
 
 const mocks = vi.hoisted(() => ({
@@ -15,25 +15,25 @@ vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
 
-vi.mock('$lib/api/purchases', () => ({
+vi.mock('#lib/api/purchases.ts', () => ({
   purchasesApi: {
     get: mocks.getPurchase
   }
 }));
 
-vi.mock('$lib/api/retaceos', () => ({
+vi.mock('#lib/api/retaceos.ts', () => ({
   retaceosApi: {
     create: mocks.create
   }
 }));
 
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: {
     getProduct: vi.fn().mockResolvedValue({ id_product: 10, sku: 'PROD-10', name: 'Producto A' })
   }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
   }

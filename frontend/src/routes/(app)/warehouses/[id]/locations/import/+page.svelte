@@ -1,13 +1,13 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import { HttpError } from '$lib/api/client';
-  import LocationImportModal from '$lib/features/locations/components/LocationImportModal.svelte';
-  import { getLocationCodeScheme } from '$lib/features/locations/services';
-  import type { LocationCodeScheme } from '$lib/features/locations/types';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import LocationImportModal from '#lib/features/locations/components/LocationImportModal.svelte';
+  import { getLocationCodeScheme } from '#lib/features/locations/services.ts';
+  import type { LocationCodeScheme } from '#lib/features/locations/types.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   let warehouseId = $derived(page.params.id ?? '');
   let canImport = $derived(permissions.hasPermission('locations.import'));

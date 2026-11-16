@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
-vi.mock('$lib/api/client', () => ({ apiFetch: apiFetchMock }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1' } }));
+vi.mock('#lib/api/client.ts', () => ({ apiFetch: apiFetchMock }));
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: { id: 'company-1' } }));
 
 import { inventoryAdjustmentsApi, type AdjustmentCreateInput } from '../../src/lib/features/inventory/adjustments';
 

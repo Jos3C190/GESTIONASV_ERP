@@ -1,20 +1,20 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
   import {
     DOCUMENT_ACCEPT,
     DOCUMENT_MAX_BYTES,
     documentContentType,
     isSupportedDocumentFile
-  } from '$lib/features/documents/document-upload';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  } from '#lib/features/documents/document-upload.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type {
     PurchaseQuotationDocument,
     PurchaseQuotationDocumentUpload,
     PurchaseQuotationStatus
-  } from '$lib/types/purchase-quotation';
+  } from '#lib/types/purchase-quotation.ts';
 
   let {
     quotationId,

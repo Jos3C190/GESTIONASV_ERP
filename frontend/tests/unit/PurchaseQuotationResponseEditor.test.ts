@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseQuotationResponseEditor from '$lib/features/purchase-quotations/components/PurchaseQuotationResponseEditor.svelte';
+import PurchaseQuotationResponseEditor from '#lib/features/purchase-quotations/components/PurchaseQuotationResponseEditor.svelte';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -16,7 +16,7 @@ vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
 
-vi.mock('$lib/api/purchase-quotations', () => ({
+vi.mock('#lib/api/purchase-quotations.ts', () => ({
   purchaseQuotationsApi: {
     get: mocks.get,
     recordResponse: mocks.recordResponse,
@@ -26,7 +26,7 @@ vi.mock('$lib/api/purchase-quotations', () => ({
   }
 }));
 
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: {
     getProduct: vi.fn().mockResolvedValue({
       id_product: 10,
@@ -38,13 +38,13 @@ vi.mock('$lib/api/catalog', () => ({
   }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
   }
 }));
 
-vi.mock('$lib/stores/session.svelte', () => ({
+vi.mock('#lib/stores/session.svelte.ts', () => ({
   session: {
     user: { id: 'response-editor-test-user' }
   }

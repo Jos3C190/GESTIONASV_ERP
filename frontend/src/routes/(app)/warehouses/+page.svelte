@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onDestroy } from 'svelte';
-  import { search as globalSearch } from '$lib/stores/search.svelte';
+  import { search as globalSearch } from '#lib/stores/search.svelte.ts';
   import {
     CAPACITY_ENFORCEMENT_LABEL,
     CAPACITY_PROFILE_LABEL,
@@ -9,18 +9,18 @@
     STATUS_MAP,
     type CapacityStatus,
     type Warehouse
-  } from '$lib/features/warehouses/types';
-  import { getWarehouses } from '$lib/services/warehouses';
-  import { api, HttpError, type PageMeta, type WarehouseListSummary } from '$lib/api/client';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch as operationalBranch } from '$lib/stores/branch.svelte';
-  import { queryClient } from '$lib/services/query-client';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
+  } from '#lib/features/warehouses/types.ts';
+  import { getWarehouses } from '#lib/services/warehouses.ts';
+  import { api, HttpError, type PageMeta, type WarehouseListSummary } from '#lib/api/client.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch as operationalBranch } from '#lib/stores/branch.svelte.ts';
+  import { queryClient } from '#lib/services/query-client.ts';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import KebabMenu, { type KebabItem } from '#lib/components/ui/KebabMenu.svelte';
 
   const EMPTY_SUMMARY: WarehouseListSummary = {
     total_certified_max_weight_kg: 0,

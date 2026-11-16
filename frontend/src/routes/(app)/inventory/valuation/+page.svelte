@@ -1,17 +1,17 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import ValuationOpening from '$lib/features/inventory/components/ValuationOpening.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import ValuationOpening from '#lib/features/inventory/components/ValuationOpening.svelte';
   import {
     valuationApi,
     valuationKind,
     displayDecimal,
     type ValuationOverview,
     type ValuationEntry
-  } from '$lib/features/inventory/valuation';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  } from '#lib/features/inventory/valuation.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   let data = $state<ValuationOverview | null>(null);
   let loading = $state(true);

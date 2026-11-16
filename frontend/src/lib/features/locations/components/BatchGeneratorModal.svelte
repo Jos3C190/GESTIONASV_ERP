@@ -1,10 +1,10 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
-  import { HttpError } from '$lib/api/client';
-  import type { CapacityEnforcementMode, CapacityProfile } from '$lib/features/warehouses/types';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import type { CapacityEnforcementMode, CapacityProfile } from '#lib/features/warehouses/types.ts';
   import { batchCardinality, createIdempotencyKey } from '../schemas';
   import { previewGeneratedLocations, publishLocationBatch } from '../services';
   import {

@@ -1,11 +1,11 @@
 <script lang="ts">
-  import Tabs from '$lib/components/ui/Tabs.svelte';
-  import FiscalActivitiesPanel from '$lib/features/fiscal/components/FiscalActivitiesPanel.svelte';
-  import FiscalDocumentsPanel from '$lib/features/fiscal/components/FiscalDocumentsPanel.svelte';
-  import FiscalEstablishmentsPanel from '$lib/features/fiscal/components/FiscalEstablishmentsPanel.svelte';
-  import FiscalProfilePanel from '$lib/features/fiscal/components/FiscalProfilePanel.svelte';
-  import FiscalUnitsPanel from '$lib/features/fiscal/components/FiscalUnitsPanel.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import Tabs from '#lib/components/ui/Tabs.svelte';
+  import FiscalActivitiesPanel from '#lib/features/fiscal/components/FiscalActivitiesPanel.svelte';
+  import FiscalDocumentsPanel from '#lib/features/fiscal/components/FiscalDocumentsPanel.svelte';
+  import FiscalEstablishmentsPanel from '#lib/features/fiscal/components/FiscalEstablishmentsPanel.svelte';
+  import FiscalProfilePanel from '#lib/features/fiscal/components/FiscalProfilePanel.svelte';
+  import FiscalUnitsPanel from '#lib/features/fiscal/components/FiscalUnitsPanel.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   const TABS = [
     { id: 'emisor', label: 'Emisor' },

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { DocumentRecordOut } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
-  import { formatDocumentDate, isCaptureOnly } from '$lib/features/documents/document-upload';
-  import { isBrowserPreviewable } from '$lib/features/documents/open-document';
+  import type { DocumentRecordOut } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import KebabMenu, { type KebabItem } from '#lib/components/ui/KebabMenu.svelte';
+  import { formatDocumentDate, isCaptureOnly } from '#lib/features/documents/document-upload.ts';
+  import { isBrowserPreviewable } from '#lib/features/documents/open-document.ts';
 
   interface Props {
     documents: DocumentRecordOut[];

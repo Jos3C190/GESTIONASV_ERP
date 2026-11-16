@@ -1,16 +1,16 @@
 <script lang="ts">
   import { beforeNavigate, goto } from '$app/navigation';
   import { onMount, tick } from 'svelte';
-  import { api, HttpError, type EmployeeOut } from '$lib/api/client';
-  import { getBranch } from '$lib/services/branches';
-  import { company } from '$lib/stores/company.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
-  import ChipInput from '$lib/components/ui/ChipInput.svelte';
-  import EditorSectionNav from '$lib/components/editor/EditorSectionNav.svelte';
+  import { api, HttpError, type EmployeeOut } from '#lib/api/client.ts';
+  import { getBranch } from '#lib/services/branches.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
+  import ChipInput from '#lib/components/ui/ChipInput.svelte';
+  import EditorSectionNav from '#lib/components/editor/EditorSectionNav.svelte';
   import BranchImagesEditor from './BranchImagesEditor.svelte';
   import BranchLocationPicker from './BranchLocationPicker.svelte';
   import type { Branch, BranchImage, ScheduleDay } from '../types';
@@ -374,6 +374,7 @@
     void goto(target);
   }
   beforeNavigate((navigation) => {
+    if (navigation.shallow && navigation.type === 'goto') return;
     const from = navigation.from?.url;
     const to = navigation.to?.url;
     const isHashOnlyNavigation =

@@ -13,14 +13,14 @@ const { salesApi, documentApi } = vi.hoisted(() => ({
   documentApi: { list: vi.fn() }
 }));
 
-vi.mock('$lib/api/sales', () => ({ salesApi }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/sales.ts', () => ({ salesApi }));
+vi.mock('#lib/api/client.ts', () => ({
   HttpError: class HttpError extends Error {},
   api: { documents: { list: documentApi.list } }
 }));
 
-import { permissions } from '$lib/stores/permissions.svelte';
-import type { Sale, SalesReturn, SalesReturnableAllocation } from '$lib/types/sales';
+import { permissions } from '#lib/stores/permissions.svelte.ts';
+import type { Sale, SalesReturn, SalesReturnableAllocation } from '#lib/types/sales.ts';
 import SalesReturnsPanel from './SalesReturnsPanel.svelte';
 
 const sale: Sale = {

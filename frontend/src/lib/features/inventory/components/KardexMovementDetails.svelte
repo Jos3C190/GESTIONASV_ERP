@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Modal from '$lib/components/ui/Modal.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
   import { movementTypeLabel, stockStatusLabel } from '../movement-presentation';
   import type { PhysicalKardexRow } from '../kardex';
 

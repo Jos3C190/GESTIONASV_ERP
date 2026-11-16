@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PurchaseConsolidationAwardBoard } from '$lib/types/purchase-consolidation';
+  import type { PurchaseConsolidationAwardBoard } from '#lib/types/purchase-consolidation.ts';
   import { formatQuantity } from '../adjudication-formatters';
   import PurchaseConsolidationMatrixOffer from './PurchaseConsolidationMatrixOffer.svelte';
 

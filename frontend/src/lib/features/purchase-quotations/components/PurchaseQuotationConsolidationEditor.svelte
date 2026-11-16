@@ -1,14 +1,14 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseConsolidationsApi } from '$lib/api/purchase-consolidations';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Currency, Supplier } from '$lib/types/supplier';
-  import type { PurchaseConsolidation } from '$lib/types/purchase-consolidation';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseConsolidationsApi } from '#lib/api/purchase-consolidations.ts';
+  import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Currency, Supplier } from '#lib/types/supplier.ts';
+  import type { PurchaseConsolidation } from '#lib/types/purchase-consolidation.ts';
 
   let { consolidationId }: { consolidationId: string } = $props();
 

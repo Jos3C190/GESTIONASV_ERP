@@ -1,19 +1,19 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseQuotationList from '$lib/features/purchase-quotations/components/PurchaseQuotationList.svelte';
+import PurchaseQuotationList from '#lib/features/purchase-quotations/components/PurchaseQuotationList.svelte';
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   listSuppliers: vi.fn()
 }));
 
-vi.mock('$lib/api/purchase-quotations', () => ({
+vi.mock('#lib/api/purchase-quotations.ts', () => ({
   purchaseQuotationsApi: {
     list: mocks.list
   }
 }));
 
-vi.mock('$lib/api/suppliers', () => ({
+vi.mock('#lib/api/suppliers.ts', () => ({
   suppliersApi: {
     listSuppliers: mocks.listSuppliers
   }

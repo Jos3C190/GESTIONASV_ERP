@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   previewUrl: vi.fn()
 }));
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
   api: {
     documents: {
       previewUrl: mocks.previewUrl
@@ -16,7 +16,7 @@ import {
   DocumentBrowserOpenError,
   openDocumentInBrowser,
   openResolvedDocumentInBrowser
-} from '$lib/features/documents/open-document';
+} from '#lib/features/documents/open-document.ts';
 
 describe('openDocumentInBrowser', () => {
   beforeEach(() => {

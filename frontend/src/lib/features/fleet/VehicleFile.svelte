@@ -2,12 +2,12 @@
   import { tick } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import OwnedDocumentsPanel from '$lib/features/documents/components/OwnedDocumentsPanel.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import OwnedDocumentsPanel from '#lib/features/documents/components/OwnedDocumentsPanel.svelte';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import { fleetApi, type FleetVehicle } from './api';
   import {
     formatDate,

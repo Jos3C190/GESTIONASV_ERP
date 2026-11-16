@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import PrivacyEmptyState from './PrivacyEmptyState.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { privacyApi } from '$lib/api/privacy';
-  import { CHANNEL_LABELS, PURPOSE_LABELS, formatMoment } from '$lib/features/privacy/labels';
-  import type { Channel, Consent, ConsentPurpose } from '$lib/types/privacy';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { privacyApi } from '#lib/api/privacy.ts';
+  import { CHANNEL_LABELS, PURPOSE_LABELS, formatMoment } from '#lib/features/privacy/labels.ts';
+  import type { Channel, Consent, ConsentPurpose } from '#lib/types/privacy.ts';
 
   let { customerId, canManage }: { customerId: string; canManage: boolean } = $props();
 

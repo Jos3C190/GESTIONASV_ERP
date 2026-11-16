@@ -1,4 +1,4 @@
-import { apiFetch } from '$lib/api/client';
+import { apiFetch } from '#lib/api/client.ts';
 
 export type BranchDemandLevel = 'low' | 'medium' | 'high';
 

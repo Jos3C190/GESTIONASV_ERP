@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { TrackingAlertOut } from '$lib/api/client';
+import type { TrackingAlertOut } from '#lib/api/client.ts';
 import AlertsPanel from './AlertsPanel.svelte';
 import { sortAlerts } from './alerts.svelte';
 
