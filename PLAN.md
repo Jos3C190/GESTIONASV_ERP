@@ -70,7 +70,7 @@ Fuera de alcance: las promociones (V6) y el registro de la autorización (V2d y 
     - permisos;
     - guarda en el downgrade.
   - Prueba de migración.
-- [ ] **Paso 2: dominio.**
+- [x] **Paso 2: dominio.**
   - Funciones: margen, precio sugerido, elección de escala, descuento sugerido, topes efectivos de varios roles y evaluación de una línea.
   - Pruebas unitarias con valores exactos.
 - [ ] **Paso 3: repositorio, casos de uso y API.**
@@ -94,7 +94,7 @@ Fuera de alcance: las promociones (V6) y el registro de la autorización (V2d y 
 
 ## Estado actual
 
-- **Paso en curso**: 2 (dominio). Migración `0123_sales_margins_and_discounts.py` aplicada también en la base local; modelos nuevos en `models/sales_pricing.py` y `discount_percent` en `sales_customers`.
+- **Paso en curso**: 3 (repositorio, casos de uso y API). Dominio en `domain/entities/sales_margin.py` con 7 pruebas en `tests/unit/test_sales_margin.py`. Migración `0123_sales_margins_and_discounts.py` aplicada también en la base local; modelos nuevos en `models/sales_pricing.py` y `discount_percent` en `sales_customers`.
 - **Contexto**: el frontend usa SvelteKit 3: imports `#lib/…` con extensión, `$app/env`, `goto(…, { replace, reset: false })`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
