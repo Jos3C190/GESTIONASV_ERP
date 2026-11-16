@@ -61,7 +61,7 @@ Queda fuera de V1c:
 - [x] **Paso 1: migración `0120_product_fiscal_classification` y modelos.**
   - Columnas en `products` y en `company_units`, su carga y el permiso `products:fiscal`.
   - Verificar con upgrade, downgrade y upgrade, y con `tests/integration/test_product_fiscal_migration.py`.
-- [ ] **Paso 2: dominio.**
+- [x] **Paso 2: dominio.**
   - `app/domain/entities/product_fiscal.py`: tratamiento, tipo de ítem efectivo, validación de tributos, unidad sugerida y requisitos.
   - Verificar con `tests/unit/test_product_fiscal_domain.py`.
 - [ ] **Paso 3: repositorio, casos de uso y API.**
@@ -83,7 +83,7 @@ Queda fuera de V1c:
 
 ## Estado actual
 
-- **Paso en curso**: 2 (dominio). Las unidades que una empresa habilite después quedan con `hacienda_unit_code` vacío y usan la sugerencia del dominio.
+- **Paso en curso**: 3 (repositorio, casos de uso y API). Las unidades que una empresa habilite después quedan con `hacienda_unit_code` vacío y usan la sugerencia del dominio.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.
