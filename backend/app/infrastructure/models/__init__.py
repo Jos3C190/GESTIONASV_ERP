@@ -183,6 +183,10 @@ from app.infrastructure.models.sales_delivery import (
     SalesDeliveryLineModel,
     SalesDeliveryModel,
 )
+from app.infrastructure.models.sales_pricing import (
+    SalesPriceListItemModel,
+    SalesPriceListModel,
+)
 from app.infrastructure.models.sales_return import (
     SalesReturnCommandModel,
     SalesReturnDocumentModel,
@@ -339,6 +343,8 @@ __all__: list[str] = [
     "SalesDeliveryLineModel",
     "SalesDeliveryModel",
     "SalesIdempotencyModel",
+    "SalesPriceListItemModel",
+    "SalesPriceListModel",
     "SalesQuotationLineModel",
     "SalesQuotationModel",
     "SalesReturnCommandModel",

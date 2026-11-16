@@ -61,7 +61,7 @@ Resultado verificable:
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [ ] **Paso 1: migración `0122_sales_price_lists` y modelos.**
+- [x] **Paso 1: migración `0122_sales_price_lists` y modelos.**
   - Tablas, columna del cliente, permisos, `btree_gist` y una guarda en el downgrade.
   - Verificar con una prueba de migración.
 - [ ] **Paso 2: dominio, repositorio, casos de uso y API.**
@@ -79,7 +79,7 @@ Resultado verificable:
 
 ## Estado actual
 
-- **Paso en curso**: 1 (migración).
+- **Paso en curso**: 2 (dominio, repositorio, casos de uso y API). Migración `0122_sales_price_lists.py` y modelos en `models/sales_pricing.py`; el traslape de vigencias lo garantiza `ex_sales_price_list_items_overlap` (solo en la migración).
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.

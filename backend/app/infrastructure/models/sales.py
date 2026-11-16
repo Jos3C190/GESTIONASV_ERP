@@ -76,6 +76,8 @@ class SalesCustomerModel(UUIDPKMixin, TimestampMixin, Base):
     branch_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     #: Fecha en que se anonimizó por cancelación u olvido (revisión 0121).
     anonymized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Lista de precios del cliente (revisión 0122); sin ella usa la predeterminada.
+    price_list_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     created_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     updated_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
 
@@ -86,6 +88,12 @@ class SalesCustomerModel(UUIDPKMixin, TimestampMixin, Base):
             name="ck_sales_customers_anonymized",
         ),
         ForeignKeyConstraint(["company_id"], ["companies.id"], ondelete="RESTRICT"),
+        ForeignKeyConstraint(
+            ["company_id", "price_list_id"],
+            ["sales_price_lists.company_id", "sales_price_lists.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_customers_price_list",
+        ),
         ForeignKeyConstraint(
             ["created_by_id", "company_id"],
             ["user_companies.user_id", "user_companies.company_id"],
