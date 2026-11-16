@@ -36,6 +36,15 @@ describe('catalog navigation', () => {
     expect(routeTitle('/sales/fiscal-settings')).toBe('Configuración fiscal');
   });
 
+  it('exposes personal data protection under administration', () => {
+    expect(itemByRoute('/privacy')).toMatchObject({
+      label: 'Datos personales',
+      implemented: true,
+      requiredPermission: 'privacy:read'
+    });
+    expect(routeTitle('/privacy')).toBe('Datos personales');
+  });
+
   it('exposes product categories with product read access', () => {
     expect(itemByRoute('/inventory/categories')).toMatchObject({
       label: 'Categorías de productos',

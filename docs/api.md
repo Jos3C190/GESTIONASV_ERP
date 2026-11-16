@@ -1821,6 +1821,61 @@ Error codes (`422` unless noted): `product_fiscal_taxes_require_taxed`,
 `product_fiscal_tax_is_iva`, `product_fiscal_tax_unknown`, `fiscal_unit_code_unknown`,
 `product_not_found` (404), `fiscal_unit_not_found` (404).
 
+## Personal data protection (revision 0121)
+
+Sales area block V1d. Compliance with the Ley para la Protección de Datos Personales
+(D.L. 144/2024, reformed by D.L. 659/2026) for the company's customers: the privacy notice,
+consents for optional uses, ARCO-POL requests of data subjects, anonymization and security
+incidents. Every write is audited; every read and write is scoped by `X-Company-ID`.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/privacy/notice` | `privacy:read` or `sales_customers:read` | Current published notice or `null`. |
+| GET | `/privacy/notices` | `privacy:read` | Every version, newest first. |
+| GET | `/privacy/notice-template` | `privacy:manage` | `title`, a `body` filled with the company's name, address, email and phone, and the nine `elements` of art. 24. |
+| POST | `/privacy/notices` | `privacy:manage` | Body: `title`, `body` (at least 200 characters), `covered_elements` (all nine keys). Publishes the next version; earlier ones stay. Audited as `privacy_notice`. |
+| GET | `/customers/{id}/consents` | `sales_customers:read` | Consents of a customer, active and revoked. |
+| POST | `/customers/{id}/consents` | `sales_customers:manage` | Body: `purpose` (`marketing`, `profiling`, `third_party_sharing`), `channel` (`in_person`, `phone`, `email`, `web`, `written`), optional `notes`. Stores the current notice version. Audited as `customer_consent`. |
+| POST | `/customers/{id}/consents/{consent_id}/revoke` | `sales_customers:manage` | Body: `channel`. |
+| GET | `/privacy/requests?scope=open,closed,all` | `privacy:read` | Requests with `effective_due_on` and `overdue`. `scope` takes one of the three values. |
+| GET | `/privacy/assignee-options` | `privacy:manage` | Active users of the company. |
+| POST | `/privacy/requests` | `privacy:manage` | Body: optional `customer_id`, `requester_name`, optional `requester_document`, `response_channel`, `right_type` (`access`, `rectification`, `cancellation`, `opposition`, `portability`, `erasure`, `restriction`), `description`, `received_on` (not in the future), optional `assignee_id`. Code `SOL-00001`. Audited as `data_subject_request`. |
+| GET | `/privacy/requests/{id}` | `privacy:read` | One request. |
+| POST | `/privacy/requests/{id}/actions` | `privacy:manage` | Body: `action` (`start`, `request_correction`, `correction_received`, `extend`, `resolve`, `deny`, `return`, `archive`), `text`, `extension_reason`. |
+| PUT | `/privacy/requests/{id}/assignee` | `privacy:manage` | Body: `assignee_id` or `null`. |
+| GET | `/privacy/customers/{id}/export` | `privacy:manage` | JSON with the customer, delivery addresses, consents, quotations and sales. Audited as `EXPORT`. |
+| POST | `/privacy/customers/{id}/anonymize` | `privacy:erase` | Body: `request_id` of a cancellation or erasure request in process for that customer. Returns 204. Audited as `ANONYMIZE`. |
+| GET | `/privacy/incidents` | `privacy:read` | Incidents with `notification_deadline` (discovery + 72 h). |
+| POST | `/privacy/incidents` | `privacy:manage` | Body: `discovered_at`, `occurred_at`, `description`, `data_categories`, `affected_count`, `measures` and the notifications to ACE, Fiscalía and subjects (date and reference) or `subjects_not_required_reason`. Code `INC-00001`. |
+| PUT | `/privacy/incidents/{id}` | `privacy:manage` | Same body; only while open. |
+| POST | `/privacy/incidents/{id}/close` | `privacy:manage` | Requires the ACE and Fiscalía notifications and the subjects' notification or its reason. |
+
+Request deadlines, in business days of El Salvador (weekends and the holidays of the
+Código de Trabajo, art. 190, are skipped): answer within 20 (art. 20), extendable once by 20
+with a reason; correction requested from the subject within 10 (art. 18); archiving only
+after that term. `resolve`, `deny`, `return` and `archive` need a text of at least 10
+characters, which is stored as the resolution.
+
+Anonymization replaces the name with «Titular anonimizado CLI-…», clears identity, contact,
+address and seller, deletes the delivery addresses, revokes the active consents and
+deactivates the customer with `anonymized_at`. Issued quotations, sales and fiscal documents
+are kept, as the tax law requires. An anonymized customer cannot be edited or reactivated
+(`customer_anonymized_locked`).
+
+Error codes: `privacy_notice_title_required`, `privacy_notice_body_too_short`,
+`privacy_notice_element_unknown`, `privacy_notice_incomplete`, `privacy_notice_missing`,
+`privacy_consent_already_granted`, `privacy_consent_already_revoked`,
+`privacy_request_future_date`, `privacy_request_action_invalid`,
+`privacy_request_extension_reason_required`, `privacy_request_correction_note_required`,
+`privacy_request_resolution_required`, `privacy_request_archive_too_early`,
+`privacy_request_customer_mismatch`, `privacy_erasure_request_required`,
+`privacy_customer_already_anonymized`, `privacy_assignee_not_found`,
+`privacy_incident_description_required`, `privacy_incident_data_required`,
+`privacy_incident_dates_invalid`, `privacy_incident_future_date`, `privacy_incident_closed`,
+`privacy_incident_notifications_missing`, `customer_anonymized_locked`; not found (404):
+`privacy_request_not_found`, `privacy_consent_not_found`, `privacy_incident_not_found`,
+`privacy_company_not_found`, `sales_customer_not_found`.
+
 ## Sales tax calculation (block V2a)
 
 One calculation engine (`app/domain/entities/sales_tax.py`) computes the fiscal amounts of

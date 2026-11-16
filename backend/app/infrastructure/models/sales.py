@@ -74,11 +74,17 @@ class SalesCustomerModel(UUIDPKMixin, TimestampMixin, Base):
     )
     is_generic: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     branch_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    #: Fecha en que se anonimizó por cancelación u olvido (revisión 0121).
+    anonymized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     updated_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
 
     __table_args__ = (
         UniqueConstraint("company_id", "id", name="uq_sales_customers_company_id"),
+        CheckConstraint(
+            "anonymized_at IS NULL OR (NOT is_active AND NOT is_generic)",
+            name="ck_sales_customers_anonymized",
+        ),
         ForeignKeyConstraint(["company_id"], ["companies.id"], ondelete="RESTRICT"),
         ForeignKeyConstraint(
             ["created_by_id", "company_id"],

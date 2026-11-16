@@ -1038,3 +1038,34 @@ Revision `0120` (revises `0119`).
 
 **Downgrade** refuses while any product is not taxed or has an item type or additional
 taxes. Covered by `backend/tests/integration/test_product_fiscal_migration.py`.
+
+## 31. Personal data protection (0121)
+
+Revision `0121` (revises `0120`).
+
+- `company_privacy_notices`: published versions of the company's privacy notice. `version`
+  is unique per company, `body` has at least 200 characters and `covered_elements
+  varchar(32)[]` records the nine elements of art. 24 confirmed by `published_by`.
+  Versions are never edited; a new one is published.
+- `customer_consents`: one row per consent of a customer for `marketing`, `profiling` or
+  `third_party_sharing`, with the `channel` used, the `notice_id` informed (composite FK to
+  the company's notice), who granted it and, when revoked, the revocation date, user and
+  channel. A partial unique index allows one active consent per customer and purpose.
+- `data_subject_requests`: ARCO-POL requests with `code` (`SOL-00001`), optional
+  `customer_id`, requester, `response_channel`, `right_type`, `received_on`, `due_on`,
+  `correction_due_on`, `extended_due_on` with its `extension_reason`, `status` (`received`,
+  `in_progress`, `awaiting_correction`, `extended`, `resolved`, `denied`, `returned`,
+  `archived`), assignee and the closing `resolution`, `closed_at` and `closed_by`. Checks
+  keep the extension pair together and the closing fields consistent with the status.
+- `personal_data_incidents`: security incidents with `code` (`INC-00001`), discovery and
+  occurrence dates, description, data categories, affected count, measures, the
+  notifications to ACE, Fiscalía and subjects (timestamp and reference) or the reason the
+  subjects are not notified, and `status` `open`/`closed`. A check forbids closing without
+  the notifications.
+- `sales_customers` gains `anonymized_at`; a check requires an anonymized customer to be
+  inactive and not generic.
+- Permissions `privacy:read`, `privacy:manage` and `privacy:erase` are inserted and granted
+  to `SUPER_ADMIN`.
+
+**Downgrade** refuses while any notice, consent, request, incident or anonymized customer
+exists. Covered by `backend/tests/integration/test_privacy_migration.py`.
