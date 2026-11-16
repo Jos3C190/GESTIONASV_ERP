@@ -17,6 +17,7 @@ const TITLES: Record<string, string> = {
   '/customers': 'Clientes',
   '/sales/quotations': 'Cotizaciones de venta',
   '/sales/returns': 'Devoluciones',
+  '/sales/fiscal-settings': 'Configuración fiscal',
   '/sales': 'Ventas',
   '/purchase-requests': 'Solicitudes de compra',
   '/purchase-quotations': 'Cotizaciones de compra',

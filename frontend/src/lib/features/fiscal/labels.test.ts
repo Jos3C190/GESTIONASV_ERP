@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatFiscalDate,
   isEstablishmentCode,
   isPointOfSaleCode,
   nextEstablishmentCode,
@@ -25,5 +26,12 @@ describe('fiscal codes', () => {
     expect(isPointOfSaleCode('p010')).toBe(true);
     expect(isPointOfSaleCode('P000')).toBe(false);
     expect(isPointOfSaleCode('C001')).toBe(false);
+  });
+});
+
+describe('formatFiscalDate', () => {
+  it('uses DD/MM/YYYY in El Salvador time', () => {
+    expect(formatFiscalDate('2026-11-16T03:00:00Z')).toBe('15/11/2026');
+    expect(formatFiscalDate(null)).toBe('—');
   });
 });

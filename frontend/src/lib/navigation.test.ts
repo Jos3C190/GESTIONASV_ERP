@@ -27,6 +27,15 @@ describe('catalog navigation', () => {
     expect(routeTitle('/sales/sale-1')).toBe('Ventas');
   });
 
+  it('exposes the DTE issuer settings with the fiscal read permission', () => {
+    expect(itemByRoute('/sales/fiscal-settings')).toMatchObject({
+      label: 'Configuración fiscal',
+      implemented: true,
+      requiredPermission: 'fiscal_settings:read'
+    });
+    expect(routeTitle('/sales/fiscal-settings')).toBe('Configuración fiscal');
+  });
+
   it('exposes product categories with product read access', () => {
     expect(itemByRoute('/inventory/categories')).toMatchObject({
       label: 'Categorías de productos',

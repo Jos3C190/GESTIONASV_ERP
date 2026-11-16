@@ -88,3 +88,14 @@ export function isEstablishmentCode(type: EstablishmentType, code: string): bool
 export function isPointOfSaleCode(code: string): boolean {
   return /^P(?!000)[0-9]{3}$/.test(code.trim().toUpperCase());
 }
+
+/** Fecha en `DD/MM/YYYY`, en la hora de El Salvador. */
+export function formatFiscalDate(value: string | null): string {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('es-SV', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'America/El_Salvador'
+  }).format(new Date(value));
+}
