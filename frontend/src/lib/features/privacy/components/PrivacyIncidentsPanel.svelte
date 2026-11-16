@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import PrivacyEmptyState from './PrivacyEmptyState.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import { HttpError } from '$lib/api/client';
   import { privacyApi } from '$lib/api/privacy';
@@ -167,8 +168,8 @@
         Ciberseguridad del Estado, a la Fiscalía y a los titulares afectados dentro de 72 horas.
       </p>
     </div>
-    {#if canManage}
-      <Button onclick={() => openEditor(null)}>Registrar vulneración</Button>
+    {#if canManage && (loading || loadError || incidents.length > 0)}
+      <Button class="shrink-0" onclick={() => openEditor(null)}>Registrar vulneración</Button>
     {/if}
   </div>
 
@@ -186,9 +187,18 @@
       <Button variant="secondary" size="sm" onclick={() => void load()}>Reintentar</Button>
     </div>
   {:else if incidents.length === 0}
-    <p class="px-6 py-12 text-center text-sm text-foreground-muted">
-      No hay vulneraciones registradas.
-    </p>
+    <PrivacyEmptyState
+      icon="M12 9v4 M12 17h.01 M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"
+      message="No hay vulneraciones registradas."
+      detail="Si se detecta un acceso indebido, una pérdida o una filtración de datos, regístrala de inmediato: el plazo para notificar es de 72 horas."
+    >
+      {#snippet action()}
+        {#if canManage}
+          <Button variant="secondary" onclick={() => openEditor(null)}>Registrar vulneración</Button
+          >
+        {/if}
+      {/snippet}
+    </PrivacyEmptyState>
   {:else}
     <ul class="divide-y divide-border">
       {#each incidents as incident (incident.id)}

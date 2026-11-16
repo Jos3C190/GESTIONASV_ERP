@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import PrivacyEmptyState from './PrivacyEmptyState.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import { HttpError } from '$lib/api/client';
   import { privacyApi } from '$lib/api/privacy';
@@ -82,10 +83,8 @@
         conocerse antes de recolectar datos y antes de registrar un consentimiento.
       </p>
     </div>
-    {#if canManage && !loading}
-      <Button onclick={() => void openEditor()}>
-        {current ? 'Publicar nueva versión' : 'Redactar el aviso'}
-      </Button>
+    {#if canManage && !loading && current}
+      <Button class="shrink-0" onclick={() => void openEditor()}>Publicar nueva versión</Button>
     {/if}
   </div>
 
@@ -103,12 +102,17 @@
       <Button variant="secondary" size="sm" onclick={() => void load()}>Reintentar</Button>
     </div>
   {:else if !current}
-    <div class="px-6 py-12 text-center">
-      <p class="text-sm font-semibold text-foreground">Aún no hay aviso de privacidad publicado</p>
-      <p class="mt-1 text-sm text-foreground-muted">
-        Sin aviso no se pueden registrar consentimientos de los clientes.
-      </p>
-    </div>
+    <PrivacyEmptyState
+      icon="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"
+      message="Aún no hay aviso de privacidad publicado"
+      detail="Sin aviso no se pueden registrar consentimientos de los clientes."
+    >
+      {#snippet action()}
+        {#if canManage}
+          <Button variant="secondary" onclick={() => void openEditor()}>Redactar el aviso</Button>
+        {/if}
+      {/snippet}
+    </PrivacyEmptyState>
   {:else}
     <article class="space-y-3 p-4">
       <p class="text-xs text-foreground-muted">

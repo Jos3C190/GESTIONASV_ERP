@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import PrivacyEmptyState from './PrivacyEmptyState.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import { HttpError } from '$lib/api/client';
   import { privacyApi } from '$lib/api/privacy';
@@ -99,8 +100,10 @@
         después de informarle el aviso de privacidad, y puede retirarlos cuando quiera.
       </p>
     </div>
-    {#if canManage && !loading && !loadError && available.length > 0}
-      <Button variant="secondary" onclick={openGrant}>Registrar consentimiento</Button>
+    {#if canManage && !loading && !loadError && consents.length > 0 && available.length > 0}
+      <Button class="shrink-0" variant="secondary" onclick={openGrant}
+        >Registrar consentimiento</Button
+      >
     {/if}
   </div>
 
@@ -118,10 +121,19 @@
       <Button variant="secondary" size="sm" onclick={() => void load()}>Reintentar</Button>
     </div>
   {:else if consents.length === 0}
-    <p class="px-6 py-8 text-center text-sm text-foreground-muted">
-      El cliente no ha dado consentimientos. Sin ellos no se le envían promociones ni se comparten
-      sus datos.
-    </p>
+    <PrivacyEmptyState
+      icon="M9 12l2 2 4-4 M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"
+      message="El cliente no ha dado consentimientos."
+      detail="Sin ellos no se le envían promociones ni se comparten sus datos."
+    >
+      {#snippet action()}
+        {#if canManage}
+          <Button class="shrink-0" variant="secondary" onclick={openGrant}
+            >Registrar consentimiento</Button
+          >
+        {/if}
+      {/snippet}
+    </PrivacyEmptyState>
   {:else}
     <ul class="divide-y divide-border">
       {#each consents as consent (consent.id)}
@@ -140,6 +152,9 @@
               {consent.notice_version}
               {#if consent.revoked_at}
                 · revocado el {formatMoment(consent.revoked_at)}
+                {#if consent.revocation_channel}
+                  ({CHANNEL_LABELS[consent.revocation_channel].toLowerCase()})
+                {/if}
               {/if}
             </p>
           </div>

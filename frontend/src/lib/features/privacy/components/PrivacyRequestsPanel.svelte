@@ -5,6 +5,7 @@
   } from '$lib/components/ui/AsyncSmartSelect.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import PrivacyEmptyState from './PrivacyEmptyState.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import { HttpError } from '$lib/api/client';
   import { customersApi } from '$lib/api/customers';
@@ -47,6 +48,7 @@
   let form = $state<SubjectRequestInput>(blank());
   let creating = $state(false);
   let createError = $state<string | null>(null);
+  let customerLabel = $state('');
 
   let selected = $state<SubjectRequest | null>(null);
   let pendingAction = $state<RequestAction | null>(null);
@@ -95,6 +97,13 @@
   async function searchCustomers(query: string): Promise<AsyncSmartOption[]> {
     const page = await customersApi.list({ search: query, active: null, size: 20 });
     return page.items.map((c) => ({ value: c.id, label: `${c.code} · ${c.name}` }));
+  }
+
+  function openCreate() {
+    form = blank();
+    customerLabel = '';
+    createError = null;
+    createOpen = true;
   }
 
   async function create(event: SubmitEvent) {
@@ -188,7 +197,7 @@
         limitación. Se responden en 20 días hábiles, prorrogables una vez por otros 20.
       </p>
     </div>
-    <div class="flex gap-2">
+    <div class="flex shrink-0 gap-2">
       <label class="sr-only" for="request-scope">Mostrar</label>
       <select
         id="request-scope"
@@ -203,14 +212,8 @@
         <option value="closed">Cerradas</option>
         <option value="all">Todas</option>
       </select>
-      {#if canManage}
-        <Button
-          onclick={() => {
-            form = blank();
-            createError = null;
-            createOpen = true;
-          }}>Registrar solicitud</Button
-        >
+      {#if canManage && (loading || loadError || requests.length > 0)}
+        <Button onclick={openCreate}>Registrar solicitud</Button>
       {/if}
     </div>
   </div>
@@ -239,9 +242,19 @@
       <Button variant="secondary" size="sm" onclick={() => void load()}>Reintentar</Button>
     </div>
   {:else if requests.length === 0}
-    <p class="px-6 py-12 text-center text-sm text-foreground-muted">
-      {scope === 'open' ? 'No hay solicitudes en trámite.' : 'No hay solicitudes en esta vista.'}
-    </p>
+    <PrivacyEmptyState
+      icon="M4 13h4l2 3h4l2-3h4 M4 13l2-8h12l2 8v6H4z"
+      message={scope === 'open'
+        ? 'No hay solicitudes en trámite.'
+        : 'No hay solicitudes en esta vista.'}
+      detail="Registra aquí cada pedido de un titular para controlar su plazo de respuesta."
+    >
+      {#snippet action()}
+        {#if canManage}
+          <Button variant="secondary" onclick={openCreate}>Registrar solicitud</Button>
+        {/if}
+      {/snippet}
+    </PrivacyEmptyState>
   {:else}
     <ul class="divide-y divide-border">
       {#each requests as request (request.id)}
@@ -350,7 +363,11 @@
           label="Cliente relacionado (si lo es)"
           value={form.customer_id ?? ''}
           placeholder="Buscar cliente…"
-          onselect={(value) => (form.customer_id = value || null)}
+          selectedLabel={customerLabel}
+          onselect={(value, option) => {
+            form.customer_id = value || null;
+            customerLabel = option?.label ?? '';
+          }}
           loadOptions={searchCustomers}
         />
       </div>

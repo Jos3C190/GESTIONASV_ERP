@@ -282,7 +282,11 @@ def require_notice_complete(title: str, body: str, covered: list[str]) -> tuple[
 def notice_template(
     *, company_name: str, address: str, email: str | None, phone: str | None
 ) -> str:
-    contact = " o ".join(part for part in (email, phone) if part) or "nuestras sucursales"
+    channels = [f"escribiendo a {email}"] if email else []
+    if phone:
+        channels.append(f"llamando al {phone}")
+    channels.append("en cualquiera de nuestras sucursales")
+    contact = f"{', '.join(channels[:-1])} o {channels[-1]}" if len(channels) > 1 else channels[0]
     return (
         f"{company_name}, con domicilio en {address}, es responsable del tratamiento de los "
         "datos personales de sus clientes.\n\n"
@@ -296,7 +300,7 @@ def notice_template(
         "enviarte promociones y novedades.\n\n"
         "Tus derechos: puedes pedir acceso, rectificación, cancelación, oposición, "
         "portabilidad, olvido o limitación del tratamiento de tus datos, y revocar tu "
-        f"consentimiento, escribiendo a {contact} o en cualquiera de nuestras sucursales. "
+        f"consentimiento, {contact}. "
         "Respondemos en un máximo de veinte días hábiles.\n\n"
         "Cambios a este aviso: los publicaremos en nuestras sucursales y en los documentos que "
         "te enviemos.\n\n"

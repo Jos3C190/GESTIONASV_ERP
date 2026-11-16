@@ -159,6 +159,15 @@ def test_notice_must_cover_article_24() -> None:
         company_name="Empresa ficticia", address="San Salvador", email="d@x.test", phone=None
     )
     assert "veinte días hábiles" in body
+    assert "escribiendo a d@x.test o en cualquiera de nuestras sucursales" in body
+    phone_only = notice_template(
+        company_name="Empresa ficticia", address="San Salvador", email=None, phone="2222-0000"
+    )
+    assert "llamando al 2222-0000 o en cualquiera de nuestras sucursales" in phone_only
+    both = notice_template(
+        company_name="Empresa ficticia", address="San Salvador", email="d@x.test", phone="2222"
+    )
+    assert "escribiendo a d@x.test, llamando al 2222 o en cualquiera" in both
     covered = require_notice_complete("Aviso de privacidad", body, list(NOTICE_ELEMENTS))
     assert len(covered) == 9
     with pytest.raises(BusinessRuleError) as missing:
