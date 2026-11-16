@@ -165,6 +165,7 @@ from app.infrastructure.models.retaceo import (
 from app.infrastructure.models.sales import (
     SaleLineModel,
     SaleModel,
+    SalesCustomerDeliveryAddressModel,
     SalesCustomerModel,
     SalesIdempotencyModel,
     SalesQuotationLineModel,
@@ -321,6 +322,7 @@ __all__: list[str] = [
     "RolePermission",
     "SaleLineModel",
     "SaleModel",
+    "SalesCustomerDeliveryAddressModel",
     "SalesCustomerModel",
     "SalesDeliveryAllocationModel",
     "SalesDeliveryCommandModel",

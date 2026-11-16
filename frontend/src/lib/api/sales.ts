@@ -1,9 +1,8 @@
-import { apiFetch, type Page } from '$lib/api/client';
+import { apiFetch } from '$lib/api/client';
 import { branch } from '$lib/stores/branch.svelte';
 import type {
   Sale,
   SalesCatalogItem,
-  SalesCustomer,
   SalesDelivery,
   SalesDeliveryStockLine,
   SalesFilters,
@@ -30,20 +29,6 @@ function scopedPath(path: string, filters: SalesFilters = {}): string {
 }
 
 export const salesApi = {
-  customers(params: { search?: string; active?: boolean | null; page?: number; size?: number } = {}) {
-    const query = new URLSearchParams();
-    if (params.search?.trim()) query.set('search', params.search.trim());
-    if (params.active !== undefined && params.active !== null) query.set('active', String(params.active));
-    query.set('page', String(params.page ?? 1));
-    query.set('size', String(params.size ?? 100));
-    return apiFetch<Page<SalesCustomer>>(`/sales/customers?${query.toString()}`);
-  },
-  createCustomer(payload: Pick<SalesCustomer, 'code' | 'name' | 'phone' | 'email'>) {
-    return apiFetch<SalesCustomer>('/sales/customers', { method: 'POST', body: JSON.stringify(payload) });
-  },
-  updateCustomer(id: string, payload: Partial<Pick<SalesCustomer, 'name' | 'phone' | 'email' | 'is_active'>>) {
-    return apiFetch<SalesCustomer>(`/sales/customers/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-  },
   catalog() {
     return apiFetch<SalesCatalogItem[]>('/sales/catalog');
   },

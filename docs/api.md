@@ -1252,12 +1252,11 @@ does not include availability or cost. Physical deliveries are added by B07;
 there are still no reservation, invoice, tax, discount, payment or receivable
 endpoints.
 
+The customer routes of this block (`/sales/customers`) were replaced in revision 0119 by
+`/api/v1/customers`; see «Customers with fiscal identity» below.
+
 | Method and path | Permission | Scope and purpose |
 | --- | --- | --- |
-| `GET /customers?search=&active=&page=&size=` | `sales_customers:read` | Search the active company's customer catalog. |
-| `POST /customers` | `sales_customers:manage` | Create a customer with company-unique code and required name. |
-| `GET /customers/{customer_id}` | `sales_customers:read` | Read a customer in the active company. |
-| `PATCH /customers/{customer_id}` | `sales_customers:manage` | Update basic contact data or deactivate; no physical deletion. |
 | `GET /catalog` | `sales_quotations:manage` | Read company-scoped sellable inventory identities and valid units. |
 | `GET /quotations?branch_id=&customer_id=&status=&from_date=&to_date=&page=&size=` | `sales_quotations:read` | List quotations within assigned branches; status also projects expiry. |
 | `POST /quotations` | `sales_quotations:manage` | Create an idempotent draft after branch, customer, product, unit and line validation. Requires `Idempotency-Key`. |
@@ -1745,3 +1744,57 @@ Error codes (`422` unless noted): `fiscal_catalog_unknown` (404),
 `fiscal_document_type_invalid`, `fiscal_document_not_certified`,
 `fiscal_production_not_ready`, `fiscal_production_would_break`,
 `fiscal_company_not_found` (404).
+
+## Customers with fiscal identity (revision 0119)
+
+Sales area block V1b. Replaces `/api/v1/sales/customers`. Routes live in
+`/api/v1/customers`, resolve the company from `X-Company-ID` and use
+`sales_customers:read` (GET) and `sales_customers:manage` (writes). Every write is
+audited as `sales_customer` or `sales_customer_delivery_address`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/customers?search=&customer_type=&active=&include_generic=&page=&size=` | List. `search` matches code, name, commercial name and, with 3 or more digits, NIT, DUI or NRC. Generic customers are hidden unless `include_generic=true`. |
+| POST | `/customers` | Create. `code` is optional (the server proposes `CLI-00001`, `CLI-00002`…); `customer_type` defaults to `final_consumer`. |
+| GET | `/customers/seller-options?search=` | Active employees of the company that can be assigned as the customer's seller (`id`, `code`, `name`, `position`). Uses `sales_customers:read`, so the customer screen does not need `employees:read`. |
+| GET | `/customers/generic?branch_id=` | The branch's generic «Consumidor final» customer; created the first time (code `CF-<branch code>`). |
+| GET | `/customers/{id}` | Customer file with delivery addresses. |
+| PUT | `/customers/{id}` | Replace the customer data. |
+| PATCH | `/customers/{id}/status` | `{"is_active": bool}`. Inactive customers cannot be quoted or sold to. |
+| POST | `/customers/{id}/delivery-addresses` | Add a delivery address; the first active one becomes the default. |
+| PUT / DELETE | `/customers/{id}/delivery-addresses/{address_id}` | Edit or remove a delivery address. |
+
+Body fields: `customer_type` (`final_consumer`, `taxpayer`, `foreign`), `name`,
+`person_type` (`1`, `2`), `taxpayer_category` (required for taxpayers: `large`,
+`medium`, `other`), `is_withholding_agent`, `commercial_name`, `document_type`
+(CAT-022: `36` NIT, `13` DUI, `02`, `03`, `37`) with `document_number`, `nrc`,
+`activity_code` (CAT-019), `geography` (`department_id`, `municipality_id`,
+`district_id`), `address_line`, `country_code` (CAT-020, foreign customers only),
+`phone`, `email`, `credit_days` (0 to 365), `credit_limit`, `seller_employee_id`.
+
+Rules:
+
+- NIT is stored as 14 or 9 digits and DUI as 9 digits, without dashes; NRC as 2 to 8
+  digits. Document and NRC are unique per company.
+- The response adds `receivable_documents` (CAT-002 codes the customer can receive
+  today) and `tax_credit_missing` (Spanish reasons). Tax credit (`03`) needs a taxpayer
+  with NIT or DUI, NRC, activity and a complete address whose district has Hacienda
+  codes. Foreign customers receive export invoices (`11`); everyone else, invoices
+  (`01`).
+- `seller_employee_id` must be an active employee of the same company; the response adds
+  `seller_name`.
+- Generic customers cannot be edited, deactivated or given delivery addresses.
+
+Error codes (`422` unless noted): `customer_name_required`,
+`customer_taxpayer_category_required`, `customer_document_incomplete`,
+`customer_taxpayer_document_invalid`, `customer_nit_invalid`, `customer_dui_invalid`,
+`customer_document_invalid`, `customer_nrc_invalid`, `customer_activity_invalid`,
+`customer_activity_unknown`, `customer_country_required`, `customer_country_unknown`,
+`customer_country_not_foreign`, `customer_foreign_geography`, `customer_geography_invalid`,
+`customer_credit_days_invalid`, `customer_credit_limit_invalid`, `customer_generic_locked`,
+`customer_delivery_label_required`, `customer_delivery_line_required`,
+`customer_delivery_coordinates_invalid`, `customer_delivery_default_inactive`,
+`customer_document_duplicate` (409), `customer_nrc_duplicate` (409),
+`sales_customer_code_exists` (409), `sales_customer_not_found` (404),
+`customer_branch_not_found` (404), `customer_seller_not_found` (404),
+`customer_delivery_not_found` (404).

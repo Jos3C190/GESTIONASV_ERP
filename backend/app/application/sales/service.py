@@ -33,8 +33,7 @@ from app.infrastructure.models.sales import (
     SalesQuotationModel,
 )
 from app.infrastructure.models.sales_delivery import SalesDeliveryLineModel, SalesDeliveryModel
-from sqlalchemy import and_, func, or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 SV_TZ = ZoneInfo("America/El_Salvador")
@@ -99,18 +98,6 @@ class SalesService:
         )
 
     @staticmethod
-    def _customer_state(row: SalesCustomerModel) -> dict[str, object]:
-        return {
-            "id": str(row.id),
-            "company_id": str(row.company_id),
-            "code": row.code,
-            "name": row.name,
-            "phone": row.phone,
-            "email": row.email,
-            "is_active": row.is_active,
-        }
-
-    @staticmethod
     def _quote_state(row: SalesQuotationModel) -> dict[str, object]:
         return {
             "id": str(row.id),
@@ -142,90 +129,6 @@ class SalesService:
             "version": row.version,
         }
 
-    async def create_customer(
-        self, *, company_id: uuid.UUID, actor_id: uuid.UUID, data: dict[str, Any], request: Any
-    ) -> dict[str, Any]:
-        code = str(data["code"]).strip()
-        name = str(data["name"]).strip()
-        if not code or not name:
-            raise ValidationError(
-                "El código y el nombre del cliente son obligatorios.",
-                code="sales_customer_required",
-            )
-        row = SalesCustomerModel(
-            company_id=company_id,
-            code=code,
-            name=name,
-            phone=(str(data.get("phone") or "").strip() or None),
-            email=(str(data.get("email") or "").strip() or None),
-            is_active=True,
-            created_by_id=actor_id,
-            updated_by_id=actor_id,
-        )
-        try:
-            async with self.session.begin_nested():
-                self.session.add(row)
-                await self.session.flush()
-                await self._audit(
-                    action="SALES_CUSTOMER_CREATED",
-                    actor_id=actor_id,
-                    company_id=company_id,
-                    resource_type="sales_customer",
-                    resource_id=row.id,
-                    request=request,
-                    after=self._customer_state(row),
-                )
-        except IntegrityError as exc:
-            raise ConflictError(
-                "Ya existe un cliente con ese código en la empresa.",
-                code="sales_customer_code_exists",
-            ) from exc
-        return self.customer_out(row)
-
-    async def list_customers(
-        self,
-        company_id: uuid.UUID,
-        *,
-        search: str | None,
-        active: bool | None,
-        page: int,
-        size: int,
-    ) -> dict[str, Any]:
-        conditions = [SalesCustomerModel.company_id == company_id]
-        if active is not None:
-            conditions.append(SalesCustomerModel.is_active.is_(active))
-        if search:
-            pattern = f"%{search.strip()}%"
-            conditions.append(
-                or_(SalesCustomerModel.code.ilike(pattern), SalesCustomerModel.name.ilike(pattern))
-            )
-        total = int(
-            await self.session.scalar(
-                select(func.count()).select_from(SalesCustomerModel).where(*conditions)
-            )
-            or 0
-        )
-        rows = list(
-            (
-                await self.session.scalars(
-                    select(SalesCustomerModel)
-                    .where(*conditions)
-                    .order_by(SalesCustomerModel.name, SalesCustomerModel.code)
-                    .offset((page - 1) * size)
-                    .limit(size)
-                )
-            ).all()
-        )
-        return {
-            "items": [self.customer_out(row) for row in rows],
-            "meta": {
-                "page": page,
-                "size": size,
-                "total": total,
-                "pages": (total + size - 1) // size,
-            },
-        }
-
     async def get_customer(
         self, company_id: uuid.UUID, customer_id: uuid.UUID
     ) -> SalesCustomerModel:
@@ -237,59 +140,6 @@ class SalesService:
         if row is None:
             raise NotFoundError("Cliente no encontrado.", code="sales_customer_not_found")
         return row
-
-    async def update_customer(
-        self,
-        *,
-        company_id: uuid.UUID,
-        actor_id: uuid.UUID,
-        customer_id: uuid.UUID,
-        data: dict[str, Any],
-        request: Any,
-    ) -> dict[str, Any]:
-        async with self.session.begin_nested():
-            row = await self.get_customer(company_id, customer_id)
-            before = self._customer_state(row)
-            for key in ("name", "phone", "email", "is_active"):
-                if key in data:
-                    value = data[key]
-                    if key == "name":
-                        value = str(value or "").strip()
-                        if not value:
-                            raise ValidationError(
-                                "El nombre del cliente no puede quedar vacío.",
-                                code="sales_customer_name_required",
-                            )
-                    if key in {"phone", "email"}:
-                        value = str(value or "").strip() or None
-                    setattr(row, key, value)
-            row.updated_by_id = actor_id
-            await self.session.flush()
-            await self._audit(
-                action="SALES_CUSTOMER_UPDATED",
-                actor_id=actor_id,
-                company_id=company_id,
-                resource_type="sales_customer",
-                resource_id=row.id,
-                request=request,
-                before=before,
-                after=self._customer_state(row),
-            )
-        return self.customer_out(row)
-
-    @staticmethod
-    def customer_out(row: SalesCustomerModel) -> dict[str, Any]:
-        return {
-            "id": str(row.id),
-            "company_id": str(row.company_id),
-            "code": row.code,
-            "name": row.name,
-            "phone": row.phone,
-            "email": row.email,
-            "is_active": row.is_active,
-            "created_at": row.created_at,
-            "updated_at": row.updated_at,
-        }
 
     async def catalog(self, company_id: uuid.UUID) -> list[dict[str, Any]]:
         products = list(

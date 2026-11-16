@@ -202,7 +202,7 @@ async def _receive_and_place(client, ctx, index, quantity, *, ordered_quantity=N
 
 async def _sell_all(client, ctx, units):
     customer = await client.post(
-        "/api/v1/sales/customers",
+        "/api/v1/customers",
         headers=ctx.admin,
         json={"code": "FINAL-CLIENTE", "name": "Cliente de aceptación final"},
     )

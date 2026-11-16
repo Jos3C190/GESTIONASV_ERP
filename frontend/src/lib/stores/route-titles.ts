@@ -15,6 +15,7 @@ const TITLES: Record<string, string> = {
   '/documents': 'Documentos',
   '/suppliers': 'Proveedores',
   '/customers': 'Clientes',
+  '/customers/new': 'Nuevo cliente',
   '/sales/quotations': 'Cotizaciones de venta',
   '/sales/returns': 'Devoluciones',
   '/sales/fiscal-settings': 'Configuración fiscal',
@@ -51,6 +52,7 @@ export function routeTitle(pathname: string): string {
   // Check exact match first
   if (TITLES[pathname]) return TITLES[pathname];
   // Gestión de estructuras físicas dentro de un almacén
+  if (/^\/customers\/[^/]+\/?$/.test(pathname)) return 'Clientes';
   if (/^\/fleet\/[^/]+\/edit\/?$/.test(pathname)) return 'Editar vehículo';
   if (/^\/fleet\/[^/]+\/?$/.test(pathname)) return 'Flota';
   if (/^\/drivers\/[^/]+\/?$/.test(pathname)) return 'Conductores';

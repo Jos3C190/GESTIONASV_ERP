@@ -5,10 +5,12 @@
   import { salesApi } from '$lib/api/sales';
   import { formatUnitLabel } from '$lib/features/sales/unit-label';
   import { branch } from '$lib/stores/branch.svelte';
-  import type { SalesCatalogItem, SalesCustomer, SalesLine, SalesLineInput } from '$lib/types/sales';
+  import type { SalesCatalogItem, SalesLine, SalesLineInput } from '$lib/types/sales';
+  import type { Customer } from '$lib/types/customer';
+  import { customersApi } from '$lib/api/customers';
 
   type DraftLine = { key: string; option: SalesCatalogItem | null; unitId: number | null; quantity: string; unitPrice: string; sourceLineId?: string };
-  let customers = $state<SalesCustomer[]>([]);
+  let customers = $state<Customer[]>([]);
   let catalog = $state<SalesCatalogItem[]>([]);
   let branches = $state(branch.branches.filter((item) => item.is_active));
   let branchId = $state(branch.id ?? '');
@@ -37,7 +39,7 @@
       branches = branch.branches.filter((item) => item.is_active);
       if (!branchId && branches.length === 1) branchId = branches[0]?.id ?? '';
       const [customerResponse, items] = await Promise.all([
-        salesApi.customers({ active: true, size: 100 }), salesApi.catalog()
+        customersApi.list({ active: true, size: 100 }), salesApi.catalog()
       ]);
       customers = customerResponse.items;
       catalog = items;

@@ -239,7 +239,7 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
     unit_id = item["units"][0]["unit_id"]
 
     created_customer = await e2e_client.post(
-        "/api/v1/sales/customers",
+        "/api/v1/customers",
         headers=admin_headers,
         json={"code": f"CLI-{uuid.uuid4().hex[:8].upper()}", "name": "Cliente B06 de prueba"},
     )
@@ -666,7 +666,7 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
     }
 
     deactivated_customer = await e2e_client.patch(
-        f"/api/v1/sales/customers/{customer_id}",
+        f"/api/v1/customers/{customer_id}/status",
         headers=admin_headers,
         json={"is_active": False},
     )
@@ -691,5 +691,5 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
     no_permission_email = f"{no_permission_username}@example.test"
     await seed_user(username=no_permission_username, email=no_permission_email, password=PASSWORD)
     no_permission_headers = await _login(e2e_client, no_permission_email, PASSWORD, company_id)
-    denied = await e2e_client.get("/api/v1/sales/customers", headers=no_permission_headers)
+    denied = await e2e_client.get("/api/v1/customers", headers=no_permission_headers)
     assert denied.status_code == 403

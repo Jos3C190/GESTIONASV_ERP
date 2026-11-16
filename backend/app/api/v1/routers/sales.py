@@ -25,10 +25,6 @@ from app.api.v1.schemas.sales import (
     SaleOut,
     SalesCancellation,
     SalesCatalogItemOut,
-    SalesCustomerCreate,
-    SalesCustomerOut,
-    SalesCustomerPage,
-    SalesCustomerUpdate,
     SalesDeliveryCancellation,
     SalesDeliveryCreate,
     SalesDeliveryDraftUpdate,
@@ -160,81 +156,6 @@ async def _authorize_return_evidence_access(
                 "No tiene permiso para consultar documentos de evidencia.",
                 code="sales_return_evidence_read_forbidden",
             )
-
-
-@router.get(
-    "/customers",
-    response_model=SalesCustomerPage,
-    dependencies=[Depends(require_permission("sales_customers:read"))],
-)
-async def list_customers(
-    request: Request,
-    service: SalesServiceDep,
-    company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-    search: str | None = Query(default=None, max_length=120),
-    active: bool | None = None,
-    page: int = Query(default=1, ge=1),
-    size: int = Query(default=20, ge=1, le=100),
-) -> dict[str, Any]:
-    return await service.list_customers(
-        company_id, search=search, active=active, page=page, size=size
-    )
-
-
-@router.post(
-    "/customers",
-    response_model=SalesCustomerOut,
-    status_code=201,
-    dependencies=[Depends(require_permission("sales_customers:manage"))],
-)
-async def create_customer(
-    body: SalesCustomerCreate,
-    request: Request,
-    service: SalesServiceDep,
-    current: CurrentUser,
-    company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-) -> dict[str, Any]:
-    return await service.create_customer(
-        company_id=company_id,
-        actor_id=current.id,
-        data=body.model_dump(mode="python"),
-        request=request,
-    )
-
-
-@router.get(
-    "/customers/{customer_id}",
-    response_model=SalesCustomerOut,
-    dependencies=[Depends(require_permission("sales_customers:read"))],
-)
-async def get_customer(
-    customer_id: uuid.UUID,
-    service: SalesServiceDep,
-    company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-) -> dict[str, Any]:
-    return service.customer_out(await service.get_customer(company_id, customer_id))
-
-
-@router.patch(
-    "/customers/{customer_id}",
-    response_model=SalesCustomerOut,
-    dependencies=[Depends(require_permission("sales_customers:manage"))],
-)
-async def update_customer(
-    customer_id: uuid.UUID,
-    body: SalesCustomerUpdate,
-    request: Request,
-    service: SalesServiceDep,
-    current: CurrentUser,
-    company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-) -> dict[str, Any]:
-    return await service.update_customer(
-        company_id=company_id,
-        actor_id=current.id,
-        customer_id=customer_id,
-        data=body.model_dump(exclude_unset=True),
-        request=request,
-    )
 
 
 @router.get(
