@@ -989,3 +989,35 @@ granted to `SUPER_ADMIN`.
 or document setting exists; otherwise it drops everything above. Models live in
 `app/infrastructure/models/fiscal.py`. Covered by
 `backend/tests/integration/test_fiscal_migration.py`.
+
+## 29. Customers with fiscal identity (0119)
+
+Revision `0119` (revises `0118`). `sales_customers` is extended, not replaced, so
+quotations and sales keep their foreign keys. The database guarantees formats and
+combinations; whether a customer can receive a tax credit document is computed by the
+domain (`app/domain/entities/customer.py`), because a taxpayer may be registered
+incomplete and completed later.
+
+**New columns on `sales_customers`**: `customer_type` (`final_consumer` by default,
+`taxpayer`, `foreign`), `taxpayer_category` (required only for taxpayers),
+`is_withholding_agent`, `person_type`, `commercial_name`, `document_type` and
+`document_number` (both or none; CAT-022), `nrc` (2 to 8 digits), `activity_code`
+(5 or 6 digits), `department_id`, `municipality_id` and `district_id` (all or none),
+`address_line`, `country_code` (present if and only if the customer is foreign, and then
+without Salvadoran geography), `credit_days` (0 to 365), `credit_limit` (>= 0),
+`seller_employee_id`, `is_generic` and `branch_id` (generic customers: one per branch,
+final consumers without document or NRC).
+
+Checks use explicit `IS NOT NULL` where a NULL would otherwise satisfy an `IN (...)`.
+
+**Indexes**: unique `(company_id, branch_id) WHERE is_generic`, unique
+`(company_id, document_type, document_number)` and `(company_id, nrc)` when present,
+and `(company_id, customer_type, is_active)`.
+
+**`sales_customer_delivery_addresses`**: label, address line, optional geography,
+optional coordinates (both or none, within range), contact, phone, `is_default` (one
+per customer, partial unique index; must be active) and `is_active`. Composite FK
+`(company_id, customer_id)` with `ON DELETE CASCADE`.
+
+**Downgrade** refuses while any delivery address or customer with fiscal data exists.
+Covered by `backend/tests/integration/test_customer_migration.py`.
