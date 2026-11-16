@@ -105,7 +105,7 @@ Fuente: D.L. 144 de 2024, reformado por el D.L. 659 de 2026. Los textos están e
 
 ## Pasos
 
-- [ ] **Paso 1: migración `0121_personal_data_protection` y modelos.**
+- [x] **Paso 1: migración `0121_personal_data_protection` y modelos.**
   - Crea las cuatro tablas y `sales_customers.anonymized_at`, más los permisos.
   - Verificar con upgrade, downgrade y upgrade, y con su prueba de integración.
 - [ ] **Paso 2: dominio.**
@@ -122,7 +122,7 @@ Fuente: D.L. 144 de 2024, reformado por el D.L. 659 de 2026. Los textos están e
 
 ## Estado actual
 
-- **Paso en curso**: 1.
+- **Paso en curso**: 2 (dominio).
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.

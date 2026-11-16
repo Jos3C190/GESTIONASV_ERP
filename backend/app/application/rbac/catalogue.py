@@ -214,6 +214,14 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec(
         "fiscal_settings:manage", "Configurar el emisor, establecimientos y documentos", "fiscal"
     ),
+    # --- personal data protection ---
+    PermissionSpec(
+        "privacy:read", "Consultar avisos, solicitudes de titulares y vulneraciones", "privacy"
+    ),
+    PermissionSpec(
+        "privacy:manage", "Gestionar el aviso de privacidad, solicitudes y vulneraciones", "privacy"
+    ),
+    PermissionSpec("privacy:erase", "Anonimizar clientes por cancelación u olvido", "privacy"),
     # --- fleet ---
     PermissionSpec("fleet:read", "Consultar la flota", "fleet"),
     PermissionSpec("fleet:create", "Registrar vehículos", "fleet"),

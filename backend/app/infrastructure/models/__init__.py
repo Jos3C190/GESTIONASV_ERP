@@ -107,6 +107,12 @@ from app.infrastructure.models.organization import (
     WarehouseCapacityGroup,
     WarehouseCategory,
 )
+from app.infrastructure.models.privacy import (
+    CustomerConsentModel,
+    DataSubjectRequestModel,
+    PersonalDataIncidentModel,
+    PrivacyNoticeModel,
+)
 from app.infrastructure.models.product_image import ProductImageModel
 from app.infrastructure.models.product_master import (
     ProductBrandModel,
@@ -218,6 +224,8 @@ __all__: list[str] = [
     "CompanyUnitModel",
     "CountryModel",
     "CurrencyModel",
+    "CustomerConsentModel",
+    "DataSubjectRequestModel",
     "Department",
     "DepartmentBranchAssignment",
     "District",
@@ -281,6 +289,8 @@ __all__: list[str] = [
     "PasswordResetToken",
     "PaymentTermsModel",
     "Permission",
+    "PersonalDataIncidentModel",
+    "PrivacyNoticeModel",
     "ProductBrandModel",
     "ProductFamilyAttributeModel",
     "ProductFamilyAttributeValueModel",
