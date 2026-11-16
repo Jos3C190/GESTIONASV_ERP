@@ -25,6 +25,7 @@ from app.api.v1.schemas.customer import (
     DeliveryAddressIn,
     DeliveryAddressOut,
     GeographyIn,
+    SellerOptionOut,
 )
 from app.application.audit.audit_service import AuditService
 from app.application.customers import CustomerUseCases
@@ -131,6 +132,7 @@ def _out(customer: Customer) -> CustomerOut:
         credit_days=draft.credit_days,
         credit_limit=draft.credit_limit,
         seller_employee_id=draft.seller_employee_id,
+        seller_name=customer.seller_name,
         is_active=customer.is_active,
         is_generic=customer.is_generic,
         branch_id=customer.branch_id,
@@ -231,6 +233,21 @@ async def create_customer(
         after=customer,
     )
     return _out(customer)
+
+
+@router.get(
+    "/seller-options",
+    response_model=list[SellerOptionOut],
+    summary="Empleados activos que pueden quedar como vendedor",
+    dependencies=_READ,
+)
+async def seller_options(
+    request: Request,
+    use_cases: UseCases,
+    search: Annotated[str | None, Query(max_length=120)] = None,
+) -> list[SellerOptionOut]:
+    items = await use_cases.seller_options(request_company_id(request), search=search)
+    return [SellerOptionOut(id=i.id, code=i.code, name=i.name, position=i.position) for i in items]
 
 
 @router.get(

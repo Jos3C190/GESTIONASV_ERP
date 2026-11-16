@@ -1756,6 +1756,7 @@ audited as `sales_customer` or `sales_customer_delivery_address`.
 |---|---|---|
 | GET | `/customers?search=&customer_type=&active=&include_generic=&page=&size=` | List. `search` matches code, name, commercial name and, with 3 or more digits, NIT, DUI or NRC. Generic customers are hidden unless `include_generic=true`. |
 | POST | `/customers` | Create. `code` is optional (the server proposes `CLI-00001`, `CLI-00002`…); `customer_type` defaults to `final_consumer`. |
+| GET | `/customers/seller-options?search=` | Active employees of the company that can be assigned as the customer's seller (`id`, `code`, `name`, `position`). Uses `sales_customers:read`, so the customer screen does not need `employees:read`. |
 | GET | `/customers/generic?branch_id=` | The branch's generic «Consumidor final» customer; created the first time (code `CF-<branch code>`). |
 | GET | `/customers/{id}` | Customer file with delivery addresses. |
 | PUT | `/customers/{id}` | Replace the customer data. |
@@ -1780,6 +1781,8 @@ Rules:
   with NIT or DUI, NRC, activity and a complete address whose district has Hacienda
   codes. Foreign customers receive export invoices (`11`); everyone else, invoices
   (`01`).
+- `seller_employee_id` must be an active employee of the same company; the response adds
+  `seller_name`.
 - Generic customers cannot be edited, deactivated or given delivery addresses.
 
 Error codes (`422` unless noted): `customer_name_required`,

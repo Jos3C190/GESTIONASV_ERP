@@ -199,6 +199,16 @@ class DeliveryAddress:
 
 
 @dataclass(frozen=True, slots=True)
+class SellerOption:
+    """Empleado activo de la empresa que puede quedar como vendedor del cliente."""
+
+    id: uuid.UUID
+    code: str
+    name: str
+    position: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class Customer:
     id: uuid.UUID
     company_id: uuid.UUID
@@ -213,6 +223,7 @@ class Customer:
     created_at: datetime
     updated_at: datetime
     delivery_addresses: tuple[DeliveryAddress, ...] = field(default=())
+    seller_name: str | None = None
 
     @property
     def tax_credit_missing(self) -> list[str]:

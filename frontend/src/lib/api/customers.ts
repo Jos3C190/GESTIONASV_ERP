@@ -5,7 +5,8 @@ import type {
   CustomerInput,
   CustomerListParams,
   DeliveryAddress,
-  DeliveryAddressInput
+  DeliveryAddressInput,
+  SellerOption
 } from '$lib/types/customer';
 
 const BASE = '/customers';
@@ -42,6 +43,11 @@ export const customersApi = {
 
   setActive(id: string, isActive: boolean) {
     return apiFetch<Customer>(`${BASE}/${id}/status`, json('PATCH', { is_active: isActive }));
+  },
+
+  sellerOptions(search = '') {
+    const query = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+    return apiFetch<SellerOption[]>(`${BASE}/seller-options${query}`);
   },
 
   generic(branchId: string) {

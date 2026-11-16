@@ -118,6 +118,7 @@ class CustomerOut(BaseModel):
     credit_days: int
     credit_limit: Decimal | None
     seller_employee_id: uuid.UUID | None
+    seller_name: str | None
     is_active: bool
     is_generic: bool
     branch_id: uuid.UUID | None
@@ -126,6 +127,13 @@ class CustomerOut(BaseModel):
     delivery_addresses: list[DeliveryAddressOut]
     created_at: datetime
     updated_at: datetime
+
+
+class SellerOptionOut(BaseModel):
+    id: uuid.UUID
+    code: str
+    name: str
+    position: str | None
 
 
 class CustomerPageMeta(BaseModel):

@@ -14,6 +14,7 @@ from app.domain.entities.customer import (
     DeliveryAddressDraft,
     Geography,
     IdentityDocument,
+    SellerOption,
 )
 
 
@@ -58,6 +59,10 @@ class CustomerRepository(Protocol):
     async def geography_consistent(self, geography: Geography) -> bool: ...
 
     async def employee_in_company(self, company_id: uuid.UUID, employee_id: uuid.UUID) -> bool: ...
+
+    async def seller_options(
+        self, company_id: uuid.UUID, *, search: str | None, limit: int
+    ) -> list[SellerOption]: ...
 
     async def branch_exists(self, company_id: uuid.UUID, branch_id: uuid.UUID) -> bool: ...
 

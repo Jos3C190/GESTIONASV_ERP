@@ -61,6 +61,7 @@ export interface Customer {
   credit_days: number;
   credit_limit: string | null;
   seller_employee_id: string | null;
+  seller_name: string | null;
   is_active: boolean;
   is_generic: boolean;
   branch_id: string | null;
@@ -106,6 +107,13 @@ export interface DeliveryAddressInput {
   phone: string | null;
   is_default: boolean;
   is_active: boolean;
+}
+
+export interface SellerOption {
+  id: string;
+  code: string;
+  name: string;
+  position: string | null;
 }
 
 export interface CustomerListParams {

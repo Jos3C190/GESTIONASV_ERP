@@ -18,6 +18,7 @@ from app.domain.entities.customer import (
     DeliveryAddressDraft,
     Geography,
     IdentityDocument,
+    SellerOption,
 )
 from app.domain.entities.fiscal import PersonType, TaxpayerCategory
 from app.domain.ports.customer_repository import CustomerFilters
@@ -113,6 +114,14 @@ class SqlAlchemyCustomerRepository:
         )
         return dict(rows.tuples().all())
 
+    async def _seller_names(self, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+        if not ids:
+            return {}
+        rows = await self._session.execute(
+            select(Employee.id, Employee.first_name, Employee.last_name).where(Employee.id.in_(ids))
+        )
+        return {id_: f"{first} {last}".strip() for id_, first, last in rows.tuples().all()}
+
     async def _hydrate(
         self, rows: list[SalesCustomerModel], *, with_delivery: bool
     ) -> list[Customer]:
@@ -145,6 +154,9 @@ class SqlAlchemyCustomerRepository:
         countries = await self._catalog_names(
             "CAT-020", {r.country_code for r in rows if r.country_code}
         )
+        sellers = await self._seller_names(
+            {r.seller_employee_id for r in rows if r.seller_employee_id}
+        )
         by_customer: dict[uuid.UUID, list[DeliveryAddress]] = {}
         for item in delivery_rows:
             by_customer.setdefault(item.customer_id, []).append(
@@ -167,6 +179,7 @@ class SqlAlchemyCustomerRepository:
                 created_at=row.created_at,
                 updated_at=row.updated_at,
                 delivery_addresses=tuple(by_customer.get(row.id, ())),
+                seller_name=sellers.get(row.seller_employee_id) if row.seller_employee_id else None,
             )
             for row in rows
         ]
@@ -327,6 +340,43 @@ class SqlAlchemyCustomerRepository:
             Employee.company_id == company_id,
             Employee.deleted_at.is_(None),
         )
+
+    async def seller_options(
+        self, company_id: uuid.UUID, *, search: str | None, limit: int
+    ) -> list[SellerOption]:
+        stmt = select(Employee).where(
+            Employee.company_id == company_id,
+            Employee.deleted_at.is_(None),
+            Employee.status == "activo",
+        )
+        if search and search.strip():
+            pattern = f"%{search.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    Employee.first_name.ilike(pattern),
+                    Employee.last_name.ilike(pattern),
+                    Employee.employee_code.ilike(pattern),
+                    (Employee.first_name + " " + Employee.last_name).ilike(pattern),
+                )
+            )
+        rows = (
+            (
+                await self._session.execute(
+                    stmt.order_by(Employee.first_name, Employee.last_name).limit(limit)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return [
+            SellerOption(
+                id=row.id,
+                code=row.employee_code,
+                name=f"{row.first_name} {row.last_name}".strip(),
+                position=row.position,
+            )
+            for row in rows
+        ]
 
     async def branch_exists(self, company_id: uuid.UUID, branch_id: uuid.UUID) -> bool:
         return await self._exists(

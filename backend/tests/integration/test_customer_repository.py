@@ -326,3 +326,43 @@ async def test_companies_never_see_each_other(
         second.company_id, _taxpayer(second.geography), second.actor_id
     )
     assert other.code == "CLI-00001"
+
+
+async def _employee(session: AsyncSession, company_id: uuid.UUID, first: str) -> uuid.UUID:
+    employee = Employee(
+        company_id=company_id,
+        employee_code=f"VEN-{uuid.uuid4().hex[:6].upper()}",
+        first_name=first,
+        last_name="Vendedora",
+        position="Ventas de mayoreo",
+        status="activo",
+    )
+    session.add(employee)
+    await session.flush()
+    return employee.id
+
+
+async def test_seller_options_and_assignment_stay_in_the_company(
+    session: AsyncSession, use_cases: CustomerUseCases
+) -> None:
+    ctx = await _context(session)
+    other = await _context(session)
+    seller = await _employee(session, ctx.company_id, "Rosa")
+    foreign_seller = await _employee(session, other.company_id, "Rosa")
+    options = await use_cases.seller_options(ctx.company_id, search="rosa")
+    assert [o.id for o in options] == [seller]
+    assert options[0].name == "Rosa Vendedora"
+    customer = await use_cases.create_customer(
+        ctx.company_id,
+        _taxpayer(ctx.geography, seller_employee_id=seller),
+        ctx.actor_id,
+    )
+    assert customer.seller_name == "Rosa Vendedora"
+    with pytest.raises(NotFoundError) as foreign:
+        await use_cases.update_customer(
+            ctx.company_id,
+            customer.id,
+            _taxpayer(ctx.geography, seller_employee_id=foreign_seller),
+            ctx.actor_id,
+        )
+    assert foreign.value.code == "customer_seller_not_found"

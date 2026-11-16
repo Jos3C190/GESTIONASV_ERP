@@ -86,6 +86,15 @@
     return items.map((item) => ({ value: item.code, label: `${item.code} · ${item.name}` }));
   }
 
+  async function searchSellers(query: string): Promise<AsyncSmartOption[]> {
+    const items = await customersApi.sellerOptions(query);
+    return items.map((item) => ({
+      value: item.id,
+      label: item.name,
+      description: [item.code, item.position].filter(Boolean).join(' · ')
+    }));
+  }
+
   async function submit(event: SubmitEvent) {
     event.preventDefault();
     if (!editable) return;
@@ -443,6 +452,21 @@
             class={inputClass}
           />
           <p class="mt-1 text-xs text-foreground-muted">0 significa venta de contado.</p>
+        </div>
+        <div class="md:col-span-2">
+          <AsyncSmartSelect
+            id="customer-seller"
+            label="Vendedor asignado"
+            value={form.seller_employee_id ?? ''}
+            selectedLabel={customer?.seller_employee_id &&
+            customer.seller_employee_id === form.seller_employee_id
+              ? (customer.seller_name ?? '')
+              : ''}
+            placeholder="Buscar empleado por nombre o código…"
+            disabled={!editable}
+            onselect={(value) => (form.seller_employee_id = value || null)}
+            loadOptions={searchSellers}
+          />
         </div>
         <div>
           <label for="customer-credit-limit" class={labelClass}>Límite de crédito (USD)</label>

@@ -13,6 +13,7 @@ from app.domain.entities.customer import (
     CustomerType,
     DeliveryAddress,
     DeliveryAddressDraft,
+    SellerOption,
     require_editable,
     validate_delivery_address,
     validate_draft,
@@ -31,6 +32,13 @@ class CustomerUseCases:
     ) -> tuple[list[Customer], int]:
         return await self._repo.list_customers(
             company_id, filters, page=max(page, 1), size=max(1, min(size, MAX_PAGE_SIZE))
+        )
+
+    async def seller_options(
+        self, company_id: uuid.UUID, *, search: str | None, limit: int = 20
+    ) -> list[SellerOption]:
+        return await self._repo.seller_options(
+            company_id, search=search, limit=max(1, min(limit, MAX_PAGE_SIZE))
         )
 
     async def get_customer(self, company_id: uuid.UUID, customer_id: uuid.UUID) -> Customer:

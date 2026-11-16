@@ -69,6 +69,7 @@ const taxpayer: Customer = {
   credit_days: 0,
   credit_limit: null,
   seller_employee_id: null,
+  seller_name: null,
   is_active: true,
   is_generic: false,
   branch_id: null,

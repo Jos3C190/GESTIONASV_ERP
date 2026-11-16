@@ -30,8 +30,10 @@ describe('customersApi', () => {
       '/customers/c1/status',
       { method: 'PATCH', body: '{"is_active":false}' }
     ]);
+    await customersApi.sellerOptions(' rosa ');
+    expect(call(1)[0]).toBe('/customers/seller-options?search=rosa');
     await customersApi.generic('branch 1');
-    expect(call(1)[0]).toBe('/customers/generic?branch_id=branch%201');
+    expect(call(2)[0]).toBe('/customers/generic?branch_id=branch%201');
   });
 
   it('manages delivery addresses', async () => {

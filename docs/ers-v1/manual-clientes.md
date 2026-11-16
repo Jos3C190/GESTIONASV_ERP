@@ -43,6 +43,7 @@ identificación será obligatoria al emitir la factura.
 5. **Contacto y condiciones.**
    - Correo para recibir los documentos y teléfono.
    - Plazo de crédito en días (0 es contado) y límite de crédito.
+   - Vendedor asignado: se busca entre los empleados activos de la empresa.
 
 El documento de identidad y el NRC no se pueden repetir entre clientes.
 
