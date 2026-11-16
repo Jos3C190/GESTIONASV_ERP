@@ -75,7 +75,7 @@ Queda fuera de V1b:
   - `app/domain/entities/customer.py`: validación por tipo, documentos que puede recibir, requisitos del crédito fiscal y normalización.
   - `app/domain/ports/customer_repository.py`: el puerto.
   - Verificar con `tests/unit/test_customer_domain.py`.
-- [ ] **Paso 3: repositorio y casos de uso.**
+- [x] **Paso 3: repositorio y casos de uso.**
   - `app/infrastructure/repositories/customer_repository.py` y `app/application/customers/`.
   - Verificar con `tests/integration/test_customer_repository.py`: unicidades, cliente genérico, direcciones de entrega y aislamiento entre empresas.
 - [ ] **Paso 4: API.**
@@ -104,7 +104,7 @@ Queda fuera de V1b:
 
 ## Estado actual
 
-- **Paso en curso**: 3 (repositorio y casos de uso). En los checks, `IN (...)` con NULL da NULL y PostgreSQL lo acepta: exigir `IS NOT NULL` explícito.
+- **Paso en curso**: 4 (API). En los checks, `IN (...)` con NULL da NULL y PostgreSQL lo acepta: exigir `IS NOT NULL` explícito.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería: el hook de pre-commit usa la misma base de pruebas.
