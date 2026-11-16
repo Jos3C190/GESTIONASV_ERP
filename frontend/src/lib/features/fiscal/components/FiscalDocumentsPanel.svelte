@@ -45,7 +45,12 @@
 
   onMount(() => void load());
 
-  async function save(item: DocumentTypeSetting, changes: Partial<DocumentTypeSetting>) {
+  /** Guarda un cambio; si el servidor lo rechaza, el control vuelve al valor guardado. */
+  async function save(
+    item: DocumentTypeSetting,
+    changes: Partial<DocumentTypeSetting>,
+    control: HTMLInputElement | HTMLSelectElement
+  ) {
     savingCode = item.document_type;
     rowError = null;
     const next = { ...item, ...changes };
@@ -57,6 +62,8 @@
       });
       documents = documents.map((d) => (d.document_type === saved.document_type ? saved : d));
     } catch (cause) {
+      if (control instanceof HTMLInputElement) control.checked = item.is_enabled;
+      else control.value = item.certification_status;
       rowError = {
         code: item.document_type,
         message: cause instanceof HttpError ? cause.message : 'No se pudo guardar el cambio.'
@@ -131,10 +138,11 @@
               value={item.certification_status}
               disabled={!canManage || busy}
               onchange={(e) =>
-                void save(item, {
-                  certification_status: (e.currentTarget as HTMLSelectElement)
-                    .value as CertificationStatus
-                })}
+                void save(
+                  item,
+                  { certification_status: e.currentTarget.value as CertificationStatus },
+                  e.currentTarget
+                )}
               class="h-11 rounded-lg border border-border bg-surface px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
             >
               {#each STATUSES as status (status)}
@@ -148,7 +156,7 @@
               checked={item.is_enabled}
               disabled={!canManage || busy}
               onchange={(e) =>
-                void save(item, { is_enabled: (e.currentTarget as HTMLInputElement).checked })}
+                void save(item, { is_enabled: e.currentTarget.checked }, e.currentTarget)}
             />
             {busy ? 'Guardando…' : 'Habilitado'}
           </label>

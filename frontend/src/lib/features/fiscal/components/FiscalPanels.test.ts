@@ -152,5 +152,7 @@ describe('fiscal settings panels', () => {
       })
     );
     expect(await screen.findByRole('alert')).toHaveTextContent('después de aprobar sus pruebas');
+    // El servidor rechazó el cambio: la casilla vuelve a mostrarse deshabilitada.
+    expect(toggle).not.toBeChecked();
   });
 });
