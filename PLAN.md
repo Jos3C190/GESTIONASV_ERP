@@ -1,122 +1,119 @@
-# Plan: Ventas V1a — Base fiscal del emisor
+# Plan: Ventas V1b — Clientes con datos fiscales
 
-Rama: `feature/ventas-v1-base-fiscal`, creada sobre `chore/claude-workflow`, que a su vez sale de `develop`.
-Fuente del diseño: `docs/plan-area-ventas-el-salvador.pdf`, secciones 6.1, 6.2, 6.5 y 7.1 (bloque V1).
+Rama: `feature/ventas-v1b-clientes-fiscales`, desde `develop` (ya incluye V1a, PR #38).
+Fuente: `docs/plan-area-ventas-el-salvador.pdf`, módulo 5.1 (Clientes), secciones 4.3 y 6.2, y bloque V1.
+Bloques anteriores: V1a, base fiscal del emisor, fusionado el 2026-11-15. Después vienen V1c (clasificación fiscal de productos) y V1d (datos personales).
 
 ## Alcance
 
-El bloque V1 del plan se divide en cuatro entregas, cada una con su PR:
+El maestro de clientes se rehace con identidad fiscal y condiciones comerciales, y pasa del menú de Compras al de Ventas.
 
-| Entrega | Contenido |
-|---|---|
-| **V1a (este plan)** | Catálogos de Hacienda, códigos de Hacienda en la geografía, perfil de emisor por empresa, actividades económicas, establecimientos por sucursal, puntos de venta y tipos de documento habilitados por empresa. |
-| V1b | Clientes con datos fiscales (sustituye `sales_customers`). |
-| V1c | Clasificación fiscal de productos (gravado, exento, no sujeto; tipo de ítem). |
-| V1d | Datos personales: aviso de privacidad, consentimientos, solicitudes de titulares, incidentes. |
+Resultado verificable:
+- un cliente contribuyente con datos completos puede recibir comprobante de crédito fiscal;
+- a uno incompleto la pantalla le dice qué le falta;
+- cada sucursal tiene su cliente genérico «Consumidor final».
 
-Queda fuera de V1a y pasa a V3: las credenciales de Hacienda y el certificado de firma, porque necesitan cifrado y viven junto al servicio DTE.
+Queda fuera de V1b:
+- las listas de precios (V2);
+- la ruta de reparto (V5);
+- el consentimiento y el aviso de privacidad (V1d).
 
-Resultado verificable: dos empresas configuradas como emisores distintos, sin datos compartidos.
+## Hechos verificados
 
-## Hechos verificados (fuentes oficiales en `D:\josec\Downloads\Documentacion DTE\`)
+**Receptor del DTE en los esquemas oficiales:**
+- **Factura (01).** Lleva tipo y número de documento (CAT-022), NRC opcional, nombre, actividad opcional, dirección opcional, teléfono y correo.
+- **Comprobante de crédito fiscal (03).** Exige NIT de 14 o 9 dígitos, NRC, nombre, actividad (CAT-019), nombre comercial y dirección completa (departamento, municipio, distrito y complemento de hasta 200 caracteres), además de teléfono y correo.
+- **Factura de exportación (11).** Lleva tipo y número de documento, país (CAT-020), complemento de dirección, tipo de persona (CAT-029) y descripción de la actividad.
 
-- **Catálogos.** Están en `Catálogos - Facturación Electrónica (1 julio).xlsx`, versión 1.1 de 07/2026, que es la vigente. El PDF del 25 de mayo es el mismo documento. Tiene 33 catálogos (CAT-001 a CAT-033) en una sola hoja.
-- **Dirección en el DTE.** Los esquemas v2 y v4 piden departamento (CAT-012), municipio (CAT-013) y distrito (CAT-008) en el emisor y en el receptor.
-- **Códigos territoriales.**
-  - Los códigos de municipio y de distrito son únicos solo dentro de su departamento.
-  - El de distrito es correlativo por departamento: vuelve a 01 en cada uno.
-  - El ERP ya tiene 14 departamentos, 44 municipios y 262 distritos (migración 0014). 261 distritos se enlazan por nombre; San José La Fuente (La Unión) corresponde al «SAN JOSE», código 15.
-- **Número de control.** Sigue el patrón `DTE-TT-(M|B|S|P)NNNPNNN-15 dígitos`.
-  - El código de establecimiento es la letra del tipo más 3 dígitos: M casa matriz, S sucursal, B bodega, P patio.
-  - El punto de venta es `P` más 3 dígitos.
-  - El emisor lleva `codEstable` (4 caracteres) y `codPuntoVenta` en el JSON.
-- **Tipos de establecimiento** (CAT-009): 01 Sucursal, 02 Casa matriz, 04 Bodega, 07 Patio.
-- **Tipos de documento** (CAT-002): 01, 03, 04, 05, 06, 07, 08, 09, 11, 14 y 15, más los eventos 17 y 18.
+**Otras reglas:**
+- **Tipos de documento (CAT-022).** 36 NIT, 13 DUI, 02 carné de residente, 03 pasaporte y 37 otro. El DUI está homologado como NIT, así que 9 dígitos es un NIT válido.
+- **Identificación del consumidor final.** No se exige en ventas menores de $25,000 (D.L. 94 de 2024). Lo controlará V3 al emitir.
+- **Datos actuales.** `sales_customers` no tiene registros en ninguna empresa, así que se puede rediseñar sin migrar datos. Las cotizaciones y las ventas apuntan a esa tabla y se conservan.
 
 ## Decisiones
 
-- Los catálogos de Hacienda son globales, no por empresa. Viven en la tabla `hacienda_catalog_items`, con versión, y se cargan desde un módulo Python generado del Excel oficial.
-- La geografía existente recibe una columna `hacienda_code`, sin crear tablas paralelas.
-- **Perfil de emisor** (1:1 con la empresa). Guarda:
-  - la categoría de contribuyente: gran contribuyente, mediano u otro;
-  - el tipo de persona (CAT-029);
-  - el modo de operación: `simulated`, `test` o `production`;
-  - el correo y el teléfono para el DTE.
-  El NIT, el NRC, la razón social y el nombre comercial siguen en `companies`.
-- **Establecimiento**: uno por sucursal, como máximo. Su dirección es la de la sucursal. El código es único en la empresa y su letra debe coincidir con el tipo.
-- **Punto de venta**: pertenece a un establecimiento; el código es único dentro de él. Las cajas de V6 se enlazarán aquí.
-- **Documento habilitado**: va por empresa y tipo, con su estado de certificación (`pending`, `in_progress` o `approved`). En modo `production` solo se habilita un tipo que esté aprobado; en `simulated` y `test` se puede habilitar cualquiera.
-- Para pasar a `production` hacen falta NIT, NRC, una actividad principal, un establecimiento activo con punto de venta y al menos un documento aprobado y habilitado.
-- **Permisos**: `fiscal_settings:read` y `fiscal_settings:manage` (módulo `fiscal`). Los catálogos se leen con `reference_data:read`.
-- Toda escritura queda en `audit_logs`.
+- **Tabla.** Se amplía `sales_customers` en lugar de crear otra, para conservar las llaves de cotizaciones y ventas.
+- **Tipo de cliente.**
+  - `customer_type`: `final_consumer`, `taxpayer` o `foreign`.
+  - Para contribuyentes, `taxpayer_category`: `large`, `medium` u `other`.
+  - `is_withholding_agent` marca al cliente que retiene el 1 % de IVA, incluido el gobierno; lo usará V2.
+- **Identidad.**
+  - `person_type` (CAT-029), nombre o razón social, nombre comercial, `document_type` (CAT-022) y número de documento normalizado.
+  - NRC y actividad económica (CAT-019).
+  - El NIT y el NRC se validan con `dte_nit` y `dte_nrc` del dominio fiscal y son únicos por empresa, sin contar el cliente genérico.
+- **Dirección fiscal.**
+  - Departamento, municipio y distrito del ERP, que ya tienen códigos de Hacienda, más el complemento.
+  - Para clientes del extranjero: país (CAT-020) y complemento.
+- **Contacto.** Teléfono y correo, que es a donde se enviarán los DTE.
+- **Condiciones comerciales.** Plazo de crédito en días (0 es contado), límite de crédito en USD y vendedor asignado (empleado), todos opcionales.
+- **Direcciones de entrega.**
+  - Van en la tabla `sales_customer_delivery_addresses`, con nombre, dirección, geografía, coordenadas, contacto, teléfono y marca de principal (una por cliente).
+  - Tienen coordenadas para el módulo de rastreo.
+- **Cliente genérico «Consumidor final».**
+  - Hay uno por sucursal, marcado `is_generic`. Se crea al pedirlo por primera vez con `GET /customers/generic?branch_id=` y siempre devuelve el mismo.
+  - No se edita su identidad ni se desactiva.
+- **Documentos que puede recibir.** Es un cálculo del dominio:
+  - Factura (01): todos menos los del extranjero.
+  - Crédito fiscal (03): contribuyente con NIT, NRC, actividad y dirección completa.
+  - Exportación (11): clientes del extranjero.
+  - La respuesta incluye lo que falta para el crédito fiscal, en español.
+- **API.**
+  - La API nueva es `/api/v1/customers`.
+  - Se quitan las rutas `/sales/customers`. El servicio de ventas conserva su lectura interna de clientes.
+  - El frontend de cotizaciones pasa a usar la API nueva.
+- **Código del cliente.** Si no se envía, el servidor propone el siguiente `CLI-00001`.
+- **Permisos.** Se mantienen `sales_customers:read` y `sales_customers:manage`.
+- **Auditoría.** Toda escritura queda en `audit_logs`.
+- **Interfaz.** Los textos no mencionan a otras empresas (regla del usuario).
 
 ## Pasos
 
-- [x] **Paso 1: catálogos de Hacienda como datos.**
+- [ ] **Paso 1: migración `0119_fiscal_customers` y modelos.**
+  - La migración amplía `sales_customers` con sus columnas y checks, y crea `sales_customer_delivery_addresses`.
+  - Verificar con upgrade, downgrade y upgrade, y con `tests/integration/test_customer_migration.py`.
+- [ ] **Paso 2: dominio.**
+  - `app/domain/entities/customer.py`: validación por tipo, documentos que puede recibir, requisitos del crédito fiscal y normalización.
+  - `app/domain/ports/customer_repository.py`: el puerto.
+  - Verificar con `tests/unit/test_customer_domain.py`.
+- [ ] **Paso 3: repositorio y casos de uso.**
+  - `app/infrastructure/repositories/customer_repository.py` y `app/application/customers/`.
+  - Verificar con `tests/integration/test_customer_repository.py`: unicidades, cliente genérico, direcciones de entrega y aislamiento entre empresas.
+- [ ] **Paso 4: API.**
   - Archivos:
-    - `backend/app/infrastructure/catalogs/hacienda_dte.py`: los 33 catálogos, la versión y la fecha.
-    - `backend/app/infrastructure/catalogs/hacienda_geography.py`: el mapa de la geografía del ERP a los códigos de Hacienda.
-    - `backend/scripts/generate_hacienda_catalogs.py`: el generador a partir del Excel oficial.
-  - Verificar con `tests/unit/test_hacienda_catalogs.py`:
-    - los conteos por catálogo;
-    - 14, 44 y 262 códigos territoriales asignados;
-    - códigos únicos por departamento;
-    - una muestra de distritos.
-- [x] **Paso 2: migración `0118_fiscal_issuer_base` y modelos.**
-  - La migración crea:
-    - la tabla `hacienda_catalog_items`, con su carga;
-    - la columna `hacienda_code` en `geographic_departments`, `municipalities` y `districts`, con su carga;
-    - las tablas `company_fiscal_profiles`, `company_economic_activities`, `fiscal_establishments`, `fiscal_points_of_sale` y `company_dte_document_types`.
-  - Modelos en `backend/app/infrastructure/models/fiscal.py`, más los cambios de geografía en `organization.py`.
-  - Verificar que `alembic upgrade head`, `downgrade -1` y `upgrade` pasan sin errores. Agregar la prueba `tests/integration/test_fiscal_migration.py`.
-- [x] **Paso 3: dominio.**
-  - `backend/app/domain/entities/fiscal.py` contiene las reglas puras: códigos de establecimiento y de punto de venta, tipos, habilitación según el modo y requisitos para pasar a producción.
-  - `backend/app/domain/ports/fiscal_repository.py` define el puerto.
-  - Verificar con `tests/unit/test_fiscal_domain.py`.
-- [x] **Paso 4: repositorio y casos de uso.**
-  - `backend/app/infrastructure/repositories/fiscal_repository.py` y `backend/app/application/fiscal/use_cases.py`.
-  - Verificar con `tests/integration/test_fiscal_repository.py`: CRUD, unicidades y aislamiento entre dos empresas.
-- [x] **Paso 5: API.**
-  - Archivos:
-    - `backend/app/api/v1/routers/fiscal.py`;
-    - `backend/app/api/v1/schemas/fiscal.py`;
-    - el registro en `router.py`;
-    - los permisos en `rbac/catalogue.py`;
+    - el router y los esquemas de `customers`;
+    - quitar las rutas de clientes de `sales.py`;
     - las dependencias en `deps.py`.
-  - Verificar con `tests/e2e/test_fiscal_settings.py`: permisos, auditoría, aislamiento entre dos empresas y errores en español.
-- [x] **Paso 6: semilla.**
-  - En `backend/seed/` (Grupo Lorena), en modo simulado:
-    - el perfil fiscal;
-    - las actividades económicas;
-    - un establecimiento por sucursal;
-    - un punto de venta por tienda;
-    - los documentos 01, 03, 04, 05 y 06 habilitados.
-  - La semilla debe poder reejecutarse sin duplicar nada.
-  - Verificar con las pruebas unitarias de la semilla.
-- [x] **Paso 7: API y tipos del frontend.**
-  - `frontend/src/lib/api/fiscal.ts`, `frontend/src/lib/types/fiscal.ts` y `frontend/src/lib/features/fiscal/labels.ts`, que sigue la organización existente del frontend.
+  - Verificar con `tests/e2e/test_customers.py`, ajustar `test_sales_base.py` y reejecutar las pruebas de ventas.
+- [ ] **Paso 5: frontend, API y tipos.**
+  - `lib/api/customers.ts`, `lib/types/customer.ts` y las etiquetas.
+  - El editor de cotizaciones pasa a la API nueva.
   - Verificar con vitest.
-- [x] **Paso 8: pantalla «Configuración fiscal».** (la revisión en el navegador queda para el paso 10)
-  - Ruta `/sales/fiscal-settings`, en el menú de Ventas, con pestañas: Emisor, Actividades, Establecimientos y puntos de venta, Documentos.
-  - Debe tener estados de carga, vacío y error, verse bien en tema claro y oscuro, y funcionar a 375 px.
+- [ ] **Paso 6: pantallas.**
+  - Lista de clientes con filtros, y ficha para crear y editar con estas secciones:
+    - identidad fiscal;
+    - dirección;
+    - contacto;
+    - condiciones;
+    - direcciones de entrega;
+    - documentos que puede recibir.
+  - Mover «Clientes» al menú de Ventas.
   - Verificar con vitest y en el navegador.
-- [x] **Paso 9: documentación.** Manual en `docs/ers-v1/manual-configuracion-fiscal.md`. `docs/api.md`, `docs/database-schema.md` y el manual en `docs/ers-v1/`.
-- [x] **Paso 10: verificación y PR.** Batería completa en verde (backend 1,766 pruebas; frontend 1,118 pruebas; ruff, mypy, svelte-check, ESLint y build sin errores); revisión en el navegador con Grupo Lorena y SIMAN. Falta abrir el PR.
-  - Correr `./scripts/run-tests.sh all` y hacer QA en el navegador con dos empresas.
-  - Abrir el PR hacia `develop`, sin atribución.
+- [ ] **Paso 7: semilla.** Clientes de demostración de Grupo Lorena: un contribuyente completo, uno incompleto, un consumidor final identificado y uno del extranjero. Debe poder reejecutarse.
+- [ ] **Paso 8: documentación.** `docs/api.md`, `docs/database-schema.md` y `docs/ers-v1/manual-clientes.md`.
+- [ ] **Paso 9: verificación y PR.** `./scripts/run-tests.sh all`, QA en el navegador y PR hacia `develop`.
 
 ## Estado actual
 
-- **Paso en curso**: ninguno. V1a está terminado y falta abrir el PR hacia `develop`. Lo que sigue es V1b, clientes con datos fiscales. La pantalla vive en `frontend/src/routes/(app)/sales/fiscal-settings` y tiene un panel por pestaña en `lib/features/fiscal/components`. Falta revisarla en el navegador: la sesión del panel había vencido y el clasificador de permisos no deja leer la contraseña de `.env`, así que el usuario debe iniciar sesión en el panel. La semilla fiscal es el follow-up `seed.grupo_lorena.fiscal_issuer` (`seed/seed_grupo_lorena_fiscal.py`): pasa por los casos de uso y solo crea lo que falta. Ya se ejecutó en la base de desarrollo, donde quedaron M001 más S001 a S007 con su caja P001. La API vive en `/api/v1/fiscal` (catalogs, profile, activities, branch-options, establishments, points-of-sale, document-types); la auditoría registra los recursos `fiscal_profile`, `fiscal_activity`, `fiscal_establishment`, `fiscal_point_of_sale` y `fiscal_document_type`. En producción, los casos de uso revisan los requisitos después de cada cambio y fallan con `fiscal_production_would_break`; la búsqueda en catálogos usa `translate()` porque la base no tiene `unaccent`; códigos de actividad útiles: 10712 (fabricación de pan) y 47215 (venta al por menor de panadería). En el paso 3, el dominio usa `BusinessRuleError` (422) de `app.core.exceptions` y define los modelos de lectura (FiscalProfile, Establishment, etc.) que comparten puerto, casos de uso y API; los permisos `fiscal_settings:*` ya están en `rbac/catalogue.py` (la semilla de pruebas toma los roles de ahí, no de la migración). Paso 1: CAT-019 tiene 774 códigos (las 885 filas del Excel incluyen títulos de sector). El generador se ejecuta en el contenedor: `docker compose cp <xlsx> backend:/tmp/catalogos.xlsx` y `uv run python scripts/generate_hacienda_catalogs.py /tmp/catalogos.xlsx`, luego `ruff format`.
-- **Herramientas**:
-  - Los datos crudos de los catálogos, ya extraídos, están en el scratchpad de la sesión: `cats.json` y `geo_map.json`. Si se pierden, el paso 1 los regenera con el script a partir del Excel.
-  - El Excel se lee con zipfile y XML, porque no hay openpyxl.
+- **Paso en curso**: 1.
 - **Comandos**:
-  - Pruebas: `./scripts/run-tests.sh backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`.
-  - Migraciones: `docker compose exec -T backend uv run alembic upgrade head`.
-- **Revisión en el navegador (paso 10)**: el NRC de Grupo Lorena en la semilla es «Pendiente de verificación». Ahora el NIT (14 o 9 dígitos) y el NRC (2 a 8 dígitos), sin guiones, se validan con el formato del DTE antes de pasar a producción; el NRC real lo aporta la empresa. La sesión del navegador vive en memoria: navegar con el menú, sin recargar.
+  - Pruebas: `./scripts/run-tests.sh backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
+  - No hacer commits mientras corre la batería: el hook de pre-commit usa la misma base de pruebas.
+- **Navegador**:
+  - Para revisar en el navegador, iniciar sesión en `http://localhost:5173/login` con la cuenta local que dio el usuario.
+  - La sesión vive en memoria: navegar con el menú, sin recargar la página.
 - **Reglas del usuario**:
   - Commits y PR sin Co-Authored-By ni «Generated with Claude Code».
+  - PR hacia `develop`.
   - Ignorar el check de Vercel.
+  - Dentro de una empresa, la interfaz no menciona a otras empresas.
   - En documentos compartidos, el servicio de referencia se nombra «proyecto de referencia».
-  - Dentro de una empresa, los textos de la interfaz no mencionan a otras empresas (corrección del 2026-11-15).
