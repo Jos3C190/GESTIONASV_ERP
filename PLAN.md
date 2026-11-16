@@ -73,7 +73,7 @@ Resultado verificable: dos empresas configuradas como emisores distintos, sin da
   - `backend/app/domain/entities/fiscal.py` contiene las reglas puras: códigos de establecimiento y de punto de venta, tipos, habilitación según el modo y requisitos para pasar a producción.
   - `backend/app/domain/ports/fiscal_repository.py` define el puerto.
   - Verificar con `tests/unit/test_fiscal_domain.py`.
-- [ ] **Paso 4: repositorio y casos de uso.**
+- [x] **Paso 4: repositorio y casos de uso.**
   - `backend/app/infrastructure/repositories/fiscal_repository.py` y `backend/app/application/fiscal/use_cases.py`.
   - Verificar con `tests/integration/test_fiscal_repository.py`: CRUD, unicidades y aislamiento entre dos empresas.
 - [ ] **Paso 5: API.**
@@ -107,7 +107,7 @@ Resultado verificable: dos empresas configuradas como emisores distintos, sin da
 
 ## Estado actual
 
-- **Paso en curso**: 4 (repositorio y casos de uso). Pasos 1 a 3 listos; el dominio usa `BusinessRuleError` (422) de `app.core.exceptions` y define los modelos de lectura (FiscalProfile, Establishment, etc.) que comparten puerto, casos de uso y API; los permisos `fiscal_settings:*` ya están en `rbac/catalogue.py` (la semilla de pruebas toma los roles de ahí, no de la migración). Paso 1: CAT-019 tiene 774 códigos (las 885 filas del Excel incluyen títulos de sector). El generador se ejecuta en el contenedor: `docker compose cp <xlsx> backend:/tmp/catalogos.xlsx` y `uv run python scripts/generate_hacienda_catalogs.py /tmp/catalogos.xlsx`, luego `ruff format`.
+- **Paso en curso**: 5 (API). Pasos 1 a 4 listos. En producción, los casos de uso revisan los requisitos después de cada cambio y fallan con `fiscal_production_would_break`; la búsqueda en catálogos usa `translate()` porque la base no tiene `unaccent`; códigos de actividad útiles: 10712 (fabricación de pan) y 47215 (venta al por menor de panadería). En el paso 3, el dominio usa `BusinessRuleError` (422) de `app.core.exceptions` y define los modelos de lectura (FiscalProfile, Establishment, etc.) que comparten puerto, casos de uso y API; los permisos `fiscal_settings:*` ya están en `rbac/catalogue.py` (la semilla de pruebas toma los roles de ahí, no de la migración). Paso 1: CAT-019 tiene 774 códigos (las 885 filas del Excel incluyen títulos de sector). El generador se ejecuta en el contenedor: `docker compose cp <xlsx> backend:/tmp/catalogos.xlsx` y `uv run python scripts/generate_hacienda_catalogs.py /tmp/catalogos.xlsx`, luego `ruff format`.
 - **Herramientas**:
   - Los datos crudos de los catálogos, ya extraídos, están en el scratchpad de la sesión: `cats.json` y `geo_map.json`. Si se pierden, el paso 1 los regenera con el script a partir del Excel.
   - El Excel se lee con zipfile y XML, porque no hay openpyxl.

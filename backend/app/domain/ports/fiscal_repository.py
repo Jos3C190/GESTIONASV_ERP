@@ -52,6 +52,8 @@ class DocumentTypeValues:
 
 class FiscalRepository(Protocol):
     # --- Hacienda catalogs (global) ---
+    def catalog_titles(self) -> dict[str, str]: ...
+
     async def list_catalog(
         self, catalog_code: str, *, group_code: str | None, search: str | None, limit: int
     ) -> list[CatalogItem]: ...
