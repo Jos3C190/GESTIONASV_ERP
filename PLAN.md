@@ -74,7 +74,7 @@ Queda fuera de V1c:
 - [x] **Paso 4: frontend.**
   - La tarjeta y el modal en la ficha del producto, y la pestaña de unidades en Configuración fiscal.
   - Verificar con vitest.
-- [ ] **Paso 5: semilla.** Clasificación de los productos de Grupo Lorena: gravados, salvo lo que el usuario indique. Debe poder reejecutarse.
+- [x] **Paso 5: semilla.** No hizo falta: los 13 productos de Grupo Lorena son insumos gravados y la migración los dejó en `taxed`; sus unidades de venta (UNIT, KILOGRAM) ya tienen código 59 y 34.
 - [ ] **Paso 6: documentación.** `docs/api.md`, `docs/database-schema.md` y el manual.
 - [ ] **Paso 7: verificación y PR.**
   - Correr la batería completa y revisar en el navegador.
@@ -83,7 +83,7 @@ Queda fuera de V1c:
 
 ## Estado actual
 
-- **Paso en curso**: 5 (semilla). Rutas: `/product-fiscal/options` (no bajo `/products/...` porque `/products/{product_id}` es entero y atraparía la ruta), `/products/{id}/fiscal` y `/fiscal/units`. Un trigger habilita las unidades globales al crear una empresa, sin código guardado. Las unidades que una empresa habilite después quedan con `hacienda_unit_code` vacío y usan la sugerencia del dominio.
+- **Paso en curso**: 6 (documentación). Rutas: `/product-fiscal/options` (no bajo `/products/...` porque `/products/{product_id}` es entero y atraparía la ruta), `/products/{id}/fiscal` y `/fiscal/units`. Un trigger habilita las unidades globales al crear una empresa, sin código guardado. Las unidades que una empresa habilite después quedan con `hacienda_unit_code` vacío y usan la sugerencia del dominio.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.

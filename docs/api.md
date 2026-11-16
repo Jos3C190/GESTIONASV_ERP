@@ -1798,3 +1798,25 @@ Error codes (`422` unless noted): `customer_name_required`,
 `sales_customer_code_exists` (409), `sales_customer_not_found` (404),
 `customer_branch_not_found` (404), `customer_seller_not_found` (404),
 `customer_delivery_not_found` (404).
+
+## Product fiscal classification and Hacienda units (revision 0120)
+
+Sales area block V1c. Every product of every company declares how it goes on a DTE line,
+and every unit enabled in a company has its Hacienda unit of measure (CAT-014).
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/product-fiscal/options` | `products:read` | CAT-015 taxes a product can carry (without IVA `20` and `C3`) and CAT-014 units. Lives outside `/products/...` because `/products/{product_id}` takes an integer. |
+| GET | `/products/{product_id}/fiscal` | `products:read` | `tax_treatment`, `dte_item_type` (override or `null`), `effective_item_type`, `additional_taxes`, `sale_unit` with its Hacienda code and `billing_issues` (Spanish). |
+| PUT | `/products/{product_id}/fiscal` | `products:fiscal` | Body: `tax_treatment` (`taxed`, `exempt`, `not_subject`), optional `dte_item_type` (`1`, `2`, `3`), `additional_tax_codes`. Audited as `product_fiscal`. |
+| GET | `/fiscal/units` | `fiscal_settings:read` | The company's units with `hacienda_unit_code` (stored or `null`), `suggested_code` and `effective_code`. |
+| PUT | `/fiscal/units/{unit_id}` | `fiscal_settings:manage` | Body: `hacienda_unit_code` (CAT-014 code or `null` to use the suggestion). Audited as `fiscal_unit`. |
+
+Rules: the item type defaults to goods (`1`) or services (`2`) from `product_kind`;
+additional taxes are normalized to upper case, must exist in CAT-015, cannot be IVA and
+are only allowed on taxed products. Suggested units: UNIT 59, KILOGRAM 34, GRAM 39,
+POUND 36, LITER 23, MILLILITER 26, GALLON 22, METER 1, everything else 99 («Otra»).
+
+Error codes (`422` unless noted): `product_fiscal_taxes_require_taxed`,
+`product_fiscal_tax_is_iva`, `product_fiscal_tax_unknown`, `fiscal_unit_code_unknown`,
+`product_not_found` (404), `fiscal_unit_not_found` (404).
