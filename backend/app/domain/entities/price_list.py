@@ -14,6 +14,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from app.core.exceptions import BusinessRuleError, ConflictError
+from app.domain.entities.sales_margin import require_target_margin
 
 _CODE = re.compile(r"^[A-Z0-9][A-Z0-9-]{0,19}$")
 
@@ -30,6 +31,7 @@ class PriceListDraft:
     description: str | None = None
     is_default: bool = False
     is_active: bool = True
+    target_margin_percent: Decimal | None = None
 
 
 def validate_list_draft(draft: PriceListDraft) -> PriceListDraft:
@@ -47,6 +49,7 @@ def validate_list_draft(draft: PriceListDraft) -> PriceListDraft:
             "La lista predeterminada no puede estar inactiva.", "price_list_default_inactive"
         )
     description = (draft.description or "").strip() or None
+    require_target_margin(draft.target_margin_percent)
     return PriceListDraft(
         code=code,
         name=name,
@@ -54,6 +57,7 @@ def validate_list_draft(draft: PriceListDraft) -> PriceListDraft:
         description=description,
         is_default=draft.is_default,
         is_active=draft.is_active,
+        target_margin_percent=draft.target_margin_percent,
     )
 
 
@@ -70,6 +74,7 @@ class PriceList:
     price_count: int
     customer_count: int
     updated_at: datetime
+    target_margin_percent: Decimal | None = None
 
 
 class PriceStatus(StrEnum):
@@ -202,6 +207,8 @@ class SellableUnit:
     unit_name: str
     factor: Decimal
     is_base: bool
+    category_id: int | None = None
+    inventory_item_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +219,9 @@ class ListedPrice:
     current: PriceEntry | None
     next: PriceEntry | None
     branch_overrides: int
+    cost: Decimal | None = None
+    """Costo actual de la unidad (costo promedio x factor); solo si se pidió."""
+    target_margin_percent: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)

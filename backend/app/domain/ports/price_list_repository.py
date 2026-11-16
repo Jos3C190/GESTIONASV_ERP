@@ -78,6 +78,26 @@ class PriceListRepository(Protocol):
 
     async def branch_exists(self, company_id: uuid.UUID, branch_id: uuid.UUID) -> bool: ...
 
+    async def unit_costs(
+        self, company_id: uuid.UUID, item_ids: set[uuid.UUID]
+    ) -> dict[uuid.UUID, Decimal]:
+        """Costo promedio por unidad base de cada artículo de inventario."""
+        ...
+
+    async def category_margins(
+        self, company_id: uuid.UUID, list_id: uuid.UUID
+    ) -> dict[int, Decimal]: ...
+
+    async def replace_category_margins(
+        self,
+        company_id: uuid.UUID,
+        list_id: uuid.UUID,
+        margins: dict[int, Decimal],
+        actor_id: uuid.UUID,
+    ) -> None: ...
+
+    async def categories(self, company_id: uuid.UUID) -> list[tuple[int, str]]: ...
+
     async def customer_list_id(
         self, company_id: uuid.UUID, customer_id: uuid.UUID
     ) -> tuple[bool, uuid.UUID | None]:

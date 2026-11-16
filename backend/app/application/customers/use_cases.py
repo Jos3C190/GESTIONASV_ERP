@@ -18,6 +18,7 @@ from app.domain.entities.customer import (
     validate_delivery_address,
     validate_draft,
 )
+from app.domain.entities.sales_margin import percent_round, require_customer_discount
 from app.domain.ports.customer_repository import CustomerFilters, CustomerRepository
 
 MAX_PAGE_SIZE = 100
@@ -87,6 +88,8 @@ class CustomerUseCases:
             raise NotFoundError(
                 "No se encontró ese vendedor en la empresa.", code="customer_seller_not_found"
             )
+        require_customer_discount(draft.discount_percent)
+        draft = replace(draft, discount_percent=percent_round(draft.discount_percent))
         if draft.price_list_id is not None and not await self._repo.price_list_active(
             company_id, draft.price_list_id
         ):

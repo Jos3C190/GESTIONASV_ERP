@@ -7,12 +7,13 @@ sin IVA antes de comparar.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 
-from app.core.exceptions import BusinessRuleError
+from app.core.exceptions import BusinessRuleError, ConflictError
 from app.domain.entities.sales_tax import VAT_FACTOR, line_round
 
 HUNDRED = Decimal("100")
@@ -224,3 +225,35 @@ def evaluate_global(
     if discount_percent > policy.max_global_percent:
         return (AuthorizationReason.GLOBAL_DISCOUNT_ABOVE_LIMIT,)
     return ()
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduledScale:
+    """Una escala guardada, con su identificador, para planificar cambios."""
+
+    id: uuid.UUID
+    scale: VolumeScale
+
+
+def plan_scale_change(
+    existing: list[ScheduledScale], valid_from: date, today: date
+) -> tuple[uuid.UUID | None, date | None]:
+    """Igual que un precio: la escala nueva cierra la vigente el día anterior.
+
+    ``existing`` son las escalas de la misma lista, producto, unidad y cantidad mínima.
+    """
+
+    if valid_from < today:
+        raise _rule("Una escala rige desde hoy o desde una fecha futura.", "sales_volume_backdated")
+    later = [s for s in existing if s.scale.valid_from >= valid_from]
+    if later:
+        first = min(later, key=lambda s: s.scale.valid_from)
+        raise ConflictError(
+            f"Ya hay una escala para esa cantidad que rige desde el "
+            f"{first.scale.valid_from:%d/%m/%Y}. Anúlala antes de crear otra.",
+            code="sales_volume_future_exists",
+        )
+    covering = next((s for s in existing if s.scale.covers(valid_from)), None)
+    if covering is None:
+        return None, None
+    return covering.id, valid_from - timedelta(days=1)

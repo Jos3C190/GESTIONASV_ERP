@@ -73,7 +73,7 @@ Fuera de alcance: las promociones (V6) y el registro de la autorización (V2d y 
 - [x] **Paso 2: dominio.**
   - Funciones: margen, precio sugerido, elección de escala, descuento sugerido, topes efectivos de varios roles y evaluación de una línea.
   - Pruebas unitarias con valores exactos.
-- [ ] **Paso 3: repositorio, casos de uso y API.**
+- [x] **Paso 3: repositorio, casos de uso y API.**
   - Costo y margen en los precios de la lista, solo con `sales_costs:read`.
   - Margen objetivo de la lista y por categoría.
   - Escalas por volumen.
@@ -94,7 +94,7 @@ Fuera de alcance: las promociones (V6) y el registro de la autorización (V2d y 
 
 ## Estado actual
 
-- **Paso en curso**: 3 (repositorio, casos de uso y API). Dominio en `domain/entities/sales_margin.py` con 7 pruebas en `tests/unit/test_sales_margin.py`. Migración `0123_sales_margins_and_discounts.py` aplicada también en la base local; modelos nuevos en `models/sales_pricing.py` y `discount_percent` en `sales_customers`.
+- **Paso en curso**: 4 (frontend). Backend: costo, margen y precio sugerido en `GET /price-lists/{id}/prices` (solo con `sales_costs:read`), `/price-lists/categories`, `/price-lists/{id}/category-margins`, escalas en `/price-lists/{id}/volume-discounts`, topes en `/sales/discount-policies`, `/sales/my-discount-policy` y `/sales/discount-evaluation` (módulo `application/sales_discounts`); `discount_percent` en el cliente. 3 pruebas e2e en `tests/e2e/test_sales_discounts.py`. Dominio en `domain/entities/sales_margin.py` con 7 pruebas en `tests/unit/test_sales_margin.py`. Migración `0123_sales_margins_and_discounts.py` aplicada también en la base local; modelos nuevos en `models/sales_pricing.py` y `discount_percent` en `sales_customers`.
 - **Contexto**: el frontend usa SvelteKit 3: imports `#lib/…` con extensión, `$app/env`, `goto(…, { replace, reset: false })`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.

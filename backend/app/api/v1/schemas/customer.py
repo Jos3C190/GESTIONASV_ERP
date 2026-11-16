@@ -44,6 +44,9 @@ class CustomerIn(BaseModel):
     credit_limit: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=2)
     seller_employee_id: uuid.UUID | None = None
     price_list_id: uuid.UUID | None = None
+    discount_percent: Decimal = Field(
+        default=Decimal("0"), ge=0, le=100, max_digits=5, decimal_places=2
+    )
 
 
 class CustomerCreate(CustomerIn):
@@ -122,6 +125,7 @@ class CustomerOut(BaseModel):
     seller_name: str | None
     price_list_id: uuid.UUID | None
     price_list_name: str | None
+    discount_percent: Decimal
     anonymized_at: datetime | None
     is_active: bool
     is_generic: bool

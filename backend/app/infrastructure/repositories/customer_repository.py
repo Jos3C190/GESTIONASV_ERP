@@ -72,6 +72,7 @@ def _draft(row: SalesCustomerModel) -> CustomerDraft:
         credit_limit=row.credit_limit,
         seller_employee_id=row.seller_employee_id,
         price_list_id=row.price_list_id,
+        discount_percent=row.discount_percent,
     )
 
 
@@ -438,6 +439,7 @@ class SqlAlchemyCustomerRepository:
         row.credit_limit = draft.credit_limit
         row.seller_employee_id = draft.seller_employee_id
         row.price_list_id = draft.price_list_id
+        row.discount_percent = draft.discount_percent
 
     async def create_customer(
         self,

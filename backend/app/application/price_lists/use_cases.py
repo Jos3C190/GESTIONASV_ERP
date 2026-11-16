@@ -25,9 +25,18 @@ from app.domain.entities.price_list import (
     require_endable,
     validate_list_draft,
 )
+from app.domain.entities.sales_margin import require_target_margin, target_margin_for
+from app.domain.entities.sales_tax import line_round
 from app.domain.ports.price_list_repository import PriceListRepository
 
 _TZ = ZoneInfo("America/El_Salvador")
+
+
+def _unit_cost(unit: SellableUnit, costs: dict[uuid.UUID, Decimal]) -> Decimal | None:
+    """Costo de la unidad vendible: costo promedio por unidad base x factor."""
+    if unit.inventory_item_id is None or unit.inventory_item_id not in costs:
+        return None
+    return line_round(costs[unit.inventory_item_id] * unit.factor)
 
 
 def today_in_el_salvador() -> date:
@@ -104,13 +113,21 @@ class PriceListUseCases:
         search: str | None,
         branch_id: uuid.UUID | None,
         on: date | None,
+        with_costs: bool = False,
     ) -> list[ListedPrice]:
-        await self.get_list(company_id, list_id)
+        price_list = await self.get_list(company_id, list_id)
         day = on or today_in_el_salvador()
         units = await self._repo.sellable_units(company_id, search=search)
         entries = await self._repo.entries(
             company_id, list_id, product_ids={u.product_id for u in units}
         )
+        costs: dict[uuid.UUID, Decimal] = {}
+        category_margins: dict[int, Decimal] = {}
+        if with_costs:
+            costs = await self._repo.unit_costs(
+                company_id, {u.inventory_item_id for u in units if u.inventory_item_id}
+            )
+            category_margins = await self._repo.category_margins(company_id, list_id)
         result: list[ListedPrice] = []
         for unit in units:
             mine = [
@@ -137,9 +154,44 @@ class PriceListUseCases:
                     current=current,
                     next=upcoming[0] if upcoming else None,
                     branch_overrides=len(overrides),
+                    cost=_unit_cost(unit, costs) if with_costs else None,
+                    target_margin_percent=target_margin_for(
+                        price_list.target_margin_percent, category_margins, unit.category_id
+                    )
+                    if with_costs
+                    else None,
                 )
             )
         return result
+
+    async def category_margins(
+        self, company_id: uuid.UUID, list_id: uuid.UUID
+    ) -> dict[int, Decimal]:
+        await self.get_list(company_id, list_id)
+        return await self._repo.category_margins(company_id, list_id)
+
+    async def categories(self, company_id: uuid.UUID) -> list[tuple[int, str]]:
+        return await self._repo.categories(company_id)
+
+    async def replace_category_margins(
+        self,
+        company_id: uuid.UUID,
+        list_id: uuid.UUID,
+        margins: dict[int, Decimal],
+        actor_id: uuid.UUID,
+    ) -> tuple[dict[int, Decimal], dict[int, Decimal]]:
+        before = await self.category_margins(company_id, list_id)
+        known = {category_id for category_id, _ in await self._repo.categories(company_id)}
+        unknown = set(margins) - known
+        if unknown:
+            raise NotFoundError(
+                "Una de las categorías no existe en la empresa.",
+                code="price_list_category_not_found",
+            )
+        for margin in margins.values():
+            require_target_margin(margin)
+        await self._repo.replace_category_margins(company_id, list_id, margins, actor_id)
+        return before, await self._repo.category_margins(company_id, list_id)
 
     async def history(
         self,

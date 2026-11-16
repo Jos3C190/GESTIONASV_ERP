@@ -12,11 +12,15 @@ from app.api.v1.company_access import request_company_id
 from app.api.v1.deps import (
     CurrentUser,
     get_audit_service,
+    get_check_permission_use_case,
     get_price_list_use_cases,
     require_any_permission,
     require_permission,
 )
 from app.api.v1.schemas.price_list import (
+    CategoryMarginOut,
+    CategoryMarginsIn,
+    CategoryOut,
     EndPriceIn,
     ListedPriceOut,
     PriceEntryOut,
@@ -28,18 +32,22 @@ from app.api.v1.schemas.price_list import (
 )
 from app.application.audit.audit_service import AuditService
 from app.application.price_lists import PriceListUseCases, today_in_el_salvador
+from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.domain.entities.price_list import (
+    ListedPrice,
     PriceEntry,
     PriceKey,
     PriceList,
     PriceListDraft,
     SellableUnit,
 )
+from app.domain.entities.sales_margin import margin_percent, suggested_price
 
 router = APIRouter(tags=["price-lists"])
 
 UseCases = Annotated[PriceListUseCases, Depends(get_price_list_use_cases)]
 Audit = Annotated[AuditService, Depends(get_audit_service)]
+Checker = Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)]
 _READ = [Depends(require_permission("price_lists:read"))]
 _MANAGE = [Depends(require_permission("price_lists:manage"))]
 
@@ -56,6 +64,7 @@ def _list_out(item: PriceList) -> PriceListOut:
         price_count=item.price_count,
         customer_count=item.customer_count,
         updated_at=item.updated_at,
+        target_margin_percent=item.target_margin_percent,
     )
 
 
@@ -87,6 +96,30 @@ def _entry_out(entry: PriceEntry) -> PriceEntryOut:
         status=entry.status(today_in_el_salvador()).value,
         created_by_name=entry.created_by_name,
         created_at=entry.created_at,
+    )
+
+
+def _listed_out(row: ListedPrice, includes_vat: bool) -> ListedPriceOut:
+    """Costo, margen y precio sugerido; solo llegan aquí si el usuario puede verlos."""
+    margin = margin_percent(row.current.price, includes_vat, row.cost) if row.current else None
+    suggested = (
+        suggested_price(row.cost, row.target_margin_percent, includes_vat)
+        if row.cost is not None and row.target_margin_percent is not None
+        else None
+    )
+    return ListedPriceOut(
+        unit=_unit_out(row.unit),
+        current=_entry_out(row.current) if row.current else None,
+        next=_entry_out(row.next) if row.next else None,
+        branch_overrides=row.branch_overrides,
+        cost=row.cost,
+        margin_percent=margin,
+        target_margin_percent=row.target_margin_percent,
+        suggested_price=suggested,
+        below_cost=margin is not None and margin < 0,
+        below_target=margin is not None
+        and row.target_margin_percent is not None
+        and margin < row.target_margin_percent,
     )
 
 
@@ -131,6 +164,7 @@ def _draft(body: PriceListIn) -> PriceListDraft:
         prices_include_vat=body.prices_include_vat,
         is_default=body.is_default,
         is_active=body.is_active,
+        target_margin_percent=body.target_margin_percent,
     )
 
 
@@ -182,6 +216,17 @@ async def sellable_units(
 ) -> list[SellableUnitOut]:
     units = await use_cases.sellable_units(request_company_id(request), search)
     return [_unit_out(u) for u in units]
+
+
+@router.get(
+    "/price-lists/categories",
+    response_model=list[CategoryOut],
+    summary="Categorías de productos para los márgenes por categoría",
+    dependencies=_READ,
+)
+async def categories(request: Request, use_cases: UseCases) -> list[CategoryOut]:
+    rows = await use_cases.categories(request_company_id(request))
+    return [CategoryOut(id=i, name=n) for i, n in rows]
 
 
 @router.post(
@@ -283,22 +328,66 @@ async def listed_prices(
     list_id: uuid.UUID,
     request: Request,
     use_cases: UseCases,
+    current: CurrentUser,
+    checker: Checker,
     search: Annotated[str | None, Query(max_length=100)] = None,
     branch_id: uuid.UUID | None = None,
     on: date | None = None,
 ) -> list[ListedPriceOut]:
+    company_id = request_company_id(request)
+    with_costs = (await checker.execute(current.id, company_id, "sales_costs:read")).allowed
+    price_list = await use_cases.get_list(company_id, list_id)
     rows = await use_cases.listed_prices(
-        request_company_id(request), list_id, search=search, branch_id=branch_id, on=on
+        company_id, list_id, search=search, branch_id=branch_id, on=on, with_costs=with_costs
     )
-    return [
-        ListedPriceOut(
-            unit=_unit_out(r.unit),
-            current=_entry_out(r.current) if r.current else None,
-            next=_entry_out(r.next) if r.next else None,
-            branch_overrides=r.branch_overrides,
-        )
-        for r in rows
-    ]
+    return [_listed_out(r, price_list.prices_include_vat) for r in rows]
+
+
+@router.get(
+    "/price-lists/{list_id}/category-margins",
+    response_model=list[CategoryMarginOut],
+    summary="Márgenes objetivo por categoría dentro de una lista",
+    dependencies=_READ,
+)
+async def category_margins(
+    list_id: uuid.UUID, request: Request, use_cases: UseCases
+) -> list[CategoryMarginOut]:
+    margins = await use_cases.category_margins(request_company_id(request), list_id)
+    return [CategoryMarginOut(category_id=k, target_margin_percent=v) for k, v in margins.items()]
+
+
+@router.put(
+    "/price-lists/{list_id}/category-margins",
+    response_model=list[CategoryMarginOut],
+    summary="Reemplazar los márgenes objetivo por categoría de una lista",
+    dependencies=_MANAGE,
+)
+async def replace_category_margins(
+    list_id: uuid.UUID,
+    body: CategoryMarginsIn,
+    request: Request,
+    current: CurrentUser,
+    use_cases: UseCases,
+    audit: Audit,
+) -> list[CategoryMarginOut]:
+    company_id = request_company_id(request)
+    margins = {m.category_id: m.target_margin_percent for m in body.margins}
+    before, after = await use_cases.replace_category_margins(
+        company_id, list_id, margins, current.id
+    )
+    await audit.record(
+        action="UPDATE",
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="price_list_category_margins",
+        resource_id=str(list_id),
+        before_state={str(k): str(v) for k, v in before.items()},
+        after_state={str(k): str(v) for k, v in after.items()},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        required=True,
+    )
+    return [CategoryMarginOut(category_id=k, target_margin_percent=v) for k, v in after.items()]
 
 
 @router.get(
