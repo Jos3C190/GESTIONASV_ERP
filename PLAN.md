@@ -80,11 +80,11 @@ Resultado verificable:
   - Endpoint `POST /sales/tax-calculation`.
   - Verificar con pruebas e2e: permisos, empresa aislada, documento no habilitado o no permitido al cliente, producto con tributos adicionales.
 - [x] **Paso 3: documentación.** `docs/api.md` y un manual del cálculo en `docs/ers-v1/`.
-- [ ] **Paso 4: verificación y PR.** Correr la batería completa y abrir el PR hacia `develop`.
+- [x] **Paso 4: verificación y PR.** Correr la batería completa y abrir el PR hacia `develop`.
 
 ## Estado actual
 
-- **Paso en curso**: 4 (verificación y PR). Documentación en `docs/api.md` (Sales tax calculation) y `docs/ers-v1/manual-calculo-fiscal-ventas.md`. API en `routers/sales_tax.py` (`POST /sales/tax-calculation`, permiso `sales_quotations:read` o `sales:read`, sin auditoría porque no guarda); caso de uso en `application/sales_tax`; 5 pruebas e2e en `tests/e2e/test_sales_tax.py`. El motor está en `backend/app/domain/entities/sales_tax.py`, con 22 pruebas en `tests/unit/test_sales_tax.py`.
+- **Paso en curso**: ninguno; V2a terminado y en PR hacia `develop`. Batería completa: backend 1,843 y frontend 1,134 pruebas en verde. Lo siguiente es V2b (listas de precios). Documentación en `docs/api.md` (Sales tax calculation) y `docs/ers-v1/manual-calculo-fiscal-ventas.md`. API en `routers/sales_tax.py` (`POST /sales/tax-calculation`, permiso `sales_quotations:read` o `sales:read`, sin auditoría porque no guarda); caso de uso en `application/sales_tax`; 5 pruebas e2e en `tests/e2e/test_sales_tax.py`. El motor está en `backend/app/domain/entities/sales_tax.py`, con 22 pruebas en `tests/unit/test_sales_tax.py`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.
