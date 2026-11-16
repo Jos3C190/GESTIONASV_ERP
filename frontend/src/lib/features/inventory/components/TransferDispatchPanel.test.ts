@@ -7,7 +7,7 @@ const apiMock = vi.hoisted(() => ({
   dispatchOptions: vi.fn(),
   dispatchCheck: vi.fn()
 }));
-vi.mock('$lib/features/inventory/transfer-documents', () => ({ inventoryTransfersApi: apiMock }));
+vi.mock('#lib/features/inventory/transfer-documents.ts', () => ({ inventoryTransfersApi: apiMock }));
 
 import TransferDispatchPanel from './TransferDispatchPanel.svelte';
 import Host from '../../../../../tests/unit/TransferDispatchPanelHost.svelte';

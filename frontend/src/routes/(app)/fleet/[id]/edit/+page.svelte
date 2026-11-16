@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { HttpError } from '$lib/api/client';
-  import { fleetApi, type FleetVehicle } from '$lib/features/fleet/api';
-  import VehicleForm from '$lib/features/fleet/VehicleForm.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { fleetApi, type FleetVehicle } from '#lib/features/fleet/api.ts';
+  import VehicleForm from '#lib/features/fleet/VehicleForm.svelte';
 
   let vehicle = $state<FleetVehicle | null>(null);
   let error = $state<string | null>(null);

@@ -11,7 +11,7 @@ const apiMock = vi.hoisted(() => ({
 const permissionMock = vi.hoisted(() => ({ codes: new Set<string>() }));
 
 vi.mock('./api', () => ({ fleetApi: apiMock }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: (code: string) => permissionMock.codes.has(code) }
 }));
 

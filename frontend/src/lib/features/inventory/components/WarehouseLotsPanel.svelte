@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import { inventoryApi } from '../services';
   import type { InventoryReceiptLot } from '../types';
   import { workspaceField } from '../workspace';

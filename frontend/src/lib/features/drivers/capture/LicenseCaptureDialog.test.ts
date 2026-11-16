@@ -20,15 +20,15 @@ vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
   driversApi: apiMock
 }));
-vi.mock('$lib/api/client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('#lib/api/client.ts')>()),
   api: { documents: { uploadDirect } }
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: (code: string) => permissionMock.codes.has(code) }
 }));
 const prepareMock = vi.hoisted(() => vi.fn());
-vi.mock('$lib/features/document-capture/upload', () => ({
+vi.mock('#lib/features/document-capture/upload.ts', () => ({
   checksumOf: vi.fn().mockResolvedValue('a'.repeat(64)),
   prepareForUpload: prepareMock
 }));

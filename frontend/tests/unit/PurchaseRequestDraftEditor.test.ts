@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseRequestDraftEditor from '$lib/features/purchase-requests/components/PurchaseRequestDraftEditor.svelte';
+import PurchaseRequestDraftEditor from '#lib/features/purchase-requests/components/PurchaseRequestDraftEditor.svelte';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -15,25 +15,25 @@ vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
 
-vi.mock('$lib/api/purchase-requests', () => ({
+vi.mock('#lib/api/purchase-requests.ts', () => ({
   purchaseRequestsApi: {
     get: mocks.get,
     update: mocks.update
   }
 }));
 
-vi.mock('$lib/services/warehouses', () => ({
+vi.mock('#lib/services/warehouses.ts', () => ({
   getWarehouses: mocks.getWarehouses
 }));
 
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: {
     listProducts: mocks.listProducts,
     getProduct: mocks.getProduct
   }
 }));
 
-vi.mock('$lib/stores/branch.svelte', () => ({
+vi.mock('#lib/stores/branch.svelte.ts', () => ({
   branch: {
     branches: [
       {
@@ -47,7 +47,7 @@ vi.mock('$lib/stores/branch.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: (code: string) => code === 'purchase_requests:manage'
   }

@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   measure: vi.fn(),
   locations: vi.fn()
 }));
-vi.mock('$lib/features/locations/services', () => ({ listLocations: mocks.locations }));
+vi.mock('#lib/features/locations/services.ts', () => ({ listLocations: mocks.locations }));
 vi.mock('../preparation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../preparation')>()),
   preparationApi: { list: mocks.list, execute: mocks.execute }

@@ -1,16 +1,16 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import { purchasesApi } from '$lib/api/purchases';
-  import { retaceosApi } from '$lib/api/retaceos';
-  import { apiFetch } from '$lib/api/client';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { purchasesApi } from '#lib/api/purchases.ts';
+  import { retaceosApi } from '#lib/api/retaceos.ts';
+  import { apiFetch } from '#lib/api/client.ts';
   import {
     actualExpensesApi,
     type ActualPurchaseExpense
-  } from '$lib/features/purchase-orders/actual-expenses';
-  import type { PurchaseOrderExpenseType } from '$lib/types/purchase-order';
+  } from '#lib/features/purchase-orders/actual-expenses.ts';
+  import type { PurchaseOrderExpenseType } from '#lib/types/purchase-order.ts';
   import RetaceoFixedAmounts from './RetaceoFixedAmounts.svelte';
   import RetaceoFobLines from './RetaceoFobLines.svelte';
   import {
@@ -20,26 +20,26 @@
     validateImportAmount,
     type FixedAmounts
   } from '../manual-costs';
-  import CustomsReferencePanel from '$lib/features/retaceos/components/CustomsReferencePanel.svelte';
+  import CustomsReferencePanel from '#lib/features/retaceos/components/CustomsReferencePanel.svelte';
   import RetaceoImportFields from './RetaceoImportFields.svelte';
   import RetaceoPlannedExpenses from './RetaceoPlannedExpenses.svelte';
-  import type { RetaceoImportData } from '$lib/types/retaceo';
-  import RetaceoCostEditor from '$lib/features/retaceos/components/RetaceoCostEditor.svelte';
+  import type { RetaceoImportData } from '#lib/types/retaceo.ts';
+  import RetaceoCostEditor from '#lib/features/retaceos/components/RetaceoCostEditor.svelte';
   import {
     DOCUMENT_MAX_BYTES,
     documentContentType,
     isSupportedDocumentFile
-  } from '$lib/features/documents/document-upload';
-  import { openResolvedDocumentInBrowser } from '$lib/features/documents/open-document';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  } from '#lib/features/documents/document-upload.ts';
+  import { openResolvedDocumentInBrowser } from '#lib/features/documents/open-document.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
   import type {
     Retaceo,
     RetaceoCost,
     RetaceoCostClass,
     RetaceoCostDocument
-  } from '$lib/types/retaceo';
-  import type { EditableRetaceoCost } from '$lib/features/retaceos/retaceo-cost-editor-types';
+  } from '#lib/types/retaceo.ts';
+  import type { EditableRetaceoCost } from '#lib/features/retaceos/retaceo-cost-editor-types.ts';
 
   let { retaceoId }: { retaceoId: string } = $props();
 

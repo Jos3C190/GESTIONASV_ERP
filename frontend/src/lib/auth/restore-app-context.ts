@@ -1,9 +1,9 @@
-import { browser } from '$app/environment';
-import { api } from '$lib/api/client';
-import { branch } from '$lib/stores/branch.svelte';
-import { company } from '$lib/stores/company.svelte';
-import { permissions } from '$lib/stores/permissions.svelte';
-import { session } from '$lib/stores/session.svelte';
+import { browser } from '$app/env';
+import { api } from '#lib/api/client.ts';
+import { branch } from '#lib/stores/branch.svelte.ts';
+import { company } from '#lib/stores/company.svelte.ts';
+import { permissions } from '#lib/stores/permissions.svelte.ts';
+import { session } from '#lib/stores/session.svelte.ts';
 
 export interface AppContextRestoreResult {
   authenticated: boolean;

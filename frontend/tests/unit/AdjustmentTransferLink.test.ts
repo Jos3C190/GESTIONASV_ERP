@@ -4,10 +4,10 @@ import AdjustmentDetail from '../../src/routes/(app)/inventory/adjustments/[id]/
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), apply: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1' } }));
-vi.mock('$lib/stores/branch.svelte', () => ({ branch: { id: 'branch-1' } }));
-vi.mock('$lib/stores/permissions.svelte', () => ({ permissions: { hasPermission: () => true } }));
-vi.mock('$lib/features/inventory/adjustments', () => ({
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: { id: 'company-1' } }));
+vi.mock('#lib/stores/branch.svelte.ts', () => ({ branch: { id: 'branch-1' } }));
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({ permissions: { hasPermission: () => true } }));
+vi.mock('#lib/features/inventory/adjustments.ts', () => ({
   inventoryAdjustmentsApi: { get: mocks.get, apply: mocks.apply }
 }));
 

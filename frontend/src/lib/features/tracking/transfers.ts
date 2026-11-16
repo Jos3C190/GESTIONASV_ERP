@@ -1,4 +1,4 @@
-import type { TrackedTransferOut, TrackingAlertOut, TransferTrackOut } from '$lib/api/client';
+import type { TrackedTransferOut, TrackingAlertOut, TransferTrackOut } from '#lib/api/client.ts';
 
 type LngLat = [number, number];
 

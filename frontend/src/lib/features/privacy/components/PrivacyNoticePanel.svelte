@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import PrivacyEmptyState from './PrivacyEmptyState.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { privacyApi } from '$lib/api/privacy';
-  import { formatMoment } from '$lib/features/privacy/labels';
-  import type { NoticeElement, PrivacyNotice } from '$lib/types/privacy';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { privacyApi } from '#lib/api/privacy.ts';
+  import { formatMoment } from '#lib/features/privacy/labels.ts';
+  import type { NoticeElement, PrivacyNotice } from '#lib/types/privacy.ts';
 
   let { canManage }: { canManage: boolean } = $props();
 

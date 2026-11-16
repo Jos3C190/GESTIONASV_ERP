@@ -1,17 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { api, HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { search as globalSearch } from '$lib/stores/search.svelte';
-  import { session } from '$lib/stores/session.svelte';
-  import type { Unit } from '$lib/types/catalog';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import KebabMenu, { type KebabItem } from '#lib/components/ui/KebabMenu.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { search as globalSearch } from '#lib/stores/search.svelte.ts';
+  import { session } from '#lib/stores/session.svelte.ts';
+  import type { Unit } from '#lib/types/catalog.ts';
 
   type ScopeFilter = 'all' | 'standard' | 'custom';
   const UNIT_TYPES = ['Cantidad', 'Empaque', 'Masa', 'Volumen', 'Longitud', 'Área', 'Tiempo'];

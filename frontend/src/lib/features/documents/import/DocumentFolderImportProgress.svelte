@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { GeneralImportOut } from '$lib/api/client';
+  import type { GeneralImportOut } from '#lib/api/client.ts';
 
   type LocalState = { status: string; progress: number; message?: string };
 

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HttpError } from '$lib/api/client';
+import { HttpError } from '#lib/api/client.ts';
 import DriverProfile from './DriverProfile.svelte';
 
 const permissionMock = vi.hoisted(() => ({ codes: new Set(['drivers:read']) }));
@@ -14,15 +14,15 @@ const driversApi = vi.hoisted(() => ({
 }));
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/features/fleet/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('$lib/features/fleet/api')>()),
+vi.mock('#lib/features/fleet/api.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('#lib/features/fleet/api.ts')>()),
   fleetApi: { driverIncidents: vi.fn().mockResolvedValue([]) }
 }));
 vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
   driversApi
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: (code: string) => permissionMock.codes.has(code) }
 }));
 

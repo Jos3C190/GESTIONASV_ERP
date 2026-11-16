@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { productFiscalApi } from '$lib/api/product-fiscal';
-  import type { CatalogEntry, UnitFiscal } from '$lib/types/product-fiscal';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { productFiscalApi } from '#lib/api/product-fiscal.ts';
+  import type { CatalogEntry, UnitFiscal } from '#lib/types/product-fiscal.ts';
 
   let { canManage }: { canManage: boolean } = $props();
 

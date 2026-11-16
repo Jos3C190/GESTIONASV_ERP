@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseConsolidationDetail from '$lib/features/purchase-requests/components/PurchaseConsolidationDetail.svelte';
-import type { PurchaseConsolidation } from '$lib/types/purchase-consolidation';
+import PurchaseConsolidationDetail from '#lib/features/purchase-requests/components/PurchaseConsolidationDetail.svelte';
+import type { PurchaseConsolidation } from '#lib/types/purchase-consolidation.ts';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('$app/state', () => ({ page: { params: { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/api/purchase-consolidations', () => ({
+vi.mock('#lib/api/purchase-consolidations.ts', () => ({
   purchaseConsolidationsApi: {
     get: mocks.get,
     eligibleRequests: mocks.eligibleRequests,
@@ -27,15 +27,15 @@ vi.mock('$lib/api/purchase-consolidations', () => ({
     cancel: mocks.cancel
   }
 }));
-vi.mock('$lib/api/catalog', () => ({ catalogApi: { listProducts: mocks.listProducts } }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({ catalogApi: { listProducts: mocks.listProducts } }));
+vi.mock('#lib/api/client.ts', () => ({
   api: { warehouses: { catalogue: mocks.warehouses } },
   HttpError: class HttpError extends Error {}
 }));
-vi.mock('$lib/stores/branch.svelte', () => ({
+vi.mock('#lib/stores/branch.svelte.ts', () => ({
   branch: { id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', accessAllBranches: true, branches: [] }
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({ permissions: { hasPermission: mocks.hasPermission } }));
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({ permissions: { hasPermission: mocks.hasPermission } }));
 
 const consolidation: PurchaseConsolidation = {
   id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',

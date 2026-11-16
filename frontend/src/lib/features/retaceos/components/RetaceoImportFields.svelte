@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RetaceoImportData } from '$lib/types/retaceo';
+  import type { RetaceoImportData } from '#lib/types/retaceo.ts';
   let {
     value,
     oninput,

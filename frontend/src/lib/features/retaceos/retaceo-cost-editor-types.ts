@@ -1,4 +1,4 @@
-import type { RetaceoCostClass, RetaceoCostDocument } from '$lib/types/retaceo';
+import type { RetaceoCostClass, RetaceoCostDocument } from '#lib/types/retaceo.ts';
 
 export type EditableRetaceoCost = {
   expenseTypeId?: string | null;

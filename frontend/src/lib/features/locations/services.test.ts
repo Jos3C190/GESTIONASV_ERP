@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { apiFetch, HttpError } from '$lib/api/client';
+import { apiFetch, HttpError } from '#lib/api/client.ts';
 import {
   getLocationSummary,
   getOptionalLocationCodeScheme,
@@ -8,7 +8,7 @@ import {
 } from './services';
 import { locationBatchRequiredPermissions } from './types';
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
   apiFetch: vi.fn(),
   HttpError: class HttpError extends Error {
     readonly code: string;

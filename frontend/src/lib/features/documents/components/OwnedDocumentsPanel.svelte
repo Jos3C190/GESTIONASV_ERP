@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { HttpError, type DocumentCategoryOut, type DocumentRecordOut } from '$lib/api/client';
-  import type { OwnedDocumentsApi } from '$lib/api/owned-documents';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import DocumentList from '$lib/features/documents/components/DocumentList.svelte';
-  import DocumentMetadataModal from '$lib/features/documents/components/DocumentMetadataModal.svelte';
-  import DocumentUploadQueue from '$lib/features/documents/components/DocumentUploadQueue.svelte';
+  import { HttpError, type DocumentCategoryOut, type DocumentRecordOut } from '#lib/api/client.ts';
+  import type { OwnedDocumentsApi } from '#lib/api/owned-documents.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import DocumentList from '#lib/features/documents/components/DocumentList.svelte';
+  import DocumentMetadataModal from '#lib/features/documents/components/DocumentMetadataModal.svelte';
+  import DocumentUploadQueue from '#lib/features/documents/components/DocumentUploadQueue.svelte';
   import {
     CAPTURE_ONLY_CATEGORY_CODES,
     formatDocumentDate
-  } from '$lib/features/documents/document-upload';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  } from '#lib/features/documents/document-upload.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   interface Props {
     owner: OwnedDocumentsApi;

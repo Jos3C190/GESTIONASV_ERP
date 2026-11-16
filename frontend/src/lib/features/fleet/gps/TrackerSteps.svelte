@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import type { TrackerModel } from '../api';
   import CopyField from './CopyField.svelte';
   import Notice from './Notice.svelte';

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import PurchaseQuotationDetail from '$lib/features/purchase-quotations/components/PurchaseQuotationDetail.svelte';
+  import PurchaseQuotationDetail from '#lib/features/purchase-quotations/components/PurchaseQuotationDetail.svelte';
 
   let quotationId = $derived(page.params.id ?? '');
   let consolidationId = $derived(page.url.searchParams.get('consolidation_id'));

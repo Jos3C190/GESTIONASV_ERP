@@ -1,4 +1,4 @@
-import type { TrackedDeviceOut, TrackedVehicleOut } from '$lib/api/client';
+import type { TrackedDeviceOut, TrackedVehicleOut } from '#lib/api/client.ts';
 
 export type TrackingStatus = 'moving' | 'stopped' | 'offline';
 

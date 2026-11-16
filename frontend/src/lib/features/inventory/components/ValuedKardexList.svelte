@@ -1,13 +1,13 @@
 <script lang="ts">
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import {
     kardexMoney,
     kardexNumber,
     formatKardexDate
-  } from '$lib/features/inventory/kardex-format';
-  import { valuationKind } from '$lib/features/inventory/valuation';
-  import type { ValuationCostBreakdown, ValuedKardex } from '$lib/features/inventory/kardex';
+  } from '#lib/features/inventory/kardex-format.ts';
+  import { valuationKind } from '#lib/features/inventory/valuation.ts';
+  import type { ValuationCostBreakdown, ValuedKardex } from '#lib/features/inventory/kardex.ts';
 
   let {
     data,

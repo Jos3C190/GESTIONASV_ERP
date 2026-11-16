@@ -1,16 +1,16 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import SingleImageEditor from '$lib/features/suppliers/components/SingleImageEditor.svelte';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import { api, HttpError } from '$lib/api/client';
-  import type { Supplier, SupplierContact, SupplierImageDraft } from '$lib/types/supplier';
-  import { company } from '$lib/stores/company.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import SingleImageEditor from '#lib/features/suppliers/components/SingleImageEditor.svelte';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import type { Supplier, SupplierContact, SupplierImageDraft } from '#lib/types/supplier.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
 
   let supplierId = $derived(Number(page.params.id));
   let supplier = $state<Supplier | null>(null);

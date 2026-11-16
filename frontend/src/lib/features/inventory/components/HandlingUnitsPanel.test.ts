@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import QRCode from 'qrcode';
-import { HttpError } from '$lib/api/client';
-import { confirmation } from '$lib/stores/confirmation.svelte';
+import { HttpError } from '#lib/api/client.ts';
+import { confirmation } from '#lib/stores/confirmation.svelte.ts';
 import type { HandlingUnit } from '../types';
 import HandlingUnitLabelDialog from './HandlingUnitLabelDialog.svelte';
 import HandlingUnitsPanel from './HandlingUnitsPanel.svelte';
@@ -44,7 +44,7 @@ vi.mock('../label-printing', async (original) => ({
   })
 }));
 vi.mock('$app/navigation', () => navigationMocks);
-vi.mock('$lib/features/locations/services', () => locationMocks);
+vi.mock('#lib/features/locations/services.ts', () => locationMocks);
 
 function handlingUnit(overrides: Partial<HandlingUnit> = {}): HandlingUnit {
   return {

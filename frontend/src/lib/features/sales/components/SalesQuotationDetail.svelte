@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { HttpError } from '$lib/api/client';
-  import { salesApi } from '$lib/api/sales';
-  import { formatUnitLabel } from '$lib/features/sales/unit-label';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import type { SalesQuotation } from '$lib/types/sales';
+  import { HttpError } from '#lib/api/client.ts';
+  import { salesApi } from '#lib/api/sales.ts';
+  import { formatUnitLabel } from '#lib/features/sales/unit-label.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import type { SalesQuotation } from '#lib/types/sales.ts';
 
   let { id }: { id: string } = $props();
   let quote = $state<SalesQuotation | null>(null);

@@ -6,14 +6,14 @@
     HttpError,
     type DocumentBreadcrumbOut,
     type DocumentCategoryOut
-  } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import DocumentBreadcrumbs from '$lib/features/documents/components/DocumentBreadcrumbs.svelte';
+  } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import DocumentBreadcrumbs from '#lib/features/documents/components/DocumentBreadcrumbs.svelte';
   import {
     openDocumentInBrowser,
     DocumentBrowserOpenError
-  } from '$lib/features/documents/open-document';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  } from '#lib/features/documents/open-document.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import { parseExplorerQuery, serializeExplorerQuery } from './query';
   import { keyboardAction, documentOpenAction, canExplorerAction, canDropIntoFolder } from './interaction';
   import { normalizeExplorerPage, type ExplorerItem, type ExplorerQuery } from './types';
@@ -25,7 +25,7 @@
   import ExplorerOverlays from './ExplorerOverlays.svelte';
   import { gridNavigationIndex } from './grid-navigation';
 
-  let query = $state<ExplorerQuery>(parseExplorerQuery(page.url));
+  let query = $state<ExplorerQuery>(parseExplorerQuery(new URL(page.url.href)));
   let items = $state<ExplorerItem[]>([]);
   let breadcrumbs = $state<DocumentBreadcrumbOut[]>([]);
   let categories = $state<DocumentCategoryOut[]>([]);
@@ -80,9 +80,8 @@
     error = null;
     const serialized = serializeExplorerQuery(next);
     void goto('/documents/general' + (serialized ? '?' + serialized : ''), {
-      replaceState: !('folder' in changes),
-      keepFocus: true,
-      noScroll: true
+      replace: !('folder' in changes),
+      reset: false
     });
   }
 
@@ -130,7 +129,7 @@
   }
 
   $effect(() => {
-    const nextQuery = parseExplorerQuery(page.url);
+    const nextQuery = parseExplorerQuery(new URL(page.url.href));
     query = nextQuery;
     void load(nextQuery);
   });

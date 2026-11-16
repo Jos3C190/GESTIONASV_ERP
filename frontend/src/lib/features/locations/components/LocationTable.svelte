@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
-  import { CAPACITY_PROFILE_LABEL, CAPACITY_STATUS_LABEL } from '$lib/features/warehouses/types';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import KebabMenu, { type KebabItem } from '#lib/components/ui/KebabMenu.svelte';
+  import { CAPACITY_PROFILE_LABEL, CAPACITY_STATUS_LABEL } from '#lib/features/warehouses/types.ts';
   import type { LocationOut } from '../types';
   import { locationStatusLabel, locationTypeLabel } from '../types';
   import LocationRoute from './LocationRoute.svelte';

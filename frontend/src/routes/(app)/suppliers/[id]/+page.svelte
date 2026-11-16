@@ -1,15 +1,15 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import { catalogApi } from '$lib/api/catalog';
-  import { HttpError } from '$lib/api/client';
-  import type { Country } from '$lib/types/catalog';
-  import type { Supplier } from '$lib/types/supplier';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { HttpError } from '#lib/api/client.ts';
+  import type { Country } from '#lib/types/catalog.ts';
+  import type { Supplier } from '#lib/types/supplier.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   let supplier = $state<Supplier | null>(null);
   let countries = $state<Country[]>([]);

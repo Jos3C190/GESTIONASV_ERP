@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
-vi.mock('$lib/api/client', () => ({ apiFetch: apiFetchMock }));
+vi.mock('#lib/api/client.ts', () => ({ apiFetch: apiFetchMock }));
 
 import { fiscalApi } from '../../src/lib/api/fiscal';
 

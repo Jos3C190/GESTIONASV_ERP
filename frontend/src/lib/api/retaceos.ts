@@ -1,4 +1,4 @@
-import { apiFetch, type Page } from '$lib/api/client';
+import { apiFetch, type Page } from '#lib/api/client.ts';
 import type {
   Retaceo,
   RetaceoAverageComparison,
@@ -8,7 +8,7 @@ import type {
   RetaceoCreateInput,
   RetaceoListParams,
   RetaceoUpdateInput
-} from '$lib/types/retaceo';
+} from '#lib/types/retaceo.ts';
 
 function queryPath(path: string, params: URLSearchParams): string {
   const query = params.toString();

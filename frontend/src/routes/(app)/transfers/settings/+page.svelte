@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Callout from '$lib/components/ui/Callout.svelte';
-  import { inventoryTransfersApi } from '$lib/features/inventory/transfer-documents';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Callout from '#lib/components/ui/Callout.svelte';
+  import { inventoryTransfersApi } from '#lib/features/inventory/transfer-documents.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
 
   let form = $state({
     allow_branch_to_branch: false,

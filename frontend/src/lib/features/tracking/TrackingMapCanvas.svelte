@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import type { GeofenceOut, SiteOut } from '$lib/api/client';
+  import type { GeofenceOut, SiteOut } from '#lib/api/client.ts';
   import { geofenceCollection } from './geofences';
   import { siteAreas, sitePopup } from './sites';
   import {

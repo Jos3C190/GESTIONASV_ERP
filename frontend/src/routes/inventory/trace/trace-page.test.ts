@@ -6,7 +6,7 @@ const inventoryMocks = vi.hoisted(() => ({
   getPublicTraceability: vi.fn()
 }));
 
-vi.mock('$lib/features/inventory/services', () => ({ inventoryApi: inventoryMocks }));
+vi.mock('#lib/features/inventory/services.ts', () => ({ inventoryApi: inventoryMocks }));
 
 describe('public inventory trace page', () => {
   beforeEach(() => {

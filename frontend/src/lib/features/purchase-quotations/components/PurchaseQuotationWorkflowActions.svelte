@@ -1,9 +1,9 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseQuotationsApi } from '$lib/api/purchase-quotations';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { PurchaseQuotation } from '$lib/types/purchase-quotation';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseQuotationsApi } from '#lib/api/purchase-quotations.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { PurchaseQuotation } from '#lib/types/purchase-quotation.ts';
 
   type WorkflowAction = 'send' | 'evaluate' | 'select' | 'reject' | 'cancel';
 

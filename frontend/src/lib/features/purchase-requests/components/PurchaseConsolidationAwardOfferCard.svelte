@@ -1,9 +1,9 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import type {
     PurchaseConsolidationAwardLine,
     PurchaseConsolidationAwardOffer
-  } from '$lib/types/purchase-consolidation';
+  } from '#lib/types/purchase-consolidation.ts';
   import {
     adjudicationQuantityPattern,
     formatDate,

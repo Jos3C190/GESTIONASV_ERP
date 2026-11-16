@@ -1,8 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import { fleetApi, type FleetVehicle, type GpsStatus } from './api';
   import FleetIcon from './FleetIcon.svelte';
   import GpsSetupDialog from './gps/GpsSetupDialog.svelte';

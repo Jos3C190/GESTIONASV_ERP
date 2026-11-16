@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
 
   let moduleName = $derived(page.url.searchParams.get('module') ?? 'Módulo');
 </script>

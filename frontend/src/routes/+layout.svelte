@@ -2,8 +2,8 @@
   import '../app.css';
   import type { Snippet } from 'svelte';
   import type { LayoutData } from './$types';
-  import { dev } from '$app/environment';
-  import ConfirmActionDialog from '$lib/components/ui/ConfirmActionDialog.svelte';
+  import { dev } from '$app/env';
+  import ConfirmActionDialog from '#lib/components/ui/ConfirmActionDialog.svelte';
 
   interface Props {
     children: Snippet;

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import { kardexMoney, kardexNumber } from '$lib/features/inventory/kardex-format';
-  import type { Reconciliation, ReconciliationRow } from '$lib/features/inventory/kardex';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { kardexMoney, kardexNumber } from '#lib/features/inventory/kardex-format.ts';
+  import type { Reconciliation, ReconciliationRow } from '#lib/features/inventory/kardex.ts';
 
   let {
     data,

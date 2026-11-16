@@ -5,11 +5,11 @@ const state = vi.hoisted(() => ({
   company: { id: 'company-lorena' },
   branch: { id: 'branch-matriz' }
 }));
-vi.mock('$app/environment', () => ({ browser: true }));
-vi.mock('$lib/stores/session.svelte', () => ({ session: state.session }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: state.company }));
-vi.mock('$lib/stores/branch.svelte', () => ({ branch: state.branch }));
-import { apiDownload } from '$lib/api/client';
+vi.mock('$app/env', () => ({ browser: true }));
+vi.mock('#lib/stores/session.svelte.ts', () => ({ session: state.session }));
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: state.company }));
+vi.mock('#lib/stores/branch.svelte.ts', () => ({ branch: state.branch }));
+import { apiDownload } from '#lib/api/client.ts';
 
 beforeEach(() => {
   state.session.token = 'old-token';

@@ -1,4 +1,4 @@
-import { HttpError, apiFetch } from '$lib/api/client';
+import { HttpError, apiFetch } from '#lib/api/client.ts';
 import type {
   CapacityMetric,
   CapacityScopeSummary,

@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { api, HttpError } from '$lib/api/client';
-  import { salesApi } from '$lib/api/sales';
-  import { formatUnitLabel } from '$lib/features/sales/unit-label';
-  import { scaledQuantity } from '$lib/features/inventory/transfer-operations';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Sale, SalesReturn, SalesReturnCondition, SalesReturnableAllocation } from '$lib/types/sales';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import { salesApi } from '#lib/api/sales.ts';
+  import { formatUnitLabel } from '#lib/features/sales/unit-label.ts';
+  import { scaledQuantity } from '#lib/features/inventory/transfer-operations.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Sale, SalesReturn, SalesReturnCondition, SalesReturnableAllocation } from '#lib/types/sales.ts';
 
   let { sale, onChanged }: { sale: Sale; onChanged: () => void } = $props();
   let allocations = $state<SalesReturnableAllocation[]>([]);

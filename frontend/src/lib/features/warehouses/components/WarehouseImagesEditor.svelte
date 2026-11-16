@@ -1,8 +1,8 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import ImageUpload from '$lib/components/ui/ImageUpload.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import ImageUpload from '#lib/components/ui/ImageUpload.svelte';
   import type { WarehouseImage } from '../types';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
   interface Props {
     images: WarehouseImage[];
     companyId: string;

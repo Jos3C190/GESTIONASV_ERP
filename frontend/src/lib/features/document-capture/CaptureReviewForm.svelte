@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
-  import ImageLightbox from '$lib/features/fleet/ImageLightbox.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FleetIcon from '#lib/features/fleet/FleetIcon.svelte';
+  import ImageLightbox from '#lib/features/fleet/ImageLightbox.svelte';
   import { fieldsToReview, issuesFor } from './review';
   import type { CaptureConfig, CaptureIssue, CaptureSide, CaptureValues } from './types';
 

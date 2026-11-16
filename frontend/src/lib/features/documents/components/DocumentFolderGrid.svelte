@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DocumentFolderOut } from '$lib/api/client';
+  import type { DocumentFolderOut } from '#lib/api/client.ts';
   import DocumentFolderCard from './DocumentFolderCard.svelte';
 
   interface Props {

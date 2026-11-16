@@ -8,7 +8,7 @@ import {
 import type { InventoryTransfer, TransferDiscrepancy } from '../transfer-documents';
 
 const servicesMock = vi.hoisted(() => ({ listPackaging: vi.fn() }));
-vi.mock('$lib/features/inventory/services', () => ({ inventoryApi: servicesMock }));
+vi.mock('#lib/features/inventory/services.ts', () => ({ inventoryApi: servicesMock }));
 
 import TransferDiscrepancyPanel from './TransferDiscrepancyPanel.svelte';
 

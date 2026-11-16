@@ -11,11 +11,11 @@ const { productFiscalApi } = vi.hoisted(() => ({
   }
 }));
 
-vi.mock('$lib/api/product-fiscal', async (original) => ({
-  ...(await original<typeof import('$lib/api/product-fiscal')>()),
+vi.mock('#lib/api/product-fiscal.ts', async (original) => ({
+  ...(await original<typeof import('#lib/api/product-fiscal.ts')>()),
   productFiscalApi
 }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
   HttpError: class HttpError extends Error {
     constructor(
       readonly code: string,
@@ -27,9 +27,9 @@ vi.mock('$lib/api/client', () => ({
   }
 }));
 
-import { permissions } from '$lib/stores/permissions.svelte';
-import type { ProductFiscal, UnitFiscal } from '$lib/types/product-fiscal';
-import FiscalUnitsPanel from '$lib/features/fiscal/components/FiscalUnitsPanel.svelte';
+import { permissions } from '#lib/stores/permissions.svelte.ts';
+import type { ProductFiscal, UnitFiscal } from '#lib/types/product-fiscal.ts';
+import FiscalUnitsPanel from '#lib/features/fiscal/components/FiscalUnitsPanel.svelte';
 import ProductFiscalCard from './ProductFiscalCard.svelte';
 
 const unit: UnitFiscal = {

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseOrderList from '$lib/features/purchase-orders/components/PurchaseOrderList.svelte';
+import PurchaseOrderList from '#lib/features/purchase-orders/components/PurchaseOrderList.svelte';
 
 const navigationMocks = vi.hoisted(() => ({ goto: vi.fn() }));
 
@@ -13,13 +13,13 @@ const mocks = vi.hoisted(() => ({
   listSuppliers: vi.fn()
 }));
 
-vi.mock('$lib/api/purchase-orders', () => ({
+vi.mock('#lib/api/purchase-orders.ts', () => ({
   purchaseOrdersApi: {
     list: mocks.list
   }
 }));
 
-vi.mock('$lib/api/suppliers', () => ({
+vi.mock('#lib/api/suppliers.ts', () => ({
   suppliersApi: {
     listSuppliers: mocks.listSuppliers
   }

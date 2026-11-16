@@ -1,5 +1,5 @@
-import { apiFetch } from '$lib/api/client';
-import { branch } from '$lib/stores/branch.svelte';
+import { apiFetch } from '#lib/api/client.ts';
+import { branch } from '#lib/stores/branch.svelte.ts';
 import type {
   Sale,
   SalesCatalogItem,
@@ -12,7 +12,7 @@ import type {
   SalesReturnCondition,
   SalesReturnableAllocation,
   SalesQuotation
-} from '$lib/types/sales';
+} from '#lib/types/sales.ts';
 
 function scopedPath(path: string, filters: SalesFilters = {}): string {
   const query = new URLSearchParams();

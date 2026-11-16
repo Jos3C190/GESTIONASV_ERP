@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import RetaceoDraftEditor from '$lib/features/retaceos/components/RetaceoDraftEditor.svelte';
-import type { Retaceo } from '$lib/types/retaceo';
+import RetaceoDraftEditor from '#lib/features/retaceos/components/RetaceoDraftEditor.svelte';
+import type { Retaceo } from '#lib/types/retaceo.ts';
 
 const mocks = vi.hoisted(() => ({
   goto: vi.fn(),
@@ -14,32 +14,32 @@ const mocks = vi.hoisted(() => ({
 vi.mock('$app/navigation', () => ({
   goto: mocks.goto
 }));
-vi.mock('$lib/api/client', async (original) => ({
+vi.mock('#lib/api/client.ts', async (original) => ({
   ...(await original<object>()),
   apiFetch: vi.fn().mockResolvedValue([])
 }));
 
-vi.mock('$lib/api/retaceos', () => ({
+vi.mock('#lib/api/retaceos.ts', () => ({
   retaceosApi: {
     get: mocks.getRetaceo,
     update: mocks.update
   }
 }));
 
-vi.mock('$lib/api/purchases', () => ({
+vi.mock('#lib/api/purchases.ts', () => ({
   purchasesApi: {
     get: mocks.getPurchase
   }
 }));
 
-vi.mock('$lib/api/catalog', () => ({
+vi.mock('#lib/api/catalog.ts', () => ({
   catalogApi: {
     listUnits: vi.fn().mockResolvedValue([]),
     getProduct: vi.fn().mockResolvedValue(null)
   }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
   }

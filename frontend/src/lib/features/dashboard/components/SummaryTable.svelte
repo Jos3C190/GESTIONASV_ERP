@@ -1,8 +1,8 @@
 <script lang="ts">
   /** SummaryTable — tabla resumen con hover sutil, badges de estado, avatares. */
 
-  import Avatar from '$lib/components/ui/Avatar.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
+  import Avatar from '#lib/components/ui/Avatar.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
 
   interface Row {
     name: string;

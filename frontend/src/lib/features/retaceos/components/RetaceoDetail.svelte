@@ -1,26 +1,26 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import ReportDownloads from '$lib/components/ui/ReportDownloads.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { catalogApi } from '$lib/api/catalog';
-  import { purchasesApi } from '$lib/api/purchases';
-  import { retaceosApi } from '$lib/api/retaceos';
-  import { openResolvedDocumentInBrowser } from '$lib/features/documents/open-document';
-  import RetaceoWorkflowActions from '$lib/features/retaceos/components/RetaceoWorkflowActions.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import ReportDownloads from '#lib/components/ui/ReportDownloads.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { purchasesApi } from '#lib/api/purchases.ts';
+  import { retaceosApi } from '#lib/api/retaceos.ts';
+  import { openResolvedDocumentInBrowser } from '#lib/features/documents/open-document.ts';
+  import RetaceoWorkflowActions from '#lib/features/retaceos/components/RetaceoWorkflowActions.svelte';
   import RetaceoAveragePanel from './RetaceoAveragePanel.svelte';
   import RetaceoPlannedExpenses from './RetaceoPlannedExpenses.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Purchase } from '$lib/types/purchase';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Purchase } from '#lib/types/purchase.ts';
   import type {
     Retaceo,
     RetaceoCost,
     RetaceoCostClass,
     RetaceoCostDocument,
     RetaceoStatus
-  } from '$lib/types/retaceo';
+  } from '#lib/types/retaceo.ts';
 
   let { id }: { id: string } = $props();
 

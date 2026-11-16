@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { HttpError } from '$lib/api/client';
-  import ImageUpload from '$lib/components/ui/ImageUpload.svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import ImageUpload from '#lib/components/ui/ImageUpload.svelte';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
   import { fleetApi, type VehiclePhoto } from './api';
   import FleetIcon from './FleetIcon.svelte';
   import ImageLightbox from './ImageLightbox.svelte';

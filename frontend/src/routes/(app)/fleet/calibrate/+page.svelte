@@ -1,8 +1,8 @@
 <script lang="ts">
-  import BrandedVehicle from '$lib/features/fleet/BrandedVehicle.svelte';
-  import { VEHICLE_DECALS, type DecalZone, type Point } from '$lib/features/fleet/branding';
-  import { BASE_IMAGE_KEYS, BASE_IMAGES, type BaseImage } from '$lib/features/fleet/catalog';
-  import { company } from '$lib/stores/company.svelte';
+  import BrandedVehicle from '#lib/features/fleet/BrandedVehicle.svelte';
+  import { VEHICLE_DECALS, type DecalZone, type Point } from '#lib/features/fleet/branding.ts';
+  import { BASE_IMAGE_KEYS, BASE_IMAGES, type BaseImage } from '#lib/features/fleet/catalog.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
 
   const kinds = BASE_IMAGE_KEYS;
   let kind = $state<BaseImage>('refrigerated');

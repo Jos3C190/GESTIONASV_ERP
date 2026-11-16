@@ -21,11 +21,11 @@ vi.mock('$app/state', () => ({
     url: new URL('http://localhost/warehouses/warehouse-branch?tab=inventario')
   }
 }));
-vi.mock('$lib/services/warehouses', () => ({
+vi.mock('#lib/services/warehouses.ts', () => ({
   getWarehouse: mocks.getWarehouse,
   getWarehouses: mocks.getWarehouses
 }));
-vi.mock('$lib/features/inventory/services', () => ({
+vi.mock('#lib/features/inventory/services.ts', () => ({
   inventoryApi: {
     listWarehouseMovements: mocks.listWarehouseMovements,
     listHandlingUnits: mocks.listHandlingUnits,
@@ -42,15 +42,15 @@ vi.mock('$lib/features/inventory/services', () => ({
     confirmInventoryLabelPlacement: vi.fn()
   }
 }));
-vi.mock('$lib/features/inventory/transfer-documents', () => ({
+vi.mock('#lib/features/inventory/transfer-documents.ts', () => ({
   inventoryTransfersApi: { settings: mocks.transferSettings }
 }));
-vi.mock('$lib/features/locations/services', () => ({
+vi.mock('#lib/features/locations/services.ts', () => ({
   listLocations: mocks.listLocations
 }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-test' } }));
-vi.mock('$lib/stores/branch.svelte', () => ({ branch: { id: 'branch-test' } }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: { id: 'company-test' } }));
+vi.mock('#lib/stores/branch.svelte.ts', () => ({ branch: { id: 'branch-test' } }));
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     permissions: [],
     isSuperuser: false,

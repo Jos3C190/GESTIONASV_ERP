@@ -1,4 +1,4 @@
-import { apiFetch } from '$lib/api/client';
+import { apiFetch } from '#lib/api/client.ts';
 import type {
   ApprovedRequestCandidatePage,
   BranchDemandLevel,
@@ -8,8 +8,8 @@ import type {
   SelectedPurchaseRequestResolution,
   PurchaseWorkItemPage,
   PurchaseWorkItemType
-} from '$lib/types/purchase-consolidation';
-import type { PurchaseRequestStatus } from '$lib/types/purchase-request';
+} from '#lib/types/purchase-consolidation.ts';
+import type { PurchaseRequestStatus } from '#lib/types/purchase-request.ts';
 
 export interface PurchaseWorkItemFilters {
   type?: PurchaseWorkItemType;

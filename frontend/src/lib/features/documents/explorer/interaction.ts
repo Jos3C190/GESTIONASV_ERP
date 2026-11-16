@@ -1,5 +1,5 @@
 import type { ExplorerDocument } from './types';
-import { isBrowserPreviewable } from '$lib/features/documents/open-document';
+import { isBrowserPreviewable } from '#lib/features/documents/open-document.ts';
 
 export type ExplorerAction = 'open' | 'select' | 'rename' | 'move' | 'delete' | 'restore';
 export function canDropIntoFolder(

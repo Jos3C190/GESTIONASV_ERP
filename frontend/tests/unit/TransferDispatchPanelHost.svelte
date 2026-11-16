@@ -1,9 +1,9 @@
 <script lang="ts">
-  import TransferDispatchPanel from '$lib/features/inventory/components/TransferDispatchPanel.svelte';
+  import TransferDispatchPanel from '#lib/features/inventory/components/TransferDispatchPanel.svelte';
   import type {
     DispatchSelection,
     InventoryTransfer
-  } from '$lib/features/inventory/transfer-documents';
+  } from '#lib/features/inventory/transfer-documents.ts';
 
   /** Test host: reports every selection the panel binds, as the page does. */
   let {

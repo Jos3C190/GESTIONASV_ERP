@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from '$lib/api/client';
-  import type { GeographyInput } from '$lib/types/customer';
+  import { api } from '#lib/api/client.ts';
+  import type { GeographyInput } from '#lib/types/customer.ts';
 
   interface Props {
     idPrefix: string;

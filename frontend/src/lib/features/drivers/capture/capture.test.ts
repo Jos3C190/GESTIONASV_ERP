@@ -8,7 +8,7 @@ import {
   QUALITY_MESSAGES,
   toGrey,
   type ImageMetrics
-} from '$lib/features/document-capture/image-prep';
+} from '#lib/features/document-capture/image-prep.ts';
 import {
   confirmBlocker as confirmBlockerFor,
   fieldsToReview as fieldsToReviewIn,
@@ -17,8 +17,8 @@ import {
   mergeExtracted,
   unreadFields as unreadFieldsFor,
   warningCodes
-} from '$lib/features/document-capture/review';
-import type { CaptureIssue, CaptureValues } from '$lib/features/document-capture/types';
+} from '#lib/features/document-capture/review.ts';
+import type { CaptureIssue, CaptureValues } from '#lib/features/document-capture/types.ts';
 import { EMPTY_VALUES, licenseCaptureRules } from './license-config';
 
 const fieldsToReview = (issues: CaptureIssue[]) =>

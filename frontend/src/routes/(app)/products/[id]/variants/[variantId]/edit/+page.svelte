@@ -2,17 +2,17 @@
   import { beforeNavigate, goto } from '$app/navigation';
   import { tick } from 'svelte';
   import { page } from '$app/state';
-  import { catalogApi } from '$lib/api/catalog';
-  import { HttpError } from '$lib/api/client';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import EditorSectionNav from '$lib/components/editor/EditorSectionNav.svelte';
-  import PackagingManager from '$lib/features/inventory/components/PackagingManager.svelte';
-  import ProductVariantImageEditor from '$lib/features/products/components/ProductVariantImageEditor.svelte';
-  import ProductIdentifiersEditor from '$lib/features/products/components/ProductIdentifiersEditor.svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { catalogApi } from '#lib/api/catalog.ts';
+  import { HttpError } from '#lib/api/client.ts';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import EditorSectionNav from '#lib/components/editor/EditorSectionNav.svelte';
+  import PackagingManager from '#lib/features/inventory/components/PackagingManager.svelte';
+  import ProductVariantImageEditor from '#lib/features/products/components/ProductVariantImageEditor.svelte';
+  import ProductIdentifiersEditor from '#lib/features/products/components/ProductIdentifiersEditor.svelte';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type {
     Product,
     ProductIdentifier,
@@ -20,7 +20,7 @@
     ProductVariantImageDraft,
     ProductVariantUpdateInput,
     Unit
-  } from '$lib/types/catalog';
+  } from '#lib/types/catalog.ts';
 
   type VariantStatus = ProductVariant['lifecycle_status'];
   type IdentifierType = ProductIdentifier['identifier_type'];
@@ -307,6 +307,7 @@
   }
 
   beforeNavigate((navigation) => {
+    if (navigation.shallow && navigation.type === 'goto') return;
     if (bypassNavigationGuard) {
       bypassNavigationGuard = false;
       return;

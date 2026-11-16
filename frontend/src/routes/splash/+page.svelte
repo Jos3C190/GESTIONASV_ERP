@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { session } from '$lib/stores/session.svelte';
+  import { session } from '#lib/stores/session.svelte.ts';
 
   let videoEl = $state<HTMLVideoElement | null>(null);
   let visible = $state(true);

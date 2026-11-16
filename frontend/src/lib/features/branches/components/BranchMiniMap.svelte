@@ -5,14 +5,14 @@
    */
 
   import { onMount } from 'svelte';
-  import type { Branch } from '$lib/features/branches/types';
+  import type { Branch } from '#lib/features/branches/types.ts';
   import {
     cartoBasemapUrl,
     cartoTileLayerOptions,
     isCartoBasemapConfigured,
     loadLeaflet
-  } from '$lib/services/maps';
-  import { theme } from '$lib/stores/theme.svelte';
+  } from '#lib/services/maps.ts';
+  import { theme } from '#lib/stores/theme.svelte.ts';
 
   interface Props {
     branch: Branch;

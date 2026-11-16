@@ -1,10 +1,10 @@
-import { apiFetch } from '$lib/api/client';
-import type { PageResponse } from '$lib/api/catalog';
+import { apiFetch } from '#lib/api/client.ts';
+import type { PageResponse } from '#lib/api/catalog.ts';
 import type {
   PurchaseRequest,
   PurchaseRequestStatus,
   PurchaseRequestWrite
-} from '$lib/types/purchase-request';
+} from '#lib/types/purchase-request.ts';
 
 export const purchaseRequestsApi = {
   list: (params?: {

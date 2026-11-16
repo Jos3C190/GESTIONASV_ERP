@@ -1,5 +1,5 @@
 <script lang="ts">
-  import RetaceoList from '$lib/features/retaceos/components/RetaceoList.svelte';
+  import RetaceoList from '#lib/features/retaceos/components/RetaceoList.svelte';
 </script>
 
 <svelte:head>

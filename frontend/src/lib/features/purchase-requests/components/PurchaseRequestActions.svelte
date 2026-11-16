@@ -1,11 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseRequestsApi } from '$lib/api/purchase-requests';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { session } from '$lib/stores/session.svelte';
-  import type { PurchaseRequest } from '$lib/types/purchase-request';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseRequestsApi } from '#lib/api/purchase-requests.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { session } from '#lib/stores/session.svelte.ts';
+  import type { PurchaseRequest } from '#lib/types/purchase-request.ts';
 
   interface Props {
     item: PurchaseRequest;

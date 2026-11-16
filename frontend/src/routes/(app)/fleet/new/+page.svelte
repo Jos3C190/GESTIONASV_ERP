@@ -1,5 +1,5 @@
 <script lang="ts">
-  import VehicleForm from '$lib/features/fleet/VehicleForm.svelte';
+  import VehicleForm from '#lib/features/fleet/VehicleForm.svelte';
 </script>
 
 <svelte:head><title>Nuevo vehículo — GestionaSV</title></svelte:head>

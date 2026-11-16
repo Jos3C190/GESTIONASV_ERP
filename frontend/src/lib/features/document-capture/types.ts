@@ -1,4 +1,4 @@
-import type { DocumentUploadTicket } from '$lib/api/client';
+import type { DocumentUploadTicket } from '#lib/api/client.ts';
 import type { QualityIssue } from './image-prep';
 
 export type CaptureSide = 'front' | 'back';

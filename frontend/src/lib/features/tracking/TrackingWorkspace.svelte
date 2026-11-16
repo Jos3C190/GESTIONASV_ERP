@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { api, type GeofenceOut, type SitesOut, type TrackedVehicleOut } from '$lib/api/client';
-  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
+  import { api, type GeofenceOut, type SitesOut, type TrackedVehicleOut } from '#lib/api/client.ts';
+  import FleetIcon from '#lib/features/fleet/FleetIcon.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
   import AlertsPanel from './AlertsPanel.svelte';
   import { ALERT_KIND_LABELS, trackingAlerts } from './alerts.svelte';
   import EventsPanel from './EventsPanel.svelte';
@@ -17,7 +17,7 @@
     type DraftKind,
     type GeofenceDraft
   } from './geofences';
-  import { company } from '$lib/stores/company.svelte';
+  import { company } from '#lib/stores/company.svelte.ts';
   import SimulatorDock from './SimulatorDock.svelte';
   import { pathBetween } from './truck3d';
   import TrackingMap from './TrackingMap.svelte';

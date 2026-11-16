@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { HttpError } from '$lib/api/client';
-  import { salesApi } from '$lib/api/sales';
-  import { formatUnitLabel } from '$lib/features/sales/unit-label';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
-  import type { Sale } from '$lib/types/sales';
+  import { HttpError } from '#lib/api/client.ts';
+  import { salesApi } from '#lib/api/sales.ts';
+  import { formatUnitLabel } from '#lib/features/sales/unit-label.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import type { Sale } from '#lib/types/sales.ts';
   import SalesDeliveryPanel from './SalesDeliveryPanel.svelte';
   import SalesReturnsPanel from './SalesReturnsPanel.svelte';
 

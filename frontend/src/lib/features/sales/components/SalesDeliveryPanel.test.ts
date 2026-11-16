@@ -12,14 +12,14 @@ const { salesApi } = vi.hoisted(() => ({
   }
 }));
 
-vi.mock('$lib/api/sales', () => ({ salesApi }));
+vi.mock('#lib/api/sales.ts', () => ({ salesApi }));
 
-import { branch } from '$lib/stores/branch.svelte';
-import { permissions } from '$lib/stores/permissions.svelte';
-import { confirmation } from '$lib/stores/confirmation.svelte';
-import type { Sale, SalesDelivery, SalesDeliveryStockLine } from '$lib/types/sales';
+import { branch } from '#lib/stores/branch.svelte.ts';
+import { permissions } from '#lib/stores/permissions.svelte.ts';
+import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+import type { Sale, SalesDelivery, SalesDeliveryStockLine } from '#lib/types/sales.ts';
 import SalesDeliveryPanel from './SalesDeliveryPanel.svelte';
-import { HttpError } from '$lib/api/client';
+import { HttpError } from '#lib/api/client.ts';
 
 const sale: Sale = {
   id: 'sale-1',

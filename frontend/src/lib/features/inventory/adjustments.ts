@@ -1,5 +1,5 @@
-import { apiFetch } from '$lib/api/client';
-import { company } from '$lib/stores/company.svelte';
+import { apiFetch } from '#lib/api/client.ts';
+import { company } from '#lib/stores/company.svelte.ts';
 
 export type AdjustmentStatus = 'draft' | 'approved' | 'applied' | 'cancelled';
 export type AdjustmentDirection = 'increase' | 'decrease';

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { retaceosApi } from '$lib/api/retaceos';
-  import type { RetaceoAverageComparison } from '$lib/types/retaceo';
-  import Button from '$lib/components/ui/Button.svelte';
+  import { retaceosApi } from '#lib/api/retaceos.ts';
+  import type { RetaceoAverageComparison } from '#lib/types/retaceo.ts';
+  import Button from '#lib/components/ui/Button.svelte';
 
   let {
     retaceoId,

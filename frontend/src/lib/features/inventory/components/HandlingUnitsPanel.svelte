@@ -1,12 +1,12 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onDestroy, tick } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import { listLocations } from '$lib/features/locations/services';
-  import type { LocationOut } from '$lib/features/locations/types';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import { listLocations } from '#lib/features/locations/services.ts';
+  import type { LocationOut } from '#lib/features/locations/types.ts';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
   import { inventoryApi } from '../services';
   import { physicalKardexHref } from '../kardex';
   import type { HandlingUnit, PhysicalMeasuresInput, StockStatus } from '../types';

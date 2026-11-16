@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { DocumentCategoryOut, GeneralImportItemOut, GeneralImportOut, DocumentMetadataInput } from '$lib/api/client';
-  import { api, HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { DOCUMENT_MAX_BYTES } from '$lib/features/documents/document-upload';
+  import type { DocumentCategoryOut, GeneralImportItemOut, GeneralImportOut, DocumentMetadataInput } from '#lib/api/client.ts';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { DOCUMENT_MAX_BYTES } from '#lib/features/documents/document-upload.ts';
   import { buildFolderManifest, selectionFromDrop, selectionFromPicker, sha256, type FolderSelection } from './folder-import';
   import DocumentFolderImportSummary from './DocumentFolderImportSummary.svelte';
   import DocumentFolderImportTree from './DocumentFolderImportTree.svelte';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Badge from '$lib/components/ui/Badge.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
   import type { CapacitySummary } from '../types';
 
   interface Props {

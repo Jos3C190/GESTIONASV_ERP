@@ -1,4 +1,4 @@
-import { apiFetch, HttpError } from '$lib/api/client';
+import { apiFetch, HttpError } from '#lib/api/client.ts';
 
 export interface KardexItemOption {
   inventory_item_id: string;

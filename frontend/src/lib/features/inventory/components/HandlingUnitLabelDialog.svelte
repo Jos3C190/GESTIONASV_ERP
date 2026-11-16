@@ -2,9 +2,9 @@
   import { onDestroy, tick, untrack } from 'svelte';
   import QRCode from 'qrcode';
   import JsBarcode from 'jsbarcode';
-  import { HttpError } from '$lib/api/client';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import { inventoryApi } from '../services';
   import type { HandlingUnit, InventoryLabelPreview, InventoryLabelLayout } from '../types';
   import LabelPrintSettings from './LabelPrintSettings.svelte';

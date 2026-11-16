@@ -1,21 +1,21 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import type { OwnedDocumentsApi } from '$lib/api/owned-documents';
+  import type { OwnedDocumentsApi } from '#lib/api/owned-documents.ts';
   import {
     api,
     HttpError,
     type DocumentCategoryOut,
     type DocumentMetadataInput
-  } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
+  } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
   import {
     CAPTURE_ONLY_CATEGORY_CODES,
     DOCUMENT_ACCEPT,
     DOCUMENT_MAX_BYTES,
     documentContentType,
     isSupportedDocumentFile
-  } from '$lib/features/documents/document-upload';
+  } from '#lib/features/documents/document-upload.ts';
 
   interface Props {
     categories: DocumentCategoryOut[];

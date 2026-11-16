@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { DocumentRecordOut } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
+  import type { DocumentRecordOut } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
 
   interface Props {
     documents: DocumentRecordOut[];

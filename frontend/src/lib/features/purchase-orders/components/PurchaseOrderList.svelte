@@ -1,13 +1,13 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page as currentPage } from '$app/state';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseOrdersApi } from '$lib/api/purchase-orders';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { suppliersApi } from '$lib/api/suppliers';
-  import type { PurchaseOrder, PurchaseOrderStatus } from '$lib/types/purchase-order';
-  import type { Supplier } from '$lib/types/supplier';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseOrdersApi } from '#lib/api/purchase-orders.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { suppliersApi } from '#lib/api/suppliers.ts';
+  import type { PurchaseOrder, PurchaseOrderStatus } from '#lib/types/purchase-order.ts';
+  import type { Supplier } from '#lib/types/supplier.ts';
 
   const STATUS_OPTIONS: { value: PurchaseOrderStatus; label: string }[] = [
     { value: 'draft', label: 'Borrador' },
@@ -84,10 +84,10 @@
   }
 
   function syncStatusInUrl(status: PurchaseOrderStatus | '') {
-    const url = new URL(currentPage.url);
+    const url = new URL(currentPage.url.href);
     if (status) url.searchParams.set('status', status);
     else url.searchParams.delete('status');
-    void goto(url, { replaceState: true, keepFocus: true, noScroll: true });
+    void goto(url, { replace: true, reset: false });
   }
 
   function handleSupplierChange(event: Event) {

@@ -1,10 +1,10 @@
-import { apiFetch } from '$lib/api/client';
+import { apiFetch } from '#lib/api/client.ts';
 import type {
   FiscalOptions,
   ProductFiscal,
   ProductFiscalInput,
   UnitFiscal
-} from '$lib/types/product-fiscal';
+} from '#lib/types/product-fiscal.ts';
 
 export const productFiscalApi = {
   options() {

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { purchaseOrdersApi } from '$lib/api/purchase-orders';
-  import type { PurchaseOrder } from '$lib/types/purchase-order';
-  import Button from '$lib/components/ui/Button.svelte';
+  import { purchaseOrdersApi } from '#lib/api/purchase-orders.ts';
+  import type { PurchaseOrder } from '#lib/types/purchase-order.ts';
+  import Button from '#lib/components/ui/Button.svelte';
   let {
     orderId,
     actualExpenses,

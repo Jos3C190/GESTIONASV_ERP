@@ -1,10 +1,10 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { HttpError } from '$lib/api/client';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import { LICENSE_LABELS, type LicenseClass } from '$lib/features/fleet/catalog';
-  import { branch } from '$lib/stores/branch.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import { LICENSE_LABELS, type LicenseClass } from '#lib/features/fleet/catalog.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
   import { driversApi, type Driver, type DriverCandidate } from './api';
   let {
     open: createOpen = $bindable(false),

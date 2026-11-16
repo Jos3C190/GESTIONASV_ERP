@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HttpError } from '$lib/api/client';
+import { HttpError } from '#lib/api/client.ts';
 import type { FleetVehicleType } from './api';
 import { meterName, meterShort, plateLabel } from './catalog';
 import VehicleImage from './VehicleImage.svelte';
@@ -15,7 +15,7 @@ vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
   fleetApi: apiMock
 }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: { active: null } }));
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: { active: null } }));
 
 const existing: FleetVehicleType = {
   id: 't1',

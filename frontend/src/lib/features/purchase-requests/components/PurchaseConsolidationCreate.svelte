@@ -3,18 +3,18 @@
   import { goto } from '$app/navigation';
   import { page as currentPage } from '$app/state';
   import { onMount } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
   import PurchaseFlowRibbon from './PurchaseFlowRibbon.svelte';
-  import { api, HttpError } from '$lib/api/client';
-  import { purchaseConsolidationsApi } from '$lib/api/purchase-consolidations';
-  import { branch } from '$lib/stores/branch.svelte';
+  import { api, HttpError } from '#lib/api/client.ts';
+  import { purchaseConsolidationsApi } from '#lib/api/purchase-consolidations.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
   import type {
     ApprovedRequestCandidate,
     BranchDemandLevel,
     SelectedPurchaseRequestResolution
-  } from '$lib/types/purchase-consolidation';
-  import type { WarehouseOut } from '$lib/api/client';
+  } from '#lib/types/purchase-consolidation.ts';
+  import type { WarehouseOut } from '#lib/api/client.ts';
 
   function todayInput() {
     const d = new Date();

@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { permissions } from '$lib/stores/permissions.svelte';
-import { confirmation } from '$lib/stores/confirmation.svelte';
+import { permissions } from '#lib/stores/permissions.svelte.ts';
+import { confirmation } from '#lib/stores/confirmation.svelte.ts';
 import SaleDetail from './SaleDetail.svelte';
 
 const { salesApi } = vi.hoisted(() => ({ salesApi: { sale: vi.fn(), updateSale: vi.fn(), confirmSale: vi.fn() } }));
-vi.mock('$lib/api/sales', () => ({ salesApi }));
+vi.mock('#lib/api/sales.ts', () => ({ salesApi }));
 
 const draft = {
   id: 'sale-dirty', status: 'draft', version: 1, code: 'VTA-DEMO', customer_name: 'Cliente de prueba',

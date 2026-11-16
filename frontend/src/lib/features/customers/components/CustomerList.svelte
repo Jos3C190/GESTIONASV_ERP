@@ -1,16 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { customersApi } from '$lib/api/customers';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { customersApi } from '#lib/api/customers.ts';
   import {
     CUSTOMER_TYPE_LABELS,
     RECEIVABLE_DOCUMENT_LABELS,
     formatDocument
-  } from '$lib/features/customers/labels';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { Customer, CustomerType } from '$lib/types/customer';
+  } from '#lib/features/customers/labels.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { Customer, CustomerType } from '#lib/types/customer.ts';
 
   const SIZE = 20;
   const controlClass =

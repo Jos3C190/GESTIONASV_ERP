@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Frontend image — multi-stage. dev = vite dev server, prod = node adapter.
 
-ARG NODE_VERSION=20
+ARG NODE_VERSION=22
 
 # ---------------- base ----------------
 FROM node:${NODE_VERSION}-slim AS base
@@ -44,6 +44,6 @@ COPY --from=build /app/pnpm-lock.yaml* ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod --ignore-scripts
 EXPOSE 3000
-# SvelteKit's node adapter reads PORT, ORIGIN, BODY_SIZE_LIMIT from env.
+# SvelteKit's node adapter reads PORT and BODY_SIZE_LIMIT from env (since SvelteKit 3 it ignores ORIGIN).
 ENV PORT=3000
 CMD ["node", "build"]

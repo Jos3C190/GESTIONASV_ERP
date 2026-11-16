@@ -1,4 +1,4 @@
-import type { PurchaseOrderStatus } from '$lib/types/purchase-order';
+import type { PurchaseOrderStatus } from '#lib/types/purchase-order.ts';
 
 export type PurchaseStatus = 'draft' | 'received' | 'verified' | 'cancelled' | 'closed';
 

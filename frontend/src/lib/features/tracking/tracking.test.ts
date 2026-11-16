@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TrackedDeviceOut, TrackedVehicleOut } from '$lib/api/client';
+import type { TrackedDeviceOut, TrackedVehicleOut } from '#lib/api/client.ts';
 import { compassPoint, fromTraccar, statusFor, timeAgo } from './tracking';
 
 const fleetVehicle: TrackedVehicleOut = {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mapWarehouseOutToWarehouse } from './warehouses';
-import type { WarehouseOut } from '$lib/api/client';
+import type { WarehouseOut } from '#lib/api/client.ts';
 
 describe('mapWarehouseOutToWarehouse', () => {
   it('conserva descripción y galería entregadas por el backend', () => {

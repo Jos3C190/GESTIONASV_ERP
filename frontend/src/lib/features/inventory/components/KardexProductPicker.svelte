@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
   import { kardexApi, kardexErrorMessage, type KardexItemOption } from '../kardex';
 
   interface Props {

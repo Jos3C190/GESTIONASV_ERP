@@ -1,3 +1,8 @@
+import autoAdapter from '@sveltejs/adapter-auto';
+import nodeAdapter from '@sveltejs/adapter-node';
+import vercelAdapter from '@sveltejs/adapter-vercel';
+import { env } from 'node:process';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
 import { defineConfig, type ViteDevServer } from 'vite';
@@ -83,11 +88,21 @@ function warmUpOnStart() {
   };
 }
 
+const useNodeAdapter = env.SVELTE_ADAPTER === 'node';
+const useVercelAdapter =
+  env.SVELTE_ADAPTER === 'vercel' || env.VERCEL === '1' || env.VERCEL === 'true';
+
+const adapter = useNodeAdapter ? nodeAdapter() : useVercelAdapter ? vercelAdapter() : autoAdapter();
+
 export default defineConfig(({ mode }) => ({
   plugins: [
     warmUpOnStart(),
     normalizeSvelteRouteModulePath(),
-    sveltekit(),
+    sveltekit({
+      preprocess: vitePreprocess(),
+      compilerOptions: { runes: true },
+      adapter
+    }),
     ...(mode === 'test' ? [svelteTesting()] : [])
   ],
   server: {

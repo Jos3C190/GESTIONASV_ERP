@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { TransferVehicle } from '$lib/features/inventory/transfer-documents';
+  import type { TransferVehicle } from '#lib/features/inventory/transfer-documents.ts';
 
   type CollectionState = 'loading' | 'loaded' | 'empty' | 'error';
   interface Props {

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import ImageUpload from '$lib/components/ui/ImageUpload.svelte';
-  import type { ProductImageDraft } from '$lib/types/catalog';
+  import Button from '#lib/components/ui/Button.svelte';
+  import ImageUpload from '#lib/components/ui/ImageUpload.svelte';
+  import type { ProductImageDraft } from '#lib/types/catalog.ts';
 
   interface Props {
     images: ProductImageDraft[];

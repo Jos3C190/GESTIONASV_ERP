@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ProductDistributionItem } from '$lib/api/catalog';
+  import type { ProductDistributionItem } from '#lib/api/catalog.ts';
 
   interface Props {
     title: string;

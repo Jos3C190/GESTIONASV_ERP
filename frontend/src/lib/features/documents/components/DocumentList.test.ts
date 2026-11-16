@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DocumentRecordOut } from '$lib/api/client';
+import type { DocumentRecordOut } from '#lib/api/client.ts';
 import { formatDocumentDate, isCaptureOnly } from '../document-upload';
 import DocumentDetailPanel from './DocumentDetailPanel.svelte';
 import DocumentList from './DocumentList.svelte';

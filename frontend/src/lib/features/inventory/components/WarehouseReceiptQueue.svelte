@@ -1,9 +1,9 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { listLocations } from '$lib/features/locations/services';
-  import type { LocationOut } from '$lib/features/locations/types';
-  import LocationGridPicker from '$lib/features/locations/components/LocationGridPicker.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { listLocations } from '#lib/features/locations/services.ts';
+  import type { LocationOut } from '#lib/features/locations/types.ts';
+  import LocationGridPicker from '#lib/features/locations/components/LocationGridPicker.svelte';
   import { warehouseReceivingApi, type WarehouseReceipt } from '../warehouse-receiving';
 
   let {

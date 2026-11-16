@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import ValuationOpening from '$lib/features/inventory/components/ValuationOpening.svelte';
-import { valuationApi, type ValuationOverview } from '$lib/features/inventory/valuation';
+import ValuationOpening from '#lib/features/inventory/components/ValuationOpening.svelte';
+import { valuationApi, type ValuationOverview } from '#lib/features/inventory/valuation.ts';
 
-vi.mock('$lib/api/client', () => ({ apiFetch: vi.fn() }));
+vi.mock('#lib/api/client.ts', () => ({ apiFetch: vi.fn() }));
 
 const empty: ValuationOverview = {
   setting: null,

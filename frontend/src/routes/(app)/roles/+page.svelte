@@ -6,18 +6,18 @@
     type PermissionOut,
     type UserOut,
     type PageMeta
-  } from '$lib/api/client';
+  } from '#lib/api/client.ts';
   import { goto } from '$app/navigation';
   import { onDestroy, onMount } from 'svelte';
-  import { search as globalSearch } from '$lib/stores/search.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import FormField from '$lib/components/ui/FormField.svelte';
-  import SmartSelect from '$lib/components/ui/SmartSelect.svelte';
-  import KebabMenu, { type KebabItem } from '$lib/components/ui/KebabMenu.svelte';
-  import { confirmation } from '$lib/stores/confirmation.svelte';
+  import { search as globalSearch } from '#lib/stores/search.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Modal from '#lib/components/ui/Modal.svelte';
+  import FormField from '#lib/components/ui/FormField.svelte';
+  import SmartSelect from '#lib/components/ui/SmartSelect.svelte';
+  import KebabMenu, { type KebabItem } from '#lib/components/ui/KebabMenu.svelte';
+  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
 
   let roles = $state<RoleWithPermissions[]>([]);
   let roleCatalogue = $state<RoleWithPermissions[]>([]);

@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
-import { browser } from '$app/environment';
-import { restoreAppContext } from '$lib/auth/restore-app-context';
+import { browser } from '$app/env';
+import { restoreAppContext } from '#lib/auth/restore-app-context.ts';
 import type { LayoutLoad } from './$types';
 
 export const load: LayoutLoad = async ({ url }) => {

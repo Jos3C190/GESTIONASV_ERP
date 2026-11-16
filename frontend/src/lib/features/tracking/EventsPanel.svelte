@@ -1,5 +1,5 @@
 <script lang="ts">
-  import FleetIcon from '$lib/features/fleet/FleetIcon.svelte';
+  import FleetIcon from '#lib/features/fleet/FleetIcon.svelte';
   import { EVENT_GROUPS, type EventGroup, type TrackingEvent } from './events';
   import { timeAgo } from './tracking';
 

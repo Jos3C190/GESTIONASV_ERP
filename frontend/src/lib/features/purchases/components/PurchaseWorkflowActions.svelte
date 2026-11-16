@@ -1,11 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchasesApi } from '$lib/api/purchases';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import PurchaseVerificationEditor from '$lib/features/purchases/components/PurchaseVerificationEditor.svelte';
-  import type { Purchase } from '$lib/types/purchase';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchasesApi } from '#lib/api/purchases.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import PurchaseVerificationEditor from '#lib/features/purchases/components/PurchaseVerificationEditor.svelte';
+  import type { Purchase } from '#lib/types/purchase.ts';
 
   type WorkflowAction = 'receive' | 'cancel' | 'close';
 

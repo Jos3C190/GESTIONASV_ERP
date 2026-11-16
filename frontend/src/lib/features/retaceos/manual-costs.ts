@@ -1,5 +1,5 @@
-import { decimalMicros, fromMicros } from '$lib/features/inventory/valuation';
-import type { PurchaseDetail } from '$lib/types/purchase';
+import { decimalMicros, fromMicros } from '#lib/features/inventory/valuation.ts';
+import type { PurchaseDetail } from '#lib/types/purchase.ts';
 
 export type FixedAmounts = { freight: string; dai: string };
 

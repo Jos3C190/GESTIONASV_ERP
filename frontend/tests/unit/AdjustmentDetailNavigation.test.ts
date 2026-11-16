@@ -4,10 +4,10 @@ import AdjustmentDetail from '../../src/routes/(app)/inventory/adjustments/[id]/
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), apply: vi.fn(), correction: vi.fn(), goto: vi.fn(), canApprove: false, canManage: false }));
 vi.mock('$app/navigation', () => ({ goto: mocks.goto }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1' } }));
-vi.mock('$lib/stores/branch.svelte', () => ({ branch: { id: 'branch-1' } }));
-vi.mock('$lib/stores/permissions.svelte', () => ({ permissions: { hasPermission: (permission: string) => permission === 'inventory:adjust_approve' ? mocks.canApprove : permission === 'inventory:adjust' && mocks.canManage } }));
-vi.mock('$lib/features/inventory/adjustments', () => ({ inventoryAdjustmentsApi: { get: mocks.get, apply: mocks.apply, correction: mocks.correction } }));
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: { id: 'company-1' } }));
+vi.mock('#lib/stores/branch.svelte.ts', () => ({ branch: { id: 'branch-1' } }));
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({ permissions: { hasPermission: (permission: string) => permission === 'inventory:adjust_approve' ? mocks.canApprove : permission === 'inventory:adjust' && mocks.canManage } }));
+vi.mock('#lib/features/inventory/adjustments.ts', () => ({ inventoryAdjustmentsApi: { get: mocks.get, apply: mocks.apply, correction: mocks.correction } }));
 
 function adjustment(status: 'draft' | 'approved' | 'applied') {
   return {

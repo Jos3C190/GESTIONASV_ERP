@@ -23,8 +23,8 @@ const mocks = vi.hoisted(() => ({
   branches: [] as Array<{ id: string }>
 }));
 vi.mock('$app/navigation', () => ({ goto: mocks.goto }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1' } }));
-vi.mock('$lib/stores/branch.svelte', () => ({
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: { id: 'company-1' } }));
+vi.mock('#lib/stores/branch.svelte.ts', () => ({
   branch: {
     id: null,
     ready: true,
@@ -36,20 +36,20 @@ vi.mock('$lib/stores/branch.svelte', () => ({
     }
   }
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: (code: string) => mocks.permissions.has(code) }
 }));
-vi.mock('$lib/stores/session.svelte', () => ({
+vi.mock('#lib/stores/session.svelte.ts', () => ({
   session: { user: { id: 'user-receiver', is_superuser: false } }
 }));
-vi.mock('$lib/features/locations/services', () => ({ listLocations: mocks.listLocations }));
-vi.mock('$lib/features/inventory/services', () => ({
+vi.mock('#lib/features/locations/services.ts', () => ({ listLocations: mocks.listLocations }));
+vi.mock('#lib/features/inventory/services.ts', () => ({
   inventoryApi: {
     listTransferUnits: mocks.listTransferUnits,
     listPackaging: vi.fn().mockResolvedValue([])
   }
 }));
-vi.mock('$lib/features/inventory/transfer-documents', () => ({
+vi.mock('#lib/features/inventory/transfer-documents.ts', () => ({
   inventoryTransfersApi: {
     get: mocks.get,
     list: mocks.list,

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { purchaseOrdersApi } from '$lib/api/purchase-orders';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import type { PurchaseOrder } from '$lib/types/purchase-order';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { purchaseOrdersApi } from '#lib/api/purchase-orders.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import type { PurchaseOrder } from '#lib/types/purchase-order.ts';
 
   type WorkflowAction = 'submit' | 'approve' | 'send' | 'cancel';
 

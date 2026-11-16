@@ -3,25 +3,25 @@
 
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { HttpError } from '$lib/api/client';
-  import { getWarehouse } from '$lib/services/warehouses';
-  import { inventoryApi } from '$lib/features/inventory/services';
-  import { inventoryTransfersApi } from '$lib/features/inventory/transfer-documents';
-  import type { CapacitySummary, InventoryMovementHistory } from '$lib/features/inventory/types';
+  import { HttpError } from '#lib/api/client.ts';
+  import { getWarehouse } from '#lib/services/warehouses.ts';
+  import { inventoryApi } from '#lib/features/inventory/services.ts';
+  import { inventoryTransfersApi } from '#lib/features/inventory/transfer-documents.ts';
+  import type { CapacitySummary, InventoryMovementHistory } from '#lib/features/inventory/types.ts';
   import {
     formatMovementDate,
     formatMovementQuantity,
     movementIcon,
     movementTypeLabel,
     stockStatusLabel
-  } from '$lib/features/inventory/movement-presentation';
-  import CapacitySummaryPanel from '$lib/features/inventory/components/CapacitySummaryPanel.svelte';
-  import HandlingUnitsPanel from '$lib/features/inventory/components/HandlingUnitsPanel.svelte';
-  import MovementDetailsModal from '$lib/features/inventory/components/MovementDetailsModal.svelte';
-  import WarehouseCapacityGroupsSummary from '$lib/features/warehouses/components/WarehouseCapacityGroupsSummary.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { company } from '$lib/stores/company.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
+  } from '#lib/features/inventory/movement-presentation.ts';
+  import CapacitySummaryPanel from '#lib/features/inventory/components/CapacitySummaryPanel.svelte';
+  import HandlingUnitsPanel from '#lib/features/inventory/components/HandlingUnitsPanel.svelte';
+  import MovementDetailsModal from '#lib/features/inventory/components/MovementDetailsModal.svelte';
+  import WarehouseCapacityGroupsSummary from '#lib/features/warehouses/components/WarehouseCapacityGroupsSummary.svelte';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { company } from '#lib/stores/company.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
   import {
     CAPACITY_ENFORCEMENT_LABEL,
     CAPACITY_PROFILE_LABEL,
@@ -31,12 +31,12 @@
     type CapacityStatus,
     type Warehouse,
     type WarehouseMovement
-  } from '$lib/features/warehouses/types';
-  import Avatar from '$lib/components/ui/Avatar.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Tabs from '$lib/components/ui/Tabs.svelte';
+  } from '#lib/features/warehouses/types.ts';
+  import Avatar from '#lib/components/ui/Avatar.svelte';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Card from '#lib/components/ui/Card.svelte';
+  import Tabs from '#lib/components/ui/Tabs.svelte';
 
   let warehouse = $state<Warehouse | null>(null);
   let loading = $state(true);

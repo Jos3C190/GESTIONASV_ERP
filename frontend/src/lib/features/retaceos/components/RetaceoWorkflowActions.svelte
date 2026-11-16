@@ -1,11 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Button from '$lib/components/ui/Button.svelte';
-  import { HttpError } from '$lib/api/client';
-  import { retaceosApi } from '$lib/api/retaceos';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { branch } from '$lib/stores/branch.svelte';
-  import type { Retaceo } from '$lib/types/retaceo';
+  import Button from '#lib/components/ui/Button.svelte';
+  import { HttpError } from '#lib/api/client.ts';
+  import { retaceosApi } from '#lib/api/retaceos.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import type { Retaceo } from '#lib/types/retaceo.ts';
 
   type WorkflowAction = 'calculate' | 'verify' | 'cancel' | 'close' | 'apply';
 

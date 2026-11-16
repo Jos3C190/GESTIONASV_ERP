@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { api, HttpError, type DepartmentOut } from '$lib/api/client';
-  import EmployeeForm from '$lib/features/employees/components/EmployeeForm.svelte';
+  import { api, HttpError, type DepartmentOut } from '#lib/api/client.ts';
+  import EmployeeForm from '#lib/features/employees/components/EmployeeForm.svelte';
 
   let departments = $state<DepartmentOut[]>([]);
   let loading = $state(true);

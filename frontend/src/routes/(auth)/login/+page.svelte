@@ -1,8 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { session } from '$lib/stores/session.svelte';
-  import { permissions } from '$lib/stores/permissions.svelte';
-  import { api, HttpError } from '$lib/api/client';
+  import { session } from '#lib/stores/session.svelte.ts';
+  import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { api, HttpError } from '#lib/api/client.ts';
   import { z } from 'zod';
 
   const loginSchema = z.object({

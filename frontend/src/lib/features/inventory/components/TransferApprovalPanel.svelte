@@ -1,20 +1,20 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Callout from '$lib/components/ui/Callout.svelte';
-  import { HttpError } from '$lib/api/client';
+  import Badge from '#lib/components/ui/Badge.svelte';
+  import Button from '#lib/components/ui/Button.svelte';
+  import Callout from '#lib/components/ui/Callout.svelte';
+  import { HttpError } from '#lib/api/client.ts';
   import {
     inventoryTransfersApi,
     type AssignmentCheck,
     type DispatchIssue,
     type InventoryTransfer
-  } from '$lib/features/inventory/transfer-documents';
+  } from '#lib/features/inventory/transfer-documents.ts';
   import {
     assignmentFitness,
     FITNESS_LABEL,
     vehicleName
-  } from '$lib/features/inventory/transfer-operations';
+  } from '#lib/features/inventory/transfer-operations.ts';
 
   interface Props {
     transfer: InventoryTransfer;

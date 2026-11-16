@@ -3,7 +3,7 @@ import type {
   DocumentCategoryOut,
   GeneralEntryOut,
   GeneralExplorerPage
-} from '$lib/api/client';
+} from '#lib/api/client.ts';
 
 export type ExplorerView = 'list' | 'grid';
 export type ExplorerSort = 'name' | 'updated' | 'size';

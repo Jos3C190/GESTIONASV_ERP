@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TrackingWorkspace from '../../src/lib/features/tracking/TrackingWorkspace.svelte';
-import { api } from '$lib/api/client';
+import { api } from '#lib/api/client.ts';
 
 const currentRoute = vi.hoisted(() => ({ search: '' }));
 
@@ -39,7 +39,7 @@ const device = {
 };
 
 // El mapa no se carga en la prueba: solo interesa la tarjeta de detalle.
-vi.mock('$lib/features/tracking/maplibre', () => ({
+vi.mock('#lib/features/tracking/maplibre.ts', () => ({
   DEFAULT_CENTER: [-88.18, 13.48],
   MAP_STYLE: '',
   loadMapLibre: () => new Promise(() => {})
@@ -52,9 +52,9 @@ vi.mock('$app/state', () => ({
   }
 }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn(), replaceState: vi.fn() }));
-vi.mock('$lib/stores/company.svelte', () => ({ company: { id: 'company-1', active: null } }));
-vi.mock('$lib/stores/permissions.svelte', () => ({ permissions: { hasPermission: () => true } }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/stores/company.svelte.ts', () => ({ company: { id: 'company-1', active: null } }));
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({ permissions: { hasPermission: () => true } }));
+vi.mock('#lib/api/client.ts', () => ({
   api: {
     tracking: {
       positions: vi.fn(async () => ({

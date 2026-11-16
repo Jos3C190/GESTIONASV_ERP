@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { HttpError } from '$lib/api/client';
-  import { salesApi } from '$lib/api/sales';
-  import { branch } from '$lib/stores/branch.svelte';
-  import { formatUnitLabel } from '$lib/features/sales/unit-label';
-  import type { SalesReturn, SalesReturnStatus } from '$lib/types/sales';
+  import { HttpError } from '#lib/api/client.ts';
+  import { salesApi } from '#lib/api/sales.ts';
+  import { branch } from '#lib/stores/branch.svelte.ts';
+  import { formatUnitLabel } from '#lib/features/sales/unit-label.ts';
+  import type { SalesReturn, SalesReturnStatus } from '#lib/types/sales.ts';
 
   let items = $state<SalesReturn[]>([]);
   let loading = $state(true);

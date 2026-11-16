@@ -1,4 +1,4 @@
-import { apiFetch } from '$lib/api/client';
+import { apiFetch } from '#lib/api/client.ts';
 import type {
   BranchOption,
   CatalogItem,
@@ -14,7 +14,7 @@ import type {
   PointOfSale,
   PointOfSaleInput,
   PointOfSaleUpdateInput
-} from '$lib/types/fiscal';
+} from '#lib/types/fiscal.ts';
 
 const BASE = '/fiscal';
 

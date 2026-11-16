@@ -1,5 +1,5 @@
-import { apiFetch, type Page } from '$lib/api/client';
-import { branch } from '$lib/stores/branch.svelte';
+import { apiFetch, type Page } from '#lib/api/client.ts';
+import { branch } from '#lib/stores/branch.svelte.ts';
 import type {
   PurchaseOrder,
   PurchaseOrderCreateInput,
@@ -12,7 +12,7 @@ import type {
   PurchaseOrderExpenseTypeCatalog,
   PurchaseOrderListParams,
   PurchaseOrderUpdateInput
-} from '$lib/types/purchase-order';
+} from '#lib/types/purchase-order.ts';
 
 function queryPath(path: string, params: URLSearchParams): string {
   const query = params.toString();

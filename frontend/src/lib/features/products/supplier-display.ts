@@ -1,4 +1,4 @@
-import type { ProductSupplier } from '$lib/types/catalog';
+import type { ProductSupplier } from '#lib/types/catalog.ts';
 
 export function supplierDisplayName(
   relation: Pick<ProductSupplier, 'supplier_id' | 'supplier_name'>

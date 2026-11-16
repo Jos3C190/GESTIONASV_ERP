@@ -1,8 +1,8 @@
-import { apiFetch, type DocumentUploadTicket } from '$lib/api/client';
-import { ownedDocuments } from '$lib/api/owned-documents';
-import type { Compliance, FleetPage } from '$lib/features/fleet/api';
-import type { BaseImage, LicenseClass } from '$lib/features/fleet/catalog';
-import { branch } from '$lib/stores/branch.svelte';
+import { apiFetch, type DocumentUploadTicket } from '#lib/api/client.ts';
+import { ownedDocuments } from '#lib/api/owned-documents.ts';
+import type { Compliance, FleetPage } from '#lib/features/fleet/api.ts';
+import type { BaseImage, LicenseClass } from '#lib/features/fleet/catalog.ts';
+import { branch } from '#lib/stores/branch.svelte.ts';
 
 export type DriverStatus = 'active' | 'suspended' | 'inactive';
 

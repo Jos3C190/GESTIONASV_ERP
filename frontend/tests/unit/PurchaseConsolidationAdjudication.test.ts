@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseConsolidationAdjudication from '$lib/features/purchase-requests/components/PurchaseConsolidationAdjudication.svelte';
-import type { PurchaseConsolidationAwardBoard } from '$lib/types/purchase-consolidation';
+import PurchaseConsolidationAdjudication from '#lib/features/purchase-requests/components/PurchaseConsolidationAdjudication.svelte';
+import type { PurchaseConsolidationAwardBoard } from '#lib/types/purchase-consolidation.ts';
 
 const mocks = vi.hoisted(() => ({
   getAwardBoard: vi.fn(),
@@ -13,24 +13,24 @@ const mocks = vi.hoisted(() => ({
   hasPermission: vi.fn()
 }));
 
-vi.mock('$lib/api/purchase-consolidations', () => ({
+vi.mock('#lib/api/purchase-consolidations.ts', () => ({
   purchaseConsolidationsApi: {
     getAwardBoard: mocks.getAwardBoard,
     award: mocks.award,
     revokeAward: mocks.revokeAward
   }
 }));
-vi.mock('$lib/api/suppliers', () => ({
+vi.mock('#lib/api/suppliers.ts', () => ({
   suppliersApi: { getSupplier: mocks.getSupplier }
 }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
   HttpError: class HttpError extends Error {},
   api: {
     auth: { me: mocks.getCurrentUser },
     users: { get: mocks.getUser }
   }
 }));
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: { hasPermission: mocks.hasPermission }
 }));
 

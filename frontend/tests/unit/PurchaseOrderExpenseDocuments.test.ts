@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import PurchaseOrderExpenseDocuments from '$lib/features/purchase-orders/components/PurchaseOrderExpenseDocuments.svelte';
-import type { PurchaseOrderExpense, PurchaseOrderExpenseDocument } from '$lib/types/purchase-order';
+import PurchaseOrderExpenseDocuments from '#lib/features/purchase-orders/components/PurchaseOrderExpenseDocuments.svelte';
+import type { PurchaseOrderExpense, PurchaseOrderExpenseDocument } from '#lib/types/purchase-order.ts';
 
 const mocks = vi.hoisted(() => ({
   initiate: vi.fn(),
@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   hasPermission: vi.fn()
 }));
 
-vi.mock('$lib/api/purchase-orders', () => ({
+vi.mock('#lib/api/purchase-orders.ts', () => ({
   purchaseOrdersApi: {
     initiateExpenseDocument: mocks.initiate,
     completeExpenseDocument: mocks.complete,
@@ -20,7 +20,7 @@ vi.mock('$lib/api/purchase-orders', () => ({
   }
 }));
 
-vi.mock('$lib/stores/permissions.svelte', () => ({
+vi.mock('#lib/stores/permissions.svelte.ts', () => ({
   permissions: {
     hasPermission: mocks.hasPermission
   }
