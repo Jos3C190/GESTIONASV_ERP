@@ -85,7 +85,7 @@ def test_activity_code_has_five_or_six_digits() -> None:
 
 def test_nit_and_nrc_follow_the_dte_format() -> None:
     assert dte_nit("1217-060102-101-1") == "12170601021011"
-    assert dte_nit("06141234-5") is None
+    assert dte_nit("0614-12345") is None  # 10 dígitos
     assert dte_nit("123456789") == "123456789"
     assert dte_nrc("123456-7") == "1234567"
     assert dte_nrc("Pendiente de verificación") is None
