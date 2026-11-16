@@ -217,9 +217,11 @@
         >
           Registrar establecimiento
         </Button>
-        {#if !loading && !loadError && freeBranches.length === 0 && establishments.length > 0}
+        {#if !loading && !loadError && freeBranches.length === 0}
           <p id="est-register-help" class="text-xs text-foreground-muted">
-            Todas las sucursales ya son establecimientos.
+            {establishments.length > 0
+              ? 'Todas las sucursales ya son establecimientos.'
+              : 'Primero registra una sucursal en Sucursales.'}
           </p>
         {/if}
       </div>

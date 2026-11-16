@@ -9,7 +9,7 @@
   const TABS = [
     { id: 'emisor', label: 'Emisor' },
     { id: 'actividades', label: 'Actividades' },
-    { id: 'establecimientos', label: 'Establecimientos y cajas' },
+    { id: 'establecimientos', label: 'Establecimientos' },
     { id: 'documentos', label: 'Documentos' }
   ];
 

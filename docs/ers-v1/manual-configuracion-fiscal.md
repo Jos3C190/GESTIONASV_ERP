@@ -32,7 +32,7 @@ en el catálogo de Hacienda (CAT-019).
 - Una actividad que usa un establecimiento no se puede quitar: primero cámbiala en el
   establecimiento.
 
-## 3. Establecimientos y cajas
+## 3. Establecimientos
 
 Cada sucursal que opera ante Hacienda es un **establecimiento**, y cada caja es un **punto de
 venta**. Sus códigos forman el número de control del documento: `DTE-01-S001P001-…`.
