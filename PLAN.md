@@ -60,7 +60,7 @@ Fuera de alcance: las promociones (V6) y el registro de la autorización (V2d y 
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [ ] **Paso 1: migración `0123` y modelos.**
+- [x] **Paso 1: migración `0123` y modelos.**
   - Cambios en la base:
     - margen objetivo en la lista;
     - márgenes por categoría;
@@ -94,7 +94,7 @@ Fuera de alcance: las promociones (V6) y el registro de la autorización (V2d y 
 
 ## Estado actual
 
-- **Paso en curso**: 1.
+- **Paso en curso**: 2 (dominio). Migración `0123_sales_margins_and_discounts.py` aplicada también en la base local; modelos nuevos en `models/sales_pricing.py` y `discount_percent` en `sales_customers`.
 - **Contexto**: el frontend usa SvelteKit 3: imports `#lib/…` con extensión, `$app/env`, `goto(…, { replace, reset: false })`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.

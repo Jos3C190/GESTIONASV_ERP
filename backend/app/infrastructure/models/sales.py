@@ -78,6 +78,10 @@ class SalesCustomerModel(UUIDPKMixin, TimestampMixin, Base):
     anonymized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     #: Lista de precios del cliente (revisión 0122); sin ella usa la predeterminada.
     price_list_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    #: Descuento fijo del cliente, en % (revisión 0123).
+    discount_percent: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, server_default=text("0")
+    )
     created_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     updated_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
 

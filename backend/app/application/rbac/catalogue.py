@@ -225,6 +225,8 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     # --- sales price lists ---
     PermissionSpec("price_lists:read", "Consultar listas de precios de venta", "sales"),
     PermissionSpec("price_lists:manage", "Gestionar listas de precios y sus precios", "sales"),
+    PermissionSpec("sales_costs:read", "Ver el costo y el margen de los precios de venta", "sales"),
+    PermissionSpec("sales_discounts:manage", "Configurar los topes de descuento por rol", "sales"),
     # --- fleet ---
     PermissionSpec("fleet:read", "Consultar la flota", "fleet"),
     PermissionSpec("fleet:create", "Registrar vehículos", "fleet"),
