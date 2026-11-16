@@ -1690,3 +1690,58 @@ Messages changed for `retaceo_fixed_amount_invalid`, `retaceo_fixed_amount_misma
 `retaceo_fixed_category_invalid`, `retaceo_expense_category_invalid`,
 `retaceo_cost_allocation_incomplete` and `actual_expense_fixed_category`.
 The retaceo export no longer has the VAT column.
+
+## DTE issuer settings (revision 0118)
+
+Base of the sales area plan, block V1a (`docs/plan-area-ventas-el-salvador.pdf`,
+section 6.5). Every company is an independent DTE issuer: all endpoints resolve the
+company from `X-Company-ID` and never read or write another company's settings.
+Hacienda catalogs are the only global data.
+
+Permissions: `fiscal_settings:read` (GET) and `fiscal_settings:manage` (writes);
+catalogs use `reference_data:read`. Every write is audited with resource type
+`fiscal_profile`, `fiscal_activity`, `fiscal_establishment`, `fiscal_point_of_sale`
+or `fiscal_document_type`, with before and after states.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/fiscal/catalogs` | The 33 Hacienda catalogs (version 1.1, July 2026): code and title. |
+| GET | `/fiscal/catalogs/{CAT-xxx}?group=&search=&limit=` | Items of one catalog. `group` is the department code in CAT-008 and CAT-013 and the section (`summary`, `body`, `informative`) in CAT-015. `search` matches code or name, ignoring accents. `limit` 1 to 1000. |
+| GET / PUT | `/fiscal/profile` | Issuer profile: `taxpayer_category` (`large`, `medium`, `other`), `person_type` (`1`, `2`), `operating_mode` (`simulated`, `test`, `production`), `dte_email`, `dte_phone`. The response adds the company name, NIT and NRC and `production_blockers` (Spanish reasons). |
+| GET / POST | `/fiscal/activities` | Economic activities (CAT-019). The first one becomes primary. |
+| POST | `/fiscal/activities/{id}/primary` | Mark the primary activity. |
+| DELETE | `/fiscal/activities/{id}` | Remove an activity not used by an establishment. |
+| GET | `/fiscal/branch-options` | Branches of the company and the establishment each one already has. |
+| GET / POST | `/fiscal/establishments` | Establishments with address, Hacienda codes and points of sale. One per branch. |
+| GET / PATCH | `/fiscal/establishments/{id}` | Detail and edition (`establishment_type`, `code`, `activity_id`, `is_active`). |
+| POST | `/fiscal/establishments/{id}/points-of-sale` | New point of sale (`code`, `name`). |
+| PATCH | `/fiscal/points-of-sale/{id}` | Edit a point of sale (`code`, `name`, `is_active`). |
+| GET | `/fiscal/document-types` | The 13 CAT-002 types with `is_enabled`, `certification_status` and `certified_at`. |
+| PUT | `/fiscal/document-types/{code}` | Enable a type or change its certification (`pending`, `in_progress`, `approved`). |
+
+Rules:
+
+- Establishment code: the type letter plus three digits (`M` headquarters 02, `S`
+  branch 01, `B` warehouse 04, `P` yard 07), unique in the company. Point of sale:
+  `P` plus three digits, unique in its establishment. Both form the control number
+  `DTE-TT-S001P001-…`, so another company may reuse them.
+- The DTE address of an establishment is its branch address, with the Hacienda
+  department, municipality and district codes (`address.complete` is false when a
+  code is missing).
+- In `production` a type can be enabled only when its certification is `approved`.
+- Moving to `production` requires NIT, NRC, a primary activity, an active
+  establishment with an active point of sale and at least one enabled document, all
+  certified. While in production, any change that breaks one of those conditions is
+  rejected and nothing is saved.
+
+Error codes (`422` unless noted): `fiscal_catalog_unknown` (404),
+`fiscal_activity_code_invalid`, `fiscal_activity_unknown`,
+`fiscal_activity_duplicate` (409), `fiscal_activity_in_use` (409),
+`fiscal_activity_not_found` (404), `fiscal_branch_not_found` (404),
+`fiscal_branch_already_establishment` (409), `fiscal_establishment_code_invalid`,
+`fiscal_establishment_code_type_mismatch`, `fiscal_establishment_code_duplicate` (409),
+`fiscal_establishment_not_found` (404), `fiscal_point_of_sale_code_invalid`,
+`fiscal_point_of_sale_code_duplicate` (409), `fiscal_point_of_sale_not_found` (404),
+`fiscal_document_type_invalid`, `fiscal_document_not_certified`,
+`fiscal_production_not_ready`, `fiscal_production_would_break`,
+`fiscal_company_not_found` (404).
