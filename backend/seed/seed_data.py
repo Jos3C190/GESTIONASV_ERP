@@ -15,6 +15,9 @@ its next start:
   vehicle and driver has its documents; while the document storage or the
   antivirus is unavailable the vehicles are assigned with a recorded exception
   and the next start retries the documents;
+* the DTE issuer in simulated mode (``seed_grupo_lorena_fiscal``): fiscal profile,
+  economic activities, one establishment per branch with its point of sale and the
+  documents a bakery issues;
 * the demonstration operation (``seed_grupo_lorena_operations``), which creates
   purchase and inventory documents, only with ``SEED_DEMO_OPERATIONS=true`` and
   never when ``ENVIRONMENT=production``.
@@ -79,6 +82,12 @@ async def _fleet() -> bool:
     return await seed_fleet()
 
 
+async def _fiscal_issuer() -> bool:
+    from seed.seed_grupo_lorena_fiscal import seed as seed_fiscal
+
+    return await seed_fiscal()
+
+
 async def _operations() -> bool:
     from seed.seed_grupo_lorena_operations import seed as seed_operations
 
@@ -99,6 +108,7 @@ class FollowUp:
 FOLLOW_UPS: tuple[FollowUp, ...] = (
     FollowUp("seed.catalog.soft_flour_units", "2026-11-14-v1", _soft_flour_units),
     FollowUp("seed.grupo_lorena.fleet", "2026-11-14-v1", _fleet),
+    FollowUp("seed.grupo_lorena.fiscal_issuer", "2026-11-15-v1", _fiscal_issuer),
     FollowUp("seed.grupo_lorena.operations", "2026-11-14-v1", _operations, demo_operations_enabled),
 )
 
