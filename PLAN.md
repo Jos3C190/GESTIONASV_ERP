@@ -1,98 +1,98 @@
-# Plan: Ventas V1c — Clasificación fiscal de productos
+# Plan: Ventas V2a — Motor único de cálculo fiscal
 
-Rama: `feature/ventas-v1c-clasificacion-fiscal-productos`, desde `develop` (ya incluye V1a y V1b, PR #38 y #39).
-Fuente: `docs/plan-area-ventas-el-salvador.pdf`, módulo 5.2 («Clasificación fiscal de cada producto: gravado, exento o no sujeto, y su código de tributo»), sección 6.5 («La clasificación fiscal es por producto y por empresa. Ninguna regla asume que todo es gravado») y bloque V1.
-Después viene V1d: datos personales.
+Rama: `feature/ventas-v2a-motor-calculo`, desde `develop` (incluye V1a, V1b y V1c; V1d está en la PR #41).
+Fuente: `docs/plan-area-ventas-el-salvador.pdf`, secciones 3.2 (IVA), 3.3 (retención y percepción), 4.5 (reglas de cálculo), módulo 5.2 y bloque V2.
 
-## Alcance
+## Decisiones del usuario (16/11/2026)
 
-Cada producto de cada empresa tiene su clasificación fiscal, y cada unidad de medida su código de Hacienda. Esos datos los necesita cada línea de un DTE.
+- V2 se divide en cinco sub-bloques, cada uno con su PR a `develop`:
+  - **V2a**: motor único de cálculo (este plan);
+  - **V2b**: listas de precios;
+  - **V2c**: descuentos con topes por rol y venta bajo costo;
+  - **V2d**: cotización rediseñada;
+  - **V2e**: pedido de venta que sustituye a la venta actual.
+- Las promociones (2×1, combos, precio por horario) van en V6, con la caja. V2 deja el motor listo para recibirlas.
+- La cotización y la venta actuales (B06) se rehacen en su lugar, con migración. Si hubiera datos en algún entorno, la migración se niega a seguir en lugar de perderlos. Entregas y devoluciones se adaptan.
+
+## Alcance de V2a
+
+Un solo motor calcula los montos fiscales de cualquier documento de venta. Lo usarán la cotización, el pedido, el punto de venta y el DTE. Este sub-bloque no tiene migración ni pantallas: entrega el motor y un endpoint para previsualizar el cálculo.
 
 Resultado verificable:
-- un producto vendible muestra su tratamiento de IVA, su tipo de ítem, sus tributos adicionales y el código de Hacienda de su unidad de venta;
-- si falta algo para facturarlo, la pantalla lo dice.
+- el mismo producto da $1.13 con IVA incluido en la factura y $1.00 + $0.13 en el crédito fiscal (cuadro 1 del plan);
+- el ejemplo oficial de crédito fiscal con descuento global y retención (Manual Funcional, cap. XVIII) da exactamente los mismos montos.
 
-Queda fuera de V1c:
-- el cálculo de impuestos (V2);
-- las tasas de los tributos especiales, que se configuran con el motor de V2. Aquí solo se registra qué tributo lleva el producto.
+## Hechos verificados
 
-## Hechos verificados (catálogos de Hacienda 1.1 y esquemas del DTE)
+- **Esquemas oficiales** (`svfe-json-schemas`; `fe-f-v2` y `fe-ccf-v4`):
+  - los montos por línea admiten 8 decimales (`multipleOf 1e-08`) y los del resumen, 2;
+  - la factura lleva `ivaItem` por línea y `totalIva` en el resumen;
+  - el crédito fiscal lleva el IVA en `resumen.tributos` (código 20), más `ivaPerci` e `ivaRete`.
+- **Redondeo y holgura** (Manual Funcional, cap. XXI): media hacia arriba, en el 8.º decimal en las líneas y en el 2.º en el resumen. Hacienda tolera $0.01 en cada campo del resumen.
+- **Descuentos** (cap. XVIII):
+  - el descuento por ítem se resta de precio × cantidad;
+  - el descuento global va por naturaleza (gravada, exenta, no sujeta) en el resumen;
+  - `totalDescu` suma ambos y es informativo.
+- **Ejemplo oficial de crédito fiscal**: gravadas $775.00, descuento global gravado $77.50 → subtotal $697.50.
+  - IVA: 697.50 × 0.13 = 90.675 → $90.68.
+  - Retención: 1 % = $6.98.
+  - Monto total de la operación: $697.50 + $90.68 − $6.98 = $781.20.
+- **Lo que ya existe en el ERP**:
+  - categoría del emisor (`large`, `medium`, `other`) en el perfil fiscal (V1a);
+  - del cliente: categoría y si es agente de retención (V1b);
+  - del producto: tratamiento de IVA, tipo de ítem y tributos adicionales (V1c);
+  - documentos que puede recibir cada cliente (`receivable_documents`) y documentos habilitados por empresa (V1a).
+- No existe ningún precio de producto en el ERP: «Asignación de precios» es un marcador del menú. Lo resuelve V2b.
 
-- **Línea del DTE (`cuerpoDocumento`).** Lleva:
-  - `tipoItem` (CAT-011): 1 bienes, 2 servicios, 3 ambos, 4 otros tributos por ítem;
-  - `uniMedida` (CAT-014);
-  - montos separados en venta gravada, exenta y no sujeta;
-  - `tributos`, con códigos de CAT-015.
-- **IVA.** El IVA 13 % es el tributo 20 y el IVA de exportación es C3. Los dos los decide el tipo de venta y de documento, no el producto.
-- **Tributos adicionales por producto** (CAT-015, sin 20 ni C3):
-  - FOVIAL (D1) y COTRANS (C8) para combustibles;
-  - impuestos especiales a bebidas, tabaco, armas y cemento;
-  - otros.
-- **Unidades (CAT-014).** Tiene metro, gramo, kilogramo, libra, galón, litro, mililitro, docena, unidad (59) y «Otra» (99). No tiene caja, paquete ni centímetro: esas van como 99.
-- **Datos actuales.**
-  - Grupo Lorena tiene 13 productos, todos bienes y vendibles.
-  - Las unidades globales son: UNIT, BOX, PACK, METER, CENTIMETER, GRAM, KILOGRAM, POUND, GALLON, LITER y MILLILITER. Grupo Lorena tiene además una unidad propia, FT (pie).
-  - `company_units` (llave `company_id`, `unit_id`) enlaza cada unidad con cada empresa.
+## Reglas del motor
 
-## Decisiones
-
-- **Columnas nuevas en `products`.**
-  - `tax_treatment`: `taxed`, que es el valor por defecto, `exempt` o `not_subject`.
-  - `dte_item_type`: opcional, `1`, `2` o `3`. Si va vacío, se deriva del tipo de producto: bien 1, servicio 2.
-  - `additional_tax_codes`: lista de códigos de CAT-015 sin 20 ni C3; vacía por defecto.
-- **Código de Hacienda de la unidad.** Va por empresa en `company_units.hacienda_unit_code`, porque cada empresa puede tener sus propias unidades y su propio criterio.
-  - Si está vacío, se usa un valor sugerido según el código de la unidad: UNIT 59, KILOGRAM 34, GRAM 39, POUND 36, LITER 23, MILLILITER 26, GALLON 22, METER 1, y 99 para las demás.
-  - La migración no guarda la sugerencia: el código queda vacío hasta que la empresa elija uno, para que la pantalla distinga lo sugerido de lo elegido (corregido en la revisión del navegador).
-- **Requisitos para facturar un producto vendible.**
-  - Su unidad de venta debe estar habilitada en la empresa y tener código de Hacienda.
-  - Si es exento o no sujeto, no puede llevar tributos adicionales: los tributos especiales solo aplican a ventas gravadas.
-  - El dominio devuelve los problemas en español.
-- **API.**
-  - `GET` y `PUT /products/{id}/fiscal`, con `products:read` y el permiso nuevo `products:fiscal`.
-  - `GET /fiscal/units` y `PUT /fiscal/units/{unit_id}`, con `fiscal_settings:read` y `fiscal_settings:manage`.
-  - Toda escritura queda en la bitácora.
-- **Pantallas.**
-  - Una tarjeta «Clasificación fiscal» en la ficha del producto, con edición en un modal.
-  - Una pestaña «Unidades» en Configuración fiscal.
-- **Interfaz.** No menciona a otras empresas.
+- **Documentos**: factura (01) y comprobante de crédito fiscal (03). Exportación y notas vienen con el DTE (V3 y V4).
+- **Precio de cada línea**:
+  - llega con la marca `price_includes_vat`;
+  - el motor lo lleva a la forma del documento: con IVA en la factura y sin IVA en el crédito fiscal;
+  - convierte con ÷ 1.13 o × 1.13, redondeando a 8 decimales;
+  - el precio de una línea exenta o no sujeta nunca lleva IVA.
+- **Venta por línea** = cantidad × precio − descuento por ítem, a 8 decimales. Va en `venta_gravada`, `venta_exenta` o `venta_no_sujeta` según el producto.
+- **IVA**:
+  - Factura: `iva_item` = venta gravada − venta gravada ÷ 1.13, por línea. En el resumen, `total_iva` se calcula sobre la gravada neta del descuento global.
+  - Crédito fiscal: IVA = (gravada − descuento global gravado) × 0.13, redondeado a 2 decimales.
+- **Retención 1 %** (CT art. 162):
+  - aplica si el cliente es gran contribuyente o agente de retención, el emisor no es gran contribuyente y la gravada neta sin IVA llega a $100;
+  - la base es la gravada neta sin IVA;
+  - se resta del monto total.
+- **Percepción 1 %** (CT art. 163):
+  - solo en el crédito fiscal;
+  - aplica si el emisor es gran contribuyente, el cliente es contribuyente sin esa categoría y la base llega a $100;
+  - la base es la gravada neta de las líneas de bienes (tipo de ítem 1 o 3);
+  - se suma al total.
+- **Cuadre**: el descuento global de cada naturaleza no puede superar su total.
+- **Tributos adicionales**: un producto con tributos adicionales (FOVIAL, COTRANS, etc.) se rechaza con un error claro, porque sus tasas y bases no son el 13 %. Quedan para cuando una empresa los necesite.
+- **Total en letras**: en español y en mayúsculas, por ejemplo «CIENTO TRECE 50/100 DÓLARES».
 
 ## Pasos
 
-- [x] **Paso 1: migración `0120_product_fiscal_classification` y modelos.**
-  - Columnas en `products` y en `company_units`, su carga y el permiso `products:fiscal`.
-  - Verificar con upgrade, downgrade y upgrade, y con `tests/integration/test_product_fiscal_migration.py`.
-- [x] **Paso 2: dominio.**
-  - `app/domain/entities/product_fiscal.py`: tratamiento, tipo de ítem efectivo, validación de tributos, unidad sugerida y requisitos.
-  - Verificar con `tests/unit/test_product_fiscal_domain.py`.
-- [x] **Paso 3: repositorio, casos de uso y API.** (cubierto por `tests/e2e/test_product_fiscal.py`)
-  - Archivos:
-    - el puerto, el repositorio y los casos de uso;
-    - los routers de productos y de configuración fiscal;
-    - los esquemas;
-    - el permiso en `rbac/catalogue.py`.
-  - Verificar con las pruebas de integración y e2e: aislamiento entre empresas, permisos y auditoría.
-- [x] **Paso 4: frontend.**
-  - La tarjeta y el modal en la ficha del producto, y la pestaña de unidades en Configuración fiscal.
-  - Verificar con vitest.
-- [x] **Paso 5: semilla.** No hizo falta: los 13 productos de Grupo Lorena son insumos gravados y la migración los dejó en `taxed`; sus unidades de venta (UNIT, KILOGRAM) ya tienen código 59 y 34.
-- [ ] **Paso 6: documentación.** `docs/api.md`, `docs/database-schema.md` y el manual.
-- [x] **Paso 7: verificación y PR.** Batería completa en verde (backend 1,816; frontend 1,134; lint, tipos y build); tras los ajustes de la revisión se volvieron a correr las 15 pruebas de clasificación fiscal. Revisión en el navegador: tarjeta y modal en la ficha del producto, y pestaña Unidades.
-  - Correr la batería completa y revisar en el navegador.
-  - Reiniciar el contenedor `frontend` si una ruta nueva da «Not found».
-  - Abrir el PR hacia `develop`.
+- [x] **Paso 0: plan.**
+- [ ] **Paso 1: dominio.**
+  - Crear `backend/app/domain/entities/sales_tax.py` con el motor puro y `amount_in_words`.
+  - Verificar con pruebas unitarias: cuadro 1, el ejemplo oficial, exentos y no sujetos, retención y percepción en su umbral y debajo de él, conversión de precio, redondeo con 5 en el 9.º decimal y errores.
+- [ ] **Paso 2: aplicación y API.**
+  - Caso de uso que arma la entrada con el emisor, el cliente y la clasificación de cada producto, y valida que el documento lo pueda recibir el cliente y esté habilitado en la empresa.
+  - Endpoint `POST /sales/tax-calculation`.
+  - Verificar con pruebas e2e: permisos, empresa aislada, documento no habilitado o no permitido al cliente, producto con tributos adicionales.
+- [ ] **Paso 3: documentación.** `docs/api.md` y un manual del cálculo en `docs/ers-v1/`.
+- [ ] **Paso 4: verificación y PR.** Correr la batería completa y abrir el PR hacia `develop`.
 
 ## Estado actual
 
-- **Paso en curso**: ninguno; V1c terminado y con PR hacia `develop`. Lo siguiente es V1d (datos personales).
+- **Paso en curso**: 1 (dominio).
 - **Comandos**:
-  - Pruebas: `./scripts/run-tests.sh backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
+  - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.
   - Prettier solo se aplica a archivos nuevos o tocados.
-- **Navegador**:
-  - Iniciar sesión en `http://localhost:5173/login` con la cuenta local que dio el usuario.
-  - Navegar con el menú, sin recargar la página.
+  - Los esquemas oficiales están en `D:\josec\Downloads\Documentacion DTE\svfe-json-schemas.zip`.
 - **Reglas del usuario**:
   - Commits y PR sin Co-Authored-By ni «Generated with Claude Code».
   - PR hacia `develop`.
   - Ignorar el check de Vercel.
   - Dentro de una empresa, la interfaz no menciona a otras empresas.
+  - En documentos compartidos, el servicio DTE de referencia se llama «proyecto de referencia».
