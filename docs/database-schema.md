@@ -944,3 +944,48 @@ classification. Deleted VAT costs, amounts, rates and modes are not restored.
 `RetaceoModel` mirrors the migration exactly (tests run with
 `-W error::SAWarning`); `manual_entry` is kept. Covered by
 `backend/tests/integration/test_retaceo_without_vat_migration.py`.
+
+## 28. Fiscal issuer base (0118)
+
+Revision `0118` (revises `0117`). First block of the sales area (V1a): Hacienda
+catalogs and the DTE issuer settings of each company.
+
+**Global data**
+
+- `hacienda_catalog_items` (`catalog_code`, `group_code`, `code`) primary key, with
+  `name`, `sort_order`, `catalog_version` and `is_active`. Loaded from
+  `app/infrastructure/catalogs/hacienda_dte.py` (catalogs version 1.1, July 2026;
+  1,681 codes), which `backend/scripts/generate_hacienda_catalogs.py` builds from the
+  official workbook. `group_code` is the department code in CAT-008 and CAT-013,
+  whose codes repeat across departments, and the section in CAT-015, where D4 and D5
+  appear twice.
+- `geographic_departments`, `municipalities` and `districts` gain
+  `hacienda_code VARCHAR(2)` (two digits, nullable for rows created outside the
+  official catalog), filled for all 14 departments, 44 municipalities and 262
+  districts. Unique indexes: department code, and municipality code per department.
+  District codes are unique per department (checked by tests, not by an index,
+  because districts reference their municipality).
+
+**Per company**
+
+- `company_fiscal_profiles` (1:1 with `companies`, cascade): `taxpayer_category`,
+  `person_type`, `operating_mode` (`simulated` by default), `dte_email`, `dte_phone`.
+- `company_economic_activities`: `activity_code` (5 or 6 digits, unique per company)
+  and `is_primary` (one per company, partial unique index).
+- `fiscal_establishments`: one per branch (`UNIQUE (company_id, branch_id)`), `code`
+  unique per company and whose letter must match `establishment_type`
+  (`ck_fiscal_establishments_code_matches_type`), optional `activity_id` (composite FK
+  to the company's activities).
+- `fiscal_points_of_sale`: `code` `P` plus three digits, unique per establishment;
+  composite FK `(company_id, establishment_id)`.
+- `company_dte_document_types`: primary key `(company_id, document_type)`, the 13
+  CAT-002 codes, `is_enabled`, `certification_status` and `certified_at`, present if
+  and only if the status is `approved`.
+
+Permissions `fiscal_settings:read` and `fiscal_settings:manage` are inserted and
+granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses with `RuntimeError` while any profile, activity, establishment
+or document setting exists; otherwise it drops everything above. Models live in
+`app/infrastructure/models/fiscal.py`. Covered by
+`backend/tests/integration/test_fiscal_migration.py`.

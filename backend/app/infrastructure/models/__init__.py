@@ -31,6 +31,14 @@ from app.infrastructure.models.employee import (
     Employee,
     EmployeeBranchAssignment,
 )
+from app.infrastructure.models.fiscal import (
+    CompanyDteDocumentTypeModel,
+    CompanyEconomicActivityModel,
+    CompanyFiscalProfileModel,
+    FiscalEstablishmentModel,
+    FiscalPointOfSaleModel,
+    HaciendaCatalogItemModel,
+)
 from app.infrastructure.models.fleet import (
     DriverModel,
     FleetVehicleModel,
@@ -203,6 +211,9 @@ __all__: list[str] = [
     "CapacityReservationModel",
     "CategoryModel",
     "Company",
+    "CompanyDteDocumentTypeModel",
+    "CompanyEconomicActivityModel",
+    "CompanyFiscalProfileModel",
     "CompanyUnitModel",
     "CountryModel",
     "CurrencyModel",
@@ -222,10 +233,13 @@ __all__: list[str] = [
     "Employee",
     "EmployeeBranchAssignment",
     "ExpenseTypeModel",
+    "FiscalEstablishmentModel",
+    "FiscalPointOfSaleModel",
     "FleetVehicleModel",
     "FleetVehiclePhotoModel",
     "FuelLogModel",
     "GeographicDepartment",
+    "HaciendaCatalogItemModel",
     "InventoryAdjustmentDetailModel",
     "InventoryAdjustmentDocumentModel",
     "InventoryAdjustmentEventModel",

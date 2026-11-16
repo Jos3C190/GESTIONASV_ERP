@@ -33,6 +33,20 @@ from app.infrastructure.db.base import Base, SoftDeleteMixin, TimestampMixin, UU
 class GeographicDepartment(UUIDPKMixin, Base):
     __tablename__ = "geographic_departments"
     name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    #: Código de Hacienda (CAT-012).
+    hacienda_code: Mapped[str | None] = mapped_column(String(2))
+    __table_args__ = (
+        CheckConstraint(
+            "hacienda_code IS NULL OR hacienda_code ~ '^[0-9]{2}$'",
+            name="ck_geographic_departments_hacienda_code",
+        ),
+        Index(
+            "uq_geographic_departments_hacienda_code",
+            "hacienda_code",
+            unique=True,
+            postgresql_where=text("hacienda_code IS NOT NULL"),
+        ),
+    )
 
 
 class Municipality(UUIDPKMixin, Base):
@@ -43,8 +57,21 @@ class Municipality(UUIDPKMixin, Base):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    #: Código de Hacienda (CAT-013); único dentro del departamento.
+    hacienda_code: Mapped[str | None] = mapped_column(String(2))
     __table_args__ = (
         UniqueConstraint("department_id", "name", name="uq_municipalities_department_name"),
+        CheckConstraint(
+            "hacienda_code IS NULL OR hacienda_code ~ '^[0-9]{2}$'",
+            name="ck_municipalities_hacienda_code",
+        ),
+        Index(
+            "uq_municipalities_department_hacienda_code",
+            "department_id",
+            "hacienda_code",
+            unique=True,
+            postgresql_where=text("hacienda_code IS NOT NULL"),
+        ),
     )
 
 
@@ -54,8 +81,14 @@ class District(UUIDPKMixin, Base):
         PGUUID(as_uuid=True), ForeignKey("municipalities.id", ondelete="RESTRICT"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    #: Código de Hacienda (CAT-008); correlativo y único dentro del departamento.
+    hacienda_code: Mapped[str | None] = mapped_column(String(2))
     __table_args__ = (
         UniqueConstraint("municipality_id", "name", name="uq_districts_municipality_name"),
+        CheckConstraint(
+            "hacienda_code IS NULL OR hacienda_code ~ '^[0-9]{2}$'",
+            name="ck_districts_hacienda_code",
+        ),
     )
 
 

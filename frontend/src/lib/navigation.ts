@@ -303,6 +303,13 @@ export const NAV_GROUPS: NavGroup[] = [
         route: '/sales/returns',
         implemented: true,
         requiredPermission: 'sales_returns:read'
+      },
+      {
+        label: 'Configuración fiscal',
+        icon: ICONS.settings,
+        route: '/sales/fiscal-settings',
+        implemented: true,
+        requiredPermission: 'fiscal_settings:read'
       }
     ]
   },
