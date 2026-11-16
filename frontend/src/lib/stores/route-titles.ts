@@ -20,6 +20,7 @@ const TITLES: Record<string, string> = {
   '/sales/quotations': 'Cotizaciones de venta',
   '/sales/returns': 'Devoluciones',
   '/sales/fiscal-settings': 'Configuración fiscal',
+  '/sales/price-lists': 'Listas de precios',
   '/sales': 'Ventas',
   '/purchase-requests': 'Solicitudes de compra',
   '/purchase-quotations': 'Cotizaciones de compra',
@@ -78,6 +79,8 @@ export function routeTitle(pathname: string): string {
     return TITLES['/warehouse-categories'] ?? 'Categorías de almacén';
   if (pathname.startsWith('/suppliers')) return TITLES['/suppliers'] ?? 'Proveedores';
   if (pathname.startsWith('/customers')) return TITLES['/customers'] ?? 'Clientes';
+  if (pathname.startsWith('/sales/price-lists'))
+    return TITLES['/sales/price-lists'] ?? 'Listas de precios';
   if (pathname.startsWith('/sales/quotations'))
     return TITLES['/sales/quotations'] ?? 'Cotizaciones de venta';
   if (pathname.startsWith('/sales')) return TITLES['/sales'] ?? 'Ventas';

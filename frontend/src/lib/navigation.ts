@@ -210,13 +210,6 @@ export const NAV_GROUPS: NavGroup[] = [
         route: '/retaceos',
         implemented: true,
         requiredPermission: 'retaceos:read'
-      },
-      {
-        label: 'Asignación de precios',
-        icon: ICONS.pricing,
-        route: '/placeholder?module=Asignación de precios',
-        implemented: false,
-        module: 'Asignación de precios'
       }
     ]
   },
@@ -311,6 +304,13 @@ export const NAV_GROUPS: NavGroup[] = [
         route: '/sales/returns',
         implemented: true,
         requiredPermission: 'sales_returns:read'
+      },
+      {
+        label: 'Listas de precios',
+        icon: ICONS.pricing,
+        route: '/sales/price-lists',
+        implemented: true,
+        requiredPermission: 'price_lists:read'
       },
       {
         label: 'Configuración fiscal',

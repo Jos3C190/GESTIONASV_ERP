@@ -45,6 +45,17 @@ describe('catalog navigation', () => {
     expect(routeTitle('/privacy')).toBe('Datos personales');
   });
 
+  it('exposes price lists under sales and drops the old placeholder', () => {
+    expect(itemByRoute('/sales/price-lists')).toMatchObject({
+      label: 'Listas de precios',
+      implemented: true,
+      requiredPermission: 'price_lists:read'
+    });
+    expect(routeTitle('/sales/price-lists/list-1')).toBe('Listas de precios');
+    const labels = NAV_GROUPS.flatMap((group) => group.items).map((item) => item.label);
+    expect(labels).not.toContain('Asignación de precios');
+  });
+
   it('exposes product categories with product read access', () => {
     expect(itemByRoute('/inventory/categories')).toMatchObject({
       label: 'Categorías de productos',
