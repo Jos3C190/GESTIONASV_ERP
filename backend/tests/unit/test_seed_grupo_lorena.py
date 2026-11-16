@@ -28,6 +28,7 @@ def test_follow_ups_run_fleet_automatically_and_operations_only_on_request() -> 
         "seed.grupo_lorena.fleet",
         "seed.grupo_lorena.fiscal_issuer",
         "seed.grupo_lorena.customers",
+        "seed.grupo_lorena.privacy_notice",
         "seed.grupo_lorena.operations",
     ]
     enabled = {step.key: step.enabled for step in seed_data.FOLLOW_UPS}
