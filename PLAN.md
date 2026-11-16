@@ -72,14 +72,14 @@ Resultado verificable:
   - Selector de lista en la ficha del cliente.
   - Menú.
   - Verificar con vitest, svelte-check y ESLint.
-- [ ] **Paso 4: semilla y documentación.**
+- [x] **Paso 4: semilla y documentación.**
   - Listas y precios de Grupo Lorena.
   - `docs/api.md`, `docs/database-schema.md` §32 y el manual.
 - [ ] **Paso 5: verificación y PR.** Batería completa, QA en el navegador y PR a `develop`.
 
 ## Estado actual
 
-- **Paso en curso**: 4 (semilla y documentación). Frontend en `lib/features/price-lists` y rutas `/sales/price-lists` y `/sales/price-lists/[id]`; selector de lista en la ficha del cliente; «Asignación de precios» salió del menú de Compras. Backend: `domain/entities/price_list.py`, `application/price_lists`, `repositories/price_list_repository.py`, `routers/price_lists.py` (rutas `/price-lists` y `/sales/prices/resolve`, registrado antes del router de ventas para que `/sales/{id}` no lo capture) y `price_list_id` en el cliente. Las pruebas e2e preparan un artículo de inventario porque la semilla de API no lo trae. Migración `0122_sales_price_lists.py` y modelos en `models/sales_pricing.py`; el traslape de vigencias lo garantiza `ex_sales_price_list_items_overlap` (solo en la migración).
+- **Paso en curso**: 5 (verificación y PR). Semilla: paso de seguimiento `seed.grupo_lorena.price_lists` (`backend/seed/seed_grupo_lorena_price_lists.py`), idempotente. Documentación en `docs/api.md`, `docs/database-schema.md` §32 y `docs/ers-v1/manual-listas-precios.md`. Frontend en `lib/features/price-lists` y rutas `/sales/price-lists` y `/sales/price-lists/[id]`; selector de lista en la ficha del cliente; «Asignación de precios» salió del menú de Compras. Backend: `domain/entities/price_list.py`, `application/price_lists`, `repositories/price_list_repository.py`, `routers/price_lists.py` (rutas `/price-lists` y `/sales/prices/resolve`, registrado antes del router de ventas para que `/sales/{id}` no lo capture) y `price_list_id` en el cliente. Las pruebas e2e preparan un artículo de inventario porque la semilla de API no lo trae. Migración `0122_sales_price_lists.py` y modelos en `models/sales_pricing.py`; el traslape de vigencias lo garantiza `ex_sales_price_list_items_overlap` (solo en la migración).
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.
