@@ -9,6 +9,7 @@
   import { HttpError } from '#lib/api/client.ts';
   import { customersApi } from '#lib/api/customers.ts';
   import { fiscalApi } from '#lib/api/fiscal.ts';
+  import { priceListsApi } from '#lib/api/price-lists.ts';
   import CustomerDeliveryAddresses from '#lib/features/customers/components/CustomerDeliveryAddresses.svelte';
   import CustomerConsentsPanel from '#lib/features/privacy/components/CustomerConsentsPanel.svelte';
   import GeographyFields from '#lib/features/customers/components/GeographyFields.svelte';
@@ -25,6 +26,7 @@
   import { confirmation } from '#lib/stores/confirmation.svelte.ts';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type { Customer, CustomerInput, CustomerType } from '#lib/types/customer.ts';
+  import type { PriceList } from '#lib/types/price-list.ts';
 
   let { customerId = null }: { customerId?: string | null } = $props();
 
@@ -34,6 +36,7 @@
   const labelClass = 'mb-1 block text-sm font-medium text-foreground';
 
   let customer = $state<Customer | null>(null);
+  let priceLists = $state<PriceList[] | null>(null);
   let form = $state<CustomerInput>(emptyCustomerInput());
   let code = $state('');
   let loading = $state(true);
@@ -75,7 +78,16 @@
   onMount(() => {
     if (customerId) void load();
     else loading = false;
+    priceListsApi.list().then(
+      (items) => (priceLists = items),
+      () => (priceLists = null)
+    );
   });
+
+  const selectablePriceLists = $derived(
+    (priceLists ?? []).filter((item) => item.is_active || item.id === form.price_list_id)
+  );
+  const defaultPriceList = $derived((priceLists ?? []).find((item) => item.is_default) ?? null);
 
   function changeType(type: CustomerType) {
     form = switchCustomerType(form, type);
@@ -477,6 +489,32 @@
             loadOptions={searchSellers}
           />
         </div>
+        {#if priceLists !== null}
+          <div class="md:col-span-2">
+            <label for="customer-price-list" class={labelClass}>Lista de precios</label>
+            <select
+              id="customer-price-list"
+              value={form.price_list_id ?? ''}
+              onchange={(e) => (form.price_list_id = e.currentTarget.value || null)}
+              disabled={!editable}
+              class={inputClass}
+            >
+              <option value="">
+                {defaultPriceList
+                  ? `La predeterminada (${defaultPriceList.name})`
+                  : 'La predeterminada de la empresa'}
+              </option>
+              {#each selectablePriceLists as item (item.id)}
+                <option value={item.id}>
+                  {item.name}{item.is_active ? '' : ' (inactiva)'}
+                </option>
+              {/each}
+            </select>
+            <p class="mt-1 text-xs text-foreground-muted">
+              De aquí salen los precios que se le proponen en cotizaciones y pedidos.
+            </p>
+          </div>
+        {/if}
         <div>
           <label for="customer-credit-limit" class={labelClass}>Límite de crédito (USD)</label>
           <input

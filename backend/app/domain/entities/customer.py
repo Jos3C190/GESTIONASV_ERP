@@ -103,6 +103,7 @@ class CustomerDraft:
     credit_days: int = 0
     credit_limit: Decimal | None = None
     seller_employee_id: uuid.UUID | None = None
+    price_list_id: uuid.UUID | None = None
 
 
 def validate_draft(draft: CustomerDraft) -> CustomerDraft:  # noqa: C901 - una regla por campo
@@ -224,6 +225,7 @@ class Customer:
     updated_at: datetime
     delivery_addresses: tuple[DeliveryAddress, ...] = field(default=())
     seller_name: str | None = None
+    price_list_name: str | None = None
     anonymized_at: datetime | None = None
 
     @property

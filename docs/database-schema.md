@@ -1069,3 +1069,24 @@ Revision `0121` (revises `0120`).
 
 **Downgrade** refuses while any notice, consent, request, incident or anonymized customer
 exists. Covered by `backend/tests/integration/test_privacy_migration.py`.
+
+## 32. Sales price lists (0122)
+
+Revision `0122` (revises `0121`). Enables `btree_gist`.
+
+- `sales_price_lists`: `code` (unique per company, upper case), `name`, `description`,
+  `prices_include_vat`, `is_default` (a partial unique index allows one per company; the
+  default must be active), `is_active`, authors and timestamps.
+- `sales_price_list_items`: one row per price and validity: `price_list_id`, `product_id`,
+  `variant_id` (null for products without variants), `unit_id`, `branch_id` (null = all
+  branches), `price numeric(19,8)` (≥ 0), `valid_from`, `valid_to` (null = open), author and
+  creation time. Composite foreign keys keep the list, product, variant, unit and branch in
+  the same company. The exclusion constraint `ex_sales_price_list_items_overlap` (GiST over
+  list, product, variant, unit, branch and `daterange(valid_from, valid_to, '[]')`) forbids
+  two prices of the same key in force on the same day. Rows are not edited; only `valid_to`
+  changes when a newer price closes them, and a scheduled row may be deleted.
+- `sales_customers.price_list_id`: optional list of the customer (composite foreign key).
+- Permissions `price_lists:read` and `price_lists:manage`, granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while any price list exists. Covered by
+`backend/tests/integration/test_price_lists_migration.py`.

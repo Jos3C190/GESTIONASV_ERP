@@ -43,6 +43,7 @@ class CustomerIn(BaseModel):
     credit_days: int = Field(default=0, ge=0, le=365)
     credit_limit: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=2)
     seller_employee_id: uuid.UUID | None = None
+    price_list_id: uuid.UUID | None = None
 
 
 class CustomerCreate(CustomerIn):
@@ -119,6 +120,8 @@ class CustomerOut(BaseModel):
     credit_limit: Decimal | None
     seller_employee_id: uuid.UUID | None
     seller_name: str | None
+    price_list_id: uuid.UUID | None
+    price_list_name: str | None
     anonymized_at: datetime | None
     is_active: bool
     is_generic: bool

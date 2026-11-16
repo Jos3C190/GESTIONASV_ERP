@@ -1915,3 +1915,35 @@ Error codes (`422` unless noted): `sales_tax_document_disabled`,
 `sales_tax_quantity_invalid`, `sales_tax_price_invalid`, `sales_tax_discount_invalid`,
 `sales_tax_discount_exceeds_line`, `sales_tax_global_discount_exceeds`; not found (404):
 `sales_customer_not_found`, `product_not_found`.
+
+## Sales price lists (revision 0122, block V2b)
+
+Each company defines its price lists (for example «Mostrador» with VAT and «Mayoreo» without
+VAT). One list is the default. A price is set per product (or variant) and selling unit, from
+a date, and optionally for one branch only. Prices are never edited: a new price closes the
+one in force the day before, so the history answers which price applied on any day.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/price-lists` | `price_lists:read`, `sales_customers:read` or `sales:read` | The company's lists, default first, with `price_count` and `customer_count`. |
+| POST | `/price-lists` | `price_lists:manage` | Body: `code` (1–20 letters, digits or hyphens, stored upper case), `name`, `description`, `prices_include_vat`, `is_default`, `is_active`. The first list becomes the default. Audited as `price_list`. |
+| GET | `/price-lists/{id}` | `price_lists:read` | One list. |
+| PUT | `/price-lists/{id}` | `price_lists:manage` | Same body. Marking a list as default unmarks the previous one; the default cannot be unmarked directly. |
+| GET | `/price-lists/sellable-units?search=` | `price_lists:read` | Active, sellable products (and variants) with their base unit and current packaging units (`factor` to the base unit). A product without inventory item that is not goods uses its sale unit. |
+| GET | `/price-lists/{id}/prices?search=&branch_id=&on=` | `price_lists:read` | Each sellable unit with the `current` price for that branch and day (the branch price wins over the general one), the `next` scheduled change and `branch_overrides`. |
+| GET | `/price-lists/{id}/history?product_id=&unit_id=&variant_id=` | `price_lists:read` | Every price of that product and unit in the list, all branches, with `status` (`scheduled`, `current`, `expired`). |
+| POST | `/price-lists/{id}/prices` | `price_lists:manage` | Body: `product_id`, `variant_id`, `unit_id`, `branch_id` (null = all branches), `price` (8 decimals), `valid_from` (today by default; never in the past). Audited as `price_list_item`. |
+| POST | `/price-lists/items/{entry_id}/end` | `price_lists:manage` | Body: `ends_on` (today or later). A branch price that ends falls back to the general price. |
+| DELETE | `/price-lists/items/{entry_id}` | `price_lists:manage` | Cancels a scheduled price; the previous one gets its end date back. Returns 204. |
+| GET | `/sales/prices/resolve?product_id=&unit_id=&variant_id=&customer_id=&branch_id=&on=` | `price_lists:read`, `sales_quotations:read` or `sales:read` | The price for a customer at a branch and date: the customer's list if active, otherwise the default list. Returns `found`, `price`, `prices_include_vat`, `price_list_id`, `price_list_name`, `source` (`customer` or `default`), `branch_specific`, `entry_id`, `valid_to` and a Spanish `message` when there is no price. |
+
+Customers gain `price_list_id` (input and output) and `price_list_name` (output). The list
+must belong to the company and be active (`customer_price_list_invalid`).
+
+Error codes (`422` unless noted): `price_list_code_invalid`, `price_list_name_required`,
+`price_list_default_inactive`, `price_list_default_required`, `price_list_code_taken` (409),
+`price_list_price_invalid`, `price_list_backdated`, `price_list_future_exists` (409),
+`price_list_unit_invalid`, `price_list_not_scheduled`, `price_list_already_ended`,
+`price_list_end_invalid`, `customer_price_list_invalid`; not found (404):
+`price_list_not_found`, `price_list_entry_not_found`, `price_list_product_not_sellable`,
+`branch_not_found`, `sales_customer_not_found`.

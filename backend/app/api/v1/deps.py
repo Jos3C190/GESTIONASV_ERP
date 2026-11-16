@@ -32,6 +32,7 @@ from app.application.fiscal import FiscalSettingsUseCases
 from app.application.inventory import InventoryUseCases
 from app.application.inventory.kardex_read import InventoryKardexReadUseCases
 from app.application.password_policy import PasswordPolicy
+from app.application.price_lists import PriceListUseCases
 from app.application.privacy import PrivacyUseCases
 from app.application.product_fiscal import ProductFiscalUseCases
 from app.application.purchase_consolidations import (
@@ -102,6 +103,7 @@ from app.infrastructure.repositories import (
 from app.infrastructure.repositories.customer_repository import SqlAlchemyCustomerRepository
 from app.infrastructure.repositories.fiscal_repository import SqlAlchemyFiscalRepository
 from app.infrastructure.repositories.inventory_repository import SqlAlchemyInventoryRepository
+from app.infrastructure.repositories.price_list_repository import SqlAlchemyPriceListRepository
 from app.infrastructure.repositories.privacy_repository import SqlAlchemyPrivacyRepository
 from app.infrastructure.repositories.product_fiscal_repository import (
     SqlAlchemyProductFiscalRepository,
@@ -171,6 +173,10 @@ def get_product_fiscal_use_cases(session: SessionDep) -> ProductFiscalUseCases:
 
 def get_privacy_use_cases(session: SessionDep) -> PrivacyUseCases:
     return PrivacyUseCases(SqlAlchemyPrivacyRepository(session))
+
+
+def get_price_list_use_cases(session: SessionDep) -> PriceListUseCases:
+    return PriceListUseCases(SqlAlchemyPriceListRepository(session))
 
 
 def get_sales_tax_use_cases(session: SessionDep) -> SalesTaxUseCases:

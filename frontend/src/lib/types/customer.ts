@@ -62,6 +62,8 @@ export interface Customer {
   credit_limit: string | null;
   seller_employee_id: string | null;
   seller_name: string | null;
+  price_list_id: string | null;
+  price_list_name: string | null;
   is_active: boolean;
   is_generic: boolean;
   anonymized_at: string | null;
@@ -92,6 +94,7 @@ export interface CustomerInput {
   credit_days: number;
   credit_limit: string | null;
   seller_employee_id: string | null;
+  price_list_id: string | null;
 }
 
 export interface CustomerCreateInput extends CustomerInput {

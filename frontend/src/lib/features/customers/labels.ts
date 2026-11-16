@@ -63,7 +63,8 @@ export function emptyCustomerInput(type: CustomerType = 'final_consumer'): Custo
     email: null,
     credit_days: 0,
     credit_limit: null,
-    seller_employee_id: null
+    seller_employee_id: null,
+    price_list_id: null
   };
 }
 
@@ -94,7 +95,8 @@ export function customerToInput(customer: Customer): CustomerInput {
     email: customer.email,
     credit_days: customer.credit_days,
     credit_limit: customer.credit_limit,
-    seller_employee_id: customer.seller_employee_id
+    seller_employee_id: customer.seller_employee_id,
+    price_list_id: customer.price_list_id
   };
 }
 
