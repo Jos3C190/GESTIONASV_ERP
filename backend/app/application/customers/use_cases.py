@@ -128,7 +128,10 @@ class CustomerUseCases:
             raise NotFoundError(
                 "No se encontró esa sucursal en la empresa.", code="customer_branch_not_found"
             )
-        code = f"CF-{str(branch_id)[:8].upper()}"
+        branch_code = await self._repo.branch_code(company_id, branch_id)
+        code = f"CF-{branch_code or str(branch_id)[:8]}".upper()[:40]
+        if await self._repo.code_taken(company_id, code):
+            code = f"CF-{str(branch_id)[:8]}".upper()
         created = await self._repo.create_customer(
             company_id,
             code,

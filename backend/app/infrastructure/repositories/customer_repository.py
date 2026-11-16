@@ -333,6 +333,12 @@ class SqlAlchemyCustomerRepository:
             Branch.id == branch_id, Branch.company_id == company_id, Branch.deleted_at.is_(None)
         )
 
+    async def branch_code(self, company_id: uuid.UUID, branch_id: uuid.UUID) -> str | None:
+        code: str | None = await self._session.scalar(
+            select(Branch.code).where(Branch.id == branch_id, Branch.company_id == company_id)
+        )
+        return code
+
     # --- writes ---
     @staticmethod
     def _assign(row: SalesCustomerModel, draft: CustomerDraft) -> None:

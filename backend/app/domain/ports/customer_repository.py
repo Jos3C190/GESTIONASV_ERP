@@ -61,6 +61,8 @@ class CustomerRepository(Protocol):
 
     async def branch_exists(self, company_id: uuid.UUID, branch_id: uuid.UUID) -> bool: ...
 
+    async def branch_code(self, company_id: uuid.UUID, branch_id: uuid.UUID) -> str | None: ...
+
     async def create_customer(
         self,
         company_id: uuid.UUID,
