@@ -17,8 +17,13 @@ const { fiscalApi } = vi.hoisted(() => ({
 vi.mock('$lib/api/fiscal', () => ({ fiscalApi }));
 vi.mock('$lib/api/client', () => ({
   HttpError: class HttpError extends Error {
-    code = 'error';
-    status = 422;
+    constructor(
+      readonly code: string,
+      message: string,
+      readonly status: number
+    ) {
+      super(message);
+    }
   }
 }));
 
@@ -139,7 +144,11 @@ describe('fiscal settings panels', () => {
     fiscalApi.listDocumentTypes.mockResolvedValue([invoice]);
     const { HttpError } = await import('$lib/api/client');
     fiscalApi.updateDocumentType.mockRejectedValueOnce(
-      new HttpError('En producción solo se habilita «Factura» después de aprobar sus pruebas.')
+      new HttpError(
+        'fiscal_document_not_certified',
+        'En producción solo se habilita «Factura» después de aprobar sus pruebas.',
+        422
+      )
     );
     render(FiscalDocumentsPanel, { canManage: true });
     const toggle = await screen.findByRole('checkbox');
