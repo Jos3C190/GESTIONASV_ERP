@@ -1138,3 +1138,28 @@ Revision `0124` (revises `0123`). The B06 quotation is reworked in place.
 
 **Upgrade and downgrade** refuse while quotations exist (the downgrade also while settings exist).
 Covered by `backend/tests/integration/test_sales_quotation_redesign_migration.py`.
+
+## 35. Sales order (0125)
+
+Revision `0125` (revises `0124`). The B06 sale becomes the sales order in place.
+
+- `sales`:
+  - `quotation_id` becomes optional (still unique);
+  - `status` (varchar 24): `draft`, `pending_authorization`, `confirmed`, `cancelled`;
+  - same fiscal and authorization columns as the quotation (`document_type`, `price_list_id`,
+    `prices_include_vat`, `global_discount_percent`, tax totals, `total_in_words`,
+    `requires_authorization`, `authorization_reasons`, `authorized_by_id`, `authorized_at`,
+    `authorization_note`);
+  - delivery: `promised_date`, `delivery_mode` (`pickup`/`delivery`), `delivery_address_id`
+    (composite FK to the customer's address) and `delivery_address_text` (copy);
+  - payment: `payment_terms` (`cash`/`credit`) and `credit_days` (0–365; 0 for cash).
+- `sales_lines`: `source_quotation_line_id` optional, amounts numeric(19,8) and the same pricing
+  and tax columns as quotation lines; index `ix_sales_lines_reservation`.
+- `sales_customer_delivery_addresses`: unique `(company_id, customer_id, id)` for the FK above.
+- The line guards `guard_sales_lines_draft` and `guard_sales_order_lines_draft` read the status
+  into varchar(24).
+
+The commercial reservation has no table: it is the pending quantity of confirmed orders.
+
+**Upgrade and downgrade** refuse while sales, deliveries or returns exist. Covered by
+`backend/tests/integration/test_sales_order_migration.py`.

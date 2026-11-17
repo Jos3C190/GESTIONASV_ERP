@@ -48,7 +48,8 @@ Un producto exento o no sujeto no lleva IVA, aunque la lista sea con IVA.
 1. **Ver PDF** abre la versión imprimible: empresa, cliente, documento, productos con descuento,
    resumen fiscal, total en letras y vigencia. Nunca muestra costos ni márgenes.
 2. Registra **El cliente aceptó** o **El cliente rechazó** (con el motivo).
-3. Desde una Aceptada, **Crear venta en borrador** genera la venta (una sola vez).
+3. Desde una Aceptada, **Crear pedido** genera el pedido en borrador con sus mismas condiciones
+   (una sola vez). Ver [manual-pedidos.md](manual-pedidos.md).
 
 ## 5. Vigencia por empresa
 
@@ -62,7 +63,7 @@ En **Ventas → Configuración fiscal → Cotizaciones** se fijan los días de v
 | `sales_quotations:read` | Ver cotizaciones y su PDF. |
 | `sales_quotations:manage` | Crear y editar borradores. |
 | `sales_quotations:confirm` | Emitir, registrar la respuesta del cliente y cancelar. |
-| `sales_quotations:convert` | Crear la venta desde una Aceptada. |
+| `sales_quotations:convert` | Crear el pedido desde una Aceptada. |
 | `sales_discounts:authorize` | Autorizar o devolver cotizaciones por autorizar. |
 | `sales_prices:override` | Escribir un precio distinto al de lista. |
 | `sales_costs:read` | Ver costo y margen. |

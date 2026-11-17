@@ -91,12 +91,13 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Lista de pedidos.
   - «Crear pedido» en la cotización aceptada.
   - vitest.
-- [ ] **Paso 5: documentación.** `docs/api.md`, `docs/database-schema.md` §35, manual de pedidos y ajuste del manual de ventas base.
+- [x] **Paso 5: documentación.** `docs/api.md`, `docs/database-schema.md` §35, manual de pedidos y ajuste del manual de ventas base.
 - [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 5 (documentación).
+- **Paso en curso**: 6 (verificación y PR).
+  - Paso 5: `docs/api.md` (Sales orders), `docs/database-schema.md` §35, `docs/ers-v1/manual-pedidos.md` y ajustes en `manual-cotizaciones.md` y `manual-ventas-base.md`.
   - Paso 4:
     - Editor:
       - `SalesQuotationEditor` pasó a `SalesDocumentEditor`, con `kind` cotización o pedido;
