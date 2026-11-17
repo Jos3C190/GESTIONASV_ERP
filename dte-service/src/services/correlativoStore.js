@@ -13,8 +13,8 @@
 
 const _memoria = new Map();
 
-function _proveedorEnMemoria(tipoDte, anio, codEstablecimiento, codPuntoVenta) {
-  const clave = `${tipoDte}|${anio}|${codEstablecimiento}|${codPuntoVenta}`;
+function _proveedorEnMemoria(tipoDte, anio, codEstablecimiento, codPuntoVenta, nit = '', ambiente = '') {
+  const clave = `${nit}|${ambiente}|${tipoDte}|${anio}|${codEstablecimiento}|${codPuntoVenta}`;
   const siguiente = (_memoria.get(clave) || 0) + 1;
   _memoria.set(clave, siguiente);
   return siguiente;
@@ -33,8 +33,9 @@ function reiniciarAMemoria() {
   _proveedorActivo = _proveedorEnMemoria;
 }
 
-function obtener(tipoDte, anio, codEstablecimiento, codPuntoVenta) {
-  return _proveedorActivo(tipoDte, anio, codEstablecimiento, codPuntoVenta);
+/** `nit` y `ambiente` separan la serie de cada emisor (vacíos = emisor único heredado). */
+function obtener(tipoDte, anio, codEstablecimiento, codPuntoVenta, nit = '', ambiente = '') {
+  return _proveedorActivo(tipoDte, anio, codEstablecimiento, codPuntoVenta, nit, ambiente);
 }
 
 module.exports = { obtener, usar, reiniciarAMemoria };

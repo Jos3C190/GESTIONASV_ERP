@@ -16,6 +16,7 @@ const logger = require('../utils/logger');
  * simulado: la invalidación ante Hacienda nunca se reutiliza aquí.
  */
 const router = express.Router();
+router.param('codigoGeneracion', require('../middleware/emisorSolicitud').propietarioDocumento);
 
 function normalizarMotivo(motivo) {
   if (!motivo || typeof motivo !== 'object') return motivo;

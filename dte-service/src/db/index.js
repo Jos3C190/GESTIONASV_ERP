@@ -139,6 +139,11 @@ db.exec(`
 `);
 // Versión transmitida originalmente (modelo previo) de un documento que se
 // convirtió a diferido: se restaura si Hacienda sí lo había recibido.
+// Multiemisor: a qué emisor pertenece cada documento (null = un solo emisor heredado).
+if (!new Set(db.pragma('table_info(dtes)').map((column) => column.name)).has('nit')) {
+  db.exec('ALTER TABLE dtes ADD COLUMN nit TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_dtes_nit ON dtes(nit)');
+}
 const dteColumnsContingencia = new Set(db.pragma('table_info(dtes)').map((column) => column.name));
 if (!dteColumnsContingencia.has('payload_original_json')) db.exec('ALTER TABLE dtes ADD COLUMN payload_original_json TEXT');
 if (!dteColumnsContingencia.has('documento_firmado_original')) db.exec('ALTER TABLE dtes ADD COLUMN documento_firmado_original TEXT');
@@ -180,24 +185,50 @@ db.exec('CREATE INDEX IF NOT EXISTS idx_idempotency_codigo_generacion ON idempot
  * El correlativo NUNCA debe reiniciarse salvo cambio de año fiscal, y
  * nunca debe reutilizarse un número ya emitido.
  */
-const obtenerSiguienteCorrelativo = db.transaction((tipoDte, anio, codEstablecimiento, codPuntoVenta) => {
+// Multiemisor: el correlativo se lleva por emisor (NIT) y ambiente además del
+// tipo, año, establecimiento y punto de venta. Las filas de un solo emisor
+// (sin NIT) quedan con nit = '' y ambiente = '' y siguen su propia serie.
+const columnasCorrelativo = new Set(db.pragma('table_info(correlativos)').map((column) => column.name));
+if (!columnasCorrelativo.has('nit')) {
+  db.exec(`
+    CREATE TABLE correlativos_emisor (
+      nit TEXT NOT NULL DEFAULT '',
+      ambiente TEXT NOT NULL DEFAULT '',
+      tipo_dte TEXT NOT NULL,
+      anio INTEGER NOT NULL,
+      cod_establecimiento TEXT NOT NULL,
+      cod_punto_venta TEXT NOT NULL,
+      ultimo INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (nit, ambiente, tipo_dte, anio, cod_establecimiento, cod_punto_venta)
+    );
+    INSERT INTO correlativos_emisor (tipo_dte, anio, cod_establecimiento, cod_punto_venta, ultimo)
+      SELECT tipo_dte, anio, cod_establecimiento, cod_punto_venta, ultimo FROM correlativos;
+    DROP TABLE correlativos;
+    ALTER TABLE correlativos_emisor RENAME TO correlativos;
+  `);
+}
+
+const obtenerSiguienteCorrelativo = db.transaction(
+  (tipoDte, anio, codEstablecimiento, codPuntoVenta, nit = '', ambiente = '') => {
   const row = db
     .prepare(
       `SELECT ultimo FROM correlativos
-       WHERE tipo_dte = ? AND anio = ? AND cod_establecimiento = ? AND cod_punto_venta = ?`
+       WHERE nit = ? AND ambiente = ? AND tipo_dte = ? AND anio = ? AND cod_establecimiento = ?
+         AND cod_punto_venta = ?`
     )
-    .get(tipoDte, anio, codEstablecimiento, codPuntoVenta);
+    .get(nit, ambiente, tipoDte, anio, codEstablecimiento, codPuntoVenta);
 
   const siguiente = (row?.ultimo || 0) + 1;
 
   db.prepare(
-    `INSERT INTO correlativos (tipo_dte, anio, cod_establecimiento, cod_punto_venta, ultimo)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(tipo_dte, anio, cod_establecimiento, cod_punto_venta)
+    `INSERT INTO correlativos (nit, ambiente, tipo_dte, anio, cod_establecimiento, cod_punto_venta, ultimo)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(nit, ambiente, tipo_dte, anio, cod_establecimiento, cod_punto_venta)
      DO UPDATE SET ultimo = excluded.ultimo`
-  ).run(tipoDte, anio, codEstablecimiento, codPuntoVenta, siguiente);
+  ).run(nit, ambiente, tipoDte, anio, codEstablecimiento, codPuntoVenta, siguiente);
 
   return siguiente;
-});
+  }
+);
 
 module.exports = { db, obtenerSiguienteCorrelativo, siguienteIdEnvio };

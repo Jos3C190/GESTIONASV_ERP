@@ -75,7 +75,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Tabla `emisores` y su API (alcance `issuers`).
   - El emisor de la solicitud debe estar registrado, activo y con el tipo habilitado.
   - El modo sale del emisor.
-- [ ] **Paso 3: aislamiento de datos.**
+- [x] **Paso 3: aislamiento de datos.**
   - Columnas `nit` y `ambiente` en `correlativos`, `dtes`, `eventos`, `idempotency_keys` y `contingencias`, con migración de bases existentes.
   - Filtro por emisor en todas las rutas.
 - [ ] **Paso 4: pruebas de aislamiento y CI.** Pruebas multiemisor y job de CI con `npm test`.
@@ -84,7 +84,17 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 3 (aislamiento de datos).
+- **Paso en curso**: 4 (pruebas multiemisor y CI).
+  - Paso 3:
+    - `src/middleware/emisorSolicitud.js` (`X-DTE-Issuer-NIT`):
+      - es obligatorio sin emisor en el entorno y debe coincidir con el snapshot;
+      - `propietarioDocumento` responde 404 a códigos de otro emisor, con `router.param` en dte y simulación.
+    - La tabla `correlativos` suma `nit` y `ambiente` a su llave, con migración que conserva las filas heredadas (`''`).
+    - El emisor heredado del entorno conserva su serie.
+    - `dtes.nit` guarda el emisor de cada documento.
+    - La clave de idempotencia se guarda como `NIT:clave` cuando hay encabezado.
+    - Eventos y contingencias heredan la propiedad de su documento; su columna propia llega con contingencia por empresa (V4).
+    - Pruebas: 460 en verde.
   - Paso 2:
     - `src/services/issuerRegistry.js` (tabla `emisores`) y `src/routes/emisores.routes.js`: `GET /api/emisores`, `GET` y `PUT /api/emisores/:nit`, con alcance `issuers`.
     - `emitir()` exige emisor registrado, activo, en el modo del despliegue y con el tipo habilitado.

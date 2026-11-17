@@ -12,12 +12,14 @@ const { reclamar, guardarResultado, hashSolicitud } = require('../services/idemp
 function conIdempotencia(handlerAsync, { revalidarErrorPreIdentidad = false } = {}) {
   return async (req, res) => {
     const rawClave = req.headers['idempotency-key'];
-    const clave = typeof rawClave === 'string' ? rawClave.trim() : '';
-    if (clave.length < 8 || clave.length > 200) {
+    const recibida = typeof rawClave === 'string' ? rawClave.trim() : '';
+    if (recibida.length < 8 || recibida.length > 200) {
       return res.status(400).json({
         error: 'Idempotency-Key es obligatoria en operaciones DTE y debe tener entre 8 y 200 caracteres.',
       });
     }
+    // Multiemisor: la misma clave de dos emisores no choca.
+    const clave = req.dteIssuerNit ? `${req.dteIssuerNit}:${recibida}` : recibida;
     const requestHash = clave ? hashSolicitud(req.method, `${req.baseUrl}${req.path}`, req.body) : null;
     const { debeSeguir, existente, enCurso, conflictoSolicitud, reconciliacionRequerida } = reclamar(
       clave,

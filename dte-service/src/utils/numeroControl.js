@@ -21,14 +21,17 @@ const { fechaHoraSV } = require('./fechaHoraSV');
  * desde el mismo instante con el que arman fecEmi, para que el correlativo
  * no cambie de año antes que la fecha de emisión (31 de diciembre ≥ 18:00).
  */
-function generarNumeroControl({ tipoDte, tipoEstablecimiento, codEstablecimientoMH, codPuntoVentaMH, anio = fechaHoraSV().anio }) {
+function generarNumeroControl({
+  tipoDte, tipoEstablecimiento, codEstablecimientoMH, codPuntoVentaMH, anio = fechaHoraSV().anio, nit = '', ambiente = '',
+}) {
   const codEstableMH = construirCodEstableMH(tipoEstablecimiento, codEstablecimientoMH);
   const codPuntoVentaMHStr = construirCodPuntoVentaMH(codPuntoVentaMH);
 
   // El número no puede repetirse dentro del año calendario de la fecha de
   // emisión (hora de El Salvador): el correlativo se lleva por tipoDte +
   // año + establecimiento + punto de venta.
-  const correlativo = correlativoStore.obtener(tipoDte, anio, codEstablecimientoMH, codPuntoVentaMH);
+  // Multiemisor: cada emisor (NIT) y ambiente lleva su propia serie.
+  const correlativo = correlativoStore.obtener(tipoDte, anio, codEstablecimientoMH, codPuntoVentaMH, nit, ambiente);
   const corr = String(correlativo).padStart(15, '0');
 
   return `DTE-${tipoDte}-${codEstableMH}${codPuntoVentaMHStr}-${corr}`;

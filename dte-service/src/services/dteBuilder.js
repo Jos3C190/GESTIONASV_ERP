@@ -41,12 +41,17 @@ function _construirIdentificacion({ tipoDte, version, issuer = config.emisor, co
   const camposContingencia = _camposContingencia(contingencia);
   const codigoGeneracion = generarCodigoGeneracion();
   const { fecha, hora, anio } = fechaHoraSV();
+  // Multiemisor: un emisor distinto del heredado del entorno lleva su propia serie
+  // por NIT y ambiente; el heredado conserva la suya para no reiniciar números.
+  const serieDelEmisor = issuer.nit !== config.emisor?.nit;
   const numeroControl = generarNumeroControl({
     tipoDte,
     tipoEstablecimiento: issuer.tipoEstablecimiento,
     codEstablecimientoMH: issuer.codEstablecimientoMH,
     codPuntoVentaMH: issuer.codPuntoVentaMH,
     anio,
+    nit: serieDelEmisor ? issuer.nit : '',
+    ambiente: serieDelEmisor ? config.ambiente : '',
   });
 
   const identificacion = {

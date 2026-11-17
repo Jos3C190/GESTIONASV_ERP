@@ -37,6 +37,8 @@ const conIdempotencia = require('../middleware/conIdempotencia');
 const { escenarioSimulacion } = require('../middleware/escenarioSimulacion');
 
 const router = express.Router();
+// Multiemisor: un código de generación de otro emisor responde 404.
+router.param('codigoGeneracion', require('../middleware/emisorSolicitud').propietarioDocumento);
 
 function parsearObservaciones(valor) {
   try {
@@ -176,7 +178,7 @@ function respuestaDeTransmision(codigoGeneracion, numeroControl, resultado) {
  * que se respondió, sin importar por cuál rama haya salido esta función.
  */
 async function emitir(tipoDte, builderFn, req) {
-  const nitEmisor = req.body?.emisor?.nit ?? config.emisor?.nit ?? null;
+  const nitEmisor = req.dteIssuerNit ?? req.body?.emisor?.nit ?? config.emisor?.nit ?? null;
   try {
     issuerRegistry.exigirEmision(nitEmisor, tipoDte);
   } catch (error) {
@@ -277,8 +279,8 @@ async function emitir(tipoDte, builderFn, req) {
         }
 
         db.prepare(
-          `INSERT INTO dtes (codigo_generacion, numero_control, tipo_dte, estado, payload_json, modo_emision, simulation_run_id)
-           VALUES (?, ?, ?, 'PENDIENTE', ?, ?, ?)`
+          `INSERT INTO dtes (codigo_generacion, numero_control, tipo_dte, estado, payload_json, modo_emision, simulation_run_id, nit)
+           VALUES (?, ?, ?, 'PENDIENTE', ?, ?, ?, ?)`
         ).run(
           construido.codigoGeneracion,
           construido.numeroControl,
@@ -286,6 +288,7 @@ async function emitir(tipoDte, builderFn, req) {
           JSON.stringify(dteValidado),
           config.dteMode.toUpperCase().replace('-', '_'),
           config.dteMode === 'simulated' ? config.simulation.runId : null,
+          dteValidado.emisor?.nit ?? null,
         );
         asociarIdentidad(req.dteIdempotency?.clave, construido.codigoGeneracion);
         return { ...construido, dte: dteValidado };
