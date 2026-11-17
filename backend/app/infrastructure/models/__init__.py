@@ -184,8 +184,11 @@ from app.infrastructure.models.sales_delivery import (
     SalesDeliveryModel,
 )
 from app.infrastructure.models.sales_pricing import (
+    SalesDiscountPolicyModel,
+    SalesPriceListCategoryMarginModel,
     SalesPriceListItemModel,
     SalesPriceListModel,
+    SalesVolumeDiscountModel,
 )
 from app.infrastructure.models.sales_return import (
     SalesReturnCommandModel,
@@ -342,7 +345,9 @@ __all__: list[str] = [
     "SalesDeliveryCommandModel",
     "SalesDeliveryLineModel",
     "SalesDeliveryModel",
+    "SalesDiscountPolicyModel",
     "SalesIdempotencyModel",
+    "SalesPriceListCategoryMarginModel",
     "SalesPriceListItemModel",
     "SalesPriceListModel",
     "SalesQuotationLineModel",
@@ -352,6 +357,7 @@ __all__: list[str] = [
     "SalesReturnEventModel",
     "SalesReturnLineModel",
     "SalesReturnModel",
+    "SalesVolumeDiscountModel",
     "SubCategoryModel",
     "SupplierAddressModel",
     "SupplierBankAccountModel",

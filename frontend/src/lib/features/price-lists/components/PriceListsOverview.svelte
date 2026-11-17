@@ -30,7 +30,8 @@
       description: null,
       prices_include_vat: true,
       is_default: false,
-      is_active: true
+      is_active: true,
+      target_margin_percent: null
     };
   }
 
@@ -58,7 +59,8 @@
           description: item.description,
           prices_include_vat: item.prices_include_vat,
           is_default: item.is_default,
-          is_active: item.is_active
+          is_active: item.is_active,
+          target_margin_percent: item.target_margin_percent
         }
       : { ...blank(), is_default: lists.length === 0 };
     formError = null;

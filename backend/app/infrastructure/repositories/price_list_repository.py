@@ -18,13 +18,23 @@ from app.domain.entities.price_list import (
     PriceListDraft,
     SellableUnit,
 )
-from app.infrastructure.models.catalog import CompanyUnitModel, ProductModel, UnitModel
+from app.infrastructure.models.catalog import (
+    CategoryModel,
+    CompanyUnitModel,
+    ProductModel,
+    UnitModel,
+)
 from app.infrastructure.models.employee import Employee
 from app.infrastructure.models.inventory import InventoryItemModel, InventoryPackagingModel
+from app.infrastructure.models.inventory_valuation import InventoryCostAverageModel
 from app.infrastructure.models.organization import Branch
 from app.infrastructure.models.product_variant import ProductVariantModel
 from app.infrastructure.models.sales import SalesCustomerModel
-from app.infrastructure.models.sales_pricing import SalesPriceListItemModel, SalesPriceListModel
+from app.infrastructure.models.sales_pricing import (
+    SalesPriceListCategoryMarginModel,
+    SalesPriceListItemModel,
+    SalesPriceListModel,
+)
 from app.infrastructure.models.user import User
 
 
@@ -89,6 +99,7 @@ class SqlAlchemyPriceListRepository:
                 price_count=int(prices.get(r.id, 0)),
                 customer_count=int(customers.get(r.id, 0)),
                 updated_at=r.updated_at,
+                target_margin_percent=r.target_margin_percent,
             )
             for r in rows
         ]
@@ -143,6 +154,7 @@ class SqlAlchemyPriceListRepository:
             prices_include_vat=draft.prices_include_vat,
             is_default=draft.is_default,
             is_active=draft.is_active,
+            target_margin_percent=draft.target_margin_percent,
             created_by=actor_id,
             updated_by=actor_id,
         )
@@ -163,6 +175,7 @@ class SqlAlchemyPriceListRepository:
                 prices_include_vat=draft.prices_include_vat,
                 is_default=draft.is_default,
                 is_active=draft.is_active,
+                target_margin_percent=draft.target_margin_percent,
                 updated_by=actor_id,
                 updated_at=datetime.now(UTC),
             )
@@ -302,7 +315,16 @@ class SqlAlchemyPriceListRepository:
                     None,
                 )
                 owner = SellableUnit(
-                    product.id_product, variant_id, sku, name, 0, "", Decimal("1"), True
+                    product.id_product,
+                    variant_id,
+                    sku,
+                    name,
+                    0,
+                    "",
+                    Decimal("1"),
+                    True,
+                    category_id=product.id_category,
+                    inventory_item_id=item.id if item else None,
                 )
                 result.extend(_owner_units(owner, product, item, packages, units))
         return result
@@ -449,6 +471,73 @@ class SqlAlchemyPriceListRepository:
             )
         )
         return found is not None
+
+    async def unit_costs(
+        self, company_id: uuid.UUID, item_ids: set[uuid.UUID]
+    ) -> dict[uuid.UUID, Decimal]:
+        if not item_ids:
+            return {}
+        rows = await self._session.execute(
+            select(
+                InventoryCostAverageModel.inventory_item_id,
+                InventoryCostAverageModel.average_unit_cost,
+            ).where(
+                InventoryCostAverageModel.company_id == company_id,
+                InventoryCostAverageModel.inventory_item_id.in_(item_ids),
+                InventoryCostAverageModel.average_unit_cost > 0,
+            )
+        )
+        return dict(rows.tuples().all())
+
+    async def category_margins(
+        self, company_id: uuid.UUID, list_id: uuid.UUID
+    ) -> dict[int, Decimal]:
+        rows = await self._session.execute(
+            select(
+                SalesPriceListCategoryMarginModel.category_id,
+                SalesPriceListCategoryMarginModel.target_margin_percent,
+            ).where(
+                SalesPriceListCategoryMarginModel.company_id == company_id,
+                SalesPriceListCategoryMarginModel.price_list_id == list_id,
+            )
+        )
+        return dict(rows.tuples().all())
+
+    async def replace_category_margins(
+        self,
+        company_id: uuid.UUID,
+        list_id: uuid.UUID,
+        margins: dict[int, Decimal],
+        actor_id: uuid.UUID,
+    ) -> None:
+        await self._session.execute(
+            delete(SalesPriceListCategoryMarginModel).where(
+                SalesPriceListCategoryMarginModel.company_id == company_id,
+                SalesPriceListCategoryMarginModel.price_list_id == list_id,
+            )
+        )
+        for category_id, margin in margins.items():
+            self._session.add(
+                SalesPriceListCategoryMarginModel(
+                    company_id=company_id,
+                    price_list_id=list_id,
+                    category_id=category_id,
+                    target_margin_percent=margin,
+                    updated_by=actor_id,
+                )
+            )
+        await self._session.flush()
+
+    async def categories(self, company_id: uuid.UUID) -> list[tuple[int, str]]:
+        rows = await self._session.execute(
+            select(CategoryModel.id_category, CategoryModel.name)
+            .where(
+                CategoryModel.company_id == company_id,
+                CategoryModel.deleted_at.is_(None),
+            )
+            .order_by(CategoryModel.name)
+        )
+        return list(rows.tuples().all())
 
     async def customer_list_id(
         self, company_id: uuid.UUID, customer_id: uuid.UUID

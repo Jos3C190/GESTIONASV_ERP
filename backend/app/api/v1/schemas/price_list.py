@@ -20,6 +20,9 @@ class PriceListIn(BaseModel):
     prices_include_vat: bool
     is_default: bool = False
     is_active: bool = True
+    target_margin_percent: Decimal | None = Field(
+        default=None, ge=0, le=95, max_digits=5, decimal_places=2
+    )
 
 
 class PriceListOut(BaseModel):
@@ -33,6 +36,7 @@ class PriceListOut(BaseModel):
     price_count: int
     customer_count: int
     updated_at: datetime
+    target_margin_percent: Decimal | None
 
 
 class SellableUnitOut(BaseModel):
@@ -67,6 +71,12 @@ class ListedPriceOut(BaseModel):
     current: PriceEntryOut | None
     next: PriceEntryOut | None
     branch_overrides: int
+    cost: Decimal | None = None
+    margin_percent: Decimal | None = None
+    target_margin_percent: Decimal | None = None
+    suggested_price: Decimal | None = None
+    below_cost: bool = False
+    below_target: bool = False
 
 
 class PriceIn(BaseModel):
@@ -78,6 +88,29 @@ class PriceIn(BaseModel):
     branch_id: uuid.UUID | None = None
     price: Decimal = Field(ge=0, max_digits=19, decimal_places=8)
     valid_from: date | None = None
+
+
+class CategoryOut(BaseModel):
+    id: int
+    name: str
+
+
+class CategoryMarginIn(BaseModel):
+    model_config = _IN
+
+    category_id: int = Field(gt=0)
+    target_margin_percent: Decimal = Field(ge=0, le=95, max_digits=5, decimal_places=2)
+
+
+class CategoryMarginsIn(BaseModel):
+    model_config = _IN
+
+    margins: list[CategoryMarginIn] = Field(max_length=500)
+
+
+class CategoryMarginOut(BaseModel):
+    category_id: int
+    target_margin_percent: Decimal
 
 
 class EndPriceIn(BaseModel):

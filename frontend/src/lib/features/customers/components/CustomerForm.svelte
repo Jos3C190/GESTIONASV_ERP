@@ -516,6 +516,24 @@
           </div>
         {/if}
         <div>
+          <label for="customer-discount" class={labelClass}>Descuento fijo (%)</label>
+          <input
+            id="customer-discount"
+            type="number"
+            min="0"
+            max="100"
+            step="any"
+            value={form.discount_percent}
+            oninput={(e) => (form.discount_percent = e.currentTarget.value || '0')}
+            disabled={!editable}
+            class={inputClass}
+          />
+          <p class="mt-1 text-xs text-foreground-muted">
+            Se propone en cada línea. Si hay un descuento por volumen mayor, se usa ese; no se
+            suman.
+          </p>
+        </div>
+        <div>
           <label for="customer-credit-limit" class={labelClass}>Límite de crédito (USD)</label>
           <input
             id="customer-credit-limit"

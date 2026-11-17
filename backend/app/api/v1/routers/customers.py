@@ -75,6 +75,7 @@ def _draft(body: CustomerIn) -> CustomerDraft:
         credit_limit=body.credit_limit,
         seller_employee_id=body.seller_employee_id,
         price_list_id=body.price_list_id,
+        discount_percent=body.discount_percent,
     )
 
 
@@ -136,6 +137,7 @@ def _out(customer: Customer) -> CustomerOut:
         seller_name=customer.seller_name,
         price_list_id=draft.price_list_id,
         price_list_name=customer.price_list_name,
+        discount_percent=draft.discount_percent,
         anonymized_at=customer.anonymized_at,
         is_active=customer.is_active,
         is_generic=customer.is_generic,

@@ -81,6 +81,7 @@ const taxpayer: Customer = {
   anonymized_at: null,
   price_list_id: null,
   price_list_name: null,
+  discount_percent: '0.00',
   branch_id: null,
   receivable_documents: ['01'],
   tax_credit_missing: ['NRC.', 'Actividad económica.'],

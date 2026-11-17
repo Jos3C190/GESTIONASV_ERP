@@ -1,99 +1,120 @@
-# Plan: Ventas V2b — Listas de precios
+# Plan: Ventas V2c — Margen, precio sugerido y descuentos
 
-Rama: `feature/ventas-v2b-listas-precios`, desde `develop` (incluye V1 completo y V2a, PR #42).
-Fuente: `docs/plan-area-ventas-el-salvador.pdf`, módulos 5.1 («Condiciones comerciales: lista de precios…») y 5.2 («Listas de precios con vigencia… por sucursal cuando el precio cambie entre tiendas. Precio por producto y unidad de venta, indicando si incluye IVA»), sección 3.6 (precio al público con impuestos incluidos) y bloque V2.
+Rama: `feature/ventas-v2c-descuentos-margen`, desde `develop` (incluye V2a, V2b y el frontend en SvelteKit 3).
+Fuente: `docs/plan-area-ventas-el-salvador.pdf`:
+- módulo 5.2: «Descuentos por línea, por cliente y por volumen, con tope según el rol»; «No se vende por debajo del costo promedio sin autorización explícita»; «Toma el costo promedio… para mostrar el margen»;
+- sección 6.7: el costo solo lo ven roles autorizados; un descuento fuera de tope queda en la bitácora.
 
-## Decisiones del usuario para V2 (16/11/2026)
+## Decisiones del usuario
 
-- V2 se divide en V2a (motor de cálculo, ya en `develop`), V2b (listas de precios, este plan), V2c (descuentos con topes por rol y venta bajo costo), V2d (cotización rediseñada) y V2e (pedido de venta). Cada uno lleva su PR a `develop`.
-- Las promociones van en V6, con la caja.
-- V2c incluye un **precio sugerido**: costo promedio (que ya incluye el retaceo) más un margen objetivo, como punto de partida al fijar un precio en la lista. Lo pidió el usuario el 16/11/2026, al aclarar que el costo del retaceo y el precio de venta son cosas distintas.
-- La cotización y la venta actuales se rehacen en su lugar (V2d y V2e).
-- Pendiente para el inicio de V2c (16/11/2026): en el detalle de una lista de precios, mostrar junto a cada precio el «costo actual» (costo promedio de `inventory_cost_averages`, que ya incluye el retaceo) y el «margen %», y resaltar los precios que quedan bajo costo. Motivo: el precio de lista lleva la ganancia implícita, pero hoy nadie ve el margen al fijarlo. Para comparar, el precio de una lista con IVA se toma sin IVA.
+- 16/11/2026, antes de V2c:
+  - el costo del retaceo no es el precio de venta;
+  - V2c muestra el costo actual y el margen junto a cada precio de la lista y resalta los precios bajo costo;
+  - V2c da un precio sugerido = costo + margen objetivo.
+- 16/11/2026, al planificar V2c:
+  - **Margen sobre el precio**: margen % = (precio sin IVA − costo) ÷ precio sin IVA. Precio sugerido sin IVA = costo ÷ (1 − margen). Con 30 % y costo $7.00: $10.00 sin IVA, o $11.30 en una lista con IVA.
+  - **Margen objetivo por lista, con excepción por categoría** de productos dentro de la lista.
+  - Entran el **descuento fijo del cliente** y el **descuento por volumen**, además del tope por rol.
 
-## Alcance de V2b
+## Alcance
 
-El precio de venta sale de una lista de precios, no lo teclea el vendedor.
+1. **Costo y margen en la lista de precios.** Junto a cada precio aparecen el costo actual de la unidad y el margen %. Los precios bajo costo o bajo el margen objetivo se resaltan. Solo lo ve quien tiene el permiso nuevo `sales_costs:read`.
+2. **Precio sugerido** al fijar un precio: costo actual ÷ (1 − margen objetivo), con IVA si la lista lo incluye.
+3. **Descuento fijo del cliente**: un % en la ficha del cliente (condiciones comerciales).
+4. **Descuento por volumen**: escalas por lista, producto (o variante) y unidad, desde una cantidad mínima, con vigencia.
+5. **Tope de descuento por rol**: % máximo por línea y global para cada rol de la empresa, y si el rol puede vender bajo costo.
+6. **Evaluación**: un endpoint que, para el usuario, cliente, sucursal y líneas propuestas, devuelve:
+   - el precio de lista;
+   - el descuento sugerido (cliente o volumen, el mayor);
+   - el descuento aplicado;
+   - el costo, el margen y el tope del usuario;
+   - si la línea **requiere autorización** y por qué (excede el tope o queda bajo costo).
+   - La cotización y el pedido (V2d y V2e) lo usan para decidir; la autorización en sí se registra en esos documentos.
 
-- Cada empresa define sus listas, por ejemplo Mostrador, Mayoreo o Institucional. Una de ellas es la predeterminada.
-- Cada lista indica si sus precios incluyen IVA.
-- El precio se fija por producto (o variante) y unidad de venta, con fecha de vigencia.
-- Una sucursal puede tener su propio precio dentro de la misma lista.
-- El cliente puede tener asignada una lista.
-- Un endpoint resuelve qué precio corresponde a un cliente en una sucursal y fecha. Lo usarán la cotización y el pedido (V2d y V2e).
-
-Resultado verificable:
-- Grupo Lorena tiene «Mostrador» (predeterminada, con IVA) y «Mayoreo» (sin IVA) con precios.
-- El precio se resuelve según el cliente, la sucursal y la fecha:
-  - un cliente con Mayoreo recibe el precio de mayoreo;
-  - un cliente sin lista, el de Mostrador;
-  - en una sucursal con precio propio, ese precio;
-  - un precio con vigencia futura todavía no aplica.
-- Cambiar un precio no borra el anterior: queda el historial de vigencias.
-
-## Hechos verificados
-
-- No existe ningún precio de venta en el ERP. «Asignación de precios» es un marcador sin implementar en el grupo Compras del menú.
-- Una línea de venta actual se identifica por:
-  - producto y variante (`variant_id`);
-  - artículo de inventario;
-  - unidad, que es la unidad base del artículo o la de un empaque vigente con su factor (`application/sales/service.py`, `_catalog_option`).
-- Los productos tienen `sale_unit`, `variant_mode` (`standalone` o `template`) y `can_sell`.
-- Los 13 productos vendibles de Grupo Lorena son bienes; uno tiene variantes.
-- El costo promedio vive en `inventory_cost_averages`. El margen y la venta bajo costo quedan para V2c.
+Fuera de alcance: las promociones (V6) y el registro de la autorización (V2d y V2e).
 
 ## Diseño
 
-- **`sales_price_lists`**: `company_id`, `code` (único por empresa), `name`, `description`, `prices_include_vat`, `is_default` (una sola activa por empresa, con índice parcial), `is_active`, autor y fechas.
-- **`sales_price_list_items`**: una fila por precio y vigencia.
-  - Columnas: `price_list_id`, `product_id`, `variant_id` (nulo si el producto no tiene variantes), `unit_id`, `branch_id` (nulo = todas las sucursales), `price` (8 decimales, ≥ 0), `valid_from`, `valid_to` (nulo = sin fin), `created_by` y `created_at`.
-  - Las filas no se editan: un cambio cierra la vigente el día anterior y crea otra.
-  - Dos filas de la misma clave no se traslapan; lo cuida el caso de uso con bloqueo y lo garantiza una restricción de exclusión con `btree_gist`.
-  - Un precio que aún no empezó se puede anular (borrar), y la fila anterior recupera su fin.
-- **`sales_customers.price_list_id`**: lista asignada al cliente, opcional, de la misma empresa.
-- **Resolución** del precio de un producto, variante y unidad para una fecha:
-  1. lista del cliente, si tiene y está activa;
-  2. si no, la lista predeterminada.
-  - Dentro de la lista, el precio de la sucursal gana al general.
-  - Si no hay precio, responde «sin precio» con un mensaje, sin error.
-- **Unidades con precio**: la unidad base del artículo de inventario y las de sus empaques vigentes; un producto sin artículo (servicio) usa su `sale_unit`.
-- **Permisos**: `price_lists:read` y `price_lists:manage`, otorgados a `SUPER_ADMIN`. Toda escritura queda en la bitácora.
-- **Menú**: «Listas de precios» en Ventas (`/sales/price-lists`), que reemplaza el marcador «Asignación de precios» de Compras.
+- **Costo de una unidad vendible**: `inventory_cost_averages.average_unit_cost` (por unidad base, ya incluye el retaceo) × factor de la unidad. Sin costo registrado → «sin costo» y no se calcula margen.
+- **Margen objetivo**:
+  - `sales_price_lists.target_margin_percent` (0 a 95, opcional);
+  - tabla `sales_price_list_category_margins` (lista, categoría, margen) para las excepciones;
+  - el de la categoría gana al de la lista.
+- **Descuento del cliente**: `sales_customers.discount_percent` (0 a 100, por defecto 0).
+- **Escalas por volumen**: `sales_volume_discounts`:
+  - columnas: lista, producto, variante, unidad, `min_quantity` > 0, `discount_percent`, `valid_from`, `valid_to`;
+  - no se traslapan en el tiempo dos escalas con la misma clave y cantidad mínima;
+  - aplica la de mayor `min_quantity` que la cantidad alcance.
+- **Topes por rol**: `sales_discount_policies`:
+  - columnas: empresa, rol, `max_line_discount_percent`, `max_global_discount_percent`, `can_sell_below_cost`;
+  - un usuario con varios roles toma el máximo de cada valor;
+  - un rol sin política tiene 0 % y no vende bajo costo;
+  - el superusuario no tiene tope.
+- **Descuento sugerido** de una línea: el mayor entre el del cliente y el de volumen. No se suman.
+- **Permisos**:
+  - `sales_costs:read` para ver costo y margen;
+  - `sales_discounts:manage` para configurar topes por rol;
+  - el margen objetivo y las escalas usan `price_lists:manage`, y el descuento del cliente `sales_customers:manage`.
+  - Todo cambio queda en la bitácora.
 
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [x] **Paso 1: migración `0122_sales_price_lists` y modelos.**
-  - Tablas, columna del cliente, permisos, `btree_gist` y una guarda en el downgrade.
-  - Verificar con una prueba de migración.
-- [x] **Paso 2: dominio, repositorio, casos de uso y API.**
-  - CRUD de listas, fijar o anular precios con vigencia, historial, precios de una lista con búsqueda, resolución y lista del cliente.
-  - Verificar con pruebas unitarias y e2e (permisos, aislamiento, traslapes, resolución).
-- [x] **Paso 3: frontend.**
-  - Pantalla de listas y de precios de una lista.
-  - Selector de lista en la ficha del cliente.
-  - Menú.
-  - Verificar con vitest, svelte-check y ESLint.
-- [x] **Paso 4: semilla y documentación.**
-  - Listas y precios de Grupo Lorena.
-  - `docs/api.md`, `docs/database-schema.md` §32 y el manual.
-- [x] **Paso 5: verificación y PR.** Batería completa, QA en el navegador y PR a `develop`.
+- [x] **Paso 1: migración `0123` y modelos.**
+  - Cambios en la base:
+    - margen objetivo en la lista;
+    - márgenes por categoría;
+    - descuento del cliente;
+    - escalas por volumen con exclusión de traslape;
+    - políticas por rol;
+    - permisos;
+    - guarda en el downgrade.
+  - Prueba de migración.
+- [x] **Paso 2: dominio.**
+  - Funciones: margen, precio sugerido, elección de escala, descuento sugerido, topes efectivos de varios roles y evaluación de una línea.
+  - Pruebas unitarias con valores exactos.
+- [x] **Paso 3: repositorio, casos de uso y API.**
+  - Costo y margen en los precios de la lista, solo con `sales_costs:read`.
+  - Margen objetivo de la lista y por categoría.
+  - Escalas por volumen.
+  - Descuento del cliente.
+  - Políticas por rol.
+  - Endpoint de evaluación.
+  - Pruebas e2e.
+- [x] **Paso 4: frontend.**
+  - En el detalle de la lista: costo, margen, resaltado, precio sugerido en el modal y escalas por volumen.
+  - En la edición de la lista: margen objetivo y márgenes por categoría.
+  - En la ficha del cliente: descuento fijo.
+  - Pantalla de topes por rol.
+  - vitest.
+- [x] **Paso 5: semilla y documentación.**
+  - Semilla de Grupo Lorena: márgenes de Mostrador y Mayoreo, escalas en Mayoreo, descuento a un cliente y topes para GERENTE DE SUCURSAL.
+  - `docs/api.md`, `docs/database-schema.md` §33 y el manual.
+- [x] **Paso 6: verificación y PR.** Batería completa, QA en el navegador (claro, oscuro, 375 px) y PR a `develop`.
 
 ## Estado actual
 
-- **Paso en curso**: ninguno; V2b terminado y en PR hacia `develop`. Batería completa: backend 1,873 y frontend 1,154 pruebas en verde; QA en navegador (claro, oscuro y 375 px). Lo siguiente es V2c, que empieza por las notas de costo, margen y precio sugerido de las decisiones.
-- **SvelteKit 3 (16/11/2026)**: la PR #44 subió el frontend a SvelteKit 3 por la CVE-2026-128120, que bloqueaba el CI de esta PR. Se trajo `develop` y los archivos de V2b pasaron a imports `#lib/…` con extensión; check, lint, 1,154 pruebas y build en verde.
+- **Paso en curso**: ninguno; V2c terminado y en PR hacia `develop`. Batería completa: backend 1,886 pruebas y frontend 183 archivos en verde. Lo siguiente es V2d (cotización rediseñada), que usará `POST /sales/discount-evaluation` para pedir autorización.
+- **QA en el navegador (16/11/2026)**, con el panel oculto, por texto y JavaScript:
+  - Mostrador muestra costo, margen e insignias «Bajo el objetivo» y «Bajo costo»;
+  - el sugerido del café da $19.82 ($11.40 de costo, 35 %) y «Usar» lo copia;
+  - la pantalla de topes muestra GERENTE 10/5 y EMPLEADO 3/0;
+  - El Trigal tiene 3 % fijo y la lista Mayoreo.
+  - No se revisaron capturas en modo oscuro ni a 375 px porque el panel del navegador estaba oculto.
+- **Hallazgo y corrección (16/11/2026, pedido del usuario)**: con los costos de la demo, el café de Mostrador ($11.50 con IVA) quedaba bajo costo y varios productos bajo el margen objetivo.
+  - La semilla de listas (paso `seed.grupo_lorena.price_lists`, versión `2026-11-16-v2`) ahora fija precios de mostrador con al menos 35 % de margen; Mayoreo queda cerca de 28 %.
+  - En entornos ya sembrados, si el precio vigente sigue siendo el de la primera versión, programa el corregido desde el día siguiente (un precio que empezó hoy no se puede reemplazar hoy).
+  - Prueba nueva: `test_demo_prices_reach_the_target_margins`.
+- **Contexto**: el frontend usa SvelteKit 3: imports `#lib/…` con extensión, `$app/env`, `goto(…, { replace, reset: false })`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
   - No hacer commits mientras corre la batería.
   - Prettier solo se aplica a archivos nuevos o tocados.
 - **Navegador**:
-  - Iniciar sesión en `http://localhost:5173/login` con la cuenta local que dio el usuario.
-  - Navegar con el menú, sin recargar la página.
+  - Iniciar sesión en `http://localhost:5173/login` con la cuenta local del usuario.
   - Si una ruta nueva da «Not found», reiniciar el contenedor `frontend`.
 - **Reglas del usuario**:
   - Commits y PR sin Co-Authored-By ni «Generated with Claude Code».
   - PR hacia `develop`.
   - Ignorar el check de Vercel.
   - Dentro de una empresa, la interfaz no menciona a otras empresas.
-  - En documentos compartidos, el servicio DTE de referencia se llama «proyecto de referencia».

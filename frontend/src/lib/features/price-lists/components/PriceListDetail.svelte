@@ -3,6 +3,8 @@
   import Badge from '#lib/components/ui/Badge.svelte';
   import Button from '#lib/components/ui/Button.svelte';
   import Modal from '#lib/components/ui/Modal.svelte';
+  import CategoryMarginsDialog from '#lib/features/price-lists/components/CategoryMarginsDialog.svelte';
+  import VolumeDiscountsDialog from '#lib/features/price-lists/components/VolumeDiscountsDialog.svelte';
   import { api, HttpError } from '#lib/api/client.ts';
   import { priceListsApi } from '#lib/api/price-lists.ts';
   import {
@@ -16,7 +18,7 @@
   } from '#lib/features/price-lists/labels.ts';
   import { confirmation } from '#lib/stores/confirmation.svelte.ts';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
-  import type { ListedPrice, PriceEntry, PriceList } from '#lib/types/price-list.ts';
+  import type { ListedPrice, PriceEntry, PriceList, SellableUnit } from '#lib/types/price-list.ts';
 
   let { listId }: { listId: string } = $props();
 
@@ -45,8 +47,18 @@
   let history = $state<PriceEntry[]>([]);
   let historyError = $state<string | null>(null);
 
+  let scalesFor = $state<SellableUnit | null>(null);
+  let marginsOpen = $state(false);
+
   const canManage = $derived(permissions.hasPermission('price_lists:manage'));
   const vatText = $derived(priceList?.prices_include_vat ? 'con IVA' : 'sin IVA');
+  const showsCost = $derived(rows.some((row) => row.cost !== undefined && row.cost !== null));
+
+  function marginTone(row: ListedPrice): string {
+    if (row.below_cost) return 'text-danger';
+    if (row.below_target) return 'text-warning';
+    return 'text-success';
+  }
 
   async function loadPrices() {
     loading = true;
@@ -174,6 +186,18 @@
         <span class="font-mono">{priceList.code}</span> · Precios {vatText}. Un precio nuevo rige
         desde la fecha que indiques; el anterior queda en el historial.
       </p>
+      <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-foreground-muted">
+        <span>
+          Margen objetivo: {priceList.target_margin_percent
+            ? `${Number(priceList.target_margin_percent)} %`
+            : 'sin definir'}
+        </span>
+        {#if canManage}
+          <Button variant="ghost" size="sm" onclick={() => (marginsOpen = true)}>
+            Cambiar margen objetivo
+          </Button>
+        {/if}
+      </div>
     {/if}
   </header>
 
@@ -316,6 +340,19 @@
               {:else}
                 <p class="text-foreground-muted">Sin precio</p>
               {/if}
+              {#if showsCost}
+                <p class="text-xs text-foreground-muted">
+                  Costo {row.cost ? formatPrice(row.cost) : 'sin registrar'}
+                  {#if row.margin_percent !== null && row.margin_percent !== undefined}
+                    · <span class="font-medium {marginTone(row)}"
+                      >margen {Number(row.margin_percent)} %</span
+                    >
+                    {#if row.below_cost}<Badge variant="danger">Bajo costo</Badge>
+                    {:else if row.below_target}<Badge variant="warning">Bajo el objetivo</Badge
+                      >{/if}
+                  {/if}
+                </p>
+              {/if}
               {#if row.branch_overrides > 0 && !branchId}
                 <p class="text-xs text-foreground-muted">
                   {row.branch_overrides}
@@ -341,6 +378,9 @@
               {/if}
               <Button variant="ghost" size="sm" onclick={() => void openHistory(row)}>
                 Historial
+              </Button>
+              <Button variant="ghost" size="sm" onclick={() => (scalesFor = row.unit)}>
+                Volumen
               </Button>
             </div>
           </li>
@@ -384,6 +424,19 @@
             required
             class="{inputClass} tabular-nums"
           />
+          {#if editing.suggested_price}
+            <p class="mt-1 text-xs text-foreground-muted">
+              Sugerido: <span class="font-medium tabular-nums text-foreground"
+                >{formatPrice(editing.suggested_price)}</span
+              >
+              (costo {formatPrice(editing.cost)} y margen {Number(editing.target_margin_percent)} %)
+              <button
+                type="button"
+                class="ml-1 font-medium text-primary hover:underline"
+                onclick={() => (price = String(Number(editing?.suggested_price)))}>Usar</button
+              >
+            </p>
+          {/if}
           {#if price !== '' && Number(price) >= 0}
             <p class="mt-1 text-xs text-foreground-muted">
               {priceList?.prices_include_vat ? 'Sin IVA' : 'Con IVA'}: {counterpartPrice(
@@ -474,3 +527,17 @@
     </ul>
   {/if}
 </Modal>
+
+<VolumeDiscountsDialog {listId} unit={scalesFor} {canManage} onclose={() => (scalesFor = null)} />
+
+{#if priceList}
+  <CategoryMarginsDialog
+    {priceList}
+    open={marginsOpen}
+    onclose={() => (marginsOpen = false)}
+    onsaved={(updated) => {
+      priceList = updated;
+      void loadPrices();
+    }}
+  />
+{/if}

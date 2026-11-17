@@ -53,6 +53,7 @@ from app.application.retaceos.cost_documents import RetaceoCostDocumentService
 from app.application.sales.deliveries import SalesDeliveryService
 from app.application.sales.returns import SalesReturnService
 from app.application.sales.service import SalesService
+from app.application.sales_discounts import SalesDiscountUseCases
 from app.application.sales_tax import SalesTaxUseCases
 from app.core.config import settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
@@ -131,6 +132,9 @@ from app.infrastructure.repositories.purchase_request_repository import (
     SqlAlchemyPurchaseRequestRepository,
 )
 from app.infrastructure.repositories.retaceo_repository import SqlAlchemyRetaceoRepository
+from app.infrastructure.repositories.sales_discount_repository import (
+    SqlAlchemySalesDiscountRepository,
+)
 
 # Type aliases used widely in routers.
 SessionDep = Annotated[AsyncSession, Depends(get_async_session)]
@@ -177,6 +181,12 @@ def get_privacy_use_cases(session: SessionDep) -> PrivacyUseCases:
 
 def get_price_list_use_cases(session: SessionDep) -> PriceListUseCases:
     return PriceListUseCases(SqlAlchemyPriceListRepository(session))
+
+
+def get_sales_discount_use_cases(session: SessionDep) -> SalesDiscountUseCases:
+    return SalesDiscountUseCases(
+        SqlAlchemySalesDiscountRepository(session), SqlAlchemyPriceListRepository(session)
+    )
 
 
 def get_sales_tax_use_cases(session: SessionDep) -> SalesTaxUseCases:

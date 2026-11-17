@@ -104,6 +104,7 @@ class CustomerDraft:
     credit_limit: Decimal | None = None
     seller_employee_id: uuid.UUID | None = None
     price_list_id: uuid.UUID | None = None
+    discount_percent: Decimal = Decimal("0")
 
 
 def validate_draft(draft: CustomerDraft) -> CustomerDraft:  # noqa: C901 - una regla por campo

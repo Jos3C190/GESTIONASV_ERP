@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { priceListsApi, branchesApi } = vi.hoisted(() => ({
+const { priceListsApi, branchesApi, discountPoliciesApi } = vi.hoisted(() => ({
   priceListsApi: {
     list: vi.fn(),
     get: vi.fn(),
@@ -11,12 +11,19 @@ const { priceListsApi, branchesApi } = vi.hoisted(() => ({
     history: vi.fn(),
     setPrice: vi.fn(),
     endPrice: vi.fn(),
-    cancelPrice: vi.fn()
+    cancelPrice: vi.fn(),
+    categories: vi.fn(),
+    categoryMargins: vi.fn(),
+    replaceCategoryMargins: vi.fn(),
+    volumeDiscounts: vi.fn(),
+    addVolumeDiscount: vi.fn(),
+    removeVolumeDiscount: vi.fn()
   },
-  branchesApi: { list: vi.fn() }
+  branchesApi: { list: vi.fn() },
+  discountPoliciesApi: { list: vi.fn(), save: vi.fn(), mine: vi.fn() }
 }));
 
-vi.mock('#lib/api/price-lists.ts', () => ({ priceListsApi }));
+vi.mock('#lib/api/price-lists.ts', () => ({ priceListsApi, discountPoliciesApi }));
 vi.mock('#lib/api/client.ts', () => ({
   api: { branches: branchesApi },
   HttpError: class HttpError extends Error {
@@ -39,6 +46,7 @@ import {
 } from '#lib/features/price-lists/labels.ts';
 import { permissions } from '#lib/stores/permissions.svelte.ts';
 import type { ListedPrice, PriceList } from '#lib/types/price-list.ts';
+import DiscountPoliciesPage from './DiscountPoliciesPage.svelte';
 import PriceListDetail from './PriceListDetail.svelte';
 import PriceListsOverview from './PriceListsOverview.svelte';
 
@@ -52,7 +60,8 @@ const counter: PriceList = {
   is_active: true,
   price_count: 3,
   customer_count: 0,
-  updated_at: '2026-11-16T15:00:00Z'
+  updated_at: '2026-11-16T15:00:00Z',
+  target_margin_percent: '30.00'
 };
 
 const row: ListedPrice = {
@@ -86,7 +95,12 @@ const row: ListedPrice = {
 };
 
 beforeEach(() => {
-  for (const fn of [...Object.values(priceListsApi), branchesApi.list]) fn.mockReset();
+  for (const fn of [
+    ...Object.values(priceListsApi),
+    ...Object.values(discountPoliciesApi),
+    branchesApi.list
+  ])
+    fn.mockReset();
   permissions.set(['price_lists:read', 'price_lists:manage'], false);
   branchesApi.list.mockResolvedValue([{ id: 'branch-1', name: 'Roosevelt' }]);
 });
@@ -123,7 +137,8 @@ describe('PriceListsOverview', () => {
       description: null,
       prices_include_vat: false,
       is_default: false,
-      is_active: true
+      is_active: true,
+      target_margin_percent: null
     });
   });
 
@@ -186,5 +201,103 @@ describe('PriceListDetail', () => {
     priceListsApi.prices.mockResolvedValue([]);
     render(PriceListDetail, { listId: 'list-1' });
     expect(await screen.findByText('No hay productos para vender.')).toBeInTheDocument();
+  });
+});
+
+describe('V2c: margen, escalas y topes', () => {
+  const costed: ListedPrice = {
+    ...row,
+    cost: '1.40000000',
+    margin_percent: '24.67',
+    target_margin_percent: '30.00',
+    suggested_price: '2.26',
+    below_cost: false,
+    below_target: true
+  };
+
+  it('shows cost and margin and uses the suggested price', async () => {
+    priceListsApi.get.mockResolvedValue(counter);
+    priceListsApi.prices.mockResolvedValue([costed]);
+    priceListsApi.setPrice.mockResolvedValue({});
+    render(PriceListDetail, { listId: 'list-1' });
+
+    expect(await screen.findByText('margen 24.67 %')).toBeInTheDocument();
+    expect(screen.getByText('Bajo el objetivo')).toBeInTheDocument();
+    expect(screen.getByText('Margen objetivo: 30 %')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Cambiar' }));
+    expect(screen.getByText('$2.26')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Usar' }));
+    expect(screen.getByLabelText('Precio (USD)')).toHaveValue(2.26);
+  });
+
+  it('hides cost when the user cannot see it', async () => {
+    priceListsApi.get.mockResolvedValue(counter);
+    priceListsApi.prices.mockResolvedValue([row]);
+    render(PriceListDetail, { listId: 'list-1' });
+    expect(await screen.findByText('$1.13')).toBeInTheDocument();
+    expect(screen.queryByText(/Costo/)).not.toBeInTheDocument();
+  });
+
+  it('adds a volume scale for the product', async () => {
+    priceListsApi.get.mockResolvedValue(counter);
+    priceListsApi.prices.mockResolvedValue([row]);
+    priceListsApi.volumeDiscounts.mockResolvedValue([]);
+    priceListsApi.addVolumeDiscount.mockResolvedValue({});
+    render(PriceListDetail, { listId: 'list-1' });
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Volumen' }));
+    expect(
+      await screen.findByText('Este producto no tiene escalas en la lista.')
+    ).toBeInTheDocument();
+    await fireEvent.input(screen.getByLabelText('Desde la cantidad'), { target: { value: '10' } });
+    await fireEvent.input(screen.getByLabelText('Descuento (%)'), { target: { value: '3' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Agregar escala' }));
+    expect(priceListsApi.addVolumeDiscount).toHaveBeenCalledWith(
+      'list-1',
+      expect.objectContaining({
+        product_id: 7,
+        unit_id: 1,
+        min_quantity: '10',
+        discount_percent: '3'
+      })
+    );
+  });
+
+  it('saves the discount limits of a role', async () => {
+    discountPoliciesApi.list.mockResolvedValue([
+      {
+        role_id: 'role-1',
+        role_name: 'GERENTE DE SUCURSAL',
+        configured: false,
+        updated_at: null,
+        max_line_discount_percent: '0.00',
+        max_global_discount_percent: '0.00',
+        can_sell_below_cost: false
+      }
+    ]);
+    discountPoliciesApi.save.mockResolvedValue({
+      role_id: 'role-1',
+      role_name: 'GERENTE DE SUCURSAL',
+      configured: true,
+      updated_at: '2026-11-16T15:00:00Z',
+      max_line_discount_percent: '10.00',
+      max_global_discount_percent: '0.00',
+      can_sell_below_cost: false
+    });
+    render(DiscountPoliciesPage);
+
+    expect(await screen.findByText('Sin topes')).toBeInTheDocument();
+    const save = screen.getByRole('button', { name: 'Guardar' });
+    expect(save).toBeDisabled();
+    await fireEvent.input(screen.getByLabelText('Por línea (%)'), { target: { value: '10' } });
+    await fireEvent.click(save);
+    expect(discountPoliciesApi.save).toHaveBeenCalledWith('role-1', {
+      max_line_discount_percent: '10',
+      max_global_discount_percent: '0',
+      can_sell_below_cost: false
+    });
+    expect(
+      await screen.findByText('Se guardaron los topes de GERENTE DE SUCURSAL.')
+    ).toBeInTheDocument();
   });
 });

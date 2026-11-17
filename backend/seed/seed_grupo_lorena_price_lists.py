@@ -5,12 +5,18 @@
 - Roosevelt tiene precio propio de mostrador para el café, para mostrar el precio por sucursal.
 - Los clientes contribuyentes CLI-00001 y CLI-00002 usan Mayoreo.
 
-Solo agrega lo que falta: no cambia precios ni listas ya guardados.
+Los precios de mostrador dejan al menos 35 % de margen sobre el costo de la operación de
+demostración (costo ÷ 0.65, con IVA).
+
+Solo agrega lo que falta y no cambia precios que alguien haya tocado. Si un precio vigente
+todavía es el de la primera versión de la semilla (que en varios productos quedaba bajo el
+margen o bajo el costo), programa el precio corregido desde mañana.
 """
 
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.application.price_lists import PriceListUseCases, today_in_el_salvador
@@ -39,21 +45,32 @@ WHOLESALE = PriceListDraft(
 )
 #: Precio de mostrador, con IVA, por unidad base.
 COUNTER_PRICES: dict[str, Decimal] = {
+    "PRD-HAR-001": Decimal("42.60"),
+    "PRD-LAC-002": Decimal("103.60"),
+    "PRD-HAR-003": Decimal("1.45"),
+    "PRD-AZU-004": Decimal("2.25"),
+    "PRD-LEV-005": Decimal("4.25"),
+    "PRD-CHO-006": Decimal("12.10"),
+    "PRD-REL-007": Decimal("7.10"),
+    "PRD-MAR-008": Decimal("3.60"),
+    "PRD-EMP-009": Decimal("0.95"),
+    "PRD-EMP-010": Decimal("0.12"),
+    "PRD-CAF-011": Decimal("19.85"),
+    "PRD-JAR-012": Decimal("6.75"),
+}
+#: Precios de la primera versión de la semilla que se corrigen si siguen sin tocar.
+PREVIOUS_COUNTER_PRICES: dict[str, Decimal] = {
     "PRD-HAR-001": Decimal("38.50"),
     "PRD-LAC-002": Decimal("62.00"),
-    "PRD-HAR-003": Decimal("1.45"),
     "PRD-AZU-004": Decimal("2.10"),
-    "PRD-LEV-005": Decimal("4.25"),
     "PRD-CHO-006": Decimal("9.80"),
     "PRD-REL-007": Decimal("3.60"),
     "PRD-MAR-008": Decimal("3.15"),
-    "PRD-EMP-009": Decimal("0.95"),
-    "PRD-EMP-010": Decimal("0.12"),
     "PRD-CAF-011": Decimal("11.50"),
-    "PRD-JAR-012": Decimal("6.75"),
 }
 ROOSEVELT_CODE = "LOR-SM-01"
-ROOSEVELT_COFFEE = Decimal("12.25")
+ROOSEVELT_COFFEE = Decimal("20.50")
+PREVIOUS_ROOSEVELT_COFFEE = Decimal("12.25")
 WHOLESALE_CUSTOMERS = ("CLI-00001", "CLI-00002")
 CENT = Decimal("0.01")
 
@@ -92,6 +109,37 @@ async def _set_missing(
     await prices.set_price(COMPANY_ID, price_list.id, key, price, today_in_el_salvador(), actor)
 
 
+async def _correct_if_untouched(
+    prices: PriceListUseCases,
+    price_list: PriceList,
+    unit: SellableUnit,
+    previous: Decimal,
+    corrected: Decimal,
+    actor: uuid.UUID,
+    branch_id: uuid.UUID | None = None,
+) -> None:
+    """Programa el precio corregido desde mañana si el vigente sigue siendo el anterior."""
+    if previous == corrected:
+        return
+    today = today_in_el_salvador()
+    mine = [
+        entry
+        for entry in await prices.history(
+            COMPANY_ID, price_list.id, unit.product_id, unit.variant_id, unit.unit_id
+        )
+        if entry.key.branch_id == branch_id
+    ]
+    current = next((e for e in mine if e.covers(today)), None)
+    if current is None or current.valid_to is not None or current.price != previous:
+        return
+    if any(e.valid_from > today for e in mine):
+        return
+    key = PriceKey(unit.product_id, unit.variant_id, unit.unit_id, branch_id)
+    await prices.set_price(
+        COMPANY_ID, price_list.id, key, corrected, today + timedelta(days=1), actor
+    )
+
+
 async def seed() -> bool:
     async with session_scope() as session:
         actor = await session.scalar(select(User.id).where(User.username == SUPER_ADMIN_USERNAME))
@@ -113,12 +161,37 @@ async def seed() -> bool:
                 await _set_missing(prices, counter, unit, base, actor)
             await _set_missing(prices, wholesale, unit, wholesale_price(base, unit.factor), actor)
 
+        for unit in units:
+            previous = PREVIOUS_COUNTER_PRICES.get(unit.sku)
+            corrected = base_prices.get(unit.sku)
+            if previous is None or corrected is None:
+                continue
+            if unit.is_base:
+                await _correct_if_untouched(prices, counter, unit, previous, corrected, actor)
+            await _correct_if_untouched(
+                prices,
+                wholesale,
+                unit,
+                wholesale_price(previous, unit.factor),
+                wholesale_price(corrected, unit.factor),
+                actor,
+            )
+
         roosevelt = await session.scalar(
             select(Branch.id).where(Branch.company_id == COMPANY_ID, Branch.code == ROOSEVELT_CODE)
         )
         coffee = next((u for u in units if u.sku == "PRD-CAF-011" and u.is_base), None)
         if roosevelt is not None and coffee is not None:
             await _set_missing(prices, counter, coffee, ROOSEVELT_COFFEE, actor, roosevelt)
+            await _correct_if_untouched(
+                prices,
+                counter,
+                coffee,
+                PREVIOUS_ROOSEVELT_COFFEE,
+                ROOSEVELT_COFFEE,
+                actor,
+                roosevelt,
+            )
 
         await session.execute(
             update(SalesCustomerModel)
