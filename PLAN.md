@@ -60,7 +60,7 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
 
 - [x] **Paso 0: plan.**
 - [x] **Paso 1: firmador oficial en compose.** Construcción Maven más JRE, volumen de certificados, salud y prueba de que responde (error 803 sin certificado).
-- [ ] **Paso 2: servicio, emisores con credenciales.** Registro con contraseñas cifradas y certificado al volumen. Pruebas.
+- [x] **Paso 2: servicio, emisores con credenciales.** Registro con contraseñas cifradas y certificado al volumen. Pruebas.
 - [ ] **Paso 3: servicio, modo y ambiente por emisor.**
   - Token por NIT, firma por emisor, host y ambiente por modo; sin `ISSUER_MODE_UNAVAILABLE`.
   - Pruebas con el stub, con dos emisores en modos distintos.
@@ -73,7 +73,15 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
 
 ## Estado actual
 
-- **Paso en curso**: 2 (servicio, emisores con credenciales).
+- **Paso en curso**: 3 (servicio, modo y ambiente por emisor).
+  - Paso 2:
+    - `src/services/issuerCredentials.js`:
+      - contraseñas cifradas con AES-256-GCM (`DTE_CREDENTIALS_KEY`, formato `v1:`) en la tabla `emisor_credenciales`;
+      - certificado validado (mismo NIT y SHA-512 de la contraseña privada) y escrito de forma atómica en `DTE_CERTIFICATES_DIR`.
+    - `PUT /api/emisores/:nit` acepta `credenciales` y, fuera de simulado, las exige (`ISSUER_CREDENTIALS_REQUIRED`). La respuesta solo trae `credenciales.{configuradas, certificadoPresente, certificadoSha256}`.
+    - Helper `test/helpers/certificadoPrueba.js`: genera un `.crt` con llaves RSA reales. Verificado a mano: el firmador oficial firma con él (JWS RS512 que se verifica con la llave pública).
+    - `DTE_CREDENTIALS_KEY` está en compose, `setup.sh`, `.env.example` y CI. El `.env` del usuario todavía no la tiene: pedir permiso para agregarla al llegar a las e2e del paso 6.
+    - Servicio: 479 pruebas en verde.
   - Paso 1:
     - Código oficial copiado sin cambios a `dte-signer/`, con `Dockerfile.erp` (Maven 3.9.9 + Temurin 21 JRE, usuario sin privilegios, salud en `/firmardocumento/status`) y `PROCEDENCIA.md`.
     - Servicio `dte-signer` en compose (perfil `dte` en producción) y volumen `dte-certificates`: el firmador lo monta de solo lectura en `/certificados` y `dte-service` lo escribe en `/app/certificados`, que la imagen crea con dueño `node`.

@@ -209,6 +209,12 @@ const config = {
   certificado: {
     ruta: process.env.MH_CERT_PATH?.trim() || '/app/certificado',
   },
+  // Credenciales de Hacienda por emisor (V3d): contraseñas cifradas con esta
+  // clave (32 bytes en base64) y certificados en la carpeta del firmador.
+  credenciales: {
+    clave: process.env.DTE_CREDENTIALS_KEY?.trim() || null,
+    directorioCertificados: process.env.DTE_CERTIFICATES_DIR?.trim() || '/app/certificados',
+  },
   contingencia: {
     // Solo para las pruebas de certificación (Manual Funcional XXIV) en el ambiente de pruebas.
     forzadaPermitida: process.env.DTE_ALLOW_FORCED_CONTINGENCY === 'true' && dteMode === 'hacienda-test',

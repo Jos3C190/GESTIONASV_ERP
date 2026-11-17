@@ -3,6 +3,7 @@
  * en el entorno, con dos empresas registradas desde el ERP.
  */
 const { test, before, after } = require('node:test');
+const { certificadoPrueba } = require('../helpers/certificadoPrueba');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 
@@ -161,7 +162,19 @@ test('emisor no registrado, desactivado o con el tipo no habilitado se rechaza',
   assert.equal(inactivo.status, 403);
 
   const otroModo = { nit: '06142010001050', nombre: 'Empresa en pruebas' };
-  assert.equal((await registrar(otroModo.nit, { nombre: otroModo.nombre, modo: 'hacienda-test', tiposHabilitados: ['01'] })).status, 200);
+  const sinClaves = await registrar(otroModo.nit, { nombre: otroModo.nombre, modo: 'hacienda-test', tiposHabilitados: ['01'] });
+  assert.equal(sinClaves.status, 400);
+  assert.equal((await sinClaves.json()).code, 'ISSUER_CREDENTIALS_REQUIRED');
+  const conClaves = await registrar(otroModo.nit, {
+    nombre: otroModo.nombre,
+    modo: 'hacienda-test',
+    tiposHabilitados: ['01'],
+    credenciales: { passwordApi: 'api', passwordPri: 'pri', certificado: certificadoPrueba(otroModo.nit, 'pri').toString('base64') },
+  });
+  assert.equal(conClaves.status, 200);
+  const registrado = await conClaves.json();
+  assert.equal(registrado.credenciales.configuradas, true);
+  assert.equal(JSON.stringify(registrado).includes('pri"'), false);
   const modo = await factura(otroModo, 'multi-modo-01');
   assert.equal(modo.status, 409);
   assert.equal((await modo.json()).code, 'ISSUER_MODE_UNAVAILABLE');

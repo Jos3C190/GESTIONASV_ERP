@@ -11,6 +11,7 @@
  */
 const { db } = require('../db');
 const config = require('../config');
+const credenciales = require('./issuerCredentials');
 
 const MODOS = Object.freeze(['simulated', 'hacienda-test', 'production']);
 const NIT_REGEX = /^(\d{9}|\d{14})$/;
@@ -48,6 +49,8 @@ function aRegistro(row) {
     modo: row.modo,
     tiposHabilitados: row.tipos_habilitados ? row.tipos_habilitados.split(',') : [],
     activo: row.activo === 1,
+    // Nunca las contraseñas: solo si hay credenciales y la huella del certificado.
+    credenciales: credenciales.estado(row.nit),
     creadoEn: row.creado_en,
     actualizadoEn: row.actualizado_en,
   };
@@ -75,6 +78,16 @@ function registrar(nit, datos) {
     throw new IssuerError(400, 'INVALID_ISSUER', 'Los tipos de DTE son códigos de dos dígitos');
   }
   const activo = datos?.activo === false ? 0 : 1;
+  // Fuera de simulado el emisor firma y se autentica con Hacienda con lo suyo (V3d).
+  if (datos?.credenciales) {
+    credenciales.guardar(limpio, datos.credenciales);
+  } else if (datos.modo !== 'simulated' && !credenciales.estado(limpio).configuradas) {
+    throw new IssuerError(
+      400,
+      'ISSUER_CREDENTIALS_REQUIRED',
+      'Un emisor en pruebas o producción necesita sus credenciales de Hacienda y su certificado',
+    );
+  }
   db.prepare(
     `INSERT INTO emisores (nit, nombre, modo, tipos_habilitados, activo)
      VALUES (?, ?, ?, ?, ?)

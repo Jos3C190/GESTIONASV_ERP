@@ -5,6 +5,7 @@
 const express = require('express');
 const { requireDteScope } = require('../middleware/apiKeyAuth');
 const issuerRegistry = require('../services/issuerRegistry');
+const issuerCredentials = require('../services/issuerCredentials');
 
 const router = express.Router();
 
@@ -12,7 +13,7 @@ function responder(res, fn) {
   try {
     return fn();
   } catch (error) {
-    if (error instanceof issuerRegistry.IssuerError) {
+    if (error instanceof issuerRegistry.IssuerError || error instanceof issuerCredentials.CredentialsError) {
       return res.status(error.status).json({ error: error.message, code: error.code });
     }
     throw error;
