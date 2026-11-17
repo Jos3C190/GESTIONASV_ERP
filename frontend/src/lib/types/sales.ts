@@ -17,14 +17,6 @@ export interface SalesCatalogItem {
   units: SalesUnit[];
 }
 
-export interface SalesLineInput {
-  product_id: number;
-  variant_id: string | null;
-  unit_id: number;
-  quantity: string;
-  unit_price: string;
-}
-
 export interface SalesLine {
   id: string;
   source_quotation_line_id: string;
@@ -46,6 +38,51 @@ export interface SalesLine {
   quantity_pending_base: string;
 }
 
+export type QuotationStatus =
+  'draft' | 'pending_authorization' | 'issued' | 'accepted' | 'rejected' | 'cancelled';
+
+export interface AuthorizationReason {
+  code: 'discount_above_limit' | 'below_cost' | 'global_discount_above_limit';
+  message: string;
+}
+
+export interface SalesQuotationLine {
+  id: string | null;
+  line_number: number;
+  product_id: number;
+  variant_id: string | null;
+  inventory_item_id: string;
+  product_sku: string;
+  product_name: string;
+  unit_id: number;
+  unit_name: string;
+  base_unit_id: number;
+  base_unit_name: string;
+  unit_factor: string;
+  quantity: string;
+  quantity_base: string;
+  price_list_id: string | null;
+  list_price: string | null;
+  price_overridden: boolean;
+  unit_price: string;
+  discount_percent: string;
+  suggested_discount_percent: string;
+  suggested_discount_source: 'none' | 'customer' | 'volume';
+  tax_treatment: 'taxed' | 'exempt' | 'not_subject';
+  item_type: '1' | '2' | '3';
+  document_unit_price: string;
+  discount_amount: string;
+  not_subject: string;
+  exempt: string;
+  taxed: string;
+  vat_item: string | null;
+  line_total: string;
+  /** Solo llega a quien puede ver costos o autorizar descuentos. */
+  cost: string | null;
+  margin_percent: string | null;
+  authorization_reasons: AuthorizationReason[];
+}
+
 export interface SalesQuotation {
   id: string;
   company_id: string;
@@ -56,19 +93,73 @@ export interface SalesQuotation {
   code: string;
   quotation_date: string;
   valid_until: string;
-  currency: 'USD';
-  subtotal: string;
-  total: string;
-  status: 'draft' | 'confirmed' | 'cancelled' | 'expired';
-  stored_status: 'draft' | 'confirmed' | 'cancelled';
+  document_type: '01' | '03';
+  price_list_id: string | null;
+  price_list_name: string | null;
+  prices_include_vat: boolean;
+  global_discount_percent: string;
+  status: QuotationStatus;
+  /** Emitida con la vigencia vencida. */
+  expired: boolean;
   version: number;
   notes: string | null;
-  converted: boolean;
+  total_not_subject: string;
+  total_exempt: string;
+  total_taxed: string;
+  subtotal_sales: string;
+  total_discount: string;
+  subtotal: string;
+  vat: string;
+  vat_perceived: string;
+  vat_withheld: string;
+  total: string;
+  total_in_words: string;
+  requires_authorization: boolean;
+  authorization_reasons: AuthorizationReason[];
+  costs_visible: boolean;
+  created_by_id: string;
+  created_by_name: string | null;
+  issued_by_name: string | null;
+  issued_at: string | null;
+  authorized_by_name: string | null;
+  authorized_at: string | null;
+  authorization_note: string | null;
+  customer_response_by_name: string | null;
+  customer_response_at: string | null;
+  rejection_reason: string | null;
+  cancelled_by_name: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
   sale_id: string | null;
   sale_code: string | null;
-  lines: SalesLine[];
-  created_at: string;
-  updated_at: string;
+  lines: SalesQuotationLine[];
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface QuotationLineInput {
+  product_id: number;
+  variant_id: string | null;
+  unit_id: number;
+  quantity: string;
+  /** Vacío: se aplica el descuento sugerido. */
+  discount_percent?: string | null;
+  /** Precio escrito a mano; exige permiso para cambiar precios. */
+  manual_price?: string | null;
+}
+
+export interface QuotationDraftInput {
+  branch_id: string;
+  customer_id: string;
+  document_type?: '01' | '03' | null;
+  valid_until?: string | null;
+  global_discount_percent: string;
+  notes: string | null;
+  lines: QuotationLineInput[];
+}
+
+export interface QuotationSettings {
+  quotation_validity_days: number;
 }
 
 export interface Sale {
@@ -166,7 +257,8 @@ export interface SalesDelivery {
   lines: SalesDeliveryLine[];
 }
 
-export type SalesReturnStatus = 'draft' | 'received' | 'under_review' | 'accepted' | 'rejected' | 'mixed' | 'cancelled';
+export type SalesReturnStatus =
+  'draft' | 'received' | 'under_review' | 'accepted' | 'rejected' | 'mixed' | 'cancelled';
 export type SalesReturnCondition = 'resalable' | 'damaged' | 'wrong_item' | 'other';
 
 export interface SalesReturnEvent {

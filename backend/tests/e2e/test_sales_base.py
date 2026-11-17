@@ -13,6 +13,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from tests.e2e.conftest import get_test_company_id, seed_user
+from tests.e2e.sales_quote_flow import accept_quote, enable_invoice
 
 pytestmark = pytest.mark.e2e
 
@@ -252,27 +253,19 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
         "branch_id": str(branch_a.id),
         "customer_id": customer_id,
         "valid_until": valid_until,
-        "currency": "USD",
         "notes": "Validación automatizada B06",
-        "subtotal": 0,
-        "total": 0,
         "lines": [
             {
                 "product_id": item["product_id"],
                 "variant_id": item["variant_id"],
                 "unit_id": unit_id,
                 "quantity": "3",
-                "unit_price": "1.255",
+                "manual_price": "1.255",
             }
         ],
     }
 
-    unsupported_currency = await e2e_client.post(
-        "/api/v1/sales/quotations",
-        headers={**admin_headers, "Idempotency-Key": f"b06-currency-{uuid.uuid4()}"},
-        json={**body, "currency": "EUR"},
-    )
-    assert unsupported_currency.status_code == 422
+    await enable_invoice(e2e_client, admin_headers)
     unsupported_unit = await e2e_client.post(
         "/api/v1/sales/quotations",
         headers={**admin_headers, "Idempotency-Key": f"b06-unit-{uuid.uuid4()}"},
@@ -291,8 +284,7 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
     quote = created.json()
     assert quote["subtotal"] == "3.77"
     assert quote["total"] == "3.77"
-    assert quote["lines"][0]["quantity_delivered_base"] == "0.000000"
-    assert quote["lines"][0]["quantity_pending_base"] == quote["lines"][0]["quantity_base"]
+    assert quote["lines"][0]["price_overridden"] is True
     assert not ({"unit_cost", "average_unit_cost", "inventory_value", "margin"} & quote.keys())
 
     replay_quote = await e2e_client.post(
@@ -309,24 +301,14 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
     )
     assert conflicting_replay.status_code == 409
 
-    confirmed_quote = await e2e_client.post(
-        f"/api/v1/sales/quotations/{quote['id']}/confirm",
-        headers=admin_headers,
-        json={"expected_version": quote["version"]},
-    )
+    confirmed_quote = await accept_quote(e2e_client, admin_headers, quote["id"], quote["version"])
     assert confirmed_quote.status_code == 200, confirmed_quote.text
     quote = confirmed_quote.json()
-    assert quote["status"] == "confirmed"
+    assert quote["status"] == "accepted"
     confirmed_quote_edit = await e2e_client.put(
         f"/api/v1/sales/quotations/{quote['id']}",
         headers=admin_headers,
-        json={
-            "expected_version": quote["version"],
-            "valid_until": valid_until,
-            "currency": "USD",
-            "notes": quote["notes"],
-            "lines": body["lines"],
-        },
+        json={**body, "expected_version": quote["version"]},
     )
     assert confirmed_quote_edit.status_code == 422
 
@@ -349,9 +331,9 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
     assert quote_after_catalog_change.status_code == 200, quote_after_catalog_change.text
     assert quote_after_catalog_change.json()["lines"][0]["product_name"] == original_product_name
 
-    # Confirmation and draft editing use the same expected version. Exactly
+    # Issuing and draft editing use the same expected version. Exactly
     # one transition may win; the losing request must reload instead of
-    # silently overwriting the confirmed revision.
+    # silently overwriting the issued revision.
     race_edit_quote_response = await e2e_client.post(
         "/api/v1/sales/quotations",
         headers={**admin_headers, "Idempotency-Key": f"b06-confirm-edit-{uuid.uuid4()}"},
@@ -361,7 +343,7 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
     race_edit_quote = race_edit_quote_response.json()
     race_edit_confirmation, race_edit_update = await asyncio.gather(
         e2e_client.post(
-            f"/api/v1/sales/quotations/{race_edit_quote['id']}/confirm",
+            f"/api/v1/sales/quotations/{race_edit_quote['id']}/issue",
             headers=admin_headers,
             json={"expected_version": race_edit_quote["version"]},
         ),
@@ -369,15 +351,15 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
             f"/api/v1/sales/quotations/{race_edit_quote['id']}",
             headers=admin_headers,
             json={
+                **body,
                 "expected_version": race_edit_quote["version"],
-                "valid_until": valid_until,
-                "currency": "USD",
                 "notes": "Edición concurrente B06",
-                "lines": body["lines"],
             },
         ),
     )
+    # The loser may see the new version (409) or the issued state (422).
     assert (race_edit_confirmation.status_code, race_edit_update.status_code) in {
+        (200, 409),
         (200, 422),
         (409, 200),
     }, (race_edit_confirmation.text, race_edit_update.text)
@@ -385,13 +367,10 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
         f"/api/v1/sales/quotations/{race_edit_quote['id']}", headers=admin_headers
     )
     assert final_race_quote.status_code == 200, final_race_quote.text
-    if final_race_quote.json()["status"] == "draft":
-        final_race_confirmation = await e2e_client.post(
-            f"/api/v1/sales/quotations/{race_edit_quote['id']}/confirm",
-            headers=admin_headers,
-            json={"expected_version": final_race_quote.json()["version"]},
-        )
-        assert final_race_confirmation.status_code == 200, final_race_confirmation.text
+    expected_notes = (
+        "Edición concurrente B06" if race_edit_update.status_code == 200 else body["notes"]
+    )
+    assert final_race_quote.json()["notes"] == expected_notes
 
     # Inject a failure after the sale, lines, idempotency record, and first
     # conversion audit event have been flushed. The savepoint must remove all
@@ -432,10 +411,8 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
     )
     assert two_line_quote_response.status_code == 201, two_line_quote_response.text
     two_line_quote = two_line_quote_response.json()
-    two_line_confirmation = await e2e_client.post(
-        f"/api/v1/sales/quotations/{two_line_quote['id']}/confirm",
-        headers=admin_headers,
-        json={"expected_version": two_line_quote["version"]},
+    two_line_confirmation = await accept_quote(
+        e2e_client, admin_headers, two_line_quote["id"], two_line_quote["version"]
     )
     assert two_line_confirmation.status_code == 200, two_line_confirmation.text
     two_line_quote = two_line_confirmation.json()
@@ -594,6 +571,12 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
         json={**body, "branch_id": str(branch_b.id)},
     )
     assert branch_b_quote.status_code == 201, branch_b_quote.text
+    issued_b = await e2e_client.post(
+        f"/api/v1/sales/quotations/{branch_b_quote.json()['id']}/issue",
+        headers=admin_headers,
+        json={"expected_version": branch_b_quote.json()["version"]},
+    )
+    assert issued_b.status_code == 200, issued_b.text
     async with async_session_factory() as session:
         expired_row = await session.get(SalesQuotationModel, uuid.UUID(branch_b_quote.json()["id"]))
         assert expired_row is not None
@@ -604,9 +587,10 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
         f"/api/v1/sales/quotations/{branch_b_quote.json()['id']}", headers=admin_headers
     )
     assert expired_quote.status_code == 200, expired_quote.text
-    assert expired_quote.json()["status"] == "expired"
+    assert expired_quote.json()["status"] == "issued"
+    assert expired_quote.json()["expired"] is True
     expired_confirmation = await e2e_client.post(
-        f"/api/v1/sales/quotations/{branch_b_quote.json()['id']}/confirm",
+        f"/api/v1/sales/quotations/{branch_b_quote.json()['id']}/accept",
         headers=admin_headers,
         json={"expected_version": expired_quote.json()["version"]},
     )
@@ -636,10 +620,8 @@ async def test_sales_quote_conversion_is_idempotent_scoped_and_inventory_neutral
         json=body,
     )
     assert race_quote.status_code == 201, race_quote.text
-    race_confirm = await e2e_client.post(
-        f"/api/v1/sales/quotations/{race_quote.json()['id']}/confirm",
-        headers=admin_headers,
-        json={"expected_version": race_quote.json()["version"]},
+    race_confirm = await accept_quote(
+        e2e_client, admin_headers, race_quote.json()["id"], race_quote.json()["version"]
     )
     assert race_confirm.status_code == 200, race_confirm.text
     race_version = race_confirm.json()["version"]

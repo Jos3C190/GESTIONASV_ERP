@@ -2,20 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import StrEnum
 
 QUANTITY_QUANTUM = Decimal("0.000001")
 PRICE_QUANTUM = Decimal("0.000001")
 MONEY_QUANTUM = Decimal("0.01")
-
-
-class QuoteStatus(StrEnum):
-    DRAFT = "draft"
-    CONFIRMED = "confirmed"
-    CANCELLED = "cancelled"
-    EXPIRED = "expired"  # Read-only projection; not persisted.
 
 
 class SaleStatus(StrEnum):
@@ -58,13 +50,3 @@ def quantity_in_base(quantity: Decimal, factor: Decimal) -> Decimal:
 
 def line_amount(quantity: Decimal, unit_price: Decimal) -> Decimal:
     return (quantity * unit_price).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
-
-
-def quote_display_status(status: str, valid_until: date, today: date) -> str:
-    if status in {QuoteStatus.DRAFT.value, QuoteStatus.CONFIRMED.value} and valid_until < today:
-        return QuoteStatus.EXPIRED.value
-    return status
-
-
-def can_convert_quote(status: str, valid_until: date, today: date) -> bool:
-    return status == QuoteStatus.CONFIRMED.value and valid_until >= today

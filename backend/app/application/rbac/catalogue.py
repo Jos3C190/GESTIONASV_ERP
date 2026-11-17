@@ -227,6 +227,14 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("price_lists:manage", "Gestionar listas de precios y sus precios", "sales"),
     PermissionSpec("sales_costs:read", "Ver el costo y el margen de los precios de venta", "sales"),
     PermissionSpec("sales_discounts:manage", "Configurar los topes de descuento por rol", "sales"),
+    PermissionSpec(
+        "sales_discounts:authorize",
+        "Autorizar descuentos fuera de tope y ventas bajo costo",
+        "sales",
+    ),
+    PermissionSpec(
+        "sales_prices:override", "Cambiar el precio de lista en una cotización", "sales"
+    ),
     # --- fleet ---
     PermissionSpec("fleet:read", "Consultar la flota", "fleet"),
     PermissionSpec("fleet:create", "Registrar vehículos", "fleet"),

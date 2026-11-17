@@ -54,6 +54,7 @@ from app.application.sales.deliveries import SalesDeliveryService
 from app.application.sales.returns import SalesReturnService
 from app.application.sales.service import SalesService
 from app.application.sales_discounts import SalesDiscountUseCases
+from app.application.sales_quotations import SalesQuotationUseCases
 from app.application.sales_tax import SalesTaxUseCases
 from app.core.config import settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
@@ -135,6 +136,9 @@ from app.infrastructure.repositories.retaceo_repository import SqlAlchemyRetaceo
 from app.infrastructure.repositories.sales_discount_repository import (
     SqlAlchemySalesDiscountRepository,
 )
+from app.infrastructure.repositories.sales_quotation_repository import (
+    SqlAlchemySalesQuotationRepository,
+)
 
 # Type aliases used widely in routers.
 SessionDep = Annotated[AsyncSession, Depends(get_async_session)]
@@ -186,6 +190,18 @@ def get_price_list_use_cases(session: SessionDep) -> PriceListUseCases:
 def get_sales_discount_use_cases(session: SessionDep) -> SalesDiscountUseCases:
     return SalesDiscountUseCases(
         SqlAlchemySalesDiscountRepository(session), SqlAlchemyPriceListRepository(session)
+    )
+
+
+def get_sales_quotation_use_cases(session: SessionDep) -> SalesQuotationUseCases:
+    prices = SqlAlchemyPriceListRepository(session)
+    return SalesQuotationUseCases(
+        SqlAlchemySalesQuotationRepository(session),
+        SalesDiscountUseCases(SqlAlchemySalesDiscountRepository(session), prices),
+        prices,
+        SqlAlchemyFiscalRepository(session),
+        SqlAlchemyCustomerRepository(session),
+        SqlAlchemyProductFiscalRepository(session),
     )
 
 

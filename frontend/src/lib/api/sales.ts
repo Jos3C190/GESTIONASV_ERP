@@ -6,12 +6,13 @@ import type {
   SalesDelivery,
   SalesDeliveryStockLine,
   SalesFilters,
-  SalesLineInput,
   SalesPage,
   SalesReturn,
   SalesReturnCondition,
   SalesReturnableAllocation,
-  SalesQuotation
+  SalesQuotation,
+  QuotationDraftInput,
+  QuotationSettings
 } from '#lib/types/sales.ts';
 
 function scopedPath(path: string, filters: SalesFilters = {}): string {
@@ -38,34 +39,46 @@ export const salesApi = {
   quotation(id: string) {
     return apiFetch<SalesQuotation>(`/sales/quotations/${id}`);
   },
-  createQuotation(payload: {
-    branch_id: string;
-    customer_id: string;
-    valid_until: string;
-    currency: 'USD';
-    notes: string | null;
-    lines: SalesLineInput[];
-  }, idempotencyKey: string) {
+  previewQuotation(payload: QuotationDraftInput) {
+    return apiFetch<SalesQuotation>('/sales/quotations/preview', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+  createQuotation(payload: QuotationDraftInput, idempotencyKey: string) {
     return apiFetch<SalesQuotation>('/sales/quotations', {
       method: 'POST',
       headers: { 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify(payload)
     });
   },
-  updateQuotation(id: string, payload: {
-    expected_version: number;
-    valid_until: string;
-    currency: 'USD';
-    notes: string | null;
-    lines: SalesLineInput[];
-  }) {
-    return apiFetch<SalesQuotation>(`/sales/quotations/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  updateQuotation(id: string, payload: QuotationDraftInput & { expected_version: number }) {
+    return apiFetch<SalesQuotation>(`/sales/quotations/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
   },
-  confirmQuotation(id: string, expected_version: number) {
-    return apiFetch<SalesQuotation>(`/sales/quotations/${id}/confirm`, { method: 'POST', body: JSON.stringify({ expected_version }) });
+  quotationAction(
+    id: string,
+    action: 'issue' | 'authorize' | 'return' | 'accept' | 'reject' | 'cancel',
+    payload: { expected_version: number; note?: string | null; reason?: string }
+  ) {
+    return apiFetch<SalesQuotation>(`/sales/quotations/${id}/${action}`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
   },
-  cancelQuotation(id: string, expected_version: number, reason: string) {
-    return apiFetch<SalesQuotation>(`/sales/quotations/${id}/cancel`, { method: 'POST', body: JSON.stringify({ expected_version, reason }) });
+  quotationPdfPath(id: string) {
+    return `/sales/quotations/${id}/pdf`;
+  },
+  quotationSettings() {
+    return apiFetch<QuotationSettings>('/sales/settings/quotations');
+  },
+  saveQuotationSettings(payload: QuotationSettings) {
+    return apiFetch<QuotationSettings>('/sales/settings/quotations', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
   },
   convertQuotation(id: string, expected_version: number, idempotencyKey: string) {
     return apiFetch<Sale>(`/sales/quotations/${id}/convert`, {
@@ -80,18 +93,27 @@ export const salesApi = {
   sale(id: string) {
     return apiFetch<Sale>(`/sales/${id}`);
   },
-  updateSale(id: string, payload: {
-    expected_version: number;
-    notes: string | null;
-    lines: Array<{ source_quotation_line_id: string; quantity: string; unit_price: string }>;
-  }) {
+  updateSale(
+    id: string,
+    payload: {
+      expected_version: number;
+      notes: string | null;
+      lines: Array<{ source_quotation_line_id: string; quantity: string; unit_price: string }>;
+    }
+  ) {
     return apiFetch<Sale>(`/sales/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
   },
   confirmSale(id: string, expected_version: number) {
-    return apiFetch<Sale>(`/sales/${id}/confirm`, { method: 'POST', body: JSON.stringify({ expected_version }) });
+    return apiFetch<Sale>(`/sales/${id}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ expected_version })
+    });
   },
   cancelSale(id: string, expected_version: number, reason: string) {
-    return apiFetch<Sale>(`/sales/${id}/cancel`, { method: 'POST', body: JSON.stringify({ expected_version, reason }) });
+    return apiFetch<Sale>(`/sales/${id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ expected_version, reason })
+    });
   },
   deliveryStock(id: string) {
     return apiFetch<SalesDeliveryStockLine[]>(`/sales/${id}/delivery-stock`);
@@ -102,15 +124,32 @@ export const salesApi = {
   delivery(id: string) {
     return apiFetch<SalesDelivery>(`/sales/deliveries/${id}`);
   },
-  createDelivery(id: string, payload: { notes: string | null; assignments: Array<{ sale_line_id: string; handling_unit_id: string }> }, idempotencyKey: string) {
+  createDelivery(
+    id: string,
+    payload: {
+      notes: string | null;
+      assignments: Array<{ sale_line_id: string; handling_unit_id: string }>;
+    },
+    idempotencyKey: string
+  ) {
     return apiFetch<SalesDelivery>(`/sales/${id}/deliveries`, {
       method: 'POST',
       headers: { 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify(payload)
     });
   },
-  updateDelivery(id: string, payload: { expected_version: number; notes: string | null; assignments: Array<{ sale_line_id: string; handling_unit_id: string }> }) {
-    return apiFetch<SalesDelivery>(`/sales/deliveries/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  updateDelivery(
+    id: string,
+    payload: {
+      expected_version: number;
+      notes: string | null;
+      assignments: Array<{ sale_line_id: string; handling_unit_id: string }>;
+    }
+  ) {
+    return apiFetch<SalesDelivery>(`/sales/deliveries/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
   },
   confirmDelivery(id: string, expected_version: number, idempotencyKey: string) {
     return apiFetch<SalesDelivery>(`/sales/deliveries/${id}/confirm`, {
@@ -137,11 +176,20 @@ export const salesApi = {
     const suffix = query.size ? `?${query.toString()}` : '';
     return apiFetch<SalesReturn[]>(`/sales/returns${suffix}`);
   },
-  createReturn(id: string, payload: {
-    notes: string | null;
-    document_ids: string[];
-    lines: Array<{ delivery_allocation_id: string; quantity_base: string; reason: string; declared_condition: SalesReturnCondition }>;
-  }, idempotencyKey: string) {
+  createReturn(
+    id: string,
+    payload: {
+      notes: string | null;
+      document_ids: string[];
+      lines: Array<{
+        delivery_allocation_id: string;
+        quantity_base: string;
+        reason: string;
+        declared_condition: SalesReturnCondition;
+      }>;
+    },
+    idempotencyKey: string
+  ) {
     return apiFetch<SalesReturn>(`/sales/${id}/returns`, {
       method: 'POST',
       headers: { 'Idempotency-Key': idempotencyKey },
@@ -154,14 +202,20 @@ export const salesApi = {
       headers: { 'Idempotency-Key': idempotencyKey }
     });
   },
-  resolveReturn(id: string, payload: { lines: Array<{
-    return_line_id: string;
-    decision: 'accepted' | 'rejected';
-    quantity_base: string;
-    condition: SalesReturnCondition;
-    reason: string;
-    destination_location_id?: string | null;
-  }> }, idempotencyKey: string) {
+  resolveReturn(
+    id: string,
+    payload: {
+      lines: Array<{
+        return_line_id: string;
+        decision: 'accepted' | 'rejected';
+        quantity_base: string;
+        condition: SalesReturnCondition;
+        reason: string;
+        destination_location_id?: string | null;
+      }>;
+    },
+    idempotencyKey: string
+  ) {
     return apiFetch<SalesReturn>(`/sales/returns/${id}/resolve`, {
       method: 'POST',
       headers: { 'Idempotency-Key': idempotencyKey },

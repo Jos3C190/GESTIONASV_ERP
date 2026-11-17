@@ -53,6 +53,8 @@ class EvaluatedLine:
     message: str | None
     suggested: SuggestedDiscount | None
     evaluation: LineEvaluation | None
+    cost: Decimal | None = None
+    """Costo unitario sin IVA en la unidad de la línea, aunque no haya precio de lista."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,29 +218,6 @@ class SalesDiscountUseCases:
                 unit_id=line.unit_id,
                 on=day,
             )
-            if resolved.price_list is None or resolved.entry is None:
-                results.append(
-                    EvaluatedLine(
-                        line,
-                        resolved.price_list,
-                        False,
-                        "La empresa no tiene lista predeterminada."
-                        if resolved.price_list is None
-                        else f"Sin precio en la lista «{resolved.price_list.name}».",
-                        None,
-                        None,
-                    )
-                )
-                continue
-            scales = await self._repo.volume_discounts(
-                company_id,
-                resolved.price_list.id,
-                product_id=line.product_id,
-                variant_id=line.variant_id,
-                unit_id=line.unit_id,
-            )
-            volume = pick_volume_discount([_as_scale(s) for s in scales], line.quantity, day)
-            suggested = suggested_discount(customer_percent, volume)
             unit = next(
                 (
                     u
@@ -254,6 +233,30 @@ class SalesDiscountUseCases:
                 if unit and unit.inventory_item_id in costs
                 else None
             )
+            if resolved.price_list is None or resolved.entry is None:
+                results.append(
+                    EvaluatedLine(
+                        line,
+                        resolved.price_list,
+                        False,
+                        "La empresa no tiene lista predeterminada."
+                        if resolved.price_list is None
+                        else f"Sin precio en la lista «{resolved.price_list.name}».",
+                        None,
+                        None,
+                        cost,
+                    )
+                )
+                continue
+            scales = await self._repo.volume_discounts(
+                company_id,
+                resolved.price_list.id,
+                product_id=line.product_id,
+                variant_id=line.variant_id,
+                unit_id=line.unit_id,
+            )
+            volume = pick_volume_discount([_as_scale(s) for s in scales], line.quantity, day)
+            suggested = suggested_discount(customer_percent, volume)
             applied = (
                 line.discount_percent if line.discount_percent is not None else suggested.percent
             )
@@ -265,7 +268,7 @@ class SalesDiscountUseCases:
                 policy,
             )
             results.append(
-                EvaluatedLine(line, resolved.price_list, True, None, suggested, evaluation)
+                EvaluatedLine(line, resolved.price_list, True, None, suggested, evaluation, cost)
             )
         return Evaluation(
             policy=policy,

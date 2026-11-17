@@ -63,6 +63,8 @@ async def test_locked_document_observes_change_committed_after_initial_read(
             code=f"Q-{suffix}",
             quotation_date=today,
             valid_until=today,
+            document_type="01",
+            prices_include_vat=True,
         )
         setup.add(quote)
         await setup.flush()

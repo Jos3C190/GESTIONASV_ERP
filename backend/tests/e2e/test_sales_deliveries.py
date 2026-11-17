@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import func, select
 
 from tests.e2e.conftest import get_test_company_id, seed_user
+from tests.e2e.sales_quote_flow import accept_quote, enable_invoice
 
 pytestmark = pytest.mark.e2e
 
@@ -327,6 +328,7 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
     valid_until = (
         datetime.now(ZoneInfo("America/El_Salvador")).date() + timedelta(days=2)
     ).isoformat()
+    await enable_invoice(e2e_client, headers)
     quotation = await e2e_client.post(
         "/api/v1/sales/quotations",
         headers={**headers, "Idempotency-Key": f"b07-quote-{uuid.uuid4()}"},
@@ -341,23 +343,21 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
                     "variant_id": None,
                     "unit_id": package_unit_id,
                     "quantity": "1",
-                    "unit_price": "40",
+                    "manual_price": "40",
                 },
                 {
                     "product_id": product_id,
                     "variant_id": None,
                     "unit_id": base_unit_id,
                     "quantity": "3",
-                    "unit_price": "20",
+                    "manual_price": "20",
                 },
             ],
         },
     )
     assert quotation.status_code == 201, quotation.text
-    quote = await e2e_client.post(
-        f"/api/v1/sales/quotations/{quotation.json()['id']}/confirm",
-        headers=headers,
-        json={"expected_version": quotation.json()["version"]},
+    quote = await accept_quote(
+        e2e_client, headers, quotation.json()["id"], quotation.json()["version"]
     )
     assert quote.status_code == 200, quote.text
     sale_response = await e2e_client.post(
@@ -742,6 +742,7 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
     assert "applied_total_cost" not in deliveries_response.text
 
     async def create_confirmed_sale_on_branch_b(label: str) -> tuple[str, str]:
+        await enable_invoice(e2e_client, headers)
         quote_response = await e2e_client.post(
             "/api/v1/sales/quotations",
             headers={**headers, "Idempotency-Key": f"b07-{label}-quote-{uuid.uuid4()}"},
@@ -756,16 +757,14 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
                         "variant_id": None,
                         "unit_id": base_unit_id,
                         "quantity": "7",
-                        "unit_price": "20",
+                        "manual_price": "20",
                     }
                 ],
             },
         )
         assert quote_response.status_code == 201, quote_response.text
-        quote_confirmation = await e2e_client.post(
-            f"/api/v1/sales/quotations/{quote_response.json()['id']}/confirm",
-            headers=headers,
-            json={"expected_version": quote_response.json()["version"]},
+        quote_confirmation = await accept_quote(
+            e2e_client, headers, quote_response.json()["id"], quote_response.json()["version"]
         )
         assert quote_confirmation.status_code == 200, quote_confirmation.text
         converted = await e2e_client.post(
