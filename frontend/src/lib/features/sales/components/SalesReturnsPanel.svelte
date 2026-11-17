@@ -419,7 +419,7 @@
     <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <h2 id="sales-returns-heading" class="text-lg font-semibold text-foreground">
-          Devoluciones de esta venta
+          Devoluciones de este pedido
         </h2>
         <p class="mt-1 max-w-3xl text-sm text-foreground-muted">
           Se devuelven unidades de una entrega confirmada. Registrar la recepción no cambia el
@@ -543,7 +543,7 @@
             <div
               class="rounded-lg border border-border bg-surface p-4 text-sm text-foreground-muted"
             >
-              No hay cantidades pendientes de devolución para las entregas de esta venta.
+              No hay cantidades pendientes de devolución para las entregas de este pedido.
             </div>
           {/if}
           {#if allocations.length > 0}
@@ -723,7 +723,7 @@
           <div
             class="rounded-lg border border-border bg-surface-muted/30 p-5 text-sm text-foreground-muted"
           >
-            Todavía no hay devoluciones de esta venta.
+            Todavía no hay devoluciones de este pedido.
           </div>
         {:else}
           <div class="space-y-3">

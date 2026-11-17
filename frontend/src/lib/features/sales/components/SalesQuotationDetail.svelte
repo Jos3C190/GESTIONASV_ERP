@@ -363,7 +363,7 @@
           </li>{/if}
         {#if quote.customer_response_at}
           <li>
-            {quote.status === 'rejected' ? 'Rechazo' : 'Aceptación'} registrado por {quote.customer_response_by_name}
+            {quote.status === 'rejected' ? 'Rechazo registrado' : 'Aceptación registrada'} por {quote.customer_response_by_name}
             el {formatDay(quote.customer_response_at)}{quote.rejection_reason
               ? ` · ${quote.rejection_reason}`
               : ''}

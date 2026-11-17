@@ -147,7 +147,7 @@ describe('SalesDeliveryPanel', () => {
   it('prepara y cierra el formulario sin crear documentos ni tocar stock', async () => {
     setup();
 
-    await screen.findByText('Todavía no se han preparado entregas para esta venta.');
+    await screen.findByText('Todavía no se han preparado entregas para este pedido.');
     await fireEvent.click(screen.getByRole('button', { name: 'Preparar entrega' }));
     expect(await screen.findByText('Nueva entrega · VEN-00001')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Cerrar preparación' }));
@@ -162,7 +162,7 @@ describe('SalesDeliveryPanel', () => {
       sale: { ...sale, delivery_progress: 'complete' },
       onChanged: vi.fn()
     });
-    await screen.findByText('Todavía no se han preparado entregas para esta venta.');
+    await screen.findByText('Todavía no se han preparado entregas para este pedido.');
     expect(screen.queryByRole('button', { name: 'Preparar entrega' })).not.toBeInTheDocument();
     expect(salesApi.createDelivery).not.toHaveBeenCalled();
   });
@@ -173,7 +173,7 @@ describe('SalesDeliveryPanel', () => {
       onChanged: vi.fn()
     });
     expect(
-      await screen.findByText('Confirma la venta antes de preparar una entrega.')
+      await screen.findByText('Confirma el pedido antes de preparar una entrega.')
     ).toBeInTheDocument();
     expect(salesApi.deliveryStock).not.toHaveBeenCalled();
     await view.rerender({ sale });
@@ -190,7 +190,7 @@ describe('SalesDeliveryPanel', () => {
   it('guarda una selección de unidades completas como borrador sin confirmar la salida', async () => {
     setup();
 
-    await screen.findByText('Todavía no se han preparado entregas para esta venta.');
+    await screen.findByText('Todavía no se han preparado entregas para este pedido.');
     await fireEvent.click(screen.getByRole('button', { name: 'Preparar entrega' }));
     await fireEvent.click(
       await screen.findByRole('checkbox', { name: 'Seleccionar unidad HU-00001' })
@@ -236,7 +236,7 @@ describe('SalesDeliveryPanel', () => {
       new HttpError('sales_delivery_unit_unavailable', 'La unidad ya no está disponible', 409)
     );
     setup();
-    await screen.findByText('Todavía no se han preparado entregas para esta venta.');
+    await screen.findByText('Todavía no se han preparado entregas para este pedido.');
     await fireEvent.click(screen.getByRole('button', { name: 'Preparar entrega' }));
     await fireEvent.click(
       await screen.findByRole('checkbox', { name: 'Seleccionar unidad HU-00001' })

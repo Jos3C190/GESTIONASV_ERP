@@ -92,11 +92,19 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - «Crear pedido» en la cotización aceptada.
   - vitest.
 - [x] **Paso 5: documentación.** `docs/api.md`, `docs/database-schema.md` §35, manual de pedidos y ajuste del manual de ventas base.
-- [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
+- [x] **Paso 6: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 6 (verificación y PR).
+- **Paso en curso**: ninguno. V2e está terminado y en PR hacia `develop` con auto-merge.
+  - Batería completa en verde:
+    - 1914 pruebas de backend;
+    - ruff, mypy, svelte-check, eslint y build;
+    - 1165 pruebas de vitest.
+  - QA en el navegador (17/11), en desarrollo:
+    - Pedido desde la cotización COT-20261116-3F7C82B6 (PED-20261117-AFD6C179, en borrador): se rechazó por 0 disponibles en Roosevelt.
+    - Pedido directo PED-20261117-1669F1A3 en la Matriz: se confirmó (apartó 5 de 120) y luego se canceló para liberar lo apartado.
+    - Los textos de los paneles de entregas y devoluciones ahora dicen «pedido».
   - Paso 5: `docs/api.md` (Sales orders), `docs/database-schema.md` §35, `docs/ers-v1/manual-pedidos.md` y ajustes en `manual-cotizaciones.md` y `manual-ventas-base.md`.
   - Paso 4:
     - Editor:

@@ -194,7 +194,7 @@
     try {
       if (editingDeliveryId) {
         const draft = deliveries.find((item) => item.id === editingDeliveryId);
-        if (!draft) throw new Error('El borrador ya no está disponible. Recarga la venta.');
+        if (!draft) throw new Error('El borrador ya no está disponible. Recarga el pedido.');
         await salesApi.updateDelivery(editingDeliveryId, {
           expected_version: draft.version,
           notes: deliveryNotes || null,
@@ -333,8 +333,8 @@
     <h2 class="font-semibold text-foreground">Entregas</h2>
     <p class="mt-1 text-sm text-foreground-muted">
       {sale.status === 'draft'
-        ? 'Confirma la venta antes de preparar una entrega.'
-        : 'Una venta cancelada no admite nuevas entregas.'}
+        ? 'Confirma el pedido antes de preparar una entrega.'
+        : 'Un pedido cancelado no admite nuevas entregas.'}
     </p>
   </section>
 {:else if canRead || canPrepare}
@@ -344,7 +344,7 @@
   >
     <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h2 id="delivery-title" class="font-semibold text-foreground">Entregas de la venta</h2>
+        <h2 id="delivery-title" class="font-semibold text-foreground">Entregas del pedido</h2>
         <p class="mt-1 text-sm text-foreground-muted">
           Las unidades se descuentan al confirmar. Cada asignación mueve una caja o unidad logística
           completa.
@@ -442,7 +442,7 @@
                   </div>
                   {#if line.units.length === 0}
                     <p class="px-3 py-4 text-sm text-foreground-muted">
-                      No hay unidades disponibles de este producto en la sucursal de la venta.
+                      No hay unidades disponibles de este producto en la sucursal del pedido.
                     </p>
                   {:else}
                     <ul class="divide-y divide-border">
@@ -526,7 +526,7 @@
         <p
           class="rounded-lg border border-dashed border-border px-4 py-5 text-center text-sm text-foreground-muted"
         >
-          Todavía no se han preparado entregas para esta venta.
+          Todavía no se han preparado entregas para este pedido.
         </p>
       {:else}
         <div class="space-y-3">
