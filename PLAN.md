@@ -81,11 +81,12 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`:
   - Vigencia en Configuración fiscal.
   - vitest.
 - [x] **Paso 5: semilla y documentación.** `docs/api.md`, `docs/database-schema.md` §34 y el manual de cotizaciones.
-- [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
+- [x] **Paso 6: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 6, la verificación y la PR. Los pasos 1 a 5 están hechos, con un commit cada uno.
+- **Paso en curso**: ninguno. V2d está terminado y en PR hacia `develop` con auto-merge. Sigue V2e (pedido de venta).
+  - Batería completa: 1896 pruebas de backend; 8 fallaron por el fixture de `test_sales_lock_refresh.py` sin `document_type` (ya corregido; 13/13 al volver a correr). Lint, build y 1164 de vitest en verde.
   - Pruebas verdes:
     - migración: `test_sales_quotation_redesign_migration.py`;
     - e2e: `test_sales_quotations.py`, `test_sales_base.py`, `test_sales_deliveries.py`, `test_inventory_final_acceptance.py` y `test_sales_discounts.py`;
