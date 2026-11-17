@@ -79,12 +79,13 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Columnas `nit` y `ambiente` en `correlativos`, `dtes`, `eventos`, `idempotency_keys` y `contingencias`, con migración de bases existentes.
   - Filtro por emisor en todas las rutas.
 - [x] **Paso 4: pruebas de aislamiento y CI.** Pruebas multiemisor y job de CI con `npm test`.
-- [ ] **Paso 5: documentación.** `docs/` del servicio: API, variables, emisores y modos.
+- [x] **Paso 5: documentación.** `docs/` del servicio: API, variables, emisores y modos.
 - [ ] **Paso 6: verificación y PR.** Batería completa del ERP más pruebas del servicio, y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 5 (documentación).
+- **Paso en curso**: 6 (verificación y PR).
+  - Paso 5: `dte-service/docs/multiemisor.md` con arranque, variables, registro de emisores, aislamiento, errores y pruebas.
   - Paso 4:
     - `test/integration/multiemisor.test.js` (7 pruebas):
       - despliegue simulado sin emisor en el entorno;

@@ -2,7 +2,7 @@
 > proyecto de referencia (bloque V3 del área de Ventas, `docs/plan-area-ventas-el-salvador.pdf`,
 > secciones 6.4 y 6.5). En el ERP se vuelve multiemisor: cada empresa es un emisor aislado, con su
 > modo, su numeración y sus documentos. Mientras dure esa adaptación, este README describe el
-> comportamiento heredado; los cambios multiemisor se documentan en `docs/` del servicio.
+> comportamiento heredado; los cambios multiemisor están en [`docs/multiemisor.md`](docs/multiemisor.md).
 
 # Microservicio DTE — Facturación Electrónica El Salvador
 
