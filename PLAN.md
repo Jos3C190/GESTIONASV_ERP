@@ -94,6 +94,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
       - Se revisaron el aviso «Antes de facturar», la emisión por `dte-worker`, el PDF en el almacenamiento, «Cancelar» oculto, la bandeja y el detalle en modo claro y oscuro, y la vista a 375 px.
     - Corregido en la QA: «Ver PDF» usa `presign_preview` (se ve en línea); búsqueda de la bandeja más ancha; la ayuda del pedido avisa que uno facturado no se cancela.
     - Visto y fuera de alcance: el perfil fiscal rechaza correos `.test` con un 422 genérico («Revise los datos ingresados»).
+    - CI de la PR #49: `compose.prod.yaml` no definía `storage-init`, del que dependía `dte-worker`. En producción, `dte-service` y `dte-worker` van con el perfil `dte` y el backend lleva `DTE_SERVICE_URL` vacío; la facturación en producción se habilita en V3d.
     - Si el login de desarrollo da 500 tras cambios grandes del frontend, se arregla reiniciando el contenedor `frontend` (caché de dependencias de Vite).
   - Paso 7: `docs/api.md` (Sales invoices), `docs/database-schema.md` §36, `docs/ers-v1/manual-facturacion.md`, enlace desde el manual de pedidos y `dte-service/docs/multiemisor.md` (arranque normal y clave liberada en rechazos del emisor).
   - Paso 6:
