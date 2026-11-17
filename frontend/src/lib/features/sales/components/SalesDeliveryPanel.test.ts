@@ -17,52 +17,17 @@ vi.mock('#lib/api/sales.ts', () => ({ salesApi }));
 import { branch } from '#lib/stores/branch.svelte.ts';
 import { permissions } from '#lib/stores/permissions.svelte.ts';
 import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+import { order, orderLine } from '#lib/features/sales/test-fixtures.ts';
 import type { Sale, SalesDelivery, SalesDeliveryStockLine } from '#lib/types/sales.ts';
 import SalesDeliveryPanel from './SalesDeliveryPanel.svelte';
 import { HttpError } from '#lib/api/client.ts';
 
-const sale: Sale = {
-  id: 'sale-1',
-  company_id: 'company-1',
-  branch_id: 'branch-1',
-  customer_id: 'customer-1',
-  customer_code: 'CLI-001',
-  customer_name: 'Cliente de prueba',
-  quotation_id: 'quotation-1',
-  quotation_code: 'COT-00001',
+const sale: Sale = order({
   code: 'VEN-00001',
-  currency: 'USD',
-  subtotal: '100.00',
-  total: '100.00',
-  status: 'confirmed',
-  version: 2,
-  notes: null,
+  customer_name: 'Cliente de prueba',
   delivery_progress: 'pending',
-  lines: [
-    {
-      id: 'sale-line-1',
-      source_quotation_line_id: 'quotation-line-1',
-      product_id: 1,
-      variant_id: null,
-      inventory_item_id: 'item-1',
-      product_sku: 'SKU-001',
-      product_name: 'Producto de prueba',
-      unit_id: 1,
-      unit_name: 'Caja',
-      base_unit_id: 1,
-      base_unit_name: 'unidad',
-      unit_factor: '1',
-      quantity: '2',
-      quantity_base: '2.000000',
-      unit_price: '50.00',
-      line_total: '100.00',
-      quantity_delivered_base: '0.000000',
-      quantity_pending_base: '2.000000'
-    }
-  ],
-  created_at: '2026-10-19T12:00:00Z',
-  updated_at: '2026-10-19T12:00:00Z'
-};
+  lines: [orderLine({ product_name: 'Producto de prueba', product_sku: 'SKU-001' })]
+});
 
 const unit = {
   handling_unit_id: 'hu-1',
@@ -152,10 +117,23 @@ describe('SalesDeliveryPanel', () => {
       company_id: 'company-1',
       access_all_branches: false,
       last_branch_id: 'branch-1',
-      branches: [{ id: 'branch-1', company_id: 'company-1', name: 'Sucursal de prueba', code: 'S01', is_active: true }]
+      branches: [
+        {
+          id: 'branch-1',
+          company_id: 'company-1',
+          name: 'Sucursal de prueba',
+          code: 'S01',
+          is_active: true
+        }
+      ]
     });
     permissions.set(
-      ['sales_deliveries:read', 'sales_deliveries:manage', 'sales_deliveries:confirm', 'sales_deliveries:cancel'],
+      [
+        'sales_deliveries:read',
+        'sales_deliveries:manage',
+        'sales_deliveries:confirm',
+        'sales_deliveries:cancel'
+      ],
       false
     );
     salesApi.deliveryStock.mockReset().mockResolvedValue(stock);
@@ -169,7 +147,7 @@ describe('SalesDeliveryPanel', () => {
   it('prepara y cierra el formulario sin crear documentos ni tocar stock', async () => {
     setup();
 
-    await screen.findByText('Todavía no se han preparado entregas para esta venta.');
+    await screen.findByText('Todavía no se han preparado entregas para este pedido.');
     await fireEvent.click(screen.getByRole('button', { name: 'Preparar entrega' }));
     expect(await screen.findByText('Nueva entrega · VEN-00001')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Cerrar preparación' }));
@@ -180,31 +158,43 @@ describe('SalesDeliveryPanel', () => {
   });
 
   it('no ofrece preparar otra entrega cuando la venta ya está completamente entregada', async () => {
-    render(SalesDeliveryPanel, { sale: { ...sale, delivery_progress: 'complete' }, onChanged: vi.fn() });
-    await screen.findByText('Todavía no se han preparado entregas para esta venta.');
+    render(SalesDeliveryPanel, {
+      sale: { ...sale, delivery_progress: 'complete' },
+      onChanged: vi.fn()
+    });
+    await screen.findByText('Todavía no se han preparado entregas para este pedido.');
     expect(screen.queryByRole('button', { name: 'Preparar entrega' })).not.toBeInTheDocument();
     expect(salesApi.createDelivery).not.toHaveBeenCalled();
   });
 
   it('consulta la disponibilidad al confirmar una venta sin exigir recargar la página', async () => {
-    const view = render(SalesDeliveryPanel, { sale: { ...sale, status: 'draft' }, onChanged: vi.fn() });
-    expect(await screen.findByText('Confirma la venta antes de preparar una entrega.')).toBeInTheDocument();
+    const view = render(SalesDeliveryPanel, {
+      sale: { ...sale, status: 'draft' },
+      onChanged: vi.fn()
+    });
+    expect(
+      await screen.findByText('Confirma el pedido antes de preparar una entrega.')
+    ).toBeInTheDocument();
     expect(salesApi.deliveryStock).not.toHaveBeenCalled();
     await view.rerender({ sale });
     await waitFor(() => expect(salesApi.deliveryStock).toHaveBeenCalledWith('sale-1'));
     const prepare = await screen.findByRole('button', { name: 'Preparar entrega' });
     await waitFor(() => expect(prepare).toBeEnabled());
     await fireEvent.click(prepare);
-    expect(await screen.findByRole('checkbox', { name: 'Seleccionar unidad HU-00001' })).toBeEnabled();
+    expect(
+      await screen.findByRole('checkbox', { name: 'Seleccionar unidad HU-00001' })
+    ).toBeEnabled();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('guarda una selección de unidades completas como borrador sin confirmar la salida', async () => {
     setup();
 
-    await screen.findByText('Todavía no se han preparado entregas para esta venta.');
+    await screen.findByText('Todavía no se han preparado entregas para este pedido.');
     await fireEvent.click(screen.getByRole('button', { name: 'Preparar entrega' }));
-    await fireEvent.click(await screen.findByRole('checkbox', { name: 'Seleccionar unidad HU-00001' }));
+    await fireEvent.click(
+      await screen.findByRole('checkbox', { name: 'Seleccionar unidad HU-00001' })
+    );
     await fireEvent.click(screen.getByRole('button', { name: 'Crear borrador' }));
 
     await waitFor(() => expect(salesApi.createDelivery).toHaveBeenCalledOnce());
@@ -234,15 +224,23 @@ describe('SalesDeliveryPanel', () => {
     await waitFor(() => expect(salesApi.confirmDelivery).toHaveBeenCalledOnce());
     expect(salesApi.confirmDelivery).toHaveBeenCalledWith('delivery-1', 1, expect.any(String));
     expect(onChanged).toHaveBeenCalledOnce();
-    expect(await screen.findByText('Entrega confirmada. El inventario y su valoración quedaron registrados en el Kardex.')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Entrega confirmada. El inventario y su valoración quedaron registrados en el Kardex.'
+      )
+    ).toBeInTheDocument();
   });
 
   it('permite corregir una selección rechazada sin conservar un envío pendiente bloqueado', async () => {
-    salesApi.createDelivery.mockRejectedValueOnce(new HttpError('sales_delivery_unit_unavailable', 'La unidad ya no está disponible', 409));
+    salesApi.createDelivery.mockRejectedValueOnce(
+      new HttpError('sales_delivery_unit_unavailable', 'La unidad ya no está disponible', 409)
+    );
     setup();
-    await screen.findByText('Todavía no se han preparado entregas para esta venta.');
+    await screen.findByText('Todavía no se han preparado entregas para este pedido.');
     await fireEvent.click(screen.getByRole('button', { name: 'Preparar entrega' }));
-    await fireEvent.click(await screen.findByRole('checkbox', { name: 'Seleccionar unidad HU-00001' }));
+    await fireEvent.click(
+      await screen.findByRole('checkbox', { name: 'Seleccionar unidad HU-00001' })
+    );
     await fireEvent.click(screen.getByRole('button', { name: 'Crear borrador' }));
     await screen.findByRole('alert');
     expect(screen.getByRole('checkbox', { name: 'Seleccionar unidad HU-00001' })).toBeEnabled();
@@ -250,13 +248,20 @@ describe('SalesDeliveryPanel', () => {
   });
 
   it('renueva el comando de confirmación al recuperar un borrador con una revisión posterior', async () => {
-    sessionStorage.setItem('sales-delivery-confirm:sale-1:delivery-1:branch-1', JSON.stringify({ idempotencyKey: 'old-command', version: 1 }));
+    sessionStorage.setItem(
+      'sales-delivery-confirm:sale-1:delivery-1:branch-1',
+      JSON.stringify({ idempotencyKey: 'old-command', version: 1 })
+    );
     salesApi.deliveriesForSale.mockResolvedValue([{ ...draft, version: 2 }]);
     setup();
     await fireEvent.click(await screen.findByRole('button', { name: 'Confirmar entrega' }));
     await confirmation.proceed();
     await waitFor(() => expect(salesApi.confirmDelivery).toHaveBeenCalledOnce());
-    expect(salesApi.confirmDelivery).toHaveBeenCalledWith('delivery-1', 2, expect.not.stringMatching(/^old-command$/));
+    expect(salesApi.confirmDelivery).toHaveBeenCalledWith(
+      'delivery-1',
+      2,
+      expect.not.stringMatching(/^old-command$/)
+    );
   });
 
   it('exige guardar la selección y notas editadas antes de confirmar la entrega', async () => {
@@ -280,7 +285,9 @@ describe('SalesDeliveryPanel', () => {
     salesApi.deliveriesForSale.mockResolvedValue([updated]);
     await fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
     await waitFor(() => expect(salesApi.updateDelivery).toHaveBeenCalledOnce());
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar entrega' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Confirmar entrega' })).toBeEnabled()
+    );
   });
 
   it('cancelar o abandonar la confirmación no descuenta las unidades', async () => {

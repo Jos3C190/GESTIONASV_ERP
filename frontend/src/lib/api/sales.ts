@@ -12,7 +12,9 @@ import type {
   SalesReturnableAllocation,
   SalesQuotation,
   QuotationDraftInput,
-  QuotationSettings
+  QuotationSettings,
+  OrderDelivery,
+  OrderDraftInput
 } from '#lib/types/sales.ts';
 
 function scopedPath(path: string, filters: SalesFilters = {}): string {
@@ -80,11 +82,15 @@ export const salesApi = {
       body: JSON.stringify(payload)
     });
   },
-  convertQuotation(id: string, expected_version: number, idempotencyKey: string) {
-    return apiFetch<Sale>(`/sales/quotations/${id}/convert`, {
+  orderFromQuotation(
+    quotationId: string,
+    payload: OrderDelivery & { notes?: string | null },
+    idempotencyKey: string
+  ) {
+    return apiFetch<Sale>(`/sales/quotations/${quotationId}/order`, {
       method: 'POST',
       headers: { 'Idempotency-Key': idempotencyKey },
-      body: JSON.stringify({ expected_version })
+      body: JSON.stringify(payload)
     });
   },
   sales(filters: SalesFilters = {}) {
@@ -93,26 +99,27 @@ export const salesApi = {
   sale(id: string) {
     return apiFetch<Sale>(`/sales/${id}`);
   },
-  updateSale(
-    id: string,
-    payload: {
-      expected_version: number;
-      notes: string | null;
-      lines: Array<{ source_quotation_line_id: string; quantity: string; unit_price: string }>;
-    }
-  ) {
-    return apiFetch<Sale>(`/sales/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  previewOrder(payload: OrderDraftInput) {
+    return apiFetch<Sale>('/sales/preview', { method: 'POST', body: JSON.stringify(payload) });
   },
-  confirmSale(id: string, expected_version: number) {
-    return apiFetch<Sale>(`/sales/${id}/confirm`, {
+  createOrder(payload: OrderDraftInput, idempotencyKey: string) {
+    return apiFetch<Sale>('/sales', {
       method: 'POST',
-      body: JSON.stringify({ expected_version })
+      headers: { 'Idempotency-Key': idempotencyKey },
+      body: JSON.stringify(payload)
     });
   },
-  cancelSale(id: string, expected_version: number, reason: string) {
-    return apiFetch<Sale>(`/sales/${id}/cancel`, {
+  updateOrder(id: string, payload: OrderDraftInput & { expected_version: number }) {
+    return apiFetch<Sale>(`/sales/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  },
+  orderAction(
+    id: string,
+    action: 'confirm' | 'authorize' | 'return' | 'cancel',
+    payload: { expected_version: number; note?: string | null; reason?: string }
+  ) {
+    return apiFetch<Sale>(`/sales/${id}/${action}`, {
       method: 'POST',
-      body: JSON.stringify({ expected_version, reason })
+      body: JSON.stringify(payload)
     });
   },
   deliveryStock(id: string) {

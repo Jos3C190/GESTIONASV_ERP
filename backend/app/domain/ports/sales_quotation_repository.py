@@ -9,66 +9,12 @@ from decimal import Decimal
 from typing import Protocol
 
 from app.domain.entities.sales_quotation import QuotationStatus
+from app.domain.ports.sales_document import DocumentLine, DocumentTotals, LineIdentity
 
-
-@dataclass(frozen=True, slots=True)
-class LineIdentity:
-    """Lo que identifica al artículo vendido y su unidad, copiado al momento de cotizar."""
-
-    product_id: int
-    variant_id: uuid.UUID | None
-    inventory_item_id: uuid.UUID
-    packaging_definition_id: uuid.UUID | None
-    packaging_version: int | None
-    unit_id: int
-    base_unit_id: int
-    unit_factor: Decimal
-    product_sku: str
-    product_name: str
-    unit_name: str
-    base_unit_name: str
-
-
-@dataclass(slots=True)
-class QuotationLine:
-    identity: LineIdentity
-    quantity: Decimal
-    quantity_base: Decimal
-    price_list_id: uuid.UUID | None
-    list_price: Decimal | None
-    price_overridden: bool
-    unit_price: Decimal
-    discount_percent: Decimal
-    suggested_discount_percent: Decimal
-    suggested_discount_source: str
-    tax_treatment: str
-    item_type: str
-    document_unit_price: Decimal
-    discount_amount: Decimal
-    not_subject: Decimal
-    exempt: Decimal
-    taxed: Decimal
-    vat_item: Decimal | None
-    line_total: Decimal
-    cost: Decimal | None
-    margin_percent: Decimal | None
-    authorization_reasons: tuple[str, ...]
-    id: uuid.UUID | None = None
-
-
-@dataclass(slots=True)
-class QuotationTotals:
-    total_not_subject: Decimal
-    total_exempt: Decimal
-    total_taxed: Decimal
-    subtotal_sales: Decimal
-    total_discount: Decimal
-    subtotal: Decimal
-    vat: Decimal
-    vat_perceived: Decimal
-    vat_withheld: Decimal
-    total: Decimal
-    total_in_words: str
+# La cotización usa las piezas comunes de los documentos de venta.
+QuotationLine = DocumentLine
+QuotationTotals = DocumentTotals
+__all__ = ["LineIdentity", "QuotationLine", "QuotationTotals"]
 
 
 @dataclass(slots=True)
@@ -87,11 +33,11 @@ class Quotation:
     status: QuotationStatus
     version: int
     notes: str | None
-    totals: QuotationTotals
+    totals: DocumentTotals
     requires_authorization: bool
     authorization_reasons: tuple[str, ...]
     created_by_id: uuid.UUID
-    lines: list[QuotationLine] = field(default_factory=list)
+    lines: list[DocumentLine] = field(default_factory=list)
     issued_by_id: uuid.UUID | None = None
     issued_at: datetime | None = None
     authorized_by_id: uuid.UUID | None = None

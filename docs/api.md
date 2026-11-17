@@ -2004,7 +2004,7 @@ with `expired: true` and cannot be accepted.
 | POST | `/sales/quotations/{id}/accept` | `sales_quotations:confirm` | Issued and in force only. |
 | POST | `/sales/quotations/{id}/reject` | `sales_quotations:confirm` | `reason` (≥ 3 characters). Allowed after expiry. |
 | POST | `/sales/quotations/{id}/cancel` | `sales_quotations:confirm` | `reason` (≥ 3 characters). Not after conversion. |
-| POST | `/sales/quotations/{id}/convert` | `sales_quotations:convert` | Accepted only. Creates the B06 sale with each line's net amount (until V2e replaces it). |
+| POST | `/sales/quotations/{id}/order` | `sales_quotations:convert` | Accepted only. Replaced the B06 `convert` in V2e: creates the sales order (see "Sales orders"). |
 | GET | `/sales/settings/quotations` | `sales_quotations:read` or `fiscal_settings:read` | `quotation_validity_days`. |
 | PUT | `/sales/settings/quotations` | `fiscal_settings:manage` | `quotation_validity_days` (1–365). Audited as `SALES_SETTINGS_UPDATED`. |
 
@@ -2020,3 +2020,47 @@ Error codes (`422` unless noted): `sales_quote_status_invalid`, `sales_quote_pri
 `sales_tax_document_disabled`, `sales_tax_document_not_receivable`, `sales_customer_inactive`,
 `sales_branch_inactive`; `sales_quote_version_conflict` and
 `sales_idempotency_payload_conflict` (409); `sales_quotation_not_found` (404).
+
+## Sales orders (revision 0125, block V2e)
+
+The B06 sale is reworked in place as the **sales order**: same `/sales` routes and tables
+(`sales`, `sales_lines`), so deliveries and returns keep working. Order ids use a UUID path
+convertor, so `/sales/returns` and `/sales/deliveries` are not captured.
+
+An order is created directly (same pricing as the quotation: list price, suggested discount,
+limits and tax engine) or from an **accepted** quotation, whose lines, prices and totals are
+copied as accepted. While it is not edited, such an order keeps the quotation's authorization.
+
+States: `draft` → `pending_authorization` (only if it exceeds the confirmer's limits) →
+`confirmed`; `cancelled` from any open state without confirmed deliveries.
+
+**Commercial reservation.** Confirming checks, per branch and inventory item (advisory lock),
+that `available to sell = available handling units in the branch's active non-transit
+warehouses − pending quantity of other confirmed orders` covers the order. Nothing physical
+moves; deliveries consume the reservation and cancelling releases it. Transfers and
+adjustments do not respect reservations yet.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales` | `sales:read` | Paged list in the user's branches. Filters: `branch_id`, `customer_id`, `status`, `from_date`/`to_date` (promised date). |
+| POST | `/sales/preview` | `sales:manage` | Calculates without saving; open orders return `available_base` per line. |
+| POST | `/sales` | `sales:manage` | Header `Idempotency-Key`. Body: the quotation draft fields (without `valid_until`) plus `promised_date` (not in the past), `delivery_mode` (`pickup`/`delivery`) and `delivery_address_id` (required for delivery, an active address of the customer). Payment terms come from the customer (`credit_days` > 0 → credit). |
+| POST | `/sales/quotations/{id}/order` | `sales_quotations:convert` | Header `Idempotency-Key`. Body: `promised_date`, `delivery_mode`, `delivery_address_id`, `notes`. One order per quotation (returns the existing one). |
+| GET | `/sales/{id}` | `sales:read` | Detail with fiscal totals, delivery data, `quantity_delivered_base`, `quantity_pending_base` and, while open, `available_base`. Cost and margin only with `sales_costs:read` or `sales_discounts:authorize`. |
+| PUT | `/sales/{id}` | `sales:manage` | Draft only; recalculates and drops an inherited authorization. |
+| POST | `/sales/{id}/confirm` | `sales:confirm` | Confirms and reserves, or sends to authorization. |
+| POST | `/sales/{id}/authorize` | `sales_discounts:authorize` | Optional `note`; the authorizer's own limits must cover the order; then reserves and confirms. |
+| POST | `/sales/{id}/return` | `sales_discounts:authorize` | `reason`: back to draft. |
+| POST | `/sales/{id}/cancel` | `sales:cancel` | `reason`; not with confirmed deliveries. Releases the reservation. |
+
+The B06 endpoints `POST /sales/quotations/{id}/convert` and the line-price edit of a draft sale
+were removed. `GET /sales/catalog` now also accepts `sales:manage`.
+
+Audited on `sale`: `SALES_ORDER_CREATED`, `_CREATED_FROM_QUOTATION`, `_UPDATED`, `_CONFIRMED`,
+`_SUBMITTED_FOR_AUTHORIZATION`, `_AUTHORIZED`, `_RETURNED`, `_CANCELLED`.
+
+Error codes (`422` unless noted): `sales_order_status_invalid`, `sales_order_stock_insufficient`,
+`sales_order_has_deliveries`, `sales_order_promised_date_past`, `sales_order_address_required`,
+`sales_order_address_not_allowed`, `sales_order_address_invalid`,
+`sales_order_reason_required`, `sales_quote_not_convertible`; `sales_order_version_conflict`
+(409); `sales_order_not_found` (404).

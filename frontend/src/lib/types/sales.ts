@@ -17,27 +17,6 @@ export interface SalesCatalogItem {
   units: SalesUnit[];
 }
 
-export interface SalesLine {
-  id: string;
-  source_quotation_line_id: string;
-  product_id: number;
-  variant_id: string | null;
-  inventory_item_id: string;
-  product_sku: string;
-  product_name: string;
-  unit_id: number;
-  unit_name: string;
-  base_unit_id: number;
-  base_unit_name: string;
-  unit_factor: string;
-  quantity: string;
-  quantity_base: string;
-  unit_price: string;
-  line_total: string;
-  quantity_delivered_base: string;
-  quantity_pending_base: string;
-}
-
 export type QuotationStatus =
   'draft' | 'pending_authorization' | 'issued' | 'accepted' | 'rejected' | 'cancelled';
 
@@ -162,6 +141,19 @@ export interface QuotationSettings {
   quotation_validity_days: number;
 }
 
+export type OrderStatus = 'draft' | 'pending_authorization' | 'confirmed' | 'cancelled';
+
+/** Línea del pedido: la de la cotización más lo entregado y el disponible para vender. */
+export interface SalesLine extends Omit<SalesQuotationLine, 'id'> {
+  id: string;
+  source_quotation_line_id: string | null;
+  quantity_delivered_base: string;
+  quantity_pending_base: string;
+  /** Disponible en la sucursal sin contar este pedido (solo en borrador o por autorizar). */
+  available_base: string | null;
+}
+
+/** Pedido de venta (V2e). Se llama `Sale` porque reemplaza a la venta B06. */
 export interface Sale {
   id: string;
   company_id: string;
@@ -169,20 +161,60 @@ export interface Sale {
   customer_id: string;
   customer_code: string;
   customer_name: string;
-  quotation_id: string;
-  quotation_code: string;
+  quotation_id: string | null;
+  quotation_code: string | null;
   code: string;
-  currency: 'USD';
-  subtotal: string;
-  total: string;
-  status: 'draft' | 'confirmed' | 'cancelled';
+  document_type: '01' | '03';
+  price_list_id: string | null;
+  price_list_name: string | null;
+  prices_include_vat: boolean;
+  global_discount_percent: string;
+  status: OrderStatus;
+  delivery_progress: 'pending' | 'partial' | 'complete';
   version: number;
   notes: string | null;
-  delivery_progress: 'pending' | 'partial' | 'complete';
+  total_not_subject: string;
+  total_exempt: string;
+  total_taxed: string;
+  subtotal_sales: string;
+  total_discount: string;
+  subtotal: string;
+  vat: string;
+  vat_perceived: string;
+  vat_withheld: string;
+  total: string;
+  total_in_words: string;
+  requires_authorization: boolean;
+  authorization_reasons: AuthorizationReason[];
+  costs_visible: boolean;
+  promised_date: string;
+  delivery_mode: 'pickup' | 'delivery';
+  delivery_address_id: string | null;
+  delivery_address_text: string | null;
+  payment_terms: 'cash' | 'credit';
+  credit_days: number;
+  created_by_id: string;
+  created_by_name: string | null;
+  confirmed_by_name: string | null;
+  confirmed_at: string | null;
+  authorized_by_name: string | null;
+  authorized_at: string | null;
+  authorization_note: string | null;
+  cancelled_by_name: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
   lines: SalesLine[];
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
+  updated_at: string | null;
 }
+
+export interface OrderDelivery {
+  promised_date: string;
+  delivery_mode: 'pickup' | 'delivery';
+  delivery_address_id: string | null;
+}
+
+export type OrderDraftInput = Omit<QuotationDraftInput, 'valid_until'> & OrderDelivery;
 
 export interface SalesDeliveryStockUnit {
   handling_unit_id: string;

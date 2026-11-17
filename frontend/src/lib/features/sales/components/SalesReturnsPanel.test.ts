@@ -20,42 +20,77 @@ vi.mock('#lib/api/client.ts', () => ({
 }));
 
 import { permissions } from '#lib/stores/permissions.svelte.ts';
+import { order } from '#lib/features/sales/test-fixtures.ts';
 import type { Sale, SalesReturn, SalesReturnableAllocation } from '#lib/types/sales.ts';
 import SalesReturnsPanel from './SalesReturnsPanel.svelte';
 
-const sale: Sale = {
-  id: 'sale-1', company_id: 'company-1', branch_id: 'branch-1', customer_id: 'customer-1',
-  customer_code: 'CLI-001', customer_name: 'Cliente ficticio', quotation_id: 'quote-1',
-  quotation_code: 'COT-00001', code: 'VEN-00001', currency: 'USD', subtotal: '20.00',
-  total: '20.00', status: 'confirmed', version: 2, notes: null, delivery_progress: 'partial',
-  lines: [], created_at: '2026-10-19T12:00:00Z', updated_at: '2026-10-19T12:00:00Z'
-};
+const sale: Sale = order({
+  code: 'VEN-00001',
+  customer_name: 'Cliente ficticio',
+  total: '20.00',
+  delivery_progress: 'partial',
+  lines: []
+});
 
 const allocation: SalesReturnableAllocation = {
-  delivery_id: 'delivery-1', delivery_code: 'ENT-00001', delivery_line_id: 'delivery-line-1',
-  delivery_allocation_id: 'allocation-1', delivery_date: '2026-10-19T12:00:00Z',
-  handling_unit_code: 'HU-00001', inventory_item_id: 'item-1', product_sku: 'SKU-FICT-01',
-  product_name: 'Producto ficticio', unit_name: 'Caja', base_unit_name: 'unidad', lot_code: 'LOT-FICT-01',
-  quantity_delivered_base: '2.000000', quantity_returned_base: '0.000000',
-  quantity_reserved_base: '0.000000', quantity_returnable_base: '2.000000'
+  delivery_id: 'delivery-1',
+  delivery_code: 'ENT-00001',
+  delivery_line_id: 'delivery-line-1',
+  delivery_allocation_id: 'allocation-1',
+  delivery_date: '2026-10-19T12:00:00Z',
+  handling_unit_code: 'HU-00001',
+  inventory_item_id: 'item-1',
+  product_sku: 'SKU-FICT-01',
+  product_name: 'Producto ficticio',
+  unit_name: 'Caja',
+  base_unit_name: 'unidad',
+  lot_code: 'LOT-FICT-01',
+  quantity_delivered_base: '2.000000',
+  quantity_returned_base: '0.000000',
+  quantity_reserved_base: '0.000000',
+  quantity_returnable_base: '2.000000'
 };
 
 function returnDocument(status: SalesReturn['status']): SalesReturn {
   return {
-    id: 'return-1', company_id: 'company-1', branch_id: 'branch-1', sale_id: 'sale-1',
-    code: 'DEV-20261019-ABCDEF12', status, notes: null, created_by_id: 'user-1',
-    received_by_id: status === 'draft' ? null : 'user-1', received_at: status === 'draft' ? null : '2026-10-19T12:01:00Z',
-    cancelled_at: null, cancellation_reason: null, created_at: '2026-10-19T12:00:00Z',
-    updated_at: '2026-10-19T12:01:00Z', evidence: [],
-    lines: [{
-      id: 'return-line-1', delivery_id: 'delivery-1', delivery_code: 'ENT-00001',
-      delivery_allocation_id: 'allocation-1', source_handling_unit_id: 'hu-1',
-      inventory_item_id: 'item-1', product_sku: 'SKU-FICT-01', product_name: 'Producto ficticio',
-      unit_name: 'Caja', base_unit_name: 'unidad', lot_code: 'LOT-FICT-01',
-      quantity_received_base: '1.000000', quantity_accepted_base: '0.000000',
-      quantity_rejected_base: '0.000000', quantity_pending_base: '1.000000',
-      quantity_returnable_base: '1.000000', reason: 'Empaque sin abrir', declared_condition: 'resalable', events: []
-    }]
+    id: 'return-1',
+    company_id: 'company-1',
+    branch_id: 'branch-1',
+    sale_id: 'sale-1',
+    code: 'DEV-20261019-ABCDEF12',
+    status,
+    notes: null,
+    created_by_id: 'user-1',
+    received_by_id: status === 'draft' ? null : 'user-1',
+    received_at: status === 'draft' ? null : '2026-10-19T12:01:00Z',
+    cancelled_at: null,
+    cancellation_reason: null,
+    created_at: '2026-10-19T12:00:00Z',
+    updated_at: '2026-10-19T12:01:00Z',
+    evidence: [],
+    lines: [
+      {
+        id: 'return-line-1',
+        delivery_id: 'delivery-1',
+        delivery_code: 'ENT-00001',
+        delivery_allocation_id: 'allocation-1',
+        source_handling_unit_id: 'hu-1',
+        inventory_item_id: 'item-1',
+        product_sku: 'SKU-FICT-01',
+        product_name: 'Producto ficticio',
+        unit_name: 'Caja',
+        base_unit_name: 'unidad',
+        lot_code: 'LOT-FICT-01',
+        quantity_received_base: '1.000000',
+        quantity_accepted_base: '0.000000',
+        quantity_rejected_base: '0.000000',
+        quantity_pending_base: '1.000000',
+        quantity_returnable_base: '1.000000',
+        reason: 'Empaque sin abrir',
+        declared_condition: 'resalable',
+        events: []
+      }
+    ]
   };
 }
 
@@ -75,10 +110,17 @@ describe('SalesReturnsPanel', () => {
     salesApi.resolveReturn.mockReset().mockResolvedValue(returnDocument('accepted'));
     salesApi.cancelReturn.mockReset().mockResolvedValue(returnDocument('cancelled'));
     documentApi.list.mockReset().mockResolvedValue({
-      items: [{
-        id: 'document-1', module: 'general', business_status: 'active', is_current: true,
-        title: 'Factura ficticia', original_filename: 'factura-prueba.pdf', reference_code: 'FAC-TEST-01'
-      }],
+      items: [
+        {
+          id: 'document-1',
+          module: 'general',
+          business_status: 'active',
+          is_current: true,
+          title: 'Factura ficticia',
+          original_filename: 'factura-prueba.pdf',
+          reference_code: 'FAC-TEST-01'
+        }
+      ],
       meta: { page: 1, size: 20, total: 1, pages: 1 }
     });
   });
@@ -91,7 +133,9 @@ describe('SalesReturnsPanel', () => {
     salesApi.returnsForSale.mockResolvedValue([historicalReturn]);
     setup();
 
-    expect(await screen.findByText(/Entregado 2\.000000 Unidad \(u\).*quedan 2\.000000 Unidad \(u\)/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Entregado 2\.000000 Unidad \(u\).*quedan 2\.000000 Unidad \(u\)/)
+    ).toBeInTheDocument();
     expect(screen.getByLabelText('Cantidad devuelta (Unidad (u))')).toBeInTheDocument();
     expect(screen.getByText(/recibido 1\.000000 Unidad \(u\)/)).toBeInTheDocument();
     expect(screen.queryByText(/Unidad \(u\) \(u\)/)).not.toBeInTheDocument();
@@ -102,31 +146,57 @@ describe('SalesReturnsPanel', () => {
     setup();
 
     await screen.findByText(/SKU-FICT-01/);
-    await fireEvent.input(screen.getByLabelText('Cantidad devuelta de Producto ficticio'), { target: { value: '1' } });
-    await fireEvent.input(screen.getByLabelText('Motivo de devolución de Producto ficticio'), { target: { value: 'Empaque sin abrir' } });
+    await fireEvent.input(screen.getByLabelText('Cantidad devuelta de Producto ficticio'), {
+      target: { value: '1' }
+    });
+    await fireEvent.input(screen.getByLabelText('Motivo de devolución de Producto ficticio'), {
+      target: { value: 'Empaque sin abrir' }
+    });
     await fireEvent.click(screen.getByRole('button', { name: 'Buscar documentos' }));
     const evidence = await screen.findByLabelText('Adjuntar evidencia Factura ficticia');
     await fireEvent.click(evidence);
-    expect(screen.getByLabelText('Evidencia seleccionada')).toHaveTextContent('Factura ficticia · factura-prueba.pdf');
-    await fireEvent.click(screen.getByRole('button', { name: 'Quitar evidencia Factura ficticia' }));
+    expect(screen.getByLabelText('Evidencia seleccionada')).toHaveTextContent(
+      'Factura ficticia · factura-prueba.pdf'
+    );
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Quitar evidencia Factura ficticia' })
+    );
     expect(screen.queryByLabelText('Evidencia seleccionada')).not.toBeInTheDocument();
     await fireEvent.click(evidence);
     expect(screen.getByLabelText('Cantidad devuelta de Producto ficticio')).toHaveValue(1);
-    expect(screen.getByLabelText('Motivo de devolución de Producto ficticio')).toHaveValue('Empaque sin abrir');
+    expect(screen.getByLabelText('Motivo de devolución de Producto ficticio')).toHaveValue(
+      'Empaque sin abrir'
+    );
     await fireEvent.submit(screen.getByRole('button', { name: 'Crear borrador' }).closest('form')!);
 
     await waitFor(() => expect(salesApi.createReturn).toHaveBeenCalledOnce());
-    expect(salesApi.createReturn).toHaveBeenCalledWith('sale-1', expect.objectContaining({
-      document_ids: ['document-1'],
-      lines: [expect.objectContaining({ delivery_allocation_id: 'allocation-1', quantity_base: '1', reason: 'Empaque sin abrir' })]
-    }), expect.stringMatching(/^create:/));
-    expect(await screen.findByRole('status')).toHaveTextContent('Se creó el borrador DEV-20261019-ABCDEF12');
+    expect(salesApi.createReturn).toHaveBeenCalledWith(
+      'sale-1',
+      expect.objectContaining({
+        document_ids: ['document-1'],
+        lines: [
+          expect.objectContaining({
+            delivery_allocation_id: 'allocation-1',
+            quantity_base: '1',
+            reason: 'Empaque sin abrir'
+          })
+        ]
+      }),
+      expect.stringMatching(/^create:/)
+    );
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Se creó el borrador DEV-20261019-ABCDEF12'
+    );
     expect(screen.getByLabelText('Cantidad devuelta de Producto ficticio')).toHaveValue(null);
     expect(screen.getByLabelText('Motivo de devolución de Producto ficticio')).toHaveValue('');
     expect(salesApi.receiveReturn).not.toHaveBeenCalled();
     expect(salesApi.resolveReturn).not.toHaveBeenCalled();
     expect(documentApi.list).toHaveBeenCalledWith({
-      module: 'general', status: 'active', search: undefined, page: 1, size: 20
+      module: 'general',
+      status: 'active',
+      search: undefined,
+      page: 1,
+      size: 20
     });
   });
 
@@ -135,8 +205,12 @@ describe('SalesReturnsPanel', () => {
     setup();
 
     await screen.findByText(/SKU-FICT-01/);
-    await fireEvent.input(screen.getByLabelText('Cantidad devuelta de Producto ficticio'), { target: { value: '1' } });
-    await fireEvent.input(screen.getByLabelText('Motivo de devolución de Producto ficticio'), { target: { value: 'Empaque sin abrir' } });
+    await fireEvent.input(screen.getByLabelText('Cantidad devuelta de Producto ficticio'), {
+      target: { value: '1' }
+    });
+    await fireEvent.input(screen.getByLabelText('Motivo de devolución de Producto ficticio'), {
+      target: { value: 'Empaque sin abrir' }
+    });
     await fireEvent.click(screen.getByRole('button', { name: 'Buscar documentos' }));
     const search = screen.getByLabelText('Buscar evidencia por nombre o referencia');
     await fireEvent.input(search, { target: { value: 'Factura' } });
@@ -152,7 +226,9 @@ describe('SalesReturnsPanel', () => {
     salesApi.returnsForSale.mockResolvedValue([returnDocument('draft')]);
     setup();
 
-    await fireEvent.click(await screen.findByRole('button', { name: 'Registrar recepción física' }));
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Registrar recepción física' })
+    );
 
     await waitFor(() => expect(salesApi.receiveReturn).toHaveBeenCalledOnce());
     expect(salesApi.resolveReturn).not.toHaveBeenCalled();
@@ -163,14 +239,18 @@ describe('SalesReturnsPanel', () => {
     salesApi.returnsForSale.mockResolvedValue([returnDocument('draft')]);
     salesApi.receiveReturn.mockRejectedValueOnce(new Error('Respuesta perdida'));
     const first = setup();
-    await fireEvent.click(await screen.findByRole('button', { name: 'Registrar recepción física' }));
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Registrar recepción física' })
+    );
     await screen.findByRole('alert');
     const firstKey = salesApi.receiveReturn.mock.calls[0]?.[1];
     expect(firstKey).toEqual(expect.any(String));
     first.unmount();
 
     setup();
-    await fireEvent.click(await screen.findByRole('button', { name: 'Registrar recepción física' }));
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Registrar recepción física' })
+    );
     await waitFor(() => expect(salesApi.receiveReturn).toHaveBeenCalledTimes(2));
     expect(salesApi.receiveReturn.mock.calls[1]?.[1]).toBe(firstKey);
   });
@@ -178,18 +258,26 @@ describe('SalesReturnsPanel', () => {
   it('reconsulta el estado si se pierde la respuesta después de aplicar la recepción', async () => {
     permissions.set(['sales_returns:read', 'sales_returns:receive'], false);
     let serverReceived = false;
-    salesApi.returnsForSale.mockImplementation(async () => [returnDocument(serverReceived ? 'received' : 'draft')]);
+    salesApi.returnsForSale.mockImplementation(async () => [
+      returnDocument(serverReceived ? 'received' : 'draft')
+    ]);
     salesApi.receiveReturn.mockImplementationOnce(async () => {
       serverReceived = true;
       throw new Error('Respuesta perdida después de confirmar');
     });
     setup();
 
-    await fireEvent.click(await screen.findByRole('button', { name: 'Registrar recepción física' }));
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Registrar recepción física' })
+    );
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Se consultó de nuevo el estado antes de reintentar.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Se consultó de nuevo el estado antes de reintentar.'
+    );
     expect(await screen.findByText('Recibida · pendiente de revisión')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Registrar recepción física' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Registrar recepción física' })
+    ).not.toBeInTheDocument();
     expect(salesApi.returnsForSale).toHaveBeenCalledTimes(2);
     expect(salesApi.receiveReturn).toHaveBeenCalledOnce();
   });
@@ -219,8 +307,10 @@ describe('SalesReturnsPanel', () => {
         reason: decision.reason,
         destination_location_id: decision.decision === 'accepted' ? 'location-test' : null,
         movement_id: decision.decision === 'accepted' ? `movement-${line.events.length + 1}` : null,
-        movement_line_id: decision.decision === 'accepted' ? `movement-line-${line.events.length + 1}` : null,
-        valuation_entry_id: decision.decision === 'accepted' ? `valuation-${line.events.length + 1}` : null,
+        movement_line_id:
+          decision.decision === 'accepted' ? `movement-line-${line.events.length + 1}` : null,
+        valuation_entry_id:
+          decision.decision === 'accepted' ? `valuation-${line.events.length + 1}` : null,
         actor_id: 'user-test',
         created_at: '2026-10-20T18:00:00-06:00'
       });
@@ -230,7 +320,8 @@ describe('SalesReturnsPanel', () => {
     setup();
 
     await screen.findByLabelText('Cantidad a resolver');
-    const decisionButton = () => screen.getByRole('button', { name: 'Registrar decisión de esta cantidad' });
+    const decisionButton = () =>
+      screen.getByRole('button', { name: 'Registrar decisión de esta cantidad' });
 
     await fireEvent.input(screen.getByLabelText('Cantidad a resolver'), { target: { value: '1' } });
     expect(screen.getByLabelText('Cantidad a resolver')).toHaveValue(1);
@@ -254,10 +345,12 @@ describe('SalesReturnsPanel', () => {
     await fireEvent.click(decisionButton());
     await waitFor(() => expect(salesApi.resolveReturn).toHaveBeenCalledTimes(3));
 
-    expect(salesApi.resolveReturn.mock.calls.map((call) => ({
-      decision: call[1].lines[0]?.decision,
-      quantity: call[1].lines[0]?.quantity_base
-    }))).toEqual([
+    expect(
+      salesApi.resolveReturn.mock.calls.map((call) => ({
+        decision: call[1].lines[0]?.decision,
+        quantity: call[1].lines[0]?.quantity_base
+      }))
+    ).toEqual([
       { decision: 'accepted', quantity: '1' },
       { decision: 'rejected', quantity: '1' },
       { decision: 'accepted', quantity: '1' }
@@ -268,7 +361,9 @@ describe('SalesReturnsPanel', () => {
     expect(serverReturn.lines[0]?.quantity_pending_base).toBe('0.000000');
     expect(screen.getByText('Mixta')).toBeInTheDocument();
     expect(salesApi.resolveReturn.mock.calls.map((call) => call[1].lines[0]?.decision)).toEqual([
-      'accepted', 'rejected', 'accepted'
+      'accepted',
+      'rejected',
+      'accepted'
     ]);
   });
 
@@ -303,8 +398,16 @@ describe('SalesReturnsPanel', () => {
 
     await waitFor(() => expect(salesApi.createReturn).toHaveBeenCalledOnce());
     expect(salesApi.createReturn.mock.calls[0]?.[1].lines).toEqual([
-      expect.objectContaining({ delivery_allocation_id: 'allocation-1', quantity_base: '1', reason: 'Caja cerrada' }),
-      expect.objectContaining({ delivery_allocation_id: 'allocation-2', quantity_base: '1', reason: 'Unidad sin uso' })
+      expect.objectContaining({
+        delivery_allocation_id: 'allocation-1',
+        quantity_base: '1',
+        reason: 'Caja cerrada'
+      }),
+      expect.objectContaining({
+        delivery_allocation_id: 'allocation-2',
+        quantity_base: '1',
+        reason: 'Unidad sin uso'
+      })
     ]);
   });
 
@@ -313,32 +416,54 @@ describe('SalesReturnsPanel', () => {
     salesApi.returnsForSale.mockResolvedValue([returnDocument('received')]);
     setup();
 
-    await fireEvent.click(await screen.findByRole('button', { name: 'Registrar decisión de esta cantidad' }));
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Registrar decisión de esta cantidad' })
+    );
 
     await waitFor(() => expect(salesApi.resolveReturn).toHaveBeenCalledOnce());
-    expect(salesApi.resolveReturn).toHaveBeenCalledWith('return-1', {
-      lines: [expect.objectContaining({ return_line_id: 'return-line-1', decision: 'accepted', quantity_base: '1.000000', condition: 'resalable' })]
-    }, expect.stringMatching(/^resolve:return-1:return-line-1:/));
+    expect(salesApi.resolveReturn).toHaveBeenCalledWith(
+      'return-1',
+      {
+        lines: [
+          expect.objectContaining({
+            return_line_id: 'return-line-1',
+            decision: 'accepted',
+            quantity_base: '1.000000',
+            condition: 'resalable'
+          })
+        ]
+      },
+      expect.stringMatching(/^resolve:return-1:return-line-1:/)
+    );
     expect(await screen.findByRole('status')).toHaveTextContent('quedó en cuarentena');
   });
 
-  it.each(['', '0', '-1', '1.000001', '0.0000001'])('rechaza una cantidad a resolver inválida: %s', async (quantity) => {
-    permissions.set(['sales_returns:read', 'sales_returns:resolve'], false);
-    salesApi.returnsForSale.mockResolvedValue([returnDocument('received')]);
-    setup();
-    const input = await screen.findByLabelText('Cantidad a resolver');
-    await fireEvent.input(input, { target: { value: quantity } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Registrar decisión de esta cantidad' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('La cantidad a resolver debe ser positiva');
-    expect(salesApi.resolveReturn).not.toHaveBeenCalled();
-  });
+  it.each(['', '0', '-1', '1.000001', '0.0000001'])(
+    'rechaza una cantidad a resolver inválida: %s',
+    async (quantity) => {
+      permissions.set(['sales_returns:read', 'sales_returns:resolve'], false);
+      salesApi.returnsForSale.mockResolvedValue([returnDocument('received')]);
+      setup();
+      const input = await screen.findByLabelText('Cantidad a resolver');
+      await fireEvent.input(input, { target: { value: quantity } });
+      await fireEvent.click(
+        screen.getByRole('button', { name: 'Registrar decisión de esta cantidad' })
+      );
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'La cantidad a resolver debe ser positiva'
+      );
+      expect(salesApi.resolveReturn).not.toHaveBeenCalled();
+    }
+  );
 
   it('anuncia errores de carga y ofrece volver a consultar', async () => {
     permissions.set(['sales_returns:read', 'sales_returns:manage'], false);
     salesApi.returnableAllocations.mockRejectedValueOnce(new Error('offline'));
     setup();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cargar el flujo de devoluciones.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No se pudo cargar el flujo de devoluciones.'
+    );
     await fireEvent.click(screen.getByRole('button', { name: 'Actualizar' }));
     expect(await screen.findByText(/Producto ficticio/)).toBeInTheDocument();
   });
@@ -350,12 +475,16 @@ describe('SalesReturnsPanel', () => {
 
     const quantity = await screen.findByLabelText('Cantidad devuelta de Producto ficticio');
     await fireEvent.input(quantity, { target: { value: '1' } });
-    await fireEvent.input(screen.getByLabelText('Motivo de devolución de Producto ficticio'), { target: { value: 'Empaque sin abrir' } });
+    await fireEvent.input(screen.getByLabelText('Motivo de devolución de Producto ficticio'), {
+      target: { value: 'Empaque sin abrir' }
+    });
     await fireEvent.submit(screen.getByRole('button', { name: 'Crear borrador' }).closest('form')!);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo guardar el borrador.');
     expect(quantity).toHaveValue(1);
-    expect(screen.getByLabelText('Motivo de devolución de Producto ficticio')).toHaveValue('Empaque sin abrir');
+    expect(screen.getByLabelText('Motivo de devolución de Producto ficticio')).toHaveValue(
+      'Empaque sin abrir'
+    );
   });
 
   it('exige motivo para cancelar y anuncia la cancelación del borrador', async () => {
@@ -364,14 +493,24 @@ describe('SalesReturnsPanel', () => {
     setup();
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Cancelar borrador' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Escribe por qué se cancela el borrador.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Escribe por qué se cancela el borrador.'
+    );
     expect(salesApi.cancelReturn).not.toHaveBeenCalled();
 
     await fireEvent.input(screen.getByLabelText('Motivo de cancelación de DEV-20261019-ABCDEF12'), {
       target: { value: 'Duplicado de prueba' }
     });
     await fireEvent.click(screen.getByRole('button', { name: 'Cancelar borrador' }));
-    await waitFor(() => expect(salesApi.cancelReturn).toHaveBeenCalledWith('return-1', 'Duplicado de prueba', expect.stringMatching(/^cancel:return-1:/)));
-    expect(await screen.findByRole('status')).toHaveTextContent('Se canceló el borrador DEV-20261019-ABCDEF12');
+    await waitFor(() =>
+      expect(salesApi.cancelReturn).toHaveBeenCalledWith(
+        'return-1',
+        'Duplicado de prueba',
+        expect.stringMatching(/^cancel:return-1:/)
+      )
+    );
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Se canceló el borrador DEV-20261019-ABCDEF12'
+    );
   });
 });

@@ -292,7 +292,7 @@ export const NAV_GROUPS: NavGroup[] = [
         requiredPermission: 'sales_quotations:read'
       },
       {
-        label: 'Ventas',
+        label: 'Pedidos',
         icon: ICONS.sales,
         route: '/sales',
         implemented: true,

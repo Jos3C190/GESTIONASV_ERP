@@ -17,6 +17,10 @@ from app.infrastructure.models.sales_return import SalesReturnModel
 from app.infrastructure.repositories.inventory_adjustment_repository import (
     SqlAlchemyInventoryAdjustmentRepository,
 )
+from app.infrastructure.repositories.sales_order_repository import SqlAlchemySalesOrderRepository
+from app.infrastructure.repositories.sales_quotation_repository import (
+    SqlAlchemySalesQuotationRepository,
+)
 from sqlalchemy import select, update
 
 from tests.e2e.conftest import get_test_company_id
@@ -28,7 +32,8 @@ pytestmark = pytest.mark.integration
 @pytest.mark.parametrize(
     ("service_type", "method", "model"),
     [
-        (SalesService, "get_quotation", SalesQuotationModel),
+        (SqlAlchemySalesQuotationRepository, "get", SalesQuotationModel),
+        (SqlAlchemySalesOrderRepository, "get", SaleModel),
         (SalesService, "get_sale", SaleModel),
         (SalesDeliveryService, "_sale", SaleModel),
         (SalesDeliveryService, "_delivery", SalesDeliveryModel),
@@ -76,6 +81,11 @@ async def test_locked_document_observes_change_committed_after_initial_read(
             code=f"S-{suffix}",
             subtotal=0,
             total=0,
+            document_type="01",
+            prices_include_vat=True,
+            promised_date=today,
+            delivery_mode="pickup",
+            payment_terms="cash",
         )
         setup.add(sale)
         await setup.flush()
@@ -116,7 +126,11 @@ async def test_locked_document_observes_change_committed_after_initial_read(
 
     try:
         async with async_session_factory() as reader:
-            if service_type is SqlAlchemyInventoryAdjustmentRepository:
+            if service_type in (
+                SqlAlchemyInventoryAdjustmentRepository,
+                SqlAlchemySalesQuotationRepository,
+                SqlAlchemySalesOrderRepository,
+            ):
                 args = (reader,)
             elif service_type is SalesService:
                 args = (reader, MagicMock())

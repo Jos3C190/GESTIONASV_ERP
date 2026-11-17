@@ -14,7 +14,7 @@ from app.infrastructure.models.organization import Location
 from openpyxl import load_workbook
 from sqlalchemy import func, select
 
-from tests.e2e.sales_quote_flow import accept_quote, enable_invoice
+from tests.e2e.sales_quote_flow import accept_quote, enable_invoice, order_from_quote
 from tests.e2e.test_inventory_preparation import _operator_headers, _review_unit
 from tests.e2e.test_purchase_orders import (
     _headers,
@@ -230,12 +230,8 @@ async def _sell_all(client, ctx, units):
     assert quote.status_code == 201, quote.text
     confirmed = await accept_quote(client, ctx.admin, quote.json()["id"], quote.json()["version"])
     assert confirmed.status_code == 200, confirmed.text
-    converted = await client.post(
-        f"/api/v1/sales/quotations/{quote.json()['id']}/convert",
-        headers={**ctx.admin, "Idempotency-Key": "final-convert"},
-        json={"expected_version": confirmed.json()["version"]},
-    )
-    assert converted.status_code == 200, converted.text
+    converted = await order_from_quote(client, ctx.admin, quote.json()["id"], "final-convert")
+    assert converted.status_code == 201, converted.text
     sale = await client.post(
         f"/api/v1/sales/{converted.json()['id']}/confirm",
         headers=ctx.admin,

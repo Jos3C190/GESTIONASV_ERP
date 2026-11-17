@@ -48,6 +48,7 @@ from app.application.sales_quotations import (
 )
 from app.application.sales_quotations.use_cases import QuotationView
 from app.domain.entities.sales_margin import REASON_TEXT, AuthorizationReason
+from app.domain.ports.sales_document import DocumentLine
 from app.domain.ports.sales_quotation_repository import Quotation, QuotationFilters
 from app.infrastructure.sales_quotation_pdf import render_quotation_pdf
 
@@ -64,27 +65,67 @@ _AUTHORIZE = [Depends(require_permission("sales_discounts:authorize"))]
 _STATUS_PATTERN = "^(draft|pending_authorization|issued|expired|accepted|rejected|cancelled)$"
 
 
-async def _allowed(
+async def allowed(
     checker: CheckPermissionUseCase, user: uuid.UUID, company: uuid.UUID, code: str
 ) -> bool:
     return (await checker.execute(user, company, code)).allowed
 
 
-async def _costs_visible(
+async def costs_visible_for(
     checker: CheckPermissionUseCase, user: uuid.UUID, company: uuid.UUID
 ) -> bool:
     """El margen lo ve quien puede ver costos y quien autoriza descuentos."""
 
-    return await _allowed(checker, user, company, "sales_costs:read") or await _allowed(
+    return await allowed(checker, user, company, "sales_costs:read") or await allowed(
         checker, user, company, "sales_discounts:authorize"
     )
 
 
-def _reasons(codes: tuple[str, ...]) -> list[AuthorizationReasonOut]:
+def reasons_out(codes: tuple[str, ...]) -> list[AuthorizationReasonOut]:
     return [
         AuthorizationReasonOut(code=code, message=REASON_TEXT[AuthorizationReason(code)])
         for code in codes
     ]
+
+
+def document_line_fields(line: DocumentLine, number: int, costs_visible: bool) -> dict[str, Any]:
+    """Campos de una línea de cotización o de pedido; costo y margen solo si se pueden ver."""
+
+    return {
+        "id": line.id,
+        "line_number": number,
+        "product_id": line.identity.product_id,
+        "variant_id": line.identity.variant_id,
+        "inventory_item_id": line.identity.inventory_item_id,
+        "product_sku": line.identity.product_sku,
+        "product_name": line.identity.product_name,
+        "unit_id": line.identity.unit_id,
+        "unit_name": line.identity.unit_name,
+        "base_unit_id": line.identity.base_unit_id,
+        "base_unit_name": line.identity.base_unit_name,
+        "unit_factor": line.identity.unit_factor,
+        "quantity": line.quantity,
+        "quantity_base": line.quantity_base,
+        "price_list_id": line.price_list_id,
+        "list_price": line.list_price,
+        "price_overridden": line.price_overridden,
+        "unit_price": line.unit_price,
+        "discount_percent": line.discount_percent,
+        "suggested_discount_percent": line.suggested_discount_percent,
+        "suggested_discount_source": line.suggested_discount_source,
+        "tax_treatment": line.tax_treatment,
+        "item_type": line.item_type,
+        "document_unit_price": line.document_unit_price,
+        "discount_amount": line.discount_amount,
+        "not_subject": line.not_subject,
+        "exempt": line.exempt,
+        "taxed": line.taxed,
+        "vat_item": line.vat_item,
+        "line_total": line.line_total,
+        "cost": line.cost if costs_visible else None,
+        "margin_percent": line.margin_percent if costs_visible else None,
+        "authorization_reasons": reasons_out(line.authorization_reasons),
+    }
 
 
 def _out(view: QuotationView, costs_visible: bool) -> QuotationOut:
@@ -122,7 +163,7 @@ def _out(view: QuotationView, costs_visible: bool) -> QuotationOut:
         total=totals.total,
         total_in_words=totals.total_in_words,
         requires_authorization=quotation.requires_authorization,
-        authorization_reasons=_reasons(quotation.authorization_reasons),
+        authorization_reasons=reasons_out(quotation.authorization_reasons),
         costs_visible=costs_visible,
         created_by_id=quotation.created_by_id,
         created_by_name=people.of(quotation.created_by_id),
@@ -140,41 +181,7 @@ def _out(view: QuotationView, costs_visible: bool) -> QuotationOut:
         sale_id=view.sale.id if view.sale else None,
         sale_code=view.sale.code if view.sale else None,
         lines=[
-            QuotationLineOut(
-                id=line.id,
-                line_number=number,
-                product_id=line.identity.product_id,
-                variant_id=line.identity.variant_id,
-                inventory_item_id=line.identity.inventory_item_id,
-                product_sku=line.identity.product_sku,
-                product_name=line.identity.product_name,
-                unit_id=line.identity.unit_id,
-                unit_name=line.identity.unit_name,
-                base_unit_id=line.identity.base_unit_id,
-                base_unit_name=line.identity.base_unit_name,
-                unit_factor=line.identity.unit_factor,
-                quantity=line.quantity,
-                quantity_base=line.quantity_base,
-                price_list_id=line.price_list_id,
-                list_price=line.list_price,
-                price_overridden=line.price_overridden,
-                unit_price=line.unit_price,
-                discount_percent=line.discount_percent,
-                suggested_discount_percent=line.suggested_discount_percent,
-                suggested_discount_source=line.suggested_discount_source,  # type: ignore[arg-type]
-                tax_treatment=line.tax_treatment,  # type: ignore[arg-type]
-                item_type=line.item_type,  # type: ignore[arg-type]
-                document_unit_price=line.document_unit_price,
-                discount_amount=line.discount_amount,
-                not_subject=line.not_subject,
-                exempt=line.exempt,
-                taxed=line.taxed,
-                vat_item=line.vat_item,
-                line_total=line.line_total,
-                cost=line.cost if costs_visible else None,
-                margin_percent=line.margin_percent if costs_visible else None,
-                authorization_reasons=_reasons(line.authorization_reasons),
-            )
+            QuotationLineOut(**document_line_fields(line, number, costs_visible))
             for number, line in enumerate(quotation.lines, start=1)
         ],
         created_at=quotation.created_at,
@@ -273,7 +280,7 @@ async def _actor(
 ) -> Actor:
     return Actor(
         user_id=current.id,
-        can_override_price=await _allowed(checker, current.id, company, "sales_prices:override"),
+        can_override_price=await allowed(checker, current.id, company, "sales_prices:override"),
     )
 
 
@@ -295,7 +302,7 @@ async def _respond(
     current: CurrentUser,
     quotation: Quotation,
 ) -> QuotationOut:
-    visible = await _costs_visible(checker, current.id, quotation.company_id)
+    visible = await costs_visible_for(checker, current.id, quotation.company_id)
     return _out(await use_cases.view(quotation), visible)
 
 
@@ -384,7 +391,7 @@ async def list_quotations(
         today=today_in_el_salvador(),
     )
     rows, total = await use_cases.page(company_id, filters, page, size)
-    visible = await _costs_visible(checker, current.id, company_id)
+    visible = await costs_visible_for(checker, current.id, company_id)
     return QuotationPage(
         items=[_out(await use_cases.view(row), visible) for row in rows],
         meta=QuotationPageMeta(page=page, size=size, total=total, pages=(total + size - 1) // size),

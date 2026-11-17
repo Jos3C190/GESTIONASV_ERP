@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { permissions } from '#lib/stores/permissions.svelte.ts';
-import SalesQuotationEditor from './SalesQuotationEditor.svelte';
+import SalesDocumentEditor from './SalesDocumentEditor.svelte';
 import {
   formatDay,
   formatMoney,
@@ -14,6 +14,7 @@ const { salesApi, customersApi } = vi.hoisted(() => ({
     catalog: vi.fn(),
     quotationSettings: vi.fn(),
     previewQuotation: vi.fn(),
+    previewOrder: vi.fn(),
     createQuotation: vi.fn(),
     quotation: vi.fn()
   },
@@ -92,7 +93,7 @@ beforeEach(() => {
 });
 
 async function fillDraft() {
-  render(SalesQuotationEditor, {});
+  render(SalesDocumentEditor, {});
   const [customer, , , product] = await screen.findAllByRole('combobox');
   await fireEvent.change(customer!, { target: { value: 'customer-1' } });
   await fireEvent.change(product!, { target: { value: '7:' } });
@@ -119,7 +120,7 @@ it('el precio manual solo aparece con permiso para cambiar precios', async () =>
   await fillDraft();
   expect(screen.queryByText('Precio manual')).not.toBeInTheDocument();
   permissions.set(['sales_quotations:manage', 'sales_prices:override'], false);
-  render(SalesQuotationEditor, {});
+  render(SalesDocumentEditor, {});
   expect(await screen.findByText('Precio manual')).toBeInTheDocument();
 });
 
@@ -129,4 +130,50 @@ it('formatea montos, fechas, cantidades y estados en es-SV', () => {
   expect(formatQuantity('2.000000')).toBe('2');
   expect(statusLabel({ status: 'issued', expired: true })).toBe('Vencida');
   expect(statusLabel({ status: 'pending_authorization', expired: false })).toBe('Por autorizar');
+});
+
+it('el pedido pide fecha y lugar de entrega y calcula con la vista previa del pedido', async () => {
+  salesApi.previewOrder = vi.fn().mockResolvedValue({
+    document_type: '01',
+    costs_visible: false,
+    requires_authorization: false,
+    authorization_reasons: [],
+    total_taxed: '11.30',
+    total_exempt: '0.00',
+    total_not_subject: '0.00',
+    total_discount: '0.00',
+    vat: '1.30',
+    vat_perceived: '0.00',
+    vat_withheld: '0.00',
+    total: '11.30',
+    total_in_words: 'ONCE 30/100 DÓLARES',
+    lines: [
+      {
+        list_price: '10.00000000',
+        unit_price: '10.00000000',
+        price_overridden: false,
+        discount_percent: '0.00',
+        suggested_discount_percent: '0.00',
+        suggested_discount_source: 'none',
+        margin_percent: null,
+        line_total: '11.30000000',
+        quantity_base: '1.000000',
+        base_unit_name: 'Unidad',
+        available_base: '0.000000',
+        authorization_reasons: []
+      }
+    ]
+  });
+  render(SalesDocumentEditor, { kind: 'order' });
+  expect(await screen.findByText('Fecha comprometida')).toBeInTheDocument();
+  expect(screen.queryByText('Válida hasta')).not.toBeInTheDocument();
+  const [customer, , , , product] = screen.getAllByRole('combobox');
+  await fireEvent.change(customer!, { target: { value: 'customer-1' } });
+  await fireEvent.change(product!, { target: { value: '7:' } });
+  await waitFor(() => expect(salesApi.previewOrder).toHaveBeenCalled(), { timeout: 2000 });
+  expect(salesApi.previewOrder.mock.calls.at(-1)![0]).toMatchObject({
+    delivery_mode: 'pickup',
+    delivery_address_id: null
+  });
+  expect(await screen.findByText(/Disponible en la sucursal: 0/)).toBeInTheDocument();
 });

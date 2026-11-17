@@ -54,6 +54,8 @@ from app.application.sales.deliveries import SalesDeliveryService
 from app.application.sales.returns import SalesReturnService
 from app.application.sales.service import SalesService
 from app.application.sales_discounts import SalesDiscountUseCases
+from app.application.sales_documents.pricing import SalesDocumentPricing
+from app.application.sales_orders import SalesOrderUseCases
 from app.application.sales_quotations import SalesQuotationUseCases
 from app.application.sales_tax import SalesTaxUseCases
 from app.core.config import settings
@@ -85,6 +87,7 @@ from app.domain.ports.purchase_request_repository import PurchaseRequestReposito
 from app.domain.ports.refresh_token_repository import RefreshTokenRepository
 from app.domain.ports.retaceo_repository import RetaceoRepository
 from app.domain.ports.role_repository import RoleRepository
+from app.domain.ports.sales_document import SalesCatalog
 from app.domain.ports.token_service import TokenService
 from app.domain.ports.user_repository import UserRepository
 from app.infrastructure.db.session import get_async_session
@@ -135,6 +138,9 @@ from app.infrastructure.repositories.purchase_request_repository import (
 from app.infrastructure.repositories.retaceo_repository import SqlAlchemyRetaceoRepository
 from app.infrastructure.repositories.sales_discount_repository import (
     SqlAlchemySalesDiscountRepository,
+)
+from app.infrastructure.repositories.sales_order_repository import (
+    SqlAlchemySalesOrderRepository,
 )
 from app.infrastructure.repositories.sales_quotation_repository import (
     SqlAlchemySalesQuotationRepository,
@@ -195,10 +201,31 @@ def get_sales_discount_use_cases(session: SessionDep) -> SalesDiscountUseCases:
 
 def get_sales_quotation_use_cases(session: SessionDep) -> SalesQuotationUseCases:
     prices = SqlAlchemyPriceListRepository(session)
+    fiscal = SqlAlchemyFiscalRepository(session)
+    customers = SqlAlchemyCustomerRepository(session)
+    repository = SqlAlchemySalesQuotationRepository(session)
     return SalesQuotationUseCases(
+        repository, _sales_pricing(session, repository), prices, fiscal, customers
+    )
+
+
+def get_sales_order_use_cases(session: SessionDep) -> SalesOrderUseCases:
+    repository = SqlAlchemySalesOrderRepository(session)
+    return SalesOrderUseCases(
+        repository,
         SqlAlchemySalesQuotationRepository(session),
-        SalesDiscountUseCases(SqlAlchemySalesDiscountRepository(session), prices),
-        prices,
+        _sales_pricing(session, repository),
+        SqlAlchemyPriceListRepository(session),
+        SqlAlchemyCustomerRepository(session),
+    )
+
+
+def _sales_pricing(session: AsyncSession, catalog: SalesCatalog) -> SalesDocumentPricing:
+    return SalesDocumentPricing(
+        catalog,
+        SalesDiscountUseCases(
+            SqlAlchemySalesDiscountRepository(session), SqlAlchemyPriceListRepository(session)
+        ),
         SqlAlchemyFiscalRepository(session),
         SqlAlchemyCustomerRepository(session),
         SqlAlchemyProductFiscalRepository(session),

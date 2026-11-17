@@ -1,4 +1,4 @@
-import type { QuotationStatus, SalesQuotation } from '#lib/types/sales.ts';
+import type { OrderStatus, QuotationStatus, Sale, SalesQuotation } from '#lib/types/sales.ts';
 
 export const STATUS_LABELS: Record<QuotationStatus, string> = {
   draft: 'Borrador',
@@ -107,4 +107,43 @@ export function formatDay(value: string | null | undefined): string {
       : value;
   const [year, month, date] = day.split('-');
   return `${date}/${month}/${year}`;
+}
+
+// --- Pedido (V2e) ---------------------------------------------------------------------------
+
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  draft: 'Borrador',
+  pending_authorization: 'Por autorizar',
+  confirmed: 'Confirmado',
+  cancelled: 'Cancelado'
+};
+
+export const ORDER_STATUS_BADGES: Record<OrderStatus, string> = {
+  draft: 'bg-surface-muted text-foreground-muted',
+  pending_authorization: 'bg-warning/10 text-warning',
+  confirmed: 'bg-success/10 text-success',
+  cancelled: 'bg-danger/10 text-danger'
+};
+
+export const ORDER_STATUS_FILTERS: { value: string; label: string }[] = [
+  { value: '', label: 'Todos' },
+  { value: 'draft', label: 'Borrador' },
+  { value: 'pending_authorization', label: 'Por autorizar' },
+  { value: 'confirmed', label: 'Confirmado' },
+  { value: 'cancelled', label: 'Cancelado' }
+];
+
+export const DELIVERY_PROGRESS_LABELS: Record<Sale['delivery_progress'], string> = {
+  pending: 'Pendiente de entrega',
+  partial: 'Entrega parcial',
+  complete: 'Entregado'
+};
+
+export const DELIVERY_MODE_LABELS: Record<Sale['delivery_mode'], string> = {
+  pickup: 'Retiro en sucursal',
+  delivery: 'Entrega a domicilio'
+};
+
+export function paymentLabel(order: Pick<Sale, 'payment_terms' | 'credit_days'>): string {
+  return order.payment_terms === 'credit' ? `Crédito a ${order.credit_days} días` : 'Contado';
 }
