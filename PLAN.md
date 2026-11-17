@@ -68,12 +68,13 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
 - [x] **Paso 5: ERP, migración `0129` y credenciales cifradas.** Aplicación, API, regla para pasar a pruebas y e2e.
 - [x] **Paso 6: ERP, registro del emisor con modo y credenciales.** `dte-worker` y e2e contra el stub.
 - [x] **Paso 7: frontend.** Pestaña «Hacienda». vitest.
-- [ ] **Paso 8: documentación.** API, esquema y manuales (cómo obtener el certificado y las credenciales de pruebas).
+- [x] **Paso 8: documentación.** API, esquema y manuales (cómo obtener el certificado y las credenciales de pruebas).
 - [ ] **Paso 9: verificación y PR.** Batería completa, QA en el navegador con el stub y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 8 (documentación).
+- **Paso en curso**: 9 (verificación y PR).
+  - Paso 8: `docs/api.md` («Hacienda credentials»), esquema §39, manual de configuración fiscal §5 «Hacienda» (Correo pasa a §6) y `dte-service/docs/multiemisor.md` (modo máximo, credenciales, `/probar`, firmador, variables nuevas y errores).
   - Paso 7: pestaña «Hacienda» en Configuración fiscal (`FiscalHaciendaPanel.svelte`).
     - El certificado se lee en el navegador y viaja en base64; las contraseñas no se vuelven a mostrar.
     - Estado: Sin cargar, Sin probar o Probadas, con el NIT y la huella del certificado.
