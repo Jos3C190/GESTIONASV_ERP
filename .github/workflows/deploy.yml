@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - feature/ai-bedrock-guardrails
+  workflow_dispatch:
 
 concurrency:
   group: deploy-aws-develop
