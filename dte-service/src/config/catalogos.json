@@ -1,0 +1,7976 @@
+{
+  "CAT-001": {
+    "titulo": "Ambiente de destino",
+    "entradas": [
+      {
+        "codigo": "00",
+        "valor": "Modo prueba"
+      },
+      {
+        "codigo": "01",
+        "valor": "Modo producción"
+      }
+    ]
+  },
+  "CAT-002": {
+    "titulo": "Tipo de Documento / Evento",
+    "entradas": [
+      {
+        "codigo": "01",
+        "valor": "Factura"
+      },
+      {
+        "codigo": "03",
+        "valor": "Comprobante de crédito fiscal"
+      },
+      {
+        "codigo": "04",
+        "valor": "Nota de remisión"
+      },
+      {
+        "codigo": "05",
+        "valor": "Nota de crédito"
+      },
+      {
+        "codigo": "06",
+        "valor": "Nota de débito"
+      },
+      {
+        "codigo": "07",
+        "valor": "Comprobante de retención"
+      },
+      {
+        "codigo": "08",
+        "valor": "Comprobante de liquidación"
+      },
+      {
+        "codigo": "09",
+        "valor": "Documento contable de liquidación"
+      },
+      {
+        "codigo": "11",
+        "valor": "Facturas de exportación"
+      },
+      {
+        "codigo": "14",
+        "valor": "Factura de sujeto excluido"
+      },
+      {
+        "codigo": "15",
+        "valor": "Comprobante de donación"
+      },
+      {
+        "codigo": "17",
+        "valor": "Evento de Operaciones Especiales"
+      },
+      {
+        "codigo": "18",
+        "valor": "Evento de Retorno"
+      }
+    ]
+  },
+  "CAT-003": {
+    "titulo": "Modelo de Facturación",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "Modelo Facturación previo"
+      },
+      {
+        "codigo": "2",
+        "valor": "Modelo Facturación diferido"
+      }
+    ]
+  },
+  "CAT-004": {
+    "titulo": "Tipo de Transmisión",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "Transmisión normal"
+      },
+      {
+        "codigo": "2",
+        "valor": "Transmisión por contingencia"
+      }
+    ]
+  },
+  "CAT-005": {
+    "titulo": "Tipo de Contingencia",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "No disponibilidad de sistema del MH"
+      },
+      {
+        "codigo": "2",
+        "valor": "No disponibilidad de sistema del emisor"
+      },
+      {
+        "codigo": "3",
+        "valor": "Falla en el suministro de servicio de Internet del Emisor"
+      },
+      {
+        "codigo": "4",
+        "valor": "Falla en el suministro de servicio de energía eléctrica del emisor que impida la transmisión de los DTE"
+      },
+      {
+        "codigo": "5",
+        "valor": "Otro (deberá digitar un máximo de 500 caracteres explicando el motivo)"
+      }
+    ]
+  },
+  "CAT-006": {
+    "titulo": "Retención IVA MH",
+    "entradas": [
+      {
+        "codigo": "22",
+        "valor": "Retención IVA 1%"
+      },
+      {
+        "codigo": "C4",
+        "valor": "Retención IVA 13%"
+      },
+      {
+        "codigo": "C9",
+        "valor": "Otras retenciones IVA casos especiales"
+      }
+    ]
+  },
+  "CAT-007": {
+    "titulo": "Tipo de Generación del Documento",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "Físico"
+      },
+      {
+        "codigo": "2",
+        "valor": "Electrónico"
+      }
+    ]
+  },
+  "CAT-008": {
+    "titulo": "Distrito",
+    "entradas": [
+      {
+        "codigo": "00",
+        "valor": "Otro (Para extranjeros)"
+      },
+      {
+        "codigo": "01",
+        "valor": "AHUACHAPÁN"
+      },
+      {
+        "codigo": "02",
+        "valor": "APANECA"
+      },
+      {
+        "codigo": "03",
+        "valor": "ATIQUIZAYA"
+      },
+      {
+        "codigo": "04",
+        "valor": "CONCEPCIÓN DE ATACO"
+      },
+      {
+        "codigo": "05",
+        "valor": "EL REFUGIO"
+      },
+      {
+        "codigo": "06",
+        "valor": "GUAYMANGO"
+      },
+      {
+        "codigo": "07",
+        "valor": "JUJUTLA"
+      },
+      {
+        "codigo": "08",
+        "valor": "SAN FRANCISCO MENÉNDEZ"
+      },
+      {
+        "codigo": "09",
+        "valor": "SAN LORENZO"
+      },
+      {
+        "codigo": "10",
+        "valor": "SAN PEDRO PUXTLA"
+      },
+      {
+        "codigo": "11",
+        "valor": "TACUBA"
+      },
+      {
+        "codigo": "12",
+        "valor": "TURÍN"
+      },
+      {
+        "codigo": "01",
+        "valor": "CANDELARIA DE LA FRONTERA"
+      },
+      {
+        "codigo": "02",
+        "valor": "COATEPEQUE"
+      },
+      {
+        "codigo": "03",
+        "valor": "CHALCHUAPA"
+      },
+      {
+        "codigo": "04",
+        "valor": "EL CONGO"
+      },
+      {
+        "codigo": "05",
+        "valor": "EL PORVENIR"
+      },
+      {
+        "codigo": "06",
+        "valor": "MASAHUAT"
+      },
+      {
+        "codigo": "07",
+        "valor": "METAPÁN"
+      },
+      {
+        "codigo": "08",
+        "valor": "SAN ANTONIO PAJONAL"
+      },
+      {
+        "codigo": "09",
+        "valor": "SAN SEBASTIÁN SALITRILLO"
+      },
+      {
+        "codigo": "10",
+        "valor": "SANTA ANA"
+      },
+      {
+        "codigo": "11",
+        "valor": "STA ROSA GUACHI"
+      },
+      {
+        "codigo": "12",
+        "valor": "STGO D LA FRONT"
+      },
+      {
+        "codigo": "13",
+        "valor": "TEXISTEPEQUE"
+      },
+      {
+        "codigo": "01",
+        "valor": "ACAJUTLA"
+      },
+      {
+        "codigo": "02",
+        "valor": "ARMENIA"
+      },
+      {
+        "codigo": "03",
+        "valor": "CALUCO"
+      },
+      {
+        "codigo": "04",
+        "valor": "CUISNAHUAT"
+      },
+      {
+        "codigo": "05",
+        "valor": "STA I ISHUATAN"
+      },
+      {
+        "codigo": "06",
+        "valor": "IZALCO"
+      },
+      {
+        "codigo": "07",
+        "valor": "JUAYÚA"
+      },
+      {
+        "codigo": "08",
+        "valor": "NAHUIZALCO"
+      },
+      {
+        "codigo": "09",
+        "valor": "NAHULINGO"
+      },
+      {
+        "codigo": "10",
+        "valor": "SALCOATITÁN"
+      },
+      {
+        "codigo": "11",
+        "valor": "SAN ANTONIO DEL MONTE"
+      },
+      {
+        "codigo": "12",
+        "valor": "SAN JULIÁN"
+      },
+      {
+        "codigo": "13",
+        "valor": "STA C MASAHUAT"
+      },
+      {
+        "codigo": "14",
+        "valor": "SANTO DOMINGO GUZMÁN"
+      },
+      {
+        "codigo": "15",
+        "valor": "SONSONATE"
+      },
+      {
+        "codigo": "16",
+        "valor": "SONZACATE"
+      },
+      {
+        "codigo": "01",
+        "valor": "AGUA CALIENTE"
+      },
+      {
+        "codigo": "02",
+        "valor": "ARCATAO"
+      },
+      {
+        "codigo": "03",
+        "valor": "AZACUALPA"
+      },
+      {
+        "codigo": "04",
+        "valor": "CITALÁ"
+      },
+      {
+        "codigo": "05",
+        "valor": "COMALAPA"
+      },
+      {
+        "codigo": "06",
+        "valor": "CONCEPCIÓN QUEZALTEPEQUE"
+      },
+      {
+        "codigo": "07",
+        "valor": "CHALATENANGO"
+      },
+      {
+        "codigo": "08",
+        "valor": "DULCE NOM MARÍA"
+      },
+      {
+        "codigo": "09",
+        "valor": "EL CARRIZAL"
+      },
+      {
+        "codigo": "10",
+        "valor": "EL PARAÍSO"
+      },
+      {
+        "codigo": "11",
+        "valor": "LA LAGUNA"
+      },
+      {
+        "codigo": "12",
+        "valor": "LA PALMA"
+      },
+      {
+        "codigo": "13",
+        "valor": "LA REINA"
+      },
+      {
+        "codigo": "14",
+        "valor": "LAS VUELTAS"
+      },
+      {
+        "codigo": "15",
+        "valor": "NOMBRE DE JESUS"
+      },
+      {
+        "codigo": "16",
+        "valor": "NVA CONCEPCIÓN"
+      },
+      {
+        "codigo": "17",
+        "valor": "NUEVA TRINIDAD"
+      },
+      {
+        "codigo": "18",
+        "valor": "OJOS DE AGUA"
+      },
+      {
+        "codigo": "19",
+        "valor": "POTONICO"
+      },
+      {
+        "codigo": "20",
+        "valor": "SAN ANT LA CRUZ"
+      },
+      {
+        "codigo": "21",
+        "valor": "SAN ANT RANCHOS"
+      },
+      {
+        "codigo": "22",
+        "valor": "SAN FERNANDO"
+      },
+      {
+        "codigo": "23",
+        "valor": "SAN FRANCISCO LEMPA"
+      },
+      {
+        "codigo": "24",
+        "valor": "SAN FRANCISCO MORAZÁN"
+      },
+      {
+        "codigo": "25",
+        "valor": "SAN IGNACIO"
+      },
+      {
+        "codigo": "26",
+        "valor": "SAN I LABRADOR"
+      },
+      {
+        "codigo": "27",
+        "valor": "SAN J CANCASQUE"
+      },
+      {
+        "codigo": "28",
+        "valor": "SAN JOSE FLORES"
+      },
+      {
+        "codigo": "29",
+        "valor": "SAN LUIS CARMEN"
+      },
+      {
+        "codigo": "30",
+        "valor": "SN MIG MERCEDES"
+      },
+      {
+        "codigo": "31",
+        "valor": "SAN RAFAEL"
+      },
+      {
+        "codigo": "32",
+        "valor": "SANTA RITA"
+      },
+      {
+        "codigo": "33",
+        "valor": "TEJUTLA"
+      },
+      {
+        "codigo": "01",
+        "valor": "ANTGO CUSCATLÁN"
+      },
+      {
+        "codigo": "02",
+        "valor": "CIUDAD ARCE"
+      },
+      {
+        "codigo": "03",
+        "valor": "COLON"
+      },
+      {
+        "codigo": "04",
+        "valor": "COMASAGUA"
+      },
+      {
+        "codigo": "05",
+        "valor": "CHILTIUPAN"
+      },
+      {
+        "codigo": "06",
+        "valor": "HUIZÚCAR"
+      },
+      {
+        "codigo": "07",
+        "valor": "JAYAQUE"
+      },
+      {
+        "codigo": "08",
+        "valor": "JICALAPA"
+      },
+      {
+        "codigo": "09",
+        "valor": "LA LIBERTAD"
+      },
+      {
+        "codigo": "10",
+        "valor": "NUEVO CUSCATLÁN"
+      },
+      {
+        "codigo": "11",
+        "valor": "SANTA TECLA"
+      },
+      {
+        "codigo": "12",
+        "valor": "QUEZALTEPEQUE"
+      },
+      {
+        "codigo": "13",
+        "valor": "SACACOYO"
+      },
+      {
+        "codigo": "14",
+        "valor": "SN J VILLANUEVA"
+      },
+      {
+        "codigo": "15",
+        "valor": "SAN JUAN OPICO"
+      },
+      {
+        "codigo": "16",
+        "valor": "SAN MATÍAS"
+      },
+      {
+        "codigo": "17",
+        "valor": "SAN P TACACHICO"
+      },
+      {
+        "codigo": "18",
+        "valor": "TAMANIQUE"
+      },
+      {
+        "codigo": "19",
+        "valor": "TALNIQUE"
+      },
+      {
+        "codigo": "20",
+        "valor": "TEOTEPEQUE"
+      },
+      {
+        "codigo": "21",
+        "valor": "TEPECOYO"
+      },
+      {
+        "codigo": "22",
+        "valor": "ZARAGOZA"
+      },
+      {
+        "codigo": "01",
+        "valor": "AGUILARES"
+      },
+      {
+        "codigo": "02",
+        "valor": "APOPA"
+      },
+      {
+        "codigo": "03",
+        "valor": "AYUTUXTEPEQUE"
+      },
+      {
+        "codigo": "04",
+        "valor": "CUSCATANCINGO"
+      },
+      {
+        "codigo": "05",
+        "valor": "EL PAISNAL"
+      },
+      {
+        "codigo": "06",
+        "valor": "GUAZAPA"
+      },
+      {
+        "codigo": "07",
+        "valor": "ILOPANGO"
+      },
+      {
+        "codigo": "08",
+        "valor": "MEJICANOS"
+      },
+      {
+        "codigo": "09",
+        "valor": "NEJAPA"
+      },
+      {
+        "codigo": "10",
+        "valor": "PANCHIMALCO"
+      },
+      {
+        "codigo": "11",
+        "valor": "ROSARIO DE MORA"
+      },
+      {
+        "codigo": "12",
+        "valor": "SAN MARCOS"
+      },
+      {
+        "codigo": "13",
+        "valor": "SAN MARTIN"
+      },
+      {
+        "codigo": "14",
+        "valor": "SAN SALVADOR"
+      },
+      {
+        "codigo": "15",
+        "valor": "STG TEXACUANGOS"
+      },
+      {
+        "codigo": "16",
+        "valor": "SANTO TOMAS"
+      },
+      {
+        "codigo": "17",
+        "valor": "SOYAPANGO"
+      },
+      {
+        "codigo": "18",
+        "valor": "TONACATEPEQUE"
+      },
+      {
+        "codigo": "19",
+        "valor": "CIUDAD DELGADO"
+      },
+      {
+        "codigo": "01",
+        "valor": "CANDELARIA"
+      },
+      {
+        "codigo": "02",
+        "valor": "COJUTEPEQUE"
+      },
+      {
+        "codigo": "03",
+        "valor": "EL CARMEN"
+      },
+      {
+        "codigo": "04",
+        "valor": "EL ROSARIO"
+      },
+      {
+        "codigo": "05",
+        "valor": "MONTE SAN JUAN"
+      },
+      {
+        "codigo": "06",
+        "valor": "ORAT CONCEPCIÓN"
+      },
+      {
+        "codigo": "07",
+        "valor": "SAN B PERULAPIA"
+      },
+      {
+        "codigo": "08",
+        "valor": "SAN CRISTÓBAL"
+      },
+      {
+        "codigo": "09",
+        "valor": "SAN J GUAYABAL"
+      },
+      {
+        "codigo": "10",
+        "valor": "SAN P PERULAPÁN"
+      },
+      {
+        "codigo": "11",
+        "valor": "SAN RAF CEDROS"
+      },
+      {
+        "codigo": "12",
+        "valor": "SAN RAMON"
+      },
+      {
+        "codigo": "13",
+        "valor": "STA C ANALQUITO"
+      },
+      {
+        "codigo": "14",
+        "valor": "STA C MICHAPA"
+      },
+      {
+        "codigo": "15",
+        "valor": "SUCHITOTO"
+      },
+      {
+        "codigo": "16",
+        "valor": "TENANCINGO"
+      },
+      {
+        "codigo": "01",
+        "valor": "CUYULTITÁN"
+      },
+      {
+        "codigo": "02",
+        "valor": "EL ROSARIO"
+      },
+      {
+        "codigo": "03",
+        "valor": "JERUSALÉN"
+      },
+      {
+        "codigo": "04",
+        "valor": "MERCED LA CEIBA"
+      },
+      {
+        "codigo": "05",
+        "valor": "OLOCUILTA"
+      },
+      {
+        "codigo": "06",
+        "valor": "PARAÍSO OSORIO"
+      },
+      {
+        "codigo": "07",
+        "valor": "SN ANT MASAHUAT"
+      },
+      {
+        "codigo": "08",
+        "valor": "SAN EMIGDIO"
+      },
+      {
+        "codigo": "09",
+        "valor": "SN FCO CHINAMEC"
+      },
+      {
+        "codigo": "10",
+        "valor": "SAN J NONUALCO"
+      },
+      {
+        "codigo": "11",
+        "valor": "SAN JUAN TALPA"
+      },
+      {
+        "codigo": "12",
+        "valor": "SAN JUAN TEPEZONTES"
+      },
+      {
+        "codigo": "13",
+        "valor": "SAN LUIS TALPA"
+      },
+      {
+        "codigo": "14",
+        "valor": "SAN MIGUEL TEPEZONTES"
+      },
+      {
+        "codigo": "15",
+        "valor": "SAN PEDRO MASAHUAT"
+      },
+      {
+        "codigo": "16",
+        "valor": "SAN PEDRO NONUALCO"
+      },
+      {
+        "codigo": "17",
+        "valor": "SAN R OBRAJUELO"
+      },
+      {
+        "codigo": "18",
+        "valor": "STA MA OSTUMA"
+      },
+      {
+        "codigo": "19",
+        "valor": "STGO NONUALCO"
+      },
+      {
+        "codigo": "20",
+        "valor": "TAPALHUACA"
+      },
+      {
+        "codigo": "21",
+        "valor": "ZACATECOLUCA"
+      },
+      {
+        "codigo": "22",
+        "valor": "SN LUIS LA HERR"
+      },
+      {
+        "codigo": "01",
+        "valor": "CINQUERA"
+      },
+      {
+        "codigo": "02",
+        "valor": "GUACOTECTI"
+      },
+      {
+        "codigo": "03",
+        "valor": "ILOBASCO"
+      },
+      {
+        "codigo": "04",
+        "valor": "JUTIAPA"
+      },
+      {
+        "codigo": "05",
+        "valor": "SAN ISIDRO"
+      },
+      {
+        "codigo": "06",
+        "valor": "SENSUNTEPEQUE"
+      },
+      {
+        "codigo": "07",
+        "valor": "TEJUTEPEQUE"
+      },
+      {
+        "codigo": "08",
+        "valor": "VICTORIA"
+      },
+      {
+        "codigo": "09",
+        "valor": "DOLORES"
+      },
+      {
+        "codigo": "01",
+        "valor": "APASTEPEQUE"
+      },
+      {
+        "codigo": "02",
+        "valor": "GUADALUPE"
+      },
+      {
+        "codigo": "03",
+        "valor": "SAN CAY ISTEPEQ"
+      },
+      {
+        "codigo": "04",
+        "valor": "SANTA CLARA"
+      },
+      {
+        "codigo": "05",
+        "valor": "SANTO DOMINGO"
+      },
+      {
+        "codigo": "06",
+        "valor": "SN EST CATARINA"
+      },
+      {
+        "codigo": "07",
+        "valor": "SAN ILDEFONSO"
+      },
+      {
+        "codigo": "08",
+        "valor": "SAN LORENZO"
+      },
+      {
+        "codigo": "09",
+        "valor": "SAN SEBASTIÁN"
+      },
+      {
+        "codigo": "10",
+        "valor": "SAN VICENTE"
+      },
+      {
+        "codigo": "11",
+        "valor": "TECOLUCA"
+      },
+      {
+        "codigo": "12",
+        "valor": "TEPETITÁN"
+      },
+      {
+        "codigo": "13",
+        "valor": "VERAPAZ"
+      },
+      {
+        "codigo": "01",
+        "valor": "ALEGRÍA"
+      },
+      {
+        "codigo": "02",
+        "valor": "BERLÍN"
+      },
+      {
+        "codigo": "03",
+        "valor": "CALIFORNIA"
+      },
+      {
+        "codigo": "04",
+        "valor": "CONCEP BATRES"
+      },
+      {
+        "codigo": "05",
+        "valor": "EL TRIUNFO"
+      },
+      {
+        "codigo": "06",
+        "valor": "EREGUAYQUÍN"
+      },
+      {
+        "codigo": "07",
+        "valor": "ESTANZUELAS"
+      },
+      {
+        "codigo": "08",
+        "valor": "JIQUILISCO"
+      },
+      {
+        "codigo": "09",
+        "valor": "JUCUAPA"
+      },
+      {
+        "codigo": "10",
+        "valor": "JUCUARÁN"
+      },
+      {
+        "codigo": "11",
+        "valor": "MERCEDES UMAÑA"
+      },
+      {
+        "codigo": "12",
+        "valor": "NUEVA GRANADA"
+      },
+      {
+        "codigo": "13",
+        "valor": "OZATLÁN"
+      },
+      {
+        "codigo": "14",
+        "valor": "PTO EL TRIUNFO"
+      },
+      {
+        "codigo": "15",
+        "valor": "SAN AGUSTÍN"
+      },
+      {
+        "codigo": "16",
+        "valor": "SN BUENAVENTURA"
+      },
+      {
+        "codigo": "17",
+        "valor": "SAN DIONISIO"
+      },
+      {
+        "codigo": "18",
+        "valor": "SANTA ELENA"
+      },
+      {
+        "codigo": "19",
+        "valor": "SAN FCO JAVIER"
+      },
+      {
+        "codigo": "20",
+        "valor": "SANTA MARÍA"
+      },
+      {
+        "codigo": "21",
+        "valor": "STGO DE MARÍA"
+      },
+      {
+        "codigo": "22",
+        "valor": "TECAPÁN"
+      },
+      {
+        "codigo": "23",
+        "valor": "USULUTÁN"
+      },
+      {
+        "codigo": "01",
+        "valor": "CAROLINA"
+      },
+      {
+        "codigo": "02",
+        "valor": "CIUDAD BARRIOS"
+      },
+      {
+        "codigo": "03",
+        "valor": "COMACARÁN"
+      },
+      {
+        "codigo": "04",
+        "valor": "CHAPELTIQUE"
+      },
+      {
+        "codigo": "05",
+        "valor": "CHINAMECA"
+      },
+      {
+        "codigo": "06",
+        "valor": "CHIRILAGUA"
+      },
+      {
+        "codigo": "07",
+        "valor": "EL TRANSITO"
+      },
+      {
+        "codigo": "08",
+        "valor": "LOLOTIQUE"
+      },
+      {
+        "codigo": "09",
+        "valor": "MONCAGUA"
+      },
+      {
+        "codigo": "10",
+        "valor": "NUEVA GUADALUPE"
+      },
+      {
+        "codigo": "11",
+        "valor": "NVO EDÉN S JUAN"
+      },
+      {
+        "codigo": "12",
+        "valor": "QUELEPA"
+      },
+      {
+        "codigo": "13",
+        "valor": "SAN ANT D MOSCO"
+      },
+      {
+        "codigo": "14",
+        "valor": "SAN GERARDO"
+      },
+      {
+        "codigo": "15",
+        "valor": "SAN JORGE"
+      },
+      {
+        "codigo": "16",
+        "valor": "SAN LUIS REINA"
+      },
+      {
+        "codigo": "17",
+        "valor": "SAN MIGUEL"
+      },
+      {
+        "codigo": "18",
+        "valor": "SAN RAF ORIENTE"
+      },
+      {
+        "codigo": "19",
+        "valor": "SESORI"
+      },
+      {
+        "codigo": "20",
+        "valor": "ULUAZAPA"
+      },
+      {
+        "codigo": "01",
+        "valor": "ARAMBALA"
+      },
+      {
+        "codigo": "02",
+        "valor": "CACAOPERA"
+      },
+      {
+        "codigo": "03",
+        "valor": "CORINTO"
+      },
+      {
+        "codigo": "04",
+        "valor": "CHILANGA"
+      },
+      {
+        "codigo": "05",
+        "valor": "DELIC DE CONCEP"
+      },
+      {
+        "codigo": "06",
+        "valor": "EL DIVISADERO"
+      },
+      {
+        "codigo": "07",
+        "valor": "EL ROSARIO"
+      },
+      {
+        "codigo": "08",
+        "valor": "GUALOCOCTI"
+      },
+      {
+        "codigo": "09",
+        "valor": "GUATAJIAGUA"
+      },
+      {
+        "codigo": "10",
+        "valor": "JOATECA"
+      },
+      {
+        "codigo": "11",
+        "valor": "JOCOAITIQUE"
+      },
+      {
+        "codigo": "12",
+        "valor": "JOCORO"
+      },
+      {
+        "codigo": "13",
+        "valor": "LOLOTIQUILLO"
+      },
+      {
+        "codigo": "14",
+        "valor": "MEANGUERA"
+      },
+      {
+        "codigo": "15",
+        "valor": "OSICALA"
+      },
+      {
+        "codigo": "16",
+        "valor": "PERQUÍN"
+      },
+      {
+        "codigo": "17",
+        "valor": "SAN CARLOS"
+      },
+      {
+        "codigo": "18",
+        "valor": "SAN FERNANDO"
+      },
+      {
+        "codigo": "19",
+        "valor": "SAN FCO GOTERA"
+      },
+      {
+        "codigo": "20",
+        "valor": "SAN ISIDRO"
+      },
+      {
+        "codigo": "21",
+        "valor": "SAN SIMÓN"
+      },
+      {
+        "codigo": "22",
+        "valor": "SENSEMBRA"
+      },
+      {
+        "codigo": "23",
+        "valor": "SOCIEDAD"
+      },
+      {
+        "codigo": "24",
+        "valor": "TOROLA"
+      },
+      {
+        "codigo": "25",
+        "valor": "YAMABAL"
+      },
+      {
+        "codigo": "26",
+        "valor": "YOLOAIQUÍN"
+      },
+      {
+        "codigo": "01",
+        "valor": "ANAMOROS"
+      },
+      {
+        "codigo": "02",
+        "valor": "BOLÍVAR"
+      },
+      {
+        "codigo": "03",
+        "valor": "CONCEP DE OTE"
+      },
+      {
+        "codigo": "04",
+        "valor": "CONCHAGUA"
+      },
+      {
+        "codigo": "05",
+        "valor": "EL CARMEN"
+      },
+      {
+        "codigo": "06",
+        "valor": "EL SAUCE"
+      },
+      {
+        "codigo": "07",
+        "valor": "INTIPUCÁ"
+      },
+      {
+        "codigo": "08",
+        "valor": "LA UNIÓN"
+      },
+      {
+        "codigo": "09",
+        "valor": "LISLIQUE"
+      },
+      {
+        "codigo": "10",
+        "valor": "MEANG DEL GOLFO"
+      },
+      {
+        "codigo": "11",
+        "valor": "NUEVA ESPARTA"
+      },
+      {
+        "codigo": "12",
+        "valor": "PASAQUINA"
+      },
+      {
+        "codigo": "13",
+        "valor": "POLORÓS"
+      },
+      {
+        "codigo": "14",
+        "valor": "SAN ALEJO"
+      },
+      {
+        "codigo": "15",
+        "valor": "SAN JOSE"
+      },
+      {
+        "codigo": "16",
+        "valor": "SANTA ROSA LIMA"
+      },
+      {
+        "codigo": "17",
+        "valor": "YAYANTIQUE"
+      },
+      {
+        "codigo": "18",
+        "valor": "YUCUAIQUÍN"
+      }
+    ],
+    "entradas_por_departamento": {
+      "00": [
+        {
+          "codigo": "00",
+          "valor": "Otro (Para extranjeros)"
+        }
+      ],
+      "01": [
+        {
+          "codigo": "01",
+          "valor": "AHUACHAPÁN"
+        },
+        {
+          "codigo": "02",
+          "valor": "APANECA"
+        },
+        {
+          "codigo": "03",
+          "valor": "ATIQUIZAYA"
+        },
+        {
+          "codigo": "04",
+          "valor": "CONCEPCIÓN DE ATACO"
+        },
+        {
+          "codigo": "05",
+          "valor": "EL REFUGIO"
+        },
+        {
+          "codigo": "06",
+          "valor": "GUAYMANGO"
+        },
+        {
+          "codigo": "07",
+          "valor": "JUJUTLA"
+        },
+        {
+          "codigo": "08",
+          "valor": "SAN FRANCISCO MENÉNDEZ"
+        },
+        {
+          "codigo": "09",
+          "valor": "SAN LORENZO"
+        },
+        {
+          "codigo": "10",
+          "valor": "SAN PEDRO PUXTLA"
+        },
+        {
+          "codigo": "11",
+          "valor": "TACUBA"
+        },
+        {
+          "codigo": "12",
+          "valor": "TURÍN"
+        }
+      ],
+      "02": [
+        {
+          "codigo": "01",
+          "valor": "CANDELARIA DE LA FRONTERA"
+        },
+        {
+          "codigo": "02",
+          "valor": "COATEPEQUE"
+        },
+        {
+          "codigo": "03",
+          "valor": "CHALCHUAPA"
+        },
+        {
+          "codigo": "04",
+          "valor": "EL CONGO"
+        },
+        {
+          "codigo": "05",
+          "valor": "EL PORVENIR"
+        },
+        {
+          "codigo": "06",
+          "valor": "MASAHUAT"
+        },
+        {
+          "codigo": "07",
+          "valor": "METAPÁN"
+        },
+        {
+          "codigo": "08",
+          "valor": "SAN ANTONIO PAJONAL"
+        },
+        {
+          "codigo": "09",
+          "valor": "SAN SEBASTIÁN SALITRILLO"
+        },
+        {
+          "codigo": "10",
+          "valor": "SANTA ANA"
+        },
+        {
+          "codigo": "11",
+          "valor": "STA ROSA GUACHI"
+        },
+        {
+          "codigo": "12",
+          "valor": "STGO D LA FRONT"
+        },
+        {
+          "codigo": "13",
+          "valor": "TEXISTEPEQUE"
+        }
+      ],
+      "03": [
+        {
+          "codigo": "01",
+          "valor": "ACAJUTLA"
+        },
+        {
+          "codigo": "02",
+          "valor": "ARMENIA"
+        },
+        {
+          "codigo": "03",
+          "valor": "CALUCO"
+        },
+        {
+          "codigo": "04",
+          "valor": "CUISNAHUAT"
+        },
+        {
+          "codigo": "05",
+          "valor": "STA I ISHUATAN"
+        },
+        {
+          "codigo": "06",
+          "valor": "IZALCO"
+        },
+        {
+          "codigo": "07",
+          "valor": "JUAYÚA"
+        },
+        {
+          "codigo": "08",
+          "valor": "NAHUIZALCO"
+        },
+        {
+          "codigo": "09",
+          "valor": "NAHULINGO"
+        },
+        {
+          "codigo": "10",
+          "valor": "SALCOATITÁN"
+        },
+        {
+          "codigo": "11",
+          "valor": "SAN ANTONIO DEL MONTE"
+        },
+        {
+          "codigo": "12",
+          "valor": "SAN JULIÁN"
+        },
+        {
+          "codigo": "13",
+          "valor": "STA C MASAHUAT"
+        },
+        {
+          "codigo": "14",
+          "valor": "SANTO DOMINGO GUZMÁN"
+        },
+        {
+          "codigo": "15",
+          "valor": "SONSONATE"
+        },
+        {
+          "codigo": "16",
+          "valor": "SONZACATE"
+        }
+      ],
+      "04": [
+        {
+          "codigo": "01",
+          "valor": "AGUA CALIENTE"
+        },
+        {
+          "codigo": "02",
+          "valor": "ARCATAO"
+        },
+        {
+          "codigo": "03",
+          "valor": "AZACUALPA"
+        },
+        {
+          "codigo": "04",
+          "valor": "CITALÁ"
+        },
+        {
+          "codigo": "05",
+          "valor": "COMALAPA"
+        },
+        {
+          "codigo": "06",
+          "valor": "CONCEPCIÓN QUEZALTEPEQUE"
+        },
+        {
+          "codigo": "07",
+          "valor": "CHALATENANGO"
+        },
+        {
+          "codigo": "08",
+          "valor": "DULCE NOM MARÍA"
+        },
+        {
+          "codigo": "09",
+          "valor": "EL CARRIZAL"
+        },
+        {
+          "codigo": "10",
+          "valor": "EL PARAÍSO"
+        },
+        {
+          "codigo": "11",
+          "valor": "LA LAGUNA"
+        },
+        {
+          "codigo": "12",
+          "valor": "LA PALMA"
+        },
+        {
+          "codigo": "13",
+          "valor": "LA REINA"
+        },
+        {
+          "codigo": "14",
+          "valor": "LAS VUELTAS"
+        },
+        {
+          "codigo": "15",
+          "valor": "NOMBRE DE JESUS"
+        },
+        {
+          "codigo": "16",
+          "valor": "NVA CONCEPCIÓN"
+        },
+        {
+          "codigo": "17",
+          "valor": "NUEVA TRINIDAD"
+        },
+        {
+          "codigo": "18",
+          "valor": "OJOS DE AGUA"
+        },
+        {
+          "codigo": "19",
+          "valor": "POTONICO"
+        },
+        {
+          "codigo": "20",
+          "valor": "SAN ANT LA CRUZ"
+        },
+        {
+          "codigo": "21",
+          "valor": "SAN ANT RANCHOS"
+        },
+        {
+          "codigo": "22",
+          "valor": "SAN FERNANDO"
+        },
+        {
+          "codigo": "23",
+          "valor": "SAN FRANCISCO LEMPA"
+        },
+        {
+          "codigo": "24",
+          "valor": "SAN FRANCISCO MORAZÁN"
+        },
+        {
+          "codigo": "25",
+          "valor": "SAN IGNACIO"
+        },
+        {
+          "codigo": "26",
+          "valor": "SAN I LABRADOR"
+        },
+        {
+          "codigo": "27",
+          "valor": "SAN J CANCASQUE"
+        },
+        {
+          "codigo": "28",
+          "valor": "SAN JOSE FLORES"
+        },
+        {
+          "codigo": "29",
+          "valor": "SAN LUIS CARMEN"
+        },
+        {
+          "codigo": "30",
+          "valor": "SN MIG MERCEDES"
+        },
+        {
+          "codigo": "31",
+          "valor": "SAN RAFAEL"
+        },
+        {
+          "codigo": "32",
+          "valor": "SANTA RITA"
+        },
+        {
+          "codigo": "33",
+          "valor": "TEJUTLA"
+        }
+      ],
+      "05": [
+        {
+          "codigo": "01",
+          "valor": "ANTGO CUSCATLÁN"
+        },
+        {
+          "codigo": "02",
+          "valor": "CIUDAD ARCE"
+        },
+        {
+          "codigo": "03",
+          "valor": "COLON"
+        },
+        {
+          "codigo": "04",
+          "valor": "COMASAGUA"
+        },
+        {
+          "codigo": "05",
+          "valor": "CHILTIUPAN"
+        },
+        {
+          "codigo": "06",
+          "valor": "HUIZÚCAR"
+        },
+        {
+          "codigo": "07",
+          "valor": "JAYAQUE"
+        },
+        {
+          "codigo": "08",
+          "valor": "JICALAPA"
+        },
+        {
+          "codigo": "09",
+          "valor": "LA LIBERTAD"
+        },
+        {
+          "codigo": "10",
+          "valor": "NUEVO CUSCATLÁN"
+        },
+        {
+          "codigo": "11",
+          "valor": "SANTA TECLA"
+        },
+        {
+          "codigo": "12",
+          "valor": "QUEZALTEPEQUE"
+        },
+        {
+          "codigo": "13",
+          "valor": "SACACOYO"
+        },
+        {
+          "codigo": "14",
+          "valor": "SN J VILLANUEVA"
+        },
+        {
+          "codigo": "15",
+          "valor": "SAN JUAN OPICO"
+        },
+        {
+          "codigo": "16",
+          "valor": "SAN MATÍAS"
+        },
+        {
+          "codigo": "17",
+          "valor": "SAN P TACACHICO"
+        },
+        {
+          "codigo": "18",
+          "valor": "TAMANIQUE"
+        },
+        {
+          "codigo": "19",
+          "valor": "TALNIQUE"
+        },
+        {
+          "codigo": "20",
+          "valor": "TEOTEPEQUE"
+        },
+        {
+          "codigo": "21",
+          "valor": "TEPECOYO"
+        },
+        {
+          "codigo": "22",
+          "valor": "ZARAGOZA"
+        }
+      ],
+      "06": [
+        {
+          "codigo": "01",
+          "valor": "AGUILARES"
+        },
+        {
+          "codigo": "02",
+          "valor": "APOPA"
+        },
+        {
+          "codigo": "03",
+          "valor": "AYUTUXTEPEQUE"
+        },
+        {
+          "codigo": "04",
+          "valor": "CUSCATANCINGO"
+        },
+        {
+          "codigo": "05",
+          "valor": "EL PAISNAL"
+        },
+        {
+          "codigo": "06",
+          "valor": "GUAZAPA"
+        },
+        {
+          "codigo": "07",
+          "valor": "ILOPANGO"
+        },
+        {
+          "codigo": "08",
+          "valor": "MEJICANOS"
+        },
+        {
+          "codigo": "09",
+          "valor": "NEJAPA"
+        },
+        {
+          "codigo": "10",
+          "valor": "PANCHIMALCO"
+        },
+        {
+          "codigo": "11",
+          "valor": "ROSARIO DE MORA"
+        },
+        {
+          "codigo": "12",
+          "valor": "SAN MARCOS"
+        },
+        {
+          "codigo": "13",
+          "valor": "SAN MARTIN"
+        },
+        {
+          "codigo": "14",
+          "valor": "SAN SALVADOR"
+        },
+        {
+          "codigo": "15",
+          "valor": "STG TEXACUANGOS"
+        },
+        {
+          "codigo": "16",
+          "valor": "SANTO TOMAS"
+        },
+        {
+          "codigo": "17",
+          "valor": "SOYAPANGO"
+        },
+        {
+          "codigo": "18",
+          "valor": "TONACATEPEQUE"
+        },
+        {
+          "codigo": "19",
+          "valor": "CIUDAD DELGADO"
+        }
+      ],
+      "07": [
+        {
+          "codigo": "01",
+          "valor": "CANDELARIA"
+        },
+        {
+          "codigo": "02",
+          "valor": "COJUTEPEQUE"
+        },
+        {
+          "codigo": "03",
+          "valor": "EL CARMEN"
+        },
+        {
+          "codigo": "04",
+          "valor": "EL ROSARIO"
+        },
+        {
+          "codigo": "05",
+          "valor": "MONTE SAN JUAN"
+        },
+        {
+          "codigo": "06",
+          "valor": "ORAT CONCEPCIÓN"
+        },
+        {
+          "codigo": "07",
+          "valor": "SAN B PERULAPIA"
+        },
+        {
+          "codigo": "08",
+          "valor": "SAN CRISTÓBAL"
+        },
+        {
+          "codigo": "09",
+          "valor": "SAN J GUAYABAL"
+        },
+        {
+          "codigo": "10",
+          "valor": "SAN P PERULAPÁN"
+        },
+        {
+          "codigo": "11",
+          "valor": "SAN RAF CEDROS"
+        },
+        {
+          "codigo": "12",
+          "valor": "SAN RAMON"
+        },
+        {
+          "codigo": "13",
+          "valor": "STA C ANALQUITO"
+        },
+        {
+          "codigo": "14",
+          "valor": "STA C MICHAPA"
+        },
+        {
+          "codigo": "15",
+          "valor": "SUCHITOTO"
+        },
+        {
+          "codigo": "16",
+          "valor": "TENANCINGO"
+        }
+      ],
+      "08": [
+        {
+          "codigo": "01",
+          "valor": "CUYULTITÁN"
+        },
+        {
+          "codigo": "02",
+          "valor": "EL ROSARIO"
+        },
+        {
+          "codigo": "03",
+          "valor": "JERUSALÉN"
+        },
+        {
+          "codigo": "04",
+          "valor": "MERCED LA CEIBA"
+        },
+        {
+          "codigo": "05",
+          "valor": "OLOCUILTA"
+        },
+        {
+          "codigo": "06",
+          "valor": "PARAÍSO OSORIO"
+        },
+        {
+          "codigo": "07",
+          "valor": "SN ANT MASAHUAT"
+        },
+        {
+          "codigo": "08",
+          "valor": "SAN EMIGDIO"
+        },
+        {
+          "codigo": "09",
+          "valor": "SN FCO CHINAMEC"
+        },
+        {
+          "codigo": "10",
+          "valor": "SAN J NONUALCO"
+        },
+        {
+          "codigo": "11",
+          "valor": "SAN JUAN TALPA"
+        },
+        {
+          "codigo": "12",
+          "valor": "SAN JUAN TEPEZONTES"
+        },
+        {
+          "codigo": "13",
+          "valor": "SAN LUIS TALPA"
+        },
+        {
+          "codigo": "14",
+          "valor": "SAN MIGUEL TEPEZONTES"
+        },
+        {
+          "codigo": "15",
+          "valor": "SAN PEDRO MASAHUAT"
+        },
+        {
+          "codigo": "16",
+          "valor": "SAN PEDRO NONUALCO"
+        },
+        {
+          "codigo": "17",
+          "valor": "SAN R OBRAJUELO"
+        },
+        {
+          "codigo": "18",
+          "valor": "STA MA OSTUMA"
+        },
+        {
+          "codigo": "19",
+          "valor": "STGO NONUALCO"
+        },
+        {
+          "codigo": "20",
+          "valor": "TAPALHUACA"
+        },
+        {
+          "codigo": "21",
+          "valor": "ZACATECOLUCA"
+        },
+        {
+          "codigo": "22",
+          "valor": "SN LUIS LA HERR"
+        }
+      ],
+      "09": [
+        {
+          "codigo": "01",
+          "valor": "CINQUERA"
+        },
+        {
+          "codigo": "02",
+          "valor": "GUACOTECTI"
+        },
+        {
+          "codigo": "03",
+          "valor": "ILOBASCO"
+        },
+        {
+          "codigo": "04",
+          "valor": "JUTIAPA"
+        },
+        {
+          "codigo": "05",
+          "valor": "SAN ISIDRO"
+        },
+        {
+          "codigo": "06",
+          "valor": "SENSUNTEPEQUE"
+        },
+        {
+          "codigo": "07",
+          "valor": "TEJUTEPEQUE"
+        },
+        {
+          "codigo": "08",
+          "valor": "VICTORIA"
+        },
+        {
+          "codigo": "09",
+          "valor": "DOLORES"
+        }
+      ],
+      "10": [
+        {
+          "codigo": "01",
+          "valor": "APASTEPEQUE"
+        },
+        {
+          "codigo": "02",
+          "valor": "GUADALUPE"
+        },
+        {
+          "codigo": "03",
+          "valor": "SAN CAY ISTEPEQ"
+        },
+        {
+          "codigo": "04",
+          "valor": "SANTA CLARA"
+        },
+        {
+          "codigo": "05",
+          "valor": "SANTO DOMINGO"
+        },
+        {
+          "codigo": "06",
+          "valor": "SN EST CATARINA"
+        },
+        {
+          "codigo": "07",
+          "valor": "SAN ILDEFONSO"
+        },
+        {
+          "codigo": "08",
+          "valor": "SAN LORENZO"
+        },
+        {
+          "codigo": "09",
+          "valor": "SAN SEBASTIÁN"
+        },
+        {
+          "codigo": "10",
+          "valor": "SAN VICENTE"
+        },
+        {
+          "codigo": "11",
+          "valor": "TECOLUCA"
+        },
+        {
+          "codigo": "12",
+          "valor": "TEPETITÁN"
+        },
+        {
+          "codigo": "13",
+          "valor": "VERAPAZ"
+        }
+      ],
+      "11": [
+        {
+          "codigo": "01",
+          "valor": "ALEGRÍA"
+        },
+        {
+          "codigo": "02",
+          "valor": "BERLÍN"
+        },
+        {
+          "codigo": "03",
+          "valor": "CALIFORNIA"
+        },
+        {
+          "codigo": "04",
+          "valor": "CONCEP BATRES"
+        },
+        {
+          "codigo": "05",
+          "valor": "EL TRIUNFO"
+        },
+        {
+          "codigo": "06",
+          "valor": "EREGUAYQUÍN"
+        },
+        {
+          "codigo": "07",
+          "valor": "ESTANZUELAS"
+        },
+        {
+          "codigo": "08",
+          "valor": "JIQUILISCO"
+        },
+        {
+          "codigo": "09",
+          "valor": "JUCUAPA"
+        },
+        {
+          "codigo": "10",
+          "valor": "JUCUARÁN"
+        },
+        {
+          "codigo": "11",
+          "valor": "MERCEDES UMAÑA"
+        },
+        {
+          "codigo": "12",
+          "valor": "NUEVA GRANADA"
+        },
+        {
+          "codigo": "13",
+          "valor": "OZATLÁN"
+        },
+        {
+          "codigo": "14",
+          "valor": "PTO EL TRIUNFO"
+        },
+        {
+          "codigo": "15",
+          "valor": "SAN AGUSTÍN"
+        },
+        {
+          "codigo": "16",
+          "valor": "SN BUENAVENTURA"
+        },
+        {
+          "codigo": "17",
+          "valor": "SAN DIONISIO"
+        },
+        {
+          "codigo": "18",
+          "valor": "SANTA ELENA"
+        },
+        {
+          "codigo": "19",
+          "valor": "SAN FCO JAVIER"
+        },
+        {
+          "codigo": "20",
+          "valor": "SANTA MARÍA"
+        },
+        {
+          "codigo": "21",
+          "valor": "STGO DE MARÍA"
+        },
+        {
+          "codigo": "22",
+          "valor": "TECAPÁN"
+        },
+        {
+          "codigo": "23",
+          "valor": "USULUTÁN"
+        }
+      ],
+      "12": [
+        {
+          "codigo": "01",
+          "valor": "CAROLINA"
+        },
+        {
+          "codigo": "02",
+          "valor": "CIUDAD BARRIOS"
+        },
+        {
+          "codigo": "03",
+          "valor": "COMACARÁN"
+        },
+        {
+          "codigo": "04",
+          "valor": "CHAPELTIQUE"
+        },
+        {
+          "codigo": "05",
+          "valor": "CHINAMECA"
+        },
+        {
+          "codigo": "06",
+          "valor": "CHIRILAGUA"
+        },
+        {
+          "codigo": "07",
+          "valor": "EL TRANSITO"
+        },
+        {
+          "codigo": "08",
+          "valor": "LOLOTIQUE"
+        },
+        {
+          "codigo": "09",
+          "valor": "MONCAGUA"
+        },
+        {
+          "codigo": "10",
+          "valor": "NUEVA GUADALUPE"
+        },
+        {
+          "codigo": "11",
+          "valor": "NVO EDÉN S JUAN"
+        },
+        {
+          "codigo": "12",
+          "valor": "QUELEPA"
+        },
+        {
+          "codigo": "13",
+          "valor": "SAN ANT D MOSCO"
+        },
+        {
+          "codigo": "14",
+          "valor": "SAN GERARDO"
+        },
+        {
+          "codigo": "15",
+          "valor": "SAN JORGE"
+        },
+        {
+          "codigo": "16",
+          "valor": "SAN LUIS REINA"
+        },
+        {
+          "codigo": "17",
+          "valor": "SAN MIGUEL"
+        },
+        {
+          "codigo": "18",
+          "valor": "SAN RAF ORIENTE"
+        },
+        {
+          "codigo": "19",
+          "valor": "SESORI"
+        },
+        {
+          "codigo": "20",
+          "valor": "ULUAZAPA"
+        }
+      ],
+      "13": [
+        {
+          "codigo": "01",
+          "valor": "ARAMBALA"
+        },
+        {
+          "codigo": "02",
+          "valor": "CACAOPERA"
+        },
+        {
+          "codigo": "03",
+          "valor": "CORINTO"
+        },
+        {
+          "codigo": "04",
+          "valor": "CHILANGA"
+        },
+        {
+          "codigo": "05",
+          "valor": "DELIC DE CONCEP"
+        },
+        {
+          "codigo": "06",
+          "valor": "EL DIVISADERO"
+        },
+        {
+          "codigo": "07",
+          "valor": "EL ROSARIO"
+        },
+        {
+          "codigo": "08",
+          "valor": "GUALOCOCTI"
+        },
+        {
+          "codigo": "09",
+          "valor": "GUATAJIAGUA"
+        },
+        {
+          "codigo": "10",
+          "valor": "JOATECA"
+        },
+        {
+          "codigo": "11",
+          "valor": "JOCOAITIQUE"
+        },
+        {
+          "codigo": "12",
+          "valor": "JOCORO"
+        },
+        {
+          "codigo": "13",
+          "valor": "LOLOTIQUILLO"
+        },
+        {
+          "codigo": "14",
+          "valor": "MEANGUERA"
+        },
+        {
+          "codigo": "15",
+          "valor": "OSICALA"
+        },
+        {
+          "codigo": "16",
+          "valor": "PERQUÍN"
+        },
+        {
+          "codigo": "17",
+          "valor": "SAN CARLOS"
+        },
+        {
+          "codigo": "18",
+          "valor": "SAN FERNANDO"
+        },
+        {
+          "codigo": "19",
+          "valor": "SAN FCO GOTERA"
+        },
+        {
+          "codigo": "20",
+          "valor": "SAN ISIDRO"
+        },
+        {
+          "codigo": "21",
+          "valor": "SAN SIMÓN"
+        },
+        {
+          "codigo": "22",
+          "valor": "SENSEMBRA"
+        },
+        {
+          "codigo": "23",
+          "valor": "SOCIEDAD"
+        },
+        {
+          "codigo": "24",
+          "valor": "TOROLA"
+        },
+        {
+          "codigo": "25",
+          "valor": "YAMABAL"
+        },
+        {
+          "codigo": "26",
+          "valor": "YOLOAIQUÍN"
+        }
+      ],
+      "14": [
+        {
+          "codigo": "01",
+          "valor": "ANAMOROS"
+        },
+        {
+          "codigo": "02",
+          "valor": "BOLÍVAR"
+        },
+        {
+          "codigo": "03",
+          "valor": "CONCEP DE OTE"
+        },
+        {
+          "codigo": "04",
+          "valor": "CONCHAGUA"
+        },
+        {
+          "codigo": "05",
+          "valor": "EL CARMEN"
+        },
+        {
+          "codigo": "06",
+          "valor": "EL SAUCE"
+        },
+        {
+          "codigo": "07",
+          "valor": "INTIPUCÁ"
+        },
+        {
+          "codigo": "08",
+          "valor": "LA UNIÓN"
+        },
+        {
+          "codigo": "09",
+          "valor": "LISLIQUE"
+        },
+        {
+          "codigo": "10",
+          "valor": "MEANG DEL GOLFO"
+        },
+        {
+          "codigo": "11",
+          "valor": "NUEVA ESPARTA"
+        },
+        {
+          "codigo": "12",
+          "valor": "PASAQUINA"
+        },
+        {
+          "codigo": "13",
+          "valor": "POLORÓS"
+        },
+        {
+          "codigo": "14",
+          "valor": "SAN ALEJO"
+        },
+        {
+          "codigo": "15",
+          "valor": "SAN JOSE"
+        },
+        {
+          "codigo": "16",
+          "valor": "SANTA ROSA LIMA"
+        },
+        {
+          "codigo": "17",
+          "valor": "YAYANTIQUE"
+        },
+        {
+          "codigo": "18",
+          "valor": "YUCUAIQUÍN"
+        }
+      ]
+    },
+    "nota": "Los codigos de distrito se repiten entre departamentos; estan agrupados por codigo de Departamento (CAT-012) en entradas_por_departamento."
+  },
+  "CAT-009": {
+    "titulo": "Tipo de establecimiento",
+    "entradas": [
+      {
+        "codigo": "01",
+        "valor": "Sucursal"
+      },
+      {
+        "codigo": "02",
+        "valor": "Casa Matriz"
+      },
+      {
+        "codigo": "04",
+        "valor": "Bodega"
+      },
+      {
+        "codigo": "07",
+        "valor": "Patio"
+      }
+    ]
+  },
+  "CAT-010": {
+    "titulo": "Código tipo de Servicio (Médico)",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "Cirugía"
+      },
+      {
+        "codigo": "2",
+        "valor": "Operación"
+      },
+      {
+        "codigo": "3",
+        "valor": "Tratamiento médico"
+      },
+      {
+        "codigo": "4",
+        "valor": "Cirugía instituto salvadoreño de Bienestar Magisterial"
+      },
+      {
+        "codigo": "5",
+        "valor": "Operación Instituto Salvadoreño de Bienestar Magisterial"
+      },
+      {
+        "codigo": "6",
+        "valor": "Tratamiento médico Instituto Salvadoreño de Bienestar Magisterial"
+      }
+    ]
+  },
+  "CAT-011": {
+    "titulo": "Tipo de ítem",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "Bienes"
+      },
+      {
+        "codigo": "2",
+        "valor": "Servicios"
+      },
+      {
+        "codigo": "3",
+        "valor": "Ambos (Bienes y Servicios, incluye los dos inherente a los Productos o servicios)"
+      },
+      {
+        "codigo": "4",
+        "valor": "Otros tributos por ítem"
+      }
+    ]
+  },
+  "CAT-012": {
+    "titulo": "Departamento",
+    "entradas": [
+      {
+        "codigo": "00",
+        "valor": "Otro (Para extranjeros)"
+      },
+      {
+        "codigo": "01",
+        "valor": "Ahuachapán"
+      },
+      {
+        "codigo": "02",
+        "valor": "Santa Ana"
+      },
+      {
+        "codigo": "03",
+        "valor": "Sonsonate"
+      },
+      {
+        "codigo": "04",
+        "valor": "Chalatenango"
+      },
+      {
+        "codigo": "05",
+        "valor": "La Libertad"
+      },
+      {
+        "codigo": "06",
+        "valor": "San Salvador"
+      },
+      {
+        "codigo": "07",
+        "valor": "Cuscatlán"
+      },
+      {
+        "codigo": "08",
+        "valor": "La Paz"
+      },
+      {
+        "codigo": "09",
+        "valor": "Cabañas"
+      },
+      {
+        "codigo": "10",
+        "valor": "San Vicente"
+      },
+      {
+        "codigo": "11",
+        "valor": "Usulután"
+      },
+      {
+        "codigo": "12",
+        "valor": "San Miguel"
+      },
+      {
+        "codigo": "13",
+        "valor": "Morazán"
+      },
+      {
+        "codigo": "14",
+        "valor": "La Unión"
+      }
+    ]
+  },
+  "CAT-013": {
+    "titulo": "Municipio",
+    "entradas": [
+      {
+        "codigo": "00",
+        "valor": "Otro (Para extranjeros)"
+      },
+      {
+        "codigo": "13",
+        "valor": "AHUACHAPAN NORTE"
+      },
+      {
+        "codigo": "14",
+        "valor": "AHUACHAPAN CENTRO"
+      },
+      {
+        "codigo": "15",
+        "valor": "AHUACHAPAN SUR"
+      },
+      {
+        "codigo": "14",
+        "valor": "SANTA ANA NORTE"
+      },
+      {
+        "codigo": "15",
+        "valor": "SANTA ANA CENTRO"
+      },
+      {
+        "codigo": "16",
+        "valor": "SANTA ANA ESTE"
+      },
+      {
+        "codigo": "17",
+        "valor": "SANTA ANA OESTE"
+      },
+      {
+        "codigo": "17",
+        "valor": "SONSONATE NORTE"
+      },
+      {
+        "codigo": "18",
+        "valor": "SONSONATE CENTRO"
+      },
+      {
+        "codigo": "19",
+        "valor": "SONSONATE ESTE"
+      },
+      {
+        "codigo": "20",
+        "valor": "SONSONATE OESTE"
+      },
+      {
+        "codigo": "34",
+        "valor": "CHALATENANGO NORTE"
+      },
+      {
+        "codigo": "35",
+        "valor": "CHALATENANGO CENTRO"
+      },
+      {
+        "codigo": "36",
+        "valor": "CHALATENANGO SUR"
+      },
+      {
+        "codigo": "23",
+        "valor": "LA LIBERTAD NORTE"
+      },
+      {
+        "codigo": "24",
+        "valor": "LA LIBERTAD CENTRO"
+      },
+      {
+        "codigo": "25",
+        "valor": "LA LIBERTAD OESTE"
+      },
+      {
+        "codigo": "26",
+        "valor": "LA LIBERTAD ESTE"
+      },
+      {
+        "codigo": "27",
+        "valor": "LA LIBERTAD COSTA"
+      },
+      {
+        "codigo": "28",
+        "valor": "LA LIBERTAD SUR"
+      },
+      {
+        "codigo": "20",
+        "valor": "SAN SALVADOR NORTE"
+      },
+      {
+        "codigo": "21",
+        "valor": "SAN SALVADOR OESTE"
+      },
+      {
+        "codigo": "22",
+        "valor": "SAN SALVADOR ESTE"
+      },
+      {
+        "codigo": "23",
+        "valor": "SAN SALVADOR CENTRO"
+      },
+      {
+        "codigo": "24",
+        "valor": "SAN SALVADOR SUR"
+      },
+      {
+        "codigo": "17",
+        "valor": "CUSCATLAN NORTE"
+      },
+      {
+        "codigo": "18",
+        "valor": "CUSCATLAN SUR"
+      },
+      {
+        "codigo": "23",
+        "valor": "LA PAZ OESTE"
+      },
+      {
+        "codigo": "24",
+        "valor": "LA PAZ CENTRO"
+      },
+      {
+        "codigo": "25",
+        "valor": "LA PAZ ESTE"
+      },
+      {
+        "codigo": "10",
+        "valor": "CABAÑAS ESTE"
+      },
+      {
+        "codigo": "11",
+        "valor": "CABAÑAS OESTE"
+      },
+      {
+        "codigo": "14",
+        "valor": "SAN VICENTE NORTE"
+      },
+      {
+        "codigo": "15",
+        "valor": "SAN VICENTE SUR"
+      },
+      {
+        "codigo": "24",
+        "valor": "USULUTAN NORTE"
+      },
+      {
+        "codigo": "25",
+        "valor": "USULUTAN ESTE"
+      },
+      {
+        "codigo": "26",
+        "valor": "USULUTAN OESTE"
+      },
+      {
+        "codigo": "21",
+        "valor": "SAN MIGUEL NORTE"
+      },
+      {
+        "codigo": "22",
+        "valor": "SAN MIGUEL CENTRO"
+      },
+      {
+        "codigo": "23",
+        "valor": "SAN MIGUEL OESTE"
+      },
+      {
+        "codigo": "27",
+        "valor": "MORAZAN NORTE"
+      },
+      {
+        "codigo": "28",
+        "valor": "MORAZAN SUR"
+      },
+      {
+        "codigo": "19",
+        "valor": "LA UNION NORTE"
+      },
+      {
+        "codigo": "20",
+        "valor": "LA UNION SUR"
+      }
+    ]
+  },
+  "CAT-014": {
+    "titulo": "Unidad de Medida",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "metro"
+      },
+      {
+        "codigo": "2",
+        "valor": "Yarda 1"
+      },
+      {
+        "codigo": "6",
+        "valor": "milímetro"
+      },
+      {
+        "codigo": "9",
+        "valor": "kilómetro cuadrado"
+      },
+      {
+        "codigo": "10",
+        "valor": "Hectárea"
+      },
+      {
+        "codigo": "13",
+        "valor": "metro cuadrado"
+      },
+      {
+        "codigo": "15",
+        "valor": "Vara cuadrada 2"
+      },
+      {
+        "codigo": "18",
+        "valor": "metro cúbico"
+      },
+      {
+        "codigo": "20",
+        "valor": "Barril 3"
+      },
+      {
+        "codigo": "22",
+        "valor": "Galón 1, 4"
+      },
+      {
+        "codigo": "23",
+        "valor": "Litro"
+      },
+      {
+        "codigo": "24",
+        "valor": "Botella"
+      },
+      {
+        "codigo": "26",
+        "valor": "Mililitro"
+      },
+      {
+        "codigo": "30",
+        "valor": "Tonelada"
+      },
+      {
+        "codigo": "32",
+        "valor": "Quintal 1"
+      },
+      {
+        "codigo": "33",
+        "valor": "Arroba 1"
+      },
+      {
+        "codigo": "34",
+        "valor": "Kilogramo"
+      },
+      {
+        "codigo": "36",
+        "valor": "Libra 1"
+      },
+      {
+        "codigo": "37",
+        "valor": "Onza troy 5"
+      },
+      {
+        "codigo": "38",
+        "valor": "Onza 1"
+      },
+      {
+        "codigo": "39",
+        "valor": "Gramo"
+      },
+      {
+        "codigo": "40",
+        "valor": "Miligramo"
+      },
+      {
+        "codigo": "42",
+        "valor": "Megawatt"
+      },
+      {
+        "codigo": "43",
+        "valor": "Kilowatt"
+      },
+      {
+        "codigo": "44",
+        "valor": "Watt"
+      },
+      {
+        "codigo": "45",
+        "valor": "Megavoltio-amperio"
+      },
+      {
+        "codigo": "46",
+        "valor": "Kilovoltio-amperio"
+      },
+      {
+        "codigo": "47",
+        "valor": "Voltio-amperio"
+      },
+      {
+        "codigo": "49",
+        "valor": "Gigawatt-hora"
+      },
+      {
+        "codigo": "50",
+        "valor": "Megawatt-hora"
+      },
+      {
+        "codigo": "51",
+        "valor": "Kilowatt-hora"
+      },
+      {
+        "codigo": "52",
+        "valor": "Watt-hora"
+      },
+      {
+        "codigo": "53",
+        "valor": "Kilovoltio"
+      },
+      {
+        "codigo": "54",
+        "valor": "Voltio"
+      },
+      {
+        "codigo": "55",
+        "valor": "Millar"
+      },
+      {
+        "codigo": "56",
+        "valor": "Medio millar"
+      },
+      {
+        "codigo": "57",
+        "valor": "Ciento"
+      },
+      {
+        "codigo": "58",
+        "valor": "Docena"
+      },
+      {
+        "codigo": "59",
+        "valor": "Unidad"
+      },
+      {
+        "codigo": "99",
+        "valor": "Otra 6"
+      }
+    ]
+  },
+  "CAT-015": {
+    "titulo": "Tributos",
+    "entradas": [
+      {
+        "codigo": "20",
+        "valor": "Impuesto al Valor Agregado 13%"
+      },
+      {
+        "codigo": "C3",
+        "valor": "Impuesto al Valor Agregado (exportaciones) 0%"
+      },
+      {
+        "codigo": "59",
+        "valor": "Turismo: por alojamiento (5%)"
+      },
+      {
+        "codigo": "71",
+        "valor": "Turismo: salida del país por vía aérea $7.00"
+      },
+      {
+        "codigo": "D1",
+        "valor": "FOVIAL ($0.20 Ctvs. por galón)"
+      },
+      {
+        "codigo": "C8",
+        "valor": "COTRANS ($0.10 Ctvs. por galón)"
+      },
+      {
+        "codigo": "D5",
+        "valor": "Otras tasas casos especiales"
+      },
+      {
+        "codigo": "D4",
+        "valor": "Otros impuestos casos especiales"
+      },
+      {
+        "codigo": "A8",
+        "valor": "Impuesto Especial al Combustible (0%, 0.5%, 1%)"
+      },
+      {
+        "codigo": "57",
+        "valor": "Impuesto industria de Cemento"
+      },
+      {
+        "codigo": "90",
+        "valor": "Impuesto especial a la primera matrícula"
+      },
+      {
+        "codigo": "D4",
+        "valor": "Otros impuestos casos especiales"
+      },
+      {
+        "codigo": "D5",
+        "valor": "Otras tasas casos especiales"
+      },
+      {
+        "codigo": "A6",
+        "valor": "Impuesto ad- valorem, armas de fuego, municiones explosivas y artículos similares"
+      },
+      {
+        "codigo": "C5",
+        "valor": "Impuesto ad- valorem por diferencial de precios de bebidas alcohólicas (8%)"
+      },
+      {
+        "codigo": "C6",
+        "valor": "Impuesto ad- valorem por diferencial de precios al tabaco cigarrillos (39%)"
+      },
+      {
+        "codigo": "C7",
+        "valor": "Impuesto ad- valorem por diferencial de precios al tabaco cigarros (100%)"
+      },
+      {
+        "codigo": "19",
+        "valor": "Fabricante de Bebidas Gaseosas, Isotónicas, Deportivas, Fortificantes, Energizante o Estimulante"
+      },
+      {
+        "codigo": "28",
+        "valor": "Importador de Bebidas Gaseosas, Isotónicas, Deportivas, Fortificantes, Energizante o Estimulante"
+      },
+      {
+        "codigo": "31",
+        "valor": "Detallistas o Expendedores de Bebidas Alcohólicas"
+      },
+      {
+        "codigo": "32",
+        "valor": "Fabricante de Cerveza"
+      },
+      {
+        "codigo": "33",
+        "valor": "Importador de Cerveza"
+      },
+      {
+        "codigo": "34",
+        "valor": "Fabricante de Productos de Tabaco"
+      },
+      {
+        "codigo": "35",
+        "valor": "Importador de Productos de Tabaco"
+      },
+      {
+        "codigo": "36",
+        "valor": "Fabricante de Armas de Fuego, Municiones y Artículos Similares"
+      },
+      {
+        "codigo": "37",
+        "valor": "Importador de Arma de Fuego, Munición y Artículos. Similares"
+      },
+      {
+        "codigo": "38",
+        "valor": "Fabricante de Explosivos"
+      },
+      {
+        "codigo": "39",
+        "valor": "Importador de Explosivos"
+      },
+      {
+        "codigo": "42",
+        "valor": "Fabricante de Productos Pirotécnicos"
+      },
+      {
+        "codigo": "43",
+        "valor": "Importador de Productos Pirotécnicos"
+      },
+      {
+        "codigo": "44",
+        "valor": "Productor de Tabaco"
+      },
+      {
+        "codigo": "50",
+        "valor": "Distribuidor de Bebidas Gaseosas, Isotónicas, Deportivas, Fortificantes, Energizante o Estimulante"
+      },
+      {
+        "codigo": "51",
+        "valor": "Bebidas Alcohólicas"
+      },
+      {
+        "codigo": "52",
+        "valor": "Cerveza"
+      },
+      {
+        "codigo": "53",
+        "valor": "Productos del Tabaco"
+      },
+      {
+        "codigo": "54",
+        "valor": "Bebidas Carbonatadas o Gaseosas Simples o Endulzadas"
+      },
+      {
+        "codigo": "55",
+        "valor": "Otros Específicos"
+      },
+      {
+        "codigo": "58",
+        "valor": "Alcohol"
+      },
+      {
+        "codigo": "77",
+        "valor": "Importador de Jugos, Néctares, Bebidas con Jugo y Refrescos"
+      },
+      {
+        "codigo": "78",
+        "valor": "Distribuidor de Jugos, Néctares, Bebidas con Jugo y Refrescos"
+      },
+      {
+        "codigo": "79",
+        "valor": "Sobre Llamadas Telefónicas Provenientes del Ext."
+      },
+      {
+        "codigo": "85",
+        "valor": "Detallista de Jugos, Néctares, Bebidas con Jugo y Refrescos"
+      },
+      {
+        "codigo": "86",
+        "valor": "Fabricante de Preparaciones Concentradas o en Polvo para la Elaboración de Bebidas"
+      },
+      {
+        "codigo": "91",
+        "valor": "Fabricante de Jugos, Néctares, Bebidas con Jugo y Refrescos"
+      },
+      {
+        "codigo": "92",
+        "valor": "Importador de Preparaciones Concentradas o en Polvo para la Elaboración de Bebidas"
+      },
+      {
+        "codigo": "A1",
+        "valor": "Específicos y Ad-Valorem"
+      },
+      {
+        "codigo": "A5",
+        "valor": "Bebidas Gaseosas, Isotónicas, Deportivas, Fortificantes, Energizantes o Estimulantes"
+      },
+      {
+        "codigo": "A7",
+        "valor": "Alcohol Etílico"
+      },
+      {
+        "codigo": "A9",
+        "valor": "Sacos Sintéticos"
+      }
+    ]
+  },
+  "CAT-016": {
+    "titulo": "Condición de la Operación",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "Contado"
+      },
+      {
+        "codigo": "2",
+        "valor": "A crédito"
+      },
+      {
+        "codigo": "3",
+        "valor": "Otro"
+      }
+    ]
+  },
+  "CAT-017": {
+    "titulo": "Forma de Pago",
+    "entradas": [
+      {
+        "codigo": "01",
+        "valor": "Billetes y monedas"
+      },
+      {
+        "codigo": "02",
+        "valor": "Tarjeta Débito"
+      },
+      {
+        "codigo": "03",
+        "valor": "Tarjeta Crédito"
+      },
+      {
+        "codigo": "04",
+        "valor": "Cheque"
+      },
+      {
+        "codigo": "05",
+        "valor": "Transferencia-Depósito Bancario"
+      },
+      {
+        "codigo": "08",
+        "valor": "Dinero electrónico"
+      },
+      {
+        "codigo": "09",
+        "valor": "Monedero electrónico"
+      },
+      {
+        "codigo": "11",
+        "valor": "Bitcoin"
+      },
+      {
+        "codigo": "12",
+        "valor": "Otras Criptomonedas"
+      },
+      {
+        "codigo": "13",
+        "valor": "Cuentas por pagar del receptor"
+      },
+      {
+        "codigo": "14",
+        "valor": "Giro bancario"
+      },
+      {
+        "codigo": "99",
+        "valor": "Otros (se debe indicar el medio de pago)"
+      }
+    ]
+  },
+  "CAT-018": {
+    "titulo": "Plazo",
+    "entradas": [
+      {
+        "codigo": "01",
+        "valor": "Días"
+      },
+      {
+        "codigo": "02",
+        "valor": "Meses"
+      },
+      {
+        "codigo": "03",
+        "valor": "Años"
+      }
+    ]
+  },
+  "CAT-019": {
+    "titulo": "Código de Actividad Económica",
+    "entradas": [
+      {
+        "codigo": "01111",
+        "valor": "Cultivo de cereales excepto arroz y para forrajes"
+      },
+      {
+        "codigo": "01112",
+        "valor": "Cultivo de legumbres"
+      },
+      {
+        "codigo": "01113",
+        "valor": "Cultivo de semillas oleaginosas"
+      },
+      {
+        "codigo": "01114",
+        "valor": "Cultivo de plantas para la preparación de semillas"
+      },
+      {
+        "codigo": "01119",
+        "valor": "Cultivo de otros cereales excepto arroz y forrajeros n.c.p."
+      },
+      {
+        "codigo": "01120",
+        "valor": "Cultivo de arroz"
+      },
+      {
+        "codigo": "01131",
+        "valor": "Cultivo de raíces y tubérculos"
+      },
+      {
+        "codigo": "01132",
+        "valor": "Cultivo de brotes, bulbos, vegetales tubérculos y cultivos similares"
+      },
+      {
+        "codigo": "01133",
+        "valor": "Cultivo hortícola de fruto"
+      },
+      {
+        "codigo": "01134",
+        "valor": "Cultivo de hortalizas de hoja y otras hortalizas ncp"
+      },
+      {
+        "codigo": "01140",
+        "valor": "Cultivo de caña de azúcar"
+      },
+      {
+        "codigo": "01150",
+        "valor": "Cultivo de tabaco"
+      },
+      {
+        "codigo": "01161",
+        "valor": "Cultivo de algodón"
+      },
+      {
+        "codigo": "01162",
+        "valor": "Cultivo de fibras vegetales excepto algodón"
+      },
+      {
+        "codigo": "01191",
+        "valor": "Cultivo de plantas no perennes para la producción de semillas y flores"
+      },
+      {
+        "codigo": "01192",
+        "valor": "Cultivo de cereales y pastos para la alimentación animal"
+      },
+      {
+        "codigo": "01199",
+        "valor": "Producción de cultivos no estacionales ncp"
+      },
+      {
+        "codigo": "01220",
+        "valor": "Cultivo de frutas tropicales"
+      },
+      {
+        "codigo": "01230",
+        "valor": "Cultivo de cítricos"
+      },
+      {
+        "codigo": "01240",
+        "valor": "Cultivo de frutas de pepita y hueso"
+      },
+      {
+        "codigo": "01251",
+        "valor": "Cultivo de frutas ncp"
+      },
+      {
+        "codigo": "01252",
+        "valor": "Cultivo de otros frutos y nueces de árboles y arbustos"
+      },
+      {
+        "codigo": "01260",
+        "valor": "Cultivo de frutos oleaginosos"
+      },
+      {
+        "codigo": "01271",
+        "valor": "Cultivo de café"
+      },
+      {
+        "codigo": "01272",
+        "valor": "Cultivo de plantas para la elaboración de bebidas excepto café"
+      },
+      {
+        "codigo": "01281",
+        "valor": "Cultivo de especias y aromáticas"
+      },
+      {
+        "codigo": "01282",
+        "valor": "Cultivo de plantas para la obtención de productos medicinales y farmacéuticos"
+      },
+      {
+        "codigo": "01291",
+        "valor": "Cultivo de árboles de hule (caucho) para la obtención de látex"
+      },
+      {
+        "codigo": "01292",
+        "valor": "Cultivo de plantas para la obtención de productos químicos y colorantes"
+      },
+      {
+        "codigo": "01299",
+        "valor": "Producción de cultivos perennes ncp"
+      },
+      {
+        "codigo": "01300",
+        "valor": "Propagación de plantas"
+      },
+      {
+        "codigo": "01301",
+        "valor": "Cultivo de plantas y flores ornamentales"
+      },
+      {
+        "codigo": "01410",
+        "valor": "Cría y engorde de ganado bovino"
+      },
+      {
+        "codigo": "01420",
+        "valor": "Cría de caballos y otros equinos"
+      },
+      {
+        "codigo": "01440",
+        "valor": "Cría de ovejas y cabras"
+      },
+      {
+        "codigo": "01450",
+        "valor": "Cría de cerdos"
+      },
+      {
+        "codigo": "01460",
+        "valor": "Cría de aves de corral y producción de huevos"
+      },
+      {
+        "codigo": "01491",
+        "valor": "Cría de abejas apicultura para la obtención de miel y otros productos apícolas"
+      },
+      {
+        "codigo": "01492",
+        "valor": "Cría de conejos"
+      },
+      {
+        "codigo": "01493",
+        "valor": "Cría de iguanas y garrobos"
+      },
+      {
+        "codigo": "01494",
+        "valor": "Cría de mariposas y otros insectos"
+      },
+      {
+        "codigo": "01499",
+        "valor": "Cría y obtención de productos animales n.c.p."
+      },
+      {
+        "codigo": "01500",
+        "valor": "Cultivo de productos agrícolas en combinación con la cría de animales"
+      },
+      {
+        "codigo": "01611",
+        "valor": "Servicios de maquinaria agrícola"
+      },
+      {
+        "codigo": "01612",
+        "valor": "Control de plagas"
+      },
+      {
+        "codigo": "01613",
+        "valor": "Servicios de riego"
+      },
+      {
+        "codigo": "01614",
+        "valor": "Servicios de contratación de mano de obra para la agricultura"
+      },
+      {
+        "codigo": "01619",
+        "valor": "Servicios agrícolas ncp"
+      },
+      {
+        "codigo": "01621",
+        "valor": "Actividades para mejorar la reproducción, el crecimiento y el rendimiento de los animales y sus productos"
+      },
+      {
+        "codigo": "01622",
+        "valor": "Servicios de mano de obra pecuaria"
+      },
+      {
+        "codigo": "01629",
+        "valor": "Servicios pecuarios ncp"
+      },
+      {
+        "codigo": "01631",
+        "valor": "Labores post cosecha de preparación de los productos agrícolas para su comercialización o para la industria"
+      },
+      {
+        "codigo": "01632",
+        "valor": "Servicio de beneficio de café"
+      },
+      {
+        "codigo": "01633",
+        "valor": "Servicio de beneficiado de plantas textiles (incluye el beneficiado cuando este es realizado en la misma explotación agropecuaria)"
+      },
+      {
+        "codigo": "01640",
+        "valor": "Tratamiento de semillas para la propagación"
+      },
+      {
+        "codigo": "01700",
+        "valor": "Caza ordinaria y mediante trampas, repoblación de animales de caza y servicios conexos"
+      },
+      {
+        "codigo": "02100",
+        "valor": "Silvicultura y otras actividades forestales"
+      },
+      {
+        "codigo": "02200",
+        "valor": "Extracción de madera"
+      },
+      {
+        "codigo": "02300",
+        "valor": "Recolección de productos diferentes a la madera"
+      },
+      {
+        "codigo": "02400",
+        "valor": "Servicios de apoyo a la silvicultura"
+      },
+      {
+        "codigo": "03110",
+        "valor": "Pesca marítima de altura y costera"
+      },
+      {
+        "codigo": "03120",
+        "valor": "Pesca de agua dulce"
+      },
+      {
+        "codigo": "03210",
+        "valor": "Acuicultura marítima"
+      },
+      {
+        "codigo": "03220",
+        "valor": "Acuicultura de agua dulce"
+      },
+      {
+        "codigo": "03300",
+        "valor": "Servicios de apoyo a la pesca y acuicultura"
+      },
+      {
+        "codigo": "05100",
+        "valor": "Extracción de hulla"
+      },
+      {
+        "codigo": "05200",
+        "valor": "Extracción y aglomeración de lignito"
+      },
+      {
+        "codigo": "06100",
+        "valor": "Extracción de petróleo crudo"
+      },
+      {
+        "codigo": "06200",
+        "valor": "Extracción de gas natural"
+      },
+      {
+        "codigo": "07100",
+        "valor": "Extracción de minerales de hierro"
+      },
+      {
+        "codigo": "07210",
+        "valor": "Extracción de minerales de uranio y torio"
+      },
+      {
+        "codigo": "07290",
+        "valor": "Extracción de minerales metalíferos no ferrosos"
+      },
+      {
+        "codigo": "08100",
+        "valor": "Extracción de piedra, arena y arcilla"
+      },
+      {
+        "codigo": "08910",
+        "valor": "Extracción de minerales para la fabricación de abonos y productos químicos"
+      },
+      {
+        "codigo": "08920",
+        "valor": "Extracción y aglomeración de turba"
+      },
+      {
+        "codigo": "08930",
+        "valor": "Extracción de sal"
+      },
+      {
+        "codigo": "08990",
+        "valor": "Explotación de otras minas y canteras ncp"
+      },
+      {
+        "codigo": "09100",
+        "valor": "Actividades de apoyo a la extracción de petróleo y gas natural"
+      },
+      {
+        "codigo": "09900",
+        "valor": "Actividades de apoyo a la explotación de minas y canteras"
+      },
+      {
+        "codigo": "10101",
+        "valor": "Servicio de rastros y mataderos de bovinos y porcinos"
+      },
+      {
+        "codigo": "10102",
+        "valor": "Matanza y procesamiento de bovinos y porcinos"
+      },
+      {
+        "codigo": "10103",
+        "valor": "Matanza y procesamientos de aves de corral"
+      },
+      {
+        "codigo": "10104",
+        "valor": "Elaboración y conservación de embutidos y tripas naturales"
+      },
+      {
+        "codigo": "10105",
+        "valor": "Servicios de conservación y empaque de carnes"
+      },
+      {
+        "codigo": "10106",
+        "valor": "Elaboración y conservación de grasas y aceites animales"
+      },
+      {
+        "codigo": "10107",
+        "valor": "Servicios de molienda de carne"
+      },
+      {
+        "codigo": "10108",
+        "valor": "Elaboración de productos de carne ncp"
+      },
+      {
+        "codigo": "10201",
+        "valor": "Procesamiento y conservación de pescado, crustáceos y moluscos"
+      },
+      {
+        "codigo": "10209",
+        "valor": "Fabricación de productos de pescado ncp"
+      },
+      {
+        "codigo": "10301",
+        "valor": "Elaboración de jugos de frutas y hortalizas"
+      },
+      {
+        "codigo": "10302",
+        "valor": "Elaboración y envase de jaleas, mermeladas y frutas deshidratadas"
+      },
+      {
+        "codigo": "10309",
+        "valor": "Elaboración de productos de frutas y hortalizas n.c.p."
+      },
+      {
+        "codigo": "10401",
+        "valor": "Fabricación de aceites y grasas vegetales y animales comestibles"
+      },
+      {
+        "codigo": "10402",
+        "valor": "Fabricación de aceites y grasas vegetales y animales no comestibles"
+      },
+      {
+        "codigo": "10409",
+        "valor": "Servicio de maquilado de aceites"
+      },
+      {
+        "codigo": "10501",
+        "valor": "Fabricación de productos lácteos excepto sorbetes y quesos sustitutos"
+      },
+      {
+        "codigo": "10502",
+        "valor": "Fabricación de sorbetes y helados"
+      },
+      {
+        "codigo": "10503",
+        "valor": "Fabricación de quesos"
+      },
+      {
+        "codigo": "10611",
+        "valor": "Molienda de cereales"
+      },
+      {
+        "codigo": "10612",
+        "valor": "Elaboración de cereales para el desayuno y similares"
+      },
+      {
+        "codigo": "10613",
+        "valor": "Servicios de beneficiado de productos agrícolas ncp (excluye Beneficio de azúcar rama 1072 y beneficio de café rama 0163)"
+      },
+      {
+        "codigo": "10621",
+        "valor": "Fabricación de almidón"
+      },
+      {
+        "codigo": "10628",
+        "valor": "Servicio de molienda de maíz húmedo molino para nixtamal"
+      },
+      {
+        "codigo": "10711",
+        "valor": "Elaboración de tortillas"
+      },
+      {
+        "codigo": "10712",
+        "valor": "Fabricación de pan, galletas y barquillos"
+      },
+      {
+        "codigo": "10713",
+        "valor": "Fabricación de repostería"
+      },
+      {
+        "codigo": "10721",
+        "valor": "Ingenios azucareros"
+      },
+      {
+        "codigo": "10722",
+        "valor": "Molienda de caña de azúcar para la elaboración de dulces"
+      },
+      {
+        "codigo": "10723",
+        "valor": "Elaboración de jarabes de azúcar y otros similares"
+      },
+      {
+        "codigo": "10724",
+        "valor": "Maquilado de azúcar de caña"
+      },
+      {
+        "codigo": "10730",
+        "valor": "Fabricación de cacao, chocolates y productos de confitería"
+      },
+      {
+        "codigo": "10740",
+        "valor": "Elaboración de macarrones, fideos, y productos farináceos similares"
+      },
+      {
+        "codigo": "10750",
+        "valor": "Elaboración de comidas y platos preparados para la reventa en locales y/o para exportación"
+      },
+      {
+        "codigo": "10791",
+        "valor": "Elaboración de productos de café"
+      },
+      {
+        "codigo": "10792",
+        "valor": "Elaboración de especies, sazonadores y condimentos"
+      },
+      {
+        "codigo": "10793",
+        "valor": "Elaboración de sopas, cremas y consomé"
+      },
+      {
+        "codigo": "10794",
+        "valor": "Fabricación de bocadillos tostados y/o fritos"
+      },
+      {
+        "codigo": "10799",
+        "valor": "Elaboración de productos alimenticios ncp"
+      },
+      {
+        "codigo": "10800",
+        "valor": "Elaboración de alimentos preparados para animales"
+      },
+      {
+        "codigo": "11012",
+        "valor": "Fabricación de aguardiente y licores"
+      },
+      {
+        "codigo": "11020",
+        "valor": "Elaboración de vinos"
+      },
+      {
+        "codigo": "11030",
+        "valor": "Fabricación de cerveza"
+      },
+      {
+        "codigo": "11041",
+        "valor": "Fabricación de aguas gaseosas"
+      },
+      {
+        "codigo": "11042",
+        "valor": "Fabricación y envasado de agua"
+      },
+      {
+        "codigo": "11043",
+        "valor": "Elaboración de refrescos"
+      },
+      {
+        "codigo": "11048",
+        "valor": "Maquilado de aguas gaseosas"
+      },
+      {
+        "codigo": "11049",
+        "valor": "Elaboración de bebidas no alcohólicas"
+      },
+      {
+        "codigo": "12000",
+        "valor": "Elaboración de productos de tabaco"
+      },
+      {
+        "codigo": "13111",
+        "valor": "Preparación de fibras textiles"
+      },
+      {
+        "codigo": "13112",
+        "valor": "Fabricación de hilados"
+      },
+      {
+        "codigo": "13120",
+        "valor": "Fabricación de telas"
+      },
+      {
+        "codigo": "13130",
+        "valor": "Acabado de productos textiles"
+      },
+      {
+        "codigo": "13910",
+        "valor": "Fabricación de tejidos de punto y ganchillo"
+      },
+      {
+        "codigo": "13921",
+        "valor": "Fabricación de productos textiles para el hogar"
+      },
+      {
+        "codigo": "13922",
+        "valor": "Sacos, bolsas y otros artículos textiles"
+      },
+      {
+        "codigo": "13929",
+        "valor": "Fabricación de artículos confeccionados con materiales textiles, excepto prendas de vestir n.c.p"
+      },
+      {
+        "codigo": "13930",
+        "valor": "Fabricación de tapices y alfombras"
+      },
+      {
+        "codigo": "13941",
+        "valor": "Fabricación de cuerdas de henequén y otras fibras naturales (lazos, pitas)"
+      },
+      {
+        "codigo": "13942",
+        "valor": "Fabricación de redes de diversos materiales"
+      },
+      {
+        "codigo": "13948",
+        "valor": "Maquilado de productos trenzables de cualquier material (petates, sillas, etc.)"
+      },
+      {
+        "codigo": "13991",
+        "valor": "Fabricación de adornos, etiquetas y otros artículos para prendas de vestir"
+      },
+      {
+        "codigo": "13992",
+        "valor": "Servicio de bordados en artículos y prendas de tela"
+      },
+      {
+        "codigo": "13999",
+        "valor": "Fabricación de productos textiles ncp"
+      },
+      {
+        "codigo": "14101",
+        "valor": "Fabricación de ropa interior, para dormir y similares"
+      },
+      {
+        "codigo": "14102",
+        "valor": "Fabricación de ropa para niños"
+      },
+      {
+        "codigo": "14103",
+        "valor": "Fabricación de prendas de vestir para ambos sexos"
+      },
+      {
+        "codigo": "14104",
+        "valor": "Confección de prendas a medida"
+      },
+      {
+        "codigo": "14105",
+        "valor": "Fabricación de prendas de vestir para deportes"
+      },
+      {
+        "codigo": "14106",
+        "valor": "Elaboración de artesanías de uso personal confeccionadas especialmente de materiales textiles"
+      },
+      {
+        "codigo": "14108",
+        "valor": "Maquilado de prendas de vestir, accesorios y otros"
+      },
+      {
+        "codigo": "14109",
+        "valor": "Fabricación de prendas y accesorios de vestir n.c.p."
+      },
+      {
+        "codigo": "14200",
+        "valor": "Fabricación de artículos de piel"
+      },
+      {
+        "codigo": "14301",
+        "valor": "Fabricación de calcetines, calcetas, medias (panty house) y otros similares"
+      },
+      {
+        "codigo": "14302",
+        "valor": "Fabricación de ropa interior de tejido de punto"
+      },
+      {
+        "codigo": "14309",
+        "valor": "Fabricación de prendas de vestir de tejido de punto ncp"
+      },
+      {
+        "codigo": "15110",
+        "valor": "Curtido y adobo de cueros; adobo y teñido de pieles"
+      },
+      {
+        "codigo": "15121",
+        "valor": "Fabricación de maletas, bolsos de mano y otros artículos de marroquinería"
+      },
+      {
+        "codigo": "15122",
+        "valor": "Fabricación de monturas, accesorios y vainas talabartería"
+      },
+      {
+        "codigo": "15123",
+        "valor": "Fabricación de artesanías principalmente de cuero natural y sintético"
+      },
+      {
+        "codigo": "15128",
+        "valor": "Maquilado de artículos de cuero natural, sintético y de otros materiales"
+      },
+      {
+        "codigo": "15201",
+        "valor": "Fabricación de calzado"
+      },
+      {
+        "codigo": "15202",
+        "valor": "Fabricación de partes y accesorios de calzado"
+      },
+      {
+        "codigo": "15208",
+        "valor": "Maquilado de partes y accesorios de calzado"
+      },
+      {
+        "codigo": "16100",
+        "valor": "Aserradero y acepilladura de madera"
+      },
+      {
+        "codigo": "16210",
+        "valor": "Fabricación de madera laminada, terciada, enchapada y contrachapada, paneles para la construcción"
+      },
+      {
+        "codigo": "16220",
+        "valor": "Fabricación de partes y piezas de carpintería para edificios y construcciones"
+      },
+      {
+        "codigo": "16230",
+        "valor": "Fabricación de envases y recipientes de madera"
+      },
+      {
+        "codigo": "16292",
+        "valor": "Fabricación de artesanías de madera, semillas, materiales trenzables"
+      },
+      {
+        "codigo": "16299",
+        "valor": "Fabricación de productos de madera, corcho, paja y materiales trenzables ncp"
+      },
+      {
+        "codigo": "17010",
+        "valor": "Fabricación de pasta de madera, papel y cartón"
+      },
+      {
+        "codigo": "17020",
+        "valor": "Fabricación de papel y cartón ondulado y envases de papel y cartón"
+      },
+      {
+        "codigo": "17091",
+        "valor": "Fabricación de artículos de papel y cartón de uso personal y doméstico"
+      },
+      {
+        "codigo": "17092",
+        "valor": "Fabricación de productos de papel ncp"
+      },
+      {
+        "codigo": "18110",
+        "valor": "Impresión"
+      },
+      {
+        "codigo": "18120",
+        "valor": "Servicios relacionados con la impresión"
+      },
+      {
+        "codigo": "18200",
+        "valor": "Reproducción de grabaciones"
+      },
+      {
+        "codigo": "19100",
+        "valor": "Fabricación de productos de hornos de coque"
+      },
+      {
+        "codigo": "19201",
+        "valor": "Fabricación de combustible"
+      },
+      {
+        "codigo": "19202",
+        "valor": "Fabricación de aceites y lubricantes"
+      },
+      {
+        "codigo": "20111",
+        "valor": "Fabricación de materias primas para la fabricación de colorantes"
+      },
+      {
+        "codigo": "20112",
+        "valor": "Fabricación de materiales curtientes"
+      },
+      {
+        "codigo": "20113",
+        "valor": "Fabricación de gases industriales"
+      },
+      {
+        "codigo": "20114",
+        "valor": "Fabricación de alcohol etílico"
+      },
+      {
+        "codigo": "20119",
+        "valor": "Fabricación de sustancias químicas básicas"
+      },
+      {
+        "codigo": "20120",
+        "valor": "Fabricación de abonos y fertilizantes"
+      },
+      {
+        "codigo": "20130",
+        "valor": "Fabricación de plástico y caucho en formas primarias"
+      },
+      {
+        "codigo": "20210",
+        "valor": "Fabricación de plaguicidas y otros productos químicos de uso agropecuario"
+      },
+      {
+        "codigo": "20220",
+        "valor": "Fabricación de pinturas, barnices y productos de revestimiento similares; tintas de imprenta y masillas"
+      },
+      {
+        "codigo": "20231",
+        "valor": "Fabricación de jabones, detergentes y similares para limpieza"
+      },
+      {
+        "codigo": "20232",
+        "valor": "Fabricación de perfumes, cosméticos y productos de higiene y cuidado personal, incluyendo tintes, champú, etc."
+      },
+      {
+        "codigo": "20291",
+        "valor": "Fabricación de tintas y colores para escribir y pintar; fabricación de cintas para impresoras"
+      },
+      {
+        "codigo": "20292",
+        "valor": "Fabricación de productos pirotécnicos, explosivos y municiones"
+      },
+      {
+        "codigo": "20299",
+        "valor": "Fabricación de productos químicos n.c.p."
+      },
+      {
+        "codigo": "20300",
+        "valor": "Fabricación de fibras artificiales"
+      },
+      {
+        "codigo": "21001",
+        "valor": "Manufactura de productos farmacéuticos, sustancias químicas y productos botánicos"
+      },
+      {
+        "codigo": "21008",
+        "valor": "Maquilado de medicamentos"
+      },
+      {
+        "codigo": "22110",
+        "valor": "Fabricación de cubiertas y cámaras; renovación y recauchutado de cubiertas"
+      },
+      {
+        "codigo": "22190",
+        "valor": "Fabricación de otros productos de caucho"
+      },
+      {
+        "codigo": "22201",
+        "valor": "Fabricación de envases plásticos"
+      },
+      {
+        "codigo": "22202",
+        "valor": "Fabricación de productos plásticos para uso personal o doméstico"
+      },
+      {
+        "codigo": "22208",
+        "valor": "Maquila de plásticos"
+      },
+      {
+        "codigo": "22209",
+        "valor": "Fabricación de productos plásticos n.c.p."
+      },
+      {
+        "codigo": "23101",
+        "valor": "Fabricación de vidrio"
+      },
+      {
+        "codigo": "23102",
+        "valor": "Fabricación de recipientes y envases de vidrio"
+      },
+      {
+        "codigo": "23108",
+        "valor": "Servicio de maquilado"
+      },
+      {
+        "codigo": "23109",
+        "valor": "Fabricación de productos de vidrio ncp"
+      },
+      {
+        "codigo": "23910",
+        "valor": "Fabricación de productos refractarios"
+      },
+      {
+        "codigo": "23920",
+        "valor": "Fabricación de productos de arcilla para la construcción"
+      },
+      {
+        "codigo": "23931",
+        "valor": "Fabricación de productos de cerámica y porcelana no refractaria"
+      },
+      {
+        "codigo": "23932",
+        "valor": "Fabricación de productos de cerámica y porcelana ncp"
+      },
+      {
+        "codigo": "23940",
+        "valor": "Fabricación de cemento, cal y yeso"
+      },
+      {
+        "codigo": "23950",
+        "valor": "Fabricación de artículos de hormigón, cemento y yeso"
+      },
+      {
+        "codigo": "23960",
+        "valor": "Corte, tallado y acabado de la piedra"
+      },
+      {
+        "codigo": "23990",
+        "valor": "Fabricación de productos minerales no metálicos ncp"
+      },
+      {
+        "codigo": "24100",
+        "valor": "Industrias básicas de hierro y acero"
+      },
+      {
+        "codigo": "24200",
+        "valor": "Fabricación de productos primarios de metales preciosos y metales no ferrosos"
+      },
+      {
+        "codigo": "24310",
+        "valor": "Fundición de hierro y acero"
+      },
+      {
+        "codigo": "24320",
+        "valor": "Fundición de metales no ferrosos"
+      },
+      {
+        "codigo": "25111",
+        "valor": "Fabricación de productos metálicos para uso estructural"
+      },
+      {
+        "codigo": "25118",
+        "valor": "Servicio de maquila para la fabricación de estructuras metálicas"
+      },
+      {
+        "codigo": "25120",
+        "valor": "Fabricación de tanques, depósitos y recipientes de metal"
+      },
+      {
+        "codigo": "25130",
+        "valor": "Fabricación de generadores de vapor, excepto calderas de agua caliente para calefacción central"
+      },
+      {
+        "codigo": "25200",
+        "valor": "Fabricación de armas y municiones"
+      },
+      {
+        "codigo": "25910",
+        "valor": "Forjado, prensado, estampado y laminado de metales; pulvimetalurgia"
+      },
+      {
+        "codigo": "25920",
+        "valor": "Tratamiento y revestimiento de metales"
+      },
+      {
+        "codigo": "25930",
+        "valor": "Fabricación de artículos de cuchillería, herramientas de mano y artículos de ferretería"
+      },
+      {
+        "codigo": "25991",
+        "valor": "Fabricación de envases y artículos conexos de metal"
+      },
+      {
+        "codigo": "25992",
+        "valor": "Fabricación de artículos metálicos de uso personal y/o doméstico"
+      },
+      {
+        "codigo": "25999",
+        "valor": "Fabricación de productos elaborados de metal ncp"
+      },
+      {
+        "codigo": "26100",
+        "valor": "Fabricación de componentes electrónicos"
+      },
+      {
+        "codigo": "26200",
+        "valor": "Fabricación de computadoras y equipo conexo"
+      },
+      {
+        "codigo": "26300",
+        "valor": "Fabricación de equipo de comunicaciones"
+      },
+      {
+        "codigo": "26400",
+        "valor": "Fabricación de aparatos electrónicos de consumo para audio, video radio y televisión"
+      },
+      {
+        "codigo": "26510",
+        "valor": "Fabricación de instrumentos y aparatos para medir, verificar, ensayar, navegar y de control de procesos industriales"
+      },
+      {
+        "codigo": "26520",
+        "valor": "Fabricación de relojes y piezas de relojes"
+      },
+      {
+        "codigo": "26600",
+        "valor": "Fabricación de equipo médico de irradiación y equipo electrónico de uso médico y terapéutico"
+      },
+      {
+        "codigo": "26700",
+        "valor": "Fabricación de instrumentos de óptica y equipo fotográfico"
+      },
+      {
+        "codigo": "26800",
+        "valor": "Fabricación de medios magnéticos y ópticos"
+      },
+      {
+        "codigo": "27100",
+        "valor": "Fabricación de motores, generadores, transformadores eléctricos, aparatos de distribución y control de electricidad"
+      },
+      {
+        "codigo": "27200",
+        "valor": "Fabricación de pilas, baterías y acumuladores"
+      },
+      {
+        "codigo": "27310",
+        "valor": "Fabricación de cables de fibra óptica"
+      },
+      {
+        "codigo": "27320",
+        "valor": "Fabricación de otros hilos y cables eléctricos"
+      },
+      {
+        "codigo": "27330",
+        "valor": "Fabricación de dispositivos de cableados"
+      },
+      {
+        "codigo": "27400",
+        "valor": "Fabricación de equipo eléctrico de iluminación"
+      },
+      {
+        "codigo": "27500",
+        "valor": "Fabricación de aparatos de uso doméstico"
+      },
+      {
+        "codigo": "27900",
+        "valor": "Fabricación de otros tipos de equipo eléctrico"
+      },
+      {
+        "codigo": "28110",
+        "valor": "Fabricación de motores y turbinas, excepto motores para aeronaves, vehículos automotores y motocicletas"
+      },
+      {
+        "codigo": "28120",
+        "valor": "Fabricación de equipo hidráulico"
+      },
+      {
+        "codigo": "28130",
+        "valor": "Fabricación de otras bombas, compresores, grifos y válvulas"
+      },
+      {
+        "codigo": "28140",
+        "valor": "Fabricación de cojinetes, engranajes, trenes de engranajes y piezas de transmisión"
+      },
+      {
+        "codigo": "28150",
+        "valor": "Fabricación de hornos y quemadores"
+      },
+      {
+        "codigo": "28160",
+        "valor": "Fabricación de equipo de elevación y manipulación"
+      },
+      {
+        "codigo": "28170",
+        "valor": "Fabricación de maquinaria y equipo de oficina"
+      },
+      {
+        "codigo": "28180",
+        "valor": "Fabricación de herramientas manuales"
+      },
+      {
+        "codigo": "28190",
+        "valor": "Fabricación de otros tipos de maquinaria de uso general"
+      },
+      {
+        "codigo": "28210",
+        "valor": "Fabricación de maquinaria agropecuaria y forestal"
+      },
+      {
+        "codigo": "28220",
+        "valor": "Fabricación de máquinas para conformar metales y maquinaria herramienta"
+      },
+      {
+        "codigo": "28230",
+        "valor": "Fabricación de maquinaria metalúrgica"
+      },
+      {
+        "codigo": "28240",
+        "valor": "Fabricación de maquinaria para la explotación de minas y canteras y para obras de construcción"
+      },
+      {
+        "codigo": "28250",
+        "valor": "Fabricación de maquinaria para la elaboración de alimentos, bebidas y tabaco"
+      },
+      {
+        "codigo": "28260",
+        "valor": "Fabricación de maquinaria para la elaboración de productos textiles, prendas de vestir y cueros"
+      },
+      {
+        "codigo": "28291",
+        "valor": "Fabricación de máquinas para imprenta"
+      },
+      {
+        "codigo": "28299",
+        "valor": "Fabricación de maquinaria de uso especial ncp"
+      },
+      {
+        "codigo": "29100",
+        "valor": "Fabricación vehículos automotores"
+      },
+      {
+        "codigo": "29200",
+        "valor": "Fabricación de carrocerías para vehículos automotores; fabricación de remolques y semiremolques"
+      },
+      {
+        "codigo": "29300",
+        "valor": "Fabricación de partes, piezas y accesorios para vehículos automotores"
+      },
+      {
+        "codigo": "30110",
+        "valor": "Fabricación de buques"
+      },
+      {
+        "codigo": "30120",
+        "valor": "Construcción y reparación de embarcaciones de recreo"
+      },
+      {
+        "codigo": "30200",
+        "valor": "Fabricación de locomotoras y de material rodante"
+      },
+      {
+        "codigo": "30300",
+        "valor": "Fabricación de aeronaves y naves espaciales"
+      },
+      {
+        "codigo": "30400",
+        "valor": "Fabricación de vehículos militares de combate"
+      },
+      {
+        "codigo": "30910",
+        "valor": "Fabricación de motocicletas"
+      },
+      {
+        "codigo": "30920",
+        "valor": "Fabricación de bicicletas y sillones de ruedas para inválidos"
+      },
+      {
+        "codigo": "30990",
+        "valor": "Fabricación de equipo de transporte ncp"
+      },
+      {
+        "codigo": "31001",
+        "valor": "Fabricación de colchones y somier"
+      },
+      {
+        "codigo": "31002",
+        "valor": "Fabricación de muebles y otros productos de madera a medida"
+      },
+      {
+        "codigo": "31008",
+        "valor": "Servicios de maquilado de muebles"
+      },
+      {
+        "codigo": "31009",
+        "valor": "Fabricación de muebles ncp"
+      },
+      {
+        "codigo": "32110",
+        "valor": "Fabricación de joyas platerías y joyerías"
+      },
+      {
+        "codigo": "32120",
+        "valor": "Fabricación de joyas de imitación (fantasía) y artículos conexos"
+      },
+      {
+        "codigo": "32200",
+        "valor": "Fabricación de instrumentos musicales"
+      },
+      {
+        "codigo": "32301",
+        "valor": "Fabricación de artículos de deporte"
+      },
+      {
+        "codigo": "32308",
+        "valor": "Servicio de maquila de productos deportivos"
+      },
+      {
+        "codigo": "32401",
+        "valor": "Fabricación de juegos de mesa y de salón"
+      },
+      {
+        "codigo": "32402",
+        "valor": "Servicio de maquilado de juguetes y juegos"
+      },
+      {
+        "codigo": "32409",
+        "valor": "Fabricación de juegos y juguetes n.c.p."
+      },
+      {
+        "codigo": "32500",
+        "valor": "Fabricación de instrumentos y materiales médicos y odontológicos"
+      },
+      {
+        "codigo": "32901",
+        "valor": "Fabricación de lápices, bolígrafos, sellos y artículos de librería en general"
+      },
+      {
+        "codigo": "32902",
+        "valor": "Fabricación de escobas, cepillos, pinceles y similares"
+      },
+      {
+        "codigo": "32903",
+        "valor": "Fabricación de artesanías de materiales diversos"
+      },
+      {
+        "codigo": "32904",
+        "valor": "Fabricación de artículos de uso personal y domésticos n.c.p."
+      },
+      {
+        "codigo": "32905",
+        "valor": "Fabricación de accesorios para las confecciones y la marroquinería n.c.p."
+      },
+      {
+        "codigo": "32908",
+        "valor": "Servicios de maquila ncp"
+      },
+      {
+        "codigo": "32909",
+        "valor": "Fabricación de productos manufacturados n.c.p."
+      },
+      {
+        "codigo": "33110",
+        "valor": "Reparación y mantenimiento de productos elaborados de metal"
+      },
+      {
+        "codigo": "33120",
+        "valor": "Reparación y mantenimiento de maquinaria"
+      },
+      {
+        "codigo": "33130",
+        "valor": "Reparación y mantenimiento de equipo electrónico y óptico"
+      },
+      {
+        "codigo": "33140",
+        "valor": "Reparación y mantenimiento de equipo eléctrico"
+      },
+      {
+        "codigo": "33150",
+        "valor": "Reparación y mantenimiento de equipo de transporte, excepto vehículos automotores"
+      },
+      {
+        "codigo": "33190",
+        "valor": "Reparación y mantenimiento de equipos n.c.p."
+      },
+      {
+        "codigo": "33200",
+        "valor": "Instalación de maquinaria y equipo industrial"
+      },
+      {
+        "codigo": "35101",
+        "valor": "Generación de energía eléctrica"
+      },
+      {
+        "codigo": "35102",
+        "valor": "Transmisión de energía eléctrica"
+      },
+      {
+        "codigo": "35103",
+        "valor": "Distribución de energía eléctrica"
+      },
+      {
+        "codigo": "35200",
+        "valor": "Fabricación de gas, distribución de combustibles gaseosos por tuberías"
+      },
+      {
+        "codigo": "35300",
+        "valor": "Suministro de vapor y agua caliente"
+      },
+      {
+        "codigo": "36000",
+        "valor": "Captación, tratamiento y suministro de agua"
+      },
+      {
+        "codigo": "37000",
+        "valor": "Evacuación de aguas residuales (alcantarillado)"
+      },
+      {
+        "codigo": "38110",
+        "valor": "Recolección y transporte de desechos sólidos proveniente de hogares y sector urbano"
+      },
+      {
+        "codigo": "38120",
+        "valor": "Recolección de desechos peligrosos"
+      },
+      {
+        "codigo": "38210",
+        "valor": "Tratamiento y eliminación de desechos inicuos"
+      },
+      {
+        "codigo": "38220",
+        "valor": "Tratamiento y eliminación de desechos peligrosos"
+      },
+      {
+        "codigo": "38301",
+        "valor": "Reciclaje de desperdicios y desechos textiles"
+      },
+      {
+        "codigo": "38302",
+        "valor": "Reciclaje de desperdicios y desechos de plástico y caucho"
+      },
+      {
+        "codigo": "38303",
+        "valor": "Reciclaje de desperdicios y desechos de vidrio"
+      },
+      {
+        "codigo": "38304",
+        "valor": "Reciclaje de desperdicios y desechos de papel y cartón"
+      },
+      {
+        "codigo": "38305",
+        "valor": "Reciclaje de desperdicios y desechos metálicos"
+      },
+      {
+        "codigo": "38309",
+        "valor": "Reciclaje de desperdicios y desechos no metálicos n.c.p."
+      },
+      {
+        "codigo": "39000",
+        "valor": "Actividades de Saneamiento y otros Servicios de Gestión de Desechos"
+      },
+      {
+        "codigo": "41001",
+        "valor": "Construcción de edificios residenciales"
+      },
+      {
+        "codigo": "41002",
+        "valor": "Construcción de edificios no residenciales"
+      },
+      {
+        "codigo": "42100",
+        "valor": "Construcción de carreteras, calles y caminos"
+      },
+      {
+        "codigo": "42200",
+        "valor": "Construcción de proyectos de servicio público"
+      },
+      {
+        "codigo": "42900",
+        "valor": "Construcción de obras de ingeniería civil n.c.p."
+      },
+      {
+        "codigo": "43110",
+        "valor": "Demolición"
+      },
+      {
+        "codigo": "43120",
+        "valor": "Preparación de terreno"
+      },
+      {
+        "codigo": "43210",
+        "valor": "Instalaciones eléctricas"
+      },
+      {
+        "codigo": "43220",
+        "valor": "Instalación de fontanería, calefacción y aire acondicionado"
+      },
+      {
+        "codigo": "43290",
+        "valor": "Otras instalaciones para obras de construcción"
+      },
+      {
+        "codigo": "43300",
+        "valor": "Terminación y acabado de edificios"
+      },
+      {
+        "codigo": "43900",
+        "valor": "Otras actividades especializadas de construcción"
+      },
+      {
+        "codigo": "43901",
+        "valor": "Fabricación de techos y materiales diversos"
+      },
+      {
+        "codigo": "45100",
+        "valor": "Venta de vehículos automotores"
+      },
+      {
+        "codigo": "45201",
+        "valor": "Reparación mecánica de vehículos automotores"
+      },
+      {
+        "codigo": "45202",
+        "valor": "Reparaciones eléctricas del automotor y recarga de baterías"
+      },
+      {
+        "codigo": "45203",
+        "valor": "Enderezado y pintura de vehículos automotores"
+      },
+      {
+        "codigo": "45204",
+        "valor": "Reparaciones de radiadores, escapes y silenciadores"
+      },
+      {
+        "codigo": "45205",
+        "valor": "Reparación y reconstrucción de vías, stop y otros artículos de fibra de vidrio"
+      },
+      {
+        "codigo": "45206",
+        "valor": "Reparación de llantas de vehículos automotores"
+      },
+      {
+        "codigo": "45207",
+        "valor": "Polarizado de vehículos (mediante la adhesión de papel especial a los vidrios)"
+      },
+      {
+        "codigo": "45208",
+        "valor": "Lavado y pasteado de vehículos (carwash)"
+      },
+      {
+        "codigo": "45209",
+        "valor": "Reparaciones de vehículos n.c.p."
+      },
+      {
+        "codigo": "45211",
+        "valor": "Remolque de vehículos automotores"
+      },
+      {
+        "codigo": "45301",
+        "valor": "Venta de partes, piezas y accesorios nuevos para vehículos automotores"
+      },
+      {
+        "codigo": "45302",
+        "valor": "Venta de partes, piezas y accesorios usados para vehículos automotores"
+      },
+      {
+        "codigo": "45401",
+        "valor": "Venta de motocicletas"
+      },
+      {
+        "codigo": "45402",
+        "valor": "Venta de repuestos, piezas y accesorios de motocicletas"
+      },
+      {
+        "codigo": "45403",
+        "valor": "Mantenimiento y reparación de motocicletas"
+      },
+      {
+        "codigo": "46100",
+        "valor": "Venta al por mayor a cambio de retribución o por contrata"
+      },
+      {
+        "codigo": "46201",
+        "valor": "Venta al por mayor de materias primas agrícolas"
+      },
+      {
+        "codigo": "46202",
+        "valor": "Venta al por mayor de productos de la silvicultura"
+      },
+      {
+        "codigo": "46203",
+        "valor": "Venta al por mayor de productos pecuarios y de granja"
+      },
+      {
+        "codigo": "46211",
+        "valor": "Venta de productos para uso agropecuario"
+      },
+      {
+        "codigo": "46291",
+        "valor": "Venta al por mayor de granos básicos (cereales, leguminosas)"
+      },
+      {
+        "codigo": "46292",
+        "valor": "Venta al por mayor de semillas mejoradas para cultivo"
+      },
+      {
+        "codigo": "46293",
+        "valor": "Venta al por mayor de café oro y uva"
+      },
+      {
+        "codigo": "46294",
+        "valor": "Venta al por mayor de caña de azúcar"
+      },
+      {
+        "codigo": "46295",
+        "valor": "Venta al por mayor de flores, plantas y otros productos naturales"
+      },
+      {
+        "codigo": "46296",
+        "valor": "Venta al por mayor de productos agrícolas"
+      },
+      {
+        "codigo": "46297",
+        "valor": "Venta al por mayor de ganado bovino (vivo)"
+      },
+      {
+        "codigo": "46298",
+        "valor": "Venta al por mayor de animales porcinos, ovinos, caprino, canículas, apícolas, avícolas vivos"
+      },
+      {
+        "codigo": "46299",
+        "valor": "Venta de otras especies vivas del reino animal"
+      },
+      {
+        "codigo": "46301",
+        "valor": "Venta al por mayor de alimentos"
+      },
+      {
+        "codigo": "46302",
+        "valor": "Venta al por mayor de bebidas"
+      },
+      {
+        "codigo": "46303",
+        "valor": "Venta al por mayor de tabaco"
+      },
+      {
+        "codigo": "46371",
+        "valor": "Venta al por mayor de frutas, hortalizas (verduras), legumbres y tubérculos"
+      },
+      {
+        "codigo": "46372",
+        "valor": "Venta al por mayor de pollos, gallinas destazadas, pavos y otras aves"
+      },
+      {
+        "codigo": "46373",
+        "valor": "Venta al por mayor de carne bovina y porcina, productos de carne y embutidos"
+      },
+      {
+        "codigo": "46374",
+        "valor": "Venta al por mayor de huevos"
+      },
+      {
+        "codigo": "46375",
+        "valor": "Venta al por mayor de productos lácteos"
+      },
+      {
+        "codigo": "46376",
+        "valor": "Venta al por mayor de productos farináceos de panadería (pan dulce, cakes, respostería, etc.)"
+      },
+      {
+        "codigo": "46377",
+        "valor": "Venta al por mayor de pastas alimenticias, aceites y grasas comestibles vegetal y animal"
+      },
+      {
+        "codigo": "46378",
+        "valor": "Venta al por mayor de sal comestible"
+      },
+      {
+        "codigo": "46379",
+        "valor": "Venta al por mayor de azúcar"
+      },
+      {
+        "codigo": "46391",
+        "valor": "Venta al por mayor de abarrotes (vinos, licores, productos alimenticios envasados, etc.)"
+      },
+      {
+        "codigo": "46392",
+        "valor": "Venta al por mayor de aguas gaseosas"
+      },
+      {
+        "codigo": "46393",
+        "valor": "Venta al por mayor de agua purificada"
+      },
+      {
+        "codigo": "46394",
+        "valor": "Venta al por mayor de refrescos y otras bebidas, líquidas o en polvo"
+      },
+      {
+        "codigo": "46395",
+        "valor": "Venta al por mayor de cerveza y licores"
+      },
+      {
+        "codigo": "46396",
+        "valor": "Venta al por mayor de hielo"
+      },
+      {
+        "codigo": "46411",
+        "valor": "Venta al por mayor de hilados, tejidos y productos textiles de mercería"
+      },
+      {
+        "codigo": "46412",
+        "valor": "Venta al por mayor de artículos textiles excepto confecciones para el hogar"
+      },
+      {
+        "codigo": "46413",
+        "valor": "Venta al por mayor de confecciones textiles para el hogar"
+      },
+      {
+        "codigo": "46414",
+        "valor": "Venta al por mayor de prendas de vestir y accesorios de vestir"
+      },
+      {
+        "codigo": "46415",
+        "valor": "Venta al por mayor de ropa usada"
+      },
+      {
+        "codigo": "46416",
+        "valor": "Venta al por mayor de calzado"
+      },
+      {
+        "codigo": "46417",
+        "valor": "Venta al por mayor de artículos de marroquinería y talabartería"
+      },
+      {
+        "codigo": "46418",
+        "valor": "Venta al por mayor de artículos de peletería"
+      },
+      {
+        "codigo": "46419",
+        "valor": "Venta al por mayor de otros artículos textiles n.c.p."
+      },
+      {
+        "codigo": "46471",
+        "valor": "Venta al por mayor de instrumentos musicales"
+      },
+      {
+        "codigo": "46472",
+        "valor": "Venta al por mayor de colchones, almohadas, cojines, etc."
+      },
+      {
+        "codigo": "46473",
+        "valor": "Venta al por mayor de artículos de aluminio para el hogar y para otros usos"
+      },
+      {
+        "codigo": "46474",
+        "valor": "Venta al por mayor de depósitos y otros artículos plásticos para el hogar y otros usos, incluyendo los desechables de durapax y no desechables"
+      },
+      {
+        "codigo": "46475",
+        "valor": "Venta al por mayor de cámaras fotográficas, accesorios y materiales"
+      },
+      {
+        "codigo": "46482",
+        "valor": "Venta al por mayor de medicamentos, artículos y otros productos de uso veterinario"
+      },
+      {
+        "codigo": "46483",
+        "valor": "Venta al por mayor de productos y artículos de belleza y de uso personal"
+      },
+      {
+        "codigo": "46484",
+        "valor": "Venta de productos farmacéuticos y medicinales"
+      },
+      {
+        "codigo": "46491",
+        "valor": "Venta al por mayor de productos medicinales, cosméticos, perfumería y productos de limpieza"
+      },
+      {
+        "codigo": "46492",
+        "valor": "Venta al por mayor de relojes y artículos de joyería"
+      },
+      {
+        "codigo": "46493",
+        "valor": "Venta al por mayor de electrodomésticos y artículos del hogar excepto bazar; artículos de iluminación"
+      },
+      {
+        "codigo": "46494",
+        "valor": "Venta al por mayor de artículos de bazar y similares"
+      },
+      {
+        "codigo": "46495",
+        "valor": "Venta al por mayor de artículos de óptica"
+      },
+      {
+        "codigo": "46496",
+        "valor": "Venta al por mayor de revistas, periódicos, libros, artículos de librería y artículos de papel y cartón en general"
+      },
+      {
+        "codigo": "46497",
+        "valor": "Venta de artículos deportivos, juguetes y rodados"
+      },
+      {
+        "codigo": "46498",
+        "valor": "Venta al por mayor de productos usados para el hogar o el uso personal"
+      },
+      {
+        "codigo": "46499",
+        "valor": "Venta al por mayor de enseres domésticos y de uso personal n.c.p."
+      },
+      {
+        "codigo": "46500",
+        "valor": "Venta al por mayor de bicicletas, partes, accesorios y otros"
+      },
+      {
+        "codigo": "46510",
+        "valor": "Venta al por mayor de computadoras, equipo periférico y programas informáticos"
+      },
+      {
+        "codigo": "46520",
+        "valor": "Venta al por mayor de equipos de comunicación"
+      },
+      {
+        "codigo": "46530",
+        "valor": "Venta al por mayor de maquinaria y equipo agropecuario, accesorios, partes y suministros"
+      },
+      {
+        "codigo": "46590",
+        "valor": "Venta de equipos e instrumentos de uso profesional y científico y aparatos de medida y control"
+      },
+      {
+        "codigo": "46591",
+        "valor": "Venta al por mayor de maquinaria equipo, accesorios y materiales para la industria de la madera y sus productos"
+      },
+      {
+        "codigo": "46592",
+        "valor": "Venta al por mayor de maquinaria, equipo, accesorios y materiales para la industria gráfica y del papel, cartón y productos de papel y cartón"
+      },
+      {
+        "codigo": "46593",
+        "valor": "Venta al por mayor de maquinaria, equipo, accesorios y materiales para la industria de productos químicos, plástico y caucho"
+      },
+      {
+        "codigo": "46594",
+        "valor": "Venta al por mayor de maquinaria, equipo, accesorios y materiales para la industria metálica y de sus productos"
+      },
+      {
+        "codigo": "46595",
+        "valor": "Venta al por mayor de equipamiento para uso médico, odontológico, veterinario y servicios conexos"
+      },
+      {
+        "codigo": "46596",
+        "valor": "Venta al por mayor de maquinaria, equipo, accesorios y partes para la industria de la alimentación"
+      },
+      {
+        "codigo": "46597",
+        "valor": "Venta al por mayor de maquinaria, equipo, accesorios y partes para la industria textil, confecciones y cuero"
+      },
+      {
+        "codigo": "46598",
+        "valor": "Venta al por mayor de maquinaria, equipo y accesorios para la construcción y explotación de minas y canteras"
+      },
+      {
+        "codigo": "46599",
+        "valor": "Venta al por mayor de otro tipo de maquinaria y equipo con sus accesorios y partes"
+      },
+      {
+        "codigo": "46610",
+        "valor": "Venta al por mayor de otros combustibles sólidos, líquidos, gaseosos y de productos conexos"
+      },
+      {
+        "codigo": "46612",
+        "valor": "Venta al por mayor de combustibles para automotores, aviones, barcos, maquinaria y otros"
+      },
+      {
+        "codigo": "46613",
+        "valor": "Venta al por mayor de lubricantes, grasas y otros aceites para automotores, maquinaria industrial, etc."
+      },
+      {
+        "codigo": "46614",
+        "valor": "Venta al por mayor de gas propano"
+      },
+      {
+        "codigo": "46615",
+        "valor": "Venta al por mayor de leña y carbón"
+      },
+      {
+        "codigo": "46620",
+        "valor": "Venta al por mayor de metales y minerales metalíferos"
+      },
+      {
+        "codigo": "46631",
+        "valor": "Venta al por mayor de puertas, ventanas, vitrinas y similares"
+      },
+      {
+        "codigo": "46632",
+        "valor": "Venta al por mayor de artículos de ferretería y pinturerías"
+      },
+      {
+        "codigo": "46633",
+        "valor": "Vidrierías"
+      },
+      {
+        "codigo": "46634",
+        "valor": "Venta al por mayor de maderas"
+      },
+      {
+        "codigo": "46639",
+        "valor": "Venta al por mayor de materiales para la construcción n.c.p."
+      },
+      {
+        "codigo": "46691",
+        "valor": "Venta al por mayor de sal industrial sin yodar"
+      },
+      {
+        "codigo": "46692",
+        "valor": "Venta al por mayor de productos intermedios y desechos de origen textil"
+      },
+      {
+        "codigo": "46693",
+        "valor": "Venta al por mayor de productos intermedios y desechos de origen metálico"
+      },
+      {
+        "codigo": "46694",
+        "valor": "Venta al por mayor de productos intermedios y desechos de papel y cartón"
+      },
+      {
+        "codigo": "46695",
+        "valor": "Venta al por mayor fertilizantes, abonos, agroquímicos y productos similares"
+      },
+      {
+        "codigo": "46696",
+        "valor": "Venta al por mayor de productos intermedios y desechos de origen plástico"
+      },
+      {
+        "codigo": "46697",
+        "valor": "Venta al por mayor de tintas para imprenta, productos curtientes y materias y productos colorantes"
+      },
+      {
+        "codigo": "46698",
+        "valor": "Venta de productos intermedios y desechos de origen químico y de caucho"
+      },
+      {
+        "codigo": "46699",
+        "valor": "Venta al por mayor de productos intermedios y desechos ncp"
+      },
+      {
+        "codigo": "46701",
+        "valor": "Venta de algodón en oro"
+      },
+      {
+        "codigo": "46900",
+        "valor": "Venta al por mayor de otros productos"
+      },
+      {
+        "codigo": "46901",
+        "valor": "Venta al por mayor de cohetes y otros productos pirotécnicos"
+      },
+      {
+        "codigo": "46902",
+        "valor": "Venta al por mayor de artículos diversos para consumo humano"
+      },
+      {
+        "codigo": "46903",
+        "valor": "Venta al por mayor de armas de fuego, municiones y accesorios"
+      },
+      {
+        "codigo": "46904",
+        "valor": "Venta al por mayor de toldos y tiendas de campaña de cualquier material"
+      },
+      {
+        "codigo": "46905",
+        "valor": "Venta al por mayor de exhibidores publicitarios y rótulos"
+      },
+      {
+        "codigo": "46906",
+        "valor": "Venta al por mayor de artículos promocionales diversos"
+      },
+      {
+        "codigo": "47111",
+        "valor": "Venta en supermercados"
+      },
+      {
+        "codigo": "47112",
+        "valor": "Venta en tiendas de artículos de primera necesidad"
+      },
+      {
+        "codigo": "47119",
+        "valor": "Almacenes (venta de diversos artículos)"
+      },
+      {
+        "codigo": "47120",
+        "valor": "Almacenes (venta de diversos artículos), y venta de vehículos automotores y motocicletas"
+      },
+      {
+        "codigo": "47190",
+        "valor": "Venta al por menor de otros productos en comercios no especializados"
+      },
+      {
+        "codigo": "47199",
+        "valor": "Venta de establecimientos no especializados con surtido compuesto principalmente de alimentos, bebidas y tabaco"
+      },
+      {
+        "codigo": "47211",
+        "valor": "Venta al por menor de frutas y hortalizas"
+      },
+      {
+        "codigo": "47212",
+        "valor": "Venta al por menor de carnes, embutidos y productos de granja"
+      },
+      {
+        "codigo": "47213",
+        "valor": "Venta al por menor de pescado y mariscos"
+      },
+      {
+        "codigo": "47214",
+        "valor": "Venta al por menor de productos lácteos"
+      },
+      {
+        "codigo": "47215",
+        "valor": "Venta al por menor de productos de panadería, repostería y galletas"
+      },
+      {
+        "codigo": "47216",
+        "valor": "Venta al por menor de huevos"
+      },
+      {
+        "codigo": "47217",
+        "valor": "Venta al por menor de carnes y productos cárnicos"
+      },
+      {
+        "codigo": "47218",
+        "valor": "Venta al por menor de granos básicos y otros"
+      },
+      {
+        "codigo": "47219",
+        "valor": "Venta al por menor de alimentos n.c.p."
+      },
+      {
+        "codigo": "47221",
+        "valor": "Venta al por menor de hielo"
+      },
+      {
+        "codigo": "47223",
+        "valor": "Venta de bebidas no alcohólicas, para su consumo fuera del establecimiento"
+      },
+      {
+        "codigo": "47224",
+        "valor": "Venta de bebidas alcohólicas, para su consumo fuera del establecimiento"
+      },
+      {
+        "codigo": "47225",
+        "valor": "Venta de bebidas alcohólicas para su consumo dentro del establecimiento"
+      },
+      {
+        "codigo": "47230",
+        "valor": "Venta al por menor de tabaco"
+      },
+      {
+        "codigo": "47300",
+        "valor": "Venta de combustibles, lubricantes y otros (gasolineras)"
+      },
+      {
+        "codigo": "47411",
+        "valor": "Venta al por menor de computadoras y equipo periférico"
+      },
+      {
+        "codigo": "47412",
+        "valor": "Venta de equipo y accesorios de telecomunicación"
+      },
+      {
+        "codigo": "47420",
+        "valor": "Venta al por menor de equipo de audio y video"
+      },
+      {
+        "codigo": "47510",
+        "valor": "Venta al por menor de hilados, tejidos y productos textiles de mercería; confecciones para el hogar y textiles n.c.p."
+      },
+      {
+        "codigo": "47521",
+        "valor": "Venta al por menor de productos de madera"
+      },
+      {
+        "codigo": "47522",
+        "valor": "Venta al por menor de artículos de ferretería"
+      },
+      {
+        "codigo": "47523",
+        "valor": "Venta al por menor de productos de pinturerías"
+      },
+      {
+        "codigo": "47524",
+        "valor": "Venta al por menor en vidrierías"
+      },
+      {
+        "codigo": "47529",
+        "valor": "Venta al por menor de materiales de construcción y artículos conexos"
+      },
+      {
+        "codigo": "47530",
+        "valor": "Venta al por menor de tapices, alfombras y revestimientos de paredes y pisos en comercios especializados"
+      },
+      {
+        "codigo": "47591",
+        "valor": "Venta al por menor de muebles"
+      },
+      {
+        "codigo": "47592",
+        "valor": "Venta al por menor de artículos de bazar"
+      },
+      {
+        "codigo": "47593",
+        "valor": "Venta al por menor de aparatos electrodomésticos, repuestos y accesorios"
+      },
+      {
+        "codigo": "47594",
+        "valor": "Venta al por menor de artículos eléctricos y de iluminación"
+      },
+      {
+        "codigo": "47598",
+        "valor": "Venta al por menor de instrumentos musicales"
+      },
+      {
+        "codigo": "47610",
+        "valor": "Venta al por menor de libros, periódicos y artículos de papelería en comercios especializados"
+      },
+      {
+        "codigo": "47620",
+        "valor": "Venta al por menor de discos láser, cassettes, cintas de video y otros"
+      },
+      {
+        "codigo": "47630",
+        "valor": "Venta al por menor de productos y equipos de deporte"
+      },
+      {
+        "codigo": "47631",
+        "valor": "Venta al por menor de bicicletas, accesorios y repuestos"
+      },
+      {
+        "codigo": "47640",
+        "valor": "Venta al por menor de juegos y juguetes en comercios especializados"
+      },
+      {
+        "codigo": "47711",
+        "valor": "Venta al por menor de prendas de vestir y accesorios de vestir"
+      },
+      {
+        "codigo": "47712",
+        "valor": "Venta al por menor de calzado"
+      },
+      {
+        "codigo": "47713",
+        "valor": "Venta al por menor de artículos de peletería, marroquinería y talabartería"
+      },
+      {
+        "codigo": "47721",
+        "valor": "Venta al por menor de medicamentos farmacéuticos y otros materiales y artículos de uso médico, odontológico y veterinario"
+      },
+      {
+        "codigo": "47722",
+        "valor": "Venta al por menor de productos cosméticos y de tocador"
+      },
+      {
+        "codigo": "47731",
+        "valor": "Venta al por menor de productos de joyería, bisutería, óptica, relojería"
+      },
+      {
+        "codigo": "47732",
+        "valor": "Venta al por menor de plantas, semillas, animales y artículos conexos"
+      },
+      {
+        "codigo": "47733",
+        "valor": "Venta al por menor de combustibles de uso doméstico (gas propano y gas licuado)"
+      },
+      {
+        "codigo": "47734",
+        "valor": "Venta al por menor de artesanías, artículos cerámicos y recuerdos en general"
+      },
+      {
+        "codigo": "47735",
+        "valor": "Venta al por menor de ataúdes, lápidas y cruces, trofeos, artículos religiosos en general"
+      },
+      {
+        "codigo": "47736",
+        "valor": "Venta al por menor de armas de fuego, municiones y accesorios"
+      },
+      {
+        "codigo": "47737",
+        "valor": "Venta al por menor de artículos de cohetería y pirotécnicos"
+      },
+      {
+        "codigo": "47738",
+        "valor": "Venta al por menor de artículos desechables de uso personal y doméstico (servilletas, papel higiénico, pañales, toallas sanitarias, etc.)"
+      },
+      {
+        "codigo": "47739",
+        "valor": "Venta al por menor de otros productos n.c.p."
+      },
+      {
+        "codigo": "47741",
+        "valor": "Venta al por menor de artículos usados"
+      },
+      {
+        "codigo": "47742",
+        "valor": "Venta al por menor de textiles y confecciones usados"
+      },
+      {
+        "codigo": "47743",
+        "valor": "Venta al por menor de libros, revistas, papel y cartón usados"
+      },
+      {
+        "codigo": "47749",
+        "valor": "Venta al por menor de productos usados n.c.p."
+      },
+      {
+        "codigo": "47811",
+        "valor": "Venta al por menor de frutas, verduras y hortalizas"
+      },
+      {
+        "codigo": "47814",
+        "valor": "Venta al por menor de productos lácteos"
+      },
+      {
+        "codigo": "47815",
+        "valor": "Venta al por menor de productos de panadería, galletas y similares"
+      },
+      {
+        "codigo": "47816",
+        "valor": "Venta al por menor de bebidas"
+      },
+      {
+        "codigo": "47818",
+        "valor": "Venta al por menor en tiendas de mercado y puestos"
+      },
+      {
+        "codigo": "47821",
+        "valor": "Venta al por menor de hilados, tejidos y productos textiles de mercería en puestos de mercados y ferias"
+      },
+      {
+        "codigo": "47822",
+        "valor": "Venta al por menor de artículos textiles excepto confecciones para el hogar en puestos de mercados y ferias"
+      },
+      {
+        "codigo": "47823",
+        "valor": "Venta al por menor de confecciones textiles para el hogar en puestos de mercados y ferias"
+      },
+      {
+        "codigo": "47824",
+        "valor": "Venta al por menor de prendas de vestir, accesorios de vestir y similares en puestos de mercados y ferias"
+      },
+      {
+        "codigo": "47825",
+        "valor": "Venta al por menor de ropa usada"
+      },
+      {
+        "codigo": "47826",
+        "valor": "Venta al por menor de calzado, artículos de marroquinería y talabartería en puestos de mercados y ferias"
+      },
+      {
+        "codigo": "47827",
+        "valor": "Venta al por menor de artículos de marroquinería y talabartería en puestos de mercados y ferias"
+      },
+      {
+        "codigo": "47829",
+        "valor": "Venta al por menor de artículos textiles ncp en puestos de mercados y ferias"
+      },
+      {
+        "codigo": "47891",
+        "valor": "Venta al por menor de animales, flores y productos conexos en puestos de feria y mercados"
+      },
+      {
+        "codigo": "47892",
+        "valor": "Venta al por menor de productos medicinales, cosméticos, de tocador y de limpieza en puestos de ferias y mercados"
+      },
+      {
+        "codigo": "47893",
+        "valor": "Venta al por menor de artículos de bazar en puestos de ferias y mercados"
+      },
+      {
+        "codigo": "47894",
+        "valor": "Venta al por menor de artículos de papel, envases, libros, revistas y conexos en puestos de feria y mercados"
+      },
+      {
+        "codigo": "47895",
+        "valor": "Venta al por menor de materiales de construcción, electrodomésticos, accesorios para autos y similares en puestos de feria y mercados"
+      },
+      {
+        "codigo": "47896",
+        "valor": "Venta al por menor de equipos accesorios para las comunicaciones en puestos de feria y mercados"
+      },
+      {
+        "codigo": "47899",
+        "valor": "Venta al por menor en puestos de ferias y mercados n.c.p."
+      },
+      {
+        "codigo": "47910",
+        "valor": "Venta al por menor por correo o Internet"
+      },
+      {
+        "codigo": "47990",
+        "valor": "Otros tipos de venta al por menor no realizada, en almacenes, puestos de venta o mercado"
+      },
+      {
+        "codigo": "49110",
+        "valor": "Transporte interurbano de pasajeros por ferrocarril"
+      },
+      {
+        "codigo": "49120",
+        "valor": "Transporte de carga por ferrocarril"
+      },
+      {
+        "codigo": "49211",
+        "valor": "Transporte de pasajeros urbanos e interurbano mediante buses"
+      },
+      {
+        "codigo": "49212",
+        "valor": "Transporte de pasajeros interdepartamental mediante microbuses"
+      },
+      {
+        "codigo": "49213",
+        "valor": "Transporte de pasajeros urbanos e interurbano mediante microbuses"
+      },
+      {
+        "codigo": "49214",
+        "valor": "Transporte de pasajeros interdepartamental mediante buses"
+      },
+      {
+        "codigo": "49221",
+        "valor": "Transporte internacional de pasajeros"
+      },
+      {
+        "codigo": "49222",
+        "valor": "Transporte de pasajeros mediante taxis y autos con chofer"
+      },
+      {
+        "codigo": "49223",
+        "valor": "Transporte escolar"
+      },
+      {
+        "codigo": "49225",
+        "valor": "Transporte de pasajeros para excursiones"
+      },
+      {
+        "codigo": "49226",
+        "valor": "Servicios de transporte de personal"
+      },
+      {
+        "codigo": "49229",
+        "valor": "Transporte de pasajeros por vía terrestre ncp"
+      },
+      {
+        "codigo": "49231",
+        "valor": "Transporte de carga urbano"
+      },
+      {
+        "codigo": "49232",
+        "valor": "Transporte nacional de carga"
+      },
+      {
+        "codigo": "49233",
+        "valor": "Transporte de carga internacional"
+      },
+      {
+        "codigo": "49234",
+        "valor": "Servicios de mudanza"
+      },
+      {
+        "codigo": "49235",
+        "valor": "Alquiler de vehículos de carga con conductor"
+      },
+      {
+        "codigo": "49300",
+        "valor": "Transporte por oleoducto o gasoducto"
+      },
+      {
+        "codigo": "50110",
+        "valor": "Transporte de pasajeros marítimo y de cabotaje"
+      },
+      {
+        "codigo": "50120",
+        "valor": "Transporte de carga marítimo y de cabotaje"
+      },
+      {
+        "codigo": "50211",
+        "valor": "Transporte de pasajeros por vías de navegación interiores"
+      },
+      {
+        "codigo": "50212",
+        "valor": "Alquiler de equipo de transporte de pasajeros por vías de navegación interior con conductor"
+      },
+      {
+        "codigo": "50220",
+        "valor": "Transporte de carga por vías de navegación interiores"
+      },
+      {
+        "codigo": "51100",
+        "valor": "Transporte aéreo de pasajeros"
+      },
+      {
+        "codigo": "51201",
+        "valor": "Transporte de carga por vía aérea"
+      },
+      {
+        "codigo": "51202",
+        "valor": "Alquiler de equipo de aerotransporte con operadores para el propósito de transportar carga"
+      },
+      {
+        "codigo": "52101",
+        "valor": "Alquiler de instalaciones de almacenamiento en zonas francas"
+      },
+      {
+        "codigo": "52102",
+        "valor": "Alquiler de silos para conservación y almacenamiento de granos"
+      },
+      {
+        "codigo": "52103",
+        "valor": "Alquiler de instalaciones con refrigeración para almacenamiento y conservación de alimentos y otros productos"
+      },
+      {
+        "codigo": "52109",
+        "valor": "Alquiler de bodegas para almacenamiento y depósito n.c.p."
+      },
+      {
+        "codigo": "52211",
+        "valor": "Servicio de garaje y estacionamiento"
+      },
+      {
+        "codigo": "52212",
+        "valor": "Servicios de terminales para el transporte por vía terrestre"
+      },
+      {
+        "codigo": "52219",
+        "valor": "Servicios para el transporte por vía terrestre n.c.p."
+      },
+      {
+        "codigo": "52220",
+        "valor": "Servicios para el transporte acuático"
+      },
+      {
+        "codigo": "52230",
+        "valor": "Servicios para el transporte aéreo"
+      },
+      {
+        "codigo": "52240",
+        "valor": "Manipulación de carga"
+      },
+      {
+        "codigo": "52290",
+        "valor": "Servicios para el transporte ncp"
+      },
+      {
+        "codigo": "52291",
+        "valor": "Agencias de tramitaciones aduanales"
+      },
+      {
+        "codigo": "53100",
+        "valor": "Servicios de correo nacional"
+      },
+      {
+        "codigo": "53200",
+        "valor": "Actividades de correo distintas a las actividades postales nacionales"
+      },
+      {
+        "codigo": "53201",
+        "valor": "Agencia privada de correo y encomiendas"
+      },
+      {
+        "codigo": "55101",
+        "valor": "Actividades de alojamiento para estancias cortas"
+      },
+      {
+        "codigo": "55102",
+        "valor": "Hoteles"
+      },
+      {
+        "codigo": "55200",
+        "valor": "Actividades de campamentos, parques de vehículos de recreo y parques de caravanas"
+      },
+      {
+        "codigo": "55900",
+        "valor": "Alojamiento n.c.p."
+      },
+      {
+        "codigo": "56101",
+        "valor": "Restaurantes"
+      },
+      {
+        "codigo": "56106",
+        "valor": "Pupusería"
+      },
+      {
+        "codigo": "56107",
+        "valor": "Actividades varias de restaurantes"
+      },
+      {
+        "codigo": "56108",
+        "valor": "Comedores"
+      },
+      {
+        "codigo": "56109",
+        "valor": "Merenderos ambulantes"
+      },
+      {
+        "codigo": "56210",
+        "valor": "Preparación de comida para eventos especiales"
+      },
+      {
+        "codigo": "56291",
+        "valor": "Servicios de provisión de comidas por contrato"
+      },
+      {
+        "codigo": "56292",
+        "valor": "Servicios de concesión de cafetines y chalet en empresas e instituciones"
+      },
+      {
+        "codigo": "56299",
+        "valor": "Servicios de preparación de comidas ncp"
+      },
+      {
+        "codigo": "56301",
+        "valor": "Servicio de expendio de bebidas en salones y bares"
+      },
+      {
+        "codigo": "56302",
+        "valor": "Servicio de expendio de bebidas en puestos callejeros, mercados y ferias"
+      },
+      {
+        "codigo": "58110",
+        "valor": "Edición de libros, folletos, partituras y otras ediciones distintas a estas"
+      },
+      {
+        "codigo": "58120",
+        "valor": "Edición de directorios y listas de correos"
+      },
+      {
+        "codigo": "58130",
+        "valor": "Edición de periódicos, revistas y otras publicaciones periódicas"
+      },
+      {
+        "codigo": "58190",
+        "valor": "Otras actividades de edición"
+      },
+      {
+        "codigo": "58200",
+        "valor": "Edición de programas informáticos (software)"
+      },
+      {
+        "codigo": "59110",
+        "valor": "Actividades de producción cinematográfica"
+      },
+      {
+        "codigo": "59120",
+        "valor": "Actividades de post producción de películas, videos y programas de televisión"
+      },
+      {
+        "codigo": "59130",
+        "valor": "Actividades de distribución de películas cinematográficas, videos y programas de televisión"
+      },
+      {
+        "codigo": "59140",
+        "valor": "Actividades de exhibición de películas cinematográficas y cintas de vídeo"
+      },
+      {
+        "codigo": "59200",
+        "valor": "Actividades de edición y grabación de música"
+      },
+      {
+        "codigo": "60100",
+        "valor": "Servicios de difusiones de radio"
+      },
+      {
+        "codigo": "60201",
+        "valor": "Actividades de programación y difusión de televisión abierta"
+      },
+      {
+        "codigo": "60202",
+        "valor": "Actividades de suscripción y difusión de televisión por cable y/o suscripción"
+      },
+      {
+        "codigo": "60299",
+        "valor": "Servicios de televisión, incluye televisión por cable"
+      },
+      {
+        "codigo": "60900",
+        "valor": "Programación y transmisión de radio y televisión"
+      },
+      {
+        "codigo": "61101",
+        "valor": "Servicio de telefonía"
+      },
+      {
+        "codigo": "61102",
+        "valor": "Servicio de Internet"
+      },
+      {
+        "codigo": "61103",
+        "valor": "Servicio de telefonía fija"
+      },
+      {
+        "codigo": "61109",
+        "valor": "Servicio de Internet n.c.p."
+      },
+      {
+        "codigo": "61201",
+        "valor": "Servicios de telefonía celular"
+      },
+      {
+        "codigo": "61202",
+        "valor": "Servicios de Internet inalámbrico"
+      },
+      {
+        "codigo": "61209",
+        "valor": "Servicios de telecomunicaciones inalámbrico n.c.p."
+      },
+      {
+        "codigo": "61301",
+        "valor": "Telecomunicaciones satelitales"
+      },
+      {
+        "codigo": "61309",
+        "valor": "Comunicación vía satélite n.c.p."
+      },
+      {
+        "codigo": "61900",
+        "valor": "Actividades de telecomunicación n.c.p."
+      },
+      {
+        "codigo": "62010",
+        "valor": "Programación Informática"
+      },
+      {
+        "codigo": "62020",
+        "valor": "Consultorías y gestión de servicios informáticos"
+      },
+      {
+        "codigo": "62090",
+        "valor": "Otras actividades de tecnología de información y servicios de computadora"
+      },
+      {
+        "codigo": "63110",
+        "valor": "Procesamiento de datos y Actividades relacionadas"
+      },
+      {
+        "codigo": "63120",
+        "valor": "Portales WEB"
+      },
+      {
+        "codigo": "63910",
+        "valor": "Servicios de Agencias de Noticias"
+      },
+      {
+        "codigo": "63990",
+        "valor": "Otros servicios de información n.c.p."
+      },
+      {
+        "codigo": "64110",
+        "valor": "Servicios provistos por el Banco Central de El salvador"
+      },
+      {
+        "codigo": "64190",
+        "valor": "Bancos"
+      },
+      {
+        "codigo": "64192",
+        "valor": "Entidades dedicadas al envío de remesas"
+      },
+      {
+        "codigo": "64199",
+        "valor": "Otras entidades financieras"
+      },
+      {
+        "codigo": "64200",
+        "valor": "Actividades de sociedades de cartera"
+      },
+      {
+        "codigo": "64300",
+        "valor": "Fideicomisos, fondos y otras fuentes de financiamiento"
+      },
+      {
+        "codigo": "64910",
+        "valor": "Arrendamientos financieros"
+      },
+      {
+        "codigo": "64920",
+        "valor": "Asociaciones cooperativas de ahorro y crédito dedicadas a la intermediación financiera"
+      },
+      {
+        "codigo": "64921",
+        "valor": "Instituciones emisoras de tarjetas de crédito y otros"
+      },
+      {
+        "codigo": "64922",
+        "valor": "Tipos de crédito ncp"
+      },
+      {
+        "codigo": "64928",
+        "valor": "Prestamistas y casas de empeño"
+      },
+      {
+        "codigo": "64990",
+        "valor": "Actividades de servicios financieros, excepto la financiación de planes de seguros y de pensiones n.c.p."
+      },
+      {
+        "codigo": "65110",
+        "valor": "Planes de seguros de vida"
+      },
+      {
+        "codigo": "65120",
+        "valor": "Planes de seguro excepto de vida"
+      },
+      {
+        "codigo": "65199",
+        "valor": "Seguros generales de todo tipo"
+      },
+      {
+        "codigo": "65200",
+        "valor": "Planes se seguro"
+      },
+      {
+        "codigo": "65300",
+        "valor": "Planes de pensiones"
+      },
+      {
+        "codigo": "66110",
+        "valor": "Administración de mercados financieros (Bolsa de Valores)"
+      },
+      {
+        "codigo": "66120",
+        "valor": "Actividades bursátiles (Corredores de Bolsa)"
+      },
+      {
+        "codigo": "66190",
+        "valor": "Actividades auxiliares de la intermediación financiera ncp"
+      },
+      {
+        "codigo": "66210",
+        "valor": "Evaluación de riesgos y daños"
+      },
+      {
+        "codigo": "66220",
+        "valor": "Actividades de agentes y corredores de seguros"
+      },
+      {
+        "codigo": "66290",
+        "valor": "Otras actividades auxiliares de seguros y fondos de pensiones"
+      },
+      {
+        "codigo": "66300",
+        "valor": "Actividades de administración de fondos"
+      },
+      {
+        "codigo": "68101",
+        "valor": "Servicio de alquiler y venta de lotes en cementerios"
+      },
+      {
+        "codigo": "68109",
+        "valor": "Actividades inmobiliarias realizadas con bienes propios o arrendados n.c.p."
+      },
+      {
+        "codigo": "68200",
+        "valor": "Actividades Inmobiliarias Realizadas a Cambio de una Retribución o por Contrata"
+      },
+      {
+        "codigo": "69100",
+        "valor": "Actividades jurídicas"
+      },
+      {
+        "codigo": "69200",
+        "valor": "Actividades de contabilidad, teneduría de libros y auditoría; asesoramiento en materia de impuestos"
+      },
+      {
+        "codigo": "70100",
+        "valor": "Actividades de oficinas centrales de sociedades de cartera"
+      },
+      {
+        "codigo": "70200",
+        "valor": "Actividades de consultoría en gestión empresarial"
+      },
+      {
+        "codigo": "71101",
+        "valor": "Servicios de arquitectura y planificación urbana y servicios conexos"
+      },
+      {
+        "codigo": "71102",
+        "valor": "Servicios de ingeniería"
+      },
+      {
+        "codigo": "71103",
+        "valor": "Servicios de agrimensura, topografía, cartografía, prospección y geofísica y servicios conexos"
+      },
+      {
+        "codigo": "71200",
+        "valor": "Ensayos y análisis técnicos"
+      },
+      {
+        "codigo": "72100",
+        "valor": "Investigaciones y desarrollo experimental en el campo de las ciencias naturales y la ingeniería"
+      },
+      {
+        "codigo": "72199",
+        "valor": "Investigaciones científicas"
+      },
+      {
+        "codigo": "72200",
+        "valor": "Investigaciones y desarrollo experimental en el campo de las ciencias sociales y las humanidades científica y desarrollo"
+      },
+      {
+        "codigo": "73100",
+        "valor": "Publicidad"
+      },
+      {
+        "codigo": "73200",
+        "valor": "Investigación de mercados y realización de encuestas de opinión pública"
+      },
+      {
+        "codigo": "74100",
+        "valor": "Actividades de diseño especializado"
+      },
+      {
+        "codigo": "74200",
+        "valor": "Actividades de fotografía"
+      },
+      {
+        "codigo": "74900",
+        "valor": "Servicios profesionales y científicos ncp"
+      },
+      {
+        "codigo": "75000",
+        "valor": "Actividades veterinarias"
+      },
+      {
+        "codigo": "77101",
+        "valor": "Alquiler de equipo de transporte terrestre"
+      },
+      {
+        "codigo": "77102",
+        "valor": "Alquiler de equipo de transporte acuático"
+      },
+      {
+        "codigo": "77103",
+        "valor": "Alquiler de equipo de transporte por vía aérea"
+      },
+      {
+        "codigo": "77210",
+        "valor": "Alquiler y arrendamiento de equipo de recreo y deportivo"
+      },
+      {
+        "codigo": "77220",
+        "valor": "Alquiler de cintas de video y discos"
+      },
+      {
+        "codigo": "77290",
+        "valor": "Alquiler de otros efectos personales y enseres domésticos"
+      },
+      {
+        "codigo": "77300",
+        "valor": "Alquiler de maquinaria y equipo"
+      },
+      {
+        "codigo": "77400",
+        "valor": "Arrendamiento de productos de propiedad intelectual"
+      },
+      {
+        "codigo": "78100",
+        "valor": "Obtención y dotación de personal"
+      },
+      {
+        "codigo": "78200",
+        "valor": "Actividades de las agencias de trabajo temporal"
+      },
+      {
+        "codigo": "78300",
+        "valor": "Dotación de recursos humanos y gestión; gestión de las funciones de recursos humanos"
+      },
+      {
+        "codigo": "79110",
+        "valor": "Actividades de agencias de viajes y organizadores de viajes; actividades de asistencia a turistas"
+      },
+      {
+        "codigo": "79120",
+        "valor": "Actividades de los operadores turísticos"
+      },
+      {
+        "codigo": "79900",
+        "valor": "Otros servicios de reservas y actividades relacionadas"
+      },
+      {
+        "codigo": "80100",
+        "valor": "Servicios de seguridad privados"
+      },
+      {
+        "codigo": "80201",
+        "valor": "Actividades de servicios de sistemas de seguridad"
+      },
+      {
+        "codigo": "80202",
+        "valor": "Actividades para la prestación de sistemas de seguridad"
+      },
+      {
+        "codigo": "80300",
+        "valor": "Actividades de investigación"
+      },
+      {
+        "codigo": "81100",
+        "valor": "Actividades combinadas de mantenimiento de edificios e instalaciones"
+      },
+      {
+        "codigo": "81210",
+        "valor": "Limpieza general de edificios"
+      },
+      {
+        "codigo": "81290",
+        "valor": "Otras actividades combinadas de mantenimiento de edificios e instalaciones ncp"
+      },
+      {
+        "codigo": "81300",
+        "valor": "Servicio de jardinería"
+      },
+      {
+        "codigo": "82110",
+        "valor": "Servicios administrativos de oficinas"
+      },
+      {
+        "codigo": "82190",
+        "valor": "Servicio de fotocopiado y similares, excepto en imprentas"
+      },
+      {
+        "codigo": "82200",
+        "valor": "Actividades de las centrales de llamadas (call center)"
+      },
+      {
+        "codigo": "82300",
+        "valor": "Organización de convenciones y ferias de negocios"
+      },
+      {
+        "codigo": "82910",
+        "valor": "Actividades de agencias de cobro y oficinas de crédito"
+      },
+      {
+        "codigo": "82921",
+        "valor": "Servicios de envase y empaque de productos alimenticios"
+      },
+      {
+        "codigo": "82922",
+        "valor": "Servicios de envase y empaque de productos medicinales"
+      },
+      {
+        "codigo": "82929",
+        "valor": "Servicio de envase y empaque ncp"
+      },
+      {
+        "codigo": "82990",
+        "valor": "Actividades de apoyo empresariales ncp"
+      },
+      {
+        "codigo": "84110",
+        "valor": "Actividades de la Administración Pública en general"
+      },
+      {
+        "codigo": "84111",
+        "valor": "Alcaldías Municipales"
+      },
+      {
+        "codigo": "84120",
+        "valor": "Regulación de las actividades de prestación de servicios sanitarios, educativos, culturales y otros servicios sociales, excepto seguridad social"
+      },
+      {
+        "codigo": "84130",
+        "valor": "Regulación y facilitación de la actividad económica"
+      },
+      {
+        "codigo": "84210",
+        "valor": "Actividades de administración y funcionamiento del Ministerio de Relaciones Exteriores"
+      },
+      {
+        "codigo": "84220",
+        "valor": "Actividades de defensa"
+      },
+      {
+        "codigo": "84230",
+        "valor": "Actividades de mantenimiento del orden público y de seguridad"
+      },
+      {
+        "codigo": "84300",
+        "valor": "Actividades de planes de seguridad social de afiliación obligatoria"
+      },
+      {
+        "codigo": "85101",
+        "valor": "Guardería educativa"
+      },
+      {
+        "codigo": "85102",
+        "valor": "Enseñanza preescolar o parvularia"
+      },
+      {
+        "codigo": "85103",
+        "valor": "Enseñanza primaria"
+      },
+      {
+        "codigo": "85104",
+        "valor": "Servicio de educación preescolar y primaria integrada"
+      },
+      {
+        "codigo": "85211",
+        "valor": "Enseñanza secundaria tercer ciclo (7°, 8° y 9°)"
+      },
+      {
+        "codigo": "85212",
+        "valor": "Enseñanza secundaria de formación general bachillerato"
+      },
+      {
+        "codigo": "85221",
+        "valor": "Enseñanza secundaria de formación técnica y profesional"
+      },
+      {
+        "codigo": "85222",
+        "valor": "Enseñanza secundaria de formación técnica y profesional integrada con enseñanza primaria"
+      },
+      {
+        "codigo": "85301",
+        "valor": "Enseñanza superior universitaria"
+      },
+      {
+        "codigo": "85302",
+        "valor": "Enseñanza superior no universitaria"
+      },
+      {
+        "codigo": "85303",
+        "valor": "Enseñanza superior integrada a educación secundaria y/o primaria"
+      },
+      {
+        "codigo": "85410",
+        "valor": "Educación deportiva y recreativa"
+      },
+      {
+        "codigo": "85420",
+        "valor": "Educación cultural"
+      },
+      {
+        "codigo": "85490",
+        "valor": "Otros tipos de enseñanza n.c.p."
+      },
+      {
+        "codigo": "85499",
+        "valor": "Enseñanza formal"
+      },
+      {
+        "codigo": "85500",
+        "valor": "Servicios de apoyo a la enseñanza"
+      },
+      {
+        "codigo": "86100",
+        "valor": "Actividades de hospitales"
+      },
+      {
+        "codigo": "86201",
+        "valor": "Clínicas médicas"
+      },
+      {
+        "codigo": "86202",
+        "valor": "Servicios de Odontología"
+      },
+      {
+        "codigo": "86203",
+        "valor": "Servicios médicos"
+      },
+      {
+        "codigo": "86901",
+        "valor": "Servicios de análisis y estudios de diagnóstico"
+      },
+      {
+        "codigo": "86902",
+        "valor": "Actividades de atención de la salud humana"
+      },
+      {
+        "codigo": "86909",
+        "valor": "Otros Servicio relacionados con la salud ncp"
+      },
+      {
+        "codigo": "87100",
+        "valor": "Residencias de ancianos con atención de enfermería"
+      },
+      {
+        "codigo": "87200",
+        "valor": "Instituciones dedicadas al tratamiento del retraso mental, problemas de salud mental y el uso indebido de sustancias nocivas"
+      },
+      {
+        "codigo": "87300",
+        "valor": "Instituciones dedicadas al cuidado de ancianos y discapacitados"
+      },
+      {
+        "codigo": "87900",
+        "valor": "Actividades de asistencia a niños y jóvenes"
+      },
+      {
+        "codigo": "87901",
+        "valor": "Otras actividades de atención en instituciones"
+      },
+      {
+        "codigo": "88100",
+        "valor": "Actividades de asistencia sociales sin alojamiento para ancianos y discapacitados"
+      },
+      {
+        "codigo": "88900",
+        "valor": "servicios sociales sin alojamiento ncp"
+      },
+      {
+        "codigo": "90000",
+        "valor": "Actividades creativas artísticas y de esparcimiento"
+      },
+      {
+        "codigo": "91010",
+        "valor": "Actividades de bibliotecas y archivos"
+      },
+      {
+        "codigo": "91020",
+        "valor": "Actividades de museos y preservación de lugares y edificios históricos"
+      },
+      {
+        "codigo": "91030",
+        "valor": "Actividades de jardines botánicos, zoológicos y de reservas naturales"
+      },
+      {
+        "codigo": "92000",
+        "valor": "Actividades de juegos y apuestas"
+      },
+      {
+        "codigo": "93110",
+        "valor": "Gestión de instalaciones deportivas"
+      },
+      {
+        "codigo": "93120",
+        "valor": "Actividades de clubes deportivos"
+      },
+      {
+        "codigo": "93190",
+        "valor": "Otras actividades deportivas"
+      },
+      {
+        "codigo": "93210",
+        "valor": "Actividades de parques de atracciones y parques temáticos"
+      },
+      {
+        "codigo": "93291",
+        "valor": "Discotecas y salas de baile"
+      },
+      {
+        "codigo": "93298",
+        "valor": "Centros vacacionales"
+      },
+      {
+        "codigo": "93299",
+        "valor": "Actividades de esparcimiento ncp"
+      },
+      {
+        "codigo": "94110",
+        "valor": "Actividades de organizaciones empresariales y de empleadores"
+      },
+      {
+        "codigo": "94120",
+        "valor": "Actividades de organizaciones profesionales"
+      },
+      {
+        "codigo": "94200",
+        "valor": "Actividades de sindicatos"
+      },
+      {
+        "codigo": "94910",
+        "valor": "Actividades de organizaciones religiosas"
+      },
+      {
+        "codigo": "94920",
+        "valor": "Actividades de organizaciones políticas"
+      },
+      {
+        "codigo": "94990",
+        "valor": "Actividades de asociaciones n.c.p."
+      },
+      {
+        "codigo": "95110",
+        "valor": "Reparación de computadoras y equipo periférico"
+      },
+      {
+        "codigo": "95120",
+        "valor": "Reparación de equipo de comunicación"
+      },
+      {
+        "codigo": "95210",
+        "valor": "Reparación de aparatos electrónicos de consumo"
+      },
+      {
+        "codigo": "95220",
+        "valor": "Reparación de aparatos doméstico y equipo de hogar y jardín"
+      },
+      {
+        "codigo": "95230",
+        "valor": "Reparación de calzado y artículos de cuero"
+      },
+      {
+        "codigo": "95240",
+        "valor": "Reparación de muebles y accesorios para el hogar"
+      },
+      {
+        "codigo": "95291",
+        "valor": "Reparación de Instrumentos musicales"
+      },
+      {
+        "codigo": "95292",
+        "valor": "Servicios de cerrajería y copiado de llaves"
+      },
+      {
+        "codigo": "95293",
+        "valor": "Reparación de joyas y relojes"
+      },
+      {
+        "codigo": "95294",
+        "valor": "Reparación de bicicletas, sillas de ruedas y rodados n.c.p."
+      },
+      {
+        "codigo": "95299",
+        "valor": "Reparaciones de enseres personales n.c.p."
+      },
+      {
+        "codigo": "96010",
+        "valor": "Lavado y limpieza de prendas de tela y de piel, incluso la limpieza en seco"
+      },
+      {
+        "codigo": "96020",
+        "valor": "Peluquería y otros tratamientos de belleza"
+      },
+      {
+        "codigo": "96030",
+        "valor": "Pompas fúnebres y actividades conexas"
+      },
+      {
+        "codigo": "96091",
+        "valor": "Servicios de sauna y otros servicios para la estética corporal n.c.p."
+      },
+      {
+        "codigo": "96092",
+        "valor": "Servicios n.c.p."
+      },
+      {
+        "codigo": "97000",
+        "valor": "Actividad de los hogares en calidad de empleadores de personal doméstico"
+      },
+      {
+        "codigo": "98100",
+        "valor": "Actividades indiferenciadas de producción de bienes de los hogares privados para uso propio"
+      },
+      {
+        "codigo": "98200",
+        "valor": "Actividades indiferenciadas de producción de servicios de los hogares privados para uso propio"
+      },
+      {
+        "codigo": "99000",
+        "valor": "Actividades de organizaciones y órganos extraterritoriales"
+      },
+      {
+        "codigo": "10001",
+        "valor": "Empleados"
+      },
+      {
+        "codigo": "10002",
+        "valor": "Pensionado"
+      },
+      {
+        "codigo": "10003",
+        "valor": "Estudiante"
+      },
+      {
+        "codigo": "10004",
+        "valor": "Desempleado"
+      },
+      {
+        "codigo": "10005",
+        "valor": "Otros"
+      },
+      {
+        "codigo": "10006",
+        "valor": "Comerciante"
+      }
+    ]
+  },
+  "CAT-020": {
+    "titulo": "País",
+    "entradas": [
+      {
+        "codigo": "AF",
+        "valor": "Afganistán"
+      },
+      {
+        "codigo": "AX",
+        "valor": "Aland"
+      },
+      {
+        "codigo": "AL",
+        "valor": "Albania"
+      },
+      {
+        "codigo": "DE",
+        "valor": "Alemania"
+      },
+      {
+        "codigo": "AD",
+        "valor": "Andorra"
+      },
+      {
+        "codigo": "AO",
+        "valor": "Angola"
+      },
+      {
+        "codigo": "AI",
+        "valor": "Anguila"
+      },
+      {
+        "codigo": "AQ",
+        "valor": "Antártica"
+      },
+      {
+        "codigo": "AG",
+        "valor": "Antigua y Barbuda"
+      },
+      {
+        "codigo": "AW",
+        "valor": "Aruba"
+      },
+      {
+        "codigo": "SA",
+        "valor": "Arabia Saudita"
+      },
+      {
+        "codigo": "DZ",
+        "valor": "Argelia"
+      },
+      {
+        "codigo": "AR",
+        "valor": "Argentina"
+      },
+      {
+        "codigo": "AM",
+        "valor": "Armenia"
+      },
+      {
+        "codigo": "AU",
+        "valor": "Australia"
+      },
+      {
+        "codigo": "AT",
+        "valor": "Austria"
+      },
+      {
+        "codigo": "AZ",
+        "valor": "Azerbaiyán"
+      },
+      {
+        "codigo": "BS",
+        "valor": "Bahamas"
+      },
+      {
+        "codigo": "BH",
+        "valor": "Bahrein"
+      },
+      {
+        "codigo": "BD",
+        "valor": "Bangladesh"
+      },
+      {
+        "codigo": "BB",
+        "valor": "Barbados"
+      },
+      {
+        "codigo": "BE",
+        "valor": "Bélgica"
+      },
+      {
+        "codigo": "BZ",
+        "valor": "Belice"
+      },
+      {
+        "codigo": "BJ",
+        "valor": "Benin"
+      },
+      {
+        "codigo": "BM",
+        "valor": "Bermudas"
+      },
+      {
+        "codigo": "BY",
+        "valor": "Bielorrusia"
+      },
+      {
+        "codigo": "BO",
+        "valor": "Bolivia"
+      },
+      {
+        "codigo": "BQ",
+        "valor": "Bonaire, Sint Eustatius and Saba"
+      },
+      {
+        "codigo": "BA",
+        "valor": "Bosnia-Herzegovina"
+      },
+      {
+        "codigo": "BW",
+        "valor": "Botswana"
+      },
+      {
+        "codigo": "BR",
+        "valor": "Brasil"
+      },
+      {
+        "codigo": "BN",
+        "valor": "Brunei"
+      },
+      {
+        "codigo": "BG",
+        "valor": "Bulgaria"
+      },
+      {
+        "codigo": "BF",
+        "valor": "Burkina Faso"
+      },
+      {
+        "codigo": "BI",
+        "valor": "Burundi"
+      },
+      {
+        "codigo": "BT",
+        "valor": "Bután"
+      },
+      {
+        "codigo": "CV",
+        "valor": "Cabo Verde"
+      },
+      {
+        "codigo": "KY",
+        "valor": "Caimán, Islas"
+      },
+      {
+        "codigo": "KH",
+        "valor": "Camboya"
+      },
+      {
+        "codigo": "CM",
+        "valor": "Camerún"
+      },
+      {
+        "codigo": "CA",
+        "valor": "Canadá"
+      },
+      {
+        "codigo": "CF",
+        "valor": "Centroafricana, República"
+      },
+      {
+        "codigo": "TD",
+        "valor": "Chad"
+      },
+      {
+        "codigo": "CL",
+        "valor": "Chile"
+      },
+      {
+        "codigo": "CN",
+        "valor": "China"
+      },
+      {
+        "codigo": "CY",
+        "valor": "Chipre"
+      },
+      {
+        "codigo": "VA",
+        "valor": "Ciudad del Vaticano"
+      },
+      {
+        "codigo": "CO",
+        "valor": "Colombia"
+      },
+      {
+        "codigo": "KM",
+        "valor": "Comoras"
+      },
+      {
+        "codigo": "CG",
+        "valor": "Congo"
+      },
+      {
+        "codigo": "CI",
+        "valor": "Costa de Marfil"
+      },
+      {
+        "codigo": "CR",
+        "valor": "Costa Rica"
+      },
+      {
+        "codigo": "HR",
+        "valor": "Croacia"
+      },
+      {
+        "codigo": "CU",
+        "valor": "Cuba"
+      },
+      {
+        "codigo": "CW",
+        "valor": "Curazao"
+      },
+      {
+        "codigo": "DK",
+        "valor": "Dinamarca"
+      },
+      {
+        "codigo": "DM",
+        "valor": "Dominica"
+      },
+      {
+        "codigo": "DJ",
+        "valor": "Djiboutí"
+      },
+      {
+        "codigo": "EC",
+        "valor": "Ecuador"
+      },
+      {
+        "codigo": "EG",
+        "valor": "Egipto"
+      },
+      {
+        "codigo": "SV",
+        "valor": "El Salvador"
+      },
+      {
+        "codigo": "AE",
+        "valor": "Emiratos Árabes Unidos"
+      },
+      {
+        "codigo": "ER",
+        "valor": "Eritrea"
+      },
+      {
+        "codigo": "SK",
+        "valor": "Eslovaquia"
+      },
+      {
+        "codigo": "SI",
+        "valor": "Eslovenia"
+      },
+      {
+        "codigo": "ES",
+        "valor": "España"
+      },
+      {
+        "codigo": "US",
+        "valor": "Estados Unidos"
+      },
+      {
+        "codigo": "EE",
+        "valor": "Estonia"
+      },
+      {
+        "codigo": "ET",
+        "valor": "Etiopía"
+      },
+      {
+        "codigo": "FJ",
+        "valor": "Fiji"
+      },
+      {
+        "codigo": "PH",
+        "valor": "Filipinas"
+      },
+      {
+        "codigo": "FI",
+        "valor": "Finlandia"
+      },
+      {
+        "codigo": "FR",
+        "valor": "Francia"
+      },
+      {
+        "codigo": "GA",
+        "valor": "Gabón"
+      },
+      {
+        "codigo": "GM",
+        "valor": "Gambia"
+      },
+      {
+        "codigo": "GE",
+        "valor": "Georgia"
+      },
+      {
+        "codigo": "GH",
+        "valor": "Ghana"
+      },
+      {
+        "codigo": "GI",
+        "valor": "Gibraltar"
+      },
+      {
+        "codigo": "GD",
+        "valor": "Granada"
+      },
+      {
+        "codigo": "GR",
+        "valor": "Grecia"
+      },
+      {
+        "codigo": "GL",
+        "valor": "Groenlandia"
+      },
+      {
+        "codigo": "GP",
+        "valor": "Guadalupe"
+      },
+      {
+        "codigo": "GU",
+        "valor": "Guam"
+      },
+      {
+        "codigo": "GT",
+        "valor": "Guatemala"
+      },
+      {
+        "codigo": "GF",
+        "valor": "Guayana Francesa"
+      },
+      {
+        "codigo": "GG",
+        "valor": "Guernsey"
+      },
+      {
+        "codigo": "GN",
+        "valor": "Guinea"
+      },
+      {
+        "codigo": "GQ",
+        "valor": "Guinea Ecuatorial"
+      },
+      {
+        "codigo": "GW",
+        "valor": "Guinea-Bissau"
+      },
+      {
+        "codigo": "GY",
+        "valor": "Guyana"
+      },
+      {
+        "codigo": "HT",
+        "valor": "Haití"
+      },
+      {
+        "codigo": "HN",
+        "valor": "Honduras"
+      },
+      {
+        "codigo": "HK",
+        "valor": "Hong Kong"
+      },
+      {
+        "codigo": "HU",
+        "valor": "Hungría"
+      },
+      {
+        "codigo": "IN",
+        "valor": "India"
+      },
+      {
+        "codigo": "ID",
+        "valor": "Indonesia"
+      },
+      {
+        "codigo": "IQ",
+        "valor": "Irak"
+      },
+      {
+        "codigo": "IE",
+        "valor": "Irlanda"
+      },
+      {
+        "codigo": "BV",
+        "valor": "Isla Bouvet"
+      },
+      {
+        "codigo": "IM",
+        "valor": "Isla de Man"
+      },
+      {
+        "codigo": "NF",
+        "valor": "Isla Norfolk"
+      },
+      {
+        "codigo": "IS",
+        "valor": "Islandia"
+      },
+      {
+        "codigo": "CX",
+        "valor": "Islas Navidad"
+      },
+      {
+        "codigo": "CC",
+        "valor": "Islas Cocos"
+      },
+      {
+        "codigo": "CK",
+        "valor": "Islas Cook"
+      },
+      {
+        "codigo": "FO",
+        "valor": "Islas Faroe"
+      },
+      {
+        "codigo": "GS",
+        "valor": "Islas Georgias d. S.-Sandwich d. S."
+      },
+      {
+        "codigo": "HM",
+        "valor": "Islas Heard y McDonald"
+      },
+      {
+        "codigo": "FK",
+        "valor": "Islas Malvinas (Falkland)"
+      },
+      {
+        "codigo": "MP",
+        "valor": "Islas Marianas del Norte"
+      },
+      {
+        "codigo": "MH",
+        "valor": "Islas Marshall"
+      },
+      {
+        "codigo": "PN",
+        "valor": "Islas Pitcairn"
+      },
+      {
+        "codigo": "TC",
+        "valor": "Islas Turcas y Caicos"
+      },
+      {
+        "codigo": "UM",
+        "valor": "Islas Ultramarinas de E.E.U.U"
+      },
+      {
+        "codigo": "VI",
+        "valor": "Islas Vírgenes"
+      },
+      {
+        "codigo": "IL",
+        "valor": "Israel"
+      },
+      {
+        "codigo": "IT",
+        "valor": "Italia"
+      },
+      {
+        "codigo": "JM",
+        "valor": "Jamaica"
+      },
+      {
+        "codigo": "JP",
+        "valor": "Japón"
+      },
+      {
+        "codigo": "JE",
+        "valor": "Jersey"
+      },
+      {
+        "codigo": "JO",
+        "valor": "Jordania"
+      },
+      {
+        "codigo": "KZ",
+        "valor": "Kazajistán"
+      },
+      {
+        "codigo": "KE",
+        "valor": "Kenia"
+      },
+      {
+        "codigo": "KG",
+        "valor": "Kirguistán"
+      },
+      {
+        "codigo": "KI",
+        "valor": "Kiribati"
+      },
+      {
+        "codigo": "KW",
+        "valor": "Kuwait"
+      },
+      {
+        "codigo": "LA",
+        "valor": "Laos, República Democrática"
+      },
+      {
+        "codigo": "LS",
+        "valor": "Lesotho"
+      },
+      {
+        "codigo": "LV",
+        "valor": "Letonia"
+      },
+      {
+        "codigo": "LB",
+        "valor": "Líbano"
+      },
+      {
+        "codigo": "LR",
+        "valor": "Liberia"
+      },
+      {
+        "codigo": "LY",
+        "valor": "Libia"
+      },
+      {
+        "codigo": "LI",
+        "valor": "Liechtenstein"
+      },
+      {
+        "codigo": "LT",
+        "valor": "Lituania"
+      },
+      {
+        "codigo": "LU",
+        "valor": "Luxemburgo"
+      },
+      {
+        "codigo": "MO",
+        "valor": "Macao"
+      },
+      {
+        "codigo": "MK",
+        "valor": "Macedonia"
+      },
+      {
+        "codigo": "MG",
+        "valor": "Madagascar"
+      },
+      {
+        "codigo": "MY",
+        "valor": "Malasia"
+      },
+      {
+        "codigo": "MW",
+        "valor": "Malawi"
+      },
+      {
+        "codigo": "MV",
+        "valor": "Maldivas"
+      },
+      {
+        "codigo": "ML",
+        "valor": "Malí"
+      },
+      {
+        "codigo": "MT",
+        "valor": "Malta"
+      },
+      {
+        "codigo": "MA",
+        "valor": "Marruecos"
+      },
+      {
+        "codigo": "MQ",
+        "valor": "Martinica e.a."
+      },
+      {
+        "codigo": "MU",
+        "valor": "Mauricio"
+      },
+      {
+        "codigo": "MR",
+        "valor": "Mauritania"
+      },
+      {
+        "codigo": "YT",
+        "valor": "Mayotte"
+      },
+      {
+        "codigo": "MX",
+        "valor": "México"
+      },
+      {
+        "codigo": "FM",
+        "valor": "Micronesia"
+      },
+      {
+        "codigo": "MD",
+        "valor": "Moldavia, República de"
+      },
+      {
+        "codigo": "MC",
+        "valor": "Mónaco"
+      },
+      {
+        "codigo": "MN",
+        "valor": "Mongolia"
+      },
+      {
+        "codigo": "ME",
+        "valor": "Montenegro"
+      },
+      {
+        "codigo": "MS",
+        "valor": "Montserrat"
+      },
+      {
+        "codigo": "MZ",
+        "valor": "Mozambique"
+      },
+      {
+        "codigo": "MM",
+        "valor": "Myanmar"
+      },
+      {
+        "codigo": "NA",
+        "valor": "Namibia"
+      },
+      {
+        "codigo": "NR",
+        "valor": "Nauru"
+      },
+      {
+        "codigo": "NP",
+        "valor": "Nepal"
+      },
+      {
+        "codigo": "NI",
+        "valor": "Nicaragua"
+      },
+      {
+        "codigo": "NE",
+        "valor": "Níger"
+      },
+      {
+        "codigo": "NG",
+        "valor": "Nigeria"
+      },
+      {
+        "codigo": "NU",
+        "valor": "Niue"
+      },
+      {
+        "codigo": "NO",
+        "valor": "Noruega"
+      },
+      {
+        "codigo": "NC",
+        "valor": "Nueva Caledonia"
+      },
+      {
+        "codigo": "NZ",
+        "valor": "Nueva Zelanda"
+      },
+      {
+        "codigo": "OM",
+        "valor": "Omán"
+      },
+      {
+        "codigo": "NL",
+        "valor": "Países Bajos"
+      },
+      {
+        "codigo": "PK",
+        "valor": "Pakistán"
+      },
+      {
+        "codigo": "PW",
+        "valor": "Palaos"
+      },
+      {
+        "codigo": "PS",
+        "valor": "Palestina"
+      },
+      {
+        "codigo": "PA",
+        "valor": "Panamá"
+      },
+      {
+        "codigo": "PG",
+        "valor": "Papúa, Nueva Guinea"
+      },
+      {
+        "codigo": "PY",
+        "valor": "Paraguay"
+      },
+      {
+        "codigo": "PE",
+        "valor": "Perú"
+      },
+      {
+        "codigo": "PF",
+        "valor": "Polinesia Francesa"
+      },
+      {
+        "codigo": "PL",
+        "valor": "Polonia"
+      },
+      {
+        "codigo": "PT",
+        "valor": "Portugal"
+      },
+      {
+        "codigo": "PR",
+        "valor": "Puerto Rico"
+      },
+      {
+        "codigo": "QA",
+        "valor": "Qatar"
+      },
+      {
+        "codigo": "GB",
+        "valor": "Reino Unido"
+      },
+      {
+        "codigo": "KP",
+        "valor": "Rep. Democrática popular de Corea"
+      },
+      {
+        "codigo": "CZ",
+        "valor": "República Checa"
+      },
+      {
+        "codigo": "KR",
+        "valor": "República de Corea"
+      },
+      {
+        "codigo": "CD",
+        "valor": "República Democrática del Congo"
+      },
+      {
+        "codigo": "DO",
+        "valor": "República Dominicana"
+      },
+      {
+        "codigo": "IR",
+        "valor": "República Islámica de Irán"
+      },
+      {
+        "codigo": "RE",
+        "valor": "Reunión"
+      },
+      {
+        "codigo": "RW",
+        "valor": "Ruanda"
+      },
+      {
+        "codigo": "RO",
+        "valor": "Rumania"
+      },
+      {
+        "codigo": "RU",
+        "valor": "Rusia"
+      },
+      {
+        "codigo": "EH",
+        "valor": "Sahara Occidental"
+      },
+      {
+        "codigo": "BL",
+        "valor": "Saint Barthélemy"
+      },
+      {
+        "codigo": "MF",
+        "valor": "Saint Martin (French part)"
+      },
+      {
+        "codigo": "SB",
+        "valor": "Salomón, Islas"
+      },
+      {
+        "codigo": "WS",
+        "valor": "Samoa"
+      },
+      {
+        "codigo": "AS",
+        "valor": "Samoa Americana"
+      },
+      {
+        "codigo": "KN",
+        "valor": "San Cristóbal y Nieves"
+      },
+      {
+        "codigo": "SM",
+        "valor": "San Marino"
+      },
+      {
+        "codigo": "PM",
+        "valor": "San Pedro y Miquelón"
+      },
+      {
+        "codigo": "VC",
+        "valor": "San Vicente y las Granadinas"
+      },
+      {
+        "codigo": "SH",
+        "valor": "Santa Elena"
+      },
+      {
+        "codigo": "LC",
+        "valor": "Santa Lucía"
+      },
+      {
+        "codigo": "ST",
+        "valor": "Santo Tomé y Príncipe"
+      },
+      {
+        "codigo": "SN",
+        "valor": "Senegal"
+      },
+      {
+        "codigo": "RS",
+        "valor": "Serbia"
+      },
+      {
+        "codigo": "SC",
+        "valor": "Seychelles"
+      },
+      {
+        "codigo": "SL",
+        "valor": "Sierra Leona"
+      },
+      {
+        "codigo": "SG",
+        "valor": "Singapur"
+      },
+      {
+        "codigo": "SX",
+        "valor": "Sint Maarten (Dutch part)"
+      },
+      {
+        "codigo": "SY",
+        "valor": "Siria"
+      },
+      {
+        "codigo": "SO",
+        "valor": "Somalia"
+      },
+      {
+        "codigo": "SS",
+        "valor": "South Sudan"
+      },
+      {
+        "codigo": "LK",
+        "valor": "Sri Lanka"
+      },
+      {
+        "codigo": "ZA",
+        "valor": "Sudáfrica"
+      },
+      {
+        "codigo": "SD",
+        "valor": "Sudán"
+      },
+      {
+        "codigo": "SE",
+        "valor": "Suecia"
+      },
+      {
+        "codigo": "CH",
+        "valor": "Suiza"
+      },
+      {
+        "codigo": "SR",
+        "valor": "Surinám"
+      },
+      {
+        "codigo": "SJ",
+        "valor": "Svalbard y Jan Mayen"
+      },
+      {
+        "codigo": "SZ",
+        "valor": "Swazilandia"
+      },
+      {
+        "codigo": "TH",
+        "valor": "Tailandia"
+      },
+      {
+        "codigo": "TW",
+        "valor": "Taiwan, Provincia de China"
+      },
+      {
+        "codigo": "TZ",
+        "valor": "Tanzania, República Unida de"
+      },
+      {
+        "codigo": "TJ",
+        "valor": "Tayikistán"
+      },
+      {
+        "codigo": "IO",
+        "valor": "Territorio Británico Océano Indico"
+      },
+      {
+        "codigo": "TF",
+        "valor": "Territorios Australes Franceses"
+      },
+      {
+        "codigo": "TL",
+        "valor": "Timor Oriental"
+      },
+      {
+        "codigo": "TG",
+        "valor": "Togo"
+      },
+      {
+        "codigo": "TK",
+        "valor": "Tokelau"
+      },
+      {
+        "codigo": "TO",
+        "valor": "Tonga"
+      },
+      {
+        "codigo": "TT",
+        "valor": "Trinidad y Tobago"
+      },
+      {
+        "codigo": "TN",
+        "valor": "Túnez"
+      },
+      {
+        "codigo": "TM",
+        "valor": "Turkmenistán"
+      },
+      {
+        "codigo": "TR",
+        "valor": "Turquía"
+      },
+      {
+        "codigo": "TV",
+        "valor": "Tuvalu"
+      },
+      {
+        "codigo": "UA",
+        "valor": "Ucrania"
+      },
+      {
+        "codigo": "UG",
+        "valor": "Uganda"
+      },
+      {
+        "codigo": "UY",
+        "valor": "Uruguay"
+      },
+      {
+        "codigo": "UZ",
+        "valor": "Uzbekistán"
+      },
+      {
+        "codigo": "VU",
+        "valor": "Vanuatu"
+      },
+      {
+        "codigo": "VE",
+        "valor": "Venezuela"
+      },
+      {
+        "codigo": "VN",
+        "valor": "Vietnam"
+      },
+      {
+        "codigo": "VG",
+        "valor": "Islas Vírgenes Británicas"
+      },
+      {
+        "codigo": "WF",
+        "valor": "Wallis y Fortuna, Islas"
+      },
+      {
+        "codigo": "YE",
+        "valor": "Yemen"
+      },
+      {
+        "codigo": "ZM",
+        "valor": "Zambia"
+      },
+      {
+        "codigo": "ZW",
+        "valor": "Zimbabue"
+      }
+    ]
+  },
+  "CAT-021": {
+    "titulo": "Documentos Asociados",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "Emisor"
+      },
+      {
+        "codigo": "2",
+        "valor": "Receptor"
+      },
+      {
+        "codigo": "3",
+        "valor": "Médico (solo aplica para contribuyentes obligados a la presentación de F-958)"
+      },
+      {
+        "codigo": "4",
+        "valor": "Transporte (solo aplica para Factura de exportación)"
+      }
+    ]
+  },
+  "CAT-022": {
+    "titulo": "Tipo de documento de identificación",
+    "entradas": [
+      {
+        "codigo": "36",
+        "valor": "NIT"
+      },
+      {
+        "codigo": "13",
+        "valor": "DUI"
+      },
+      {
+        "codigo": "37",
+        "valor": "Otro"
+      },
+      {
+        "codigo": "03",
+        "valor": "Pasaporte"
+      },
+      {
+        "codigo": "02",
+        "valor": "Carnet de Residente"
+      }
+    ]
+  },
+  "CAT-023": {
+    "titulo": "Operaciones Especiales",
+    "entradas": [
+      {
+        "codigo": "02",
+        "valor": "Factura de venta simplificada"
+      },
+      {
+        "codigo": "97",
+        "valor": "Comprobantes de Control Interno"
+      }
+    ]
+  },
+  "CAT-024": {
+    "titulo": "Motivo del evento",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "Error en la Información del Documento Tributario Electrónico a invalidar."
+      },
+      {
+        "codigo": "2",
+        "valor": "Rescindir de la operación realizada."
+      },
+      {
+        "codigo": "3",
+        "valor": "Otro"
+      }
+    ]
+  },
+  "CAT-025": {
+    "titulo": "Título a que se remiten los bienes",
+    "entradas": [
+      {
+        "codigo": "01",
+        "valor": "Depósito"
+      },
+      {
+        "codigo": "02",
+        "valor": "Propiedad"
+      },
+      {
+        "codigo": "03",
+        "valor": "Consignación"
+      },
+      {
+        "codigo": "04",
+        "valor": "Traslado"
+      },
+      {
+        "codigo": "05",
+        "valor": "Otros"
+      }
+    ]
+  },
+  "CAT-026": {
+    "titulo": "Tipo de Donación",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "Efectivo"
+      },
+      {
+        "codigo": "2",
+        "valor": "Bien"
+      },
+      {
+        "codigo": "3",
+        "valor": "Servicio"
+      }
+    ]
+  },
+  "CAT-027": {
+    "titulo": "Recinto fiscal",
+    "entradas": [
+      {
+        "codigo": "01",
+        "valor": "Terrestre San Bartolo"
+      },
+      {
+        "codigo": "02",
+        "valor": "Marítima de Acajutla"
+      },
+      {
+        "codigo": "03",
+        "valor": "Aérea De Comalapa"
+      },
+      {
+        "codigo": "04",
+        "valor": "Terrestre Las Chinamas"
+      },
+      {
+        "codigo": "05",
+        "valor": "Terrestre La Hachadura"
+      },
+      {
+        "codigo": "06",
+        "valor": "Terrestre Santa Ana"
+      },
+      {
+        "codigo": "07",
+        "valor": "Terrestre San Cristóbal"
+      },
+      {
+        "codigo": "08",
+        "valor": "Terrestre Anguiatú"
+      },
+      {
+        "codigo": "09",
+        "valor": "Terrestre El Amatillo"
+      },
+      {
+        "codigo": "10",
+        "valor": "Marítima La Unión"
+      },
+      {
+        "codigo": "11",
+        "valor": "Terrestre El Poy"
+      },
+      {
+        "codigo": "12",
+        "valor": "Terrestre Metalío"
+      },
+      {
+        "codigo": "15",
+        "valor": "Fardos Postales"
+      },
+      {
+        "codigo": "16",
+        "valor": "Z.F. San Marcos"
+      },
+      {
+        "codigo": "17",
+        "valor": "Z.F. El Pedregal"
+      },
+      {
+        "codigo": "18",
+        "valor": "Z.F. San Bartolo"
+      },
+      {
+        "codigo": "20",
+        "valor": "Z.F. Exportsalva"
+      },
+      {
+        "codigo": "21",
+        "valor": "Z.F. American Park"
+      },
+      {
+        "codigo": "23",
+        "valor": "Z.F. Internacional"
+      },
+      {
+        "codigo": "24",
+        "valor": "Z.F. Diez"
+      },
+      {
+        "codigo": "26",
+        "valor": "Z.F. Miramar"
+      },
+      {
+        "codigo": "27",
+        "valor": "Z.F. Santo Tomas"
+      },
+      {
+        "codigo": "28",
+        "valor": "Z.F. Santa Tecla"
+      },
+      {
+        "codigo": "29",
+        "valor": "Z.F. Santa Ana"
+      },
+      {
+        "codigo": "30",
+        "valor": "Z.F. La Concordia"
+      },
+      {
+        "codigo": "31",
+        "valor": "Aérea Ilopango"
+      },
+      {
+        "codigo": "32",
+        "valor": "Z.F. Pipil"
+      },
+      {
+        "codigo": "33",
+        "valor": "Puerto Barillas"
+      },
+      {
+        "codigo": "34",
+        "valor": "Z.F. Calvo Conservas"
+      },
+      {
+        "codigo": "35",
+        "valor": "Feria Internacional"
+      },
+      {
+        "codigo": "36",
+        "valor": "Aduana El Papalón"
+      },
+      {
+        "codigo": "37",
+        "valor": "Z.F. Sam-Li"
+      },
+      {
+        "codigo": "38",
+        "valor": "Z.F. San José"
+      },
+      {
+        "codigo": "39",
+        "valor": "Z.F. Las Mercedes"
+      },
+      {
+        "codigo": "40",
+        "valor": "Z.F. EMCO"
+      },
+      {
+        "codigo": "41",
+        "valor": "Z.F. Gigante"
+      },
+      {
+        "codigo": "42",
+        "valor": "Z.F. NOVABES"
+      },
+      {
+        "codigo": "43",
+        "valor": "Z.F. INHDELVA"
+      },
+      {
+        "codigo": "71",
+        "valor": "Aldesa"
+      },
+      {
+        "codigo": "72",
+        "valor": "Agdosa Merliot"
+      },
+      {
+        "codigo": "73",
+        "valor": "Bodesa"
+      },
+      {
+        "codigo": "76",
+        "valor": "Delegacion DHL"
+      },
+      {
+        "codigo": "77",
+        "valor": "Transauto"
+      },
+      {
+        "codigo": "80",
+        "valor": "Nejapa"
+      },
+      {
+        "codigo": "81",
+        "valor": "Almaconsa"
+      },
+      {
+        "codigo": "83",
+        "valor": "Agdosa Apopa"
+      },
+      {
+        "codigo": "85",
+        "valor": "Gutiérrez Courier Y Cargo"
+      },
+      {
+        "codigo": "99",
+        "valor": "San Bartolo Envío Hn/Gt"
+      }
+    ]
+  },
+  "CAT-028": {
+    "titulo": "Régimen",
+    "entradas": [
+      {
+        "codigo": "1000.000",
+        "valor": "Exportación Definitiva, Régimen Común"
+      },
+      {
+        "codigo": "1040.000",
+        "valor": "Exportación Definitiva Sustitución de Mercancías, Régimen Común"
+      },
+      {
+        "codigo": "1041.020",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Provisional, Franq. Presidenciales exento de DAI"
+      },
+      {
+        "codigo": "1041.021",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Provisional, Franq. Presidenciales exento de DAI e IVA"
+      },
+      {
+        "codigo": "1048.025",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Maquinaria y Equipo LZF. DPA"
+      },
+      {
+        "codigo": "1048.031",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Distribución Internacional"
+      },
+      {
+        "codigo": "1048.032",
+        "valor": "Exportación Definitiva Proveniente. de Franquicia Definitiva, Operaciones Internacionales de Logística"
+      },
+      {
+        "codigo": "1048.033",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Centro Internacional de llamadas(Call Center)"
+      },
+      {
+        "codigo": "1048.034",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Tecnologias de Información LSI"
+      },
+      {
+        "codigo": "1048.035",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Investigación y Desarrollo LSI"
+      },
+      {
+        "codigo": "1048.036",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Reparación y Mantenimiento de Embarcaciones Marítimas LSI"
+      },
+      {
+        "codigo": "1048.037",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Reparación y Mantenimiento de Aeronaves LSI"
+      },
+      {
+        "codigo": "1048.038",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Procesos Empresariales LSI"
+      },
+      {
+        "codigo": "1048.039",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Servicios Medico-Hospitalarios LSI"
+      },
+      {
+        "codigo": "1048.040",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Servicios Financieros Internacionales LSI"
+      },
+      {
+        "codigo": "1048.043",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Reparación y Mantenimiento de Contenedores LSI"
+      },
+      {
+        "codigo": "1048.044",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Reparación de Equipos Tecnológicos LSI"
+      },
+      {
+        "codigo": "1048.054",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Atención Ancianos y Convalecientes LSI"
+      },
+      {
+        "codigo": "1048.055",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Telemedicina LSI"
+      },
+      {
+        "codigo": "1048.056",
+        "valor": "Exportación Definitiva Proveniente de Franquicia Definitiva, Cinematografía LSI"
+      },
+      {
+        "codigo": "1052.000",
+        "valor": "Exportación Definitiva de DPA con origen en Compras Locales, Régimen Común"
+      },
+      {
+        "codigo": "1054.000",
+        "valor": "Exportación Definitiva de Zona Franca con origen en Compras Locales, Régimen Común"
+      },
+      {
+        "codigo": "1100.000",
+        "valor": "Exportación Definitiva de Envíos de Socorro , Régimen Común"
+      },
+      {
+        "codigo": "1200.000",
+        "valor": "Exportación Definitiva de Envíos Postales, Régimen Común"
+      },
+      {
+        "codigo": "1300.000",
+        "valor": "Exportación Definitiva Envíos que  requieren despacho urgente, Régimen Común"
+      },
+      {
+        "codigo": "1400.000",
+        "valor": "Exportación Definitiva  Courier, Régimen Común"
+      },
+      {
+        "codigo": "1400.011",
+        "valor": "Exportación Definitiva  Courier, Muestras Sin Valor Comercial"
+      },
+      {
+        "codigo": "1400.012",
+        "valor": "Exportación Definitiva  Courier, Material Publicitario"
+      },
+      {
+        "codigo": "1400.017",
+        "valor": "Exportación Definitiva  Courier, Declaración de Documentos"
+      },
+      {
+        "codigo": "1500.000",
+        "valor": "Exportación Definitiva Menaje de casa, Régimen Común"
+      },
+      {
+        "codigo": "2100.000",
+        "valor": "Exportación Temporal para Perfeccionamiento Pasivo, Régimen Común"
+      },
+      {
+        "codigo": "2100.065",
+        "valor": "Exportación Temporal para Perfeccionamiento Pasivo, De Mercado Nacional a ZF o DPA"
+      },
+      {
+        "codigo": "2200.000",
+        "valor": "Exportación Temporal con Reimportación en el mismo estado, Régimen Común"
+      },
+      {
+        "codigo": "2200.065",
+        "valor": "Exportación Temporal con Reimportación en el mismo estado, De Mercado Nacional a ZF o DPA"
+      },
+      {
+        "codigo": "2400.000",
+        "valor": "Traslados Definitivos"
+      },
+      {
+        "codigo": "3050.000",
+        "valor": "Reexportación Proveniente de Importación Temporal, Régimen Común"
+      },
+      {
+        "codigo": "3051.000",
+        "valor": "Reexportación Proveniente de Tiendas Libres, Régimen Común"
+      },
+      {
+        "codigo": "3052.000",
+        "valor": "Reexportación Proveniente de Admisión Temporal para Perfeccionamiento Activo, Régimen Común"
+      },
+      {
+        "codigo": "3053.000",
+        "valor": "Reexportación Proveniente de Admisión Temporal, Régimen Común"
+      },
+      {
+        "codigo": "3054.000",
+        "valor": "Reexportación Proveniente de Régimen de Zona Franca, Régimen Común"
+      },
+      {
+        "codigo": "3055.000",
+        "valor": "Reexportación Proveniente de Admisión Temporal para Perfeccionamiento Activo con Garantía, Régimen Común"
+      },
+      {
+        "codigo": "3056.000",
+        "valor": "Reexportación Proveniente de Admisión Temporal Distribución Internacional Parque de Servicios, Régimen Común"
+      },
+      {
+        "codigo": "3056.047",
+        "valor": "Reexportación Proveniente de Admisión Temporal Distribución Internacional Parque de Servicios, Remisión a Departamento de Subastas"
+      },
+      {
+        "codigo": "3056.057",
+        "valor": "Reexportación Proveniente de Admisión Temporal Distribución Internacional Parque de Servicios, Remisión entre Usuarios Directos del Mismo Parque de Servicios"
+      },
+      {
+        "codigo": "3056.058",
+        "valor": "Reexportación Proveniente de Admisión Temporal Distribución Internacional Parque de Servicios, Remisión entre Usuarios Directos de Diferente Parque de Servicios"
+      },
+      {
+        "codigo": "3056.072",
+        "valor": "Reexportación Proveniente de Admisión Temporal Distribución Internacional Parque de Servicios, Decreto 738 Eléctricos e Híbridos"
+      },
+      {
+        "codigo": "3056.081",
+        "valor": "Reexportación Proveniente de Admisión Temporal Distribución Internacional Parque de Servicios, Remisión entre Usuarios Directos LSI"
+      },
+      {
+        "codigo": "3056.084",
+        "valor": "Reexportación Proveniente de Admisión Temporal Distribución Internacional Parque de Servicios, De una LSI para un DPA"
+      },
+      {
+        "codigo": "3056.085",
+        "valor": "Reexportación Proveniente de Admisión Temporal Distribución Internacional Parque de Servicios, De una LSI para una ZF"
+      },
+      {
+        "codigo": "3057.000",
+        "valor": "Reexportación Proveniente de Admisión Temporal Operaciones Internacional de Logística Parque de Servicios, Régimen Común"
+      },
+      {
+        "codigo": "3057.047",
+        "valor": "Reexportación Proveniente de Admisión Temporal Operaciones Internacional de Logística Parque de Servicios, Remisión a Departamento de Subastas"
+      },
+      {
+        "codigo": "3057.057",
+        "valor": "Reexportación Proveniente de Admisión Temporal Operaciones Internacional de Logística Parque de Servicios, Remisión entre Usuarios Directos del Mismo Parque de Servicios"
+      },
+      {
+        "codigo": "3057.058",
+        "valor": "Reexportación Proveniente de Admisión Temporal Operaciones Internacional de Logística Parque de Servicios, Remisión entre Usuarios Directos de Diferente Parque de Servicios"
+      },
+      {
+        "codigo": "3057.081",
+        "valor": "Reexportación Proveniente de Admisión Temporal Operaciones Internacional de Logística Parque de Servicios, Remisión entre Usuarios Directos LSI"
+      },
+      {
+        "codigo": "3057.084",
+        "valor": "Reexportación Proveniente de Admisión Temporal Operaciones Internacional de Logística Parque de Servicios, De una LSI para un DPA"
+      },
+      {
+        "codigo": "3057.085",
+        "valor": "Reexportación Proveniente de Admisión Temporal Operaciones Internacional de Logística Parque de Servicios, De una LSI para una ZF"
+      },
+      {
+        "codigo": "3058.033",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Centro Internacional de llamadas(Call Center)"
+      },
+      {
+        "codigo": "3058.034",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Tecnologías de Información LSI"
+      },
+      {
+        "codigo": "3058.035",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Investigación y Desarrollo LSI"
+      },
+      {
+        "codigo": "3058.036",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Reparación y Mantenimiento de Embarcaciones Marítimas LSI"
+      },
+      {
+        "codigo": "3058.037",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Reparación y Mantenimiento de Aeronaves LSI"
+      },
+      {
+        "codigo": "3058.038",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Procesos Empresariales LSI"
+      },
+      {
+        "codigo": "3058.039",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Servicios Medico-Hospitalarios LSI"
+      },
+      {
+        "codigo": "3058.040",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Servicios Financieros Internacionales LSI"
+      },
+      {
+        "codigo": "3058.043",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Reparación y Mantenimiento de Contenedores LSI"
+      },
+      {
+        "codigo": "3058.044",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Reparación de Equipos Tecnológicos LSI"
+      },
+      {
+        "codigo": "3058.054",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Atención Ancianos y Convalecientes LSI"
+      },
+      {
+        "codigo": "3058.055",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Telemedicina LSI"
+      },
+      {
+        "codigo": "3058.056",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Cinematografía LSI"
+      },
+      {
+        "codigo": "3058.082",
+        "valor": "Reexportación Proveniente de Admisión Temporal Centro Servicio LSI, Remisión entre Centros de Servicios LSI"
+      },
+      {
+        "codigo": "3059.000",
+        "valor": "Reexportación Proveniente de Admisión Temporal Reparación de Equipo Tecnológico Parque de Servicios, Régimen Común"
+      },
+      {
+        "codigo": "3059.057",
+        "valor": "Reexportación Proveniente de Admisión Temporal Reparación de Equipo Tecnológico Parque de Servicios, Remisión entre Usuarios Directos del Mismo Parque de Servicios"
+      },
+      {
+        "codigo": "3059.058",
+        "valor": "Reexportación Proveniente de Admisión Temporal Reparación de Equipo Tecnológico Parque de Servicios, Remisión entre Usuarios Directos de Diferente Parque de Servicios"
+      },
+      {
+        "codigo": "3059.033",
+        "valor": "Reexportación Proveniente de Servicios Internacionales en Parques de Servicios, Centro Internacional de llamadas(Call Center)"
+      },
+      {
+        "codigo": "3059.034",
+        "valor": "Reexportación Proveniente de Servicios Internacionales en Parques de Servicios, Tecnologías de Información LSI"
+      },
+      {
+        "codigo": "3059.035",
+        "valor": "Reexportación Proveniente de Servicios Internacionales en Parques de Servicios, Investigación y Desarrollo LSI"
+      },
+      {
+        "codigo": "3059.038",
+        "valor": "Reexportación Proveniente de Servicios Internacionales en Parques de Servicios, Procesos Empresariales LSI"
+      },
+      {
+        "codigo": "3059.039",
+        "valor": "Reexportación Proveniente de Servicios Internacionales en Parques de Servicios, Servicios Medico-Hospitalarios LSI"
+      },
+      {
+        "codigo": "3059.040",
+        "valor": "Reexportación Proveniente de Servicios Internacionales en Parques de Servicios, Servicios Financieros Internacionales LSI"
+      },
+      {
+        "codigo": "3059.044",
+        "valor": "Reexportación Proveniente de Servicios Internacionales en Parques de Servicios, Reparación de Equipos Tecnológicos LSI"
+      },
+      {
+        "codigo": "3059.047",
+        "valor": "Reexportación Proveniente de Servicios Internacionales en Parques de Servicios, Remisión a Departamento de Subastas"
+      },
+      {
+        "codigo": "3059.054",
+        "valor": "Reexportación Proveniente de Servicios Internacionales en Parques de Servicios, Atención Ancianos y Convalecientes LSI"
+      },
+      {
+        "codigo": "3059.055",
+        "valor": "Reexportación Proveniente de Servicios Internacionales en Parques de Servicios, Telemedicina LS"
+      },
+      {
+        "codigo": "3059.056",
+        "valor": "Reexportación Proveniente de Servicios Internacionales en Parques de Servicios, Cinematografía LSI"
+      },
+      {
+        "codigo": "3059.081",
+        "valor": "Reexportación Proveniente de Servicios Internacionales en Parques de Servicios, Remisión entre Usuarios Directos"
+      },
+      {
+        "codigo": "3070.000",
+        "valor": "Reexportación Proveniente de Depósito., Régimen Común"
+      },
+      {
+        "codigo": "3070.047",
+        "valor": "Reexportación Proveniente de Depósito., Remisión a Departamento de Subastas"
+      },
+      {
+        "codigo": "3070.072",
+        "valor": "Reexportación Proveniente de Depósito., Decreto 738 Eléctricos e Híbridos"
+      },
+      {
+        "codigo": "3071.000",
+        "valor": "Reexp. Prov. de Deposito."
+      },
+      {
+        "codigo": "0000.000",
+        "valor": "Tránsito Aduanero"
+      }
+    ]
+  },
+  "CAT-029": {
+    "titulo": "Tipo de persona",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "Persona Natural"
+      },
+      {
+        "codigo": "2",
+        "valor": "Persona Jurídica"
+      }
+    ]
+  },
+  "CAT-030": {
+    "titulo": "Transporte",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "TERRESTRE"
+      },
+      {
+        "codigo": "2",
+        "valor": "AÉREO"
+      },
+      {
+        "codigo": "3",
+        "valor": "MARÍTIMO"
+      },
+      {
+        "codigo": "4",
+        "valor": "FERREO"
+      },
+      {
+        "codigo": "5",
+        "valor": "MULTIMODAL"
+      },
+      {
+        "codigo": "6",
+        "valor": "CORREO"
+      }
+    ]
+  },
+  "CAT-031": {
+    "titulo": "INCOTERMS",
+    "entradas": [
+      {
+        "codigo": "01",
+        "valor": "EXW-En fabrica"
+      },
+      {
+        "codigo": "02",
+        "valor": "FCA-Libre transportista"
+      },
+      {
+        "codigo": "03",
+        "valor": "CPT-Transporte pagado hasta"
+      },
+      {
+        "codigo": "04",
+        "valor": "CIP-Transporte y seguro pagado hasta"
+      },
+      {
+        "codigo": "05",
+        "valor": "DAP-Entrega en el lugar"
+      },
+      {
+        "codigo": "06",
+        "valor": "DPU-Entregado en el lugar descargado"
+      },
+      {
+        "codigo": "07",
+        "valor": "DDP-Entrega con impuestos pagados"
+      },
+      {
+        "codigo": "08",
+        "valor": "FAS-Libre al costado del buque"
+      },
+      {
+        "codigo": "09",
+        "valor": "FOB-Libre a bordo"
+      },
+      {
+        "codigo": "10",
+        "valor": "CFR-Costo y flete"
+      },
+      {
+        "codigo": "11",
+        "valor": "CIF- Costo seguro y flete"
+      }
+    ]
+  },
+  "CAT-032": {
+    "titulo": "Domicilio Fiscal",
+    "entradas": [
+      {
+        "codigo": "1",
+        "valor": "Domiciliado"
+      },
+      {
+        "codigo": "2",
+        "valor": "No Domiciliado"
+      }
+    ]
+  },
+  "CAT-033": {
+    "titulo": "Tipo de Régimen",
+    "entradas": [
+      {
+        "codigo": "EX-1",
+        "valor": "Exportación Definitiva"
+      },
+      {
+        "codigo": "EX-2",
+        "valor": "Exportación Temporal"
+      },
+      {
+        "codigo": "EX-3",
+        "valor": "Reexportación"
+      },
+      {
+        "codigo": "TA-1",
+        "valor": "Tránsito Aduanero"
+      }
+    ]
+  }
+}

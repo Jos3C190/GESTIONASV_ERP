@@ -42,6 +42,7 @@ jobs:
               "REDIS_PASSWORD=CHANGE_ME_GENERATE_LOCAL_REDIS_PASSWORD": f"REDIS_PASSWORD={secrets.token_hex(32)}",
               "GRAFANA_ADMIN_PASSWORD=CHANGE_ME_GENERATE_LOCAL_GRAFANA_PASSWORD": f"GRAFANA_ADMIN_PASSWORD={secrets.token_hex(32)}",
               "JWT_SECRET_KEY=CHANGE_ME_USE_openssl_rand_hex_64": f"JWT_SECRET_KEY={secrets.token_hex(64)}",
+              "DTE_SERVICE_API_KEY=CHANGE_ME_GENERATE_DTE_SERVICE_API_KEY": f"DTE_SERVICE_API_KEY={secrets.token_hex(32)}",
           }
           for source, target in replacements.items():
               text = text.replace(source, target)
@@ -50,7 +51,7 @@ jobs:
 
       - name: Validate optional compose profiles
         run: |
-          docker compose --profile vlm --profile lan config -q
+          docker compose --profile vlm --profile lan --profile dte config -q
           docker compose -f compose.yaml -f compose.prod.yaml --profile prod --profile tracking config -q
       - name: Start ERP services
         run: docker compose up -d --build

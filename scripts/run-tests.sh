@@ -50,20 +50,32 @@ run_ocr() {
   docker compose exec -T backend uv run --frozen --extra ocr pytest -q -ra tests/unit/test_ocr_worker.py
 }
 
+run_dte() {
+  echo "[tests] DTE service (node --test)..."
+  # Corre sobre una copia en /tmp para no escribir node_modules en el repositorio.
+  local dir="$(pwd)/dte-service"
+  if command -v cygpath >/dev/null 2>&1; then
+    dir="$(cygpath -w "$dir")"
+    export MSYS_NO_PATHCONV=1
+  fi
+  docker run --rm -v "${dir}:/src:ro" node:22-slim     sh -c "cp -r /src /tmp/svc && cd /tmp/svc && npm ci --no-audit --no-fund >/dev/null && npm test"
+}
+
 run_lint() {
   run_backend_quality
   run_frontend_quality
 }
 
 case "$TARGET" in
-  all)               run_backend all; run_ocr; run_frontend; run_lint ;;
+  all)               run_backend all; run_ocr; run_dte; run_frontend; run_lint ;;
   backend)           run_backend all ;;
   backend-unit)      run_backend unit ;;
   backend-integration) run_backend integration ;;
   backend-e2e)       run_backend e2e ;;
   frontend)          run_frontend; run_frontend_quality ;;
   lint)              run_lint ;;
+  dte)               run_dte ;;
   *)
-    echo "Usage: $0 {all|backend|backend-unit|backend-integration|backend-e2e|frontend|lint}"
+    echo "Usage: $0 {all|backend|backend-unit|backend-integration|backend-e2e|dte|frontend|lint}"
     exit 2 ;;
 esac

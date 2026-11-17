@@ -1,0 +1,11 @@
+node_modules/
+.npm-cache/
+data/
+backups/
+coverage/
+.env
+firmador-docker/certificado/*
+!firmador-docker/certificado/LEEME.txt
+*.p12
+*.pfx
+*.key

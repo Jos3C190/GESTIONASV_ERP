@@ -1,0 +1,14 @@
+node_modules
+data
+.env
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.git
+.gitignore
+test
+README.md
+firmador-docker/certificado/*.crt
+firmador-docker/ssl/*.p12
+npm-debug.log*

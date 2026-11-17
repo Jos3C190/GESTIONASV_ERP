@@ -459,6 +459,26 @@ services:
     restart: "no"
 
   # ---------------- Frontend (SvelteKit dev) ----------------
+  # Servicio DTE (bloque V3 de Ventas): arma, firma y transmite los documentos
+  # tributarios. Multiemisor: cada empresa se registra como emisor desde el ERP.
+  # Perfil `dte` mientras el backend no lo use (V3b lo pasa al arranque normal).
+  dte-service:
+    profiles: ["dte"]
+    build:
+      context: ./dte-service
+    environment:
+      DTE_MODE: ${DTE_MODE:-simulated}
+      DTE_SIMULATION_ACKNOWLEDGED: "true"
+      DTE_SIMULATION_SQLITE_PATH: /app/data/dte-simulation.db
+      SQLITE_PATH: /app/data/dte.db
+      MS_API_KEYS: ${DTE_SERVICE_API_KEY:-}
+      MS_API_KEY_SCOPES: issue,read,invalidate,contingency,simulate,issuers
+      LOG_LEVEL: ${DTE_LOG_LEVEL:-info}
+    volumes:
+      - dte-data:/app/data
+    restart: unless-stopped
+    stop_grace_period: 15s
+
   frontend:
     build:
       context: ./frontend
@@ -1051,3 +1071,4 @@ volumes:
   frontend-svelte-kit:
   vlm-models:
   lan-proxy-data:
+  dte-data:
