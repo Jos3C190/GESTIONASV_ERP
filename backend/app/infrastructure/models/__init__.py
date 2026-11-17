@@ -188,6 +188,7 @@ from app.infrastructure.models.sales_pricing import (
     SalesPriceListCategoryMarginModel,
     SalesPriceListItemModel,
     SalesPriceListModel,
+    SalesSettingsModel,
     SalesVolumeDiscountModel,
 )
 from app.infrastructure.models.sales_return import (
@@ -357,6 +358,7 @@ __all__: list[str] = [
     "SalesReturnEventModel",
     "SalesReturnLineModel",
     "SalesReturnModel",
+    "SalesSettingsModel",
     "SalesVolumeDiscountModel",
     "SubCategoryModel",
     "SupplierAddressModel",

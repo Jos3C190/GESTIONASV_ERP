@@ -279,3 +279,26 @@ class SalesDiscountPolicyModel(UUIDPKMixin, Base):
             name="ck_sales_discount_policies_global",
         ),
     )
+
+
+class SalesSettingsModel(Base):
+    """Configuración de ventas por empresa (revisión 0124)."""
+
+    __tablename__ = "sales_settings"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), primary_key=True
+    )
+    quotation_validity_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("15")
+    )
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), _user_fk())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "quotation_validity_days BETWEEN 1 AND 365", name="ck_sales_settings_validity"
+        ),
+    )
