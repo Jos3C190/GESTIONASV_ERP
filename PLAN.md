@@ -47,7 +47,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [ ] **Paso 1: envío SMTP.**
+- [x] **Paso 1: envío SMTP.**
   - Configuración, puerto y adaptador con pruebas unitarias (SMTP falso).
   - Mailpit en compose y `.env.example`.
 - [ ] **Paso 2: migración `0127` y modelo** del registro de envíos, con prueba de migración.
@@ -62,7 +62,12 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 1 (envío SMTP).
+- **Paso en curso**: 2 (migración 0127).
+  - Paso 1:
+    - Puerto `app/domain/ports/email_sender.py` y adaptador `app/infrastructure/smtp_email_sender.py` (smtplib en hilo; errores 4xx y de red son reintentables).
+    - Configuración `SMTP_*`; `SMTP_HOST` exige `SMTP_FROM_ADDRESS`.
+    - Mailpit `axllent/mailpit:v1.21.8` con su interfaz en `127.0.0.1:8025`; backend y `dte-worker` apuntan a `mailpit:1025` sin TLS. En producción, Mailpit va con el perfil `local-mail` y el SMTP sale de las variables.
+    - Prueba de humo: un correo real llegó a Mailpit con su adjunto.
 - **Contexto**:
   - El frontend usa SvelteKit 3.
   - El servicio DTE se prueba con `./scripts/run-tests.sh dte`.

@@ -240,6 +240,12 @@ services:
       VLM_ENABLED: ${VLM_ENABLED:-true}
       DTE_SERVICE_URL: http://dte-service:3000
       DTE_SERVICE_API_KEY: ${DTE_SERVICE_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURITY: ${SMTP_SECURITY:-none}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-facturacion@gestionasv.local}
       <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
@@ -321,6 +327,12 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DTE_SERVICE_URL: http://dte-service:3000
       DTE_SERVICE_API_KEY: ${DTE_SERVICE_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURITY: ${SMTP_SECURITY:-none}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-facturacion@gestionasv.local}
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -505,6 +517,15 @@ services:
   # Servicio DTE (bloque V3 de Ventas): arma, firma y transmite los documentos
   # tributarios. Multiemisor: cada empresa se registra como emisor desde el ERP.
   # Perfil `dte` mientras el backend no lo use (V3b lo pasa al arranque normal).
+  # Buzón de prueba para el correo saliente (bloque V3c). Ver los correos en http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.21.8
+    environment:
+      MP_MAX_MESSAGES: "500"
+    ports:
+      - "127.0.0.1:8025:8025"
+    restart: unless-stopped
+
   # Servicio DTE multiemisor (red interna; no publica puertos).
   dte-service:
     build:

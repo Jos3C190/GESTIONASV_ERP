@@ -46,6 +46,11 @@ services:
       VLM_ENABLED: "false"
       # Facturación electrónica apagada hasta el ambiente de Hacienda (bloque V3d).
       DTE_SERVICE_URL: ""
+      # Correo saliente: el SMTP real del despliegue (vacío = sin envío).
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-}
       OBSERVABILITY_ENABLED: ${OBSERVABILITY_ENABLED:-false}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
@@ -84,6 +89,9 @@ services:
         condition: service_healthy
 
   # Servicio DTE y su trabajador: solo con el perfil `dte` (requiere Redis) hasta V3d.
+  mailpit:
+    profiles: [local-mail]
+
   dte-service:
     profiles: [dte]
 
