@@ -1,137 +1,105 @@
-# Plan: Ventas V2d — Cotización rediseñada
+# Plan: Ventas V2e — Pedido de venta
 
-Rama: `feature/ventas-v2d-cotizacion`, apilada sobre `feature/ventas-v2c-descuentos-margen` (PR #45, con auto-merge). Cuando la #45 entre, se trae `develop`.
-Fuente: `docs/plan-area-ventas-el-salvador.pdf`:
-- módulo 5.3: «Cotización rediseñada: precios de lista, impuestos, descuentos, vigencia y margen visible para quien autoriza»; «Versión imprimible y envío por correo de la cotización»;
-- módulo 5.2: «El precio de lista se propone automáticamente; cambiarlo exige permiso y deja rastro»; «No se vende por debajo del costo promedio sin autorización explícita»;
-- sección 6.7: un descuento fuera de tope queda en la bitácora con usuario, fecha, motivo y valores.
+Rama: `feature/ventas-v2e-pedido`, apilada sobre `feature/ventas-v2d-cotizacion` (PR #46, con auto-merge). Cuando la #46 entre, se trae `develop`.
+
+Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
+- Módulo 5.3:
+  - «Pedido de venta: compromiso con fecha y lugar de entrega, que puede nacer de una cotización o directamente».
+  - «Reserva de existencias al confirmar el pedido».
+  - «El pedido es un documento distinto de la factura: tiene su propia numeración y sus estados de entrega…».
+  - «Toda cancelación exige motivo y libera las reservas».
+- Bloque V2: «Nuevo modelo de cotización y pedido, que sustituye al actual». El resultado verificable es una cotización y un pedido con totales fiscales correctos en ambos documentos.
 
 ## Decisiones del usuario
 
-- 16/11/2026 (V2): la cotización actual (B06) se rehace en su lugar con migración. Si hay datos, la migración se niega a seguir en lugar de perderlos. Las promociones van en V6.
-- 16/11/2026 (V2d):
-  - **Estados**: Borrador → Por autorizar (solo si una línea o el descuento global pasa el tope o queda bajo costo) → Emitida → Aceptada / Rechazada / Cancelada. «Vencida» es una Emitida cuya vigencia pasó. El pedido (V2e) nace de una Aceptada.
-  - **Quién autoriza**: un usuario con el permiso nuevo `sales_discounts:authorize` y cuyo **propio tope** cubra el descuento. Si la línea queda bajo costo, su rol debe poder vender bajo costo.
-  - **Precio manual**: solo con el permiso nuevo `sales_prices:override`. Queda registrado y la diferencia contra el precio de lista cuenta como descuento ante el tope.
-  - **Entrega**: días de vigencia por defecto configurables por empresa (15 de entrada) y editables en cada cotización; PDF imprimible. El envío por correo llega con el DTE (V3).
-- 16/11/2026: el usuario delegó el merge de las PR cuando pasen los checks propios. El repositorio tiene auto-merge y `develop` protegida con esos checks.
+- 16/11/2026 (V2): la venta B06 se rehace en su lugar con migración. Si hay datos, la migración se niega a seguir en lugar de perderlos. Las entregas y devoluciones se adaptan.
+- 16/11/2026 (V2e):
+  - **Reserva comercial al confirmar**:
+    - El pedido aparta cantidad por artículo en la sucursal sin mover unidades físicas.
+    - La entrega la consume.
+    - Cancelar la libera.
+  - **Origen**: el pedido nace de una cotización aceptada (copia precios y descuentos) o se arma directamente, con el mismo editor y las mismas reglas de topes y autorización.
+  - **Entrega**: fecha comprometida obligatoria. El lugar es retiro en la sucursal o una dirección de entrega del cliente.
+  - **Crédito**: el bloqueo por cupo y saldos vencidos queda para V5. En V2e el pedido solo copia la condición de pago del cliente (contado o crédito, y días).
+- 16/11/2026: el usuario delegó el merge de las PR cuando pasen los checks propios.
 
 ## Hechos verificados
 
-- `sales_quotations` (B06):
-  - estados `draft`, `confirmed` y `cancelled`; `subtotal` = `total` (sin impuestos);
-  - líneas con precio tecleado, unidad, factor y artículo de inventario.
-  - Se convierte en venta: `sales.quotation_id` es obligatorio y único.
-  - En la base local hay 0 cotizaciones y 0 ventas.
-- Endpoints actuales: `/sales/catalog` y `/sales/quotations` (crear, editar, confirmar, cancelar, convertir), en `application/sales/service.py`. Pantallas: `SalesQuotationList`, `SalesQuotationEditor` y `SalesQuotationDetail`.
-- Ya existen:
-  - el motor fiscal (`sales_tax.calculate`, V2a);
-  - la resolución de precio (`PriceListUseCases.resolve`, V2b);
-  - la evaluación de descuentos y topes (`SalesDiscountUseCases.evaluate`, V2c).
-- reportlab está en las dependencias (`procurement_report_renderer.py`).
+- `sales` y `sales_lines` (B06):
+  - `quotation_id` es obligatorio y único;
+  - `total` = `subtotal`, sin impuestos;
+  - estados `draft`, `confirmed` y `cancelled`.
+  - Las líneas tienen `source_quotation_line_id` obligatorio.
+- Entregas (`sales_deliveries`) y devoluciones (`sales_returns`):
+  - Apuntan a `sales` y `sales_lines` y solo usan cantidades, no precios.
+  - Las entregas toman unidades `available` de cualquier bodega activa, no de tránsito, de la sucursal del documento.
+- El inventario no tiene reservas de producto; solo de capacidad.
+- La cotización V2d ya calcula todo en `SalesQuotationUseCases._build`:
+  - precio de lista, descuento sugerido, tope y motor fiscal;
+  - identidad de línea en `sales_line_identity.py`.
+- `sales_customers` tiene `credit_days` y `credit_limit`, y existen las direcciones de entrega del cliente.
 
 ## Diseño
 
-- **Tipo de documento**: factura (01) o crédito fiscal (03). Se propone según el cliente (`receivable_documents`) y se puede cambiar entre los válidos y habilitados en la empresa.
-- **Cálculo en el servidor**:
-  - Cada vez que se guarda un borrador se resuelve el precio de lista de cada línea (cliente, sucursal, fecha), salvo que tenga precio manual.
-  - Luego se aplican el descuento sugerido o el propuesto y la evaluación contra el tope del usuario.
-  - Al final, el motor fiscal calcula gravado, exento, no sujeto, IVA, retención, percepción, total y total en letras.
-  - Todo queda guardado en la cotización: un cambio posterior de lista o de costo no la altera.
+- **Tablas**: se conservan `sales` y `sales_lines`, porque las entregas y devoluciones ya apuntan a ellas. En la interfaz el documento se llama **Pedido**.
+- **Cabecera**:
+  - `quotation_id` pasa a opcional;
+  - mismos campos fiscales y de autorización que la cotización: documento, lista, IVA, descuento global, totales, motivos y autorización;
+  - entrega: `promised_date`, `delivery_mode` (`pickup` o `delivery`), `delivery_address_id` y una copia de la dirección;
+  - condición de pago: `payment_terms` (`cash` o `credit`) y `credit_days`.
 - **Línea**:
-  - precio de lista, lista usada y si el precio es manual;
-  - precio aplicado y % de descuento, más el descuento sugerido y su origen;
-  - montos fiscales;
-  - costo y margen al momento de calcular;
-  - motivos de autorización.
-- **Cotización**:
-  - documento, lista de precios y si sus precios llevan IVA;
-  - descuento global %;
-  - totales fiscales;
-  - si requiere autorización y el registro de la autorización: quién, cuándo y nota;
-  - fechas y responsables de emisión, respuesta del cliente y cancelación.
-- **Vigencia**: `sales_settings.quotation_validity_days` por empresa (15 por defecto). `valid_until` = fecha + días, editable.
-- **Conversión a venta (B06)** hasta que V2e la reemplace: solo desde Aceptada, copiando el precio neto de cada línea.
-- **PDF**: encabezado de la empresa, cliente, documento, líneas con descuento, resumen fiscal, total en letras y vigencia. Nunca muestra costo ni margen.
-- **Permisos nuevos**: `sales_discounts:authorize` y `sales_prices:override`. Los demás usan `sales_quotations:*`. Toda acción queda en la bitácora, incluidos los precios manuales y las autorizaciones con valores.
+  - mismos campos que la línea de cotización;
+  - `source_quotation_line_id` pasa a opcional.
+- **Estados**: Borrador → Por autorizar (si pasa el tope o queda bajo costo) → Confirmado → Cancelado.
+  - La entrega sigue con su avance calculado: pendiente, parcial o completa.
+  - Facturación y cobro llegan en V3 y V5.
+- **Reserva comercial**: calculada, sin tabla nueva.
+  - Reservado de un artículo en una sucursal = suma de lo pendiente de entregar (en unidad base) de los pedidos confirmados de esa sucursal.
+  - Disponible para vender = unidades `available` en las bodegas activas de la sucursal − reservado.
+  - Al confirmar se bloquea por empresa, sucursal y artículo (lock consultivo) y se valida que alcance. Si no alcanza, error por línea.
+  - Cancelar un pedido confirmado sin entregas libera lo reservado. Con entregas parciales, cancelar no se permite en V2e.
+  - **Límite**: los traslados y ajustes todavía no respetan la reserva. Lo verán como aviso en un bloque posterior.
+- **Cálculo compartido**: `_build` de la cotización pasa a un constructor común de documentos de venta. Lo usan la cotización y el pedido, sin duplicar código.
+- **Desde cotización**: «Crear pedido» en una cotización Aceptada.
+  - Copia líneas, precios, descuentos y totales tal como se aceptaron, sin recalcular.
+  - Pide fecha y lugar de entrega, y el pedido queda en borrador.
+  - Es idempotente: una cotización origina un solo pedido.
+- **Permisos**: se reutilizan `sales:read`, `sales:manage`, `sales:confirm`, `sales:cancel` y `sales_quotations:convert`, y los de topes y precio manual de V2d. Todo queda en la bitácora.
 
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [x] **Paso 1: migración `0124` y modelos.**
-  - Guarda: se niega si hay cotizaciones.
-  - Columnas nuevas de cotización y línea, estados nuevos, `sales_settings` y permisos.
+- [ ] **Paso 1: migración `0125` y modelos.**
+  - Guarda: se niega si hay ventas, entregas o devoluciones.
+  - Columnas nuevas de pedido y línea, estados y opcionales.
   - Prueba de migración.
-- [x] **Paso 2: dominio.**
-  - Transiciones de estado.
-  - Cálculo de la cotización con el motor fiscal y la evaluación.
-  - Regla del autorizador.
+- [ ] **Paso 2: dominio y cálculo compartido.**
+  - Extraer de la cotización el constructor común.
+  - Transiciones del pedido.
+  - Regla de reserva: disponible, reservado y suficiencia.
   - Pruebas unitarias.
-- [x] **Paso 3: aplicación, repositorio y API.**
-  - Borrador con recálculo.
-  - Emitir, autorizar o devolver, aceptar, rechazar y cancelar.
-  - Convertir a venta.
-  - Vigencia por empresa.
-  - PDF.
-  - Pruebas e2e (permisos, autorizador con tope insuficiente, precio manual sin permiso, aislamiento).
-- [x] **Paso 4: frontend.**
-  - Editor: precio de lista automático, descuentos con sugeridos, totales fiscales en vivo y aviso de autorización.
-  - Detalle: acciones por estado, margen para quien autoriza y PDF.
-  - Lista con los estados nuevos.
-  - Vigencia en Configuración fiscal.
+- [ ] **Paso 3: aplicación, repositorio y API.**
+  - Pedido directo y desde cotización.
+  - Confirmar con reserva, autorizar o devolver, y cancelar con liberación.
+  - Disponible para vender en la vista previa.
+  - Adaptar entregas y devoluciones al pedido confirmado.
+  - Retirar el `convert` B06.
+  - Pruebas e2e: reserva insuficiente, concurrencia, cancelación que libera, aislamiento y permisos.
+- [ ] **Paso 4: frontend.**
+  - Editor de pedido (el de cotización con fecha y lugar de entrega), con disponible por línea.
+  - Detalle con acciones por estado y entregas.
+  - Lista de pedidos.
+  - «Crear pedido» en la cotización aceptada.
   - vitest.
-- [x] **Paso 5: semilla y documentación.** `docs/api.md`, `docs/database-schema.md` §34 y el manual de cotizaciones.
-- [x] **Paso 6: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
+- [ ] **Paso 5: documentación.** `docs/api.md`, `docs/database-schema.md` §35, manual de pedidos y ajuste del manual de ventas base.
+- [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: ninguno. V2d está terminado y en PR hacia `develop` con auto-merge. Sigue V2e (pedido de venta).
-  - Batería completa: 1896 pruebas de backend; 8 fallaron por el fixture de `test_sales_lock_refresh.py` sin `document_type` (ya corregido; 13/13 al volver a correr). Lint, build y 1164 de vitest en verde.
-  - Pruebas verdes:
-    - migración: `test_sales_quotation_redesign_migration.py`;
-    - e2e: `test_sales_quotations.py`, `test_sales_base.py`, `test_sales_deliveries.py`, `test_inventory_final_acceptance.py` y `test_sales_discounts.py`;
-    - unitarias de ventas y vitest.
-  - En `test_sales_base.py`, la carrera emitir-contra-editar acepta un 409 o un 422 para quien pierde.
-  - Paso 1 (migración y modelos):
-    - Migración `0124`; modelos en `sales.py` y `SalesSettingsModel` en `sales_pricing.py`; permisos en el catálogo.
-    - Ya está aplicada en la base de desarrollo.
-    - `status` pasa a varchar(24).
-  - Paso 2 (dominio): `domain/entities/sales_quotation.py`, con sus pruebas unitarias en verde. Se agregó `sales_tax.document_unit_price`.
-  - Paso 3 (backend): ruff y mypy en verde.
-    - Archivos:
-      - puerto `domain/ports/sales_quotation_repository.py`;
-      - repositorio `infrastructure/repositories/sales_quotation_repository.py`;
-      - `sales_line_identity.py`, que saca del servicio B06 la identidad de artículo y unidad;
-      - casos de uso en `application/sales_quotations/`;
-      - router `api/v1/routers/sales_quotations.py`, registrado antes de `sales` para que `/sales/settings` no choque con `/sales/{sale_id}`;
-      - esquemas `schemas/sales_quotation.py`;
-      - PDF `infrastructure/sales_quotation_pdf.py`.
-    - Se retiraron los endpoints y métodos viejos de cotización. `convert` exige Aceptada.
-    - `EvaluatedLine.cost` (V2c) devuelve el costo aunque no haya precio de lista.
-    - Pruebas:
-      - nueva: `tests/e2e/test_sales_quotations.py`;
-      - adaptadas con `tests/e2e/sales_quote_flow.py`: `test_sales_base.py`, `test_sales_deliveries.py` y `test_inventory_final_acceptance.py`.
-  - Paso 4 (frontend): svelte-check, eslint y vitest (50 pruebas) en verde.
-    - Archivos:
-      - tipos en `types/sales.ts` y API en `api/sales.ts`;
-      - `features/sales/quotation-labels.ts`;
-      - editor con cálculo en vivo (`/sales/quotations/preview`), detalle con acciones por estado y PDF, y lista con estados nuevos;
-      - pestaña «Cotizaciones» en Configuración fiscal (`QuotationSettingsPanel.svelte`).
-  - Paso 5 (documentación):
-    - `docs/api.md`, `docs/database-schema.md` §34, `docs/ers-v1/manual-cotizaciones.md` y `manual-ventas-base.md`.
-    - La semilla no necesita cambios: la vigencia por defecto es 15 y SUPER_ADMIN recibe los permisos en la migración.
-  - QA en el navegador (16/11), en la base de desarrollo:
-    - Recorrido completo: cotización COT-20261116-3F7C82B6 de borrador a emitida, aceptada y venta VTA-20261116-6C21B05C.
-    - Cálculo en vivo, crédito fiscal propuesto, descuento del cliente 3 %, PDF sin costos, lista por sucursal y pestaña de vigencia.
-    - Quedan esos dos documentos de prueba en desarrollo.
-- **Decisiones técnicas**:
-  - En una lista con IVA, el precio de un producto exento o no sujeto se toma sin IVA: no le aplica.
-  - Un precio manual mayor que el de lista no cuenta como descuento negativo: el descuento efectivo es 0.
-  - El descuento global % se reparte sobre los totales gravado, exento y no sujeto; cada parte se redondea al centavo.
-  - Se puede rechazar una cotización vencida, pero no aceptarla.
+- **Paso en curso**: 1.
 - **Contexto**: el frontend usa SvelteKit 3 (imports `#lib/…` con extensión, `$app/env`).
 - **Comandos**:
-  - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
+  - Pruebas: `./scripts/run-tests.sh` con un objetivo explícito: `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` o `lint`. Sin argumento corre la batería completa, de unos 45 minutos.
   - No hacer commits mientras corre la batería.
   - Prettier solo se aplica a archivos nuevos o tocados.
 - **Reglas del usuario**:
