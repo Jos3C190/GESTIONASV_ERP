@@ -51,7 +51,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Configuración, puerto y adaptador con pruebas unitarias (SMTP falso).
   - Mailpit en compose y `.env.example`.
 - [x] **Paso 2: migración `0127` y modelo** del registro de envíos, con prueba de migración.
-- [ ] **Paso 3: dominio del mensaje.** Asunto, cuerpo, marca de simulado, aviso de privacidad y validación de destinatarios. Pruebas unitarias.
+- [x] **Paso 3: dominio del mensaje.** Asunto, cuerpo, marca de simulado, aviso de privacidad y validación de destinatarios. Pruebas unitarias.
 - [ ] **Paso 4: trabajador, aplicación y API.**
   - Envío automático tras emitir y envío manual.
   - Historial y bitácora.
@@ -62,7 +62,13 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 3 (dominio del mensaje).
+- **Paso en curso**: 4 (trabajador, aplicación y API).
+  - Paso 3: `app/domain/entities/sales_fiscal_email.py`.
+    - `normalize_recipients`: recorta, pasa a minúsculas, quita repetidos y acepta de 1 a 5 correos.
+    - `customer_recipients` usa el correo de la ficha del cliente.
+    - `compose` arma el asunto, el texto y el HTML escapado, con la fecha en El Salvador y el total en formato `$1,250.00`.
+    - Marca de simulado en el asunto y en el cuerpo; aviso de privacidad al pie.
+    - Al cliente se le trata de usted.
   - Paso 2: `sales_fiscal_document_emails`, con:
     - destinatarios `text[]` (de 1 a 5) y origen `auto` o `manual`; el manual exige quién lo pidió;
     - estado `pending`, `sent` o `failed`; `sent` exige `sent_at` y `message_id`;
