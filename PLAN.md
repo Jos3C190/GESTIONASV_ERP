@@ -101,7 +101,10 @@ Fuera de alcance: las promociones (V6) y el registro de la autorización (V2d y 
   - la pantalla de topes muestra GERENTE 10/5 y EMPLEADO 3/0;
   - El Trigal tiene 3 % fijo y la lista Mayoreo.
   - No se revisaron capturas en modo oscuro ni a 375 px porque el panel del navegador estaba oculto.
-- **Hallazgo**: con los costos de la demo, el café de Mostrador ($11.50 con IVA) queda bajo costo ($11.40 sin IVA) y varios productos quedan bajo el margen objetivo. La pantalla lo marca bien; los precios de la semilla de V2b no se tocaron.
+- **Hallazgo y corrección (16/11/2026, pedido del usuario)**: con los costos de la demo, el café de Mostrador ($11.50 con IVA) quedaba bajo costo y varios productos bajo el margen objetivo.
+  - La semilla de listas (paso `seed.grupo_lorena.price_lists`, versión `2026-11-16-v2`) ahora fija precios de mostrador con al menos 35 % de margen; Mayoreo queda cerca de 28 %.
+  - En entornos ya sembrados, si el precio vigente sigue siendo el de la primera versión, programa el corregido desde el día siguiente (un precio que empezó hoy no se puede reemplazar hoy).
+  - Prueba nueva: `test_demo_prices_reach_the_target_margins`.
 - **Contexto**: el frontend usa SvelteKit 3: imports `#lib/…` con extensión, `$app/env`, `goto(…, { replace, reset: false })`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.

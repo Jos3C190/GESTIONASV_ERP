@@ -142,7 +142,7 @@ FOLLOW_UPS: tuple[FollowUp, ...] = (
     FollowUp("seed.grupo_lorena.fiscal_issuer", "2026-11-15-v1", _fiscal_issuer),
     FollowUp("seed.grupo_lorena.customers", "2026-11-16-v1", _customers),
     FollowUp("seed.grupo_lorena.privacy_notice", "2026-11-16-v1", _privacy_notice),
-    FollowUp("seed.grupo_lorena.price_lists", "2026-11-16-v1", _price_lists),
+    FollowUp("seed.grupo_lorena.price_lists", "2026-11-16-v2", _price_lists),
     FollowUp("seed.grupo_lorena.sales_discounts", "2026-11-16-v1", _sales_discounts),
     FollowUp("seed.grupo_lorena.operations", "2026-11-14-v1", _operations, demo_operations_enabled),
 )
