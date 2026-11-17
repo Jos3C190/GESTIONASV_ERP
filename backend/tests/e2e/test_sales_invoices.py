@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import uuid
 
+import httpx
 import pytest
 from app.core.config import settings
-from app.infrastructure.db.session import async_session_factory
+from app.infrastructure.db.session import async_session_factory, session_scope
+from app.infrastructure.dte_email import email_sender, process_fiscal_email
 from app.infrastructure.dte_worker import dte_client, object_storage, process_fiscal_document
 from app.infrastructure.models.fiscal import (
     CompanyDteDocumentTypeModel,
@@ -20,6 +22,7 @@ from app.infrastructure.models.fiscal import (
     FiscalPointOfSaleModel,
 )
 from app.infrastructure.models.organization import Company
+from app.infrastructure.models.sales import SalesCustomerModel
 from httpx import AsyncClient
 from sqlalchemy import select
 
@@ -239,3 +242,124 @@ async def test_rules_permissions_and_company_isolation(e2e_client: AsyncClient) 
     foreign = await e2e_client.get(f"{DOCUMENTS}/{document['id']}", headers=other)
     assert foreign.status_code == 404
     assert (await e2e_client.get(DOCUMENTS, headers=other)).json()["total"] == 0
+
+
+# --- V3c: envío por correo -------------------------------------------------------------------
+
+
+MAILPIT = "http://mailpit:8025/api/v1"
+
+
+async def _set_customer_email(order: dict, email: str | None) -> None:
+    async with async_session_factory() as session:
+        customer = await session.get(SalesCustomerModel, uuid.UUID(order["customer_id"]))
+        assert customer is not None
+        customer.email = email
+        await session.commit()
+
+
+async def _deliver(email_id: str) -> None:
+    sender = email_sender()
+    assert sender is not None
+    await process_fiscal_email(
+        uuid.UUID(email_id),
+        sender=sender,
+        storage=object_storage(),
+        client=dte_client(),
+        scope=session_scope,
+    )
+
+
+async def _mailbox(address: str) -> list[dict]:
+    async with httpx.AsyncClient() as client:
+        found = await client.get(f"{MAILPIT}/search", params={"query": f"to:{address}"})
+    found.raise_for_status()
+    return list(found.json()["messages"])
+
+
+async def _issued(client: AsyncClient) -> tuple[dict[str, str], dict, dict]:
+    admin, order, point = await _confirmed_order(client)
+    document = (
+        await client.post(
+            f"{ORDERS}/{order['id']}/invoice", json={"point_of_sale_id": str(point)}, headers=admin
+        )
+    ).json()
+    return admin, order, document
+
+
+@pytest.mark.skipif(not settings.SMTP_HOST, reason="Sin servidor de correo configurado")
+async def test_issued_document_is_emailed_to_the_customer(e2e_client: AsyncClient) -> None:
+    admin, order, document = await _issued(e2e_client)
+    customer = f"cliente-{uuid.uuid4().hex[:8]}@example.com"
+    await _set_customer_email(order, customer)
+    await _process(document["id"])
+
+    history = await e2e_client.get(f"{DOCUMENTS}/{document['id']}/emails", headers=admin)
+    assert history.status_code == 200, history.text
+    assert history.json()["enabled"] is True
+    assert history.json()["customer_email"] == customer
+    [auto] = history.json()["items"]
+    assert auto["origin"] == "auto"
+    assert auto["status"] == "pending"
+    assert auto["recipients"] == [customer]
+
+    await _deliver(auto["id"])
+    [sent] = (await e2e_client.get(f"{DOCUMENTS}/{document['id']}/emails", headers=admin)).json()[
+        "items"
+    ]
+    assert sent["status"] == "sent", sent
+    [message] = await _mailbox(customer)
+    issued = (await e2e_client.get(f"{DOCUMENTS}/{document['id']}", headers=admin)).json()
+    assert issued["control_number"] in message["Subject"]
+    assert message["Subject"].startswith("[SIMULADO")
+    assert message["Attachments"] == 2
+    assert message["ReplyTo"][0]["Address"] == "facturacion@example.com"
+
+    # Procesar de nuevo no reenvía; reemitir el aviso automático tampoco.
+    await _deliver(auto["id"])
+    await _process(document["id"])
+    assert len(await _mailbox(customer)) == 1
+
+
+@pytest.mark.skipif(not settings.SMTP_HOST, reason="Sin servidor de correo configurado")
+async def test_manual_email_rules_and_permissions(e2e_client: AsyncClient) -> None:
+    admin, order, document = await _issued(e2e_client)
+    await _set_customer_email(order, None)
+
+    not_issued = await e2e_client.post(
+        f"{DOCUMENTS}/{document['id']}/emails", json={}, headers=admin
+    )
+    assert not_issued.status_code == 422
+    assert not_issued.json()["code"] == "sales_invoice_email_not_issued"
+
+    await _process(document["id"])
+    history = (await e2e_client.get(f"{DOCUMENTS}/{document['id']}/emails", headers=admin)).json()
+    assert history["items"] == []  # Sin correo en la ficha no hay envío automático.
+    missing = await e2e_client.post(f"{DOCUMENTS}/{document['id']}/emails", json={}, headers=admin)
+    assert missing.status_code == 422
+    assert missing.json()["code"] == "sales_invoice_email_required"
+    invalid = await e2e_client.post(
+        f"{DOCUMENTS}/{document['id']}/emails", json={"recipients": ["no-es-correo"]}, headers=admin
+    )
+    assert invalid.status_code == 422
+    assert invalid.json()["code"] == "sales_invoice_email_invalid"
+
+    target = f"contabilidad-{uuid.uuid4().hex[:8]}@example.com"
+    manual = await e2e_client.post(
+        f"{DOCUMENTS}/{document['id']}/emails",
+        json={"recipients": [target.upper(), target]},
+        headers=admin,
+    )
+    assert manual.status_code == 202, manual.text
+    assert manual.json()["origin"] == "manual"
+    assert manual.json()["recipients"] == [target]
+    assert manual.json()["requested_by_name"]
+    await _deliver(manual.json()["id"])
+    [message] = await _mailbox(target)
+    assert message["Attachments"] == 2
+
+    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2", False)
+    denied = await e2e_client.post(
+        f"{DOCUMENTS}/{document['id']}/emails", json={"recipients": [target]}, headers=seller
+    )
+    assert denied.status_code == 403

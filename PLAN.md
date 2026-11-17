@@ -52,7 +52,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Mailpit en compose y `.env.example`.
 - [x] **Paso 2: migración `0127` y modelo** del registro de envíos, con prueba de migración.
 - [x] **Paso 3: dominio del mensaje.** Asunto, cuerpo, marca de simulado, aviso de privacidad y validación de destinatarios. Pruebas unitarias.
-- [ ] **Paso 4: trabajador, aplicación y API.**
+- [x] **Paso 4: trabajador, aplicación y API.**
   - Envío automático tras emitir y envío manual.
   - Historial y bitácora.
   - e2e con Mailpit (el correo llega con sus dos adjuntos).
@@ -62,7 +62,20 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 4 (trabajador, aplicación y API).
+- **Paso en curso**: 5 (frontend).
+  - Paso 4:
+    - Repositorio `sales_fiscal_email_repository.py`; el documento fiscal trae `customer_email`.
+    - Casos de uso `application/sales_invoices/emails.py` (envío manual e historial).
+    - Entrega en `infrastructure/dte_email.py`:
+      - `queue_auto_email` crea el envío automático al emitirse;
+      - `process_fiscal_email` baja el PDF del almacenamiento o del servicio, arma el mensaje y envía.
+    - `dte-worker`: tarea `send_fiscal_email`; la conciliación también reencola los envíos pendientes.
+    - API:
+      - `GET /sales/fiscal-documents/{id}/emails` devuelve `enabled`, `customer_email` e `items`;
+      - `POST …/emails` con `{recipients?}` responde 202.
+      - Bitácora: `REQUEST_FISCAL_DOCUMENT_EMAIL`, `FISCAL_DOCUMENT_EMAIL_SENT` y `_FAILED`.
+    - e2e: 2 pruebas nuevas en `test_sales_invoices.py` que comprueban en Mailpit (`http://mailpit:8025/api/v1/search`) la llegada con dos adjuntos, el `Reply-To`, que no se reenvía, las reglas y los permisos.
+    - Después de cambiar el código del trabajador hay que reiniciar `dte-worker`; arq no recarga solo.
   - Paso 3: `app/domain/entities/sales_fiscal_email.py`.
     - `normalize_recipients`: recorta, pasa a minúsculas, quita repetidos y acepta de 1 a 5 correos.
     - `customer_recipients` usa el correo de la ficha del cliente.

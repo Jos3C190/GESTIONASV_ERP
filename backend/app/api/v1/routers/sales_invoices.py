@@ -17,6 +17,7 @@ from app.api.v1.deps import (
     SessionDep,
     get_audit_service,
     get_object_storage,
+    get_sales_invoice_email_use_cases,
     get_sales_invoice_use_cases,
     require_permission,
 )
@@ -24,21 +25,30 @@ from app.api.v1.schemas.sales_invoice import (
     DownloadUrlOut,
     FiscalDocumentOut,
     FiscalDocumentPage,
+    FiscalEmailHistoryOut,
+    FiscalEmailIn,
+    FiscalEmailOut,
     InvoiceIn,
     InvoiceOptionsOut,
     PointOfSaleOut,
 )
 from app.application.audit.audit_service import AuditService
 from app.application.sales_invoices import SalesInvoiceUseCases
+from app.application.sales_invoices.emails import SalesInvoiceEmailUseCases
 from app.core.config import settings
 from app.core.exceptions import BusinessRuleError, ConflictError
 from app.domain.ports.object_storage import ObjectStorage
-from app.domain.ports.sales_fiscal_repository import FiscalDocument, FiscalDocumentFilters
-from app.infrastructure.dte_worker import enqueue_fiscal_document
+from app.domain.ports.sales_fiscal_repository import (
+    FiscalDocument,
+    FiscalDocumentEmail,
+    FiscalDocumentFilters,
+)
+from app.infrastructure.dte_worker import enqueue_fiscal_document, enqueue_fiscal_email
 
 router = APIRouter(prefix="/sales", tags=["sales-invoices"])
 
 UseCases = Annotated[SalesInvoiceUseCases, Depends(get_sales_invoice_use_cases)]
+EmailUseCases = Annotated[SalesInvoiceEmailUseCases, Depends(get_sales_invoice_email_use_cases)]
 Audit = Annotated[AuditService, Depends(get_audit_service)]
 Storage = Annotated[ObjectStorage, Depends(get_object_storage)]
 CompanyId = Annotated[uuid.UUID, Depends(request_company_id)]
@@ -56,6 +66,7 @@ def document_out(document: FiscalDocument) -> FiscalDocumentOut:
         sale_id=document.sale_id,
         sale_code=document.sale_code,
         customer_name=document.customer_name,
+        customer_email=document.customer_email,
         establishment_code=document.establishment_code,
         point_of_sale_code=document.point_of_sale_code,
         document_type=document.document_type,  # type: ignore[arg-type]
@@ -336,3 +347,87 @@ async def download_fiscal_pdf(
         expires_seconds=settings.OBJECT_STORAGE_DOWNLOAD_TTL_SECONDS,
     )
     return DownloadUrlOut(url=url)
+
+
+# --- correo ---------------------------------------------------------------------------------------
+
+
+def _email_out(email: FiscalDocumentEmail) -> FiscalEmailOut:
+    return FiscalEmailOut(
+        id=email.id,
+        document_id=email.document_id,
+        recipients=list(email.recipients),
+        origin=email.origin,  # type: ignore[arg-type]
+        status=email.status,  # type: ignore[arg-type]
+        attempts=email.attempts,
+        error_code=email.error_code,
+        error_message=email.error_message,
+        requested_by_name=email.requested_by_name,
+        sent_at=email.sent_at,
+        created_at=email.created_at,
+    )
+
+
+@router.get(
+    "/fiscal-documents/{document_id:uuid}/emails",
+    response_model=FiscalEmailHistoryOut,
+    summary="Envíos por correo del documento fiscal",
+    dependencies=_READ,
+)
+async def fiscal_document_emails(
+    document_id: uuid.UUID,
+    session: SessionDep,
+    current: CurrentUser,
+    company_id: CompanyId,
+    use_cases: UseCases,
+    emails: EmailUseCases,
+) -> FiscalEmailHistoryOut:
+    document = await _scoped(use_cases, session, current, company_id, document_id)
+    items = await emails.history(company_id, document_id)
+    return FiscalEmailHistoryOut(
+        enabled=bool(settings.SMTP_HOST),
+        customer_email=document.customer_email,
+        items=[_email_out(item) for item in items],
+    )
+
+
+@router.post(
+    "/fiscal-documents/{document_id:uuid}/emails",
+    response_model=FiscalEmailOut,
+    status_code=202,
+    summary="Enviar el documento fiscal por correo",
+    dependencies=_ISSUE,
+)
+async def send_fiscal_document_email(
+    document_id: uuid.UUID,
+    body: FiscalEmailIn,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    company_id: CompanyId,
+    use_cases: UseCases,
+    emails: EmailUseCases,
+    audit: Audit,
+) -> FiscalEmailOut:
+    if not settings.SMTP_HOST:
+        raise BusinessRuleError(
+            "El envío de correos no está configurado en este servidor.",
+            code="sales_invoice_email_unavailable",
+        )
+    await _scoped(use_cases, session, current, company_id, document_id)
+    document, email = await emails.request(company_id, document_id, current.id, body.recipients)
+    await audit.record(
+        action="REQUEST_FISCAL_DOCUMENT_EMAIL",
+        user_id=current.id,
+        company_id=company_id,
+        branch_id=document.branch_id,
+        resource_type="sales_fiscal_document",
+        resource_id=str(document.id),
+        after_state={"email_id": str(email.id), "recipients": list(email.recipients)},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        required=True,
+    )
+    await session.commit()
+    await enqueue_fiscal_email(email.id)
+    return _email_out(email)

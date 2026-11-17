@@ -68,6 +68,7 @@ def _query() -> Select[Any]:
             SalesCustomerModel.name,
             FiscalPointOfSaleModel.code,
             FiscalEstablishmentModel.code,
+            SalesCustomerModel.email,
         )
         .join(
             SaleModel,
@@ -91,7 +92,7 @@ def _query() -> Select[Any]:
 
 
 def _entity(row: Any) -> FiscalDocument:
-    model, sale_code, customer_name, pos_code, establishment_code = row
+    model, sale_code, customer_name, pos_code, establishment_code, customer_email = row
     return FiscalDocument(
         id=model.id,
         company_id=model.company_id,
@@ -102,6 +103,7 @@ def _entity(row: Any) -> FiscalDocument:
         customer_name=customer_name,
         point_of_sale_code=pos_code,
         establishment_code=establishment_code,
+        customer_email=customer_email,
         **{name: getattr(model, name) for name in _FIELDS},
     )
 

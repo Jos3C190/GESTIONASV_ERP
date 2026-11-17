@@ -44,6 +44,7 @@ class FiscalDocument:
     customer_name: str | None = None
     point_of_sale_code: str | None = None
     establishment_code: str | None = None
+    customer_email: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,3 +86,42 @@ class SalesFiscalRepository(Protocol):
         ...
 
     async def catalog_version(self, catalog_code: str) -> str | None: ...
+
+
+@dataclass(slots=True)
+class FiscalDocumentEmail:
+    """Un envío por correo del documento fiscal (bloque V3c)."""
+
+    id: uuid.UUID
+    company_id: uuid.UUID
+    document_id: uuid.UUID
+    recipients: tuple[str, ...]
+    origin: str
+    status: str
+    attempts: int = 0
+    error_code: str | None = None
+    error_message: str | None = None
+    message_id: str | None = None
+    requested_by_id: uuid.UUID | None = None
+    requested_by_name: str | None = None
+    sent_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class SalesFiscalEmailRepository(Protocol):
+    async def create(self, email: FiscalDocumentEmail) -> FiscalDocumentEmail: ...
+
+    async def auto_exists(self, company_id: uuid.UUID, document_id: uuid.UUID) -> bool: ...
+
+    async def list_for_document(
+        self, company_id: uuid.UUID, document_id: uuid.UUID
+    ) -> list[FiscalDocumentEmail]: ...
+
+    async def claim(self, email_id: uuid.UUID) -> FiscalDocumentEmail | None:
+        """Toma un envío pendiente (``SKIP LOCKED``) y cuenta el intento."""
+        ...
+
+    async def save(self, email: FiscalDocumentEmail) -> FiscalDocumentEmail: ...
+
+    async def pending_ids(self, updated_before: datetime, limit: int) -> list[uuid.UUID]: ...
