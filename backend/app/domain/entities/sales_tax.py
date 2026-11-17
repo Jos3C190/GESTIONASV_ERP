@@ -152,6 +152,12 @@ def _document_price(line: TaxLineInput, document: SalesDocumentKind) -> Decimal:
     return line_round(line.unit_price / VAT_FACTOR)
 
 
+def document_unit_price(line: TaxLineInput, document: SalesDocumentKind) -> Decimal:
+    """Precio unitario en la forma del documento: con IVA en factura, sin IVA en crédito fiscal."""
+
+    return _document_price(line, document)
+
+
 def _check_line(index: int, line: TaxLineInput) -> None:
     position = index + 1
     if line.additional_taxes:
