@@ -30,15 +30,17 @@ from arq.worker import Retry
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit.audit_service import AuditService
+from app.application.fiscal.hacienda_credentials import decrypt_credentials
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.domain.entities.sales_fiscal_document import (
     INVOICEABLE_DOCUMENTS,
     FiscalDocumentStatus,
+    FiscalMode,
     dte_differences,
     service_status,
 )
-from app.domain.ports.dte_service import DteService, DteServiceError
+from app.domain.ports.dte_service import DteService, DteServiceError, IssuerCredentials
 from app.domain.ports.email_sender import EmailDeliveryError
 from app.domain.ports.object_storage import ObjectStorage
 from app.domain.ports.sales_fiscal_repository import FiscalDocument
@@ -48,6 +50,9 @@ from app.infrastructure.dte_service_client import HttpDteServiceClient
 from app.infrastructure.object_storage import S3ObjectStorage
 from app.infrastructure.repositories.audit_repository import SqlAlchemyAuditRepository
 from app.infrastructure.repositories.fiscal_repository import SqlAlchemyFiscalRepository
+from app.infrastructure.repositories.hacienda_credentials_repository import (
+    SqlAlchemyHaciendaCredentialsRepository,
+)
 from app.infrastructure.repositories.sales_fiscal_email_repository import (
     SqlAlchemySalesFiscalEmailRepository,
 )
@@ -116,6 +121,23 @@ async def _enabled_types(scope: SessionScope, company_id: uuid.UUID) -> list[str
         for item in settings_list
         if item.is_enabled and item.document_type in INVOICEABLE_DOCUMENTS
     )
+
+
+async def _credentials(scope: SessionScope, document: FiscalDocument) -> IssuerCredentials | None:
+    """Fuera de simulado, el emisor se registra con sus credenciales de Hacienda (V3d)."""
+
+    if document.mode == FiscalMode.SIMULATED.value:
+        return None
+    async with scope() as session:
+        stored = await SqlAlchemyHaciendaCredentialsRepository(session).get(document.company_id)
+    if stored is None:
+        raise DteServiceError(
+            "La empresa no tiene credenciales de Hacienda para emitir en "
+            f"{document.mode}. Cárgalas en Configuración fiscal → Hacienda.",
+            code="hacienda_credentials_missing",
+            transient=False,
+        )
+    return decrypt_credentials(stored)
 
 
 async def _store(
@@ -194,6 +216,7 @@ async def process_fiscal_document(
             name=str(document.issuer_snapshot["legalName"]),
             mode=document.mode,
             document_types=await _enabled_types(scope, document.company_id),
+            credentials=await _credentials(scope, document),
         )
         result = await client.issue(
             document.document_type,

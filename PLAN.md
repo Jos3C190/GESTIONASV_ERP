@@ -66,14 +66,19 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
   - Pruebas con el stub, con dos emisores en modos distintos.
 - [x] **Paso 4: servicio, probar la conexión del emisor.** Endpoint y pruebas.
 - [x] **Paso 5: ERP, migración `0129` y credenciales cifradas.** Aplicación, API, regla para pasar a pruebas y e2e.
-- [ ] **Paso 6: ERP, registro del emisor con modo y credenciales.** `dte-worker` y e2e contra el stub.
+- [x] **Paso 6: ERP, registro del emisor con modo y credenciales.** `dte-worker` y e2e contra el stub.
 - [ ] **Paso 7: frontend.** Pestaña «Hacienda». vitest.
 - [ ] **Paso 8: documentación.** API, esquema y manuales (cómo obtener el certificado y las credenciales de pruebas).
 - [ ] **Paso 9: verificación y PR.** Batería completa, QA en el navegador con el stub y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 6 (ERP, registro del emisor con modo y credenciales).
+- **Paso en curso**: 7 (frontend, pestaña Hacienda).
+  - Paso 6:
+    - `dte-worker` registra al emisor con el modo del documento y, fuera de simulado, con sus credenciales descifradas en memoria (`_credentials`).
+    - Sin credenciales, el documento falla sin reintentar (`hacienda_credentials_missing`).
+    - e2e `tests/e2e/test_hacienda_issuing.py` con un cliente DTE falso. El camino real (firmador y Hacienda simulados) lo cubre `modoPorEmisor.test.js` en el servicio.
+    - Decisión: no se levanta un segundo servicio DTE en modo pruebas para las e2e del ERP; la QA con el stub se hará a mano si hace falta.
   - Paso 5:
     - Migración 0129 `company_hacienda_credentials`: contraseñas y certificado cifrados con AES-GCM (`secret_encryption`), más la huella y el NIT del certificado y la última prueba.
     - Dominio `hacienda_credentials.py`: el certificado debe ser del NIT de la empresa y abrir con su contraseña privada (SHA-512, como el firmador).
