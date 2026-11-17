@@ -244,6 +244,14 @@ async def test_rejection_return_cancel_settings_and_isolation(e2e_client: AsyncC
     cancelled = await _act(e2e_client, seller, edited.json(), "cancel", reason="Cliente desistió")
     assert cancelled.json()["status"] == "cancelled"
 
+    accepted = await _post(e2e_client, seller, body)
+    accepted = (await _act(e2e_client, seller, accepted, "issue")).json()
+    accepted = (await _act(e2e_client, seller, accepted, "accept")).json()
+    withdrawn = await _act(e2e_client, seller, accepted, "cancel", reason="Cliente desistió")
+    assert withdrawn.status_code == 200, withdrawn.text
+    assert withdrawn.json()["status"] == "cancelled"
+    assert withdrawn.json()["customer_response_at"] is not None
+
     settings = await e2e_client.get("/api/v1/sales/settings/quotations", headers=seller)
     assert settings.json() == {"quotation_validity_days": 15}
     forbidden = await e2e_client.put(
