@@ -212,7 +212,7 @@ async function transmitir(codigoGeneracion, { plazo } = {}) {
   let respuesta;
   try {
     respuesta = await haciendaClient.anularDte({
-      ambiente: config.emisor.ambiente,
+      ambiente: config.ambiente,
       idEnvio: siguienteIdEnvio(),
       version: manifest.eventos.invalidacion.version,
       documentoFirmado: evento.documento_firmado,

@@ -71,7 +71,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Contenedor en compose, con su volumen y su API key.
   - README de procedencia.
   - Sus pruebas pasan sin cambios en el contenedor.
-- [ ] **Paso 2: registro de emisores y modo por emisor.**
+- [x] **Paso 2: registro de emisores y modo por emisor.**
   - Tabla `emisores` y su API (alcance `issuers`).
   - El emisor de la solicitud debe estar registrado, activo y con el tipo habilitado.
   - El modo sale del emisor.
@@ -84,7 +84,19 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 2.
+- **Paso en curso**: 3 (aislamiento de datos).
+  - Paso 2:
+    - `src/services/issuerRegistry.js` (tabla `emisores`) y `src/routes/emisores.routes.js`: `GET /api/emisores`, `GET` y `PUT /api/emisores/:nit`, con alcance `issuers`.
+    - `emitir()` exige emisor registrado, activo, en el modo del despliegue y con el tipo habilitado.
+    - En modo simulado las variables `MH_*` son opcionales (`config.emisor` es null) y se agrega `config.ambiente`.
+    - Un NIT de `DTE_AUTHORIZED_ISSUER_NITS` sin registrar sigue autorizado, por compatibilidad.
+    - Compose:
+      - `dte-service` con perfil `dte` y volumen `dte-data`;
+      - `DTE_SERVICE_API_KEY` en `.env.example` y en `scripts/setup.sh` (`ensure_secret`).
+    - Pruebas: 457 heredadas y 3 del registro, en verde.
+- **Decisiones técnicas**:
+  - En V3a el modo de cada emisor debe coincidir con el del despliegue (`ISSUER_MODE_UNAVAILABLE`). Para que convivan modos hace falta una sesión con Hacienda por emisor (V3d).
+  - Para usar el servicio, el `.env` local necesita `DTE_SERVICE_API_KEY`. `scripts/setup.sh` la genera; no se leyó ni se editó el `.env` del usuario.
   - Paso 1:
     - Servicio copiado a `dte-service/`: 125 archivos, sin `.env`, `data`, `node_modules` ni `firmador-docker`, que tiene el certificado.
     - El agente de usuario pasa a `GestionaSV-DTE/2.0`.

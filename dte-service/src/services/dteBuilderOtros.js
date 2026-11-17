@@ -27,7 +27,7 @@ function _construirIdentificacion({ tipoDte, version, incluirContingencia = fals
 
   const identificacion = {
     version,
-    ambiente: config.emisor.ambiente,
+    ambiente: config.ambiente,
     tipoDte,
     numeroControl,
     codigoGeneracion,

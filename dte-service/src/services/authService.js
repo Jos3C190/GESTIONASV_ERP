@@ -69,7 +69,7 @@ class AuthService {
       this._token = token.trim();
       this._expiraEn = Date.now() + 12 * 60 * 60 * 1000;
       registrarAccesoExitoso('autenticacion');
-      logger.info({ ambiente: config.emisor.ambiente }, 'Token de Hacienda renovado');
+      logger.info({ ambiente: config.ambiente }, 'Token de Hacienda renovado');
       return this._token;
     }
 

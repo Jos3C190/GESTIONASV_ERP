@@ -34,7 +34,7 @@ function _construirIdentificacion({ tipoDte, version, incluirFusion = false }) {
 
   const identificacion = {
     version,
-    ambiente: config.emisor.ambiente,
+    ambiente: config.ambiente,
     tipoDte,
     numeroControl,
     codigoGeneracion,

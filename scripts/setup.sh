@@ -72,6 +72,7 @@ ensure_secret "OBJECT_STORAGE_SECRET_KEY" "CHANGE_ME_GENERATE_LOCAL_SECRET_KEY" 
 ensure_secret "REDIS_PASSWORD" "CHANGE_ME_GENERATE_LOCAL_REDIS_PASSWORD" 32
 ensure_secret "SUPPLIER_DATA_ENCRYPTION_KEY" "CHANGE_ME_GENERATE_A_32_BYTE_BASE64URL_KEY" 32 random_base64url
 ensure_secret "GRAFANA_ADMIN_PASSWORD" "CHANGE_ME_GENERATE_LOCAL_GRAFANA_PASSWORD" 32
+ensure_secret "DTE_SERVICE_API_KEY" "CHANGE_ME_GENERATE_DTE_SERVICE_API_KEY" 32
 
 grafana_user=$(grep -E '^GRAFANA_ADMIN_USER=' .env 2>/dev/null | tail -n 1 | cut -d= -f2- | tr -d '\r' || true)
 grafana_user=${grafana_user:-admin}

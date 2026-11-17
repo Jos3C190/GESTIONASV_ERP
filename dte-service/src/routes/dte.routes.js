@@ -1,3 +1,4 @@
+const issuerRegistry = require('../services/issuerRegistry');
 const express = require('express');
 const { db } = require('../db');
 const { construirFactura, construirCCF } = require('../services/dteBuilder');
@@ -175,6 +176,15 @@ function respuestaDeTransmision(codigoGeneracion, numeroControl, resultado) {
  * que se respondió, sin importar por cuál rama haya salido esta función.
  */
 async function emitir(tipoDte, builderFn, req) {
+  const nitEmisor = req.body?.emisor?.nit ?? config.emisor?.nit ?? null;
+  try {
+    issuerRegistry.exigirEmision(nitEmisor, tipoDte);
+  } catch (error) {
+    if (error instanceof issuerRegistry.IssuerError) {
+      return { status: error.status, body: { error: error.message, code: error.code, tipoDte } };
+    }
+    throw error;
+  }
   if (!config.security.allowedDocumentTypes.includes(tipoDte)) {
     return {
       status: 403,

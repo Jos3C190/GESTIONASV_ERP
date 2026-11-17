@@ -51,7 +51,7 @@ function _construirIdentificacion({ tipoDte, version, issuer = config.emisor, co
 
   const identificacion = {
     version,
-    ambiente: config.emisor.ambiente,
+    ambiente: config.ambiente,
     tipoDte,
     numeroControl,
     codigoGeneracion,

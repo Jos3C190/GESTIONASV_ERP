@@ -42,7 +42,8 @@ function parseAllowedDocumentTypes(value) {
 }
 
 // `simulate` solo da acceso a /api/dte/simulacion, que existe únicamente en modo simulated.
-const ALL_API_SCOPES = Object.freeze(['issue', 'read', 'invalidate', 'contingency', 'simulate']);
+// `issuers` administra el registro de emisores (multiemisor); lo usa el ERP.
+const ALL_API_SCOPES = Object.freeze(['issue', 'read', 'invalidate', 'contingency', 'simulate', 'issuers']);
 
 function parseApiKeyScopes(value, keyCount) {
   if (!value || !value.trim()) return Array.from({ length: keyCount }, () => ['issue', 'read']);
@@ -66,11 +67,15 @@ const apiKeys = (process.env.MS_API_KEYS || '')
 const apiKeyScopes = parseApiKeyScopes(process.env.MS_API_KEY_SCOPES, apiKeys.length);
 // Hacienda y el firmador aceptan NIT de 14 dígitos o de 9 (DUI homologado).
 const NIT_REGEX = /^(\d{9}|\d{14})$/;
+// Multiemisor: los emisores se registran desde el ERP (tabla `emisores`). La
+// lista del entorno queda para despliegues heredados de un solo emisor.
 const authorizedIssuerNits = (process.env.DTE_AUTHORIZED_ISSUER_NITS || process.env.MH_NIT || '')
   .split(',').map((nit) => nit.replace(/[\s-]/g, '')).filter(Boolean);
-if (authorizedIssuerNits.length === 0 || authorizedIssuerNits.some((nit) => !NIT_REGEX.test(nit))) {
+if (authorizedIssuerNits.some((nit) => !NIT_REGEX.test(nit))) {
   throw new Error('DTE_AUTHORIZED_ISSUER_NITS debe contener NIT de 9 o 14 dígitos separados por coma');
 }
+// En modo simulado el emisor llega en cada solicitud y el del entorno es opcional.
+const emisorDelEntorno = Boolean(process.env.MH_NIT?.trim()) || dteMode !== 'simulated';
 
 /**
  * Cada modo tiene un único ambiente y host oficial (Manual Técnico v2.0,
@@ -140,14 +145,14 @@ function tipoContingenciaPorDefecto() {
   return tipo;
 }
 
-const nitEmisorEntorno = required('MH_NIT').replace(/[\s-]/g, '');
-if (!NIT_REGEX.test(nitEmisorEntorno)) throw new Error('MH_NIT debe tener 9 o 14 dígitos');
-if (!authorizedIssuerNits.includes(nitEmisorEntorno)) {
+const nitEmisorEntorno = emisorDelEntorno ? required('MH_NIT').replace(/[\s-]/g, '') : null;
+if (emisorDelEntorno && !NIT_REGEX.test(nitEmisorEntorno)) throw new Error('MH_NIT debe tener 9 o 14 dígitos');
+if (emisorDelEntorno && !authorizedIssuerNits.includes(nitEmisorEntorno)) {
   throw new Error('MH_NIT debe estar incluido en DTE_AUTHORIZED_ISSUER_NITS (es el NIT del certificado y de las credenciales)');
 }
 
-const config = {
-  emisor: {
+function construirEmisorDelEntorno() {
+  return {
     nit: nitEmisorEntorno,
     nrc: required('MH_NRC'),
     nombre: required('MH_NOMBRE'),
@@ -174,7 +179,15 @@ const config = {
     tipoEstablecimiento: required('MH_TIPO_ESTABLECIMIENTO'), // CAT-009: 01/02/04/07
     codEstablecimientoMH: required('MH_COD_ESTABLECIMIENTO'),
     codPuntoVentaMH: required('MH_COD_PUNTO_VENTA'),
-  },
+  };
+}
+
+const config = {
+  // 00 = pruebas, 01 = producción; derivado de DTE_MODE. Común a todos los emisores del despliegue.
+  ambiente: ambienteDelModo(),
+  // Emisor heredado (un solo emisor por despliegue). Es null en un despliegue
+  // multiemisor en modo simulado: entonces cada solicitud trae su emisor (v2).
+  emisor: emisorDelEntorno ? construirEmisorDelEntorno() : null,
   hacienda: {
     authUrl: urlHacienda('MH_AUTH_URL'),
     recepcionUrl: urlHacienda('MH_RECEPCION_URL'),

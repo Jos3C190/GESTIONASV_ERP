@@ -41,6 +41,8 @@ if (config.dteMode === 'simulated') {
     res.status(404).json({ error: 'Las rutas de simulación solo existen con DTE_MODE=simulated', code: 'SIMULATION_ROUTES_DISABLED' });
   });
 }
+// Registro de emisores (multiemisor): lo administra el ERP con el alcance `issuers`.
+app.use('/api/emisores', apiKeyAuth, rateLimiter, require('./routes/emisores.routes'));
 app.use('/api/dte', apiKeyAuth, rateLimiter, rechazarEscenarioNoAdmitido, dteRoutes);
 app.use('/api/catalogos', apiKeyAuth, rateLimiter, catalogosRoutes);
 

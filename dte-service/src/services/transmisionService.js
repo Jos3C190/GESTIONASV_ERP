@@ -122,7 +122,7 @@ async function transmitir(codigoGeneracion, { desdeCola = false } = {}) {
   const payload = JSON.parse(dte.payload_json);
   try {
     const respuesta = await haciendaClient.transmitirDte({
-      ambiente: config.emisor.ambiente,
+      ambiente: config.ambiente,
       idEnvio: siguienteIdEnvio(),
       version: payload.identificacion.version,
       tipoDte: dte.tipo_dte,

@@ -62,7 +62,7 @@ function rutaCertificado() {
   const ruta = config.certificado.ruta;
   try {
     const info = fs.statSync(ruta);
-    return info.isDirectory() ? path.join(ruta, `${config.emisor.nit}.crt`) : ruta;
+    return info.isDirectory() ? path.join(ruta, `${config.emisor?.nit}.crt`) : ruta;
   } catch {
     return null;
   }
@@ -89,7 +89,7 @@ function estadoCertificado(ahora = new Date()) {
   return {
     estado,
     nit: datos.nit,
-    coincideConNitConfigurado: datos.nit ? datos.nit === config.emisor.nit : null,
+    coincideConNitConfigurado: datos.nit ? datos.nit === config.emisor?.nit : null,
     validoDesde: datos.validoDesde ? datos.validoDesde.toISOString() : null,
     validoHasta: datos.validoHasta.toISOString(),
     diasParaVencer: Math.max(diasParaVencer, 0),
@@ -100,9 +100,9 @@ function estadoCertificado(ahora = new Date()) {
 function credenciales() {
   if (config.dteMode === 'simulated') return { aplica: false, faltan: [] };
   const presentes = {
-    MH_NIT: Boolean(config.emisor.nit),
-    MH_PASSWORD_API: Boolean(config.emisor.passwordApi),
-    MH_PASSWORD_PRI: Boolean(config.emisor.passwordPri),
+    MH_NIT: Boolean(config.emisor?.nit),
+    MH_PASSWORD_API: Boolean(config.emisor?.passwordApi),
+    MH_PASSWORD_PRI: Boolean(config.emisor?.passwordPri),
     FIRMADOR_URL: Boolean(config.firmador.url),
   };
   return { aplica: true, ...presentes, faltan: Object.keys(presentes).filter((nombre) => !presentes[nombre]) };
@@ -111,9 +111,9 @@ function credenciales() {
 function estado(ahora = new Date()) {
   return {
     modo: config.dteMode,
-    ambiente: config.emisor.ambiente,
+    ambiente: config.ambiente,
     ambienteEtiqueta: ETIQUETAS_AMBIENTE[config.dteMode] ?? config.dteMode,
-    nitConfigurado: config.dteMode === 'simulated' ? null : config.emisor.nit,
+    nitConfigurado: config.dteMode === 'simulated' ? null : config.emisor?.nit,
     credenciales: credenciales(),
     certificado: estadoCertificado(ahora),
     ultimoAccesoExitoso: ultimoAccesoExitoso(),

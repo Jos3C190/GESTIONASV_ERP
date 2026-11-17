@@ -14,7 +14,7 @@ const { db, obtenerSiguienteCorrelativo } = require('./db');
 correlativoStore.usar(obtenerSiguienteCorrelativo);
 
 const server = app.listen(config.server.port, () => {
-  logger.info(`Microservicio DTE escuchando en puerto ${config.server.port} (ambiente MH: ${config.emisor.ambiente})`);
+  logger.info(`Microservicio DTE escuchando en puerto ${config.server.port} (ambiente MH: ${config.ambiente})`);
   if (config.dteMode !== 'simulated' && config.security.apiKeyRecords.some((registro) => registro.scopes.includes('simulate'))) {
     // Sin efecto (las rutas de simulación no existen en este modo), pero indica una configuración mezclada.
     logger.warn(`Una API key tiene el scope simulate con DTE_MODE=${config.dteMode}; ese scope solo sirve en modo simulated`);

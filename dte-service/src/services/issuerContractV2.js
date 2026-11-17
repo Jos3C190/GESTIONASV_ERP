@@ -23,10 +23,11 @@ function validateIssuerV2(emisor) {
     fail('INVALID_ISSUER', 'La dirección del emisor v2 está incompleta');
   }
   if (!/^(\d{9}|\d{14})$/.test(emisor.nit) || !/^\d{2,8}$/.test(emisor.nrc)) fail('INVALID_ISSUER', 'NIT o NRC del emisor inválido');
-  if (!config.security.authorizedIssuerNits.includes(emisor.nit)) fail('UNAUTHORIZED_ISSUER', 'El NIT del emisor no está autorizado en este ambiente');
+  // Se requiere aquí para evitar el ciclo config -> db -> registro al cargar.
+  if (!require('./issuerRegistry').autorizado(emisor.nit)) fail('UNAUTHORIZED_ISSUER', 'El NIT del emisor no está autorizado en este ambiente');
   // El firmador firma con el certificado {MH_NIT}.crt y Hacienda autentica con
   // ese NIT: un snapshot con otro NIT produciría una firma que no corresponde.
-  if (config.dteMode !== 'simulated' && emisor.nit !== config.emisor.nit) {
+  if (config.dteMode !== 'simulated' && emisor.nit !== config.emisor?.nit) {
     fail('UNAUTHORIZED_ISSUER', 'El NIT del emisor no coincide con el NIT del certificado configurado (MH_NIT)');
   }
 
