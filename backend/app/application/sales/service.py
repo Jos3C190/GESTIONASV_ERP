@@ -13,16 +13,15 @@ from zoneinfo import ZoneInfo
 from app.application.audit.audit_service import AuditService
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError, ValidationError
 from app.domain.entities.sales import (
-    can_convert_quote,
+    PRICE_QUANTUM,
     line_amount,
     normalize_price,
     normalize_quantity,
     quantity_in_base,
-    quote_display_status,
 )
-from app.infrastructure.models.catalog import CompanyUnitModel, ProductModel, UnitModel
+from app.domain.entities.sales_quotation import QuotationStatus
+from app.infrastructure.models.catalog import ProductModel
 from app.infrastructure.models.inventory import InventoryItemModel, InventoryPackagingModel
-from app.infrastructure.models.organization import Branch
 from app.infrastructure.models.product_variant import ProductVariantModel
 from app.infrastructure.models.sales import (
     SaleLineModel,
@@ -33,7 +32,8 @@ from app.infrastructure.models.sales import (
     SalesQuotationModel,
 )
 from app.infrastructure.models.sales_delivery import SalesDeliveryLineModel, SalesDeliveryModel
-from sqlalchemy import and_, func, select
+from app.infrastructure.repositories.sales_line_identity import unit_label, unit_name, unit_symbol
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 SV_TZ = ZoneInfo("America/El_Salvador")
@@ -52,17 +52,6 @@ def _fingerprint(value: object) -> str:
 
 def _decimal_string(value: Decimal | int | None) -> str | None:
     return str(value) if value is not None else None
-
-
-def _unit_label(name: str, symbol: str) -> str:
-    """Return a readable unit label without appending an existing symbol twice."""
-    clean_name = name.strip()
-    clean_symbol = symbol.strip()
-    if not clean_name:
-        return clean_symbol
-    if not clean_symbol or clean_name == clean_symbol or clean_name.endswith(f"({clean_symbol})"):
-        return clean_name
-    return f"{clean_name} ({clean_symbol})"
 
 
 class SalesService:
@@ -215,7 +204,7 @@ class SalesService:
                 )
             ).all()
         )
-        base_unit = await self._unit_name(item.company_id, item.base_unit_id)
+        base_unit = await unit_name(self.session, item.company_id, item.base_unit_id)
         units.append(
             {
                 "unit_id": item.base_unit_id,
@@ -228,11 +217,11 @@ class SalesService:
         for package in package_rows:
             if package.packaging_unit_id is None:
                 continue
-            symbol = await self._unit_symbol(item.company_id, package.packaging_unit_id)
+            symbol = await unit_symbol(self.session, item.company_id, package.packaging_unit_id)
             units.append(
                 {
                     "unit_id": package.packaging_unit_id,
-                    "name": _unit_label(package.name, symbol),
+                    "name": unit_label(package.name, symbol),
                     "factor": str(package.base_quantity),
                     "packaging_definition_id": str(package.id),
                     "packaging_version": package.version,
@@ -253,288 +242,6 @@ class SalesService:
             "base_unit_name": base_unit,
             "units": units,
         }
-
-    async def _unit_name(self, company_id: uuid.UUID, unit_id: int) -> str:
-        row = await self.session.scalar(
-            select(UnitModel)
-            .join(
-                CompanyUnitModel,
-                and_(
-                    CompanyUnitModel.unit_id == UnitModel.id_unit,
-                    CompanyUnitModel.company_id == company_id,
-                ),
-            )
-            .where(
-                UnitModel.id_unit == unit_id,
-                CompanyUnitModel.is_enabled.is_(True),
-                UnitModel.is_active.is_(True),
-            )
-        )
-        if row is None:
-            raise BusinessRuleError(
-                "La unidad del producto ya no está habilitada para la empresa.",
-                code="sales_unit_not_enabled",
-            )
-        return _unit_label(row.name, row.symbol)
-
-    async def _unit_symbol(self, company_id: uuid.UUID, unit_id: int) -> str:
-        row = await self.session.scalar(
-            select(UnitModel)
-            .join(
-                CompanyUnitModel,
-                and_(
-                    CompanyUnitModel.unit_id == UnitModel.id_unit,
-                    CompanyUnitModel.company_id == company_id,
-                ),
-            )
-            .where(
-                UnitModel.id_unit == unit_id,
-                CompanyUnitModel.is_enabled.is_(True),
-                UnitModel.is_active.is_(True),
-            )
-        )
-        if row is None:
-            raise BusinessRuleError(
-                "La unidad de venta no está habilitada para la empresa.",
-                code="sales_unit_not_enabled",
-            )
-        return row.symbol
-
-    async def _line_snapshot(self, company_id: uuid.UUID, data: dict[str, Any]) -> dict[str, Any]:
-        product_id = int(data["product_id"])
-        variant_id = uuid.UUID(str(data["variant_id"])) if data.get("variant_id") else None
-        product = await self.session.scalar(
-            select(ProductModel).where(
-                ProductModel.company_id == company_id,
-                ProductModel.id_product == product_id,
-                ProductModel.is_active.is_(True),
-                ProductModel.can_sell.is_(True),
-                ProductModel.product_kind == "goods",
-                ProductModel.lifecycle_status == "active",
-                ProductModel.deleted_at.is_(None),
-            )
-        )
-        if product is None:
-            raise BusinessRuleError(
-                "El producto no existe, está inactivo o no se puede vender.",
-                code="sales_product_unavailable",
-            )
-        if product.variant_mode == "standalone" and variant_id is not None:
-            raise ValidationError(
-                "El producto independiente no admite una variante.", code="sales_variant_invalid"
-            )
-        variant: ProductVariantModel | None = None
-        if product.variant_mode == "template":
-            if variant_id is None:
-                raise ValidationError(
-                    "Seleccione una variante activa del producto.", code="sales_variant_required"
-                )
-            variant = await self.session.scalar(
-                select(ProductVariantModel).where(
-                    ProductVariantModel.company_id == company_id,
-                    ProductVariantModel.product_id == product_id,
-                    ProductVariantModel.id == variant_id,
-                    ProductVariantModel.is_active.is_(True),
-                    ProductVariantModel.lifecycle_status == "active",
-                )
-            )
-            if variant is None:
-                raise BusinessRuleError(
-                    "La variante no existe o está inactiva.", code="sales_variant_unavailable"
-                )
-        item_condition = (
-            InventoryItemModel.product_id == product_id
-            if variant_id is None
-            else InventoryItemModel.variant_id == variant_id
-        )
-        item = await self.session.scalar(
-            select(InventoryItemModel).where(
-                InventoryItemModel.company_id == company_id,
-                item_condition,
-                InventoryItemModel.is_active.is_(True),
-            )
-        )
-        if item is None:
-            raise BusinessRuleError(
-                "El artículo no tiene identidad inventariable configurada. Configure el producto en Inventario para poder cotizarlo.",
-                code="sales_inventory_item_missing",
-            )
-        unit_id = int(data["unit_id"])
-        factor = Decimal("1")
-        packaging_id = None
-        packaging_version = None
-        unit_name = await self._unit_name(company_id, unit_id)
-        if unit_id != item.base_unit_id:
-            packages = list(
-                (
-                    await self.session.scalars(
-                        select(InventoryPackagingModel).where(
-                            InventoryPackagingModel.company_id == company_id,
-                            InventoryPackagingModel.inventory_item_id == item.id,
-                            InventoryPackagingModel.packaging_unit_id == unit_id,
-                            InventoryPackagingModel.is_current.is_(True),
-                            InventoryPackagingModel.is_active.is_(True),
-                        )
-                    )
-                ).all()
-            )
-            if len(packages) != 1:
-                raise BusinessRuleError(
-                    "La unidad elegida no tiene una equivalencia vigente para este producto.",
-                    code="sales_unit_conversion_missing",
-                )
-            package = packages[0]
-            factor = package.base_quantity
-            packaging_id = package.id
-            packaging_version = package.version
-            symbol = await self._unit_symbol(company_id, unit_id)
-            unit_name = _unit_label(package.name, symbol)
-        if unit_id == item.base_unit_id:
-            unit_name = await self._unit_name(company_id, unit_id)
-        quantity = normalize_quantity(Decimal(str(data["quantity"])))
-        unit_price = normalize_price(Decimal(str(data["unit_price"])))
-        quantity_base = quantity_in_base(quantity, factor)
-        product_name = (
-            (variant.name_override if variant and variant.name_override else None)
-            or product.sales_name
-            or product.name
-        )
-        return {
-            "product_id": product_id,
-            "variant_id": variant_id,
-            "inventory_item_id": item.id,
-            "packaging_definition_id": packaging_id,
-            "packaging_version": packaging_version,
-            "unit_id": unit_id,
-            "base_unit_id": item.base_unit_id,
-            "unit_factor": factor,
-            "quantity": quantity,
-            "quantity_base": quantity_base,
-            "product_sku": variant.sku if variant else product.sku,
-            "product_name": product_name,
-            "unit_name": unit_name,
-            "base_unit_name": await self._unit_name(company_id, item.base_unit_id),
-            "unit_price": unit_price,
-            "line_total": line_amount(quantity, unit_price),
-        }
-
-    async def create_quotation(
-        self,
-        *,
-        company_id: uuid.UUID,
-        actor_id: uuid.UUID,
-        idempotency_key: str,
-        data: dict[str, Any],
-        request: Any,
-    ) -> dict[str, Any]:
-        branch_id = uuid.UUID(str(data["branch_id"]))
-        valid_until = data["valid_until"]
-        customer_id = uuid.UUID(str(data["customer_id"]))
-        currency = str(data.get("currency", "USD")).upper()
-        if currency != "USD":
-            raise ValidationError(
-                "En esta demostración solo se admite USD.", code="sales_currency_unsupported"
-            )
-        today = local_today()
-        if valid_until < today:
-            raise ValidationError(
-                "La vigencia de la cotización no puede quedar en el pasado.",
-                code="sales_quote_validity_past",
-            )
-        if not idempotency_key or len(idempotency_key) > IDEMPOTENCY_KEY_MAX_LENGTH:
-            raise ValidationError(
-                "La clave de idempotencia es obligatoria y admite hasta 120 caracteres.",
-                code="sales_idempotency_key_required",
-            )
-        fingerprint = _fingerprint(
-            {
-                **data,
-                "valid_until": valid_until.isoformat(),
-                "customer_id": str(customer_id),
-                "branch_id": str(branch_id),
-            }
-        )
-        async with self.session.begin_nested():
-            await self._lock_idempotency(company_id, "create_quote", idempotency_key)
-            replay = await self._idempotency(
-                company_id, "create_quote", idempotency_key, fingerprint
-            )
-            if replay:
-                row = await self.get_quotation(company_id, replay.resource_id)
-                return await self.quotation_out(row)
-            customer = await self.get_customer(company_id, customer_id)
-            if not customer.is_active:
-                raise BusinessRuleError(
-                    "El cliente está inactivo y no admite nuevas cotizaciones.",
-                    code="sales_customer_inactive",
-                )
-            branch = await self.session.scalar(
-                select(Branch).where(
-                    Branch.company_id == company_id,
-                    Branch.id == branch_id,
-                    Branch.is_active.is_(True),
-                    Branch.operational_status == "active",
-                )
-            )
-            if branch is None:
-                raise BusinessRuleError(
-                    "La sucursal no está activa para emitir cotizaciones.",
-                    code="sales_branch_inactive",
-                )
-            raw_lines = data.get("lines") or []
-            if not raw_lines:
-                raise ValidationError(
-                    "Agregue al menos un producto a la cotización.",
-                    code="sales_quote_lines_required",
-                )
-            snapshots = [await self._line_snapshot(company_id, item) for item in raw_lines]
-            subtotal = sum((line["line_total"] for line in snapshots), ZERO_MONEY)
-            row = SalesQuotationModel(
-                company_id=company_id,
-                branch_id=branch_id,
-                customer_id=customer_id,
-                code=f"CV-{today:%Y%m%d}-{uuid.uuid4().hex[:8].upper()}",
-                quotation_date=today,
-                valid_until=valid_until,
-                currency="USD",
-                subtotal=subtotal,
-                total=subtotal,
-                status="draft",
-                version=1,
-                notes=(str(data.get("notes") or "").strip() or None),
-                created_by_id=actor_id,
-            )
-            self.session.add(row)
-            await self.session.flush()
-            for number, snapshot in enumerate(snapshots, start=1):
-                self.session.add(
-                    SalesQuotationLineModel(
-                        company_id=company_id, quotation_id=row.id, line_number=number, **snapshot
-                    )
-                )
-            self.session.add(
-                SalesIdempotencyModel(
-                    company_id=company_id,
-                    action="create_quote",
-                    idempotency_key=idempotency_key,
-                    fingerprint=fingerprint,
-                    resource_type="quotation",
-                    resource_id=row.id,
-                    actor_id=actor_id,
-                )
-            )
-            await self.session.flush()
-            await self._audit(
-                action="SALES_QUOTATION_CREATED",
-                actor_id=actor_id,
-                company_id=company_id,
-                branch_id=branch_id,
-                resource_type="sales_quotation",
-                resource_id=row.id,
-                request=request,
-                after=self._quote_state(row),
-            )
-        return await self.quotation_out(row)
 
     async def _idempotency(
         self, company_id: uuid.UUID, action: str, key: str, fingerprint: str
@@ -559,79 +266,6 @@ class SalesService:
         lock_value = f"{company_id}:{action}:{key}"
         await self.session.scalar(select(func.pg_advisory_xact_lock(func.hashtext(lock_value))))
 
-    async def list_quotations(
-        self,
-        company_id: uuid.UUID,
-        *,
-        branch_ids: tuple[uuid.UUID, ...] | None,
-        branch_id: uuid.UUID | None,
-        customer_id: uuid.UUID | None,
-        status: str | None,
-        from_date: date | None,
-        to_date: date | None,
-        page: int,
-        size: int,
-    ) -> dict[str, Any]:
-        today = local_today()
-        conditions: list[Any] = [SalesQuotationModel.company_id == company_id]
-        if branch_id:
-            conditions.append(SalesQuotationModel.branch_id == branch_id)
-        elif branch_ids is not None:
-            conditions.append(
-                SalesQuotationModel.branch_id.in_(branch_ids)
-                if branch_ids
-                else SalesQuotationModel.id.is_(None)
-            )
-        if customer_id:
-            conditions.append(SalesQuotationModel.customer_id == customer_id)
-        if from_date:
-            conditions.append(SalesQuotationModel.quotation_date >= from_date)
-        if to_date:
-            conditions.append(SalesQuotationModel.quotation_date <= to_date)
-        if status == "expired":
-            conditions.extend(
-                [
-                    SalesQuotationModel.status.in_(["draft", "confirmed"]),
-                    SalesQuotationModel.valid_until < today,
-                ]
-            )
-        elif status:
-            conditions.extend(
-                [SalesQuotationModel.status == status, SalesQuotationModel.valid_until >= today]
-                if status in {"draft", "confirmed"}
-                else [SalesQuotationModel.status == status]
-            )
-        total = int(
-            await self.session.scalar(
-                select(func.count()).select_from(SalesQuotationModel).where(*conditions)
-            )
-            or 0
-        )
-        rows = list(
-            (
-                await self.session.scalars(
-                    select(SalesQuotationModel)
-                    .where(*conditions)
-                    .order_by(
-                        SalesQuotationModel.quotation_date.desc(),
-                        SalesQuotationModel.created_at.desc(),
-                    )
-                    .offset((page - 1) * size)
-                    .limit(size)
-                )
-            ).all()
-        )
-        items = [await self.quotation_out(row) for row in rows]
-        return {
-            "items": items,
-            "meta": {
-                "page": page,
-                "size": size,
-                "total": total,
-                "pages": (total + size - 1) // size,
-            },
-        }
-
     async def get_quotation(
         self, company_id: uuid.UUID, quote_id: uuid.UUID, *, lock: bool = False
     ) -> SalesQuotationModel:
@@ -646,50 +280,6 @@ class SalesService:
                 "Cotización de venta no encontrada.", code="sales_quotation_not_found"
             )
         return row
-
-    async def quotation_out(self, row: SalesQuotationModel) -> dict[str, Any]:
-        lines = list(
-            (
-                await self.session.scalars(
-                    select(SalesQuotationLineModel)
-                    .where(
-                        SalesQuotationLineModel.company_id == row.company_id,
-                        SalesQuotationLineModel.quotation_id == row.id,
-                    )
-                    .order_by(SalesQuotationLineModel.line_number)
-                )
-            ).all()
-        )
-        customer = await self.get_customer(row.company_id, row.customer_id)
-        sale = await self.session.scalar(
-            select(SaleModel).where(
-                SaleModel.company_id == row.company_id, SaleModel.quotation_id == row.id
-            )
-        )
-        return {
-            "id": str(row.id),
-            "company_id": str(row.company_id),
-            "branch_id": str(row.branch_id),
-            "customer_id": str(row.customer_id),
-            "customer_code": customer.code,
-            "customer_name": customer.name,
-            "code": row.code,
-            "quotation_date": row.quotation_date,
-            "valid_until": row.valid_until,
-            "currency": row.currency,
-            "subtotal": str(row.subtotal),
-            "total": str(row.total),
-            "status": quote_display_status(row.status, row.valid_until, local_today()),
-            "stored_status": row.status,
-            "version": row.version,
-            "notes": row.notes,
-            "converted": sale is not None,
-            "sale_id": str(sale.id) if sale else None,
-            "sale_code": sale.code if sale else None,
-            "lines": [self._line_out(line) for line in lines],
-            "created_at": row.created_at,
-            "updated_at": row.updated_at,
-        }
 
     @staticmethod
     def _line_out(
@@ -721,218 +311,6 @@ class SalesService:
             "quantity_delivered_base": str(delivered.quantize(quantity_quantum)),
             "quantity_pending_base": str(pending.quantize(quantity_quantum)),
         }
-
-    async def confirm_quotation(
-        self,
-        *,
-        company_id: uuid.UUID,
-        actor_id: uuid.UUID,
-        quote_id: uuid.UUID,
-        expected_version: int,
-        request: Any,
-    ) -> dict[str, Any]:
-        async with self.session.begin_nested():
-            row = await self.get_quotation(company_id, quote_id, lock=True)
-            if row.status == "confirmed":
-                return await self.quotation_out(row)
-            if row.status != "draft":
-                raise BusinessRuleError(
-                    "Solo se puede confirmar una cotización en borrador.",
-                    code="sales_quote_state_invalid",
-                )
-            if row.version != expected_version:
-                raise ConflictError(
-                    "La cotización cambió. Recárguela antes de confirmar.",
-                    code="sales_quote_version_conflict",
-                )
-            if row.valid_until < local_today():
-                raise BusinessRuleError(
-                    "La cotización venció. Actualice su vigencia antes de confirmar.",
-                    code="sales_quote_expired",
-                )
-            customer = await self.get_customer(company_id, row.customer_id)
-            if not customer.is_active:
-                raise BusinessRuleError(
-                    "El cliente está inactivo y no se puede confirmar la cotización.",
-                    code="sales_customer_inactive",
-                )
-            lines = await self.session.scalar(
-                select(func.count())
-                .select_from(SalesQuotationLineModel)
-                .where(
-                    SalesQuotationLineModel.company_id == company_id,
-                    SalesQuotationLineModel.quotation_id == quote_id,
-                )
-            )
-            if not lines:
-                raise BusinessRuleError(
-                    "La cotización no contiene líneas.", code="sales_quote_lines_required"
-                )
-            before = self._quote_state(row)
-            row.status = "confirmed"
-            row.confirmed_by_id = actor_id
-            row.confirmed_at = datetime.now(UTC)
-            row.version += 1
-            await self.session.flush()
-            await self._audit(
-                action="SALES_QUOTATION_CONFIRMED",
-                actor_id=actor_id,
-                company_id=company_id,
-                branch_id=row.branch_id,
-                resource_type="sales_quotation",
-                resource_id=row.id,
-                request=request,
-                before=before,
-                after=self._quote_state(row),
-            )
-        return await self.quotation_out(row)
-
-    async def update_quotation(
-        self,
-        *,
-        company_id: uuid.UUID,
-        actor_id: uuid.UUID,
-        quote_id: uuid.UUID,
-        data: dict[str, Any],
-        request: Any,
-    ) -> dict[str, Any]:
-        async with self.session.begin_nested():
-            row = await self.get_quotation(company_id, quote_id, lock=True)
-            if row.status != "draft":
-                raise BusinessRuleError(
-                    "Solo se puede editar una cotización en borrador.",
-                    code="sales_quote_state_invalid",
-                )
-            if row.version != int(data["expected_version"]):
-                raise ConflictError(
-                    "La cotización cambió. Recárguela antes de editar.",
-                    code="sales_quote_version_conflict",
-                )
-            valid_until = data["valid_until"]
-            if valid_until < local_today():
-                raise ValidationError(
-                    "La nueva vigencia debe ser hoy o una fecha posterior en El Salvador.",
-                    code="sales_quote_validity_past",
-                )
-            if str(data.get("currency", "USD")).upper() != "USD":
-                raise ValidationError(
-                    "En esta demostración solo se admite USD.", code="sales_currency_unsupported"
-                )
-            customer = await self.get_customer(company_id, row.customer_id)
-            if not customer.is_active:
-                raise BusinessRuleError(
-                    "El cliente está inactivo y no se puede editar la cotización.",
-                    code="sales_customer_inactive",
-                )
-            raw_lines = data.get("lines") or []
-            if not raw_lines:
-                raise ValidationError(
-                    "Agregue al menos un producto a la cotización.",
-                    code="sales_quote_lines_required",
-                )
-            snapshots = [await self._line_snapshot(company_id, item) for item in raw_lines]
-            before = self._quote_state(row)
-            current_lines = list(
-                (
-                    await self.session.scalars(
-                        select(SalesQuotationLineModel).where(
-                            SalesQuotationLineModel.company_id == company_id,
-                            SalesQuotationLineModel.quotation_id == quote_id,
-                        )
-                    )
-                ).all()
-            )
-            for line in current_lines:
-                await self.session.delete(line)
-            row.valid_until = valid_until
-            row.subtotal = sum((line["line_total"] for line in snapshots), ZERO_MONEY)
-            row.total = row.subtotal
-            row.notes = str(data.get("notes") or "").strip() or None
-            row.version += 1
-            await self.session.flush()
-            for number, snapshot in enumerate(snapshots, start=1):
-                self.session.add(
-                    SalesQuotationLineModel(
-                        company_id=company_id, quotation_id=row.id, line_number=number, **snapshot
-                    )
-                )
-            await self.session.flush()
-            await self._audit(
-                action="SALES_QUOTATION_UPDATED",
-                actor_id=actor_id,
-                company_id=company_id,
-                branch_id=row.branch_id,
-                resource_type="sales_quotation",
-                resource_id=row.id,
-                request=request,
-                before=before,
-                after=self._quote_state(row),
-            )
-        return await self.quotation_out(row)
-
-    async def cancel_quotation(
-        self,
-        *,
-        company_id: uuid.UUID,
-        actor_id: uuid.UUID,
-        quote_id: uuid.UUID,
-        expected_version: int,
-        reason: str,
-        request: Any,
-    ) -> dict[str, Any]:
-        reason = reason.strip()
-        if not reason:
-            raise ValidationError(
-                "Indique el motivo de cancelación.", code="sales_cancellation_reason_required"
-            )
-        async with self.session.begin_nested():
-            row = await self.get_quotation(company_id, quote_id, lock=True)
-            converted = await self.session.scalar(
-                select(SaleModel.id).where(
-                    SaleModel.company_id == company_id, SaleModel.quotation_id == quote_id
-                )
-            )
-            if converted:
-                raise BusinessRuleError(
-                    "La cotización ya originó una venta. Gestione la venta vinculada.",
-                    code="sales_quote_converted",
-                )
-            if row.status == "cancelled":
-                if row.cancellation_reason == reason:
-                    return await self.quotation_out(row)
-                raise ConflictError(
-                    "La cotización ya está cancelada con otro motivo.",
-                    code="sales_quote_already_cancelled",
-                )
-            if row.version != expected_version:
-                raise ConflictError(
-                    "La cotización cambió. Recárguela antes de cancelar.",
-                    code="sales_quote_version_conflict",
-                )
-            if row.status not in {"draft", "confirmed"}:
-                raise BusinessRuleError(
-                    "El estado actual no permite cancelar la cotización.",
-                    code="sales_quote_state_invalid",
-                )
-            before = self._quote_state(row)
-            row.status = "cancelled"
-            row.cancelled_by_id = actor_id
-            row.cancelled_at = datetime.now(UTC)
-            row.cancellation_reason = reason
-            row.version += 1
-            await self.session.flush()
-            await self._audit(
-                action="SALES_QUOTATION_CANCELLED",
-                actor_id=actor_id,
-                company_id=company_id,
-                branch_id=row.branch_id,
-                resource_type="sales_quotation",
-                resource_id=row.id,
-                request=request,
-                before=before,
-                after=self._quote_state(row),
-            )
-        return await self.quotation_out(row)
 
     async def convert_quotation(
         self,
@@ -986,9 +364,9 @@ class SalesService:
                     "La cotización cambió. Recárguela antes de convertir.",
                     code="sales_quote_version_conflict",
                 )
-            if not can_convert_quote(row.status, row.valid_until, local_today()):
+            if row.status != QuotationStatus.ACCEPTED.value:
                 raise BusinessRuleError(
-                    "Solo una cotización confirmada y vigente puede convertirse en venta.",
+                    "Solo una cotización aceptada por el cliente puede convertirse en venta.",
                     code="sales_quote_not_convertible",
                 )
             customer = await self.get_customer(company_id, row.customer_id)
@@ -1013,6 +391,10 @@ class SalesService:
                 raise BusinessRuleError(
                     "La cotización no contiene líneas.", code="sales_quote_lines_required"
                 )
+            # La venta B06 no lleva impuestos ni descuento global: copia el neto de cada línea
+            # (precio con descuento en la forma del documento). V2e la reemplaza por el pedido.
+            net_lines = [(line, line_amount(Decimal("1"), line.line_total)) for line in quote_lines]
+            sale_total = sum((amount for _, amount in net_lines), ZERO_MONEY)
             sale = SaleModel(
                 company_id=company_id,
                 branch_id=row.branch_id,
@@ -1020,8 +402,8 @@ class SalesService:
                 quotation_id=row.id,
                 code=f"VTA-{local_today():%Y%m%d}-{uuid.uuid4().hex[:8].upper()}",
                 currency=row.currency,
-                subtotal=row.subtotal,
-                total=row.total,
+                subtotal=sale_total,
+                total=sale_total,
                 status="draft",
                 version=1,
                 notes=row.notes,
@@ -1029,7 +411,7 @@ class SalesService:
             )
             self.session.add(sale)
             await self.session.flush()
-            for line in quote_lines:
+            for line, net_total in net_lines:
                 self.session.add(
                     SaleLineModel(
                         company_id=company_id,
@@ -1050,8 +432,8 @@ class SalesService:
                         product_name=line.product_name,
                         unit_name=line.unit_name,
                         base_unit_name=line.base_unit_name,
-                        unit_price=line.unit_price,
-                        line_total=line.line_total,
+                        unit_price=(line.line_total / line.quantity).quantize(PRICE_QUANTUM),
+                        line_total=net_total,
                     )
                 )
             self.session.add(

@@ -1,16 +1,13 @@
-from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-from app.application.sales.service import _unit_label
 from app.domain.entities.sales import (
-    can_convert_quote,
     line_amount,
     normalize_price,
     normalize_quantity,
     quantity_in_base,
-    quote_display_status,
 )
+from app.infrastructure.repositories.sales_line_identity import unit_label as _unit_label
 
 
 def test_unit_label_does_not_repeat_a_symbol_already_in_the_name() -> None:
@@ -39,13 +36,3 @@ def test_base_quantity_uses_the_explicit_conversion_factor() -> None:
 
 def test_each_commercial_line_rounds_half_up_to_cents() -> None:
     assert line_amount(Decimal("3"), Decimal("1.255")) == Decimal("3.77")
-
-
-def test_quote_expiration_is_inclusive_in_local_date() -> None:
-    today = date(2026, 10, 19)
-    assert quote_display_status("confirmed", today, today) == "confirmed"
-    assert can_convert_quote("confirmed", today, today)
-    yesterday = today - timedelta(days=1)
-    assert quote_display_status("confirmed", yesterday, today) == "expired"
-    assert not can_convert_quote("confirmed", yesterday, today)
-    assert quote_display_status("cancelled", yesterday, today) == "cancelled"
