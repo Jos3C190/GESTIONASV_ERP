@@ -88,7 +88,7 @@ Pasos:
   - Acciones «Activar contingencia» y «Cerrar contingencia».
   - Aviso en la bandeja cuando hay una ventana activa.
   - Verificar: vitest con estados de carga, vacío y error.
-- [ ] **Paso 6: documentación.** `api.md`, esquema, manual de documentos fiscales y `multiemisor.md`.
+- [x] **Paso 6: documentación.** `api.md`, esquema, manual de documentos fiscales y `multiemisor.md`.
 - [ ] **Paso 7: verificación y PR.**
   - Batería completa y QA en el navegador: forzar la contingencia en simulado, emitir, cerrar y ver el sello.
   - PR hacia `develop`.
@@ -121,7 +121,9 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 6 de V4a (documentación).
+- **Paso en curso**: 7 de V4a (verificación y PR).
+  - Paso 6 hecho: `docs/api.md` («Billing contingency»), esquema §40, manual de facturación §5
+    «Contingencia» (las secciones siguientes se renumeran) y `dte-service/docs/multiemisor.md`.
   - Paso 5 hecho:
     - Pantalla `/sales/contingencies` (menú Ventas → «Contingencia», con `sales_invoices:read`) y
       `ContingencyPanel.svelte`:

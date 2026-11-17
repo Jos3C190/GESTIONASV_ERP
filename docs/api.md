@@ -2198,3 +2198,34 @@ Audited on `company_hacienda_credentials` (`CREATE`, `UPDATE`, `DELETE`,
 `hacienda_api_password_required`, `hacienda_private_key_password_required`,
 `hacienda_company_nit_missing`, `hacienda_credentials_in_use`; `hacienda_credentials_not_found`
 (404).
+
+## Billing contingency (revision 0130, block V4a)
+
+A contingency window belongs to one company and one fiscal establishment and lives in the DTE
+service. The service opens it by itself when Hacienda does not answer; an operator opens it for a
+failure the service cannot see (power or internet outage at the store). Documents issued meanwhile
+are generated in the deferred model and stay in the fiscal status `contingency` (with
+`contingency_type`, `contingency_reason` and `contingency_at`) until the service seals them
+(`issued`/`simulated`) or Hacienda rejects them; `dte-worker` follows them
+(`follow_fiscal_contingency`) and never issues them again. The customer receives the readable
+version during the contingency.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/contingencies` | `sales_invoices:read` | Windows (open and recent) with status `ACTIVA`, `CERRADA`, `REPORTADA` or `COMPLETADA`, documents, deadlines (24 h for the event, 72 h for the documents) and last error; the responsible person; `active`. |
+| POST | `/sales/contingencies` | `sales_invoices:contingency` | Opens the window of `establishment_id` with `contingency_type` (CAT-005, 1–5) and `reason` (required for 5). `201`. |
+| POST | `/sales/contingencies/{id}/close` | `sales_invoices:contingency` | Closes it and reports the event with the registered responsible person. |
+| POST | `/sales/contingencies/{id}/event` | `sales_invoices:contingency` | Sends the event of a closed window again. |
+| PUT | `/sales/contingencies/responsible` | `sales_invoices:contingency` | `name`, `document_type` (CAT-022: 13, 36, 03, 02, 37) and `document_number` of the person who signs the event. |
+
+Before each action the ERP registers the company in the service with its mode, credentials and
+responsible person. `/sales/fiscal-documents` accepts `status=contingency`.
+
+Audited: `ACTIVATE_CONTINGENCY`, `CLOSE_CONTINGENCY`, `SEND_CONTINGENCY_EVENT` on
+`sales_contingency`; `CREATE`/`UPDATE` on `company_contingency_responsible`; the worker records
+`FISCAL_DOCUMENT_CONTINGENCY`. Error codes: `sales_contingency_type_invalid`,
+`sales_contingency_reason_required`, `sales_contingency_responsible_invalid`,
+`sales_contingency_responsible_required`, `sales_contingency_active`,
+`sales_contingency_nit_missing`, `sales_contingency_rejected` (422);
+`sales_contingency_already_active` (409); `sales_contingency_not_found`,
+`sales_contingency_establishment_not_found` (404).
