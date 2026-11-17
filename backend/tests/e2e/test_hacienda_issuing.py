@@ -51,6 +51,7 @@ class FakeDte:
         mode: str,
         document_types: list[str],
         credentials: IssuerCredentials | None = None,
+        responsible: object = None,
     ) -> None:
         self.registrations.append({"nit": nit, "mode": mode, "credentials": credentials})
 

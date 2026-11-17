@@ -8,10 +8,17 @@ misma clave devuelve el mismo DTE en lugar de crear otro.
 from __future__ import annotations
 
 import base64
+from datetime import datetime
 from typing import Any
 
 import httpx
 
+from app.domain.entities.fiscal_contingency import (
+    ContingencyDocuments,
+    ContingencyOverview,
+    ContingencyResponsible,
+    ContingencyWindow,
+)
 from app.domain.ports.dte_service import (
     ConnectionCheck,
     DocumentState,
@@ -26,6 +33,46 @@ _TRANSIENT_CODES = frozenset({"IDEMPOTENCY_IN_PROGRESS", "ISSUER_MODE_UNAVAILABL
 #: Códigos 5xx que no se corrigen reintentando (configuración del firmador).
 _PERMANENT_CODES = frozenset({"FIRMADOR_CONFIGURATION_ERROR"})
 _SERVER_ERROR = 500
+_NOT_FOUND = 404
+
+
+def _when(value: Any) -> datetime | None:
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00")) if value else None
+
+
+def _window(data: dict[str, Any]) -> ContingencyWindow:
+    """Ventana tal como la resume el servicio (``resumenVentana``)."""
+
+    documents = data.get("documentos") or {}
+    event = data.get("evento") or {}
+    deadlines = data.get("plazos") or {}
+    started = _when(data.get("inicio"))
+    assert started is not None
+    return ContingencyWindow(
+        id=int(data["id"]),
+        establishment_code=data.get("establecimiento") or None,
+        status=str(data.get("estado") or ""),
+        contingency_type=int(data.get("tipoContingencia") or 0),
+        reason=data.get("motivo") or None,
+        forced=bool(data.get("forzada")),
+        started_at=started,
+        ended_at=_when(data.get("fin")),
+        documents=ContingencyDocuments(
+            total=int(documents.get("total") or 0),
+            in_contingency=int(documents.get("enContingencia") or 0),
+            pending_transmission=int(documents.get("pendientesDeTransmitir") or 0),
+            transmitted=int(documents.get("transmitidos") or 0),
+            rejected=int(documents.get("rechazados") or 0),
+        ),
+        event_status=event.get("estado") or None,
+        event_seal=event.get("selloRecepcion") or None,
+        event_sealed_at=_when(event.get("selloEn")),
+        event_deadline=_when(deadlines.get("eventoLimite")),
+        event_overdue=bool(deadlines.get("eventoVencido")),
+        transmission_deadline=_when(deadlines.get("transmisionLimite")),
+        transmission_overdue=bool(deadlines.get("transmisionVencida")),
+        last_error=data.get("ultimoError") or None,
+    )
 
 
 class HttpDteServiceClient:
@@ -88,6 +135,7 @@ class HttpDteServiceClient:
         mode: str,
         document_types: list[str],
         credentials: IssuerCredentials | None = None,
+        responsible: ContingencyResponsible | None = None,
     ) -> None:
         body: dict[str, Any] = {
             "nombre": name,
@@ -100,6 +148,13 @@ class HttpDteServiceClient:
                 "passwordApi": credentials.api_password,
                 "passwordPri": credentials.private_key_password,
                 "certificado": base64.b64encode(credentials.certificate).decode("ascii"),
+            }
+        if responsible is not None:
+            # Sin el campo el servicio conserva el que tenga (V4a).
+            body["responsable"] = {
+                "nombre": responsible.name,
+                "tipoDocumento": responsible.document_type,
+                "numeroDocumento": responsible.document_number,
             }
         response = await self._send(None, "PUT", f"/api/emisores/{nit}", json=body)
         if response.is_error:
@@ -170,3 +225,51 @@ class HttpDteServiceClient:
         if response.is_error:
             raise self._error(response)
         return response.content
+
+    # --- contingencia por establecimiento (V4a) ---
+
+    async def contingencies(self, nit: str) -> ContingencyOverview:
+        response = await self._send(None, "GET", f"/api/emisores/{nit}/contingencias")
+        if response.status_code == _NOT_FOUND:
+            # Aún no registrada: no tiene ventanas.
+            return ContingencyOverview(windows=(), responsible_registered=False)
+        if response.is_error:
+            raise self._error(response)
+        data = response.json()
+        return ContingencyOverview(
+            windows=tuple(_window(item) for item in data.get("ventanas") or []),
+            responsible_registered=bool(data.get("responsableConfigurado")),
+        )
+
+    async def activate_contingency(
+        self, nit: str, *, establishment_code: str, contingency_type: int, reason: str | None
+    ) -> ContingencyWindow:
+        response = await self._send(
+            None,
+            "POST",
+            f"/api/emisores/{nit}/contingencias",
+            json={
+                "establecimiento": establishment_code,
+                "tipoContingencia": contingency_type,
+                "motivoContingencia": reason,
+            },
+        )
+        if response.is_error:
+            raise self._error(response)
+        return _window(response.json())
+
+    async def close_contingency(self, nit: str, window_id: int) -> ContingencyWindow:
+        response = await self._send(
+            None, "POST", f"/api/emisores/{nit}/contingencias/{window_id}/cerrar", json={}
+        )
+        if response.is_error:
+            raise self._error(response)
+        return _window(response.json())
+
+    async def send_contingency_event(self, nit: str, window_id: int) -> ContingencyWindow:
+        response = await self._send(
+            None, "POST", f"/api/emisores/{nit}/contingencias/{window_id}/evento", json={}
+        )
+        if response.is_error:
+            raise self._error(response)
+        return _window(response.json())

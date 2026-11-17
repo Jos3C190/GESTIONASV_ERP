@@ -58,6 +58,7 @@ from app.application.sales.service import SalesService
 from app.application.sales_discounts import SalesDiscountUseCases
 from app.application.sales_documents.pricing import SalesDocumentPricing
 from app.application.sales_invoices import SalesInvoiceUseCases
+from app.application.sales_invoices.contingency import ContingencyUseCases
 from app.application.sales_invoices.emails import SalesInvoiceEmailUseCases
 from app.application.sales_orders import SalesOrderUseCases
 from app.application.sales_quotations import SalesQuotationUseCases
@@ -203,6 +204,23 @@ def get_hacienda_credentials_use_cases(session: SessionDep) -> HaciendaCredentia
     return HaciendaCredentialsUseCases(
         SqlAlchemyHaciendaCredentialsRepository(session),
         SqlAlchemyFiscalRepository(session),
+        dte_client(),
+    )
+
+
+def get_contingency_use_cases(session: SessionDep) -> ContingencyUseCases:
+    from app.infrastructure.dte_worker import dte_client
+    from app.infrastructure.repositories.contingency_responsible_repository import (
+        SqlAlchemyContingencyResponsibleRepository,
+    )
+    from app.infrastructure.repositories.hacienda_credentials_repository import (
+        SqlAlchemyHaciendaCredentialsRepository,
+    )
+
+    return ContingencyUseCases(
+        SqlAlchemyFiscalRepository(session),
+        SqlAlchemyContingencyResponsibleRepository(session),
+        SqlAlchemyHaciendaCredentialsRepository(session),
         dte_client(),
     )
 

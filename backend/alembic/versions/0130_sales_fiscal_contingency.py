@@ -8,7 +8,9 @@ número de control y versión legible, pero espera el Evento de Contingencia y s
 queda en el estado ``contingency`` con el tipo (CAT-005) y el motivo de la contingencia, hasta que
 el servicio DTE lo sella (``issued``/``simulated``) o Hacienda lo rechaza.
 
-Agrega el permiso ``sales_invoices:contingency`` para activar y cerrar contingencias.
+Agrega el permiso ``sales_invoices:contingency`` para activar y cerrar contingencias, y la tabla
+``company_contingency_responsibles``: la persona que firma el Evento de Contingencia de la
+empresa (nombre y documento de CAT-022). El ERP se la entrega al servicio DTE al registrarla.
 """
 
 from alembic import op
@@ -43,6 +45,23 @@ def upgrade() -> None:
                      AND contingency_type IS NOT NULL))
             )
     """)
+    op.execute("""
+        CREATE TABLE company_contingency_responsibles (
+            company_id uuid PRIMARY KEY REFERENCES companies (id) ON DELETE CASCADE,
+            name varchar(100) NOT NULL,
+            document_type varchar(2) NOT NULL,
+            document_number varchar(25) NOT NULL,
+            updated_by uuid REFERENCES users (id) ON DELETE SET NULL,
+            created_at timestamptz NOT NULL DEFAULT now(),
+            updated_at timestamptz NOT NULL DEFAULT now(),
+            CONSTRAINT ck_company_contingency_responsibles_name
+                CHECK (char_length(btrim(name)) BETWEEN 3 AND 100),
+            CONSTRAINT ck_company_contingency_responsibles_document CHECK (
+                document_type IN ('36','13','37','03','02')
+                AND char_length(btrim(document_number)) BETWEEN 1 AND 25
+            )
+        )
+    """)
     code, description = _PERMISSION
     op.execute(f"""
         INSERT INTO permissions (id, code, description, module, created_at)
@@ -74,6 +93,7 @@ def downgrade() -> None:
             f"Hay {stored} documentos fiscales generados en contingencia; la migración 0130 "
             "perdería su tipo y motivo. Respáldalos antes de revertir."
         )
+    op.execute("DROP TABLE company_contingency_responsibles")
     code, _ = _PERMISSION
     op.execute(f"""
         DELETE FROM role_permissions WHERE permission_id IN

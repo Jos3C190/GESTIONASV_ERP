@@ -75,7 +75,7 @@ Pasos:
     - el resultado CONTINGENCIA deja el documento en `contingency`;
     - una tarea de conciliación consulta su estado hasta el sello, sin volver a emitir.
   - Verificar: unitarias del dominio y e2e con el cliente DTE falso.
-- [ ] **Paso 4: API y permisos.**
+- [x] **Paso 4: API y permisos.**
   - `GET /sales/contingencies`, `POST /sales/contingencies` (forzar por establecimiento, con tipo del
     catálogo CAT-005 y motivo) y `POST /sales/contingencies/{id}/close`.
   - Permiso `sales_invoices:contingency` (creado en la migración 0130; sigue el espacio de nombres de
@@ -121,7 +121,25 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 4 de V4a (API de contingencias, permisos y auditoría).
+- **Paso en curso**: 5 de V4a (interfaz: bandeja y pantalla «Contingencia»).
+  - Paso 4 hecho:
+    - API `/sales/contingencies`: GET (`sales_invoices:read`; ventanas, responsable y `active`); POST para
+      activar (`establishment_id`, `contingency_type` de CAT-005, `reason`, obligatorio para el tipo 5);
+      `/{id}/close`, `/{id}/event` y PUT `/responsible`, todo con `sales_invoices:contingency`.
+      Bitácora: `ACTIVATE_CONTINGENCY`, `CLOSE_CONTINGENCY`, `SEND_CONTINGENCY_EVENT` y CREATE/UPDATE
+      del responsable.
+    - Decisión: el responsable del evento es uno por empresa, en la tabla `company_contingency_responsibles`
+      (en la misma 0130, que todavía no está mergeada). El ERP lo entrega al servicio en cada registro, al
+      emitir y antes de cada acción de contingencia.
+    - `ContingencyUseCases` registra a la empresa (modo, credenciales y responsable) antes de activar,
+      cerrar o reenviar. Los códigos del servicio se traducen a `sales_contingency_*`.
+    - Servicio: el PDF ya se entrega en CONTINGENCIA y CONTINGENCIA_REPORTADA, con el sello «Pendiente:
+      documento generado en contingencia» (el Manual pide entregar la versión legible).
+    - Pruebas: unitarias `test_fiscal_contingency.py` y e2e `test_sales_contingencies.py`, contra el
+      servicio real en simulado (activar, facturar en contingencia, cerrar, seguir hasta `simulated`).
+  - Arreglo aparte: el CI de develop tras V3d falló de forma intermitente porque el ayudante `_stock` de
+    `test_sales_orders.py` tomaba como actor un registro de la bitácora del trabajador DTE, que no tiene
+    usuario. Va en la PR #52 (`fix/e2e-actor-sin-usuario`) y el mismo cambio en esta rama.
   - Paso 3 hecho:
     - Migración 0130: estado `contingency` y columnas `contingency_type` (CAT-005), `contingency_reason` y
       `contingency_at`. Un documento en contingencia exige número, código de generación y `issued_at`.

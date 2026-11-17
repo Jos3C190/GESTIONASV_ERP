@@ -54,6 +54,7 @@ class FakeDte:
         mode: str,
         document_types: list[str],
         credentials: IssuerCredentials | None = None,
+        responsible: object = None,
     ) -> None:
         return None
 

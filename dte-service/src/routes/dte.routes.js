@@ -491,14 +491,29 @@ router.get('/:codigoGeneracion/documento-firmado', requireDteScope('read'), (req
  * El backend archiva los bytes devueltos y nunca usa el logo vigente para
  * regenerar documentos ya entregados.
  */
+/**
+ * Sello que lleva la versión legible. En contingencia (V4a del ERP) el cliente
+ * recibe el documento antes del sello (Manual Funcional VIII): se indica que está
+ * pendiente y el PDF muestra el tipo y el motivo de la contingencia.
+ */
+const ESTADOS_EN_CONTINGENCIA = ['CONTINGENCIA', 'CONTINGENCIA_REPORTADA'];
+const SELLO_PENDIENTE = 'Pendiente: documento generado en contingencia';
+
+function datosRepresentacion(row) {
+  const simulation = row.estado === 'SIMULADO' || row.modo_emision === 'SIMULATED';
+  if (ESTADOS_EN_CONTINGENCIA.includes(row.estado)) return { simulation, sello: SELLO_PENDIENTE };
+  if (!['TRANSMITIDO', 'SIMULADO'].includes(row.estado)) return null;
+  return { simulation, sello: row.estado === 'SIMULADO' ? row.simulation_marker : row.sello_recepcion };
+}
+
 router.post('/:codigoGeneracion/pdf/render', requireDteScope('read'), async (req, res) => {
   const row = db.prepare('SELECT * FROM dtes WHERE codigo_generacion = ?').get(req.params.codigoGeneracion);
   if (!row) return res.status(404).json({ error: 'DTE no encontrado' });
-  if (!['TRANSMITIDO', 'SIMULADO'].includes(row.estado)) {
+  const representacion = datosRepresentacion(row);
+  if (!representacion) {
     return res.status(409).json({ error: `El PDF no está disponible en estado ${row.estado}` });
   }
-  const simulation = row.estado === 'SIMULADO';
-  const sello = simulation ? row.simulation_marker : row.sello_recepcion;
+  const { simulation, sello } = representacion;
   if (typeof sello !== 'string' || !sello.trim()) return res.status(409).json({ error: 'Falta sello o marcador simulado' });
   const { logoPngBuffer, error: errorLogo } = leerLogoPdf(req.body);
   if (errorLogo) return res.status(422).json({ error: errorLogo });
@@ -525,11 +540,11 @@ router.post('/:codigoGeneracion/pdf/render', requireDteScope('read'), async (req
 router.get('/:codigoGeneracion/pdf', requireDteScope('read'), async (req, res) => {
   const row = db.prepare('SELECT * FROM dtes WHERE codigo_generacion = ?').get(req.params.codigoGeneracion);
   if (!row) return res.status(404).json({ error: 'DTE no encontrado' });
-  if (!['TRANSMITIDO', 'SIMULADO'].includes(row.estado)) {
+  const representacion = datosRepresentacion(row);
+  if (!representacion) {
     return res.status(409).json({ error: `El PDF no está disponible en estado ${row.estado}` });
   }
-  const simulation = row.estado === 'SIMULADO';
-  const selloOMarcador = simulation ? row.simulation_marker : row.sello_recepcion;
+  const { simulation, sello: selloOMarcador } = representacion;
   if (typeof selloOMarcador !== 'string' || !selloOMarcador.trim()) {
     return res.status(409).json({ error: 'El DTE está transmitido pero aún no tiene sello de recepción; el PDF final no está disponible' });
   }

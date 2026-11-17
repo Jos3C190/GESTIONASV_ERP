@@ -33,6 +33,7 @@ from app.application.audit.audit_service import AuditService
 from app.application.fiscal.hacienda_credentials import decrypt_credentials
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
+from app.domain.entities.fiscal_contingency import ContingencyResponsible
 from app.domain.entities.sales_fiscal_document import (
     INVOICEABLE_DOCUMENTS,
     FiscalDocumentStatus,
@@ -50,6 +51,9 @@ from app.infrastructure.dte_email import email_sender, process_fiscal_email, que
 from app.infrastructure.dte_service_client import HttpDteServiceClient
 from app.infrastructure.object_storage import S3ObjectStorage
 from app.infrastructure.repositories.audit_repository import SqlAlchemyAuditRepository
+from app.infrastructure.repositories.contingency_responsible_repository import (
+    SqlAlchemyContingencyResponsibleRepository,
+)
 from app.infrastructure.repositories.fiscal_repository import SqlAlchemyFiscalRepository
 from app.infrastructure.repositories.hacienda_credentials_repository import (
     SqlAlchemyHaciendaCredentialsRepository,
@@ -142,6 +146,13 @@ async def _credentials(scope: SessionScope, document: FiscalDocument) -> IssuerC
     return decrypt_credentials(stored)
 
 
+async def _responsible(scope: SessionScope, company_id: uuid.UUID) -> ContingencyResponsible | None:
+    """Responsable del Evento de Contingencia, para que el servicio lo informe solo (V4a)."""
+
+    async with scope() as session:
+        return await SqlAlchemyContingencyResponsibleRepository(session).get(company_id)
+
+
 async def _store(
     storage: ObjectStorage | None, document: FiscalDocument, dte_json: dict[str, Any], pdf: bytes
 ) -> tuple[str | None, str | None]:
@@ -219,6 +230,7 @@ async def process_fiscal_document(
             mode=document.mode,
             document_types=await _enabled_types(scope, document.company_id),
             credentials=await _credentials(scope, document),
+            responsible=await _responsible(scope, document.company_id),
         )
         result = await client.issue(
             document.document_type,

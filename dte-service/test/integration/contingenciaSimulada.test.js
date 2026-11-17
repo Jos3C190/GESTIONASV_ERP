@@ -125,6 +125,10 @@ test('activar, emitir en diferido, cerrar y quedar simulado sin salir del servic
   assert.equal(payload.identificacion.tipoModelo, 2);
   assert.equal(payload.identificacion.tipoContingencia, 4);
 
+  const pdf = await fetch(`${baseUrl}/api/dte/${emitida.body.codigoGeneracion}/pdf`, { headers: headers(EMPRESA.nit) });
+  assert.equal(pdf.status, 200, 'el cliente recibe la versión legible en contingencia');
+  assert.equal(pdf.headers.get('content-type'), 'application/pdf');
+
   const consulta = await fetch(`${baseUrl}/api/dte/${emitida.body.codigoGeneracion}`, { headers: headers(EMPRESA.nit) });
   assert.equal(consulta.status, 200);
   assert.equal((await consulta.json()).estado, 'CONTINGENCIA');
