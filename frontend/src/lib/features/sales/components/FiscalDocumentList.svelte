@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { HttpError } from '#lib/api/client.ts';
+  import { contingenciesApi } from '#lib/api/sales-contingencies.ts';
   import { salesInvoicesApi } from '#lib/api/sales-invoices.ts';
   import {
     FISCAL_STATUS_BADGES,
@@ -21,6 +22,7 @@
   let pages = $state(1);
   let total = $state(0);
   let generation = 0;
+  let inContingency = $state<string[]>([]);
   let debounce: ReturnType<typeof setTimeout> | null = null;
   onDestroy(() => {
     generation++;
@@ -56,6 +58,22 @@
     }
   }
 
+  async function loadContingency() {
+    try {
+      const overview = await contingenciesApi.overview();
+      inContingency = overview.windows
+        .filter((item) => item.status === 'ACTIVA')
+        .map((item) => item.branch_name ?? item.establishment_code ?? '');
+    } catch {
+      // El aviso es informativo: sin él la bandeja sigue funcionando.
+      inContingency = [];
+    }
+  }
+
+  $effect(() => {
+    void loadContingency();
+  });
+
   $effect(() => {
     void branch.id;
     untrack(() => {
@@ -90,6 +108,19 @@
       control, su JSON y su PDF.
     </p>
   </header>
+
+  {#if inContingency.length > 0}
+    <div
+      class="flex flex-col gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning sm:flex-row sm:items-center sm:justify-between"
+      role="status"
+    >
+      <span
+        >En contingencia: {inContingency.join(', ')}. Los documentos se generan sin conexión con
+        Hacienda y se transmiten al cerrarla.</span
+      >
+      <a class="font-medium underline" href="/sales/contingencies">Ver contingencia</a>
+    </div>
+  {/if}
 
   <section
     class="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 lg:flex-row lg:items-center lg:justify-between"

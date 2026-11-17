@@ -81,7 +81,7 @@ Pasos:
   - Permiso `sales_invoices:contingency` (creado en la migración 0130; sigue el espacio de nombres de
     `sales_invoices:read`/`issue`) y auditoría.
   - Verificar: e2e de permisos, auditoría y aislamiento entre empresas.
-- [ ] **Paso 5: interfaz.**
+- [x] **Paso 5: interfaz.**
   - En la bandeja de documentos: estado «En contingencia» y filtro.
   - Pantalla «Contingencia», con las ventanas por establecimiento (activa o cerrada), sus documentos, el
     estado del evento y el plazo de 24 h para el evento y de 72 h para los documentos.
@@ -121,7 +121,19 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 5 de V4a (interfaz: bandeja y pantalla «Contingencia»).
+- **Paso en curso**: 6 de V4a (documentación).
+  - Paso 5 hecho:
+    - Pantalla `/sales/contingencies` (menú Ventas → «Contingencia», con `sales_invoices:read`) y
+      `ContingencyPanel.svelte`:
+      - ventanas abiertas con su estado, documentos, plazo y último error;
+      - «Activar contingencia» (establecimiento, tipo de CAT-005 y motivo), «Cerrar contingencia» con
+        confirmación e «Informar evento»;
+      - responsable del evento (nombre y documento de CAT-022) e historial reciente.
+      Sin `sales_invoices:contingency` la pantalla es de solo lectura.
+    - Bandeja: estado y filtro «En contingencia», y un aviso cuando hay establecimientos en contingencia.
+    - Detalle: nota «Generado en contingencia» con el tipo y el motivo, y si ya se transmitió.
+    - `formatMoment` (DD/MM/YYYY HH:mm, hora de El Salvador).
+    - vitest: `ContingencyPanel.test.ts` (5), más navegación y bandeja.
   - Paso 4 hecho:
     - API `/sales/contingencies`: GET (`sales_invoices:read`; ventanas, responsable y `active`); POST para
       activar (`establishment_id`, `contingency_type` de CAT-005, `reason`, obligatorio para el tipo 5);
