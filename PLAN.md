@@ -56,13 +56,17 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Envío automático tras emitir y envío manual.
   - Historial y bitácora.
   - e2e con Mailpit (el correo llega con sus dos adjuntos).
-- [ ] **Paso 5: frontend.** «Enviar por correo» e historial. vitest.
+- [x] **Paso 5: frontend.** «Enviar por correo» e historial. vitest.
 - [ ] **Paso 6: documentación.** `docs/api.md`, `docs/database-schema.md` §37 y manual de facturación.
 - [ ] **Paso 7: verificación y PR.** Batería completa, QA en el navegador con Mailpit y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 5 (frontend).
+- **Paso en curso**: 6 (documentación).
+  - Paso 5: componente `FiscalDocumentEmails.svelte`, en el detalle del documento y en la sección Factura del pedido.
+    - Propone el correo del cliente y acepta varios separados por comas, punto y coma o espacios.
+    - Historial con estado (Enviando, Enviado, No se envió), origen, quién lo pidió y error; se actualiza solo mientras hay envíos pendientes.
+    - Avisa si el servidor no envía correos. vitest: 5 pruebas nuevas.
   - Paso 4:
     - Repositorio `sales_fiscal_email_repository.py`; el documento fiscal trae `customer_email`.
     - Casos de uso `application/sales_invoices/emails.py` (envío manual e historial).
