@@ -72,11 +72,15 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 - [x] **Paso 9: envío con el SMTP de la empresa.** Elegir el remitente por documento en `dte-worker`; el historial indica si hay correo disponible. e2e con Mailpit como SMTP de la empresa.
 - [x] **Paso 10: frontend.** Pestaña «Correo» en Configuración fiscal con prueba de envío. vitest.
 - [x] **Paso 11: documentación.** API, esquema §38 y manuales.
-- [ ] **Paso 12: verificación y PR.** Batería completa, QA en el navegador con Mailpit y PR a `develop` con auto-merge.
+- [x] **Paso 12: verificación y PR.** Batería completa, QA en el navegador con Mailpit y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 12 (verificación y PR).
+- **Paso en curso**: V3c terminado; PR hacia `develop`. Sigue V3d (ambiente de pruebas de Hacienda).
+  - Paso 12:
+    - Batería completa en verde: pytest 1968 (2 omitidas), servicio DTE 474, vitest, lint y build. Se confirmó que los 7 fallos anteriores eran por la migración agregada mientras corría.
+    - QA en el navegador con Mailpit como SMTP propio de Grupo Lorena: guardar, probar («se envió bien») y reenviar el DTE. El correo salió como «Pastelería Lorena <facturacion@grupolorena.example>», con dos adjuntos y `Reply-To` al correo DTE.
+    - En desarrollo, Grupo Lorena queda con Mailpit como SMTP propio (útil para demostrar; se quita en Configuración fiscal → Correo).
   - La batería sobre los pasos 1 a 6 dio 1947 pasadas y 7 fallos. Los 7 son guardas de migración de traslados que comparan la revisión de la base con la cabeza del repositorio: la 0128 se agregó mientras corría. La batería nueva debe confirmarlo.
   - Error latente corregido: `secret_encryption._key` no aceptaba la clave sin relleno que genera `scripts/setup.sh` (base64url de 43 caracteres), así que en desarrollo tampoco se podían cifrar los datos bancarios de proveedores. Ahora completa el relleno. Pruebas en `test_supplier_master_data.py`; `fails_closed_without_key` ahora también quita la variable de entorno.
   - Paso 7: migración 0128 `company_email_settings`, modelo `CompanyEmailSettingsModel` y prueba de migración. Ya está aplicada en desarrollo.
