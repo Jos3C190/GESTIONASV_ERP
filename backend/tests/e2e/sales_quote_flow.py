@@ -1,4 +1,4 @@
-"""Atajos e2e para llegar a una cotización aceptada con el flujo de V2d.
+"""Atajos e2e para llegar a una cotización aceptada (V2d) y a su pedido (V2e).
 
 Las pruebas de ventas, entregas y devoluciones necesitan una venta B06, que nace de una
 cotización aceptada. Estos atajos recorren el flujo real: habilitar la factura, crear el
@@ -8,7 +8,9 @@ emitir y registrar la aceptación del cliente.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from httpx import AsyncClient, Response
 
@@ -62,4 +64,17 @@ async def accept_quote(
         f"/api/v1/sales/quotations/{quote_id}/accept",
         headers=headers,
         json={"expected_version": issued.json()["version"]},
+    )
+
+
+async def order_from_quote(
+    client: AsyncClient, headers: dict[str, str], quote_id: str, key: str
+) -> Response:
+    """Crea el pedido de una cotización aceptada, con retiro en sucursal hoy."""
+
+    today = datetime.now(ZoneInfo("America/El_Salvador")).date().isoformat()
+    return await client.post(
+        f"/api/v1/sales/quotations/{quote_id}/order",
+        headers={**headers, "Idempotency-Key": key},
+        json={"promised_date": today, "delivery_mode": "pickup"},
     )

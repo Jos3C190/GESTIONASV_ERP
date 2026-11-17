@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import func, select
 
 from tests.e2e.conftest import get_test_company_id, seed_user
-from tests.e2e.sales_quote_flow import accept_quote, enable_invoice
+from tests.e2e.sales_quote_flow import accept_quote, enable_invoice, order_from_quote
 
 pytestmark = pytest.mark.e2e
 
@@ -360,12 +360,10 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
         e2e_client, headers, quotation.json()["id"], quotation.json()["version"]
     )
     assert quote.status_code == 200, quote.text
-    sale_response = await e2e_client.post(
-        f"/api/v1/sales/quotations/{quote.json()['id']}/convert",
-        headers={**headers, "Idempotency-Key": f"b07-convert-{uuid.uuid4()}"},
-        json={"expected_version": quote.json()["version"]},
+    sale_response = await order_from_quote(
+        e2e_client, headers, quote.json()["id"], f"b07-convert-{uuid.uuid4()}"
     )
-    assert sale_response.status_code == 200, sale_response.text
+    assert sale_response.status_code == 201, sale_response.text
     sale = await e2e_client.post(
         f"/api/v1/sales/{sale_response.json()['id']}/confirm",
         headers=headers,
@@ -741,7 +739,9 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
     assert deliveries_response.status_code == 200, deliveries_response.text
     assert "applied_total_cost" not in deliveries_response.text
 
-    async def create_confirmed_sale_on_branch_b(label: str) -> tuple[str, str]:
+    async def create_confirmed_sale_on_branch_b(
+        label: str, *, bypass_reservation: bool = False
+    ) -> tuple[str, str]:
         await enable_invoice(e2e_client, headers)
         quote_response = await e2e_client.post(
             "/api/v1/sales/quotations",
@@ -767,12 +767,28 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
             e2e_client, headers, quote_response.json()["id"], quote_response.json()["version"]
         )
         assert quote_confirmation.status_code == 200, quote_confirmation.text
-        converted = await e2e_client.post(
-            f"/api/v1/sales/quotations/{quote_response.json()['id']}/convert",
-            headers={**headers, "Idempotency-Key": f"b07-{label}-convert-{uuid.uuid4()}"},
-            json={"expected_version": quote_confirmation.json()["version"]},
+        converted = await order_from_quote(
+            e2e_client, headers, quote_response.json()["id"], f"b07-{label}-convert-{uuid.uuid4()}"
         )
-        assert converted.status_code == 200, converted.text
+        assert converted.status_code == 201, converted.text
+        if bypass_reservation:
+            # La reserva comercial (V2e) impide confirmar dos pedidos por la misma existencia.
+            # Traslados y ajustes aún no la respetan, así que dos pedidos confirmados pueden
+            # llegar a competir por la última unidad física: se simula confirmando directo.
+            from app.infrastructure.models.sales import SaleModel
+
+            async with async_session_factory() as session:
+                row = await session.get(SaleModel, uuid.UUID(converted.json()["id"]))
+                assert row is not None
+                row.status = "confirmed"
+                row.confirmed_by_id = row.created_by_id
+                row.confirmed_at = datetime.now(ZoneInfo("America/El_Salvador"))
+                row.version += 1
+                await session.commit()
+            reloaded = await e2e_client.get(
+                f"/api/v1/sales/{converted.json()['id']}", headers=headers
+            )
+            return converted.json()["id"], reloaded.json()["lines"][0]["id"]
         sale_confirmation = await e2e_client.post(
             f"/api/v1/sales/{converted.json()['id']}/confirm",
             headers=headers,
@@ -783,7 +799,7 @@ async def test_sales_delivery_partial_cost_idempotency_concurrency_and_rollback(
 
     competitor_sales = [
         await create_confirmed_sale_on_branch_b("branch-b-sale-a"),
-        await create_confirmed_sale_on_branch_b("branch-b-sale-b"),
+        await create_confirmed_sale_on_branch_b("branch-b-sale-b", bypass_reservation=True),
     ]
     competitor_deliveries: list[tuple[str, dict[str, object]]] = []
     for competitor_sale_id, competitor_line_id in competitor_sales:

@@ -14,6 +14,7 @@ from app.infrastructure.models.rbac import UserRole
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from tests.e2e.sales_quote_flow import order_from_quote
 from tests.e2e.test_sales_discounts import BASE, _key, _login, _new_list, _unit_with_cost
 
 pytestmark = pytest.mark.e2e
@@ -180,13 +181,10 @@ async def test_list_price_limits_authorization_and_customer_answer(e2e_client: A
     assert pdf.headers["content-type"] == "application/pdf"
     assert pdf.content.startswith(b"%PDF")
 
-    sale = await e2e_client.post(
-        f"{QUOTES}/{quote['id']}/convert",
-        json={"expected_version": quote["version"]},
-        headers={**admin, "Idempotency-Key": str(uuid.uuid4())},
-    )
-    assert sale.status_code == 200, sale.text
-    assert sale.json()["total"] == "20.34"
+    order = await order_from_quote(e2e_client, admin, quote["id"], str(uuid.uuid4()))
+    assert order.status_code == 201, order.text
+    assert order.json()["total"] == "20.34"
+    assert order.json()["vat"] == quote["vat"]
     cancel_converted = await _act(e2e_client, admin, quote, "cancel", reason="Ya no")
     assert cancel_converted.status_code == 422
 

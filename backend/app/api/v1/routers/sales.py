@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable
-from datetime import date
 from typing import Annotated, Any, TypeVar
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.company_access import get_branch_context, request_company_id, resolve_branch_scope
@@ -19,11 +18,10 @@ from app.api.v1.deps import (
     get_sales_delivery_service,
     get_sales_return_service,
     get_sales_service,
+    require_any_permission,
     require_permission,
 )
 from app.api.v1.schemas.sales import (
-    SaleOut,
-    SalesCancellation,
     SalesCatalogItemOut,
     SalesDeliveryCancellation,
     SalesDeliveryCreate,
@@ -31,8 +29,6 @@ from app.api.v1.schemas.sales import (
     SalesDeliveryOut,
     SalesDeliveryStockLineOut,
     SalesDocumentAction,
-    SalesDraftUpdate,
-    SalesPage,
 )
 from app.api.v1.schemas.sales_return import (
     SalesReturnableAllocationOut,
@@ -87,17 +83,6 @@ async def _list_scope(
     if context.access_all_branches:
         return None, None
     return None, tuple(item.id for item in context.branches)
-
-
-async def _authorize_quote_branch(
-    session: SessionDep,
-    current: CurrentUser,
-    company_id: uuid.UUID,
-    service: SalesService,
-    quote_id: uuid.UUID,
-) -> None:
-    row = await service.get_quotation(company_id, quote_id)
-    await resolve_branch_scope(session, current, company_id, row.branch_id)
 
 
 async def _authorize_sale_branch(
@@ -157,66 +142,12 @@ async def _authorize_return_evidence_access(
 @router.get(
     "/catalog",
     response_model=list[SalesCatalogItemOut],
-    dependencies=[Depends(require_permission("sales_quotations:manage"))],
+    dependencies=[Depends(require_any_permission("sales_quotations:manage", "sales:manage"))],
 )
 async def sales_catalog(
     service: SalesServiceDep, company_id: Annotated[uuid.UUID, Depends(request_company_id)]
 ) -> list[dict[str, Any]]:
     return await service.catalog(company_id)
-
-
-@router.post(
-    "/quotations/{quote_id}/convert",
-    response_model=SaleOut,
-    dependencies=[Depends(require_permission("sales_quotations:convert"))],
-)
-async def convert_quotation(
-    quote_id: uuid.UUID,
-    body: SalesDocumentAction,
-    request: Request,
-    session: SessionDep,
-    current: CurrentUser,
-    service: SalesServiceDep,
-    company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
-) -> dict[str, Any]:
-    await _authorize_quote_branch(session, current, company_id, service, quote_id)
-    return await service.convert_quotation(
-        company_id=company_id,
-        actor_id=current.id,
-        quote_id=quote_id,
-        expected_version=body.expected_version,
-        idempotency_key=idempotency_key,
-        request=request,
-    )
-
-
-@router.get("", response_model=SalesPage, dependencies=[Depends(require_permission("sales:read"))])
-async def list_sales(
-    session: SessionDep,
-    current: CurrentUser,
-    service: SalesServiceDep,
-    company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-    branch_id: uuid.UUID | None = None,
-    customer_id: uuid.UUID | None = None,
-    status: str | None = Query(default=None, pattern="^(draft|confirmed|cancelled)$"),
-    from_date: date | None = None,
-    to_date: date | None = None,
-    page: int = Query(default=1, ge=1),
-    size: int = Query(default=20, ge=1, le=100),
-) -> dict[str, Any]:
-    scoped_branch, branch_ids = await _list_scope(session, current, company_id, branch_id)
-    return await service.list_sales(
-        company_id,
-        branch_ids=branch_ids,
-        branch_id=scoped_branch,
-        customer_id=customer_id,
-        status=status,
-        from_date=from_date,
-        to_date=to_date,
-        page=page,
-        size=size,
-    )
 
 
 @router.get(
@@ -396,93 +327,6 @@ async def cancel_sale_return(
         return_id=return_id,
         reason=body.reason,
         idempotency_key=idempotency_key,
-        request=request,
-    )
-
-
-@router.get(
-    "/{sale_id}", response_model=SaleOut, dependencies=[Depends(require_permission("sales:read"))]
-)
-async def get_sale(
-    sale_id: uuid.UUID,
-    request: Request,
-    session: SessionDep,
-    current: CurrentUser,
-    service: SalesServiceDep,
-    company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-) -> dict[str, Any]:
-    row = await service.get_sale(company_id, sale_id)
-    await resolve_branch_scope(session, current, company_id, row.branch_id)
-    return await service.sale_out(row)
-
-
-@router.put(
-    "/{sale_id}", response_model=SaleOut, dependencies=[Depends(require_permission("sales:manage"))]
-)
-async def update_sale(
-    sale_id: uuid.UUID,
-    body: SalesDraftUpdate,
-    request: Request,
-    session: SessionDep,
-    current: CurrentUser,
-    service: SalesServiceDep,
-    company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-) -> dict[str, Any]:
-    await _authorize_sale_branch(session, current, company_id, service, sale_id)
-    return await service.update_sale(
-        company_id=company_id,
-        actor_id=current.id,
-        sale_id=sale_id,
-        data=body.model_dump(mode="python"),
-        request=request,
-    )
-
-
-@router.post(
-    "/{sale_id}/confirm",
-    response_model=SaleOut,
-    dependencies=[Depends(require_permission("sales:confirm"))],
-)
-async def confirm_sale(
-    sale_id: uuid.UUID,
-    body: SalesDocumentAction,
-    request: Request,
-    session: SessionDep,
-    current: CurrentUser,
-    service: SalesServiceDep,
-    company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-) -> dict[str, Any]:
-    await _authorize_sale_branch(session, current, company_id, service, sale_id)
-    return await service.confirm_sale(
-        company_id=company_id,
-        actor_id=current.id,
-        sale_id=sale_id,
-        expected_version=body.expected_version,
-        request=request,
-    )
-
-
-@router.post(
-    "/{sale_id}/cancel",
-    response_model=SaleOut,
-    dependencies=[Depends(require_permission("sales:cancel"))],
-)
-async def cancel_sale(
-    sale_id: uuid.UUID,
-    body: SalesCancellation,
-    request: Request,
-    session: SessionDep,
-    current: CurrentUser,
-    service: SalesServiceDep,
-    company_id: Annotated[uuid.UUID, Depends(request_company_id)],
-) -> dict[str, Any]:
-    await _authorize_sale_branch(session, current, company_id, service, sale_id)
-    return await service.cancel_sale(
-        company_id=company_id,
-        actor_id=current.id,
-        sale_id=sale_id,
-        expected_version=body.expected_version,
-        reason=body.reason,
         request=request,
     )
 

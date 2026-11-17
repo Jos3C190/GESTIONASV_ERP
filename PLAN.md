@@ -78,7 +78,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Transiciones del pedido.
   - Regla de reserva: disponible, reservado y suficiencia.
   - Pruebas unitarias.
-- [ ] **Paso 3: aplicación, repositorio y API.**
+- [x] **Paso 3: aplicación, repositorio y API.**
   - Pedido directo y desde cotización.
   - Confirmar con reserva, autorizar o devolver, y cancelar con liberación.
   - Disponible para vender en la vista previa.
@@ -96,7 +96,19 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 3. El puerto `domain/ports/sales_order_repository.py` ya está escrito.
+- **Paso en curso**: 4 (frontend).
+  - Paso 3:
+    - Archivos:
+      - repositorio `sales_order_repository.py`, que hereda de `SalesDocumentSupport`;
+      - casos de uso `application/sales_orders/`;
+      - router `routers/sales_orders.py` (rutas `/sales`, con `{order_id:uuid}`, registrado antes de `sales`);
+      - esquemas `schemas/sales_order.py`.
+    - Se retiraron de `sales.py` y de `SalesService` el `convert`, la lista, el detalle, la edición, la confirmación y la cancelación B06. Quedan el catálogo (ahora también con `sales:manage`) y `get_sale`, que usan entregas y devoluciones.
+    - Un pedido creado desde una cotización aceptada hereda su autorización mientras no se edite.
+    - La salida conserva `quantity_delivered_base` y `quantity_pending_base`.
+    - Pruebas:
+      - `test_sales_base.py` se reemplazó por `test_sales_orders.py`;
+      - `test_sales_deliveries.py` simula, en la base, un segundo pedido que salta la reserva, para seguir probando la carrera por la última unidad física.
   - Paso 2:
     - `application/sales_documents/pricing.py` (`SalesDocumentPricing`): cálculo común de cotización y pedido.
     - `domain/ports/sales_document.py`: `LineIdentity`, `DocumentLine`, `DocumentTotals` y `SalesCatalog`. La cotización los usa por alias.

@@ -10,6 +10,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.sales_quotation import DEFAULT_VALIDITY_DAYS, QuotationStatus
+from app.domain.ports.sales_document import DocumentLine
 from app.domain.ports.sales_quotation_repository import (
     LineIdentity,
     LinkedSale,
@@ -57,7 +58,7 @@ _HEADER_FIELDS = (
     "cancelled_at",
     "cancellation_reason",
 )
-_TOTAL_FIELDS = (
+TOTAL_FIELDS = (
     "total_not_subject",
     "total_exempt",
     "total_taxed",
@@ -70,7 +71,7 @@ _TOTAL_FIELDS = (
     "total",
     "total_in_words",
 )
-_LINE_FIELDS = (
+LINE_FIELDS = (
     "quantity",
     "quantity_base",
     "price_list_id",
@@ -92,7 +93,7 @@ _LINE_FIELDS = (
     "cost",
     "margin_percent",
 )
-_IDENTITY_FIELDS = (
+IDENTITY_FIELDS = (
     "product_id",
     "variant_id",
     "inventory_item_id",
@@ -108,10 +109,12 @@ _IDENTITY_FIELDS = (
 )
 
 
-def _line(row: SalesQuotationLineModel) -> QuotationLine:
-    identity = LineIdentity(**{name: getattr(row, name) for name in _IDENTITY_FIELDS})
-    values: dict[str, Any] = {name: getattr(row, name) for name in _LINE_FIELDS}
-    return QuotationLine(
+def document_line(row: Any) -> DocumentLine:
+    """Línea común desde una fila de cotización o de pedido (tienen las mismas columnas)."""
+
+    identity = LineIdentity(**{name: getattr(row, name) for name in IDENTITY_FIELDS})
+    values: dict[str, Any] = {name: getattr(row, name) for name in LINE_FIELDS}
+    return DocumentLine(
         identity=identity,
         authorization_reasons=tuple(row.authorization_reasons or ()),
         id=row.id,
@@ -121,14 +124,14 @@ def _line(row: SalesQuotationLineModel) -> QuotationLine:
 
 def _quotation(row: SalesQuotationModel, lines: list[SalesQuotationLineModel]) -> Quotation:
     header: dict[str, Any] = {name: getattr(row, name) for name in _HEADER_FIELDS}
-    totals = QuotationTotals(**{name: getattr(row, name) for name in _TOTAL_FIELDS})
+    totals = QuotationTotals(**{name: getattr(row, name) for name in TOTAL_FIELDS})
     return Quotation(
         id=row.id,
         company_id=row.company_id,
         status=QuotationStatus(row.status),
         totals=totals,
         authorization_reasons=tuple(row.authorization_reasons or ()),
-        lines=[_line(line) for line in lines],
+        lines=[document_line(line) for line in lines],
         created_at=row.created_at,
         updated_at=row.updated_at,
         **header,
@@ -141,21 +144,33 @@ def _line_row(quotation: Quotation, number: int, line: QuotationLine) -> SalesQu
         quotation_id=quotation.id,
         line_number=number,
         authorization_reasons=list(line.authorization_reasons),
-        **{name: getattr(line.identity, name) for name in _IDENTITY_FIELDS},
-        **{name: getattr(line, name) for name in _LINE_FIELDS},
+        **line_columns(line),
     )
+
+
+def line_columns(line: DocumentLine) -> dict[str, Any]:
+    """Columnas de una línea común para crear la fila de cotización o de pedido."""
+
+    return {
+        **{name: getattr(line.identity, name) for name in IDENTITY_FIELDS},
+        **{name: getattr(line, name) for name in LINE_FIELDS},
+    }
 
 
 def _apply_header(row: SalesQuotationModel, quotation: Quotation) -> None:
     for name in _HEADER_FIELDS:
         setattr(row, name, getattr(quotation, name))
-    for name in _TOTAL_FIELDS:
+    for name in TOTAL_FIELDS:
         setattr(row, name, getattr(quotation.totals, name))
     row.status = quotation.status.value
     row.authorization_reasons = list(quotation.authorization_reasons)
 
 
-class SqlAlchemySalesQuotationRepository:
+class SalesDocumentSupport:
+    """Lo que comparten los repositorios de cotización y de pedido."""
+
+    RESOURCE_TYPE = "quotation"
+
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
@@ -175,6 +190,61 @@ class SqlAlchemySalesQuotationRepository:
         )
         return found is not None
 
+    async def user_names(self, user_ids: set[uuid.UUID]) -> PeopleNames:
+        if not user_ids:
+            return PeopleNames({})
+        rows = await self._session.execute(
+            select(User.id, User.username, Employee.first_name, Employee.last_name)
+            .outerjoin(Employee, (Employee.user_id == User.id) & Employee.deleted_at.is_(None))
+            .where(User.id.in_(user_ids))
+        )
+        names: dict[uuid.UUID, str] = {}
+        for user_id, username, first, last in rows.tuples().all():
+            full = f"{first or ''} {last or ''}".strip()
+            names.setdefault(user_id, full or username)
+        return PeopleNames(names)
+
+    async def lock_key(self, company_id: uuid.UUID, action: str, key: str) -> None:
+        await self._session.scalar(
+            select(func.pg_advisory_xact_lock(func.hashtext(f"{company_id}:{action}:{key}")))
+        )
+
+    async def remembered(
+        self, company_id: uuid.UUID, action: str, key: str
+    ) -> tuple[str, uuid.UUID] | None:
+        row = await self._session.scalar(
+            select(SalesIdempotencyModel).where(
+                SalesIdempotencyModel.company_id == company_id,
+                SalesIdempotencyModel.action == action,
+                SalesIdempotencyModel.idempotency_key == key,
+            )
+        )
+        return (row.fingerprint, row.resource_id) if row else None
+
+    async def remember(
+        self,
+        company_id: uuid.UUID,
+        action: str,
+        key: str,
+        fingerprint: str,
+        resource_id: uuid.UUID,
+        actor_id: uuid.UUID,
+    ) -> None:
+        self._session.add(
+            SalesIdempotencyModel(
+                company_id=company_id,
+                action=action,
+                idempotency_key=key,
+                fingerprint=fingerprint,
+                resource_type=self.RESOURCE_TYPE,
+                resource_id=resource_id,
+                actor_id=actor_id,
+            )
+        )
+        await self._session.flush()
+
+
+class SqlAlchemySalesQuotationRepository(SalesDocumentSupport):
     async def _lines(
         self, company_id: uuid.UUID, quotation_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, list[SalesQuotationLineModel]]:
@@ -303,20 +373,6 @@ class SqlAlchemySalesQuotationRepository:
         ).first()
         return LinkedSale(id=found[0], code=found[1]) if found else None
 
-    async def user_names(self, user_ids: set[uuid.UUID]) -> PeopleNames:
-        if not user_ids:
-            return PeopleNames({})
-        rows = await self._session.execute(
-            select(User.id, User.username, Employee.first_name, Employee.last_name)
-            .outerjoin(Employee, (Employee.user_id == User.id) & Employee.deleted_at.is_(None))
-            .where(User.id.in_(user_ids))
-        )
-        names: dict[uuid.UUID, str] = {}
-        for user_id, username, first, last in rows.tuples().all():
-            full = f"{first or ''} {last or ''}".strip()
-            names.setdefault(user_id, full or username)
-        return PeopleNames(names)
-
     async def validity_days(self, company_id: uuid.UUID) -> int:
         days = await self._session.scalar(
             select(SalesSettingsModel.quotation_validity_days).where(
@@ -335,43 +391,4 @@ class SqlAlchemySalesQuotationRepository:
         row.quotation_validity_days = days
         row.updated_by = actor_id
         row.updated_at = datetime.now(UTC)
-        await self._session.flush()
-
-    async def lock_key(self, company_id: uuid.UUID, action: str, key: str) -> None:
-        await self._session.scalar(
-            select(func.pg_advisory_xact_lock(func.hashtext(f"{company_id}:{action}:{key}")))
-        )
-
-    async def remembered(
-        self, company_id: uuid.UUID, action: str, key: str
-    ) -> tuple[str, uuid.UUID] | None:
-        row = await self._session.scalar(
-            select(SalesIdempotencyModel).where(
-                SalesIdempotencyModel.company_id == company_id,
-                SalesIdempotencyModel.action == action,
-                SalesIdempotencyModel.idempotency_key == key,
-            )
-        )
-        return (row.fingerprint, row.resource_id) if row else None
-
-    async def remember(
-        self,
-        company_id: uuid.UUID,
-        action: str,
-        key: str,
-        fingerprint: str,
-        resource_id: uuid.UUID,
-        actor_id: uuid.UUID,
-    ) -> None:
-        self._session.add(
-            SalesIdempotencyModel(
-                company_id=company_id,
-                action=action,
-                idempotency_key=key,
-                fingerprint=fingerprint,
-                resource_type="quotation",
-                resource_id=resource_id,
-                actor_id=actor_id,
-            )
-        )
         await self._session.flush()

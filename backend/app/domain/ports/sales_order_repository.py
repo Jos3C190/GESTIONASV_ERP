@@ -99,7 +99,9 @@ class SalesOrderRepository(Protocol):
 
     async def save(self, order: Order, *, replace_lines: bool) -> None: ...
 
-    async def for_quotation(self, company_id: uuid.UUID, quotation_id: uuid.UUID) -> Order | None: ...
+    async def for_quotation(
+        self, company_id: uuid.UUID, quotation_id: uuid.UUID
+    ) -> Order | None: ...
 
     async def delivery_address(
         self, company_id: uuid.UUID, customer_id: uuid.UUID, address_id: uuid.UUID

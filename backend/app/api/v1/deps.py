@@ -55,6 +55,7 @@ from app.application.sales.returns import SalesReturnService
 from app.application.sales.service import SalesService
 from app.application.sales_discounts import SalesDiscountUseCases
 from app.application.sales_documents.pricing import SalesDocumentPricing
+from app.application.sales_orders import SalesOrderUseCases
 from app.application.sales_quotations import SalesQuotationUseCases
 from app.application.sales_tax import SalesTaxUseCases
 from app.core.config import settings
@@ -138,6 +139,9 @@ from app.infrastructure.repositories.retaceo_repository import SqlAlchemyRetaceo
 from app.infrastructure.repositories.sales_discount_repository import (
     SqlAlchemySalesDiscountRepository,
 )
+from app.infrastructure.repositories.sales_order_repository import (
+    SqlAlchemySalesOrderRepository,
+)
 from app.infrastructure.repositories.sales_quotation_repository import (
     SqlAlchemySalesQuotationRepository,
 )
@@ -202,6 +206,17 @@ def get_sales_quotation_use_cases(session: SessionDep) -> SalesQuotationUseCases
     repository = SqlAlchemySalesQuotationRepository(session)
     return SalesQuotationUseCases(
         repository, _sales_pricing(session, repository), prices, fiscal, customers
+    )
+
+
+def get_sales_order_use_cases(session: SessionDep) -> SalesOrderUseCases:
+    repository = SqlAlchemySalesOrderRepository(session)
+    return SalesOrderUseCases(
+        repository,
+        SqlAlchemySalesQuotationRepository(session),
+        _sales_pricing(session, repository),
+        SqlAlchemyPriceListRepository(session),
+        SqlAlchemyCustomerRepository(session),
     )
 
 
