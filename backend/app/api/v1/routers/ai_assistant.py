@@ -13,6 +13,9 @@ from pydantic import BaseModel, Field
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = structlog.get_logger(__name__)
 

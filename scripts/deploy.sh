@@ -24,7 +24,7 @@ cd "$HOME/GESTIONASV_ERP/backend"
 source .venv/bin/activate
 uv sync
 alembic upgrade head
-pm2 restart erp-backend
+pm2 restart erp-backend --update-env
 
 # 3. Actualizar Frontend
 echo ">>> 3. Compilando y desplegando Frontend..."
