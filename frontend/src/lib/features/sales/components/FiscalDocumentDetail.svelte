@@ -11,6 +11,7 @@
   } from '#lib/features/sales/fiscal-labels.ts';
   import { DOCUMENT_LABELS, formatDay, formatMoney } from '#lib/features/sales/quotation-labels.ts';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import FiscalDocumentEmails from './FiscalDocumentEmails.svelte';
   import type { FiscalDocument } from '#lib/types/sales-invoices.ts';
 
   let { id }: { id: string } = $props();
@@ -197,5 +198,9 @@
         </p>
       {/if}
     </section>
+
+    {#key document.status}
+      <FiscalDocumentEmails {document} />
+    {/key}
   {/if}
 </div>

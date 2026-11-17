@@ -1,4 +1,8 @@
-import type { FiscalDocument, FiscalDocumentStatus } from '#lib/types/sales-invoices.ts';
+import type {
+  FiscalDocument,
+  FiscalDocumentStatus,
+  FiscalEmailStatus
+} from '#lib/types/sales-invoices.ts';
 
 export const FISCAL_STATUS_LABELS: Record<FiscalDocumentStatus, string> = {
   pending: 'Emitiendo',
@@ -39,4 +43,24 @@ export function canRetry(document: Pick<FiscalDocument, 'status'>): boolean {
 /** Un documento con resultado definitivo del servicio. */
 export function isFinal(document: Pick<FiscalDocument, 'status'>): boolean {
   return document.status !== 'pending';
+}
+
+export const EMAIL_STATUS_LABELS: Record<FiscalEmailStatus, string> = {
+  pending: 'Enviando',
+  sent: 'Enviado',
+  failed: 'No se envió'
+};
+
+export const EMAIL_STATUS_BADGES: Record<FiscalEmailStatus, string> = {
+  pending: 'bg-warning/10 text-warning',
+  sent: 'bg-success/10 text-success',
+  failed: 'bg-danger/10 text-danger'
+};
+
+/** Separa los correos escritos con comas, punto y coma o espacios. */
+export function splitRecipients(value: string): string[] {
+  return value
+    .split(/[\s,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }

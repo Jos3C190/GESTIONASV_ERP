@@ -2113,3 +2113,60 @@ Error codes (`422` unless noted): `sales_invoice_order_not_confirmed`,
 
 Configuration: `DTE_SERVICE_URL` (empty disables invoicing), `DTE_SERVICE_API_KEY`,
 `DTE_SERVICE_TIMEOUT_SECONDS`, `DTE_MAX_ATTEMPTS`, `DTE_RECONCILE_SECONDS`, `DTE_STALE_MINUTES`.
+
+
+## Sales invoice emails (revision 0127, block V3c)
+
+An issued (`issued` or `simulated`) fiscal document is emailed to the customer with its PDF and
+JSON attached. The ERP sends it through the **company's own SMTP** (see «Company outgoing
+email» below) when it is configured and enabled: the sender is its `from_address` with its
+`from_name` (or the trade name). Otherwise it falls back to the deployment's SMTP server
+(`SMTP_FROM_ADDRESS` with the trade name); with neither, nothing is sent. `Reply-To` is always
+the company's DTE email from the issuer snapshot. The body lists the control number, generation code, issue date and total,
+and closes with the company's current privacy notice. Simulated documents carry
+«SIMULADO — sin validez fiscal» in the subject and the body.
+
+- **Automatic**: when `dte-worker` issues a document and the customer's record has a valid
+  email, it creates one `auto` send (at most one per document) and delivers it.
+- **Manual**: a user sends the document to the customer's email or to up to five addresses.
+- Delivery is asynchronous (`pending` → `sent` or `failed`); temporary SMTP or network errors are
+  retried with the same record, and the reconcile job re-enqueues stale pending sends.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/fiscal-documents/{id}/emails` | `sales_invoices:read` | `{enabled, customer_email, items}`: whether the company can send email (own SMTP enabled or server fallback), the customer's email and the history (recipients, origin, status, attempts, error, requester, sent date). |
+| POST | `/sales/fiscal-documents/{id}/emails` | `sales_invoices:issue` | Body `{"recipients": [...]}` (1–5 after trimming, lowercasing and removing duplicates) or empty for the customer's email. `202` with the `pending` send. |
+
+Audited on `sales_fiscal_document`: `REQUEST_FISCAL_DOCUMENT_EMAIL` (user),
+`FISCAL_DOCUMENT_EMAIL_SENT` and `FISCAL_DOCUMENT_EMAIL_FAILED` (worker).
+
+Error codes (`422`): `sales_invoice_email_not_issued`, `sales_invoice_email_required`,
+`sales_invoice_email_invalid`, `sales_invoice_email_too_many`,
+`sales_invoice_email_unavailable`. `FiscalDocumentOut` now includes `customer_email`.
+
+Configuration: `SMTP_HOST` (empty disables email), `SMTP_PORT`, `SMTP_SECURITY`
+(`none`, `starttls`, `ssl`), `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_ADDRESS` (required with
+a host) and `SMTP_TIMEOUT_SECONDS`. In development compose points the backend and `dte-worker` to
+Mailpit (`mailpit:1025`); its inbox is at <http://localhost:8025>.
+
+### Company outgoing email (revision 0128)
+
+Each company can send its documents from its own SMTP server and domain. The domain's DNS
+(SPF, DKIM, DMARC) is the company's responsibility. Authentication is username and password
+(an app password for Google) over STARTTLS or SSL. The password is encrypted with AES-GCM
+(`SUPPLIER_DATA_ENCRYPTION_KEY`, which `dte-worker` also receives) and is never returned.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/fiscal/email-settings` | `fiscal_settings:read` | `configured`, `host`, `port`, `security`, `username`, `has_password`, `from_address`, `from_name`, `is_enabled`, last test (`last_test_at`, `last_test_ok`, `last_test_error`) and `server_fallback`. |
+| PUT | `/fiscal/email-settings` | `fiscal_settings:manage` | Create or replace. An empty `password` keeps the stored one; without `username` there is no password. Saving clears the last test. |
+| DELETE | `/fiscal/email-settings` | `fiscal_settings:manage` | Remove; documents fall back to the server SMTP, if any. `204`. |
+| POST | `/fiscal/email-settings/test` | `fiscal_settings:manage` | Body `{"recipient"}`. Sends a test email synchronously and records the result; returns `{ok, message}`. |
+
+Audited on `company_email_settings` (`CREATE`, `UPDATE`, `DELETE`, `TEST_COMPANY_EMAIL_SETTINGS`)
+without the password. Error codes (`422`): `email_settings_host_invalid`,
+`email_settings_port_invalid`, `email_settings_security_invalid`,
+`email_settings_username_required`, `email_settings_password_required`,
+`email_settings_from_invalid`, `email_settings_from_name_too_long`,
+`email_settings_test_recipient_invalid`; `email_settings_not_found` (404). A send whose company
+has no usable SMTP fails with `email_unavailable`.

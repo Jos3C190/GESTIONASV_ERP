@@ -14,6 +14,7 @@ const ITEM = {
   sale_id: 'sale-1',
   sale_code: 'PED-0001',
   customer_name: 'Clínica San Rafael',
+  customer_email: null,
   establishment_code: 'M001',
   point_of_sale_code: 'P001',
   document_type: '03',

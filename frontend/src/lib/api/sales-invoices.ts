@@ -4,6 +4,8 @@ import type {
   FiscalDocument,
   FiscalDocumentFilters,
   FiscalDocumentPage,
+  FiscalEmail,
+  FiscalEmailHistory,
   InvoiceOptions
 } from '#lib/types/sales-invoices.ts';
 
@@ -44,5 +46,14 @@ export const salesInvoicesApi = {
   },
   pdfUrl(id: string) {
     return apiFetch<{ url: string }>(`/sales/fiscal-documents/${id}/pdf`);
+  },
+  emails(id: string) {
+    return apiFetch<FiscalEmailHistory>(`/sales/fiscal-documents/${id}/emails`);
+  },
+  sendEmail(id: string, recipients: string[] | null) {
+    return apiFetch<FiscalEmail>(`/sales/fiscal-documents/${id}/emails`, {
+      method: 'POST',
+      body: JSON.stringify({ recipients })
+    });
   }
 };

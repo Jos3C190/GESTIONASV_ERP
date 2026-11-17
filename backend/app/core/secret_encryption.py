@@ -28,7 +28,9 @@ def _key() -> bytes:
     if not raw:
         raise EncryptionConfigurationError("SUPPLIER_DATA_ENCRYPTION_KEY no está configurada")
     try:
-        key = base64.urlsafe_b64decode(raw.encode("ascii"))
+        # scripts/setup.sh genera la clave en base64url sin relleno «=»; se completa aquí.
+        padded = raw.strip() + "=" * (-len(raw.strip()) % 4)
+        key = base64.urlsafe_b64decode(padded.encode("ascii"))
     except (ValueError, UnicodeEncodeError, binascii.Error) as exc:
         raise EncryptionConfigurationError(
             "La clave de datos de proveedores no es base64 válida"

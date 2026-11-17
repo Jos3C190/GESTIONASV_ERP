@@ -12,6 +12,7 @@
   import { DOCUMENT_LABELS, formatDay, formatMoney } from '#lib/features/sales/quotation-labels.ts';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type { Sale } from '#lib/types/sales.ts';
+  import FiscalDocumentEmails from './FiscalDocumentEmails.svelte';
   import type { FiscalDocument, InvoiceOptions } from '#lib/types/sales-invoices.ts';
 
   let {
@@ -202,6 +203,11 @@
         >
       {/if}
     </div>
+    {#if current.status === 'issued' || current.status === 'simulated'}
+      {#key current.status}
+        <FiscalDocumentEmails document={current} />
+      {/key}
+    {/if}
   {:else if options}
     {#if current?.status === 'failed'}
       <div

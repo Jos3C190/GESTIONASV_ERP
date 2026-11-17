@@ -155,3 +155,48 @@ class DocumentTypeIn(BaseModel):
     is_enabled: bool
     certification_status: CertificationStatus
     notes: str | None = Field(default=None, max_length=1000)
+
+
+# --- SMTP propio de la empresa (bloque V3c) ---
+
+
+class EmailSettingsIn(BaseModel):
+    model_config = _IN
+
+    host: str = Field(min_length=1, max_length=255)
+    port: int = Field(ge=1, le=65535)
+    security: str = Field(pattern="^(none|starttls|ssl)$")
+    username: str | None = Field(default=None, max_length=255)
+    password: str | None = Field(default=None, max_length=500)
+    """Vacío al editar: se conserva la contraseña guardada. Nunca se devuelve."""
+    from_address: str = Field(min_length=3, max_length=254)
+    from_name: str | None = Field(default=None, max_length=150)
+    is_enabled: bool = True
+
+
+class EmailSettingsOut(BaseModel):
+    configured: bool
+    host: str | None = None
+    port: int | None = None
+    security: str | None = None
+    username: str | None = None
+    has_password: bool = False
+    from_address: str | None = None
+    from_name: str | None = None
+    is_enabled: bool = False
+    last_test_at: datetime | None = None
+    last_test_ok: bool | None = None
+    last_test_error: str | None = None
+    server_fallback: bool
+    """Si el servidor tiene un SMTP propio que se usa cuando la empresa no configura el suyo."""
+
+
+class EmailTestIn(BaseModel):
+    model_config = _IN
+
+    recipient: str = Field(min_length=3, max_length=254)
+
+
+class EmailTestOut(BaseModel):
+    ok: bool
+    message: str

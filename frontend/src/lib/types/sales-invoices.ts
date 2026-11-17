@@ -9,6 +9,7 @@ export interface FiscalDocument {
   sale_id: string;
   sale_code: string | null;
   customer_name: string | null;
+  customer_email: string | null;
   establishment_code: string | null;
   point_of_sale_code: string | null;
   document_type: '01' | '03';
@@ -59,4 +60,26 @@ export interface FiscalDocumentFilters {
   q?: string;
   page?: number;
   size?: number;
+}
+
+export type FiscalEmailStatus = 'pending' | 'sent' | 'failed';
+
+export interface FiscalEmail {
+  id: string;
+  document_id: string;
+  recipients: string[];
+  origin: 'auto' | 'manual';
+  status: FiscalEmailStatus;
+  attempts: number;
+  error_code: string | null;
+  error_message: string | null;
+  requested_by_name: string | null;
+  sent_at: string | null;
+  created_at: string | null;
+}
+
+export interface FiscalEmailHistory {
+  enabled: boolean;
+  customer_email: string | null;
+  items: FiscalEmail[];
 }

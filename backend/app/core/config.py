@@ -80,6 +80,16 @@ class Settings(BaseSettings):
     DTE_RECONCILE_SECONDS: int = Field(default=20, ge=5, le=60)
     DTE_STALE_MINUTES: int = Field(default=5, ge=1, le=1440)
 
+    # --- Correo saliente (bloque V3c) ---
+    #: Servidor SMTP del despliegue; vacío = no se envían correos.
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = Field(default=587, ge=1, le=65535)
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = Field(default=None, repr=False)
+    SMTP_FROM_ADDRESS: str | None = None
+    SMTP_SECURITY: str = Field(default="starttls", pattern="^(none|starttls|ssl)$")
+    SMTP_TIMEOUT_SECONDS: float = Field(default=20, ge=1, le=120)
+
     # --- Redis / background processing ---
     REDIS_ENABLED: bool = False
     REDIS_URL: str | None = None
@@ -249,6 +259,8 @@ class Settings(BaseSettings):
             )
         if self.REDIS_ENABLED and not self.REDIS_URL:
             raise ValueError("REDIS_URL es obligatorio cuando REDIS_ENABLED=true.")
+        if self.SMTP_HOST and not self.SMTP_FROM_ADDRESS:
+            raise ValueError("SMTP_FROM_ADDRESS es obligatorio cuando SMTP_HOST está definido.")
         if self.DTE_SERVICE_URL and not self.DTE_SERVICE_API_KEY:
             raise ValueError(
                 "DTE_SERVICE_API_KEY es obligatorio cuando DTE_SERVICE_URL está definido."

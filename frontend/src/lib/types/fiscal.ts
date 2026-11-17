@@ -129,3 +129,38 @@ export interface DocumentTypeInput {
   certification_status: CertificationStatus;
   notes?: string | null;
 }
+
+/** SMTP propio de la empresa (bloque V3c). La contraseña nunca vuelve del servidor. */
+export type SmtpSecurity = 'none' | 'starttls' | 'ssl';
+
+export interface EmailSettings {
+  configured: boolean;
+  host: string | null;
+  port: number | null;
+  security: SmtpSecurity | null;
+  username: string | null;
+  has_password: boolean;
+  from_address: string | null;
+  from_name: string | null;
+  is_enabled: boolean;
+  last_test_at: string | null;
+  last_test_ok: boolean | null;
+  last_test_error: string | null;
+  server_fallback: boolean;
+}
+
+export interface EmailSettingsInput {
+  host: string;
+  port: number;
+  security: SmtpSecurity;
+  username: string | null;
+  password: string | null;
+  from_address: string;
+  from_name: string | null;
+  is_enabled: boolean;
+}
+
+export interface EmailTestResult {
+  ok: boolean;
+  message: string;
+}

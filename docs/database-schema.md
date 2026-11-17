@@ -1188,3 +1188,37 @@ Revision `0126` (revises `0125`), block V3b.
 
 **Downgrade** refuses while fiscal documents exist (they are kept ten years). Covered by
 `backend/tests/integration/test_sales_fiscal_documents_migration.py`.
+
+
+## 37. Fiscal document emails (0127)
+
+Revision `0127` (revises `0126`), block V3c.
+
+- `sales_fiscal_document_emails`: one row per email of a fiscal document.
+  - `document_id` (composite FK to `sales_fiscal_documents`), `recipients` (`text[]`, 1–5).
+  - `origin` (`auto`, `manual`); `requested_by_id` (composite FK to `user_companies`) is required
+    for `manual` and empty for `auto`.
+  - `status` (`pending`, `sent`, `failed`); `sent` requires `sent_at` and `message_id`.
+  - `attempts`, `error_code`, `error_message`, timestamps.
+  - `uq_sales_fiscal_document_emails_auto`: one automatic send per document;
+    `ix_sales_fiscal_document_emails_document` for the history and a partial index on pending
+    sends for the reconcile job.
+
+**Downgrade** refuses while sends exist. Covered by
+`backend/tests/integration/test_sales_fiscal_document_emails_migration.py`.
+
+## 38. Company outgoing email (0128)
+
+Revision `0128` (revises `0127`), block V3c.
+
+- `company_email_settings`: one row per company (`company_id` primary key, cascades with the
+  company).
+  - Connection: `host`, `port` (1–65535), `security` (`none`, `starttls`, `ssl`), `username`.
+  - `password_encrypted` (`bytea`, AES-GCM with a random nonce); requires `username`.
+  - Sender: `from_address` (required), `from_name` (optional); `is_enabled`.
+  - Last test: `last_test_at`, `last_test_ok`, `last_test_error` (all empty or set together;
+    a failed test keeps its error).
+  - `updated_by`, timestamps.
+
+**Downgrade** refuses while settings exist. Covered by
+`backend/tests/integration/test_company_email_settings_migration.py`.

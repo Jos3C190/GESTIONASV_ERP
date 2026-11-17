@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import tempfile
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -39,13 +39,18 @@ from app.domain.entities.sales_fiscal_document import (
     service_status,
 )
 from app.domain.ports.dte_service import DteService, DteServiceError
+from app.domain.ports.email_sender import EmailDeliveryError
 from app.domain.ports.object_storage import ObjectStorage
 from app.domain.ports.sales_fiscal_repository import FiscalDocument
 from app.infrastructure.db.session import session_scope
+from app.infrastructure.dte_email import email_sender, process_fiscal_email, queue_auto_email
 from app.infrastructure.dte_service_client import HttpDteServiceClient
 from app.infrastructure.object_storage import S3ObjectStorage
 from app.infrastructure.repositories.audit_repository import SqlAlchemyAuditRepository
 from app.infrastructure.repositories.fiscal_repository import SqlAlchemyFiscalRepository
+from app.infrastructure.repositories.sales_fiscal_email_repository import (
+    SqlAlchemySalesFiscalEmailRepository,
+)
 from app.infrastructure.repositories.sales_fiscal_repository import SqlAlchemySalesFiscalRepository
 from app.infrastructure.repositories.sales_order_repository import SqlAlchemySalesOrderRepository
 
@@ -56,6 +61,7 @@ DTE_HEALTH_KEY = "erp:dte:health"
 _MAX_ERROR = 2000
 
 SessionScope = Callable[[], AbstractAsyncContextManager[AsyncSession]]
+EmailQueued = Callable[[uuid.UUID], Awaitable[None]]
 
 
 def dte_client() -> HttpDteServiceClient | None:
@@ -160,10 +166,12 @@ async def process_fiscal_document(
     storage: ObjectStorage | None,
     scope: SessionScope = session_scope,
     max_attempts: int | None = None,
+    on_email: EmailQueued | None = None,
 ) -> FiscalDocument | None:
     """Emite un documento pendiente. Devuelve el documento guardado, o ``None`` si no le tocaba.
 
-    Lanza ``DteServiceError`` reintentable cuando el documento quedó pendiente.
+    Lanza ``DteServiceError`` reintentable cuando el documento quedó pendiente. Al quedar
+    emitido crea el envío automático al cliente y avisa con ``on_email``.
     """
 
     limit = max_attempts or settings.DTE_MAX_ATTEMPTS
@@ -223,7 +231,7 @@ async def process_fiscal_document(
         if differences:
             document.error_code = "dte_totals_mismatch"
             document.error_message = "; ".join(differences)[:_MAX_ERROR]
-        return await _save(scope, document, "FISCAL_DOCUMENT_ISSUED")
+        saved = await _save(scope, document, "FISCAL_DOCUMENT_ISSUED")
     except DteServiceError as error:
         document.error_code = error.code[:80]
         document.error_message = error.message[:_MAX_ERROR]
@@ -232,15 +240,27 @@ async def process_fiscal_document(
             raise
         document.status = FiscalDocumentStatus.FAILED
         return await _save(scope, document, "FISCAL_DOCUMENT_FAILED")
+    email_id = await queue_auto_email(scope, saved)
+    if email_id is not None and on_email is not None:
+        await on_email(email_id)
+    return saved
 
 
 # --- arq ----------------------------------------------------------------------------------------
 
 
 async def issue_fiscal_document(ctx: dict[str, Any], document_id_text: str) -> None:
+    async def queue_email(email_id: uuid.UUID) -> None:
+        await ctx["redis"].enqueue_job(
+            "send_fiscal_email", str(email_id), _job_id=f"dte-email:{email_id}"
+        )
+
     try:
         await process_fiscal_document(
-            uuid.UUID(document_id_text), client=ctx["dte"], storage=ctx["storage"]
+            uuid.UUID(document_id_text),
+            client=ctx["dte"],
+            storage=ctx["storage"],
+            on_email=queue_email,
         )
     except DteServiceError as error:
         attempt = int(ctx.get("job_try") or 1)
@@ -252,25 +272,46 @@ async def reconcile_fiscal_documents(ctx: dict[str, Any]) -> None:
     stale_before = datetime.now(UTC) - timedelta(minutes=settings.DTE_STALE_MINUTES)
     async with session_scope() as session:
         pending = await SqlAlchemySalesFiscalRepository(session).pending_ids(stale_before, 20)
+        emails = await SqlAlchemySalesFiscalEmailRepository(session).pending_ids(stale_before, 20)
     for document_id in pending:
         await ctx["redis"].enqueue_job(
             "issue_fiscal_document", str(document_id), _job_id=f"dte:{document_id}"
         )
-    if pending:
-        log.info("dte_reconciled", pending_enqueued=len(pending))
+    for email_id in emails:
+        await ctx["redis"].enqueue_job(
+            "send_fiscal_email", str(email_id), _job_id=f"dte-email:{email_id}"
+        )
+    if pending or emails:
+        log.info("dte_reconciled", pending_enqueued=len(pending), emails_enqueued=len(emails))
+
+
+async def send_fiscal_email(ctx: dict[str, Any], email_id_text: str) -> None:
+    try:
+        await process_fiscal_email(
+            uuid.UUID(email_id_text),
+            sender=ctx["mailer"],
+            storage=ctx["storage"],
+            client=ctx["dte"],
+            scope=session_scope,
+        )
+    except EmailDeliveryError as error:
+        attempt = int(ctx.get("job_try") or 1)
+        log.info("dte_email_retry", code=error.code, attempt=attempt)
+        raise Retry(defer=min(30 * (2 ** (attempt - 1)), 600)) from error
 
 
 async def startup(ctx: dict[str, Any]) -> None:
     configure_logging()
     ctx["dte"] = dte_client()
     ctx["storage"] = object_storage()
+    ctx["mailer"] = email_sender()
 
 
 _reconcile_seconds = set(range(0, 60, settings.DTE_RECONCILE_SECONDS))
 
 
 class WorkerSettings:
-    functions: ClassVar[list[Any]] = [issue_fiscal_document]
+    functions: ClassVar[list[Any]] = [issue_fiscal_document, send_fiscal_email]
     cron_jobs: ClassVar[list[Any]] = [
         cron(reconcile_fiscal_documents, second=_reconcile_seconds, run_at_startup=True)
     ]
@@ -290,8 +331,8 @@ class WorkerSettings:
 _pool: ArqRedis | None = None
 
 
-async def enqueue_fiscal_document(document_id: uuid.UUID) -> None:
-    """Pide la emisión sin fallar la solicitud: la conciliación recoge lo que esto pierda."""
+async def _enqueue(function: str, item_id: uuid.UUID, job_id: str) -> None:
+    """Encola sin fallar la solicitud: la conciliación recoge lo que esto pierda."""
 
     if not (settings.REDIS_ENABLED and settings.DTE_SERVICE_URL):
         return
@@ -302,11 +343,14 @@ async def enqueue_fiscal_document(document_id: uuid.UUID) -> None:
                 RedisSettings.from_dsn(settings.REDIS_URL or "redis://localhost:6379/0"),
                 default_queue_name=DTE_QUEUE,
             )
-        await _pool.enqueue_job(
-            "issue_fiscal_document",
-            str(document_id),
-            _job_id=f"dte:{document_id}",
-            _queue_name=DTE_QUEUE,
-        )
+        await _pool.enqueue_job(function, str(item_id), _job_id=job_id, _queue_name=DTE_QUEUE)
     except Exception as exc:
-        log.warning("dte_enqueue_failed", error_type=type(exc).__name__)
+        log.warning("dte_enqueue_failed", function=function, error_type=type(exc).__name__)
+
+
+async def enqueue_fiscal_document(document_id: uuid.UUID) -> None:
+    await _enqueue("issue_fiscal_document", document_id, f"dte:{document_id}")
+
+
+async def enqueue_fiscal_email(email_id: uuid.UUID) -> None:
+    await _enqueue("send_fiscal_email", email_id, f"dte-email:{email_id}")

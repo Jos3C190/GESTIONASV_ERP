@@ -12,7 +12,9 @@ const { salesInvoicesApi } = vi.hoisted(() => ({
     get: vi.fn(),
     retry: vi.fn(),
     json: vi.fn(),
-    pdfUrl: vi.fn()
+    pdfUrl: vi.fn(),
+    emails: vi.fn(),
+    sendEmail: vi.fn()
   }
 }));
 vi.mock('#lib/api/sales-invoices.ts', () => ({ salesInvoicesApi }));
@@ -25,6 +27,7 @@ function fiscal(values: Partial<FiscalDocument> = {}): FiscalDocument {
     sale_id: 'sale-1',
     sale_code: 'PED-0001',
     customer_name: 'Clínica San Rafael',
+    customer_email: null,
     establishment_code: 'M001',
     point_of_sale_code: 'P001',
     document_type: '01',
@@ -64,6 +67,7 @@ function options(values: Partial<InvoiceOptions> = {}): InvoiceOptions {
 beforeEach(() => {
   permissions.set(['sales_invoices:read', 'sales_invoices:issue'], false);
   for (const fn of Object.values(salesInvoicesApi)) fn.mockReset();
+  salesInvoicesApi.emails.mockResolvedValue({ enabled: true, customer_email: null, items: [] });
 });
 afterEach(() => vi.useRealTimers());
 
