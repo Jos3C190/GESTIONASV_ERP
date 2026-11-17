@@ -1,91 +1,447 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { HttpError } from '#lib/api/client.ts';
+  import { HttpError, apiDownload } from '#lib/api/client.ts';
   import { salesApi } from '#lib/api/sales.ts';
   import { formatUnitLabel } from '#lib/features/sales/unit-label.ts';
+  import {
+    DOCUMENT_LABELS,
+    TREATMENT_LABELS,
+    formatDay,
+    formatMoney,
+    formatPercent,
+    formatQuantity,
+    formatUnitPrice,
+    statusBadge,
+    statusLabel
+  } from '#lib/features/sales/quotation-labels.ts';
   import { branch } from '#lib/stores/branch.svelte.ts';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
-  import { confirmation } from '#lib/stores/confirmation.svelte.ts';
   import type { SalesQuotation } from '#lib/types/sales.ts';
+
+  type Action = 'issue' | 'authorize' | 'return' | 'accept' | 'reject' | 'cancel';
 
   let { id }: { id: string } = $props();
   let quote = $state<SalesQuotation | null>(null);
-  let branchName = $derived(
-    quote ? branch.branches.find((item) => item.id === quote?.branch_id)?.name ?? 'Sucursal autorizada' : ''
-  );
   let loading = $state(true);
   let busy = $state(false);
   let error = $state<string | null>(null);
-  let reason = $state('');
+  let text = $state('');
+  let pending = $state<Action | null>(null);
   let generation = 0;
-  let pendingConfirmation: (() => Promise<void>) | null = null;
-  onDestroy(() => {
-    generation++;
-    if (pendingConfirmation && confirmation.current?.execute === pendingConfirmation) confirmation.cancel();
-  });
+  onDestroy(() => generation++);
+
+  const branchName = $derived(
+    quote ? (branch.branches.find((item) => item.id === quote?.branch_id)?.name ?? '') : ''
+  );
+  const can = (code: string) => permissions.hasPermission(code);
 
   async function load() {
     const current = ++generation;
     loading = true;
     error = null;
-    try { const response = await salesApi.quotation(id); if (generation === current) quote = response; }
-    catch (cause) { if (generation === current) error = cause instanceof HttpError ? cause.message : 'No se pudo cargar la cotización.'; }
-    finally { if (generation === current) loading = false; }
+    try {
+      const response = await salesApi.quotation(id);
+      if (generation === current) quote = response;
+    } catch (cause) {
+      if (generation === current) {
+        error = cause instanceof HttpError ? cause.message : 'No se pudo cargar la cotización.';
+      }
+    } finally {
+      if (generation === current) loading = false;
+    }
   }
   onMount(() => void load());
 
-  async function confirm() {
-    if (!quote || busy || confirmation.open) return;
-    const document = quote;
-    pendingConfirmation = async () => {
-      if (!quote || quote.id !== document.id || quote.version !== document.version || quote.status !== 'draft') {
-        throw new Error('El documento cambió. Recarga antes de confirmar.');
-      }
-      busy = true; error = null;
-      try { quote = await salesApi.confirmQuotation(document.id, document.version); }
-      catch (cause) { throw new Error(cause instanceof HttpError ? cause.message : 'No se pudo confirmar. Recarga el documento.'); }
-      finally { busy = false; }
-    };
-    confirmation.request({ kind: 'confirm', title: `Confirmar ${document.code}`, resourceName: document.code,
-      description: 'La cotización quedará congelada. Esta confirmación no reserva ni descuenta inventario.',
-      confirmLabel: 'Confirmar cotización ahora', execute: pendingConfirmation });
+  const prompts: Record<
+    'authorize' | 'return' | 'reject' | 'cancel',
+    { label: string; required: boolean; button: string }
+  > = {
+    authorize: {
+      label: 'Nota de la autorización (opcional)',
+      required: false,
+      button: 'Autorizar y emitir'
+    },
+    return: { label: 'Qué debe corregirse', required: true, button: 'Devolver a borrador' },
+    reject: { label: 'Por qué la rechazó el cliente', required: true, button: 'Registrar rechazo' },
+    cancel: { label: 'Motivo de la cancelación', required: true, button: 'Cancelar cotización' }
+  };
+
+  async function run(action: Action) {
+    if (!quote || busy) return;
+    const prompt = action === 'issue' || action === 'accept' ? null : prompts[action];
+    if (prompt?.required && text.trim().length < 3) {
+      error = `${prompt.label}: escribe al menos 3 caracteres.`;
+      return;
+    }
+    busy = true;
+    error = null;
+    try {
+      quote = await salesApi.quotationAction(quote.id, action, {
+        expected_version: quote.version,
+        ...(action === 'authorize' ? { note: text.trim() || null } : {}),
+        ...(prompt?.required ? { reason: text.trim() } : {})
+      });
+      text = '';
+      pending = null;
+    } catch (cause) {
+      error =
+        cause instanceof HttpError ? cause.message : 'No se pudo completar la acción. Recarga.';
+    } finally {
+      busy = false;
+    }
   }
+
   async function convert() {
-    if (!quote || quote.converted) return;
-    busy = true; error = null;
+    if (!quote) return;
+    busy = true;
+    error = null;
     const storageKey = `sales-convert:${quote.id}`;
     let key = sessionStorage.getItem(storageKey);
-    if (!key) { key = crypto.randomUUID(); sessionStorage.setItem(storageKey, key); }
+    if (!key) {
+      key = crypto.randomUUID();
+      sessionStorage.setItem(storageKey, key);
+    }
     try {
       const sale = await salesApi.convertQuotation(quote.id, quote.version, key);
       await goto(`/sales/${sale.id}`);
-    } catch (cause) { error = cause instanceof HttpError ? cause.message : 'No se pudo convertir. Puedes reintentar sin duplicar la venta.'; }
-    finally { busy = false; }
-  }
-  async function cancel() {
-    if (!quote || !reason.trim()) { error = 'Escribe el motivo de cancelación.'; return; }
-    busy = true; error = null;
-    try { quote = await salesApi.cancelQuotation(quote.id, quote.version, reason); reason = ''; }
-    catch (cause) { error = cause instanceof HttpError ? cause.message : 'No se pudo cancelar la cotización.'; }
-    finally { busy = false; }
+    } catch (cause) {
+      error =
+        cause instanceof HttpError
+          ? cause.message
+          : 'No se pudo crear la venta. Puedes reintentar.';
+    } finally {
+      busy = false;
+    }
   }
 
-  const statusNames: Record<SalesQuotation['status'], string> = { draft: 'Borrador', confirmed: 'Confirmada', cancelled: 'Cancelada', expired: 'Vencida' };
+  async function openPdf() {
+    if (!quote) return;
+    error = null;
+    try {
+      const blob = await apiDownload(salesApi.quotationPdfPath(quote.id));
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (cause) {
+      error = cause instanceof HttpError ? cause.message : 'No se pudo generar el PDF.';
+    }
+  }
 </script>
 
-<svelte:head><title>Cotización de venta | GestionaSV</title></svelte:head>
+<svelte:head
+  ><title>{quote ? `Cotización ${quote.code}` : 'Cotización de venta'} | GestionaSV</title
+  ></svelte:head
+>
+
 <div class="space-y-5">
-  <a class="text-sm text-primary hover:underline" href="/sales/quotations">← Cotizaciones de venta</a>
-  {#if error}<div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger" role="alert">{error}<button class="ml-3 underline" onclick={() => void load()}>Recargar</button></div>{/if}
-  {#if loading}<section class="rounded-xl border border-border bg-surface p-10 text-center text-sm text-foreground-muted">Cargando cotización…</section>{:else if quote}<header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p class="text-xs font-semibold uppercase tracking-widest text-primary">Cotización de venta · {quote.code}</p><h1 class="mt-1 text-2xl font-bold text-foreground">{quote.customer_name}</h1><p class="mt-1 text-sm text-foreground-muted">{quote.customer_code} · {quote.quotation_date} · válida hasta {quote.valid_until}</p></div><span class="w-fit rounded-full bg-surface-muted px-3 py-1 text-sm text-foreground">{statusNames[quote.status]}</span></header>
-    <section class="grid gap-3 sm:grid-cols-3"><div class="rounded-xl border border-border bg-surface p-4"><p class="text-xs uppercase tracking-wide text-foreground-muted">Estado comercial</p><p class="mt-2 font-semibold text-foreground">{statusNames[quote.status]}</p><p class="text-xs text-foreground-muted">Revisión {quote.version} · {quote.currency}</p></div><div class="rounded-xl border border-border bg-surface p-4"><p class="text-xs uppercase tracking-wide text-foreground-muted">Sucursal</p><p class="mt-2 font-semibold text-foreground">{branchName}</p><p class="text-xs text-foreground-muted">{quote.converted ? `Convertida a ${quote.sale_code}` : 'Sin conversión'}</p></div><div class="rounded-xl border border-border bg-surface p-4"><p class="text-xs uppercase tracking-wide text-foreground-muted">Total comercial</p><p class="mt-2 font-mono text-xl font-bold text-foreground">USD {Number(quote.total).toFixed(2)}</p><p class="text-xs text-foreground-muted">No incluye impuestos ni descuentos.</p></div></section>
-    <section class="overflow-hidden rounded-xl border border-border bg-surface"><div class="border-b border-border p-4"><h2 class="font-semibold text-foreground">Renglones</h2><p class="mt-1 text-xs text-foreground-muted">Cantidades y unidad quedan congeladas al confirmar.</p></div><div class="overflow-x-auto"><table class="w-full min-w-[750px] text-left text-sm"><thead class="bg-surface-muted text-xs uppercase text-foreground-muted"><tr><th class="px-4 py-3">Producto</th><th class="px-4 py-3">Cantidad y unidad</th><th class="px-4 py-3 text-right">Precio unitario</th><th class="px-4 py-3 text-right">Total</th></tr></thead><tbody class="divide-y divide-border">{#each quote.lines as line (line.id)}<tr><td class="px-4 py-3"><p class="font-medium text-foreground">{line.product_name}</p><p class="font-mono text-xs text-foreground-muted">{line.product_sku}</p></td><td class="px-4 py-3 text-foreground">{line.quantity} {formatUnitLabel(line.unit_name)}<p class="text-xs text-foreground-muted">≈ {line.quantity_base} {formatUnitLabel(line.base_unit_name)}</p></td><td class="px-4 py-3 text-right font-mono text-foreground">USD {Number(line.unit_price).toFixed(6)}</td><td class="px-4 py-3 text-right font-mono font-semibold text-foreground">USD {Number(line.line_total).toFixed(2)}</td></tr>{/each}</tbody></table></div><div class="flex justify-end border-t border-border p-4"><p class="text-lg font-semibold text-foreground">Total: USD {Number(quote.total).toFixed(2)}</p></div></section>
-    {#if quote.notes}<section class="rounded-xl border border-border bg-surface p-4"><h2 class="font-semibold text-foreground">Notas</h2><p class="mt-2 whitespace-pre-wrap text-sm text-foreground-muted">{quote.notes}</p></section>{/if}
-    {#if quote.converted && quote.sale_id}<section class="rounded-xl border border-primary/30 bg-primary/5 p-4"><p class="text-sm text-foreground">Esta cotización ya generó la venta <a class="font-semibold text-primary hover:underline" href={`/sales/${quote.sale_id}`}>{quote.sale_code}</a>. La venta conserva su propio estado e historial.</p></section>{/if}
-    <section class="space-y-3 rounded-xl border border-border bg-surface p-4"><div class="flex flex-wrap gap-2">{#if quote.status === 'draft' && !quote.converted}{#if permissions.hasPermission('sales_quotations:manage')}<a class="rounded-md border border-border px-4 py-2 text-sm text-foreground" href={`/sales/quotations/${quote.id}/edit`}>Editar borrador</a>{/if}{#if permissions.hasPermission('sales_quotations:confirm')}<button class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50" disabled={busy} onclick={() => void confirm()}>{busy ? 'Procesando…' : 'Confirmar cotización'}</button>{/if}{/if}{#if quote.status === 'confirmed' && !quote.converted && permissions.hasPermission('sales_quotations:convert')}<button class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50" disabled={busy} onclick={() => void convert()}>{busy ? 'Convirtiendo…' : 'Crear venta en borrador'}</button>{/if}</div>
-      {#if quote.status !== 'cancelled' && !quote.converted && permissions.hasPermission('sales_quotations:confirm')}<form class="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row" onsubmit={(event) => { event.preventDefault(); void cancel(); }}><label class="sr-only" for="quote-cancel-reason">Motivo de cancelación</label><input id="quote-cancel-reason" class="h-10 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground" bind:value={reason} placeholder="Motivo para cancelar la cotización" maxlength="1000" /><button class="rounded-md border border-danger/30 px-4 py-2 text-sm text-danger disabled:opacity-50" disabled={busy || !reason.trim()}>Cancelar cotización</button></form>{/if}
-      <p class="text-xs text-foreground-muted">La conversión es única e idempotente. No hay acción de entrega en esta etapa; las ventas confirmadas quedan pendientes de entrega.</p>
+  <a class="text-sm text-primary hover:underline" href="/sales/quotations"
+    >← Cotizaciones de venta</a
+  >
+  {#if error}
+    <div
+      class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+      role="alert"
+    >
+      {error}
+      <button class="ml-3 underline" onclick={() => void load()}>Recargar</button>
+    </div>
+  {/if}
+
+  {#if loading}
+    <section class="space-y-3 rounded-xl border border-border bg-surface p-5" aria-busy="true">
+      <div class="skeleton h-8 w-1/3 rounded-md"></div>
+      <div class="skeleton h-24 w-full rounded-md"></div>
+      <div class="skeleton h-40 w-full rounded-md"></div>
+    </section>
+  {:else if quote}
+    <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-primary">
+          Cotización · {quote.code} · {DOCUMENT_LABELS[quote.document_type]}
+        </p>
+        <h1 class="mt-1 text-2xl font-bold text-foreground">{quote.customer_name}</h1>
+        <p class="mt-1 text-sm text-foreground-muted">
+          {quote.customer_code} · {formatDay(quote.quotation_date)} · válida hasta {formatDay(
+            quote.valid_until
+          )}
+          {#if branchName}· {branchName}{/if}
+        </p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class={`w-fit rounded-full px-3 py-1 text-sm ${statusBadge(quote)}`}
+          >{statusLabel(quote)}</span
+        >
+        <button
+          class="rounded-md border border-border px-3 py-1.5 text-sm text-foreground"
+          onclick={() => void openPdf()}
+        >
+          Ver PDF
+        </button>
+      </div>
+    </header>
+
+    {#if quote.status === 'pending_authorization'}
+      <section
+        class="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning"
+      >
+        <p class="font-semibold">Espera autorización</p>
+        <ul class="mt-1 list-disc pl-5">
+          {#each quote.authorization_reasons as reason (reason.code)}<li>
+              {reason.message}
+            </li>{/each}
+        </ul>
+      </section>
+    {:else if quote.status === 'draft' && quote.authorization_note}
+      <section
+        class="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning"
+      >
+        Devuelta por quien autoriza: {quote.authorization_note}
+      </section>
+    {/if}
+    {#if quote.expired}
+      <section
+        class="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning"
+      >
+        La vigencia pasó: ya no se puede aceptar. Puedes registrar el rechazo o cancelarla.
+      </section>
+    {/if}
+
+    <section class="overflow-hidden rounded-xl border border-border bg-surface">
+      <div class="border-b border-border p-4">
+        <h2 class="font-semibold text-foreground">Productos</h2>
+        <p class="mt-1 text-xs text-foreground-muted">
+          Lista: {quote.price_list_name ?? 'sin lista'} · precios {quote.prices_include_vat
+            ? 'con'
+            : 'sin'} IVA. Los precios y costos quedaron guardados al calcular.
+        </p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[780px] text-left text-sm">
+          <thead class="bg-surface-muted text-xs uppercase text-foreground-muted">
+            <tr>
+              <th class="px-4 py-3">Producto</th>
+              <th class="px-4 py-3">Cantidad</th>
+              <th class="px-4 py-3 text-right">Precio</th>
+              <th class="px-4 py-3 text-right">Descuento</th>
+              {#if quote.costs_visible}<th class="px-4 py-3 text-right">Costo / margen</th>{/if}
+              <th class="px-4 py-3 text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border">
+            {#each quote.lines as line (line.line_number)}
+              <tr>
+                <td class="px-4 py-3">
+                  <p class="font-medium text-foreground">{line.product_name}</p>
+                  <p class="font-mono text-xs text-foreground-muted">
+                    {line.product_sku}{line.tax_treatment !== 'taxed'
+                      ? ` · ${TREATMENT_LABELS[line.tax_treatment]}`
+                      : ''}
+                  </p>
+                  {#each line.authorization_reasons as reason (reason.code)}
+                    <p class="text-xs text-warning">{reason.message}</p>
+                  {/each}
+                </td>
+                <td class="px-4 py-3 text-foreground"
+                  >{formatQuantity(line.quantity)} {formatUnitLabel(line.unit_name)}</td
+                >
+                <td class="px-4 py-3 text-right font-mono text-foreground">
+                  {formatUnitPrice(line.document_unit_price)}
+                  {#if line.price_overridden}
+                    <p class="text-xs text-warning">
+                      Manual · lista {formatUnitPrice(line.list_price)}
+                    </p>
+                  {/if}
+                </td>
+                <td class="px-4 py-3 text-right font-mono text-foreground">
+                  {Number(line.discount_percent) > 0 ? formatPercent(line.discount_percent) : '—'}
+                </td>
+                {#if quote.costs_visible}
+                  <td class="px-4 py-3 text-right font-mono text-foreground-muted">
+                    {formatUnitPrice(line.cost)} · {formatPercent(line.margin_percent)}
+                  </td>
+                {/if}
+                <td class="px-4 py-3 text-right font-mono font-semibold text-foreground"
+                  >{formatMoney(line.line_total)}</td
+                >
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+      <dl
+        class="grid gap-x-6 gap-y-1 border-t border-border p-4 text-sm sm:ml-auto sm:max-w-sm sm:grid-cols-[1fr_auto]"
+      >
+        <dt class="text-foreground-muted">Ventas gravadas</dt>
+        <dd class="text-right font-mono text-foreground">{formatMoney(quote.total_taxed)}</dd>
+        {#if Number(quote.total_exempt) > 0}
+          <dt class="text-foreground-muted">Ventas exentas</dt>
+          <dd class="text-right font-mono text-foreground">{formatMoney(quote.total_exempt)}</dd>
+        {/if}
+        {#if Number(quote.total_not_subject) > 0}
+          <dt class="text-foreground-muted">Ventas no sujetas</dt>
+          <dd class="text-right font-mono text-foreground">
+            {formatMoney(quote.total_not_subject)}
+          </dd>
+        {/if}
+        <dt class="text-foreground-muted">
+          Descuentos{Number(quote.global_discount_percent) > 0
+            ? ` (global ${formatPercent(quote.global_discount_percent)})`
+            : ''}
+        </dt>
+        <dd class="text-right font-mono text-foreground">{formatMoney(quote.total_discount)}</dd>
+        <dt class="text-foreground-muted">
+          {quote.document_type === '03' ? 'IVA 13 %' : 'IVA incluido'}
+        </dt>
+        <dd class="text-right font-mono text-foreground">{formatMoney(quote.vat)}</dd>
+        {#if Number(quote.vat_perceived) > 0}
+          <dt class="text-foreground-muted">IVA percibido</dt>
+          <dd class="text-right font-mono text-foreground">{formatMoney(quote.vat_perceived)}</dd>
+        {/if}
+        {#if Number(quote.vat_withheld) > 0}
+          <dt class="text-foreground-muted">IVA retenido</dt>
+          <dd class="text-right font-mono text-foreground">−{formatMoney(quote.vat_withheld)}</dd>
+        {/if}
+        <dt class="border-t border-border pt-1 font-semibold text-foreground">Total</dt>
+        <dd
+          class="border-t border-border pt-1 text-right font-mono text-lg font-bold text-foreground"
+        >
+          {formatMoney(quote.total)}
+        </dd>
+      </dl>
+      <p class="px-4 pb-4 text-right text-xs text-foreground-muted">{quote.total_in_words}</p>
+    </section>
+
+    {#if quote.notes}
+      <section class="rounded-xl border border-border bg-surface p-4">
+        <h2 class="font-semibold text-foreground">Notas</h2>
+        <p class="mt-2 whitespace-pre-wrap text-sm text-foreground-muted">{quote.notes}</p>
+      </section>
+    {/if}
+
+    <section class="rounded-xl border border-border bg-surface p-4 text-sm text-foreground-muted">
+      <h2 class="font-semibold text-foreground">Historial</h2>
+      <ul class="mt-2 space-y-1">
+        <li>Creada por {quote.created_by_name ?? '—'}</li>
+        {#if quote.authorized_at}<li>
+            Autorizada por {quote.authorized_by_name} el {formatDay(
+              quote.authorized_at
+            )}{quote.authorization_note ? ` · ${quote.authorization_note}` : ''}
+          </li>{/if}
+        {#if quote.issued_at}<li>
+            Emitida por {quote.issued_by_name} el {formatDay(quote.issued_at)}
+          </li>{/if}
+        {#if quote.customer_response_at}
+          <li>
+            {quote.status === 'rejected' ? 'Rechazo' : 'Aceptación'} registrado por {quote.customer_response_by_name}
+            el {formatDay(quote.customer_response_at)}{quote.rejection_reason
+              ? ` · ${quote.rejection_reason}`
+              : ''}
+          </li>
+        {/if}
+        {#if quote.cancelled_at}<li>
+            Cancelada por {quote.cancelled_by_name} el {formatDay(quote.cancelled_at)} · {quote.cancellation_reason}
+          </li>{/if}
+      </ul>
+      {#if quote.sale_id}
+        <p class="mt-3 text-foreground">
+          Generó la venta <a
+            class="font-semibold text-primary hover:underline"
+            href={`/sales/${quote.sale_id}`}>{quote.sale_code}</a
+          >.
+        </p>
+      {/if}
+    </section>
+
+    <section class="space-y-3 rounded-xl border border-border bg-surface p-4">
+      <div class="flex flex-wrap gap-2">
+        {#if quote.status === 'draft'}
+          {#if can('sales_quotations:manage')}
+            <a
+              class="rounded-md border border-border px-4 py-2 text-sm text-foreground"
+              href={`/sales/quotations/${quote.id}/edit`}>Editar borrador</a
+            >
+          {/if}
+          {#if can('sales_quotations:confirm')}
+            <button
+              class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+              disabled={busy}
+              onclick={() => void run('issue')}
+            >
+              {quote.requires_authorization ? 'Enviar a autorización' : 'Emitir cotización'}
+            </button>
+          {/if}
+        {/if}
+        {#if quote.status === 'pending_authorization' && can('sales_discounts:authorize')}
+          <button
+            class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            onclick={() => (pending = 'authorize')}>Autorizar</button
+          >
+          <button
+            class="rounded-md border border-border px-4 py-2 text-sm text-foreground"
+            onclick={() => (pending = 'return')}>Devolver a borrador</button
+          >
+        {/if}
+        {#if quote.status === 'issued' && can('sales_quotations:confirm')}
+          {#if !quote.expired}
+            <button
+              class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+              disabled={busy}
+              onclick={() => void run('accept')}>El cliente aceptó</button
+            >
+          {/if}
+          <button
+            class="rounded-md border border-border px-4 py-2 text-sm text-foreground"
+            onclick={() => (pending = 'reject')}>El cliente rechazó</button
+          >
+        {/if}
+        {#if quote.status === 'accepted' && !quote.sale_id && can('sales_quotations:convert')}
+          <button
+            class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            disabled={busy}
+            onclick={() => void convert()}
+          >
+            {busy ? 'Creando…' : 'Crear venta en borrador'}
+          </button>
+        {/if}
+        {#if ['draft', 'pending_authorization', 'issued', 'accepted'].includes(quote.status) && !quote.sale_id && can('sales_quotations:confirm')}
+          <button
+            class="rounded-md border border-danger/30 px-4 py-2 text-sm text-danger"
+            onclick={() => (pending = 'cancel')}>Cancelar</button
+          >
+        {/if}
+      </div>
+      {#if pending && pending !== 'issue' && pending !== 'accept'}
+        {@const prompt = prompts[pending]}
+        <form
+          class="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row"
+          onsubmit={(event) => {
+            event.preventDefault();
+            if (pending) void run(pending);
+          }}
+        >
+          <label class="sr-only" for="quote-action-text">{prompt.label}</label>
+          <input
+            id="quote-action-text"
+            class="h-10 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+            bind:value={text}
+            placeholder={prompt.label}
+            maxlength="1000"
+          />
+          <button
+            class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            disabled={busy || (prompt.required && text.trim().length < 3)}>{prompt.button}</button
+          >
+          <button
+            type="button"
+            class="rounded-md border border-border px-4 py-2 text-sm text-foreground"
+            onclick={() => {
+              pending = null;
+              text = '';
+            }}>Volver</button
+          >
+        </form>
+      {/if}
     </section>
   {/if}
 </div>
