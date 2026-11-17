@@ -66,7 +66,7 @@ async def chat_with_erp_agent(payload: ChatRequest) -> ChatResponse:
     """
     guardrail_id = os.getenv("BEDROCK_GUARDRAIL_ID")
     guardrail_version = os.getenv("BEDROCK_GUARDRAIL_VERSION", "DRAFT")
-    model_id = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-3-5-haiku-20241022-v1:0")
+    model_id = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 
     # Bedrock en us-east-1 requiere el ID de perfil de inferencia cross-region (prefijo us.)
     if model_id and not model_id.startswith("us."):
