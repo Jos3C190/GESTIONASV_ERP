@@ -7,6 +7,8 @@ escribe la configuración de otra.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import uuid
 from dataclasses import asdict
 from typing import Annotated, Any
@@ -19,6 +21,7 @@ from app.api.v1.deps import (
     get_audit_service,
     get_company_email_settings_use_cases,
     get_fiscal_settings_use_cases,
+    get_hacienda_credentials_use_cases,
     require_permission,
 )
 from app.api.v1.schemas.fiscal import (
@@ -39,6 +42,9 @@ from app.api.v1.schemas.fiscal import (
     EstablishmentUpdate,
     FiscalProfileIn,
     FiscalProfileOut,
+    HaciendaCredentialsIn,
+    HaciendaCredentialsOut,
+    HaciendaTestOut,
     PointOfSaleIn,
     PointOfSaleOut,
     PointOfSaleUpdate,
@@ -46,7 +52,9 @@ from app.api.v1.schemas.fiscal import (
 from app.application.audit.audit_service import AuditService
 from app.application.fiscal import FiscalSettingsUseCases
 from app.application.fiscal.email_settings import CompanyEmailSettingsUseCases
+from app.application.fiscal.hacienda_credentials import HaciendaCredentialsUseCases
 from app.core.config import settings as app_settings
+from app.core.exceptions import BusinessRuleError
 from app.domain.entities.company_email import EmailSettings, EmailSettingsInput
 from app.domain.entities.fiscal import (
     DocumentTypeSetting,
@@ -55,11 +63,15 @@ from app.domain.entities.fiscal import (
     FiscalProfile,
     PointOfSale,
 )
+from app.domain.entities.hacienda_credentials import HaciendaCredentials
 from app.domain.ports.fiscal_repository import ProfileValues
 
 router = APIRouter(prefix="/fiscal", tags=["fiscal"])
 
 UseCases = Annotated[FiscalSettingsUseCases, Depends(get_fiscal_settings_use_cases)]
+HaciendaUseCases = Annotated[
+    HaciendaCredentialsUseCases, Depends(get_hacienda_credentials_use_cases)
+]
 EmailSettingsUseCases = Annotated[
     CompanyEmailSettingsUseCases, Depends(get_company_email_settings_use_cases)
 ]
@@ -736,3 +748,138 @@ async def test_email_settings(
         required=True,
     )
     return EmailTestOut(ok=result.ok, message=result.message)
+
+
+# --- credenciales de Hacienda (bloque V3d) ---
+
+
+def _hacienda_out(credentials: HaciendaCredentials | None) -> HaciendaCredentialsOut:
+    if credentials is None:
+        return HaciendaCredentialsOut(configured=False)
+    return HaciendaCredentialsOut(
+        configured=True,
+        certificate_nit=credentials.certificate_nit,
+        certificate_sha256=credentials.certificate_sha256,
+        last_test_at=credentials.last_test_at,
+        last_test_ok=credentials.last_test_ok,
+        last_test_error=credentials.last_test_error,
+        updated_at=credentials.updated_at,
+    )
+
+
+@router.get(
+    "/hacienda-credentials",
+    response_model=HaciendaCredentialsOut,
+    summary="Credenciales de Hacienda de la empresa (sin secretos)",
+    dependencies=_READ,
+)
+async def get_hacienda_credentials(
+    request: Request, hacienda: HaciendaUseCases
+) -> HaciendaCredentialsOut:
+    return _hacienda_out(await hacienda.get(request_company_id(request)))
+
+
+@router.put(
+    "/hacienda-credentials",
+    response_model=HaciendaCredentialsOut,
+    summary="Guardar las credenciales de Hacienda (cifradas)",
+    dependencies=_MANAGE,
+)
+async def save_hacienda_credentials(
+    body: HaciendaCredentialsIn,
+    request: Request,
+    current: CurrentUser,
+    hacienda: HaciendaUseCases,
+    audit: Audit,
+) -> HaciendaCredentialsOut:
+    company_id = request_company_id(request)
+    certificate: bytes | None = None
+    if body.certificate_base64:
+        try:
+            certificate = base64.b64decode(body.certificate_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise BusinessRuleError(
+                "El certificado no llegó en base64 válido.", code="hacienda_certificate_invalid"
+            ) from exc
+    before, saved = await hacienda.save(
+        company_id,
+        api_password=body.api_password,
+        private_key_password=body.private_key_password,
+        certificate=certificate,
+        actor_id=current.id,
+    )
+    # La bitácora guarda solo el NIT y la huella del certificado, nunca las contraseñas.
+    await _record(
+        audit,
+        request,
+        action="UPDATE" if before else "CREATE",
+        actor=current.id,
+        company_id=company_id,
+        resource_type="company_hacienda_credentials",
+        resource_id=str(company_id),
+        before=before,
+        after=saved,
+    )
+    return _hacienda_out(saved)
+
+
+@router.delete(
+    "/hacienda-credentials",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Quitar las credenciales de Hacienda",
+    dependencies=_MANAGE,
+)
+async def delete_hacienda_credentials(
+    request: Request, current: CurrentUser, hacienda: HaciendaUseCases, audit: Audit
+) -> None:
+    company_id = request_company_id(request)
+    before = await hacienda.get(company_id)
+    if before is None:
+        return
+    await hacienda.remove(company_id)
+    await _record(
+        audit,
+        request,
+        action="DELETE",
+        actor=current.id,
+        company_id=company_id,
+        resource_type="company_hacienda_credentials",
+        resource_id=str(company_id),
+        before=before,
+    )
+
+
+@router.post(
+    "/hacienda-credentials/test",
+    response_model=HaciendaTestOut,
+    summary="Probar la conexión con Hacienda y la firma",
+    dependencies=_MANAGE,
+)
+async def test_hacienda_credentials(
+    request: Request, current: CurrentUser, hacienda: HaciendaUseCases, audit: Audit
+) -> HaciendaTestOut:
+    company_id = request_company_id(request)
+    result = await hacienda.test(company_id)
+    await audit.record(
+        action="TEST_HACIENDA_CREDENTIALS",
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="company_hacienda_credentials",
+        resource_id=str(company_id),
+        after_state={
+            "ok": result.ok,
+            "authentication_ok": result.authentication_ok,
+            "signature_ok": result.signature_ok,
+        },
+        status="success" if result.ok else "failure",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        required=True,
+    )
+    return HaciendaTestOut(
+        ok=result.ok,
+        authentication_ok=result.authentication_ok,
+        authentication_message=result.authentication_message,
+        signature_ok=result.signature_ok,
+        signature_message=result.signature_message,
+    )

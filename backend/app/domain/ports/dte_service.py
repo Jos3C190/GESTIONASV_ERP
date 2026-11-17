@@ -20,6 +20,24 @@ class DteServiceError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class IssuerCredentials:
+    """Credenciales de Hacienda en claro, solo en memoria para entregarlas al servicio."""
+
+    api_password: str
+    private_key_password: str
+    certificate: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectionCheck:
+    ok: bool
+    authentication_ok: bool
+    authentication_message: str
+    signature_ok: bool
+    signature_message: str
+
+
+@dataclass(frozen=True, slots=True)
 class IssueResult:
     status: str
     """Estado del servicio: SIMULADO, TRANSMITIDO, RECHAZADO, CONTINGENCIA, FIRMADO…"""
@@ -31,8 +49,16 @@ class IssueResult:
 
 class DteService(Protocol):
     async def register_issuer(
-        self, nit: str, *, name: str, mode: str, document_types: list[str]
+        self,
+        nit: str,
+        *,
+        name: str,
+        mode: str,
+        document_types: list[str],
+        credentials: IssuerCredentials | None = None,
     ) -> None: ...
+
+    async def test_issuer(self, nit: str) -> ConnectionCheck: ...
 
     async def issue(
         self, document_type: str, *, nit: str, idempotency_key: str, body: dict[str, Any]

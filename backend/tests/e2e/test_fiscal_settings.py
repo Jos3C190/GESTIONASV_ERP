@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from app.infrastructure.db.session import async_session_factory
 from app.infrastructure.models.audit import AuditLog
+from app.infrastructure.models.fiscal import CompanyHaciendaCredentialsModel
 from app.infrastructure.models.organization import Branch, Company, UserCompany
 from httpx import AsyncClient
 from sqlalchemy import func, select
@@ -158,6 +160,21 @@ async def test_issuer_configuration_flow_is_audited(e2e_client: AsyncClient) -> 
     )
     assert approve.status_code == 200, approve.text
     assert approve.json()["certified_at"] is not None
+    # Credenciales de Hacienda ya probadas (V3d); su flujo se prueba en test_hacienda_credentials.
+    async with async_session_factory() as session:
+        session.add(
+            CompanyHaciendaCredentialsModel(
+                company_id=uuid.UUID(headers["X-Company-ID"]),
+                api_password_encrypted=b"cifrado",
+                private_key_password_encrypted=b"cifrado",
+                certificate_encrypted=b"cifrado",
+                certificate_sha256="a" * 64,
+                certificate_nit="06142803901121",
+                last_test_at=datetime.now(UTC),
+                last_test_ok=True,
+            )
+        )
+        await session.commit()
     saved = await e2e_client.put(f"{BASE}/profile", json=production, headers=headers)
     assert saved.status_code == 200, saved.text
     assert saved.json()["operating_mode"] == "production"

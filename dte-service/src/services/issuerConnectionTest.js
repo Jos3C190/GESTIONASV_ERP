@@ -30,6 +30,10 @@ async function probar(nit) {
       firma: resultado(true, 'En modo simulado no se usa el firmador'),
     };
   }
+  if (!issuerContext.modoPermitido(registro.modo)) {
+    const mensaje = `Este servicio DTE admite hasta el modo ${require('../config').dteMode}; la empresa está en ${registro.modo}`;
+    return { nit: registro.nit, modo: registro.modo, ok: false, autenticacion: resultado(false, mensaje), firma: resultado(false, mensaje) };
+  }
   const estado = issuerCredentials.estado(registro.nit);
   return issuerContext.conEmisor(registro.nit, async () => {
     let autenticacion;

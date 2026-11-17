@@ -28,6 +28,7 @@ READY = IssuerFacts(
     has_primary_activity=True,
     establishments_with_point_of_sale=1,
     enabled_documents=2,
+    hacienda_credentials_tested=True,
 )
 
 
@@ -130,15 +131,19 @@ def test_blockers_explain_every_missing_piece() -> None:
         enabled_uncertified_documents=("04",),
     )
     reasons = production_blockers(facts)
-    assert len(reasons) == 6
+    assert len(reasons) == 7
     assert any("NIT" in r for r in reasons)
+    assert any("credenciales de Hacienda" in r for r in reasons)
     assert any("Nota de remisión" in r for r in reasons)
     with pytest.raises(BusinessRuleError) as exc:
         require_mode_change(OperatingMode.PRODUCTION, facts)
     assert exc.value.code == "fiscal_production_not_ready"
 
 
-def test_non_production_modes_never_block() -> None:
+def test_simulated_never_blocks_and_test_needs_tested_credentials() -> None:
     empty = IssuerFacts(False, False, False, 0, 0)
     require_mode_change(OperatingMode.SIMULATED, empty)
-    require_mode_change(OperatingMode.TEST, empty)
+    with pytest.raises(BusinessRuleError) as exc:
+        require_mode_change(OperatingMode.TEST, empty)
+    assert exc.value.code == "fiscal_test_not_ready"
+    require_mode_change(OperatingMode.TEST, IssuerFacts(False, False, False, 0, 0, (), True))

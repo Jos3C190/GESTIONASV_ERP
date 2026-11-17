@@ -65,7 +65,7 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
   - Token por NIT, firma por emisor, host y ambiente por modo; sin `ISSUER_MODE_UNAVAILABLE`.
   - Pruebas con el stub, con dos emisores en modos distintos.
 - [x] **Paso 4: servicio, probar la conexión del emisor.** Endpoint y pruebas.
-- [ ] **Paso 5: ERP, migración `0129` y credenciales cifradas.** Aplicación, API, regla para pasar a pruebas y e2e.
+- [x] **Paso 5: ERP, migración `0129` y credenciales cifradas.** Aplicación, API, regla para pasar a pruebas y e2e.
 - [ ] **Paso 6: ERP, registro del emisor con modo y credenciales.** `dte-worker` y e2e contra el stub.
 - [ ] **Paso 7: frontend.** Pestaña «Hacienda». vitest.
 - [ ] **Paso 8: documentación.** API, esquema y manuales (cómo obtener el certificado y las credenciales de pruebas).
@@ -73,7 +73,18 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
 
 ## Estado actual
 
-- **Paso en curso**: 5 (ERP, credenciales cifradas).
+- **Paso en curso**: 6 (ERP, registro del emisor con modo y credenciales).
+  - Paso 5:
+    - Migración 0129 `company_hacienda_credentials`: contraseñas y certificado cifrados con AES-GCM (`secret_encryption`), más la huella y el NIT del certificado y la última prueba.
+    - Dominio `hacienda_credentials.py`: el certificado debe ser del NIT de la empresa y abrir con su contraseña privada (SHA-512, como el firmador).
+    - Casos de uso `application/fiscal/hacienda_credentials.py`:
+      - lo que se deja en blanco se conserva;
+      - quitar exige estar en simulado;
+      - probar registra a la empresa en el servicio con sus credenciales (modo pruebas, o producción si ya lo está) y llama a `/probar`.
+    - API `/fiscal/hacienda-credentials` (GET, PUT, DELETE y `/test`); nada secreto vuelve ni entra en la bitácora.
+    - `IssuerFacts.hacienda_credentials_tested`: pasar a pruebas exige credenciales probadas (`fiscal_test_not_ready`) y producción también lo exige.
+    - Servicio: `/probar` informa si el despliegue no admite el modo de la empresa.
+    - Pruebas: unitarias del certificado, de migración y e2e `test_hacienda_credentials.py`. `test_fiscal_settings` ahora siembra credenciales probadas antes de pasar a producción.
   - Paso 4: `POST /api/emisores/:nit/probar` (alcance `issuers`, `src/services/issuerConnectionTest.js`). Autentica con Hacienda y firma un documento de prueba con el certificado del emisor; devuelve `{ok, autenticacion:{ok,mensaje}, firma:{ok,mensaje}}`. No transmite ni consume números de control; en simulado responde ok sin salir. Servicio: 483 en verde.
   - Paso 3:
     - `src/services/issuerContext.js` (`AsyncLocalStorage`): el middleware `contextoEmisor` corre cada solicitud de `/api/dte` con el modo, el ambiente, las URLs de Hacienda y las credenciales (descifradas solo al usarlas) del emisor del encabezado.
