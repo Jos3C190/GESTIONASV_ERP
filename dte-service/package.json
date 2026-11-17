@@ -1,0 +1,32 @@
+{
+  "name": "dte-microservice-sv",
+  "version": "1.0.0",
+  "description": "Microservicio de emision de Documentos Tributarios Electronicos (DTE) para El Salvador - integra con Ministerio de Hacienda (DGII)",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/unit/*.test.js test/integration/*.test.js",
+    "test:unit": "node --test test/unit/*.test.js",
+    "test:integration": "node --test test/integration/*.test.js",
+    "certificacion": "node scripts/enviar-lote-certificacion.js"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "axios": "^1.7.9",
+    "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "pdfkit": "^0.15.1",
+    "pino": "^9.6.0",
+    "pino-http": "^10.4.0",
+    "qrcode": "^1.5.4",
+    "uuid": "^11.0.4"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

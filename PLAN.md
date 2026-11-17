@@ -66,7 +66,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [ ] **Paso 1: copiar el servicio y levantarlo.**
+- [x] **Paso 1: copiar el servicio y levantarlo.**
   - Copia sin dependencias ni datos.
   - Contenedor en compose, con su volumen y su API key.
   - README de procedencia.
@@ -84,7 +84,12 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 1.
+- **Paso en curso**: 2.
+  - Paso 1:
+    - Servicio copiado a `dte-service/`: 125 archivos, sin `.env`, `data`, `node_modules` ni `firmador-docker`, que tiene el certificado.
+    - El agente de usuario pasa a `GestionaSV-DTE/2.0`.
+    - Sus 457 pruebas pasan sin cambios en `node:22-slim`. Se corren sobre una copia en `/tmp` para no escribir `node_modules` en el repo.
+    - El contenedor se agrega a compose en el paso 2, cuando ya no exija el emisor por variables `MH_*`.
 - **Contexto**: el ERP es multiempresa; no se fija nada fiscal por despliegue y se prueba siempre con dos empresas. El proyecto de referencia (`D:\josec\Documents\PROYECTO`) es de solo lectura: no se modifica, no se corren sus pruebas ni nada que escriba ahí.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con un objetivo explícito. Sin argumento corre la batería completa, de unos 45 minutos.
