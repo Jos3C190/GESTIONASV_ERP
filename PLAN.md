@@ -68,7 +68,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [ ] **Paso 1: servicio, contrato v2 ampliado.** Condición y plazo, retención, percepción y descuento global en el resumen, con pruebas.
+- [x] **Paso 1: servicio, contrato v2 ampliado.** Condición y plazo, retención, percepción y descuento global en el resumen, con pruebas.
 - [ ] **Paso 2: migración `0126` y modelos.** `sales_fiscal_documents`, permisos y bloqueo de la cancelación de pedidos facturados.
 - [ ] **Paso 3: dominio.** Snapshot del emisor con su hash, receptor, líneas y resumen desde el pedido, conciliación de totales y estados. Pruebas unitarias.
 - [ ] **Paso 4: infraestructura.**
@@ -86,7 +86,13 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 1.
+- **Paso en curso**: 2 (migración y modelos).
+  - Paso 1:
+    - `ajustes` en factura y CCF (v1 y v2): `condicionOperacion` (1, 2 o 3), `plazoDias` (obligatorio a crédito), `ivaRete`, `ivaPerci` (solo CCF) y `descuentoGlobalEnResumen`.
+    - Se validan con 1 % desde $100 sin IVA y holgura de ±0.01.
+    - A crédito, el pago lleva `plazo` 01 y `periodo` en días.
+    - Pruebas: `test/unit/ajustesErp.test.js` (5, con validación del schema oficial); 472 en total.
+- **Pendiente de confirmar en certificación (V3d)**: con descuento global en el resumen, la factura informa `totalIva` sobre la base neta (`(gravada − descuGravada) × 0.13/1.13`), como el motor del ERP. Hay que confirmarlo contra Hacienda en el ambiente de pruebas.
 - **Contexto**:
   - El frontend usa SvelteKit 3.
   - El servicio DTE se prueba con `./scripts/run-tests.sh dte`.

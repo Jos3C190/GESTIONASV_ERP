@@ -144,6 +144,117 @@ function _ivaIncluido(ventaGravada) {
  *   montoTotalOperacion = subTotal
  *   totalPagar = montoTotalOperacion − ivaRete + totalNoGravado
  */
+/**
+ * Ajustes del ERP (bloque V3b). El ERP es dueño del cálculo fiscal: manda la
+ * condición de la operación, la retención y la percepción que ya calculó, y
+ * pide llevar el descuento global en el resumen (descuGravada, descuExenta,
+ * descuNoSuj) en lugar de prorratearlo a las líneas. Cada valor se valida
+ * contra las reglas de Hacienda antes de reservar el correlativo.
+ *
+ * Sin `ajustes` el comportamiento es el heredado.
+ */
+const CONDICIONES = Object.freeze([CONDICION_OPERACION.CONTADO, CONDICION_OPERACION.CREDITO, CONDICION_OPERACION.OTRO]);
+const UMBRAL_RETENCION = 100; // CT arts. 162 y 163: desde $100 sin IVA.
+const TASA_RETENCION = 0.01;
+
+function _normalizarAjustes(ajustes, tipoDte) {
+  if (!ajustes) return null;
+  if (typeof ajustes !== 'object') throw errorDeSolicitud('"ajustes" debe ser un objeto');
+  const condicion = ajustes.condicionOperacion ?? CONDICION_OPERACION.CONTADO;
+  if (!CONDICIONES.includes(condicion)) throw errorDeSolicitud('condicionOperacion debe ser 1 (contado), 2 (crédito) o 3 (otro)');
+  const plazoDias = ajustes.plazoDias ?? null;
+  if (condicion === CONDICION_OPERACION.CREDITO && !(Number.isInteger(plazoDias) && plazoDias > 0 && plazoDias <= 365)) {
+    throw errorDeSolicitud('Una venta a crédito requiere plazoDias entre 1 y 365');
+  }
+  const importe = (valor, nombre) => {
+    const numero = valor ?? 0;
+    if (typeof numero !== 'number' || !Number.isFinite(numero) || numero < 0) {
+      throw errorDeSolicitud(`${nombre} debe ser un importe no negativo`);
+    }
+    return r2(numero);
+  };
+  const ivaPerci = importe(ajustes.ivaPerci, 'ivaPerci');
+  if (ivaPerci > 0 && tipoDte !== TIPO_DTE.COMPROBANTE_CREDITO_FISCAL) {
+    throw errorDeSolicitud('La percepción de IVA solo aplica al comprobante de crédito fiscal');
+  }
+  return {
+    condicion,
+    plazoDias: condicion === CONDICION_OPERACION.CREDITO ? plazoDias : null,
+    ivaRete: importe(ajustes.ivaRete, 'ivaRete'),
+    ivaPerci,
+    descuentoEnResumen: ajustes.descuentoGlobalEnResumen === true,
+  };
+}
+
+function _descuentosGlobales(descuentoGlobal, resumen) {
+  const d = descuentoGlobal || {};
+  const descuentos = {};
+  for (const [campo, total, nombre] of [
+    ['gravada', resumen.totalGravada, 'descuGravada'],
+    ['exenta', resumen.totalExenta, 'descuExenta'],
+    ['noSuj', resumen.totalNoSuj, 'descuNoSuj'],
+  ]) {
+    const monto = d[campo] ?? 0;
+    if (typeof monto !== 'number' || !Number.isFinite(monto) || monto < 0) {
+      throw errorDeSolicitud(`El descuento global de ${campo} debe ser un número no negativo`);
+    }
+    if (r2(monto) > r2(total) + 1e-9) throw errorDeSolicitud(`El descuento global de ${campo} excede el total de esa categoría`);
+    descuentos[nombre] = r2(monto);
+  }
+  return descuentos;
+}
+
+/** Aplica los ajustes del ERP al resumen ya construido. */
+function _aplicarAjustes(resumen, { tipoDte, ajustes, descuentoGlobal }) {
+  if (!ajustes) return resumen;
+  const esCCF = tipoDte === TIPO_DTE.COMPROBANTE_CREDITO_FISCAL;
+  const ajustado = { ...resumen, condicionOperacion: ajustes.condicion };
+
+  if (ajustes.descuentoEnResumen) {
+    const descuentos = _descuentosGlobales(descuentoGlobal, resumen);
+    const global = r2(descuentos.descuGravada + descuentos.descuExenta + descuentos.descuNoSuj);
+    Object.assign(ajustado, descuentos);
+    ajustado.totalDescu = r2(resumen.totalDescu + global);
+    ajustado.subTotal = r2(resumen.subTotalVentas - global);
+    ajustado.porcentajeDescuento = resumen.subTotalVentas > 0 ? r2((global / resumen.subTotalVentas) * 100) : 0;
+  }
+
+  const baseGravada = r2(ajustado.totalGravada - ajustado.descuGravada);
+  // Base de la retención, sin IVA: en factura la venta gravada lo trae incluido.
+  const baseSinIva = esCCF ? baseGravada : r2(baseGravada / (1 + TASA_IVA));
+  if (esCCF) {
+    const iva = r2(baseGravada * TASA_IVA);
+    ajustado.tributos = ajustado.totalGravada > 0 ? [{ ...TRIBUTO_IVA, valor: iva }] : null;
+    ajustado.montoTotalOperacion = r2(ajustado.subTotal + iva);
+  } else {
+    ajustado.totalIva = r2((baseGravada * TASA_IVA) / (1 + TASA_IVA));
+    ajustado.montoTotalOperacion = ajustado.subTotal;
+  }
+
+  if (ajustes.ivaRete > 0) {
+    const esperada = r2(baseSinIva * TASA_RETENCION);
+    if (baseSinIva < UMBRAL_RETENCION || Math.abs(ajustes.ivaRete - esperada) > HOLGURA + 1e-9) {
+      throw errorDeSolicitud(`La retención (${ajustes.ivaRete.toFixed(2)}) no corresponde al 1 % de la base sin IVA desde $100 (${esperada.toFixed(2)})`);
+    }
+  }
+  if (ajustes.ivaPerci > 0 && (baseGravada < UMBRAL_RETENCION || ajustes.ivaPerci > r2(baseGravada * TASA_RETENCION) + HOLGURA + 1e-9)) {
+    throw errorDeSolicitud('La percepción excede el 1 % de la base gravada o la base es menor de $100');
+  }
+  ajustado.ivaRete = ajustes.ivaRete;
+  if (esCCF) ajustado.ivaPerci = ajustes.ivaPerci;
+  const totalPagar = r2(ajustado.montoTotalOperacion + (esCCF ? ajustes.ivaPerci : 0) - ajustes.ivaRete + ajustado.totalNoGravado);
+  if (totalPagar < 0) throw errorDeSolicitud('El total a pagar no puede ser negativo');
+  ajustado.totalPagar = totalPagar;
+  ajustado.totalLetras = numeroALetras(totalPagar);
+  return ajustado;
+}
+
+/** Con crédito, el pago lleva el plazo en días (CAT-018 código 01). */
+function _plazoDelPago(resumen, ajustes) {
+  if (!ajustes || ajustes.condicion !== CONDICION_OPERACION.CREDITO || !resumen.pagos) return resumen;
+  return { ...resumen, pagos: resumen.pagos.map((pago) => ({ ...pago, plazo: '01', periodo: ajustes.plazoDias })) };
+}
+
 function _construirResumenFactura(items, cuerpoDocumento) {
   const totales = calcularVentasPorCategoria(items);
   const subTotalVentas = r2(totales.totalGravada + totales.totalExenta + totales.totalNoSuj);
@@ -211,10 +322,11 @@ function _normalizarReceptorFactura(receptor) {
  * `descuentoGlobal` (opcional) = { gravada?, exenta?, noSuj? } en dólares; se
  * prorratea a las líneas como descuento por ítem.
  */
-function construirFactura({ emisor = null, receptor, items, descuentoGlobal = null, pago = null }, { contingencia = null } = {}) {
+function construirFactura({ emisor = null, receptor, items, descuentoGlobal = null, pago = null, ajustes = null }, { contingencia = null } = {}) {
   const issuer = emisor ? validateIssuerV2(emisor) : config.emisor;
   if (!Array.isArray(items) || items.length === 0) throw errorDeSolicitud('Se requiere "items" con al menos 1 línea');
-  const lineas = aplicarDescuentoGlobal(items, descuentoGlobal);
+  const ajustesErp = _normalizarAjustes(ajustes, TIPO_DTE.FACTURA);
+  const lineas = ajustesErp?.descuentoEnResumen ? items : aplicarDescuentoGlobal(items, descuentoGlobal);
   validarLineas(lineas);
 
   const cuerpoDocumento = lineas.map((item, indice) => ({
@@ -228,7 +340,13 @@ function construirFactura({ emisor = null, receptor, items, descuentoGlobal = nu
   const receptorNormalizado = _normalizarReceptorFactura(receptor);
   // Toda validación de negocio, incluido el pago, ocurre antes de reservar el
   // correlativo: un pago no conciliado no consume Número de Control.
-  const resumen = _aplicarPago(_construirResumenFactura(lineas, cuerpoDocumento), pago);
+  const resumen = _plazoDelPago(
+    _aplicarPago(
+      _aplicarAjustes(_construirResumenFactura(lineas, cuerpoDocumento), { tipoDte: TIPO_DTE.FACTURA, ajustes: ajustesErp, descuentoGlobal }),
+      pago,
+    ),
+    ajustesErp,
+  );
   const { identificacion, codigoGeneracion, numeroControl } = _construirIdentificacion({
     tipoDte: TIPO_DTE.FACTURA,
     version: 2,
@@ -329,13 +447,14 @@ function _construirResumenCCF(lineas) {
  * cumplen cantidad × precioUni − montoDescu = venta; `ivaItem` opcional con
  * el IVA asignado a cada línea (no se transmite en el cuerpo).
  */
-function construirCCF({ emisor = null, receptor, items, descuentoGlobal = null, pago = null }, { contingencia = null } = {}) {
+function construirCCF({ emisor = null, receptor, items, descuentoGlobal = null, pago = null, ajustes = null }, { contingencia = null } = {}) {
   const issuer = emisor ? validateIssuerV2(emisor) : config.emisor;
   if (!Array.isArray(items) || items.length === 0) throw errorDeSolicitud('Se requiere "items" con al menos 1 línea');
   if (!receptor || !receptor.nit || !receptor.nrc) {
     throw errorDeSolicitud('Un CCF requiere receptor.nit y receptor.nrc (schema fe-ccf-v4.json los exige como no-nulos)');
   }
-  const lineas = aplicarDescuentoGlobal(items, descuentoGlobal);
+  const ajustesErp = _normalizarAjustes(ajustes, TIPO_DTE.COMPROBANTE_CREDITO_FISCAL);
+  const lineas = ajustesErp?.descuentoEnResumen ? items : aplicarDescuentoGlobal(items, descuentoGlobal);
   validarLineas(lineas);
 
   const cuerpoDocumento = lineas.map((item, indice) => ({
@@ -346,7 +465,15 @@ function construirCCF({ emisor = null, receptor, items, descuentoGlobal = null, 
   }));
   // El CCF solo reserva identidad cuando las líneas, el receptor fiscal y el
   // pago ya cuadran. Los errores deterministas previos no avanzan correlativos.
-  const resumen = _aplicarPago(_construirResumenCCF(lineas), pago);
+  const resumen = _plazoDelPago(
+    _aplicarPago(
+      _aplicarAjustes(_construirResumenCCF(lineas), {
+        tipoDte: TIPO_DTE.COMPROBANTE_CREDITO_FISCAL, ajustes: ajustesErp, descuentoGlobal,
+      }),
+      pago,
+    ),
+    ajustesErp,
+  );
   const { identificacion, codigoGeneracion, numeroControl } = _construirIdentificacion({
     tipoDte: TIPO_DTE.COMPROBANTE_CREDITO_FISCAL,
     version: 4,
