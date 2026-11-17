@@ -43,6 +43,10 @@ const defaults = {
   MS_AUTH_DESHABILITADA: 'false',
   DTE_AUTHORIZED_ISSUER_NITS: '06141804941035',
   DTE_ALLOWED_DOCUMENT_TYPES: '01,03',
+  // Credenciales de Hacienda por emisor (V3d): clave ficticia de 32 bytes y
+  // una carpeta temporal por proceso para los certificados.
+  DTE_CREDENTIALS_KEY: Buffer.alloc(32, 7).toString('base64'),
+  DTE_CERTIFICATES_DIR: require('node:path').join(require('node:os').tmpdir(), `dte-certificados-${process.pid}`),
 };
 
 for (const [key, value] of Object.entries(defaults)) {

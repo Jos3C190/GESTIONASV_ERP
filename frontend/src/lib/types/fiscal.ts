@@ -164,3 +164,28 @@ export interface EmailTestResult {
   ok: boolean;
   message: string;
 }
+
+/** Credenciales de Hacienda de la empresa (bloque V3d). Nada secreto vuelve del servidor. */
+export interface HaciendaCredentials {
+  configured: boolean;
+  certificate_nit: string | null;
+  certificate_sha256: string | null;
+  last_test_at: string | null;
+  last_test_ok: boolean | null;
+  last_test_error: string | null;
+  updated_at: string | null;
+}
+
+export interface HaciendaCredentialsInput {
+  api_password: string | null;
+  private_key_password: string | null;
+  certificate_base64: string | null;
+}
+
+export interface HaciendaTestResult {
+  ok: boolean;
+  authentication_ok: boolean;
+  authentication_message: string;
+  signature_ok: boolean;
+  signature_message: string;
+}

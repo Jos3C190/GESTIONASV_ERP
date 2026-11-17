@@ -5,6 +5,7 @@ const haciendaClient = require('./haciendaClient');
 const { clasificarRespuestaDte, clasificarConsultaDte } = require('./haciendaResponse');
 const contingenciaService = require('./contingenciaService');
 const { AuthError } = require('./authService');
+const issuerContext = require('./issuerContext');
 const { fechaHoraSV } = require('../utils/fechaHoraSV');
 const { fechaDeProcesamiento } = require('../utils/plazosFiscales');
 
@@ -122,7 +123,7 @@ async function transmitir(codigoGeneracion, { desdeCola = false } = {}) {
   const payload = JSON.parse(dte.payload_json);
   try {
     const respuesta = await haciendaClient.transmitirDte({
-      ambiente: config.ambiente,
+      ambiente: issuerContext.actual().ambiente,
       idEnvio: siguienteIdEnvio(),
       version: payload.identificacion.version,
       tipoDte: dte.tipo_dte,
@@ -150,7 +151,7 @@ async function reconciliar(codigoGeneracion, motivo) {
   let consulta;
   try {
     consulta = clasificarConsultaDte(normalizarConsulta(await haciendaClient.consultarDte({
-      nitEmisor: config.emisor.nit,
+      nitEmisor: issuerContext.actual().nit,
       tdte: dte.tipo_dte,
       codigoGeneracion,
     })));

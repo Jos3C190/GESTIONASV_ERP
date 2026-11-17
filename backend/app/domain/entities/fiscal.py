@@ -174,6 +174,8 @@ class IssuerFacts:
     establishments_with_point_of_sale: int
     enabled_documents: int
     enabled_uncertified_documents: tuple[str, ...] = ()
+    hacienda_credentials_tested: bool = False
+    """Credenciales de Hacienda cargadas y con la última prueba de conexión correcta (V3d)."""
 
 
 def production_blockers(facts: IssuerFacts) -> list[str]:
@@ -189,6 +191,10 @@ def production_blockers(facts: IssuerFacts) -> list[str]:
         reasons.append("Crea un establecimiento activo con al menos un punto de venta activo.")
     if facts.enabled_documents == 0:
         reasons.append("Habilita al menos un tipo de documento.")
+    if not facts.hacienda_credentials_tested:
+        reasons.append(
+            "Carga las credenciales de Hacienda y prueba la conexión (pestaña Hacienda)."
+        )
     for document_type in facts.enabled_uncertified_documents:
         reasons.append(
             f"«{DOCUMENT_TYPES[document_type]}» está habilitado pero sus pruebas no están "
@@ -198,6 +204,12 @@ def production_blockers(facts: IssuerFacts) -> list[str]:
 
 
 def require_mode_change(target: OperatingMode, facts: IssuerFacts) -> None:
+    if target == OperatingMode.TEST and not facts.hacienda_credentials_tested:
+        raise _rule(
+            "Para emitir en el ambiente de pruebas de Hacienda carga las credenciales y "
+            "prueba la conexión en la pestaña Hacienda.",
+            "fiscal_test_not_ready",
+        )
     if target != OperatingMode.PRODUCTION:
         return
     reasons = production_blockers(facts)

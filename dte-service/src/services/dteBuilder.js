@@ -6,6 +6,7 @@ const { numeroALetras } = require('../utils/numeroALetras');
 const { TIPO_DTE, MODELO_FACTURACION, TIPO_TRANSMISION, CONDICION_OPERACION, TIPO_CONTINGENCIA, esCodigoValido } = require('../config/catalogs');
 const config = require('../config');
 const { validateIssuerV2 } = require('./issuerContractV2');
+const issuerContext = require('./issuerContext');
 
 const TASA_IVA = 0.13;
 const TRIBUTO_IVA = Object.freeze({ codigo: '20', descripcion: 'Impuesto al Valor Agregado 13%' });
@@ -51,12 +52,12 @@ function _construirIdentificacion({ tipoDte, version, issuer = config.emisor, co
     codPuntoVentaMH: issuer.codPuntoVentaMH,
     anio,
     nit: serieDelEmisor ? issuer.nit : '',
-    ambiente: serieDelEmisor ? config.ambiente : '',
+    ambiente: serieDelEmisor ? issuerContext.actual().ambiente : '',
   });
 
   const identificacion = {
     version,
-    ambiente: config.ambiente,
+    ambiente: issuerContext.actual().ambiente,
     tipoDte,
     numeroControl,
     codigoGeneracion,

@@ -8,6 +8,9 @@ import type {
   EmailSettings,
   EmailSettingsInput,
   EmailTestResult,
+  HaciendaCredentials,
+  HaciendaCredentialsInput,
+  HaciendaTestResult,
   EconomicActivity,
   Establishment,
   EstablishmentInput,
@@ -120,5 +123,21 @@ export const fiscalApi = {
 
   testEmailSettings(recipient: string) {
     return apiFetch<EmailTestResult>(`${BASE}/email-settings/test`, json('POST', { recipient }));
+  },
+
+  getHaciendaCredentials() {
+    return apiFetch<HaciendaCredentials>(`${BASE}/hacienda-credentials`);
+  },
+
+  saveHaciendaCredentials(payload: HaciendaCredentialsInput) {
+    return apiFetch<HaciendaCredentials>(`${BASE}/hacienda-credentials`, json('PUT', payload));
+  },
+
+  deleteHaciendaCredentials() {
+    return apiFetch<void>(`${BASE}/hacienda-credentials`, { method: 'DELETE' });
+  },
+
+  testHaciendaCredentials() {
+    return apiFetch<HaciendaTestResult>(`${BASE}/hacienda-credentials/test`, { method: 'POST' });
   }
 };

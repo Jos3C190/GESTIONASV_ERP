@@ -3,6 +3,7 @@
   import FiscalActivitiesPanel from '#lib/features/fiscal/components/FiscalActivitiesPanel.svelte';
   import FiscalDocumentsPanel from '#lib/features/fiscal/components/FiscalDocumentsPanel.svelte';
   import FiscalEmailPanel from '#lib/features/fiscal/components/FiscalEmailPanel.svelte';
+  import FiscalHaciendaPanel from '#lib/features/fiscal/components/FiscalHaciendaPanel.svelte';
   import FiscalEstablishmentsPanel from '#lib/features/fiscal/components/FiscalEstablishmentsPanel.svelte';
   import FiscalProfilePanel from '#lib/features/fiscal/components/FiscalProfilePanel.svelte';
   import FiscalUnitsPanel from '#lib/features/fiscal/components/FiscalUnitsPanel.svelte';
@@ -14,6 +15,7 @@
     { id: 'actividades', label: 'Actividades' },
     { id: 'establecimientos', label: 'Establecimientos' },
     { id: 'documentos', label: 'Documentos' },
+    { id: 'hacienda', label: 'Hacienda' },
     { id: 'correo', label: 'Correo' },
     { id: 'unidades', label: 'Unidades' },
     { id: 'cotizaciones', label: 'Cotizaciones' }
@@ -55,6 +57,8 @@
       <FiscalEstablishmentsPanel {canManage} />
     {:else if active === 'documentos'}
       <FiscalDocumentsPanel {canManage} />
+    {:else if active === 'hacienda'}
+      <FiscalHaciendaPanel {canManage} />
     {:else if active === 'correo'}
       <FiscalEmailPanel {canManage} />
     {:else if active === 'unidades'}

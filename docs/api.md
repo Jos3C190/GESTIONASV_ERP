@@ -2170,3 +2170,31 @@ without the password. Error codes (`422`): `email_settings_host_invalid`,
 `email_settings_from_invalid`, `email_settings_from_name_too_long`,
 `email_settings_test_recipient_invalid`; `email_settings_not_found` (404). A send whose company
 has no usable SMTP fails with `email_unavailable`.
+
+## Hacienda credentials (revision 0129, block V3d)
+
+Each company keeps its own Hacienda API password, private-key password and certificate
+(`{nit}.crt`, the XML that Hacienda generates). They are encrypted with AES-GCM
+(`SUPPLIER_DATA_ENCRYPTION_KEY`) and never returned. The certificate must belong to the company's
+NIT and open with the private-key password (SHA-512 in `privateKey/clave`, as the official
+signer checks).
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/fiscal/hacienda-credentials` | `fiscal_settings:read` | `configured`, `certificate_nit`, `certificate_sha256` and the last connection test. |
+| PUT | `/fiscal/hacienda-credentials` | `fiscal_settings:manage` | `api_password`, `private_key_password`, `certificate_base64`; empty fields keep the stored value. Saving clears the last test. |
+| DELETE | `/fiscal/hacienda-credentials` | `fiscal_settings:manage` | Only while the company is in simulated mode. `204`. |
+| POST | `/fiscal/hacienda-credentials/test` | `fiscal_settings:manage` | Registers the company in the DTE service with its credentials (test mode, or production if already there) and runs the service's connection test: Hacienda authentication and a test signature. Returns `{ok, authentication_ok, authentication_message, signature_ok, signature_message}`. |
+
+Switching the fiscal profile to `test` requires tested credentials (`fiscal_test_not_ready`);
+`production` also lists them among its blockers. When `dte-worker` issues a document outside
+simulated mode it registers the company with its mode and credentials; without credentials the
+document fails with `hacienda_credentials_missing`.
+
+Audited on `company_hacienda_credentials` (`CREATE`, `UPDATE`, `DELETE`,
+`TEST_HACIENDA_CREDENTIALS`) with the certificate NIT and fingerprint only. Error codes (`422`):
+`hacienda_certificate_required`, `hacienda_certificate_invalid`,
+`hacienda_certificate_nit_mismatch`, `hacienda_private_key_password_invalid`,
+`hacienda_api_password_required`, `hacienda_private_key_password_required`,
+`hacienda_company_nit_missing`, `hacienda_credentials_in_use`; `hacienda_credentials_not_found`
+(404).

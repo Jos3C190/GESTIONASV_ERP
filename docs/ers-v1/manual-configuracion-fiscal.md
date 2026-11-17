@@ -67,7 +67,27 @@ especiales y de retorno.
 - En *simulado* y *pruebas* puedes habilitar cualquier documento para probarlo.
 - En *producción* solo se habilita un documento cuyas pruebas estén aprobadas.
 
-## 5. Correo
+## 5. Hacienda
+
+Para emitir ante el Ministerio de Hacienda (ambiente de pruebas o producción) la empresa carga sus
+credenciales, que se obtienen en el portal de facturación electrónica de Hacienda con la cuenta de
+la empresa:
+
+- la **contraseña de la API**;
+- el **certificado** `{nit}.crt` que genera Hacienda;
+- la **contraseña de la llave privada** de ese certificado.
+
+1. En la pestaña **Hacienda**, elige el certificado y escribe las dos contraseñas. **Guardar**.
+   El sistema rechaza un certificado de otro NIT o una contraseña privada que no le corresponda.
+2. **Probar conexión**: el sistema se autentica en Hacienda y firma un documento de prueba con el
+   certificado. Muestra el resultado de cada parte por separado.
+3. Con la prueba correcta, en la pestaña **Emisor** ya se puede pasar a **Pruebas de Hacienda**.
+
+Las contraseñas y el certificado se guardan cifrados y no se vuelven a mostrar: para cambiarlos se
+escriben de nuevo. Lo que se deja en blanco se conserva. Para quitarlos, la empresa debe estar en
+modo simulado.
+
+## 6. Correo
 
 Los documentos tributarios se envían a los clientes desde el servidor de correo y el dominio de la
 empresa.

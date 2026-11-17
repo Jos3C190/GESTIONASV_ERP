@@ -1,146 +1,150 @@
-# Plan: Ventas V3c — Enviar el DTE al cliente por correo
+# Plan: Ventas V3d — Ambiente de pruebas de Hacienda por empresa
 
-Rama: `feature/ventas-v3c-correo`, desde `develop` con V3b (#49).
+Rama: `feature/ventas-v3d-hacienda`, desde `develop` con V3c (#50).
 
-Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
-- Módulo 5 (DTE): «Envío al cliente del JSON y el PDF por correo, y descarga desde el sistema».
-- Protección de datos: el aviso de privacidad de la empresa va en el correo del documento (art. 24).
+Fuente: `docs/plan-area-ventas-el-salvador.pdf` (módulo 5, DTE).
+Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el Manual Técnico v2, el firmador `svfe-api-firmador.zip` y los schemas.
 
 ## Decisiones del usuario
 
-- 17/11/2026 (V3c):
-  - **SMTP**: uno por despliegue, en variables de entorno. Cada correo sale con el nombre de la empresa como remitente y con `Reply-To` al correo DTE de esa empresa. En desarrollo se usa Mailpit, un buzón de prueba en compose.
-  - **Cuándo**: automático al emitirse, si el cliente tiene correo. Además hay un botón «Enviar por correo» para reenviar o mandar a otras direcciones. Cada envío queda registrado.
-  - **Simulados**: sí se envían, con «SIMULADO — sin validez fiscal» en el asunto y en el cuerpo.
-  - **Cambio, SMTP por empresa** (tras la QA): cada empresa configura su propio SMTP y su correo remitente en Configuración fiscal. El dominio y el DNS (SPF, DKIM, DMARC) son responsabilidad de la empresa.
-    - Se autentica con usuario y contraseña (de aplicación en Google), sobre STARTTLS o SSL. OAuth de Microsoft queda como mejora posterior.
-    - Decisión por defecto, tomada por Claude: si la empresa no configuró su SMTP, se usa el del servidor (en desarrollo, Mailpit; en producción viene vacío).
-- Decisiones anteriores que siguen vigentes (V3b):
-  - Producción con la facturación apagada hasta V3d.
+- 17/11/2026 (V3d):
+  - **Credenciales**: todavía no hay credenciales del ambiente de pruebas. Se construye y se prueba contra un Hacienda simulado (stub) y el firmador real; la prueba contra `apitest.dtes.mh.gob.sv` queda para cuando las haya.
+  - **Dónde**: en el ERP, en una pestaña «Hacienda» de Configuración fiscal. Ahí se suben el certificado y las contraseñas (API y llave privada), que se guardan cifrados. El ERP se los entrega al servicio DTE al registrar a la empresa. Incluye «Probar conexión».
+  - **Firmador**: el oficial, compilado desde `svfe-api-firmador.zip` (Java 21) dentro de compose. Los certificados de cada empresa van en un volumen compartido con el servicio.
+  - **Modos**: por empresa. Cada empresa usa el modo de su perfil fiscal (simulado, pruebas o producción) en el mismo despliegue.
+- Decisiones anteriores que siguen vigentes:
+  - Producción con la facturación apagada (perfil `dte`), salvo que se decida otra cosa al cerrar V3d.
   - Merge delegado cuando pasen los checks propios.
+  - El proyecto de referencia es de solo lectura.
 
 ## Hechos verificados
 
-- El ERP no tiene envío de correo: no hay SMTP, ni librería, ni configuración.
-- El documento fiscal (V3b) guarda `dte_json` en la base y el PDF en el almacenamiento (`pdf_object_key`). El almacenamiento tiene `download_to`.
-- El cliente tiene `email` en su ficha (`CustomerDraft.email`).
-- Hay un aviso de privacidad versionado por empresa (`PrivacyUseCases.current_notice`).
-- El trabajador `dte-worker` (arq, cola `arq:dte`) emite y tiene conciliación periódica.
-- Producción no tiene Redis ni almacenamiento: allí la facturación sigue apagada.
+- El servicio asume un emisor por despliegue para Hacienda:
+  - `MH_NIT`, `MH_PASSWORD_API` y `MH_PASSWORD_PRI` vienen del entorno; `DTE_MODE` es global.
+  - `authService` guarda un solo token; `firmadorClient` firma con `config.emisor.nit` y `passwordPri`.
+  - `issuerRegistry.exigirEmision` exige que el modo del emisor sea el del despliegue (`ISSUER_MODE_UNAVAILABLE`).
+  - Hay 32 usos de `config.dteMode` y 110 de `config.emisor` en `src/`.
+- Autenticación con Hacienda: `POST /seguridad/auth` con `user` (el NIT) y `pwd` (la contraseña de la API). El token dura 48 h en pruebas y 24 h en producción.
+- Firmador oficial: `POST /firmardocumento/` con `nit`, `activo`, `passwordPri` y `dteJson`. Firma con `{nit}.crt` de su carpeta de certificados, así que varias empresas pueden compartir un firmador.
+  - Errores de configuración: 803 (no hay certificado para el NIT o la contraseña no corresponde; verificado), 809 (datos) y 812.
+  - Busca `{nit}.crt` en `./uploads` o en `CERTIFICATE_HOME`. El `.crt` es un XML (`CertificadoMH`) con las llaves; `privateKey.clave` es el SHA-512 de la contraseña privada. Se puede generar un certificado de prueba propio para firmar de verdad sin Hacienda.
+  - El `Dockerfile` oficial copia `target/*-exec.jar`: hace falta una etapa Maven previa. Puerto 8113, perfil `nonssl`.
+- El ERP ya cifra con AES-GCM (`app/core/secret_encryption.py`) y el modo de la empresa está en `company_fiscal_profiles.operating_mode` (`simulated`, `test`, `production`).
+- El servicio ya numera por NIT y ambiente, y el documento fiscal guarda su `mode`.
+- Hay un stub de Hacienda en las pruebas del servicio (`test/integration/haciendaStub.test.js`).
 
 ## Diseño
 
-- **Envío SMTP**:
-  - `smtplib` de la biblioteca estándar dentro de `asyncio.to_thread`, sin dependencias nuevas.
-  - Puerto `EmailSender` en el dominio y adaptador `SmtpEmailSender`.
-  - Configuración: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_ADDRESS`, `SMTP_SECURITY` (`none`, `starttls` o `ssl`) y `SMTP_TIMEOUT_SECONDS`.
-  - `SMTP_HOST` vacío deshabilita el envío.
-- **Registro** (`sales_fiscal_document_emails`, migración 0127): documento, destinatarios, origen (`auto` o `manual`), estado (`pending`, `sent`, `failed`), intentos, error, `message_id`, quién lo pidió y fechas.
-- **Mensaje** (dominio):
-  - Asunto: tipo de documento, número de control, empresa y, si es simulado, la marca.
-  - Cuerpo en texto y HTML: saludo, datos del documento (código de generación, fecha, total), adjuntos y el aviso de privacidad vigente.
-  - Adjuntos: `{número de control}.pdf` y `.json`.
-- **Flujo**:
-  - Al quedar `issued` o `simulated`, el trabajador crea el envío automático si el cliente tiene correo y lo encola.
-  - El envío manual valida de 1 a 5 destinatarios y lo encola.
-  - El trabajador baja el PDF del almacenamiento (o del servicio si no está guardado), arma el mensaje y envía; reintenta los errores temporales.
-- **Permisos**: enviar requiere `sales_invoices:issue`; ver el historial, `sales_invoices:read`. Todo queda en la bitácora.
-- **Pantallas**: «Enviar por correo» en el detalle del documento y en la sección Factura del pedido (con el correo del cliente propuesto), e historial de envíos en el detalle.
-- **SMTP por empresa** (pasos 7 a 10):
-  - Tabla `company_email_settings` (migración 0128): servidor, puerto, seguridad, usuario, contraseña cifrada con AES-GCM (`app/core/secret_encryption.py`), correo y nombre del remitente, activo y resultado de la última prueba.
-  - La contraseña nunca se devuelve por la API: solo `has_password`. Si se deja vacía al guardar, se conserva la anterior.
-  - Al enviar se usa el SMTP de la empresa si está activo; si no, el del servidor; si no hay ninguno, no se envía.
-  - «Enviar correo de prueba» manda un correo a la dirección que se indique y guarda el resultado.
-  - Permisos: `fiscal_settings:read` y `fiscal_settings:manage`. Se audita sin la contraseña.
+- **Firmador en compose**:
+  - Servicio `dte-signer`, que construye el jar con Maven en una etapa y lo corre sobre `amazoncorretto:21-alpine`.
+  - Volumen `dte-certificates`: el servicio DTE escribe ahí `{nit}.crt` y el firmador lo lee.
+  - Sin puertos publicados.
+- **Servicio DTE, emisor con credenciales y modo propio**:
+  - `PUT /api/emisores/:nit` acepta además `passwordApi`, `passwordPri` y `certificado` (base64). En modos distintos de simulado son obligatorios.
+  - Las contraseñas se guardan cifradas en SQLite con una clave del servicio (`DTE_CREDENTIALS_KEY`); el certificado se escribe en el volumen del firmador.
+  - El modo y el ambiente se leen del emisor, no del despliegue (`00` para pruebas, `01` para producción):
+    - token de Hacienda por NIT;
+    - firma con el NIT y la contraseña del emisor;
+    - host de Hacienda según el modo del emisor.
+  - Se quita `ISSUER_MODE_UNAVAILABLE`: `DTE_MODE` pasa a ser el modo máximo que el despliegue permite (simulado ⊂ pruebas ⊂ producción).
+  - `POST /api/emisores/:nit/probar` autentica contra Hacienda (o el stub) y verifica que el certificado esté.
+- **ERP**:
+  - Tabla `company_hacienda_credentials` (migración 0129): contraseña de la API, contraseña de la llave privada y certificado, todo cifrado. Además, el NIT del certificado, la fecha de carga y la última prueba de conexión.
+  - `GET`, `PUT` y `DELETE /fiscal/hacienda-credentials` y `POST …/test`. Nada secreto vuelve.
+  - Al registrar al emisor, `dte-worker` envía el modo del perfil y, fuera de simulado, las credenciales.
+  - Pasar el perfil a pruebas exige credenciales cargadas y probadas.
+- **Pantalla**: pestaña «Hacienda» en Configuración fiscal (subir el certificado, contraseñas de solo escritura, probar la conexión, estado y ayuda).
+- **Seguridad**: secretos solo en memoria al usarlos, nunca en la bitácora ni en registros; permisos `fiscal_settings:manage`.
 
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [x] **Paso 1: envío SMTP.**
-  - Configuración, puerto y adaptador con pruebas unitarias (SMTP falso).
-  - Mailpit en compose y `.env.example`.
-- [x] **Paso 2: migración `0127` y modelo** del registro de envíos, con prueba de migración.
-- [x] **Paso 3: dominio del mensaje.** Asunto, cuerpo, marca de simulado, aviso de privacidad y validación de destinatarios. Pruebas unitarias.
-- [x] **Paso 4: trabajador, aplicación y API.**
-  - Envío automático tras emitir y envío manual.
-  - Historial y bitácora.
-  - e2e con Mailpit (el correo llega con sus dos adjuntos).
-- [x] **Paso 5: frontend.** «Enviar por correo» e historial. vitest.
-- [x] **Paso 6: documentación.** `docs/api.md`, `docs/database-schema.md` §37 y manual de facturación.
-- [x] **Paso 7: migración `0128`** de la configuración de correo por empresa, con prueba de migración.
-- [x] **Paso 8: aplicación y API.** Leer, guardar (contraseña cifrada y escrita solo una vez), quitar y probar. Auditoría. e2e.
-- [x] **Paso 9: envío con el SMTP de la empresa.** Elegir el remitente por documento en `dte-worker`; el historial indica si hay correo disponible. e2e con Mailpit como SMTP de la empresa.
-- [x] **Paso 10: frontend.** Pestaña «Correo» en Configuración fiscal con prueba de envío. vitest.
-- [x] **Paso 11: documentación.** API, esquema §38 y manuales.
-- [x] **Paso 12: verificación y PR.** Batería completa, QA en el navegador con Mailpit y PR a `develop` con auto-merge.
+- [x] **Paso 1: firmador oficial en compose.** Construcción Maven más JRE, volumen de certificados, salud y prueba de que responde (error 803 sin certificado).
+- [x] **Paso 2: servicio, emisores con credenciales.** Registro con contraseñas cifradas y certificado al volumen. Pruebas.
+- [x] **Paso 3: servicio, modo y ambiente por emisor.**
+  - Token por NIT, firma por emisor, host y ambiente por modo; sin `ISSUER_MODE_UNAVAILABLE`.
+  - Pruebas con el stub, con dos emisores en modos distintos.
+- [x] **Paso 4: servicio, probar la conexión del emisor.** Endpoint y pruebas.
+- [x] **Paso 5: ERP, migración `0129` y credenciales cifradas.** Aplicación, API, regla para pasar a pruebas y e2e.
+- [x] **Paso 6: ERP, registro del emisor con modo y credenciales.** `dte-worker` y e2e contra el stub.
+- [x] **Paso 7: frontend.** Pestaña «Hacienda». vitest.
+- [x] **Paso 8: documentación.** API, esquema y manuales (cómo obtener el certificado y las credenciales de pruebas).
+- [x] **Paso 9: verificación y PR.** Batería completa, QA en el navegador con el stub y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: V3c terminado; PR hacia `develop`. Sigue V3d (ambiente de pruebas de Hacienda).
-  - Paso 12:
-    - Batería completa en verde: pytest 1968 (2 omitidas), servicio DTE 474, vitest, lint y build. Se confirmó que los 7 fallos anteriores eran por la migración agregada mientras corría.
-    - QA en el navegador con Mailpit como SMTP propio de Grupo Lorena: guardar, probar («se envió bien») y reenviar el DTE. El correo salió como «Pastelería Lorena <facturacion@grupolorena.example>», con dos adjuntos y `Reply-To` al correo DTE.
-    - En desarrollo, Grupo Lorena queda con Mailpit como SMTP propio (útil para demostrar; se quita en Configuración fiscal → Correo).
-  - La batería sobre los pasos 1 a 6 dio 1947 pasadas y 7 fallos. Los 7 son guardas de migración de traslados que comparan la revisión de la base con la cabeza del repositorio: la 0128 se agregó mientras corría. La batería nueva debe confirmarlo.
-  - Error latente corregido: `secret_encryption._key` no aceptaba la clave sin relleno que genera `scripts/setup.sh` (base64url de 43 caracteres), así que en desarrollo tampoco se podían cifrar los datos bancarios de proveedores. Ahora completa el relleno. Pruebas en `test_supplier_master_data.py`; `fails_closed_without_key` ahora también quita la variable de entorno.
-  - Paso 7: migración 0128 `company_email_settings`, modelo `CompanyEmailSettingsModel` y prueba de migración. Ya está aplicada en desarrollo.
-  - Paso 8:
-    - Dominio `domain/entities/company_email.py` (`validate_settings`) con 9 pruebas unitarias en verde; puerto y repositorio.
-    - Casos de uso `application/fiscal/email_settings.py`; el remitente se inyecta con `company_email_sender`, que descifra en memoria.
-    - API `/fiscal/email-settings` (GET, PUT, DELETE y `/test`).
+- **Paso en curso**: 9 hecho; falta la PR hacia `develop` y su merge.
   - Paso 9:
-    - `process_fiscal_email` usa el SMTP de la empresa si está activo; si no, el del servidor; si no hay ninguno, falla con `email_unavailable`.
-    - `SalesInvoiceEmailUseCases.available` decide `enabled` y bloquea el envío manual.
-    - `dte-worker` recibe `SUPPLIER_DATA_ENCRYPTION_KEY`. e2e en `tests/e2e/test_company_email_settings.py`.
-  - Paso 10: pestaña «Correo» (`FiscalEmailPanel.svelte`) con prueba de envío y ayuda para Google y Microsoft 365. vitest: 70 en verde (fiscal y ventas).
-  - Paso 11: `api.md` («Company outgoing email»), esquema §38, manual de configuración fiscal §5 y manual de facturación §6.
-  - QA de los pasos 1 a 6 en el navegador: el envío manual desde el detalle del documento llegó a Mailpit, a dos destinatarios, con el PDF, el JSON y el aviso de privacidad de Grupo Lorena. El historial lo marcó Enviado y la vista a 375 px no se desborda.
-  - La primera batería completa de V3c corrió sobre los pasos 1 a 6.
-  - Paso 6: `docs/api.md` (Sales invoice emails), `docs/database-schema.md` §37 y sección 6 del manual de facturación.
-  - Paso 5: componente `FiscalDocumentEmails.svelte`, en el detalle del documento y en la sección Factura del pedido.
-    - Propone el correo del cliente y acepta varios separados por comas, punto y coma o espacios.
-    - Historial con estado (Enviando, Enviado, No se envió), origen, quién lo pidió y error; se actualiza solo mientras hay envíos pendientes.
-    - Avisa si el servidor no envía correos. vitest: 5 pruebas nuevas.
-  - Paso 4:
-    - Repositorio `sales_fiscal_email_repository.py`; el documento fiscal trae `customer_email`.
-    - Casos de uso `application/sales_invoices/emails.py` (envío manual e historial).
-    - Entrega en `infrastructure/dte_email.py`:
-      - `queue_auto_email` crea el envío automático al emitirse;
-      - `process_fiscal_email` baja el PDF del almacenamiento o del servicio, arma el mensaje y envía.
-    - `dte-worker`: tarea `send_fiscal_email`; la conciliación también reencola los envíos pendientes.
-    - API:
-      - `GET /sales/fiscal-documents/{id}/emails` devuelve `enabled`, `customer_email` e `items`;
-      - `POST …/emails` con `{recipients?}` responde 202.
-      - Bitácora: `REQUEST_FISCAL_DOCUMENT_EMAIL`, `FISCAL_DOCUMENT_EMAIL_SENT` y `_FAILED`.
-    - e2e: 2 pruebas nuevas en `test_sales_invoices.py` que comprueban en Mailpit (`http://mailpit:8025/api/v1/search`) la llegada con dos adjuntos, el `Reply-To`, que no se reenvía, las reglas y los permisos.
-    - Después de cambiar el código del trabajador hay que reiniciar `dte-worker`; arq no recarga solo.
-  - Paso 3: `app/domain/entities/sales_fiscal_email.py`.
-    - `normalize_recipients`: recorta, pasa a minúsculas, quita repetidos y acepta de 1 a 5 correos.
-    - `customer_recipients` usa el correo de la ficha del cliente.
-    - `compose` arma el asunto, el texto y el HTML escapado, con la fecha en El Salvador y el total en formato `$1,250.00`.
-    - Marca de simulado en el asunto y en el cuerpo; aviso de privacidad al pie.
-    - Al cliente se le trata de usted.
-  - Paso 2: `sales_fiscal_document_emails`, con:
-    - destinatarios `text[]` (de 1 a 5) y origen `auto` o `manual`; el manual exige quién lo pidió;
-    - estado `pending`, `sent` o `failed`; `sent` exige `sent_at` y `message_id`;
-    - un solo envío automático por documento.
-    - Modelo `SalesFiscalDocumentEmailModel`; prueba `tests/integration/test_sales_fiscal_document_emails_migration.py`.
+    - Batería completa: backend 1978 pasaron y 2 fallaron en `tests/integration/test_fiscal_repository.py`,
+      que no sembraban credenciales probadas antes de pasar a pruebas o producción. Se agregó
+      `_tested_credentials` y ahora también comprueba que sin ellas se rechaza. El archivo pasa (6).
+      OCR, DTE, frontend y lint se corrieron aparte, porque la batería se detiene tras el backend.
+    - QA en el navegador de la pestaña «Hacienda»: estado «Sin cargar», textos de ayuda, modo claro y
+      oscuro, 375 px sin desborde y error de validación al guardar vacío. La subida del certificado y
+      «Probar conexión» quedan cubiertas por vitest y las e2e (el panel del navegador no sube archivos).
+    - En desarrollo `DTE_MODE` es simulado y el `.env` no tiene `DTE_CREDENTIALS_KEY`: para probar con
+      credenciales reales hay que agregarla (con permiso del usuario) y subir el modo del despliegue.
+  - Paso 8: `docs/api.md` («Hacienda credentials»), esquema §39, manual de configuración fiscal §5 «Hacienda» (Correo pasa a §6) y `dte-service/docs/multiemisor.md` (modo máximo, credenciales, `/probar`, firmador, variables nuevas y errores).
+  - Paso 7: pestaña «Hacienda» en Configuración fiscal (`FiscalHaciendaPanel.svelte`).
+    - El certificado se lee en el navegador y viaja en base64; las contraseñas no se vuelven a mostrar.
+    - Estado: Sin cargar, Sin probar o Probadas, con el NIT y la huella del certificado.
+    - «Probar conexión» muestra la autenticación y la firma por separado; también se puede quitar.
+    - vitest: 4 pruebas nuevas.
+  - Paso 6:
+    - `dte-worker` registra al emisor con el modo del documento y, fuera de simulado, con sus credenciales descifradas en memoria (`_credentials`).
+    - Sin credenciales, el documento falla sin reintentar (`hacienda_credentials_missing`).
+    - e2e `tests/e2e/test_hacienda_issuing.py` con un cliente DTE falso. El camino real (firmador y Hacienda simulados) lo cubre `modoPorEmisor.test.js` en el servicio.
+    - Decisión: no se levanta un segundo servicio DTE en modo pruebas para las e2e del ERP; la QA con el stub se hará a mano si hace falta.
+  - Paso 5:
+    - Migración 0129 `company_hacienda_credentials`: contraseñas y certificado cifrados con AES-GCM (`secret_encryption`), más la huella y el NIT del certificado y la última prueba.
+    - Dominio `hacienda_credentials.py`: el certificado debe ser del NIT de la empresa y abrir con su contraseña privada (SHA-512, como el firmador).
+    - Casos de uso `application/fiscal/hacienda_credentials.py`:
+      - lo que se deja en blanco se conserva;
+      - quitar exige estar en simulado;
+      - probar registra a la empresa en el servicio con sus credenciales (modo pruebas, o producción si ya lo está) y llama a `/probar`.
+    - API `/fiscal/hacienda-credentials` (GET, PUT, DELETE y `/test`); nada secreto vuelve ni entra en la bitácora.
+    - `IssuerFacts.hacienda_credentials_tested`: pasar a pruebas exige credenciales probadas (`fiscal_test_not_ready`) y producción también lo exige.
+    - Servicio: `/probar` informa si el despliegue no admite el modo de la empresa.
+    - Pruebas: unitarias del certificado, de migración y e2e `test_hacienda_credentials.py`. `test_fiscal_settings` ahora siembra credenciales probadas antes de pasar a producción.
+  - Paso 4: `POST /api/emisores/:nit/probar` (alcance `issuers`, `src/services/issuerConnectionTest.js`). Autentica con Hacienda y firma un documento de prueba con el certificado del emisor; devuelve `{ok, autenticacion:{ok,mensaje}, firma:{ok,mensaje}}`. No transmite ni consume números de control; en simulado responde ok sin salir. Servicio: 483 en verde.
+  - Paso 3:
+    - `src/services/issuerContext.js` (`AsyncLocalStorage`): el middleware `contextoEmisor` corre cada solicitud de `/api/dte` con el modo, el ambiente, las URLs de Hacienda y las credenciales (descifradas solo al usarlas) del emisor del encabezado.
+    - `retryQueue` usa el emisor de cada documento. Sin contexto se usa el emisor del entorno, como antes.
+    - `authService` guarda un token por NIT y modo; el firmador recibe el NIT y la contraseña privada del emisor; la identificación y la transmisión usan el ambiente del emisor.
+    - En `dte.routes.js`, «simulado» es el modo del emisor.
+    - `DTE_MODE` es el modo máximo (simulado < pruebas < producción): un emisor de un modo mayor recibe `ISSUER_MODE_UNAVAILABLE`.
+    - Config: el emisor del entorno solo existe si hay `MH_NIT`. Sin `MH_*_URL` se usan las rutas oficiales del host del modo, y `haciendaPorModo` da las URLs de otro modo.
+    - Prueba nueva `test/integration/modoPorEmisor.test.js`: dos empresas en pruebas y una simulada en el mismo despliegue, con token y firma por empresa y ambiente 00; credenciales equivocadas; producción rechazada. Servicio: 482 en verde.
+  - **Límite conocido** (para V4): la contingencia ya usa el token y las URLs del emisor, pero `contingenciaService` todavía toma datos del emisor del entorno (3 usos de `config.emisor`). La invalidación no depende de `config.emisor`. Se revisa con V4.
+  - **Para las pruebas del paso 6 y la QA**: el despliegue de desarrollo tiene `DTE_MODE=simulated`, así que una empresa en pruebas recibe 409. Para probar contra el stub hay que levantar el servicio con `DTE_MODE=hacienda-test` y las `MH_*_URL` del stub.
+  - Paso 2:
+    - `src/services/issuerCredentials.js`:
+      - contraseñas cifradas con AES-256-GCM (`DTE_CREDENTIALS_KEY`, formato `v1:`) en la tabla `emisor_credenciales`;
+      - certificado validado (mismo NIT y SHA-512 de la contraseña privada) y escrito de forma atómica en `DTE_CERTIFICATES_DIR`.
+    - `PUT /api/emisores/:nit` acepta `credenciales` y, fuera de simulado, las exige (`ISSUER_CREDENTIALS_REQUIRED`). La respuesta solo trae `credenciales.{configuradas, certificadoPresente, certificadoSha256}`.
+    - Helper `test/helpers/certificadoPrueba.js`: genera un `.crt` con llaves RSA reales. Verificado a mano: el firmador oficial firma con él (JWS RS512 que se verifica con la llave pública).
+    - `DTE_CREDENTIALS_KEY` está en compose, `setup.sh`, `.env.example` y CI. El `.env` del usuario todavía no la tiene: pedir permiso para agregarla al llegar a las e2e del paso 6.
+    - Servicio: 479 pruebas en verde.
   - Paso 1:
-    - Puerto `app/domain/ports/email_sender.py` y adaptador `app/infrastructure/smtp_email_sender.py` (smtplib en hilo; errores 4xx y de red son reintentables).
-    - Configuración `SMTP_*`; `SMTP_HOST` exige `SMTP_FROM_ADDRESS`.
-    - Mailpit `axllent/mailpit:v1.21.8` con su interfaz en `127.0.0.1:8025`; backend y `dte-worker` apuntan a `mailpit:1025` sin TLS. En producción, Mailpit va con el perfil `local-mail` y el SMTP sale de las variables.
-    - Prueba de humo: un correo real llegó a Mailpit con su adjunto.
+    - Código oficial copiado sin cambios a `dte-signer/`, con `Dockerfile.erp` (Maven 3.9.9 + Temurin 21 JRE, usuario sin privilegios, salud en `/firmardocumento/status`) y `PROCEDENCIA.md`.
+    - Servicio `dte-signer` en compose (perfil `dte` en producción) y volumen `dte-certificates`: el firmador lo monta de solo lectura en `/certificados` y `dte-service` lo escribe en `/app/certificados`, que la imagen crea con dueño `node`.
+    - `dte-service` recibe `FIRMADOR_URL` y `DTE_CERTIFICATES_DIR`.
+    - Verificado: compila, arranca en 6 s y, sin certificado, responde 803.
 - **Contexto**:
   - El frontend usa SvelteKit 3.
   - El servicio DTE se prueba con `./scripts/run-tests.sh dte`.
-  - El proyecto de referencia es de solo lectura.
-  - Si el login de desarrollo da 500 tras cambios grandes del frontend, reiniciar el contenedor `frontend`.
+  - Si el login de desarrollo da 500 o una pantalla nueva no aparece, reiniciar el contenedor `frontend`.
+  - `dte-worker` no recarga solo: reiniciarlo tras cambios.
 - **Comandos**:
-  - Pruebas con objetivo explícito; sin argumento corre la batería completa (unos 45 minutos).
-  - No hacer commits mientras corre la batería.
+  - Pruebas con objetivo explícito; sin argumento corre la batería completa (unos 35 a 45 minutos).
+  - No hacer commits ni correr pruebas de base mientras corre la batería. Tampoco agregar migraciones mientras corre: las guardas de traslados comparan la revisión de la base con la cabeza del repositorio.
   - Git: `git -c http.sslBackend=schannel` para `fetch` y `push`.
+- **Decisión del usuario (17/11/2026)**: el CI de la PR #51 falló por CVE-2026-112366 (`picomatch` ≤ 4.0.7,
+  sin versión corregida, solo en dependencias de desarrollo del frontend). Se ignora en `.trivyignore`
+  con vencimiento 31/01/2027; al salir la corrección, override en `frontend/package.json` y quitarla.
 - **Reglas del usuario**:
   - Commits y PR sin Co-Authored-By ni «Generated with Claude Code».
   - PR hacia `develop` con Auto-fix y auto-merge.
   - Ignorar el check de Vercel.
   - Dentro de una empresa, la interfaz no menciona a otras empresas.
+  - Credenciales reales: nunca en el chat ni en archivos del repo; las carga el usuario en la pantalla.

@@ -528,6 +528,23 @@ services:
       - "127.0.0.1:8025:8025"
     restart: unless-stopped
 
+  # Firmador oficial de Hacienda, compilado desde dte-signer/ (bloque V3d). Red interna.
+  dte-signer:
+    build:
+      context: ./dte-signer
+      dockerfile: Dockerfile.erp
+    environment:
+      SPRING_PROFILES_ACTIVE: nonssl
+      CERTIFICATE_HOME: /certificados
+    volumes:
+      - dte-certificates:/certificados:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 15s
+
   # Servicio DTE multiemisor (red interna; no publica puertos).
   dte-service:
     build:
@@ -538,10 +555,14 @@ services:
       DTE_SIMULATION_SQLITE_PATH: /app/data/dte-simulation.db
       SQLITE_PATH: /app/data/dte.db
       MS_API_KEYS: ${DTE_SERVICE_API_KEY:-}
+      DTE_CREDENTIALS_KEY: ${DTE_CREDENTIALS_KEY:-}
       MS_API_KEY_SCOPES: issue,read,invalidate,contingency,simulate,issuers
+      FIRMADOR_URL: http://dte-signer:8113/firmardocumento/
+      DTE_CERTIFICATES_DIR: /app/certificados
       LOG_LEVEL: ${DTE_LOG_LEVEL:-info}
     volumes:
       - dte-data:/app/data
+      - dte-certificates:/app/certificados
     restart: unless-stopped
     stop_grace_period: 15s
 
@@ -872,8 +893,12 @@ services:
       - json
       - --output
       - /reports/trivy-report.json
+      # Excepciones justificadas y con vencimiento; ver .trivyignore.
+      - --ignorefile
+      - /config/.trivyignore
       - /src
     volumes:
+      - ./.trivyignore:/config/.trivyignore:ro
       # Vulnerability scanning consumes manifests/lockfiles; mounting only these
       # keeps Windows bind-mount traversal deterministic without reducing scope.
       - ./backend/pyproject.toml:/src/backend/pyproject.toml:ro
@@ -1138,3 +1163,4 @@ volumes:
   vlm-models:
   lan-proxy-data:
   dte-data:
+  dte-certificates:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import pytest
 from app.application.fiscal import FiscalSettingsUseCases
@@ -19,6 +20,7 @@ from app.domain.entities.fiscal import (
 from app.domain.ports.fiscal_repository import ProfileValues
 from app.infrastructure.db.session import async_session_factory, dispose_engine
 from app.infrastructure.models.employee import Employee
+from app.infrastructure.models.fiscal import CompanyHaciendaCredentialsModel
 from app.infrastructure.models.organization import (
     Branch,
     Company,
@@ -120,6 +122,23 @@ async def _issuer(db: AsyncSession, actor: uuid.UUID, label: str) -> Issuer:
     return Issuer(company.id, branches[0], branches[1])
 
 
+async def _tested_credentials(db: AsyncSession, company_id: uuid.UUID) -> None:
+    """Credenciales de Hacienda ya probadas (V3d); su flujo se prueba aparte."""
+    db.add(
+        CompanyHaciendaCredentialsModel(
+            company_id=company_id,
+            api_password_encrypted=b"cifrado",
+            private_key_password_encrypted=b"cifrado",
+            certificate_encrypted=b"cifrado",
+            certificate_sha256="a" * 64,
+            certificate_nit="06142803901121",
+            last_test_at=datetime.now(UTC),
+            last_test_ok=True,
+        )
+    )
+    await db.flush()
+
+
 @pytest.fixture
 async def actor(session: AsyncSession) -> uuid.UUID:
     suffix = uuid.uuid4().hex[:10]
@@ -147,13 +166,14 @@ async def test_profile_defaults_then_saved(
     profile = await use_cases.get_profile(issuer.company_id)
     assert profile.configured is False
     assert profile.operating_mode == OperatingMode.SIMULATED
-    saved = await use_cases.update_profile(
-        issuer.company_id,
-        ProfileValues(
-            TaxpayerCategory.MEDIUM, PersonType.LEGAL, OperatingMode.TEST, "dte@x.test", None
-        ),
-        actor,
+    to_test = ProfileValues(
+        TaxpayerCategory.MEDIUM, PersonType.LEGAL, OperatingMode.TEST, "dte@x.test", None
     )
+    with pytest.raises(BusinessRuleError) as not_tested:
+        await use_cases.update_profile(issuer.company_id, to_test, actor)
+    assert not_tested.value.code == "fiscal_test_not_ready"
+    await _tested_credentials(session, issuer.company_id)
+    saved = await use_cases.update_profile(issuer.company_id, to_test, actor)
     assert saved.configured is True
     assert saved.operating_mode == OperatingMode.TEST
     assert saved.dte_email == "dte@x.test"
@@ -339,6 +359,9 @@ async def test_production_needs_a_ready_issuer_and_stays_ready(
         actor_id=actor,
     )
     assert approved.certified_at is not None
+    with pytest.raises(BusinessRuleError):  # Faltan las credenciales probadas.
+        await use_cases.update_profile(issuer.company_id, production, actor)
+    await _tested_credentials(session, issuer.company_id)
     assert (
         await use_cases.update_profile(issuer.company_id, production, actor)
     ).operating_mode == (OperatingMode.PRODUCTION)

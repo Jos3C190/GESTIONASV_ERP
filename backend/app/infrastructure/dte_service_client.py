@@ -7,11 +7,17 @@ misma clave devuelve el mismo DTE en lugar de crear otro.
 
 from __future__ import annotations
 
+import base64
 from typing import Any
 
 import httpx
 
-from app.domain.ports.dte_service import DteServiceError, IssueResult
+from app.domain.ports.dte_service import (
+    ConnectionCheck,
+    DteServiceError,
+    IssuerCredentials,
+    IssueResult,
+)
 
 _PATHS = {"01": "/api/dte/v2/factura", "03": "/api/dte/v2/ccf"}
 #: Códigos del servicio que se resuelven solos al reintentar con la misma clave.
@@ -74,21 +80,44 @@ class HttpDteServiceClient:
         return DteServiceError(message, code=code, transient=transient, status=response.status_code)
 
     async def register_issuer(
-        self, nit: str, *, name: str, mode: str, document_types: list[str]
+        self,
+        nit: str,
+        *,
+        name: str,
+        mode: str,
+        document_types: list[str],
+        credentials: IssuerCredentials | None = None,
     ) -> None:
-        response = await self._send(
-            None,
-            "PUT",
-            f"/api/emisores/{nit}",
-            json={
-                "nombre": name,
-                "modo": mode,
-                "tiposHabilitados": document_types,
-                "activo": True,
-            },
-        )
+        body: dict[str, Any] = {
+            "nombre": name,
+            "modo": mode,
+            "tiposHabilitados": document_types,
+            "activo": True,
+        }
+        if credentials is not None:
+            body["credenciales"] = {
+                "passwordApi": credentials.api_password,
+                "passwordPri": credentials.private_key_password,
+                "certificado": base64.b64encode(credentials.certificate).decode("ascii"),
+            }
+        response = await self._send(None, "PUT", f"/api/emisores/{nit}", json=body)
         if response.is_error:
             raise self._error(response)
+
+    async def test_issuer(self, nit: str) -> ConnectionCheck:
+        response = await self._send(None, "POST", f"/api/emisores/{nit}/probar")
+        if response.is_error:
+            raise self._error(response)
+        data = response.json()
+        auth = data.get("autenticacion") or {}
+        firma = data.get("firma") or {}
+        return ConnectionCheck(
+            ok=bool(data.get("ok")),
+            authentication_ok=bool(auth.get("ok")),
+            authentication_message=str(auth.get("mensaje") or ""),
+            signature_ok=bool(firma.get("ok")),
+            signature_message=str(firma.get("mensaje") or ""),
+        )
 
     async def issue(
         self, document_type: str, *, nit: str, idempotency_key: str, body: dict[str, Any]

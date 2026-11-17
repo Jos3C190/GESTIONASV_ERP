@@ -11,6 +11,7 @@
  */
 const { db } = require('../db');
 const config = require('../config');
+const credenciales = require('./issuerCredentials');
 
 const MODOS = Object.freeze(['simulated', 'hacienda-test', 'production']);
 const NIT_REGEX = /^(\d{9}|\d{14})$/;
@@ -48,6 +49,8 @@ function aRegistro(row) {
     modo: row.modo,
     tiposHabilitados: row.tipos_habilitados ? row.tipos_habilitados.split(',') : [],
     activo: row.activo === 1,
+    // Nunca las contraseñas: solo si hay credenciales y la huella del certificado.
+    credenciales: credenciales.estado(row.nit),
     creadoEn: row.creado_en,
     actualizadoEn: row.actualizado_en,
   };
@@ -75,6 +78,16 @@ function registrar(nit, datos) {
     throw new IssuerError(400, 'INVALID_ISSUER', 'Los tipos de DTE son códigos de dos dígitos');
   }
   const activo = datos?.activo === false ? 0 : 1;
+  // Fuera de simulado el emisor firma y se autentica con Hacienda con lo suyo (V3d).
+  if (datos?.credenciales) {
+    credenciales.guardar(limpio, datos.credenciales);
+  } else if (datos.modo !== 'simulated' && !credenciales.estado(limpio).configuradas) {
+    throw new IssuerError(
+      400,
+      'ISSUER_CREDENTIALS_REQUIRED',
+      'Un emisor en pruebas o producción necesita sus credenciales de Hacienda y su certificado',
+    );
+  }
   db.prepare(
     `INSERT INTO emisores (nit, nombre, modo, tipos_habilitados, activo)
      VALUES (?, ?, ?, ?, ?)
@@ -105,12 +118,13 @@ function exigirEmision(nit, tipoDte) {
     throw new IssuerError(403, 'UNAUTHORIZED_ISSUER', 'El emisor no está registrado en el servicio DTE');
   }
   if (!registro.activo) throw new IssuerError(403, 'ISSUER_INACTIVE', 'El emisor está desactivado');
-  // Varios modos a la vez exigen una sesión con Hacienda por emisor (V3d).
-  if (registro.modo !== config.dteMode) {
+  // Cada emisor usa su modo (V3d) siempre que el despliegue lo admita: DTE_MODE
+  // es el modo máximo (simulado < pruebas < producción).
+  if (!require('./issuerContext').modoPermitido(registro.modo)) {
     throw new IssuerError(
       409,
       'ISSUER_MODE_UNAVAILABLE',
-      `El emisor está en modo ${registro.modo} y este despliegue opera en ${config.dteMode}`
+      `El emisor está en modo ${registro.modo} y este despliegue admite hasta ${config.dteMode}`
     );
   }
   if (!registro.tiposHabilitados.includes(tipoDte)) {
