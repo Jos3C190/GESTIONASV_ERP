@@ -2,9 +2,9 @@ name: Security gate
 
 on:
   pull_request:
-    branches: [develop, main, feature/ai-bedrock-guardrails]
+    branches: [develop, main]
   push:
-    branches: [develop, main, feature/ai-bedrock-guardrails]
+    branches: [develop, main]
 
 permissions:
   contents: read
