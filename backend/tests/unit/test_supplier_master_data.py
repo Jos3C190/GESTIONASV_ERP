@@ -54,7 +54,16 @@ def test_bank_encryption_decrypts_cryptography_45_ciphertext(
     assert decrypt_secret(ciphertext) == "001234567890"
 
 
+def test_key_without_base64_padding_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """scripts/setup.sh writes the 32-byte key as unpadded base64url (43 characters)."""
+    key = base64.urlsafe_b64encode(b"1" * 32).decode("ascii").rstrip("=")
+    assert len(key) == 43
+    monkeypatch.setattr(settings, "SUPPLIER_DATA_ENCRYPTION_KEY", key)
+    assert decrypt_secret(encrypt_secret("clave-smtp")) == "clave-smtp"
+
+
 def test_bank_encryption_fails_closed_without_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "SUPPLIER_DATA_ENCRYPTION_KEY", None)
+    monkeypatch.delenv("SUPPLIER_DATA_ENCRYPTION_KEY", raising=False)
     with pytest.raises(RuntimeError):
         encrypt_secret("123456")

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit.audit_service import AuditService
 from app.core.config import settings
+from app.core.secret_encryption import decrypt_secret
 from app.domain.entities.sales_fiscal_document import FiscalDocumentStatus
 from app.domain.entities.sales_fiscal_email import (
     EmailOrigin,
@@ -29,6 +30,7 @@ from app.domain.entities.sales_fiscal_email import (
     compose,
     customer_recipients,
 )
+from app.domain.ports.company_email_repository import StoredEmailSettings
 from app.domain.ports.dte_service import DteService
 from app.domain.ports.email_sender import (
     EmailAttachment,
@@ -39,6 +41,9 @@ from app.domain.ports.email_sender import (
 from app.domain.ports.object_storage import ObjectStorage
 from app.domain.ports.sales_fiscal_repository import FiscalDocument, FiscalDocumentEmail
 from app.infrastructure.repositories.audit_repository import SqlAlchemyAuditRepository
+from app.infrastructure.repositories.company_email_repository import (
+    SqlAlchemyCompanyEmailRepository,
+)
 from app.infrastructure.repositories.privacy_repository import SqlAlchemyPrivacyRepository
 from app.infrastructure.repositories.sales_fiscal_email_repository import (
     SqlAlchemySalesFiscalEmailRepository,
@@ -65,6 +70,21 @@ def email_sender() -> SmtpEmailSender | None:
     )
 
 
+def company_email_sender(stored: StoredEmailSettings) -> SmtpEmailSender:
+    """El SMTP propio de la empresa, con la contraseña descifrada solo en memoria."""
+
+    settings_ = stored.settings
+    return SmtpEmailSender(
+        settings_.host,
+        settings_.port,
+        settings_.from_address,
+        username=settings_.username,
+        password=decrypt_secret(stored.password_encrypted) if stored.password_encrypted else None,
+        security=settings_.security,
+        timeout_seconds=settings.SMTP_TIMEOUT_SECONDS,
+    )
+
+
 async def _audit(
     session: AsyncSession, document: FiscalDocument, email: FiscalDocumentEmail, action: str
 ) -> None:
@@ -87,16 +107,33 @@ async def _audit(
     )
 
 
+SenderFactory = Callable[[StoredEmailSettings], EmailSender]
+
+
+async def _company_settings(
+    scope: SessionScope, company_id: uuid.UUID
+) -> StoredEmailSettings | None:
+    async with scope() as session:
+        stored = await SqlAlchemyCompanyEmailRepository(session).get(company_id)
+    return stored if stored is not None and stored.settings.is_enabled else None
+
+
+async def email_available(scope: SessionScope, company_id: uuid.UUID) -> bool:
+    """Si la empresa tiene SMTP propio activo o el servidor tiene uno."""
+
+    return bool(settings.SMTP_HOST) or await _company_settings(scope, company_id) is not None
+
+
 async def queue_auto_email(scope: SessionScope, document: FiscalDocument) -> uuid.UUID | None:
     """Crea el envío automático de un documento recién emitido; ``None`` si no corresponde."""
 
-    if not settings.SMTP_HOST or document.status not in (
+    if document.status not in (
         FiscalDocumentStatus.ISSUED,
         FiscalDocumentStatus.SIMULATED,
     ):
         return None
     recipients = customer_recipients(document.customer_email)
-    if not recipients:
+    if not recipients or not await email_available(scope, document.company_id):
         return None
     async with scope() as session:
         repo = SqlAlchemySalesFiscalEmailRepository(session)
@@ -133,7 +170,11 @@ async def _pdf(
 
 
 async def _message(
-    scope: SessionScope, document: FiscalDocument, email: FiscalDocumentEmail, pdf: bytes
+    scope: SessionScope,
+    document: FiscalDocument,
+    email: FiscalDocumentEmail,
+    pdf: bytes,
+    sender_name: str | None,
 ) -> OutgoingEmail:
     async with scope() as session:
         notice = await SqlAlchemyPrivacyRepository(session).current_notice(document.company_id)
@@ -155,7 +196,7 @@ async def _message(
         )
     )
     return OutgoingEmail(
-        sender_name=company,
+        sender_name=sender_name or company,
         recipients=email.recipients,
         subject=composed.subject,
         text=composed.text,
@@ -185,13 +226,17 @@ async def _finish(
 async def process_fiscal_email(
     email_id: uuid.UUID,
     *,
-    sender: EmailSender,
+    sender: EmailSender | None,
     storage: ObjectStorage | None,
     client: DteService | None,
     scope: SessionScope,
     max_attempts: int | None = None,
+    company_sender: SenderFactory | None = None,
 ) -> FiscalDocumentEmail | None:
-    """Entrega un envío pendiente. Lanza ``EmailDeliveryError`` reintentable si quedó pendiente."""
+    """Entrega un envío pendiente. Lanza ``EmailDeliveryError`` reintentable si quedó pendiente.
+
+    Usa el SMTP propio de la empresa si está activo; si no, ``sender`` (el del servidor).
+    """
 
     limit = max_attempts or settings.DTE_MAX_ATTEMPTS
     async with scope() as session:
@@ -208,8 +253,18 @@ async def process_fiscal_email(
         email.error_code = email.error_code or "email_attempts_exhausted"
         return await _finish(scope, document, email, "FISCAL_DOCUMENT_EMAIL_FAILED")
     try:
-        message = await _message(scope, document, email, await _pdf(document, storage, client))
-        email.message_id = await sender.send(message)
+        stored = await _company_settings(scope, document.company_id)
+        chosen = (company_sender or company_email_sender)(stored) if stored else sender
+        if chosen is None:
+            raise EmailDeliveryError(  # noqa: TRY301 - se registra igual que un fallo SMTP
+                "No hay servidor de correo configurado para la empresa.",
+                code="email_unavailable",
+                transient=False,
+            )
+        from_name = stored.settings.from_name if stored else None
+        pdf = await _pdf(document, storage, client)
+        message = await _message(scope, document, email, pdf, from_name)
+        email.message_id = await chosen.send(message)
     except EmailDeliveryError as error:
         email.error_code = error.code
         email.error_message = error.message[:_MAX_ERROR]

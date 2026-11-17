@@ -17,6 +17,7 @@ from app.api.v1.company_access import request_company_id
 from app.api.v1.deps import (
     CurrentUser,
     get_audit_service,
+    get_company_email_settings_use_cases,
     get_fiscal_settings_use_cases,
     require_permission,
 )
@@ -28,6 +29,10 @@ from app.api.v1.schemas.fiscal import (
     DocumentTypeOut,
     EconomicActivityIn,
     EconomicActivityOut,
+    EmailSettingsIn,
+    EmailSettingsOut,
+    EmailTestIn,
+    EmailTestOut,
     EstablishmentAddressOut,
     EstablishmentIn,
     EstablishmentOut,
@@ -40,6 +45,9 @@ from app.api.v1.schemas.fiscal import (
 )
 from app.application.audit.audit_service import AuditService
 from app.application.fiscal import FiscalSettingsUseCases
+from app.application.fiscal.email_settings import CompanyEmailSettingsUseCases
+from app.core.config import settings as app_settings
+from app.domain.entities.company_email import EmailSettings, EmailSettingsInput
 from app.domain.entities.fiscal import (
     DocumentTypeSetting,
     EconomicActivity,
@@ -52,6 +60,9 @@ from app.domain.ports.fiscal_repository import ProfileValues
 router = APIRouter(prefix="/fiscal", tags=["fiscal"])
 
 UseCases = Annotated[FiscalSettingsUseCases, Depends(get_fiscal_settings_use_cases)]
+EmailSettingsUseCases = Annotated[
+    CompanyEmailSettingsUseCases, Depends(get_company_email_settings_use_cases)
+]
 Audit = Annotated[AuditService, Depends(get_audit_service)]
 _READ = [Depends(require_permission("fiscal_settings:read"))]
 _MANAGE = [Depends(require_permission("fiscal_settings:manage"))]
@@ -590,3 +601,138 @@ async def update_document_type(
         after=item,
     )
     return _document_out(item)
+
+
+# --- correo saliente propio (bloque V3c) ---
+
+
+def _email_settings_out(settings_: EmailSettings | None) -> EmailSettingsOut:
+    fallback = bool(app_settings.SMTP_HOST)
+    if settings_ is None:
+        return EmailSettingsOut(configured=False, server_fallback=fallback)
+    return EmailSettingsOut(
+        configured=True,
+        host=settings_.host,
+        port=settings_.port,
+        security=settings_.security,
+        username=settings_.username,
+        has_password=settings_.has_password,
+        from_address=settings_.from_address,
+        from_name=settings_.from_name,
+        is_enabled=settings_.is_enabled,
+        last_test_at=settings_.last_test_at,
+        last_test_ok=settings_.last_test_ok,
+        last_test_error=settings_.last_test_error,
+        server_fallback=fallback,
+    )
+
+
+@router.get(
+    "/email-settings",
+    response_model=EmailSettingsOut,
+    summary="Correo saliente propio de la empresa",
+    dependencies=_READ,
+)
+async def get_email_settings(request: Request, email: EmailSettingsUseCases) -> EmailSettingsOut:
+    return _email_settings_out(await email.get(request_company_id(request)))
+
+
+@router.put(
+    "/email-settings",
+    response_model=EmailSettingsOut,
+    summary="Guardar el SMTP propio de la empresa",
+    dependencies=_MANAGE,
+)
+async def save_email_settings(
+    body: EmailSettingsIn,
+    request: Request,
+    current: CurrentUser,
+    email: EmailSettingsUseCases,
+    audit: Audit,
+) -> EmailSettingsOut:
+    company_id = request_company_id(request)
+    before, saved = await email.save(
+        company_id,
+        EmailSettingsInput(
+            host=body.host,
+            port=body.port,
+            security=body.security,
+            username=body.username,
+            password=body.password,
+            from_address=body.from_address,
+            from_name=body.from_name,
+            is_enabled=body.is_enabled,
+        ),
+        current.id,
+    )
+    # La contraseña no entra a la bitácora: EmailSettings solo dice si existe.
+    await _record(
+        audit,
+        request,
+        action="UPDATE" if before else "CREATE",
+        actor=current.id,
+        company_id=company_id,
+        resource_type="company_email_settings",
+        resource_id=str(company_id),
+        before=before,
+        after=saved,
+    )
+    return _email_settings_out(saved)
+
+
+@router.delete(
+    "/email-settings",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Quitar el SMTP propio de la empresa",
+    dependencies=_MANAGE,
+)
+async def delete_email_settings(
+    request: Request, current: CurrentUser, email: EmailSettingsUseCases, audit: Audit
+) -> None:
+    company_id = request_company_id(request)
+    before = await email.get(company_id)
+    if before is None:
+        return
+    await email.remove(company_id)
+    await _record(
+        audit,
+        request,
+        action="DELETE",
+        actor=current.id,
+        company_id=company_id,
+        resource_type="company_email_settings",
+        resource_id=str(company_id),
+        before=before,
+    )
+
+
+@router.post(
+    "/email-settings/test",
+    response_model=EmailTestOut,
+    summary="Enviar un correo de prueba con el SMTP de la empresa",
+    dependencies=_MANAGE,
+)
+async def test_email_settings(
+    body: EmailTestIn,
+    request: Request,
+    current: CurrentUser,
+    use_cases: UseCases,
+    email: EmailSettingsUseCases,
+    audit: Audit,
+) -> EmailTestOut:
+    company_id = request_company_id(request)
+    identity = await use_cases.company_identity(company_id)
+    result = await email.test(company_id, body.recipient, identity.commercial_name or identity.name)
+    await audit.record(
+        action="TEST_COMPANY_EMAIL_SETTINGS",
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="company_email_settings",
+        resource_id=str(company_id),
+        after_state={"ok": result.ok, "recipient": body.recipient.strip().lower()},
+        status="success" if result.ok else "failure",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        required=True,
+    )
+    return EmailTestOut(ok=result.ok, message=result.message)

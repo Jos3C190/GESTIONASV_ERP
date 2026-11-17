@@ -385,7 +385,7 @@ async def fiscal_document_emails(
     document = await _scoped(use_cases, session, current, company_id, document_id)
     items = await emails.history(company_id, document_id)
     return FiscalEmailHistoryOut(
-        enabled=bool(settings.SMTP_HOST),
+        enabled=await emails.available(company_id),
         customer_email=document.customer_email,
         items=[_email_out(item) for item in items],
     )
@@ -409,11 +409,6 @@ async def send_fiscal_document_email(
     emails: EmailUseCases,
     audit: Audit,
 ) -> FiscalEmailOut:
-    if not settings.SMTP_HOST:
-        raise BusinessRuleError(
-            "El envío de correos no está configurado en este servidor.",
-            code="sales_invoice_email_unavailable",
-        )
     await _scoped(use_cases, session, current, company_id, document_id)
     document, email = await emails.request(company_id, document_id, current.id, body.recipients)
     await audit.record(

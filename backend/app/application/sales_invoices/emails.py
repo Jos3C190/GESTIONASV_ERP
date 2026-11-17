@@ -7,6 +7,7 @@ un usuario y el historial. Ambos quedan ``pending`` y los entrega ``dte-worker``
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.domain.entities.sales_fiscal_email import (
@@ -26,10 +27,18 @@ from app.domain.ports.sales_fiscal_repository import (
 
 class SalesInvoiceEmailUseCases:
     def __init__(
-        self, documents: SalesFiscalRepository, emails: SalesFiscalEmailRepository
+        self,
+        documents: SalesFiscalRepository,
+        emails: SalesFiscalEmailRepository,
+        available: Callable[[uuid.UUID], Awaitable[bool]],
     ) -> None:
         self._documents = documents
         self._emails = emails
+        self._available = available
+
+    async def available(self, company_id: uuid.UUID) -> bool:
+        """Si la empresa tiene SMTP propio activo o el servidor tiene uno."""
+        return await self._available(company_id)
 
     async def _document(self, company_id: uuid.UUID, document_id: uuid.UUID) -> FiscalDocument:
         document = await self._documents.get(company_id, document_id)
@@ -51,6 +60,12 @@ class SalesInvoiceEmailUseCases:
         recipients: list[str] | None,
     ) -> tuple[FiscalDocument, FiscalDocumentEmail]:
         document = await self._document(company_id, document_id)
+        if not await self._available(company_id):
+            raise BusinessRuleError(
+                "Configura el correo saliente de la empresa (Configuración fiscal → Correo) "
+                "para enviar documentos.",
+                code="sales_invoice_email_unavailable",
+            )
         require_sendable(document.status.value)
         if recipients:
             addresses = normalize_recipients(recipients)

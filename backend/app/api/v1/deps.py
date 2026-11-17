@@ -29,6 +29,7 @@ from app.application.documents import (
     DocumentService,
 )
 from app.application.fiscal import FiscalSettingsUseCases
+from app.application.fiscal.email_settings import CompanyEmailSettingsUseCases
 from app.application.inventory import InventoryUseCases
 from app.application.inventory.kardex_read import InventoryKardexReadUseCases
 from app.application.password_policy import PasswordPolicy
@@ -179,6 +180,19 @@ def get_fiscal_settings_use_cases(session: SessionDep) -> FiscalSettingsUseCases
     return FiscalSettingsUseCases(SqlAlchemyFiscalRepository(session))
 
 
+def get_company_email_settings_use_cases(
+    session: SessionDep,
+) -> CompanyEmailSettingsUseCases:
+    from app.infrastructure.dte_email import company_email_sender
+    from app.infrastructure.repositories.company_email_repository import (
+        SqlAlchemyCompanyEmailRepository,
+    )
+
+    return CompanyEmailSettingsUseCases(
+        SqlAlchemyCompanyEmailRepository(session), company_email_sender
+    )
+
+
 def get_customer_use_cases(session: SessionDep) -> CustomerUseCases:
     return CustomerUseCases(SqlAlchemyCustomerRepository(session))
 
@@ -223,6 +237,9 @@ def get_sales_order_use_cases(session: SessionDep) -> SalesOrderUseCases:
 
 
 def get_sales_invoice_email_use_cases(session: SessionDep) -> SalesInvoiceEmailUseCases:
+    from app.infrastructure.repositories.company_email_repository import (
+        SqlAlchemyCompanyEmailRepository,
+    )
     from app.infrastructure.repositories.sales_fiscal_email_repository import (
         SqlAlchemySalesFiscalEmailRepository,
     )
@@ -230,9 +247,18 @@ def get_sales_invoice_email_use_cases(session: SessionDep) -> SalesInvoiceEmailU
         SqlAlchemySalesFiscalRepository,
     )
 
+    companies = SqlAlchemyCompanyEmailRepository(session)
+
+    async def available(company_id: uuid.UUID) -> bool:
+        if settings.SMTP_HOST:
+            return True
+        stored = await companies.get(company_id)
+        return stored is not None and stored.settings.is_enabled
+
     return SalesInvoiceEmailUseCases(
         SqlAlchemySalesFiscalRepository(session),
         SqlAlchemySalesFiscalEmailRepository(session),
+        available,
     )
 
 

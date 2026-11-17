@@ -286,8 +286,6 @@ async def reconcile_fiscal_documents(ctx: dict[str, Any]) -> None:
 
 
 async def send_fiscal_email(ctx: dict[str, Any], email_id_text: str) -> None:
-    if ctx["mailer"] is None:
-        return
     try:
         await process_fiscal_email(
             uuid.UUID(email_id_text),
