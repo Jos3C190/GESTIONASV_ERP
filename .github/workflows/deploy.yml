@@ -23,5 +23,8 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            cd /home/ec2-user/GESTIONASV_ERP
+            git fetch origin feature/ai-bedrock-guardrails
+            git checkout -B feature/ai-bedrock-guardrails origin/feature/ai-bedrock-guardrails
             bash /home/ec2-user/GESTIONASV_ERP/scripts/deploy.sh
 

@@ -7,6 +7,8 @@ echo "============================================="
 
 # Exportar rutas del entorno de ec2-user (node, pnpm, pm2, uv)
 export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/usr/bin:$PATH"
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
 # 1. Traer cambios de la rama activa
 cd "$HOME/GESTIONASV_ERP"
