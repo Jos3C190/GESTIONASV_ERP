@@ -25,6 +25,12 @@ describe('catalog navigation', () => {
     });
     expect(routeTitle('/sales/quotations/quote-1/edit')).toBe('Cotizaciones de venta');
     expect(routeTitle('/sales/sale-1')).toBe('Pedidos');
+    expect(itemByRoute('/sales/fiscal-documents')).toMatchObject({
+      label: 'Documentos fiscales',
+      implemented: true,
+      requiredPermission: 'sales_invoices:read'
+    });
+    expect(routeTitle('/sales/fiscal-documents/doc-1')).toBe('Documentos fiscales');
   });
 
   it('exposes the DTE issuer settings with the fiscal read permission', () => {

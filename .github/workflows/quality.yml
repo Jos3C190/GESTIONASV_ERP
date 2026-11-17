@@ -51,7 +51,7 @@ jobs:
 
       - name: Validate optional compose profiles
         run: |
-          docker compose --profile vlm --profile lan --profile dte config -q
+          docker compose --profile vlm --profile lan config -q
           docker compose -f compose.yaml -f compose.prod.yaml --profile prod --profile tracking config -q
       - name: Start ERP services
         run: docker compose up -d --build
@@ -77,7 +77,7 @@ jobs:
 
       - name: Collect service logs on failure
         if: failure()
-        run: docker compose logs --no-color --tail=300 backend migrate seed ocr-worker frontend
+        run: docker compose logs --no-color --tail=300 backend migrate seed ocr-worker dte-worker dte-service frontend
 
       - name: Stop services
         if: always()

@@ -1163,3 +1163,28 @@ The commercial reservation has no table: it is the pending quantity of confirmed
 
 **Upgrade and downgrade** refuse while sales, deliveries or returns exist. Covered by
 `backend/tests/integration/test_sales_order_migration.py`.
+
+
+## 36. Fiscal document of the order (0126)
+
+Revision `0126` (revises `0125`), block V3b.
+
+- `sales_fiscal_documents`: one row per DTE issued from an order.
+  - Keys: `company_id`, `branch_id`, `sale_id` (composite FK to `sales`), `establishment_id` and
+    `point_of_sale_id` (composite FKs to `fiscal_establishments` and `fiscal_points_of_sale`),
+    `created_by_id` (composite FK to `user_companies`).
+  - `document_type` (`01`, `03`), `mode` (`simulated`, `hacienda-test`, `production`) and
+    `status` (`pending`, `issued`, `simulated`, `rejected`, `failed`).
+  - Identity: `idempotency_key` (unique per company), `generation_code` (unique per company),
+    `control_number`; `ck_sales_fiscal_documents_identity` requires both and `issued_at` once
+    `issued` or `simulated`, and `ck_sales_fiscal_documents_seal` requires `seal` once `issued`.
+  - Content: `total`, `issuer_snapshot` (canonical snapshot plus `snapshotSha256`),
+    `request_payload` (body sent to the service), `dte_json`, `service_response`,
+    `json_object_key`, `pdf_object_key`.
+  - Control: `attempts`, `error_code`, `error_message`, timestamps.
+  - `uq_sales_fiscal_documents_active_sale`: one non-failed document per order (partial unique
+    index); `ix_sales_fiscal_documents_company_status` for the inbox.
+- Permissions `sales_invoices:read` and `sales_invoices:issue`, granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while fiscal documents exist (they are kept ten years). Covered by
+`backend/tests/integration/test_sales_fiscal_documents_migration.py`.

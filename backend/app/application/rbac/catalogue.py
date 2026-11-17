@@ -196,6 +196,10 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec("sales:manage", "Editar borradores de venta", "sales"),
     PermissionSpec("sales:confirm", "Confirmar ventas", "sales"),
     PermissionSpec("sales:cancel", "Cancelar ventas con motivo", "sales"),
+    PermissionSpec("sales_invoices:read", "Consultar los documentos fiscales emitidos", "sales"),
+    PermissionSpec(
+        "sales_invoices:issue", "Facturar pedidos y reintentar documentos fiscales", "sales"
+    ),
     PermissionSpec("sales_deliveries:read", "Consultar entregas de venta", "sales"),
     PermissionSpec("sales_deliveries:manage", "Preparar entregas de venta", "sales"),
     PermissionSpec(

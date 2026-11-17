@@ -71,6 +71,15 @@ class Settings(BaseSettings):
     )
     CORS_ORIGIN_REGEX: str | None = r"https://.*\.vercel\.app"
 
+    # --- Servicio DTE (bloque V3b) ---
+    #: URL interna del servicio; vacía = facturación electrónica deshabilitada.
+    DTE_SERVICE_URL: str | None = None
+    DTE_SERVICE_API_KEY: str | None = Field(default=None, repr=False)
+    DTE_SERVICE_TIMEOUT_SECONDS: float = Field(default=30, ge=1, le=120)
+    DTE_MAX_ATTEMPTS: int = Field(default=5, ge=1, le=20)
+    DTE_RECONCILE_SECONDS: int = Field(default=20, ge=5, le=60)
+    DTE_STALE_MINUTES: int = Field(default=5, ge=1, le=1440)
+
     # --- Redis / background processing ---
     REDIS_ENABLED: bool = False
     REDIS_URL: str | None = None
@@ -240,6 +249,10 @@ class Settings(BaseSettings):
             )
         if self.REDIS_ENABLED and not self.REDIS_URL:
             raise ValueError("REDIS_URL es obligatorio cuando REDIS_ENABLED=true.")
+        if self.DTE_SERVICE_URL and not self.DTE_SERVICE_API_KEY:
+            raise ValueError(
+                "DTE_SERVICE_API_KEY es obligatorio cuando DTE_SERVICE_URL está definido."
+            )
         if self.OCR_ENABLED and not self.REDIS_ENABLED:
             raise ValueError("OCR_ENABLED requiere REDIS_ENABLED=true.")
         if self.VLM_ENABLED and not (self.REDIS_ENABLED and self.OBJECT_STORAGE_ENABLED):

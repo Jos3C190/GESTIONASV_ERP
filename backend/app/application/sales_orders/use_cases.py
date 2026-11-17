@@ -523,6 +523,12 @@ class SalesOrderUseCases:
         )
         current = await self._locked(company_id, order_id, expected_version)
         require_cancellable(current.status, current.delivered_any)
+        if await self._repo.invoiced(company_id, order_id):
+            raise BusinessRuleError(
+                "El pedido ya está facturado y no se puede cancelar. Se corrige con la "
+                "invalidación del documento o una nota de crédito.",
+                code="sales_order_invoiced",
+            )
         before = _copy(current)
         current.status = OrderStatus.CANCELLED
         current.cancelled_by_id, current.cancelled_at = actor_id, datetime.now(UTC)

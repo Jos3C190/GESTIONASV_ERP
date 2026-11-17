@@ -6,10 +6,11 @@ numeración y sus documentos. El ERP lo usa desde la red interna; el servicio nu
 
 ## Arranque
 
-El servicio corre con el perfil `dte` de `compose.yaml`:
+El servicio arranca con el resto del entorno (`make up`). En la red interna lo usan el
+backend y el trabajador `dte-worker` en `http://dte-service:3000`:
 
 ```bash
-docker compose --profile dte up -d dte-service
+docker compose up -d dte-service dte-worker
 ```
 
 | Variable | Para qué |
@@ -49,7 +50,10 @@ Un emisor emite solo si cumple todo esto:
 - **Numeración**: el correlativo se lleva por NIT, ambiente, tipo, año, establecimiento y punto de
   venta. Dos empresas con el mismo establecimiento 001 y punto 001 empiezan cada una en 1.
 - **Idempotencia**: la clave se guarda por empresa; la misma clave en dos empresas crea dos
-  documentos.
+  documentos. Un rechazo del emisor antes de reservar identidad (`ISSUER_REQUIRED`,
+  `UNAUTHORIZED_ISSUER`, `ISSUER_INACTIVE`, `ISSUER_MODE_UNAVAILABLE`,
+  `DTE_DOCUMENT_TYPE_NOT_ALLOWED`) no se guarda: la clave queda libre para reintentar el mismo
+  documento cuando cambie la configuración.
 
 ## Errores
 

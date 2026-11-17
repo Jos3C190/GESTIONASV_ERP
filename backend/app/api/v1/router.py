@@ -67,6 +67,7 @@ from app.api.v1.routers import (
     roles,
     sales,
     sales_discounts,
+    sales_invoices,
     sales_orders,
     sales_quotations,
     sales_tax,
@@ -150,6 +151,7 @@ api_router.include_router(sales_tax.router, prefix="/api/v1")
 api_router.include_router(price_lists.router, prefix="/api/v1")
 api_router.include_router(sales_discounts.router, prefix="/api/v1")
 api_router.include_router(sales_quotations.router, prefix="/api/v1")
+api_router.include_router(sales_invoices.router, prefix="/api/v1")
 api_router.include_router(sales_orders.router, prefix="/api/v1")
 api_router.include_router(sales.router, prefix="/api/v1")
 api_router.include_router(suppliers.router, prefix="/api/v1")

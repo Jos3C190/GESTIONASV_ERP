@@ -144,9 +144,27 @@ function asociarIdentidad(clave, codigoGeneracion) {
   if (result.changes !== 1) throw new Error('No se pudo asociar de forma segura la identidad DTE a su clave idempotente');
 }
 
+/**
+ * Rechazos del emisor (bloque V3b): ocurren antes de reservar identidad y dependen
+ * de la configuración del emisor, no de la solicitud. Se libera la clave para que
+ * el mismo documento se pueda reintentar con ella cuando la configuración cambie;
+ * sin identidad reservada, reintentar no puede duplicar un DTE.
+ */
+const RECHAZOS_DEL_EMISOR = Object.freeze([
+  'ISSUER_REQUIRED',
+  'UNAUTHORIZED_ISSUER',
+  'ISSUER_INACTIVE',
+  'ISSUER_MODE_UNAVAILABLE',
+  'DTE_DOCUMENT_TYPE_NOT_ALLOWED',
+]);
+
 /** Guarda el resultado y clasifica si es terminal, pendiente o reintentable. */
 function guardarResultado(clave, statusCode, body, { revalidarErrorPreIdentidad = false } = {}) {
   if (!clave) return;
+  if (RECHAZOS_DEL_EMISOR.includes(body?.code) && !body?.codigoGeneracion) {
+    const liberada = db.prepare('DELETE FROM idempotency_keys WHERE clave = ? AND codigo_generacion IS NULL').run(clave);
+    if (liberada.changes === 1) return;
+  }
   // Solo una operación enlazada a un codigoGeneracion (DTE o evento de
   // invalidación persistido) puede reanudarse sin crear otra identidad.
   const errorPreIdentidad = revalidarErrorPreIdentidad

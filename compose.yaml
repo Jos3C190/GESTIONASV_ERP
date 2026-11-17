@@ -238,6 +238,8 @@ services:
       TRACCAR_OSMAND_URL: ${TRACCAR_OSMAND_URL:-}
       # Sin el perfil `vlm` la captura sigue disponible y los datos se escriben a mano.
       VLM_ENABLED: ${VLM_ENABLED:-true}
+      DTE_SERVICE_URL: http://dte-service:3000
+      DTE_SERVICE_API_KEY: ${DTE_SERVICE_API_KEY:-}
       <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
@@ -299,6 +301,47 @@ services:
       - /tmp:size=1g,mode=1777
     healthcheck:
       test: ["CMD", "/opt/venv/bin/arq", "app.infrastructure.ocr_worker.WorkerSettings", "--check"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
+  # Emite en el servicio DTE los documentos fiscales pendientes (bloque V3b).
+  dte-worker:
+    build:
+      context: ./backend
+      target: dev
+    command: ["/opt/venv/bin/arq", "app.infrastructure.dte_worker.WorkerSettings"]
+    environment:
+      <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DTE_SERVICE_URL: http://dte-service:3000
+      DTE_SERVICE_API_KEY: ${DTE_SERVICE_API_KEY:-}
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      dte-service:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "/opt/venv/bin/arq", "app.infrastructure.dte_worker.WorkerSettings", "--check"]
       interval: 20s
       timeout: 10s
       retries: 6
@@ -462,8 +505,8 @@ services:
   # Servicio DTE (bloque V3 de Ventas): arma, firma y transmite los documentos
   # tributarios. Multiemisor: cada empresa se registra como emisor desde el ERP.
   # Perfil `dte` mientras el backend no lo use (V3b lo pasa al arranque normal).
+  # Servicio DTE multiemisor (red interna; no publica puertos).
   dte-service:
-    profiles: ["dte"]
     build:
       context: ./dte-service
     environment:

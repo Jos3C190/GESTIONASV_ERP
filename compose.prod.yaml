@@ -44,6 +44,8 @@ services:
       REDIS_ENABLED: "false"
       OCR_ENABLED: "false"
       VLM_ENABLED: "false"
+      # Facturación electrónica apagada hasta el ambiente de Hacienda (bloque V3d).
+      DTE_SERVICE_URL: ""
       OBSERVABILITY_ENABLED: ${OBSERVABILITY_ENABLED:-false}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
@@ -80,6 +82,25 @@ services:
     depends_on: !override
       redis:
         condition: service_healthy
+
+  # Servicio DTE y su trabajador: solo con el perfil `dte` (requiere Redis) hasta V3d.
+  dte-service:
+    profiles: [dte]
+
+  dte-worker:
+    profiles: [dte]
+    build:
+      target: prod
+    volumes: !reset []
+    depends_on: !override
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      dte-service:
+        condition: service_started
 
   loki:
     profiles: [local-observability]

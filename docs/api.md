@@ -2064,3 +2064,52 @@ Error codes (`422` unless noted): `sales_order_status_invalid`, `sales_order_sto
 `sales_order_address_not_allowed`, `sales_order_address_invalid`,
 `sales_order_reason_required`, `sales_quote_not_convertible`; `sales_order_version_conflict`
 (409); `sales_order_not_found` (404).
+
+
+## Sales invoices (revision 0126, block V3b)
+
+A **confirmed** order is invoiced as a whole: one fiscal document (`01` factura or `03` crédito
+fiscal, the order's `document_type`) at any moment after confirmation, before, during or after
+delivering. The ERP owns the sale and the tax calculation; the DTE service (`dte-service`,
+contract v2) builds, signs and transmits the DTE, and the ERP keeps its copy (issuer snapshot,
+request, JSON, seal, PDF).
+
+**Issuing is asynchronous.** `POST /sales/{id}/invoice` validates the order, builds the issuer
+snapshot (company identity, the establishment of the order's branch and the chosen point of
+sale, with the SHA-256 of its canonical JSON), the receiver, the lines and the summary, checks
+that the request reconciles to the cent with the stored totals, and saves the document as
+`pending`. The `dte-worker` registers the company in the service (`PUT /api/emisores/:nit`),
+issues with the document's `Idempotency-Key` (`erp-{document id}`), downloads the JSON and the
+PDF into object storage and compares the returned summary with the order. A reconcile job
+re-enqueues stale `pending` documents every `DTE_RECONCILE_SECONDS`.
+
+States: `pending` → `simulated` (simulated mode), `issued` (sealed by Hacienda) or `rejected`;
+`failed` when the service refuses for good or attempts run out (`DTE_MAX_ATTEMPTS`). An order has
+at most one non-failed document; an invoiced order cannot be cancelled (`sales_order_invoiced`)
+until credit notes and invalidation arrive (V4).
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/{id}/invoice-options` | `sales_invoices:read` | Points of sale of the branch's establishment, mode, `blockers` (what is missing, in Spanish) and the current document. |
+| POST | `/sales/{id}/invoice` | `sales_invoices:issue` | Body `{"point_of_sale_id": uuid \| null}` (optional when the establishment has one active point of sale). `202` with the new `pending` document; `200` with the existing one when the order is already invoiced. |
+| GET | `/sales/fiscal-documents` | `sales_invoices:read` | Paged inbox in the user's branches. Filters: `branch_id`, `sale_id`, `status`, `document_type`, `q` (control number, order code or customer). |
+| GET | `/sales/fiscal-documents/{id}` | `sales_invoices:read` | One document: status, control number, generation code, seal, attempts, last error, `has_json`, `has_pdf`. |
+| POST | `/sales/fiscal-documents/{id}/retry` | `sales_invoices:issue` | Back to `pending` with the same idempotency key and payload (only `pending` or `failed`). |
+| GET | `/sales/fiscal-documents/{id}/json` | `sales_invoices:read` | The DTE JSON as delivered by the service (attachment). `409` until issued. |
+| GET | `/sales/fiscal-documents/{id}/pdf` | `sales_invoices:read` | `{"url"}`: presigned link to the PDF. `409` until issued. |
+
+Audited on `sales_fiscal_document`: `ISSUE_FISCAL_DOCUMENT`, `RETRY_FISCAL_DOCUMENT` (user) and
+`FISCAL_DOCUMENT_ISSUED`, `_REJECTED`, `_FAILED` (worker).
+
+Error codes (`422` unless noted): `sales_invoice_order_not_confirmed`,
+`sales_invoice_document_unsupported`, `sales_invoice_document_disabled`,
+`sales_invoice_establishment_missing`, `sales_invoice_point_of_sale_required`,
+`sales_invoice_point_of_sale_missing`, `sales_invoice_point_of_sale_invalid`,
+`sales_invoice_issuer_incomplete`, `sales_invoice_receiver_incomplete`,
+`sales_invoice_totals_mismatch`, `sales_invoice_not_retryable`, `sales_invoice_already_issued`,
+`sales_invoice_service_unavailable`; `sales_invoice_not_ready` (409); `sales_invoice_not_found`
+(404). A document whose returned summary differs from the order keeps its status and carries
+`error_code = dte_totals_mismatch` for review.
+
+Configuration: `DTE_SERVICE_URL` (empty disables invoicing), `DTE_SERVICE_API_KEY`,
+`DTE_SERVICE_TIMEOUT_SECONDS`, `DTE_MAX_ATTEMPTS`, `DTE_RECONCILE_SECONDS`, `DTE_STALE_MINUTES`.

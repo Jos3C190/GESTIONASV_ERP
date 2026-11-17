@@ -20,6 +20,7 @@
   import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type { Sale } from '#lib/types/sales.ts';
   import SalesDeliveryPanel from './SalesDeliveryPanel.svelte';
+  import SalesInvoicePanel from './SalesInvoicePanel.svelte';
   import SalesReturnsPanel from './SalesReturnsPanel.svelte';
 
   type Action = 'confirm' | 'authorize' | 'return' | 'cancel';
@@ -31,6 +32,7 @@
   let error = $state<string | null>(null);
   let text = $state('');
   let pending = $state<Exclude<Action, 'confirm'> | null>(null);
+  let invoiced = $state(false);
   let generation = 0;
   onDestroy(() => generation++);
 
@@ -292,6 +294,9 @@
     {/if}
 
     {#if sale.status === 'confirmed'}
+      {#if can('sales_invoices:read')}
+        <SalesInvoicePanel {sale} onInvoiced={(value) => (invoiced = value)} />
+      {/if}
       <SalesDeliveryPanel {sale} onChanged={load} />
       <SalesReturnsPanel {sale} onChanged={load} />
     {/if}
@@ -347,7 +352,7 @@
             onclick={() => (pending = 'return')}>Devolver a borrador</button
           >
         {/if}
-        {#if sale.status !== 'cancelled' && sale.delivery_progress === 'pending' && can('sales:cancel')}
+        {#if sale.status !== 'cancelled' && sale.delivery_progress === 'pending' && !invoiced && can('sales:cancel')}
           <button
             class="rounded-md border border-danger/30 px-4 py-2 text-sm text-danger"
             onclick={() => (pending = 'cancel')}>Cancelar pedido</button
@@ -387,7 +392,8 @@
       {/if}
       <p class="text-xs text-foreground-muted">
         Confirmar aparta las existencias de la sucursal; cancelar las libera. Un pedido con entregas
-        ya no se cancela: se gestiona con devoluciones.
+        ya no se cancela: se gestiona con devoluciones. Uno facturado tampoco: se corregirá con
+        invalidación o nota de crédito.
       </p>
     </section>
   {/if}
