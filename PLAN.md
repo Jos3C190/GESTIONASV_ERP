@@ -61,7 +61,7 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
 - [x] **Paso 0: plan.**
 - [x] **Paso 1: firmador oficial en compose.** Construcción Maven más JRE, volumen de certificados, salud y prueba de que responde (error 803 sin certificado).
 - [x] **Paso 2: servicio, emisores con credenciales.** Registro con contraseñas cifradas y certificado al volumen. Pruebas.
-- [ ] **Paso 3: servicio, modo y ambiente por emisor.**
+- [x] **Paso 3: servicio, modo y ambiente por emisor.**
   - Token por NIT, firma por emisor, host y ambiente por modo; sin `ISSUER_MODE_UNAVAILABLE`.
   - Pruebas con el stub, con dos emisores en modos distintos.
 - [ ] **Paso 4: servicio, probar la conexión del emisor.** Endpoint y pruebas.
@@ -73,7 +73,17 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
 
 ## Estado actual
 
-- **Paso en curso**: 3 (servicio, modo y ambiente por emisor).
+- **Paso en curso**: 4 (servicio, probar la conexión del emisor).
+  - Paso 3:
+    - `src/services/issuerContext.js` (`AsyncLocalStorage`): el middleware `contextoEmisor` corre cada solicitud de `/api/dte` con el modo, el ambiente, las URLs de Hacienda y las credenciales (descifradas solo al usarlas) del emisor del encabezado.
+    - `retryQueue` usa el emisor de cada documento. Sin contexto se usa el emisor del entorno, como antes.
+    - `authService` guarda un token por NIT y modo; el firmador recibe el NIT y la contraseña privada del emisor; la identificación y la transmisión usan el ambiente del emisor.
+    - En `dte.routes.js`, «simulado» es el modo del emisor.
+    - `DTE_MODE` es el modo máximo (simulado < pruebas < producción): un emisor de un modo mayor recibe `ISSUER_MODE_UNAVAILABLE`.
+    - Config: el emisor del entorno solo existe si hay `MH_NIT`. Sin `MH_*_URL` se usan las rutas oficiales del host del modo, y `haciendaPorModo` da las URLs de otro modo.
+    - Prueba nueva `test/integration/modoPorEmisor.test.js`: dos empresas en pruebas y una simulada en el mismo despliegue, con token y firma por empresa y ambiente 00; credenciales equivocadas; producción rechazada. Servicio: 482 en verde.
+  - **Límites conocidos** (para V4): la invalidación y la contingencia ya usan el token y las URLs del emisor, pero sus eventos todavía toman datos del emisor del entorno (`config.emisor`). Se revisan cuando V4 traiga la invalidación desde el ERP.
+  - **Para las pruebas del paso 6 y la QA**: el despliegue de desarrollo tiene `DTE_MODE=simulated`, así que una empresa en pruebas recibe 409. Para probar contra el stub hay que levantar el servicio con `DTE_MODE=hacienda-test` y las `MH_*_URL` del stub.
   - Paso 2:
     - `src/services/issuerCredentials.js`:
       - contraseñas cifradas con AES-256-GCM (`DTE_CREDENTIALS_KEY`, formato `v1:`) en la tabla `emisor_credenciales`;

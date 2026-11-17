@@ -74,8 +74,9 @@ const authorizedIssuerNits = (process.env.DTE_AUTHORIZED_ISSUER_NITS || process.
 if (authorizedIssuerNits.some((nit) => !NIT_REGEX.test(nit))) {
   throw new Error('DTE_AUTHORIZED_ISSUER_NITS debe contener NIT de 9 o 14 dígitos separados por coma');
 }
-// En modo simulado el emisor llega en cada solicitud y el del entorno es opcional.
-const emisorDelEntorno = Boolean(process.env.MH_NIT?.trim()) || dteMode !== 'simulated';
+// Multiemisor (V3d): cada empresa trae su emisor y sus credenciales; el del
+// entorno (MH_*) solo existe en despliegues heredados de un solo emisor.
+const emisorDelEntorno = Boolean(process.env.MH_NIT?.trim());
 
 /**
  * Cada modo tiene un único ambiente y host oficial (Manual Técnico v2.0,
@@ -96,9 +97,25 @@ function ambienteDelModo() {
   return esperado;
 }
 
+/** Rutas oficiales de la API de Hacienda (Manual Técnico v2.0, secciones 4 y 6). */
+const RUTAS_HACIENDA = Object.freeze({
+  authUrl: ['MH_AUTH_URL', '/seguridad/auth'],
+  recepcionUrl: ['MH_RECEPCION_URL', '/fesv/recepciondte'],
+  recepcionLoteUrl: ['MH_RECEPCION_LOTE_URL', '/fesv/recepcionlote'],
+  anulacionUrl: ['MH_ANULACION_URL', '/fesv/anulardte'],
+  contingenciaUrl: ['MH_CONTINGENCIA_URL', '/fesv/contingencia'],
+  consultaUrl: ['MH_CONSULTA_URL', '/fesv/recepcion/consultadte'],
+  consultaLoteUrl: ['MH_CONSULTA_LOTE_URL', '/fesv/recepcion/consultadtelote'],
+});
+
 function urlHacienda(nombre) {
   if (dteMode === 'simulated') return null;
-  const valor = required(nombre).trim();
+  // Sin la variable se usa la ruta oficial del host del modo del despliegue.
+  if (!process.env[nombre]?.trim()) {
+    const [, ruta] = Object.values(RUTAS_HACIENDA).find(([variable]) => variable === nombre);
+    return `https://${HOST_POR_MODO[dteMode]}${ruta}`;
+  }
+  const valor = process.env[nombre].trim();
   let url;
   try {
     url = new URL(valor);
@@ -182,6 +199,19 @@ function construirEmisorDelEntorno() {
   };
 }
 
+/**
+ * URLs de Hacienda para el modo de un emisor (V3d). Las del entorno valen
+ * para el modo del despliegue; para otro modo se usan las oficiales de su host.
+ */
+function haciendaPorModo(modo) {
+  if (modo === 'simulated') return null;
+  if (modo === dteMode) return config.hacienda;
+  const urls = Object.fromEntries(
+    Object.entries(RUTAS_HACIENDA).map(([clave, [, ruta]]) => [clave, `https://${HOST_POR_MODO[modo]}${ruta}`]),
+  );
+  return { ...config.hacienda, ...urls };
+}
+
 const config = {
   // 00 = pruebas, 01 = producción; derivado de DTE_MODE. Común a todos los emisores del despliegue.
   ambiente: ambienteDelModo(),
@@ -223,6 +253,7 @@ const config = {
     responsable: dteMode === 'simulated' ? null : responsableContingencia(),
   },
   dteMode,
+  haciendaPorModo,
   simulation: {
     acknowledged: process.env.DTE_SIMULATION_ACKNOWLEDGED === 'true',
     runId: process.env.DTE_SIMULATION_RUN_ID?.trim() || null,

@@ -8,7 +8,6 @@ const { certificadoPrueba } = require('../helpers/certificadoPrueba');
 // En pruebas el despliegue opera en el modo de DTE_MODE (hacienda-test) y el NIT
 // heredado del entorno es 06141804941035.
 const MODO = config.dteMode;
-const OTRO_MODO = MODO === 'simulated' ? 'hacienda-test' : 'simulated';
 
 /** Credenciales de prueba: fuera de simulado el registro las exige (V3d). */
 function credenciales(nit) {
@@ -65,7 +64,7 @@ describe('registro de emisores', () => {
     );
   });
 
-  test('exige emisor registrado, activo, en el modo del despliegue y con el tipo habilitado', () => {
+  test('exige emisor registrado, activo, en un modo que el despliegue admite y con el tipo habilitado', () => {
     assert.equal(codigo(() => registry.exigirEmision(null, '01')), 'ISSUER_REQUIRED');
     assert.equal(codigo(() => registry.exigirEmision('99999999999999', '01')), 'UNAUTHORIZED_ISSUER');
     // El emisor heredado del entorno sigue autorizado aunque no esté registrado.
@@ -79,7 +78,13 @@ describe('registro de emisores', () => {
     assert.equal(codigo(() => registry.exigirEmision('22222222222222', '01')), 'ISSUER_INACTIVE');
     assert.equal(registry.autorizado('22222222222222'), false);
 
-    registry.registrar('33333333333333', { nombre: 'Otro modo', modo: OTRO_MODO, tiposHabilitados: ['01'] });
-    assert.equal(codigo(() => registry.exigirEmision('33333333333333', '01')), 'ISSUER_MODE_UNAVAILABLE');
+    // DTE_MODE es el modo máximo (V3d): un emisor simulado emite en un despliegue de pruebas,
+    // uno de producción no.
+    registry.registrar('33333333333333', { nombre: 'Simulado', modo: 'simulated', tiposHabilitados: ['01'] });
+    assert.equal(registry.exigirEmision('33333333333333', '01').modo, 'simulated');
+    registry.registrar('55555555555555', {
+      nombre: 'Producción', modo: 'production', tiposHabilitados: ['01'], credenciales: credenciales('55555555555555'),
+    });
+    assert.equal(codigo(() => registry.exigirEmision('55555555555555', '01')), 'ISSUER_MODE_UNAVAILABLE');
   });
 });

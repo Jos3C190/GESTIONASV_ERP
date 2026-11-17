@@ -118,12 +118,13 @@ function exigirEmision(nit, tipoDte) {
     throw new IssuerError(403, 'UNAUTHORIZED_ISSUER', 'El emisor no está registrado en el servicio DTE');
   }
   if (!registro.activo) throw new IssuerError(403, 'ISSUER_INACTIVE', 'El emisor está desactivado');
-  // Varios modos a la vez exigen una sesión con Hacienda por emisor (V3d).
-  if (registro.modo !== config.dteMode) {
+  // Cada emisor usa su modo (V3d) siempre que el despliegue lo admita: DTE_MODE
+  // es el modo máximo (simulado < pruebas < producción).
+  if (!require('./issuerContext').modoPermitido(registro.modo)) {
     throw new IssuerError(
       409,
       'ISSUER_MODE_UNAVAILABLE',
-      `El emisor está en modo ${registro.modo} y este despliegue opera en ${config.dteMode}`
+      `El emisor está en modo ${registro.modo} y este despliegue admite hasta ${config.dteMode}`
     );
   }
   if (!registro.tiposHabilitados.includes(tipoDte)) {

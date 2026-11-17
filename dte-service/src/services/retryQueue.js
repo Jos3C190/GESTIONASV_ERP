@@ -2,6 +2,7 @@ const { db } = require('../db');
 const config = require('../config');
 const logger = require('../utils/logger');
 const transmisionService = require('./transmisionService');
+const issuerContext = require('./issuerContext');
 const contingenciaService = require('./contingenciaService');
 
 /**
@@ -100,7 +101,8 @@ async function procesarCola() {
 
   for (const item of pendientes) {
     try {
-      await _procesarItem(item);
+      const { nit } = db.prepare('SELECT nit FROM dtes WHERE codigo_generacion = ?').get(item.codigo_generacion) ?? {};
+      await issuerContext.conEmisor(nit, () => _procesarItem(item));
     } catch (err) {
       logger.error({ err: err.message, codigoGeneracion: item.codigo_generacion }, 'Error procesando acción de la cola');
       // Solo si la acción sigue pendiente: una transición ya aplicada no se revierte.
