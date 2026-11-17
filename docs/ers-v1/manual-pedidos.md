@@ -51,6 +51,9 @@ pedido. Si no alcanza, el aviso aparece en color de advertencia.
 **Cancelar pedido** pide un motivo y libera lo apartado. Un pedido que ya tiene entregas no se
 cancela: se gestiona con devoluciones.
 
+Un pedido **facturado** tampoco se cancela: la corrección se hará con invalidación o nota de
+crédito. Para facturar, ver [manual-facturacion.md](manual-facturacion.md).
+
 ## 5. Lo que todavía no hace
 
 - Los traslados y los ajustes de inventario aún no respetan lo apartado.

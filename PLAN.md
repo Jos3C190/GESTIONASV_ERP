@@ -81,12 +81,13 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Registro del emisor.
   - Pruebas e2e contra el servicio real en simulado, con dos empresas.
 - [x] **Paso 6: frontend.** Facturar en el pedido, bandeja, detalle y menú. vitest.
-- [ ] **Paso 7: documentación.** `docs/api.md`, `docs/database-schema.md` §36 y manual de facturación.
+- [x] **Paso 7: documentación.** `docs/api.md`, `docs/database-schema.md` §36 y manual de facturación.
 - [ ] **Paso 8: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 7 (documentación).
+- **Paso en curso**: 8 (verificación y PR).
+  - Paso 7: `docs/api.md` (Sales invoices), `docs/database-schema.md` §36, `docs/ers-v1/manual-facturacion.md`, enlace desde el manual de pedidos y `dte-service/docs/multiemisor.md` (arranque normal y clave liberada en rechazos del emisor).
   - Paso 6:
     - Panel «Factura» en el pedido confirmado (`SalesInvoicePanel.svelte`): elige la caja si hay varias, muestra lo que falta para facturar, sigue el documento mientras se emite (cada 3 s), descarga JSON y PDF y reintenta. Con documento vigente, el pedido oculta «Cancelar pedido».
     - Bandeja `/sales/fiscal-documents` y detalle `/sales/fiscal-documents/[id]`; entrada «Documentos fiscales» en el menú con `sales_invoices:read`.
