@@ -1,149 +1,94 @@
-# Plan: Ventas V2e — Pedido de venta
+# Plan: Ventas V3a — Servicio DTE multiemisor (modo simulado)
 
-Rama: `feature/ventas-v2e-pedido`. V2d (PR #46) ya está en `develop` y se trajo a esta rama.
+Rama: `feature/ventas-v3-dte`, desde `develop`, con V2 completo (#42 a #47).
 
 Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
-- Módulo 5.3:
-  - «Pedido de venta: compromiso con fecha y lugar de entrega, que puede nacer de una cotización o directamente».
-  - «Reserva de existencias al confirmar el pedido».
-  - «El pedido es un documento distinto de la factura: tiene su propia numeración y sus estados de entrega…».
-  - «Toda cancelación exige motivo y libera las reservas».
-- Bloque V2: «Nuevo modelo de cotización y pedido, que sustituye al actual». El resultado verificable es una cotización y un pedido con totales fiscales correctos en ambos documentos.
+- Módulo 5: «Facturación electrónica (DTE)».
+- Secciones:
+  - 6.3, estados del documento fiscal;
+  - 6.4, arquitectura: ERP → cola de tareas → servicio DTE → firmador → Hacienda;
+  - 6.5, facturación multiemisor.
+- Bloque V3, resultado verificable: «Dos empresas emiten en simulado desde el ERP con numeración, credenciales y plantillas separadas; con credenciales, sellan en el ambiente de pruebas».
 
 ## Decisiones del usuario
 
-- 16/11/2026 (V2): la venta B06 se rehace en su lugar con migración. Si hay datos, la migración se niega a seguir en lugar de perderlos. Las entregas y devoluciones se adaptan.
-- 16/11/2026 (V2e):
-  - **Reserva comercial al confirmar**:
-    - El pedido aparta cantidad por artículo en la sucursal sin mover unidades físicas.
-    - La entrega la consume.
-    - Cancelar la libera.
-  - **Origen**: el pedido nace de una cotización aceptada (copia precios y descuentos) o se arma directamente, con el mismo editor y las mismas reglas de topes y autorización.
-  - **Entrega**: fecha comprometida obligatoria. El lugar es retiro en la sucursal o una dirección de entrega del cliente.
-  - **Crédito**: el bloqueo por cupo y saldos vencidos queda para V5. En V2e el pedido solo copia la condición de pago del cliente (contado o crédito, y días).
-- 16/11/2026: el usuario delegó el merge de las PR cuando pasen los checks propios.
+- 15/11/2026: facturación multiemisor. Cada empresa es un emisor aislado y elige sus documentos. Cada sucursal es un establecimiento y cada caja un punto de venta. En los documentos compartidos se habla del «proyecto de referencia».
+- 17/11/2026 (V3):
+  - **Facturar**: acción sobre un pedido confirmado. Se emite un DTE por el pedido completo; facturar por entregas queda para después.
+  - **Servicio**: se copia (sin tocar el original, que es de solo lectura) a `dte-service/` del monorepo, como contenedor propio, y ahí se vuelve multiemisor.
+  - **Correo**: SMTP del ERP (Mailpit en desarrollo). Cada empresa define su nombre de remitente y su correo de respuesta.
+  - **Sub-bloques**, una PR cada uno:
+    - V3a: servicio multiemisor en modo simulado;
+    - V3b: documento fiscal en el ERP (Facturar, bandeja, PDF y JSON guardados);
+    - V3c: correo al cliente;
+    - V3d: ambiente de pruebas de Hacienda (credenciales cifradas, certificado y firmador).
+- El usuario delegó el merge de las PR cuando pasen los checks propios.
 
-## Hechos verificados
+## Hechos verificados del servicio de referencia (solo lectura)
 
-- `sales` y `sales_lines` (B06):
-  - `quotation_id` es obligatorio y único;
-  - `total` = `subtotal`, sin impuestos;
-  - estados `draft`, `confirmed` y `cancelled`.
-  - Las líneas tienen `source_quotation_line_id` obligatorio.
-- Entregas (`sales_deliveries`) y devoluciones (`sales_returns`):
-  - Apuntan a `sales` y `sales_lines` y solo usan cantidades, no precios.
-  - Las entregas toman unidades `available` de cualquier bodega activa, no de tránsito, de la sucursal del documento.
-- El inventario no tiene reservas de producto; solo de capacidad.
-- La cotización V2d ya calcula todo en `SalesQuotationUseCases._build`:
-  - precio de lista, descuento sugerido, tope y motor fiscal;
-  - identidad de línea en `sales_line_identity.py`.
-- `sales_customers` tiene `credit_days` y `credit_limit`, y existen las direcciones de entrega del cliente.
+- Node 18+, Express, SQLite (better-sqlite3), pdfkit, qrcode y Ajv con los schemas oficiales. Unas 7300 líneas en `src/`; pruebas con `node --test` (`test/unit` y `test/integration`).
+- Ya acepta el emisor por solicitud (contrato v2, `issuerContractV2.js`, con hash del snapshot), pero sigue siendo de un solo emisor:
+  - el modo (`DTE_MODE`) es global;
+  - la lista de NIT autorizados y el emisor por defecto vienen del entorno (`MH_*`);
+  - `correlativos` usa como llave (tipo, año, establecimiento, punto de venta), sin NIT ni ambiente;
+  - `dtes`, `eventos`, `idempotency_keys` y `contingencias` no guardan a qué emisor pertenecen;
+  - hay un solo token de Hacienda en memoria.
+- Rutas: `/api/dte/v2/factura`, `/v2/ccf` y `/v2/nota-credito` (contrato v2), más consulta, JSON, PDF, invalidación, contingencia y simulación. Usan API keys con alcances.
 
-## Diseño
+## Diseño de V3a
 
-- **Tablas**: se conservan `sales` y `sales_lines`, porque las entregas y devoluciones ya apuntan a ellas. En la interfaz el documento se llama **Pedido**.
-- **Cabecera**:
-  - `quotation_id` pasa a opcional;
-  - mismos campos fiscales y de autorización que la cotización: documento, lista, IVA, descuento global, totales, motivos y autorización;
-  - entrega: `promised_date`, `delivery_mode` (`pickup` o `delivery`), `delivery_address_id` y una copia de la dirección;
-  - condición de pago: `payment_terms` (`cash` o `credit`) y `credit_days`.
-- **Línea**:
-  - mismos campos que la línea de cotización;
-  - `source_quotation_line_id` pasa a opcional.
-- **Estados**: Borrador → Por autorizar (si pasa el tope o queda bajo costo) → Confirmado → Cancelado.
-  - La entrega sigue con su avance calculado: pendiente, parcial o completa.
-  - Facturación y cobro llegan en V3 y V5.
-- **Reserva comercial**: calculada, sin tabla nueva.
-  - Reservado de un artículo en una sucursal = suma de lo pendiente de entregar (en unidad base) de los pedidos confirmados de esa sucursal.
-  - Disponible para vender = unidades `available` en las bodegas activas de la sucursal − reservado.
-  - Al confirmar se bloquea por empresa, sucursal y artículo (lock consultivo) y se valida que alcance. Si no alcanza, error por línea.
-  - Cancelar un pedido confirmado sin entregas libera lo reservado. Con entregas parciales, cancelar no se permite en V2e.
-  - **Límite**: los traslados y ajustes todavía no respetan la reserva. Lo verán como aviso en un bloque posterior.
-- **Cálculo compartido**: `_build` de la cotización pasa a un constructor común de documentos de venta. Lo usan la cotización y el pedido, sin duplicar código.
-- **Desde cotización**: «Crear pedido» en una cotización Aceptada.
-  - Copia líneas, precios, descuentos y totales tal como se aceptaron, sin recalcular.
-  - Pide fecha y lugar de entrega, y el pedido queda en borrador.
-  - Es idempotente: una cotización origina un solo pedido.
-- **Permisos**: se reutilizan `sales:read`, `sales:manage`, `sales:confirm`, `sales:cancel` y `sales_quotations:convert`, y los de topes y precio manual de V2d. Todo queda en la bitácora.
+- **Copia**: `dte-service/` con `src/`, `test/`, `package.json` y `package-lock.json`, el Dockerfile y el README. Sin `node_modules` ni `data`. La procedencia queda en el README, sin nombrar al proyecto.
+- **Contenedor**:
+  - `dte-service` en `compose.yaml`, solo en la red interna;
+  - volumen propio para SQLite;
+  - API key generada en `.env` para el backend;
+  - healthcheck a `/health`.
+- **Registro de emisores** (`emisores`, administrado por el ERP con un alcance nuevo `issuers`):
+  - columnas: NIT, nombre, modo (`simulated`, `hacienda-test` o `production`), tipos de DTE habilitados y activo;
+  - reemplaza la lista de NIT del entorno;
+  - el modo de cada documento sale de su emisor;
+  - el arranque solo fija qué modos admite el despliegue.
+- **Aislamiento**:
+  - cada solicitud declara el emisor en `X-DTE-Issuer-NIT`, que debe coincidir con el snapshot;
+  - toda consulta filtra por ese NIT;
+  - un documento de otro emisor responde 404.
+- **Numeración**: la llave pasa a (NIT, ambiente, tipo, año, establecimiento, punto de venta).
+- **Idempotencia**: la clave se guarda por emisor.
+- **Fuera de V3a**:
+  - contingencia por empresa y token por empresa (V3d y V4);
+  - correo (V3c);
+  - integración con el ERP (V3b).
+- **Pruebas**:
+  - las del servicio siguen pasando;
+  - se agregan: dos emisores con el mismo tipo, establecimiento y punto de venta llevan correlativos separados; un emisor no ve documentos del otro; un emisor inactivo o un tipo no habilitado se rechaza; un modo no admitido se rechaza.
+  - El CI corre `npm test` del servicio.
 
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [x] **Paso 1: migración `0125` y modelos.**
-  - Guarda: se niega si hay ventas, entregas o devoluciones.
-  - Columnas nuevas de pedido y línea, estados y opcionales.
-  - Prueba de migración.
-- [x] **Paso 2: dominio y cálculo compartido.**
-  - Extraer de la cotización el constructor común.
-  - Transiciones del pedido.
-  - Regla de reserva: disponible, reservado y suficiencia.
-  - Pruebas unitarias.
-- [x] **Paso 3: aplicación, repositorio y API.**
-  - Pedido directo y desde cotización.
-  - Confirmar con reserva, autorizar o devolver, y cancelar con liberación.
-  - Disponible para vender en la vista previa.
-  - Adaptar entregas y devoluciones al pedido confirmado.
-  - Retirar el `convert` B06.
-  - Pruebas e2e: reserva insuficiente, concurrencia, cancelación que libera, aislamiento y permisos.
-- [x] **Paso 4: frontend.**
-  - Editor de pedido (el de cotización con fecha y lugar de entrega), con disponible por línea.
-  - Detalle con acciones por estado y entregas.
-  - Lista de pedidos.
-  - «Crear pedido» en la cotización aceptada.
-  - vitest.
-- [x] **Paso 5: documentación.** `docs/api.md`, `docs/database-schema.md` §35, manual de pedidos y ajuste del manual de ventas base.
-- [x] **Paso 6: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
+- [ ] **Paso 1: copiar el servicio y levantarlo.**
+  - Copia sin dependencias ni datos.
+  - Contenedor en compose, con su volumen y su API key.
+  - README de procedencia.
+  - Sus pruebas pasan sin cambios en el contenedor.
+- [ ] **Paso 2: registro de emisores y modo por emisor.**
+  - Tabla `emisores` y su API (alcance `issuers`).
+  - El emisor de la solicitud debe estar registrado, activo y con el tipo habilitado.
+  - El modo sale del emisor.
+- [ ] **Paso 3: aislamiento de datos.**
+  - Columnas `nit` y `ambiente` en `correlativos`, `dtes`, `eventos`, `idempotency_keys` y `contingencias`, con migración de bases existentes.
+  - Filtro por emisor en todas las rutas.
+- [ ] **Paso 4: pruebas de aislamiento y CI.** Pruebas multiemisor y job de CI con `npm test`.
+- [ ] **Paso 5: documentación.** `docs/` del servicio: API, variables, emisores y modos.
+- [ ] **Paso 6: verificación y PR.** Batería completa del ERP más pruebas del servicio, y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: ninguno. V2e está terminado y en PR hacia `develop` con auto-merge.
-  - Batería completa en verde:
-    - 1914 pruebas de backend;
-    - ruff, mypy, svelte-check, eslint y build;
-    - 1165 pruebas de vitest.
-  - QA en el navegador (17/11), en desarrollo:
-    - Pedido desde la cotización COT-20261116-3F7C82B6 (PED-20261117-AFD6C179, en borrador): se rechazó por 0 disponibles en Roosevelt.
-    - Pedido directo PED-20261117-1669F1A3 en la Matriz: se confirmó (apartó 5 de 120) y luego se canceló para liberar lo apartado.
-    - Los textos de los paneles de entregas y devoluciones ahora dicen «pedido».
-  - Paso 5: `docs/api.md` (Sales orders), `docs/database-schema.md` §35, `docs/ers-v1/manual-pedidos.md` y ajustes en `manual-cotizaciones.md` y `manual-ventas-base.md`.
-  - Paso 4:
-    - Editor:
-      - `SalesQuotationEditor` pasó a `SalesDocumentEditor`, con `kind` cotización o pedido;
-      - el pedido agrega fecha comprometida, retiro o entrega con dirección del cliente, y muestra el disponible por línea.
-    - `SaleDetail` y `SalesList` se rehicieron como pedido.
-    - Rutas nuevas: `/sales/new` y `/sales/[id]/edit`.
-    - La cotización aceptada ofrece «Crear pedido».
-    - En el menú, «Ventas» pasa a «Pedidos».
-    - Datos de prueba compartidos en `features/sales/test-fixtures.ts`.
-    - vitest: 1165 pruebas en verde.
-  - Paso 3:
-    - Archivos:
-      - repositorio `sales_order_repository.py`, que hereda de `SalesDocumentSupport`;
-      - casos de uso `application/sales_orders/`;
-      - router `routers/sales_orders.py` (rutas `/sales`, con `{order_id:uuid}`, registrado antes de `sales`);
-      - esquemas `schemas/sales_order.py`.
-    - Se retiraron de `sales.py` y de `SalesService` el `convert`, la lista, el detalle, la edición, la confirmación y la cancelación B06. Quedan el catálogo (ahora también con `sales:manage`) y `get_sale`, que usan entregas y devoluciones.
-    - Un pedido creado desde una cotización aceptada hereda su autorización mientras no se edite.
-    - La salida conserva `quantity_delivered_base` y `quantity_pending_base`.
-    - Pruebas:
-      - `test_sales_base.py` se reemplazó por `test_sales_orders.py`;
-      - `test_sales_deliveries.py` simula, en la base, un segundo pedido que salta la reserva, para seguir probando la carrera por la última unidad física.
-  - Paso 2:
-    - `application/sales_documents/pricing.py` (`SalesDocumentPricing`): cálculo común de cotización y pedido.
-    - `domain/ports/sales_document.py`: `LineIdentity`, `DocumentLine`, `DocumentTotals` y `SalesCatalog`. La cotización los usa por alias.
-    - `domain/entities/sales_order.py`, con sus pruebas unitarias en verde.
-    - Las e2e de cotización pasan, salvo la conversión B06, que se reemplaza en el paso 3.
-  - Paso 1:
-    - Migración `0125` y modelos.
-    - La migración redefine los triggers `guard_sales_lines_draft` y `guard_sales_order_lines_draft` con `varchar(24)`, porque `pending_authorization` no cabía.
-    - Agrega `uq_sales_customer_delivery_addresses_owner` (empresa, cliente, id), para que la dirección de entrega quede ligada al cliente del pedido.
-    - Ya está aplicada en desarrollo. Antes se borró la venta de QA VTA-20261116-6C21B05C, con respaldo JSON en el scratchpad de la sesión.
-    - El servicio B06 solo tolera pedidos sin cotización. Las e2e de ventas, entregas y aceptación final fallarán hasta el paso 3.
-- **Contexto**: el frontend usa SvelteKit 3 (imports `#lib/…` con extensión, `$app/env`).
+- **Paso en curso**: 1.
+- **Contexto**: el ERP es multiempresa; no se fija nada fiscal por despliegue y se prueba siempre con dos empresas. El proyecto de referencia (`D:\josec\Documents\PROYECTO`) es de solo lectura: no se modifica, no se corren sus pruebas ni nada que escriba ahí.
 - **Comandos**:
-  - Pruebas: `./scripts/run-tests.sh` con un objetivo explícito: `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` o `lint`. Sin argumento corre la batería completa, de unos 45 minutos.
+  - Pruebas: `./scripts/run-tests.sh` con un objetivo explícito. Sin argumento corre la batería completa, de unos 45 minutos.
   - No hacer commits mientras corre la batería.
-  - Prettier solo se aplica a archivos nuevos o tocados.
 - **Reglas del usuario**:
   - Commits y PR sin Co-Authored-By ni «Generated with Claude Code».
   - PR hacia `develop` con Auto-fix y auto-merge (merge commit).
