@@ -20,6 +20,7 @@ from app.domain.entities.sales_fiscal_document import (
     ReceiverFacts,
     build_receiver,
     build_request,
+    contingency_details,
     dte_differences,
     fiscal_mode,
     issuer_snapshot,
@@ -344,3 +345,15 @@ def test_order_rules_and_states() -> None:
     assert service_status("TRANSMITIDO") is FiscalDocumentStatus.ISSUED
     assert service_status("RECHAZADO") is FiscalDocumentStatus.REJECTED
     assert service_status("FIRMADO") is None
+    assert service_status("CONTINGENCIA") is FiscalDocumentStatus.CONTINGENCY
+    assert service_status("CONTINGENCIA_REPORTADA") is FiscalDocumentStatus.CONTINGENCY
+    assert service_status("PENDIENTE_REINTENTO") is None
+
+
+def test_contingency_details_come_from_the_identification() -> None:
+    dte = {"identificacion": {"tipoContingencia": 4, "motivoContin": None}}
+    assert contingency_details(dte) == (4, None)
+    dte = {"identificacion": {"tipoContingencia": 5, "motivoContin": "Corte de energía"}}
+    assert contingency_details(dte) == (5, "Corte de energía")
+    assert contingency_details({"identificacion": {"tipoContingencia": None}}) is None
+    assert contingency_details(None) is None

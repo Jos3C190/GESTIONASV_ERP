@@ -47,6 +47,14 @@ class IssueResult:
     response: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class DocumentState:
+    """Estado de un documento en el servicio (seguimiento de la contingencia, V4a)."""
+
+    status: str
+    seal: str | None
+
+
 class DteService(Protocol):
     async def register_issuer(
         self,
@@ -63,6 +71,8 @@ class DteService(Protocol):
     async def issue(
         self, document_type: str, *, nit: str, idempotency_key: str, body: dict[str, Any]
     ) -> IssueResult: ...
+
+    async def document_state(self, nit: str, generation_code: str) -> DocumentState: ...
 
     async def document_json(self, nit: str, generation_code: str) -> dict[str, Any]: ...
 

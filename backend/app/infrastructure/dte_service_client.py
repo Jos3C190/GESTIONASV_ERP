@@ -14,6 +14,7 @@ import httpx
 
 from app.domain.ports.dte_service import (
     ConnectionCheck,
+    DocumentState,
     DteServiceError,
     IssuerCredentials,
     IssueResult,
@@ -146,6 +147,15 @@ class HttpDteServiceClient:
             control_number=payload.get("numeroControl"),
             seal=payload.get("selloRecepcion"),
             response=payload,
+        )
+
+    async def document_state(self, nit: str, generation_code: str) -> DocumentState:
+        response = await self._send(nit, "GET", f"/api/dte/{generation_code}")
+        if response.is_error:
+            raise self._error(response)
+        data = response.json()
+        return DocumentState(
+            status=str(data.get("estado") or ""), seal=data.get("sello_recepcion") or None
         )
 
     async def document_json(self, nit: str, generation_code: str) -> dict[str, Any]:

@@ -56,6 +56,8 @@ def _rule(message: str, code: str) -> BusinessRuleError:
 
 class FiscalDocumentStatus(StrEnum):
     PENDING = "pending"
+    CONTINGENCY = "contingency"
+    """Generado sin comunicación con Hacienda: tiene número y versión legible, espera el sello."""
     ISSUED = "issued"
     """Sellado por Hacienda."""
     SIMULATED = "simulated"
@@ -67,6 +69,7 @@ class FiscalDocumentStatus(StrEnum):
 #: Estados que ya tienen identidad fiscal y bloquean una nueva emisión del pedido.
 ACTIVE_STATUSES = (
     FiscalDocumentStatus.PENDING,
+    FiscalDocumentStatus.CONTINGENCY,
     FiscalDocumentStatus.ISSUED,
     FiscalDocumentStatus.SIMULATED,
     FiscalDocumentStatus.REJECTED,
@@ -99,7 +102,31 @@ def service_status(estado: str | None) -> FiscalDocumentStatus | None:
         "TRANSMITIDO": FiscalDocumentStatus.ISSUED,
         "PROCESADO": FiscalDocumentStatus.ISSUED,
         "RECHAZADO": FiscalDocumentStatus.REJECTED,
+        # Generado en contingencia: espera el evento y su transmisión (V4a).
+        "CONTINGENCIA": FiscalDocumentStatus.CONTINGENCY,
+        "CONTINGENCIA_REPORTADA": FiscalDocumentStatus.CONTINGENCY,
     }.get(estado or "")
+
+
+#: CAT-005, tipo de contingencia.
+CONTINGENCY_TYPES = {
+    1: "No disponibilidad de sistema del MH",
+    2: "No disponibilidad de sistema del emisor",
+    3: "Falla en el suministro de servicio de Internet del Emisor",
+    4: "Falla en el suministro de servicio de energía eléctrica del emisor",
+    5: "Otro",
+}
+
+
+def contingency_details(dte_json: dict[str, Any] | None) -> tuple[int, str | None] | None:
+    """Tipo (CAT-005) y motivo de la contingencia del JSON del documento; ``None`` si no la tiene."""
+
+    identification = (dte_json or {}).get("identificacion") or {}
+    kind = identification.get("tipoContingencia")
+    if kind not in CONTINGENCY_TYPES:
+        return None
+    reason = identification.get("motivoContin")
+    return int(kind), str(reason) if reason else None
 
 
 # --- emisor ---

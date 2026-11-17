@@ -15,6 +15,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -61,6 +62,9 @@ class SalesFiscalDocumentModel(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    contingency_type: Mapped[int | None] = mapped_column(SmallInteger)
+    contingency_reason: Mapped[str | None] = mapped_column(Text)
+    contingency_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -113,11 +117,11 @@ class SalesFiscalDocumentModel(Base):
             name="ck_sales_fiscal_documents_mode",
         ),
         CheckConstraint(
-            "status IN ('pending','issued','simulated','rejected','failed')",
+            "status IN ('pending','contingency','issued','simulated','rejected','failed')",
             name="ck_sales_fiscal_documents_status",
         ),
         CheckConstraint(
-            "status NOT IN ('issued','simulated') OR (generation_code IS NOT NULL "
+            "status NOT IN ('contingency','issued','simulated') OR (generation_code IS NOT NULL "
             "AND control_number IS NOT NULL AND issued_at IS NOT NULL)",
             name="ck_sales_fiscal_documents_identity",
         ),
@@ -125,6 +129,12 @@ class SalesFiscalDocumentModel(Base):
             "status <> 'issued' OR seal IS NOT NULL", name="ck_sales_fiscal_documents_seal"
         ),
         CheckConstraint("total >= 0 AND attempts >= 0", name="ck_sales_fiscal_documents_total"),
+        CheckConstraint(
+            "(contingency_type IS NULL OR contingency_type BETWEEN 1 AND 5) "
+            "AND (status <> 'contingency' OR (contingency_at IS NOT NULL "
+            "AND contingency_type IS NOT NULL))",
+            name="ck_sales_fiscal_documents_contingency",
+        ),
         Index(
             "uq_sales_fiscal_documents_active_sale",
             "company_id",

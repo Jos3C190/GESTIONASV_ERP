@@ -38,6 +38,9 @@ class FiscalDocument:
     error_code: str | None = None
     error_message: str | None = None
     issued_at: datetime | None = None
+    contingency_type: int | None = None
+    contingency_reason: str | None = None
+    contingency_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     sale_code: str | None = None
@@ -74,6 +77,10 @@ class SalesFiscalRepository(Protocol):
     ) -> tuple[list[FiscalDocument], int]: ...
 
     async def save(self, document: FiscalDocument) -> FiscalDocument: ...
+
+    async def lock_contingency(self, document_id: uuid.UUID) -> FiscalDocument | None:
+        """Toma un documento en contingencia para seguirlo (``SKIP LOCKED``)."""
+        ...
 
     async def claim(self, document_id: uuid.UUID, max_attempts: int) -> FiscalDocument | None:
         """Toma un documento pendiente para emitirlo (``SKIP LOCKED``) y cuenta el intento."""

@@ -9,6 +9,7 @@ from decimal import Decimal
 import pytest
 from app.core.exceptions import BusinessRuleError
 from app.domain.entities.sales_fiscal_email import (
+    CONTINGENCY_NOTE,
     SIMULATED_MARK,
     FiscalEmailContent,
     PrivacyNoticeText,
@@ -81,9 +82,17 @@ def test_simulated_documents_are_marked_and_ccf_is_named() -> None:
     assert "comuníquese con nosotros" in no_reply.text
 
 
+def test_contingency_documents_say_they_will_be_transmitted_later() -> None:
+    email = compose(replace(CONTENT, contingency=True))
+    assert CONTINGENCY_NOTE in email.text
+    assert "se generó en contingencia" in email.html
+    assert CONTINGENCY_NOTE not in compose(CONTENT).text
+
+
 def test_only_issued_documents_are_sent() -> None:
     require_sendable("issued")
     require_sendable("simulated")
+    require_sendable("contingency")
     for status in ("pending", "rejected", "failed"):
         with pytest.raises(BusinessRuleError) as raised:
             require_sendable(status)

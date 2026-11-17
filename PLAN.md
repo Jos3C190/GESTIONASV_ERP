@@ -66,7 +66,7 @@ Pasos:
   - En simulado, la contingencia se simula (el escenario se fuerza con `simulacion`) para poder probarla
     sin Hacienda.
   - Verificar: pruebas de integración del servicio.
-- [ ] **Paso 3: estado «en contingencia» en el ERP.**
+- [x] **Paso 3: estado «en contingencia» en el ERP.**
   - Migración: `sales_fiscal_documents` agrega el estado `contingency` y los campos de transmisión
     (`transmission_type`, `contingency_type`, `contingency_reason`, `contingency_window_id`).
   - Dominio: transiciones `pending → contingency → issued | rejected`. Un documento en contingencia ya tiene
@@ -78,7 +78,8 @@ Pasos:
 - [ ] **Paso 4: API y permisos.**
   - `GET /sales/contingencies`, `POST /sales/contingencies` (forzar por establecimiento, con tipo del
     catálogo CAT-005 y motivo) y `POST /sales/contingencies/{id}/close`.
-  - Permisos `fiscal_documents:contingency` (nuevo) y auditoría.
+  - Permiso `sales_invoices:contingency` (creado en la migración 0130; sigue el espacio de nombres de
+    `sales_invoices:read`/`issue`) y auditoría.
   - Verificar: e2e de permisos, auditoría y aislamiento entre empresas.
 - [ ] **Paso 5: interfaz.**
   - En la bandeja de documentos: estado «En contingencia» y filtro.
@@ -120,7 +121,23 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 3 de V4a (estado «en contingencia» en el ERP).
+- **Paso en curso**: 4 de V4a (API de contingencias, permisos y auditoría).
+  - Paso 3 hecho:
+    - Migración 0130: estado `contingency` y columnas `contingency_type` (CAT-005), `contingency_reason` y
+      `contingency_at`. Un documento en contingencia exige número, código de generación y `issued_at`.
+      La 0130 también crea el permiso `sales_invoices:contingency`. El downgrade se niega si hay documentos
+      generados en contingencia.
+    - `service_status`: CONTINGENCIA y CONTINGENCIA_REPORTADA se traducen a `contingency`. `dte_worker`
+      guarda el JSON y el PDF, el tipo y el motivo (`contingency_details`) y lo audita como
+      `FISCAL_DOCUMENT_CONTINGENCY`. Antes, un documento así se reintentaba hasta quedar FAILED.
+    - Seguimiento: `follow_contingency_document` (tarea arq `follow_fiscal_contingency`, encolada por
+      `reconcile_fiscal_documents`) consulta `GET /api/dte/:codigo` (`DteService.document_state`). Con el
+      sello vuelve a bajar el JSON y el PDF y pasa a `issued` o `simulated`; si Hacienda lo rechaza, a
+      `rejected`. Nunca vuelve a emitir.
+    - Correo: el automático sale al quedar en contingencia, con el aviso `CONTINGENCY_NOTE`, y no se repite
+      al sellarse (se puede reenviar a mano). Un documento simulado se marca como tal también en contingencia.
+    - Facturar de nuevo un pedido con un documento en contingencia devuelve ese mismo documento.
+    - Pruebas: unitarias, `test_sales_fiscal_contingency_migration.py` y e2e `test_fiscal_contingency.py`.
   - Paso 2 hecho:
     - Rutas `/api/emisores/:nit/contingencias`: GET; POST con `establecimiento`, `tipoContingencia` y
       `motivoContingencia`; y `/:id/cerrar`, `/:id/evento` y `/:id/transmitir`, con el alcance `contingency`. Una
