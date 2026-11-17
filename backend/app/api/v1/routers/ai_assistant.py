@@ -13,9 +13,19 @@ from pydantic import BaseModel, Field
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-from dotenv import load_dotenv
+from pathlib import Path
+from dotenv import find_dotenv, load_dotenv
 
-load_dotenv()
+# Cargar .env buscando en cwd, padres y raíz del proyecto
+load_dotenv(find_dotenv(usecwd=True))
+for _p in [
+    Path(__file__).resolve().parents[5] / ".env",
+    Path(__file__).resolve().parents[4] / ".env",
+    Path.cwd() / ".env",
+    Path.cwd().parent / ".env",
+]:
+    if _p.exists():
+        load_dotenv(_p)
 
 logger = structlog.get_logger(__name__)
 

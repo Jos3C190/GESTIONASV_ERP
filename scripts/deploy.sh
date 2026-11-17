@@ -20,6 +20,7 @@ git reset --hard origin/"$DEPLOY_BRANCH"
 
 # 2. Actualizar Backend
 echo ">>> 2. Actualizando dependencias y migraciones del Backend..."
+[ -f "$HOME/GESTIONASV_ERP/.env" ] && ln -sf "$HOME/GESTIONASV_ERP/.env" "$HOME/GESTIONASV_ERP/backend/.env"
 cd "$HOME/GESTIONASV_ERP/backend"
 source .venv/bin/activate
 uv sync
