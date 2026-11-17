@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1.routers import (
+    ai_assistant,
     audit_logs,
     auth,
     branch_product_demand,
@@ -156,3 +157,4 @@ api_router.include_router(sales_orders.router, prefix="/api/v1")
 api_router.include_router(sales.router, prefix="/api/v1")
 api_router.include_router(suppliers.router, prefix="/api/v1")
 api_router.include_router(lifecycle.router, prefix="/api/v1")
+api_router.include_router(ai_assistant.router, prefix="/api/v1")
