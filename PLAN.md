@@ -26,7 +26,8 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
   - Hay 32 usos de `config.dteMode` y 110 de `config.emisor` en `src/`.
 - Autenticación con Hacienda: `POST /seguridad/auth` con `user` (el NIT) y `pwd` (la contraseña de la API). El token dura 48 h en pruebas y 24 h en producción.
 - Firmador oficial: `POST /firmardocumento/` con `nit`, `activo`, `passwordPri` y `dteJson`. Firma con `{nit}.crt` de su carpeta de certificados, así que varias empresas pueden compartir un firmador.
-  - Errores de configuración: 803 (llave o contraseña), 809 (datos) y 812 (no está el certificado).
+  - Errores de configuración: 803 (no hay certificado para el NIT o la contraseña no corresponde; verificado), 809 (datos) y 812.
+  - Busca `{nit}.crt` en `./uploads` o en `CERTIFICATE_HOME`. El `.crt` es un XML (`CertificadoMH`) con las llaves; `privateKey.clave` es el SHA-512 de la contraseña privada. Se puede generar un certificado de prueba propio para firmar de verdad sin Hacienda.
   - El `Dockerfile` oficial copia `target/*-exec.jar`: hace falta una etapa Maven previa. Puerto 8113, perfil `nonssl`.
 - El ERP ya cifra con AES-GCM (`app/core/secret_encryption.py`) y el modo de la empresa está en `company_fiscal_profiles.operating_mode` (`simulated`, `test`, `production`).
 - El servicio ya numera por NIT y ambiente, y el documento fiscal guarda su `mode`.
@@ -58,7 +59,7 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [ ] **Paso 1: firmador oficial en compose.** Construcción Maven más Corretto, volumen de certificados, salud y prueba de que responde (error 812 sin certificado).
+- [x] **Paso 1: firmador oficial en compose.** Construcción Maven más JRE, volumen de certificados, salud y prueba de que responde (error 803 sin certificado).
 - [ ] **Paso 2: servicio, emisores con credenciales.** Registro con contraseñas cifradas y certificado al volumen. Pruebas.
 - [ ] **Paso 3: servicio, modo y ambiente por emisor.**
   - Token por NIT, firma por emisor, host y ambiente por modo; sin `ISSUER_MODE_UNAVAILABLE`.
@@ -72,7 +73,12 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
 
 ## Estado actual
 
-- **Paso en curso**: 1 (firmador oficial en compose).
+- **Paso en curso**: 2 (servicio, emisores con credenciales).
+  - Paso 1:
+    - Código oficial copiado sin cambios a `dte-signer/`, con `Dockerfile.erp` (Maven 3.9.9 + Temurin 21 JRE, usuario sin privilegios, salud en `/firmardocumento/status`) y `PROCEDENCIA.md`.
+    - Servicio `dte-signer` en compose (perfil `dte` en producción) y volumen `dte-certificates`: el firmador lo monta de solo lectura en `/certificados` y `dte-service` lo escribe en `/app/certificados`, que la imagen crea con dueño `node`.
+    - `dte-service` recibe `FIRMADOR_URL` y `DTE_CERTIFICATES_DIR`.
+    - Verificado: compila, arranca en 6 s y, sin certificado, responde 803.
 - **Contexto**:
   - El frontend usa SvelteKit 3.
   - El servicio DTE se prueba con `./scripts/run-tests.sh dte`.

@@ -1,0 +1,22 @@
+# Firmador oficial de Hacienda (svfe-api-firmador) compilado dentro de compose.
+#
+# El Dockerfile oficial (./Dockerfile) espera el jar ya compilado en target/. Este agrega la
+# etapa de Maven para que la imagen se construya igual en desarrollo, en CI y en el servidor.
+
+FROM maven:3.9.9-eclipse-temurin-21-alpine AS build
+WORKDIR /build
+COPY pom.xml .
+RUN --mount=type=cache,target=/root/.m2 mvn -q -B dependency:go-offline
+COPY src ./src
+RUN --mount=type=cache,target=/root/.m2 mvn -q -B -DskipTests package
+
+FROM eclipse-temurin:21.0.5_11-jre-alpine
+ENV TZ=America/El_Salvador
+WORKDIR /app
+RUN addgroup -S firmador && adduser -S firmador -G firmador
+COPY --from=build /build/target/*-exec.jar /app/app.jar
+USER firmador
+EXPOSE 8113
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:8113/firmardocumento/status >/dev/null || exit 1
+ENTRYPOINT ["java", "--add-opens", "java.base/java.math=ALL-UNNAMED", "--add-opens", "java.base/java.time=ALL-UNNAMED", "-jar", "/app/app.jar"]
