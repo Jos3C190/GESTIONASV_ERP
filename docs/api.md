@@ -2113,3 +2113,36 @@ Error codes (`422` unless noted): `sales_invoice_order_not_confirmed`,
 
 Configuration: `DTE_SERVICE_URL` (empty disables invoicing), `DTE_SERVICE_API_KEY`,
 `DTE_SERVICE_TIMEOUT_SECONDS`, `DTE_MAX_ATTEMPTS`, `DTE_RECONCILE_SECONDS`, `DTE_STALE_MINUTES`.
+
+
+## Sales invoice emails (revision 0127, block V3c)
+
+An issued (`issued` or `simulated`) fiscal document is emailed to the customer with its PDF and
+JSON attached. The ERP sends it through the deployment's SMTP server: the sender is
+`SMTP_FROM_ADDRESS` with the company's trade name, and `Reply-To` is the company's DTE email from
+the issuer snapshot. The body lists the control number, generation code, issue date and total,
+and closes with the company's current privacy notice. Simulated documents carry
+«SIMULADO — sin validez fiscal» in the subject and the body.
+
+- **Automatic**: when `dte-worker` issues a document and the customer's record has a valid
+  email, it creates one `auto` send (at most one per document) and delivers it.
+- **Manual**: a user sends the document to the customer's email or to up to five addresses.
+- Delivery is asynchronous (`pending` → `sent` or `failed`); temporary SMTP or network errors are
+  retried with the same record, and the reconcile job re-enqueues stale pending sends.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/fiscal-documents/{id}/emails` | `sales_invoices:read` | `{enabled, customer_email, items}`: whether the server sends email, the customer's email and the history (recipients, origin, status, attempts, error, requester, sent date). |
+| POST | `/sales/fiscal-documents/{id}/emails` | `sales_invoices:issue` | Body `{"recipients": [...]}` (1–5 after trimming, lowercasing and removing duplicates) or empty for the customer's email. `202` with the `pending` send. |
+
+Audited on `sales_fiscal_document`: `REQUEST_FISCAL_DOCUMENT_EMAIL` (user),
+`FISCAL_DOCUMENT_EMAIL_SENT` and `FISCAL_DOCUMENT_EMAIL_FAILED` (worker).
+
+Error codes (`422`): `sales_invoice_email_not_issued`, `sales_invoice_email_required`,
+`sales_invoice_email_invalid`, `sales_invoice_email_too_many`,
+`sales_invoice_email_unavailable`. `FiscalDocumentOut` now includes `customer_email`.
+
+Configuration: `SMTP_HOST` (empty disables email), `SMTP_PORT`, `SMTP_SECURITY`
+(`none`, `starttls`, `ssl`), `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_ADDRESS` (required with
+a host) and `SMTP_TIMEOUT_SECONDS`. In development compose points the backend and `dte-worker` to
+Mailpit (`mailpit:1025`); its inbox is at <http://localhost:8025>.

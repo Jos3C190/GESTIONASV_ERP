@@ -58,9 +58,30 @@ En **Ventas → Documentos fiscales** están todos los documentos de la sucursal
 estado y tipo y búsqueda por número de control, pedido o cliente. El detalle muestra el código
 de generación, el sello, los intentos y el último error, y permite descargar el JSON y el PDF.
 
-## 6. Permisos
+## 6. Envío por correo
+
+El documento emitido se envía al cliente con el PDF y el JSON adjuntos. El correo sale con el
+nombre comercial de la empresa y, si el cliente responde, la respuesta llega al correo DTE de la
+empresa. Al pie va el aviso de privacidad vigente.
+
+- **Automático**: al terminar de emitirse, si la ficha del cliente tiene un correo válido, el
+  documento se envía solo (una vez).
+- **Manual**: en la sección **Envío por correo** del documento (o en la sección Factura del
+  pedido) escribe hasta 5 correos separados por comas y pulsa **Enviar por correo**. Si dejas el
+  correo del cliente, se usa ese.
+- El historial muestra a quién se envió, si fue automático o quién lo pidió, y si llegó al
+  servidor de correo (**Enviado**), si sigue en proceso (**Enviando**) o si falló (**No se
+  envió**, con el motivo).
+- Un documento **simulado** se envía con la marca «SIMULADO — sin validez fiscal» en el asunto y
+  en el cuerpo.
+- Si el servidor no tiene configurado el correo saliente, la sección lo indica y no deja enviar.
+
+En desarrollo, los correos no salen a internet: llegan al buzón de prueba Mailpit, en
+<http://localhost:8025>.
+
+## 7. Permisos
 
 | Permiso | Qué permite |
 |---|---|
-| `sales_invoices:read` | Ver la sección Factura, la bandeja y descargar JSON y PDF. |
-| `sales_invoices:issue` | Facturar y reintentar. |
+| `sales_invoices:read` | Ver la sección Factura, la bandeja, el historial de envíos y descargar JSON y PDF. |
+| `sales_invoices:issue` | Facturar, reintentar y enviar por correo. |

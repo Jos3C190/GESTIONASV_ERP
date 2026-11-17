@@ -57,12 +57,13 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Historial y bitácora.
   - e2e con Mailpit (el correo llega con sus dos adjuntos).
 - [x] **Paso 5: frontend.** «Enviar por correo» e historial. vitest.
-- [ ] **Paso 6: documentación.** `docs/api.md`, `docs/database-schema.md` §37 y manual de facturación.
+- [x] **Paso 6: documentación.** `docs/api.md`, `docs/database-schema.md` §37 y manual de facturación.
 - [ ] **Paso 7: verificación y PR.** Batería completa, QA en el navegador con Mailpit y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 6 (documentación).
+- **Paso en curso**: 7 (verificación y PR).
+  - Paso 6: `docs/api.md` (Sales invoice emails), `docs/database-schema.md` §37 y sección 6 del manual de facturación.
   - Paso 5: componente `FiscalDocumentEmails.svelte`, en el detalle del documento y en la sección Factura del pedido.
     - Propone el correo del cliente y acepta varios separados por comas, punto y coma o espacios.
     - Historial con estado (Enviando, Enviado, No se envió), origen, quién lo pidió y error; se actualiza solo mientras hay envíos pendientes.
