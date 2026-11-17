@@ -69,11 +69,21 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
 - [x] **Paso 6: ERP, registro del emisor con modo y credenciales.** `dte-worker` y e2e contra el stub.
 - [x] **Paso 7: frontend.** Pestaña «Hacienda». vitest.
 - [x] **Paso 8: documentación.** API, esquema y manuales (cómo obtener el certificado y las credenciales de pruebas).
-- [ ] **Paso 9: verificación y PR.** Batería completa, QA en el navegador con el stub y PR a `develop` con auto-merge.
+- [x] **Paso 9: verificación y PR.** Batería completa, QA en el navegador con el stub y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 9 (verificación y PR).
+- **Paso en curso**: 9 hecho; falta la PR hacia `develop` y su merge.
+  - Paso 9:
+    - Batería completa: backend 1978 pasaron y 2 fallaron en `tests/integration/test_fiscal_repository.py`,
+      que no sembraban credenciales probadas antes de pasar a pruebas o producción. Se agregó
+      `_tested_credentials` y ahora también comprueba que sin ellas se rechaza. El archivo pasa (6).
+      OCR, DTE, frontend y lint se corrieron aparte, porque la batería se detiene tras el backend.
+    - QA en el navegador de la pestaña «Hacienda»: estado «Sin cargar», textos de ayuda, modo claro y
+      oscuro, 375 px sin desborde y error de validación al guardar vacío. La subida del certificado y
+      «Probar conexión» quedan cubiertas por vitest y las e2e (el panel del navegador no sube archivos).
+    - En desarrollo `DTE_MODE` es simulado y el `.env` no tiene `DTE_CREDENTIALS_KEY`: para probar con
+      credenciales reales hay que agregarla (con permiso del usuario) y subir el modo del despliegue.
   - Paso 8: `docs/api.md` («Hacienda credentials»), esquema §39, manual de configuración fiscal §5 «Hacienda» (Correo pasa a §6) y `dte-service/docs/multiemisor.md` (modo máximo, credenciales, `/probar`, firmador, variables nuevas y errores).
   - Paso 7: pestaña «Hacienda» en Configuración fiscal (`FiscalHaciendaPanel.svelte`).
     - El certificado se lee en el navegador y viaja en base64; las contraseñas no se vuelven a mostrar.
