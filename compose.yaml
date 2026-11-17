@@ -238,6 +238,8 @@ services:
       TRACCAR_OSMAND_URL: ${TRACCAR_OSMAND_URL:-}
       # Sin el perfil `vlm` la captura sigue disponible y los datos se escriben a mano.
       VLM_ENABLED: ${VLM_ENABLED:-true}
+      DTE_SERVICE_URL: http://dte-service:3000
+      DTE_SERVICE_API_KEY: ${DTE_SERVICE_API_KEY:-}
       <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
@@ -462,8 +464,8 @@ services:
   # Servicio DTE (bloque V3 de Ventas): arma, firma y transmite los documentos
   # tributarios. Multiemisor: cada empresa se registra como emisor desde el ERP.
   # Perfil `dte` mientras el backend no lo use (V3b lo pasa al arranque normal).
+  # Servicio DTE multiemisor (red interna; no publica puertos).
   dte-service:
-    profiles: ["dte"]
     build:
       context: ./dte-service
     environment:

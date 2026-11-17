@@ -71,12 +71,12 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 - [x] **Paso 1: servicio, contrato v2 ampliado.** Condición y plazo, retención, percepción y descuento global en el resumen, con pruebas.
 - [x] **Paso 2: migración `0126` y modelos.** `sales_fiscal_documents`, permisos y bloqueo de la cancelación de pedidos facturados.
 - [x] **Paso 3: dominio.** Snapshot del emisor con su hash, receptor, líneas y resumen desde el pedido, conciliación de totales y estados. Pruebas unitarias.
-- [ ] **Paso 4: infraestructura.**
-  - Cliente HTTP del servicio.
-  - Trabajador arq `dte-worker`.
-  - Guardado del JSON y del PDF.
-  - Compose.
+- [x] **Paso 4: infraestructura.**
+  - Cliente HTTP del servicio (`app/infrastructure/dte_service_client.py`, puerto `app/domain/ports/dte_service.py`).
+  - Configuración `DTE_SERVICE_*` y compose: `dte-service` en el arranque normal.
+  - El trabajador y el guardado del JSON y el PDF pasan al paso 5, porque dependen del repositorio y de los casos de uso.
 - [ ] **Paso 5: aplicación y API.**
+  - Repositorio del documento fiscal y trabajador arq `dte-worker` (emisión, JSON y PDF al almacenamiento, conciliación periódica de pendientes).
   - Facturar, reintentar, lista, detalle y descargas.
   - Registro del emisor.
   - Pruebas e2e contra el servicio real en simulado, con dos empresas.
@@ -86,7 +86,8 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 4 (infraestructura).
+- **Paso en curso**: 5 (aplicación, trabajador y API).
+  - Paso 4: errores del servicio clasificados en reintentables (red, 5xx, `IDEMPOTENCY_IN_PROGRESS`, `ISSUER_MODE_UNAVAILABLE`) y definitivos (4xx, `FIRMADOR_CONFIGURATION_ERROR`). `DTE_SERVICE_URL` vacío = facturación deshabilitada; con URL exige `DTE_SERVICE_API_KEY`. El backend debe recrearse (`docker compose up -d backend`) para tomar las variables nuevas.
   - Paso 3: `app/domain/entities/sales_fiscal_document.py`.
     - Hash del emisor: `canonical_json` = llaves ordenadas, sin espacios, `ensure_ascii=False`. Se comprobó contra `issuerContractV2.js` (la prueba fija el hash que calculó el servicio).
     - Códigos MH: `M001` → tipo `02` y `001`; `P001` → `001`. `codEstable` y `codPuntoVenta` llevan el código del ERP.
