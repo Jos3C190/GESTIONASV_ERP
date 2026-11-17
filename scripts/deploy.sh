@@ -8,11 +8,13 @@ echo "============================================="
 # Exportar rutas del entorno de ec2-user (node, pnpm, pm2, uv)
 export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/usr/bin:$PATH"
 
-# 1. Traer cambios de develop
+# 1. Traer cambios de la rama activa
 cd "$HOME/GESTIONASV_ERP"
-echo ">>> 1. Descargando cambios más recientes de develop..."
-git fetch origin develop
-git reset --hard origin/develop
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-$CURRENT_BRANCH}"
+echo ">>> 1. Descargando cambios más recientes de $DEPLOY_BRANCH..."
+git fetch origin "$DEPLOY_BRANCH"
+git reset --hard origin/"$DEPLOY_BRANCH"
 
 # 2. Actualizar Backend
 echo ">>> 2. Actualizando dependencias y migraciones del Backend..."

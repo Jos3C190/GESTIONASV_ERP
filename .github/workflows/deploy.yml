@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - develop
+      - feature/ai-bedrock-guardrails
 
 concurrency:
   group: deploy-aws-develop
