@@ -90,11 +90,18 @@ Fuera de alcance: las promociones (V6) y el registro de la autorización (V2d y 
 - [x] **Paso 5: semilla y documentación.**
   - Semilla de Grupo Lorena: márgenes de Mostrador y Mayoreo, escalas en Mayoreo, descuento a un cliente y topes para GERENTE DE SUCURSAL.
   - `docs/api.md`, `docs/database-schema.md` §33 y el manual.
-- [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador (claro, oscuro, 375 px) y PR a `develop`.
+- [x] **Paso 6: verificación y PR.** Batería completa, QA en el navegador (claro, oscuro, 375 px) y PR a `develop`.
 
 ## Estado actual
 
-- **Paso en curso**: 6 (verificación y PR). Semilla en el paso `seed.grupo_lorena.sales_discounts` (`seed/seed_grupo_lorena_discounts.py`); documentación en `docs/api.md`, `docs/database-schema.md` §33 y `docs/ers-v1/manual-margen-y-descuentos.md`. Frontend: costo, margen y sugerido en `PriceListDetail.svelte`, diálogos `VolumeDiscountsDialog` y `CategoryMarginsDialog`, pantalla `/sales/discount-policies` (`DiscountPoliciesPage.svelte`) y descuento fijo en la ficha del cliente. Backend: costo, margen y precio sugerido en `GET /price-lists/{id}/prices` (solo con `sales_costs:read`), `/price-lists/categories`, `/price-lists/{id}/category-margins`, escalas en `/price-lists/{id}/volume-discounts`, topes en `/sales/discount-policies`, `/sales/my-discount-policy` y `/sales/discount-evaluation` (módulo `application/sales_discounts`); `discount_percent` en el cliente. 3 pruebas e2e en `tests/e2e/test_sales_discounts.py`. Dominio en `domain/entities/sales_margin.py` con 7 pruebas en `tests/unit/test_sales_margin.py`. Migración `0123_sales_margins_and_discounts.py` aplicada también en la base local; modelos nuevos en `models/sales_pricing.py` y `discount_percent` en `sales_customers`.
+- **Paso en curso**: ninguno; V2c terminado y en PR hacia `develop`. Batería completa: backend 1,886 pruebas y frontend 183 archivos en verde. Lo siguiente es V2d (cotización rediseñada), que usará `POST /sales/discount-evaluation` para pedir autorización.
+- **QA en el navegador (16/11/2026)**, con el panel oculto, por texto y JavaScript:
+  - Mostrador muestra costo, margen e insignias «Bajo el objetivo» y «Bajo costo»;
+  - el sugerido del café da $19.82 ($11.40 de costo, 35 %) y «Usar» lo copia;
+  - la pantalla de topes muestra GERENTE 10/5 y EMPLEADO 3/0;
+  - El Trigal tiene 3 % fijo y la lista Mayoreo.
+  - No se revisaron capturas en modo oscuro ni a 375 px porque el panel del navegador estaba oculto.
+- **Hallazgo**: con los costos de la demo, el café de Mostrador ($11.50 con IVA) queda bajo costo ($11.40 sin IVA) y varios productos quedan bajo el margen objetivo. La pantalla lo marca bien; los precios de la semilla de V2b no se tocaron.
 - **Contexto**: el frontend usa SvelteKit 3: imports `#lib/…` con extensión, `$app/env`, `goto(…, { replace, reset: false })`.
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
