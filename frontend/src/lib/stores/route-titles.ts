@@ -19,6 +19,7 @@ const TITLES: Record<string, string> = {
   '/customers/new': 'Nuevo cliente',
   '/sales/quotations': 'Cotizaciones de venta',
   '/sales/returns': 'Devoluciones',
+  '/sales/fiscal-documents': 'Documentos fiscales',
   '/sales/fiscal-settings': 'Configuración fiscal',
   '/sales/price-lists': 'Listas de precios',
   '/sales/discount-policies': 'Topes de descuento',
@@ -82,6 +83,8 @@ export function routeTitle(pathname: string): string {
   if (pathname.startsWith('/customers')) return TITLES['/customers'] ?? 'Clientes';
   if (pathname.startsWith('/sales/price-lists'))
     return TITLES['/sales/price-lists'] ?? 'Listas de precios';
+  if (pathname.startsWith('/sales/fiscal-documents'))
+    return TITLES['/sales/fiscal-documents'] ?? 'Documentos fiscales';
   if (pathname.startsWith('/sales/quotations'))
     return TITLES['/sales/quotations'] ?? 'Cotizaciones de venta';
   if (pathname.startsWith('/sales')) return TITLES['/sales'] ?? 'Ventas';

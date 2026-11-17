@@ -80,13 +80,18 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Facturar, reintentar, lista, detalle y descargas.
   - Registro del emisor.
   - Pruebas e2e contra el servicio real en simulado, con dos empresas.
-- [ ] **Paso 6: frontend.** Facturar en el pedido, bandeja, detalle y menú. vitest.
+- [x] **Paso 6: frontend.** Facturar en el pedido, bandeja, detalle y menú. vitest.
 - [ ] **Paso 7: documentación.** `docs/api.md`, `docs/database-schema.md` §36 y manual de facturación.
 - [ ] **Paso 8: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 6 (frontend).
+- **Paso en curso**: 7 (documentación).
+  - Paso 6:
+    - Panel «Factura» en el pedido confirmado (`SalesInvoicePanel.svelte`): elige la caja si hay varias, muestra lo que falta para facturar, sigue el documento mientras se emite (cada 3 s), descarga JSON y PDF y reintenta. Con documento vigente, el pedido oculta «Cancelar pedido».
+    - Bandeja `/sales/fiscal-documents` y detalle `/sales/fiscal-documents/[id]`; entrada «Documentos fiscales» en el menú con `sales_invoices:read`.
+    - vitest: 1174 en verde.
+    - Nota de pruebas: `beforeEach(() => mock.mockReset())` devuelve el mock y vitest lo ejecuta como limpieza; usar llaves. En los `select` se usa `value` con `onchange` (como el resto del proyecto), porque `bind:value` no responde a `fireEvent.change`.
   - Paso 5:
     - API (`routers/sales_invoices.py`):
       - `GET /sales/{id}/invoice-options`;
