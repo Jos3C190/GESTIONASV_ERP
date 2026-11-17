@@ -34,6 +34,7 @@ from app.infrastructure.models.employee import (
 from app.infrastructure.models.fiscal import (
     CompanyDteDocumentTypeModel,
     CompanyEconomicActivityModel,
+    CompanyEmailSettingsModel,
     CompanyFiscalProfileModel,
     FiscalEstablishmentModel,
     FiscalPointOfSaleModel,
@@ -232,6 +233,7 @@ __all__: list[str] = [
     "Company",
     "CompanyDteDocumentTypeModel",
     "CompanyEconomicActivityModel",
+    "CompanyEmailSettingsModel",
     "CompanyFiscalProfileModel",
     "CompanyUnitModel",
     "CountryModel",

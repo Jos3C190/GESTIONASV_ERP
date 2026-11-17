@@ -17,6 +17,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -227,5 +228,51 @@ class CompanyDteDocumentTypeModel(Base):
         CheckConstraint(
             "(certification_status = 'approved') = (certified_at IS NOT NULL)",
             name="ck_company_dte_document_types_certified",
+        ),
+    )
+
+
+class CompanyEmailSettingsModel(Base):
+    """SMTP propio de la empresa para enviar documentos (revisión 0128, bloque V3c)."""
+
+    __tablename__ = "company_email_settings"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), primary_key=True
+    )
+    host: Mapped[str] = mapped_column(String(255), nullable=False)
+    port: Mapped[int] = mapped_column(Integer, nullable=False)
+    security: Mapped[str] = mapped_column(String(8), nullable=False)
+    username: Mapped[str | None] = mapped_column(String(255))
+    password_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary)
+    from_address: Mapped[str] = mapped_column(String(254), nullable=False)
+    from_name: Mapped[str | None] = mapped_column(String(150))
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    last_test_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_test_ok: Mapped[bool | None] = mapped_column(Boolean)
+    last_test_error: Mapped[str | None] = mapped_column(Text)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), _user_fk())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint("port BETWEEN 1 AND 65535", name="ck_company_email_settings_port"),
+        CheckConstraint(
+            "security IN ('none','starttls','ssl')", name="ck_company_email_settings_security"
+        ),
+        CheckConstraint("length(btrim(host)) > 0", name="ck_company_email_settings_host"),
+        CheckConstraint("from_address LIKE '%_@_%._%'", name="ck_company_email_settings_from"),
+        CheckConstraint(
+            "password_encrypted IS NULL OR username IS NOT NULL",
+            name="ck_company_email_settings_password",
+        ),
+        CheckConstraint(
+            "(last_test_at IS NULL) = (last_test_ok IS NULL) "
+            "AND (last_test_ok IS NOT FALSE OR last_test_error IS NOT NULL)",
+            name="ck_company_email_settings_test",
         ),
     )
