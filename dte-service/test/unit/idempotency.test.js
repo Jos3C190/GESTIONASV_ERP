@@ -129,6 +129,26 @@ describe('idempotency.js', () => {
     assert.equal(r.existente.codigo_generacion, 'CODIGO-ABANDONADO');
   });
 
+  test('un rechazo del emisor sin identidad libera la clave para reintentarla', () => {
+    const hash = hashSolicitud('POST', '/api/dte/v2/factura', { items: [] });
+    reclamar('key-emisor', hash);
+    guardarResultado('key-emisor', 403, { code: 'DTE_DOCUMENT_TYPE_NOT_ALLOWED', error: 'No' });
+    assert.equal(reclamar('key-emisor', hash).debeSeguir, true);
+    guardarResultado('key-emisor', 201, { codigoGeneracion: 'XYZ-1' });
+    const repetida = reclamar('key-emisor', hash);
+    assert.equal(repetida.debeSeguir, false);
+    assert.equal(repetida.existente.status_code, 201);
+  });
+
+  test('un rechazo del emisor con identidad asociada no borra la clave', () => {
+    reclamar('key-emisor-id');
+    asociarIdentidad('key-emisor-id', 'ID-1');
+    guardarResultado('key-emisor-id', 409, { code: 'ISSUER_MODE_UNAVAILABLE' });
+    const r = reclamar('key-emisor-id');
+    assert.equal(r.debeSeguir, false);
+    assert.equal(r.existente.status_code, 409);
+  });
+
   test('guardarResultado no revienta si se llama sin clave', () => {
     assert.doesNotThrow(() => guardarResultado(undefined, 200, {}));
   });

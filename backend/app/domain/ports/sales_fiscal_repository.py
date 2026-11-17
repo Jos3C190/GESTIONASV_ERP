@@ -1,0 +1,87 @@
+"""Puerto de persistencia del documento fiscal del pedido (bloque V3b)."""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal
+from typing import Any, Protocol
+
+from app.domain.entities.sales_fiscal_document import FiscalDocumentStatus
+
+
+@dataclass(slots=True)
+class FiscalDocument:
+    id: uuid.UUID
+    company_id: uuid.UUID
+    branch_id: uuid.UUID
+    sale_id: uuid.UUID
+    establishment_id: uuid.UUID
+    point_of_sale_id: uuid.UUID
+    document_type: str
+    mode: str
+    status: FiscalDocumentStatus
+    idempotency_key: str
+    total: Decimal
+    issuer_snapshot: dict[str, Any]
+    request_payload: dict[str, Any]
+    created_by_id: uuid.UUID
+    attempts: int = 0
+    generation_code: uuid.UUID | None = None
+    control_number: str | None = None
+    dte_json: dict[str, Any] | None = None
+    seal: str | None = None
+    service_response: dict[str, Any] | None = None
+    json_object_key: str | None = None
+    pdf_object_key: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    issued_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    sale_code: str | None = None
+    customer_name: str | None = None
+    point_of_sale_code: str | None = None
+    establishment_code: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FiscalDocumentFilters:
+    branch_ids: tuple[uuid.UUID, ...] | None
+    """``None``: todas las sucursales; tupla vacía: ninguna."""
+    branch_id: uuid.UUID | None = None
+    sale_id: uuid.UUID | None = None
+    status: str | None = None
+    document_type: str | None = None
+    search: str | None = None
+
+
+class SalesFiscalRepository(Protocol):
+    async def create(self, document: FiscalDocument) -> FiscalDocument: ...
+
+    async def get(
+        self, company_id: uuid.UUID, document_id: uuid.UUID, *, lock: bool = False
+    ) -> FiscalDocument | None: ...
+
+    async def active_for_order(
+        self, company_id: uuid.UUID, order_id: uuid.UUID
+    ) -> FiscalDocument | None: ...
+
+    async def list_documents(
+        self, company_id: uuid.UUID, filters: FiscalDocumentFilters, *, page: int, size: int
+    ) -> tuple[list[FiscalDocument], int]: ...
+
+    async def save(self, document: FiscalDocument) -> FiscalDocument: ...
+
+    async def claim(self, document_id: uuid.UUID, max_attempts: int) -> FiscalDocument | None:
+        """Toma un documento pendiente para emitirlo (``SKIP LOCKED``) y cuenta el intento."""
+        ...
+
+    async def pending_ids(self, updated_before: datetime, limit: int) -> list[uuid.UUID]: ...
+
+    async def unit_codes(self, company_id: uuid.UUID, unit_ids: set[int]) -> dict[int, str]:
+        """CAT-014 de cada unidad en la empresa (solo las que lo tienen)."""
+        ...
+
+    async def catalog_version(self, catalog_code: str) -> str | None: ...

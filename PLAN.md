@@ -75,7 +75,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Cliente HTTP del servicio (`app/infrastructure/dte_service_client.py`, puerto `app/domain/ports/dte_service.py`).
   - Configuración `DTE_SERVICE_*` y compose: `dte-service` en el arranque normal.
   - El trabajador y el guardado del JSON y el PDF pasan al paso 5, porque dependen del repositorio y de los casos de uso.
-- [ ] **Paso 5: aplicación y API.**
+- [x] **Paso 5: aplicación y API.**
   - Repositorio del documento fiscal y trabajador arq `dte-worker` (emisión, JSON y PDF al almacenamiento, conciliación periódica de pendientes).
   - Facturar, reintentar, lista, detalle y descargas.
   - Registro del emisor.
@@ -86,7 +86,18 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 5 (aplicación, trabajador y API).
+- **Paso en curso**: 6 (frontend).
+  - Paso 5:
+    - API (`routers/sales_invoices.py`):
+      - `GET /sales/{id}/invoice-options`;
+      - `POST /sales/{id}/invoice` (202 al crear; 200 si el pedido ya tenía documento, que se devuelve el mismo);
+      - `GET /sales/fiscal-documents` (filtros `branch_id`, `sale_id`, `status`, `document_type`, `q`), `GET …/{id}`, `POST …/{id}/retry`, `GET …/{id}/json` (archivo) y `GET …/{id}/pdf` (enlace firmado).
+    - Trabajador `dte-worker` (`app/infrastructure/dte_worker.py`, cola `arq:dte`):
+      - registra al emisor (`PUT /api/emisores/:nit`), emite y baja el JSON y el PDF al almacenamiento;
+      - concilia los pendientes cada 20 s;
+      - la API encola después del commit.
+    - e2e `tests/e2e/test_sales_invoices.py` (3) contra el servicio real; procesan con `process_fiscal_document` porque el trabajador mira la base de desarrollo.
+  - **Decisión (reanudación del 17/11/2026)**: el servicio guardaba bajo la Idempotency-Key los rechazos del emisor (tipo no habilitado, emisor no autorizado o inactivo, modo no disponible) y los repetía para siempre. Ahora `guardarResultado` libera la clave cuando no hay identidad reservada, así el reintento usa la misma clave sin riesgo de duplicar. Prueba en `test/unit/idempotency.test.js`.
   - Paso 4: errores del servicio clasificados en reintentables (red, 5xx, `IDEMPOTENCY_IN_PROGRESS`, `ISSUER_MODE_UNAVAILABLE`) y definitivos (4xx, `FIRMADOR_CONFIGURATION_ERROR`). `DTE_SERVICE_URL` vacío = facturación deshabilitada; con URL exige `DTE_SERVICE_API_KEY`. El backend debe recrearse (`docker compose up -d backend`) para tomar las variables nuevas.
   - Paso 3: `app/domain/entities/sales_fiscal_document.py`.
     - Hash del emisor: `canonical_json` = llaves ordenadas, sin espacios, `ensure_ascii=False`. Se comprobó contra `issuerContractV2.js` (la prueba fija el hash que calculó el servicio).

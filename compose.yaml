@@ -307,6 +307,47 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # Emite en el servicio DTE los documentos fiscales pendientes (bloque V3b).
+  dte-worker:
+    build:
+      context: ./backend
+      target: dev
+    command: ["/opt/venv/bin/arq", "app.infrastructure.dte_worker.WorkerSettings"]
+    environment:
+      <<: [*document-storage-environment, *redis-ocr-environment, *observability-environment]
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DTE_SERVICE_URL: http://dte-service:3000
+      DTE_SERVICE_API_KEY: ${DTE_SERVICE_API_KEY:-}
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      dte-service:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "/opt/venv/bin/arq", "app.infrastructure.dte_worker.WorkerSettings", "--check"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
   # ---------------- On-demand vision model (local GPU) ----------------
   # Off unless the `vlm` profile is requested. The worker rests in under 200 MiB
   # and only holds VRAM while the model server it supervises is running.

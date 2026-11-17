@@ -55,6 +55,7 @@ from app.application.sales.returns import SalesReturnService
 from app.application.sales.service import SalesService
 from app.application.sales_discounts import SalesDiscountUseCases
 from app.application.sales_documents.pricing import SalesDocumentPricing
+from app.application.sales_invoices import SalesInvoiceUseCases
 from app.application.sales_orders import SalesOrderUseCases
 from app.application.sales_quotations import SalesQuotationUseCases
 from app.application.sales_tax import SalesTaxUseCases
@@ -217,6 +218,19 @@ def get_sales_order_use_cases(session: SessionDep) -> SalesOrderUseCases:
         _sales_pricing(session, repository),
         SqlAlchemyPriceListRepository(session),
         SqlAlchemyCustomerRepository(session),
+    )
+
+
+def get_sales_invoice_use_cases(session: SessionDep) -> SalesInvoiceUseCases:
+    from app.infrastructure.repositories.sales_fiscal_repository import (
+        SqlAlchemySalesFiscalRepository,
+    )
+
+    return SalesInvoiceUseCases(
+        SqlAlchemySalesFiscalRepository(session),
+        SqlAlchemySalesOrderRepository(session),
+        SqlAlchemyCustomerRepository(session),
+        SqlAlchemyFiscalRepository(session),
     )
 
 
