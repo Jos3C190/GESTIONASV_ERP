@@ -80,11 +80,14 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Filtro por emisor en todas las rutas.
 - [x] **Paso 4: pruebas de aislamiento y CI.** Pruebas multiemisor y job de CI con `npm test`.
 - [x] **Paso 5: documentación.** `docs/` del servicio: API, variables, emisores y modos.
-- [ ] **Paso 6: verificación y PR.** Batería completa del ERP más pruebas del servicio, y PR a `develop` con auto-merge.
+- [x] **Paso 6: verificación y PR.** Batería completa del ERP más pruebas del servicio, y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 6 (verificación y PR).
+- **Paso en curso**: ninguno. V3a está terminado y en PR hacia `develop` con auto-merge. Sigue V3b.
+  - Paso 6:
+    - El CI genera `DTE_SERVICE_API_KEY` y valida el perfil `dte` de compose.
+    - La batería completa del ERP no se corrió local porque la PR no toca backend ni frontend; la corre el CI. Pasaron `run-tests.sh dte` (467) y la validación de compose de desarrollo y producción.
   - Paso 5: `dte-service/docs/multiemisor.md` con arranque, variables, registro de emisores, aislamiento, errores y pruebas.
   - Paso 4:
     - `test/integration/multiemisor.test.js` (7 pruebas):
