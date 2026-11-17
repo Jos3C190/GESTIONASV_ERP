@@ -78,13 +78,20 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 - [x] **Paso 3: aislamiento de datos.**
   - Columnas `nit` y `ambiente` en `correlativos`, `dtes`, `eventos`, `idempotency_keys` y `contingencias`, con migración de bases existentes.
   - Filtro por emisor en todas las rutas.
-- [ ] **Paso 4: pruebas de aislamiento y CI.** Pruebas multiemisor y job de CI con `npm test`.
+- [x] **Paso 4: pruebas de aislamiento y CI.** Pruebas multiemisor y job de CI con `npm test`.
 - [ ] **Paso 5: documentación.** `docs/` del servicio: API, variables, emisores y modos.
 - [ ] **Paso 6: verificación y PR.** Batería completa del ERP más pruebas del servicio, y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 4 (pruebas multiemisor y CI).
+- **Paso en curso**: 5 (documentación).
+  - Paso 4:
+    - `test/integration/multiemisor.test.js` (7 pruebas):
+      - despliegue simulado sin emisor en el entorno;
+      - dos empresas con el mismo establecimiento y punto de venta;
+      - series separadas, propiedad, clave compartida, emisor que no coincide, no registrado, inactivo, tipo no habilitado y modo no disponible.
+    - `scripts/run-tests.sh dte` corre `npm test` en `node:22-slim` sobre una copia, y `all` lo incluye: así el CI lo cubre en «Tests and static quality».
+    - Resultados: 467 pruebas en verde y `npm audit --omit=dev` sin vulnerabilidades.
   - Paso 3:
     - `src/middleware/emisorSolicitud.js` (`X-DTE-Issuer-NIT`):
       - es obligatorio sin emisor en el entorno y debe coincidir con el snapshot;
