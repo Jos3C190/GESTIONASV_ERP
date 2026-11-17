@@ -5,6 +5,9 @@ import type {
   CatalogSummary,
   DocumentTypeInput,
   DocumentTypeSetting,
+  EmailSettings,
+  EmailSettingsInput,
+  EmailTestResult,
   EconomicActivity,
   Establishment,
   EstablishmentInput,
@@ -101,5 +104,21 @@ export const fiscalApi = {
       `${BASE}/document-types/${documentType}`,
       json('PUT', payload)
     );
+  },
+
+  getEmailSettings() {
+    return apiFetch<EmailSettings>(`${BASE}/email-settings`);
+  },
+
+  saveEmailSettings(payload: EmailSettingsInput) {
+    return apiFetch<EmailSettings>(`${BASE}/email-settings`, json('PUT', payload));
+  },
+
+  deleteEmailSettings() {
+    return apiFetch<void>(`${BASE}/email-settings`, { method: 'DELETE' });
+  },
+
+  testEmailSettings(recipient: string) {
+    return apiFetch<EmailTestResult>(`${BASE}/email-settings/test`, json('POST', { recipient }));
   }
 };

@@ -101,7 +101,7 @@
   {:else if history}
     {#if !history.enabled}
       <p class="text-sm text-foreground-muted">
-        El envío de correos no está configurado en este servidor.
+        La empresa no tiene configurado su correo saliente (Configuración fiscal → Correo).
       </p>
     {:else if canSend && sendable}
       <form

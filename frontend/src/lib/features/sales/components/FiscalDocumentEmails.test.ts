@@ -108,7 +108,7 @@ it('sigue el envío pendiente hasta que se entrega', async () => {
 it('avisa si el servidor no envía correos y oculta el formulario a quien solo consulta', async () => {
   salesInvoicesApi.emails.mockResolvedValue({ enabled: false, customer_email: null, items: [] });
   const { unmount } = render(FiscalDocumentEmails, { document: DOCUMENT });
-  expect(await screen.findByText(/no está configurado en este servidor/)).toBeInTheDocument();
+  expect(await screen.findByText(/no tiene configurado su correo saliente/)).toBeInTheDocument();
   unmount();
   permissions.set(['sales_invoices:read'], false);
   salesInvoicesApi.emails.mockResolvedValue({ enabled: true, customer_email: null, items: [] });
