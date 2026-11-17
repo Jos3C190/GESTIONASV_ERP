@@ -21,7 +21,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -138,5 +138,81 @@ class SalesFiscalDocumentModel(Base):
             "branch_id",
             "status",
             "created_at",
+        ),
+    )
+
+
+class SalesFiscalDocumentEmailModel(Base):
+    """Envío por correo de un documento fiscal (revisión 0127, bloque V3c)."""
+
+    __tablename__ = "sales_fiscal_document_emails"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    recipients: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
+    origin: Mapped[str] = mapped_column(String(8), nullable=False)
+    status: Mapped[str] = mapped_column(String(8), nullable=False, server_default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    error_code: Mapped[str | None] = mapped_column(String(80))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    message_id: Mapped[str | None] = mapped_column(String(255))
+    requested_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "id", name="uq_sales_fiscal_document_emails_company_id"),
+        ForeignKeyConstraint(
+            ["company_id", "document_id"],
+            ["sales_fiscal_documents.company_id", "sales_fiscal_documents.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_document_emails_document",
+        ),
+        ForeignKeyConstraint(
+            ["requested_by_id", "company_id"],
+            ["user_companies.user_id", "user_companies.company_id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_document_emails_requester",
+        ),
+        CheckConstraint(
+            "origin IN ('auto','manual') AND (origin = 'manual') = (requested_by_id IS NOT NULL)",
+            name="ck_sales_fiscal_document_emails_origin",
+        ),
+        CheckConstraint(
+            "status IN ('pending','sent','failed')", name="ck_sales_fiscal_document_emails_status"
+        ),
+        CheckConstraint(
+            "cardinality(recipients) BETWEEN 1 AND 5",
+            name="ck_sales_fiscal_document_emails_recipients",
+        ),
+        CheckConstraint(
+            "(status = 'sent') = (sent_at IS NOT NULL AND message_id IS NOT NULL)",
+            name="ck_sales_fiscal_document_emails_sent",
+        ),
+        CheckConstraint("attempts >= 0", name="ck_sales_fiscal_document_emails_attempts"),
+        Index(
+            "uq_sales_fiscal_document_emails_auto",
+            "company_id",
+            "document_id",
+            unique=True,
+            postgresql_where=text("origin = 'auto'"),
+        ),
+        Index(
+            "ix_sales_fiscal_document_emails_document", "company_id", "document_id", "created_at"
+        ),
+        Index(
+            "ix_sales_fiscal_document_emails_pending",
+            "updated_at",
+            postgresql_where=text("status = 'pending'"),
         ),
     )

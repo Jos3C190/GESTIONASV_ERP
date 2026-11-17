@@ -50,7 +50,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 - [x] **Paso 1: envío SMTP.**
   - Configuración, puerto y adaptador con pruebas unitarias (SMTP falso).
   - Mailpit en compose y `.env.example`.
-- [ ] **Paso 2: migración `0127` y modelo** del registro de envíos, con prueba de migración.
+- [x] **Paso 2: migración `0127` y modelo** del registro de envíos, con prueba de migración.
 - [ ] **Paso 3: dominio del mensaje.** Asunto, cuerpo, marca de simulado, aviso de privacidad y validación de destinatarios. Pruebas unitarias.
 - [ ] **Paso 4: trabajador, aplicación y API.**
   - Envío automático tras emitir y envío manual.
@@ -62,7 +62,12 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 2 (migración 0127).
+- **Paso en curso**: 3 (dominio del mensaje).
+  - Paso 2: `sales_fiscal_document_emails`, con:
+    - destinatarios `text[]` (de 1 a 5) y origen `auto` o `manual`; el manual exige quién lo pidió;
+    - estado `pending`, `sent` o `failed`; `sent` exige `sent_at` y `message_id`;
+    - un solo envío automático por documento.
+    - Modelo `SalesFiscalDocumentEmailModel`; prueba `tests/integration/test_sales_fiscal_document_emails_migration.py`.
   - Paso 1:
     - Puerto `app/domain/ports/email_sender.py` y adaptador `app/infrastructure/smtp_email_sender.py` (smtplib en hilo; errores 4xx y de red son reintentables).
     - Configuración `SMTP_*`; `SMTP_HOST` exige `SMTP_FROM_ADDRESS`.
