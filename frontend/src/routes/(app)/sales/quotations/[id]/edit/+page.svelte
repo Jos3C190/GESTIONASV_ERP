@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import SalesQuotationEditor from '#lib/features/sales/components/SalesQuotationEditor.svelte';
+  import SalesDocumentEditor from '#lib/features/sales/components/SalesDocumentEditor.svelte';
 
   let quotationId = $derived(page.params.id);
 </script>
 
 {#key quotationId}
-  <SalesQuotationEditor {quotationId} />
+  <SalesDocumentEditor documentId={quotationId} />
 {/key}

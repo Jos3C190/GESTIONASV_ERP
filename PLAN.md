@@ -85,7 +85,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Adaptar entregas y devoluciones al pedido confirmado.
   - Retirar el `convert` B06.
   - Pruebas e2e: reserva insuficiente, concurrencia, cancelación que libera, aislamiento y permisos.
-- [ ] **Paso 4: frontend.**
+- [x] **Paso 4: frontend.**
   - Editor de pedido (el de cotización con fecha y lugar de entrega), con disponible por línea.
   - Detalle con acciones por estado y entregas.
   - Lista de pedidos.
@@ -96,7 +96,17 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 4 (frontend).
+- **Paso en curso**: 5 (documentación).
+  - Paso 4:
+    - Editor:
+      - `SalesQuotationEditor` pasó a `SalesDocumentEditor`, con `kind` cotización o pedido;
+      - el pedido agrega fecha comprometida, retiro o entrega con dirección del cliente, y muestra el disponible por línea.
+    - `SaleDetail` y `SalesList` se rehicieron como pedido.
+    - Rutas nuevas: `/sales/new` y `/sales/[id]/edit`.
+    - La cotización aceptada ofrece «Crear pedido».
+    - En el menú, «Ventas» pasa a «Pedidos».
+    - Datos de prueba compartidos en `features/sales/test-fixtures.ts`.
+    - vitest: 1165 pruebas en verde.
   - Paso 3:
     - Archivos:
       - repositorio `sales_order_repository.py`, que hereda de `SalesDocumentSupport`;

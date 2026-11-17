@@ -10,12 +10,20 @@
     SOURCE_LABELS,
     formatMoney,
     formatPercent,
+    formatQuantity,
     formatUnitPrice
   } from '#lib/features/sales/quotation-labels.ts';
   import { branch } from '#lib/stores/branch.svelte.ts';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type { Customer } from '#lib/types/customer.ts';
-  import type { QuotationDraftInput, SalesCatalogItem, SalesQuotation } from '#lib/types/sales.ts';
+  import { todayInElSalvador } from '#lib/features/price-lists/labels.ts';
+  import type {
+    OrderDraftInput,
+    QuotationDraftInput,
+    Sale,
+    SalesCatalogItem,
+    SalesQuotation
+  } from '#lib/types/sales.ts';
 
   type DraftLine = {
     key: string;
@@ -26,7 +34,14 @@
     manualPrice: string;
   };
 
-  let { quotationId = null }: { quotationId?: string | null } = $props();
+  /** Editor común: cotización (V2d) o pedido (V2e). */
+  let {
+    kind = 'quotation',
+    documentId = null
+  }: { kind?: 'quotation' | 'order'; documentId?: string | null } = $props();
+  const isOrder = $derived(kind === 'order');
+  const noun = $derived(kind === 'order' ? 'pedido' : 'cotización');
+  const listPath = $derived(kind === 'order' ? '/sales' : '/sales/quotations');
 
   let customers = $state<Customer[]>([]);
   let catalog = $state<SalesCatalogItem[]>([]);
@@ -39,11 +54,14 @@
   let notes = $state('');
   let lines = $state<DraftLine[]>([newLine()]);
   let validityDays = $state<number | null>(null);
+  let promisedDate = $state(todayInElSalvador());
+  let deliveryMode = $state<'pickup' | 'delivery'>('pickup');
+  let addressId = $state('');
   let loading = $state(true);
   let saving = $state(false);
   let error = $state<string | null>(null);
-  let original = $state<SalesQuotation | null>(null);
-  let preview = $state<SalesQuotation | null>(null);
+  let original = $state<SalesQuotation | Sale | null>(null);
+  let preview = $state<SalesQuotation | Sale | null>(null);
   let previewError = $state<string | null>(null);
   let calculating = $state(false);
   let generation = 0;
@@ -51,6 +69,7 @@
 
   const canOverride = $derived(permissions.hasPermission('sales_prices:override'));
   const customer = $derived(customers.find((item) => item.id === customerId) ?? null);
+  const addresses = $derived((customer?.delivery_addresses ?? []).filter((item) => item.is_active));
   const documents = $derived(
     (customer?.receivable_documents ?? ['01']).filter(
       (code): code is '01' | '03' => code === '01' || code === '03'
@@ -76,25 +95,33 @@
   onMount(async () => {
     try {
       if (!branchId && branches.length === 1) branchId = branches[0]?.id ?? '';
-      const [customerPage, items, settings] = await Promise.all([
+      const [customerPage, items] = await Promise.all([
         customersApi.list({ active: true, size: 100 }),
-        salesApi.catalog(),
-        salesApi.quotationSettings()
+        salesApi.catalog()
       ]);
       customers = customerPage.items;
       catalog = items;
-      validityDays = settings.quotation_validity_days;
-      if (quotationId) {
-        const quote = await salesApi.quotation(quotationId);
-        if (quote.status !== 'draft') throw new Error('Esta cotización ya no admite edición.');
-        original = quote;
-        branchId = quote.branch_id;
-        customerId = quote.customer_id;
-        documentType = quote.document_type;
-        validUntil = quote.valid_until;
-        globalDiscount = quote.global_discount_percent;
-        notes = quote.notes ?? '';
-        lines = quote.lines.map((line) => ({
+      if (!isOrder) {
+        validityDays = (await salesApi.quotationSettings()).quotation_validity_days;
+      }
+      if (documentId) {
+        const document = isOrder
+          ? await salesApi.sale(documentId)
+          : await salesApi.quotation(documentId);
+        if (document.status !== 'draft') throw new Error(`Este ${noun} ya no admite edición.`);
+        original = document;
+        branchId = document.branch_id;
+        customerId = document.customer_id;
+        documentType = document.document_type;
+        globalDiscount = document.global_discount_percent;
+        notes = document.notes ?? '';
+        if ('valid_until' in document) validUntil = document.valid_until;
+        if ('promised_date' in document) {
+          promisedDate = document.promised_date;
+          deliveryMode = document.delivery_mode;
+          addressId = document.delivery_address_id ?? '';
+        }
+        lines = document.lines.map((line) => ({
           key: line.id ?? crypto.randomUUID(),
           option:
             catalog.find(
@@ -106,7 +133,7 @@
           manualPrice: line.price_overridden ? line.unit_price : ''
         }));
         if (lines.some((line) => !line.option)) {
-          throw new Error('Un producto de esta cotización ya no está disponible para la venta.');
+          throw new Error(`Un producto de este ${noun} ya no está disponible para la venta.`);
         }
       }
     } catch (cause) {
@@ -121,8 +148,9 @@
     if (timer) clearTimeout(timer);
   });
 
-  function payload(): QuotationDraftInput | null {
+  function payload(): QuotationDraftInput | OrderDraftInput | null {
     if (!branchId || !customerId) return null;
+    if (isOrder && (!promisedDate || (deliveryMode === 'delivery' && !addressId))) return null;
     const items = [];
     for (const line of lines) {
       if (!line.option || !line.unitId || !(Number(line.quantity) > 0)) return null;
@@ -135,15 +163,23 @@
         manual_price: line.manualPrice === '' ? null : line.manualPrice
       });
     }
-    return {
+    const common = {
       branch_id: branchId,
       customer_id: customerId,
       document_type: documentType || null,
-      valid_until: validUntil || null,
       global_discount_percent: globalDiscount === '' ? '0' : globalDiscount,
       notes: notes.trim() || null,
       lines: items
     };
+    if (isOrder) {
+      return {
+        ...common,
+        promised_date: promisedDate,
+        delivery_mode: deliveryMode,
+        delivery_address_id: deliveryMode === 'delivery' ? addressId : null
+      };
+    }
+    return { ...common, valid_until: validUntil || null };
   }
 
   // Recalcula en el servidor cuando algo cambia; descarta respuestas viejas.
@@ -160,14 +196,16 @@
     timer = setTimeout(async () => {
       calculating = true;
       try {
-        const result = await salesApi.previewQuotation(JSON.parse(snapshot));
+        const result = isOrder
+          ? await salesApi.previewOrder(JSON.parse(snapshot))
+          : await salesApi.previewQuotation(JSON.parse(snapshot));
         if (current !== generation) return;
         preview = result;
         previewError = null;
       } catch (cause) {
         if (current !== generation) return;
         preview = null;
-        previewError = message(cause, 'No se pudo calcular la cotización.');
+        previewError = message(cause, `No se pudo calcular el ${noun}.`);
       } finally {
         if (current === generation) calculating = false;
       }
@@ -185,8 +223,8 @@
     if (lines.length > 1) lines = lines.filter((line) => line.key !== key);
   }
 
-  function idempotencyKey(body: QuotationDraftInput): string {
-    const storageKey = 'sales-quotation-create-pending';
+  function idempotencyKey(body: object): string {
+    const storageKey = `sales-${kind}-create-pending`;
     const fingerprint = JSON.stringify(body);
     try {
       const previous = JSON.parse(sessionStorage.getItem(storageKey) ?? 'null') as {
@@ -212,17 +250,30 @@
     error = null;
     saving = true;
     try {
-      const saved =
-        quotationId && original
-          ? await salesApi.updateQuotation(quotationId, {
-              ...body,
-              expected_version: original.version
-            })
-          : await salesApi.createQuotation(body, idempotencyKey(body));
-      sessionStorage.removeItem('sales-quotation-create-pending');
-      await goto(`/sales/quotations/${saved.id}`);
+      let saved: { id: string };
+      if (isOrder) {
+        const order = body as OrderDraftInput;
+        saved =
+          documentId && original
+            ? await salesApi.updateOrder(documentId, {
+                ...order,
+                expected_version: original.version
+              })
+            : await salesApi.createOrder(order, idempotencyKey(order));
+      } else {
+        const quote = body as QuotationDraftInput;
+        saved =
+          documentId && original
+            ? await salesApi.updateQuotation(documentId, {
+                ...quote,
+                expected_version: original.version
+              })
+            : await salesApi.createQuotation(quote, idempotencyKey(quote));
+      }
+      sessionStorage.removeItem(`sales-${kind}-create-pending`);
+      await goto(`${listPath}/${saved.id}`);
     } catch (cause) {
-      error = message(cause, 'No se pudo guardar la cotización.');
+      error = message(cause, `No se pudo guardar el ${noun}.`);
     } finally {
       saving = false;
     }
@@ -231,24 +282,36 @@
   function previewLine(index: number) {
     return preview?.lines[index] ?? null;
   }
+
+  function availableOf(index: number): string | null {
+    const line = preview?.lines[index];
+    return line && 'available_base' in line ? line.available_base : null;
+  }
+
+  const title = $derived(
+    documentId ? `Editar ${original?.code ?? noun}` : isOrder ? 'Nuevo pedido' : 'Nueva cotización'
+  );
 </script>
 
 <svelte:head>
-  <title>{quotationId ? 'Editar cotización' : 'Nueva cotización'} | GestionaSV</title>
+  <title>{title} | GestionaSV</title>
 </svelte:head>
 
 <div class="space-y-5">
-  <a class="text-sm text-primary hover:underline" href="/sales/quotations"
-    >← Cotizaciones de venta</a
+  <a class="text-sm text-primary hover:underline" href={listPath}
+    >← {isOrder ? 'Pedidos de venta' : 'Cotizaciones de venta'}</a
   >
   <header>
     <p class="text-xs font-semibold uppercase tracking-widest text-primary">Ventas · USD</p>
     <h1 class="mt-1 text-2xl font-bold text-foreground">
-      {quotationId ? `Editar ${original?.code ?? 'cotización'}` : 'Nueva cotización'}
+      {title}
     </h1>
     <p class="mt-1 text-sm text-foreground-muted">
       El precio sale de la lista del cliente. Los descuentos, impuestos y totales los calcula el
-      servidor mientras editas. Guardar no reserva existencias.
+      servidor mientras editas.
+      {isOrder
+        ? 'Las existencias se apartan al confirmar el pedido.'
+        : 'Cotizar no reserva existencias.'}
     </p>
   </header>
 
@@ -317,17 +380,60 @@
             {/each}
           </select>
         </label>
-        <label class="text-sm text-foreground-muted">
-          Válida hasta
-          <input
-            class="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground"
-            type="date"
-            bind:value={validUntil}
-          />
-          {#if !validUntil && validityDays}
-            <span class="mt-1 block text-xs">Vacío: {validityDays} días desde hoy.</span>
+        {#if isOrder}
+          <label class="text-sm text-foreground-muted">
+            Fecha comprometida
+            <input
+              class="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground"
+              type="date"
+              min={todayInElSalvador()}
+              bind:value={promisedDate}
+              required
+            />
+          </label>
+          <label class="text-sm text-foreground-muted">
+            Entrega
+            <select
+              class="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground"
+              bind:value={deliveryMode}
+            >
+              <option value="pickup">Retiro en sucursal</option>
+              <option value="delivery">Entrega a domicilio</option>
+            </select>
+          </label>
+          {#if deliveryMode === 'delivery'}
+            <label class="text-sm text-foreground-muted">
+              Dirección de entrega
+              <select
+                class="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground"
+                bind:value={addressId}
+                required
+              >
+                <option value="">Selecciona una dirección</option>
+                {#each addresses as item (item.id)}
+                  <option value={item.id}>{item.label} · {item.address_line}</option>
+                {/each}
+              </select>
+              {#if customer && addresses.length === 0}
+                <span class="mt-1 block text-xs text-warning"
+                  >El cliente no tiene direcciones de entrega. Agrégalas en su ficha.</span
+                >
+              {/if}
+            </label>
           {/if}
-        </label>
+        {:else}
+          <label class="text-sm text-foreground-muted">
+            Válida hasta
+            <input
+              class="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground"
+              type="date"
+              bind:value={validUntil}
+            />
+            {#if !validUntil && validityDays}
+              <span class="mt-1 block text-xs">Vacío: {validityDays} días desde hoy.</span>
+            {/if}
+          </label>
+        {/if}
         <label class="text-sm text-foreground-muted">
           Descuento global (%)
           <input
@@ -480,6 +586,15 @@
                       )}</span
                     >
                   {/if}
+                  {#if availableOf(index) !== null}
+                    <span
+                      class={Number(availableOf(index)) < Number(result.quantity_base)
+                        ? 'text-warning'
+                        : ''}
+                      >Disponible en la sucursal: {formatQuantity(availableOf(index) ?? '0')}
+                      {formatUnitLabel(result.base_unit_name)}</span
+                    >
+                  {/if}
                   {#if preview?.costs_visible && result.margin_percent !== null}
                     <span>Margen: {formatPercent(result.margin_percent)}</span>
                   {/if}
@@ -575,7 +690,7 @@
       <div class="flex flex-wrap justify-end gap-2">
         <a
           class="rounded-md border border-border px-4 py-2 text-sm text-foreground"
-          href={quotationId ? `/sales/quotations/${quotationId}` : '/sales/quotations'}
+          href={documentId ? `${listPath}/${documentId}` : listPath}
         >
           Cancelar
         </a>

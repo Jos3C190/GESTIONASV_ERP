@@ -19,12 +19,12 @@ describe('catalog navigation', () => {
       requiredPermission: 'sales_quotations:read'
     });
     expect(itemByRoute('/sales')).toMatchObject({
-      label: 'Ventas',
+      label: 'Pedidos',
       implemented: true,
       requiredPermission: 'sales:read'
     });
     expect(routeTitle('/sales/quotations/quote-1/edit')).toBe('Cotizaciones de venta');
-    expect(routeTitle('/sales/sale-1')).toBe('Ventas');
+    expect(routeTitle('/sales/sale-1')).toBe('Pedidos');
   });
 
   it('exposes the DTE issuer settings with the fiscal read permission', () => {

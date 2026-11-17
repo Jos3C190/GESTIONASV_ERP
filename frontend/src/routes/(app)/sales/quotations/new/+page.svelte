@@ -1,5 +1,5 @@
 <script lang="ts">
-  import SalesQuotationEditor from '#lib/features/sales/components/SalesQuotationEditor.svelte';
+  import SalesDocumentEditor from '#lib/features/sales/components/SalesDocumentEditor.svelte';
 </script>
 
-<SalesQuotationEditor />
+<SalesDocumentEditor />

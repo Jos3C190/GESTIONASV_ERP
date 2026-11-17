@@ -17,6 +17,9 @@
   } from '#lib/features/sales/quotation-labels.ts';
   import { branch } from '#lib/stores/branch.svelte.ts';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { customersApi } from '#lib/api/customers.ts';
+  import { todayInElSalvador } from '#lib/features/price-lists/labels.ts';
+  import type { DeliveryAddress } from '#lib/types/customer.ts';
   import type { SalesQuotation } from '#lib/types/sales.ts';
 
   type Action = 'issue' | 'authorize' | 'return' | 'accept' | 'reject' | 'cancel';
@@ -92,24 +95,51 @@
     }
   }
 
-  async function convert() {
+  let ordering = $state(false);
+  let promisedDate = $state(todayInElSalvador());
+  let deliveryMode = $state<'pickup' | 'delivery'>('pickup');
+  let addressId = $state('');
+  let addresses = $state<DeliveryAddress[]>([]);
+
+  async function startOrder() {
+    if (!quote) return;
+    ordering = true;
+    try {
+      const customer = await customersApi.get(quote.customer_id);
+      addresses = customer.delivery_addresses.filter((item) => item.is_active);
+    } catch {
+      addresses = [];
+    }
+  }
+
+  async function createOrder(event: SubmitEvent) {
+    event.preventDefault();
     if (!quote) return;
     busy = true;
     error = null;
-    const storageKey = `sales-convert:${quote.id}`;
+    const storageKey = `sales-order-from:${quote.id}`;
     let key = sessionStorage.getItem(storageKey);
     if (!key) {
       key = crypto.randomUUID();
       sessionStorage.setItem(storageKey, key);
     }
     try {
-      const sale = await salesApi.convertQuotation(quote.id, quote.version, key);
-      await goto(`/sales/${sale.id}`);
+      const order = await salesApi.orderFromQuotation(
+        quote.id,
+        {
+          promised_date: promisedDate,
+          delivery_mode: deliveryMode,
+          delivery_address_id: deliveryMode === 'delivery' ? addressId : null
+        },
+        key
+      );
+      sessionStorage.removeItem(storageKey);
+      await goto(`/sales/${order.id}`);
     } catch (cause) {
       error =
         cause instanceof HttpError
           ? cause.message
-          : 'No se pudo crear la venta. Puedes reintentar.';
+          : 'No se pudo crear el pedido. Puedes reintentar.';
     } finally {
       busy = false;
     }
@@ -345,7 +375,7 @@
       </ul>
       {#if quote.sale_id}
         <p class="mt-3 text-foreground">
-          Generó la venta <a
+          Generó el pedido <a
             class="font-semibold text-primary hover:underline"
             href={`/sales/${quote.sale_id}`}>{quote.sale_code}</a
           >.
@@ -399,9 +429,9 @@
           <button
             class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
             disabled={busy}
-            onclick={() => void convert()}
+            onclick={() => void startOrder()}
           >
-            {busy ? 'Creando…' : 'Crear venta en borrador'}
+            Crear pedido
           </button>
         {/if}
         {#if ['draft', 'pending_authorization', 'issued', 'accepted'].includes(quote.status) && !quote.sale_id && can('sales_quotations:confirm')}
@@ -411,6 +441,56 @@
           >
         {/if}
       </div>
+      {#if ordering && quote.status === 'accepted' && !quote.sale_id}
+        <form
+          class="grid gap-3 border-t border-border pt-3 sm:grid-cols-[auto_auto_1fr_auto] sm:items-end"
+          onsubmit={createOrder}
+        >
+          <label class="text-sm text-foreground-muted">
+            Fecha comprometida
+            <input
+              class="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground"
+              type="date"
+              min={todayInElSalvador()}
+              bind:value={promisedDate}
+              required
+            />
+          </label>
+          <label class="text-sm text-foreground-muted">
+            Entrega
+            <select
+              class="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground"
+              bind:value={deliveryMode}
+            >
+              <option value="pickup">Retiro en sucursal</option>
+              <option value="delivery">Entrega a domicilio</option>
+            </select>
+          </label>
+          {#if deliveryMode === 'delivery'}
+            <label class="text-sm text-foreground-muted">
+              Dirección
+              <select
+                class="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground"
+                bind:value={addressId}
+                required
+              >
+                <option value="">Selecciona una dirección</option>
+                {#each addresses as item (item.id)}
+                  <option value={item.id}>{item.label} · {item.address_line}</option>
+                {/each}
+              </select>
+            </label>
+          {:else}
+            <span></span>
+          {/if}
+          <button
+            class="h-10 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            disabled={busy}
+          >
+            {busy ? 'Creando…' : 'Crear pedido en borrador'}
+          </button>
+        </form>
+      {/if}
       {#if pending && pending !== 'issue' && pending !== 'accept'}
         {@const prompt = prompts[pending]}
         <form

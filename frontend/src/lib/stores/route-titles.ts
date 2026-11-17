@@ -22,7 +22,7 @@ const TITLES: Record<string, string> = {
   '/sales/fiscal-settings': 'Configuración fiscal',
   '/sales/price-lists': 'Listas de precios',
   '/sales/discount-policies': 'Topes de descuento',
-  '/sales': 'Ventas',
+  '/sales': 'Pedidos',
   '/purchase-requests': 'Solicitudes de compra',
   '/purchase-quotations': 'Cotizaciones de compra',
   '/purchase-orders': 'Órdenes de compra',
