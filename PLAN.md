@@ -82,11 +82,19 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Pruebas e2e contra el servicio real en simulado, con dos empresas.
 - [x] **Paso 6: frontend.** Facturar en el pedido, bandeja, detalle y menú. vitest.
 - [x] **Paso 7: documentación.** `docs/api.md`, `docs/database-schema.md` §36 y manual de facturación.
-- [ ] **Paso 8: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
+- [x] **Paso 8: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 8 (verificación y PR).
+- **Paso en curso**: V3b terminado; PR hacia `develop`. Sigue V3c (correo al cliente).
+  - Paso 8:
+    - Batería completa en verde: pytest 1938, servicio DTE 474, vitest 1174, lint y build.
+    - QA en el navegador con Grupo Lorena en desarrollo, con datos de prueba aprobados por el usuario: NRC `1234567` y correo DTE `facturacion@example.com`.
+      - El pedido PED-20261117-63FB7EB4 quedó facturado como simulado (`DTE-01-M001P001-000000000000001`); ese documento queda en la base.
+      - Se revisaron el aviso «Antes de facturar», la emisión por `dte-worker`, el PDF en el almacenamiento, «Cancelar» oculto, la bandeja y el detalle en modo claro y oscuro, y la vista a 375 px.
+    - Corregido en la QA: «Ver PDF» usa `presign_preview` (se ve en línea); búsqueda de la bandeja más ancha; la ayuda del pedido avisa que uno facturado no se cancela.
+    - Visto y fuera de alcance: el perfil fiscal rechaza correos `.test` con un 422 genérico («Revise los datos ingresados»).
+    - Si el login de desarrollo da 500 tras cambios grandes del frontend, se arregla reiniciando el contenedor `frontend` (caché de dependencias de Vite).
   - Paso 7: `docs/api.md` (Sales invoices), `docs/database-schema.md` §36, `docs/ers-v1/manual-facturacion.md`, enlace desde el manual de pedidos y `dte-service/docs/multiemisor.md` (arranque normal y clave liberada en rechazos del emisor).
   - Paso 6:
     - Panel «Factura» en el pedido confirmado (`SalesInvoicePanel.svelte`): elige la caja si hay varias, muestra lo que falta para facturar, sigue el documento mientras se emite (cada 3 s), descarga JSON y PDF y reintenta. Con documento vigente, el pedido oculta «Cancelar pedido».

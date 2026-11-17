@@ -392,7 +392,8 @@
       {/if}
       <p class="text-xs text-foreground-muted">
         Confirmar aparta las existencias de la sucursal; cancelar las libera. Un pedido con entregas
-        ya no se cancela: se gestiona con devoluciones.
+        ya no se cancela: se gestiona con devoluciones. Uno facturado tampoco: se corregirá con
+        invalidación o nota de crédito.
       </p>
     </section>
   {/if}

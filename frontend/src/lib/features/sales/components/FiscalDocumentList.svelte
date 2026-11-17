@@ -99,7 +99,7 @@
       <label class="sr-only" for="fiscal-search">Buscar</label>
       <input
         id="fiscal-search"
-        class="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+        class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground sm:w-72"
         placeholder="Número de control, pedido o cliente"
         maxlength="80"
         bind:value={search}

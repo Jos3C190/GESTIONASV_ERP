@@ -313,7 +313,7 @@ async def download_fiscal_json(
 @router.get(
     "/fiscal-documents/{document_id:uuid}/pdf",
     response_model=DownloadUrlOut,
-    summary="Enlace temporal al PDF del DTE",
+    summary="Enlace temporal para ver el PDF del DTE en el navegador",
     dependencies=_READ,
 )
 async def download_fiscal_pdf(
@@ -329,7 +329,7 @@ async def download_fiscal_pdf(
         raise ConflictError(
             "El PDF del DTE aún no está disponible.", code="sales_invoice_not_ready"
         )
-    url = await storage.presign_download(
+    url = await storage.presign_preview(
         document.pdf_object_key,
         filename=f"{document.control_number}.pdf",
         content_type="application/pdf",
