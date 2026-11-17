@@ -51,7 +51,7 @@ Hechos verificados en el servicio (`dte-service/src/services/contingenciaService
 
 Pasos:
 - [x] **Paso 0: plan y rama.** Este plan; rama desde `develop` actualizado.
-- [ ] **Paso 1: ventana por emisor y establecimiento en el servicio.**
+- [x] **Paso 1: ventana por emisor y establecimiento en el servicio.**
   - Migración SQLite: `contingencias` gana `nit_emisor` y `cod_establecimiento`; el índice único de ventana
     activa pasa a ser por (NIT, establecimiento). Las filas viejas toman el emisor del entorno, si existe.
   - `ventanaActiva`, `abrirVentana` y `vincular` usan el emisor y el establecimiento del documento.
@@ -120,7 +120,20 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 1 de V4a (ventana de contingencia por emisor y establecimiento en el servicio).
+- **Paso en curso**: 2 de V4a (rutas de contingencia por emisor).
+  - Paso 1 hecho:
+    - `contingencias` tiene `nit_emisor` y `cod_establecimiento` ('' = emisor heredado), con un índice único
+      de ventana activa por los dos. Las ventanas viejas toman el NIT y el `codEstable` de sus documentos.
+    - El establecimiento es el `codEstable` interno (por ejemplo M001): antes de construir el documento sale de
+      `body.emisor.codEstable` y, después, del documento.
+    - El sondeo recorre cada ventana automática y el evento se envía dentro del contexto de su emisor
+      (`conEmisor`). Ya no queda ningún uso de `config.emisor` en `contingenciaService`.
+    - Decisión: un solo responsable del evento por empresa (`responsable` en `PUT /api/emisores/:nit`, columna
+      `responsable_json`). Si no se envía el campo se conserva; si se envía null, se quita. El emisor heredado
+      sigue usando `MH_RESPONSABLE_*`. Sin responsable, el evento espera a que el operador lo envíe.
+    - `estadoGeneral({ nit })` filtra por emisor. Las rutas globales `/api/dte/contingencia` siguen sirviendo
+      al emisor del entorno; el Paso 2 las pasa a ser por emisor.
+    - Prueba nueva: `test/integration/contingenciaPorEmisor.test.js`. Servicio: 486 en verde.
 - **Contexto**:
   - V3 completo en `develop`: #48 a #51.
   - En desarrollo `DTE_MODE` es simulado y el `.env` no tiene `DTE_CREDENTIALS_KEY`.

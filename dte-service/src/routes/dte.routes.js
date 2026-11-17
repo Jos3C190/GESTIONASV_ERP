@@ -250,7 +250,13 @@ async function emitir(tipoDte, builderFn, req) {
     try {
       // Con una contingencia activa el documento nace en modelo diferido
       // (Manual Funcional VIII) y no se intenta transmitirlo hasta el evento.
-      const ventana = issuerContext.simulado() ? null : contingenciaService.ventanaActiva();
+      // La ventana es la del emisor y el establecimiento de la solicitud (V4a).
+      const ventana = issuerContext.simulado()
+        ? null
+        : contingenciaService.ventanaActiva({
+          nit: issuerContext.actual().nit,
+          establecimiento: contingenciaService.establecimientoDeSolicitud(req.body),
+        });
       const opcionesBuilder = ventana ? { contingencia: contingenciaService.camposContingencia(ventana) } : {};
       const preparado = db.transaction(() => {
         let construido;
@@ -354,7 +360,10 @@ async function emitir(tipoDte, builderFn, req) {
   }
 
   if (dte.identificacion.tipoModelo === MODELO_FACTURACION.DIFERIDO) {
-    const ventana = contingenciaService.ventanaActiva()
+    const ventana = contingenciaService.ventanaActiva({
+      nit: issuerContext.actual().nit,
+      establecimiento: contingenciaService.establecimientoDeDte(dte),
+    })
       || db.prepare(
         `SELECT c.* FROM contingencia_documentos d JOIN contingencias c ON c.id = d.contingencia_id WHERE d.codigo_generacion = ?`
       ).get(codigoGeneracion);

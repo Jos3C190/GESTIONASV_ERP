@@ -127,7 +127,6 @@ db.exec(`
     creado_en TEXT NOT NULL DEFAULT (datetime('now')),
     actualizado_en TEXT NOT NULL DEFAULT (datetime('now'))
   );
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_contingencia_unica_activa ON contingencias(estado) WHERE estado = 'ACTIVA';
 
   CREATE TABLE IF NOT EXISTS contingencia_documentos (
     contingencia_id INTEGER NOT NULL,
@@ -145,6 +144,27 @@ if (!new Set(db.pragma('table_info(dtes)').map((column) => column.name)).has('ni
   db.exec('CREATE INDEX IF NOT EXISTS idx_dtes_nit ON dtes(nit)');
 }
 const dteColumnsContingencia = new Set(db.pragma('table_info(dtes)').map((column) => column.name));
+// V4a del ERP: una ventana de contingencia por emisor y establecimiento ('' = sin dato,
+// emisor heredado del entorno). Las ventanas anteriores toman el emisor y el establecimiento
+// de sus documentos.
+const contingenciaColumns = new Set(db.pragma('table_info(contingencias)').map((column) => column.name));
+if (!contingenciaColumns.has('nit_emisor')) {
+  db.exec("ALTER TABLE contingencias ADD COLUMN nit_emisor TEXT NOT NULL DEFAULT ''");
+  db.exec("ALTER TABLE contingencias ADD COLUMN cod_establecimiento TEXT NOT NULL DEFAULT ''");
+  db.prepare(
+    `UPDATE contingencias SET
+       nit_emisor = COALESCE((SELECT t.nit FROM contingencia_documentos d JOIN dtes t ON t.codigo_generacion = d.codigo_generacion
+                              WHERE d.contingencia_id = contingencias.id AND t.nit IS NOT NULL LIMIT 1), ?),
+       cod_establecimiento = COALESCE((SELECT json_extract(t.payload_json, '$.emisor.codEstable')
+                                       FROM contingencia_documentos d JOIN dtes t ON t.codigo_generacion = d.codigo_generacion
+                                       WHERE d.contingencia_id = contingencias.id LIMIT 1), ?)`
+  ).run(config.emisor?.nit ?? '', config.emisor?.codEstableInterno ?? '');
+}
+db.exec(`
+  DROP INDEX IF EXISTS idx_contingencia_unica_activa;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_contingencia_activa_por_establecimiento
+    ON contingencias(nit_emisor, cod_establecimiento) WHERE estado = 'ACTIVA';
+`);
 if (!dteColumnsContingencia.has('payload_original_json')) db.exec('ALTER TABLE dtes ADD COLUMN payload_original_json TEXT');
 if (!dteColumnsContingencia.has('documento_firmado_original')) db.exec('ALTER TABLE dtes ADD COLUMN documento_firmado_original TEXT');
 

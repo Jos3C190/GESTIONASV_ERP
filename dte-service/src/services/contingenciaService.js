@@ -11,6 +11,7 @@ const firmadorClient = require('./firmadorClient');
 const haciendaClient = require('./haciendaClient');
 const { clasificarRespuestaEvento, clasificarConsultaDte, esDuplicado } = require('./haciendaResponse');
 const { AuthError } = require('./authService');
+const issuerContext = require('./issuerContext');
 
 /**
  * Operación en contingencia (Manual Funcional VIII, Manual Técnico 3.2/4.4).
@@ -26,6 +27,11 @@ const { AuthError } = require('./authService');
  *   con sello.
  * Momento 3: con el sello del evento, cada documento se transmite uno a uno
  *   dentro de las 72 h siguientes, sin cambiar sus campos de contingencia.
+ *
+ * Multiemisor (V4a del ERP): cada ventana es de un emisor y un establecimiento
+ * (`codEstable` del documento). Una caída en una tienda no pone en contingencia
+ * a las demás ni a otras empresas, y cada evento se firma y se transmite con el
+ * contexto (credenciales y ambiente) de su emisor.
  */
 const LIMITE_DOCUMENTOS = 1000;
 const ESTADOS_DOCUMENTO_FINALES = ['TRANSMITIDO', 'RECHAZADO', 'INVALIDADO'];
@@ -57,8 +63,48 @@ function leerVentana(id) {
   return db.prepare('SELECT * FROM contingencias WHERE id = ?').get(id);
 }
 
-function ventanaActiva() {
-  return db.prepare(`SELECT * FROM contingencias WHERE estado = 'ACTIVA'`).get() || null;
+/** Clave del emisor heredado del entorno (despliegue de una sola empresa). */
+function claveDelEntorno() {
+  return { nit: config.emisor?.nit ?? '', establecimiento: config.emisor?.codEstableInterno ?? '' };
+}
+
+/** Establecimiento de un documento ya construido. */
+function establecimientoDeDte(dte) {
+  return dte?.emisor?.codEstable ?? '';
+}
+
+/** Establecimiento de una solicitud de emisión, antes de construir el documento. */
+function establecimientoDeSolicitud(body) {
+  if (body?.emisor && Object.prototype.hasOwnProperty.call(body.emisor, 'codEstable')) return body.emisor.codEstable ?? '';
+  return claveDelEntorno().establecimiento;
+}
+
+function normalizarClave(clave) {
+  const base = clave ?? claveDelEntorno();
+  return { nit: base.nit ?? '', establecimiento: base.establecimiento ?? '' };
+}
+
+function ventanaActiva(clave) {
+  const { nit, establecimiento } = normalizarClave(clave);
+  return db.prepare(
+    `SELECT * FROM contingencias WHERE estado = 'ACTIVA' AND nit_emisor = ? AND cod_establecimiento = ?`
+  ).get(nit, establecimiento) || null;
+}
+
+/** NIT con el que se consulta y se transmite: el de la ventana, o el del entorno si es heredada. */
+function nitDe(ventana) {
+  return ventana.nit_emisor || config.emisor?.nit || null;
+}
+
+/** Corre `fn` con el contexto (credenciales, ambiente) del emisor de la ventana. */
+function enContexto(ventana, fn) {
+  return issuerContext.conEmisor(ventana.nit_emisor || null, fn);
+}
+
+/** Responsable del evento: el registrado con el emisor o, si es heredado, el del entorno. */
+function responsableDe(ventana) {
+  const registro = ventana.nit_emisor ? require('./issuerRegistry').obtener(ventana.nit_emisor) : null;
+  return registro ? registro.responsable : config.contingencia.responsable;
 }
 
 function ventanaDeDocumento(codigoGeneracion) {
@@ -89,18 +135,23 @@ function validarTipoYMotivo(tipoContingencia, motivo) {
   return { tipo, motivo: texto };
 }
 
-function abrirVentana({ tipoContingencia, motivo = null, forzada = false, inicio = ahoraIso() }) {
+function abrirVentana({ clave, tipoContingencia, motivo = null, forzada = false, inicio = ahoraIso() }) {
   const datos = validarTipoYMotivo(tipoContingencia, motivo);
+  const { nit, establecimiento } = normalizarClave(clave);
   try {
     const { lastInsertRowid } = db.prepare(
-      `INSERT INTO contingencias (estado, tipo_contingencia, motivo, forzada, inicio) VALUES ('ACTIVA', ?, ?, ?, ?)`
-    ).run(datos.tipo, datos.motivo, forzada ? 1 : 0, inicio);
+      `INSERT INTO contingencias (estado, tipo_contingencia, motivo, forzada, inicio, nit_emisor, cod_establecimiento)
+       VALUES ('ACTIVA', ?, ?, ?, ?, ?, ?)`
+    ).run(datos.tipo, datos.motivo, forzada ? 1 : 0, inicio, nit, establecimiento);
     const ventana = leerVentana(lastInsertRowid);
-    logger.error({ contingencia: ventana.id, tipo: datos.tipo, forzada }, 'Contingencia abierta: los DTE se generan en modelo diferido');
+    logger.error(
+      { contingencia: ventana.id, nit, establecimiento, tipo: datos.tipo, forzada },
+      'Contingencia abierta: los DTE se generan en modelo diferido',
+    );
     return ventana;
   } catch (error) {
     // Índice único de ventana activa: otra emisión la abrió al mismo tiempo.
-    const activa = ventanaActiva();
+    const activa = ventanaActiva({ nit, establecimiento });
     if (activa) return activa;
     throw error;
   }
@@ -133,7 +184,12 @@ function vincular(codigoGeneracion, ventana) {
   const { total } = db.prepare('SELECT COUNT(*) AS total FROM contingencia_documentos WHERE contingencia_id = ?').get(ventana.id);
   if (total >= LIMITE_DOCUMENTOS && ventana.estado === 'ACTIVA') {
     cerrarVentana(ventana.id);
-    abrirVentana({ tipoContingencia: ventana.tipo_contingencia, motivo: ventana.motivo, forzada: Boolean(ventana.forzada) });
+    abrirVentana({
+      clave: { nit: ventana.nit_emisor, establecimiento: ventana.cod_establecimiento },
+      tipoContingencia: ventana.tipo_contingencia,
+      motivo: ventana.motivo,
+      forzada: Boolean(ventana.forzada),
+    });
   }
 }
 
@@ -214,7 +270,9 @@ async function registrarFallaDeConectividad(codigoGeneracion, detalle = {}) {
   }
 
   const dte = leerDte(codigoGeneracion);
-  const ventana = ventanaActiva() || abrirVentana({
+  const clave = { nit: dte.nit ?? '', establecimiento: establecimientoDeDte(JSON.parse(dte.payload_json)) };
+  const ventana = ventanaActiva(clave) || abrirVentana({
+    clave,
     tipoContingencia: tipoSegunFalla(detalle),
     inicio: new Date(new Date(isoDesdeSqlite(dte.creado_en)).getTime() - 60000).toISOString(),
   });
@@ -226,19 +284,30 @@ async function registrarFallaDeConectividad(codigoGeneracion, detalle = {}) {
 
 let ultimoSondeo = 0;
 
-/** Con una ventana automática activa, comprueba si Hacienda vuelve a responder. */
+/**
+ * Con ventanas automáticas activas, comprueba por cada una si Hacienda vuelve a
+ * responder a su emisor. Devuelve las ventanas cerradas.
+ */
 async function sondearRecuperacion({ forzar = false } = {}) {
-  const ventana = ventanaActiva();
-  if (!ventana || ventana.forzada) return null;
-  if (!forzar && Date.now() - ultimoSondeo < config.contingencia.sondeoMs) return null;
+  if (!forzar && Date.now() - ultimoSondeo < config.contingencia.sondeoMs) return [];
   ultimoSondeo = Date.now();
+  const activas = db.prepare(`SELECT * FROM contingencias WHERE estado = 'ACTIVA' AND forzada = 0 ORDER BY id`).all();
+  const cerradas = [];
+  for (const ventana of activas) {
+    const cerrada = await enContexto(ventana, () => sondearVentana(ventana));
+    if (cerrada) cerradas.push(cerrada);
+  }
+  return cerradas;
+}
+
+async function sondearVentana(ventana) {
   const documento = db.prepare(
     `SELECT t.codigo_generacion, t.tipo_dte FROM contingencia_documentos d JOIN dtes t ON t.codigo_generacion = d.codigo_generacion
      WHERE d.contingencia_id = ? ORDER BY t.creado_en LIMIT 1`
   ).get(ventana.id);
   if (!documento) return null;
   try {
-    await haciendaClient.consultarDte({ nitEmisor: config.emisor.nit, tdte: documento.tipo_dte, codigoGeneracion: documento.codigo_generacion });
+    await haciendaClient.consultarDte({ nitEmisor: nitDe(ventana), tdte: documento.tipo_dte, codigoGeneracion: documento.codigo_generacion });
   } catch (error) {
     const sinComunicacion = (error instanceof haciendaClient.HaciendaError && error.transitorio)
       || (error instanceof AuthError && !error.credenciales)
@@ -270,7 +339,7 @@ async function reconciliarConvertidos(ventana) {
   const convertidos = documentosDeVentana(ventana.id, ['CONTINGENCIA']).filter((dte) => dte.payload_original_json);
   for (const dte of convertidos) {
     const consulta = clasificarConsultaDte(await haciendaClient.consultarDte({
-      nitEmisor: config.emisor.nit, tdte: dte.tipo_dte, codigoGeneracion: dte.codigo_generacion,
+      nitEmisor: nitDe(ventana), tdte: dte.tipo_dte, codigoGeneracion: dte.codigo_generacion,
     }));
     if (consulta.resultado !== 'ACEPTADO') continue;
     db.transaction(() => {
@@ -331,16 +400,21 @@ function actualizarEvento(codigoGeneracion, cambios) {
  * idempotente: reenvía el mismo evento firmado hasta obtener RECIBIDO con
  * sello y, con él, encola la transmisión de cada documento (Momento 3).
  */
-async function enviarEvento(ventanaId, { responsable = config.contingencia.responsable } = {}) {
-  let ventana = leerVentana(ventanaId);
+async function enviarEvento(ventanaId, opciones = {}) {
+  const ventana = leerVentana(ventanaId);
   if (!ventana) throw new ContingenciaError('Contingencia no encontrada', 'CONTINGENCY_NOT_FOUND', 404);
+  const responsable = opciones.responsable === undefined ? responsableDe(ventana) : opciones.responsable;
+  return enContexto(ventana, () => enviarEventoDeVentana(ventana, responsable));
+}
+
+async function enviarEventoDeVentana(ventana, responsable) {
   if (ventana.estado === 'ACTIVA') {
     throw new ContingenciaError('La contingencia sigue activa: ciérrala cuando se restablezca la comunicación', 'CONTINGENCY_STILL_ACTIVE');
   }
   if (['REPORTADA', 'COMPLETADA'].includes(ventana.estado)) return resumenVentana(ventana);
   if (!responsable) {
     throw new ContingenciaError(
-      'Se requiere el responsable del establecimiento (MH_RESPONSABLE_* o en la solicitud) para el evento',
+      'Se requiere el responsable del establecimiento (registrado con el emisor, MH_RESPONSABLE_* o en la solicitud) para el evento',
       'CONTINGENCY_RESPONSIBLE_REQUIRED',
       400,
     );
@@ -370,7 +444,7 @@ async function enviarEvento(ventanaId, { responsable = config.contingencia.respo
 
   let respuesta;
   try {
-    respuesta = await haciendaClient.transmitirContingencia({ nit: config.emisor.nit, documentoFirmado: evento.documento_firmado });
+    respuesta = await haciendaClient.transmitirContingencia({ nit: nitDe(ventana), documentoFirmado: evento.documento_firmado });
   } catch (error) {
     if (error instanceof haciendaClient.HaciendaError && !error.transitorio) {
       actualizarEvento(evento.codigo_generacion, { estado: 'RECHAZADO', respuesta_json: JSON.stringify({ httpStatus: error.httpStatus, respuesta: error.haciendaResponse }) });
@@ -447,28 +521,28 @@ function completarVentanas() {
 /** Ciclo periódico (server.js): sondeo, eventos pendientes y cierre de ventanas. */
 async function procesar() {
   await sondearRecuperacion();
-  if (config.contingencia.responsable) {
-    const listas = db.prepare(
-      `SELECT id FROM contingencias WHERE estado = 'CERRADA' AND proximo_intento_evento IS NOT NULL AND proximo_intento_evento <= datetime('now')`
-    ).all();
-    for (const { id } of listas) {
-      try {
-        await enviarEvento(id);
-      } catch (error) {
-        logger.error({ contingencia: id, err: error.message }, 'No se pudo enviar el Evento de Contingencia');
-      }
+  const listas = db.prepare(
+    `SELECT * FROM contingencias WHERE estado = 'CERRADA' AND proximo_intento_evento IS NOT NULL AND proximo_intento_evento <= datetime('now')`
+  ).all();
+  for (const ventana of listas) {
+    // Sin responsable, el evento espera a que el operador lo envíe indicándolo.
+    if (!responsableDe(ventana)) continue;
+    try {
+      await enviarEvento(ventana.id);
+    } catch (error) {
+      logger.error({ contingencia: ventana.id, err: error.message }, 'No se pudo enviar el Evento de Contingencia');
     }
   }
   completarVentanas();
 }
 
 /** Contingencia forzada para las pruebas de certificación (solo hacienda-test con permiso explícito). */
-function forzar({ tipoContingencia, motivoContingencia = null }) {
+function forzar({ clave, tipoContingencia, motivoContingencia = null }) {
   if (!config.contingencia.forzadaPermitida) {
     throw new ContingenciaError('La contingencia forzada solo está disponible en hacienda-test con DTE_ALLOW_FORCED_CONTINGENCY=true', 'CONTINGENCY_FORCE_DISABLED', 403);
   }
-  if (ventanaActiva()) throw new ContingenciaError('Ya hay una contingencia activa', 'CONTINGENCY_ALREADY_ACTIVE');
-  return resumenVentana(abrirVentana({ tipoContingencia, motivo: motivoContingencia, forzada: true }));
+  if (ventanaActiva(clave)) throw new ContingenciaError('Ya hay una contingencia activa', 'CONTINGENCY_ALREADY_ACTIVE');
+  return resumenVentana(abrirVentana({ clave, tipoContingencia, motivo: motivoContingencia, forzada: true }));
 }
 
 function cerrar(ventanaId) {
@@ -487,6 +561,8 @@ function resumenVentana(ventana) {
   const transmisionLimite = ventana.evento_sello_en ? sumarHoras(ventana.evento_sello_en, HORAS_PLAZO_TRANSMISION) : null;
   return {
     id: ventana.id,
+    nit: ventana.nit_emisor || null,
+    establecimiento: ventana.cod_establecimiento || null,
     estado: ventana.estado,
     tipoContingencia: ventana.tipo_contingencia,
     motivo: ventana.motivo,
@@ -514,17 +590,23 @@ function resumenVentana(ventana) {
   };
 }
 
-/** Estado para el panel: ventanas abiertas o recientes con plazos. */
-function estadoGeneral() {
-  const ventanas = db.prepare(
-    `SELECT * FROM contingencias WHERE estado <> 'COMPLETADA'
-     UNION ALL SELECT * FROM (SELECT * FROM contingencias WHERE estado = 'COMPLETADA' ORDER BY id DESC LIMIT 5)
-     ORDER BY id DESC`
-  ).all();
+/**
+ * Estado para el panel: ventanas abiertas o recientes con plazos. Con `nit`, solo
+ * las de ese emisor; sin él, las de todos (vista del despliegue).
+ */
+function estadoGeneral({ nit = null } = {}) {
+  const filtro = nit === null ? '' : 'AND nit_emisor = ?';
+  const parametros = nit === null ? [] : [nit];
+  const abiertas = db.prepare(`SELECT * FROM contingencias WHERE estado <> 'COMPLETADA' ${filtro} ORDER BY id DESC`).all(...parametros);
+  const completadas = db.prepare(
+    `SELECT * FROM contingencias WHERE estado = 'COMPLETADA' ${filtro} ORDER BY id DESC LIMIT 5`
+  ).all(...parametros);
+  const ventanas = [...abiertas, ...completadas].sort((a, b) => b.id - a.id);
+  const responsable = nit === null ? config.contingencia.responsable : responsableDe({ nit_emisor: nit });
   return {
-    activa: Boolean(ventanaActiva()),
+    activa: abiertas.some((ventana) => ventana.estado === 'ACTIVA'),
     forzadaPermitida: config.contingencia.forzadaPermitida,
-    responsableConfigurado: Boolean(config.contingencia.responsable),
+    responsableConfigurado: Boolean(responsable),
     ventanas: ventanas.map(resumenVentana),
   };
 }
@@ -532,6 +614,8 @@ function estadoGeneral() {
 module.exports = {
   ContingenciaError,
   ventanaActiva,
+  establecimientoDeDte,
+  establecimientoDeSolicitud,
   camposContingencia,
   registrarEmisionEnContingencia,
   registrarFallaDeConectividad,
