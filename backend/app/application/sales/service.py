@@ -110,7 +110,7 @@ class SalesService:
             "company_id": str(row.company_id),
             "branch_id": str(row.branch_id),
             "customer_id": str(row.customer_id),
-            "quotation_id": str(row.quotation_id),
+            "quotation_id": str(row.quotation_id) if row.quotation_id else None,
             "currency": row.currency,
             "subtotal": str(row.subtotal),
             "total": str(row.total),
@@ -552,7 +552,9 @@ class SalesService:
             ).all()
         )
         customer = await self.get_customer(row.company_id, row.customer_id)
-        quote = await self.get_quotation(row.company_id, row.quotation_id)
+        quote = (
+            await self.get_quotation(row.company_id, row.quotation_id) if row.quotation_id else None
+        )
         delivered_rows = (
             await self.session.execute(
                 select(
@@ -591,8 +593,8 @@ class SalesService:
             "customer_id": str(row.customer_id),
             "customer_code": customer.code,
             "customer_name": customer.name,
-            "quotation_id": str(row.quotation_id),
-            "quotation_code": quote.code,
+            "quotation_id": str(row.quotation_id) if row.quotation_id else None,
+            "quotation_code": quote.code if quote else None,
             "code": row.code,
             "currency": row.currency,
             "subtotal": str(row.subtotal),

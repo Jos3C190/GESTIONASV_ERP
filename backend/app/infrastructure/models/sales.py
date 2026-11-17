@@ -211,6 +211,9 @@ class SalesCustomerDeliveryAddressModel(UUIDPKMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
 
     __table_args__ = (
+        UniqueConstraint(
+            "company_id", "customer_id", "id", name="uq_sales_customer_delivery_addresses_owner"
+        ),
         ForeignKeyConstraint(
             ["company_id", "customer_id"],
             ["sales_customers.company_id", "sales_customers.id"],
@@ -560,12 +563,12 @@ class SaleModel(UUIDPKMixin, TimestampMixin, Base):
     company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     customer_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    quotation_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    quotation_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     code: Mapped[str] = mapped_column(String(48), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="USD")
     subtotal: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     total: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="draft")
+    status: Mapped[str] = mapped_column(String(24), nullable=False, server_default="draft")
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
     notes: Mapped[str | None] = mapped_column(Text)
     created_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
@@ -574,6 +577,39 @@ class SaleModel(UUIDPKMixin, TimestampMixin, Base):
     cancelled_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancellation_reason: Mapped[str | None] = mapped_column(Text)
+    # --- V2e (revisión 0125) ---
+    document_type: Mapped[str] = mapped_column(String(2), nullable=False)
+    price_list_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    prices_include_vat: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    global_discount_percent: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, server_default="0"
+    )
+    total_not_subject: Mapped[Decimal] = _money_column()
+    total_exempt: Mapped[Decimal] = _money_column()
+    total_taxed: Mapped[Decimal] = _money_column()
+    subtotal_sales: Mapped[Decimal] = _money_column()
+    total_discount: Mapped[Decimal] = _money_column()
+    vat: Mapped[Decimal] = _money_column()
+    vat_perceived: Mapped[Decimal] = _money_column()
+    vat_withheld: Mapped[Decimal] = _money_column()
+    total_in_words: Mapped[str] = mapped_column(
+        String(400), nullable=False, server_default="CERO 00/100 DÓLARES"
+    )
+    requires_authorization: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    authorization_reasons: Mapped[list[str]] = mapped_column(
+        ARRAY(String(40)), nullable=False, server_default=text("'{}'")
+    )
+    authorized_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    authorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    authorization_note: Mapped[str | None] = mapped_column(Text)
+    promised_date: Mapped[date] = mapped_column(Date, nullable=False)
+    delivery_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    delivery_address_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    delivery_address_text: Mapped[str | None] = mapped_column(String(400))
+    payment_terms: Mapped[str] = mapped_column(String(8), nullable=False)
+    credit_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     __table_args__ = (
         UniqueConstraint("company_id", "id", name="uq_sales_company_id"),
@@ -617,15 +653,64 @@ class SaleModel(UUIDPKMixin, TimestampMixin, Base):
             name="fk_sales_canceller_company",
         ),
         CheckConstraint("currency = 'USD'", name="ck_sales_currency_usd"),
-        CheckConstraint("status IN ('draft','confirmed','cancelled')", name="ck_sales_status"),
+        ForeignKeyConstraint(
+            ["company_id", "price_list_id"],
+            ["sales_price_lists.company_id", "sales_price_lists.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_price_list",
+        ),
+        ForeignKeyConstraint(
+            ["authorized_by_id", "company_id"],
+            ["user_companies.user_id", "user_companies.company_id"],
+            ondelete="RESTRICT",
+            name="fk_sales_authorizer_company",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "customer_id", "delivery_address_id"],
+            [
+                "sales_customer_delivery_addresses.company_id",
+                "sales_customer_delivery_addresses.customer_id",
+                "sales_customer_delivery_addresses.id",
+            ],
+            ondelete="RESTRICT",
+            name="fk_sales_delivery_address",
+        ),
         CheckConstraint(
-            "version >= 1 AND subtotal >= 0 AND total = subtotal", name="ck_sales_totals_version"
+            "status IN ('draft','pending_authorization','confirmed','cancelled')",
+            name="ck_sales_status",
+        ),
+        CheckConstraint("document_type IN ('01','03')", name="ck_sales_document"),
+        CheckConstraint(
+            "global_discount_percent >= 0 AND global_discount_percent <= 100",
+            name="ck_sales_global_discount",
+        ),
+        CheckConstraint(
+            "version >= 1 "
+            "AND total_not_subject >= 0 AND total_exempt >= 0 AND total_taxed >= 0 "
+            "AND subtotal_sales >= 0 AND total_discount >= 0 AND subtotal >= 0 "
+            "AND vat >= 0 AND vat_perceived >= 0 AND vat_withheld >= 0 AND total >= 0",
+            name="ck_sales_totals_version",
         ),
         CheckConstraint(
             "(confirmed_at IS NULL) = (confirmed_by_id IS NULL) "
-            "AND (status <> 'confirmed' OR (confirmed_at IS NOT NULL AND confirmed_by_id IS NOT NULL)) "
-            "AND (status <> 'draft' OR (confirmed_at IS NULL AND confirmed_by_id IS NULL))",
+            "AND (status <> 'confirmed' OR confirmed_at IS NOT NULL) "
+            "AND (status NOT IN ('draft','pending_authorization') OR confirmed_at IS NULL)",
             name="ck_sales_confirmation",
+        ),
+        CheckConstraint(
+            "(authorized_at IS NULL) = (authorized_by_id IS NULL)",
+            name="ck_sales_authorization",
+        ),
+        CheckConstraint(
+            "delivery_mode IN ('pickup','delivery') "
+            "AND (delivery_mode = 'delivery') = (delivery_address_id IS NOT NULL) "
+            "AND (delivery_address_id IS NULL) = (delivery_address_text IS NULL)",
+            name="ck_sales_delivery",
+        ),
+        CheckConstraint(
+            "payment_terms IN ('cash','credit') AND credit_days BETWEEN 0 AND 365 "
+            "AND (payment_terms = 'credit' OR credit_days = 0)",
+            name="ck_sales_payment",
         ),
         CheckConstraint(
             "(status = 'cancelled') = (cancelled_at IS NOT NULL AND cancelled_by_id IS NOT NULL AND cancellation_reason IS NOT NULL)",
@@ -646,7 +731,7 @@ class SaleLineModel(UUIDPKMixin, TimestampMixin, Base):
 
     company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     sale_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    source_quotation_line_id: Mapped[uuid.UUID] = mapped_column(
+    source_quotation_line_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=False
     )
     line_number: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -664,8 +749,36 @@ class SaleLineModel(UUIDPKMixin, TimestampMixin, Base):
     product_name: Mapped[str] = mapped_column(String(200), nullable=False)
     unit_name: Mapped[str] = mapped_column(String(120), nullable=False)
     base_unit_name: Mapped[str] = mapped_column(String(120), nullable=False)
-    unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
-    line_total: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(19, 8), nullable=False)
+    line_total: Mapped[Decimal] = mapped_column(Numeric(19, 8), nullable=False)
+    # --- V2e (revisión 0125) ---
+    price_list_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    list_price: Mapped[Decimal | None] = mapped_column(Numeric(19, 8))
+    price_overridden: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    discount_percent: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, server_default="0"
+    )
+    suggested_discount_percent: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, server_default="0"
+    )
+    suggested_discount_source: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="none"
+    )
+    tax_treatment: Mapped[str] = mapped_column(String(16), nullable=False)
+    item_type: Mapped[str] = mapped_column(String(1), nullable=False)
+    document_unit_price: Mapped[Decimal] = mapped_column(Numeric(19, 8), nullable=False)
+    discount_amount: Mapped[Decimal] = _line_amount_column()
+    not_subject: Mapped[Decimal] = _line_amount_column()
+    exempt: Mapped[Decimal] = _line_amount_column()
+    taxed: Mapped[Decimal] = _line_amount_column()
+    vat_item: Mapped[Decimal | None] = mapped_column(Numeric(19, 8))
+    cost: Mapped[Decimal | None] = mapped_column(Numeric(19, 8))
+    margin_percent: Mapped[Decimal | None] = mapped_column(Numeric(7, 2))
+    authorization_reasons: Mapped[list[str]] = mapped_column(
+        ARRAY(String(40)), nullable=False, server_default=text("'{}'")
+    )
 
     __table_args__ = (
         UniqueConstraint("company_id", "id", name="uq_sales_lines_company_id"),
@@ -730,7 +843,33 @@ class SaleLineModel(UUIDPKMixin, TimestampMixin, Base):
             "line_number > 0 AND quantity > 0 AND quantity_base > 0 AND unit_factor > 0",
             name="ck_sales_lines_quantities",
         ),
-        CheckConstraint("unit_price >= 0 AND line_total >= 0", name="ck_sales_lines_amounts"),
+        ForeignKeyConstraint(
+            ["company_id", "price_list_id"],
+            ["sales_price_lists.company_id", "sales_price_lists.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_lines_price_list",
+        ),
+        CheckConstraint(
+            "unit_price >= 0 AND line_total >= 0 AND document_unit_price >= 0 "
+            "AND discount_amount >= 0 AND not_subject >= 0 AND exempt >= 0 AND taxed >= 0 "
+            "AND (list_price IS NULL OR list_price >= 0) AND (cost IS NULL OR cost >= 0)",
+            name="ck_sales_lines_amounts",
+        ),
+        CheckConstraint(
+            "discount_percent >= 0 AND discount_percent <= 100 "
+            "AND suggested_discount_percent >= 0 AND suggested_discount_percent <= 100 "
+            "AND suggested_discount_source IN ('none','customer','volume')",
+            name="ck_sales_lines_discounts",
+        ),
+        CheckConstraint(
+            "tax_treatment IN ('taxed','exempt','not_subject') AND item_type IN ('1','2','3')",
+            name="ck_sales_lines_tax",
+        ),
+        CheckConstraint(
+            "price_overridden OR list_price IS NOT NULL",
+            name="ck_sales_lines_price_source",
+        ),
+        Index("ix_sales_lines_reservation", "company_id", "inventory_item_id", "sale_id"),
         CheckConstraint(
             "(packaging_definition_id IS NULL) = (packaging_version IS NULL)",
             name="ck_sales_lines_packaging_snapshot",

@@ -1,6 +1,6 @@
 # Plan: Ventas V2e — Pedido de venta
 
-Rama: `feature/ventas-v2e-pedido`, apilada sobre `feature/ventas-v2d-cotizacion` (PR #46, con auto-merge). Cuando la #46 entre, se trae `develop`.
+Rama: `feature/ventas-v2e-pedido`. V2d (PR #46) ya está en `develop` y se trajo a esta rama.
 
 Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 - Módulo 5.3:
@@ -69,7 +69,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [ ] **Paso 1: migración `0125` y modelos.**
+- [x] **Paso 1: migración `0125` y modelos.**
   - Guarda: se niega si hay ventas, entregas o devoluciones.
   - Columnas nuevas de pedido y línea, estados y opcionales.
   - Prueba de migración.
@@ -96,7 +96,13 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 1.
+- **Paso en curso**: 2.
+  - Paso 1:
+    - Migración `0125` y modelos.
+    - La migración redefine los triggers `guard_sales_lines_draft` y `guard_sales_order_lines_draft` con `varchar(24)`, porque `pending_authorization` no cabía.
+    - Agrega `uq_sales_customer_delivery_addresses_owner` (empresa, cliente, id), para que la dirección de entrega quede ligada al cliente del pedido.
+    - Ya está aplicada en desarrollo. Antes se borró la venta de QA VTA-20261116-6C21B05C, con respaldo JSON en el scratchpad de la sesión.
+    - El servicio B06 solo tolera pedidos sin cotización. Las e2e de ventas, entregas y aceptación final fallarán hasta el paso 3.
 - **Contexto**: el frontend usa SvelteKit 3 (imports `#lib/…` con extensión, `$app/env`).
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con un objetivo explícito: `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` o `lint`. Sin argumento corre la batería completa, de unos 45 minutos.

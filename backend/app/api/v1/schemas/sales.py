@@ -109,8 +109,8 @@ class SaleOut(BaseModel):
     customer_id: UUID
     customer_code: str
     customer_name: str
-    quotation_id: UUID
-    quotation_code: str
+    quotation_id: UUID | None
+    quotation_code: str | None
     code: str
     currency: Literal["USD"]
     subtotal: Decimal
