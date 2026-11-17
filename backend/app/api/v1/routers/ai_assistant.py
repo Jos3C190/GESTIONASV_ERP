@@ -66,7 +66,11 @@ async def chat_with_erp_agent(payload: ChatRequest) -> ChatResponse:
     """
     guardrail_id = os.getenv("BEDROCK_GUARDRAIL_ID")
     guardrail_version = os.getenv("BEDROCK_GUARDRAIL_VERSION", "DRAFT")
-    model_id = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
+    model_id = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-3-haiku-20240307-v1:0")
+
+    # Bedrock en us-east-1 requiere el ID de perfil de inferencia cross-region (prefijo us.)
+    if model_id and model_id.startswith("anthropic.claude-"):
+        model_id = f"us.{model_id}"
 
     if not guardrail_id:
         logger.error("ai.configuration_missing", detail="BEDROCK_GUARDRAIL_ID not set")
@@ -117,10 +121,10 @@ async def chat_with_erp_agent(payload: ChatRequest) -> ChatResponse:
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
         error_msg = e.response.get("Error", {}).get("Message", str(e))
-        logger.error("ai.bedrock_client_error", code=error_code)
+        logger.error("ai.bedrock_client_error", code=error_code, message=error_msg)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Error en el servicio de Amazon Bedrock ({error_code})"
+            detail=f"Error en el servicio de Amazon Bedrock ({error_code}): {error_msg}"
         )
     except Exception as exc:
         logger.error("ai.unexpected_error", error=str(exc))
