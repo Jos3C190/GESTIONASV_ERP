@@ -67,6 +67,35 @@ especiales y de retorno.
 - En *simulado* y *pruebas* puedes habilitar cualquier documento para probarlo.
 - En *producción* solo se habilita un documento cuyas pruebas estén aprobadas.
 
+## 5. Correo
+
+Los documentos tributarios se envían a los clientes desde el servidor de correo y el dominio de la
+empresa.
+
+1. Escribe el **servidor SMTP**, la **seguridad** y el **puerto** que te da tu proveedor de correo.
+   Al elegir la seguridad se propone su puerto: STARTTLS 587, SSL 465.
+2. Escribe el **usuario** y la **contraseña**. La contraseña se guarda cifrada y nunca se vuelve a
+   mostrar; para cambiarla, escribe otra. Si la dejas vacía al editar, se conserva.
+3. Escribe el **correo del remitente** y, si quieres, el **nombre del remitente** (por defecto, el
+   nombre comercial).
+4. **Guardar** y luego **Enviar correo de prueba** a tu propio correo. La pantalla guarda el
+   resultado de la última prueba; cambiar la conexión la borra.
+
+Con **Enviar los documentos con este correo** desmarcado, o con **Quitar**, los documentos salen
+con el correo del servidor si existe; si no, no se envían por correo.
+
+Proveedores comunes:
+
+| Proveedor | Servidor | Seguridad y puerto | Usuario y contraseña |
+|---|---|---|---|
+| Google (Gmail o Workspace) | smtp.gmail.com | STARTTLS 587 | El correo y una contraseña de aplicación (requiere verificación en dos pasos). |
+| Microsoft 365 | smtp.office365.com | STARTTLS 587 | El correo y su contraseña, con «SMTP autenticado» activado en el buzón. |
+| Hosting del dominio | El que indique el proveedor | Normalmente STARTTLS 587 o SSL 465 | Los del buzón. |
+
+**El dominio es responsabilidad de la empresa.** Para que Gmail y Outlook no manden los
+documentos a spam, el dominio del remitente debe tener SPF, DKIM y DMARC configurados en su DNS.
+Los proveedores de correo indican cómo hacerlo al dar de alta el dominio.
+
 ## Reglas que protegen a una empresa en producción
 
 Una empresa en producción no puede quedar sin poder emitir. Por eso se rechaza, sin guardar

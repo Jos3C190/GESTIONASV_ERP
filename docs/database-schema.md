@@ -1206,3 +1206,19 @@ Revision `0127` (revises `0126`), block V3c.
 
 **Downgrade** refuses while sends exist. Covered by
 `backend/tests/integration/test_sales_fiscal_document_emails_migration.py`.
+
+## 38. Company outgoing email (0128)
+
+Revision `0128` (revises `0127`), block V3c.
+
+- `company_email_settings`: one row per company (`company_id` primary key, cascades with the
+  company).
+  - Connection: `host`, `port` (1–65535), `security` (`none`, `starttls`, `ssl`), `username`.
+  - `password_encrypted` (`bytea`, AES-GCM with a random nonce); requires `username`.
+  - Sender: `from_address` (required), `from_name` (optional); `is_enabled`.
+  - Last test: `last_test_at`, `last_test_ok`, `last_test_error` (all empty or set together;
+    a failed test keeps its error).
+  - `updated_by`, timestamps.
+
+**Downgrade** refuses while settings exist. Covered by
+`backend/tests/integration/test_company_email_settings_migration.py`.

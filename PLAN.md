@@ -12,6 +12,9 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - **SMTP**: uno por despliegue, en variables de entorno. Cada correo sale con el nombre de la empresa como remitente y con `Reply-To` al correo DTE de esa empresa. En desarrollo se usa Mailpit, un buzón de prueba en compose.
   - **Cuándo**: automático al emitirse, si el cliente tiene correo. Además hay un botón «Enviar por correo» para reenviar o mandar a otras direcciones. Cada envío queda registrado.
   - **Simulados**: sí se envían, con «SIMULADO — sin validez fiscal» en el asunto y en el cuerpo.
+  - **Cambio, SMTP por empresa** (tras la QA): cada empresa configura su propio SMTP y su correo remitente en Configuración fiscal. El dominio y el DNS (SPF, DKIM, DMARC) son responsabilidad de la empresa.
+    - Se autentica con usuario y contraseña (de aplicación en Google), sobre STARTTLS o SSL. OAuth de Microsoft queda como mejora posterior.
+    - Decisión por defecto, tomada por Claude: si la empresa no configuró su SMTP, se usa el del servidor (en desarrollo, Mailpit; en producción viene vacío).
 - Decisiones anteriores que siguen vigentes (V3b):
   - Producción con la facturación apagada hasta V3d.
   - Merge delegado cuando pasen los checks propios.
@@ -43,6 +46,12 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - El trabajador baja el PDF del almacenamiento (o del servicio si no está guardado), arma el mensaje y envía; reintenta los errores temporales.
 - **Permisos**: enviar requiere `sales_invoices:issue`; ver el historial, `sales_invoices:read`. Todo queda en la bitácora.
 - **Pantallas**: «Enviar por correo» en el detalle del documento y en la sección Factura del pedido (con el correo del cliente propuesto), e historial de envíos en el detalle.
+- **SMTP por empresa** (pasos 7 a 10):
+  - Tabla `company_email_settings` (migración 0128): servidor, puerto, seguridad, usuario, contraseña cifrada con AES-GCM (`app/core/secret_encryption.py`), correo y nombre del remitente, activo y resultado de la última prueba.
+  - La contraseña nunca se devuelve por la API: solo `has_password`. Si se deja vacía al guardar, se conserva la anterior.
+  - Al enviar se usa el SMTP de la empresa si está activo; si no, el del servidor; si no hay ninguno, no se envía.
+  - «Enviar correo de prueba» manda un correo a la dirección que se indique y guarda el resultado.
+  - Permisos: `fiscal_settings:read` y `fiscal_settings:manage`. Se audita sin la contraseña.
 
 ## Pasos
 
@@ -58,11 +67,31 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - e2e con Mailpit (el correo llega con sus dos adjuntos).
 - [x] **Paso 5: frontend.** «Enviar por correo» e historial. vitest.
 - [x] **Paso 6: documentación.** `docs/api.md`, `docs/database-schema.md` §37 y manual de facturación.
-- [ ] **Paso 7: verificación y PR.** Batería completa, QA en el navegador con Mailpit y PR a `develop` con auto-merge.
+- [x] **Paso 7: migración `0128`** de la configuración de correo por empresa, con prueba de migración.
+- [x] **Paso 8: aplicación y API.** Leer, guardar (contraseña cifrada y escrita solo una vez), quitar y probar. Auditoría. e2e.
+- [x] **Paso 9: envío con el SMTP de la empresa.** Elegir el remitente por documento en `dte-worker`; el historial indica si hay correo disponible. e2e con Mailpit como SMTP de la empresa.
+- [x] **Paso 10: frontend.** Pestaña «Correo» en Configuración fiscal con prueba de envío. vitest.
+- [x] **Paso 11: documentación.** API, esquema §38 y manuales.
+- [ ] **Paso 12: verificación y PR.** Batería completa, QA en el navegador con Mailpit y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 7 (verificación y PR).
+- **Paso en curso**: 12 (verificación y PR).
+  - La batería sobre los pasos 1 a 6 dio 1947 pasadas y 7 fallos. Los 7 son guardas de migración de traslados que comparan la revisión de la base con la cabeza del repositorio: la 0128 se agregó mientras corría. La batería nueva debe confirmarlo.
+  - Error latente corregido: `secret_encryption._key` no aceptaba la clave sin relleno que genera `scripts/setup.sh` (base64url de 43 caracteres), así que en desarrollo tampoco se podían cifrar los datos bancarios de proveedores. Ahora completa el relleno. Pruebas en `test_supplier_master_data.py`; `fails_closed_without_key` ahora también quita la variable de entorno.
+  - Paso 7: migración 0128 `company_email_settings`, modelo `CompanyEmailSettingsModel` y prueba de migración. Ya está aplicada en desarrollo.
+  - Paso 8:
+    - Dominio `domain/entities/company_email.py` (`validate_settings`) con 9 pruebas unitarias en verde; puerto y repositorio.
+    - Casos de uso `application/fiscal/email_settings.py`; el remitente se inyecta con `company_email_sender`, que descifra en memoria.
+    - API `/fiscal/email-settings` (GET, PUT, DELETE y `/test`).
+  - Paso 9:
+    - `process_fiscal_email` usa el SMTP de la empresa si está activo; si no, el del servidor; si no hay ninguno, falla con `email_unavailable`.
+    - `SalesInvoiceEmailUseCases.available` decide `enabled` y bloquea el envío manual.
+    - `dte-worker` recibe `SUPPLIER_DATA_ENCRYPTION_KEY`. e2e en `tests/e2e/test_company_email_settings.py`.
+  - Paso 10: pestaña «Correo» (`FiscalEmailPanel.svelte`) con prueba de envío y ayuda para Google y Microsoft 365. vitest: 70 en verde (fiscal y ventas).
+  - Paso 11: `api.md` («Company outgoing email»), esquema §38, manual de configuración fiscal §5 y manual de facturación §6.
+  - QA de los pasos 1 a 6 en el navegador: el envío manual desde el detalle del documento llegó a Mailpit, a dos destinatarios, con el PDF, el JSON y el aviso de privacidad de Grupo Lorena. El historial lo marcó Enviado y la vista a 375 px no se desborda.
+  - La primera batería completa de V3c corrió sobre los pasos 1 a 6.
   - Paso 6: `docs/api.md` (Sales invoice emails), `docs/database-schema.md` §37 y sección 6 del manual de facturación.
   - Paso 5: componente `FiscalDocumentEmails.svelte`, en el detalle del documento y en la sección Factura del pedido.
     - Propone el correo del cliente y acepta varios separados por comas, punto y coma o espacios.

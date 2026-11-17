@@ -60,9 +60,10 @@ de generación, el sello, los intentos y el último error, y permite descargar e
 
 ## 6. Envío por correo
 
-El documento emitido se envía al cliente con el PDF y el JSON adjuntos. El correo sale con el
-nombre comercial de la empresa y, si el cliente responde, la respuesta llega al correo DTE de la
-empresa. Al pie va el aviso de privacidad vigente.
+El documento emitido se envía al cliente con el PDF y el JSON adjuntos. Sale desde el correo
+propio de la empresa (**Configuración fiscal → Correo**, ver el manual de configuración fiscal)
+y, si la empresa no lo configuró, desde el correo del servidor. Si el cliente responde, la
+respuesta llega al correo DTE de la empresa. Al pie va el aviso de privacidad vigente.
 
 - **Automático**: al terminar de emitirse, si la ficha del cliente tiene un correo válido, el
   documento se envía solo (una vez).
@@ -74,7 +75,8 @@ empresa. Al pie va el aviso de privacidad vigente.
   envió**, con el motivo).
 - Un documento **simulado** se envía con la marca «SIMULADO — sin validez fiscal» en el asunto y
   en el cuerpo.
-- Si el servidor no tiene configurado el correo saliente, la sección lo indica y no deja enviar.
+- Si la empresa no tiene correo saliente (ni propio ni del servidor), la sección lo indica y no
+  deja enviar.
 
 En desarrollo, los correos no salen a internet: llegan al buzón de prueba Mailpit, en
 <http://localhost:8025>.
