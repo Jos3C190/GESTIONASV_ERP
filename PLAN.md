@@ -139,6 +139,9 @@ Documentación oficial: `D:\josec\Downloads\Documentacion DTE\`, en especial el 
   - Pruebas con objetivo explícito; sin argumento corre la batería completa (unos 35 a 45 minutos).
   - No hacer commits ni correr pruebas de base mientras corre la batería. Tampoco agregar migraciones mientras corre: las guardas de traslados comparan la revisión de la base con la cabeza del repositorio.
   - Git: `git -c http.sslBackend=schannel` para `fetch` y `push`.
+- **Decisión del usuario (17/11/2026)**: el CI de la PR #51 falló por CVE-2026-112366 (`picomatch` ≤ 4.0.7,
+  sin versión corregida, solo en dependencias de desarrollo del frontend). Se ignora en `.trivyignore`
+  con vencimiento 31/01/2027; al salir la corrección, override en `frontend/package.json` y quitarla.
 - **Reglas del usuario**:
   - Commits y PR sin Co-Authored-By ni «Generated with Claude Code».
   - PR hacia `develop` con Auto-fix y auto-merge.

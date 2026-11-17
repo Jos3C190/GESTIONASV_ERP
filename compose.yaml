@@ -893,8 +893,12 @@ services:
       - json
       - --output
       - /reports/trivy-report.json
+      # Excepciones justificadas y con vencimiento; ver .trivyignore.
+      - --ignorefile
+      - /config/.trivyignore
       - /src
     volumes:
+      - ./.trivyignore:/config/.trivyignore:ro
       # Vulnerability scanning consumes manifests/lockfiles; mounting only these
       # keeps Windows bind-mount traversal deterministic without reducing scope.
       - ./backend/pyproject.toml:/src/backend/pyproject.toml:ro
