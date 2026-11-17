@@ -70,7 +70,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 - [x] **Paso 0: plan.**
 - [x] **Paso 1: servicio, contrato v2 ampliado.** Condición y plazo, retención, percepción y descuento global en el resumen, con pruebas.
 - [x] **Paso 2: migración `0126` y modelos.** `sales_fiscal_documents`, permisos y bloqueo de la cancelación de pedidos facturados.
-- [ ] **Paso 3: dominio.** Snapshot del emisor con su hash, receptor, líneas y resumen desde el pedido, conciliación de totales y estados. Pruebas unitarias.
+- [x] **Paso 3: dominio.** Snapshot del emisor con su hash, receptor, líneas y resumen desde el pedido, conciliación de totales y estados. Pruebas unitarias.
 - [ ] **Paso 4: infraestructura.**
   - Cliente HTTP del servicio.
   - Trabajador arq `dte-worker`.
@@ -86,7 +86,17 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 3 (dominio).
+- **Paso en curso**: 4 (infraestructura).
+  - Paso 3: `app/domain/entities/sales_fiscal_document.py`.
+    - Hash del emisor: `canonical_json` = llaves ordenadas, sin espacios, `ensure_ascii=False`. Se comprobó contra `issuerContractV2.js` (la prueba fija el hash que calculó el servicio).
+    - Códigos MH: `M001` → tipo `02` y `001`; `P001` → `001`. `codEstable` y `codPuntoVenta` llevan el código del ERP.
+    - Solicitudes de factura y CCF pasadas por los constructores reales del servicio: válidas contra el schema oficial y con los mismos totales.
+- **Decisiones de diseño (paso 3)**:
+  - Pago: contado `01` (billetes y monedas) y crédito `99` con plazo en días. La forma de pago real llega con cobros (V5).
+  - Servicios (`tipoItem` 2) van con `uniMedida` 99; los bienes, con el CAT-014 de la unidad de la empresa o 59.
+  - Consumidor final genérico: factura sin receptor. DUI con guion antes del verificador.
+  - Conciliación en dos tiempos. Antes de enviar, la solicitud debe cuadrar al centavo con el pedido (`sales_invoice_totals_mismatch`, no se envía). Después, `dte_differences` compara el resumen devuelto; como el documento ya existe, una diferencia queda registrada en el documento para revisión, no lo anula.
+  - `rejected` sigue contando como documento vigente; su corrección se resuelve en V3d con Hacienda.
   - Paso 2: tabla `sales_fiscal_documents` (un documento vigente por pedido; los `failed` se pueden reintentar), permisos `sales_invoices:read` e `sales_invoices:issue` para SUPER_ADMIN, y `cancel` del pedido responde 422 `sales_order_invoiced` si hay un documento no fallido. Pruebas: `tests/integration/test_sales_fiscal_documents_migration.py` y `test_invoiced_order_cannot_be_cancelled`.
   - Paso 1:
     - `ajustes` en factura y CCF (v1 y v2): `condicionOperacion` (1, 2 o 3), `plazoDias` (obligatorio a crédito), `ivaRete`, `ivaPerci` (solo CCF) y `descuentoGlobalEnResumen`.
