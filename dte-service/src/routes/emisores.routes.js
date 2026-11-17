@@ -34,4 +34,19 @@ router.put('/:nit', requireDteScope('issuers'), (req, res) =>
   responder(res, () => res.json(issuerRegistry.registrar(req.params.nit, req.body)))
 );
 
+/**
+ * Prueba de conexión del emisor (V3d): autenticación con Hacienda y firma de un
+ * documento de prueba con su certificado. No emite ni consume números de control.
+ */
+router.post('/:nit/probar', requireDteScope('issuers'), async (req, res) => {
+  try {
+    return res.json(await require('../services/issuerConnectionTest').probar(issuerRegistry.normalizarNit(req.params.nit)));
+  } catch (error) {
+    if (error instanceof issuerRegistry.IssuerError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    throw error;
+  }
+});
+
 module.exports = router;

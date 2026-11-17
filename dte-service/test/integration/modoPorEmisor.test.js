@@ -35,7 +35,7 @@ const servidorHacienda = http.createServer((req, res) => {
     }
     const cuerpo = datos ? JSON.parse(datos) : null;
     if (req.url === '/firmardocumento/') {
-      llamadas.push({ ruta: 'firmar', nit: cuerpo.nit, passwordPri: cuerpo.passwordPri, ambiente: cuerpo.dteJson.identificacion.ambiente });
+      llamadas.push({ ruta: 'firmar', nit: cuerpo.nit, passwordPri: cuerpo.passwordPri, ambiente: cuerpo.dteJson.identificacion?.ambiente ?? null });
       return json(200, { status: 'OK', body: `eyJhbGciOiJSUzUxMiJ9.${Buffer.from(cuerpo.nit).toString('base64url')}.firma` });
     }
     if (req.url === '/fesv/recepciondte') {
@@ -221,4 +221,28 @@ test('un emisor de producción no emite en un despliegue que admite hasta prueba
   const respuesta = await factura(prod, 'modo-prod-01');
   assert.equal(respuesta.status, 409);
   assert.equal(respuesta.body.code, 'ISSUER_MODE_UNAVAILABLE');
+});
+
+test('la prueba de conexión autentica y firma sin emitir', async () => {
+  const antes = llamadas.filter((l) => l.ruta === 'recepcion').length;
+  const probar = (empresa) => fetch(`${baseUrl}/api/emisores/${empresa.nit}/probar`, { method: 'POST', headers: headers(null) });
+
+  const bien = await (await probar(EN_PRUEBAS)).json();
+  assert.equal(bien.ok, true, JSON.stringify(bien));
+  assert.equal(bien.autenticacion.ok, true);
+  assert.equal(bien.firma.ok, true);
+
+  const mal = await (await probar({ nit: '06142010002045' })).json();
+  assert.equal(mal.ok, false);
+  assert.equal(mal.autenticacion.ok, false);
+  assert.match(mal.autenticacion.mensaje, /rechazó/);
+  assert.equal(mal.firma.ok, true);
+
+  const simulada = await (await probar(SIMULADA)).json();
+  assert.equal(simulada.ok, true);
+  assert.equal(simulada.modo, 'simulated');
+
+  assert.equal((await probar({ nit: '06149999999999' })).status, 404);
+  // Probar no transmite nada a Hacienda.
+  assert.equal(llamadas.filter((l) => l.ruta === 'recepcion').length, antes);
 });
