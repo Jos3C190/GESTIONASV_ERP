@@ -69,7 +69,10 @@ async def _stock(admin: dict[str, str], body: dict, quantity: str) -> uuid.UUID:
             )
         ).first()
         actor_id = await session.scalar(
-            select(AuditLog.user_id).where(AuditLog.company_id == company_id).limit(1)
+            # Las acciones del trabajador DTE no tienen usuario: se toma una con usuario.
+            select(AuditLog.user_id)
+            .where(AuditLog.company_id == company_id, AuditLog.user_id.is_not(None))
+            .limit(1)
         )
     assert item_id is not None
     assert found is not None, "La semilla debe tener una bodega con ubicación de almacenamiento."
