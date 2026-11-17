@@ -59,7 +59,7 @@ Pasos:
   - El responsable del evento sale del registro del emisor; el ERP lo envía al registrar a la empresa.
   - Verificar: pruebas nuevas con dos empresas, y un establecimiento en contingencia mientras otro de la misma
     empresa emite normal; `./scripts/run-tests.sh dte`.
-- [ ] **Paso 2: rutas de contingencia por emisor.**
+- [x] **Paso 2: rutas de contingencia por emisor.**
   - `/api/emisores/:nit/contingencias` para listar, forzar con tipo y motivo, cerrar, enviar el evento y
     transmitir, con el alcance `contingency`.
   - Las rutas globales quedan para el emisor del entorno, o se retiran si nada las usa.
@@ -120,7 +120,19 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 2 de V4a (rutas de contingencia por emisor).
+- **Paso en curso**: 3 de V4a (estado «en contingencia» en el ERP).
+  - Paso 2 hecho:
+    - Rutas `/api/emisores/:nit/contingencias`: GET; POST con `establecimiento`, `tipoContingencia` y
+      `motivoContingencia`; y `/:id/cerrar`, `/:id/evento` y `/:id/transmitir`, con el alcance `contingency`. Una
+      ventana de otro emisor da 404, y un emisor sin registrar, `ISSUER_NOT_FOUND`.
+    - Decisión: la activación por emisor es manual (`forzar({ manual: true })`) y vale en cualquier modo. La
+      activa el operador de la empresa ante una falla que el servicio no ve (energía, internet de la tienda);
+      el ERP la audita. Las rutas globales siguen pidiendo `DTE_ALLOW_FORCED_CONTINGENCY` para la certificación.
+    - Emisor simulado: la contingencia funciona sin Hacienda. El documento nace en diferido con firma simulada
+      y responde 202 `CONTINGENCIA`. Al cerrar, el evento se construye y se valida contra el esquema, recibe un
+      sello simulado, los documentos pasan a `SIMULADO` y la ventana a `COMPLETADA`.
+    - `cerrarEInformar` usa el responsable enviado o el registrado; sin ninguno, la ventana queda `CERRADA`.
+    - Pruebas: `contingenciaPorEmisor.test.js` (4) y `contingenciaSimulada.test.js`. Servicio: 488 en verde.
   - Paso 1 hecho:
     - `contingencias` tiene `nit_emisor` y `cod_establecimiento` ('' = emisor heredado), con un índice único
       de ventana activa por los dos. Las ventanas viejas toman el NIT y el `codEstable` de sus documentos.

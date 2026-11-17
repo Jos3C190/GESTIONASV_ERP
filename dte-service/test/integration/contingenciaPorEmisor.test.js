@@ -288,3 +288,39 @@ test('una caída que solo afecta a una empresa abre la ventana de esa empresa y 
   assert.equal(deB.ventanas[0].estado, 'CERRADA');
   assert.equal(llamadas.filter((l) => l.ruta === 'contingencia' && l.nit === EMPRESA_B.nit).length, 0);
 });
+
+test('las rutas por emisor operan solo las ventanas de ese emisor', async () => {
+  const ruta = (empresa, sufijo = '') => `${baseUrl}/api/emisores/${empresa.nit}/contingencias${sufijo}`;
+  const sinEstablecimiento = await fetch(ruta(EMPRESA_A), { method: 'POST', headers: headers(null), body: JSON.stringify({ tipoContingencia: 2 }) });
+  assert.equal(sinEstablecimiento.status, 400);
+  assert.equal((await sinEstablecimiento.json()).code, 'INVALID_CONTINGENCY_REQUEST');
+
+  const activada = await fetch(ruta(EMPRESA_A), {
+    method: 'POST',
+    headers: headers(null),
+    body: JSON.stringify({ establecimiento: 'M003', tipoContingencia: 2 }),
+  });
+  assert.equal(activada.status, 201);
+  const ventana = await activada.json();
+  assert.equal(ventana.establecimiento, 'M003');
+  const repetida = await fetch(ruta(EMPRESA_A), {
+    method: 'POST',
+    headers: headers(null),
+    body: JSON.stringify({ establecimiento: 'M003', tipoContingencia: 2 }),
+  });
+  assert.equal(repetida.status, 409);
+  assert.equal((await repetida.json()).code, 'CONTINGENCY_ALREADY_ACTIVE');
+
+  // Otra empresa no ve ni cierra esa ventana.
+  const ajena = await fetch(ruta(EMPRESA_B, `/${ventana.id}/cerrar`), { method: 'POST', headers: headers(null), body: '{}' });
+  assert.equal(ajena.status, 404);
+  const listadoB = await (await fetch(ruta(EMPRESA_B), { headers: headers(null) })).json();
+  assert.ok(!listadoB.ventanas.some((v) => v.id === ventana.id));
+  const desconocido = await fetch(`${baseUrl}/api/emisores/06149999999999/contingencias`, { headers: headers(null) });
+  assert.equal(desconocido.status, 404);
+
+  // Sin documentos, cerrar con el responsable registrado completa la ventana.
+  const cerrada = await fetch(ruta(EMPRESA_A, `/${ventana.id}/cerrar`), { method: 'POST', headers: headers(null), body: '{}' });
+  assert.equal(cerrada.status, 200);
+  assert.equal((await cerrada.json()).estado, 'COMPLETADA');
+});

@@ -5,13 +5,14 @@ const { fechaHoraSV, ahora } = require('../utils/fechaHoraSV');
 const { fechaDeProcesamiento } = require('../utils/plazosFiscales');
 const { validarDte, validarEvento } = require('../validators/dteSchema');
 const { sanitizarProfundo } = require('../utils/sanitizarDte');
-const { MODELO_FACTURACION, TIPO_TRANSMISION, TIPO_CONTINGENCIA } = require('../config/catalogs');
+const { MODELO_FACTURACION, TIPO_TRANSMISION, TIPO_CONTINGENCIA, TIPO_DOCUMENTO_IDENTIFICACION } = require('../config/catalogs');
 const { construirEventoContingencia } = require('./eventoContingenciaBuilder');
 const firmadorClient = require('./firmadorClient');
 const haciendaClient = require('./haciendaClient');
 const { clasificarRespuestaEvento, clasificarConsultaDte, esDuplicado } = require('./haciendaResponse');
 const { AuthError } = require('./authService');
 const issuerContext = require('./issuerContext');
+const { emitirSimulado } = require('./simulatedEmissionProvider');
 
 /**
  * Operación en contingencia (Manual Funcional VIII, Manual Técnico 3.2/4.4).
@@ -32,9 +33,14 @@ const issuerContext = require('./issuerContext');
  * (`codEstable` del documento). Una caída en una tienda no pone en contingencia
  * a las demás ni a otras empresas, y cada evento se firma y se transmite con el
  * contexto (credenciales y ambiente) de su emisor.
+ *
+ * Emisor simulado: la contingencia se puede activar a mano para probar el flujo
+ * sin Hacienda. Los documentos nacen en diferido con firma simulada y el evento
+ * se construye y se valida contra el esquema, pero su sello es simulado y no
+ * sale del servicio.
  */
 const LIMITE_DOCUMENTOS = 1000;
-const ESTADOS_DOCUMENTO_FINALES = ['TRANSMITIDO', 'RECHAZADO', 'INVALIDADO'];
+const ESTADOS_DOCUMENTO_FINALES = ['TRANSMITIDO', 'RECHAZADO', 'INVALIDADO', 'SIMULADO'];
 const HORAS_PLAZO_EVENTO = 24;
 const HORAS_PLAZO_TRANSMISION = 72;
 
@@ -133,6 +139,25 @@ function validarTipoYMotivo(tipoContingencia, motivo) {
   }
   if (texto && texto.length > 500) throw new ContingenciaError('El motivo admite como máximo 500 caracteres', 'INVALID_CONTINGENCY_REQUEST', 400);
   return { tipo, motivo: texto };
+}
+
+/** Responsable enviado en una solicitud; undefined si no se envió. */
+function responsableDeSolicitud(body) {
+  const responsable = body?.responsable;
+  if (!responsable) return undefined;
+  const tipoDocumento = String(responsable.tipoDocumento ?? '').trim();
+  if (!Object.values(TIPO_DOCUMENTO_IDENTIFICACION).includes(tipoDocumento)) {
+    throw new ContingenciaError('Tipo de documento del responsable fuera de CAT-022', 'INVALID_CONTINGENCY_REQUEST', 400);
+  }
+  const limpio = {
+    nombre: String(responsable.nombre ?? '').trim(),
+    tipoDocumento,
+    numeroDocumento: String(responsable.numeroDocumento ?? '').trim(),
+  };
+  if (!limpio.nombre || !limpio.numeroDocumento) {
+    throw new ContingenciaError('Indica el nombre y el documento del responsable', 'INVALID_CONTINGENCY_REQUEST', 400);
+  }
+  return limpio;
 }
 
 function abrirVentana({ clave, tipoContingencia, motivo = null, forzada = false, inicio = ahoraIso() }) {
@@ -408,6 +433,7 @@ async function enviarEvento(ventanaId, opciones = {}) {
 }
 
 async function enviarEventoDeVentana(ventana, responsable) {
+  if (issuerContext.simulado()) return enviarEventoSimulado(ventana, responsable);
   if (ventana.estado === 'ACTIVA') {
     throw new ContingenciaError('La contingencia sigue activa: ciérrala cuando se restablezca la comunicación', 'CONTINGENCY_STILL_ACTIVE');
   }
@@ -490,6 +516,53 @@ async function enviarEventoDeVentana(ventana, responsable) {
   return { ...resumenVentana(leerVentana(ventana.id)), error: mensaje };
 }
 
+/**
+ * Emisor simulado: el evento se construye y se valida contra el esquema oficial,
+ * se marca con un sello simulado y los documentos pasan a SIMULADO sin salir del
+ * servicio. Es el mismo recorrido (ventana, evento, documentos) sin Hacienda.
+ */
+function enviarEventoSimulado(ventana, responsable) {
+  if (ventana.estado === 'ACTIVA') {
+    throw new ContingenciaError('La contingencia sigue activa: ciérrala cuando se restablezca la comunicación', 'CONTINGENCY_STILL_ACTIVE');
+  }
+  if (['REPORTADA', 'COMPLETADA'].includes(ventana.estado)) return resumenVentana(ventana);
+  if (!responsable) {
+    throw new ContingenciaError(
+      'Se requiere el responsable del establecimiento (registrado con el emisor o en la solicitud) para el evento',
+      'CONTINGENCY_RESPONSIBLE_REQUIRED',
+      400,
+    );
+  }
+  const documentos = documentosDeVentana(ventana.id, ['CONTINGENCIA']);
+  if (documentos.length === 0) {
+    db.prepare(`UPDATE contingencias SET estado = 'COMPLETADA', actualizado_en = datetime('now') WHERE id = ?`).run(ventana.id);
+    return resumenVentana(leerVentana(ventana.id));
+  }
+  const evento = crearEvento(ventana, documentos, responsable);
+  const { documentoFirmado, simulationMarker } = emitirSimulado(JSON.parse(evento.payload_json));
+  const sello = simulationMarker.slice(0, 40).padEnd(40, '0');
+  db.transaction(() => {
+    actualizarEvento(evento.codigo_generacion, {
+      estado: 'ACEPTADO',
+      documento_firmado: documentoFirmado,
+      sello_recepcion: sello,
+      simulation_marker: simulationMarker,
+      respuesta_json: JSON.stringify({ simulacion: true, estado: 'RECIBIDO' }),
+    });
+    db.prepare(
+      `UPDATE contingencias SET estado = 'REPORTADA', evento_sello = ?, evento_sello_en = ?, ultimo_error = NULL,
+       proximo_intento_evento = NULL, actualizado_en = datetime('now') WHERE id = ?`
+    ).run(sello, ahoraIso(), ventana.id);
+    for (const dte of documentos) {
+      db.prepare(`UPDATE dtes SET estado = 'SIMULADO', actualizado_en = datetime('now') WHERE codigo_generacion = ?`)
+        .run(dte.codigo_generacion);
+    }
+  })();
+  completarVentanas();
+  logger.info({ contingencia: ventana.id, documentos: documentos.length }, 'Evento de Contingencia simulado; los documentos quedan simulados');
+  return resumenVentana(leerVentana(ventana.id));
+}
+
 /** Encola la transmisión de los documentos ya informados que siguen pendientes. */
 function transmitirPendientes(ventanaId) {
   const ventana = leerVentana(ventanaId);
@@ -536,13 +609,37 @@ async function procesar() {
   completarVentanas();
 }
 
-/** Contingencia forzada para las pruebas de certificación (solo hacienda-test con permiso explícito). */
-function forzar({ clave, tipoContingencia, motivoContingencia = null }) {
-  if (!config.contingencia.forzadaPermitida) {
+/**
+ * Contingencia forzada. `manual`: la activa el operador de una empresa registrada
+ * (ruta por emisor del ERP, auditada allí) ante una falla que el servicio no ve,
+ * como un corte de energía o de internet en la tienda. Sin `manual`, solo para las
+ * pruebas de certificación (hacienda-test con permiso explícito).
+ */
+function forzar({ clave, tipoContingencia, motivoContingencia = null, manual = false }) {
+  if (!manual && !config.contingencia.forzadaPermitida) {
     throw new ContingenciaError('La contingencia forzada solo está disponible en hacienda-test con DTE_ALLOW_FORCED_CONTINGENCY=true', 'CONTINGENCY_FORCE_DISABLED', 403);
   }
   if (ventanaActiva(clave)) throw new ContingenciaError('Ya hay una contingencia activa', 'CONTINGENCY_ALREADY_ACTIVE');
   return resumenVentana(abrirVentana({ clave, tipoContingencia, motivo: motivoContingencia, forzada: true }));
+}
+
+/** Ventana de un emisor; 404 si no existe o es de otro. */
+function ventanaDeEmisor(nit, ventanaId) {
+  const ventana = leerVentana(ventanaId);
+  if (!ventana || ventana.nit_emisor !== nit) {
+    throw new ContingenciaError('Contingencia no encontrada', 'CONTINGENCY_NOT_FOUND', 404);
+  }
+  return ventana;
+}
+
+/** Cierra la ventana y, si hay responsable (enviado o registrado), informa el evento. */
+async function cerrarEInformar(ventanaId, { responsable } = {}) {
+  const ventana = leerVentana(ventanaId);
+  if (!ventana) throw new ContingenciaError('Contingencia no encontrada', 'CONTINGENCY_NOT_FOUND', 404);
+  cerrar(ventanaId);
+  const quien = responsable ?? responsableDe(ventana);
+  if (!quien) return resumenVentana(leerVentana(ventanaId));
+  return enviarEvento(ventanaId, { responsable: quien });
 }
 
 function cerrar(ventanaId) {
@@ -626,6 +723,9 @@ module.exports = {
   procesar,
   forzar,
   cerrar,
+  cerrarEInformar,
+  ventanaDeEmisor,
+  responsableDeSolicitud,
   estadoGeneral,
   _reiniciarSondeo: () => { ultimoSondeo = 0; },
 };

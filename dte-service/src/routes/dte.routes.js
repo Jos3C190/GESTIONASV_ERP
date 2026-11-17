@@ -250,13 +250,12 @@ async function emitir(tipoDte, builderFn, req) {
     try {
       // Con una contingencia activa el documento nace en modelo diferido
       // (Manual Funcional VIII) y no se intenta transmitirlo hasta el evento.
-      // La ventana es la del emisor y el establecimiento de la solicitud (V4a).
-      const ventana = issuerContext.simulado()
-        ? null
-        : contingenciaService.ventanaActiva({
-          nit: issuerContext.actual().nit,
-          establecimiento: contingenciaService.establecimientoDeSolicitud(req.body),
-        });
+      // La ventana es la del emisor y el establecimiento de la solicitud (V4a);
+      // un emisor simulado también la tiene si su operador la activó.
+      const ventana = contingenciaService.ventanaActiva({
+        nit: issuerContext.actual().nit,
+        establecimiento: contingenciaService.establecimientoDeSolicitud(req.body),
+      });
       const opcionesBuilder = ventana ? { contingencia: contingenciaService.camposContingencia(ventana) } : {};
       const preparado = db.transaction(() => {
         let construido;
@@ -324,6 +323,26 @@ async function emitir(tipoDte, builderFn, req) {
       `UPDATE dtes SET documento_firmado = ?, simulation_marker = ?, estado = 'SIMULADO',
        actualizado_en = datetime('now') WHERE codigo_generacion = ?`
     ).run(firmaSimulada, simulationMarker, codigoGeneracion);
+    const ventanaSimulada = dte.identificacion.tipoModelo === MODELO_FACTURACION.DIFERIDO
+      ? contingenciaService.ventanaActiva({
+        nit: issuerContext.actual().nit,
+        establecimiento: contingenciaService.establecimientoDeDte(dte),
+      })
+      : null;
+    if (ventanaSimulada) {
+      contingenciaService.registrarEmisionEnContingencia(codigoGeneracion, ventanaSimulada);
+      return {
+        status: 202,
+        body: {
+          codigoGeneracion,
+          numeroControl,
+          estado: 'CONTINGENCIA',
+          simulationMarker,
+          issuanceMode: 'SIMULATED',
+          mensaje: 'Documento simulado generado en contingencia; queda simulado al informar el evento.',
+        },
+      };
+    }
     return {
       status: 201,
       body: { codigoGeneracion, numeroControl, estado: 'SIMULADO', simulationMarker, issuanceMode: 'SIMULATED' },
