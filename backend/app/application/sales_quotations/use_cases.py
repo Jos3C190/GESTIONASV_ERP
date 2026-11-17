@@ -18,17 +18,20 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from app.application.price_lists import today_in_el_salvador
-from app.application.sales_discounts import LineRequest, SalesDiscountUseCases
+from app.application.sales_documents.pricing import (
+    Actor,
+    DraftLine,
+    PriceKey,
+    PricingRequest,
+    SalesDocumentPricing,
+    totals_of,
+)
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError, ValidationError
-from app.domain.entities.customer import Customer, CustomerType
-from app.domain.entities.product_fiscal import DteItemType, TaxTreatment
-from app.domain.entities.sales import normalize_quantity, quantity_in_base
-from app.domain.entities.sales_margin import DiscountPolicy, DiscountSource
+from app.domain.entities.customer import Customer
+from app.domain.entities.sales_margin import DiscountPolicy
 from app.domain.entities.sales_quotation import (
     QuotationStatus,
     QuoteCalculation,
-    QuoteLineInput,
-    calculate_quote,
     is_expired,
     issue_target,
     require_acceptable,
@@ -37,23 +40,18 @@ from app.domain.entities.sales_quotation import (
     require_cancellable,
     require_editable,
     require_pending_authorization,
-    require_price_override_allowed,
     require_rejection_reason,
     require_valid_until,
     require_validity_days,
 )
-from app.domain.entities.sales_tax import SalesDocumentKind, TaxParties
 from app.domain.ports.customer_repository import CustomerRepository
 from app.domain.ports.fiscal_repository import FiscalRepository
 from app.domain.ports.price_list_repository import PriceListRepository
-from app.domain.ports.product_fiscal_repository import ProductFiscalRepository
 from app.domain.ports.sales_quotation_repository import (
     LinkedSale,
     PeopleNames,
     Quotation,
     QuotationFilters,
-    QuotationLine,
-    QuotationTotals,
     SalesQuotationRepository,
 )
 
@@ -67,18 +65,6 @@ def _fingerprint(value: object) -> str:
 
 
 @dataclass(frozen=True, slots=True)
-class DraftLine:
-    product_id: int
-    variant_id: uuid.UUID | None
-    unit_id: int
-    quantity: Decimal
-    discount_percent: Decimal | None = None
-    """Si falta, se aplica el descuento sugerido (cliente o volumen)."""
-    manual_price: Decimal | None = None
-    """Precio escrito a mano, en la forma de la lista; exige ``sales_prices:override``."""
-
-
-@dataclass(frozen=True, slots=True)
 class Draft:
     branch_id: uuid.UUID
     customer_id: uuid.UUID
@@ -89,12 +75,6 @@ class Draft:
     """Si falta, la fecha más los días de vigencia de la empresa."""
     global_discount_percent: Decimal = Decimal("0")
     notes: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class Actor:
-    user_id: uuid.UUID
-    can_override_price: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,18 +117,16 @@ class SalesQuotationUseCases:
     def __init__(
         self,
         repository: SalesQuotationRepository,
-        discounts: SalesDiscountUseCases,
+        pricing: SalesDocumentPricing,
         prices: PriceListRepository,
         fiscal: FiscalRepository,
         customers: CustomerRepository,
-        products: ProductFiscalRepository,
     ) -> None:
         self._repo = repository
-        self._discounts = discounts
+        self._pricing = pricing
         self._prices = prices
         self._fiscal = fiscal
         self._customers = customers
-        self._products = products
 
     # --- consultas ---------------------------------------------------------------------------
 
@@ -222,75 +200,6 @@ class SalesQuotationUseCases:
 
     # --- cálculo -----------------------------------------------------------------------------
 
-    async def _customer(self, company_id: uuid.UUID, customer_id: uuid.UUID) -> Customer:
-        customer = await self._customers.get_customer(company_id, customer_id)
-        if customer is None:
-            raise NotFoundError("Cliente no encontrado.", code="sales_customer_not_found")
-        if not customer.is_active:
-            raise BusinessRuleError(
-                "El cliente está inactivo y no admite cotizaciones.",
-                code="sales_customer_inactive",
-            )
-        return customer
-
-    async def _document(
-        self, company_id: uuid.UUID, customer: Customer, requested: str | None
-    ) -> SalesDocumentKind:
-        enabled = {
-            s.document_type
-            for s in await self._fiscal.list_document_types(company_id)
-            if s.is_enabled
-        }
-        receivable = set(customer.receivable_documents)
-        if requested is None:
-            for candidate in (SalesDocumentKind.TAX_CREDIT, SalesDocumentKind.INVOICE):
-                if candidate.value in enabled and candidate.value in receivable:
-                    return candidate
-            raise BusinessRuleError(
-                "La empresa no tiene habilitada la factura ni el crédito fiscal. Habilítalos en "
-                "Configuración fiscal → Documentos.",
-                code="sales_tax_document_disabled",
-            )
-        if requested not in {k.value for k in SalesDocumentKind}:
-            raise ValidationError("El documento debe ser 01 o 03.", code="sales_quote_document")
-        if requested not in enabled:
-            raise BusinessRuleError(
-                "La empresa no tiene habilitado este tipo de documento.",
-                code="sales_tax_document_disabled",
-            )
-        if requested not in receivable:
-            missing = customer.tax_credit_missing
-            detail = f" Falta: {' '.join(missing)}" if missing else ""
-            raise BusinessRuleError(
-                f"A este cliente no se le puede emitir ese documento.{detail}",
-                code="sales_tax_document_not_receivable",
-            )
-        return SalesDocumentKind(requested)
-
-    async def _parties(self, company_id: uuid.UUID, customer: Customer) -> TaxParties:
-        profile = await self._fiscal.get_profile(company_id)
-        return TaxParties(
-            issuer_category=profile.taxpayer_category,
-            customer_is_taxpayer=customer.draft.customer_type == CustomerType.TAXPAYER,
-            customer_category=customer.draft.taxpayer_category,
-            customer_is_withholding_agent=customer.draft.is_withholding_agent,
-        )
-
-    async def _fiscal_class(
-        self, company_id: uuid.UUID, product_id: int, position: int
-    ) -> tuple[TaxTreatment, DteItemType]:
-        product = await self._products.get_product(company_id, product_id)
-        if product is None:
-            raise NotFoundError(
-                f"El producto de la línea {position} no existe.", code="product_not_found"
-            )
-        if not product.can_sell:
-            raise BusinessRuleError(
-                f"«{product.name}» no está marcado como vendible.",
-                code="sales_tax_product_not_sellable",
-            )
-        return product.tax_treatment, product.effective_item_type
-
     async def _build(
         self,
         company_id: uuid.UUID,
@@ -298,180 +207,62 @@ class SalesQuotationUseCases:
         draft: Draft,
         today: date,
         *,
-        kept_prices: dict[tuple[int, uuid.UUID | None, int], Decimal] | None = None,
-    ) -> tuple[Quotation, QuoteCalculation]:
-        if not draft.lines:
-            raise ValidationError(
-                "Agrega al menos un producto a la cotización.", code="sales_quote_lines_required"
-            )
-        if not await self._repo.branch_is_active(company_id, draft.branch_id):
-            raise BusinessRuleError(
-                "La sucursal no está activa para cotizar.", code="sales_branch_inactive"
-            )
-        customer = await self._customer(company_id, draft.customer_id)
-        document = await self._document(company_id, customer, draft.document_type)
-        parties = await self._parties(company_id, customer)
+        kept_prices: dict[PriceKey, Decimal] | None = None,
+    ) -> Quotation:
+        priced = await self._pricing.price(
+            company_id,
+            actor,
+            PricingRequest(
+                branch_id=draft.branch_id,
+                customer_id=draft.customer_id,
+                lines=draft.lines,
+                document_type=draft.document_type,
+                global_discount_percent=draft.global_discount_percent,
+            ),
+            today,
+            kept_prices=kept_prices,
+        )
         valid_until = draft.valid_until or today + timedelta(
             days=await self._repo.validity_days(company_id)
         )
         require_valid_until(today, valid_until)
-
-        quantities = []
-        for position, line in enumerate(draft.lines, start=1):
-            try:
-                quantities.append(normalize_quantity(line.quantity))
-            except ValueError as error:
-                raise ValidationError(
-                    f"Línea {position}: {error}", code="sales_quote_quantity_invalid"
-                ) from error
-        evaluation = await self._discounts.evaluate(
-            company_id,
-            actor.user_id,
-            customer_id=customer.id,
-            branch_id=draft.branch_id,
-            on=today,
-            lines=[
-                LineRequest(
-                    line.product_id, line.variant_id, line.unit_id, quantity, line.discount_percent
-                )
-                for line, quantity in zip(draft.lines, quantities, strict=True)
-            ],
-            global_discount_percent=draft.global_discount_percent,
-        )
-        price_list = next((e.price_list for e in evaluation.lines if e.price_list), None)
-        include_vat = (
-            price_list.prices_include_vat
-            if price_list is not None
-            else document is SalesDocumentKind.INVOICE
-        )
-
-        inputs: list[QuoteLineInput] = []
-        identities = []
-        for position, (line, quantity, evaluated) in enumerate(
-            zip(draft.lines, quantities, evaluation.lines, strict=True), start=1
-        ):
-            treatment, item_type = await self._fiscal_class(company_id, line.product_id, position)
-            suggested = evaluated.suggested
-            item = QuoteLineInput(
-                quantity=quantity,
-                list_price=evaluated.evaluation.list_price if evaluated.evaluation else None,
-                manual_price=line.manual_price,
-                discount_percent=(
-                    line.discount_percent
-                    if line.discount_percent is not None
-                    else (suggested.percent if suggested else Decimal("0"))
-                ),
-                tax_treatment=treatment,
-                item_type=item_type,
-                cost=evaluated.cost,
-                suggested_discount_percent=suggested.percent if suggested else Decimal("0"),
-                suggested_discount_source=suggested.source if suggested else DiscountSource.NONE,
-            )
-            kept = (kept_prices or {}).get((line.product_id, line.variant_id, line.unit_id))
-            require_price_override_allowed(
-                item, actor.can_override_price or kept == line.manual_price
-            )
-            inputs.append(item)
-            identities.append(
-                await self._repo.line_identity(
-                    company_id, line.product_id, line.variant_id, line.unit_id
-                )
-            )
-
-        calculation = calculate_quote(
-            document,
-            include_vat,
-            inputs,
-            parties,
-            draft.global_discount_percent,
-            evaluation.policy,
-        )
-        lines = []
-        for identity, item, result, evaluated in zip(
-            identities, inputs, calculation.lines, evaluation.lines, strict=True
-        ):
-            try:
-                quantity_base = quantity_in_base(item.quantity, identity.unit_factor)
-            except ValueError as error:
-                raise ValidationError(str(error), code="sales_quote_quantity_invalid") from error
-            lines.append(
-                QuotationLine(
-                    identity=identity,
-                    quantity=item.quantity,
-                    quantity_base=quantity_base,
-                    price_list_id=evaluated.price_list.id if evaluated.price_list else None,
-                    list_price=item.list_price,
-                    price_overridden=result.price_overridden,
-                    unit_price=result.unit_price,
-                    discount_percent=item.discount_percent,
-                    suggested_discount_percent=item.suggested_discount_percent,
-                    suggested_discount_source=item.suggested_discount_source.value,
-                    tax_treatment=item.tax_treatment.value,
-                    item_type=item.item_type.value,
-                    document_unit_price=result.document_unit_price,
-                    discount_amount=result.discount_amount,
-                    not_subject=result.not_subject,
-                    exempt=result.exempt,
-                    taxed=result.taxed,
-                    vat_item=result.vat_item,
-                    line_total=result.line_total,
-                    cost=item.cost,
-                    margin_percent=result.margin_percent,
-                    authorization_reasons=tuple(r.value for r in result.reasons),
-                )
-            )
-        quotation = Quotation(
+        return Quotation(
             id=uuid.uuid4(),
             company_id=company_id,
             branch_id=draft.branch_id,
-            customer_id=customer.id,
+            customer_id=priced.customer.id,
             code="",
             quotation_date=today,
             valid_until=valid_until,
-            document_type=document.value,
-            price_list_id=price_list.id if price_list else None,
-            prices_include_vat=include_vat,
+            document_type=priced.document.value,
+            price_list_id=priced.price_list_id,
+            prices_include_vat=priced.prices_include_vat,
             global_discount_percent=draft.global_discount_percent,
             status=QuotationStatus.DRAFT,
             version=1,
             notes=(draft.notes or "").strip() or None,
-            totals=_totals(calculation),
-            requires_authorization=calculation.requires_authorization,
-            authorization_reasons=tuple(r.value for r in calculation.reasons),
+            totals=priced.totals,
+            requires_authorization=priced.calculation.requires_authorization,
+            authorization_reasons=priced.reasons,
             created_by_id=actor.user_id,
-            lines=lines,
+            lines=priced.lines,
         )
-        return quotation, calculation
 
     async def preview(self, company_id: uuid.UUID, actor: Actor, draft: Draft) -> Quotation:
         """Calcula sin guardar, para ver precios, impuestos y avisos mientras se edita."""
 
-        quotation, _ = await self._build(company_id, actor, draft, today_in_el_salvador())
-        return quotation
+        return await self._build(company_id, actor, draft, today_in_el_salvador())
 
     async def _recalculate(self, quotation: Quotation, policy: DiscountPolicy) -> QuoteCalculation:
         """Vuelve a evaluar lo guardado con el tope de otro usuario, sin tocar los precios."""
 
-        customer = await self._customer(quotation.company_id, quotation.customer_id)
-        parties = await self._parties(quotation.company_id, customer)
-        inputs = [
-            QuoteLineInput(
-                quantity=line.quantity,
-                list_price=line.list_price,
-                manual_price=line.unit_price if line.price_overridden else None,
-                discount_percent=line.discount_percent,
-                tax_treatment=TaxTreatment(line.tax_treatment),
-                item_type=DteItemType(line.item_type),
-                cost=line.cost,
-            )
-            for line in quotation.lines
-        ]
-        return calculate_quote(
-            SalesDocumentKind(quotation.document_type),
+        return await self._pricing.reevaluate(
+            quotation.company_id,
+            quotation.customer_id,
+            quotation.document_type,
             quotation.prices_include_vat,
-            inputs,
-            parties,
             quotation.global_discount_percent,
+            quotation.lines,
             policy,
         )
 
@@ -496,7 +287,7 @@ class SalesQuotationUseCases:
                 )
             return Change(await self.get(company_id, remembered[1]), replayed=True)
         today = today_in_el_salvador()
-        quotation, _ = await self._build(company_id, actor, draft, today)
+        quotation = await self._build(company_id, actor, draft, today)
         quotation.code = f"COT-{today:%Y%m%d}-{quotation.id.hex[:8].upper()}"
         await self._repo.add(quotation)
         await self._repo.remember(
@@ -537,7 +328,7 @@ class SalesQuotationUseCases:
             if line.price_overridden
         }
         before = _copy(current)
-        rebuilt, _ = await self._build(
+        rebuilt = await self._build(
             company_id, actor, draft, today_in_el_salvador(), kept_prices=kept
         )
         rebuilt.id = current.id
@@ -565,12 +356,12 @@ class SalesQuotationUseCases:
                 code="sales_quote_expired",
             )
         before = _copy(current)
-        policy = await self._discounts.user_policy(company_id, actor_id)
+        policy = await self._pricing.policy(company_id, actor_id)
         calculation = await self._recalculate(current, policy)
         current.status = issue_target(current.status, calculation.requires_authorization)
         current.requires_authorization = calculation.requires_authorization
         current.authorization_reasons = tuple(r.value for r in calculation.reasons)
-        current.totals = _totals(calculation)
+        current.totals = totals_of(calculation)
         now = datetime.now(UTC)
         if current.status is QuotationStatus.ISSUED:
             current.issued_by_id, current.issued_at = actor_id, now
@@ -593,7 +384,7 @@ class SalesQuotationUseCases:
                 "La vigencia ya pasó. Devuélvela a borrador para actualizarla.",
                 code="sales_quote_expired",
             )
-        policy = await self._discounts.user_policy(company_id, actor_id)
+        policy = await self._pricing.policy(company_id, actor_id)
         require_authority(await self._recalculate(current, policy), policy)
         before = _copy(current)
         now = datetime.now(UTC)
@@ -639,7 +430,7 @@ class SalesQuotationUseCases:
     ) -> Change:
         current = await self._locked(company_id, quotation_id, expected_version)
         require_acceptable(current.status, current.valid_until, today_in_el_salvador())
-        await self._customer(company_id, current.customer_id)
+        await self._pricing.active_customer(company_id, current.customer_id)
         before = _copy(current)
         current.status = QuotationStatus.ACCEPTED
         current.customer_response_by_id = actor_id
@@ -696,23 +487,6 @@ class SalesQuotationUseCases:
         current.version += 1
         await self._repo.save(current, replace_lines=False)
         return Change(current, before)
-
-
-def _totals(calculation: QuoteCalculation) -> QuotationTotals:
-    summary = calculation.tax.summary
-    return QuotationTotals(
-        total_not_subject=summary.total_not_subject,
-        total_exempt=summary.total_exempt,
-        total_taxed=summary.total_taxed,
-        subtotal_sales=summary.subtotal_sales,
-        total_discount=summary.total_discount,
-        subtotal=summary.subtotal,
-        vat=summary.vat,
-        vat_perceived=summary.vat_perceived,
-        vat_withheld=summary.vat_withheld,
-        total=summary.total_to_pay,
-        total_in_words=summary.total_in_words,
-    )
 
 
 def _copy(quotation: Quotation) -> Quotation:

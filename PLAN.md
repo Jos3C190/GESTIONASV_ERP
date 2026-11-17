@@ -73,7 +73,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
   - Guarda: se niega si hay ventas, entregas o devoluciones.
   - Columnas nuevas de pedido y línea, estados y opcionales.
   - Prueba de migración.
-- [ ] **Paso 2: dominio y cálculo compartido.**
+- [x] **Paso 2: dominio y cálculo compartido.**
   - Extraer de la cotización el constructor común.
   - Transiciones del pedido.
   - Regla de reserva: disponible, reservado y suficiencia.
@@ -96,7 +96,12 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 2.
+- **Paso en curso**: 3. El puerto `domain/ports/sales_order_repository.py` ya está escrito.
+  - Paso 2:
+    - `application/sales_documents/pricing.py` (`SalesDocumentPricing`): cálculo común de cotización y pedido.
+    - `domain/ports/sales_document.py`: `LineIdentity`, `DocumentLine`, `DocumentTotals` y `SalesCatalog`. La cotización los usa por alias.
+    - `domain/entities/sales_order.py`, con sus pruebas unitarias en verde.
+    - Las e2e de cotización pasan, salvo la conversión B06, que se reemplaza en el paso 3.
   - Paso 1:
     - Migración `0125` y modelos.
     - La migración redefine los triggers `guard_sales_lines_draft` y `guard_sales_order_lines_draft` con `varchar(24)`, porque `pending_authorization` no cabía.
