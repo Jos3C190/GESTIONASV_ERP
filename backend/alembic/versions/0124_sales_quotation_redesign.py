@@ -101,7 +101,9 @@ def upgrade() -> None:
             ),
             ADD CONSTRAINT ck_sales_quotations_response CHECK (
                 (customer_response_at IS NULL) = (customer_response_by_id IS NULL)
-                AND (status IN ('accepted','rejected')) = (customer_response_at IS NOT NULL)
+                AND (status NOT IN ('accepted','rejected') OR customer_response_at IS NOT NULL)
+                AND (status NOT IN ('draft','pending_authorization','issued')
+                     OR customer_response_at IS NULL)
                 AND (status = 'rejected') = (rejection_reason IS NOT NULL)
             )
     """)
