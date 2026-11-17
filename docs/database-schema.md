@@ -1111,3 +1111,30 @@ Revision `0123` (revises `0122`).
 
 **Downgrade** refuses while any category margin, tier, policy, customer discount or list
 target margin exists. Covered by `backend/tests/integration/test_sales_margins_migration.py`.
+
+## 34. Redesigned sales quotation (0124)
+
+Revision `0124` (revises `0123`). The B06 quotation is reworked in place.
+
+- `sales_quotations`:
+  - `status` (varchar 24): `draft`, `pending_authorization`, `issued`, `accepted`, `rejected`,
+    `cancelled`;
+  - `confirmed_at`/`confirmed_by_id` renamed to `issued_at`/`issued_by_id`;
+  - new: `document_type` (`01`/`03`), `price_list_id`, `prices_include_vat`,
+    `global_discount_percent`, the tax-engine totals (`total_not_subject`, `total_exempt`,
+    `total_taxed`, `subtotal_sales`, `total_discount`, `vat`, `vat_perceived`, `vat_withheld`,
+    `total_in_words`), `requires_authorization`, `authorization_reasons`, `authorized_by_id`,
+    `authorized_at`, `authorization_note`, `customer_response_by_id`, `customer_response_at`,
+    `rejection_reason`;
+  - checks tie issue, authorization and customer response to the state (accepted/rejected ↔
+    response; rejected ↔ reason).
+- `sales_quotation_lines`: `unit_price` and `line_total` become numeric(19,8); new
+  `price_list_id`, `list_price`, `price_overridden`, `discount_percent`,
+  `suggested_discount_percent`, `suggested_discount_source`, `tax_treatment`, `item_type`,
+  `document_unit_price`, `discount_amount`, `not_subject`, `exempt`, `taxed`, `vat_item`, `cost`,
+  `margin_percent`, `authorization_reasons`. A line without list price must be manual.
+- `sales_settings`: per company `quotation_validity_days` (1–365, default 15).
+- Permissions `sales_discounts:authorize` and `sales_prices:override`, granted to `SUPER_ADMIN`.
+
+**Upgrade and downgrade** refuse while quotations exist (the downgrade also while settings exist).
+Covered by `backend/tests/integration/test_sales_quotation_redesign_migration.py`.

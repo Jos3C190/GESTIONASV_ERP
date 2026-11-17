@@ -1977,3 +1977,46 @@ Error codes (`422` unless noted): `sales_margin_target_invalid`, `sales_volume_q
 `customer_discount_invalid`, `price_list_unit_invalid`; not found (404):
 `price_list_category_not_found`, `sales_volume_not_found`, `sales_policy_role_not_found`,
 `sales_customer_not_found`.
+
+## Sales quotations (revision 0124, block V2d)
+
+The quotation replaces the B06 one. On every draft save the server resolves the list price of
+each line (customer list or the default one, branch and date), applies the suggested or typed
+discount, evaluates it against the user's limits and runs the tax engine. Prices, costs and
+totals are stored: a later change of list or cost does not alter the quotation.
+
+States: `draft` → `pending_authorization` (only if a line or the global discount exceeds the
+user's limit or a line falls below cost) → `issued` → `accepted` / `rejected`; `cancelled` from
+any open state. `expired` is not stored: an issued quotation whose `valid_until` passed comes
+with `expired: true` and cannot be accepted.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/quotations` | `sales_quotations:read` | Paged list in the user's branches. Filters: `branch_id`, `customer_id`, `status` (`draft`, `pending_authorization`, `issued` = in force, `expired`, `accepted`, `rejected`, `cancelled`), `from_date`, `to_date`. |
+| POST | `/sales/quotations/preview` | `sales_quotations:manage` | Same body as create; calculates without saving. |
+| POST | `/sales/quotations` | `sales_quotations:manage` | Header `Idempotency-Key`. Body: `branch_id`, `customer_id`, optional `document_type` (`01`/`03`; proposed from the customer), optional `valid_until` (today + company validity days), `global_discount_percent`, `notes`, `lines` (`product_id`, `variant_id`, `unit_id`, `quantity`, optional `discount_percent` — the suggested one when missing — and optional `manual_price`, which needs `sales_prices:override`). |
+| GET | `/sales/quotations/{id}` | `sales_quotations:read` | Detail. Lines carry list price, applied price, discounts, fiscal amounts and authorization reasons. `cost` and `margin_percent` come only for users with `sales_costs:read` or `sales_discounts:authorize`. |
+| PUT | `/sales/quotations/{id}` | `sales_quotations:manage` | Draft only; body of create plus `expected_version`. Recalculates everything. A user without `sales_prices:override` may keep, unchanged, manual prices already in the draft. |
+| GET | `/sales/quotations/{id}/pdf` | `sales_quotations:read` | Printable version (never shows cost or margin). |
+| POST | `/sales/quotations/{id}/issue` | `sales_quotations:confirm` | Re-evaluates with the issuer's limits: `issued` or `pending_authorization`. |
+| POST | `/sales/quotations/{id}/authorize` | `sales_discounts:authorize` | Optional `note`. The authorizer's own limits must cover every reason; below-cost lines need a role that may sell below cost. |
+| POST | `/sales/quotations/{id}/return` | `sales_discounts:authorize` | `reason` (≥ 3 characters): back to draft. |
+| POST | `/sales/quotations/{id}/accept` | `sales_quotations:confirm` | Issued and in force only. |
+| POST | `/sales/quotations/{id}/reject` | `sales_quotations:confirm` | `reason` (≥ 3 characters). Allowed after expiry. |
+| POST | `/sales/quotations/{id}/cancel` | `sales_quotations:confirm` | `reason` (≥ 3 characters). Not after conversion. |
+| POST | `/sales/quotations/{id}/convert` | `sales_quotations:convert` | Accepted only. Creates the B06 sale with each line's net amount (until V2e replaces it). |
+| GET | `/sales/settings/quotations` | `sales_quotations:read` or `fiscal_settings:read` | `quotation_validity_days`. |
+| PUT | `/sales/settings/quotations` | `fiscal_settings:manage` | `quotation_validity_days` (1–365). Audited as `SALES_SETTINGS_UPDATED`. |
+
+Every action is audited on `sales_quotation` (`SALES_QUOTATION_CREATED`, `_UPDATED`, `_ISSUED`,
+`_SUBMITTED_FOR_AUTHORIZATION`, `_AUTHORIZED`, `_RETURNED`, `_ACCEPTED`, `_REJECTED`,
+`_CANCELLED`) with, per line, list price, applied price, manual flag, discount, cost, margin and
+reasons.
+
+Error codes (`422` unless noted): `sales_quote_status_invalid`, `sales_quote_price_missing`,
+`sales_quote_price_override_forbidden`, `sales_quote_authority_insufficient`,
+`sales_quote_expired`, `sales_quote_validity_invalid`, `sales_quote_reason_required`,
+`sales_quote_converted`, `sales_quote_not_convertible`, `sales_quote_lines_required`,
+`sales_tax_document_disabled`, `sales_tax_document_not_receivable`, `sales_customer_inactive`,
+`sales_branch_inactive`; `sales_quote_version_conflict` and
+`sales_idempotency_payload_conflict` (409); `sales_quotation_not_found` (404).

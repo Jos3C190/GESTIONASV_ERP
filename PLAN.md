@@ -58,34 +58,76 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`:
 ## Pasos
 
 - [x] **Paso 0: plan.**
-- [ ] **Paso 1: migración `0124` y modelos.**
+- [x] **Paso 1: migración `0124` y modelos.**
   - Guarda: se niega si hay cotizaciones.
   - Columnas nuevas de cotización y línea, estados nuevos, `sales_settings` y permisos.
   - Prueba de migración.
-- [ ] **Paso 2: dominio.**
+- [x] **Paso 2: dominio.**
   - Transiciones de estado.
   - Cálculo de la cotización con el motor fiscal y la evaluación.
   - Regla del autorizador.
   - Pruebas unitarias.
-- [ ] **Paso 3: aplicación, repositorio y API.**
+- [x] **Paso 3: aplicación, repositorio y API.**
   - Borrador con recálculo.
   - Emitir, autorizar o devolver, aceptar, rechazar y cancelar.
   - Convertir a venta.
   - Vigencia por empresa.
   - PDF.
   - Pruebas e2e (permisos, autorizador con tope insuficiente, precio manual sin permiso, aislamiento).
-- [ ] **Paso 4: frontend.**
+- [x] **Paso 4: frontend.**
   - Editor: precio de lista automático, descuentos con sugeridos, totales fiscales en vivo y aviso de autorización.
   - Detalle: acciones por estado, margen para quien autoriza y PDF.
   - Lista con los estados nuevos.
   - Vigencia en Configuración fiscal.
   - vitest.
-- [ ] **Paso 5: semilla y documentación.** `docs/api.md`, `docs/database-schema.md` §34 y el manual de cotizaciones.
+- [x] **Paso 5: semilla y documentación.** `docs/api.md`, `docs/database-schema.md` §34 y el manual de cotizaciones.
 - [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador y PR a `develop` con auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: 1.
+- **Paso en curso**: 6, la verificación y la PR. Los pasos 1 a 5 están hechos, con un commit cada uno.
+  - Pruebas verdes:
+    - migración: `test_sales_quotation_redesign_migration.py`;
+    - e2e: `test_sales_quotations.py`, `test_sales_base.py`, `test_sales_deliveries.py`, `test_inventory_final_acceptance.py` y `test_sales_discounts.py`;
+    - unitarias de ventas y vitest.
+  - En `test_sales_base.py`, la carrera emitir-contra-editar acepta un 409 o un 422 para quien pierde.
+  - Paso 1 (migración y modelos):
+    - Migración `0124`; modelos en `sales.py` y `SalesSettingsModel` en `sales_pricing.py`; permisos en el catálogo.
+    - Ya está aplicada en la base de desarrollo.
+    - `status` pasa a varchar(24).
+  - Paso 2 (dominio): `domain/entities/sales_quotation.py`, con sus pruebas unitarias en verde. Se agregó `sales_tax.document_unit_price`.
+  - Paso 3 (backend): ruff y mypy en verde.
+    - Archivos:
+      - puerto `domain/ports/sales_quotation_repository.py`;
+      - repositorio `infrastructure/repositories/sales_quotation_repository.py`;
+      - `sales_line_identity.py`, que saca del servicio B06 la identidad de artículo y unidad;
+      - casos de uso en `application/sales_quotations/`;
+      - router `api/v1/routers/sales_quotations.py`, registrado antes de `sales` para que `/sales/settings` no choque con `/sales/{sale_id}`;
+      - esquemas `schemas/sales_quotation.py`;
+      - PDF `infrastructure/sales_quotation_pdf.py`.
+    - Se retiraron los endpoints y métodos viejos de cotización. `convert` exige Aceptada.
+    - `EvaluatedLine.cost` (V2c) devuelve el costo aunque no haya precio de lista.
+    - Pruebas:
+      - nueva: `tests/e2e/test_sales_quotations.py`;
+      - adaptadas con `tests/e2e/sales_quote_flow.py`: `test_sales_base.py`, `test_sales_deliveries.py` y `test_inventory_final_acceptance.py`.
+  - Paso 4 (frontend): svelte-check, eslint y vitest (50 pruebas) en verde.
+    - Archivos:
+      - tipos en `types/sales.ts` y API en `api/sales.ts`;
+      - `features/sales/quotation-labels.ts`;
+      - editor con cálculo en vivo (`/sales/quotations/preview`), detalle con acciones por estado y PDF, y lista con estados nuevos;
+      - pestaña «Cotizaciones» en Configuración fiscal (`QuotationSettingsPanel.svelte`).
+  - Paso 5 (documentación):
+    - `docs/api.md`, `docs/database-schema.md` §34, `docs/ers-v1/manual-cotizaciones.md` y `manual-ventas-base.md`.
+    - La semilla no necesita cambios: la vigencia por defecto es 15 y SUPER_ADMIN recibe los permisos en la migración.
+  - QA en el navegador (16/11), en la base de desarrollo:
+    - Recorrido completo: cotización COT-20261116-3F7C82B6 de borrador a emitida, aceptada y venta VTA-20261116-6C21B05C.
+    - Cálculo en vivo, crédito fiscal propuesto, descuento del cliente 3 %, PDF sin costos, lista por sucursal y pestaña de vigencia.
+    - Quedan esos dos documentos de prueba en desarrollo.
+- **Decisiones técnicas**:
+  - En una lista con IVA, el precio de un producto exento o no sujeto se toma sin IVA: no le aplica.
+  - Un precio manual mayor que el de lista no cuenta como descuento negativo: el descuento efectivo es 0.
+  - El descuento global % se reparte sobre los totales gravado, exento y no sujeto; cada parte se redondea al centavo.
+  - Se puede rechazar una cotización vencida, pero no aceptarla.
 - **Contexto**: el frontend usa SvelteKit 3 (imports `#lib/…` con extensión, `$app/env`).
 - **Comandos**:
   - Pruebas: `./scripts/run-tests.sh` con los objetivos `backend-unit`, `backend-integration`, `backend-e2e`, `frontend` y `lint`. La batería completa tarda unos 40 minutos.
