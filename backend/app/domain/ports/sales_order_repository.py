@@ -133,6 +133,10 @@ class SalesOrderRepository(Protocol):
 
     async def user_names(self, user_ids: set[uuid.UUID]) -> PeopleNames: ...
 
+    async def invoiced(self, company_id: uuid.UUID, order_id: uuid.UUID) -> bool:
+        """Si el pedido tiene un documento fiscal vigente (no fallido)."""
+        ...
+
     async def lock_key(self, company_id: uuid.UUID, action: str, key: str) -> None: ...
 
     async def remembered(

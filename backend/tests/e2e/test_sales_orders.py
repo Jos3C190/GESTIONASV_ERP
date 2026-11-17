@@ -14,7 +14,7 @@ from app.infrastructure.models.audit import AuditLog
 from app.infrastructure.models.inventory import InventoryHandlingUnitModel, InventoryItemModel
 from app.infrastructure.models.organization import Location, Warehouse
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from tests.e2e.sales_quote_flow import order_from_quote
 from tests.e2e.test_sales_deliveries import _seed_receipt
@@ -283,3 +283,45 @@ async def test_edited_order_is_reevaluated_and_scoped(e2e_client: AsyncClient) -
         "SALES_ORDER_SUBMITTED_FOR_AUTHORIZATION",
         "SALES_ORDER_AUTHORIZED",
     } <= actions
+
+
+async def _fiscal_document(company_id: uuid.UUID, order: dict, status: str) -> None:
+    """Simula el documento fiscal del pedido; el bloque V3b lo crea al facturar."""
+
+    async with async_session_factory() as session:
+        await session.execute(text("SET LOCAL session_replication_role = replica"))
+        await session.execute(
+            text(
+                "INSERT INTO sales_fiscal_documents (company_id, branch_id, sale_id, "
+                "establishment_id, point_of_sale_id, document_type, mode, status, "
+                "idempotency_key, total, issuer_snapshot, request_payload, created_by_id) "
+                "VALUES (:company, :branch, :sale, :establishment, :pos, '01', 'simulated', "
+                ":status, :key, 0, '{}', '{}', :user)"
+            ),
+            {
+                "company": company_id,
+                "branch": order["branch_id"],
+                "sale": order["id"],
+                "establishment": uuid.uuid4(),
+                "pos": uuid.uuid4(),
+                "status": status,
+                "key": uuid.uuid4().hex,
+                "user": uuid.uuid4(),
+            },
+        )
+        await session.commit()
+
+
+async def test_invoiced_order_cannot_be_cancelled(e2e_client: AsyncClient) -> None:
+    admin, body, _unit = await _setup(e2e_client)
+    await _stock(admin, body, "2")
+    company_id = uuid.UUID(admin["X-Company-ID"])
+    order = await _create(e2e_client, admin, _order_body(body, "1"))
+    order = (await _order_act(e2e_client, admin, order, "confirm")).json()
+
+    # Un intento fallido no cuenta como facturado.
+    await _fiscal_document(company_id, order, "failed")
+    await _fiscal_document(company_id, order, "pending")
+    blocked = await _order_act(e2e_client, admin, order, "cancel", reason="Cliente desistió")
+    assert blocked.status_code == 422, blocked.text
+    assert blocked.json()["code"] == "sales_order_invoiced"

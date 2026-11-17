@@ -69,7 +69,7 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 - [x] **Paso 0: plan.**
 - [x] **Paso 1: servicio, contrato v2 ampliado.** Condición y plazo, retención, percepción y descuento global en el resumen, con pruebas.
-- [ ] **Paso 2: migración `0126` y modelos.** `sales_fiscal_documents`, permisos y bloqueo de la cancelación de pedidos facturados.
+- [x] **Paso 2: migración `0126` y modelos.** `sales_fiscal_documents`, permisos y bloqueo de la cancelación de pedidos facturados.
 - [ ] **Paso 3: dominio.** Snapshot del emisor con su hash, receptor, líneas y resumen desde el pedido, conciliación de totales y estados. Pruebas unitarias.
 - [ ] **Paso 4: infraestructura.**
   - Cliente HTTP del servicio.
@@ -86,7 +86,8 @@ Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
 
 ## Estado actual
 
-- **Paso en curso**: 2 (migración y modelos).
+- **Paso en curso**: 3 (dominio).
+  - Paso 2: tabla `sales_fiscal_documents` (un documento vigente por pedido; los `failed` se pueden reintentar), permisos `sales_invoices:read` e `sales_invoices:issue` para SUPER_ADMIN, y `cancel` del pedido responde 422 `sales_order_invoiced` si hay un documento no fallido. Pruebas: `tests/integration/test_sales_fiscal_documents_migration.py` y `test_invoiced_order_cannot_be_cancelled`.
   - Paso 1:
     - `ajustes` en factura y CCF (v1 y v2): `condicionOperacion` (1, 2 o 3), `plazoDias` (obligatorio a crédito), `ivaRete`, `ivaPerci` (solo CCF) y `descuentoGlobalEnResumen`.
     - Se validan con 1 % desde $100 sin IVA y holgura de ±0.01.

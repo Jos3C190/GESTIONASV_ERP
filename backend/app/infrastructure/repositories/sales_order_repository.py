@@ -32,6 +32,7 @@ from app.infrastructure.models.sales import (
     SalesCustomerDeliveryAddressModel,
 )
 from app.infrastructure.models.sales_delivery import SalesDeliveryLineModel, SalesDeliveryModel
+from app.infrastructure.models.sales_fiscal import SalesFiscalDocumentModel
 from app.infrastructure.repositories.sales_quotation_repository import (
     TOTAL_FIELDS,
     SalesDocumentSupport,
@@ -265,6 +266,16 @@ class SqlAlchemySalesOrderRepository(SalesDocumentSupport):
         await self._session.flush()
         await self._session.refresh(row)
         order.updated_at = row.updated_at
+
+    async def invoiced(self, company_id: uuid.UUID, order_id: uuid.UUID) -> bool:
+        found = await self._session.scalar(
+            select(SalesFiscalDocumentModel.id).where(
+                SalesFiscalDocumentModel.company_id == company_id,
+                SalesFiscalDocumentModel.sale_id == order_id,
+                SalesFiscalDocumentModel.status != "failed",
+            )
+        )
+        return found is not None
 
     async def delivery_address(
         self, company_id: uuid.UUID, customer_id: uuid.UUID, address_id: uuid.UUID
