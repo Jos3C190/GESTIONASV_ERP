@@ -19,6 +19,7 @@ const { sanitizarProfundo } = require('../utils/sanitizarDte');
 const { fechaHoraSV } = require('../utils/fechaHoraSV');
 const { generarNumeroControl, parsearNumeroControl } = require('../utils/numeroControl');
 const firmadorClient = require('../services/firmadorClient');
+const issuerContext = require('../services/issuerContext');
 const { emitirSimulado, rechazoSimulado } = require('../services/simulatedEmissionProvider');
 const haciendaClient = require('../services/haciendaClient');
 const { AuthError } = require('../services/authService');
@@ -201,7 +202,7 @@ async function emitir(tipoDte, builderFn, req) {
   let dte, codigoGeneracion, numeroControl;
   let documentoFirmado = null;
   const identidadExistente = req.dteIdempotency?.codigoGeneracion;
-  const escenario = config.dteMode === 'simulated' ? req.dteSimulationScenario : null;
+  const escenario = issuerContext.simulado() ? req.dteSimulationScenario : null;
   if (escenario === 'validation-failed' && !identidadExistente) {
     // Escenario simulado (DEC-010): rechazo determinista previo a la identidad,
     // sin reservar correlativo; el backend lo deja en revisión manual.
@@ -232,7 +233,7 @@ async function emitir(tipoDte, builderFn, req) {
     }
     codigoGeneracion = row.codigo_generacion;
     const original = JSON.parse(row.payload_json);
-    if (config.dteMode === 'simulated') {
+    if (issuerContext.simulado()) {
       dte = original;
     } else {
       try {
@@ -249,7 +250,12 @@ async function emitir(tipoDte, builderFn, req) {
     try {
       // Con una contingencia activa el documento nace en modelo diferido
       // (Manual Funcional VIII) y no se intenta transmitirlo hasta el evento.
-      const ventana = config.dteMode === 'simulated' ? null : contingenciaService.ventanaActiva();
+      // La ventana es la del emisor y el establecimiento de la solicitud (V4a);
+      // un emisor simulado también la tiene si su operador la activó.
+      const ventana = contingenciaService.ventanaActiva({
+        nit: issuerContext.actual().nit,
+        establecimiento: contingenciaService.establecimientoDeSolicitud(req.body),
+      });
       const opcionesBuilder = ventana ? { contingencia: contingenciaService.camposContingencia(ventana) } : {};
       const preparado = db.transaction(() => {
         let construido;
@@ -286,8 +292,8 @@ async function emitir(tipoDte, builderFn, req) {
           construido.numeroControl,
           tipoDte,
           JSON.stringify(dteValidado),
-          config.dteMode.toUpperCase().replace('-', '_'),
-          config.dteMode === 'simulated' ? config.simulation.runId : null,
+          issuerContext.actual().modo.toUpperCase().replace('-', '_'),
+          issuerContext.simulado() ? config.simulation.runId : null,
           dteValidado.emisor?.nit ?? null,
         );
         asociarIdentidad(req.dteIdempotency?.clave, construido.codigoGeneracion);
@@ -300,7 +306,7 @@ async function emitir(tipoDte, builderFn, req) {
     }
   }
 
-  if (config.dteMode === 'simulated' && escenario === 'rejected') {
+  if (issuerContext.simulado() && escenario === 'rejected') {
     const simulacion = rechazoSimulado();
     db.prepare(
       `UPDATE dtes SET estado = 'RECHAZADO', observaciones = ?, actualizado_en = datetime('now') WHERE codigo_generacion = ?`
@@ -311,12 +317,32 @@ async function emitir(tipoDte, builderFn, req) {
     };
   }
 
-  if (config.dteMode === 'simulated') {
+  if (issuerContext.simulado()) {
     const { documentoFirmado: firmaSimulada, simulationMarker } = emitirSimulado(dte);
     db.prepare(
       `UPDATE dtes SET documento_firmado = ?, simulation_marker = ?, estado = 'SIMULADO',
        actualizado_en = datetime('now') WHERE codigo_generacion = ?`
     ).run(firmaSimulada, simulationMarker, codigoGeneracion);
+    const ventanaSimulada = dte.identificacion.tipoModelo === MODELO_FACTURACION.DIFERIDO
+      ? contingenciaService.ventanaActiva({
+        nit: issuerContext.actual().nit,
+        establecimiento: contingenciaService.establecimientoDeDte(dte),
+      })
+      : null;
+    if (ventanaSimulada) {
+      contingenciaService.registrarEmisionEnContingencia(codigoGeneracion, ventanaSimulada);
+      return {
+        status: 202,
+        body: {
+          codigoGeneracion,
+          numeroControl,
+          estado: 'CONTINGENCIA',
+          simulationMarker,
+          issuanceMode: 'SIMULATED',
+          mensaje: 'Documento simulado generado en contingencia; queda simulado al informar el evento.',
+        },
+      };
+    }
     return {
       status: 201,
       body: { codigoGeneracion, numeroControl, estado: 'SIMULADO', simulationMarker, issuanceMode: 'SIMULATED' },
@@ -353,7 +379,10 @@ async function emitir(tipoDte, builderFn, req) {
   }
 
   if (dte.identificacion.tipoModelo === MODELO_FACTURACION.DIFERIDO) {
-    const ventana = contingenciaService.ventanaActiva()
+    const ventana = contingenciaService.ventanaActiva({
+      nit: issuerContext.actual().nit,
+      establecimiento: contingenciaService.establecimientoDeDte(dte),
+    })
       || db.prepare(
         `SELECT c.* FROM contingencia_documentos d JOIN contingencias c ON c.id = d.contingencia_id WHERE d.codigo_generacion = ?`
       ).get(codigoGeneracion);
@@ -462,14 +491,29 @@ router.get('/:codigoGeneracion/documento-firmado', requireDteScope('read'), (req
  * El backend archiva los bytes devueltos y nunca usa el logo vigente para
  * regenerar documentos ya entregados.
  */
+/**
+ * Sello que lleva la versión legible. En contingencia (V4a del ERP) el cliente
+ * recibe el documento antes del sello (Manual Funcional VIII): se indica que está
+ * pendiente y el PDF muestra el tipo y el motivo de la contingencia.
+ */
+const ESTADOS_EN_CONTINGENCIA = ['CONTINGENCIA', 'CONTINGENCIA_REPORTADA'];
+const SELLO_PENDIENTE = 'Pendiente: documento generado en contingencia';
+
+function datosRepresentacion(row) {
+  const simulation = row.estado === 'SIMULADO' || row.modo_emision === 'SIMULATED';
+  if (ESTADOS_EN_CONTINGENCIA.includes(row.estado)) return { simulation, sello: SELLO_PENDIENTE };
+  if (!['TRANSMITIDO', 'SIMULADO'].includes(row.estado)) return null;
+  return { simulation, sello: row.estado === 'SIMULADO' ? row.simulation_marker : row.sello_recepcion };
+}
+
 router.post('/:codigoGeneracion/pdf/render', requireDteScope('read'), async (req, res) => {
   const row = db.prepare('SELECT * FROM dtes WHERE codigo_generacion = ?').get(req.params.codigoGeneracion);
   if (!row) return res.status(404).json({ error: 'DTE no encontrado' });
-  if (!['TRANSMITIDO', 'SIMULADO'].includes(row.estado)) {
+  const representacion = datosRepresentacion(row);
+  if (!representacion) {
     return res.status(409).json({ error: `El PDF no está disponible en estado ${row.estado}` });
   }
-  const simulation = row.estado === 'SIMULADO';
-  const sello = simulation ? row.simulation_marker : row.sello_recepcion;
+  const { simulation, sello } = representacion;
   if (typeof sello !== 'string' || !sello.trim()) return res.status(409).json({ error: 'Falta sello o marcador simulado' });
   const { logoPngBuffer, error: errorLogo } = leerLogoPdf(req.body);
   if (errorLogo) return res.status(422).json({ error: errorLogo });
@@ -496,11 +540,11 @@ router.post('/:codigoGeneracion/pdf/render', requireDteScope('read'), async (req
 router.get('/:codigoGeneracion/pdf', requireDteScope('read'), async (req, res) => {
   const row = db.prepare('SELECT * FROM dtes WHERE codigo_generacion = ?').get(req.params.codigoGeneracion);
   if (!row) return res.status(404).json({ error: 'DTE no encontrado' });
-  if (!['TRANSMITIDO', 'SIMULADO'].includes(row.estado)) {
+  const representacion = datosRepresentacion(row);
+  if (!representacion) {
     return res.status(409).json({ error: `El PDF no está disponible en estado ${row.estado}` });
   }
-  const simulation = row.estado === 'SIMULADO';
-  const selloOMarcador = simulation ? row.simulation_marker : row.sello_recepcion;
+  const { simulation, sello: selloOMarcador } = representacion;
   if (typeof selloOMarcador !== 'string' || !selloOMarcador.trim()) {
     return res.status(409).json({ error: 'El DTE está transmitido pero aún no tiene sello de recepción; el PDF final no está disponible' });
   }
@@ -541,7 +585,7 @@ function responderConsultaSimulada(res) {
  * arreglos de la respuesta.
  */
 router.get('/lote/:codigoLote', requireDteScope('read'), async (req, res) => {
-  if (config.dteMode === 'simulated') return responderConsultaSimulada(res);
+  if (issuerContext.simulado()) return responderConsultaSimulada(res);
   try {
     const respuesta = await haciendaClient.consultarLoteDte(req.params.codigoLote);
     res.json(respuesta);
@@ -583,7 +627,7 @@ router.post(
   '/:codigoGeneracion/anular',
   requireDteScope('invalidate'),
   conIdempotencia(async (req) => {
-    if (config.dteMode === 'simulated') {
+    if (issuerContext.simulado()) {
       return { status: 409, body: { error: 'Los documentos simulados no se invalidan ante Hacienda' } };
     }
     const row = db.prepare('SELECT * FROM dtes WHERE codigo_generacion = ?').get(req.params.codigoGeneracion);
@@ -688,7 +732,7 @@ router.post('/:codigoGeneracion/reconciliar', requireDteScope('issue'), (req, re
 
 /** Consulta el estado directamente contra Hacienda (fuente de verdad). */
 router.get('/:codigoGeneracion/hacienda', requireDteScope('read'), async (req, res) => {
-  if (config.dteMode === 'simulated') return responderConsultaSimulada(res);
+  if (issuerContext.simulado()) return responderConsultaSimulada(res);
   const row = db.prepare('SELECT tipo_dte FROM dtes WHERE codigo_generacion = ?').get(req.params.codigoGeneracion);
   if (!row) return res.status(404).json({ error: 'DTE no encontrado localmente' });
 
@@ -696,7 +740,7 @@ router.get('/:codigoGeneracion/hacienda', requireDteScope('read'), async (req, r
     // NOTA: el servicio de consulta de Hacienda es POST, no GET
     // (confirmado en Manual Tecnológico v2.0, sección 4.3.1).
     const { httpStatus, data } = await haciendaClient.consultarDte({
-      nitEmisor: config.emisor.nit,
+      nitEmisor: issuerContext.actual().nit,
       tdte: row.tipo_dte,
       codigoGeneracion: req.params.codigoGeneracion,
     });

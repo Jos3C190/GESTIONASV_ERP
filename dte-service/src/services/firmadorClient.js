@@ -1,5 +1,6 @@
 const axios = require('axios');
 const config = require('../config');
+const issuerContext = require('./issuerContext');
 const logger = require('../utils/logger');
 
 const MAX_SIGNED_DOCUMENT_BYTES = 16 * 1024 * 1024;
@@ -62,14 +63,20 @@ function validarRespuestaFirmador(data) {
  * firma con RS512 usando el certificado {nit}.crt del contenedor.
  */
 async function firmarDocumento(dteJson) {
+  // Cada emisor firma con su certificado {nit}.crt y su contraseña privada (V3d).
+  const contexto = issuerContext.actual();
+  const credenciales = contexto.credenciales();
+  if (!contexto.nit || !credenciales?.passwordPri) {
+    throw new FirmadorError('El emisor no tiene credenciales de firma configuradas', { configuracion: true });
+  }
   let response;
   try {
     response = await axios.post(
       config.firmador.url,
       {
-        nit: config.emisor.nit,
+        nit: contexto.nit,
         activo: true,
-        passwordPri: config.emisor.passwordPri,
+        passwordPri: credenciales.passwordPri,
         dteJson,
       },
       {

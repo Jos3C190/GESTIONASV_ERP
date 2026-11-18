@@ -2,7 +2,6 @@ const express = require('express');
 const config = require('../config');
 const contingenciaService = require('../services/contingenciaService');
 const { requireDteScope } = require('../middleware/apiKeyAuth');
-const { TIPO_DOCUMENTO_IDENTIFICACION } = require('../config/catalogs');
 
 /**
  * Operación en contingencia (Manual Funcional VIII). Todas las acciones
@@ -27,19 +26,7 @@ function manejar(accion) {
   };
 }
 
-function responsableDeSolicitud(body) {
-  const responsable = body?.responsable;
-  if (!responsable) return undefined;
-  const tipoDocumento = String(responsable.tipoDocumento ?? '').trim();
-  if (!Object.values(TIPO_DOCUMENTO_IDENTIFICACION).includes(tipoDocumento)) {
-    throw new contingenciaService.ContingenciaError('Tipo de documento del responsable fuera de CAT-022', 'INVALID_CONTINGENCY_REQUEST', 400);
-  }
-  return {
-    nombre: String(responsable.nombre ?? '').trim(),
-    tipoDocumento,
-    numeroDocumento: String(responsable.numeroDocumento ?? '').trim(),
-  };
-}
+const { responsableDeSolicitud } = contingenciaService;
 
 function idDeVentana(req) {
   const id = Number.parseInt(req.params.id, 10);

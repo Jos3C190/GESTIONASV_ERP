@@ -43,6 +43,7 @@ jobs:
               "GRAFANA_ADMIN_PASSWORD=CHANGE_ME_GENERATE_LOCAL_GRAFANA_PASSWORD": f"GRAFANA_ADMIN_PASSWORD={secrets.token_hex(32)}",
               "JWT_SECRET_KEY=CHANGE_ME_USE_openssl_rand_hex_64": f"JWT_SECRET_KEY={secrets.token_hex(64)}",
               "DTE_SERVICE_API_KEY=CHANGE_ME_GENERATE_DTE_SERVICE_API_KEY": f"DTE_SERVICE_API_KEY={secrets.token_hex(32)}",
+              "DTE_CREDENTIALS_KEY=CHANGE_ME_GENERATE_DTE_CREDENTIALS_KEY": "DTE_CREDENTIALS_KEY=" + base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("="),
           }
           for source, target in replacements.items():
               text = text.replace(source, target)

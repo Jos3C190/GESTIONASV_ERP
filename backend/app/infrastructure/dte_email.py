@@ -130,6 +130,8 @@ async def queue_auto_email(scope: SessionScope, document: FiscalDocument) -> uui
     if document.status not in (
         FiscalDocumentStatus.ISSUED,
         FiscalDocumentStatus.SIMULATED,
+        # En contingencia el cliente recibe la versión legible sin esperar el sello.
+        FiscalDocumentStatus.CONTINGENCY,
     ):
         return None
     recipients = customer_recipients(document.customer_email)
@@ -190,7 +192,9 @@ async def _message(
             issued_at=document.issued_at or datetime.now(UTC),
             total=document.total,
             customer_name=document.customer_name or "cliente",
-            simulated=document.status is FiscalDocumentStatus.SIMULATED,
+            simulated=document.status is FiscalDocumentStatus.SIMULATED
+            or document.mode == "simulated",
+            contingency=document.status is FiscalDocumentStatus.CONTINGENCY,
             reply_to=str(reply_to) if reply_to else None,
             privacy_notice=PrivacyNoticeText(notice.title, notice.body) if notice else None,
         )

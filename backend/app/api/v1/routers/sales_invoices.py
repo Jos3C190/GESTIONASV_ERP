@@ -54,7 +54,7 @@ Storage = Annotated[ObjectStorage, Depends(get_object_storage)]
 CompanyId = Annotated[uuid.UUID, Depends(request_company_id)]
 _READ = [Depends(require_permission("sales_invoices:read"))]
 _ISSUE = [Depends(require_permission("sales_invoices:issue"))]
-_STATUS_PATTERN = "^(pending|issued|simulated|rejected|failed)$"
+_STATUS_PATTERN = "^(pending|contingency|issued|simulated|rejected|failed)$"
 _SERVICE_MISSING = "La facturación electrónica no está configurada en este servidor."
 
 
@@ -82,6 +82,9 @@ def document_out(document: FiscalDocument) -> FiscalDocumentOut:
         has_json=document.dte_json is not None,
         has_pdf=document.pdf_object_key is not None,
         issued_at=document.issued_at,
+        contingency_type=document.contingency_type,
+        contingency_reason=document.contingency_reason,
+        contingency_at=document.contingency_at,
         created_at=document.created_at,
         updated_at=document.updated_at,
     )

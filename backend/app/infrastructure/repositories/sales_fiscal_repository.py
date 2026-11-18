@@ -43,6 +43,9 @@ _FIELDS = (
     "error_code",
     "error_message",
     "issued_at",
+    "contingency_type",
+    "contingency_reason",
+    "contingency_at",
 )
 #: Lo que cambia después de crear el documento.
 _MUTABLE = (
@@ -57,6 +60,9 @@ _MUTABLE = (
     "error_code",
     "error_message",
     "issued_at",
+    "contingency_type",
+    "contingency_reason",
+    "contingency_at",
 )
 
 
@@ -221,6 +227,33 @@ class SqlAlchemySalesFiscalRepository:
         model.attempts += 1
         await self._session.flush()
         return await self.get(model.company_id, model.id)
+
+    async def lock_contingency(self, document_id: uuid.UUID) -> FiscalDocument | None:
+        model = await self._session.scalar(
+            select(SalesFiscalDocumentModel)
+            .where(
+                SalesFiscalDocumentModel.id == document_id,
+                SalesFiscalDocumentModel.status == FiscalDocumentStatus.CONTINGENCY.value,
+            )
+            .with_for_update(skip_locked=True)
+        )
+        if model is None:
+            return None
+        return await self.get(model.company_id, model.id)
+
+    async def contingency_ids(self, updated_before: datetime, limit: int) -> list[uuid.UUID]:
+        """Documentos en contingencia que no se revisan desde ``updated_before``."""
+
+        rows = await self._session.scalars(
+            select(SalesFiscalDocumentModel.id)
+            .where(
+                SalesFiscalDocumentModel.status == FiscalDocumentStatus.CONTINGENCY.value,
+                SalesFiscalDocumentModel.updated_at < updated_before,
+            )
+            .order_by(SalesFiscalDocumentModel.updated_at)
+            .limit(limit)
+        )
+        return list(rows)
 
     async def pending_ids(self, updated_before: datetime, limit: int) -> list[uuid.UUID]:
         rows = await self._session.scalars(

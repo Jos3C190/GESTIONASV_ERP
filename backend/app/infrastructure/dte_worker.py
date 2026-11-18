@@ -30,15 +30,19 @@ from arq.worker import Retry
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit.audit_service import AuditService
+from app.application.fiscal.hacienda_credentials import decrypt_credentials
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
+from app.domain.entities.fiscal_contingency import ContingencyResponsible
 from app.domain.entities.sales_fiscal_document import (
     INVOICEABLE_DOCUMENTS,
     FiscalDocumentStatus,
+    FiscalMode,
+    contingency_details,
     dte_differences,
     service_status,
 )
-from app.domain.ports.dte_service import DteService, DteServiceError
+from app.domain.ports.dte_service import DteService, DteServiceError, IssuerCredentials
 from app.domain.ports.email_sender import EmailDeliveryError
 from app.domain.ports.object_storage import ObjectStorage
 from app.domain.ports.sales_fiscal_repository import FiscalDocument
@@ -47,7 +51,13 @@ from app.infrastructure.dte_email import email_sender, process_fiscal_email, que
 from app.infrastructure.dte_service_client import HttpDteServiceClient
 from app.infrastructure.object_storage import S3ObjectStorage
 from app.infrastructure.repositories.audit_repository import SqlAlchemyAuditRepository
+from app.infrastructure.repositories.contingency_responsible_repository import (
+    SqlAlchemyContingencyResponsibleRepository,
+)
 from app.infrastructure.repositories.fiscal_repository import SqlAlchemyFiscalRepository
+from app.infrastructure.repositories.hacienda_credentials_repository import (
+    SqlAlchemyHaciendaCredentialsRepository,
+)
 from app.infrastructure.repositories.sales_fiscal_email_repository import (
     SqlAlchemySalesFiscalEmailRepository,
 )
@@ -93,6 +103,7 @@ async def _audit(session: AsyncSession, document: FiscalDocument, action: str) -
             "generation_code": str(document.generation_code) if document.generation_code else None,
             "attempts": document.attempts,
             "error_code": document.error_code,
+            "contingency_type": document.contingency_type,
         },
         metadata={"actor": "dte-worker"},
     )
@@ -116,6 +127,30 @@ async def _enabled_types(scope: SessionScope, company_id: uuid.UUID) -> list[str
         for item in settings_list
         if item.is_enabled and item.document_type in INVOICEABLE_DOCUMENTS
     )
+
+
+async def _credentials(scope: SessionScope, document: FiscalDocument) -> IssuerCredentials | None:
+    """Fuera de simulado, el emisor se registra con sus credenciales de Hacienda (V3d)."""
+
+    if document.mode == FiscalMode.SIMULATED.value:
+        return None
+    async with scope() as session:
+        stored = await SqlAlchemyHaciendaCredentialsRepository(session).get(document.company_id)
+    if stored is None:
+        raise DteServiceError(
+            "La empresa no tiene credenciales de Hacienda para emitir en "
+            f"{document.mode}. Cárgalas en Configuración fiscal → Hacienda.",
+            code="hacienda_credentials_missing",
+            transient=False,
+        )
+    return decrypt_credentials(stored)
+
+
+async def _responsible(scope: SessionScope, company_id: uuid.UUID) -> ContingencyResponsible | None:
+    """Responsable del Evento de Contingencia, para que el servicio lo informe solo (V4a)."""
+
+    async with scope() as session:
+        return await SqlAlchemyContingencyResponsibleRepository(session).get(company_id)
 
 
 async def _store(
@@ -152,7 +187,7 @@ async def _totals(scope: SessionScope, document: FiscalDocument) -> Any:
 def _final_status(estado: str) -> FiscalDocumentStatus:
     status = service_status(estado)
     if status is None:
-        # Firmado sin transmitir o en contingencia: el servicio lo termina después.
+        # Firmado sin transmitir o en reintento: el servicio lo termina después.
         raise DteServiceError(
             f"El servicio dejó el documento en {estado}.", code="dte_not_final", transient=True
         )
@@ -194,6 +229,8 @@ async def process_fiscal_document(
             name=str(document.issuer_snapshot["legalName"]),
             mode=document.mode,
             document_types=await _enabled_types(scope, document.company_id),
+            credentials=await _credentials(scope, document),
+            responsible=await _responsible(scope, document.company_id),
         )
         result = await client.issue(
             document.document_type,
@@ -221,17 +258,27 @@ async def process_fiscal_document(
             storage, document, dte_json, pdf
         )
         document.dte_json = dte_json
-        document.seal = result.seal
         document.status = status
         document.issued_at = datetime.now(UTC)
         document.error_code = None
         document.error_message = None
+        action = "FISCAL_DOCUMENT_ISSUED"
+        if status is FiscalDocumentStatus.CONTINGENCY:
+            # Generado sin comunicación con Hacienda: el cliente ya puede recibirlo y el
+            # seguimiento (follow_contingency_document) guarda el sello cuando llegue (V4a).
+            details = contingency_details(dte_json)
+            document.contingency_type, document.contingency_reason = details or (5, None)
+            document.contingency_at = document.issued_at
+            document.seal = None
+            action = "FISCAL_DOCUMENT_CONTINGENCY"
+        else:
+            document.seal = result.seal
         totals = await _totals(scope, document)
         differences = dte_differences(dte_json, totals) if totals is not None else []
         if differences:
             document.error_code = "dte_totals_mismatch"
             document.error_message = "; ".join(differences)[:_MAX_ERROR]
-        saved = await _save(scope, document, "FISCAL_DOCUMENT_ISSUED")
+        saved = await _save(scope, document, action)
     except DteServiceError as error:
         document.error_code = error.code[:80]
         document.error_message = error.message[:_MAX_ERROR]
@@ -244,6 +291,58 @@ async def process_fiscal_document(
     if email_id is not None and on_email is not None:
         await on_email(email_id)
     return saved
+
+
+async def follow_contingency_document(
+    document_id: uuid.UUID,
+    *,
+    client: DteService,
+    storage: ObjectStorage | None,
+    scope: SessionScope = session_scope,
+) -> FiscalDocument | None:
+    """Consulta un documento en contingencia y guarda su sello o su rechazo (V4a).
+
+    No vuelve a emitir: el servicio informa el evento y transmite el documento por su cuenta.
+    Mientras siga en contingencia solo se marca como revisado. Devuelve ``None`` si no le tocaba.
+    """
+
+    async with scope() as session:
+        document = await SqlAlchemySalesFiscalRepository(session).lock_contingency(document_id)
+    if document is None or document.generation_code is None:
+        return None
+    nit = str(document.issuer_snapshot["nit"])
+    code = str(document.generation_code).upper()
+    try:
+        state = await client.document_state(nit, code)
+        status = service_status(state.status)
+        if status is FiscalDocumentStatus.REJECTED:
+            document.status = status
+            document.error_code = "dte_rejected"
+            document.error_message = (
+                "Hacienda rechazó el documento al transmitirlo después de la contingencia."
+            )
+            return await _save(scope, document, "FISCAL_DOCUMENT_REJECTED")
+        sealed = status is FiscalDocumentStatus.SIMULATED or (
+            status is FiscalDocumentStatus.ISSUED and state.seal is not None
+        )
+        if not sealed:
+            return await _save(scope, document)
+        dte_json = await client.document_json(nit, code)
+        pdf = await client.document_pdf(nit, code)
+        document.json_object_key, document.pdf_object_key = await _store(
+            storage, document, dte_json, pdf
+        )
+    except DteServiceError as error:
+        document.error_code = error.code[:80]
+        document.error_message = error.message[:_MAX_ERROR]
+        return await _save(scope, document)
+    document.dte_json = dte_json
+    issued = status is FiscalDocumentStatus.ISSUED
+    document.seal = state.seal if issued else None
+    document.status = FiscalDocumentStatus.ISSUED if issued else FiscalDocumentStatus.SIMULATED
+    document.error_code = None
+    document.error_message = None
+    return await _save(scope, document, "FISCAL_DOCUMENT_ISSUED")
 
 
 # --- arq ----------------------------------------------------------------------------------------
@@ -268,21 +367,38 @@ async def issue_fiscal_document(ctx: dict[str, Any], document_id_text: str) -> N
         raise Retry(defer=min(15 * (2 ** (attempt - 1)), 300)) from error
 
 
+async def follow_fiscal_contingency(ctx: dict[str, Any], document_id_text: str) -> None:
+    await follow_contingency_document(
+        uuid.UUID(document_id_text), client=ctx["dte"], storage=ctx["storage"]
+    )
+
+
 async def reconcile_fiscal_documents(ctx: dict[str, Any]) -> None:
     stale_before = datetime.now(UTC) - timedelta(minutes=settings.DTE_STALE_MINUTES)
     async with session_scope() as session:
-        pending = await SqlAlchemySalesFiscalRepository(session).pending_ids(stale_before, 20)
+        documents = SqlAlchemySalesFiscalRepository(session)
+        pending = await documents.pending_ids(stale_before, 20)
+        contingency = await documents.contingency_ids(stale_before, 20)
         emails = await SqlAlchemySalesFiscalEmailRepository(session).pending_ids(stale_before, 20)
     for document_id in pending:
         await ctx["redis"].enqueue_job(
             "issue_fiscal_document", str(document_id), _job_id=f"dte:{document_id}"
         )
+    for document_id in contingency:
+        await ctx["redis"].enqueue_job(
+            "follow_fiscal_contingency", str(document_id), _job_id=f"dte-follow:{document_id}"
+        )
     for email_id in emails:
         await ctx["redis"].enqueue_job(
             "send_fiscal_email", str(email_id), _job_id=f"dte-email:{email_id}"
         )
-    if pending or emails:
-        log.info("dte_reconciled", pending_enqueued=len(pending), emails_enqueued=len(emails))
+    if pending or contingency or emails:
+        log.info(
+            "dte_reconciled",
+            pending_enqueued=len(pending),
+            contingency_followed=len(contingency),
+            emails_enqueued=len(emails),
+        )
 
 
 async def send_fiscal_email(ctx: dict[str, Any], email_id_text: str) -> None:
@@ -311,7 +427,11 @@ _reconcile_seconds = set(range(0, 60, settings.DTE_RECONCILE_SECONDS))
 
 
 class WorkerSettings:
-    functions: ClassVar[list[Any]] = [issue_fiscal_document, send_fiscal_email]
+    functions: ClassVar[list[Any]] = [
+        issue_fiscal_document,
+        follow_fiscal_contingency,
+        send_fiscal_email,
+    ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(reconcile_fiscal_documents, second=_reconcile_seconds, run_at_startup=True)
     ]

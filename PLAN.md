@@ -1,146 +1,219 @@
-# Plan: Ventas V3c — Enviar el DTE al cliente por correo
+# Plan: Ventas V4 — Robustez del DTE
 
-Rama: `feature/ventas-v3c-correo`, desde `develop` con V3b (#49).
+Fuente: `docs/plan-area-ventas-el-salvador.pdf`, bloque V4 («Contingencia por empresa y establecimiento,
+invalidación, nota de crédito, nota de débito, nota de remisión emitida al despachar traslados, evento de
+retorno, plantillas faltantes y certificación ante Hacienda»). El generador `docs/plan_area_ventas_pdf.py`
+tiene el texto completo.
 
-Fuente: `docs/plan-area-ventas-el-salvador.pdf`.
-- Módulo 5 (DTE): «Envío al cliente del JSON y el PDF por correo, y descarga desde el sistema».
-- Protección de datos: el aviso de privacidad de la empresa va en el correo del documento (art. 24).
+Resultado verificable: los cinco desvíos de la Figura 1 se prueban de extremo a extremo y la herramienta de
+certificación está lista. Los cinco desvíos son: rechazado (corregir y reenviar), sin respuesta (consultar y
+reintentar), sin conexión (contingencia), error posterior (invalidación) y ajuste posterior (nota de crédito
+o de débito).
 
-## Decisiones del usuario
+Documentación oficial: `D:\josec\Downloads\Documentacion DTE\` (Manual Técnico y Funcional v2, schemas y
+catálogos). El proyecto de referencia es de solo lectura.
 
-- 17/11/2026 (V3c):
-  - **SMTP**: uno por despliegue, en variables de entorno. Cada correo sale con el nombre de la empresa como remitente y con `Reply-To` al correo DTE de esa empresa. En desarrollo se usa Mailpit, un buzón de prueba en compose.
-  - **Cuándo**: automático al emitirse, si el cliente tiene correo. Además hay un botón «Enviar por correo» para reenviar o mandar a otras direcciones. Cada envío queda registrado.
-  - **Simulados**: sí se envían, con «SIMULADO — sin validez fiscal» en el asunto y en el cuerpo.
-  - **Cambio, SMTP por empresa** (tras la QA): cada empresa configura su propio SMTP y su correo remitente en Configuración fiscal. El dominio y el DNS (SPF, DKIM, DMARC) son responsabilidad de la empresa.
-    - Se autentica con usuario y contraseña (de aplicación en Google), sobre STARTTLS o SSL. OAuth de Microsoft queda como mejora posterior.
-    - Decisión por defecto, tomada por Claude: si la empresa no configuró su SMTP, se usa el del servidor (en desarrollo, Mailpit; en producción viene vacío).
-- Decisiones anteriores que siguen vigentes (V3b):
-  - Producción con la facturación apagada hasta V3d.
-  - Merge delegado cuando pasen los checks propios.
+## Decisiones del usuario (17/11/2026)
 
-## Hechos verificados
+- **Corte**: cinco PR hacia `develop`, en este orden:
+  - **V4a** contingencia por empresa y establecimiento, más «sin respuesta: consultar y reintentar».
+  - **V4b** invalidación, más «rechazado: corregir y reenviar». Con V4b, un pedido facturado ya se puede
+    cancelar invalidando su documento.
+  - **V4c** notas de crédito (05) y de débito (06) sobre un CCF sellado.
+  - **V4d** nota de remisión (04) al despachar traslados, y evento de retorno.
+  - **V4e** herramienta del lote de certificación.
+- **Notas de crédito y débito (V4c)**: solo ajustan el documento.
+  - Se emiten sobre un CCF sellado, con líneas tomadas de él, sin pasar de su saldo y dentro del plazo legal.
+  - No mueven inventario ni reintegran dinero: eso se conecta en V8 (devoluciones con efecto fiscal).
+- **Nota de remisión (V4d)**: configurable por empresa.
+  - Si la empresa habilita el tipo 04 en sus documentos, se emite sola al despachar un traslado.
+  - Si no lo habilita, el despacho sigue como hoy.
+- **Certificación (V4e)**: se construye ahora la herramienta que arma y transmite el lote por tipo de
+  documento y muestra su avance. Se prueba contra el stub; el lote real se corre cuando haya credenciales.
+- Siguen vigentes:
+  - merge delegado con los checks propios en verde, con Auto-fix y auto-merge (merge) en cada PR;
+  - commits y PR sin atribución;
+  - ignorar el check de Vercel;
+  - el `.env` no se lee ni se toca sin un «sí» explícito del usuario.
 
-- El ERP no tiene envío de correo: no hay SMTP, ni librería, ni configuración.
-- El documento fiscal (V3b) guarda `dte_json` en la base y el PDF en el almacenamiento (`pdf_object_key`). El almacenamiento tiene `download_to`.
-- El cliente tiene `email` en su ficha (`CustomerDraft.email`).
-- Hay un aviso de privacidad versionado por empresa (`PrivacyUseCases.current_notice`).
-- El trabajador `dte-worker` (arq, cola `arq:dte`) emite y tiene conciliación periódica.
-- Producción no tiene Redis ni almacenamiento: allí la facturación sigue apagada.
+## Bloques
 
-## Diseño
+### V4a — Contingencia por empresa y establecimiento (rama `feature/ventas-v4a-contingencia`)
 
-- **Envío SMTP**:
-  - `smtplib` de la biblioteca estándar dentro de `asyncio.to_thread`, sin dependencias nuevas.
-  - Puerto `EmailSender` en el dominio y adaptador `SmtpEmailSender`.
-  - Configuración: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_ADDRESS`, `SMTP_SECURITY` (`none`, `starttls` o `ssl`) y `SMTP_TIMEOUT_SECONDS`.
-  - `SMTP_HOST` vacío deshabilita el envío.
-- **Registro** (`sales_fiscal_document_emails`, migración 0127): documento, destinatarios, origen (`auto` o `manual`), estado (`pending`, `sent`, `failed`), intentos, error, `message_id`, quién lo pidió y fechas.
-- **Mensaje** (dominio):
-  - Asunto: tipo de documento, número de control, empresa y, si es simulado, la marca.
-  - Cuerpo en texto y HTML: saludo, datos del documento (código de generación, fecha, total), adjuntos y el aviso de privacidad vigente.
-  - Adjuntos: `{número de control}.pdf` y `.json`.
-- **Flujo**:
-  - Al quedar `issued` o `simulated`, el trabajador crea el envío automático si el cliente tiene correo y lo encola.
-  - El envío manual valida de 1 a 5 destinatarios y lo encola.
-  - El trabajador baja el PDF del almacenamiento (o del servicio si no está guardado), arma el mensaje y envía; reintenta los errores temporales.
-- **Permisos**: enviar requiere `sales_invoices:issue`; ver el historial, `sales_invoices:read`. Todo queda en la bitácora.
-- **Pantallas**: «Enviar por correo» en el detalle del documento y en la sección Factura del pedido (con el correo del cliente propuesto), e historial de envíos en el detalle.
-- **SMTP por empresa** (pasos 7 a 10):
-  - Tabla `company_email_settings` (migración 0128): servidor, puerto, seguridad, usuario, contraseña cifrada con AES-GCM (`app/core/secret_encryption.py`), correo y nombre del remitente, activo y resultado de la última prueba.
-  - La contraseña nunca se devuelve por la API: solo `has_password`. Si se deja vacía al guardar, se conserva la anterior.
-  - Al enviar se usa el SMTP de la empresa si está activo; si no, el del servidor; si no hay ninguno, no se envía.
-  - «Enviar correo de prueba» manda un correo a la dirección que se indique y guarda el resultado.
-  - Permisos: `fiscal_settings:read` y `fiscal_settings:manage`. Se audita sin la contraseña.
+Hechos verificados en el servicio (`dte-service/src/services/contingenciaService.js`):
+- La ventana de contingencia es única para todo el servicio: `ventanaActiva()` no filtra por emisor y la
+  tabla `contingencias` no guarda NIT ni establecimiento.
+- Quedan 3 usos de `config.emisor.nit`: consultar un documento, transmitirlo y transmitir el evento. El
+  responsable del evento sale de `MH_RESPONSABLE_*` o de la solicitud.
+- `transmisionService` ya aplica la política del manual (8 s, consultar el estado, máximo dos reenvíos) y
+  después pasa a contingencia con `registrarFallaDeConectividad`.
+- Las rutas `/api/contingencia` (listar, forzar, cerrar, enviar el evento y transmitir) no están por emisor.
 
-## Pasos
+Pasos:
+- [x] **Paso 0: plan y rama.** Este plan; rama desde `develop` actualizado.
+- [x] **Paso 1: ventana por emisor y establecimiento en el servicio.**
+  - Migración SQLite: `contingencias` gana `nit_emisor` y `cod_establecimiento`; el índice único de ventana
+    activa pasa a ser por (NIT, establecimiento). Las filas viejas toman el emisor del entorno, si existe.
+  - `ventanaActiva`, `abrirVentana` y `vincular` usan el emisor y el establecimiento del documento.
+  - Se quitan los 3 usos de `config.emisor`: el NIT sale del contexto del emisor del documento o de la ventana.
+  - El responsable del evento sale del registro del emisor; el ERP lo envía al registrar a la empresa.
+  - Verificar: pruebas nuevas con dos empresas, y un establecimiento en contingencia mientras otro de la misma
+    empresa emite normal; `./scripts/run-tests.sh dte`.
+- [x] **Paso 2: rutas de contingencia por emisor.**
+  - `/api/emisores/:nit/contingencias` para listar, forzar con tipo y motivo, cerrar, enviar el evento y
+    transmitir, con el alcance `contingency`.
+  - Las rutas globales quedan para el emisor del entorno, o se retiran si nada las usa.
+  - En simulado, la contingencia se simula (el escenario se fuerza con `simulacion`) para poder probarla
+    sin Hacienda.
+  - Verificar: pruebas de integración del servicio.
+- [x] **Paso 3: estado «en contingencia» en el ERP.**
+  - Migración: `sales_fiscal_documents` agrega el estado `contingency` y los campos de transmisión
+    (`transmission_type`, `contingency_type`, `contingency_reason`, `contingency_window_id`).
+  - Dominio: transiciones `pending → contingency → issued | rejected`. Un documento en contingencia ya tiene
+    número de control y versión legible: se entrega al cliente, con el correo automático.
+  - `dte_worker`:
+    - el resultado CONTINGENCIA deja el documento en `contingency`;
+    - una tarea de conciliación consulta su estado hasta el sello, sin volver a emitir.
+  - Verificar: unitarias del dominio y e2e con el cliente DTE falso.
+- [x] **Paso 4: API y permisos.**
+  - `GET /sales/contingencies`, `POST /sales/contingencies` (forzar por establecimiento, con tipo del
+    catálogo CAT-005 y motivo) y `POST /sales/contingencies/{id}/close`.
+  - Permiso `sales_invoices:contingency` (creado en la migración 0130; sigue el espacio de nombres de
+    `sales_invoices:read`/`issue`) y auditoría.
+  - Verificar: e2e de permisos, auditoría y aislamiento entre empresas.
+- [x] **Paso 5: interfaz.**
+  - En la bandeja de documentos: estado «En contingencia» y filtro.
+  - Pantalla «Contingencia», con las ventanas por establecimiento (activa o cerrada), sus documentos, el
+    estado del evento y el plazo de 24 h para el evento y de 72 h para los documentos.
+  - Acciones «Activar contingencia» y «Cerrar contingencia».
+  - Aviso en la bandeja cuando hay una ventana activa.
+  - Verificar: vitest con estados de carga, vacío y error.
+- [x] **Paso 6: documentación.** `api.md`, esquema, manual de documentos fiscales y `multiemisor.md`.
+- [x] **Paso 7: verificación y PR.**
+  - Batería completa y QA en el navegador: forzar la contingencia en simulado, emitir, cerrar y ver el sello.
+  - PR hacia `develop`.
 
-- [x] **Paso 0: plan.**
-- [x] **Paso 1: envío SMTP.**
-  - Configuración, puerto y adaptador con pruebas unitarias (SMTP falso).
-  - Mailpit en compose y `.env.example`.
-- [x] **Paso 2: migración `0127` y modelo** del registro de envíos, con prueba de migración.
-- [x] **Paso 3: dominio del mensaje.** Asunto, cuerpo, marca de simulado, aviso de privacidad y validación de destinatarios. Pruebas unitarias.
-- [x] **Paso 4: trabajador, aplicación y API.**
-  - Envío automático tras emitir y envío manual.
-  - Historial y bitácora.
-  - e2e con Mailpit (el correo llega con sus dos adjuntos).
-- [x] **Paso 5: frontend.** «Enviar por correo» e historial. vitest.
-- [x] **Paso 6: documentación.** `docs/api.md`, `docs/database-schema.md` §37 y manual de facturación.
-- [x] **Paso 7: migración `0128`** de la configuración de correo por empresa, con prueba de migración.
-- [x] **Paso 8: aplicación y API.** Leer, guardar (contraseña cifrada y escrita solo una vez), quitar y probar. Auditoría. e2e.
-- [x] **Paso 9: envío con el SMTP de la empresa.** Elegir el remitente por documento en `dte-worker`; el historial indica si hay correo disponible. e2e con Mailpit como SMTP de la empresa.
-- [x] **Paso 10: frontend.** Pestaña «Correo» en Configuración fiscal con prueba de envío. vitest.
-- [x] **Paso 11: documentación.** API, esquema §38 y manuales.
-- [x] **Paso 12: verificación y PR.** Batería completa, QA en el navegador con Mailpit y PR a `develop` con auto-merge.
+### V4b — Invalidación y rechazos (se detalla al empezar)
+- Invalidar documentos con un evento firmado y sus plazos (tres meses para 01, 11 y 14; décimo día hábil del
+  mes siguiente para 03, 04, 05, 06 y 07). Tipos de invalidación del catálogo: error en datos con documento
+  de reemplazo, rescindir la operación, y otro.
+- «Rechazado: corregir y reenviar»: ver las observaciones de Hacienda, corregir los datos del cliente o del
+  pedido y emitir un documento nuevo.
+- Cancelar un pedido facturado: invalidar primero y después cancelar.
+- Estado «Invalidado» en la bandeja, PDF del evento y correo al cliente.
+
+### V4c — Notas de crédito y de débito (se detalla al empezar)
+- Se emiten desde un CCF sellado: devolución sin mover inventario, descuento posterior o anulación parcial
+  (nota de crédito), y cargo adicional (nota de débito).
+- Saldo del CCF, plazo legal, documento relacionado y plantillas PDF para los tipos 05 y 06.
+
+### V4d — Nota de remisión y evento de retorno (se detalla al empezar)
+- Nota de remisión (04) al despachar un traslado, si la empresa habilita el tipo; queda vinculada al traslado.
+- Evento de retorno sobre facturas selladas: el servicio tiene el esquema pero no el generador. Hasta 50
+  documentos del mismo tipo; una factura con un evento de retorno vigente no se invalida sin invalidar antes
+  el evento.
+- Plantillas PDF que falten.
+
+### V4e — Lote de certificación (se detalla al empezar)
+- Pantalla por empresa: cuántos documentos pide Hacienda por tipo, cuántos van transmitidos y aceptados, y
+  cuáles fueron rechazados con su motivo.
+- Generación del lote con datos de prueba, transmisión y avance; probado contra el stub.
 
 ## Estado actual
 
-- **Paso en curso**: V3c terminado; PR hacia `develop`. Sigue V3d (ambiente de pruebas de Hacienda).
-  - Paso 12:
-    - Batería completa en verde: pytest 1968 (2 omitidas), servicio DTE 474, vitest, lint y build. Se confirmó que los 7 fallos anteriores eran por la migración agregada mientras corría.
-    - QA en el navegador con Mailpit como SMTP propio de Grupo Lorena: guardar, probar («se envió bien») y reenviar el DTE. El correo salió como «Pastelería Lorena <facturacion@grupolorena.example>», con dos adjuntos y `Reply-To` al correo DTE.
-    - En desarrollo, Grupo Lorena queda con Mailpit como SMTP propio (útil para demostrar; se quita en Configuración fiscal → Correo).
-  - La batería sobre los pasos 1 a 6 dio 1947 pasadas y 7 fallos. Los 7 son guardas de migración de traslados que comparan la revisión de la base con la cabeza del repositorio: la 0128 se agregó mientras corría. La batería nueva debe confirmarlo.
-  - Error latente corregido: `secret_encryption._key` no aceptaba la clave sin relleno que genera `scripts/setup.sh` (base64url de 43 caracteres), así que en desarrollo tampoco se podían cifrar los datos bancarios de proveedores. Ahora completa el relleno. Pruebas en `test_supplier_master_data.py`; `fails_closed_without_key` ahora también quita la variable de entorno.
-  - Paso 7: migración 0128 `company_email_settings`, modelo `CompanyEmailSettingsModel` y prueba de migración. Ya está aplicada en desarrollo.
-  - Paso 8:
-    - Dominio `domain/entities/company_email.py` (`validate_settings`) con 9 pruebas unitarias en verde; puerto y repositorio.
-    - Casos de uso `application/fiscal/email_settings.py`; el remitente se inyecta con `company_email_sender`, que descifra en memoria.
-    - API `/fiscal/email-settings` (GET, PUT, DELETE y `/test`).
-  - Paso 9:
-    - `process_fiscal_email` usa el SMTP de la empresa si está activo; si no, el del servidor; si no hay ninguno, falla con `email_unavailable`.
-    - `SalesInvoiceEmailUseCases.available` decide `enabled` y bloquea el envío manual.
-    - `dte-worker` recibe `SUPPLIER_DATA_ENCRYPTION_KEY`. e2e en `tests/e2e/test_company_email_settings.py`.
-  - Paso 10: pestaña «Correo» (`FiscalEmailPanel.svelte`) con prueba de envío y ayuda para Google y Microsoft 365. vitest: 70 en verde (fiscal y ventas).
-  - Paso 11: `api.md` («Company outgoing email»), esquema §38, manual de configuración fiscal §5 y manual de facturación §6.
-  - QA de los pasos 1 a 6 en el navegador: el envío manual desde el detalle del documento llegó a Mailpit, a dos destinatarios, con el PDF, el JSON y el aviso de privacidad de Grupo Lorena. El historial lo marcó Enviado y la vista a 375 px no se desborda.
-  - La primera batería completa de V3c corrió sobre los pasos 1 a 6.
-  - Paso 6: `docs/api.md` (Sales invoice emails), `docs/database-schema.md` §37 y sección 6 del manual de facturación.
-  - Paso 5: componente `FiscalDocumentEmails.svelte`, en el detalle del documento y en la sección Factura del pedido.
-    - Propone el correo del cliente y acepta varios separados por comas, punto y coma o espacios.
-    - Historial con estado (Enviando, Enviado, No se envió), origen, quién lo pidió y error; se actualiza solo mientras hay envíos pendientes.
-    - Avisa si el servidor no envía correos. vitest: 5 pruebas nuevas.
-  - Paso 4:
-    - Repositorio `sales_fiscal_email_repository.py`; el documento fiscal trae `customer_email`.
-    - Casos de uso `application/sales_invoices/emails.py` (envío manual e historial).
-    - Entrega en `infrastructure/dte_email.py`:
-      - `queue_auto_email` crea el envío automático al emitirse;
-      - `process_fiscal_email` baja el PDF del almacenamiento o del servicio, arma el mensaje y envía.
-    - `dte-worker`: tarea `send_fiscal_email`; la conciliación también reencola los envíos pendientes.
-    - API:
-      - `GET /sales/fiscal-documents/{id}/emails` devuelve `enabled`, `customer_email` e `items`;
-      - `POST …/emails` con `{recipients?}` responde 202.
-      - Bitácora: `REQUEST_FISCAL_DOCUMENT_EMAIL`, `FISCAL_DOCUMENT_EMAIL_SENT` y `_FAILED`.
-    - e2e: 2 pruebas nuevas en `test_sales_invoices.py` que comprueban en Mailpit (`http://mailpit:8025/api/v1/search`) la llegada con dos adjuntos, el `Reply-To`, que no se reenvía, las reglas y los permisos.
-    - Después de cambiar el código del trabajador hay que reiniciar `dte-worker`; arq no recarga solo.
-  - Paso 3: `app/domain/entities/sales_fiscal_email.py`.
-    - `normalize_recipients`: recorta, pasa a minúsculas, quita repetidos y acepta de 1 a 5 correos.
-    - `customer_recipients` usa el correo de la ficha del cliente.
-    - `compose` arma el asunto, el texto y el HTML escapado, con la fecha en El Salvador y el total en formato `$1,250.00`.
-    - Marca de simulado en el asunto y en el cuerpo; aviso de privacidad al pie.
-    - Al cliente se le trata de usted.
-  - Paso 2: `sales_fiscal_document_emails`, con:
-    - destinatarios `text[]` (de 1 a 5) y origen `auto` o `manual`; el manual exige quién lo pidió;
-    - estado `pending`, `sent` o `failed`; `sent` exige `sent_at` y `message_id`;
-    - un solo envío automático por documento.
-    - Modelo `SalesFiscalDocumentEmailModel`; prueba `tests/integration/test_sales_fiscal_document_emails_migration.py`.
-  - Paso 1:
-    - Puerto `app/domain/ports/email_sender.py` y adaptador `app/infrastructure/smtp_email_sender.py` (smtplib en hilo; errores 4xx y de red son reintentables).
-    - Configuración `SMTP_*`; `SMTP_HOST` exige `SMTP_FROM_ADDRESS`.
-    - Mailpit `axllent/mailpit:v1.21.8` con su interfaz en `127.0.0.1:8025`; backend y `dte-worker` apuntan a `mailpit:1025` sin TLS. En producción, Mailpit va con el perfil `local-mail` y el SMTP sale de las variables.
-    - Prueba de humo: un correo real llegó a Mailpit con su adjunto.
+- **Paso en curso**: V4a terminado; falta el merge de su PR. Sigue V4b (detallarlo al empezar).
+  - Paso 7:
+    - Batería completa en verde: backend 1990, OCR 5, servicio 488, frontend 1193, más ruff, mypy,
+      svelte-check, ESLint y el build.
+    - QA en el navegador con Grupo Lorena (simulado): registrar al responsable; activar la contingencia
+      de S001 (aviso en la bandeja); cerrarla con confirmación («se informó el evento»); 375 px sin
+      desborde; modo claro y oscuro.
+    - Hallazgo: las e2e comparten el servicio DTE de desarrollo, y su empresa tiene el mismo NIT que
+      Grupo Lorena. Las primeras corridas fallidas dejaron ventanas abiertas (M4xx); se cerraron desde
+      la pantalla y quedan en el historial. La e2e ahora cierra sus ventanas con el fixture
+      `opened_windows`, aunque falle.
+    - El PR #52 (actor nulo en las existencias de prueba) ya está en develop.
+  - Paso 6 hecho: `docs/api.md` («Billing contingency»), esquema §40, manual de facturación §5
+    «Contingencia» (las secciones siguientes se renumeran) y `dte-service/docs/multiemisor.md`.
+  - Paso 5 hecho:
+    - Pantalla `/sales/contingencies` (menú Ventas → «Contingencia», con `sales_invoices:read`) y
+      `ContingencyPanel.svelte`:
+      - ventanas abiertas con su estado, documentos, plazo y último error;
+      - «Activar contingencia» (establecimiento, tipo de CAT-005 y motivo), «Cerrar contingencia» con
+        confirmación e «Informar evento»;
+      - responsable del evento (nombre y documento de CAT-022) e historial reciente.
+      Sin `sales_invoices:contingency` la pantalla es de solo lectura.
+    - Bandeja: estado y filtro «En contingencia», y un aviso cuando hay establecimientos en contingencia.
+    - Detalle: nota «Generado en contingencia» con el tipo y el motivo, y si ya se transmitió.
+    - `formatMoment` (DD/MM/YYYY HH:mm, hora de El Salvador).
+    - vitest: `ContingencyPanel.test.ts` (5), más navegación y bandeja.
+  - Paso 4 hecho:
+    - API `/sales/contingencies`: GET (`sales_invoices:read`; ventanas, responsable y `active`); POST para
+      activar (`establishment_id`, `contingency_type` de CAT-005, `reason`, obligatorio para el tipo 5);
+      `/{id}/close`, `/{id}/event` y PUT `/responsible`, todo con `sales_invoices:contingency`.
+      Bitácora: `ACTIVATE_CONTINGENCY`, `CLOSE_CONTINGENCY`, `SEND_CONTINGENCY_EVENT` y CREATE/UPDATE
+      del responsable.
+    - Decisión: el responsable del evento es uno por empresa, en la tabla `company_contingency_responsibles`
+      (en la misma 0130, que todavía no está mergeada). El ERP lo entrega al servicio en cada registro, al
+      emitir y antes de cada acción de contingencia.
+    - `ContingencyUseCases` registra a la empresa (modo, credenciales y responsable) antes de activar,
+      cerrar o reenviar. Los códigos del servicio se traducen a `sales_contingency_*`.
+    - Servicio: el PDF ya se entrega en CONTINGENCIA y CONTINGENCIA_REPORTADA, con el sello «Pendiente:
+      documento generado en contingencia» (el Manual pide entregar la versión legible).
+    - Pruebas: unitarias `test_fiscal_contingency.py` y e2e `test_sales_contingencies.py`, contra el
+      servicio real en simulado (activar, facturar en contingencia, cerrar, seguir hasta `simulated`).
+  - Arreglo aparte: el CI de develop tras V3d falló de forma intermitente porque el ayudante `_stock` de
+    `test_sales_orders.py` tomaba como actor un registro de la bitácora del trabajador DTE, que no tiene
+    usuario. Va en la PR #52 (`fix/e2e-actor-sin-usuario`) y el mismo cambio en esta rama.
+  - Paso 3 hecho:
+    - Migración 0130: estado `contingency` y columnas `contingency_type` (CAT-005), `contingency_reason` y
+      `contingency_at`. Un documento en contingencia exige número, código de generación y `issued_at`.
+      La 0130 también crea el permiso `sales_invoices:contingency`. El downgrade se niega si hay documentos
+      generados en contingencia.
+    - `service_status`: CONTINGENCIA y CONTINGENCIA_REPORTADA se traducen a `contingency`. `dte_worker`
+      guarda el JSON y el PDF, el tipo y el motivo (`contingency_details`) y lo audita como
+      `FISCAL_DOCUMENT_CONTINGENCY`. Antes, un documento así se reintentaba hasta quedar FAILED.
+    - Seguimiento: `follow_contingency_document` (tarea arq `follow_fiscal_contingency`, encolada por
+      `reconcile_fiscal_documents`) consulta `GET /api/dte/:codigo` (`DteService.document_state`). Con el
+      sello vuelve a bajar el JSON y el PDF y pasa a `issued` o `simulated`; si Hacienda lo rechaza, a
+      `rejected`. Nunca vuelve a emitir.
+    - Correo: el automático sale al quedar en contingencia, con el aviso `CONTINGENCY_NOTE`, y no se repite
+      al sellarse (se puede reenviar a mano). Un documento simulado se marca como tal también en contingencia.
+    - Facturar de nuevo un pedido con un documento en contingencia devuelve ese mismo documento.
+    - Pruebas: unitarias, `test_sales_fiscal_contingency_migration.py` y e2e `test_fiscal_contingency.py`.
+  - Paso 2 hecho:
+    - Rutas `/api/emisores/:nit/contingencias`: GET; POST con `establecimiento`, `tipoContingencia` y
+      `motivoContingencia`; y `/:id/cerrar`, `/:id/evento` y `/:id/transmitir`, con el alcance `contingency`. Una
+      ventana de otro emisor da 404, y un emisor sin registrar, `ISSUER_NOT_FOUND`.
+    - Decisión: la activación por emisor es manual (`forzar({ manual: true })`) y vale en cualquier modo. La
+      activa el operador de la empresa ante una falla que el servicio no ve (energía, internet de la tienda);
+      el ERP la audita. Las rutas globales siguen pidiendo `DTE_ALLOW_FORCED_CONTINGENCY` para la certificación.
+    - Emisor simulado: la contingencia funciona sin Hacienda. El documento nace en diferido con firma simulada
+      y responde 202 `CONTINGENCIA`. Al cerrar, el evento se construye y se valida contra el esquema, recibe un
+      sello simulado, los documentos pasan a `SIMULADO` y la ventana a `COMPLETADA`.
+    - `cerrarEInformar` usa el responsable enviado o el registrado; sin ninguno, la ventana queda `CERRADA`.
+    - Pruebas: `contingenciaPorEmisor.test.js` (4) y `contingenciaSimulada.test.js`. Servicio: 488 en verde.
+  - Paso 1 hecho:
+    - `contingencias` tiene `nit_emisor` y `cod_establecimiento` ('' = emisor heredado), con un índice único
+      de ventana activa por los dos. Las ventanas viejas toman el NIT y el `codEstable` de sus documentos.
+    - El establecimiento es el `codEstable` interno (por ejemplo M001): antes de construir el documento sale de
+      `body.emisor.codEstable` y, después, del documento.
+    - El sondeo recorre cada ventana automática y el evento se envía dentro del contexto de su emisor
+      (`conEmisor`). Ya no queda ningún uso de `config.emisor` en `contingenciaService`.
+    - Decisión: un solo responsable del evento por empresa (`responsable` en `PUT /api/emisores/:nit`, columna
+      `responsable_json`). Si no se envía el campo se conserva; si se envía null, se quita. El emisor heredado
+      sigue usando `MH_RESPONSABLE_*`. Sin responsable, el evento espera a que el operador lo envíe.
+    - `estadoGeneral({ nit })` filtra por emisor. Las rutas globales `/api/dte/contingencia` siguen sirviendo
+      al emisor del entorno; el Paso 2 las pasa a ser por emisor.
+    - Prueba nueva: `test/integration/contingenciaPorEmisor.test.js`. Servicio: 486 en verde.
 - **Contexto**:
-  - El frontend usa SvelteKit 3.
-  - El servicio DTE se prueba con `./scripts/run-tests.sh dte`.
-  - El proyecto de referencia es de solo lectura.
-  - Si el login de desarrollo da 500 tras cambios grandes del frontend, reiniciar el contenedor `frontend`.
+  - V3 completo en `develop`: #48 a #51.
+  - En desarrollo `DTE_MODE` es simulado y el `.env` no tiene `DTE_CREDENTIALS_KEY`.
+  - CVE-2026-112366 de picomatch está ignorada en `.trivyignore` hasta el 31/01/2027.
 - **Comandos**:
-  - Pruebas con objetivo explícito; sin argumento corre la batería completa (unos 45 minutos).
-  - No hacer commits mientras corre la batería.
+  - Pruebas: `./scripts/run-tests.sh` siempre con un objetivo explícito (`dte`, `backend`, `frontend`,
+    `lint`). Sin objetivo corre la batería completa: 35 a 45 minutos, y se detiene si falla el backend.
+  - Mientras corre la batería: no hacer commits, no correr pruebas de base y no agregar migraciones.
   - Git: `git -c http.sslBackend=schannel` para `fetch` y `push`.
-- **Reglas del usuario**:
-  - Commits y PR sin Co-Authored-By ni «Generated with Claude Code».
-  - PR hacia `develop` con Auto-fix y auto-merge.
-  - Ignorar el check de Vercel.
-  - Dentro de una empresa, la interfaz no menciona a otras empresas.
+  - Si el login de desarrollo da 500 o una pantalla nueva no aparece, reiniciar `frontend`. Después de
+    cambiar `dte-worker`, reiniciarlo.

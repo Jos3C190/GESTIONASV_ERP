@@ -1222,3 +1222,36 @@ Revision `0128` (revises `0127`), block V3c.
 
 **Downgrade** refuses while settings exist. Covered by
 `backend/tests/integration/test_company_email_settings_migration.py`.
+
+## 39. Hacienda credentials (0129)
+
+Revision `0129` (revises `0128`), block V3d.
+
+- `company_hacienda_credentials`: one row per company (`company_id` primary key, cascades with
+  the company).
+  - `api_password_encrypted`, `private_key_password_encrypted` and `certificate_encrypted`
+    (`bytea`, AES-GCM with a random nonce).
+  - `certificate_sha256` (lowercase hex) and `certificate_nit` (9 or 14 digits).
+  - Last connection test: `last_test_at`, `last_test_ok`, `last_test_error` (all empty or set
+    together; a failed test keeps its error).
+  - `updated_by`, timestamps.
+
+**Downgrade** refuses while credentials exist. Covered by
+`backend/tests/integration/test_company_hacienda_credentials_migration.py`.
+
+## 40. Billing contingency (0130)
+
+Revision `0130` (revises `0129`), block V4a.
+
+- `sales_fiscal_documents`:
+  - status `contingency` (generated without Hacienda, waiting for the event and its seal);
+  - `contingency_type` (CAT-005, 1–5), `contingency_reason` and `contingency_at`. A document in
+    `contingency` needs its generation code, control number, `issued_at`, type and time; it keeps
+    the type after it is sealed.
+- `company_contingency_responsibles`: one row per company (`company_id` primary key, cascades with
+  the company): `name` (3–100), `document_type` (CAT-022: 36, 13, 37, 03, 02),
+  `document_number` (1–25), `updated_by`, timestamps.
+- Permission `sales_invoices:contingency`, granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while documents generated in contingency exist. Covered by
+`backend/tests/integration/test_sales_fiscal_contingency_migration.py`.

@@ -48,4 +48,14 @@ function propietarioDocumento(req, res, next, codigoGeneracion) {
   return next();
 }
 
-module.exports = { emisorSolicitud, propietarioDocumento };
+/**
+ * Corre el resto de la solicitud con el contexto del emisor (V3d): su modo,
+ * su ambiente, sus URLs de Hacienda y sus credenciales. Va después de
+ * `emisorSolicitud`; sin encabezado usa el emisor del entorno.
+ */
+function contextoEmisor(req, res, next) {
+  const issuerContext = require('../services/issuerContext');
+  issuerContext.conEmisor(req.dteIssuerNit, () => next());
+}
+
+module.exports = { contextoEmisor, emisorSolicitud, propietarioDocumento };

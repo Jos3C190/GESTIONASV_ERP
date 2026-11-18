@@ -92,6 +92,9 @@ services:
   mailpit:
     profiles: [local-mail]
 
+  dte-signer:
+    profiles: [dte]
+
   dte-service:
     profiles: [dte]
 

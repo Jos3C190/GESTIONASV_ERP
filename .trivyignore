@@ -1,0 +1,9 @@
+# Excepciones del escaneo de dependencias (servicio `security-trivy` de compose.yaml).
+# Cada entrada lleva su motivo y un vencimiento (exp:): al vencer, Trivy vuelve a reportarla.
+
+# picomatch <= 4.0.7: denegación de servicio con patrones extglob repetidos (ReDoS).
+# Sin versión corregida publicada al 17/11/2026. Solo llega por herramientas de desarrollo
+# del frontend (vite, vitest, eslint, tailwindcss, svelte-check); `pnpm why --prod` no la
+# encuentra y los patrones salen de la configuración del proyecto, no de usuarios.
+# Al publicarse la corrección: agregar un override en frontend/package.json y quitar esta línea.
+CVE-2026-112366 exp:2027-01-31

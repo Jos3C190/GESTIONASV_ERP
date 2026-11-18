@@ -2170,3 +2170,62 @@ without the password. Error codes (`422`): `email_settings_host_invalid`,
 `email_settings_from_invalid`, `email_settings_from_name_too_long`,
 `email_settings_test_recipient_invalid`; `email_settings_not_found` (404). A send whose company
 has no usable SMTP fails with `email_unavailable`.
+
+## Hacienda credentials (revision 0129, block V3d)
+
+Each company keeps its own Hacienda API password, private-key password and certificate
+(`{nit}.crt`, the XML that Hacienda generates). They are encrypted with AES-GCM
+(`SUPPLIER_DATA_ENCRYPTION_KEY`) and never returned. The certificate must belong to the company's
+NIT and open with the private-key password (SHA-512 in `privateKey/clave`, as the official
+signer checks).
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/fiscal/hacienda-credentials` | `fiscal_settings:read` | `configured`, `certificate_nit`, `certificate_sha256` and the last connection test. |
+| PUT | `/fiscal/hacienda-credentials` | `fiscal_settings:manage` | `api_password`, `private_key_password`, `certificate_base64`; empty fields keep the stored value. Saving clears the last test. |
+| DELETE | `/fiscal/hacienda-credentials` | `fiscal_settings:manage` | Only while the company is in simulated mode. `204`. |
+| POST | `/fiscal/hacienda-credentials/test` | `fiscal_settings:manage` | Registers the company in the DTE service with its credentials (test mode, or production if already there) and runs the service's connection test: Hacienda authentication and a test signature. Returns `{ok, authentication_ok, authentication_message, signature_ok, signature_message}`. |
+
+Switching the fiscal profile to `test` requires tested credentials (`fiscal_test_not_ready`);
+`production` also lists them among its blockers. When `dte-worker` issues a document outside
+simulated mode it registers the company with its mode and credentials; without credentials the
+document fails with `hacienda_credentials_missing`.
+
+Audited on `company_hacienda_credentials` (`CREATE`, `UPDATE`, `DELETE`,
+`TEST_HACIENDA_CREDENTIALS`) with the certificate NIT and fingerprint only. Error codes (`422`):
+`hacienda_certificate_required`, `hacienda_certificate_invalid`,
+`hacienda_certificate_nit_mismatch`, `hacienda_private_key_password_invalid`,
+`hacienda_api_password_required`, `hacienda_private_key_password_required`,
+`hacienda_company_nit_missing`, `hacienda_credentials_in_use`; `hacienda_credentials_not_found`
+(404).
+
+## Billing contingency (revision 0130, block V4a)
+
+A contingency window belongs to one company and one fiscal establishment and lives in the DTE
+service. The service opens it by itself when Hacienda does not answer; an operator opens it for a
+failure the service cannot see (power or internet outage at the store). Documents issued meanwhile
+are generated in the deferred model and stay in the fiscal status `contingency` (with
+`contingency_type`, `contingency_reason` and `contingency_at`) until the service seals them
+(`issued`/`simulated`) or Hacienda rejects them; `dte-worker` follows them
+(`follow_fiscal_contingency`) and never issues them again. The customer receives the readable
+version during the contingency.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/contingencies` | `sales_invoices:read` | Windows (open and recent) with status `ACTIVA`, `CERRADA`, `REPORTADA` or `COMPLETADA`, documents, deadlines (24 h for the event, 72 h for the documents) and last error; the responsible person; `active`. |
+| POST | `/sales/contingencies` | `sales_invoices:contingency` | Opens the window of `establishment_id` with `contingency_type` (CAT-005, 1–5) and `reason` (required for 5). `201`. |
+| POST | `/sales/contingencies/{id}/close` | `sales_invoices:contingency` | Closes it and reports the event with the registered responsible person. |
+| POST | `/sales/contingencies/{id}/event` | `sales_invoices:contingency` | Sends the event of a closed window again. |
+| PUT | `/sales/contingencies/responsible` | `sales_invoices:contingency` | `name`, `document_type` (CAT-022: 13, 36, 03, 02, 37) and `document_number` of the person who signs the event. |
+
+Before each action the ERP registers the company in the service with its mode, credentials and
+responsible person. `/sales/fiscal-documents` accepts `status=contingency`.
+
+Audited: `ACTIVATE_CONTINGENCY`, `CLOSE_CONTINGENCY`, `SEND_CONTINGENCY_EVENT` on
+`sales_contingency`; `CREATE`/`UPDATE` on `company_contingency_responsible`; the worker records
+`FISCAL_DOCUMENT_CONTINGENCY`. Error codes: `sales_contingency_type_invalid`,
+`sales_contingency_reason_required`, `sales_contingency_responsible_invalid`,
+`sales_contingency_responsible_required`, `sales_contingency_active`,
+`sales_contingency_nit_missing`, `sales_contingency_rejected` (422);
+`sales_contingency_already_active` (409); `sales_contingency_not_found`,
+`sales_contingency_establishment_not_found` (404).

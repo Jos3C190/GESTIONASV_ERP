@@ -27,7 +27,10 @@ function validateIssuerV2(emisor) {
   if (!require('./issuerRegistry').autorizado(emisor.nit)) fail('UNAUTHORIZED_ISSUER', 'El NIT del emisor no está autorizado en este ambiente');
   // El firmador firma con el certificado {MH_NIT}.crt y Hacienda autentica con
   // ese NIT: un snapshot con otro NIT produciría una firma que no corresponde.
-  if (config.dteMode !== 'simulated' && emisor.nit !== config.emisor?.nit) {
+  // Un emisor registrado firma con su propio certificado (V3d); solo el heredado del
+  // entorno debe coincidir con MH_NIT.
+  const registrado = require('./issuerRegistry').obtener(emisor.nit);
+  if (!registrado && config.dteMode !== 'simulated' && emisor.nit !== config.emisor?.nit) {
     fail('UNAUTHORIZED_ISSUER', 'El NIT del emisor no coincide con el NIT del certificado configurado (MH_NIT)');
   }
 

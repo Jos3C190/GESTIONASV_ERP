@@ -87,6 +87,8 @@ class FiscalEmailContent:
     customer_name: str
     simulated: bool
     reply_to: str | None = None
+    contingency: bool = False
+    """Generado en contingencia: se avisa que se transmitirá a Hacienda después (V4a)."""
     privacy_notice: PrivacyNoticeText | None = None
 
 
@@ -101,6 +103,12 @@ class ComposedEmail:
 
 def _money(value: Decimal) -> str:
     return f"${value:,.2f}"
+
+
+CONTINGENCY_NOTE = (
+    "Este documento se generó en contingencia, sin comunicación con Hacienda; se le "
+    "transmitirá al restablecerse el servicio."
+)
 
 
 def _day(value: datetime) -> str:
@@ -131,6 +139,7 @@ def compose(content: FiscalEmailContent) -> ComposedEmail:
         f"{content.company_name} le envía su {name.lower()} electrónica. Adjuntamos el PDF y el "
         "archivo JSON del documento tributario electrónico.",
         "",
+        *([CONTINGENCY_NOTE, ""] if content.contingency else []),
         *(f"{label}: {value}" for label, value in facts),
         "",
         reply,
@@ -164,12 +173,13 @@ def compose(content: FiscalEmailContent) -> ComposedEmail:
         if content.privacy_notice
         else ""
     )
+    contingency = f"<p><em>{e(CONTINGENCY_NOTE)}</em></p>" if content.contingency else ""
     body_html = (
         "<div style='font-family:Arial,sans-serif;font-size:14px;color:#222'>"
         f"<p>Estimado/a {e(content.customer_name)}:</p>{banner}"
         f"<p>{e(content.company_name)} le envía su {e(name.lower())} electrónica. Adjuntamos el "
         "PDF y el archivo JSON del documento tributario electrónico.</p>"
-        f"<table>{rows}</table><p>{e(reply)}</p>{notice}</div>"
+        f"{contingency}<table>{rows}</table><p>{e(reply)}</p>{notice}</div>"
     )
     return ComposedEmail(
         subject=subject,
@@ -181,9 +191,9 @@ def compose(content: FiscalEmailContent) -> ComposedEmail:
 
 
 def require_sendable(status: str) -> None:
-    """Solo se envía un documento con resultado final de Hacienda o del modo simulado."""
+    """Se envía un documento emitido, simulado o generado en contingencia (V4a)."""
 
-    if status not in ("issued", "simulated"):
+    if status not in ("issued", "simulated", "contingency"):
         raise _rule(
             "Solo se envía por correo un documento emitido.", "sales_invoice_email_not_issued"
         )

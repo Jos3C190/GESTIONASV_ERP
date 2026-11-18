@@ -1,5 +1,6 @@
 const axios = require('axios');
 const config = require('../config');
+const issuerContext = require('./issuerContext');
 const logger = require('../utils/logger');
 const { registrarAccesoExitoso } = require('./accesoHacienda');
 
@@ -22,35 +23,50 @@ class AuthError extends Error {
   }
 }
 
+/**
+ * Un token por emisor (V3d): cada empresa se autentica con su NIT y su
+ * contraseña de la API, en el host de su modo. El emisor sale del contexto.
+ */
 class AuthService {
   constructor() {
-    this._token = null;
-    this._expiraEn = 0; // epoch ms
+    this._sesiones = new Map();
     this._margenMs = 10 * 60 * 1000;
-    this._enCurso = null;
+  }
+
+  _sesion() {
+    const contexto = issuerContext.actual();
+    const clave = `${contexto.nit ?? ''}:${contexto.modo}`;
+    if (!this._sesiones.has(clave)) this._sesiones.set(clave, { token: null, expiraEn: 0, enCurso: null });
+    return { sesion: this._sesiones.get(clave), contexto };
   }
 
   async obtenerToken() {
-    if (this._token && Date.now() < this._expiraEn - this._margenMs) {
-      return this._token;
+    const { sesion, contexto } = this._sesion();
+    if (sesion.token && Date.now() < sesion.expiraEn - this._margenMs) {
+      return sesion.token;
     }
-    // Una sola autenticación aunque lleguen varias emisiones a la vez.
-    if (!this._enCurso) {
-      this._enCurso = this._autenticar().finally(() => {
-        this._enCurso = null;
+    // Una sola autenticación por emisor aunque lleguen varias emisiones a la vez.
+    if (!sesion.enCurso) {
+      sesion.enCurso = this._autenticar(sesion, contexto).finally(() => {
+        sesion.enCurso = null;
       });
     }
-    return this._enCurso;
+    return sesion.enCurso;
   }
 
-  async _autenticar() {
+  async _autenticar(sesion, contexto) {
+    const credenciales = contexto.credenciales();
+    const urls = contexto.hacienda ?? config.hacienda;
+    if (!contexto.nit || !credenciales?.passwordApi || !urls?.authUrl) {
+      throw new AuthError('El emisor no tiene credenciales de Hacienda configuradas', { credenciales: true });
+    }
     let response;
     try {
       response = await axios.post(
-        config.hacienda.authUrl,
+        urls.authUrl,
         new URLSearchParams({
-          user: config.emisor.nit,
-          pwd: config.emisor.passwordApi,
+          user: contexto.nit,
+          pwd: credenciales.passwordApi,
         }),
         {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': config.hacienda.userAgent },
@@ -66,17 +82,17 @@ class AuthService {
     const data = response.data;
     const token = data?.body?.token;
     if (response.status === 200 && data?.status === 'OK' && typeof token === 'string' && token.trim()) {
-      this._token = token.trim();
-      this._expiraEn = Date.now() + 12 * 60 * 60 * 1000;
+      sesion.token = token.trim();
+      sesion.expiraEn = Date.now() + 12 * 60 * 60 * 1000;
       registrarAccesoExitoso('autenticacion');
-      logger.info({ ambiente: config.ambiente }, 'Token de Hacienda renovado');
-      return this._token;
+      logger.info({ ambiente: contexto.ambiente, nit: contexto.nit }, 'Token de Hacienda renovado');
+      return sesion.token;
     }
 
-    const credenciales = response.status === 401 || (response.status === 200 && data?.status === 'ERROR');
+    const rechazadas = response.status === 401 || (response.status === 200 && data?.status === 'ERROR');
     const detalle = data?.message || data?.body?.descripcionMsg || data?.error || `HTTP ${response.status}`;
-    logger.error({ httpStatus: response.status, credenciales }, 'Hacienda rechazó la autenticación');
-    throw new AuthError(`Hacienda rechazó la autenticación: ${detalle}`, { credenciales });
+    logger.error({ httpStatus: response.status, credenciales: rechazadas }, 'Hacienda rechazó la autenticación');
+    throw new AuthError(`Hacienda rechazó la autenticación: ${detalle}`, { credenciales: rechazadas });
   }
 
   /**
@@ -85,13 +101,15 @@ class AuthService {
    * anterior). No emite nada.
    */
   async probarAutenticacion() {
-    return this._autenticar();
+    const { sesion, contexto } = this._sesion();
+    return this._autenticar(sesion, contexto);
   }
 
-  /** Fuerza la renovación del token (p. ej. si Hacienda responde 401). */
+  /** Fuerza la renovación del token del emisor en curso (p. ej. si Hacienda responde 401). */
   invalidar() {
-    this._token = null;
-    this._expiraEn = 0;
+    const { sesion } = this._sesion();
+    sesion.token = null;
+    sesion.expiraEn = 0;
   }
 }
 

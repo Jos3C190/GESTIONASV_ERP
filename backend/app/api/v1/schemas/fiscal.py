@@ -200,3 +200,33 @@ class EmailTestIn(BaseModel):
 class EmailTestOut(BaseModel):
     ok: bool
     message: str
+
+
+# --- Credenciales de Hacienda de la empresa (bloque V3d) ---
+
+
+class HaciendaCredentialsIn(BaseModel):
+    model_config = _IN
+
+    api_password: str | None = Field(default=None, max_length=500)
+    private_key_password: str | None = Field(default=None, max_length=500)
+    certificate_base64: str | None = Field(default=None, max_length=360_000)
+    """El ``.crt`` de Hacienda en base64. Vacío al editar: se conserva el guardado."""
+
+
+class HaciendaCredentialsOut(BaseModel):
+    configured: bool
+    certificate_nit: str | None = None
+    certificate_sha256: str | None = None
+    last_test_at: datetime | None = None
+    last_test_ok: bool | None = None
+    last_test_error: str | None = None
+    updated_at: datetime | None = None
+
+
+class HaciendaTestOut(BaseModel):
+    ok: bool
+    authentication_ok: bool
+    authentication_message: str
+    signature_ok: bool
+    signature_message: str

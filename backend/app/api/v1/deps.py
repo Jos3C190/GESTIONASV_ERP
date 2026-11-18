@@ -30,6 +30,7 @@ from app.application.documents import (
 )
 from app.application.fiscal import FiscalSettingsUseCases
 from app.application.fiscal.email_settings import CompanyEmailSettingsUseCases
+from app.application.fiscal.hacienda_credentials import HaciendaCredentialsUseCases
 from app.application.inventory import InventoryUseCases
 from app.application.inventory.kardex_read import InventoryKardexReadUseCases
 from app.application.password_policy import PasswordPolicy
@@ -57,6 +58,7 @@ from app.application.sales.service import SalesService
 from app.application.sales_discounts import SalesDiscountUseCases
 from app.application.sales_documents.pricing import SalesDocumentPricing
 from app.application.sales_invoices import SalesInvoiceUseCases
+from app.application.sales_invoices.contingency import ContingencyUseCases
 from app.application.sales_invoices.emails import SalesInvoiceEmailUseCases
 from app.application.sales_orders import SalesOrderUseCases
 from app.application.sales_quotations import SalesQuotationUseCases
@@ -190,6 +192,36 @@ def get_company_email_settings_use_cases(
 
     return CompanyEmailSettingsUseCases(
         SqlAlchemyCompanyEmailRepository(session), company_email_sender
+    )
+
+
+def get_hacienda_credentials_use_cases(session: SessionDep) -> HaciendaCredentialsUseCases:
+    from app.infrastructure.dte_worker import dte_client
+    from app.infrastructure.repositories.hacienda_credentials_repository import (
+        SqlAlchemyHaciendaCredentialsRepository,
+    )
+
+    return HaciendaCredentialsUseCases(
+        SqlAlchemyHaciendaCredentialsRepository(session),
+        SqlAlchemyFiscalRepository(session),
+        dte_client(),
+    )
+
+
+def get_contingency_use_cases(session: SessionDep) -> ContingencyUseCases:
+    from app.infrastructure.dte_worker import dte_client
+    from app.infrastructure.repositories.contingency_responsible_repository import (
+        SqlAlchemyContingencyResponsibleRepository,
+    )
+    from app.infrastructure.repositories.hacienda_credentials_repository import (
+        SqlAlchemyHaciendaCredentialsRepository,
+    )
+
+    return ContingencyUseCases(
+        SqlAlchemyFiscalRepository(session),
+        SqlAlchemyContingencyResponsibleRepository(session),
+        SqlAlchemyHaciendaCredentialsRepository(session),
+        dte_client(),
     )
 
 

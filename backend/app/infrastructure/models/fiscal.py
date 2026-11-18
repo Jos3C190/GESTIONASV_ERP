@@ -276,3 +276,75 @@ class CompanyEmailSettingsModel(Base):
             name="ck_company_email_settings_test",
         ),
     )
+
+
+class CompanyHaciendaCredentialsModel(Base):
+    """Credenciales de Hacienda de la empresa, cifradas (revisión 0129, bloque V3d)."""
+
+    __tablename__ = "company_hacienda_credentials"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), primary_key=True
+    )
+    api_password_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    private_key_password_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    certificate_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    certificate_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    certificate_nit: Mapped[str] = mapped_column(String(14), nullable=False)
+    last_test_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_test_ok: Mapped[bool | None] = mapped_column(Boolean)
+    last_test_error: Mapped[str | None] = mapped_column(Text)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), _user_fk())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "certificate_nit ~ '^([0-9]{9}|[0-9]{14})$'",
+            name="ck_company_hacienda_credentials_nit",
+        ),
+        CheckConstraint(
+            "certificate_sha256 ~ '^[0-9a-f]{64}$'", name="ck_company_hacienda_credentials_sha"
+        ),
+        CheckConstraint(
+            "(last_test_at IS NULL) = (last_test_ok IS NULL) "
+            "AND (last_test_ok IS NOT FALSE OR last_test_error IS NOT NULL)",
+            name="ck_company_hacienda_credentials_test",
+        ),
+    )
+
+
+class CompanyContingencyResponsibleModel(Base):
+    """Responsable que firma el Evento de Contingencia (revisión 0130, bloque V4a)."""
+
+    __tablename__ = "company_contingency_responsibles"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), primary_key=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    document_type: Mapped[str] = mapped_column(String(2), nullable=False)
+    document_number: Mapped[str] = mapped_column(String(25), nullable=False)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), _user_fk())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "char_length(btrim(name)) BETWEEN 3 AND 100",
+            name="ck_company_contingency_responsibles_name",
+        ),
+        CheckConstraint(
+            "document_type IN ('36','13','37','03','02') "
+            "AND char_length(btrim(document_number)) BETWEEN 1 AND 25",
+            name="ck_company_contingency_responsibles_document",
+        ),
+    )

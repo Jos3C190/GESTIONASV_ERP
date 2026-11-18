@@ -19,7 +19,7 @@ COPY scripts ./scripts
 # llegan en 600. Se dejan legibles (no escribibles) para `node`; si no, el
 # contenedor falla con EACCES al abrir src/server.js.
 RUN chmod -R a+rX /app/src /app/scripts /app/package.json /app/package-lock.json \
-  && mkdir -p /app/data && chown -R node:node /app/data
+  && mkdir -p /app/data /app/certificados && chown -R node:node /app/data /app/certificados
 USER node
 
 EXPOSE 3000

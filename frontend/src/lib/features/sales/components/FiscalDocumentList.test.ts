@@ -6,6 +6,11 @@ const { salesInvoicesApi } = vi.hoisted(() => ({
   salesInvoicesApi: { list: vi.fn() }
 }));
 vi.mock('#lib/api/sales-invoices.ts', () => ({ salesInvoicesApi }));
+vi.mock('#lib/api/sales-contingencies.ts', () => ({
+  contingenciesApi: {
+    overview: vi.fn().mockResolvedValue({ windows: [], responsible: null, active: false })
+  }
+}));
 
 const ITEM = {
   id: 'doc-1',

@@ -31,6 +31,11 @@ describe('catalog navigation', () => {
       requiredPermission: 'sales_invoices:read'
     });
     expect(routeTitle('/sales/fiscal-documents/doc-1')).toBe('Documentos fiscales');
+    expect(itemByRoute('/sales/contingencies')).toMatchObject({
+      label: 'Contingencia',
+      implemented: true,
+      requiredPermission: 'sales_invoices:read'
+    });
   });
 
   it('exposes the DTE issuer settings with the fiscal read permission', () => {

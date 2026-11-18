@@ -6,6 +6,7 @@ import type {
 
 export const FISCAL_STATUS_LABELS: Record<FiscalDocumentStatus, string> = {
   pending: 'Emitiendo',
+  contingency: 'En contingencia',
   issued: 'Emitido',
   simulated: 'Simulado',
   rejected: 'Rechazado',
@@ -14,6 +15,7 @@ export const FISCAL_STATUS_LABELS: Record<FiscalDocumentStatus, string> = {
 
 export const FISCAL_STATUS_BADGES: Record<FiscalDocumentStatus, string> = {
   pending: 'bg-warning/10 text-warning',
+  contingency: 'bg-warning/10 text-warning',
   issued: 'bg-success/10 text-success',
   simulated: 'bg-primary/10 text-primary',
   rejected: 'bg-danger/10 text-danger',
@@ -23,6 +25,7 @@ export const FISCAL_STATUS_BADGES: Record<FiscalDocumentStatus, string> = {
 export const FISCAL_STATUS_FILTERS: { value: string; label: string }[] = [
   { value: '', label: 'Todos' },
   { value: 'pending', label: 'Emitiendo' },
+  { value: 'contingency', label: 'En contingencia' },
   { value: 'issued', label: 'Emitidos' },
   { value: 'simulated', label: 'Simulados' },
   { value: 'rejected', label: 'Rechazados' },
@@ -63,4 +66,55 @@ export function splitRecipients(value: string): string[] {
     .split(/[\s,;]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+/** CAT-005, tipo de contingencia. */
+export const CONTINGENCY_TYPE_LABELS: Record<number, string> = {
+  1: 'No disponibilidad del sistema de Hacienda',
+  2: 'No disponibilidad del sistema del emisor',
+  3: 'Falla del servicio de internet del emisor',
+  4: 'Falla del suministro de energía eléctrica del emisor',
+  5: 'Otro (describe el motivo)'
+};
+
+export const CONTINGENCY_STATUS_LABELS: Record<string, string> = {
+  ACTIVA: 'Activa',
+  CERRADA: 'Cerrada: falta informar el evento',
+  REPORTADA: 'Evento informado: transmitiendo',
+  COMPLETADA: 'Completada'
+};
+
+export const CONTINGENCY_STATUS_BADGES: Record<string, string> = {
+  ACTIVA: 'bg-warning/10 text-warning',
+  CERRADA: 'bg-danger/10 text-danger',
+  REPORTADA: 'bg-primary/10 text-primary',
+  COMPLETADA: 'bg-success/10 text-success'
+};
+
+/** CAT-022, documento del responsable del evento. */
+export const RESPONSIBLE_DOCUMENT_LABELS: Record<string, string> = {
+  '13': 'DUI',
+  '36': 'NIT',
+  '03': 'Pasaporte',
+  '02': 'Carné de residente',
+  '37': 'Otro'
+};
+
+/** Fecha y hora de El Salvador: 17/11/2026 10:05. */
+export function formatMoment(value: string | null | undefined): string {
+  if (!value) return '—';
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'America/El_Salvador',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23'
+    })
+      .formatToParts(new Date(value))
+      .map((part) => [part.type, part.value])
+  );
+  return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
 }

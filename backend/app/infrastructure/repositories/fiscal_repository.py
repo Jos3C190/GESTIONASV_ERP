@@ -42,6 +42,7 @@ from app.infrastructure.models.fiscal import (
     CompanyDteDocumentTypeModel,
     CompanyEconomicActivityModel,
     CompanyFiscalProfileModel,
+    CompanyHaciendaCredentialsModel,
     FiscalEstablishmentModel,
     FiscalPointOfSaleModel,
     HaciendaCatalogItemModel,
@@ -206,6 +207,11 @@ class SqlAlchemyFiscalRepository:
                 )
             )
         ).all()
+        tested = await self._session.scalar(
+            select(CompanyHaciendaCredentialsModel.last_test_ok).where(
+                CompanyHaciendaCredentialsModel.company_id == company_id
+            )
+        )
         return IssuerFacts(
             has_nit=bool(company and dte_nit(company.nit)),
             has_nrc=bool(company and dte_nrc(company.nrc)),
@@ -217,6 +223,7 @@ class SqlAlchemyFiscalRepository:
                     doc for doc, status in documents if status != CertificationStatus.APPROVED.value
                 )
             ),
+            hacienda_credentials_tested=tested is True,
         )
 
     # --- economic activities ---

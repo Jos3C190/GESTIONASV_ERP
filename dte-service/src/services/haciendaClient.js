@@ -1,6 +1,7 @@
 const axios = require('axios');
 const config = require('../config');
 const authService = require('./authService');
+const issuerContext = require('./issuerContext');
 const logger = require('../utils/logger');
 const { verificarVentanaLote } = require('../utils/ventanaHoraria');
 const { registrarAccesoExitoso, servicioDeUrl } = require('./accesoHacienda');
@@ -34,6 +35,11 @@ class HaciendaError extends Error {
  */
 function esRespuestaSemantica(data) {
   return Boolean(data) && typeof data === 'object' && typeof data.estado === 'string' && data.estado.trim() !== '';
+}
+
+/** URLs de Hacienda del modo del emisor en curso (V3d). */
+function urls() {
+  return issuerContext.actual().hacienda ?? config.hacienda;
 }
 
 function encabezados(token) {
@@ -85,7 +91,7 @@ async function llamar(metodo, url, body, { timeoutMs = config.hacienda.timeoutMs
  * Devuelve el cuerpo de la respuesta, incluido un RECHAZADO (HTTP 400).
  */
 async function transmitirDte({ ambiente, idEnvio, version, tipoDte, documentoFirmado, codigoGeneracion }) {
-  const { data } = await llamar('post', config.hacienda.recepcionUrl, {
+  const { data } = await llamar('post', urls().recepcionUrl, {
     ambiente,
     idEnvio,
     version,
@@ -108,7 +114,7 @@ async function transmitirLote({ ambiente, idEnvio, version, nitEmisor, documento
   if (!dentroDeVentana) {
     logger.warn({ ambiente, ventana }, 'Envío de lote fuera de la ventana horaria documentada por Hacienda');
   }
-  const { data } = await llamar('post', config.hacienda.recepcionLoteUrl, { ambiente, idEnvio, version, nitEmisor, documentos });
+  const { data } = await llamar('post', urls().recepcionLoteUrl, { ambiente, idEnvio, version, nitEmisor, documentos });
   return data;
 }
 
@@ -118,7 +124,7 @@ async function transmitirLote({ ambiente, idEnvio, version, nitEmisor, documento
  * selloRecibido, observaciones }.
  */
 async function transmitirContingencia({ nit, documentoFirmado }) {
-  const { data } = await llamar('post', config.hacienda.contingenciaUrl, { nit, documento: documentoFirmado });
+  const { data } = await llamar('post', urls().contingenciaUrl, { nit, documento: documentoFirmado });
   return data;
 }
 
@@ -127,7 +133,7 @@ async function transmitirContingencia({ nit, documentoFirmado }) {
  * body { ambiente, idEnvio (Integer), version, documento }.
  */
 async function anularDte({ ambiente, idEnvio, version, documentoFirmado }) {
-  const { data } = await llamar('post', config.hacienda.anulacionUrl, { ambiente, idEnvio, version, documento: documentoFirmado });
+  const { data } = await llamar('post', urls().anulacionUrl, { ambiente, idEnvio, version, documento: documentoFirmado });
   return data;
 }
 
@@ -137,12 +143,12 @@ async function anularDte({ ambiente, idEnvio, version, documentoFirmado }) {
  * para distinguir un documento inexistente de un error.
  */
 async function consultarDte({ nitEmisor, tdte, codigoGeneracion }) {
-  return llamar('post', config.hacienda.consultaUrl, { nitEmisor, tdte, codigoGeneracion }, { aceptarNoEncontrado: true });
+  return llamar('post', urls().consultaUrl, { nitEmisor, tdte, codigoGeneracion }, { aceptarNoEncontrado: true });
 }
 
 /** GET /fesv/recepcion/consultadtelote/{codigoLote} → { procesados[], rechazados[] }. */
 async function consultarLoteDte(codigoLote) {
-  const { data } = await llamar('get', `${config.hacienda.consultaLoteUrl}/${encodeURIComponent(codigoLote)}`, undefined);
+  const { data } = await llamar('get', `${urls().consultaLoteUrl}/${encodeURIComponent(codigoLote)}`, undefined);
   return data;
 }
 
