@@ -170,7 +170,7 @@ Pasos:
   - La pantalla de contingencia pasa a decir «Responsable fiscal» (firma contingencias e invalidaciones).
   - Verificar: vitest.
 - [x] **Paso 7: documentación.** `api.md`, esquema, manual de facturación y `multiemisor.md`.
-- [ ] **Paso 8: verificación y PR.** Batería completa, QA en el navegador con el servicio simulado y PR.
+- [x] **Paso 8: verificación y PR.** Batería completa, QA en el navegador con el servicio simulado y PR.
 
 ### V4c — Notas de crédito y de débito (se detalla al empezar)
 - Se emiten desde un CCF sellado: devolución sin mover inventario, descuento posterior o anulación parcial
@@ -191,13 +191,12 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 8 de V4b (verificación y PR).
-  - Pausa pedida por el usuario el 18/11/2026. Para retomar:
-    1. La batería completa de V4b se detuvo a mitad del backend, sin resultado: volver a correrla
-       (`./scripts/run-tests.sh` sin objetivo, de 35 a 45 minutos, en segundo plano).
-    2. Con la batería en verde: hacer el commit «Paso 8: verificación de V4b», mezclar `origin/develop`
-       (con `-c http.sslBackend=schannel`), subir la rama y abrir la PR hacia `develop` con Auto-fix y
-       auto-merge (merge), sin atribución.
+- **Paso en curso**: V4b terminado; falta el merge de su PR. Sigue V4c (detallarlo al empezar).
+  - Paso 8:
+    - Batería completa: backend 2002 en verde y 1 roja, `test_sales_fiscal_documents_migration` (0126), que
+      todavía esperaba que un rechazado bloqueara volver a facturar. Se ajustó a la regla de la 0131 y pasa.
+    - Etapas que no corrieron en la batería, corridas aparte: OCR 5, servicio 489, frontend (191 archivos),
+      ruff, mypy, svelte-check, ESLint y el build. Todo en verde.
   - QA en el navegador ya hecha con Grupo Lorena (simulado): «Corregir documento» en
     DTE-01-M001P001-000000000000001 (pedido PED-20261117-63FB7EB4). Se emitió el reemplazo …0002, el
     original quedó invalidado y salió el «Aviso de anulación» (Mailpit). La sección Factura del pedido
