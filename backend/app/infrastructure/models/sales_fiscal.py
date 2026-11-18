@@ -154,6 +154,8 @@ class SalesFiscalDocumentModel(Base):
             ["company_id", "superseded_by_id"],
             ["sales_fiscal_documents.company_id", "sales_fiscal_documents.id"],
             ondelete="RESTRICT",
+            deferrable=True,
+            initially="DEFERRED",
             name="fk_sales_fiscal_documents_superseded",
         ),
         Index(

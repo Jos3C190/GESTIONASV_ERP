@@ -162,6 +162,7 @@ class SqlAlchemySalesFiscalInvalidationRepository:
             return None
         model.attempts += 1
         await self._session.flush()
+        await self._session.refresh(model)
         return _entity(model)
 
     async def pending_ids(self, updated_before: datetime, limit: int) -> list[uuid.UUID]:

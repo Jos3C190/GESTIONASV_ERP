@@ -60,6 +60,7 @@ from app.application.sales_documents.pricing import SalesDocumentPricing
 from app.application.sales_invoices import SalesInvoiceUseCases
 from app.application.sales_invoices.contingency import ContingencyUseCases
 from app.application.sales_invoices.emails import SalesInvoiceEmailUseCases
+from app.application.sales_invoices.invalidation import FiscalInvalidationUseCases
 from app.application.sales_orders import SalesOrderUseCases
 from app.application.sales_quotations import SalesQuotationUseCases
 from app.application.sales_tax import SalesTaxUseCases
@@ -221,6 +222,28 @@ def get_contingency_use_cases(session: SessionDep) -> ContingencyUseCases:
         SqlAlchemyFiscalRepository(session),
         SqlAlchemyContingencyResponsibleRepository(session),
         SqlAlchemyHaciendaCredentialsRepository(session),
+        dte_client(),
+    )
+
+
+def get_fiscal_invalidation_use_cases(session: SessionDep) -> FiscalInvalidationUseCases:
+    from app.infrastructure.dte_worker import dte_client
+    from app.infrastructure.repositories.contingency_responsible_repository import (
+        SqlAlchemyContingencyResponsibleRepository,
+    )
+    from app.infrastructure.repositories.sales_fiscal_invalidation_repository import (
+        SqlAlchemySalesFiscalInvalidationRepository,
+    )
+    from app.infrastructure.repositories.sales_fiscal_repository import (
+        SqlAlchemySalesFiscalRepository,
+    )
+
+    return FiscalInvalidationUseCases(
+        SqlAlchemySalesFiscalRepository(session),
+        SqlAlchemySalesFiscalInvalidationRepository(session),
+        get_sales_invoice_use_cases(session),
+        SqlAlchemyContingencyResponsibleRepository(session),
+        SqlAlchemySalesOrderRepository(session),
         dte_client(),
     )
 

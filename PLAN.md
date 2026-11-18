@@ -139,13 +139,13 @@ Pasos:
   - Dominio: reglas de lo que se puede invalidar (emitido o simulado, sin invalidación en curso) y de lo que
     se puede corregir (factura o CCF emitido, sin reemplazo en curso).
   - Verificar: unitarias y prueba de migración.
-- [ ] **Paso 3: rechazados y reemplazo.**
+- [x] **Paso 3: rechazados y reemplazo.**
   - Un documento rechazado deja de bloquear: se corrigen los datos y «Facturar de nuevo» crea otro.
     Las observaciones de Hacienda se muestran legibles.
   - «Corregir documento» crea el reemplazo (`replaces_document_id`) con los datos actuales y marca el original
     `superseded_by_id`. Si el reemplazo falla o lo rechazan, se suelta el vínculo y el original sigue vigente.
   - Verificar: e2e con el servicio simulado.
-- [ ] **Paso 4: invalidación en el trabajador y en la API.**
+- [x] **Paso 4: invalidación en el trabajador y en la API.**
   - Tarea arq `invalidate_fiscal_document`: registra a la empresa con el responsable, llama a `/anular` con su
     clave, y al aceptarse deja el documento `invalidated`, audita, encola el correo y, si `cancel_order`,
     cancela el pedido. Con un rechazo o un fallo, el error queda en la invalidación y el documento vigente.
@@ -191,7 +191,29 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 3 de V4b (rechazados y reemplazo).
+- **Paso en curso**: 5 de V4b (correo del aviso de invalidación).
+  - Pasos 3 y 4 hechos en un mismo commit (la API de corrección necesita al trabajador):
+    - `FiscalInvalidationUseCases` (`application/sales_invoices/invalidation.py`):
+      - `invalidate`: tipo 2, con motivo, solicitante y `cancel_order`, que además pide `sales:cancel` y que
+        el pedido se pueda cancelar;
+      - `correct`: crea el reemplazo con `SalesInvoiceUseCases.prepare_replacement`, que exige el mismo tipo
+        de documento, y la invalidación tipo 1;
+      - antes de crear: plazo vigente (`sales_invoice_invalidation_expired`) y responsable fiscal registrado
+        (`sales_invoice_responsible_missing`).
+    - La FK `superseded_by_id` es diferible: el original se marca antes de insertar su reemplazo.
+    - Trabajador `process_fiscal_invalidation` (tarea `invalidate_fiscal_document`):
+      - una corrección espera el sello del reemplazo sin gastar intentos;
+      - si el reemplazo falla o lo rechazan, la solicitud falla y se suelta `superseded_by_id`;
+      - al aceptarse, el documento queda `invalidated` y, si `cancel_order`, se cancela el pedido con la
+        bitácora `SALES_ORDER_CANCELLED`;
+      - al sellarse un reemplazo se encola enseguida la invalidación de su original, y la conciliación
+        retoma las pendientes.
+    - Cliente: `invalidation_window`, `invalidate` (INVALIDATION_REJECTED como rechazo y no como error) e
+      `invalidation_pdf`.
+    - API `/sales/fiscal-documents/{id}/invalidation` (GET), `/invalidate` y `/correct` (202). Bitácora:
+      `REQUEST_INVALIDATION`, `CORRECT_FISCAL_DOCUMENT`, `FISCAL_DOCUMENT_INVALIDATED` y
+      `FISCAL_INVALIDATION_REJECTED`/`FAILED`.
+    - e2e `test_sales_invalidations.py` (5) contra el servicio simulado.
   - Paso 2 hecho:
     - Migración 0131 según el plan. El downgrade también se niega si un pedido tiene más de un documento no
       fallido (uno rechazado y otro posterior no cabrían en el índice anterior).

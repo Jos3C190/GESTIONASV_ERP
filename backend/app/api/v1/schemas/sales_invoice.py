@@ -46,6 +46,8 @@ class FiscalDocumentOut(BaseModel):
     contingency_type: int | None = None
     contingency_reason: str | None = None
     contingency_at: datetime | None = None
+    replaces_document_id: uuid.UUID | None = None
+    superseded_by_id: uuid.UUID | None = None
     created_at: datetime | None
     updated_at: datetime | None
 

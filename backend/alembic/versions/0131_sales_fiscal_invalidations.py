@@ -50,7 +50,9 @@ def upgrade() -> None:
                 REFERENCES sales_fiscal_documents (company_id, id) ON DELETE RESTRICT,
             ADD CONSTRAINT fk_sales_fiscal_documents_superseded
                 FOREIGN KEY (company_id, superseded_by_id)
-                REFERENCES sales_fiscal_documents (company_id, id) ON DELETE RESTRICT;
+                REFERENCES sales_fiscal_documents (company_id, id) ON DELETE RESTRICT
+                -- El original se marca antes de insertar su reemplazo, en la misma transacción.
+                DEFERRABLE INITIALLY DEFERRED;
         DROP INDEX uq_sales_fiscal_documents_active_sale;
         CREATE UNIQUE INDEX uq_sales_fiscal_documents_active_sale
             ON sales_fiscal_documents (company_id, sale_id) WHERE {_ACTIVE};

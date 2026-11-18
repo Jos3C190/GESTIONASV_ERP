@@ -85,6 +85,8 @@ def document_out(document: FiscalDocument) -> FiscalDocumentOut:
         contingency_type=document.contingency_type,
         contingency_reason=document.contingency_reason,
         contingency_at=document.contingency_at,
+        replaces_document_id=document.replaces_document_id,
+        superseded_by_id=document.superseded_by_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
     )
