@@ -8,6 +8,7 @@ y seguir el documento hasta que queda simulado. También permisos, errores y bit
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
 
 import pytest
 from app.core.config import settings
@@ -64,7 +65,22 @@ async def _actions(company_id: str, resource_type: str) -> list[str]:
         return list(rows)
 
 
-async def test_contingency_round_trip_in_simulated_mode(e2e_client: AsyncClient) -> None:
+@pytest.fixture
+async def opened_windows(
+    e2e_client: AsyncClient,
+) -> AsyncIterator[list[tuple[dict[str, str], int]]]:
+    """Cierra al final las ventanas que abrió la prueba, aunque falle: el servicio DTE es el de
+    desarrollo y no debe quedar una contingencia abierta."""
+
+    opened: list[tuple[dict[str, str], int]] = []
+    yield opened
+    for headers, window_id in opened:
+        await e2e_client.post(f"{CONTINGENCIES}/{window_id}/close", headers=headers)
+
+
+async def test_contingency_round_trip_in_simulated_mode(
+    e2e_client: AsyncClient, opened_windows: list[tuple[dict[str, str], int]]
+) -> None:
     admin, order, point = await _confirmed_order(e2e_client)
     establishment = await _establishment(point)
     client = dte_client()
@@ -101,6 +117,7 @@ async def test_contingency_round_trip_in_simulated_mode(e2e_client: AsyncClient)
     )
     assert activated.status_code == 201, activated.text
     window = activated.json()
+    opened_windows.append((admin, window["id"]))
     assert window["status"] == "ACTIVA"
     assert window["contingency_label"].startswith("Falla en el suministro de servicio de energía")
     assert window["branch_name"]

@@ -89,7 +89,7 @@ Pasos:
   - Aviso en la bandeja cuando hay una ventana activa.
   - Verificar: vitest con estados de carga, vacío y error.
 - [x] **Paso 6: documentación.** `api.md`, esquema, manual de documentos fiscales y `multiemisor.md`.
-- [ ] **Paso 7: verificación y PR.**
+- [x] **Paso 7: verificación y PR.**
   - Batería completa y QA en el navegador: forzar la contingencia en simulado, emitir, cerrar y ver el sello.
   - PR hacia `develop`.
 
@@ -121,7 +121,18 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 7 de V4a (verificación y PR).
+- **Paso en curso**: V4a terminado; falta el merge de su PR. Sigue V4b (detallarlo al empezar).
+  - Paso 7:
+    - Batería completa en verde: backend 1990, OCR 5, servicio 488, frontend 1193, más ruff, mypy,
+      svelte-check, ESLint y el build.
+    - QA en el navegador con Grupo Lorena (simulado): registrar al responsable; activar la contingencia
+      de S001 (aviso en la bandeja); cerrarla con confirmación («se informó el evento»); 375 px sin
+      desborde; modo claro y oscuro.
+    - Hallazgo: las e2e comparten el servicio DTE de desarrollo, y su empresa tiene el mismo NIT que
+      Grupo Lorena. Las primeras corridas fallidas dejaron ventanas abiertas (M4xx); se cerraron desde
+      la pantalla y quedan en el historial. La e2e ahora cierra sus ventanas con el fixture
+      `opened_windows`, aunque falle.
+    - El PR #52 (actor nulo en las existencias de prueba) ya está en develop.
   - Paso 6 hecho: `docs/api.md` («Billing contingency»), esquema §40, manual de facturación §5
     «Contingencia» (las secciones siguientes se renumeran) y `dte-service/docs/multiemisor.md`.
   - Paso 5 hecho:
