@@ -6,7 +6,11 @@ import type {
   FiscalDocumentPage,
   FiscalEmail,
   FiscalEmailHistory,
-  InvoiceOptions
+  FiscalInvalidation,
+  Correction,
+  InvalidationOverview,
+  InvoiceOptions,
+  Person
 } from '#lib/types/sales-invoices.ts';
 
 export function fiscalDocumentsPath(filters: FiscalDocumentFilters = {}): string {
@@ -49,6 +53,21 @@ export const salesInvoicesApi = {
   },
   emails(id: string) {
     return apiFetch<FiscalEmailHistory>(`/sales/fiscal-documents/${id}/emails`);
+  },
+  invalidation(id: string) {
+    return apiFetch<InvalidationOverview>(`/sales/fiscal-documents/${id}/invalidation`);
+  },
+  invalidate(id: string, payload: { reason: string; requester: Person; cancel_order?: boolean }) {
+    return apiFetch<FiscalInvalidation>(`/sales/fiscal-documents/${id}/invalidate`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+  correct(id: string, requester: Person) {
+    return apiFetch<Correction>(`/sales/fiscal-documents/${id}/correct`, {
+      method: 'POST',
+      body: JSON.stringify({ requester })
+    });
   },
   sendEmail(id: string, recipients: string[] | null) {
     return apiFetch<FiscalEmail>(`/sales/fiscal-documents/${id}/emails`, {

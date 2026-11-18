@@ -156,7 +156,7 @@
         document_number: responsibleNumber
       });
       if (overview) overview = { ...overview, responsible: saved };
-      responsibleMessage = 'Se guardó el responsable del evento de contingencia.';
+      responsibleMessage = 'Se guardó el responsable fiscal.';
     } catch (cause) {
       actionError = message(cause, 'No se pudo guardar el responsable.');
     } finally {
@@ -356,15 +356,17 @@
 
     <section class="space-y-3 rounded-xl border border-border bg-surface p-4">
       <div>
-        <h2 class="font-semibold text-foreground">Responsable del evento de contingencia</h2>
+        <h2 class="font-semibold text-foreground">Responsable fiscal</h2>
         <p class="text-sm text-foreground-muted">
-          Hacienda pide el nombre y el documento de quien responde por el evento. Con un responsable
-          registrado, el evento se informa solo al cerrarse la contingencia.
+          Persona de la empresa que firma ante Hacienda los eventos de contingencia y las
+          invalidaciones de documentos. Con un responsable registrado, el evento se informa solo al
+          cerrarse la contingencia.
         </p>
       </div>
       {#if !overview.responsible}
         <p class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
-          Sin responsable registrado: el evento de contingencia no se puede informar.
+          Sin responsable fiscal registrado: no se pueden informar contingencias ni invalidar
+          documentos.
         </p>
       {/if}
       <form class="grid gap-4 sm:grid-cols-3" onsubmit={saveResponsible}>

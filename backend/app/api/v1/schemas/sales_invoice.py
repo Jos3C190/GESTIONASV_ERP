@@ -73,6 +73,7 @@ class InvoiceOptionsOut(BaseModel):
     points_of_sale: list[PointOfSaleOut]
     blockers: list[str]
     document: FiscalDocumentOut | None
+    previous_document: FiscalDocumentOut | None = None
 
 
 class DownloadUrlOut(BaseModel):

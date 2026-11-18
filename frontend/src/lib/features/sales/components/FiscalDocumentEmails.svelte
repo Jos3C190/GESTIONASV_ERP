@@ -146,9 +146,11 @@
             <div class="min-w-0">
               <p class="break-all text-foreground">{item.recipients.join(', ')}</p>
               <p class="text-xs text-foreground-muted">
-                {item.origin === 'auto'
-                  ? 'Automático al emitirse'
-                  : `Enviado por ${item.requested_by_name ?? '—'}`} · {formatDay(
+                {item.invalidation_id
+                  ? 'Aviso de anulación'
+                  : item.origin === 'auto'
+                    ? 'Automático al emitirse'
+                    : `Enviado por ${item.requested_by_name ?? '—'}`} · {formatDay(
                   item.sent_at ?? item.created_at
                 )}
               </p>

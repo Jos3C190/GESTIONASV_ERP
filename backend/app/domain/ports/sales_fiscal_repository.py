@@ -74,6 +74,10 @@ class SalesFiscalRepository(Protocol):
         self, company_id: uuid.UUID, order_id: uuid.UUID
     ) -> FiscalDocument | None: ...
 
+    async def latest_for_order(
+        self, company_id: uuid.UUID, order_id: uuid.UUID
+    ) -> FiscalDocument | None: ...
+
     async def list_documents(
         self, company_id: uuid.UUID, filters: FiscalDocumentFilters, *, page: int, size: int
     ) -> tuple[list[FiscalDocument], int]: ...

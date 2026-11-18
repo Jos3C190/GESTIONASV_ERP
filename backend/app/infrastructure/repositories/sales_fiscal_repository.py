@@ -161,6 +161,19 @@ class SqlAlchemySalesFiscalRepository:
             )
         )
 
+    async def latest_for_order(
+        self, company_id: uuid.UUID, order_id: uuid.UUID
+    ) -> FiscalDocument | None:
+        return await self._one(
+            _query()
+            .where(
+                SalesFiscalDocumentModel.company_id == company_id,
+                SalesFiscalDocumentModel.sale_id == order_id,
+            )
+            .order_by(SalesFiscalDocumentModel.created_at.desc())
+            .limit(1)
+        )
+
     async def list_documents(
         self, company_id: uuid.UUID, filters: FiscalDocumentFilters, *, page: int, size: int
     ) -> tuple[list[FiscalDocument], int]:

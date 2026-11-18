@@ -203,6 +203,11 @@ async def test_a_rejected_document_does_not_block_invoicing_again(e2e_client: As
         )
     ).json()
     await _set_status(first["id"], "rejected")
+    options = (
+        await e2e_client.get(f"{ORDERS}/{order['id']}/invoice-options", headers=admin)
+    ).json()
+    assert options["document"] is None
+    assert options["previous_document"]["id"] == first["id"], "se muestra el rechazado"
     again = await e2e_client.post(
         f"{ORDERS}/{order['id']}/invoice", json={"point_of_sale_id": str(point)}, headers=admin
     )

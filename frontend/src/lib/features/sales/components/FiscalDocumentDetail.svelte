@@ -13,6 +13,7 @@
   import { DOCUMENT_LABELS, formatDay, formatMoney } from '#lib/features/sales/quotation-labels.ts';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
   import FiscalDocumentEmails from './FiscalDocumentEmails.svelte';
+  import FiscalInvalidationPanel from './FiscalInvalidationPanel.svelte';
   import type { FiscalDocument } from '#lib/types/sales-invoices.ts';
 
   let { id }: { id: string } = $props();
@@ -211,7 +212,12 @@
       {/if}
     </section>
 
-    {#key document.status}
+    {#key `${document.status}-${document.superseded_by_id ?? ''}`}
+      <FiscalInvalidationPanel
+        {document}
+        canInvalidate={permissions.hasPermission('sales_invoices:invalidate')}
+        onChanged={() => void load()}
+      />
       <FiscalDocumentEmails {document} />
     {/key}
   {/if}

@@ -159,7 +159,7 @@ Pasos:
   - Verificar: e2e del recorrido simulado completo, con permisos, plazos y errores.
 - [x] **Paso 5: correo del aviso de invalidación.** Composición, adjunto con el PDF del evento (lo arma el
   servicio) y envío automático. Verificar: unitarias y e2e.
-- [ ] **Paso 6: interfaz.**
+- [x] **Paso 6: interfaz.**
   - Detalle del documento:
     - «Anular documento» (rescindir) con motivo y solicitante;
     - «Corregir documento» con su explicación;
@@ -191,7 +191,22 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 6 de V4b (interfaz).
+- **Paso en curso**: 7 de V4b (documentación).
+  - Paso 6 hecho:
+    - `FiscalInvalidationPanel.svelte` en el detalle del documento:
+      - plazo, o el aviso de que venció;
+      - «Corregir documento» y «Anular documento», con el solicitante y, al anular, el motivo;
+      - historial con estado, sello y error;
+      - vínculos al reemplazo y al original.
+    - Pedido: «Cancelar pedido» también en uno facturado y sellado, con los permisos `sales:cancel` y
+      `sales_invoices:invalidate`. Pide el solicitante, anula con `cancel_order` y el pedido se cancela al
+      aceptarse. `onInvoiced` ahora entrega el documento vigente.
+    - `invoice-options` devuelve `previous_document` (el último del pedido) cuando no hay uno vigente. La
+      sección Factura muestra el rechazo con las observaciones de Hacienda, o la anulación, y deja facturar
+      de nuevo.
+    - Bandeja: estado «Invalidado» y su filtro. Los envíos muestran «Aviso de anulación». La pantalla de
+      contingencia dice «Responsable fiscal».
+    - vitest: `FiscalInvalidationPanel.test.ts` (3); ventas: 64 en verde.
   - Paso 5 hecho:
     - `sales_fiscal_document_emails.invalidation_id` (en la 0131): el aviso es un envío automático aparte,
       uno por invalidación aceptada.

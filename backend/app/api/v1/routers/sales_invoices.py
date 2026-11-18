@@ -170,6 +170,7 @@ async def invoice_options(
         ],
         blockers=blockers,
         document=document_out(options.document) if options.document else None,
+        previous_document=document_out(options.previous) if options.previous else None,
     )
 
 

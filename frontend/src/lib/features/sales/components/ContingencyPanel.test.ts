@@ -155,11 +155,7 @@ it('guarda el responsable y muestra el error de validación', async () => {
     .mockResolvedValue(RESPONSIBLE);
   render(ContingencyPanel, { canOperate: true });
 
-  expect(
-    await screen.findByText(
-      /Sin responsable registrado: el evento de contingencia no se puede informar/
-    )
-  ).toBeInTheDocument();
+  expect(await screen.findByText(/Sin responsable fiscal registrado/)).toBeInTheDocument();
   await fireEvent.input(screen.getByLabelText('Nombre'), { target: { value: 'Ana Rivas' } });
   await fireEvent.input(screen.getByLabelText('Número de documento'), {
     target: { value: '01234567-8' }

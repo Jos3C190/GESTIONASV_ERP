@@ -19,7 +19,11 @@
     sale,
     onInvoiced = () => {},
     pollMs = 3000
-  }: { sale: Sale; onInvoiced?: (invoiced: boolean) => void; pollMs?: number } = $props();
+  }: {
+    sale: Sale;
+    onInvoiced?: (document: FiscalDocument | null) => void;
+    pollMs?: number;
+  } = $props();
 
   let options = $state<InvoiceOptions | null>(null);
   let current = $state<FiscalDocument | null>(null);
@@ -45,7 +49,7 @@
 
   function track(next: FiscalDocument | null) {
     current = next;
-    onInvoiced(next !== null && next.status !== 'failed');
+    onInvoiced(next !== null && next.status !== 'failed' ? next : null);
     stopPolling();
     if (next?.status === 'pending') {
       timer = setTimeout(() => void refresh(next.id), pollMs);
@@ -209,6 +213,32 @@
       {/key}
     {/if}
   {:else if options}
+    {#if !current && options.previous_document}
+      {@const previous = options.previous_document}
+      <div
+        class="rounded-lg border border-border bg-surface-muted px-4 py-3 text-sm text-foreground"
+        role="status"
+      >
+        <p class="font-medium">
+          {previous.status === 'invalidated'
+            ? `El documento ${previous.control_number ?? ''} se invalidó.`
+            : previous.status === 'rejected'
+              ? 'Hacienda rechazó el documento anterior.'
+              : 'El documento anterior no se emitió.'}
+        </p>
+        {#if previous.status === 'rejected' && previous.error_message}
+          <p class="mt-1 break-words text-danger">{previous.error_message}</p>
+          <p class="mt-1 text-foreground-muted">
+            Corrige los datos del cliente o del pedido y vuelve a facturar: se emite un documento
+            nuevo.
+          </p>
+        {/if}
+        <a
+          class="mt-1 inline-block text-primary hover:underline"
+          href={`/sales/fiscal-documents/${previous.id}`}>Ver el documento anterior</a
+        >
+      </div>
+    {/if}
     {#if current?.status === 'failed'}
       <div
         class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"

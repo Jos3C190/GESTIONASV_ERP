@@ -61,6 +61,8 @@ class InvoiceOptions:
     points_of_sale: tuple[PointOfSaleOption, ...]
     blockers: tuple[str, ...]
     document: FiscalDocument | None
+    previous: FiscalDocument | None = None
+    """Sin documento activo: el último del pedido (rechazado, fallido o invalidado), V4b."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +128,7 @@ class SalesInvoiceUseCases:
             for p in (establishment.points_of_sale if establishment else ())
             if p.is_active
         )
+        active = await self._repo.active_for_order(company_id, order_id)
         blockers: list[str] = []
         try:
             await self._prepare(order, points[0].id if points else None)
@@ -137,7 +140,8 @@ class SalesInvoiceUseCases:
             establishment_code=establishment.code if establishment else None,
             points_of_sale=points,
             blockers=tuple(blockers),
-            document=await self._repo.active_for_order(company_id, order_id),
+            document=active,
+            previous=None if active else await self._repo.latest_for_order(company_id, order_id),
         )
 
     # --- armado ---------------------------------------------------------------------------------
