@@ -9,7 +9,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-FiscalStatus = Literal["pending", "contingency", "issued", "simulated", "rejected", "failed"]
+FiscalStatus = Literal[
+    "pending", "contingency", "issued", "simulated", "rejected", "failed", "invalidated"
+]
 
 
 class InvoiceIn(BaseModel):

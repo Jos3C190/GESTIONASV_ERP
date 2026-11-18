@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -65,6 +66,8 @@ class SalesFiscalDocumentModel(Base):
     contingency_type: Mapped[int | None] = mapped_column(SmallInteger)
     contingency_reason: Mapped[str | None] = mapped_column(Text)
     contingency_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    replaces_document_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    superseded_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     created_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -117,11 +120,13 @@ class SalesFiscalDocumentModel(Base):
             name="ck_sales_fiscal_documents_mode",
         ),
         CheckConstraint(
-            "status IN ('pending','contingency','issued','simulated','rejected','failed')",
+            "status IN ('pending','contingency','issued','simulated','rejected','failed',"
+            "'invalidated')",
             name="ck_sales_fiscal_documents_status",
         ),
         CheckConstraint(
-            "status NOT IN ('contingency','issued','simulated') OR (generation_code IS NOT NULL "
+            "status NOT IN ('contingency','issued','simulated','invalidated') "
+            "OR (generation_code IS NOT NULL "
             "AND control_number IS NOT NULL AND issued_at IS NOT NULL)",
             name="ck_sales_fiscal_documents_identity",
         ),
@@ -135,12 +140,39 @@ class SalesFiscalDocumentModel(Base):
             "AND contingency_type IS NOT NULL))",
             name="ck_sales_fiscal_documents_contingency",
         ),
+        CheckConstraint(
+            "replaces_document_id IS DISTINCT FROM id AND superseded_by_id IS DISTINCT FROM id",
+            name="ck_sales_fiscal_documents_replacement",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "replaces_document_id"],
+            ["sales_fiscal_documents.company_id", "sales_fiscal_documents.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_documents_replaces",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "superseded_by_id"],
+            ["sales_fiscal_documents.company_id", "sales_fiscal_documents.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_documents_superseded",
+        ),
         Index(
             "uq_sales_fiscal_documents_active_sale",
             "company_id",
             "sale_id",
             unique=True,
-            postgresql_where=text("status <> 'failed'"),
+            postgresql_where=text(
+                "status IN ('pending','contingency','issued','simulated') AND superseded_by_id IS NULL"
+            ),
+        ),
+        Index(
+            "uq_sales_fiscal_documents_replaces",
+            "company_id",
+            "replaces_document_id",
+            unique=True,
+            postgresql_where=text(
+                "replaces_document_id IS NOT NULL AND status NOT IN ('failed','rejected')"
+            ),
         ),
         Index(
             "ix_sales_fiscal_documents_company_status",
@@ -225,4 +257,100 @@ class SalesFiscalDocumentEmailModel(Base):
             "updated_at",
             postgresql_where=text("status = 'pending'"),
         ),
+    )
+
+
+class SalesFiscalInvalidationModel(Base):
+    """Solicitud de invalidación de un documento fiscal (revisión 0131, bloque V4b)."""
+
+    __tablename__ = "sales_fiscal_invalidations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    kind: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(200))
+    requester_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    requester_document_type: Mapped[str] = mapped_column(String(2), nullable=False)
+    requester_document_number: Mapped[str] = mapped_column(String(25), nullable=False)
+    responsible_name: Mapped[str | None] = mapped_column(String(100))
+    responsible_document_type: Mapped[str | None] = mapped_column(String(2))
+    responsible_document_number: Mapped[str | None] = mapped_column(String(25))
+    replacement_document_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    cancel_order: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending")
+    idempotency_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    event_generation_code: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    event_seal: Mapped[str | None] = mapped_column(String(100))
+    error_code: Mapped[str | None] = mapped_column(String(80))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    requested_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "id", name="uq_sales_fiscal_invalidations_company_id"),
+        UniqueConstraint(
+            "company_id", "idempotency_key", name="uq_sales_fiscal_invalidations_idempotency"
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "document_id"],
+            ["sales_fiscal_documents.company_id", "sales_fiscal_documents.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_invalidations_document",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "replacement_document_id"],
+            ["sales_fiscal_documents.company_id", "sales_fiscal_documents.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_invalidations_replacement",
+        ),
+        ForeignKeyConstraint(
+            ["requested_by_id", "company_id"],
+            ["user_companies.user_id", "user_companies.company_id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_invalidations_requester",
+        ),
+        CheckConstraint(
+            "(kind = 1 AND replacement_document_id IS NOT NULL AND NOT cancel_order) "
+            "OR (kind = 2 AND replacement_document_id IS NULL)",
+            name="ck_sales_fiscal_invalidations_kind",
+        ),
+        CheckConstraint(
+            "status IN ('pending','accepted','rejected','failed')",
+            name="ck_sales_fiscal_invalidations_status",
+        ),
+        CheckConstraint(
+            "requester_document_type IN ('36','13','37','03','02') "
+            "AND char_length(btrim(requester_name)) BETWEEN 3 AND 100 "
+            "AND char_length(btrim(requester_document_number)) BETWEEN 1 AND 25",
+            name="ck_sales_fiscal_invalidations_people",
+        ),
+        CheckConstraint(
+            "(status = 'pending') = (resolved_at IS NULL) "
+            "AND (status <> 'accepted' OR event_generation_code IS NOT NULL) "
+            "AND (status NOT IN ('rejected','failed') OR error_message IS NOT NULL) "
+            "AND attempts >= 0",
+            name="ck_sales_fiscal_invalidations_result",
+        ),
+        Index(
+            "uq_sales_fiscal_invalidations_pending",
+            "company_id",
+            "document_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_sales_fiscal_invalidations_status", "status", "updated_at"),
     )

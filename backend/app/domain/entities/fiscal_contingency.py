@@ -41,22 +41,26 @@ class ContingencyResponsible:
 
 
 def validate_responsible(
-    name: str, document_type: str, document_number: str
+    name: str,
+    document_type: str,
+    document_number: str,
+    *,
+    code: str = "sales_contingency_responsible_invalid",
 ) -> ContingencyResponsible:
+    """Persona con su documento de CAT-022 (responsable fiscal, solicitante de una invalidación)."""
+
     clean = ContingencyResponsible(name.strip(), document_type.strip(), document_number.strip())
     if not MIN_NAME <= len(clean.name) <= MAX_NAME:
         raise _rule(
-            "Escribe el nombre del responsable (de 3 a 100 caracteres).",
-            "sales_contingency_responsible_invalid",
+            "Escribe el nombre completo (de 3 a 100 caracteres).",
+            code,
         )
     if clean.document_type not in RESPONSIBLE_DOCUMENT_TYPES:
-        raise _rule(
-            "Elige el tipo de documento del responsable.", "sales_contingency_responsible_invalid"
-        )
+        raise _rule("Elige el tipo de documento de identidad.", code)
     if not 1 <= len(clean.document_number) <= MAX_DOCUMENT:
         raise _rule(
-            "Escribe el número de documento del responsable (hasta 25 caracteres).",
-            "sales_contingency_responsible_invalid",
+            "Escribe el número de documento (hasta 25 caracteres).",
+            code,
         )
     return clean
 

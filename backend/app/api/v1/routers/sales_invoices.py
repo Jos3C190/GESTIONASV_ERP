@@ -54,7 +54,7 @@ Storage = Annotated[ObjectStorage, Depends(get_object_storage)]
 CompanyId = Annotated[uuid.UUID, Depends(request_company_id)]
 _READ = [Depends(require_permission("sales_invoices:read"))]
 _ISSUE = [Depends(require_permission("sales_invoices:issue"))]
-_STATUS_PATTERN = "^(pending|contingency|issued|simulated|rejected|failed)$"
+_STATUS_PATTERN = "^(pending|contingency|issued|simulated|rejected|failed|invalidated)$"
 _SERVICE_MISSING = "La facturación electrónica no está configurada en este servidor."
 
 

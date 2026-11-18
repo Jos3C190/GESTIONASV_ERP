@@ -122,7 +122,7 @@ Pasos:
   - `/anular` y `/invalidacion` usan el proveedor simulado cuando el emisor es simulado, y el real en otro
     caso, en cualquier despliegue. Las rutas `/simulacion` se conservan.
   - Verificar: pruebas de integración (emisor simulado en un despliegue en pruebas) y `run-tests.sh dte`.
-- [ ] **Paso 2: migración 0131 y dominio.**
+- [x] **Paso 2: migración 0131 y dominio.**
   - `sales_fiscal_documents`:
     - estado `invalidated`;
     - `replaces_document_id` y `superseded_by_id` (FK compuestas a la misma tabla);
@@ -191,7 +191,17 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 2 de V4b (migración 0131 y dominio).
+- **Paso en curso**: 3 de V4b (rechazados y reemplazo).
+  - Paso 2 hecho:
+    - Migración 0131 según el plan. El downgrade también se niega si un pedido tiene más de un documento no
+      fallido (uno rechazado y otro posterior no cabrían en el índice anterior).
+    - `ACTIVE_STATUSES` ya no incluye `rejected`. `active_for_order` y `invoiced()` cuentan solo pendiente,
+      contingencia, emitido y simulado sin reemplazo en curso.
+    - Dominio `sales_fiscal_invalidation.py`: `require_invalidatable`, `require_correctable`, `validate_reason`
+      (5 a 200 caracteres) y `validate_requester`. `validate_responsible` acepta el código de error y sus
+      mensajes ya son neutros.
+    - Repositorio `SqlAlchemySalesFiscalInvalidationRepository` (crear, buscar, guardar, tomar con
+      `SKIP LOCKED` y pendientes).
   - Paso 1 hecho: `/anular` y `/invalidacion` usan el proveedor simulado con un emisor simulado, en
     cualquier despliegue (respuesta `SIMULADO_INVALIDADO`, sin Hacienda ni firmador). Se actualizó la prueba
     que esperaba 409 en simulado. Servicio: 489 en verde.
