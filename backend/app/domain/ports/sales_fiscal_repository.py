@@ -113,6 +113,8 @@ class FiscalDocumentEmail:
     message_id: str | None = None
     requested_by_id: uuid.UUID | None = None
     requested_by_name: str | None = None
+    invalidation_id: uuid.UUID | None = None
+    """Aviso de una invalidación aceptada (V4b), en lugar del documento."""
     sent_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

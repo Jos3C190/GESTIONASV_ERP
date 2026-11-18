@@ -58,7 +58,12 @@ from app.domain.ports.email_sender import EmailDeliveryError
 from app.domain.ports.object_storage import ObjectStorage
 from app.domain.ports.sales_fiscal_repository import FiscalDocument
 from app.infrastructure.db.session import session_scope
-from app.infrastructure.dte_email import email_sender, process_fiscal_email, queue_auto_email
+from app.infrastructure.dte_email import (
+    email_sender,
+    process_fiscal_email,
+    queue_auto_email,
+    queue_invalidation_email,
+)
 from app.infrastructure.dte_service_client import HttpDteServiceClient
 from app.infrastructure.object_storage import S3ObjectStorage
 from app.infrastructure.repositories.audit_repository import SqlAlchemyAuditRepository
@@ -444,6 +449,7 @@ async def process_fiscal_invalidation(
     client: DteService,
     scope: SessionScope = session_scope,
     max_attempts: int | None = None,
+    on_email: EmailQueued | None = None,
 ) -> FiscalInvalidation | None:
     """Envía una invalidación pendiente. Devuelve la solicitud guardada o ``None`` si no le tocaba.
 
@@ -468,7 +474,12 @@ async def process_fiscal_invalidation(
     early = await _invalidation_not_ready(scope, item, document, replacement, limit)
     if early is not None:
         return early
-    return await _send_invalidation(scope, client, item, document, replacement)
+    saved = await _send_invalidation(scope, client, item, document, replacement)
+    if saved.status is InvalidationStatus.ACCEPTED:
+        email_id = await queue_invalidation_email(scope, document, saved.id)
+        if email_id is not None and on_email is not None:
+            await on_email(email_id)
+    return saved
 
 
 async def _invalidation_not_ready(
@@ -603,8 +614,15 @@ async def issue_fiscal_document(ctx: dict[str, Any], document_id_text: str) -> N
 
 
 async def invalidate_fiscal_document(ctx: dict[str, Any], invalidation_id_text: str) -> None:
+    async def queue_email(email_id: uuid.UUID) -> None:
+        await ctx["redis"].enqueue_job(
+            "send_fiscal_email", str(email_id), _job_id=f"dte-email:{email_id}"
+        )
+
     try:
-        await process_fiscal_invalidation(uuid.UUID(invalidation_id_text), client=ctx["dte"])
+        await process_fiscal_invalidation(
+            uuid.UUID(invalidation_id_text), client=ctx["dte"], on_email=queue_email
+        )
     except DteServiceError as error:
         attempt = int(ctx.get("job_try") or 1)
         log.info("dte_invalidation_retry", code=error.code, attempt=attempt)

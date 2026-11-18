@@ -733,13 +733,19 @@ router.get('/eventos/:codigoGeneracion/json', requireDteScope('read'), (req, res
 router.post('/eventos/:codigoGeneracion/pdf/render', requireDteScope('read'), async (req, res) => {
   const evento = invalidacionService.leerEvento(req.params.codigoGeneracion);
   if (!evento || evento.tipo !== 'INVALIDACION') return res.status(404).json({ error: 'Evento de invalidación no encontrado' });
-  const archivo = invalidacionService.archivoEvento(evento);
+  // Evento de un emisor simulado (V4b del ERP): mismo PDF con la marca sin validez fiscal.
+  const simulation = evento.modo_emision === 'SIMULATED';
+  const archivo = simulation ? invalidacionSimulada.archivoEvento(evento) : invalidacionService.archivoEvento(evento);
   if (!archivo) return res.status(409).json({ error: 'El evento aún no tiene sello de recepción', estado: evento.estado });
   const { logoPngBuffer, error: errorLogo } = leerLogoPdf(req.body);
   if (errorLogo) return res.status(422).json({ error: errorLogo });
   try {
-    const bytes = await generarPDFEventoInvalidacion(archivo, { logoPngBuffer });
+    const bytes = await generarPDFEventoInvalidacion(
+      archivo,
+      simulation ? { simulation, watermark: config.simulation.watermark, logoPngBuffer } : { logoPngBuffer },
+    );
     res.setHeader('Content-Type', 'application/pdf');
+    if (simulation) res.setHeader('X-DTE-Issuance-Mode', 'simulated');
     return res.status(200).send(bytes);
   } catch (err) {
     logger.error({ err: err.message, codigoGeneracion: evento.codigo_generacion }, 'Fallo al generar el PDF del evento');

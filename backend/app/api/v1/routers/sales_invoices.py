@@ -368,6 +368,7 @@ def _email_out(email: FiscalDocumentEmail) -> FiscalEmailOut:
         error_code=email.error_code,
         error_message=email.error_message,
         requested_by_name=email.requested_by_name,
+        invalidation_id=email.invalidation_id,
         sent_at=email.sent_at,
         created_at=email.created_at,
     )

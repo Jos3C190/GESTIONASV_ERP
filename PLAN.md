@@ -157,7 +157,7 @@ Pasos:
     - en el pedido, `cancel` con documento: invalida y cancela al aceptarse.
     Permiso `sales_invoices:invalidate` y bitácora.
   - Verificar: e2e del recorrido simulado completo, con permisos, plazos y errores.
-- [ ] **Paso 5: correo del aviso de invalidación.** Composición, adjunto con el PDF del evento (lo arma el
+- [x] **Paso 5: correo del aviso de invalidación.** Composición, adjunto con el PDF del evento (lo arma el
   servicio) y envío automático. Verificar: unitarias y e2e.
 - [ ] **Paso 6: interfaz.**
   - Detalle del documento:
@@ -191,7 +191,14 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 5 de V4b (correo del aviso de invalidación).
+- **Paso en curso**: 6 de V4b (interfaz).
+  - Paso 5 hecho:
+    - `sales_fiscal_document_emails.invalidation_id` (en la 0131): el aviso es un envío automático aparte,
+      uno por invalidación aceptada.
+    - `compose_invalidation`: el asunto «Anulación de …», el reemplazo si lo hay y, si no, el motivo; marca
+      de simulado. Adjunta el PDF del evento, que se pide al servicio en el momento del envío.
+    - Servicio: `/api/dte/eventos/:codigo/pdf/render` también arma el PDF de un evento simulado.
+    - La API de envíos expone `invalidation_id`; la interfaz lo muestra como «Aviso de anulación».
   - Pasos 3 y 4 hechos en un mismo commit (la API de corrección necesita al trabajador):
     - `FiscalInvalidationUseCases` (`application/sales_invoices/invalidation.py`):
       - `invalidate`: tipo 2, con motivo, solicitante y `cancel_order`, que además pide `sales:cancel` y que

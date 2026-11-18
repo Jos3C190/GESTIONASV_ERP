@@ -206,6 +206,7 @@ class SalesFiscalDocumentEmailModel(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     message_id: Mapped[str | None] = mapped_column(String(255))
     requested_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    invalidation_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -249,7 +250,20 @@ class SalesFiscalDocumentEmailModel(Base):
             "company_id",
             "document_id",
             unique=True,
-            postgresql_where=text("origin = 'auto'"),
+            postgresql_where=text("origin = 'auto' AND invalidation_id IS NULL"),
+        ),
+        Index(
+            "uq_sales_fiscal_document_emails_invalidation",
+            "company_id",
+            "invalidation_id",
+            unique=True,
+            postgresql_where=text("origin = 'auto' AND invalidation_id IS NOT NULL"),
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "invalidation_id"],
+            ["sales_fiscal_invalidations.company_id", "sales_fiscal_invalidations.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_document_emails_invalidation",
         ),
         Index(
             "ix_sales_fiscal_document_emails_document", "company_id", "document_id", "created_at"

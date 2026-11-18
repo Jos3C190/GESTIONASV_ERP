@@ -274,5 +274,12 @@ test('un emisor simulado invalida con sello simulado en un despliegue de pruebas
   // La misma clave devuelve el mismo evento.
   const repetida = await (await anular(motivo, 'modo-anular-01')).json();
   assert.equal(repetida.codigoGeneracion, cuerpo.codigoGeneracion);
+  const pdf = await fetch(`${baseUrl}/api/dte/eventos/${cuerpo.codigoGeneracion}/pdf/render`, {
+    method: 'POST',
+    headers: headers(SIMULADA.nit),
+    body: '{}',
+  });
+  assert.equal(pdf.status, 200, 'el PDF del evento simulado sale por la ruta normal');
+  assert.equal(pdf.headers.get('x-dte-issuance-mode'), 'simulated');
   assert.equal(llamadas.length, antes, 'nada sale hacia Hacienda ni al firmador');
 });

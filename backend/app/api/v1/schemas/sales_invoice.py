@@ -96,6 +96,8 @@ class FiscalEmailOut(BaseModel):
     error_code: str | None
     error_message: str | None
     requested_by_name: str | None
+    invalidation_id: uuid.UUID | None = None
+    """Aviso de una invalidación (V4b), no el documento."""
     sent_at: datetime | None
     created_at: datetime | None
 

@@ -11,6 +11,8 @@ Bloque V4b del área de Ventas. Un documento sellado no se borra: se invalida co
 - El documento activo de un pedido es el pendiente, en contingencia, emitido o simulado que no esté
   siendo reemplazado: un rechazado o un invalidado ya no bloquea volver a facturarlo.
 - ``sales_fiscal_invalidations`` guarda cada solicitud de invalidación con su evento.
+- ``sales_fiscal_document_emails.invalidation_id``: el aviso al cliente de una invalidación
+  aceptada es un envío aparte del documento (uno automático por invalidación).
 - Permiso ``sales_invoices:invalidate``.
 """
 
@@ -120,6 +122,18 @@ def upgrade() -> None:
             ON sales_fiscal_invalidations (company_id, document_id) WHERE status = 'pending';
         CREATE INDEX ix_sales_fiscal_invalidations_status
             ON sales_fiscal_invalidations (status, updated_at);
+        ALTER TABLE sales_fiscal_document_emails
+            ADD COLUMN invalidation_id uuid,
+            ADD CONSTRAINT fk_sales_fiscal_document_emails_invalidation
+                FOREIGN KEY (company_id, invalidation_id)
+                REFERENCES sales_fiscal_invalidations (company_id, id) ON DELETE RESTRICT;
+        DROP INDEX uq_sales_fiscal_document_emails_auto;
+        CREATE UNIQUE INDEX uq_sales_fiscal_document_emails_auto
+            ON sales_fiscal_document_emails (company_id, document_id)
+            WHERE origin = 'auto' AND invalidation_id IS NULL;
+        CREATE UNIQUE INDEX uq_sales_fiscal_document_emails_invalidation
+            ON sales_fiscal_document_emails (company_id, invalidation_id)
+            WHERE origin = 'auto' AND invalidation_id IS NOT NULL;
     """)
     code, description = _PERMISSION
     op.execute(f"""
@@ -166,6 +180,13 @@ def downgrade() -> None:
         DELETE FROM permissions WHERE code = '{code}';
     """)
     op.execute("""
+        DROP INDEX uq_sales_fiscal_document_emails_invalidation;
+        DROP INDEX uq_sales_fiscal_document_emails_auto;
+        CREATE UNIQUE INDEX uq_sales_fiscal_document_emails_auto
+            ON sales_fiscal_document_emails (company_id, document_id) WHERE origin = 'auto';
+        ALTER TABLE sales_fiscal_document_emails
+            DROP CONSTRAINT fk_sales_fiscal_document_emails_invalidation,
+            DROP COLUMN invalidation_id;
         DROP TABLE sales_fiscal_invalidations;
         DROP INDEX uq_sales_fiscal_documents_replaces;
         DROP INDEX uq_sales_fiscal_documents_active_sale;

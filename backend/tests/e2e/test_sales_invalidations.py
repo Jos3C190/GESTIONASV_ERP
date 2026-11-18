@@ -21,6 +21,9 @@ from tests.e2e.test_sales_invoices import (
     ORDER_SELLER,
     ORDERS,
     _confirmed_order,
+    _deliver,
+    _mailbox,
+    _set_customer_email,
     _with_policy,
 )
 
@@ -216,3 +219,39 @@ async def test_invalidating_needs_its_permission(e2e_client: AsyncClient) -> Non
         headers=seller,
     )
     assert denied.status_code == 403
+
+
+@pytest.mark.skipif(not settings.SMTP_HOST, reason="Sin servidor de correo configurado")
+async def test_the_customer_is_told_about_the_invalidation(e2e_client: AsyncClient) -> None:
+    admin, order, _point, issued = await _issued(e2e_client)
+    customer = f"anulacion-{uuid.uuid4().hex[:8]}@example.com"
+    await _set_customer_email(order, customer)
+    invalidation = (
+        await e2e_client.post(
+            f"{DOCUMENTS}/{issued['id']}/invalidate",
+            json={"reason": "El cliente desistió de la compra", "requester": REQUESTER},
+            headers=admin,
+        )
+    ).json()
+    queued: list[uuid.UUID] = []
+
+    async def capture(email_id: uuid.UUID) -> None:
+        queued.append(email_id)
+
+    client = dte_client()
+    assert client is not None
+    await process_fiscal_invalidation(
+        uuid.UUID(invalidation["id"]), client=client, on_email=capture
+    )
+    assert len(queued) == 1
+    await _deliver(str(queued[0]))
+
+    [message] = await _mailbox(customer)
+    assert message["Subject"].startswith("[SIMULADO")
+    assert "Anulación de factura" in message["Subject"]
+    assert message["Attachments"] == 1
+    history = (await e2e_client.get(f"{DOCUMENTS}/{issued['id']}/emails", headers=admin)).json()[
+        "items"
+    ]
+    notice = next(item for item in history if item["invalidation_id"])
+    assert notice["status"] == "sent"
