@@ -8,15 +8,33 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-aws-${{ github.ref_name }}
+  group: deploy-aws-unified
   cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
   deploy:
     name: Desplegar en EC2
     runs-on: ubuntu-latest
     steps:
-      - name: Conectar por SSH y ejecutar despliegue
+      - name: Checkout de la rama feature/ai-bedrock-guardrails
+        uses: actions/checkout@v4
+        with:
+          ref: feature/ai-bedrock-guardrails
+          fetch-depth: 0
+
+      - name: Auto-merge de develop hacia la rama feature
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin develop
+          # Fusiona los cambios de develop en tu rama de forma limpia
+          git merge origin/develop --no-edit -m "chore(sync): auto-merge develop into feature/ai-bedrock-guardrails [skip ci]" || echo "Merge omitido (al día o conflicto)"
+          git push origin feature/ai-bedrock-guardrails || echo "Push omitido"
+
+      - name: Conectar por SSH y desplegar en EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -24,10 +42,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ec2-user/GESTIONASV_ERP
-            BRANCH="${{ github.ref_name }}"
-            echo ">>> Desplegando rama: $BRANCH"
-            git fetch origin "$BRANCH"
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-            export DEPLOY_BRANCH="$BRANCH"
+            git fetch origin feature/ai-bedrock-guardrails
+            git checkout -B feature/ai-bedrock-guardrails origin/feature/ai-bedrock-guardrails
+            export DEPLOY_BRANCH="feature/ai-bedrock-guardrails"
             bash /home/ec2-user/GESTIONASV_ERP/scripts/deploy.sh
-
