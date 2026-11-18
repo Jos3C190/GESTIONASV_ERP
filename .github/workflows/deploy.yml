@@ -30,8 +30,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin develop
-          # Fusiona los cambios de develop en tu rama de forma limpia
-          git merge origin/develop --no-edit -m "chore(sync): auto-merge develop into feature/ai-bedrock-guardrails [skip ci]" || echo "Merge omitido (al día o conflicto)"
+          # Trae automáticamente lo nuevo de develop a tu rama
+          git merge origin/develop --no-edit -m "chore(sync): auto-merge develop into feature/ai-bedrock-guardrails [skip ci]" || echo "Merge omitido (al día)"
           git push origin feature/ai-bedrock-guardrails || echo "Push omitido"
 
       - name: Conectar por SSH y desplegar en EC2
