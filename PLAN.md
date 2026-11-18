@@ -192,6 +192,21 @@ Pasos:
 ## Estado actual
 
 - **Paso en curso**: 8 de V4b (verificación y PR).
+  - Pausa pedida por el usuario el 18/11/2026. Para retomar:
+    1. La batería completa de V4b se detuvo a mitad del backend, sin resultado: volver a correrla
+       (`./scripts/run-tests.sh` sin objetivo, de 35 a 45 minutos, en segundo plano).
+    2. Con la batería en verde: hacer el commit «Paso 8: verificación de V4b», mezclar `origin/develop`
+       (con `-c http.sslBackend=schannel`), subir la rama y abrir la PR hacia `develop` con Auto-fix y
+       auto-merge (merge), sin atribución.
+  - QA en el navegador ya hecha con Grupo Lorena (simulado): «Corregir documento» en
+    DTE-01-M001P001-000000000000001 (pedido PED-20261117-63FB7EB4). Se emitió el reemplazo …0002, el
+    original quedó invalidado y salió el «Aviso de anulación» (Mailpit). La sección Factura del pedido
+    muestra el reemplazo y ofrece «Cancelar pedido» con el solicitante (abierto, sin enviar). 375 px sin
+    desborde.
+  - La QA encontró dos textos y ya están corregidos (commit «Paso 8 (QA)»): un documento invalidado ahora
+    dice «Se invalidó y lo reemplaza…» y su sección de correo explica que ya no se envía. vitest: ventas
+    65 en verde.
+  - La base de desarrollo ya está en 0131.
   - Paso 7 hecho: `api.md` («Invalidation and correction»), esquema §41, manual de facturación §4.1 y
     `multiemisor.md` («Invalidación por emisor»).
   - Paso 6 hecho:

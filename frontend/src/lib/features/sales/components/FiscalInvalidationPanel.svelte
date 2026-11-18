@@ -112,7 +112,15 @@
       >.
     </p>
   {/if}
-  {#if document.superseded_by_id}
+  {#if document.superseded_by_id && document.status === 'invalidated'}
+    <p class="text-sm text-foreground">
+      Se invalidó y lo reemplaza
+      <a
+        class="text-primary hover:underline"
+        href={`/sales/fiscal-documents/${document.superseded_by_id}`}>el documento corregido</a
+      >.
+    </p>
+  {:else if document.superseded_by_id}
     <p class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
       Se está corrigiendo con
       <a class="underline" href={`/sales/fiscal-documents/${document.superseded_by_id}`}

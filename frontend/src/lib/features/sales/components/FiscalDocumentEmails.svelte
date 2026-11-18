@@ -133,7 +133,9 @@
       </p>
     {:else if !sendable}
       <p class="text-sm text-foreground-muted">
-        El documento se podrá enviar cuando termine de emitirse.
+        {fiscal.status === 'invalidated'
+          ? 'Un documento invalidado ya no se envía; el historial muestra el aviso de anulación.'
+          : 'El documento se podrá enviar cuando termine de emitirse.'}
       </p>
     {/if}
 

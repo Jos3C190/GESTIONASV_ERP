@@ -156,3 +156,19 @@ it('no ofrece acciones vencido, sin permiso o con un reemplazo en curso', async 
   expect(await screen.findByText(/Se está corrigiendo con/)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Corregir documento' })).not.toBeInTheDocument();
 });
+
+it('un documento ya invalidado enlaza al que lo reemplaza', async () => {
+  salesInvoicesApi.invalidation.mockResolvedValue({
+    deadline: null,
+    expired: false,
+    estimated: false,
+    history: [invalidation({ kind: 1 })]
+  });
+  render(FiscalInvalidationPanel, {
+    document: { ...DOCUMENT, status: 'invalidated', superseded_by_id: 'doc-2' } as FiscalDocument,
+    canInvalidate: true
+  });
+  expect(await screen.findByText('Aceptada')).toBeInTheDocument();
+  expect(screen.getByText(/Se invalidó y lo reemplaza/)).toBeInTheDocument();
+  expect(screen.queryByText(/Se está corrigiendo/)).not.toBeInTheDocument();
+});
