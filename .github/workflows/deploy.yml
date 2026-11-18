@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-aws-develop
+  group: deploy-aws-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -24,7 +24,10 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ec2-user/GESTIONASV_ERP
-            git fetch origin feature/ai-bedrock-guardrails
-            git checkout -B feature/ai-bedrock-guardrails origin/feature/ai-bedrock-guardrails
+            BRANCH="${{ github.ref_name }}"
+            echo ">>> Desplegando rama: $BRANCH"
+            git fetch origin "$BRANCH"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+            export DEPLOY_BRANCH="$BRANCH"
             bash /home/ec2-user/GESTIONASV_ERP/scripts/deploy.sh
 
