@@ -169,7 +169,7 @@ Pasos:
   - La bandeja agrega el estado «Invalidado» y su filtro.
   - La pantalla de contingencia pasa a decir «Responsable fiscal» (firma contingencias e invalidaciones).
   - Verificar: vitest.
-- [ ] **Paso 7: documentación.** `api.md`, esquema, manual de facturación y `multiemisor.md`.
+- [x] **Paso 7: documentación.** `api.md`, esquema, manual de facturación y `multiemisor.md`.
 - [ ] **Paso 8: verificación y PR.** Batería completa, QA en el navegador con el servicio simulado y PR.
 
 ### V4c — Notas de crédito y de débito (se detalla al empezar)
@@ -191,7 +191,9 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 7 de V4b (documentación).
+- **Paso en curso**: 8 de V4b (verificación y PR).
+  - Paso 7 hecho: `api.md` («Invalidation and correction»), esquema §41, manual de facturación §4.1 y
+    `multiemisor.md` («Invalidación por emisor»).
   - Paso 6 hecho:
     - `FiscalInvalidationPanel.svelte` en el detalle del documento:
       - plazo, o el aviso de que venció;

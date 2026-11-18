@@ -1255,3 +1255,27 @@ Revision `0130` (revises `0129`), block V4a.
 
 **Downgrade** refuses while documents generated in contingency exist. Covered by
 `backend/tests/integration/test_sales_fiscal_contingency_migration.py`.
+
+## 41. Invalidations and replacements (0131)
+
+Revision `0131` (revises `0130`), block V4b.
+
+- `sales_fiscal_documents`:
+  - status `invalidated`;
+  - `replaces_document_id` and `superseded_by_id` (composite FKs to the same table; the second is
+    `DEFERRABLE INITIALLY DEFERRED` so the original is marked before its replacement is inserted);
+  - `uq_sales_fiscal_documents_active_sale` now covers
+    `status IN ('pending','contingency','issued','simulated') AND superseded_by_id IS NULL`;
+  - `uq_sales_fiscal_documents_replaces`: one live replacement per original.
+- `sales_fiscal_invalidations`: `kind` (1 with a replacement, 2 without), `reason`, requester and
+  responsible (name and CAT-022 document), `replacement_document_id`, `cancel_order`, `status`
+  (`pending`, `accepted`, `rejected`, `failed`), `idempotency_key`, `attempts`, the event's
+  generation code and seal, error, `requested_by_id` and timestamps. One pending request per
+  document.
+- `sales_fiscal_document_emails.invalidation_id`: the customer notice of an accepted
+  invalidation (one automatic notice per invalidation).
+- Permission `sales_invoices:invalidate`, granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while invalidations, invalidated or replacement documents, or orders with
+more than one non-failed document exist. Covered by
+`backend/tests/integration/test_sales_fiscal_invalidations_migration.py`.
