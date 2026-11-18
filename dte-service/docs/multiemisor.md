@@ -35,7 +35,7 @@ El ERP registra cada empresa con el alcance `issuers`:
 |---|---|---|
 | `GET` | `/api/emisores` | Lista los emisores. |
 | `GET` | `/api/emisores/:nit` | Un emisor. |
-| `PUT` | `/api/emisores/:nit` | Alta o actualización: `nombre`, `modo`, `tiposHabilitados` (códigos de dos dígitos), `activo` y, fuera de simulado, `credenciales` (`passwordApi`, `passwordPri`, `certificado` en base64). |
+| `PUT` | `/api/emisores/:nit` | Alta o actualización: `nombre`, `modo`, `tiposHabilitados` (códigos de dos dígitos), `activo`; fuera de simulado, `credenciales` (`passwordApi`, `passwordPri`, `certificado` en base64); y `responsable` (`nombre`, `tipoDocumento` de CAT-022, `numeroDocumento`) del Evento de Contingencia. Sin `responsable` se conserva el guardado; `null` lo quita. |
 | `POST` | `/api/emisores/:nit/probar` | Autentica contra Hacienda y firma un documento de prueba con el certificado de la empresa. Devuelve `{ok, autenticacion, firma}`; no emite ni consume números de control. |
 
 Un emisor emite solo si cumple todo esto:
@@ -57,7 +57,36 @@ Un emisor emite solo si cumple todo esto:
   atómica en `DTE_CERTIFICATES_DIR`, donde lo lee el firmador.
 - Cada solicitud de `/api/dte` corre con el contexto de su emisor (`src/services/issuerContext.js`),
   y la cola de reintentos usa el emisor de cada documento.
-- Pendiente para V4: la contingencia todavía toma parte de sus datos del emisor del entorno.
+
+## Contingencia por emisor y establecimiento (V4a)
+
+Cada ventana es de un emisor y un establecimiento (`codEstable` del documento, por ejemplo
+`M001`): una caída en una tienda no pone en contingencia a las demás ni a otras empresas.
+
+- **Automática**: agotada la política de reintentos (8 s, consultar el estado, dos reenvíos), el
+  documento pasa a modelo diferido y abre la ventana de su emisor y establecimiento. El sondeo
+  revisa cada ventana con el contexto de su emisor y la cierra cuando Hacienda vuelve a responder.
+- **Manual**: el ERP la activa ante una falla que el servicio no ve (corte de energía o de internet
+  en la tienda) con `POST /api/emisores/:nit/contingencias`.
+- Al cerrarla se informa el Evento de Contingencia con el responsable registrado con el emisor
+  (sin él, la ventana queda `CERRADA` hasta que se envíe indicándolo). Con el sello del evento,
+  los documentos se transmiten uno a uno dentro de las 72 h.
+- Mientras tanto la versión legible (`/pdf`) se entrega con el sello «Pendiente: documento
+  generado en contingencia».
+- **Emisor simulado**: la contingencia manual funciona sin Hacienda. El evento se construye y se
+  valida contra el esquema, recibe un sello simulado y los documentos quedan `SIMULADO`.
+
+| Método | Ruta | Uso |
+|---|---|---|
+| `GET` | `/api/emisores/:nit/contingencias` | Ventanas abiertas y recientes, con plazos (`eventoLimite` 24 h, `transmisionLimite` 72 h). |
+| `POST` | `/api/emisores/:nit/contingencias` | Activa la ventana: `establecimiento`, `tipoContingencia` (CAT-005) y `motivoContingencia` (obligatorio para el tipo 5). |
+| `POST` | `/api/emisores/:nit/contingencias/:id/cerrar` | Cierra e informa el evento si hay responsable (enviado o registrado). |
+| `POST` | `/api/emisores/:nit/contingencias/:id/evento` | Envía o reenvía el evento de una ventana cerrada. |
+| `POST` | `/api/emisores/:nit/contingencias/:id/transmitir` | Encola los documentos informados pendientes. |
+
+Todas piden el alcance `contingency`; la ventana de otro emisor responde 404. Las rutas
+globales `/api/dte/contingencia` quedan para el emisor heredado del entorno y la certificación
+(`DTE_ALLOW_FORCED_CONTINGENCY`).
 
 ## Aislamiento
 
@@ -97,6 +126,7 @@ Un emisor emite solo si cumple todo esto:
 
 Corre `npm test` en `node:22-slim` sobre una copia del servicio. Las pruebas multiemisor están en
 `test/integration/multiemisor.test.js`; las de modo y credenciales por empresa, contra un Hacienda
-y un firmador simulados por HTTP, en `test/integration/modoPorEmisor.test.js`.
+y un firmador simulados por HTTP, en `test/integration/modoPorEmisor.test.js`; la contingencia
+por emisor y establecimiento, en `contingenciaPorEmisor.test.js` y `contingenciaSimulada.test.js`.
 `test/helpers/certificadoPrueba.js` genera certificados con el formato de Hacienda y llaves RSA
 reales; el firmador oficial firma con ellos (verificado).

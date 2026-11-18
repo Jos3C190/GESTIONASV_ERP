@@ -1,6 +1,7 @@
 /** Documento fiscal del pedido (bloque V3b). */
 
-export type FiscalDocumentStatus = 'pending' | 'issued' | 'simulated' | 'rejected' | 'failed';
+export type FiscalDocumentStatus =
+  'pending' | 'contingency' | 'issued' | 'simulated' | 'rejected' | 'failed';
 
 export interface FiscalDocument {
   id: string;
@@ -25,6 +26,10 @@ export interface FiscalDocument {
   has_json: boolean;
   has_pdf: boolean;
   issued_at: string | null;
+  /** Generado en contingencia (V4a): tipo de CAT-005, motivo y cuándo. */
+  contingency_type?: number | null;
+  contingency_reason?: string | null;
+  contingency_at?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }

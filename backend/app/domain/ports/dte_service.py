@@ -5,6 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from app.domain.entities.fiscal_contingency import (
+    ContingencyOverview,
+    ContingencyResponsible,
+    ContingencyWindow,
+)
+
 
 class DteServiceError(Exception):
     """Fallo del servicio. ``transient`` dice si conviene reintentar con la misma clave."""
@@ -47,6 +53,14 @@ class IssueResult:
     response: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class DocumentState:
+    """Estado de un documento en el servicio (seguimiento de la contingencia, V4a)."""
+
+    status: str
+    seal: str | None
+
+
 class DteService(Protocol):
     async def register_issuer(
         self,
@@ -56,6 +70,7 @@ class DteService(Protocol):
         mode: str,
         document_types: list[str],
         credentials: IssuerCredentials | None = None,
+        responsible: ContingencyResponsible | None = None,
     ) -> None: ...
 
     async def test_issuer(self, nit: str) -> ConnectionCheck: ...
@@ -64,6 +79,20 @@ class DteService(Protocol):
         self, document_type: str, *, nit: str, idempotency_key: str, body: dict[str, Any]
     ) -> IssueResult: ...
 
+    async def document_state(self, nit: str, generation_code: str) -> DocumentState: ...
+
     async def document_json(self, nit: str, generation_code: str) -> dict[str, Any]: ...
 
     async def document_pdf(self, nit: str, generation_code: str) -> bytes: ...
+
+    # --- contingencia por establecimiento (V4a) ---
+
+    async def contingencies(self, nit: str) -> ContingencyOverview: ...
+
+    async def activate_contingency(
+        self, nit: str, *, establishment_code: str, contingency_type: int, reason: str | None
+    ) -> ContingencyWindow: ...
+
+    async def close_contingency(self, nit: str, window_id: int) -> ContingencyWindow: ...
+
+    async def send_contingency_event(self, nit: str, window_id: int) -> ContingencyWindow: ...

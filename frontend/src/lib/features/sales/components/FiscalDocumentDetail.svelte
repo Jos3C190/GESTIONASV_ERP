@@ -4,6 +4,7 @@
   import { salesInvoicesApi } from '#lib/api/sales-invoices.ts';
   import { downloadFiscalJson, openFiscalPdf } from '#lib/features/sales/fiscal-downloads.ts';
   import {
+    CONTINGENCY_TYPE_LABELS,
     FISCAL_MODE_LABELS,
     FISCAL_STATUS_BADGES,
     FISCAL_STATUS_LABELS,
@@ -96,6 +97,17 @@
       >
     </header>
 
+    {#if document.contingency_type}
+      <p
+        class={`rounded-lg border px-4 py-3 text-sm ${document.status === 'contingency' ? 'border-warning/30 bg-warning/10 text-warning' : 'border-border bg-surface-muted text-foreground-muted'}`}
+      >
+        Generado en contingencia ({CONTINGENCY_TYPE_LABELS[document.contingency_type] ??
+          'Otro'}{document.contingency_reason ? `: ${document.contingency_reason}` : ''}).
+        {document.status === 'contingency'
+          ? 'Se transmitirá a Hacienda al cerrar la contingencia; el sello aparecerá cuando lo reciba. El cliente ya puede recibir su PDF.'
+          : 'Ya se transmitió después del evento de contingencia.'}
+      </p>
+    {/if}
     {#if document.status === 'simulated'}
       <p
         class="rounded-lg border border-border bg-surface-muted px-4 py-3 text-sm text-foreground-muted"

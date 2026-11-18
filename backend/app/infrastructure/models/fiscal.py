@@ -316,3 +316,35 @@ class CompanyHaciendaCredentialsModel(Base):
             name="ck_company_hacienda_credentials_test",
         ),
     )
+
+
+class CompanyContingencyResponsibleModel(Base):
+    """Responsable que firma el Evento de Contingencia (revisión 0130, bloque V4a)."""
+
+    __tablename__ = "company_contingency_responsibles"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), primary_key=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    document_type: Mapped[str] = mapped_column(String(2), nullable=False)
+    document_number: Mapped[str] = mapped_column(String(25), nullable=False)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), _user_fk())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "char_length(btrim(name)) BETWEEN 3 AND 100",
+            name="ck_company_contingency_responsibles_name",
+        ),
+        CheckConstraint(
+            "document_type IN ('36','13','37','03','02') "
+            "AND char_length(btrim(document_number)) BETWEEN 1 AND 25",
+            name="ck_company_contingency_responsibles_document",
+        ),
+    )
