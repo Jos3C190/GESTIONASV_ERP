@@ -93,14 +93,84 @@ Pasos:
   - Batería completa y QA en el navegador: forzar la contingencia en simulado, emitir, cerrar y ver el sello.
   - PR hacia `develop`.
 
-### V4b — Invalidación y rechazos (se detalla al empezar)
-- Invalidar documentos con un evento firmado y sus plazos (tres meses para 01, 11 y 14; décimo día hábil del
-  mes siguiente para 03, 04, 05, 06 y 07). Tipos de invalidación del catálogo: error en datos con documento
-  de reemplazo, rescindir la operación, y otro.
-- «Rechazado: corregir y reenviar»: ver las observaciones de Hacienda, corregir los datos del cliente o del
-  pedido y emitir un documento nuevo.
-- Cancelar un pedido facturado: invalidar primero y después cancelar.
-- Estado «Invalidado» en la bandeja, PDF del evento y correo al cliente.
+### V4b — Invalidación y rechazos (rama `feature/ventas-v4b-invalidacion`)
+
+Decisiones del usuario (18/11/2026):
+- **Responsable**: el responsable del evento de contingencia (V4a) pasa a ser el «responsable fiscal de la
+  empresa» y también firma las invalidaciones.
+- **Error en los datos (tipo 1)**: automático. «Corregir documento» emite el reemplazo con los datos actuales
+  del cliente y del pedido y, cuando queda sellado, el sistema invalida el original y lo vincula.
+- **Correo**: al invalidar se avisa al cliente, si tiene correo, con el PDF del evento de invalidación.
+- **Cancelar un pedido facturado**: en un solo paso desde el pedido. Se piden el motivo y el solicitante,
+  se invalida el documento (tipo 2, rescindir la operación) y, cuando Hacienda lo acepta, se cancela el pedido.
+
+Hechos verificados:
+- El servicio ya tiene la invalidación completa:
+  - `POST /api/dte/:codigo/anular` y `GET /api/dte/:codigo/invalidacion` (vista previa con el plazo y las
+    reglas de reemplazo);
+  - el constructor valida tipo (1 error, 2 rescindir, 3 otro), responsable y solicitante (CAT-022);
+  - tipos 1 y 3 exigen el reemplazo ya sellado, salvo en 05 y 08;
+  - plazos: tres meses desde el sello para 01, 11 y 14; décimo día hábil del mes siguiente para los demás.
+- La invalidación simulada (`/api/dte/simulacion/...`) solo se monta con el despliegue en simulado. En el
+  real, `/anular` responde 409 a un emisor simulado: hay que despachar por el modo del emisor.
+- En el ERP un documento rechazado cuenta como activo. Bloquea volver a facturar el pedido (índice
+  `uq_sales_fiscal_documents_active_sale`, con `status <> 'failed'`) y también cancelarlo (`invoiced()`).
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [ ] **Paso 1: invalidación por modo del emisor en el servicio.**
+  - `/anular` y `/invalidacion` usan el proveedor simulado cuando el emisor es simulado, y el real en otro
+    caso, en cualquier despliegue. Las rutas `/simulacion` se conservan.
+  - Verificar: pruebas de integración (emisor simulado en un despliegue en pruebas) y `run-tests.sh dte`.
+- [ ] **Paso 2: migración 0131 y dominio.**
+  - `sales_fiscal_documents`:
+    - estado `invalidated`;
+    - `replaces_document_id` y `superseded_by_id` (FK compuestas a la misma tabla);
+    - el índice del documento activo del pedido pasa a ser
+      `status IN ('pending','contingency','issued','simulated') AND superseded_by_id IS NULL`.
+    Un rechazado o un invalidado ya no bloquea volver a facturar.
+  - Tabla `sales_fiscal_invalidations`, una por intento:
+    - `kind` (1 o 2), `reason`, solicitante (nombre, tipo y número de documento) y responsable (copia);
+    - `replacement_document_id`, `cancel_order` y la clave de idempotencia;
+    - estado `pending`, `accepted`, `rejected` o `failed`;
+    - código de generación y sello del evento, error, `requested_by` y fechas.
+    Solo una pendiente por documento.
+  - Permiso `sales_invoices:invalidate`. El downgrade se niega si hay invalidaciones o documentos vinculados.
+  - Dominio: reglas de lo que se puede invalidar (emitido o simulado, sin invalidación en curso) y de lo que
+    se puede corregir (factura o CCF emitido, sin reemplazo en curso).
+  - Verificar: unitarias y prueba de migración.
+- [ ] **Paso 3: rechazados y reemplazo.**
+  - Un documento rechazado deja de bloquear: se corrigen los datos y «Facturar de nuevo» crea otro.
+    Las observaciones de Hacienda se muestran legibles.
+  - «Corregir documento» crea el reemplazo (`replaces_document_id`) con los datos actuales y marca el original
+    `superseded_by_id`. Si el reemplazo falla o lo rechazan, se suelta el vínculo y el original sigue vigente.
+  - Verificar: e2e con el servicio simulado.
+- [ ] **Paso 4: invalidación en el trabajador y en la API.**
+  - Tarea arq `invalidate_fiscal_document`: registra a la empresa con el responsable, llama a `/anular` con su
+    clave, y al aceptarse deja el documento `invalidated`, audita, encola el correo y, si `cancel_order`,
+    cancela el pedido. Con un rechazo o un fallo, el error queda en la invalidación y el documento vigente.
+  - Tipo 1: al sellarse el reemplazo, el trabajador encola la invalidación del original con su código.
+  - API:
+    - `GET /sales/fiscal-documents/{id}/invalidation` (vista previa: plazo y si está vencido);
+    - `POST .../invalidate` (tipo 2, motivo, solicitante);
+    - `POST .../correct` (tipo 1);
+    - en el pedido, `cancel` con documento: invalida y cancela al aceptarse.
+    Permiso `sales_invoices:invalidate` y bitácora.
+  - Verificar: e2e del recorrido simulado completo, con permisos, plazos y errores.
+- [ ] **Paso 5: correo del aviso de invalidación.** Composición, adjunto con el PDF del evento (lo arma el
+  servicio) y envío automático. Verificar: unitarias y e2e.
+- [ ] **Paso 6: interfaz.**
+  - Detalle del documento:
+    - «Anular documento» (rescindir) con motivo y solicitante;
+    - «Corregir documento» con su explicación;
+    - estado «Invalidado» con el evento, el sello y el reemplazo vinculado;
+    - observaciones del rechazo y «Facturar de nuevo».
+  - Pedido: cancelar un pedido facturado pide el motivo y el solicitante.
+  - La bandeja agrega el estado «Invalidado» y su filtro.
+  - La pantalla de contingencia pasa a decir «Responsable fiscal» (firma contingencias e invalidaciones).
+  - Verificar: vitest.
+- [ ] **Paso 7: documentación.** `api.md`, esquema, manual de facturación y `multiemisor.md`.
+- [ ] **Paso 8: verificación y PR.** Batería completa, QA en el navegador con el servicio simulado y PR.
 
 ### V4c — Notas de crédito y de débito (se detalla al empezar)
 - Se emiten desde un CCF sellado: devolución sin mover inventario, descuento posterior o anulación parcial
@@ -121,7 +191,9 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V4a terminado; falta el merge de su PR. Sigue V4b (detallarlo al empezar).
+- **Paso en curso**: 1 de V4b (invalidación por modo del emisor en el servicio).
+  - V4a mergeado (#53). Un colaborador mergeó la #54: cada push a develop se mezcla sola en
+    `feature/ai-bedrock-guardrails` y desde esa rama se despliega a EC2.
   - Paso 7:
     - Batería completa en verde: backend 1990, OCR 5, servicio 488, frontend 1193, más ruff, mypy,
       svelte-check, ESLint y el build.
