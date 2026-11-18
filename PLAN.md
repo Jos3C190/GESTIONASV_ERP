@@ -118,7 +118,7 @@ Hechos verificados:
 
 Pasos:
 - [x] **Paso 0: plan y rama.**
-- [ ] **Paso 1: invalidación por modo del emisor en el servicio.**
+- [x] **Paso 1: invalidación por modo del emisor en el servicio.**
   - `/anular` y `/invalidacion` usan el proveedor simulado cuando el emisor es simulado, y el real en otro
     caso, en cualquier despliegue. Las rutas `/simulacion` se conservan.
   - Verificar: pruebas de integración (emisor simulado en un despliegue en pruebas) y `run-tests.sh dte`.
@@ -191,7 +191,10 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 1 de V4b (invalidación por modo del emisor en el servicio).
+- **Paso en curso**: 2 de V4b (migración 0131 y dominio).
+  - Paso 1 hecho: `/anular` y `/invalidacion` usan el proveedor simulado con un emisor simulado, en
+    cualquier despliegue (respuesta `SIMULADO_INVALIDADO`, sin Hacienda ni firmador). Se actualizó la prueba
+    que esperaba 409 en simulado. Servicio: 489 en verde.
   - V4a mergeado (#53). Un colaborador mergeó la #54: cada push a develop se mezcla sola en
     `feature/ai-bedrock-guardrails` y desde esa rama se despliega a EC2.
   - Paso 7:

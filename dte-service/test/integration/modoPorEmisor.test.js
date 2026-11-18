@@ -246,3 +246,33 @@ test('la prueba de conexión autentica y firma sin emitir', async () => {
   // Probar no transmite nada a Hacienda.
   assert.equal(llamadas.filter((l) => l.ruta === 'recepcion').length, antes);
 });
+
+test('un emisor simulado invalida con sello simulado en un despliegue de pruebas, sin Hacienda', async () => {
+  const emitida = await factura(SIMULADA, 'modo-simulada-anular-01');
+  assert.equal(emitida.status, 201, JSON.stringify(emitida.body));
+  const codigo = emitida.body.codigoGeneracion;
+  const antes = llamadas.length;
+
+  const vista = await fetch(`${baseUrl}/api/dte/${codigo}/invalidacion`, { headers: headers(SIMULADA.nit) });
+  assert.equal(vista.status, 200);
+  assert.ok((await vista.json()).plazo.limite);
+
+  const persona = { nombre: 'Responsable de prueba', tipoDocumento: '13', numeroDocumento: '01234567-8' };
+  const anular = (motivo, clave) => fetch(`${baseUrl}/api/dte/${codigo}/anular`, {
+    method: 'POST',
+    headers: headers(SIMULADA.nit, { 'Idempotency-Key': clave }),
+    body: JSON.stringify({ motivo }),
+  });
+  const sinSolicitante = await anular({ tipoAnulacion: 2, responsable: persona }, 'modo-anular-mal');
+  assert.equal(sinSolicitante.status, 400);
+
+  const motivo = { tipoAnulacion: 2, motivoAnulacion: 'El cliente desistió', responsable: persona, solicitante: persona };
+  const invalidada = await anular(motivo, 'modo-anular-01');
+  const cuerpo = await invalidada.json();
+  assert.equal(invalidada.status, 200, JSON.stringify(cuerpo));
+  assert.equal(cuerpo.estado, 'SIMULADO_INVALIDADO');
+  // La misma clave devuelve el mismo evento.
+  const repetida = await (await anular(motivo, 'modo-anular-01')).json();
+  assert.equal(repetida.codigoGeneracion, cuerpo.codigoGeneracion);
+  assert.equal(llamadas.length, antes, 'nada sale hacia Hacienda ni al firmador');
+});

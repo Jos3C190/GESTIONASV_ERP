@@ -36,6 +36,7 @@ const { requireDteScope } = require('../middleware/apiKeyAuth');
 const { asociarIdentidad } = require('../services/idempotency');
 const conIdempotencia = require('../middleware/conIdempotencia');
 const { escenarioSimulacion } = require('../middleware/escenarioSimulacion');
+const invalidacionSimulada = require('../services/simulatedInvalidationProvider');
 
 const router = express.Router();
 // Multiemisor: un código de generación de otro emisor responde 404.
@@ -623,15 +624,42 @@ function normalizarMotivo(motivo) {
   };
 }
 
+/** Invalidación de un documento de un emisor simulado (mismas reglas, sello simulado). */
+function invalidarSimulado(req, row) {
+  if (!invalidacionSimulada.esDocumentoSimulado(row)) {
+    return { status: 409, body: { error: 'Solo se invalidan en simulación documentos SIMULADO', code: 'DTE_NOT_INVALIDATABLE' } };
+  }
+  const identidad = req.dteIdempotency?.codigoGeneracion;
+  if (identidad) {
+    const evento = invalidacionSimulada.leerEvento(identidad);
+    if (!evento || evento.tipo !== 'INVALIDACION' || evento.dte_codigo_generacion !== row.codigo_generacion) {
+      return {
+        status: 409,
+        body: { error: 'La identidad idempotente no corresponde a un evento simulado de este DTE', code: 'DTE_IDENTITY_REQUIRES_RECONCILIATION' },
+      };
+    }
+    return invalidacionSimulada.aplicar(evento.codigo_generacion);
+  }
+  const motivo = normalizarMotivo(req.body?.motivo);
+  const { evento, respuesta } = invalidacionSimulada.preparar({
+    row,
+    motivo,
+    codigoGeneracionReemplazo: req.body?.codigoGeneracionReemplazo ?? null,
+    claveIdempotencia: req.dteIdempotency?.clave,
+  });
+  if (respuesta) return respuesta;
+  return invalidacionSimulada.aplicar(evento.codigo_generacion);
+}
+
 router.post(
   '/:codigoGeneracion/anular',
   requireDteScope('invalidate'),
   conIdempotencia(async (req) => {
-    if (issuerContext.simulado()) {
-      return { status: 409, body: { error: 'Los documentos simulados no se invalidan ante Hacienda' } };
-    }
     const row = db.prepare('SELECT * FROM dtes WHERE codigo_generacion = ?').get(req.params.codigoGeneracion);
     if (!row) return { status: 404, body: { error: 'DTE no encontrado localmente' } };
+    // Emisor simulado (V4b del ERP): el evento se arma y se valida igual, con sello simulado y sin
+    // Hacienda, en cualquier despliegue. Nunca se manda a Hacienda un documento simulado.
+    if (issuerContext.simulado()) return invalidarSimulado(req, row);
 
     const identidad = req.dteIdempotency?.codigoGeneracion;
     if (identidad) {
@@ -660,6 +688,12 @@ router.post(
 router.get('/:codigoGeneracion/invalidacion', requireDteScope('read'), (req, res) => {
   const row = db.prepare('SELECT * FROM dtes WHERE codigo_generacion = ?').get(req.params.codigoGeneracion);
   if (!row) return res.status(404).json({ error: 'DTE no encontrado' });
+  if (issuerContext.simulado()) {
+    if (row.estado !== 'SIMULADO' || !invalidacionSimulada.esDocumentoSimulado(row)) {
+      return res.status(409).json({ error: `El DTE no se puede invalidar en estado ${row.estado}`, code: 'DTE_NOT_INVALIDATABLE', estado: row.estado });
+    }
+    return res.json(invalidacionSimulada.vistaPrevia(row));
+  }
   if (row.estado !== 'TRANSMITIDO' || !row.sello_recepcion) {
     return res.status(409).json({ error: `El DTE no se puede invalidar en estado ${row.estado}`, code: 'DTE_NOT_INVALIDATABLE', estado: row.estado });
   }
