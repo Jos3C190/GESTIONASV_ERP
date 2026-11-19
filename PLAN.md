@@ -214,10 +214,109 @@ Pasos:
 - [x] **Paso 4: documentación.** `api.md`, esquema, manual de configuración fiscal y manual de facturación.
 - [x] **Paso 5: verificación y PR.** Batería completa, QA en el navegador y PR a `develop`.
 
-### V4c — Notas de crédito y de débito (se detalla al empezar)
-- Se emiten desde un CCF sellado: devolución sin mover inventario, descuento posterior o anulación parcial
-  (nota de crédito), y cargo adicional (nota de débito).
-- Saldo del CCF, plazo legal, documento relacionado y plantillas PDF para los tipos 05 y 06.
+### V4c — Notas de crédito y de débito (rama `feature/ventas-v4c-notas`)
+
+Decisiones (18/11/2026):
+- **Nota de crédito**: elegida por el usuario. Se arma con líneas del CCF y dos motivos por línea: la
+  cantidad devuelta (devolución sin mover inventario) o el monto rebajado (descuento o corrección de precio).
+  No pasa del saldo de cada línea ni del CCF.
+- **Retención y percepción**: el usuario pidió investigarlo. El Manual Funcional V2.0 (sección XVIII, ejemplo
+  «Ajuste con NCE a CCFE con Descuento Global y Retención», pp. 46-47) resuelve así: el CCF retuvo 1 %
+  ($6.98 de $697.50) y la NC que acredita $90 gravados lleva «IVA Retenido» $0.90 (1 %), en la línea y en el
+  resumen. **La nota repite la regla del CCF sobre su propio monto gravado**: si el CCF retuvo o percibió,
+  la nota también, con la misma tasa y aunque la nota sea menor de $100 (ajusta la operación original).
+  Los esquemas `fe-nc-v4` y `fe-nd-v4` traen `ivaRete` e `ivaPerci` por línea y en el resumen.
+- **Descuentos**: en el mismo ejemplo, el descuento por ítem de la NC lleva el descuento del ítem más el
+  descuento global prorrateado del CCF. La NC acredita al precio neto con el que se vendió.
+- **Nota de débito**: el usuario pidió investigarlo y decidir. El Código Tributario, art. 110, la usa «por las
+  cantidades que aumentan tanto los valores como el impuesto antes documentado»: ajustes de precio al alza,
+  intereses devengados, cargos u otras modificaciones. Decisión: **cargos sobre el CCF**, uno o varios
+  (descripción, cantidad, precio y si es gravado, exento o no sujeto). Cada cargo puede partir de una línea
+  del CCF (un ajuste de precio) o ser libre (intereses, flete). No tiene tope de saldo y lleva la misma
+  retención y percepción del CCF.
+- **Plazo**: la NC se emite hasta 3 meses desde la fecha del CCF (Normativa 2.0, anexo IV, campo 17,
+  regla 2c; CT art. 111: «los ajustes a las ventas que rebajen el débito fiscal deben hacerse dentro del plazo
+  de tres meses»). Ese plazo limita los ajustes que rebajan, así que la ND no se bloquea: queda anotado para
+  que lo confirme el contador.
+  - **Revisado el 19/11/2026, a pedido del usuario**: la Normativa 2.0, anexo IV, campo 17, regla 2c (pág. 104) dice
+    «Si se genera NCE **o NDE** relacionando un CCF o CR, la NC o ND deberá generarse a más tardar dentro de
+    3 meses en relación a la fecha de generación del CCF o CR, salvo las excepciones legales». La ley sola no lo
+    exige para la ND (CT arts. 110 y 111; Ley IVA art. 62 num. 2 suma incrementos e intereses sin plazo; art. 63
+    da al comprador tres períodos desde la emisión de la ND), pero Hacienda valida la regla al recibir el DTE.
+    **Decisión del usuario (19/11/2026): se aplica el mismo plazo a la ND.** `note_deadline` y
+    `require_note_in_time` valen para las dos; la API expone `deadline`. Queda para el contador qué
+    son las «excepciones legales» que menciona la regla.
+- **Una nota relaciona un solo CCF**. La normativa admite hasta 50; se deja para después.
+- Un CCF con una nota vigente no se invalida ni se corrige (Manual Funcional, regla 633: primero se invalida
+  la nota). Una nota se anula (tipo 2) y no se corrige.
+- Las notas heredan la clasificación de renta del CCF. Se envían por correo al cliente como los demás
+  documentos y van como tipo 05 y 06 en el anexo de contribuyentes (V8).
+
+Hechos verificados en el código:
+- Servicio: `/v2/nota-credito` ya es multiemisor (copia del emisor, contingencia, 1 a 50 relacionados, solo
+  CCF), pero manda `ivaRete` e `ivaPerci` en 0. `/nota-debito` es la ruta antigua: usa el emisor del entorno,
+  no valida relacionados y no admite contingencia. El PDF ya trata 05 y 06 como documentos de venta.
+- ERP: `sales_fiscal_documents` solo admite 01 y 03, y el índice del documento activo del pedido contaría la
+  nota como otro documento vigente.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [x] **Paso 1: servicio.** NC con `ivaRete` e `ivaPerci` por línea (tasas que manda el ERP). Ruta
+  `/v2/nota-debito` multiemisor como la NC (copia del emisor, relacionados validados, contingencia y escenarios
+  simulados). Verificar: pruebas del servicio, esquema y PDF de las dos.
+  - Hecho: NC y ND comparten `_construirNota` (dteBuilderNotas.js). El ERP manda
+    `ajustes: { retencionIva, percepcionIva }` (booleanos); el servicio calcula el 1 % del gravado de la nota, lo
+    reparte por línea en centavos y fija `totalPagar = operación + ivaPerci − ivaRete + no gravado`. La ND usa el
+    mismo contrato (`documentosRelacionados`, `numeroDocumento` por línea) y agrega `numPagoElectronico: null`.
+    Rutas `/v2/nota-debito` y `/nota-debito` (emisor del .env) con escenario simulado. La ND se anula con tipo 2
+    (tipos 1 y 3 piden reemplazo). 493 pruebas del servicio en verde.
+- [x] **Paso 2: migración 0133 y dominio.** Tipos 05 y 06 en el documento fiscal, con `related_document_id` (el
+  CCF) y el motivo. El índice del documento activo y `invoiced()` cuentan solo 01 y 03. Dominio
+  `sales_fiscal_notes.py`: saldo por línea y del CCF, plazo, prorrata del descuento global y retención y
+  percepción espejo. Verificar: unitarias y prueba de migración.
+  - Hecho: 0133 agrega `related_document_id` y `note_reason` (obligatorios en 05/06), la tabla
+    `sales_fiscal_note_lines` (return/discount/charge, naturaleza, cantidad y monto neto) y el permiso
+    `sales_invoices:notes`. El índice del activo, `active_for_order`, `latest_for_order` e `invoiced()` cuentan solo
+    01 y 03. Dominio `sales_fiscal_notes.py`: líneas del CCF desde su `dte_json` con la prorrata en centavos del
+    descuento global, saldo por línea, devolución al precio neto (las últimas unidades toman el saldo exacto),
+    rebaja como línea «Rebaja: …» con cantidad 1, cargos de la ND, totales (IVA 13 %, retención y percepción del
+    1 % si el CCF las tuvo), plazo de 3 meses, solicitud al servicio y conciliación.
+- [x] **Paso 3: casos de uso, trabajador y API.**
+  - `GET /sales/fiscal-documents/{id}/notes` (saldo por línea, plazo y notas);
+  - `POST .../credit-note` y `.../debit-note`, con permiso `sales_invoices:notes`;
+  - el trabajador emite 05 y 06;
+  - el CCF con una nota vigente no se invalida ni se corrige;
+  - correo al cliente.
+  Verificar: e2e contra el servicio simulado.
+  - Hecho: `application/sales_invoices/notes.py` (`overview`, `credit_note`, `debit_note`; bloquea el CCF,
+    usa el emisor actual en el punto de venta del CCF y hereda su renta) y router `sales_notes.py`
+    (`GET /{id}/notes`, `POST /{id}/credit-note`, `POST /{id}/debit-note`, con alcance de sucursal y auditoría
+    `ISSUE_CREDIT_NOTE` / `ISSUE_DEBIT_NOTE`). El cliente DTE usa `/v2/nota-credito` y `/v2/nota-debito`; el
+    trabajador concilia la nota con sus líneas y registra 05/06 como tipos del emisor. Invalidar o corregir un
+    CCF con notas vigentes da `sales_invoice_has_notes`; anular una nota no cancela el pedido. `compose.yaml`
+    habilita 01,03,05,06 en el servicio (`DTE_ALLOWED_DOCUMENT_TYPES`). E2e `test_sales_notes.py` (3) en verde.
+- [x] **Paso 4: interfaz.** En el detalle de un CCF:
+  - «Emitir nota de crédito»: líneas, devolución o rebaja, saldo y total;
+  - «Emitir nota de débito»: cargos;
+  - las notas del CCF y el enlace de cada nota a su CCF;
+  - en la bandeja, los tipos 05 y 06.
+  Verificar: vitest.
+  - Hecho: `FiscalNotesPanel.svelte` en el detalle de un CCF (saldo por línea, plazo, retención, notas con
+    enlace y formularios de NC y ND con total estimado de `note-calc.ts`). El detalle de una nota enlaza su CCF y
+    muestra el motivo; la anulación de una nota no ofrece «Corregir» y la del CCF se bloquea con notas vigentes.
+    La bandeja filtra y nombra 05 y 06 (`FISCAL_DOCUMENT_LABELS`). Vitest de ventas (73), svelte-check y eslint
+    en verde.
+- [x] **Paso 5: documentación.**
+  - Hecho: manual de facturación (4.2 y permisos), `docs/api.md`, `docs/database-schema.md` (sección 43)
+    y `dte-service/README.md` (retención en las notas y `/v2/nota-debito`).
+- [x] **Paso 6: verificación y PR.**
+  - Batería completa en verde (backend 2034, OCR 5, servicio 493, frontend 1209, ruff, mypy, svelte-check,
+    eslint y build). Con el plazo de la ND se repitieron las e2e de notas e invalidaciones, las unitarias y el
+    vitest de ventas (75), en verde.
+  - QA en el navegador con Grupo Lorena: CCF simulado de $21.92 (pedido PED-20261119-6E4D46D5); NC por 50
+    unidades ($5.48, saldo a $14.55); ND con cargo sobre la línea y flete exento ($5.26); sin diferencias de
+    totales y con correo al cliente; anulación del CCF bloqueada con notas vigentes; al anular la NC el saldo
+    vuelve a $19.40. Modo oscuro y claro a 375 px sin desbordes.
 
 ### V4d — Nota de remisión y evento de retorno (se detalla al empezar)
 - Nota de remisión (04) al despachar un traslado, si la empresa habilita el tipo; queda vinculada al traslado.
@@ -233,7 +332,8 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V4b2 terminado; falta el merge de su PR. Sigue V4c (detallarlo al empezar).
+- **Paso en curso**: V4c terminado; falta el merge de su PR. Sigue V4d (detallarlo al empezar). Tras cambiar el servicio DTE:
+  `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
     svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la
     principal (10712) «Gravada · Actividades industriales» como valor de demostración; el contador debe

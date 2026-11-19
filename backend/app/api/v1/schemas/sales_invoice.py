@@ -33,7 +33,7 @@ class FiscalDocumentOut(BaseModel):
     customer_email: str | None
     establishment_code: str | None
     point_of_sale_code: str | None
-    document_type: Literal["01", "03"]
+    document_type: Literal["01", "03", "05", "06"]
     mode: str
     status: FiscalStatus
     generation_code: uuid.UUID | None
@@ -53,6 +53,9 @@ class FiscalDocumentOut(BaseModel):
     superseded_by_id: uuid.UUID | None = None
     renta_operation_type: int | None = None
     renta_income_type: int | None = None
+    related_document_id: uuid.UUID | None = None
+    """En una nota (05 o 06), el crédito fiscal que ajusta."""
+    note_reason: str | None = None
     created_at: datetime | None
     updated_at: datetime | None
 

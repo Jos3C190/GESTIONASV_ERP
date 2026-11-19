@@ -4,7 +4,6 @@ const { fechaHoraSV } = require('../utils/fechaHoraSV');
 const { numeroALetras } = require('../utils/numeroALetras');
 const {
   calcularVentasPorCategoria,
-  aplicarDescuentoGlobal,
   validarLineas,
   prorratearCentavos,
   r2,
@@ -81,46 +80,6 @@ function _construirEmisorConEstablecimiento(extra = {}) {
   });
 }
 
-/**
- * Receptor "contribuyente completo" — usado por NC, ND (siempre requieren
- * NRC porque corrigen un CCF previo entre contribuyentes).
- */
-function _construirReceptorContribuyente(receptor) {
-  const camposFaltantes = ['tipoDocumento', 'numDocumento', 'nombre', 'codActividad', 'descActividad', 'direccion', 'telefono', 'correo'].filter(
-    (campo) => receptor?.[campo] === undefined
-  );
-  if (camposFaltantes.length) {
-    throw new Error(`receptor incompleto: faltan los campos ${camposFaltantes.join(', ')}`);
-  }
-  return {
-    tipoDocumento: receptor.tipoDocumento,
-    numDocumento: receptor.numDocumento,
-    nrc: receptor.nrc ?? null,
-    nombre: receptor.nombre,
-    codActividad: receptor.codActividad,
-    descActividad: receptor.descActividad,
-    nombreComercial: receptor.nombreComercial ?? null,
-    direccion: receptor.direccion,
-    telefono: receptor.telefono,
-    correo: receptor.correo,
-  };
-}
-
-/**
- * Documento Relacionado: SIEMPRE requerido (no nullable) en NC y ND porque
- * corrigen un DTE previo. `relacionado` = { tipoDocumento (CAT-002 del doc
- * original, ej "03" para CCF), tipoGeneracion (1=físico, 2=electrónico),
- * numeroDocumento (numeroControl o número físico del original), fechaEmision }
- */
-function _construirDocumentoRelacionado(relacionado) {
-  if (!relacionado) {
-    throw new Error(
-      'Se requiere "documentoRelacionado" (el CCF/DTE que esta Nota corrige): { tipoDocumento, tipoGeneracion, numeroDocumento, fechaEmision }'
-    );
-  }
-  return [relacionado];
-}
-
 const MAX_DOCUMENTOS_RELACIONADOS = 50;
 // CAT-007, tipo de generación del documento relacionado.
 const TIPO_GENERACION = Object.freeze({ FISICO: 1, ELECTRONICO: 2 });
@@ -147,18 +106,18 @@ function _esFechaCalendario(valor) {
  * relaciona por su código de generación; uno físico (1), por su correlativo.
  * La fecha es la de emisión del CCF, que Hacienda contrasta con el original.
  */
-function _validarDocumentosRelacionados(documentosRelacionados, fechaNota) {
+function _validarDocumentosRelacionados(documentosRelacionados, fechaNota, nombre = 'Nota de Crédito') {
   if (!Array.isArray(documentosRelacionados) || documentosRelacionados.length === 0) {
-    throw errorDeSolicitud('Se requiere "documentosRelacionados" con al menos 1 CCF que la Nota de Crédito ajusta');
+    throw errorDeSolicitud(`Se requiere "documentosRelacionados" con al menos 1 CCF que la ${nombre} ajusta`);
   }
   if (documentosRelacionados.length > MAX_DOCUMENTOS_RELACIONADOS) {
-    throw errorDeSolicitud(`Una Nota de Crédito relaciona como máximo ${MAX_DOCUMENTOS_RELACIONADOS} documentos`);
+    throw errorDeSolicitud(`Una ${nombre} relaciona como máximo ${MAX_DOCUMENTOS_RELACIONADOS} documentos`);
   }
   const vistos = new Set();
   return documentosRelacionados.map((documento, indice) => {
     const posicion = indice + 1;
     if (documento?.tipoDocumento !== TIPO_DTE.COMPROBANTE_CREDITO_FISCAL) {
-      throw errorDeSolicitud(`Documento relacionado ${posicion}: la Nota de Crédito solo ajusta Comprobantes de Crédito Fiscal (tipoDocumento "03")`);
+      throw errorDeSolicitud(`Documento relacionado ${posicion}: la ${nombre} solo ajusta Comprobantes de Crédito Fiscal (tipoDocumento "03")`);
     }
     const tipoGeneracion = Number(documento.tipoGeneracion);
     let numeroDocumento;
@@ -179,7 +138,7 @@ function _validarDocumentosRelacionados(documentosRelacionados, fechaNota) {
       throw errorDeSolicitud(`Documento relacionado ${posicion}: fechaEmision debe ser una fecha AAAA-MM-DD`);
     }
     if (documento.fechaEmision > fechaNota) {
-      throw errorDeSolicitud(`Documento relacionado ${posicion}: la fecha del CCF (${documento.fechaEmision}) es posterior a la de la Nota de Crédito (${fechaNota})`);
+      throw errorDeSolicitud(`Documento relacionado ${posicion}: la fecha del CCF (${documento.fechaEmision}) es posterior a la de la ${nombre} (${fechaNota})`);
     }
     if (vistos.has(numeroDocumento)) {
       throw errorDeSolicitud(`Documento relacionado ${posicion}: el documento ${numeroDocumento} está repetido`);
@@ -210,15 +169,15 @@ function _contactoOpcional(valor, campo, { min, max, patron = null, formato = ''
   return texto;
 }
 
-function _validarReceptorNotaCredito(receptor) {
+function _validarReceptorNota(receptor, nombre = 'Nota de Crédito') {
   if (!receptor || typeof receptor !== 'object') {
-    throw errorDeSolicitud('Una Nota de Crédito requiere el receptor del CCF que ajusta');
+    throw errorDeSolicitud(`Una ${nombre} requiere el receptor del CCF que ajusta`);
   }
   if (receptor.tipoDocumento !== TIPO_DOCUMENTO_IDENTIFICACION.NIT || !NIT_REGEX.test(String(receptor.numDocumento ?? ''))) {
-    throw errorDeSolicitud('El receptor de la Nota de Crédito se identifica con NIT: tipoDocumento "36" y numDocumento de 9 o 14 dígitos');
+    throw errorDeSolicitud(`El receptor de la ${nombre} se identifica con NIT: tipoDocumento "36" y numDocumento de 9 o 14 dígitos`);
   }
   if (!NRC_REGEX.test(String(receptor.nrc ?? ''))) {
-    throw errorDeSolicitud('El receptor de la Nota de Crédito requiere NRC (2 a 8 dígitos)');
+    throw errorDeSolicitud(`El receptor de la ${nombre} requiere NRC (2 a 8 dígitos)`);
   }
   const faltantes = ['nombre', 'codActividad', 'descActividad'].filter((campo) => !_textoNoVacio(receptor[campo]));
   const direccion = receptor.direccion;
@@ -226,7 +185,7 @@ function _validarReceptorNotaCredito(receptor) {
     faltantes.push('direccion');
   }
   if (faltantes.length) {
-    throw errorDeSolicitud(`Receptor de la Nota de Crédito incompleto: faltan ${faltantes.join(', ')}`);
+    throw errorDeSolicitud(`Receptor de la ${nombre} incompleto: faltan ${faltantes.join(', ')}`);
   }
   const telefono = _contactoOpcional(receptor.telefono, 'telefono', { min: 8, max: 30 });
   const correo = _contactoOpcional(receptor.correo, 'correo', { min: 3, max: 100, patron: CORREO_REGEX, formato: ' y formato usuario@dominio' });
@@ -256,7 +215,7 @@ function _validarReceptorNotaCredito(receptor) {
  * base gravada. Sin IVA por línea, el 13 % de la base se reparte entre las
  * líneas gravadas en centavos exactos, para que Σ totalIva = total.
  */
-function _ivaNotaCredito(lineas, baseGravada) {
+function _ivaNota(lineas, baseGravada, nombre = 'Nota de Crédito') {
   const esperado = r2(baseGravada * TASA_IVA);
   const esGravada = (item) => (item.ventaGravada ?? 0) > 0;
   const gravadas = lineas.filter(esGravada);
@@ -267,10 +226,10 @@ function _ivaNotaCredito(lineas, baseGravada) {
     return { porLinea: centavos.map((valor) => valor / 100), total: esperado };
   }
   if (conIva.length !== gravadas.length) {
-    throw errorDeSolicitud('El IVA de la Nota de Crédito debe informarse en todas las líneas gravadas o en ninguna');
+    throw errorDeSolicitud(`El IVA de la ${nombre} debe informarse en todas las líneas gravadas o en ninguna`);
   }
   if (conIva.some((item) => typeof item.ivaItem !== 'number' || !Number.isFinite(item.ivaItem) || item.ivaItem < 0)) {
-    throw errorDeSolicitud('El IVA por línea de la Nota de Crédito debe ser un importe no negativo');
+    throw errorDeSolicitud(`El IVA por línea de la ${nombre} debe ser un importe no negativo`);
   }
   const porLinea = lineas.map((item) => (esGravada(item) ? r2(item.ivaItem) : 0));
   const total = r2(porLinea.reduce((suma, valor) => suma + valor, 0));
@@ -288,28 +247,64 @@ function _normalizarObservaciones(observaciones) {
   return texto || null;
 }
 
+// Retención y percepción de las notas: la misma tasa del CCF (1 %, CT arts.
+// 162 y 163) sobre el gravado de la nota, sin el umbral de $100, porque la
+// nota ajusta una operación que ya lo cumplió (Manual Funcional V2.0,
+// ejemplo «Ajuste con NCE a CCFE con Descuento Global y Retención»).
+const TASA_RETENCION_NOTA = 0.01;
+
+function _normalizarAjustesNota(ajustes) {
+  if (ajustes === undefined || ajustes === null) return { retencion: false, percepcion: false };
+  if (typeof ajustes !== 'object') throw errorDeSolicitud('"ajustes" debe ser un objeto');
+  for (const campo of ['retencionIva', 'percepcionIva']) {
+    if (ajustes[campo] !== undefined && typeof ajustes[campo] !== 'boolean') {
+      throw errorDeSolicitud(`ajustes.${campo} debe ser true o false`);
+    }
+  }
+  return { retencion: ajustes.retencionIva === true, percepcion: ajustes.percepcionIva === true };
+}
+
+/** 1 % del gravado de la nota, repartido entre las líneas gravadas en centavos exactos. */
+function _unoPorCiento(lineas, baseGravada, aplica) {
+  if (!aplica) return { porLinea: lineas.map(() => 0), total: 0 };
+  const total = r2(baseGravada * TASA_RETENCION_NOTA);
+  const centavos = prorratearCentavos(Math.round(total * 100), lineas.map((item) => Math.round(Math.max(0, item.ventaGravada ?? 0) * 100)));
+  return { porLinea: centavos.map((valor) => valor / 100), total };
+}
+
+const NOTAS = Object.freeze({
+  [TIPO_DTE.NOTA_CREDITO]: { nombre: 'Nota de Crédito', extraResumen: {} },
+  [TIPO_DTE.NOTA_DEBITO]: { nombre: 'Nota de Débito', extraResumen: { numPagoElectronico: null } },
+});
+
 /**
- * Nota de Crédito Electrónica (tipoDte 05), schema oficial fe-nc-v4.json
- * (version 4). Ajusta uno o varios CCF (03) del mismo receptor: devolución,
- * rebaja o corrección de precio.
+ * Nota de Crédito (05, fe-nc-v4.json) o de Débito (06, fe-nd-v4.json),
+ * versión 4. Ajusta uno o varios CCF (03) del mismo receptor: la NC por
+ * devolución, rebaja o corrección de precio; la ND por cargos que aumentan
+ * el valor y el impuesto del CCF (CT art. 110).
  *
  * Contrato de líneas (SIN IVA, como el CCF): `precioUni`, `montoDescu` y
- * ventas netas acreditadas que cumplen cantidad × precioUni − montoDescu =
- * venta; `ivaItem` opcional con el IVA que se acredita en la línea, y
- * `numeroDocumento` con el documento relacionado que la línea ajusta.
+ * ventas netas que cumplen cantidad × precioUni − montoDescu = venta;
+ * `ivaItem` opcional con el IVA de la línea, y `numeroDocumento` con el
+ * documento relacionado que la línea ajusta.
+ *
+ * `ajustes` = { retencionIva, percepcionIva }: si el CCF retuvo o percibió,
+ * la nota repite la regla con el 1 % de su gravado, por línea y en el resumen.
  *
  * Resumen (sin descuentos globales, que el esquema no tiene):
  *   tributo 20 = totalIva = Σ totalIva por línea (holgura ±0.01)
  *   montoTotalOperacion = subTotalVentas + IVA
- *   totalPagar = montoTotalOperacion + totalNoGravado
+ *   totalPagar = montoTotalOperacion + ivaPerci − ivaRete + totalNoGravado
  *
- * Toda validación ocurre antes de reservar el número de control. El plazo de
- * 3 meses y el saldo del CCF los controla el backend, que conoce los CCF.
+ * Toda validación ocurre antes de reservar el número de control. El plazo y
+ * el saldo del CCF los controla el backend, que conoce los CCF.
  */
-function construirNotaCredito({ emisor = null, receptor, items, documentosRelacionados, observaciones = null }, { contingencia = null } = {}) {
+function _construirNota(tipoDte, { emisor = null, receptor, items, documentosRelacionados, observaciones = null, ajustes = null }, { contingencia = null } = {}) {
+  const { nombre, extraResumen } = NOTAS[tipoDte];
   const issuer = emisor ? validateIssuerV2(emisor) : config.emisor;
-  const relacionados = _validarDocumentosRelacionados(documentosRelacionados, fechaHoraSV().fecha);
-  const receptorNormalizado = _validarReceptorNotaCredito(receptor);
+  const relacionados = _validarDocumentosRelacionados(documentosRelacionados, fechaHoraSV().fecha, nombre);
+  const receptorNormalizado = _validarReceptorNota(receptor, nombre);
+  const ajustesNota = _normalizarAjustesNota(ajustes);
   if (!Array.isArray(items) || items.length === 0) throw errorDeSolicitud('Se requiere "items" con al menos 1 línea');
   validarLineas(items);
 
@@ -317,21 +312,23 @@ function construirNotaCredito({ emisor = null, receptor, items, documentosRelaci
   const documentoDeLinea = items.map((item, indice) => {
     const numero = typeof item.numeroDocumento === 'string' ? numerosRelacionados.get(item.numeroDocumento.trim().toUpperCase()) : undefined;
     if (!numero) {
-      throw errorDeSolicitud(`Línea ${indice + 1}: numeroDocumento debe ser uno de los documentos relacionados de la Nota de Crédito`);
+      throw errorDeSolicitud(`Línea ${indice + 1}: numeroDocumento debe ser uno de los documentos relacionados de la ${nombre}`);
     }
     return numero;
   });
   const sinLineas = relacionados.find((documento) => !documentoDeLinea.includes(documento.numeroDocumento));
   if (sinLineas) {
-    throw errorDeSolicitud(`El documento relacionado ${sinLineas.numeroDocumento} no tiene líneas en la Nota de Crédito`);
+    throw errorDeSolicitud(`El documento relacionado ${sinLineas.numeroDocumento} no tiene líneas en la ${nombre}`);
   }
 
   const totales = calcularVentasPorCategoria(items);
   const subTotalVentas = r2(totales.totalGravada + totales.totalExenta + totales.totalNoSuj);
-  const iva = _ivaNotaCredito(items, totales.totalGravada);
+  const iva = _ivaNota(items, totales.totalGravada, nombre);
+  const retencion = _unoPorCiento(items, totales.totalGravada, ajustesNota.retencion);
+  const percepcion = _unoPorCiento(items, totales.totalGravada, ajustesNota.percepcion);
   const montoTotalOperacion = r2(subTotalVentas + iva.total);
-  const totalPagar = r2(montoTotalOperacion + totales.totalNoGravado);
-  if (totalPagar < 0) throw errorDeSolicitud('El total de la Nota de Crédito no puede ser negativo');
+  const totalPagar = r2(montoTotalOperacion + percepcion.total - retencion.total + totales.totalNoGravado);
+  if (totalPagar < 0) throw errorDeSolicitud(`El total de la ${nombre} no puede ser negativo`);
   const observacionesNormalizadas = _normalizarObservaciones(observaciones);
 
   const cuerpoDocumento = items.map((item, indice) => ({
@@ -350,9 +347,9 @@ function construirNotaCredito({ emisor = null, receptor, items, documentosRelaci
     ventaGravada: item.ventaGravada ?? 0,
     tributos: (item.ventaGravada ?? 0) > 0 ? [TRIBUTO_IVA.codigo] : null,
     noGravado: item.noGravado ?? 0,
-    ivaPerci: 0,
+    ivaPerci: percepcion.porLinea[indice],
     totalIva: iva.porLinea[indice],
-    ivaRete: 0,
+    ivaRete: retencion.porLinea[indice],
   }));
 
   const resumen = {
@@ -363,25 +360,27 @@ function construirNotaCredito({ emisor = null, receptor, items, documentosRelaci
     totalDescu: totales.totalDescu,
     tributos: totales.totalGravada > 0 ? [{ ...TRIBUTO_IVA, valor: iva.total }] : null,
     montoTotalOperacion,
-    ivaPerci: 0,
+    ivaPerci: percepcion.total,
     totalIva: iva.total,
-    ivaRete: 0,
+    ivaRete: retencion.total,
     totalNoGravado: totales.totalNoGravado,
     totalPagar,
     totalLetras: numeroALetras(totalPagar),
     condicionOperacion: CONDICION_OPERACION.CONTADO,
+    ...extraResumen,
     observaciones: observacionesNormalizadas,
     codigoRetencionMH: null,
   };
 
   const { identificacion, codigoGeneracion, numeroControl } = _construirIdentificacionV2({
-    tipoDte: TIPO_DTE.NOTA_CREDITO,
+    tipoDte,
     version: 4,
     issuer,
     contingencia,
   });
-  // fe-nc-v4.json exige "fusion" y no admite codEstable/codPuntoVenta en el
-  // emisor; el número de control sí lleva los códigos MH del emisor.
+  // fe-nc-v4.json y fe-nd-v4.json exigen "fusion" y no admiten
+  // codEstable/codPuntoVenta en el emisor; el número de control sí lleva los
+  // códigos MH del emisor.
   identificacion.fusion = null;
   const emisorNota = _construirEmisor(issuer);
   delete emisorNota.codEstable;
@@ -401,84 +400,14 @@ function construirNotaCredito({ emisor = null, receptor, items, documentosRelaci
   return { dte, codigoGeneracion, numeroControl };
 }
 
-/**
- * Nota de Débito Electrónica (tipoDte 06, schema fe-nd-v4.json).
- * Estructuralmente casi idéntica a la Nota de Crédito (agrega cargos en vez
- * de restarlos), pero el schema exige "numPagoElectronico" en el resumen.
- */
-function construirNotaDebito({ receptor, items, relacionado, descuentoGlobal = null }) {
-  if (!Array.isArray(items) || items.length === 0) throw new Error('Se requiere "items" con al menos 1 línea');
-  items = aplicarDescuentoGlobal(items, descuentoGlobal);
-  const { identificacion, codigoGeneracion, numeroControl } = _construirIdentificacion({
-    tipoDte: TIPO_DTE.NOTA_DEBITO,
-    version: 4,
-    incluirFusion: true,
-  });
+/** Nota de Crédito Electrónica (05). Ver `_construirNota`. */
+function construirNotaCredito(solicitud, opciones = {}) {
+  return _construirNota(TIPO_DTE.NOTA_CREDITO, solicitud, opciones);
+}
 
-  const cuerpoDocumento = items.map((item, idx) => {
-    const ivaLinea = Number((item.ventaGravada * 0.13).toFixed(2));
-    return {
-      numItem: idx + 1,
-      tipoItem: item.tipoItem ?? 1,
-      numeroDocumento: relacionado?.numeroDocumento ?? null,
-      codigo: item.codigo ?? null,
-      codTributo: item.codTributo ?? null,
-      descripcion: item.descripcion,
-      cantidad: item.cantidad,
-      uniMedida: item.uniMedida ?? 59,
-      precioUni: item.precioUni,
-      montoDescu: item.montoDescu ?? 0,
-      ventaNoSuj: item.ventaNoSuj ?? 0,
-      ventaExenta: item.ventaExenta ?? 0,
-      ventaGravada: item.ventaGravada,
-      tributos: item.ventaGravada > 0 ? ['20'] : null,
-      noGravado: item.noGravado ?? 0,
-      ivaPerci: 0,
-      totalIva: ivaLinea,
-      ivaRete: 0,
-    };
-  });
-
-  const { totalGravada, totalExenta, totalNoSuj, totalDescu } = calcularVentasPorCategoria(items);
-  const subTotalVentas = Number((totalGravada + totalExenta + totalNoSuj).toFixed(2));
-  // IMPORTANTE: se deriva de la SUMA de los totalIva por línea (ya
-  // redondeados arriba), no de totalGravada*0.13 por separado — evita el
-  // desfase de redondeo (ver nota equivalente en dteBuilder.js).
-  const totalIva = Number(cuerpoDocumento.reduce((s, i) => s + i.totalIva, 0).toFixed(2));
-  const totalPagar = Number((subTotalVentas + totalIva).toFixed(2));
-
-  const resumen = {
-    totalNoSuj,
-    totalExenta,
-    totalGravada,
-    subTotalVentas,
-    totalDescu,
-    tributos: [{ codigo: '20', descripcion: 'Impuesto al Valor Agregado 13%', valor: totalIva }],
-    ivaPerci: 0,
-    totalIva,
-    ivaRete: 0,
-    montoTotalOperacion: totalPagar,
-    totalNoGravado: 0,
-    totalPagar,
-    totalLetras: null,
-    condicionOperacion: CONDICION_OPERACION.CONTADO,
-    numPagoElectronico: null,
-    observaciones: null,
-    codigoRetencionMH: null,
-  };
-
-  const dte = {
-    identificacion,
-    documentoRelacionado: _construirDocumentoRelacionado(relacionado),
-    emisor: _construirEmisorCompleto(),
-    receptor: _construirReceptorContribuyente(receptor),
-    ventaTercero: null,
-    cuerpoDocumento,
-    resumen,
-    apendice: null,
-  };
-
-  return { dte, codigoGeneracion, numeroControl };
+/** Nota de Débito Electrónica (06): cargos sobre el CCF. Ver `_construirNota`. */
+function construirNotaDebito(solicitud, opciones = {}) {
+  return _construirNota(TIPO_DTE.NOTA_DEBITO, solicitud, opciones);
 }
 
 /**

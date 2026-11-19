@@ -22,14 +22,6 @@ const RECEPTOR_CONTRIBUYENTE = {
   correo: 'cliente@empresa.com',
 };
 
-// Nota de Débito: conserva el contrato anterior (documento relacionado único).
-const RELACIONADO = {
-  tipoDocumento: '03',
-  tipoGeneracion: 2,
-  numeroDocumento: 'DTE-03-M001P001-000000000000001',
-  fechaEmision: '2026-07-01',
-};
-
 // La Nota de Crédito relaciona el CCF electrónico por su código de generación.
 const CODIGO_CCF = '0A1B2C3D-4E5F-4061-8728-394A5B6C7D8E';
 const CCF_ELECTRONICO = { tipoDocumento: '03', tipoGeneracion: 2, numeroDocumento: CODIGO_CCF, fechaEmision: '2026-07-01' };
@@ -244,6 +236,31 @@ describe('dteBuilderNotas.js', () => {
       assert.throws(() => construirNotaCredito(notaCredito({ observaciones: 'x'.repeat(3001) })), /observaciones/);
     });
 
+    test('repite la retención del CCF: 1 % del gravado de la nota, aunque sea menor de $100 (Manual Funcional, ejemplo NCE con retención)', () => {
+      const { dte } = construirNotaCredito(notaCredito({ items: [{ ...LINEA_NC, precioUni: 90, ventaGravada: 90 }], ajustes: { retencionIva: true } }));
+      assert.equal(dte.resumen.ivaRete, 0.9);
+      assert.deepEqual(dte.cuerpoDocumento.map((linea) => linea.ivaRete), [0.9]);
+      assert.equal(dte.resumen.ivaPerci, 0);
+      assert.equal(dte.resumen.totalPagar, 100.8);
+      assert.equal(validarDte(dte).valido, true);
+    });
+
+    test('reparte la retención y la percepción entre las líneas gravadas en centavos exactos', () => {
+      const { dte } = construirNotaCredito(notaCredito({
+        items: [
+          { ...LINEA_NC, descripcion: 'A', precioUni: 33.33, ventaGravada: 33.33 },
+          { ...LINEA_NC, descripcion: 'B', precioUni: 33.33, ventaGravada: 33.33 },
+          { ...LINEA_NC, descripcion: 'C', precioUni: 0, ventaGravada: 0, ventaExenta: 0, noGravado: 5 },
+        ],
+        ajustes: { retencionIva: true, percepcionIva: true },
+      }));
+      assert.equal(dte.resumen.ivaRete, 0.67);
+      assert.equal(dte.resumen.ivaPerci, 0.67);
+      assert.equal(Number(dte.cuerpoDocumento.reduce((s, i) => s + i.ivaRete, 0).toFixed(2)), 0.67);
+      assert.equal(dte.cuerpoDocumento[2].ivaRete, 0);
+      assert.throws(() => construirNotaCredito(notaCredito({ ajustes: { retencionIva: 'sí' } })), /retencionIva debe ser true o false/);
+    });
+
     test('ningún error de la solicitud reserva número de control', () => {
       let reservas = 0;
       correlativoStore.usar(() => { reservas += 1; return reservas; });
@@ -296,32 +313,46 @@ describe('dteBuilderNotas.js', () => {
     });
   });
 
-  describe('construirNotaDebito', () => {
-    test('genera un DTE que valida contra fe-nd-v4.json', () => {
-      const { dte } = construirNotaDebito({ receptor: RECEPTOR_CONTRIBUYENTE, items: [ITEM_SIMPLE], relacionado: RELACIONADO });
-      const { valido, errores } = validarDte(dte);
+  describe('construirNotaDebito (contrato v2)', () => {
+    const CARGO = { descripcion: 'Intereses por mora', cantidad: 1, precioUni: 50, ventaGravada: 50, numeroDocumento: CODIGO_CCF };
+    const notaDebito = (cambios = {}) => ({ receptor: RECEPTOR_CONTRIBUYENTE, documentosRelacionados: [CCF_ELECTRONICO], items: [CARGO], ...cambios });
+
+    test('genera un DTE que valida contra fe-nd-v4.json, con numPagoElectronico y el CCF relacionado', () => {
+      const { dte } = construirNotaDebito(notaDebito());
+      const { valido, errores, schema } = validarDte(dte);
       assert.equal(valido, true, JSON.stringify(errores));
-    });
-
-    test('tipoDte es "06" y resumen incluye numPagoElectronico', () => {
-      const { dte } = construirNotaDebito({ receptor: RECEPTOR_CONTRIBUYENTE, items: [ITEM_SIMPLE], relacionado: RELACIONADO });
+      assert.equal(schema, 'Nota de Débito Electrónica');
       assert.equal(dte.identificacion.tipoDte, '06');
-      assert.equal('numPagoElectronico' in dte.resumen, true);
+      assert.equal(dte.identificacion.fusion, null);
+      assert.equal(dte.resumen.numPagoElectronico, null);
+      assert.deepEqual(dte.documentoRelacionado, [CCF_ELECTRONICO]);
+      assert.equal(dte.resumen.totalPagar, 56.5);
     });
 
-    test('resumen.totalIva coincide con la suma de totalIva por línea, no con un cálculo independiente', () => {
-      const { dte } = construirNotaDebito({
-        receptor: RECEPTOR_CONTRIBUYENTE,
-        items: [
-          { descripcion: 'A', cantidad: 1, precioUni: 33.33, ventaGravada: 33.33 },
-          { descripcion: 'B', cantidad: 1, precioUni: 33.33, ventaGravada: 33.33 },
-          { descripcion: 'C', cantidad: 1, precioUni: 33.34, ventaGravada: 33.34 },
-        ],
-        relacionado: RELACIONADO,
-      });
-      const sumaLineas = Number(dte.cuerpoDocumento.reduce((s, i) => s + i.totalIva, 0).toFixed(2));
-      assert.equal(dte.resumen.totalIva, sumaLineas);
-      assert.equal(dte.resumen.totalIva, 12.99);
+    test('valida relacionados y receptor con los mensajes de la Nota de Débito', () => {
+      assert.throws(() => construirNotaDebito(notaDebito({ documentosRelacionados: [] })), /que la Nota de Débito ajusta/);
+      assert.throws(
+        () => construirNotaDebito(notaDebito({ documentosRelacionados: [{ ...CCF_ELECTRONICO, tipoDocumento: '01' }] })),
+        /la Nota de Débito solo ajusta Comprobantes de Crédito Fiscal/,
+      );
+      assert.throws(() => construirNotaDebito(notaDebito({ receptor: { ...RECEPTOR_CONTRIBUYENTE, nrc: null } })), /receptor de la Nota de Débito requiere NRC/);
+    });
+
+    test('con el emisor v2 y en contingencia', () => {
+      const emisor = issuerV2();
+      const { dte } = construirNotaDebito(notaDebito({ emisor }), { contingencia: { tipoContingencia: 5, motivoContin: 'Falla del proveedor de internet' } });
+      assert.ok(dte.identificacion.numeroControl.startsWith('DTE-06-M001P001-'));
+      assert.equal(dte.identificacion.tipoModelo, 2);
+      assert.equal('codEstable' in dte.emisor, false);
+      assert.equal(validarDte(dte).valido, true);
+    });
+
+    test('repite la retención y la percepción del CCF', () => {
+      const { dte } = construirNotaDebito(notaDebito({ ajustes: { retencionIva: true, percepcionIva: true } }));
+      assert.equal(dte.resumen.ivaRete, 0.5);
+      assert.equal(dte.resumen.ivaPerci, 0.5);
+      assert.equal(dte.resumen.totalPagar, 56.5);
+      assert.equal(validarDte(dte).valido, true);
     });
   });
 

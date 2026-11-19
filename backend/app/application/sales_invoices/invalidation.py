@@ -25,6 +25,11 @@ from app.domain.entities.sales_fiscal_invalidation import (
     validate_reason,
     validate_requester,
 )
+from app.domain.entities.sales_fiscal_notes import (
+    NOTE_TYPES,
+    VIGENT_STATUSES,
+    require_without_vigent_notes,
+)
 from app.domain.entities.sales_order import require_cancellable
 from app.domain.ports.contingency_repository import ContingencyResponsibleRepository
 from app.domain.ports.dte_service import DteService, DteServiceError, InvalidationWindow
@@ -100,6 +105,10 @@ class FiscalInvalidationUseCases:
         except DteServiceError:
             return None
 
+    async def _require_without_notes(self, document: FiscalDocument) -> None:
+        notes = await self._documents.notes_for(document.company_id, document.id)
+        require_without_vigent_notes(sum(1 for n in notes if n.status in VIGENT_STATUSES))
+
     async def _require_in_time(self, document: FiscalDocument) -> None:
         window = await self.window(document.company_id, document.id)
         if window is not None and window.expired:
@@ -132,6 +141,12 @@ class FiscalInvalidationUseCases:
             superseded=document.superseded_by_id is not None,
             pending_invalidation=pending is not None,
         )
+        await self._require_without_notes(document)
+        if cancel_order and document.document_type in NOTE_TYPES:
+            raise BusinessRuleError(
+                "Anular una nota no cancela el pedido: el pedido sigue con su crédito fiscal.",
+                code="sales_note_cancel_order_invalid",
+            )
         text = validate_reason(reason)
         person = validate_requester(
             requester.name, requester.document_type, requester.document_number
@@ -175,6 +190,7 @@ class FiscalInvalidationUseCases:
             superseded=original.superseded_by_id is not None,
             pending_invalidation=pending is not None,
         )
+        await self._require_without_notes(original)
         person = validate_requester(
             requester.name, requester.document_type, requester.document_number
         )

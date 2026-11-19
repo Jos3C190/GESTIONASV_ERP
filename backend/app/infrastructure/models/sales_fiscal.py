@@ -70,6 +70,9 @@ class SalesFiscalDocumentModel(Base):
     renta_operation_type: Mapped[int | None] = mapped_column(SmallInteger)
     renta_income_type: Mapped[int | None] = mapped_column(SmallInteger)
     superseded_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    related_document_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    """En una nota (05 o 06), el crédito fiscal que ajusta (revisión 0133, V4c)."""
+    note_reason: Mapped[str | None] = mapped_column(String(300))
     created_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -116,7 +119,16 @@ class SalesFiscalDocumentModel(Base):
             ondelete="RESTRICT",
             name="fk_sales_fiscal_documents_creator",
         ),
-        CheckConstraint("document_type IN ('01','03')", name="ck_sales_fiscal_documents_document"),
+        CheckConstraint(
+            "document_type IN ('01','03','05','06')", name="ck_sales_fiscal_documents_document"
+        ),
+        CheckConstraint(
+            "(document_type IN ('05','06')) = (related_document_id IS NOT NULL) "
+            "AND (document_type IN ('05','06')) = (note_reason IS NOT NULL) "
+            "AND (note_reason IS NULL OR char_length(btrim(note_reason)) BETWEEN 5 AND 300) "
+            "AND related_document_id IS DISTINCT FROM id",
+            name="ck_sales_fiscal_documents_note",
+        ),
         CheckConstraint(
             "mode IN ('simulated','hacienda-test','production')",
             name="ck_sales_fiscal_documents_mode",
@@ -168,14 +180,27 @@ class SalesFiscalDocumentModel(Base):
             initially="DEFERRED",
             name="fk_sales_fiscal_documents_superseded",
         ),
+        ForeignKeyConstraint(
+            ["company_id", "related_document_id"],
+            ["sales_fiscal_documents.company_id", "sales_fiscal_documents.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_documents_related",
+        ),
         Index(
             "uq_sales_fiscal_documents_active_sale",
             "company_id",
             "sale_id",
             unique=True,
             postgresql_where=text(
-                "status IN ('pending','contingency','issued','simulated') AND superseded_by_id IS NULL"
+                "status IN ('pending','contingency','issued','simulated') "
+                "AND superseded_by_id IS NULL AND document_type IN ('01','03')"
             ),
+        ),
+        Index(
+            "ix_sales_fiscal_documents_related",
+            "company_id",
+            "related_document_id",
+            postgresql_where=text("related_document_id IS NOT NULL"),
         ),
         Index(
             "uq_sales_fiscal_documents_replaces",
@@ -192,6 +217,53 @@ class SalesFiscalDocumentModel(Base):
             "branch_id",
             "status",
             "created_at",
+        ),
+    )
+
+
+class SalesFiscalNoteLineModel(Base):
+    """Lo que ajusta cada línea de una nota de crédito o de débito (revisión 0133, V4c)."""
+
+    __tablename__ = "sales_fiscal_note_lines"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
+    )
+    note_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    line_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    ccf_line_number: Mapped[int | None] = mapped_column(SmallInteger)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    nature: Mapped[str] = mapped_column(String(12), nullable=False)
+    description: Mapped[str] = mapped_column(String(1000), nullable=False)
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id", "note_id", "line_number", name="uq_sales_fiscal_note_lines_number"
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "note_id"],
+            ["sales_fiscal_documents.company_id", "sales_fiscal_documents.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_note_lines_note",
+        ),
+        CheckConstraint(
+            "kind IN ('return','discount','charge') "
+            "AND nature IN ('taxed','exempt','not_subject') "
+            "AND line_number > 0 AND amount > 0 "
+            "AND (ccf_line_number IS NULL OR ccf_line_number > 0) "
+            "AND char_length(btrim(description)) > 0 "
+            "AND (kind <> 'return' OR (ccf_line_number IS NOT NULL AND quantity IS NOT NULL AND quantity > 0)) "
+            "AND (kind <> 'discount' OR (ccf_line_number IS NOT NULL AND quantity IS NULL)) "
+            "AND (kind <> 'charge' OR (quantity IS NOT NULL AND quantity > 0))",
+            name="ck_sales_fiscal_note_lines_kind",
         ),
     )
 

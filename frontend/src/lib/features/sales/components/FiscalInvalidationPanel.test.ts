@@ -172,3 +172,29 @@ it('un documento ya invalidado enlaza al que lo reemplaza', async () => {
   expect(screen.getByText(/Se invalidó y lo reemplaza/)).toBeInTheDocument();
   expect(screen.queryByText(/Se está corrigiendo/)).not.toBeInTheDocument();
 });
+
+it('una nota solo se anula, y un CCF con notas vigentes no se anula', async () => {
+  salesInvoicesApi.invalidation.mockResolvedValue({
+    deadline: '2026-12-14',
+    expired: false,
+    estimated: false,
+    history: []
+  });
+  const { unmount } = render(FiscalInvalidationPanel, {
+    document: { ...DOCUMENT, document_type: '05' } as FiscalDocument,
+    canInvalidate: true
+  });
+  expect(await screen.findByText(/Se puede anular hasta el 14\/12\/2026/)).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Anulación' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Anular documento' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Corregir documento' })).not.toBeInTheDocument();
+  unmount();
+
+  render(FiscalInvalidationPanel, {
+    document: { ...DOCUMENT, document_type: '03' } as FiscalDocument,
+    canInvalidate: true,
+    lockedReason: 'Este crédito fiscal tiene notas vigentes.'
+  });
+  expect(await screen.findByText('Este crédito fiscal tiene notas vigentes.')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Anular documento' })).not.toBeInTheDocument();
+});
