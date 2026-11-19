@@ -48,6 +48,9 @@ export interface EconomicActivity {
   code: string;
   description: string;
   is_primary: boolean;
+  /** Clasificación de renta sugerida para sus ventas (anexos del F-07). */
+  renta_operation_type?: number | null;
+  renta_income_type?: number | null;
 }
 
 export interface PointOfSale {

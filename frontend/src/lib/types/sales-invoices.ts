@@ -33,6 +33,9 @@ export interface FiscalDocument {
   /** Corrección (V4b): el documento que éste reemplaza, o el que lo reemplaza. */
   replaces_document_id?: string | null;
   superseded_by_id?: string | null;
+  /** Clasificación de renta del documento para los anexos del F-07. */
+  renta_operation_type?: number | null;
+  renta_income_type?: number | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -60,6 +63,9 @@ export interface InvoiceOptions {
   document: FiscalDocument | null;
   /** Sin documento vigente: el último del pedido (rechazado, fallido o invalidado). */
   previous_document?: FiscalDocument | null;
+  /** Clasificación de renta sugerida por la actividad del establecimiento. */
+  renta_operation_type?: number | null;
+  renta_income_type?: number | null;
 }
 
 export interface FiscalDocumentFilters {

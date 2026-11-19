@@ -67,6 +67,8 @@ class SalesFiscalDocumentModel(Base):
     contingency_reason: Mapped[str | None] = mapped_column(Text)
     contingency_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     replaces_document_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    renta_operation_type: Mapped[int | None] = mapped_column(SmallInteger)
+    renta_income_type: Mapped[int | None] = mapped_column(SmallInteger)
     superseded_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     created_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -143,6 +145,14 @@ class SalesFiscalDocumentModel(Base):
         CheckConstraint(
             "replaces_document_id IS DISTINCT FROM id AND superseded_by_id IS DISTINCT FROM id",
             name="ck_sales_fiscal_documents_replacement",
+        ),
+        CheckConstraint(
+            "(renta_operation_type IS NULL) = (renta_income_type IS NULL) "
+            "AND (renta_operation_type IS NULL OR renta_operation_type IN (1, 2, 3, 4, 12, 13)) "
+            "AND (renta_income_type IS NULL OR renta_income_type IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13)) "
+            "AND (renta_operation_type NOT IN (12, 13) OR renta_income_type = renta_operation_type) "
+            "AND (renta_income_type NOT IN (12, 13) OR renta_income_type = renta_operation_type)",
+            name="ck_sales_fiscal_documents_renta",
         ),
         ForeignKeyConstraint(
             ["company_id", "replaces_document_id"],

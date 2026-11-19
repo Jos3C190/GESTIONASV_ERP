@@ -13,6 +13,8 @@
   import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type { Sale } from '#lib/types/sales.ts';
   import FiscalDocumentEmails from './FiscalDocumentEmails.svelte';
+  import RentaFields from './RentaFields.svelte';
+  import { rentaComplete } from '#lib/features/sales/renta-labels.ts';
   import type { FiscalDocument, InvoiceOptions } from '#lib/types/sales-invoices.ts';
 
   let {
@@ -28,6 +30,8 @@
   let options = $state<InvoiceOptions | null>(null);
   let current = $state<FiscalDocument | null>(null);
   let pointOfSale = $state('');
+  let rentaOperation = $state<number | null>(null);
+  let rentaIncome = $state<number | null>(null);
   let loading = $state(true);
   let busy = $state(false);
   let error = $state<string | null>(null);
@@ -76,6 +80,8 @@
       options = response;
       const [only, ...others] = response.points_of_sale;
       if (only && others.length === 0) pointOfSale = only.id;
+      rentaOperation = response.renta_operation_type ?? null;
+      rentaIncome = response.renta_income_type ?? null;
       track(response.document);
     } catch (cause) {
       if (run === generation) {
@@ -92,7 +98,12 @@
     busy = true;
     error = null;
     try {
-      track(await salesInvoicesApi.invoice(sale.id, pointOfSale || null));
+      track(
+        await salesInvoicesApi.invoice(sale.id, pointOfSale || null, {
+          operation: rentaOperation,
+          income: rentaIncome
+        })
+      );
     } catch (cause) {
       error = cause instanceof HttpError ? cause.message : 'No se pudo facturar el pedido.';
     } finally {
@@ -124,7 +135,12 @@
   }
 
   const needsPoint = $derived((options?.points_of_sale.length ?? 0) > 1);
-  const blocked = $derived(!options || options.blockers.length > 0 || (needsPoint && !pointOfSale));
+  const blocked = $derived(
+    !options ||
+      options.blockers.length > 0 ||
+      (needsPoint && !pointOfSale) ||
+      !rentaComplete(rentaOperation, rentaIncome)
+  );
 </script>
 
 <section class="space-y-3 rounded-xl border border-border bg-surface p-4" aria-label="Factura">
@@ -271,6 +287,20 @@
       </p>
     {/if}
     {#if canIssue}
+      <div class="grid gap-2 sm:grid-cols-2">
+        <RentaFields
+          operation={rentaOperation}
+          income={rentaIncome}
+          onchange={(operation, income) => {
+            rentaOperation = operation;
+            rentaIncome = income;
+          }}
+        />
+      </div>
+      <p class="text-xs text-foreground-muted">
+        Clasificación de renta del documento para los anexos del F-07. Se propone la de la actividad
+        económica; cámbiala si esta venta es distinta.
+      </p>
       <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
         {#if needsPoint}
           <label class="flex flex-col gap-1 text-sm text-foreground-muted"

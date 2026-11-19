@@ -31,6 +31,12 @@ en el catálogo de Hacienda (CAT-019).
 - Puedes cambiar cuál es la principal en cualquier momento.
 - Una actividad que usa un establecimiento no se puede quitar: primero cámbiala en el
   establecimiento.
+- **Renta sugerida al facturar**: elige el *tipo de operación* y el *tipo de ingreso* para renta
+  que suelen llevar las ventas de esa actividad y pulsa **Guardar renta**. Desde enero de 2025 los
+  anexos de ventas del F-07 piden estos dos datos por documento. Al facturar se proponen y se
+  pueden cambiar en cada venta. Los define el contador. Es una clasificación de renta, no de IVA:
+  una venta exenta de IVA puede estar gravada en renta. Los códigos 12 (ingresos ya retenidos en
+  el F910) y 13 (sujetos excluidos) van iguales en las dos columnas.
 
 ## 3. Establecimientos
 

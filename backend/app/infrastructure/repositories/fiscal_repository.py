@@ -249,6 +249,8 @@ class SqlAlchemyFiscalRepository:
                 code=row.activity_code,
                 description=name or "",
                 is_primary=row.is_primary,
+                renta_operation_type=row.renta_operation_type,
+                renta_income_type=row.renta_income_type,
             )
             for row, name in rows
         ]
@@ -285,6 +287,26 @@ class SqlAlchemyFiscalRepository:
         activity = await self.get_activity(company_id, row.id)
         assert activity is not None
         return activity
+
+    async def set_activity_renta(
+        self,
+        company_id: uuid.UUID,
+        activity_id: uuid.UUID,
+        operation_type: int | None,
+        income_type: int | None,
+    ) -> None:
+        await self._session.execute(
+            update(CompanyEconomicActivityModel)
+            .where(
+                CompanyEconomicActivityModel.company_id == company_id,
+                CompanyEconomicActivityModel.id == activity_id,
+            )
+            .values(
+                renta_operation_type=operation_type,
+                renta_income_type=income_type,
+                updated_at=_now(),
+            )
+        )
 
     async def set_primary_activity(self, company_id: uuid.UUID, activity_id: uuid.UUID) -> None:
         # Unset first: the partial unique index allows a single primary per company.

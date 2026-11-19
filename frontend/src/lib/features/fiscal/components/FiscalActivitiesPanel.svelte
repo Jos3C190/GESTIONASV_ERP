@@ -8,6 +8,8 @@
   import { HttpError } from '#lib/api/client.ts';
   import { fiscalApi } from '#lib/api/fiscal.ts';
   import { confirmation } from '#lib/stores/confirmation.svelte.ts';
+  import RentaFields from '#lib/features/sales/components/RentaFields.svelte';
+  import { rentaComplete, rentaLabel } from '#lib/features/sales/renta-labels.ts';
   import type { EconomicActivity } from '#lib/types/fiscal.ts';
 
   let { canManage }: { canManage: boolean } = $props();
@@ -18,6 +20,23 @@
   let actionError = $state<string | null>(null);
   let selected = $state('');
   let adding = $state(false);
+  /** Clasificación de renta en edición, por actividad. */
+  let drafts = $state<Record<string, { operation: number | null; income: number | null }>>({});
+
+  function draft(activity: EconomicActivity) {
+    return (
+      drafts[activity.id] ?? {
+        operation: activity.renta_operation_type ?? null,
+        income: activity.renta_income_type ?? null
+      }
+    );
+  }
+
+  async function saveRenta(activity: EconomicActivity) {
+    const value = draft(activity);
+    await run(() => fiscalApi.setActivityRenta(activity.id, value.operation, value.income));
+    delete drafts[activity.id];
+  }
 
   async function load() {
     loading = true;
@@ -160,6 +179,28 @@
             <p class="mt-0.5 break-words text-sm text-foreground-muted">
               {activity.description || 'Código fuera del catálogo vigente'}
             </p>
+            <p class="mt-1 text-xs text-foreground-muted">
+              Renta sugerida al facturar: {rentaLabel(
+                activity.renta_operation_type,
+                activity.renta_income_type
+              )}
+            </p>
+            {#if canManage}
+              {@const value = draft(activity)}
+              <div class="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <RentaFields
+                  operation={value.operation}
+                  income={value.income}
+                  onchange={(operation, income) => (drafts[activity.id] = { operation, income })}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!drafts[activity.id] || !rentaComplete(value.operation, value.income)}
+                  onclick={() => void saveRenta(activity)}>Guardar renta</Button
+                >
+              </div>
+            {/if}
           </div>
           {#if canManage}
             <div class="flex gap-2">

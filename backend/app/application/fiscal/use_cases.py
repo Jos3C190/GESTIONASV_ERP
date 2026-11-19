@@ -31,6 +31,7 @@ from app.domain.entities.fiscal import (
     validate_establishment_code,
     validate_point_of_sale_code,
 )
+from app.domain.entities.sales_renta import validate_renta
 from app.domain.ports.fiscal_repository import (
     DocumentTypeValues,
     EstablishmentValues,
@@ -127,6 +128,25 @@ class FiscalSettingsUseCases:
                 code="fiscal_activity_not_found",
             )
         return activity
+
+    async def set_activity_renta(
+        self,
+        company_id: uuid.UUID,
+        activity_id: uuid.UUID,
+        operation_type: int | None,
+        income_type: int | None,
+    ) -> tuple[EconomicActivity, EconomicActivity]:
+        """Clasificación de renta sugerida para las ventas de la actividad; vacía la quita."""
+
+        before = await self._activity_or_404(company_id, activity_id)
+        if operation_type is None and income_type is None:
+            await self._repo.set_activity_renta(company_id, activity_id, None, None)
+        else:
+            renta = validate_renta(operation_type, income_type)
+            await self._repo.set_activity_renta(
+                company_id, activity_id, renta.operation_type, renta.income_type
+            )
+        return before, await self._activity_or_404(company_id, activity_id)
 
     async def set_primary_activity(
         self, company_id: uuid.UUID, activity_id: uuid.UUID

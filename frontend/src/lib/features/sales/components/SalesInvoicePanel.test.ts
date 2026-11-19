@@ -59,6 +59,8 @@ function options(values: Partial<InvoiceOptions> = {}): InvoiceOptions {
       { id: 'pos-2', code: 'P002', name: 'Caja 2' }
     ],
     blockers: [],
+    renta_operation_type: 1,
+    renta_income_type: 3,
     document: null,
     ...values
   };
@@ -82,7 +84,10 @@ it('pide la caja cuando hay varias y factura con la elegida', async () => {
   await fireEvent.change(screen.getByLabelText('Punto de venta'), { target: { value: 'pos-2' } });
   expect(button).toBeEnabled();
   await fireEvent.click(button);
-  expect(salesInvoicesApi.invoice).toHaveBeenCalledExactlyOnceWith(sale.id, 'pos-2');
+  expect(salesInvoicesApi.invoice).toHaveBeenCalledExactlyOnceWith(sale.id, 'pos-2', {
+    operation: 1,
+    income: 3
+  });
   expect(await screen.findByText('DTE-01-M001P001-000000000000001')).toBeInTheDocument();
   expect(screen.getByText('Simulado')).toBeInTheDocument();
   expect(onInvoiced).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'simulated' }));
@@ -128,7 +133,10 @@ it('un fallo se puede reintentar con los mismos datos', async () => {
   salesInvoicesApi.get.mockResolvedValue(fiscal());
   render(SalesInvoicePanel, { sale, pollMs: 10 });
   await fireEvent.click(await screen.findByRole('button', { name: 'Facturar' }));
-  expect(salesInvoicesApi.invoice).toHaveBeenCalledWith(sale.id, 'pos-1');
+  expect(salesInvoicesApi.invoice).toHaveBeenCalledWith(sale.id, 'pos-1', {
+    operation: 1,
+    income: 3
+  });
   expect(await screen.findByText(/no está habilitado/)).toBeInTheDocument();
   await fireEvent.click(screen.getByRole('button', { name: 'Reintentar con los mismos datos' }));
   expect(salesInvoicesApi.retry).toHaveBeenCalledWith('doc-1');
@@ -149,4 +157,31 @@ it('muestra el error del servidor al consultar', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'No se pudo consultar la facturación.'
   );
+});
+
+it('propone la clasificación de renta de la actividad y no factura sin ella', async () => {
+  const sale = order({ status: 'confirmed' });
+  salesInvoicesApi.options.mockResolvedValue(
+    options({
+      points_of_sale: [{ id: 'pos-1', code: 'P001', name: 'Caja 1' }],
+      renta_operation_type: null,
+      renta_income_type: null
+    })
+  );
+  salesInvoicesApi.invoice.mockResolvedValue(fiscal());
+  render(SalesInvoicePanel, { sale });
+  const button = await screen.findByRole('button', { name: 'Facturar' });
+  expect(button).toBeDisabled();
+  await fireEvent.change(screen.getByLabelText('Tipo de operación (renta)'), {
+    target: { value: '4' }
+  });
+  await fireEvent.change(screen.getByLabelText('Tipo de ingreso (renta)'), {
+    target: { value: '2' }
+  });
+  expect(button).toBeEnabled();
+  await fireEvent.click(button);
+  expect(salesInvoicesApi.invoice).toHaveBeenCalledExactlyOnceWith(sale.id, 'pos-1', {
+    operation: 4,
+    income: 2
+  });
 });

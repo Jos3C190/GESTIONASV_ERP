@@ -48,6 +48,8 @@ _FIELDS = (
     "contingency_at",
     "replaces_document_id",
     "superseded_by_id",
+    "renta_operation_type",
+    "renta_income_type",
 )
 #: Lo que cambia después de crear el documento.
 _MUTABLE = (
