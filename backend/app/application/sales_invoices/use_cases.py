@@ -12,7 +12,14 @@ from dataclasses import dataclass, replace
 
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.domain.entities.customer import CustomerType
-from app.domain.entities.fiscal import Establishment, OperatingMode, PointOfSale, dte_nit, dte_nrc
+from app.domain.entities.fiscal import (
+    EconomicActivity,
+    Establishment,
+    OperatingMode,
+    PointOfSale,
+    dte_nit,
+    dte_nrc,
+)
 from app.domain.entities.sales_fiscal_document import (
     FiscalDocumentStatus,
     FiscalLine,
@@ -30,6 +37,7 @@ from app.domain.entities.sales_fiscal_document import (
     require_retryable,
 )
 from app.domain.entities.sales_order import PaymentTerms
+from app.domain.entities.sales_renta import RentaClassification
 from app.domain.ports.customer_repository import CustomerRepository
 from app.domain.ports.fiscal_repository import FiscalRepository
 from app.domain.ports.sales_fiscal_repository import (
@@ -62,6 +70,8 @@ class InvoiceOptions:
     blockers: tuple[str, ...]
     document: FiscalDocument | None
     previous: FiscalDocument | None = None
+    renta: RentaClassification | None = None
+    """Clasificación de renta sugerida por la actividad del establecimiento (V4b2)."""
     """Sin documento activo: el último del pedido (rechazado, fallido o invalidado), V4b."""
 
 
@@ -142,6 +152,7 @@ class SalesInvoiceUseCases:
             blockers=tuple(blockers),
             document=active,
             previous=None if active else await self._repo.latest_for_order(company_id, order_id),
+            renta=await self._suggested_renta(order),
         )
 
     # --- armado ---------------------------------------------------------------------------------
@@ -297,6 +308,33 @@ class SalesInvoiceUseCases:
             for item in await self._fiscal.list_document_types(company_id)
         )
 
+    async def _activity(self, order: Order) -> EconomicActivity | None:
+        """Actividad del establecimiento de la sucursal o, si no tiene, la principal."""
+
+        establishment = await self._establishment(order.company_id, order.branch_id)
+        activities = await self._fiscal.list_activities(order.company_id)
+        return next(
+            (a for a in activities if establishment and a.code == establishment.activity_code),
+            None,
+        ) or next((a for a in activities if a.is_primary), None)
+
+    async def _suggested_renta(self, order: Order) -> RentaClassification | None:
+        activity = await self._activity(order)
+        if activity is None or activity.renta_operation_type is None:
+            return None
+        assert activity.renta_income_type is not None
+        return RentaClassification(activity.renta_operation_type, activity.renta_income_type)
+
+    async def _renta(self, order: Order, chosen: RentaClassification | None) -> RentaClassification:
+        renta = chosen or await self._suggested_renta(order)
+        if renta is None:
+            raise BusinessRuleError(
+                "Elige el tipo de operación y el tipo de ingreso de renta del documento, o "
+                "configúralos en la actividad económica (Configuración fiscal → Actividades).",
+                code="sales_invoice_renta_required",
+            )
+        return renta
+
     async def _prepare(
         self,
         order: Order,
@@ -357,7 +395,19 @@ class SalesInvoiceUseCases:
 
         order = await self._order(original.company_id, original.sale_id, lock=True)
         document, _issuer = await self._prepare(order, original.point_of_sale_id, replaces=original)
-        return replace(document, created_by_id=actor_id)
+        # El reemplazo conserva la clasificación de renta del original.
+        renta = await self._renta(
+            order,
+            RentaClassification(original.renta_operation_type, original.renta_income_type)
+            if original.renta_operation_type is not None and original.renta_income_type is not None
+            else None,
+        )
+        return replace(
+            document,
+            created_by_id=actor_id,
+            renta_operation_type=renta.operation_type,
+            renta_income_type=renta.income_type,
+        )
 
     # --- acciones -------------------------------------------------------------------------------
 
@@ -367,6 +417,8 @@ class SalesInvoiceUseCases:
         order_id: uuid.UUID,
         actor_id: uuid.UUID,
         point_of_sale_id: uuid.UUID | None,
+        *,
+        renta: RentaClassification | None = None,
     ) -> Issued:
         # Bloquear el pedido serializa «Facturar» con «Cancelar» y con otro «Facturar».
         order = await self._order(company_id, order_id, lock=True)
@@ -374,7 +426,15 @@ class SalesInvoiceUseCases:
         if existing is not None:
             return Issued(document=existing, created=False)
         document, _issuer = await self._prepare(order, point_of_sale_id)
-        created = await self._repo.create(replace(document, created_by_id=actor_id))
+        classification = await self._renta(order, renta)
+        created = await self._repo.create(
+            replace(
+                document,
+                created_by_id=actor_id,
+                renta_operation_type=classification.operation_type,
+                renta_income_type=classification.income_type,
+            )
+        )
         return Issued(document=created, created=True)
 
     async def retry(self, company_id: uuid.UUID, document_id: uuid.UUID) -> FiscalDocument:

@@ -18,6 +18,9 @@ class InvoiceIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     point_of_sale_id: uuid.UUID | None = None
+    # Clasificación de renta del documento (F-07); sin ella se usa la de la actividad.
+    renta_operation_type: int | None = None
+    renta_income_type: int | None = None
 
 
 class FiscalDocumentOut(BaseModel):
@@ -48,6 +51,8 @@ class FiscalDocumentOut(BaseModel):
     contingency_at: datetime | None = None
     replaces_document_id: uuid.UUID | None = None
     superseded_by_id: uuid.UUID | None = None
+    renta_operation_type: int | None = None
+    renta_income_type: int | None = None
     created_at: datetime | None
     updated_at: datetime | None
 
@@ -74,6 +79,9 @@ class InvoiceOptionsOut(BaseModel):
     blockers: list[str]
     document: FiscalDocumentOut | None
     previous_document: FiscalDocumentOut | None = None
+    renta_operation_type: int | None = None
+    """Clasificación de renta sugerida por la actividad del establecimiento."""
+    renta_income_type: int | None = None
 
 
 class DownloadUrlOut(BaseModel):

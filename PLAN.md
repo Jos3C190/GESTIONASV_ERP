@@ -205,7 +205,7 @@ Pasos:
 - [x] **Paso 1: migración 0132 y dominio.** Columnas `renta_operation_type` y `renta_income_type` en
   `company_economic_activities` y `sales_fiscal_documents`, con checks de catálogo y «las dos o ninguna».
   Dominio `sales_renta.py` con los catálogos y `validate_renta`. Verificar: unitarias y prueba de migración.
-- [ ] **Paso 2: API.** `PUT /fiscal/activities/{id}/renta` (`fiscal_settings:manage`, auditado). Las actividades
+- [x] **Paso 2: API.** `PUT /fiscal/activities/{id}/renta` (`fiscal_settings:manage`, auditado). Las actividades
   devuelven su clasificación. `invoice` acepta `renta_operation_type` y `renta_income_type`; sin ellos usa la
   sugerida y, sin sugerida, responde `sales_invoice_renta_required`. `invoice-options` devuelve la sugerida. El
   documento expone su clasificación. Verificar: e2e.
@@ -233,7 +233,9 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 2 de V4b2 (API de actividades y facturación). V4b mergeado (#55). V4c sigue
+- **Paso en curso**: 3 de V4b2 (interfaz). Paso 2 hecho: la sugerida sale de la actividad del establecimiento
+  (o la principal); `invoice` valida el par con `validate_renta`; el reemplazo hereda la del original. El
+  ayudante `_issuer` de las e2e deja las actividades con (1, 3); e2e `test_sales_renta.py`. V4b mergeado (#55). V4c sigue
   después de V4b2.
   - Paso 8:
     - Batería completa: backend 2002 en verde y 1 roja, `test_sales_fiscal_documents_migration` (0126), que

@@ -60,6 +60,15 @@ class EconomicActivityOut(BaseModel):
     code: str
     description: str
     is_primary: bool
+    renta_operation_type: int | None = None
+    renta_income_type: int | None = None
+
+
+class ActivityRentaIn(BaseModel):
+    model_config = _IN
+
+    operation_type: int | None = None
+    income_type: int | None = None
 
 
 class EconomicActivityIn(BaseModel):

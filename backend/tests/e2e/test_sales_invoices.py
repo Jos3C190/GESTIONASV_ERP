@@ -24,7 +24,7 @@ from app.infrastructure.models.fiscal import (
 from app.infrastructure.models.organization import Company
 from app.infrastructure.models.sales import SalesCustomerModel
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from tests.e2e.test_fiscal_settings import _second_company
 from tests.e2e.test_sales_orders import ORDER_SELLER, _create, _order_act, _order_body, _stock
@@ -66,6 +66,15 @@ async def _issuer(company_id: uuid.UUID, branch_id: uuid.UUID) -> uuid.UUID:
             )
             session.add(activity)
             await session.flush()
+        # Clasificación de renta sugerida (V4b2): sin ella, facturar pide elegirla.
+        await session.execute(
+            update(CompanyEconomicActivityModel)
+            .where(
+                CompanyEconomicActivityModel.company_id == company_id,
+                CompanyEconomicActivityModel.renta_operation_type.is_(None),
+            )
+            .values(renta_operation_type=1, renta_income_type=3)
+        )
         establishment = await session.scalar(
             select(FiscalEstablishmentModel).where(
                 FiscalEstablishmentModel.company_id == company_id,
