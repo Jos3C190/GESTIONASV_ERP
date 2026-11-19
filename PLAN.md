@@ -262,10 +262,17 @@ Pasos:
     mismo contrato (`documentosRelacionados`, `numeroDocumento` por línea) y agrega `numPagoElectronico: null`.
     Rutas `/v2/nota-debito` y `/nota-debito` (emisor del .env) con escenario simulado. La ND se anula con tipo 2
     (tipos 1 y 3 piden reemplazo). 493 pruebas del servicio en verde.
-- [ ] **Paso 2: migración 0133 y dominio.** Tipos 05 y 06 en el documento fiscal, con `related_document_id` (el
+- [x] **Paso 2: migración 0133 y dominio.** Tipos 05 y 06 en el documento fiscal, con `related_document_id` (el
   CCF) y el motivo. El índice del documento activo y `invoiced()` cuentan solo 01 y 03. Dominio
   `sales_fiscal_notes.py`: saldo por línea y del CCF, plazo, prorrata del descuento global y retención y
   percepción espejo. Verificar: unitarias y prueba de migración.
+  - Hecho: 0133 agrega `related_document_id` y `note_reason` (obligatorios en 05/06), la tabla
+    `sales_fiscal_note_lines` (return/discount/charge, naturaleza, cantidad y monto neto) y el permiso
+    `sales_invoices:notes`. El índice del activo, `active_for_order`, `latest_for_order` e `invoiced()` cuentan solo
+    01 y 03. Dominio `sales_fiscal_notes.py`: líneas del CCF desde su `dte_json` con la prorrata en centavos del
+    descuento global, saldo por línea, devolución al precio neto (las últimas unidades toman el saldo exacto),
+    rebaja como línea «Rebaja: …» con cantidad 1, cargos de la ND, totales (IVA 13 %, retención y percepción del
+    1 % si el CCF las tuvo), plazo de 3 meses, solicitud al servicio y conciliación.
 - [ ] **Paso 3: casos de uso, trabajador y API.**
   - `GET /sales/fiscal-documents/{id}/notes` (saldo por línea, plazo y notas);
   - `POST .../credit-note` y `.../debit-note`, con permiso `sales_invoices:notes`;
@@ -296,7 +303,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 2 de V4c (migración 0133 y dominio). Paso 1 hecho (servicio).
+- **Paso en curso**: 3 de V4c (casos de uso, trabajador y API). Pasos 1 y 2 hechos.
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
     svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la
     principal (10712) «Gravada · Actividades industriales» como valor de demostración; el contador debe

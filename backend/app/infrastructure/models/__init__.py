@@ -188,6 +188,7 @@ from app.infrastructure.models.sales_delivery import (
 from app.infrastructure.models.sales_fiscal import (
     SalesFiscalDocumentEmailModel,
     SalesFiscalDocumentModel,
+    SalesFiscalNoteLineModel,
 )
 from app.infrastructure.models.sales_pricing import (
     SalesDiscountPolicyModel,
@@ -357,6 +358,7 @@ __all__: list[str] = [
     "SalesDiscountPolicyModel",
     "SalesFiscalDocumentEmailModel",
     "SalesFiscalDocumentModel",
+    "SalesFiscalNoteLineModel",
     "SalesIdempotencyModel",
     "SalesPriceListCategoryMarginModel",
     "SalesPriceListItemModel",

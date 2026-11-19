@@ -9,7 +9,11 @@ from typing import Any
 from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.entities.sales_fiscal_document import ACTIVE_STATUSES, FiscalDocumentStatus
+from app.domain.entities.sales_fiscal_document import (
+    ACTIVE_STATUSES,
+    INVOICEABLE_DOCUMENTS,
+    FiscalDocumentStatus,
+)
 from app.domain.ports.sales_fiscal_repository import FiscalDocument, FiscalDocumentFilters
 from app.infrastructure.models.catalog import CompanyUnitModel
 from app.infrastructure.models.fiscal import (
@@ -158,6 +162,7 @@ class SqlAlchemySalesFiscalRepository:
             _query().where(
                 SalesFiscalDocumentModel.company_id == company_id,
                 SalesFiscalDocumentModel.sale_id == order_id,
+                SalesFiscalDocumentModel.document_type.in_(INVOICEABLE_DOCUMENTS),
                 SalesFiscalDocumentModel.status.in_([status.value for status in ACTIVE_STATUSES]),
                 SalesFiscalDocumentModel.superseded_by_id.is_(None),
             )
@@ -171,6 +176,7 @@ class SqlAlchemySalesFiscalRepository:
             .where(
                 SalesFiscalDocumentModel.company_id == company_id,
                 SalesFiscalDocumentModel.sale_id == order_id,
+                SalesFiscalDocumentModel.document_type.in_(INVOICEABLE_DOCUMENTS),
             )
             .order_by(SalesFiscalDocumentModel.created_at.desc())
             .limit(1)
