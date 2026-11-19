@@ -211,7 +211,7 @@ Pasos:
   documento expone su clasificación. Verificar: e2e.
 - [x] **Paso 3: interfaz.** Selectores en la pestaña Actividades, en la sección Factura del pedido y la
   clasificación en el detalle del documento. Verificar: vitest.
-- [ ] **Paso 4: documentación.** `api.md`, esquema, manual de configuración fiscal y manual de facturación.
+- [x] **Paso 4: documentación.** `api.md`, esquema, manual de configuración fiscal y manual de facturación.
 - [ ] **Paso 5: verificación y PR.** Batería completa, QA en el navegador y PR a `develop`.
 
 ### V4c — Notas de crédito y de débito (se detalla al empezar)
@@ -233,7 +233,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 4 de V4b2 (documentación).
+- **Paso en curso**: 5 de V4b2 (verificación y PR).
   - Pasos 2 y 3 hechos: la sugerida sale de la actividad del establecimiento (o la principal); `invoice` valida
     el par; el reemplazo hereda la del original. Interfaz: `RentaFields.svelte` (dos selectores) en
     Actividades («Guardar renta») y en la sección Factura (Facturar se deshabilita sin clasificación

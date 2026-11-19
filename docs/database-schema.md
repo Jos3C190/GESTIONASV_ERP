@@ -1279,3 +1279,13 @@ Revision `0131` (revises `0130`), block V4b.
 **Downgrade** refuses while invalidations, invalidated or replacement documents, or orders with
 more than one non-failed document exist. Covered by
 `backend/tests/integration/test_sales_fiscal_invalidations_migration.py`.
+
+## 42. Income-tax classification (0132)
+
+Revision `0132` (revises `0131`), block V4b2.
+
+- `company_economic_activities` and `sales_fiscal_documents` gain `renta_operation_type` and
+  `renta_income_type` (`smallint`), both set or both empty, from the F-07 annex catalogues; 12 and
+  13 must be equal in both columns (`ck_<table>_renta`).
+- The downgrade drops the columns. Covered by
+  `backend/tests/integration/test_sales_renta_migration.py`.
