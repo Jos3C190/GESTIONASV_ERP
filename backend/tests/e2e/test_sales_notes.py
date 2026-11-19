@@ -226,7 +226,8 @@ async def test_rules_deadline_and_permission(e2e_client: AsyncClient) -> None:
     # Pasados tres meses desde el CCF ya no se rebaja; la nota de débito sigue disponible.
     async with async_session_factory() as session:
         model = await session.get(SalesFiscalDocumentModel, uuid.UUID(ccf["id"]))
-        assert model is not None and model.dte_json is not None
+        assert model is not None
+        assert model.dte_json is not None
         model.dte_json = {
             **model.dte_json,
             "identificacion": {**model.dte_json["identificacion"], "fecEmi": "2026-01-02"},
