@@ -273,19 +273,31 @@ Pasos:
     descuento global, saldo por línea, devolución al precio neto (las últimas unidades toman el saldo exacto),
     rebaja como línea «Rebaja: …» con cantidad 1, cargos de la ND, totales (IVA 13 %, retención y percepción del
     1 % si el CCF las tuvo), plazo de 3 meses, solicitud al servicio y conciliación.
-- [ ] **Paso 3: casos de uso, trabajador y API.**
+- [x] **Paso 3: casos de uso, trabajador y API.**
   - `GET /sales/fiscal-documents/{id}/notes` (saldo por línea, plazo y notas);
   - `POST .../credit-note` y `.../debit-note`, con permiso `sales_invoices:notes`;
   - el trabajador emite 05 y 06;
   - el CCF con una nota vigente no se invalida ni se corrige;
   - correo al cliente.
   Verificar: e2e contra el servicio simulado.
-- [ ] **Paso 4: interfaz.** En el detalle de un CCF:
+  - Hecho: `application/sales_invoices/notes.py` (`overview`, `credit_note`, `debit_note`; bloquea el CCF,
+    usa el emisor actual en el punto de venta del CCF y hereda su renta) y router `sales_notes.py`
+    (`GET /{id}/notes`, `POST /{id}/credit-note`, `POST /{id}/debit-note`, con alcance de sucursal y auditoría
+    `ISSUE_CREDIT_NOTE` / `ISSUE_DEBIT_NOTE`). El cliente DTE usa `/v2/nota-credito` y `/v2/nota-debito`; el
+    trabajador concilia la nota con sus líneas y registra 05/06 como tipos del emisor. Invalidar o corregir un
+    CCF con notas vigentes da `sales_invoice_has_notes`; anular una nota no cancela el pedido. `compose.yaml`
+    habilita 01,03,05,06 en el servicio (`DTE_ALLOWED_DOCUMENT_TYPES`). E2e `test_sales_notes.py` (3) en verde.
+- [x] **Paso 4: interfaz.** En el detalle de un CCF:
   - «Emitir nota de crédito»: líneas, devolución o rebaja, saldo y total;
   - «Emitir nota de débito»: cargos;
   - las notas del CCF y el enlace de cada nota a su CCF;
   - en la bandeja, los tipos 05 y 06.
   Verificar: vitest.
+  - Hecho: `FiscalNotesPanel.svelte` en el detalle de un CCF (saldo por línea, plazo, retención, notas con
+    enlace y formularios de NC y ND con total estimado de `note-calc.ts`). El detalle de una nota enlaza su CCF y
+    muestra el motivo; la anulación de una nota no ofrece «Corregir» y la del CCF se bloquea con notas vigentes.
+    La bandeja filtra y nombra 05 y 06 (`FISCAL_DOCUMENT_LABELS`). Vitest de ventas (73), svelte-check y eslint
+    en verde.
 - [ ] **Paso 5: documentación.**
 - [ ] **Paso 6: verificación y PR.**
 
@@ -303,7 +315,8 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 3 de V4c (casos de uso, trabajador y API). Pasos 1 y 2 hechos.
+- **Paso en curso**: 5 de V4c (documentación). Pasos 1 a 4 hechos. Tras cambiar el servicio DTE:
+  `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
     svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la
     principal (10712) «Gravada · Actividades industriales» como valor de demostración; el contador debe
