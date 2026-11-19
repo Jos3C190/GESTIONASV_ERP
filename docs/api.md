@@ -2278,3 +2278,35 @@ and the income type for income tax (F-07 annex manual V14: operation 1, 2, 3, 4,
   An invalid pair fails with `sales_renta_invalid`.
 - Fiscal documents expose their classification. A correction's replacement keeps the original's.
   Documents issued before revision 0132 have none.
+
+## Credit and debit notes (revision 0133, block V4c)
+
+Notes adjust a sealed tax credit (`03`, issued or simulated, not being replaced and without a
+pending invalidation). A credit note (`05`) lowers it and a debit note (`06`) raises it (Tax
+Code art. 110). A note belongs to the CCF's order and point of sale, carries the current issuer
+and the CCF's income-tax classification, stays `pending` and is issued by `dte-worker` through
+`/api/dte/v2/nota-credito` or `/api/dte/v2/nota-debito`; it is emailed like any document. Notes
+are fiscal only: they move no stock and no money.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/fiscal-documents/{id}/notes` | `sales_invoices:read` | CCF lines with `net` (sale minus its share of the global discount), `returned`, `credited`, `remaining_quantity` and `remaining_amount`; `credit_deadline` (three months after the CCF's `fecEmi`), `withholding` and `perception` (whether the CCF withheld or perceived VAT), `credit_blocker` and `debit_blocker` (why a note cannot be issued now) and the `notes` with their lines. |
+| POST | `/sales/fiscal-documents/{id}/credit-note` | `sales_invoices:notes` | `reason` (5–300) and `lines`: `{ccf_line_number, kind: "return", quantity}` (credited at the remaining net price; the last units take the exact remaining amount) or `{ccf_line_number, kind: "discount", amount}` (without VAT). Each line at most once, within its balance. `202`. |
+| POST | `/sales/fiscal-documents/{id}/debit-note` | `sales_invoices:notes` | `reason` and `charges`: `{description, quantity, unit_price, nature?, ccf_line_number?}`. A charge on a CCF line takes its nature; a free charge needs `nature` (`taxed`, `exempt`, `not_subject`). No cap and no deadline. `202`. |
+
+VAT is 13 % of the taxed amount; if the CCF withheld or perceived VAT the note repeats it at 1 %
+of its own taxed amount, without the $100 threshold (Manual Funcional V2.0, NCE-with-withholding
+example). Fiscal documents accept `document_type` `05` and `06` (also as a list filter) and gain
+`related_document_id` and `note_reason`. A note is not counted as the order's active document.
+
+A note is invalidated with type 2 and never corrected; invalidating it cannot cancel the order. A
+CCF with vigent notes (pending, contingency, issued or simulated) cannot be invalidated or
+corrected (rule 633).
+
+Audited: `ISSUE_CREDIT_NOTE`, `ISSUE_DEBIT_NOTE` and the usual issuance events. Error codes
+(`422`): `sales_note_requires_ccf`, `sales_note_ccf_not_sealed`,
+`sales_note_ccf_invalidation_pending`, `sales_note_deadline_passed`,
+`sales_note_document_disabled`, `sales_note_reason_required`, `sales_note_lines_required`,
+`sales_note_line_invalid`, `sales_note_line_repeated`, `sales_note_quantity_exceeded`,
+`sales_note_amount_exceeded`, `sales_note_charge_invalid`, `sales_invoice_has_notes`,
+`sales_note_cancel_order_invalid`.

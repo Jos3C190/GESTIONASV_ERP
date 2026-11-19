@@ -80,6 +80,32 @@ Cuando Hacienda acepta la anulación, el cliente recibe por correo un aviso con 
 del evento. Si la rechaza (por ejemplo, fuera de plazo), el documento sigue vigente y el
 motivo queda en el historial.
 
+## 4.2 Notas de crédito y de débito
+
+Las notas ajustan un **crédito fiscal** sellado (Código Tributario, art. 110). La **nota de
+crédito** rebaja lo documentado; la **nota de débito** lo aumenta. Las dos son solo fiscales: no
+mueven inventario ni reintegran dinero (las devoluciones con mercadería llegan con V8). La
+empresa debe tener habilitados los tipos 05 y 06 en **Configuración fiscal → Documentos**.
+
+En el detalle del crédito fiscal, la sección **Notas de crédito y de débito** muestra cada línea
+con lo vendido, lo devuelto, su venta neta y el **saldo por acreditar**, y la lista de sus notas.
+
+- **Emitir nota de crédito**: en cada línea elige **Devolución** (la cantidad devuelta; se acredita
+  al precio neto con el que se vendió, descuento global incluido) o **Rebaja** (el monto que se
+  descuenta, sin IVA). No pasa del saldo de la línea. Se emite hasta **tres meses** desde la fecha
+  del crédito fiscal (CT art. 111); después la sección lo indica y no deja emitirla.
+- **Emitir nota de débito**: agrega cargos sin IVA (descripción, cantidad, precio). Un cargo puede
+  ajustar una línea del crédito fiscal (toma su tipo de venta) o ser libre, como intereses o flete
+  (eliges si es gravado, exento o no sujeto). No consume saldo.
+- Las dos piden el **motivo** y muestran el total estimado: si el crédito fiscal retuvo o percibió
+  el 1 % de IVA, la nota repite la misma retención o percepción sobre lo gravado.
+- La nota pertenece al mismo pedido, hereda la clasificación de renta del crédito fiscal, se emite
+  como cualquier documento y se envía al cliente por correo. Su detalle enlaza al crédito fiscal.
+
+Una nota no se corrige: se **anula** (rescindir la operación) y, si hace falta, se emite otra.
+Anularla devuelve el saldo y no cancela el pedido. Un crédito fiscal con notas vigentes no se
+anula ni se corrige: primero se anulan sus notas.
+
 ## 5. Contingencia
 
 Cuando no hay comunicación con Hacienda se sigue facturando «en contingencia». Los documentos
@@ -104,8 +130,8 @@ transmiten a Hacienda cuando la comunicación se restablece.
 
 ## 6. Bandeja «Documentos fiscales»
 
-En **Ventas → Documentos fiscales** están todos los documentos de la sucursal, con filtros por
-estado y tipo y búsqueda por número de control, pedido o cliente. El detalle muestra el código
+En **Ventas → Documentos fiscales** están todos los documentos de la sucursal (facturas, créditos
+fiscales y sus notas), con filtros por estado y tipo y búsqueda por número de control, pedido o cliente. El detalle muestra el código
 de generación, el sello, los intentos y el último error, y permite descargar el JSON y el PDF.
 
 ## 7. Envío por correo
@@ -141,4 +167,5 @@ En desarrollo, los correos no salen a internet: llegan al buzón de prueba Mailp
 | `sales_invoices:read` | Ver la sección Factura, la bandeja, el historial de envíos y descargar JSON y PDF. |
 | `sales_invoices:issue` | Facturar, reintentar y enviar por correo. |
 | `sales_invoices:invalidate` | Anular y corregir documentos emitidos; con `sales:cancel`, cancelar un pedido facturado. |
+| `sales_invoices:notes` | Emitir notas de crédito y de débito sobre un crédito fiscal. Ver su saldo y sus notas pide `sales_invoices:read`. |
 | `sales_invoices:contingency` | Activar y cerrar contingencias, informar el evento y registrar al responsable. Ver la pantalla Contingencia pide `sales_invoices:read`. |

@@ -1289,3 +1289,20 @@ Revision `0132` (revises `0131`), block V4b2.
   13 must be equal in both columns (`ck_<table>_renta`).
 - The downgrade drops the columns. Covered by
   `backend/tests/integration/test_sales_renta_migration.py`.
+
+## 43. Credit and debit notes (0133)
+
+Revision `0133` (revises `0132`), block V4c.
+
+- `sales_fiscal_documents` accepts `document_type` `05` and `06` and gains `related_document_id`
+  (the adjusted CCF, composite FK) and `note_reason` (5–300 characters); both are required exactly
+  for notes (`ck_sales_fiscal_documents_note`). `ix_sales_fiscal_documents_related` indexes them.
+- `uq_sales_fiscal_documents_active_sale` only covers `01` and `03`: notes live beside the CCF.
+- `sales_fiscal_note_lines`: `note_id`, `line_number`, `ccf_line_number` (null for a free charge),
+  `kind` (`return` with a quantity, `discount` without one, `charge` with one), `nature`
+  (`taxed`, `exempt`, `not_subject`), `description`, `quantity` and `amount` (net, without VAT,
+  greater than zero). Vigent credit-note lines give each CCF line its balance.
+- Permission `sales_invoices:notes`, granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while notes exist. Covered by
+`backend/tests/integration/test_sales_fiscal_notes_migration.py`.

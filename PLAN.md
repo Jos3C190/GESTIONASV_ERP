@@ -298,7 +298,9 @@ Pasos:
     muestra el motivo; la anulación de una nota no ofrece «Corregir» y la del CCF se bloquea con notas vigentes.
     La bandeja filtra y nombra 05 y 06 (`FISCAL_DOCUMENT_LABELS`). Vitest de ventas (73), svelte-check y eslint
     en verde.
-- [ ] **Paso 5: documentación.**
+- [x] **Paso 5: documentación.**
+  - Hecho: manual de facturación (4.2 y permisos), `docs/api.md`, `docs/database-schema.md` (sección 43)
+    y `dte-service/README.md` (retención en las notas y `/v2/nota-debito`).
 - [ ] **Paso 6: verificación y PR.**
 
 ### V4d — Nota de remisión y evento de retorno (se detalla al empezar)
@@ -315,7 +317,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 5 de V4c (documentación). Pasos 1 a 4 hechos. Tras cambiar el servicio DTE:
+- **Paso en curso**: 6 de V4c (verificación y PR). Pasos 1 a 5 hechos. Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
     svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la

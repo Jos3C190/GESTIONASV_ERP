@@ -690,9 +690,14 @@ inadvertido hasta que Hacienda rechaza algo en producción:
   la revisión del panel) — Nota de Crédito (tipo 05). Solo ajusta CCF:
   `{ emisor, receptor, items, documentosRelacionados, observaciones }`, con el
   receptor por NIT (`tipoDocumento` 36), de 1 a 50 CCF relacionados (código de
-  generación y `fechaEmision`) y `numeroDocumento` en cada línea. Fuera de la
-  allowlist por defecto (`01,03`): responde 403 hasta que el backend la use
-- `POST /api/dte/nota-debito` — Nota de Débito (tipo 06)
+  generación y `fechaEmision`) y `numeroDocumento` en cada línea.
+  `ajustes: { retencionIva, percepcionIva }` repite la retención o la percepción
+  del CCF: el 1 % del gravado de la nota, por línea y en el resumen, sin el
+  umbral de $100. Fuera de la allowlist por defecto (`01,03`); `compose.yaml`
+  habilita `01,03,05,06`
+- `POST /api/dte/nota-debito` y `POST /api/dte/v2/nota-debito` — Nota de Débito
+  (tipo 06), con el mismo contrato que la Nota de Crédito y
+  `numPagoElectronico: null` en el resumen. Se anula con el tipo 2
 - `POST /api/dte/comprobante-retencion` — Comprobante de Retención (tipo 07)
 - `POST /api/dte/comprobante-liquidacion` — Comprobante de Liquidación (tipo 08)
 - `POST /api/dte/documento-contable-liquidacion` — Doc. Contable de Liquidación (tipo 09)
