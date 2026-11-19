@@ -253,9 +253,15 @@ Hechos verificados en el código:
 
 Pasos:
 - [x] **Paso 0: plan y rama.**
-- [ ] **Paso 1: servicio.** NC con `ivaRete` e `ivaPerci` por línea (tasas que manda el ERP). Ruta
+- [x] **Paso 1: servicio.** NC con `ivaRete` e `ivaPerci` por línea (tasas que manda el ERP). Ruta
   `/v2/nota-debito` multiemisor como la NC (copia del emisor, relacionados validados, contingencia y escenarios
   simulados). Verificar: pruebas del servicio, esquema y PDF de las dos.
+  - Hecho: NC y ND comparten `_construirNota` (dteBuilderNotas.js). El ERP manda
+    `ajustes: { retencionIva, percepcionIva }` (booleanos); el servicio calcula el 1 % del gravado de la nota, lo
+    reparte por línea en centavos y fija `totalPagar = operación + ivaPerci − ivaRete + no gravado`. La ND usa el
+    mismo contrato (`documentosRelacionados`, `numeroDocumento` por línea) y agrega `numPagoElectronico: null`.
+    Rutas `/v2/nota-debito` y `/nota-debito` (emisor del .env) con escenario simulado. La ND se anula con tipo 2
+    (tipos 1 y 3 piden reemplazo). 493 pruebas del servicio en verde.
 - [ ] **Paso 2: migración 0133 y dominio.** Tipos 05 y 06 en el documento fiscal, con `related_document_id` (el
   CCF) y el motivo. El índice del documento activo y `invoiced()` cuentan solo 01 y 03. Dominio
   `sales_fiscal_notes.py`: saldo por línea y del CCF, plazo, prorrata del descuento global y retención y
@@ -290,7 +296,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 1 de V4c (servicio). V4b2 mergeado (#56).
+- **Paso en curso**: 2 de V4c (migración 0133 y dominio). Paso 1 hecho (servicio).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
     svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la
     principal (10712) «Gravada · Actividades industriales» como valor de demostración; el contador debe
