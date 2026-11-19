@@ -10,7 +10,8 @@ export const FISCAL_STATUS_LABELS: Record<FiscalDocumentStatus, string> = {
   issued: 'Emitido',
   simulated: 'Simulado',
   rejected: 'Rechazado',
-  failed: 'Falló'
+  failed: 'Falló',
+  invalidated: 'Invalidado'
 };
 
 export const FISCAL_STATUS_BADGES: Record<FiscalDocumentStatus, string> = {
@@ -19,7 +20,8 @@ export const FISCAL_STATUS_BADGES: Record<FiscalDocumentStatus, string> = {
   issued: 'bg-success/10 text-success',
   simulated: 'bg-primary/10 text-primary',
   rejected: 'bg-danger/10 text-danger',
-  failed: 'bg-danger/10 text-danger'
+  failed: 'bg-danger/10 text-danger',
+  invalidated: 'bg-surface-muted text-foreground-muted'
 };
 
 export const FISCAL_STATUS_FILTERS: { value: string; label: string }[] = [
@@ -29,7 +31,8 @@ export const FISCAL_STATUS_FILTERS: { value: string; label: string }[] = [
   { value: 'issued', label: 'Emitidos' },
   { value: 'simulated', label: 'Simulados' },
   { value: 'rejected', label: 'Rechazados' },
-  { value: 'failed', label: 'Fallidos' }
+  { value: 'failed', label: 'Fallidos' },
+  { value: 'invalidated', label: 'Invalidados' }
 ];
 
 export const FISCAL_MODE_LABELS: Record<string, string> = {
@@ -117,4 +120,29 @@ export function formatMoment(value: string | null | undefined): string {
       .map((part) => [part.type, part.value])
   );
   return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
+}
+
+/** Tipo de invalidación (CAT-024) que ofrece el ERP. */
+export const INVALIDATION_KIND_LABELS: Record<number, string> = {
+  1: 'Corrección: error en los datos',
+  2: 'Anulación: se rescinde la operación'
+};
+
+export const INVALIDATION_STATUS_LABELS: Record<string, string> = {
+  pending: 'En proceso',
+  accepted: 'Aceptada',
+  rejected: 'Rechazada',
+  failed: 'No se completó'
+};
+
+export const INVALIDATION_STATUS_BADGES: Record<string, string> = {
+  pending: 'bg-warning/10 text-warning',
+  accepted: 'bg-success/10 text-success',
+  rejected: 'bg-danger/10 text-danger',
+  failed: 'bg-danger/10 text-danger'
+};
+
+/** Un documento sellado que se puede anular o corregir. */
+export function isSealed(document: Pick<FiscalDocument, 'status'>): boolean {
+  return document.status === 'issued' || document.status === 'simulated';
 }

@@ -85,7 +85,7 @@ it('pide la caja cuando hay varias y factura con la elegida', async () => {
   expect(salesInvoicesApi.invoice).toHaveBeenCalledExactlyOnceWith(sale.id, 'pos-2');
   expect(await screen.findByText('DTE-01-M001P001-000000000000001')).toBeInTheDocument();
   expect(screen.getByText('Simulado')).toBeInTheDocument();
-  expect(onInvoiced).toHaveBeenLastCalledWith(true);
+  expect(onInvoiced).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'simulated' }));
 });
 
 it('muestra lo que falta para facturar y no deja intentarlo', async () => {

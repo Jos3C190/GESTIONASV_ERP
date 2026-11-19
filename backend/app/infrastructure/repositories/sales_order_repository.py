@@ -272,7 +272,10 @@ class SqlAlchemySalesOrderRepository(SalesDocumentSupport):
             select(SalesFiscalDocumentModel.id).where(
                 SalesFiscalDocumentModel.company_id == company_id,
                 SalesFiscalDocumentModel.sale_id == order_id,
-                SalesFiscalDocumentModel.status != "failed",
+                # Un rechazado o un invalidado no cuenta (V4b).
+                SalesFiscalDocumentModel.status.in_(
+                    ("pending", "contingency", "issued", "simulated")
+                ),
             )
         )
         return found is not None

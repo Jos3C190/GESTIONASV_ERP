@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any, Protocol
 
 from app.domain.entities.fiscal_contingency import (
@@ -61,6 +62,34 @@ class DocumentState:
     seal: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class InvalidationWindow:
+    """Plazo para invalidar un documento según el servicio (V4b)."""
+
+    deadline: date
+    expired: bool
+    estimated: bool
+    """El décimo día hábil depende de los feriados: el servicio lo estima."""
+
+
+@dataclass(frozen=True, slots=True)
+class InvalidationRequest:
+    kind: int
+    reason: str | None
+    responsible: ContingencyResponsible
+    requester: ContingencyResponsible
+    replacement_generation_code: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class InvalidationResult:
+    accepted: bool
+    event_generation_code: str | None
+    seal: str | None
+    message: str | None
+    response: dict[str, Any] = field(default_factory=dict)
+
+
 class DteService(Protocol):
     async def register_issuer(
         self,
@@ -84,6 +113,23 @@ class DteService(Protocol):
     async def document_json(self, nit: str, generation_code: str) -> dict[str, Any]: ...
 
     async def document_pdf(self, nit: str, generation_code: str) -> bytes: ...
+
+    # --- invalidación (V4b) ---
+
+    async def invalidation_window(self, nit: str, generation_code: str) -> InvalidationWindow: ...
+
+    async def invalidate(
+        self,
+        nit: str,
+        generation_code: str,
+        *,
+        idempotency_key: str,
+        request: InvalidationRequest,
+    ) -> InvalidationResult:
+        """Aceptada o rechazada por Hacienda; lanza ``DteServiceError`` si no hubo respuesta."""
+        ...
+
+    async def invalidation_pdf(self, nit: str, event_generation_code: str) -> bytes: ...
 
     # --- contingencia por establecimiento (V4a) ---
 

@@ -42,16 +42,39 @@ pedido. Si no cuadra, no envía nada y pide editar y volver a confirmar el pedid
 | Emitido | Hacienda lo recibió y le puso sello. |
 | Rechazado | Hacienda lo rechazó; el detalle queda en el documento. |
 | Falló | No se pudo emitir. Se puede reintentar. |
+| Invalidado | Se anuló ante Hacienda con un evento de invalidación; ya no tiene validez. |
 
 ## 4. Si algo falla
 
 - **Reintentar emisión** envía el mismo documento con la misma clave, así que nunca se duplica.
   Úsalo después de corregir lo que indica el mensaje (por ejemplo, habilitar el tipo de
   documento).
-- Si el problema estaba en los datos del pedido o del cliente, corrígelos y pulsa **Facturar de
-  nuevo**: se arma un documento nuevo con los datos actuales.
-- Un pedido facturado ya no se puede cancelar. La corrección se hará con invalidación o nota de
-  crédito (bloques V4b y V4c).
+- Si Hacienda **rechazó** el documento, la sección Factura del pedido muestra sus observaciones.
+  Corrige los datos del pedido o del cliente y pulsa **Facturar**: se emite un documento nuevo y
+  el rechazado queda en el historial.
+
+## 4.1 Anular o corregir un documento emitido
+
+Un documento con sello no se borra. En su detalle, la sección **Anulación y corrección** dice
+hasta cuándo se puede (tres meses desde el sello para una factura; hasta el décimo día hábil del
+mes siguiente para un crédito fiscal) y ofrece:
+
+- **Corregir documento**: para un error en los datos. Corrige antes los datos del cliente o del
+  pedido. Se emite un documento nuevo con los datos actuales y, cuando queda sellado, el
+  original se invalida solo y ambos quedan vinculados. Si el reemplazo no se emite, el original
+  sigue vigente.
+- **Anular documento**: la operación se rescinde; pide el motivo. No se emite otro documento.
+
+En los dos casos se indica quién lo solicita (nombre y documento). El evento lo firma el
+**responsable fiscal** de la empresa, que se registra en **Ventas → Contingencia**.
+
+Para **cancelar un pedido facturado**, usa **Cancelar pedido** en el pedido: pide el motivo y
+el solicitante, anula su documento ante Hacienda y el pedido se cancela cuando Hacienda lo
+acepta. Un pedido con entregas no se cancela así: se gestiona con devoluciones.
+
+Cuando Hacienda acepta la anulación, el cliente recibe por correo un aviso con el comprobante
+del evento. Si la rechaza (por ejemplo, fuera de plazo), el documento sigue vigente y el
+motivo queda en el historial.
 
 ## 5. Contingencia
 
@@ -113,4 +136,5 @@ En desarrollo, los correos no salen a internet: llegan al buzón de prueba Mailp
 |---|---|
 | `sales_invoices:read` | Ver la sección Factura, la bandeja, el historial de envíos y descargar JSON y PDF. |
 | `sales_invoices:issue` | Facturar, reintentar y enviar por correo. |
+| `sales_invoices:invalidate` | Anular y corregir documentos emitidos; con `sales:cancel`, cancelar un pedido facturado. |
 | `sales_invoices:contingency` | Activar y cerrar contingencias, informar el evento y registrar al responsable. Ver la pantalla Contingencia pide `sales_invoices:read`. |

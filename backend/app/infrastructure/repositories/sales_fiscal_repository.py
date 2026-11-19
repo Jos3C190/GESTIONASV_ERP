@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.entities.sales_fiscal_document import FiscalDocumentStatus
+from app.domain.entities.sales_fiscal_document import ACTIVE_STATUSES, FiscalDocumentStatus
 from app.domain.ports.sales_fiscal_repository import FiscalDocument, FiscalDocumentFilters
 from app.infrastructure.models.catalog import CompanyUnitModel
 from app.infrastructure.models.fiscal import (
@@ -46,6 +46,8 @@ _FIELDS = (
     "contingency_type",
     "contingency_reason",
     "contingency_at",
+    "replaces_document_id",
+    "superseded_by_id",
 )
 #: Lo que cambia después de crear el documento.
 _MUTABLE = (
@@ -63,6 +65,7 @@ _MUTABLE = (
     "contingency_type",
     "contingency_reason",
     "contingency_at",
+    "superseded_by_id",
 )
 
 
@@ -153,8 +156,22 @@ class SqlAlchemySalesFiscalRepository:
             _query().where(
                 SalesFiscalDocumentModel.company_id == company_id,
                 SalesFiscalDocumentModel.sale_id == order_id,
-                SalesFiscalDocumentModel.status != FiscalDocumentStatus.FAILED.value,
+                SalesFiscalDocumentModel.status.in_([status.value for status in ACTIVE_STATUSES]),
+                SalesFiscalDocumentModel.superseded_by_id.is_(None),
             )
+        )
+
+    async def latest_for_order(
+        self, company_id: uuid.UUID, order_id: uuid.UUID
+    ) -> FiscalDocument | None:
+        return await self._one(
+            _query()
+            .where(
+                SalesFiscalDocumentModel.company_id == company_id,
+                SalesFiscalDocumentModel.sale_id == order_id,
+            )
+            .order_by(SalesFiscalDocumentModel.created_at.desc())
+            .limit(1)
         )
 
     async def list_documents(

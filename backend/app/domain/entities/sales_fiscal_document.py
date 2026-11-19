@@ -64,15 +64,17 @@ class FiscalDocumentStatus(StrEnum):
     REJECTED = "rejected"
     FAILED = "failed"
     """No llegó a emitirse; el pedido se puede volver a facturar."""
+    INVALIDATED = "invalidated"
+    """Anulado con un evento de invalidación aceptado (V4b)."""
 
 
-#: Estados que ya tienen identidad fiscal y bloquean una nueva emisión del pedido.
+#: Estados que bloquean una nueva emisión del pedido. Un rechazado o un invalidado no la bloquea:
+#: se corrigen los datos y se factura de nuevo (V4b).
 ACTIVE_STATUSES = (
     FiscalDocumentStatus.PENDING,
     FiscalDocumentStatus.CONTINGENCY,
     FiscalDocumentStatus.ISSUED,
     FiscalDocumentStatus.SIMULATED,
-    FiscalDocumentStatus.REJECTED,
 )
 #: Estados que se pueden reintentar con la misma clave de idempotencia.
 RETRYABLE_STATUSES = (FiscalDocumentStatus.PENDING, FiscalDocumentStatus.FAILED)

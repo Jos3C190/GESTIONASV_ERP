@@ -54,7 +54,7 @@ Storage = Annotated[ObjectStorage, Depends(get_object_storage)]
 CompanyId = Annotated[uuid.UUID, Depends(request_company_id)]
 _READ = [Depends(require_permission("sales_invoices:read"))]
 _ISSUE = [Depends(require_permission("sales_invoices:issue"))]
-_STATUS_PATTERN = "^(pending|contingency|issued|simulated|rejected|failed)$"
+_STATUS_PATTERN = "^(pending|contingency|issued|simulated|rejected|failed|invalidated)$"
 _SERVICE_MISSING = "La facturación electrónica no está configurada en este servidor."
 
 
@@ -85,6 +85,8 @@ def document_out(document: FiscalDocument) -> FiscalDocumentOut:
         contingency_type=document.contingency_type,
         contingency_reason=document.contingency_reason,
         contingency_at=document.contingency_at,
+        replaces_document_id=document.replaces_document_id,
+        superseded_by_id=document.superseded_by_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
     )
@@ -168,6 +170,7 @@ async def invoice_options(
         ],
         blockers=blockers,
         document=document_out(options.document) if options.document else None,
+        previous_document=document_out(options.previous) if options.previous else None,
     )
 
 
@@ -366,6 +369,7 @@ def _email_out(email: FiscalDocumentEmail) -> FiscalEmailOut:
         error_code=email.error_code,
         error_message=email.error_message,
         requested_by_name=email.requested_by_name,
+        invalidation_id=email.invalidation_id,
         sent_at=email.sent_at,
         created_at=email.created_at,
     )

@@ -12,8 +12,10 @@ from app.domain.entities.sales_fiscal_email import (
     CONTINGENCY_NOTE,
     SIMULATED_MARK,
     FiscalEmailContent,
+    InvalidationEmailContent,
     PrivacyNoticeText,
     compose,
+    compose_invalidation,
     customer_recipients,
     normalize_recipients,
     require_sendable,
@@ -97,3 +99,29 @@ def test_only_issued_documents_are_sent() -> None:
         with pytest.raises(BusinessRuleError) as raised:
             require_sendable(status)
         assert raised.value.code == "sales_invoice_email_not_issued"
+
+
+def test_invalidation_notice_names_the_document_and_its_replacement() -> None:
+    content = InvalidationEmailContent(
+        company_name="Panadería Lorena",
+        document_type="03",
+        control_number="DTE-03-M001P001-000000000000007",
+        generation_code="a1b2c3d4-0000-4000-8000-000000000007",
+        invalidated_at=datetime(2026, 11, 18, 2, 30, tzinfo=UTC),
+        customer_name="Clínica San Rafael",
+        simulated=False,
+        reason="Rescindir la operación",
+    )
+    email = compose_invalidation(content)
+    assert email.subject == (
+        "Anulación de comprobante de crédito fiscal DTE-03-M001P001-000000000000007 — "
+        "Panadería Lorena"
+    )
+    assert "17/11/2026" in email.text
+    assert "Motivo: Rescindir la operación" in email.text
+    replaced = compose_invalidation(
+        replace(content, replacement_control_number="DTE-03-M001P001-000000000000008")
+    )
+    assert "La sustituye el documento DTE-03-M001P001-000000000000008" in replaced.text
+    assert "Motivo:" not in replaced.text
+    assert compose_invalidation(replace(content, simulated=True)).subject.startswith("[SIMULADO")

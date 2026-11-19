@@ -41,6 +41,8 @@ class FiscalDocument:
     contingency_type: int | None = None
     contingency_reason: str | None = None
     contingency_at: datetime | None = None
+    replaces_document_id: uuid.UUID | None = None
+    superseded_by_id: uuid.UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     sale_code: str | None = None
@@ -69,6 +71,10 @@ class SalesFiscalRepository(Protocol):
     ) -> FiscalDocument | None: ...
 
     async def active_for_order(
+        self, company_id: uuid.UUID, order_id: uuid.UUID
+    ) -> FiscalDocument | None: ...
+
+    async def latest_for_order(
         self, company_id: uuid.UUID, order_id: uuid.UUID
     ) -> FiscalDocument | None: ...
 
@@ -111,6 +117,8 @@ class FiscalDocumentEmail:
     message_id: str | None = None
     requested_by_id: uuid.UUID | None = None
     requested_by_name: str | None = None
+    invalidation_id: uuid.UUID | None = None
+    """Aviso de una invalidación aceptada (V4b), en lugar del documento."""
     sent_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

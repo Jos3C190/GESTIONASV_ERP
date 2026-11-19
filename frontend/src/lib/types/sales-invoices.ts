@@ -1,7 +1,7 @@
 /** Documento fiscal del pedido (bloque V3b). */
 
 export type FiscalDocumentStatus =
-  'pending' | 'contingency' | 'issued' | 'simulated' | 'rejected' | 'failed';
+  'pending' | 'contingency' | 'issued' | 'simulated' | 'rejected' | 'failed' | 'invalidated';
 
 export interface FiscalDocument {
   id: string;
@@ -30,6 +30,9 @@ export interface FiscalDocument {
   contingency_type?: number | null;
   contingency_reason?: string | null;
   contingency_at?: string | null;
+  /** Corrección (V4b): el documento que éste reemplaza, o el que lo reemplaza. */
+  replaces_document_id?: string | null;
+  superseded_by_id?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -55,6 +58,8 @@ export interface InvoiceOptions {
   points_of_sale: InvoicePointOfSale[];
   blockers: string[];
   document: FiscalDocument | null;
+  /** Sin documento vigente: el último del pedido (rechazado, fallido o invalidado). */
+  previous_document?: FiscalDocument | null;
 }
 
 export interface FiscalDocumentFilters {
@@ -79,6 +84,8 @@ export interface FiscalEmail {
   error_code: string | null;
   error_message: string | null;
   requested_by_name: string | null;
+  /** Aviso de una invalidación (V4b), no el documento. */
+  invalidation_id?: string | null;
   sent_at: string | null;
   created_at: string | null;
 }
@@ -87,4 +94,45 @@ export interface FiscalEmailHistory {
   enabled: boolean;
   customer_email: string | null;
   items: FiscalEmail[];
+}
+
+/** Invalidación y corrección de un documento (bloque V4b). */
+export interface Person {
+  name: string;
+  document_type: string;
+  document_number: string;
+}
+
+export type InvalidationStatus = 'pending' | 'accepted' | 'rejected' | 'failed';
+
+export interface FiscalInvalidation {
+  id: string;
+  document_id: string;
+  /** 1: error en los datos (con reemplazo); 2: rescindir la operación. */
+  kind: 1 | 2;
+  reason: string | null;
+  requester: Person;
+  responsible: Person | null;
+  replacement_document_id: string | null;
+  cancel_order: boolean;
+  status: InvalidationStatus;
+  attempts: number;
+  event_generation_code: string | null;
+  event_seal: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  created_at: string | null;
+  resolved_at: string | null;
+}
+
+export interface InvalidationOverview {
+  deadline: string | null;
+  expired: boolean;
+  estimated: boolean;
+  history: FiscalInvalidation[];
+}
+
+export interface Correction {
+  replacement: FiscalDocument;
+  invalidation: FiscalInvalidation;
 }
