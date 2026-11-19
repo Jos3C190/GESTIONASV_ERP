@@ -249,6 +249,9 @@ class EconomicActivity:
     code: str
     description: str
     is_primary: bool
+    renta_operation_type: int | None = None
+    """Clasificación de renta sugerida para sus ventas (F-07, V4b2)."""
+    renta_income_type: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

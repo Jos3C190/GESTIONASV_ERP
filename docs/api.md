@@ -2259,3 +2259,22 @@ Audited: `REQUEST_INVALIDATION`, `CORRECT_FISCAL_DOCUMENT`, `FISCAL_DOCUMENT_INV
 `sales_invoice_not_correctable`, `sales_invoice_correction_type_changed`,
 `sales_invoice_invalidation_reason_required`, `sales_invoice_requester_invalid`,
 `sales_invoice_responsible_missing`, `sales_invoice_invalidation_expired`.
+
+## Income-tax classification of sales (revision 0132, block V4b2)
+
+Since the January 2025 period the F-07 sales annexes carry, for every document, the operation type
+and the income type for income tax (F-07 annex manual V14: operation 1, 2, 3, 4, 12, 13; income 1–10,
+12, 13; 12 and 13 must match in both columns). The DTE does not carry them, so the ERP stores them.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| PUT | `/fiscal/activities/{id}/renta` | `fiscal_settings:manage` | `operation_type` and `income_type` suggested for the activity's sales; both `null` clears them. Audited `UPDATE` on `fiscal_activity`. |
+
+- Activities expose `renta_operation_type` and `renta_income_type`.
+- `/sales/{order_id}/invoice-options` returns the suggestion of the establishment's activity (or the
+  primary one).
+- `POST /sales/{order_id}/invoice` accepts `renta_operation_type` and `renta_income_type`; without
+  them the suggestion is used and, with no suggestion, it fails with `sales_invoice_renta_required`.
+  An invalid pair fails with `sales_renta_invalid`.
+- Fiscal documents expose their classification. A correction's replacement keeps the original's.
+  Documents issued before revision 0132 have none.

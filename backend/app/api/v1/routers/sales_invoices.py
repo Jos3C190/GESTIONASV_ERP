@@ -37,6 +37,7 @@ from app.application.sales_invoices import SalesInvoiceUseCases
 from app.application.sales_invoices.emails import SalesInvoiceEmailUseCases
 from app.core.config import settings
 from app.core.exceptions import BusinessRuleError, ConflictError
+from app.domain.entities.sales_renta import validate_renta
 from app.domain.ports.object_storage import ObjectStorage
 from app.domain.ports.sales_fiscal_repository import (
     FiscalDocument,
@@ -87,6 +88,8 @@ def document_out(document: FiscalDocument) -> FiscalDocumentOut:
         contingency_at=document.contingency_at,
         replaces_document_id=document.replaces_document_id,
         superseded_by_id=document.superseded_by_id,
+        renta_operation_type=document.renta_operation_type,
+        renta_income_type=document.renta_income_type,
         created_at=document.created_at,
         updated_at=document.updated_at,
     )
@@ -171,6 +174,8 @@ async def invoice_options(
         blockers=blockers,
         document=document_out(options.document) if options.document else None,
         previous_document=document_out(options.previous) if options.previous else None,
+        renta_operation_type=options.renta.operation_type if options.renta else None,
+        renta_income_type=options.renta.income_type if options.renta else None,
     )
 
 
@@ -195,7 +200,14 @@ async def invoice_order(
     _require_service()
     order = await use_cases.order(company_id, order_id)
     await resolve_branch_scope(session, current, company_id, order.branch_id)
-    issued = await use_cases.issue(company_id, order_id, current.id, body.point_of_sale_id)
+    renta = (
+        validate_renta(body.renta_operation_type, body.renta_income_type)
+        if body.renta_operation_type is not None or body.renta_income_type is not None
+        else None
+    )
+    issued = await use_cases.issue(
+        company_id, order_id, current.id, body.point_of_sale_id, renta=renta
+    )
     if issued.created:
         await _record(
             audit,

@@ -18,6 +18,7 @@ from sqlalchemy import (
     Index,
     Integer,
     LargeBinary,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -108,10 +109,21 @@ class CompanyEconomicActivityModel(UUIDPKMixin, TimestampMixin, Base):
     )
     activity_code: Mapped[str] = mapped_column(String(6), nullable=False)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # Clasificación de renta sugerida para sus ventas (revisión 0132).
+    renta_operation_type: Mapped[int | None] = mapped_column(SmallInteger)
+    renta_income_type: Mapped[int | None] = mapped_column(SmallInteger)
     created_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), _user_fk())
 
     __table_args__ = (
         UniqueConstraint("company_id", "id", name="uq_company_economic_activities_company_id"),
+        CheckConstraint(
+            "(renta_operation_type IS NULL) = (renta_income_type IS NULL) "
+            "AND (renta_operation_type IS NULL OR renta_operation_type IN (1, 2, 3, 4, 12, 13)) "
+            "AND (renta_income_type IS NULL OR renta_income_type IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13)) "
+            "AND (renta_operation_type NOT IN (12, 13) OR renta_income_type = renta_operation_type) "
+            "AND (renta_income_type NOT IN (12, 13) OR renta_income_type = renta_operation_type)",
+            name="ck_company_economic_activities_renta",
+        ),
         UniqueConstraint("company_id", "activity_code", name="uq_company_economic_activities_code"),
         CheckConstraint(
             "activity_code ~ '^[0-9]{5,6}$'", name="ck_company_economic_activities_code"

@@ -88,6 +88,14 @@ class FiscalRepository(Protocol):
         self, company_id: uuid.UUID, code: str, *, is_primary: bool, actor_id: uuid.UUID
     ) -> EconomicActivity: ...
 
+    async def set_activity_renta(
+        self,
+        company_id: uuid.UUID,
+        activity_id: uuid.UUID,
+        operation_type: int | None,
+        income_type: int | None,
+    ) -> None: ...
+
     async def set_primary_activity(self, company_id: uuid.UUID, activity_id: uuid.UUID) -> None: ...
 
     async def activity_in_use(self, company_id: uuid.UUID, activity_id: uuid.UUID) -> bool: ...

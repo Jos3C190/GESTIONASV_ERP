@@ -23,7 +23,11 @@ Si falta algo, el pedido lo dice en la sección **Factura**, en la lista «Antes
 
 1. Abre el pedido **confirmado**. Se puede facturar antes, durante o después de entregar.
 2. En la sección **Factura**, elige la caja si la sucursal tiene varias.
-3. Pulsa **Facturar**.
+3. Revisa el **tipo de operación** y el **tipo de ingreso (renta)**. Vienen propuestos por la
+   actividad económica del establecimiento; cámbialos si esta venta es distinta (por ejemplo, un
+   servicio en una empresa comercial, o una venta con operaciones gravadas y exentas: «Mixta»).
+   Sin ellos no se puede facturar. El documento los guarda para los anexos de ventas del F-07.
+4. Pulsa **Facturar**.
 
 El documento queda **Emitiendo** y la sección se actualiza sola. Al terminar muestra el número
 de control y los botones **Ver PDF** y **Descargar JSON**. Pulsar Facturar dos veces no crea dos

@@ -43,6 +43,9 @@ class FiscalDocument:
     contingency_at: datetime | None = None
     replaces_document_id: uuid.UUID | None = None
     superseded_by_id: uuid.UUID | None = None
+    renta_operation_type: int | None = None
+    """Clasificación de renta del documento para los anexos del F-07 (V4b2)."""
+    renta_income_type: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     sale_code: str | None = None

@@ -25,6 +25,7 @@ from app.api.v1.deps import (
     require_permission,
 )
 from app.api.v1.schemas.fiscal import (
+    ActivityRentaIn,
     BranchOptionOut,
     CatalogItemOut,
     CatalogSummaryOut,
@@ -124,7 +125,12 @@ async def _record(
 
 def _activity_out(item: EconomicActivity) -> EconomicActivityOut:
     return EconomicActivityOut(
-        id=item.id, code=item.code, description=item.description, is_primary=item.is_primary
+        id=item.id,
+        code=item.code,
+        description=item.description,
+        is_primary=item.is_primary,
+        renta_operation_type=item.renta_operation_type,
+        renta_income_type=item.renta_income_type,
     )
 
 
@@ -317,6 +323,38 @@ async def add_activity(
         company_id=company_id,
         resource_type="fiscal_activity",
         resource_id=str(item.id),
+        after=item,
+    )
+    return _activity_out(item)
+
+
+@router.put(
+    "/activities/{activity_id}/renta",
+    response_model=EconomicActivityOut,
+    summary="Clasificación de renta sugerida para las ventas de la actividad",
+    dependencies=_MANAGE,
+)
+async def set_activity_renta(
+    activity_id: uuid.UUID,
+    body: ActivityRentaIn,
+    request: Request,
+    current: CurrentUser,
+    use_cases: UseCases,
+    audit: Audit,
+) -> EconomicActivityOut:
+    company_id = request_company_id(request)
+    before, item = await use_cases.set_activity_renta(
+        company_id, activity_id, body.operation_type, body.income_type
+    )
+    await _record(
+        audit,
+        request,
+        action="UPDATE",
+        actor=current.id,
+        company_id=company_id,
+        resource_type="fiscal_activity",
+        resource_id=str(item.id),
+        before=before,
         after=item,
     )
     return _activity_out(item)

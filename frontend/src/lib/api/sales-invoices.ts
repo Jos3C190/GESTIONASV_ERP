@@ -30,10 +30,18 @@ export const salesInvoicesApi = {
   options(orderId: string) {
     return apiFetch<InvoiceOptions>(`/sales/${orderId}/invoice-options`);
   },
-  invoice(orderId: string, pointOfSaleId: string | null) {
+  invoice(
+    orderId: string,
+    pointOfSaleId: string | null,
+    renta: { operation: number | null; income: number | null } = { operation: null, income: null }
+  ) {
     return apiFetch<FiscalDocument>(`/sales/${orderId}/invoice`, {
       method: 'POST',
-      body: JSON.stringify({ point_of_sale_id: pointOfSaleId })
+      body: JSON.stringify({
+        point_of_sale_id: pointOfSaleId,
+        renta_operation_type: renta.operation,
+        renta_income_type: renta.income
+      })
     });
   },
   list(filters: FiscalDocumentFilters = {}) {
