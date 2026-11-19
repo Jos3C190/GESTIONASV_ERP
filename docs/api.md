@@ -2290,10 +2290,12 @@ are fiscal only: they move no stock and no money.
 
 | Method | Path | Permission | Purpose |
 |---|---|---|---|
-| GET | `/sales/fiscal-documents/{id}/notes` | `sales_invoices:read` | CCF lines with `net` (sale minus its share of the global discount), `returned`, `credited`, `remaining_quantity` and `remaining_amount`; `credit_deadline` (three months after the CCF's `fecEmi`), `withholding` and `perception` (whether the CCF withheld or perceived VAT), `credit_blocker` and `debit_blocker` (why a note cannot be issued now) and the `notes` with their lines. |
+| GET | `/sales/fiscal-documents/{id}/notes` | `sales_invoices:read` | CCF lines with `net` (sale minus its share of the global discount), `returned`, `credited`, `remaining_quantity` and `remaining_amount`; `deadline` (three months after the CCF's `fecEmi`, for both notes), `withholding` and `perception` (whether the CCF withheld or perceived VAT), `credit_blocker` and `debit_blocker` (why a note cannot be issued now) and the `notes` with their lines. |
 | POST | `/sales/fiscal-documents/{id}/credit-note` | `sales_invoices:notes` | `reason` (5–300) and `lines`: `{ccf_line_number, kind: "return", quantity}` (credited at the remaining net price; the last units take the exact remaining amount) or `{ccf_line_number, kind: "discount", amount}` (without VAT). Each line at most once, within its balance. `202`. |
-| POST | `/sales/fiscal-documents/{id}/debit-note` | `sales_invoices:notes` | `reason` and `charges`: `{description, quantity, unit_price, nature?, ccf_line_number?}`. A charge on a CCF line takes its nature; a free charge needs `nature` (`taxed`, `exempt`, `not_subject`). No cap and no deadline. `202`. |
+| POST | `/sales/fiscal-documents/{id}/debit-note` | `sales_invoices:notes` | `reason` and `charges`: `{description, quantity, unit_price, nature?, ccf_line_number?}`. A charge on a CCF line takes its nature; a free charge needs `nature` (`taxed`, `exempt`, `not_subject`). No cap; same deadline as the credit note. `202`. |
 
+Both notes must be issued within three months of the CCF date (Normativa de Cumplimiento DTE 2.0,
+annex IV, field 17, rule 2c, which Hacienda validates; for credit notes also Tax Code art. 111).
 VAT is 13 % of the taxed amount; if the CCF withheld or perceived VAT the note repeats it at 1 %
 of its own taxed amount, without the $100 threshold (Manual Funcional V2.0, NCE-with-withholding
 example). Fiscal documents accept `document_type` `05` and `06` (also as a list filter) and gain

@@ -112,7 +112,7 @@ async def notes_overview(
     overview = await cases.overview(company_id, document_id)
     return NotesOverviewOut(
         ccf_id=overview.ccf.id,
-        credit_deadline=overview.credit_deadline,
+        deadline=overview.deadline,
         withholding=overview.withholding,
         perception=overview.perception,
         credit_blocker=overview.credit_blocker,

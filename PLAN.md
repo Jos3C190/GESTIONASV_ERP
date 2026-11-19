@@ -238,6 +238,14 @@ Decisiones (18/11/2026):
   regla 2c; CT art. 111: «los ajustes a las ventas que rebajen el débito fiscal deben hacerse dentro del plazo
   de tres meses»). Ese plazo limita los ajustes que rebajan, así que la ND no se bloquea: queda anotado para
   que lo confirme el contador.
+  - **Revisado el 19/11/2026, a pedido del usuario**: la Normativa 2.0, anexo IV, campo 17, regla 2c (pág. 104) dice
+    «Si se genera NCE **o NDE** relacionando un CCF o CR, la NC o ND deberá generarse a más tardar dentro de
+    3 meses en relación a la fecha de generación del CCF o CR, salvo las excepciones legales». La ley sola no lo
+    exige para la ND (CT arts. 110 y 111; Ley IVA art. 62 num. 2 suma incrementos e intereses sin plazo; art. 63
+    da al comprador tres períodos desde la emisión de la ND), pero Hacienda valida la regla al recibir el DTE.
+    **Decisión del usuario (19/11/2026): se aplica el mismo plazo a la ND.** `note_deadline` y
+    `require_note_in_time` valen para las dos; la API expone `deadline`. Queda para el contador qué
+    son las «excepciones legales» que menciona la regla.
 - **Una nota relaciona un solo CCF**. La normativa admite hasta 50; se deja para después.
 - Un CCF con una nota vigente no se invalida ni se corrige (Manual Funcional, regla 633: primero se invalida
   la nota). Una nota se anula (tipo 2) y no se corrige.
@@ -301,7 +309,14 @@ Pasos:
 - [x] **Paso 5: documentación.**
   - Hecho: manual de facturación (4.2 y permisos), `docs/api.md`, `docs/database-schema.md` (sección 43)
     y `dte-service/README.md` (retención en las notas y `/v2/nota-debito`).
-- [ ] **Paso 6: verificación y PR.**
+- [x] **Paso 6: verificación y PR.**
+  - Batería completa en verde (backend 2034, OCR 5, servicio 493, frontend 1209, ruff, mypy, svelte-check,
+    eslint y build). Con el plazo de la ND se repitieron las e2e de notas e invalidaciones, las unitarias y el
+    vitest de ventas (75), en verde.
+  - QA en el navegador con Grupo Lorena: CCF simulado de $21.92 (pedido PED-20261119-6E4D46D5); NC por 50
+    unidades ($5.48, saldo a $14.55); ND con cargo sobre la línea y flete exento ($5.26); sin diferencias de
+    totales y con correo al cliente; anulación del CCF bloqueada con notas vigentes; al anular la NC el saldo
+    vuelve a $19.40. Modo oscuro y claro a 375 px sin desbordes.
 
 ### V4d — Nota de remisión y evento de retorno (se detalla al empezar)
 - Nota de remisión (04) al despachar un traslado, si la empresa habilita el tipo; queda vinculada al traslado.
@@ -317,7 +332,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 6 de V4c (verificación y PR). Pasos 1 a 5 hechos. Tras cambiar el servicio DTE:
+- **Paso en curso**: V4c terminado; falta el merge de su PR. Sigue V4d (detallarlo al empezar). Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
     svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la

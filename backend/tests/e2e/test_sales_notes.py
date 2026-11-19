@@ -81,7 +81,7 @@ async def test_credit_note_balance_and_the_ccf_lock(e2e_client: AsyncClient) -> 
     overview = (await e2e_client.get(f"{url}/notes", headers=admin)).json()
     assert overview["credit_blocker"] is None
     assert overview["debit_blocker"] is None
-    assert overview["credit_deadline"] is not None
+    assert overview["deadline"] is not None
     [line] = overview["lines"]
     assert (line["quantity"], line["net"], line["remaining_amount"]) == ("4", "40.00", "40.00")
 
@@ -223,7 +223,7 @@ async def test_rules_deadline_and_permission(e2e_client: AsyncClient) -> None:
     )
     assert denied.status_code == 403
 
-    # Pasados tres meses desde el CCF ya no se rebaja; la nota de débito sigue disponible.
+    # Pasados tres meses desde el CCF no se emite ninguna nota (Normativa 2.0, regla 2c).
     async with async_session_factory() as session:
         model = await session.get(SalesFiscalDocumentModel, uuid.UUID(ccf["id"]))
         assert model is not None
@@ -235,7 +235,7 @@ async def test_rules_deadline_and_permission(e2e_client: AsyncClient) -> None:
         await session.commit()
     overview = (await e2e_client.get(f"{DOCUMENTS}/{ccf['id']}/notes", headers=admin)).json()
     assert "02/04/2026" in overview["credit_blocker"]
-    assert overview["debit_blocker"] is None
+    assert overview["debit_blocker"] == overview["credit_blocker"]
     late = await e2e_client.post(
         f"{DOCUMENTS}/{ccf['id']}/credit-note",
         json={
@@ -246,3 +246,15 @@ async def test_rules_deadline_and_permission(e2e_client: AsyncClient) -> None:
     )
     assert late.status_code == 422
     assert late.json()["code"] == "sales_note_deadline_passed"
+    late_debit = await e2e_client.post(
+        f"{DOCUMENTS}/{ccf['id']}/debit-note",
+        json={
+            "reason": "Intereses tardíos",
+            "charges": [
+                {"description": "Intereses", "quantity": "1", "unit_price": "1", "nature": "taxed"}
+            ],
+        },
+        headers=admin,
+    )
+    assert late_debit.status_code == 422
+    assert late_debit.json()["code"] == "sales_note_deadline_passed"

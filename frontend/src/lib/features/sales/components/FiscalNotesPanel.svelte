@@ -204,16 +204,21 @@
     </div>
   {:else}
     <div class="space-y-1 text-sm">
-      {#if overview.credit_blocker}
-        <p class="text-foreground-muted">Nota de crédito: {overview.credit_blocker}</p>
-      {:else if overview.credit_deadline}
-        <p class="text-foreground-muted">
-          Se puede emitir una nota de crédito hasta el {formatDay(overview.credit_deadline)} (tres meses
-          desde el crédito fiscal).
-        </p>
-      {/if}
-      {#if overview.debit_blocker && overview.debit_blocker !== overview.credit_blocker}
-        <p class="text-foreground-muted">Nota de débito: {overview.debit_blocker}</p>
+      {#if overview.credit_blocker && overview.credit_blocker === overview.debit_blocker}
+        <p class="text-foreground-muted">{overview.credit_blocker}</p>
+      {:else}
+        {#if overview.deadline}
+          <p class="text-foreground-muted">
+            Se pueden emitir notas de crédito y de débito hasta el {formatDay(overview.deadline)}
+            (tres meses desde el crédito fiscal).
+          </p>
+        {/if}
+        {#if overview.credit_blocker}
+          <p class="text-foreground-muted">Nota de crédito: {overview.credit_blocker}</p>
+        {/if}
+        {#if overview.debit_blocker}
+          <p class="text-foreground-muted">Nota de débito: {overview.debit_blocker}</p>
+        {/if}
       {/if}
       {#if overview.withholding || overview.perception}
         <p class="text-foreground-muted">

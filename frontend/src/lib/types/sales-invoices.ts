@@ -37,7 +37,8 @@ export interface FiscalNote {
 
 export interface NotesOverview {
   ccf_id: string;
-  credit_deadline: string | null;
+  /** Último día para emitir notas: tres meses desde el CCF (Normativa 2.0, regla 2c). */
+  deadline: string | null;
   withholding: boolean;
   perception: boolean;
   credit_blocker: string | null;

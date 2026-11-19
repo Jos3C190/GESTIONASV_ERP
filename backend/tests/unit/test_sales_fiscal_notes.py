@@ -17,13 +17,13 @@ from app.domain.entities.sales_fiscal_notes import (
     build_note_request,
     ccf_adjustments,
     ccf_lines,
-    credit_note_deadline,
     line_balances,
+    note_deadline,
     note_dte_differences,
     note_totals,
     plan_credit_note,
     plan_debit_note,
-    require_credit_note_in_time,
+    require_note_in_time,
     require_noteable,
     require_reason,
 )
@@ -271,11 +271,11 @@ def test_reconciliation_of_the_service_summary() -> None:
 
 
 def test_deadline_is_three_months_from_the_ccf() -> None:
-    assert credit_note_deadline(date(2026, 11, 30)) == date(2027, 2, 28)
-    assert credit_note_deadline(date(2026, 8, 15)) == date(2026, 11, 15)
-    require_credit_note_in_time(date(2026, 8, 15), date(2026, 11, 15))
+    assert note_deadline(date(2026, 11, 30)) == date(2027, 2, 28)
+    assert note_deadline(date(2026, 8, 15)) == date(2026, 11, 15)
+    require_note_in_time(date(2026, 8, 15), date(2026, 11, 15))
     with pytest.raises(BusinessRuleError) as raised:
-        require_credit_note_in_time(date(2026, 8, 15), date(2026, 11, 16))
+        require_note_in_time(date(2026, 8, 15), date(2026, 11, 16))
     assert raised.value.code == "sales_note_deadline_passed"
     assert "15/11/2026" in raised.value.message
 

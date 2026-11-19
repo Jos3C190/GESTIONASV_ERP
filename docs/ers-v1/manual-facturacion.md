@@ -92,11 +92,13 @@ con lo vendido, lo devuelto, su venta neta y el **saldo por acreditar**, y la li
 
 - **Emitir nota de crédito**: en cada línea elige **Devolución** (la cantidad devuelta; se acredita
   al precio neto con el que se vendió, descuento global incluido) o **Rebaja** (el monto que se
-  descuenta, sin IVA). No pasa del saldo de la línea. Se emite hasta **tres meses** desde la fecha
-  del crédito fiscal (CT art. 111); después la sección lo indica y no deja emitirla.
+  descuenta, sin IVA). No pasa del saldo de la línea.
 - **Emitir nota de débito**: agrega cargos sin IVA (descripción, cantidad, precio). Un cargo puede
   ajustar una línea del crédito fiscal (toma su tipo de venta) o ser libre, como intereses o flete
   (eliges si es gravado, exento o no sujeto). No consume saldo.
+- Las dos se emiten hasta **tres meses** desde la fecha del crédito fiscal (Normativa de
+  Cumplimiento DTE 2.0, anexo IV, regla 2c; para la nota de crédito, también CT art. 111): Hacienda
+  rechaza una nota fuera de ese plazo. Vencido, la sección lo indica y no deja emitirlas.
 - Las dos piden el **motivo** y muestran el total estimado: si el crédito fiscal retuvo o percibió
   el 1 % de IVA, la nota repite la misma retención o percepción sobre lo gravado.
 - La nota pertenece al mismo pedido, hereda la clasificación de renta del crédito fiscal, se emite

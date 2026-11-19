@@ -13,7 +13,8 @@ Este módulo decide, sin tocar la base:
 - la nota de crédito pedida: devolución por cantidad o rebaja por monto, dentro del saldo;
 - la nota de débito pedida: cargos que parten de una línea del CCF o son libres;
 - la retención y la percepción, que repiten las del CCF con el 1 % del gravado de la nota;
-- el plazo de tres meses de la nota de crédito (CT art. 111; Normativa 2.0, anexo IV, campo 17);
+- el plazo de tres meses de las dos notas (Normativa 2.0, anexo IV, campo 17, regla 2c; para la
+  nota de crédito, también CT art. 111);
 - la solicitud del servicio DTE y la conciliación de su respuesta.
 """
 
@@ -39,8 +40,10 @@ DEBIT_NOTE = "06"
 NOTE_TYPES = (CREDIT_NOTE, DEBIT_NOTE)
 NOTE_NAMES = {CREDIT_NOTE: "nota de crédito", DEBIT_NOTE: "nota de débito"}
 
-#: CT art. 111: los ajustes que rebajan el débito fiscal se hacen dentro de tres meses.
-CREDIT_NOTE_MONTHS = 3
+#: Normativa de Cumplimiento DTE 2.0, anexo IV, campo 17, regla 2c: la NCE o NDE que relaciona un
+#: CCF se genera a más tardar dentro de tres meses desde la fecha del CCF (para la NC, también
+#: CT art. 111). Hacienda lo valida al recibir el DTE.
+NOTE_MONTHS = 3
 VAT_RATE = Decimal("0.13")
 #: Retención y percepción del IVA (CT arts. 162 y 163): la nota repite la tasa del CCF.
 WITHHOLDING_RATE = Decimal("0.01")
@@ -106,21 +109,22 @@ def _number(value: Decimal) -> float | int:
 # --- plazo ---
 
 
-def credit_note_deadline(ccf_date: date) -> date:
-    """Último día para emitir una nota de crédito: tres meses después de la fecha del CCF."""
+def note_deadline(ccf_date: date) -> date:
+    """Último día para emitir una nota de crédito o de débito: tres meses después del CCF."""
 
-    month = ccf_date.month - 1 + CREDIT_NOTE_MONTHS
+    month = ccf_date.month - 1 + NOTE_MONTHS
     year = ccf_date.year + month // 12
     month = month % 12 + 1
     return date(year, month, min(ccf_date.day, calendar.monthrange(year, month)[1]))
 
 
-def require_credit_note_in_time(ccf_date: date, today: date) -> None:
-    deadline = credit_note_deadline(ccf_date)
+def require_note_in_time(ccf_date: date, today: date) -> None:
+    deadline = note_deadline(ccf_date)
     if today > deadline:
         raise _rule(
-            f"El plazo de la nota de crédito venció el {deadline:%d/%m/%Y}: los ajustes que rebajan "
-            "un crédito fiscal se emiten dentro de tres meses desde su fecha (CT art. 111).",
+            f"El plazo para emitir notas sobre este crédito fiscal venció el {deadline:%d/%m/%Y}: "
+            "las notas de crédito y de débito se emiten dentro de tres meses desde su fecha "
+            "(Normativa DTE 2.0, anexo IV, regla 2c).",
             "sales_note_deadline_passed",
         )
 

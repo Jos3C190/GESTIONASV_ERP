@@ -27,7 +27,7 @@ const CCF = { id: 'ccf-1', status: 'simulated', document_type: '03' } as unknown
 function overview(overrides: Partial<NotesOverview> = {}): NotesOverview {
   return {
     ccf_id: 'ccf-1',
-    credit_deadline: '2027-02-18',
+    deadline: '2027-02-18',
     withholding: true,
     perception: false,
     credit_blocker: null,
@@ -122,10 +122,11 @@ it('emite una nota de débito con un cargo libre exento', async () => {
   });
 });
 
-it('muestra el plazo vencido, las notas y el error del servidor', async () => {
+it('con el plazo vencido no deja emitir ninguna nota y muestra las existentes', async () => {
   salesInvoicesApi.notes.mockResolvedValue(
     overview({
-      credit_blocker: 'El plazo de la nota de crédito venció el 02/04/2026.',
+      credit_blocker: 'El plazo para emitir notas sobre este crédito fiscal venció el 02/04/2026.',
+      debit_blocker: 'El plazo para emitir notas sobre este crédito fiscal venció el 02/04/2026.',
       notes: [
         {
           document: {
@@ -151,18 +152,26 @@ it('muestra el plazo vencido, las notas y el error del servidor', async () => {
       ]
     })
   );
-  salesInvoicesApi.debitNote.mockRejectedValue(
-    new HttpError('sales_note_charge_invalid', 'Cargo 1: describe el cargo.', 422)
-  );
   render(FiscalNotesPanel, { document: CCF, canIssue: true });
 
-  expect(await screen.findByText(/venció el 02\/04\/2026/)).toBeInTheDocument();
+  expect(await screen.findAllByText(/venció el 02\/04\/2026/)).toHaveLength(1);
   expect(screen.getByRole('button', { name: 'Emitir nota de crédito' })).toBeDisabled();
   expect(
     screen.getByRole('link', { name: /Nota de débito DTE-06-M001P001-000000000000001/ })
   ).toHaveAttribute('href', '/sales/fiscal-documents/nd-1');
   expect(screen.getByText(/Intereses · Cargo: \$5.00/)).toBeInTheDocument();
 
+  expect(screen.getByRole('button', { name: 'Emitir nota de débito' })).toBeDisabled();
+  expect(screen.queryByText(/Se pueden emitir notas/)).not.toBeInTheDocument();
+});
+
+it('muestra el error del servidor al emitir', async () => {
+  salesInvoicesApi.notes.mockResolvedValue(overview());
+  salesInvoicesApi.debitNote.mockRejectedValue(
+    new HttpError('sales_note_charge_invalid', 'Cargo 1: describe el cargo.', 422)
+  );
+  render(FiscalNotesPanel, { document: CCF, canIssue: true });
+  await screen.findByText(/hasta el 18\/02\/2027/);
   await fireEvent.click(screen.getByRole('button', { name: 'Emitir nota de débito' }));
   await fireEvent.input(screen.getByLabelText('Cargo 1: descripción'), {
     target: { value: 'Intereses' }

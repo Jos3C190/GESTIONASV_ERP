@@ -86,7 +86,7 @@ class NoteOut(BaseModel):
 
 class NotesOverviewOut(BaseModel):
     ccf_id: uuid.UUID
-    credit_deadline: date | None
+    deadline: date | None
     withholding: bool
     perception: bool
     credit_blocker: str | None

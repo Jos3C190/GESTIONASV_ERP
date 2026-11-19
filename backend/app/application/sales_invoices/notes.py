@@ -32,12 +32,12 @@ from app.domain.entities.sales_fiscal_notes import (
     build_note_request,
     ccf_adjustments,
     ccf_lines,
-    credit_note_deadline,
     line_balances,
+    note_deadline,
     note_totals,
     plan_credit_note,
     plan_debit_note,
-    require_credit_note_in_time,
+    require_note_in_time,
     require_noteable,
     require_reason,
 )
@@ -71,7 +71,8 @@ def ccf_date(ccf: FiscalDocument) -> date | None:
 class NotesOverview:
     ccf: FiscalDocument
     balances: tuple[LineBalance, ...]
-    credit_deadline: date | None
+    deadline: date | None
+    """Último día para emitir notas: tres meses desde la fecha del CCF."""
     withholding: bool
     perception: bool
     credit_blocker: str | None
@@ -160,19 +161,24 @@ class SalesFiscalNoteUseCases:
             credit_blocker = debit_blocker = error.message
         if credit_blocker is None and issued is not None:
             try:
-                require_credit_note_in_time(issued, today or today_sv())
-                await self._require_enabled(company_id, CREDIT_NOTE)
+                require_note_in_time(issued, today or today_sv())
             except BusinessRuleError as error:
-                credit_blocker = error.message
+                credit_blocker = debit_blocker = error.message
+        for note_type in (CREDIT_NOTE, DEBIT_NOTE):
+            if (credit_blocker if note_type == CREDIT_NOTE else debit_blocker) is not None:
+                continue
             try:
-                await self._require_enabled(company_id, DEBIT_NOTE)
+                await self._require_enabled(company_id, note_type)
             except BusinessRuleError as error:
-                debit_blocker = error.message
+                if note_type == CREDIT_NOTE:
+                    credit_blocker = error.message
+                else:
+                    debit_blocker = error.message
         withholding, perception = ccf_adjustments(ccf.dte_json or {})
         return NotesOverview(
             ccf=ccf,
             balances=line_balances(ccf_lines(ccf.dte_json or {}), await self._prior(ccf)),
-            credit_deadline=credit_note_deadline(issued) if issued else None,
+            deadline=note_deadline(issued) if issued else None,
             withholding=withholding,
             perception=perception,
             credit_blocker=credit_blocker,
@@ -256,7 +262,7 @@ class SalesFiscalNoteUseCases:
         # Bloquear el CCF serializa las notas del mismo CCF y su invalidación.
         ccf = await self._ccf(company_id, ccf_id, lock=True)
         issued = await self._require_noteable(ccf)
-        require_credit_note_in_time(issued, today or today_sv())
+        require_note_in_time(issued, today or today_sv())
         await self._require_enabled(company_id, CREDIT_NOTE)
         text = require_reason(reason)
         balances = line_balances(ccf_lines(ccf.dte_json or {}), await self._prior(ccf))
@@ -271,9 +277,11 @@ class SalesFiscalNoteUseCases:
         actor_id: uuid.UUID,
         reason: str,
         requests: list[DebitChargeRequest],
+        today: date | None = None,
     ) -> FiscalDocument:
         ccf = await self._ccf(company_id, ccf_id, lock=True)
         issued = await self._require_noteable(ccf)
+        require_note_in_time(issued, today or today_sv())
         await self._require_enabled(company_id, DEBIT_NOTE)
         text = require_reason(reason)
         planned = plan_debit_note(ccf_lines(ccf.dte_json or {}), requests)
