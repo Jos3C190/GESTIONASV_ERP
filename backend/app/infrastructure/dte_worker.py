@@ -47,6 +47,12 @@ from app.domain.entities.sales_fiscal_invalidation import (
     InvalidationKind,
     InvalidationStatus,
 )
+from app.domain.entities.sales_fiscal_notes import (
+    NOTE_TYPES,
+    ccf_adjustments,
+    note_dte_differences,
+    note_totals,
+)
 from app.domain.entities.sales_order import OrderStatus
 from app.domain.ports.dte_service import (
     DteService,
@@ -144,7 +150,7 @@ async def _enabled_types(scope: SessionScope, company_id: uuid.UUID) -> list[str
     return sorted(
         item.document_type
         for item in settings_list
-        if item.is_enabled and item.document_type in INVOICEABLE_DOCUMENTS
+        if item.is_enabled and item.document_type in (*INVOICEABLE_DOCUMENTS, *NOTE_TYPES)
     )
 
 
@@ -191,6 +197,36 @@ async def _store(
             f"{base}.pdf", pdf_path, content_type="application/pdf", metadata=metadata
         )
     return f"{base}.json", f"{base}.pdf"
+
+
+async def _note_differences(
+    scope: SessionScope, document: FiscalDocument, dte_json: dict[str, Any]
+) -> list[str]:
+    """Concilia la nota con sus líneas guardadas y la retención y percepción de su CCF."""
+
+    async with scope() as session:
+        repo = SqlAlchemySalesFiscalRepository(session)
+        lines = (await repo.note_lines(document.company_id, [document.id]))[document.id]
+        ccf = (
+            await repo.get(document.company_id, document.related_document_id)
+            if document.related_document_id
+            else None
+        )
+    if ccf is None:
+        return []
+    withholding, perception = ccf_adjustments(ccf.dte_json or {})
+    return note_dte_differences(
+        dte_json, note_totals(lines, withholding=withholding, perception=perception)
+    )
+
+
+async def _differences(
+    scope: SessionScope, document: FiscalDocument, dte_json: dict[str, Any]
+) -> list[str]:
+    if document.document_type in NOTE_TYPES:
+        return await _note_differences(scope, document, dte_json)
+    totals = await _totals(scope, document)
+    return dte_differences(dte_json, totals) if totals is not None else []
 
 
 async def _totals(scope: SessionScope, document: FiscalDocument) -> Any:
@@ -292,8 +328,7 @@ async def process_fiscal_document(
             action = "FISCAL_DOCUMENT_CONTINGENCY"
         else:
             document.seal = result.seal
-        totals = await _totals(scope, document)
-        differences = dte_differences(dte_json, totals) if totals is not None else []
+        differences = await _differences(scope, document, dte_json)
         if differences:
             document.error_code = "dte_totals_mismatch"
             document.error_message = "; ".join(differences)[:_MAX_ERROR]

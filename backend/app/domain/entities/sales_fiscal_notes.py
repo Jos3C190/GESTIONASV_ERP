@@ -20,11 +20,12 @@ Este módulo decide, sin tocar la base:
 from __future__ import annotations
 
 import calendar
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
 
 from app.core.exceptions import BusinessRuleError
 from app.domain.entities.sales_fiscal_document import (
@@ -145,6 +146,18 @@ def require_noteable(
         raise _rule(
             "El crédito fiscal tiene una invalidación en curso.",
             "sales_note_ccf_invalidation_pending",
+        )
+
+
+def require_without_vigent_notes(vigent_notes: int) -> None:
+    """Un CCF con notas vigentes no se invalida ni se corrige: primero se anulan las notas
+    (Manual Funcional V2.0, regla 633)."""
+
+    if vigent_notes:
+        raise _rule(
+            "Este crédito fiscal tiene notas de crédito o de débito vigentes: anúlalas antes de "
+            "invalidarlo o corregirlo.",
+            "sales_invoice_has_notes",
         )
 
 
@@ -299,8 +312,6 @@ class NoteLine:
     discount: Decimal
     amount: Decimal
     """Venta neta de la línea de la nota, sin IVA."""
-    returned_quantity: Decimal | None = None
-    """En una devolución, la cantidad devuelta que cuenta para el saldo."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,7 +332,17 @@ class NoteTotals:
         return self.subtotal + self.vat + self.perceived - self.withheld
 
 
-def note_totals(lines: tuple[NoteLine, ...], *, withholding: bool, perception: bool) -> NoteTotals:
+class _Amount(Protocol):
+    @property
+    def nature(self) -> str: ...
+
+    @property
+    def amount(self) -> Decimal: ...
+
+
+def note_totals(lines: Sequence[_Amount], *, withholding: bool, perception: bool) -> NoteTotals:
+    """Totales de la nota con sus líneas planeadas o guardadas."""
+
     def total(nature: Nature) -> Decimal:
         return sum((ln.amount for ln in lines if ln.nature == nature), ZERO)
 
@@ -409,7 +430,6 @@ def plan_credit_note(
                     unit_price=unit_price,
                     discount=max(gross - amount, ZERO),
                     amount=amount,
-                    returned_quantity=quantity,
                 )
             )
         elif request.kind == NoteLineKind.DISCOUNT:

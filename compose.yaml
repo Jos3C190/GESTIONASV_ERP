@@ -557,6 +557,8 @@ services:
       MS_API_KEYS: ${DTE_SERVICE_API_KEY:-}
       DTE_CREDENTIALS_KEY: ${DTE_CREDENTIALS_KEY:-}
       MS_API_KEY_SCOPES: issue,read,invalidate,contingency,simulate,issuers
+      # Factura, crédito fiscal y sus notas de crédito y de débito (V4c).
+      DTE_ALLOWED_DOCUMENT_TYPES: ${DTE_ALLOWED_DOCUMENT_TYPES:-01,03,05,06}
       FIRMADOR_URL: http://dte-signer:8113/firmardocumento/
       DTE_CERTIFICATES_DIR: /app/certificados
       LOG_LEVEL: ${DTE_LOG_LEVEL:-info}

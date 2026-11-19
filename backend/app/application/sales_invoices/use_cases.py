@@ -302,6 +302,16 @@ class SalesInvoiceUseCases:
             credit_days=order.credit_days,
         )
 
+    async def issuer_for(
+        self, order: Order, point_of_sale_id: uuid.UUID | None
+    ) -> tuple[IssuerSnapshot, Establishment, PointOfSale, OperatingMode]:
+        """El emisor actual del pedido en ese punto de venta (para las notas del CCF, V4c)."""
+
+        return await self._issuer(order, point_of_sale_id)
+
+    async def enabled(self, company_id: uuid.UUID, document_type: str) -> bool:
+        return await self._enabled(company_id, document_type)
+
     async def _enabled(self, company_id: uuid.UUID, document_type: str) -> bool:
         return any(
             item.document_type == document_type and item.is_enabled

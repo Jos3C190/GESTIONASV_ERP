@@ -19,7 +19,12 @@ from app.core.exceptions import BusinessRuleError
 
 MAX_RECIPIENTS = 5
 SIMULATED_MARK = "SIMULADO — sin validez fiscal"
-DOCUMENT_NAMES = {"01": "Factura", "03": "Comprobante de crédito fiscal"}
+DOCUMENT_NAMES = {
+    "01": "Factura",
+    "03": "Comprobante de crédito fiscal",
+    "05": "Nota de crédito",
+    "06": "Nota de débito",
+}
 _ZONE = ZoneInfo("America/El_Salvador")
 _EMAIL = re.compile(r"^[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+$")
 _MAX_EMAIL = 254
