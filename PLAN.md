@@ -212,7 +212,7 @@ Pasos:
 - [x] **Paso 3: interfaz.** Selectores en la pestaña Actividades, en la sección Factura del pedido y la
   clasificación en el detalle del documento. Verificar: vitest.
 - [x] **Paso 4: documentación.** `api.md`, esquema, manual de configuración fiscal y manual de facturación.
-- [ ] **Paso 5: verificación y PR.** Batería completa, QA en el navegador y PR a `develop`.
+- [x] **Paso 5: verificación y PR.** Batería completa, QA en el navegador y PR a `develop`.
 
 ### V4c — Notas de crédito y de débito (se detalla al empezar)
 - Se emiten desde un CCF sellado: devolución sin mover inventario, descuento posterior o anulación parcial
@@ -233,7 +233,12 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 5 de V4b2 (verificación y PR).
+- **Paso en curso**: V4b2 terminado; falta el merge de su PR. Sigue V4c (detallarlo al empezar).
+  - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
+    svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la
+    principal (10712) «Gravada · Actividades industriales» como valor de demostración; el contador debe
+    confirmarlo. El detalle del documento muestra «Clasificación de renta (F-07)»; los anteriores salen sin
+    clasificar. El formulario de facturar lo cubre vitest (Grupo Lorena no tiene un pedido sin facturar).
   - Pasos 2 y 3 hechos: la sugerida sale de la actividad del establecimiento (o la principal); `invoice` valida
     el par; el reemplazo hereda la del original. Interfaz: `RentaFields.svelte` (dos selectores) en
     Actividades («Guardar renta») y en la sección Factura (Facturar se deshabilita sin clasificación
