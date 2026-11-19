@@ -63,6 +63,13 @@ export const fiscalApi = {
     );
   },
 
+  setActivityRenta(id: string, operationType: number | null, incomeType: number | null) {
+    return apiFetch<EconomicActivity>(
+      `${BASE}/activities/${id}/renta`,
+      json('PUT', { operation_type: operationType, income_type: incomeType })
+    );
+  },
+
   setPrimaryActivity(id: string) {
     return apiFetch<EconomicActivity>(`${BASE}/activities/${id}/primary`, { method: 'POST' });
   },

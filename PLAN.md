@@ -209,7 +209,7 @@ Pasos:
   devuelven su clasificación. `invoice` acepta `renta_operation_type` y `renta_income_type`; sin ellos usa la
   sugerida y, sin sugerida, responde `sales_invoice_renta_required`. `invoice-options` devuelve la sugerida. El
   documento expone su clasificación. Verificar: e2e.
-- [ ] **Paso 3: interfaz.** Selectores en la pestaña Actividades, en la sección Factura del pedido y la
+- [x] **Paso 3: interfaz.** Selectores en la pestaña Actividades, en la sección Factura del pedido y la
   clasificación en el detalle del documento. Verificar: vitest.
 - [ ] **Paso 4: documentación.** `api.md`, esquema, manual de configuración fiscal y manual de facturación.
 - [ ] **Paso 5: verificación y PR.** Batería completa, QA en el navegador y PR a `develop`.
@@ -233,9 +233,13 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: 3 de V4b2 (interfaz). Paso 2 hecho: la sugerida sale de la actividad del establecimiento
-  (o la principal); `invoice` valida el par con `validate_renta`; el reemplazo hereda la del original. El
-  ayudante `_issuer` de las e2e deja las actividades con (1, 3); e2e `test_sales_renta.py`. V4b mergeado (#55). V4c sigue
+- **Paso en curso**: 4 de V4b2 (documentación).
+  - Pasos 2 y 3 hechos: la sugerida sale de la actividad del establecimiento (o la principal); `invoice` valida
+    el par; el reemplazo hereda la del original. Interfaz: `RentaFields.svelte` (dos selectores) en
+    Actividades («Guardar renta») y en la sección Factura (Facturar se deshabilita sin clasificación
+    completa); el detalle muestra «Clasificación de renta (F-07)». `renta-labels.ts` con los catálogos.
+  - Cuidado: `prettier --write` sobre carpetas enteras reformatea muchos archivos ajenos; usarlo solo sobre
+    los archivos tocados.
   después de V4b2.
   - Paso 8:
     - Batería completa: backend 2002 en verde y 1 roja, `test_sales_fiscal_documents_migration` (0126), que

@@ -12,6 +12,7 @@
   } from '#lib/features/sales/fiscal-labels.ts';
   import { DOCUMENT_LABELS, formatDay, formatMoney } from '#lib/features/sales/quotation-labels.ts';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
+  import { rentaLabel } from '#lib/features/sales/renta-labels.ts';
   import FiscalDocumentEmails from './FiscalDocumentEmails.svelte';
   import FiscalInvalidationPanel from './FiscalInvalidationPanel.svelte';
   import type { FiscalDocument } from '#lib/types/sales-invoices.ts';
@@ -176,6 +177,12 @@
             <dd class="break-all font-mono text-xs text-foreground">{document.seal}</dd>
           </div>
         {/if}
+        <div class="sm:col-span-2">
+          <dt class="text-foreground-muted">Clasificación de renta (F-07)</dt>
+          <dd class="text-foreground">
+            {rentaLabel(document.renta_operation_type, document.renta_income_type)}
+          </dd>
+        </div>
         <div>
           <dt class="text-foreground-muted">Intentos de emisión</dt>
           <dd class="text-foreground">{document.attempts}</dd>
