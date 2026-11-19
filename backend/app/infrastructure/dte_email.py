@@ -26,8 +26,10 @@ from app.domain.entities.sales_fiscal_email import (
     EmailOrigin,
     EmailStatus,
     FiscalEmailContent,
+    InvalidationEmailContent,
     PrivacyNoticeText,
     compose,
+    compose_invalidation,
     customer_recipients,
 )
 from app.domain.ports.company_email_repository import StoredEmailSettings
@@ -47,6 +49,9 @@ from app.infrastructure.repositories.company_email_repository import (
 from app.infrastructure.repositories.privacy_repository import SqlAlchemyPrivacyRepository
 from app.infrastructure.repositories.sales_fiscal_email_repository import (
     SqlAlchemySalesFiscalEmailRepository,
+)
+from app.infrastructure.repositories.sales_fiscal_invalidation_repository import (
+    SqlAlchemySalesFiscalInvalidationRepository,
 )
 from app.infrastructure.repositories.sales_fiscal_repository import SqlAlchemySalesFiscalRepository
 from app.infrastructure.smtp_email_sender import SmtpEmailSender
@@ -152,6 +157,90 @@ async def queue_auto_email(scope: SessionScope, document: FiscalDocument) -> uui
             )
         )
     return email.id
+
+
+async def queue_invalidation_email(
+    scope: SessionScope, document: FiscalDocument, invalidation_id: uuid.UUID
+) -> uuid.UUID | None:
+    """Crea el aviso automático de una invalidación aceptada (V4b); ``None`` si no corresponde."""
+
+    recipients = customer_recipients(document.customer_email)
+    if not recipients or not await email_available(scope, document.company_id):
+        return None
+    async with scope() as session:
+        repo = SqlAlchemySalesFiscalEmailRepository(session)
+        if await repo.invalidation_email_exists(document.company_id, invalidation_id):
+            return None
+        email = await repo.create(
+            FiscalDocumentEmail(
+                id=uuid.uuid4(),
+                company_id=document.company_id,
+                document_id=document.id,
+                recipients=recipients,
+                origin=EmailOrigin.AUTO.value,
+                status=EmailStatus.PENDING.value,
+                invalidation_id=invalidation_id,
+            )
+        )
+    return email.id
+
+
+async def _invalidation_message(
+    scope: SessionScope,
+    document: FiscalDocument,
+    email: FiscalDocumentEmail,
+    client: DteService | None,
+    sender_name: str | None,
+) -> OutgoingEmail:
+    assert email.invalidation_id is not None
+    async with scope() as session:
+        invalidation = await SqlAlchemySalesFiscalInvalidationRepository(session).get(
+            document.company_id, email.invalidation_id
+        )
+        replacement = (
+            await SqlAlchemySalesFiscalRepository(session).get(
+                document.company_id, invalidation.replacement_document_id
+            )
+            if invalidation is not None and invalidation.replacement_document_id
+            else None
+        )
+        notice = await SqlAlchemyPrivacyRepository(session).current_notice(document.company_id)
+    if invalidation is None or invalidation.event_generation_code is None or client is None:
+        raise EmailDeliveryError(
+            "El comprobante de la invalidación no está disponible.",
+            code="email_pdf_missing",
+            transient=client is not None,
+        )
+    pdf = await client.invalidation_pdf(
+        str(document.issuer_snapshot["nit"]), str(invalidation.event_generation_code).upper()
+    )
+    issuer = document.issuer_snapshot
+    company = str(issuer.get("tradeName") or issuer.get("legalName") or "")
+    reply_to = issuer.get("email")
+    composed = compose_invalidation(
+        InvalidationEmailContent(
+            company_name=company,
+            document_type=document.document_type,
+            control_number=document.control_number or str(document.id),
+            generation_code=str(document.generation_code or ""),
+            invalidated_at=invalidation.resolved_at or datetime.now(UTC),
+            customer_name=document.customer_name or "cliente",
+            simulated=document.mode == "simulated",
+            reason=invalidation.reason,
+            replacement_control_number=replacement.control_number if replacement else None,
+            reply_to=str(reply_to) if reply_to else None,
+            privacy_notice=PrivacyNoticeText(notice.title, notice.body) if notice else None,
+        )
+    )
+    return OutgoingEmail(
+        sender_name=sender_name or company,
+        recipients=email.recipients,
+        subject=composed.subject,
+        text=composed.text,
+        html=composed.html,
+        reply_to=str(reply_to) if reply_to else None,
+        attachments=(EmailAttachment(composed.pdf_filename, "application/pdf", pdf),),
+    )
 
 
 async def _pdf(
@@ -266,8 +355,11 @@ async def process_fiscal_email(
                 transient=False,
             )
         from_name = stored.settings.from_name if stored else None
-        pdf = await _pdf(document, storage, client)
-        message = await _message(scope, document, email, pdf, from_name)
+        if email.invalidation_id is not None:
+            message = await _invalidation_message(scope, document, email, client, from_name)
+        else:
+            pdf = await _pdf(document, storage, client)
+            message = await _message(scope, document, email, pdf, from_name)
         email.message_id = await chosen.send(message)
     except EmailDeliveryError as error:
         email.error_code = error.code

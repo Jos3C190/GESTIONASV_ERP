@@ -87,11 +87,13 @@ def test_fiscal_document_rules(rebuild_test_database: Callable[..., None]) -> No
             identity=True,
             seal=True,
         )
-        # Un pedido admite varios intentos fallidos y a lo sumo un documento vigente.
+        # Un pedido admite varios intentos fallidos o rechazados (desde 0131 un rechazado ya no
+        # bloquea volver a facturar) y a lo sumo un documento vigente.
         sale = uuid.uuid4()
         _document(connection, company, sale, status="failed")
         _document(connection, company, sale, status="failed")
         _document(connection, company, sale, status="rejected")
+        _document(connection, company, sale)
         with pytest.raises(errors.UniqueViolation):
             _document(connection, company, sale)
         _document(connection, company, uuid.uuid4(), key="clave-1")

@@ -8,7 +8,7 @@ misma clave devuelve el mismo DTE en lugar de crear otro.
 from __future__ import annotations
 
 import base64
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import httpx
@@ -23,6 +23,9 @@ from app.domain.ports.dte_service import (
     ConnectionCheck,
     DocumentState,
     DteServiceError,
+    InvalidationRequest,
+    InvalidationResult,
+    InvalidationWindow,
     IssuerCredentials,
     IssueResult,
 )
@@ -34,6 +37,7 @@ _TRANSIENT_CODES = frozenset({"IDEMPOTENCY_IN_PROGRESS", "ISSUER_MODE_UNAVAILABL
 _PERMANENT_CODES = frozenset({"FIRMADOR_CONFIGURATION_ERROR"})
 _SERVER_ERROR = 500
 _NOT_FOUND = 404
+_UNPROCESSABLE = 422
 
 
 def _when(value: Any) -> datetime | None:
@@ -222,6 +226,94 @@ class HttpDteServiceClient:
 
     async def document_pdf(self, nit: str, generation_code: str) -> bytes:
         response = await self._send(nit, "GET", f"/api/dte/{generation_code}/pdf")
+        if response.is_error:
+            raise self._error(response)
+        return response.content
+
+    # --- invalidación (V4b) ---
+
+    async def invalidation_window(self, nit: str, generation_code: str) -> InvalidationWindow:
+        response = await self._send(nit, "GET", f"/api/dte/{generation_code}/invalidacion")
+        if response.is_error:
+            raise self._error(response)
+        deadline = response.json().get("plazo") or {}
+        return InvalidationWindow(
+            deadline=date.fromisoformat(str(deadline["limite"])),
+            expired=bool(deadline.get("vencido")),
+            estimated=bool(deadline.get("estimado")),
+        )
+
+    async def invalidate(
+        self,
+        nit: str,
+        generation_code: str,
+        *,
+        idempotency_key: str,
+        request: InvalidationRequest,
+    ) -> InvalidationResult:
+        def person(value: ContingencyResponsible) -> dict[str, str]:
+            return {
+                "nombre": value.name,
+                "tipoDocumento": value.document_type,
+                "numeroDocumento": value.document_number,
+            }
+
+        body: dict[str, Any] = {
+            "motivo": {
+                "tipoAnulacion": request.kind,
+                "motivoAnulacion": request.reason,
+                "responsable": person(request.responsible),
+                "solicitante": person(request.requester),
+            },
+            "codigoGeneracionReemplazo": request.replacement_generation_code,
+        }
+        response = await self._send(
+            nit,
+            "POST",
+            f"/api/dte/{generation_code}/anular",
+            json=body,
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+        if (
+            response.status_code == _UNPROCESSABLE
+            and payload.get("code") == "INVALIDATION_REJECTED"
+        ):
+            hacienda = payload.get("respuestaHacienda") or payload.get("simulacion") or {}
+            observations = hacienda.get("observaciones") or []
+            message = " | ".join(
+                str(item) for item in [hacienda.get("descripcionMsg"), *observations] if item
+            )
+            return InvalidationResult(
+                accepted=False,
+                event_generation_code=payload.get("codigoGeneracionEvento"),
+                seal=None,
+                message=message or str(payload.get("error") or "Hacienda rechazó la invalidación."),
+                response=payload,
+            )
+        if response.is_error:
+            raise self._error(response)
+        if payload.get("estado") not in ("INVALIDADO", "SIMULADO_INVALIDADO"):
+            raise DteServiceError(
+                "El servicio no confirmó la invalidación todavía.",
+                code="dte_invalidation_unconfirmed",
+                transient=True,
+            )
+        return InvalidationResult(
+            accepted=True,
+            event_generation_code=payload.get("codigoGeneracionEvento"),
+            seal=payload.get("selloRecepcionEvento") or payload.get("simulationMarkerEvento"),
+            message=None,
+            response=payload,
+        )
+
+    async def invalidation_pdf(self, nit: str, event_generation_code: str) -> bytes:
+        response = await self._send(
+            nit, "POST", f"/api/dte/eventos/{event_generation_code}/pdf/render", json={}
+        )
         if response.is_error:
             raise self._error(response)
         return response.content

@@ -93,14 +93,84 @@ Pasos:
   - Batería completa y QA en el navegador: forzar la contingencia en simulado, emitir, cerrar y ver el sello.
   - PR hacia `develop`.
 
-### V4b — Invalidación y rechazos (se detalla al empezar)
-- Invalidar documentos con un evento firmado y sus plazos (tres meses para 01, 11 y 14; décimo día hábil del
-  mes siguiente para 03, 04, 05, 06 y 07). Tipos de invalidación del catálogo: error en datos con documento
-  de reemplazo, rescindir la operación, y otro.
-- «Rechazado: corregir y reenviar»: ver las observaciones de Hacienda, corregir los datos del cliente o del
-  pedido y emitir un documento nuevo.
-- Cancelar un pedido facturado: invalidar primero y después cancelar.
-- Estado «Invalidado» en la bandeja, PDF del evento y correo al cliente.
+### V4b — Invalidación y rechazos (rama `feature/ventas-v4b-invalidacion`)
+
+Decisiones del usuario (18/11/2026):
+- **Responsable**: el responsable del evento de contingencia (V4a) pasa a ser el «responsable fiscal de la
+  empresa» y también firma las invalidaciones.
+- **Error en los datos (tipo 1)**: automático. «Corregir documento» emite el reemplazo con los datos actuales
+  del cliente y del pedido y, cuando queda sellado, el sistema invalida el original y lo vincula.
+- **Correo**: al invalidar se avisa al cliente, si tiene correo, con el PDF del evento de invalidación.
+- **Cancelar un pedido facturado**: en un solo paso desde el pedido. Se piden el motivo y el solicitante,
+  se invalida el documento (tipo 2, rescindir la operación) y, cuando Hacienda lo acepta, se cancela el pedido.
+
+Hechos verificados:
+- El servicio ya tiene la invalidación completa:
+  - `POST /api/dte/:codigo/anular` y `GET /api/dte/:codigo/invalidacion` (vista previa con el plazo y las
+    reglas de reemplazo);
+  - el constructor valida tipo (1 error, 2 rescindir, 3 otro), responsable y solicitante (CAT-022);
+  - tipos 1 y 3 exigen el reemplazo ya sellado, salvo en 05 y 08;
+  - plazos: tres meses desde el sello para 01, 11 y 14; décimo día hábil del mes siguiente para los demás.
+- La invalidación simulada (`/api/dte/simulacion/...`) solo se monta con el despliegue en simulado. En el
+  real, `/anular` responde 409 a un emisor simulado: hay que despachar por el modo del emisor.
+- En el ERP un documento rechazado cuenta como activo. Bloquea volver a facturar el pedido (índice
+  `uq_sales_fiscal_documents_active_sale`, con `status <> 'failed'`) y también cancelarlo (`invoiced()`).
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [x] **Paso 1: invalidación por modo del emisor en el servicio.**
+  - `/anular` y `/invalidacion` usan el proveedor simulado cuando el emisor es simulado, y el real en otro
+    caso, en cualquier despliegue. Las rutas `/simulacion` se conservan.
+  - Verificar: pruebas de integración (emisor simulado en un despliegue en pruebas) y `run-tests.sh dte`.
+- [x] **Paso 2: migración 0131 y dominio.**
+  - `sales_fiscal_documents`:
+    - estado `invalidated`;
+    - `replaces_document_id` y `superseded_by_id` (FK compuestas a la misma tabla);
+    - el índice del documento activo del pedido pasa a ser
+      `status IN ('pending','contingency','issued','simulated') AND superseded_by_id IS NULL`.
+    Un rechazado o un invalidado ya no bloquea volver a facturar.
+  - Tabla `sales_fiscal_invalidations`, una por intento:
+    - `kind` (1 o 2), `reason`, solicitante (nombre, tipo y número de documento) y responsable (copia);
+    - `replacement_document_id`, `cancel_order` y la clave de idempotencia;
+    - estado `pending`, `accepted`, `rejected` o `failed`;
+    - código de generación y sello del evento, error, `requested_by` y fechas.
+    Solo una pendiente por documento.
+  - Permiso `sales_invoices:invalidate`. El downgrade se niega si hay invalidaciones o documentos vinculados.
+  - Dominio: reglas de lo que se puede invalidar (emitido o simulado, sin invalidación en curso) y de lo que
+    se puede corregir (factura o CCF emitido, sin reemplazo en curso).
+  - Verificar: unitarias y prueba de migración.
+- [x] **Paso 3: rechazados y reemplazo.**
+  - Un documento rechazado deja de bloquear: se corrigen los datos y «Facturar de nuevo» crea otro.
+    Las observaciones de Hacienda se muestran legibles.
+  - «Corregir documento» crea el reemplazo (`replaces_document_id`) con los datos actuales y marca el original
+    `superseded_by_id`. Si el reemplazo falla o lo rechazan, se suelta el vínculo y el original sigue vigente.
+  - Verificar: e2e con el servicio simulado.
+- [x] **Paso 4: invalidación en el trabajador y en la API.**
+  - Tarea arq `invalidate_fiscal_document`: registra a la empresa con el responsable, llama a `/anular` con su
+    clave, y al aceptarse deja el documento `invalidated`, audita, encola el correo y, si `cancel_order`,
+    cancela el pedido. Con un rechazo o un fallo, el error queda en la invalidación y el documento vigente.
+  - Tipo 1: al sellarse el reemplazo, el trabajador encola la invalidación del original con su código.
+  - API:
+    - `GET /sales/fiscal-documents/{id}/invalidation` (vista previa: plazo y si está vencido);
+    - `POST .../invalidate` (tipo 2, motivo, solicitante);
+    - `POST .../correct` (tipo 1);
+    - en el pedido, `cancel` con documento: invalida y cancela al aceptarse.
+    Permiso `sales_invoices:invalidate` y bitácora.
+  - Verificar: e2e del recorrido simulado completo, con permisos, plazos y errores.
+- [x] **Paso 5: correo del aviso de invalidación.** Composición, adjunto con el PDF del evento (lo arma el
+  servicio) y envío automático. Verificar: unitarias y e2e.
+- [x] **Paso 6: interfaz.**
+  - Detalle del documento:
+    - «Anular documento» (rescindir) con motivo y solicitante;
+    - «Corregir documento» con su explicación;
+    - estado «Invalidado» con el evento, el sello y el reemplazo vinculado;
+    - observaciones del rechazo y «Facturar de nuevo».
+  - Pedido: cancelar un pedido facturado pide el motivo y el solicitante.
+  - La bandeja agrega el estado «Invalidado» y su filtro.
+  - La pantalla de contingencia pasa a decir «Responsable fiscal» (firma contingencias e invalidaciones).
+  - Verificar: vitest.
+- [x] **Paso 7: documentación.** `api.md`, esquema, manual de facturación y `multiemisor.md`.
+- [x] **Paso 8: verificación y PR.** Batería completa, QA en el navegador con el servicio simulado y PR.
 
 ### V4c — Notas de crédito y de débito (se detalla al empezar)
 - Se emiten desde un CCF sellado: devolución sin mover inventario, descuento posterior o anulación parcial
@@ -121,7 +191,82 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V4a terminado; falta el merge de su PR. Sigue V4b (detallarlo al empezar).
+- **Paso en curso**: V4b terminado; falta el merge de su PR. Sigue V4c (detallarlo al empezar).
+  - Paso 8:
+    - Batería completa: backend 2002 en verde y 1 roja, `test_sales_fiscal_documents_migration` (0126), que
+      todavía esperaba que un rechazado bloqueara volver a facturar. Se ajustó a la regla de la 0131 y pasa.
+    - Etapas que no corrieron en la batería, corridas aparte: OCR 5, servicio 489, frontend (191 archivos),
+      ruff, mypy, svelte-check, ESLint y el build. Todo en verde.
+  - QA en el navegador ya hecha con Grupo Lorena (simulado): «Corregir documento» en
+    DTE-01-M001P001-000000000000001 (pedido PED-20261117-63FB7EB4). Se emitió el reemplazo …0002, el
+    original quedó invalidado y salió el «Aviso de anulación» (Mailpit). La sección Factura del pedido
+    muestra el reemplazo y ofrece «Cancelar pedido» con el solicitante (abierto, sin enviar). 375 px sin
+    desborde.
+  - La QA encontró dos textos y ya están corregidos (commit «Paso 8 (QA)»): un documento invalidado ahora
+    dice «Se invalidó y lo reemplaza…» y su sección de correo explica que ya no se envía. vitest: ventas
+    65 en verde.
+  - La base de desarrollo ya está en 0131.
+  - Paso 7 hecho: `api.md` («Invalidation and correction»), esquema §41, manual de facturación §4.1 y
+    `multiemisor.md` («Invalidación por emisor»).
+  - Paso 6 hecho:
+    - `FiscalInvalidationPanel.svelte` en el detalle del documento:
+      - plazo, o el aviso de que venció;
+      - «Corregir documento» y «Anular documento», con el solicitante y, al anular, el motivo;
+      - historial con estado, sello y error;
+      - vínculos al reemplazo y al original.
+    - Pedido: «Cancelar pedido» también en uno facturado y sellado, con los permisos `sales:cancel` y
+      `sales_invoices:invalidate`. Pide el solicitante, anula con `cancel_order` y el pedido se cancela al
+      aceptarse. `onInvoiced` ahora entrega el documento vigente.
+    - `invoice-options` devuelve `previous_document` (el último del pedido) cuando no hay uno vigente. La
+      sección Factura muestra el rechazo con las observaciones de Hacienda, o la anulación, y deja facturar
+      de nuevo.
+    - Bandeja: estado «Invalidado» y su filtro. Los envíos muestran «Aviso de anulación». La pantalla de
+      contingencia dice «Responsable fiscal».
+    - vitest: `FiscalInvalidationPanel.test.ts` (3); ventas: 64 en verde.
+  - Paso 5 hecho:
+    - `sales_fiscal_document_emails.invalidation_id` (en la 0131): el aviso es un envío automático aparte,
+      uno por invalidación aceptada.
+    - `compose_invalidation`: el asunto «Anulación de …», el reemplazo si lo hay y, si no, el motivo; marca
+      de simulado. Adjunta el PDF del evento, que se pide al servicio en el momento del envío.
+    - Servicio: `/api/dte/eventos/:codigo/pdf/render` también arma el PDF de un evento simulado.
+    - La API de envíos expone `invalidation_id`; la interfaz lo muestra como «Aviso de anulación».
+  - Pasos 3 y 4 hechos en un mismo commit (la API de corrección necesita al trabajador):
+    - `FiscalInvalidationUseCases` (`application/sales_invoices/invalidation.py`):
+      - `invalidate`: tipo 2, con motivo, solicitante y `cancel_order`, que además pide `sales:cancel` y que
+        el pedido se pueda cancelar;
+      - `correct`: crea el reemplazo con `SalesInvoiceUseCases.prepare_replacement`, que exige el mismo tipo
+        de documento, y la invalidación tipo 1;
+      - antes de crear: plazo vigente (`sales_invoice_invalidation_expired`) y responsable fiscal registrado
+        (`sales_invoice_responsible_missing`).
+    - La FK `superseded_by_id` es diferible: el original se marca antes de insertar su reemplazo.
+    - Trabajador `process_fiscal_invalidation` (tarea `invalidate_fiscal_document`):
+      - una corrección espera el sello del reemplazo sin gastar intentos;
+      - si el reemplazo falla o lo rechazan, la solicitud falla y se suelta `superseded_by_id`;
+      - al aceptarse, el documento queda `invalidated` y, si `cancel_order`, se cancela el pedido con la
+        bitácora `SALES_ORDER_CANCELLED`;
+      - al sellarse un reemplazo se encola enseguida la invalidación de su original, y la conciliación
+        retoma las pendientes.
+    - Cliente: `invalidation_window`, `invalidate` (INVALIDATION_REJECTED como rechazo y no como error) e
+      `invalidation_pdf`.
+    - API `/sales/fiscal-documents/{id}/invalidation` (GET), `/invalidate` y `/correct` (202). Bitácora:
+      `REQUEST_INVALIDATION`, `CORRECT_FISCAL_DOCUMENT`, `FISCAL_DOCUMENT_INVALIDATED` y
+      `FISCAL_INVALIDATION_REJECTED`/`FAILED`.
+    - e2e `test_sales_invalidations.py` (5) contra el servicio simulado.
+  - Paso 2 hecho:
+    - Migración 0131 según el plan. El downgrade también se niega si un pedido tiene más de un documento no
+      fallido (uno rechazado y otro posterior no cabrían en el índice anterior).
+    - `ACTIVE_STATUSES` ya no incluye `rejected`. `active_for_order` y `invoiced()` cuentan solo pendiente,
+      contingencia, emitido y simulado sin reemplazo en curso.
+    - Dominio `sales_fiscal_invalidation.py`: `require_invalidatable`, `require_correctable`, `validate_reason`
+      (5 a 200 caracteres) y `validate_requester`. `validate_responsible` acepta el código de error y sus
+      mensajes ya son neutros.
+    - Repositorio `SqlAlchemySalesFiscalInvalidationRepository` (crear, buscar, guardar, tomar con
+      `SKIP LOCKED` y pendientes).
+  - Paso 1 hecho: `/anular` y `/invalidacion` usan el proveedor simulado con un emisor simulado, en
+    cualquier despliegue (respuesta `SIMULADO_INVALIDADO`, sin Hacienda ni firmador). Se actualizó la prueba
+    que esperaba 409 en simulado. Servicio: 489 en verde.
+  - V4a mergeado (#53). Un colaborador mergeó la #54: cada push a develop se mezcla sola en
+    `feature/ai-bedrock-guardrails` y desde esa rama se despliega a EC2.
   - Paso 7:
     - Batería completa en verde: backend 1990, OCR 5, servicio 488, frontend 1193, más ruff, mypy,
       svelte-check, ESLint y el build.

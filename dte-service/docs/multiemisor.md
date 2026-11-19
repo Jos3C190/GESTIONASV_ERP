@@ -88,6 +88,14 @@ Todas piden el alcance `contingency`; la ventana de otro emisor responde 404. La
 globales `/api/dte/contingencia` quedan para el emisor heredado del entorno y la certificación
 (`DTE_ALLOW_FORCED_CONTINGENCY`).
 
+## Invalidación por emisor (V4b)
+
+`POST /api/dte/:codigo/anular` y `GET /api/dte/:codigo/invalidacion` usan el modo del emisor del
+documento, en cualquier despliegue. Con un emisor simulado el evento se construye y se valida
+igual, pero se marca con un sello simulado y no sale del servicio (`SIMULADO_INVALIDADO`).
+`/api/dte/eventos/:codigo/pdf/render` arma también el PDF de un evento simulado, con la marca sin
+validez fiscal. Las rutas `/api/dte/simulacion` se conservan para el despliegue simulado.
+
 ## Aislamiento
 
 - Cada solicitud a `/api/dte` declara la empresa en el encabezado `X-DTE-Issuer-NIT`. En un

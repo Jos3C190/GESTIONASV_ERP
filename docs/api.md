@@ -2229,3 +2229,33 @@ Audited: `ACTIVATE_CONTINGENCY`, `CLOSE_CONTINGENCY`, `SEND_CONTINGENCY_EVENT` o
 `sales_contingency_nit_missing`, `sales_contingency_rejected` (422);
 `sales_contingency_already_active` (409); `sales_contingency_not_found`,
 `sales_contingency_establishment_not_found` (404).
+
+## Invalidation and correction (revision 0131, block V4b)
+
+A sealed document is never deleted. It is invalidated with a signed event (CAT-024 type 2,
+rescind the operation) or corrected (type 1): a replacement is issued first with the current
+order and customer data and, once it is sealed, the worker invalidates the original and links
+both. The company's fiscal responsible person (`/sales/contingencies/responsible`) signs every
+event. Requests are stored in `sales_fiscal_invalidations` and processed by `dte-worker`
+(`invalidate_fiscal_document`) with their own idempotency key.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/fiscal-documents/{id}/invalidation` | `sales_invoices:read` | `deadline` (from the DTE service: three months after the seal for 01, the tenth business day of the next month for 03), `expired`, `estimated` and the request `history`. |
+| POST | `/sales/fiscal-documents/{id}/invalidate` | `sales_invoices:invalidate` | Type 2 with `reason` (5–200), `requester` (`name`, `document_type` of CAT-022, `document_number`) and `cancel_order` (also needs `sales:cancel`; the order is cancelled when Hacienda accepts). `202`. |
+| POST | `/sales/fiscal-documents/{id}/correct` | `sales_invoices:invalidate` | Type 1 with `requester`: creates the replacement (`replaces_document_id`) and the pending invalidation. `202` with both. |
+
+Fiscal documents gain the status `invalidated` and the fields `replaces_document_id` and
+`superseded_by_id`. The order's active document is the pending, contingency, issued or simulated
+one that is not being replaced: a rejected or invalidated document no longer blocks invoicing
+again. `/sales/{order_id}/invoice-options` returns `previous_document` (the latest one) when there
+is no active document. When the invalidation is accepted the customer receives a separate notice
+with the event PDF (emails expose `invalidation_id`).
+
+Audited: `REQUEST_INVALIDATION`, `CORRECT_FISCAL_DOCUMENT`, `FISCAL_DOCUMENT_INVALIDATED`,
+`FISCAL_INVALIDATION_REJECTED`, `FISCAL_INVALIDATION_FAILED` and, when it applies,
+`SALES_ORDER_CANCELLED`. Error codes (`422`): `sales_invoice_not_invalidatable`,
+`sales_invoice_invalidation_in_progress`, `sales_invoice_replacement_in_progress`,
+`sales_invoice_not_correctable`, `sales_invoice_correction_type_changed`,
+`sales_invoice_invalidation_reason_required`, `sales_invoice_requester_invalid`,
+`sales_invoice_responsible_missing`, `sales_invoice_invalidation_expired`.

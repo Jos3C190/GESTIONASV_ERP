@@ -61,6 +61,8 @@ class InvoiceOptions:
     points_of_sale: tuple[PointOfSaleOption, ...]
     blockers: tuple[str, ...]
     document: FiscalDocument | None
+    previous: FiscalDocument | None = None
+    """Sin documento activo: el último del pedido (rechazado, fallido o invalidado), V4b."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +128,7 @@ class SalesInvoiceUseCases:
             for p in (establishment.points_of_sale if establishment else ())
             if p.is_active
         )
+        active = await self._repo.active_for_order(company_id, order_id)
         blockers: list[str] = []
         try:
             await self._prepare(order, points[0].id if points else None)
@@ -137,7 +140,8 @@ class SalesInvoiceUseCases:
             establishment_code=establishment.code if establishment else None,
             points_of_sale=points,
             blockers=tuple(blockers),
-            document=await self._repo.active_for_order(company_id, order_id),
+            document=active,
+            previous=None if active else await self._repo.latest_for_order(company_id, order_id),
         )
 
     # --- armado ---------------------------------------------------------------------------------
@@ -294,14 +298,31 @@ class SalesInvoiceUseCases:
         )
 
     async def _prepare(
-        self, order: Order, point_of_sale_id: uuid.UUID | None
+        self,
+        order: Order,
+        point_of_sale_id: uuid.UUID | None,
+        *,
+        replaces: FiscalDocument | None = None,
     ) -> tuple[FiscalDocument, IssuerSnapshot]:
-        require_invoiceable(
-            order.status.value,
-            order.document_type,
-            await self._enabled(order.company_id, order.document_type),
-            has_active_document=False,
-        )
+        if replaces is None:
+            require_invoiceable(
+                order.status.value,
+                order.document_type,
+                await self._enabled(order.company_id, order.document_type),
+                has_active_document=False,
+            )
+        else:
+            # El reemplazo de un documento sellado (V4b): mismo tipo, datos actuales.
+            if order.document_type != replaces.document_type:
+                raise BusinessRuleError(
+                    "El pedido cambió de tipo de documento: anula el documento y factura de nuevo.",
+                    code="sales_invoice_correction_type_changed",
+                )
+            if not await self._enabled(order.company_id, order.document_type):
+                raise BusinessRuleError(
+                    "La empresa no tiene habilitado este tipo de documento para emitir.",
+                    code="sales_invoice_document_disabled",
+                )
         issuer, establishment, point, mode = await self._issuer(order, point_of_sale_id)
         receiver = build_receiver(order.document_type, await self._receiver(order))
         totals = self.totals(order)
@@ -322,8 +343,21 @@ class SalesInvoiceUseCases:
             issuer_snapshot=issuer.record(),
             request_payload=body,
             created_by_id=order.created_by_id,
+            replaces_document_id=replaces.id if replaces else None,
         )
         return document, issuer
+
+    async def prepare_replacement(
+        self, original: FiscalDocument, actor_id: uuid.UUID
+    ) -> FiscalDocument:
+        """Documento que reemplaza a ``original`` con los datos actuales del pedido y del cliente.
+
+        No lo guarda: quien lo pide marca primero el original y después lo crea.
+        """
+
+        order = await self._order(original.company_id, original.sale_id, lock=True)
+        document, _issuer = await self._prepare(order, original.point_of_sale_id, replaces=original)
+        return replace(document, created_by_id=actor_id)
 
     # --- acciones -------------------------------------------------------------------------------
 

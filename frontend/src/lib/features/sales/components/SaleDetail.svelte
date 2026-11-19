@@ -2,6 +2,8 @@
   import { onDestroy, onMount } from 'svelte';
   import { HttpError } from '#lib/api/client.ts';
   import { salesApi } from '#lib/api/sales.ts';
+  import { salesInvoicesApi } from '#lib/api/sales-invoices.ts';
+  import { RESPONSIBLE_DOCUMENT_LABELS, isSealed } from '#lib/features/sales/fiscal-labels.ts';
   import { formatUnitLabel } from '#lib/features/sales/unit-label.ts';
   import {
     DELIVERY_MODE_LABELS,
@@ -19,6 +21,7 @@
   import { branch } from '#lib/stores/branch.svelte.ts';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type { Sale } from '#lib/types/sales.ts';
+  import type { FiscalDocument } from '#lib/types/sales-invoices.ts';
   import SalesDeliveryPanel from './SalesDeliveryPanel.svelte';
   import SalesInvoicePanel from './SalesInvoicePanel.svelte';
   import SalesReturnsPanel from './SalesReturnsPanel.svelte';
@@ -32,7 +35,12 @@
   let error = $state<string | null>(null);
   let text = $state('');
   let pending = $state<Exclude<Action, 'confirm'> | null>(null);
-  let invoiced = $state(false);
+  let invoicedDocument = $state<FiscalDocument | null>(null);
+  const invoiced = $derived(invoicedDocument !== null);
+  let requesterName = $state('');
+  let requesterType = $state('13');
+  let requesterNumber = $state('');
+  let notice = $state<string | null>(null);
   let generation = 0;
   onDestroy(() => generation++);
 
@@ -80,6 +88,23 @@
     busy = true;
     error = null;
     try {
+      if (action === 'cancel' && invoicedDocument) {
+        // Pedido facturado (V4b): se anula el documento y el pedido se cancela al aceptarse.
+        await salesInvoicesApi.invalidate(invoicedDocument.id, {
+          reason: text.trim(),
+          requester: {
+            name: requesterName,
+            document_type: requesterType,
+            document_number: requesterNumber
+          },
+          cancel_order: true
+        });
+        notice =
+          'Se pidió la anulación del documento a Hacienda. El pedido se cancela cuando la acepte.';
+        text = '';
+        pending = null;
+        return;
+      }
       sale = await salesApi.orderAction(sale.id, action, {
         expected_version: sale.version,
         ...(action === 'authorize' ? { note: text.trim() || null } : {}),
@@ -295,7 +320,7 @@
 
     {#if sale.status === 'confirmed'}
       {#if can('sales_invoices:read')}
-        <SalesInvoicePanel {sale} onInvoiced={(value) => (invoiced = value)} />
+        <SalesInvoicePanel {sale} onInvoiced={(value) => (invoicedDocument = value)} />
       {/if}
       <SalesDeliveryPanel {sale} onChanged={load} />
       <SalesReturnsPanel {sale} onChanged={load} />
@@ -352,13 +377,54 @@
             onclick={() => (pending = 'return')}>Devolver a borrador</button
           >
         {/if}
-        {#if sale.status !== 'cancelled' && sale.delivery_progress === 'pending' && !invoiced && can('sales:cancel')}
+        {#if sale.status !== 'cancelled' && sale.delivery_progress === 'pending' && can('sales:cancel') && (!invoiced || (invoicedDocument && isSealed(invoicedDocument) && !invoicedDocument.superseded_by_id && can('sales_invoices:invalidate')))}
           <button
             class="rounded-md border border-danger/30 px-4 py-2 text-sm text-danger"
             onclick={() => (pending = 'cancel')}>Cancelar pedido</button
           >
         {/if}
       </div>
+      {#if pending === 'cancel' && invoicedDocument}
+        <div class="space-y-3 border-t border-border pt-3">
+          <p class="text-sm text-foreground">
+            El pedido está facturado: se anulará su documento ante Hacienda (se rescinde la
+            operación) y el pedido se cancelará cuando Hacienda lo acepte.
+          </p>
+          <div class="grid gap-3 sm:grid-cols-3">
+            <label class="space-y-1 text-sm text-foreground-muted sm:col-span-3"
+              >Nombre del solicitante
+              <input
+                class="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                maxlength="100"
+                bind:value={requesterName}
+              />
+            </label>
+            <label class="space-y-1 text-sm text-foreground-muted"
+              >Documento
+              <select
+                class="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                value={requesterType}
+                onchange={(event) => (requesterType = event.currentTarget.value)}
+              >
+                {#each Object.entries(RESPONSIBLE_DOCUMENT_LABELS) as [value, label] (value)}
+                  <option {value}>{label}</option>
+                {/each}
+              </select>
+            </label>
+            <label class="space-y-1 text-sm text-foreground-muted sm:col-span-2"
+              >Número de documento del solicitante
+              <input
+                class="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                maxlength="25"
+                bind:value={requesterNumber}
+              />
+            </label>
+          </div>
+        </div>
+      {/if}
+      {#if notice}
+        <p class="text-sm text-success" aria-live="polite">{notice}</p>
+      {/if}
       {#if pending}
         {@const prompt = prompts[pending]}
         <form
@@ -392,8 +458,8 @@
       {/if}
       <p class="text-xs text-foreground-muted">
         Confirmar aparta las existencias de la sucursal; cancelar las libera. Un pedido con entregas
-        ya no se cancela: se gestiona con devoluciones. Uno facturado tampoco: se corregirá con
-        invalidación o nota de crédito.
+        ya no se cancela: se gestiona con devoluciones. Cancelar uno facturado anula su documento
+        ante Hacienda.
       </p>
     </section>
   {/if}

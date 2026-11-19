@@ -9,7 +9,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-FiscalStatus = Literal["pending", "contingency", "issued", "simulated", "rejected", "failed"]
+FiscalStatus = Literal[
+    "pending", "contingency", "issued", "simulated", "rejected", "failed", "invalidated"
+]
 
 
 class InvoiceIn(BaseModel):
@@ -44,6 +46,8 @@ class FiscalDocumentOut(BaseModel):
     contingency_type: int | None = None
     contingency_reason: str | None = None
     contingency_at: datetime | None = None
+    replaces_document_id: uuid.UUID | None = None
+    superseded_by_id: uuid.UUID | None = None
     created_at: datetime | None
     updated_at: datetime | None
 
@@ -69,6 +73,7 @@ class InvoiceOptionsOut(BaseModel):
     points_of_sale: list[PointOfSaleOut]
     blockers: list[str]
     document: FiscalDocumentOut | None
+    previous_document: FiscalDocumentOut | None = None
 
 
 class DownloadUrlOut(BaseModel):
@@ -92,6 +97,8 @@ class FiscalEmailOut(BaseModel):
     error_code: str | None
     error_message: str | None
     requested_by_name: str | None
+    invalidation_id: uuid.UUID | None = None
+    """Aviso de una invalidación (V4b), no el documento."""
     sent_at: datetime | None
     created_at: datetime | None
 

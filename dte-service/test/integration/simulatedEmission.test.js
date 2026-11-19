@@ -246,9 +246,15 @@ test('no consulta a Hacienda el estado de un DTE ni de un lote en modo simulado'
   }
 });
 
-test('bloquea invalidacion y contingencia mientras el modo es simulado', async () => {
+test('bloquea la contingencia global mientras el modo es simulado', async () => {
+  // La invalidación de un emisor simulado ya no se bloquea: usa el proveedor simulado (V4b del ERP).
+  const anular = await fetch(`${baseUrl}/api/dte/00000000-0000-4000-8000-000000000000/anular`, {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json', 'Idempotency-Key': 'simulation-event-anular' }),
+    body: JSON.stringify({}),
+  });
+  assert.equal(anular.status, 404);
   const paths = [
-    '/api/dte/00000000-0000-4000-8000-000000000000/anular',
     '/api/dte/contingencia/forzar',
     '/api/dte/contingencia/1/cerrar',
   ];
