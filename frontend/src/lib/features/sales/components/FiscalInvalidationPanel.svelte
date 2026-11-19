@@ -155,7 +155,7 @@
       <p class={`text-sm ${overview.expired ? 'text-danger' : 'text-foreground-muted'}`}>
         {overview.expired
           ? `El plazo para anularlo venció el ${formatDay(overview.deadline)}; Hacienda ya no lo acepta.`
-          : `Se puede anular o corregir hasta el ${formatDay(overview.deadline)}${overview.estimated ? ' (fecha estimada por los feriados)' : ''}.`}
+          : `Se puede ${note ? 'anular' : 'anular o corregir'} hasta el ${formatDay(overview.deadline)}${overview.estimated ? ' (fecha estimada por los feriados)' : ''}.`}
       </p>
     {/if}
     {#if notice}
