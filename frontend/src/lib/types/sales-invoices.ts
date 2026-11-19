@@ -1,5 +1,66 @@
 /** Documento fiscal del pedido (bloque V3b). */
 
+/** 01 factura, 03 crédito fiscal, 05 nota de crédito, 06 nota de débito. */
+export type FiscalDocumentType = '01' | '03' | '05' | '06';
+
+export type FiscalNature = 'taxed' | 'exempt' | 'not_subject';
+
+/** Una línea del CCF con su saldo después de las notas de crédito vigentes (V4c). */
+export interface CcfLineBalance {
+  number: number;
+  code: string | null;
+  description: string;
+  nature: FiscalNature;
+  quantity: string;
+  unit_price: string;
+  net: string;
+  returned: string;
+  credited: string;
+  remaining_quantity: string;
+  remaining_amount: string;
+}
+
+export interface FiscalNoteLine {
+  line_number: number;
+  ccf_line_number: number | null;
+  kind: 'return' | 'discount' | 'charge';
+  nature: FiscalNature;
+  description: string;
+  quantity: string | null;
+  amount: string;
+}
+
+export interface FiscalNote {
+  document: FiscalDocument;
+  lines: FiscalNoteLine[];
+}
+
+export interface NotesOverview {
+  ccf_id: string;
+  credit_deadline: string | null;
+  withholding: boolean;
+  perception: boolean;
+  credit_blocker: string | null;
+  debit_blocker: string | null;
+  lines: CcfLineBalance[];
+  notes: FiscalNote[];
+}
+
+export interface CreditLineInput {
+  ccf_line_number: number;
+  kind: 'return' | 'discount';
+  quantity?: string;
+  amount?: string;
+}
+
+export interface DebitChargeInput {
+  description: string;
+  quantity: string;
+  unit_price: string;
+  nature?: FiscalNature | null;
+  ccf_line_number?: number | null;
+}
+
 export type FiscalDocumentStatus =
   'pending' | 'contingency' | 'issued' | 'simulated' | 'rejected' | 'failed' | 'invalidated';
 
@@ -13,7 +74,7 @@ export interface FiscalDocument {
   customer_email: string | null;
   establishment_code: string | null;
   point_of_sale_code: string | null;
-  document_type: '01' | '03';
+  document_type: FiscalDocumentType;
   mode: string;
   status: FiscalDocumentStatus;
   generation_code: string | null;
@@ -36,6 +97,9 @@ export interface FiscalDocument {
   /** Clasificación de renta del documento para los anexos del F-07. */
   renta_operation_type?: number | null;
   renta_income_type?: number | null;
+  /** En una nota (05 o 06): el crédito fiscal que ajusta y el motivo (V4c). */
+  related_document_id?: string | null;
+  note_reason?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }

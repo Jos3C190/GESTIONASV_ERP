@@ -8,7 +8,10 @@ import type {
   FiscalEmailHistory,
   FiscalInvalidation,
   Correction,
+  CreditLineInput,
+  DebitChargeInput,
   InvalidationOverview,
+  NotesOverview,
   InvoiceOptions,
   Person
 } from '#lib/types/sales-invoices.ts';
@@ -75,6 +78,21 @@ export const salesInvoicesApi = {
     return apiFetch<Correction>(`/sales/fiscal-documents/${id}/correct`, {
       method: 'POST',
       body: JSON.stringify({ requester })
+    });
+  },
+  notes(id: string) {
+    return apiFetch<NotesOverview>(`/sales/fiscal-documents/${id}/notes`);
+  },
+  creditNote(id: string, payload: { reason: string; lines: CreditLineInput[] }) {
+    return apiFetch<FiscalDocument>(`/sales/fiscal-documents/${id}/credit-note`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+  debitNote(id: string, payload: { reason: string; charges: DebitChargeInput[] }) {
+    return apiFetch<FiscalDocument>(`/sales/fiscal-documents/${id}/debit-note`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
     });
   },
   sendEmail(id: string, recipients: string[] | null) {

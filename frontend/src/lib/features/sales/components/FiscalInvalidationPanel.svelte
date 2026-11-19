@@ -9,6 +9,7 @@
     INVALIDATION_STATUS_LABELS,
     RESPONSIBLE_DOCUMENT_LABELS,
     formatMoment,
+    isNote,
     isSealed
   } from '#lib/features/sales/fiscal-labels.ts';
   import { formatDay } from '#lib/features/sales/quotation-labels.ts';
@@ -17,8 +18,16 @@
   let {
     document,
     canInvalidate,
+    lockedReason = null,
     onChanged = () => {}
-  }: { document: FiscalDocument; canInvalidate: boolean; onChanged?: () => void } = $props();
+  }: {
+    document: FiscalDocument;
+    canInvalidate: boolean;
+    /** Por qué no se puede anular ahora (un CCF con notas vigentes, V4c). */
+    lockedReason?: string | null;
+    onChanged?: () => void;
+  } = $props();
+  const note = $derived(isNote(document));
 
   const inputClass =
     'h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary';
@@ -41,6 +50,7 @@
       isSealed(document) &&
       !document.superseded_by_id &&
       !pending &&
+      !lockedReason &&
       !(overview?.expired ?? false)
   );
 
@@ -96,10 +106,11 @@
 
 <section class="space-y-3 rounded-xl border border-border bg-surface p-4" aria-label="Anulación">
   <div>
-    <h2 class="font-semibold text-foreground">Anulación y corrección</h2>
+    <h2 class="font-semibold text-foreground">{note ? 'Anulación' : 'Anulación y corrección'}</h2>
     <p class="text-sm text-foreground-muted">
-      Un documento sellado no se borra: se anula ante Hacienda o se corrige con otro que lo
-      reemplaza.
+      {note
+        ? 'Una nota sellada no se borra ni se corrige: se anula ante Hacienda y, si hace falta, se emite otra.'
+        : 'Un documento sellado no se borra: se anula ante Hacienda o se corrige con otro que lo reemplaza.'}
     </p>
   </div>
 
@@ -151,9 +162,16 @@
       <p class="text-sm text-success" aria-live="polite">{notice}</p>
     {/if}
 
+    {#if lockedReason && isSealed(document)}
+      <p class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+        {lockedReason}
+      </p>
+    {/if}
     {#if canAct && !mode}
       <div class="flex flex-wrap gap-2">
-        <Button variant="secondary" onclick={() => open('correct')}>Corregir documento</Button>
+        {#if !note}
+          <Button variant="secondary" onclick={() => open('correct')}>Corregir documento</Button>
+        {/if}
         <Button variant="secondary" onclick={() => open('cancel')}>Anular documento</Button>
       </div>
     {/if}
