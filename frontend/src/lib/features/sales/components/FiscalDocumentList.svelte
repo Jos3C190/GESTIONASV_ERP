@@ -4,11 +4,12 @@
   import { contingenciesApi } from '#lib/api/sales-contingencies.ts';
   import { salesInvoicesApi } from '#lib/api/sales-invoices.ts';
   import {
+    FISCAL_DOCUMENT_LABELS,
     FISCAL_STATUS_BADGES,
     FISCAL_STATUS_FILTERS,
     FISCAL_STATUS_LABELS
   } from '#lib/features/sales/fiscal-labels.ts';
-  import { DOCUMENT_LABELS, formatDay, formatMoney } from '#lib/features/sales/quotation-labels.ts';
+  import { formatDay, formatMoney } from '#lib/features/sales/quotation-labels.ts';
   import { branch } from '#lib/stores/branch.svelte.ts';
   import type { FiscalDocument } from '#lib/types/sales-invoices.ts';
 
@@ -145,6 +146,8 @@
           <option value="">Todos</option>
           <option value="01">Factura</option>
           <option value="03">Crédito fiscal</option>
+          <option value="05">Nota de crédito</option>
+          <option value="06">Nota de débito</option>
         </select></label
       >
       <label class="text-sm text-foreground-muted"
@@ -212,7 +215,9 @@
                 <td class="px-4 py-3 font-mono text-xs text-foreground"
                   >{item.control_number ?? '—'}</td
                 >
-                <td class="px-4 py-3 text-foreground">{DOCUMENT_LABELS[item.document_type]}</td>
+                <td class="px-4 py-3 text-foreground"
+                  >{FISCAL_DOCUMENT_LABELS[item.document_type]}</td
+                >
                 <td class="px-4 py-3">
                   <a
                     class="font-mono text-xs text-primary hover:underline"

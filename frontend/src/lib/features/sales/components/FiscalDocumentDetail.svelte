@@ -5,24 +5,34 @@
   import { downloadFiscalJson, openFiscalPdf } from '#lib/features/sales/fiscal-downloads.ts';
   import {
     CONTINGENCY_TYPE_LABELS,
+    FISCAL_DOCUMENT_LABELS,
     FISCAL_MODE_LABELS,
     FISCAL_STATUS_BADGES,
     FISCAL_STATUS_LABELS,
-    canRetry
+    canRetry,
+    isFinal,
+    isNote,
+    isVigent
   } from '#lib/features/sales/fiscal-labels.ts';
-  import { DOCUMENT_LABELS, formatDay, formatMoney } from '#lib/features/sales/quotation-labels.ts';
+  import { formatDay, formatMoney } from '#lib/features/sales/quotation-labels.ts';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
   import { rentaLabel } from '#lib/features/sales/renta-labels.ts';
   import FiscalDocumentEmails from './FiscalDocumentEmails.svelte';
   import FiscalInvalidationPanel from './FiscalInvalidationPanel.svelte';
-  import type { FiscalDocument } from '#lib/types/sales-invoices.ts';
+  import FiscalNotesPanel from './FiscalNotesPanel.svelte';
+  import type { FiscalDocument, NotesOverview } from '#lib/types/sales-invoices.ts';
 
   let { id }: { id: string } = $props();
   let document = $state<FiscalDocument | null>(null);
   let loading = $state(true);
   let busy = $state(false);
   let error = $state<string | null>(null);
+  let vigentNotes = $state(0);
   let generation = 0;
+
+  function noted(overview: NotesOverview) {
+    vigentNotes = overview.notes.filter((note) => isVigent(note.document)).length;
+  }
   onDestroy(() => generation++);
 
   async function load() {
@@ -87,7 +97,7 @@
     <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <p class="text-xs font-semibold uppercase tracking-widest text-primary">
-          {DOCUMENT_LABELS[document.document_type]}
+          {FISCAL_DOCUMENT_LABELS[document.document_type]}
         </p>
         <h1 class="mt-1 break-all font-mono text-xl font-bold text-foreground">
           {document.control_number ?? 'Sin número de control todavía'}
@@ -131,6 +141,16 @@
         </p>
         <p class="mt-1 break-words">{document.error_message}</p>
       </div>
+    {/if}
+
+    {#if isNote(document) && document.related_document_id}
+      <p class="rounded-lg border border-border bg-surface-muted px-4 py-3 text-sm text-foreground">
+        Ajusta el
+        <a
+          class="text-primary hover:underline"
+          href={`/sales/fiscal-documents/${document.related_document_id}`}>crédito fiscal</a
+        >{document.note_reason ? `. Motivo: ${document.note_reason}` : ''}.
+      </p>
     {/if}
 
     <section class="rounded-xl border border-border bg-surface">
@@ -220,9 +240,19 @@
     </section>
 
     {#key `${document.status}-${document.superseded_by_id ?? ''}`}
+      {#if document.document_type === '03' && isFinal(document)}
+        <FiscalNotesPanel
+          {document}
+          canIssue={permissions.hasPermission('sales_invoices:notes')}
+          onOverview={noted}
+        />
+      {/if}
       <FiscalInvalidationPanel
         {document}
         canInvalidate={permissions.hasPermission('sales_invoices:invalidate')}
+        lockedReason={vigentNotes > 0
+          ? 'Este crédito fiscal tiene notas vigentes: anúlalas antes de anularlo o corregirlo.'
+          : null}
         onChanged={() => void load()}
       />
       <FiscalDocumentEmails {document} />

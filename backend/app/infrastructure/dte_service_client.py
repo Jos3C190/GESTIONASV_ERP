@@ -30,7 +30,12 @@ from app.domain.ports.dte_service import (
     IssueResult,
 )
 
-_PATHS = {"01": "/api/dte/v2/factura", "03": "/api/dte/v2/ccf"}
+_PATHS = {
+    "01": "/api/dte/v2/factura",
+    "03": "/api/dte/v2/ccf",
+    "05": "/api/dte/v2/nota-credito",
+    "06": "/api/dte/v2/nota-debito",
+}
 #: Códigos del servicio que se resuelven solos al reintentar con la misma clave.
 _TRANSIENT_CODES = frozenset({"IDEMPOTENCY_IN_PROGRESS", "ISSUER_MODE_UNAVAILABLE"})
 #: Códigos 5xx que no se corrigen reintentando (configuración del firmador).

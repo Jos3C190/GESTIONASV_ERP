@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -46,6 +47,9 @@ class FiscalDocument:
     renta_operation_type: int | None = None
     """Clasificación de renta del documento para los anexos del F-07 (V4b2)."""
     renta_income_type: int | None = None
+    related_document_id: uuid.UUID | None = None
+    """En una nota (05 o 06), el crédito fiscal que ajusta (V4c)."""
+    note_reason: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     sale_code: str | None = None
@@ -53,6 +57,19 @@ class FiscalDocument:
     point_of_sale_code: str | None = None
     establishment_code: str | None = None
     customer_email: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FiscalNoteLine:
+    """Lo que ajusta una línea de una nota de crédito o de débito (V4c)."""
+
+    line_number: int
+    ccf_line_number: int | None
+    kind: str
+    nature: str
+    description: str
+    quantity: Decimal | None
+    amount: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +103,18 @@ class SalesFiscalRepository(Protocol):
     ) -> tuple[list[FiscalDocument], int]: ...
 
     async def save(self, document: FiscalDocument) -> FiscalDocument: ...
+
+    async def create_note(
+        self, document: FiscalDocument, lines: Sequence[FiscalNoteLine]
+    ) -> FiscalDocument: ...
+
+    async def notes_for(self, company_id: uuid.UUID, ccf_id: uuid.UUID) -> list[FiscalDocument]:
+        """Las notas de un crédito fiscal, de la más reciente a la más antigua."""
+        ...
+
+    async def note_lines(
+        self, company_id: uuid.UUID, note_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, list[FiscalNoteLine]]: ...
 
     async def lock_contingency(self, document_id: uuid.UUID) -> FiscalDocument | None:
         """Toma un documento en contingencia para seguirlo (``SKIP LOCKED``)."""

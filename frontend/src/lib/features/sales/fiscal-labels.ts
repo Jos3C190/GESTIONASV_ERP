@@ -1,8 +1,39 @@
 import type {
   FiscalDocument,
   FiscalDocumentStatus,
-  FiscalEmailStatus
+  FiscalDocumentType,
+  FiscalEmailStatus,
+  FiscalNature
 } from '#lib/types/sales-invoices.ts';
+
+export const FISCAL_DOCUMENT_LABELS: Record<FiscalDocumentType, string> = {
+  '01': 'Factura',
+  '03': 'Crédito fiscal',
+  '05': 'Nota de crédito',
+  '06': 'Nota de débito'
+};
+
+export const NATURE_LABELS: Record<FiscalNature, string> = {
+  taxed: 'Gravado',
+  exempt: 'Exento',
+  not_subject: 'No sujeto'
+};
+
+export const NOTE_LINE_KIND_LABELS: Record<string, string> = {
+  return: 'Devolución',
+  discount: 'Rebaja',
+  charge: 'Cargo'
+};
+
+/** Una nota que se puede anular (tipo 2) pero no corregir. */
+export function isNote(document: Pick<FiscalDocument, 'document_type'>): boolean {
+  return document.document_type === '05' || document.document_type === '06';
+}
+
+/** Estados de una nota que cuentan para el saldo del CCF y bloquean anularlo. */
+export function isVigent(document: Pick<FiscalDocument, 'status'>): boolean {
+  return ['pending', 'contingency', 'issued', 'simulated'].includes(document.status);
+}
 
 export const FISCAL_STATUS_LABELS: Record<FiscalDocumentStatus, string> = {
   pending: 'Emitiendo',

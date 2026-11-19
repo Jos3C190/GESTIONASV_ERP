@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import Select, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.entities.sales_fiscal_document import INVOICEABLE_DOCUMENTS
 from app.domain.entities.sales_order import DeliveryMode, OrderStatus, PaymentTerms
 from app.domain.ports.sales_document import DocumentTotals
 from app.domain.ports.sales_order_repository import (
@@ -272,6 +273,8 @@ class SqlAlchemySalesOrderRepository(SalesDocumentSupport):
             select(SalesFiscalDocumentModel.id).where(
                 SalesFiscalDocumentModel.company_id == company_id,
                 SalesFiscalDocumentModel.sale_id == order_id,
+                # Cuenta la factura o el CCF, no sus notas (V4c).
+                SalesFiscalDocumentModel.document_type.in_(INVOICEABLE_DOCUMENTS),
                 # Un rechazado o un invalidado no cuenta (V4b).
                 SalesFiscalDocumentModel.status.in_(
                     ("pending", "contingency", "issued", "simulated")

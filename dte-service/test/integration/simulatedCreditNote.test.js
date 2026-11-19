@@ -2,14 +2,14 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 
-// Nota de Crédito (05) habilitada solo en este proceso: la allowlist por
-// defecto (01,03) sigue respondiendo 403 (ver app.test.js).
+// Notas de Crédito (05) y de Débito (06) habilitadas solo en este proceso:
+// la allowlist por defecto (01,03) sigue respondiendo 403 (ver app.test.js).
 process.env.DTE_MODE = 'simulated';
 process.env.DTE_SIMULATION_ACKNOWLEDGED = 'true';
 process.env.DTE_SIMULATION_SQLITE_PATH = ':memory:';
 process.env.DTE_SIMULATION_RUN_ID = 'credit-note-run';
 process.env.DTE_AUTHORIZED_ISSUER_NITS = '06141804941035';
-process.env.DTE_ALLOWED_DOCUMENT_TYPES = '01,03,05';
+process.env.DTE_ALLOWED_DOCUMENT_TYPES = '01,03,05,06';
 process.env.MS_AUTH_DESHABILITADA = 'false';
 process.env.MS_API_KEY_SCOPES = 'issue,read,simulate';
 require('../_setup');
@@ -230,6 +230,36 @@ test('invalida una Nota de Crédito simulada sin documento de reemplazo', async 
   const otra = await post(`/api/dte/simulacion/${nota.codigoGeneracion}/anular`, 'nc-invalidacion-evt-002', { motivo: { tipoAnulacion: 2, responsable, solicitante } });
   assert.equal(otra.response.status, 409);
   assert.equal(otra.body.code, 'DTE_ALREADY_INVALIDATED');
+});
+
+test('v2 emite una Nota de Débito simulada con la retención del CCF, y se anula con el tipo 2', async () => {
+  const ccf = await emitirCCF('nd-ccf-001');
+  const peticion = cuerpoNota(ccf, {
+    items: [{ descripcion: 'Intereses por pago tardío', cantidad: 1, precioUni: 10, ventaGravada: 10, numeroDocumento: ccf.codigoGeneracion }],
+    observaciones: 'Intereses del CCF',
+    ajustes: { retencionIva: true },
+  });
+  const { response, body } = await post('/api/dte/v2/nota-debito', 'nd-emision-001', peticion, { 'X-DTE-Simulation-Scenario': 'success' });
+  assert.equal(response.status, 201, JSON.stringify(body));
+  assert.equal(body.estado, 'SIMULADO');
+  assert.match(body.numeroControl, /^DTE-06-M001P001-\d{15}$/);
+
+  const nota = await artefacto(body.codigoGeneracion);
+  assert.equal(nota.identificacion.tipoDte, '06');
+  assert.equal(nota.resumen.numPagoElectronico, null);
+  assert.equal(nota.resumen.ivaRete, 0.1);
+  assert.equal(nota.cuerpoDocumento[0].ivaRete, 0.1);
+  assert.equal(nota.resumen.totalPagar, 11.2);
+  assert.equal(nota.emisor.nombre, issuerV2().nombre);
+
+  const pdf = await fetch(`${baseUrl}/api/dte/${body.codigoGeneracion}/pdf`, { headers: headers() });
+  assert.equal(pdf.status, 200);
+
+  const sinReemplazo = await post(`/api/dte/simulacion/${body.codigoGeneracion}/anular`, 'nd-invalidacion-evt-001', { motivo: { tipoAnulacion: 1, motivoAnulacion: 'Cargo por error', responsable, solicitante } });
+  assert.equal(sinReemplazo.response.status, 400);
+  const evento = await post(`/api/dte/simulacion/${body.codigoGeneracion}/anular`, 'nd-invalidacion-evt-002', { motivo: { tipoAnulacion: 2, motivoAnulacion: 'Cargo rescindido', responsable, solicitante } });
+  assert.equal(evento.response.status, 200, JSON.stringify(evento.body));
+  assert.equal(fila(body.codigoGeneracion).estado, 'SIMULADO_INVALIDADO');
 });
 
 test('ninguna prueba intentó salir de la máquina', async () => {

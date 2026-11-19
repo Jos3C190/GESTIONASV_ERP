@@ -3,14 +3,23 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.entities.sales_fiscal_document import ACTIVE_STATUSES, FiscalDocumentStatus
-from app.domain.ports.sales_fiscal_repository import FiscalDocument, FiscalDocumentFilters
+from app.domain.entities.sales_fiscal_document import (
+    ACTIVE_STATUSES,
+    INVOICEABLE_DOCUMENTS,
+    FiscalDocumentStatus,
+)
+from app.domain.ports.sales_fiscal_repository import (
+    FiscalDocument,
+    FiscalDocumentFilters,
+    FiscalNoteLine,
+)
 from app.infrastructure.models.catalog import CompanyUnitModel
 from app.infrastructure.models.fiscal import (
     FiscalEstablishmentModel,
@@ -18,7 +27,10 @@ from app.infrastructure.models.fiscal import (
     HaciendaCatalogItemModel,
 )
 from app.infrastructure.models.sales import SaleModel, SalesCustomerModel
-from app.infrastructure.models.sales_fiscal import SalesFiscalDocumentModel
+from app.infrastructure.models.sales_fiscal import (
+    SalesFiscalDocumentModel,
+    SalesFiscalNoteLineModel,
+)
 
 _FIELDS = (
     "branch_id",
@@ -50,6 +62,8 @@ _FIELDS = (
     "superseded_by_id",
     "renta_operation_type",
     "renta_income_type",
+    "related_document_id",
+    "note_reason",
 )
 #: Lo que cambia después de crear el documento.
 _MUTABLE = (
@@ -158,6 +172,7 @@ class SqlAlchemySalesFiscalRepository:
             _query().where(
                 SalesFiscalDocumentModel.company_id == company_id,
                 SalesFiscalDocumentModel.sale_id == order_id,
+                SalesFiscalDocumentModel.document_type.in_(INVOICEABLE_DOCUMENTS),
                 SalesFiscalDocumentModel.status.in_([status.value for status in ACTIVE_STATUSES]),
                 SalesFiscalDocumentModel.superseded_by_id.is_(None),
             )
@@ -171,6 +186,7 @@ class SqlAlchemySalesFiscalRepository:
             .where(
                 SalesFiscalDocumentModel.company_id == company_id,
                 SalesFiscalDocumentModel.sale_id == order_id,
+                SalesFiscalDocumentModel.document_type.in_(INVOICEABLE_DOCUMENTS),
             )
             .order_by(SalesFiscalDocumentModel.created_at.desc())
             .limit(1)
@@ -231,6 +247,66 @@ class SqlAlchemySalesFiscalRepository:
         saved = await self.get(document.company_id, document.id)
         assert saved is not None
         return saved
+
+    async def create_note(
+        self, document: FiscalDocument, lines: Sequence[FiscalNoteLine]
+    ) -> FiscalDocument:
+        created = await self.create(document)
+        self._session.add_all(
+            SalesFiscalNoteLineModel(
+                company_id=document.company_id,
+                note_id=document.id,
+                line_number=line.line_number,
+                ccf_line_number=line.ccf_line_number,
+                kind=line.kind,
+                nature=line.nature,
+                description=line.description,
+                quantity=line.quantity,
+                amount=line.amount,
+            )
+            for line in lines
+        )
+        await self._session.flush()
+        return created
+
+    async def notes_for(self, company_id: uuid.UUID, ccf_id: uuid.UUID) -> list[FiscalDocument]:
+        rows = await self._session.execute(
+            _query()
+            .where(
+                SalesFiscalDocumentModel.company_id == company_id,
+                SalesFiscalDocumentModel.related_document_id == ccf_id,
+            )
+            .order_by(SalesFiscalDocumentModel.created_at.desc(), SalesFiscalDocumentModel.id)
+        )
+        return [_entity(row) for row in rows]
+
+    async def note_lines(
+        self, company_id: uuid.UUID, note_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, list[FiscalNoteLine]]:
+        result: dict[uuid.UUID, list[FiscalNoteLine]] = {note_id: [] for note_id in note_ids}
+        if not note_ids:
+            return result
+        rows = await self._session.scalars(
+            select(SalesFiscalNoteLineModel)
+            .where(
+                SalesFiscalNoteLineModel.company_id == company_id,
+                SalesFiscalNoteLineModel.note_id.in_(note_ids),
+            )
+            .order_by(SalesFiscalNoteLineModel.note_id, SalesFiscalNoteLineModel.line_number)
+        )
+        for row in rows:
+            result[row.note_id].append(
+                FiscalNoteLine(
+                    line_number=row.line_number,
+                    ccf_line_number=row.ccf_line_number,
+                    kind=row.kind,
+                    nature=row.nature,
+                    description=row.description,
+                    quantity=row.quantity,
+                    amount=row.amount,
+                )
+            )
+        return result
 
     async def claim(self, document_id: uuid.UUID, max_attempts: int) -> FiscalDocument | None:
         model = await self._session.scalar(
