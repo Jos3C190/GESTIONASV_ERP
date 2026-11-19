@@ -172,6 +172,48 @@ Pasos:
 - [x] **Paso 7: documentación.** `api.md`, esquema, manual de facturación y `multiemisor.md`.
 - [x] **Paso 8: verificación y PR.** Batería completa, QA en el navegador con el servicio simulado y PR.
 
+### V4b2 — Clasificación de renta por documento (rama `feature/ventas-renta-por-documento`)
+
+Pedido del usuario (18/11/2026), a partir de lo que señaló su contador: el «tipo de operación» y el «tipo de
+ingreso» de renta de los anexos del F-07 se eligen antes de emitir cada factura, no al exportar (como hace el
+proyecto de referencia). El usuario decidió hacerlo antes de V4c.
+
+Hechos verificados (Manual de anexos del F-07 V14, DGII, enero 2025):
+- Son columnas de cada fila de los anexos de ventas: R y S en contribuyentes, U y V en consumidor final.
+  Rigen desde el período de enero de 2025.
+- Tipo de operación: 1 gravada, 2 no gravada o exenta, 3 excluido o no constituye renta, 4 mixta («cuando
+  en un mismo documento» hay operación gravada y exenta), 12 ya retenido en F910, 13 sujetos excluidos
+  (art. 6 LISR).
+- Tipo de ingreso: 1 profesiones, artes y oficios; 2 servicios; 3 comerciales; 4 industriales;
+  5 agropecuarias; 6 utilidades y dividendos; 7 exportación de bienes; 8 servicios del exterior utilizados en
+  El Salvador; 9 exportación de servicios; 10 otras rentas gravables; 12 y 13 como arriba.
+- El DTE no los lleva: en los esquemas oficiales no hay campo y `identificacion.tipoOperacion` es la
+  transmisión. Es clasificación de renta, no de IVA, así que no se deduce de los montos del IVA.
+- No se pudo leer el complemento del F-07 V14 de agosto de 2025: el sitio del MH bloquea la descarga.
+
+Diseño:
+- Cada actividad económica de la empresa tiene una clasificación sugerida (tipo de operación y tipo de
+  ingreso), que se configura en Configuración fiscal → Actividades.
+- Al facturar, la sección Factura del pedido muestra los dos valores, tomados de la actividad del
+  establecimiento (o la principal), y se pueden cambiar. Sin valor sugerido hay que elegirlos.
+- El documento fiscal guarda los dos valores. El reemplazo de una corrección hereda los del original. Los
+  anexos (V8) los usarán tal cual. Los documentos ya emitidos quedan sin clasificación.
+- Regla: 12 y 13 van iguales en las dos columnas (son el mismo concepto en los dos catálogos).
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [ ] **Paso 1: migración 0132 y dominio.** Columnas `renta_operation_type` y `renta_income_type` en
+  `company_economic_activities` y `sales_fiscal_documents`, con checks de catálogo y «las dos o ninguna».
+  Dominio `sales_renta.py` con los catálogos y `validate_renta`. Verificar: unitarias y prueba de migración.
+- [ ] **Paso 2: API.** `PUT /fiscal/activities/{id}/renta` (`fiscal_settings:manage`, auditado). Las actividades
+  devuelven su clasificación. `invoice` acepta `renta_operation_type` y `renta_income_type`; sin ellos usa la
+  sugerida y, sin sugerida, responde `sales_invoice_renta_required`. `invoice-options` devuelve la sugerida. El
+  documento expone su clasificación. Verificar: e2e.
+- [ ] **Paso 3: interfaz.** Selectores en la pestaña Actividades, en la sección Factura del pedido y la
+  clasificación en el detalle del documento. Verificar: vitest.
+- [ ] **Paso 4: documentación.** `api.md`, esquema, manual de configuración fiscal y manual de facturación.
+- [ ] **Paso 5: verificación y PR.** Batería completa, QA en el navegador y PR a `develop`.
+
 ### V4c — Notas de crédito y de débito (se detalla al empezar)
 - Se emiten desde un CCF sellado: devolución sin mover inventario, descuento posterior o anulación parcial
   (nota de crédito), y cargo adicional (nota de débito).
@@ -191,7 +233,8 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V4b terminado; falta el merge de su PR. Sigue V4c (detallarlo al empezar).
+- **Paso en curso**: 1 de V4b2 (clasificación de renta por documento). V4b mergeado (#55). V4c sigue
+  después de V4b2.
   - Paso 8:
     - Batería completa: backend 2002 en verde y 1 roja, `test_sales_fiscal_documents_migration` (0126), que
       todavía esperaba que un rechazado bloqueara volver a facturar. Se ajustó a la regla de la 0131 y pasa.
