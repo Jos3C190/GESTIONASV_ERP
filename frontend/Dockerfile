@@ -38,12 +38,18 @@ RUN pnpm exec svelte-kit sync && pnpm build
 # ---------------- prod ----------------
 FROM base AS prod
 ENV NODE_ENV=production
-COPY --from=build /app/build ./build
-COPY --from=build /app/package.json ./
-COPY --from=build /app/pnpm-lock.yaml* ./
+WORKDIR /app
+
+COPY --from=build --chown=node:node /app/build ./build
+COPY --from=build --chown=node:node /app/package.json ./
+COPY --from=build --chown=node:node /app/pnpm-lock.yaml* ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod --ignore-scripts
+
+# Seguridad: Ejecutar como usuario no privilegiado
+USER node
+
 EXPOSE 3000
-# SvelteKit's node adapter reads PORT and BODY_SIZE_LIMIT from env (since SvelteKit 3 it ignores ORIGIN).
+# SvelteKit's node adapter reads PORT and BODY_SIZE_LIMIT from env
 ENV PORT=3000
 CMD ["node", "build"]
