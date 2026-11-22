@@ -1,0 +1,23 @@
+# ==============================================================================
+# GESTIONASV ERP — VARIABLES DE EJEMPLO PARA DESPLIEGUE (STAGING / PROD)
+# Renombrar a "terraform.tfvars" para ejecutar localmente
+# ==============================================================================
+
+aws_region   = "us-east-1"
+project_name = "gestiona-erp"
+environment  = "staging"
+
+# Capacidad Fargate (0.5 vCPU y 1 GB RAM para mantener costo en ~$18/mes)
+fargate_cpu    = "512"
+fargate_memory = "1024"
+desired_count  = 1
+
+# Imágenes de ECR generadas en el pipeline de GitHub Actions
+frontend_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/gestiona-erp-frontend:v1.0.0"
+backend_image  = "123456789012.dkr.ecr.us-east-1.amazonaws.com/gestiona-erp-backend:v1.0.0"
+
+# Base de Datos RDS PostgreSQL (FinOps: db.t3.micro)
+db_instance_class = "db.t3.micro"
+db_name           = "gestionasv_erp"
+db_username       = "erp_admin"
+db_password       = "ReemplazarPorPasswordSegura123!"
