@@ -129,7 +129,8 @@ Pasos:
   - Hecho: `PromotionsPage` (ruta /sales/promotions), `OrderSettingsPanel` en Configuración de ventas
     (interruptor «Descontar existencias al confirmar el pedido»), aviso `auto_delivery` en `SaleDetail`.
     Políticas de descuento sin la casilla de vender bajo costo. vitest de ventas y listas: 92 en verde.
-- [ ] **Paso 5: documentación.** Manuales de listas de precios, descuentos, pedidos y entregas.
+- [x] **Paso 5: documentación.** Manuales de descuentos, cotizaciones, pedidos y entregas; `api.md` y
+  `database-schema.md` (sección 44).
 - [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
 
 
@@ -458,7 +459,7 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
 
 ## Estado actual
 
-- **Paso en curso**: PI paso 5 (documentación). Pasos 1 a 4 hechos. V4c ya está en develop (#57); V4d espera a PI. Tras cambiar el servicio DTE:
+- **Paso en curso**: PI paso 6 (verificación y PR). Pasos 1 a 5 hechos. V4c ya está en develop (#57); V4d espera a PI. Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
     svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la

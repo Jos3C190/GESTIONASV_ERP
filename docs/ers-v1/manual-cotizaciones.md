@@ -38,7 +38,8 @@ Un producto exento o no sujeto no lleva IVA, aunque la lista sea con IVA.
 1. En el borrador, **Emitir cotización**. Si pasa tu tope, el botón dice **Enviar a autorización**
    y la cotización queda **Por autorizar** con los motivos a la vista.
 2. Quien autoriza necesita el permiso de autorizar descuentos y un tope propio que cubra el
-   descuento. Si hay precios bajo el costo, su rol debe poder vender bajo costo.
+   descuento. Ninguna cotización se emite con precios bajo el costo del kardex, ni con
+   autorización: hay que corregir el precio o el descuento.
 3. Quien autoriza ve el costo y el margen de cada línea y puede:
    - **Autorizar**, con una nota opcional: la cotización queda Emitida.
    - **Devolver a borrador** con lo que debe corregirse. El vendedor lo ve en el borrador.

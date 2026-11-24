@@ -1,16 +1,16 @@
 # Manual de uso — pedidos de venta
 
 El pedido es el compromiso con el cliente: qué se le entrega, cuándo y dónde. Lleva los mismos
-precios, descuentos e impuestos que la cotización. Al confirmarlo, el sistema aparta las
-existencias en la sucursal.
+precios, descuentos e impuestos que la cotización. Al confirmarlo, el sistema descuenta las
+existencias de la bodega y deja la salida en el kardex (ver la sección 3).
 
 ## 1. Estados
 
 | Estado | Qué significa |
 |---|---|
 | Borrador | Se puede editar. Cada cambio recalcula precios, descuentos e impuestos. |
-| Por autorizar | Una línea o el descuento global pasa el tope de quien confirma, o queda bajo costo. |
-| Confirmado | Las existencias quedan apartadas. Desde aquí se registran entregas y devoluciones. |
+| Por autorizar | Una línea o el descuento global pasa el tope de quien confirma. |
+| Confirmado | Las existencias salieron de la bodega o quedan apartadas. Desde aquí se registran entregas y devoluciones. |
 | Cancelado | Se anuló con un motivo y liberó lo apartado. |
 
 El avance de entrega (pendiente, parcial o entregado) se ve junto al estado.
@@ -44,7 +44,17 @@ pedido. Si no alcanza, el aviso aparece en color de advertencia.
 2. Si el pedido pasa tu tope, queda **Por autorizar**. Quien autoriza ve el costo y el margen, y
    puede autorizar (se aparta y queda confirmado) o devolverlo a borrador con lo que debe
    corregirse.
-3. Apartar no mueve unidades: la entrega las saca de la bodega y así consume lo apartado.
+3. Nunca se confirma ni se autoriza una línea bajo el costo del kardex: el sistema usa el costo
+   vigente en ese momento.
+4. **Salida al confirmar.** Con la opción «Descontar existencias al confirmar el pedido» encendida
+   (lo está por omisión, en **Ventas → Configuración de ventas**), al confirmar o autorizar se crea
+   y confirma la entrega sola con las cajas o unidades completas que cubren lo vendido, primero
+   las que vencen antes. La salida aparece en el **Kardex** con el código de la entrega y el
+   pedido muestra un aviso con ese código.
+5. Si para completar una línea hay que abrir una caja (por ejemplo, se venden 2 unidades y solo
+   hay cajas de 6), esa parte queda apartada y el aviso lo dice: separa la unidad en bodega y
+   entrégala con **Preparar entrega** (ver [manual-entregas.md](manual-entregas.md)).
+6. Con la opción apagada, confirmar solo aparta y la entrega se prepara a mano.
 
 ## 4. Cancelar
 
@@ -66,7 +76,8 @@ crédito. Para facturar, ver [manual-facturacion.md](manual-facturacion.md).
 |---|---|
 | `sales:read` | Ver pedidos. |
 | `sales:manage` | Crear y editar borradores. |
-| `sales:confirm` | Confirmar y apartar. |
+| `sales:confirm` | Confirmar y apartar (y, con la opción encendida, entregar). |
+| `fiscal_settings:manage` | Encender o apagar la salida al confirmar. |
 | `sales:cancel` | Cancelar con motivo. |
 | `sales_quotations:convert` | Crear el pedido de una cotización aceptada. |
 | `sales_discounts:authorize` | Autorizar o devolver pedidos por autorizar. |
