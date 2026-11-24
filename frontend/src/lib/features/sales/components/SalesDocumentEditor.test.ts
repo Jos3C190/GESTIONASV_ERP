@@ -177,3 +177,59 @@ it('el pedido pide fecha y lugar de entrega y calcula con la vista previa del pe
   });
   expect(await screen.findByText(/Disponible en la sucursal: 0/)).toBeInTheDocument();
 });
+
+function previewWith(line: Record<string, unknown>) {
+  return {
+    document_type: '01',
+    costs_visible: false,
+    requires_authorization: false,
+    authorization_reasons: [],
+    total_taxed: '9.04',
+    total_exempt: '0.00',
+    total_not_subject: '0.00',
+    total_discount: '1.00',
+    vat: '1.04',
+    vat_perceived: '0.00',
+    vat_withheld: '0.00',
+    total: '9.04',
+    total_in_words: 'NUEVE 04/100 DÓLARES',
+    lines: [
+      {
+        list_price: '10.00000000',
+        unit_price: '10.00000000',
+        price_overridden: false,
+        discount_percent: '20.00',
+        suggested_discount_percent: '20.00',
+        suggested_discount_source: 'promotion',
+        margin_percent: null,
+        line_total: '9.04000000',
+        authorization_reasons: [],
+        ...line
+      }
+    ]
+  };
+}
+
+it('con promoción bloquea el descuento de la línea y el global', async () => {
+  salesApi.previewQuotation.mockResolvedValue(previewWith({}));
+  await fillDraft();
+  expect(
+    await screen.findByText('Hay productos en promoción: el documento no admite descuento global.')
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText('Descuento (%)')).toBeDisabled();
+  expect(screen.getByLabelText(/Descuento global/)).toBeDisabled();
+});
+
+it('una línea bajo el costo del kardex muestra el aviso y no deja guardar', async () => {
+  salesApi.previewQuotation.mockResolvedValue(
+    previewWith({
+      suggested_discount_source: 'none',
+      authorization_reasons: [
+        { code: 'below_cost', message: 'Queda por debajo del costo: no se puede vender así.' }
+      ]
+    })
+  );
+  await fillDraft();
+  expect(await screen.findByText(/Hay líneas por debajo del costo del kardex/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Guardar borrador' })).toBeDisabled();
+});

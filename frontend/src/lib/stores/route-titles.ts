@@ -24,6 +24,7 @@ const TITLES: Record<string, string> = {
   '/sales/fiscal-settings': 'Configuración fiscal',
   '/sales/price-lists': 'Listas de precios',
   '/sales/discount-policies': 'Topes de descuento',
+  '/sales/promotions': 'Promociones por sucursal',
   '/sales': 'Pedidos',
   '/purchase-requests': 'Solicitudes de compra',
   '/purchase-quotations': 'Cotizaciones de compra',

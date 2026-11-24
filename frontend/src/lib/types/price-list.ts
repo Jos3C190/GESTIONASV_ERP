@@ -111,7 +111,6 @@ export interface VolumeDiscountInput {
 export interface DiscountPolicy {
   max_line_discount_percent: string;
   max_global_discount_percent: string;
-  can_sell_below_cost: boolean;
 }
 
 export interface RolePolicy extends DiscountPolicy {

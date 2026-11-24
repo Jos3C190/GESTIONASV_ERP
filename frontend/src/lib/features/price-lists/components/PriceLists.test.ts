@@ -271,8 +271,7 @@ describe('V2c: margen, escalas y topes', () => {
         configured: false,
         updated_at: null,
         max_line_discount_percent: '0.00',
-        max_global_discount_percent: '0.00',
-        can_sell_below_cost: false
+        max_global_discount_percent: '0.00'
       }
     ]);
     discountPoliciesApi.save.mockResolvedValue({
@@ -281,8 +280,7 @@ describe('V2c: margen, escalas y topes', () => {
       configured: true,
       updated_at: '2026-11-16T15:00:00Z',
       max_line_discount_percent: '10.00',
-      max_global_discount_percent: '0.00',
-      can_sell_below_cost: false
+      max_global_discount_percent: '0.00'
     });
     render(DiscountPoliciesPage);
 
@@ -293,8 +291,7 @@ describe('V2c: margen, escalas y topes', () => {
     await fireEvent.click(save);
     expect(discountPoliciesApi.save).toHaveBeenCalledWith('role-1', {
       max_line_discount_percent: '10',
-      max_global_discount_percent: '0',
-      can_sell_below_cost: false
+      max_global_discount_percent: '0'
     });
     expect(
       await screen.findByText('Se guardaron los topes de GERENTE DE SUCURSAL.')

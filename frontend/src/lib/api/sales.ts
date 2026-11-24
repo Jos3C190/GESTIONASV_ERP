@@ -13,6 +13,7 @@ import type {
   SalesQuotation,
   QuotationDraftInput,
   QuotationSettings,
+  OrderSettings,
   OrderDelivery,
   OrderDraftInput
 } from '#lib/types/sales.ts';
@@ -78,6 +79,15 @@ export const salesApi = {
   },
   saveQuotationSettings(payload: QuotationSettings) {
     return apiFetch<QuotationSettings>('/sales/settings/quotations', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+  orderSettings() {
+    return apiFetch<OrderSettings>('/sales/settings/orders');
+  },
+  saveOrderSettings(payload: OrderSettings) {
+    return apiFetch<OrderSettings>('/sales/settings/orders', {
       method: 'PUT',
       body: JSON.stringify(payload)
     });

@@ -123,9 +123,12 @@ Pasos:
     `SalesDeliveryService.auto_deliver` desde el router de pedidos al confirmar o autorizar; la respuesta trae
     `auto_delivery`. Pruebas: `tests/unit/test_sales_engineer_rules.py`, `tests/e2e/test_sales_engineer_rules.py`
     y `tests/integration/test_sales_engineer_rules_migration.py`; e2e de ventas en verde.
-- [ ] **Paso 4: interfaz.** Pantalla Ventas → Promociones; en el editor, insignia de promoción y descuento
+- [x] **Paso 4: interfaz.** Pantalla Ventas → Promociones; en el editor, insignia de promoción y descuento
   bloqueado, y línea bajo costo marcada con el guardado deshabilitado; aviso de entrega en el pedido.
   Verificar: vitest.
+  - Hecho: `PromotionsPage` (ruta /sales/promotions), `OrderSettingsPanel` en Configuración de ventas
+    (interruptor «Descontar existencias al confirmar el pedido»), aviso `auto_delivery` en `SaleDetail`.
+    Políticas de descuento sin la casilla de vender bajo costo. vitest de ventas y listas: 92 en verde.
 - [ ] **Paso 5: documentación.** Manuales de listas de precios, descuentos, pedidos y entregas.
 - [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
 
@@ -455,7 +458,7 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
 
 ## Estado actual
 
-- **Paso en curso**: PI paso 4 (interfaz). Pasos 1 a 3 hechos. V4c ya está en develop (#57); V4d espera a PI. Tras cambiar el servicio DTE:
+- **Paso en curso**: PI paso 5 (documentación). Pasos 1 a 4 hechos. V4c ya está en develop (#57); V4d espera a PI. Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
     svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la

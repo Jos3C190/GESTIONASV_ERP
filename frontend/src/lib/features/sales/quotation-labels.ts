@@ -36,10 +36,11 @@ export const DOCUMENT_LABELS: Record<'01' | '03', string> = {
   '03': 'Crédito fiscal'
 };
 
-export const SOURCE_LABELS: Record<'none' | 'customer' | 'volume', string> = {
+export const SOURCE_LABELS: Record<'none' | 'customer' | 'volume' | 'promotion', string> = {
   none: 'Sin descuento sugerido',
   customer: 'Descuento del cliente',
-  volume: 'Descuento por volumen'
+  volume: 'Descuento por volumen',
+  promotion: 'Promoción de la sucursal'
 };
 
 export const TREATMENT_LABELS: Record<'taxed' | 'exempt' | 'not_subject', string> = {

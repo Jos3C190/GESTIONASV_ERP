@@ -62,6 +62,14 @@
   let error = $state<string | null>(null);
   let original = $state<SalesQuotation | Sale | null>(null);
   let preview = $state<SalesQuotation | Sale | null>(null);
+  const hasPromotion = $derived(
+    preview?.lines.some((line) => line.suggested_discount_source === 'promotion') ?? false
+  );
+  const belowCost = $derived(
+    preview?.lines.some((line) =>
+      line.authorization_reasons.some((reason) => reason.code === 'below_cost')
+    ) ?? false
+  );
   let previewError = $state<string | null>(null);
   let calculating = $state(false);
   let generation = 0;
@@ -437,13 +445,19 @@
         <label class="text-sm text-foreground-muted">
           Descuento global (%)
           <input
-            class="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground"
+            class="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground disabled:opacity-60"
             type="number"
             min="0"
             max="100"
             step="any"
+            disabled={hasPromotion && Number(globalDiscount || 0) === 0}
             bind:value={globalDiscount}
           />
+          {#if hasPromotion}
+            <span class="mt-1 block text-xs text-foreground-muted"
+              >Hay productos en promoción: el documento no admite descuento global.</span
+            >
+          {/if}
         </label>
         <label class="text-sm text-foreground-muted">
           Notas para el cliente (opcional)
@@ -538,7 +552,7 @@
                 <label class="text-xs font-medium text-foreground-muted">
                   Descuento (%)
                   <input
-                    class="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                    class="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground disabled:opacity-60"
                     type="number"
                     min="0"
                     max="100"
@@ -546,6 +560,10 @@
                     placeholder={result
                       ? Number(result.suggested_discount_percent).toFixed(2)
                       : '0'}
+                    disabled={result?.suggested_discount_source === 'promotion'}
+                    title={result?.suggested_discount_source === 'promotion'
+                      ? 'El producto tiene promoción en esta sucursal: el descuento no se cambia.'
+                      : undefined}
                     bind:value={line.discount}
                   />
                 </label>
@@ -603,7 +621,11 @@
                   >
                 </div>
                 {#each result.authorization_reasons as reason (reason.code)}
-                  <p class="text-xs text-warning">{reason.message}</p>
+                  <p
+                    class={`text-xs ${reason.code === 'below_cost' ? 'font-medium text-danger' : 'text-warning'}`}
+                  >
+                    {reason.message}
+                  </p>
                 {/each}
               {/if}
             </div>
@@ -623,6 +645,15 @@
             {previewError}
           </div>
         {:else if preview}
+          {#if belowCost}
+            <div
+              class="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+              role="alert"
+            >
+              Hay líneas por debajo del costo del kardex. Sube el precio o baja el descuento: nunca
+              se vende bajo costo.
+            </div>
+          {/if}
           {#if preview.requires_authorization}
             <div
               class="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning"
@@ -696,7 +727,7 @@
         </a>
         <button
           class="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-          disabled={saving || customers.length === 0 || catalog.length === 0}
+          disabled={saving || belowCost || customers.length === 0 || catalog.length === 0}
         >
           {saving ? 'Guardando…' : 'Guardar borrador'}
         </button>
