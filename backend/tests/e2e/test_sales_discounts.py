@@ -244,6 +244,8 @@ async def test_volume_scales_customer_discount_and_role_limits(e2e_client: Async
     )
     data = below_cost.json()
     assert set(data["lines"][0]["reasons"]) == {"discount_above_limit", "below_cost"}
+    # Bajo costo ya no se autoriza: se marca como bloqueo.
+    assert data["lines"][0]["below_cost"] is True
     assert data["global_reasons"] == ["global_discount_above_limit"]
     assert data["requires_authorization"] is True
 
@@ -253,7 +255,7 @@ async def test_volume_scales_customer_discount_and_role_limits(e2e_client: Async
     line = admin_view.json()["lines"][0]
     assert line["cost"] == "7.00000000"
     assert line["margin_percent"] == "30.00"
-    assert admin_view.json()["policy"]["can_sell_below_cost"] is True
+    assert "can_sell_below_cost" not in admin_view.json()["policy"]
 
     scale_id = listed[0]["id"]
     ended = await e2e_client.delete(f"{BASE}/volume-discounts/{scale_id}", headers=headers)

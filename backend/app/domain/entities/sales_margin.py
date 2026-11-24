@@ -3,6 +3,9 @@
 El margen se mide sobre el precio sin IVA: (precio - costo) / precio. El costo es el costo
 promedio de inventario, que ya incluye el retaceo. Un precio de una lista con IVA se lleva a
 sin IVA antes de comparar.
+
+Nunca se vende por debajo del costo (pedido del ingeniero, 24/11/2026): no es un motivo de
+autorización sino un bloqueo, sin excepción por rol.
 """
 
 from __future__ import annotations
@@ -103,6 +106,8 @@ class DiscountSource(StrEnum):
     NONE = "none"
     CUSTOMER = "customer"
     VOLUME = "volume"
+    PROMOTION = "promotion"
+    """Promoción de la sucursal: reemplaza a los demás descuentos y el vendedor no la cambia."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,11 +138,10 @@ class DiscountPolicy:
 
     max_line_percent: Decimal
     max_global_percent: Decimal
-    can_sell_below_cost: bool
 
 
-UNLIMITED = DiscountPolicy(HUNDRED, HUNDRED, True)
-NONE_ALLOWED = DiscountPolicy(ZERO, ZERO, False)
+UNLIMITED = DiscountPolicy(HUNDRED, HUNDRED)
+NONE_ALLOWED = DiscountPolicy(ZERO, ZERO)
 
 
 def require_policy(policy: DiscountPolicy) -> None:
@@ -156,19 +160,19 @@ def effective_policy(policies: list[DiscountPolicy], is_superuser: bool) -> Disc
     return DiscountPolicy(
         max_line_percent=max(p.max_line_percent for p in policies),
         max_global_percent=max(p.max_global_percent for p in policies),
-        can_sell_below_cost=any(p.can_sell_below_cost for p in policies),
     )
 
 
 class AuthorizationReason(StrEnum):
     DISCOUNT_ABOVE_LIMIT = "discount_above_limit"
     BELOW_COST = "below_cost"
+    """Ya no se genera: vender bajo costo se bloquea. Queda para leer documentos anteriores."""
     GLOBAL_DISCOUNT_ABOVE_LIMIT = "global_discount_above_limit"
 
 
 REASON_TEXT: dict[AuthorizationReason, str] = {
     AuthorizationReason.DISCOUNT_ABOVE_LIMIT: "El descuento supera el tope de tu rol.",
-    AuthorizationReason.BELOW_COST: "El precio queda por debajo del costo.",
+    AuthorizationReason.BELOW_COST: "Queda por debajo del costo: no se puede vender así.",
     AuthorizationReason.GLOBAL_DISCOUNT_ABOVE_LIMIT: "El descuento global supera el tope de tu rol.",
 }
 
@@ -182,10 +186,16 @@ class LineEvaluation:
     cost: Decimal | None
     margin_percent: Decimal | None
     reasons: tuple[AuthorizationReason, ...]
+    below_cost: bool = False
+    """El precio neto sin IVA queda por debajo del costo: no se puede vender así."""
 
     @property
     def requires_authorization(self) -> bool:
         return bool(self.reasons)
+
+
+def is_below_cost(net_without_vat: Decimal, cost: Decimal | None) -> bool:
+    return cost is not None and net_without_vat < cost
 
 
 def evaluate_line(
@@ -201,12 +211,6 @@ def evaluate_line(
     reasons: list[AuthorizationReason] = []
     if discount_percent > policy.max_line_percent:
         reasons.append(AuthorizationReason.DISCOUNT_ABOVE_LIMIT)
-    if (
-        cost is not None
-        and without_vat(net, includes_vat) < cost
-        and not policy.can_sell_below_cost
-    ):
-        reasons.append(AuthorizationReason.BELOW_COST)
     return LineEvaluation(
         list_price=list_price,
         discount_percent=discount_percent,
@@ -214,6 +218,7 @@ def evaluate_line(
         cost=cost,
         margin_percent=margin_percent(net, includes_vat, cost),
         reasons=tuple(reasons),
+        below_cost=is_below_cost(without_vat(net, includes_vat), cost),
     )
 
 
@@ -257,3 +262,71 @@ def plan_scale_change(
     if covering is None:
         return None, None
     return covering.id, valid_from - timedelta(days=1)
+
+
+# --- promociones por sucursal (pedido del ingeniero, 24/11/2026) ------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class BranchPromotion:
+    """Porcentaje de descuento de un producto en una sucursal, con vigencia."""
+
+    id: uuid.UUID
+    company_id: uuid.UUID
+    branch_id: uuid.UUID
+    product_id: int
+    discount_percent: Decimal
+    valid_from: date
+    valid_to: date | None
+    notes: str | None = None
+    ended: bool = False
+    branch_name: str | None = None
+    product_name: str | None = None
+    product_sku: str | None = None
+
+    def covers(self, day: date) -> bool:
+        return (
+            not self.ended
+            and self.valid_from <= day
+            and (self.valid_to is None or day <= self.valid_to)
+        )
+
+    def overlaps(self, valid_from: date, valid_to: date | None) -> bool:
+        if self.ended:
+            return False
+        starts_before_other_ends = valid_to is None or self.valid_from <= valid_to
+        ends_after_other_starts = self.valid_to is None or valid_from <= self.valid_to
+        return starts_before_other_ends and ends_after_other_starts
+
+
+def require_promotion(
+    discount_percent: Decimal, valid_from: date, valid_to: date | None, today: date
+) -> None:
+    if not ZERO < discount_percent < HUNDRED:
+        raise _rule(
+            "El descuento de la promoción va de más de 0 % a menos de 100 %.",
+            "sales_promotion_percent_invalid",
+        )
+    if valid_from < today:
+        raise _rule(
+            "Una promoción rige desde hoy o desde una fecha futura.", "sales_promotion_backdated"
+        )
+    if valid_to is not None and valid_to < valid_from:
+        raise _rule(
+            "La promoción no puede terminar antes de empezar.", "sales_promotion_validity_invalid"
+        )
+
+
+def require_no_overlap(
+    existing: list[BranchPromotion], valid_from: date, valid_to: date | None
+) -> None:
+    """Un producto tiene a lo sumo una promoción vigente por sucursal en cada día."""
+
+    clash = next((p for p in existing if p.overlaps(valid_from, valid_to)), None)
+    if clash is not None:
+        until = f" hasta el {clash.valid_to:%d/%m/%Y}" if clash.valid_to else " sin fecha de fin"
+        raise ConflictError(
+            f"Ese producto ya tiene una promoción del {clash.discount_percent.normalize()} % en esa "
+            f"sucursal desde el {clash.valid_from:%d/%m/%Y}{until}. Termínala antes de crear otra.",
+            code="sales_promotion_overlap",
+        )

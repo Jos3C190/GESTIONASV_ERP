@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.api.v1.schemas.sales_quotation import (
     AuthorizationReasonOut,
@@ -71,6 +71,23 @@ class OrderLineOut(QuotationLineOut):
     autorizar)."""
 
 
+class OrderSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    auto_deliver_on_confirm: bool
+    """Al confirmar el pedido se descuenta la existencia y la salida queda en el kardex."""
+
+
+class AutoDeliveryOut(BaseModel):
+    """Salida automática al confirmar el pedido (pedido del ingeniero, 24/11/2026)."""
+
+    delivery_id: UUID | None = None
+    delivery_code: str | None = None
+    pending_products: list[str] = Field(default_factory=list)
+    """Productos que no se cubrieron con unidades completas: quedan apartados."""
+    message: str | None = None
+
+
 class OrderOut(BaseModel):
     id: UUID
     company_id: UUID
@@ -121,6 +138,7 @@ class OrderOut(BaseModel):
     cancelled_at: datetime | None
     cancellation_reason: str | None
     lines: list[OrderLineOut]
+    auto_delivery: AutoDeliveryOut | None = None
     created_at: datetime | None
     updated_at: datetime | None
 

@@ -217,7 +217,7 @@ async def test_a_rejected_document_does_not_block_invoicing_again(e2e_client: As
 
 async def test_invalidating_needs_its_permission(e2e_client: AsyncClient) -> None:
     admin, _order, _point, issued = await _issued(e2e_client)
-    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2", False)
+    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2")
     denied = await e2e_client.post(
         f"{DOCUMENTS}/{issued['id']}/invalidate",
         json={"reason": "Sin permiso para esto", "requester": REQUESTER},

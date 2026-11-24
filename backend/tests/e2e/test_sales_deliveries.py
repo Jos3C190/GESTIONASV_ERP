@@ -16,6 +16,29 @@ from tests.e2e.sales_quote_flow import accept_quote, enable_invoice, order_from_
 
 pytestmark = pytest.mark.e2e
 
+
+@pytest.fixture(autouse=True)
+async def manual_deliveries():
+    """Estas pruebas recorren «Preparar entrega»: apagan la salida automática al confirmar."""
+
+    from app.infrastructure.db.session import async_session_factory
+    from app.infrastructure.models.sales_pricing import SalesSettingsModel
+
+    async def set_auto(enabled: bool) -> None:
+        async with async_session_factory() as session:
+            company_id = await get_test_company_id(session=session)
+            row = await session.get(SalesSettingsModel, company_id)
+            if row is None:
+                row = SalesSettingsModel(company_id=company_id)
+                session.add(row)
+            row.auto_deliver_on_confirm = enabled
+            await session.commit()
+
+    await set_auto(False)
+    yield
+    await set_auto(True)
+
+
 PASSWORD = "Strong!Passw0rd2026"
 
 

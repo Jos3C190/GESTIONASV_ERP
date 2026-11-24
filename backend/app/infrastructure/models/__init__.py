@@ -191,6 +191,7 @@ from app.infrastructure.models.sales_fiscal import (
     SalesFiscalNoteLineModel,
 )
 from app.infrastructure.models.sales_pricing import (
+    SalesBranchPromotionModel,
     SalesDiscountPolicyModel,
     SalesPriceListCategoryMarginModel,
     SalesPriceListItemModel,
@@ -349,6 +350,7 @@ __all__: list[str] = [
     "RolePermission",
     "SaleLineModel",
     "SaleModel",
+    "SalesBranchPromotionModel",
     "SalesCustomerDeliveryAddressModel",
     "SalesCustomerModel",
     "SalesDeliveryAllocationModel",
