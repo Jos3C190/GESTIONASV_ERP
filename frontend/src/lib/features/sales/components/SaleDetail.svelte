@@ -217,7 +217,7 @@
         <p class="text-xs text-foreground-muted">
           {sale.status === 'confirmed'
             ? 'Lo pendiente queda apartado en la sucursal.'
-            : 'Se aparta al confirmar el pedido.'}
+            : 'Sale de la bodega o se aparta al confirmar el pedido.'}
         </p>
       </div>
       <div class="rounded-xl border border-border bg-surface p-4">

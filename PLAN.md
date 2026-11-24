@@ -132,6 +132,13 @@ Pasos:
 - [x] **Paso 5: documentación.** Manuales de descuentos, cotizaciones, pedidos y entregas; `api.md` y
   `database-schema.md` (sección 44).
 - [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
+  - QA en el navegador (24/11/2026): promoción creada y terminada en la Matriz; el editor fija el 10 %
+    y bloquea el descuento global; precio manual bajo costo muestra el aviso y deshabilita guardar;
+    confirmar un pedido de 1 kg de café (unidad de 120 kg en bodega) deja el aviso de separar la unidad.
+    Ajustes: pestaña «Cotizaciones y pedidos», textos de apartado/salida y botón sin salto de línea.
+  - Batería: backend 2044 pasan; `test_inventory_final_acceptance` apartaba y entregaba a mano, ahora apaga
+    la salida automática durante su confirmación; `test_sales_discounts` falló una vez por un loop de asyncio
+    y pasa al repetirla. Frontend completo (vitest, check, lint, build) en verde.
 
 
 ### V4a — Contingencia por empresa y establecimiento (rama `feature/ventas-v4a-contingencia`)

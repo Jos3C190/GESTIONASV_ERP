@@ -19,7 +19,7 @@
     { id: 'hacienda', label: 'Hacienda' },
     { id: 'correo', label: 'Correo' },
     { id: 'unidades', label: 'Unidades' },
-    { id: 'cotizaciones', label: 'Cotizaciones' }
+    { id: 'cotizaciones', label: 'Cotizaciones y pedidos' }
   ];
 
   let active = $state('emisor');

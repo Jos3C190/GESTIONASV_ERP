@@ -318,7 +318,7 @@
       El precio sale de la lista del cliente. Los descuentos, impuestos y totales los calcula el
       servidor mientras editas.
       {isOrder
-        ? 'Las existencias se apartan al confirmar el pedido.'
+        ? 'Al confirmar el pedido, las existencias salen de la bodega o quedan apartadas.'
         : 'Cotizar no reserva existencias.'}
     </p>
   </header>

@@ -47,7 +47,7 @@ pedido. Si no alcanza, el aviso aparece en color de advertencia.
 3. Nunca se confirma ni se autoriza una línea bajo el costo del kardex: el sistema usa el costo
    vigente en ese momento.
 4. **Salida al confirmar.** Con la opción «Descontar existencias al confirmar el pedido» encendida
-   (lo está por omisión, en **Ventas → Configuración de ventas**), al confirmar o autorizar se crea
+   (lo está por omisión, en **Ventas → Configuración fiscal → Cotizaciones y pedidos**), al confirmar o autorizar se crea
    y confirma la entrega sola con las cajas o unidades completas que cubren lo vendido, primero
    las que vencen antes. La salida aparece en el **Kardex** con el código de la entrega y el
    pedido muestra un aviso con ese código.

@@ -232,11 +232,25 @@ async def _sell_all(client, ctx, units):
     assert confirmed.status_code == 200, confirmed.text
     converted = await order_from_quote(client, ctx.admin, quote.json()["id"], "final-convert")
     assert converted.status_code == 201, converted.text
-    sale = await client.post(
-        f"/api/v1/sales/{converted.json()['id']}/confirm",
+    # Este recorrido aparta al confirmar y entrega a mano: apaga la salida automática.
+    manual = await client.put(
+        "/api/v1/sales/settings/orders",
         headers=ctx.admin,
-        json={"expected_version": converted.json()["version"]},
+        json={"auto_deliver_on_confirm": False},
     )
+    assert manual.status_code == 200, manual.text
+    try:
+        sale = await client.post(
+            f"/api/v1/sales/{converted.json()['id']}/confirm",
+            headers=ctx.admin,
+            json={"expected_version": converted.json()["version"]},
+        )
+    finally:
+        await client.put(
+            "/api/v1/sales/settings/orders",
+            headers=ctx.admin,
+            json={"auto_deliver_on_confirm": True},
+        )
     assert sale.status_code == 200, sale.text
     assert await _balances(ctx) == (30, 30, 405)
     delivery = await client.post(

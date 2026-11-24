@@ -145,7 +145,7 @@
       </p>
     </div>
     {#if canManage && !formOpen}
-      <Button onclick={() => void openForm()}>Nueva promoción</Button>
+      <div class="shrink-0"><Button onclick={() => void openForm()}>Nueva promoción</Button></div>
     {/if}
   </header>
 
