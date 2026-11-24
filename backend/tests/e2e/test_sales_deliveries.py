@@ -18,8 +18,12 @@ pytestmark = pytest.mark.e2e
 
 
 @pytest.fixture(autouse=True)
-async def manual_deliveries():
-    """Estas pruebas recorren «Preparar entrega»: apagan la salida automática al confirmar."""
+async def manual_deliveries(e2e_client):  # noqa: ANN001, ARG001
+    """Estas pruebas recorren «Preparar entrega»: apagan la salida automática al confirmar.
+
+    Depende de ``e2e_client`` para correr sobre la base ya preparada y cerrar antes de que el
+    cliente libere la pool: así ninguna conexión cruza al loop de la prueba siguiente.
+    """
 
     from app.infrastructure.db.session import async_session_factory
     from app.infrastructure.models.sales_pricing import SalesSettingsModel
