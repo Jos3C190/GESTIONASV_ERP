@@ -31,7 +31,11 @@ from app.infrastructure.db.base import Base
 
 
 class SalesFiscalDocumentModel(Base):
-    """Copia del ERP de cada factura o crédito fiscal emitido por el servicio DTE."""
+    """Copia del ERP de cada documento emitido por el servicio DTE.
+
+    Factura, crédito fiscal y notas pertenecen a un pedido; la nota de remisión (04), a un
+    traslado (V4d).
+    """
 
     __tablename__ = "sales_fiscal_documents"
 
@@ -42,7 +46,8 @@ class SalesFiscalDocumentModel(Base):
         PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
     )
     branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    sale_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    sale_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    transfer_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     establishment_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     point_of_sale_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     document_type: Mapped[str] = mapped_column(String(2), nullable=False)
@@ -96,6 +101,12 @@ class SalesFiscalDocumentModel(Base):
             name="fk_sales_fiscal_documents_sale",
         ),
         ForeignKeyConstraint(
+            ["company_id", "transfer_id"],
+            ["inventory_transfers.company_id", "inventory_transfers.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_documents_transfer",
+        ),
+        ForeignKeyConstraint(
             ["branch_id", "company_id"],
             ["branches.id", "branches.company_id"],
             ondelete="RESTRICT",
@@ -120,7 +131,12 @@ class SalesFiscalDocumentModel(Base):
             name="fk_sales_fiscal_documents_creator",
         ),
         CheckConstraint(
-            "document_type IN ('01','03','05','06')", name="ck_sales_fiscal_documents_document"
+            "document_type IN ('01','03','04','05','06')", name="ck_sales_fiscal_documents_document"
+        ),
+        CheckConstraint(
+            "(document_type = '04') = (transfer_id IS NOT NULL) "
+            "AND (document_type = '04') = (sale_id IS NULL)",
+            name="ck_sales_fiscal_documents_origin",
         ),
         CheckConstraint(
             "(document_type IN ('05','06')) = (related_document_id IS NOT NULL) "

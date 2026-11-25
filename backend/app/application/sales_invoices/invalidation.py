@@ -14,12 +14,15 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
+from app.application.sales_invoices.remission import TransferRemissionUseCases
 from app.application.sales_invoices.use_cases import SalesInvoiceUseCases
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.domain.entities.fiscal_contingency import ContingencyResponsible
 from app.domain.entities.sales_fiscal_invalidation import (
+    REMISSION_NOTE,
     FiscalInvalidation,
     InvalidationKind,
+    require_annullable,
     require_correctable,
     require_invalidatable,
     validate_reason,
@@ -64,7 +67,9 @@ class FiscalInvalidationUseCases:
         responsibles: ContingencyResponsibleRepository,
         orders: SalesOrderRepository,
         dte: DteService | None,
+        remissions: TransferRemissionUseCases | None = None,
     ) -> None:
+        self._remissions = remissions
         self._documents = documents
         self._invalidations = invalidations
         self._invoices = invoices
@@ -142,6 +147,12 @@ class FiscalInvalidationUseCases:
             pending_invalidation=pending is not None,
         )
         await self._require_without_notes(document)
+        require_annullable(document.document_type)
+        if cancel_order and document.sale_id is None:
+            raise BusinessRuleError(
+                "La nota de remisión pertenece a un traslado: anularla no cancela ningún pedido.",
+                code="sales_invoice_not_an_order_document",
+            )
         if cancel_order and document.document_type in NOTE_TYPES:
             raise BusinessRuleError(
                 "Anular una nota no cancela el pedido: el pedido sigue con su crédito fiscal.",
@@ -153,7 +164,7 @@ class FiscalInvalidationUseCases:
         )
         responsible = await self._responsible(company_id)
         if cancel_order:
-            order = await self._orders.get(company_id, document.sale_id, lock=True)
+            order = await self._orders.get(company_id, document.order_id(), lock=True)
             if order is None:
                 raise NotFoundError("El pedido no existe.", code="sales_order_not_found")
             require_cancellable(order.status, order.delivered_any)
@@ -196,7 +207,15 @@ class FiscalInvalidationUseCases:
         )
         responsible = await self._responsible(company_id)
         await self._require_in_time(original)
-        replacement = await self._invoices.prepare_replacement(original, actor_id)
+        if original.document_type == REMISSION_NOTE:
+            if self._remissions is None:
+                raise BusinessRuleError(
+                    "La corrección de notas de remisión no está disponible.",
+                    code="transfer_remission_disabled",
+                )
+            replacement = await self._remissions.prepare_replacement(original, actor_id)
+        else:
+            replacement = await self._invoices.prepare_replacement(original, actor_id)
         # El original deja de ser el documento activo del pedido antes de crear el reemplazo.
         original.superseded_by_id = replacement.id
         await self._documents.save(original)

@@ -21,6 +21,11 @@ from app.core.exceptions import BusinessRuleError
 from app.domain.entities.fiscal_contingency import ContingencyResponsible, validate_responsible
 from app.domain.entities.sales_fiscal_document import INVOICEABLE_DOCUMENTS, FiscalDocumentStatus
 
+#: CAT-002 04: nota de remisión (V4d).
+REMISSION_NOTE = "04"
+#: Se corrigen con un documento de reemplazo (invalidación tipo 1).
+CORRECTABLE_DOCUMENTS = (*INVOICEABLE_DOCUMENTS, REMISSION_NOTE)
+
 MIN_REASON = 5
 MAX_REASON = 200
 
@@ -98,10 +103,21 @@ def require_correctable(
     pending_invalidation: bool,
 ) -> None:
     require_invalidatable(status, superseded=superseded, pending_invalidation=pending_invalidation)
-    if document_type not in INVOICEABLE_DOCUMENTS:
+    if document_type not in CORRECTABLE_DOCUMENTS:
         raise _rule(
-            "Solo se corrige una factura o un comprobante de crédito fiscal.",
+            "Solo se corrige una factura, un comprobante de crédito fiscal o una nota de remisión.",
             "sales_invoice_not_correctable",
+        )
+
+
+def require_annullable(document_type: str) -> None:
+    """La nota de remisión no se anula (tipo 2): el traslado ya salió y no se cancela (V4d)."""
+
+    if document_type == REMISSION_NOTE:
+        raise _rule(
+            "La nota de remisión no se anula: ampara bienes que ya salieron. Si tiene un error, "
+            "corrígela con una nota de reemplazo.",
+            "transfer_remission_not_annullable",
         )
 
 

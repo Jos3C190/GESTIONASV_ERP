@@ -13,7 +13,8 @@ import type {
   InvalidationOverview,
   NotesOverview,
   InvoiceOptions,
-  Person
+  Person,
+  TransferRemission
 } from '#lib/types/sales-invoices.ts';
 
 export function fiscalDocumentsPath(filters: FiscalDocumentFilters = {}): string {
@@ -52,6 +53,15 @@ export const salesInvoicesApi = {
   },
   get(id: string) {
     return apiFetch<FiscalDocument>(`/sales/fiscal-documents/${id}`);
+  },
+  /** Nota de remisión del traslado (V4d). */
+  transferRemission(transferId: string) {
+    return apiFetch<TransferRemission>(`/inventory/transfers/${transferId}/remission`);
+  },
+  reissueTransferRemission(transferId: string) {
+    return apiFetch<FiscalDocument>(`/inventory/transfers/${transferId}/remission/reissue`, {
+      method: 'POST'
+    });
   },
   retry(id: string) {
     return apiFetch<FiscalDocument>(`/sales/fiscal-documents/${id}/retry`, { method: 'POST' });

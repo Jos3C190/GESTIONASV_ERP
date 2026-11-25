@@ -9,6 +9,7 @@ import type {
 export const FISCAL_DOCUMENT_LABELS: Record<FiscalDocumentType, string> = {
   '01': 'Factura',
   '03': 'Crédito fiscal',
+  '04': 'Nota de remisión',
   '05': 'Nota de crédito',
   '06': 'Nota de débito'
 };
@@ -26,6 +27,11 @@ export const NOTE_LINE_KIND_LABELS: Record<string, string> = {
 };
 
 /** Una nota que se puede anular (tipo 2) pero no corregir. */
+/** La nota de remisión pertenece a un traslado: no tiene pedido, cliente ni correo (V4d). */
+export function isRemission(document: Pick<FiscalDocument, 'document_type'>): boolean {
+  return document.document_type === '04';
+}
+
 export function isNote(document: Pick<FiscalDocument, 'document_type'>): boolean {
   return document.document_type === '05' || document.document_type === '06';
 }

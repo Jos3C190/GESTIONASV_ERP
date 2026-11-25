@@ -1,7 +1,7 @@
 /** Documento fiscal del pedido (bloque V3b). */
 
-/** 01 factura, 03 crédito fiscal, 05 nota de crédito, 06 nota de débito. */
-export type FiscalDocumentType = '01' | '03' | '05' | '06';
+/** 01 factura, 03 crédito fiscal, 04 nota de remisión, 05 nota de crédito, 06 nota de débito. */
+export type FiscalDocumentType = '01' | '03' | '04' | '05' | '06';
 
 export type FiscalNature = 'taxed' | 'exempt' | 'not_subject';
 
@@ -69,7 +69,10 @@ export interface FiscalDocument {
   id: string;
   company_id: string;
   branch_id: string;
-  sale_id: string;
+  /** El pedido; vacío en la nota de remisión (04), que pertenece a un traslado. */
+  sale_id: string | null;
+  transfer_id?: string | null;
+  transfer_code?: string | null;
   sale_code: string | null;
   customer_name: string | null;
   customer_email: string | null;
@@ -206,4 +209,12 @@ export interface InvalidationOverview {
 export interface Correction {
   replacement: FiscalDocument;
   invalidation: FiscalInvalidation;
+}
+
+/** Nota de remisión de un traslado (V4d). */
+export interface TransferRemission {
+  /** Si la empresa emite nota de remisión al despachar. */
+  enabled: boolean;
+  /** La nota vigente o, si no hay, la última. */
+  document: FiscalDocument | null;
 }

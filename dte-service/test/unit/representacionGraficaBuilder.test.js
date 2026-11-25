@@ -10,7 +10,7 @@ const {
   construirFacturaSujetoExcluido,
   construirComprobanteDonacion,
 } = require('../../src/services/dteBuilderOtros');
-const { construirNotaCredito } = require('../../src/services/dteBuilderNotas');
+const { construirNotaCredito, construirNotaRemision } = require('../../src/services/dteBuilderNotas');
 const correlativoStore = require('../../src/services/correlativoStore');
 const { textoPorPagina, textoCompleto, coloresUsados, contarPaginas, contarApariciones } = require('./_pdfTexto');
 
@@ -350,6 +350,21 @@ describe('representacionGraficaBuilder.js', () => {
     assert.match(textoDonacion, /Información del donante/);
     assert.match(textoDonacion, /VALOR TOTAL:/);
     assert.match(textoDonacion, /^Efectivo$/m);
+  });
+
+  test('la Nota de Remisión muestra el título de los bienes y las observaciones del transporte', async () => {
+    const { dte } = construirNotaRemision({
+      receptor: { tipoDocumento: '36', numDocumento: '06141804941099', nrc: '7654321', nombre: 'Empresa Propia S.A.', codActividad: '62010', descActividad: 'Programación informática', direccion, telefono: '22223333', correo: 'c@e.com' },
+      items: [{ descripcion: 'Harina 50 lb', cantidad: 3, precioUni: 20, ventaGravada: 60 }],
+      bienTitulo: '04',
+      observaciones: 'Vehículo P123-456, conductor Ana Pérez',
+    });
+    const texto = textoCompleto(await renderizar(dte));
+    assert.match(texto, /^NOTA DE REMISIÓN$/m);
+    assert.match(texto, /Título de los bienes:/);
+    assert.match(texto, /Traslado/);
+    assert.doesNotMatch(texto, /Condición de la Operación:/);
+    assert.match(texto, /Vehículo P123-456, conductor Ana Pérez/);
   });
 
   test('la Nota de Crédito muestra sus CCF relacionados con fecha y el documento que ajusta cada línea', async () => {

@@ -33,6 +33,7 @@ from app.domain.ports.dte_service import (
 _PATHS = {
     "01": "/api/dte/v2/factura",
     "03": "/api/dte/v2/ccf",
+    "04": "/api/dte/v2/nota-remision",
     "05": "/api/dte/v2/nota-credito",
     "06": "/api/dte/v2/nota-debito",
 }

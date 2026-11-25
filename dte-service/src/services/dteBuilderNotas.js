@@ -1,5 +1,3 @@
-const { generarCodigoGeneracion } = require('../utils/codigoGeneracion');
-const { generarNumeroControl } = require('../utils/numeroControl');
 const { fechaHoraSV } = require('../utils/fechaHoraSV');
 const { numeroALetras } = require('../utils/numeroALetras');
 const {
@@ -17,68 +15,8 @@ const {
   TRIBUTO_IVA,
 } = require('./dteBuilder');
 const { validateIssuerV2 } = require('./issuerContractV2');
-const { TIPO_DTE, MODELO_FACTURACION, TIPO_TRANSMISION, CONDICION_OPERACION, TIPO_DOCUMENTO_IDENTIFICACION } = require('../config/catalogs');
+const { TIPO_DTE, CONDICION_OPERACION, TIPO_DOCUMENTO_IDENTIFICACION } = require('../config/catalogs');
 const config = require('../config');
-
-function _construirIdentificacion({ tipoDte, version, incluirFusion = false }) {
-  const codigoGeneracion = generarCodigoGeneracion();
-  const { fecha, hora, anio } = fechaHoraSV();
-  const numeroControl = generarNumeroControl({
-    tipoDte,
-    tipoEstablecimiento: config.emisor.tipoEstablecimiento,
-    codEstablecimientoMH: config.emisor.codEstablecimientoMH,
-    codPuntoVentaMH: config.emisor.codPuntoVentaMH,
-    anio,
-  });
-
-  const identificacion = {
-    version,
-    ambiente: config.ambiente,
-    tipoDte,
-    numeroControl,
-    codigoGeneracion,
-    tipoModelo: MODELO_FACTURACION.PREVIO,
-    tipoOperacion: TIPO_TRANSMISION.NORMAL,
-    tipoContingencia: null,
-    motivoContin: null,
-    fecEmi: fecha,
-    horEmi: hora,
-    tipoMoneda: 'USD',
-  };
-  // NC, ND y CL exigen además el campo "fusion" (nullable) dentro de identificacion.
-  if (incluirFusion) identificacion.fusion = null;
-
-  return { identificacion, codigoGeneracion, numeroControl };
-}
-
-function _construirEmisorCompleto(extra = {}) {
-  return {
-    nit: config.emisor.nit,
-    nrc: config.emisor.nrc,
-    nombre: config.emisor.nombre,
-    codActividad: config.emisor.codActividad,
-    descActividad: config.emisor.descActividad,
-    nombreComercial: config.emisor.nombreComercial,
-    direccion: {
-      departamento: config.emisor.direccion.departamento,
-      municipio: config.emisor.direccion.municipio,
-      distrito: config.emisor.direccion.distrito,
-      complemento: config.emisor.direccion.complemento,
-    },
-    telefono: config.emisor.telefono,
-    correo: config.emisor.correo,
-    ...extra,
-  };
-}
-
-/** Variante con codEstable/codPuntoVenta, para los tipos de DTE cuyo schema sí los define (NR, CR, CL, FEX, FSE, CD, DCL). */
-function _construirEmisorConEstablecimiento(extra = {}) {
-  return _construirEmisorCompleto({
-    codEstable: config.emisor.codEstableInterno,
-    codPuntoVenta: config.emisor.codPuntoVentaInterno,
-    ...extra,
-  });
-}
 
 const MAX_DOCUMENTOS_RELACIONADOS = 50;
 // CAT-007, tipo de generación del documento relacionado.
@@ -410,86 +348,145 @@ function construirNotaDebito(solicitud, opciones = {}) {
   return _construirNota(TIPO_DTE.NOTA_DEBITO, solicitud, opciones);
 }
 
+// CAT-025: título a que se remiten los bienes.
+const TITULOS_BIENES = new Set(['01', '02', '03', '04', '05']);
+
+function _validarReceptorRemision(receptor) {
+  if (!receptor || typeof receptor !== 'object') {
+    throw errorDeSolicitud('Una Nota de Remisión requiere el receptor de los bienes');
+  }
+  if (!_textoNoVacio(receptor.tipoDocumento) || !_textoNoVacio(receptor.numDocumento)) {
+    throw errorDeSolicitud('El receptor de la Nota de Remisión requiere tipoDocumento y numDocumento');
+  }
+  const faltantes = ['nombre', 'codActividad', 'descActividad'].filter((campo) => !_textoNoVacio(receptor[campo]));
+  const direccion = receptor.direccion;
+  if (!direccion || ['departamento', 'municipio', 'distrito', 'complemento'].some((campo) => !_textoNoVacio(direccion[campo]))) {
+    faltantes.push('direccion');
+  }
+  if (faltantes.length) {
+    throw errorDeSolicitud(`Receptor de la Nota de Remisión incompleto: faltan ${faltantes.join(', ')}`);
+  }
+  const nrc = receptor.nrc === undefined || receptor.nrc === null || receptor.nrc === '' ? null : String(receptor.nrc);
+  if (nrc !== null && !NRC_REGEX.test(nrc)) {
+    throw errorDeSolicitud('El NRC del receptor de la Nota de Remisión debe tener de 2 a 8 dígitos');
+  }
+  return {
+    tipoDocumento: String(receptor.tipoDocumento),
+    numDocumento: String(receptor.numDocumento),
+    nrc,
+    nombre: receptor.nombre,
+    codActividad: receptor.codActividad,
+    descActividad: receptor.descActividad,
+    nombreComercial: _textoNoVacio(receptor.nombreComercial) ? receptor.nombreComercial : null,
+    direccion: {
+      departamento: direccion.departamento,
+      municipio: direccion.municipio,
+      distrito: direccion.distrito,
+      complemento: direccion.complemento,
+    },
+    telefono: _contactoOpcional(receptor.telefono, 'telefono', { min: 8, max: 30 }),
+    correo: _contactoOpcional(receptor.correo, 'correo', { min: 6, max: 100, patron: CORREO_REGEX, formato: ' y formato usuario@dominio' }),
+  };
+}
+
 /**
  * Nota de Remisión Electrónica (tipoDte 04, schema fe-nr-v4.json).
- * Documenta el TRASLADO de bienes (no siempre implica venta) — por eso el
- * receptor exige "bienTitulo" (CAT-025: depósito/propiedad/consignación/
- * traslado/otros) y el emisor exige codEstable/codPuntoVenta no-nulos.
- * documentoRelacionado es OPCIONAL aquí (a diferencia de NC/ND).
+ *
+ * Ampara la circulación de bienes (CT art. 109); no siempre implica venta: el
+ * receptor lleva `bienTitulo` (CAT-025: 01 Depósito, 02 Propiedad,
+ * 03 Consignación, 04 Traslado, 05 Otros). Con `emisor` (contrato v2) usa el
+ * emisor y el punto de venta de la solicitud; sin él, el emisor del entorno.
+ * Admite contingencia y `observaciones` (el ERP anota ahí el transporte, que
+ * el esquema no trae). Los documentos relacionados son opcionales.
+ *
+ * Totales como en el CCF: el IVA (tributo 20) se informa sobre el gravado y
+ * `montoTotalOperacion = subTotal + IVA`. La NR no causa el impuesto: el
+ * tributo es informativo.
  */
-function construirNotaRemision({ receptor, items, bienTitulo, relacionado = null }) {
-  if (!Array.isArray(items) || items.length === 0) throw new Error('Se requiere "items" con al menos 1 línea');
-  const { identificacion, codigoGeneracion, numeroControl } = _construirIdentificacion({
-    tipoDte: TIPO_DTE.NOTA_REMISION,
-    version: 4,
+function construirNotaRemision(
+  { emisor = null, receptor, items, bienTitulo, observaciones = null, documentosRelacionados = null, relacionado = null },
+  { contingencia = null } = {}
+) {
+  const issuer = emisor ? validateIssuerV2(emisor) : config.emisor;
+  if (bienTitulo === undefined || bienTitulo === null || bienTitulo === '') {
+    throw errorDeSolicitud('Se requiere "bienTitulo" (CAT-025): 01 Depósito, 02 Propiedad, 03 Consignación, 04 Traslado, 05 Otros');
+  }
+  // El esquema oficial exige bienTitulo como texto de dos dígitos (ej. "04").
+  const titulo = String(bienTitulo).padStart(2, '0');
+  if (!TITULOS_BIENES.has(titulo)) {
+    throw errorDeSolicitud(`bienTitulo ${titulo} no existe en CAT-025`);
+  }
+  const receptorNormalizado = _validarReceptorRemision(receptor);
+  if (!Array.isArray(items) || items.length === 0) throw errorDeSolicitud('Se requiere "items" con al menos 1 línea');
+  validarLineas(items);
+
+  const listaRelacionados = documentosRelacionados ?? (relacionado ? [relacionado] : null);
+  const relacionados = listaRelacionados && listaRelacionados.length
+    ? _validarDocumentosRelacionados(listaRelacionados, fechaHoraSV().fecha, 'Nota de Remisión')
+    : null;
+  const numerosRelacionados = new Map((relacionados ?? []).map((documento) => [documento.numeroDocumento.toUpperCase(), documento.numeroDocumento]));
+
+  const totales = calcularVentasPorCategoria(items);
+  const subTotalVentas = r2(totales.totalGravada + totales.totalExenta + totales.totalNoSuj);
+  const subTotal = subTotalVentas; // sin descuentos globales: se prorratean a las líneas
+  const iva = r2(totales.totalGravada * TASA_IVA);
+  const montoTotalOperacion = r2(subTotal + iva);
+
+  const cuerpoDocumento = items.map((item, indice) => {
+    let numeroDocumento = null;
+    if (typeof item.numeroDocumento === 'string' && item.numeroDocumento.trim()) {
+      numeroDocumento = numerosRelacionados.get(item.numeroDocumento.trim().toUpperCase());
+      if (!numeroDocumento) {
+        throw errorDeSolicitud(`Línea ${indice + 1}: numeroDocumento debe ser uno de los documentos relacionados de la Nota de Remisión`);
+      }
+    }
+    return {
+      numItem: indice + 1,
+      tipoItem: item.tipoItem ?? 1, // CAT-011: 1 = Bienes
+      numeroDocumento,
+      codigo: item.codigo ?? null,
+      codTributo: item.codTributo ?? null,
+      descripcion: item.descripcion,
+      cantidad: item.cantidad,
+      uniMedida: item.uniMedida ?? 59, // CAT-014: 59 = Unidad
+      precioUni: item.precioUni,
+      montoDescu: item.montoDescu ?? 0,
+      ventaNoSuj: item.ventaNoSuj ?? 0,
+      ventaExenta: item.ventaExenta ?? 0,
+      ventaGravada: item.ventaGravada ?? 0,
+      tributos: (item.ventaGravada ?? 0) > 0 ? [TRIBUTO_IVA.codigo] : null,
+    };
   });
 
-  if (!bienTitulo) {
-    throw new Error('Se requiere "bienTitulo" (CAT-025): 01 Depósito, 02 Propiedad, 03 Consignación, 04 Traslado, 05 Otros');
-  }
-  // El schema oficial exige bienTitulo como STRING (ej. "04"), no número.
-  const bienTituloStr = String(bienTitulo).padStart(2, '0');
-
-  const camposFaltantes = ['tipoDocumento', 'numDocumento', 'nombre', 'codActividad', 'descActividad', 'direccion', 'telefono', 'correo'].filter(
-    (campo) => receptor?.[campo] === undefined
-  );
-  if (camposFaltantes.length) {
-    throw new Error(`receptor incompleto: faltan los campos ${camposFaltantes.join(', ')}`);
-  }
-
-  const cuerpoDocumento = items.map((item, idx) => ({
-    numItem: idx + 1,
-    tipoItem: item.tipoItem ?? 1,
-    numeroDocumento: relacionado?.numeroDocumento ?? null,
-    codigo: item.codigo ?? null,
-    codTributo: item.codTributo ?? null,
-    descripcion: item.descripcion,
-    cantidad: item.cantidad,
-    uniMedida: item.uniMedida ?? 59,
-    precioUni: item.precioUni,
-    montoDescu: item.montoDescu ?? 0,
-    ventaNoSuj: item.ventaNoSuj ?? 0,
-    ventaExenta: item.ventaExenta ?? 0,
-    ventaGravada: item.ventaGravada,
-    tributos: item.ventaGravada > 0 ? ['20'] : null,
-  }));
-
-  const totalGravada = Number(items.reduce((s, i) => s + i.ventaGravada, 0).toFixed(2));
-
   const resumen = {
-    totalNoSuj: 0,
-    totalExenta: 0,
-    totalGravada,
-    subTotalVentas: totalGravada,
+    totalNoSuj: totales.totalNoSuj,
+    totalExenta: totales.totalExenta,
+    totalGravada: totales.totalGravada,
+    subTotalVentas,
     descuNoSuj: 0,
     descuExenta: 0,
     descuGravada: 0,
     porcentajeDescuento: 0,
-    totalDescu: 0,
-    tributos: totalGravada > 0 ? [{ codigo: '20', descripcion: 'Impuesto al Valor Agregado 13%', valor: Number((totalGravada * 0.13).toFixed(2)) }] : null,
-    subTotal: totalGravada,
-    montoTotalOperacion: totalGravada,
-    totalLetras: null,
-    observaciones: null,
+    totalDescu: totales.totalDescu,
+    tributos: totales.totalGravada > 0 ? [{ ...TRIBUTO_IVA, valor: iva }] : null,
+    subTotal,
+    montoTotalOperacion,
+    totalLetras: numeroALetras(montoTotalOperacion),
+    observaciones: _normalizarObservaciones(observaciones),
   };
+
+  const { identificacion, codigoGeneracion, numeroControl } = _construirIdentificacionV2({
+    tipoDte: TIPO_DTE.NOTA_REMISION,
+    version: 4,
+    issuer,
+    contingencia,
+  });
 
   const dte = {
     identificacion,
-    documentoRelacionado: relacionado ? [relacionado] : null,
-    emisor: _construirEmisorConEstablecimiento(),
-    receptor: {
-      tipoDocumento: receptor.tipoDocumento,
-      numDocumento: receptor.numDocumento,
-      nrc: receptor.nrc ?? null,
-      nombre: receptor.nombre,
-      codActividad: receptor.codActividad,
-      descActividad: receptor.descActividad,
-      nombreComercial: receptor.nombreComercial ?? null,
-      direccion: receptor.direccion,
-      telefono: receptor.telefono,
-      correo: receptor.correo,
-      bienTitulo: bienTituloStr,
-    },
+    documentoRelacionado: relacionados,
+    emisor: _construirEmisor(issuer),
+    receptor: { ...receptorNormalizado, bienTitulo: titulo },
     ventaTercero: null,
     cuerpoDocumento,
     resumen,

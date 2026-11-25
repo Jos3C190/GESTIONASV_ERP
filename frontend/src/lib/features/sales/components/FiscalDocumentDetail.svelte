@@ -12,6 +12,7 @@
     canRetry,
     isFinal,
     isNote,
+    isRemission,
     isVigent
   } from '#lib/features/sales/fiscal-labels.ts';
   import { formatDay, formatMoney } from '#lib/features/sales/quotation-labels.ts';
@@ -155,18 +156,33 @@
 
     <section class="rounded-xl border border-border bg-surface">
       <dl class="grid gap-x-6 gap-y-3 p-4 text-sm sm:grid-cols-2">
-        <div>
-          <dt class="text-foreground-muted">Pedido</dt>
-          <dd>
-            <a class="font-mono text-primary hover:underline" href={`/sales/${document.sale_id}`}
-              >{document.sale_code}</a
-            >
-          </dd>
-        </div>
-        <div>
-          <dt class="text-foreground-muted">Cliente</dt>
-          <dd class="text-foreground">{document.customer_name}</dd>
-        </div>
+        {#if document.sale_id}
+          <div>
+            <dt class="text-foreground-muted">Pedido</dt>
+            <dd>
+              <a class="font-mono text-primary hover:underline" href={`/sales/${document.sale_id}`}
+                >{document.sale_code}</a
+              >
+            </dd>
+          </div>
+          <div>
+            <dt class="text-foreground-muted">Cliente</dt>
+            <dd class="text-foreground">{document.customer_name}</dd>
+          </div>
+        {:else if document.transfer_id}
+          <div class="sm:col-span-2">
+            <dt class="text-foreground-muted">Traslado</dt>
+            <dd>
+              <a
+                class="font-mono text-primary hover:underline"
+                href={`/transfers?transfer=${document.transfer_id}`}>{document.transfer_code}</a
+              >
+              <span class="text-foreground-muted">
+                · ampara lo despachado; recepciones y diferencias no la cambian.</span
+              >
+            </dd>
+          </div>
+        {/if}
         <div>
           <dt class="text-foreground-muted">Total</dt>
           <dd class="font-mono text-foreground">{formatMoney(document.total)}</dd>
@@ -197,12 +213,14 @@
             <dd class="break-all font-mono text-xs text-foreground">{document.seal}</dd>
           </div>
         {/if}
-        <div class="sm:col-span-2">
-          <dt class="text-foreground-muted">Clasificación de renta (F-07)</dt>
-          <dd class="text-foreground">
-            {rentaLabel(document.renta_operation_type, document.renta_income_type)}
-          </dd>
-        </div>
+        {#if !isRemission(document)}
+          <div class="sm:col-span-2">
+            <dt class="text-foreground-muted">Clasificación de renta (F-07)</dt>
+            <dd class="text-foreground">
+              {rentaLabel(document.renta_operation_type, document.renta_income_type)}
+            </dd>
+          </div>
+        {/if}
         <div>
           <dt class="text-foreground-muted">Intentos de emisión</dt>
           <dd class="text-foreground">{document.attempts}</dd>
@@ -255,7 +273,9 @@
           : null}
         onChanged={() => void load()}
       />
-      <FiscalDocumentEmails {document} />
+      {#if !isRemission(document)}
+        <FiscalDocumentEmails {document} />
+      {/if}
     {/key}
   {/if}
 </div>
