@@ -691,7 +691,7 @@ Diseño:
 
 Pasos:
 - [x] **Paso 0: plan y rama.**
-- [ ] **Paso 1: migración 0139 y modelos.** Datos fiscales en `purchases` (clase, tipo, número, sello, renta de
+- [x] **Paso 1: migración 0139 y modelos.** Datos fiscales en `purchases` (clase, tipo, número, sello, renta de
   compras) con CHECK de catálogos; `fiscal_book_settings` por empresa (renta de compras por defecto); permisos.
   Verificar: prueba de migración con guarda de downgrade.
 - [ ] **Paso 2: dominio.** `app/domain/entities/fiscal_books.py`: filas de anexos 1, 2, 3, anulados y 169;
@@ -709,7 +709,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: libros de IVA y F-07, paso 1 (migración 0139). V4d2 en develop (#60). V4e omitida por decisión del usuario (25/11/2026).
+- **Paso en curso**: libros de IVA y F-07, paso 2 (dominio); paso 1 hecho (0139 aplicada en la base de desarrollo). V4d2 en develop (#60). V4e omitida por decisión del usuario (25/11/2026).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
