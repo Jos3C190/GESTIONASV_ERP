@@ -96,3 +96,27 @@ it('un pedido con entregas ya no ofrece cancelar', async () => {
   await screen.findByText('Entrega parcial');
   expect(screen.queryByRole('button', { name: 'Cancelar pedido' })).not.toBeInTheDocument();
 });
+
+it('al confirmar avisa la entrega automática y lo que queda apartado', async () => {
+  const draft = order({ status: 'draft', version: 1, confirmed_at: null, confirmed_by_name: null });
+  salesApi.sale.mockResolvedValue(draft);
+  salesApi.orderAction.mockResolvedValue({
+    ...draft,
+    status: 'confirmed',
+    version: 2,
+    auto_delivery: {
+      delivery_id: 'delivery-1',
+      delivery_code: 'ENT-0001',
+      pending_products: ['Harina fortificada'],
+      message: null
+    }
+  });
+  render(SaleDetail, { id: draft.id });
+  await fireEvent.click(await screen.findByRole('button', { name: 'Confirmar y apartar' }));
+  expect(
+    await screen.findByText(/Se entregó con ENT-0001: la salida ya está en el kardex/)
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(/Queda apartado para «Preparar entrega».*Harina fortificada/)
+  ).toBeInTheDocument();
+});

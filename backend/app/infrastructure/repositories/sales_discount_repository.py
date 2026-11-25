@@ -6,14 +6,17 @@ import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Select, delete, or_, select, update
+from sqlalchemy import Select, delete, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.entities.sales_margin import DiscountPolicy
+from app.domain.entities.sales_margin import BranchPromotion, DiscountPolicy
 from app.domain.ports.sales_discount_repository import RolePolicy, VolumeDiscount
+from app.infrastructure.models.catalog import ProductModel
+from app.infrastructure.models.organization import Branch
 from app.infrastructure.models.rbac import Role, UserRole
 from app.infrastructure.models.sales import SalesCustomerModel
 from app.infrastructure.models.sales_pricing import (
+    SalesBranchPromotionModel,
     SalesDiscountPolicyModel,
     SalesVolumeDiscountModel,
 )
@@ -26,7 +29,6 @@ def _policy(row: SalesDiscountPolicyModel) -> DiscountPolicy:
     return DiscountPolicy(
         max_line_percent=row.max_line_discount_percent,
         max_global_percent=row.max_global_discount_percent,
-        can_sell_below_cost=row.can_sell_below_cost,
     )
 
 
@@ -99,7 +101,6 @@ class SqlAlchemySalesDiscountRepository:
             self._session.add(row)
         row.max_line_discount_percent = policy.max_line_percent
         row.max_global_discount_percent = policy.max_global_percent
-        row.can_sell_below_cost = policy.can_sell_below_cost
         row.updated_by = actor_id
         row.updated_at = datetime.now(UTC)
         await self._session.flush()
@@ -220,3 +221,118 @@ class SqlAlchemySalesDiscountRepository:
             )
         )
         return Decimal(value) if value is not None else None
+
+    # --- promociones por sucursal -------------------------------------------------------------
+
+    def _promotion_query(
+        self, company_id: uuid.UUID
+    ) -> Select[tuple[SalesBranchPromotionModel, str, str, str]]:
+        return (
+            select(SalesBranchPromotionModel, Branch.name, ProductModel.name, ProductModel.sku)
+            .join(
+                Branch,
+                (Branch.id == SalesBranchPromotionModel.branch_id)
+                & (Branch.company_id == SalesBranchPromotionModel.company_id),
+            )
+            .join(
+                ProductModel,
+                (ProductModel.id_product == SalesBranchPromotionModel.product_id)
+                & (ProductModel.company_id == SalesBranchPromotionModel.company_id),
+            )
+            .where(SalesBranchPromotionModel.company_id == company_id)
+        )
+
+    async def promotions(
+        self,
+        company_id: uuid.UUID,
+        *,
+        branch_ids: tuple[uuid.UUID, ...] | None = None,
+        product_id: int | None = None,
+        include_ended: bool = True,
+    ) -> list[BranchPromotion]:
+        query = self._promotion_query(company_id)
+        if branch_ids is not None:
+            query = query.where(SalesBranchPromotionModel.branch_id.in_(branch_ids))
+        if product_id is not None:
+            query = query.where(SalesBranchPromotionModel.product_id == product_id)
+        if not include_ended:
+            query = query.where(SalesBranchPromotionModel.ended_at.is_(None))
+        rows = await self._session.execute(
+            query.order_by(
+                SalesBranchPromotionModel.ended_at.is_not(None),
+                SalesBranchPromotionModel.valid_from.desc(),
+                ProductModel.name,
+            )
+        )
+        return [_promotion(*row) for row in rows]
+
+    async def get_promotion(
+        self, company_id: uuid.UUID, promotion_id: uuid.UUID, *, lock: bool = False
+    ) -> BranchPromotion | None:
+        query = self._promotion_query(company_id).where(
+            SalesBranchPromotionModel.id == promotion_id
+        )
+        if lock:
+            query = query.with_for_update(of=SalesBranchPromotionModel)
+        row = (await self._session.execute(query)).first()
+        return _promotion(*row) if row else None
+
+    async def insert_promotion(
+        self,
+        company_id: uuid.UUID,
+        branch_id: uuid.UUID,
+        product_id: int,
+        discount_percent: Decimal,
+        valid_from: date,
+        valid_to: date | None,
+        notes: str | None,
+        actor_id: uuid.UUID,
+    ) -> uuid.UUID:
+        row = SalesBranchPromotionModel(
+            company_id=company_id,
+            branch_id=branch_id,
+            product_id=product_id,
+            discount_percent=discount_percent,
+            valid_from=valid_from,
+            valid_to=valid_to,
+            notes=notes,
+            created_by=actor_id,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return row.id
+
+    async def end_promotion(self, promotion_id: uuid.UUID, actor_id: uuid.UUID) -> None:
+        await self._session.execute(
+            update(SalesBranchPromotionModel)
+            .where(SalesBranchPromotionModel.id == promotion_id)
+            .values(ended_at=func.now(), ended_by=actor_id)
+        )
+        await self._session.flush()
+
+    async def lock_promotion_scope(
+        self, company_id: uuid.UUID, branch_id: uuid.UUID, product_id: int
+    ) -> None:
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"sales-promotion:{company_id}:{branch_id}:{product_id}"},
+        )
+
+
+def _promotion(
+    row: SalesBranchPromotionModel, branch_name: str, product_name: str, product_sku: str
+) -> BranchPromotion:
+    return BranchPromotion(
+        id=row.id,
+        company_id=row.company_id,
+        branch_id=row.branch_id,
+        product_id=row.product_id,
+        discount_percent=row.discount_percent,
+        valid_from=row.valid_from,
+        valid_to=row.valid_to,
+        notes=row.notes,
+        ended=row.ended_at is not None,
+        branch_name=branch_name,
+        product_name=product_name,
+        product_sku=product_sku,
+    )

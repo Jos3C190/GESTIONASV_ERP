@@ -39,6 +39,7 @@ from app.domain.entities.sales_quotation import (
     require_authority,
     require_cancellable,
     require_editable,
+    require_not_below_cost,
     require_pending_authorization,
     require_rejection_reason,
     require_valid_until,
@@ -208,6 +209,7 @@ class SalesQuotationUseCases:
         today: date,
         *,
         kept_prices: dict[PriceKey, Decimal] | None = None,
+        enforce_cost: bool = True,
     ) -> Quotation:
         priced = await self._pricing.price(
             company_id,
@@ -222,6 +224,8 @@ class SalesQuotationUseCases:
             today,
             kept_prices=kept_prices,
         )
+        if enforce_cost:
+            require_not_below_cost(priced.calculation)
         valid_until = draft.valid_until or today + timedelta(
             days=await self._repo.validity_days(company_id)
         )
@@ -251,12 +255,17 @@ class SalesQuotationUseCases:
     async def preview(self, company_id: uuid.UUID, actor: Actor, draft: Draft) -> Quotation:
         """Calcula sin guardar, para ver precios, impuestos y avisos mientras se edita."""
 
-        return await self._build(company_id, actor, draft, today_in_el_salvador())
+        return await self._build(
+            company_id, actor, draft, today_in_el_salvador(), enforce_cost=False
+        )
 
     async def _recalculate(self, quotation: Quotation, policy: DiscountPolicy) -> QuoteCalculation:
-        """Vuelve a evaluar lo guardado con el tope de otro usuario, sin tocar los precios."""
+        """Vuelve a evaluar lo guardado con el tope de otro usuario y el costo vigente.
 
-        return await self._pricing.reevaluate(
+        Nunca deja emitir ni autorizar una cotización que quedó bajo el costo del kardex.
+        """
+
+        calculation = await self._pricing.reevaluate(
             quotation.company_id,
             quotation.customer_id,
             quotation.document_type,
@@ -264,7 +273,10 @@ class SalesQuotationUseCases:
             quotation.global_discount_percent,
             quotation.lines,
             policy,
+            current_costs=True,
         )
+        require_not_below_cost(calculation)
+        return calculation
 
     # --- borrador ----------------------------------------------------------------------------
 

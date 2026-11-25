@@ -65,6 +65,13 @@ function vistaPrevia(row) {
   };
 }
 
+/** Retornos vigentes de la factura: Hacienda no invalida una FE con retorno validado (Manual VII, nota 3). */
+function retornosVigentes(codigoFactura) {
+  return db.prepare(
+    `SELECT codigo_generacion FROM eventos WHERE dte_codigo_generacion = ? AND tipo = 'RETORNO' AND estado IN ('ACEPTADO', 'SIMULADO')`
+  ).all(codigoFactura).map((fila) => fila.codigo_generacion);
+}
+
 function respuestaEvento(evento, status, extra = {}) {
   const payload = JSON.parse(evento.payload_json);
   return {
@@ -117,6 +124,10 @@ function preparar({ row, motivo, codigoGeneracionReemplazo, claveIdempotencia })
   }
   if (row.estado !== 'SIMULADO' || !esDocumentoSimulado(row)) {
     return conflicto(409, `Solo se invalida en simulación un DTE SIMULADO (estado actual: ${row.estado})`, 'DTE_NOT_INVALIDATABLE');
+  }
+  const retornos = retornosVigentes(row.codigo_generacion);
+  if (retornos.length) {
+    return conflicto(409, 'La factura tiene eventos de retorno vigentes: anúlalos antes de invalidarla', 'DTE_HAS_RETURN', { retornos });
   }
   const enCurso = db.prepare(
     `SELECT codigo_generacion FROM eventos

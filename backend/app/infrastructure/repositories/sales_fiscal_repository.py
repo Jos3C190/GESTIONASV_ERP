@@ -26,6 +26,7 @@ from app.infrastructure.models.fiscal import (
     FiscalPointOfSaleModel,
     HaciendaCatalogItemModel,
 )
+from app.infrastructure.models.inventory_transfer import InventoryTransferModel
 from app.infrastructure.models.sales import SaleModel, SalesCustomerModel
 from app.infrastructure.models.sales_fiscal import (
     SalesFiscalDocumentModel,
@@ -64,6 +65,7 @@ _FIELDS = (
     "renta_income_type",
     "related_document_id",
     "note_reason",
+    "transfer_id",
 )
 #: Lo que cambia después de crear el documento.
 _MUTABLE = (
@@ -94,16 +96,23 @@ def _query() -> Select[Any]:
             FiscalPointOfSaleModel.code,
             FiscalEstablishmentModel.code,
             SalesCustomerModel.email,
+            InventoryTransferModel.code,
         )
-        .join(
+        # La nota de remisión no tiene pedido ni cliente: pertenece a un traslado.
+        .outerjoin(
             SaleModel,
             (SaleModel.company_id == SalesFiscalDocumentModel.company_id)
             & (SaleModel.id == SalesFiscalDocumentModel.sale_id),
         )
-        .join(
+        .outerjoin(
             SalesCustomerModel,
             (SalesCustomerModel.company_id == SaleModel.company_id)
             & (SalesCustomerModel.id == SaleModel.customer_id),
+        )
+        .outerjoin(
+            InventoryTransferModel,
+            (InventoryTransferModel.company_id == SalesFiscalDocumentModel.company_id)
+            & (InventoryTransferModel.id == SalesFiscalDocumentModel.transfer_id),
         )
         .join(
             FiscalPointOfSaleModel,
@@ -117,7 +126,15 @@ def _query() -> Select[Any]:
 
 
 def _entity(row: Any) -> FiscalDocument:
-    model, sale_code, customer_name, pos_code, establishment_code, customer_email = row
+    (
+        model,
+        sale_code,
+        customer_name,
+        pos_code,
+        establishment_code,
+        customer_email,
+        transfer_code,
+    ) = row
     return FiscalDocument(
         id=model.id,
         company_id=model.company_id,
@@ -129,6 +146,7 @@ def _entity(row: Any) -> FiscalDocument:
         point_of_sale_code=pos_code,
         establishment_code=establishment_code,
         customer_email=customer_email,
+        transfer_code=transfer_code,
         **{name: getattr(model, name) for name in _FIELDS},
     )
 
@@ -178,6 +196,31 @@ class SqlAlchemySalesFiscalRepository:
             )
         )
 
+    async def active_for_transfer(
+        self, company_id: uuid.UUID, transfer_id: uuid.UUID
+    ) -> FiscalDocument | None:
+        return await self._one(
+            _query().where(
+                SalesFiscalDocumentModel.company_id == company_id,
+                SalesFiscalDocumentModel.transfer_id == transfer_id,
+                SalesFiscalDocumentModel.status.in_([status.value for status in ACTIVE_STATUSES]),
+                SalesFiscalDocumentModel.superseded_by_id.is_(None),
+            )
+        )
+
+    async def latest_for_transfer(
+        self, company_id: uuid.UUID, transfer_id: uuid.UUID
+    ) -> FiscalDocument | None:
+        return await self._one(
+            _query()
+            .where(
+                SalesFiscalDocumentModel.company_id == company_id,
+                SalesFiscalDocumentModel.transfer_id == transfer_id,
+            )
+            .order_by(SalesFiscalDocumentModel.created_at.desc())
+            .limit(1)
+        )
+
     async def latest_for_order(
         self, company_id: uuid.UUID, order_id: uuid.UUID
     ) -> FiscalDocument | None:
@@ -215,6 +258,7 @@ class SqlAlchemySalesFiscalRepository:
                     SalesFiscalDocumentModel.control_number.ilike(pattern),
                     SaleModel.code.ilike(pattern),
                     SalesCustomerModel.name.ilike(pattern),
+                    InventoryTransferModel.code.ilike(pattern),
                 )
             )
         total = await self._session.scalar(

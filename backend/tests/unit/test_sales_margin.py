@@ -81,16 +81,16 @@ def test_suggested_discount_is_the_larger_not_the_sum() -> None:
 
 
 def test_user_policy_is_the_maximum_of_their_roles() -> None:
-    cashier = DiscountPolicy(D("5"), D("0"), False)
-    manager = DiscountPolicy(D("10"), D("5"), True)
+    cashier = DiscountPolicy(D("5"), D("0"))
+    manager = DiscountPolicy(D("10"), D("5"))
     combined = effective_policy([cashier, manager], is_superuser=False)
-    assert combined == DiscountPolicy(D("10"), D("5"), True)
+    assert combined == DiscountPolicy(D("10"), D("5"))
     assert effective_policy([], is_superuser=False) == NONE_ALLOWED
     assert effective_policy([], is_superuser=True) == UNLIMITED
 
 
-def test_line_requires_authorization_above_limit_or_below_cost() -> None:
-    policy = DiscountPolicy(D("5"), D("2"), False)
+def test_line_authorization_and_below_cost() -> None:
+    policy = DiscountPolicy(D("5"), D("2"))
     within = evaluate_line(D("11.30"), True, D("5"), D("7.00"), policy)
     assert within.net_price == D("10.73500000")
     assert within.margin_percent == D("26.32")
@@ -99,12 +99,12 @@ def test_line_requires_authorization_above_limit_or_below_cost() -> None:
     above = evaluate_line(D("11.30"), True, D("8"), D("7.00"), policy)
     assert above.reasons == (AuthorizationReason.DISCOUNT_ABOVE_LIMIT,)
 
+    # Bajo costo no se autoriza: se marca para bloquearlo, sin importar el rol.
     below = evaluate_line(D("10.00"), False, D("5"), D("9.60"), policy)
-    assert below.reasons == (AuthorizationReason.BELOW_COST,)
-    allowed = evaluate_line(
-        D("10.00"), False, D("5"), D("9.60"), DiscountPolicy(D("5"), D("0"), True)
-    )
-    assert not allowed.requires_authorization
+    assert below.below_cost
+    assert below.reasons == ()
+    assert evaluate_line(D("10.00"), False, D("5"), D("9.60"), UNLIMITED).below_cost
+    assert not within.below_cost
 
     no_cost = evaluate_line(D("10.00"), False, D("0"), None, NONE_ALLOWED)
     assert no_cost.margin_percent is None

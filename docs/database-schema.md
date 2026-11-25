@@ -1106,7 +1106,7 @@ Revision `0123` (revises `0122`).
   `ex_sales_volume_discounts_overlap` forbids two tiers with the same key and minimum quantity
   in force on the same day.
 - `sales_discount_policies`: per company and role, `max_line_discount_percent`,
-  `max_global_discount_percent` (0–100) and `can_sell_below_cost`.
+  `max_global_discount_percent` (0–100) and `can_sell_below_cost` (dropped in 0134).
 - Permissions `sales_costs:read` and `sales_discounts:manage`, granted to `SUPER_ADMIN`.
 
 **Downgrade** refuses while any category margin, tier, policy, customer discount or list
@@ -1306,3 +1306,52 @@ Revision `0133` (revises `0132`), block V4c.
 
 **Downgrade** refuses while notes exist. Covered by
 `backend/tests/integration/test_sales_fiscal_notes_migration.py`.
+
+## 44. Engineer's rules: cost floor, branch promotions, stock exit on confirm (0134–0136)
+
+- **0134**: drops `sales_discount_policies.can_sell_below_cost`. No role may sell below the kardex
+  weighted-average cost; the rule lives in the application layer.
+- **0135**: `sales_branch_promotions` (company, branch, product, `discount_percent` > 0 and < 100,
+  `valid_from`, optional `valid_to` ≥ `valid_from`, notes, `created_by`/`created_at`,
+  `ended_by`/`ended_at`). Composite foreign keys keep branch and product in the company. One
+  promotion per product and branch per day is enforced by the use case. The line checks of
+  quotations and orders accept `suggested_discount_source = 'promotion'`. Permission
+  `sales_promotions:manage`, granted to `SUPER_ADMIN`.
+- **0136**: `sales_settings.auto_deliver_on_confirm boolean NOT NULL DEFAULT true`.
+
+**Downgrade** refuses while promotions exist. Covered by
+`backend/tests/integration/test_sales_engineer_rules_migration.py`.
+
+## 45. Remission notes of transfers (0137)
+
+- `sales_fiscal_documents.transfer_id` (composite FK to `inventory_transfers`, RESTRICT): the transfer a
+  remission note (`04`) covers. `sale_id` becomes nullable.
+- `ck_sales_fiscal_documents_origin`: a `04` has a transfer and no sale; every other type has a sale and
+  no transfer. `ck_sales_fiscal_documents_document` admits `04`.
+- `uq_sales_fiscal_documents_active_transfer`: one vigent note per transfer (pending, contingency, issued or
+  simulated, without a replacement).
+
+**Downgrade** refuses while remission notes exist. Covered by
+`backend/tests/integration/test_sales_transfer_remission_migration.py`.
+
+## 46. Return events (0138)
+
+Revision `0138` (revises `0137`), block V4d2.
+
+- `sales_fiscal_returns`: company, the invoice (`document_id`, composite FK), `reason`, `status`
+  (`pending`, `issued`, `simulated`, `rejected`, `failed`, `invalidated`), `idempotency_key`,
+  `request_payload`, `total` (with VAT), `generation_code`, `seal`, `dte_json`, the PDF and JSON
+  object keys, error fields, `issued_at` and `created_by_id`. The annulment lives in the same row
+  (`annul_status`, `annul_idempotency_key`, `annul_attempts`, requester and responsible,
+  `annul_generation_code`, `annul_seal`, errors, `annul_requested_by_id`, `annul_requested_at`,
+  `annulled_at`), checked by `ck_sales_fiscal_returns_status` and `ck_sales_fiscal_returns_annul`.
+- `sales_fiscal_return_lines`: `return_id`, `line_number`, `invoice_line_number`, `nature`,
+  `description`, `quantity`, `amount` (with VAT) and `vat`. Vigent returns give each invoice line
+  its balance.
+- `sales_fiscal_document_emails.return_id` (FK): the email that sends a return. An email belongs to
+  an invalidation or to a return, never both; `uq_..._auto` no longer covers return emails and
+  `uq_..._return` allows one per return.
+- Permission `sales_invoices:returns`, granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while return events exist. Covered by
+`backend/tests/integration/test_sales_fiscal_returns_migration.py`.

@@ -49,6 +49,7 @@ const nombreTributo = (codigo) => nombreEnCatalogo('CAT-015', codigo);
 const nombreContingencia = (codigo) => nombreEnCatalogo('CAT-005', codigo);
 const nombreCondicionOperacion = (codigo) => nombreEnCatalogo('CAT-016', codigo);
 const nombreRetencionIva = (codigo) => nombreEnCatalogo('CAT-006', codigo);
+const nombreBienTitulo = (codigo) => nombreEnCatalogo('CAT-025', codigo);
 const nombreTipoDonacion = (codigo) => nombreEnCatalogo('CAT-026', codigo);
 const nombrePais = (codigo) => nombreEnCatalogo('CAT-020', codigo);
 const nombreTipoInvalidacion = (codigo) => nombreEnCatalogo('CAT-024', codigo);
@@ -124,6 +125,7 @@ module.exports = {
   nombreContingencia,
   nombreCondicionOperacion,
   nombreRetencionIva,
+  nombreBienTitulo,
   nombreTipoDonacion,
   nombrePais,
   nombreTipoInvalidacion,

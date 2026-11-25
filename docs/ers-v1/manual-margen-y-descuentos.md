@@ -61,15 +61,41 @@ volumen, se propone 6 %.
 En **Ventas → Topes de descuento** (permiso `sales_discounts:manage`) se define, para cada rol:
 
 - el descuento máximo por línea;
-- el descuento máximo sobre el total;
-- si puede vender por debajo del costo.
+- el descuento máximo sobre el total.
 
 Un usuario con varios roles toma el tope más alto. Un rol sin topes no puede dar descuento sin
 autorización. El superadministrador no tiene tope.
 
-Cuando un vendedor propone un descuento mayor que su tope, o un precio que queda bajo el costo,
-el sistema marca la línea como **requiere autorización** y explica el motivo. La cotización y
-el pedido usan esa marca para pedir la autorización de un supervisor.
+Cuando un vendedor propone un descuento mayor que su tope, el sistema marca la línea como
+**requiere autorización** y explica el motivo. La cotización y el pedido usan esa marca para pedir
+la autorización de un supervisor.
+
+## Nunca bajo el costo
+
+Ningún rol puede vender por debajo del costo promedio del kardex, ni siquiera con autorización.
+El precio neto de cada línea, ya con su descuento y con su parte del descuento global, se compara
+con el costo vigente:
+
+- en el editor, la línea queda marcada en rojo y **Guardar borrador** se deshabilita;
+- al emitir la cotización, confirmar o autorizar el pedido, el sistema vuelve a leer el costo del
+  kardex en ese momento. Si una compra lo subió y la venta quedó bajo costo, rechaza la acción con
+  «Hay líneas por debajo del costo del kardex» y hay que subir el precio o bajar el descuento.
+
+## Promociones por sucursal
+
+En **Ventas → Promociones** (permiso `sales_promotions:manage`; con `sales:read` solo se
+consultan) se define un porcentaje de descuento para un producto en una sucursal, desde hoy o una
+fecha futura y con fin opcional. Un producto tiene una sola promoción por sucursal en cada día.
+
+Mientras está vigente, en las ventas de esa sucursal la promoción **reemplaza todo**:
+
+- el descuento de la línea es el de la promoción y el vendedor no lo puede cambiar;
+- no se suman ni se comparan el descuento del cliente ni el de volumen;
+- el documento no admite descuento global;
+- no pide autorización por el tope del rol, pero sigue sin poder quedar bajo el costo.
+
+**Terminar** corta una promoción vigente hoy o cancela una programada. Los documentos ya emitidos
+conservan su descuento.
 
 ## Datos de demostración
 

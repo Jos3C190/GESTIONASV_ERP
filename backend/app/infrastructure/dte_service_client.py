@@ -28,11 +28,13 @@ from app.domain.ports.dte_service import (
     InvalidationWindow,
     IssuerCredentials,
     IssueResult,
+    ReturnEventResult,
 )
 
 _PATHS = {
     "01": "/api/dte/v2/factura",
     "03": "/api/dte/v2/ccf",
+    "04": "/api/dte/v2/nota-remision",
     "05": "/api/dte/v2/nota-credito",
     "06": "/api/dte/v2/nota-debito",
 }
@@ -314,6 +316,110 @@ class HttpDteServiceClient:
             message=None,
             response=payload,
         )
+
+    # --- evento de retorno (V4d2) ---
+
+    def _return_result(
+        self, response: httpx.Response, *, accepted_state: str, rejected_code: str
+    ) -> ReturnEventResult:
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+        if response.status_code == _UNPROCESSABLE and payload.get("code") == rejected_code:
+            hacienda = payload.get("respuestaHacienda") or payload.get("simulacion") or {}
+            if isinstance(hacienda, dict) and "respuesta" in hacienda:
+                hacienda = hacienda.get("respuesta") or hacienda
+            observations = hacienda.get("observaciones") or [] if isinstance(hacienda, dict) else []
+            message = " | ".join(
+                str(item)
+                for item in [
+                    hacienda.get("descripcionMsg") if isinstance(hacienda, dict) else None,
+                    *observations,
+                ]
+                if item
+            )
+            return ReturnEventResult(
+                accepted=False,
+                generation_code=payload.get("codigoGeneracionEvento"),
+                seal=None,
+                simulated=payload.get("issuanceMode") == "SIMULATED",
+                message=message or str(payload.get("error") or "Hacienda rechazó el evento."),
+                response=payload,
+            )
+        if response.is_error:
+            raise self._error(response)
+        if payload.get("estado") not in (accepted_state, "SIMULADO"):
+            raise DteServiceError(
+                "El servicio no confirmó el evento todavía.",
+                code="dte_return_unconfirmed",
+                transient=True,
+            )
+        return ReturnEventResult(
+            accepted=True,
+            generation_code=payload.get("codigoGeneracionEvento"),
+            seal=payload.get("selloRecepcionEvento") or payload.get("simulationMarkerEvento"),
+            simulated=payload.get("issuanceMode") == "SIMULATED",
+            message=None,
+            response=payload,
+        )
+
+    async def issue_return(
+        self, nit: str, invoice_generation_code: str, *, idempotency_key: str, body: dict[str, Any]
+    ) -> ReturnEventResult:
+        response = await self._send(
+            nit,
+            "POST",
+            f"/api/dte/{invoice_generation_code}/retorno",
+            json=body,
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        return self._return_result(
+            response, accepted_state="ACEPTADO", rejected_code="RETURN_REJECTED"
+        )
+
+    async def annul_return(
+        self,
+        nit: str,
+        return_generation_code: str,
+        *,
+        idempotency_key: str,
+        request: InvalidationRequest,
+    ) -> ReturnEventResult:
+        def person(value: ContingencyResponsible) -> dict[str, str]:
+            return {
+                "nombre": value.name,
+                "tipoDocumento": value.document_type,
+                "numeroDocumento": value.document_number,
+            }
+
+        body = {
+            "motivo": {
+                "tipoAnulacion": 2,
+                "motivoAnulacion": request.reason,
+                "responsable": person(request.responsible),
+                "solicitante": person(request.requester),
+            }
+        }
+        response = await self._send(
+            nit,
+            "POST",
+            f"/api/dte/eventos/{return_generation_code}/anular",
+            json=body,
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        return self._return_result(
+            response,
+            accepted_state="RETORNO_INVALIDADO",
+            rejected_code="RETURN_INVALIDATION_REJECTED",
+        )
+
+    async def event_json(self, nit: str, event_generation_code: str) -> dict[str, Any]:
+        response = await self._send(nit, "GET", f"/api/dte/eventos/{event_generation_code}/json")
+        if response.is_error:
+            raise self._error(response)
+        data: dict[str, Any] = response.json()
+        return data
 
     async def invalidation_pdf(self, nit: str, event_generation_code: str) -> bytes:
         response = await self._send(

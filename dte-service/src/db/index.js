@@ -105,6 +105,9 @@ if (!eventoColumns.has('modo_emision')) {
     ) WHERE dte_codigo_generacion IS NOT NULL`);
   })();
 }
+// Evento de Retorno (V4d2 del ERP): su invalidación cuelga de la misma factura
+// (dte_codigo_generacion) y apunta al retorno que anula en evento_relacionado.
+if (!eventoColumns.has('evento_relacionado')) db.exec('ALTER TABLE eventos ADD COLUMN evento_relacionado TEXT');
 
 // Contingencia (Manual Funcional VIII): una ventana agrupa los documentos
 // generados en modelo diferido con el mismo tipo y motivo, y se informa con

@@ -30,13 +30,118 @@ catálogos). El proyecto de referencia es de solo lectura.
   - Si no lo habilita, el despacho sigue como hoy.
 - **Certificación (V4e)**: se construye ahora la herramienta que arma y transmite el lote por tipo de
   documento y muestra su avance. Se prueba contra el stub; el lote real se corre cuando haya credenciales.
+- **Pendiente para V8 (decidido el 20/11/2026): invalidación tipo 3 «Otro» de CAT-024.**
+  - Qué es: el Manual Funcional V2.0 (§VII, pág. 12) dice «Otro (esta opción incluye el cambio de
+    bienes/servicios)». Igual que el tipo 1, exige que el documento de reemplazo esté sellado antes.
+  - Hoy (V4b) el ERP solo usa el tipo 1 («Corregir documento») y el 2 («Anular documento»). El servicio DTE
+    ya acepta el 3; el ERP no (`InvalidationKind` y el CHECK de `sales_fiscal_invalidations.kind` admiten
+    1 y 2).
+  - No se agrega ahora: el reemplazo se arma con los datos actuales del pedido y un pedido facturado no
+    permite cambiar el producto, así que un tipo 3 sería un tipo 1 con otra etiqueta. Además, un cambio de
+    producto también mueve inventario (devolución B08).
+  - En V8, al diseñar devoluciones y cambios, decidir por caso entre: invalidar con tipo 3 y emitir el
+    documento nuevo (si el cambio ocurre dentro del plazo de invalidación), o documentar la devolución con
+    evento de retorno (factura) o nota de crédito (CCF) y emitir el documento nuevo. Cambios: ampliar el
+    CHECK, acción «cambio» con motivo obligatorio y selector del tipo en el formulario.
 - Siguen vigentes:
   - merge delegado con los checks propios en verde, con Auto-fix y auto-merge (merge) en cada PR;
   - commits y PR sin atribución;
   - ignorar el check de Vercel;
   - el `.env` no se lee ni se toca sin un «sí» explícito del usuario.
 
+## Para el futuro: punto de venta y caja (antes V6, pospuesto el 24/11/2026)
+
+El ingeniero de la materia pidió un alcance más simple; el usuario decidió no hacer el POS ahora y guardarlo.
+Contenido previsto (plan de Ventas, módulo 4 y bloque V6), para retomarlo después:
+- Pantalla de venta rápida de mostrador: búsqueda o lector de código de barras, cobro mixto, tiquete de 80 mm.
+- Turnos por cajero, arqueo por denominación, depósito del día; el cierre aprobado no se modifica.
+- Existencia de vitrina que se descuenta por pieza (se alimenta abriendo una unidad logística).
+- Operación en contingencia, con enlace de respaldo o nodo local por tienda; anular una venta cobrada pide
+  supervisor.
+- Promociones de mostrador: 2×1, combos, precio por horario. (La **promoción por sucursal** que pidió el
+  ingeniero no depende del POS: ver «Pedido del ingeniero».)
+
+## Pedido del ingeniero (24/11/2026)
+
+Alcance simple que pidió el docente, y su estado al 24/11/2026:
+1. Kardex con costo promedio ponderado que viene del retaceo, sin editar ni borrar historial: **hecho**
+   (valoración por promedio móvil de la empresa, retaceo como ajuste de costo, triggers de inmutabilidad y
+   rutas de solo lectura).
+2. Precio de venta global con historial, y nunca por debajo del costo del kardex: **parcial**. Hay listas con
+   vigencia e historial (y precio opcional por sucursal), pero hoy vender bajo costo se permite con
+   autorización de un rol con `can_sell_below_cost`; el ingeniero pide bloquearlo siempre.
+3. Promoción por sucursal que bloquea el descuento manual del vendedor: **falta** (hay descuentos con topes
+   por rol, no promociones).
+4. Descontar existencias al confirmar la venta y verlo en el kardex: **parcial**. Confirmar el pedido aparta
+   (reserva comercial); la salida del kardex ocurre al confirmar la entrega.
+5. PDF de factura (01, IVA incluido) o crédito fiscal (03, IVA y retención desglosados) con empresa, cliente,
+   tabla, total en letras y QR: **hecho** (el sistema elige 03 si el cliente puede recibirlo y 01 si no; el
+   PDF dice «Total en Letras: …» en vez de «SON: …»).
+
 ## Bloques
+
+### PI — Pedido del ingeniero: puntos 2, 3 y 4 (rama `feature/ventas-pedido-ingeniero`)
+
+Se hace antes de V4d, a pedido del usuario (24/11/2026). Decisiones:
+- **Punto 2, venta bajo costo**: se bloquea siempre, sin excepción por rol. La línea compara su precio neto
+  sin IVA, ya con el descuento de línea **y el global**, contra el costo promedio del kardex. La vista previa lo
+  marca (no lanza error) para que la pantalla lo muestre; guardar, emitir, confirmar y autorizar lo rechazan
+  con `sales_price_below_cost`. Al confirmar se usa el costo vigente del kardex, no el guardado. Se retira el
+  permiso de rol «Puede vender bajo costo» (columna `can_sell_below_cost`) y el motivo de autorización
+  `below_cost`.
+- **Punto 3, promoción por sucursal** (el usuario eligió «la promoción reemplaza todo»): porcentaje por
+  producto y sucursal con vigencia. En una línea con promoción el descuento es el de la promoción: no se
+  aplican el del cliente ni el de volumen, el vendedor no puede cambiarlo (la pantalla lo deshabilita y el
+  servidor usa el de la promoción aunque llegue otro, para que un borrador viejo se siga abriendo) y el
+  documento no admite descuento global
+  (`sales_global_discount_with_promotion`). La promoción no pasa por el tope del rol, pero sí por el costo:
+  si deja la línea bajo costo, se bloquea. Permiso `sales_promotions:manage`; leer pide `sales:read`.
+- **Punto 4, salida al confirmar** (el usuario eligió «automático con cajas completas»): al quedar
+  confirmado (al confirmar o al autorizar), el pedido se entrega solo con unidades logísticas **completas**
+  de la sucursal, primero las que vencen antes (como «Preparar entrega»), y la salida queda en el kardex en la
+  misma transacción. Una línea que no se cubre exacto con unidades completas queda apartada y el pedido
+  muestra un aviso para separar la unidad en bodega y entregarla con «Preparar entrega». Aplica a retiro y a
+  entrega a domicilio. Se agregó la configuración por empresa `sales_settings.auto_deliver_on_confirm`
+  (migración 0136, **encendida por omisión**, `GET/PUT /sales/settings/orders`) para que una empresa que
+  despacha después conserve el flujo manual; las e2e de entregas la apagan mientras corren.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [x] **Paso 1: venta bajo costo bloqueada.** Dominio (`sales_quotation.py`, `sales_margin.py`), cálculo con
+  el descuento global, error al guardar/emitir/confirmar/autorizar, costo vigente al confirmar, migración 0134
+  que retira `can_sell_below_cost`, API y pantalla de topes sin «Puede vender bajo costo». Verificar:
+  unitarias, e2e de cotización y pedido.
+- [x] **Paso 2: promociones por sucursal (backend).** Migración 0135 (`sales_branch_promotions`, fuente de
+  descuento `promotion`, permiso), dominio, casos de uso, API `/sales/promotions` y su efecto en el cálculo.
+  Verificar: unitarias, prueba de migración, e2e.
+- [x] **Paso 3: salida automática al confirmar.** Entrega automática con unidades completas al confirmar o
+  autorizar, y aviso de lo pendiente. Verificar: e2e (kardex con la salida, línea que no se cubre).
+  - Pasos 1 a 3 hechos: migraciones 0134 (retira `can_sell_below_cost`), 0135 (`sales_branch_promotions`,
+    fuente `promotion`, permiso) y 0136 (configuración). `require_not_below_cost` en guardar, emitir,
+    confirmar y autorizar, con el costo vigente del kardex al confirmar (`reevaluate(current_costs=True)`).
+    Promociones en `SalesDiscountUseCases` y router `sales_promotions.py`. Entrega automática:
+    `SalesDeliveryService.auto_deliver` desde el router de pedidos al confirmar o autorizar; la respuesta trae
+    `auto_delivery`. Pruebas: `tests/unit/test_sales_engineer_rules.py`, `tests/e2e/test_sales_engineer_rules.py`
+    y `tests/integration/test_sales_engineer_rules_migration.py`; e2e de ventas en verde.
+- [x] **Paso 4: interfaz.** Pantalla Ventas → Promociones; en el editor, insignia de promoción y descuento
+  bloqueado, y línea bajo costo marcada con el guardado deshabilitado; aviso de entrega en el pedido.
+  Verificar: vitest.
+  - Hecho: `PromotionsPage` (ruta /sales/promotions), `OrderSettingsPanel` en Configuración de ventas
+    (interruptor «Descontar existencias al confirmar el pedido»), aviso `auto_delivery` en `SaleDetail`.
+    Políticas de descuento sin la casilla de vender bajo costo. vitest de ventas y listas: 92 en verde.
+- [x] **Paso 5: documentación.** Manuales de descuentos, cotizaciones, pedidos y entregas; `api.md` y
+  `database-schema.md` (sección 44).
+- [x] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
+  - PR #58 mergeado en develop (24/11/2026). En CI, el fixture autouse de entregas cerraba después de liberar
+    la pool y dejaba una conexión en otro loop; ahora depende de `e2e_client`.
+  - QA en el navegador (24/11/2026): promoción creada y terminada en la Matriz; el editor fija el 10 %
+    y bloquea el descuento global; precio manual bajo costo muestra el aviso y deshabilita guardar;
+    confirmar un pedido de 1 kg de café (unidad de 120 kg en bodega) deja el aviso de separar la unidad.
+    Ajustes: pestaña «Cotizaciones y pedidos», textos de apartado/salida y botón sin salto de línea.
+  - Batería: backend 2044 pasan; `test_inventory_final_acceptance` apartaba y entregaba a mano, ahora apaga
+    la salida automática durante su confirmación; `test_sales_discounts` falló una vez por un loop de asyncio
+    y pasa al repetirla. Frontend completo (vitest, check, lint, build) en verde.
+
 
 ### V4a — Contingencia por empresa y establecimiento (rama `feature/ventas-v4a-contingencia`)
 
@@ -244,8 +349,15 @@ Decisiones (18/11/2026):
     exige para la ND (CT arts. 110 y 111; Ley IVA art. 62 num. 2 suma incrementos e intereses sin plazo; art. 63
     da al comprador tres períodos desde la emisión de la ND), pero Hacienda valida la regla al recibir el DTE.
     **Decisión del usuario (19/11/2026): se aplica el mismo plazo a la ND.** `note_deadline` y
-    `require_note_in_time` valen para las dos; la API expone `deadline`. Queda para el contador qué
-    son las «excepciones legales» que menciona la regla.
+    `require_note_in_time` valen para las dos; la API expone `deadline`.
+  - **Excepciones legales (investigado el 25/11/2026)**: la Normativa no las define (anexo IV, campo 17,
+    regla 2c, pág. 104). La única excepción en la ley es la **Ley de IVA, art. 62, numeral 1, literal a),
+    inciso segundo (reforma 14)**: en las devoluciones de **medicamentos y especialidades farmacéuticas
+    perecederos** para consumo humano el plazo «podrá ser ampliado hasta dos años», con registro detallado
+    por lote y vencimiento, la NC que cite el lote y el acta de destrucción de la autoridad sanitaria. El CT
+    art. 111, inciso tercero, da a las exportaciones el mismo plazo de tres meses (no es excepción). No aplica a
+    Grupo Lorena: el ERP conserva los 3 meses. Si una empresa del grupo vende medicamentos, se agrega como
+    opción por empresa (plazo de 2 años solo en NC de devolución de esos productos, con lote).
 - **Una nota relaciona un solo CCF**. La normativa admite hasta 50; se deja para después.
 - Un CCF con una nota vigente no se invalida ni se corrige (Manual Funcional, regla 633: primero se invalida
   la nota). Una nota se anula (tipo 2) y no se corrige.
@@ -318,12 +430,214 @@ Pasos:
     totales y con correo al cliente; anulación del CCF bloqueada con notas vigentes; al anular la NC el saldo
     vuelve a $19.40. Modo oscuro y claro a 375 px sin desbordes.
 
-### V4d — Nota de remisión y evento de retorno (se detalla al empezar)
+### V4d — Nota de remisión al despachar traslados (rama `feature/ventas-v4d-remision`)
+
+Decisiones (24/11/2026, el usuario dijo «continúa» con PR #58 en develop, sobre la propuesta del 19/11):
+- **V4d se parte en dos PR**, como V4b y V4b2: **V4d** la nota de remisión de traslados y **V4d2** el evento de
+  retorno. Son flujos distintos (inventario frente a factura) y cada uno toca servicio, base, trabajador e
+  interfaz.
+- Se sigue la investigación del 19/11 (abajo): una NR por traslado al despachar, título CAT-025 04
+  «Traslado», receptor la misma empresa con la dirección del establecimiento destino; recepción parcial y
+  diferencias no cambian la nota.
+- **Emisor**: el establecimiento fiscal de la sucursal de la bodega de origen y su primer punto de venta activo.
+  Si la empresa habilitó el 04 y el origen no tiene establecimiento con punto de venta, el despacho se rechaza
+  (`transfer_remission_issuer_missing`) con el motivo a la vista.
+- **Valores**: cada línea al costo promedio del kardex al despachar, como gravada (la NR no causa IVA; el tributo
+  20 queda informativo en el resumen).
+  - **Investigado el 25/11/2026: se confirma.**
+    - La ley exige que la NR lleve «el precio unitario y cantidad de los bienes» (CT art. 114 c) num. 2; para la
+      electrónica, Decreto 487, literal d) romano V), pero **no dice qué precio** usar en un traslado.
+    - Un traslado entre establecimientos propios **no es hecho generador**: no transfiere dominio (Ley IVA
+      art. 4) ni es retiro (art. 11; el precio de venta al público del art. 48 c) es solo para retiros), y el CT
+      art. 109 inciso 4 lo nombra «traslados que no constituyan transferencias». El valor es referencial: el
+      costo es el que tienen los bienes en el inventario y no inventa un margen que no existe.
+    - La Normativa 2.0, anexo IV, fija la forma: precios **sin IVA** (campo 87, regla 2); si hay ventas
+      gravadas el **valor del tributo es obligatorio** (campo 138, regla 2) y el **monto total = subtotal +
+      tributo** (campo 150, regla 2), para FE, CCFE y NRE. Eso es lo que ya hace el servicio.
+    - No se declara: los libros de IVA y los anexos del F-07 toman facturas, CCF y notas, no la NR.
+    - Cuidado: un DTE rechazado o transitorio sin sello se presume ingreso gravado (Normativa 10.1 y 10.2, CT
+      art. 199 inciso segundo). Una NR rechazada debe emitirse de nuevo pronto (la tarjeta lo ofrece).
+    - Sigue siendo una decisión del contribuyente: si el contador prefiere precio de venta, solo cambia
+      `unit_cost` en `TransferRemissionUseCases._lines`.
+- **Transporte**: placa, vehículo y conductor en `observaciones` del resumen (el esquema no trae transporte).
+- El despacho y la NR pendiente se guardan en la misma transacción; el trabajador la transmite. Si no se pudo
+  crear, no hay despacho. Rechazada: el traslado ofrece «Emitir de nuevo» con los datos del despacho.
+- **Corrección**: invalidación tipo 1 con una NR de reemplazo armada con los datos del despacho y el catálogo
+  actual. Tipo 2 no se ofrece: un traslado despachado no se cancela (se resuelve con incidencias y ajustes).
+- La NR no se envía por correo ni lleva clasificación de renta.
+
+Hechos verificados en el código:
+- Servicio: `/nota-remision` es la ruta antigua (emisor del `.env`, sin escenarios simulados ni contingencia);
+  `construirNotaRemision` no usa el emisor de la solicitud. El PDF ya trata 04 como documento de venta.
+- ERP: `sales_fiscal_documents.sale_id` es obligatorio y el trabajador, la bandeja y el detalle suponen pedido.
+  Hay un establecimiento por sucursal (`uq_fiscal_establishments_branch`) y la empresa habilita tipos en
+  «Documentos» (`DOCUMENT_TYPES` ya trae 04).
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [x] **Paso 1: servicio.** `/v2/nota-remision` multiemisor como la NC: copia del emisor con establecimiento y
+  punto de venta, contingencia y escenarios simulados; receptor y `bienTitulo` de la solicitud; `observaciones`.
+  PDF con «Título: Traslado» y observaciones. Verificar: pruebas del servicio, esquema y PDF.
+  - Hecho: `construirNotaRemision` (dteBuilderNotas.js) con emisor v2 o del entorno, contingencia, receptor
+    validado, `bienTitulo` de CAT-025, relacionados opcionales y `observaciones`; totales como el CCF (IVA
+    informativo, `montoTotalOperacion = subTotal + IVA`). Rutas `/v2/nota-remision` y `/nota-remision` con
+    escenario simulado. El PDF muestra «Título de los bienes» en vez de la condición. `compose.yaml` habilita 04.
+    Servicio: 501 pruebas en verde. Para correr las pruebas del servicio sin npm (el registro falla por TLS),
+    copiar `package.json`, `src` y `test` al contenedor `dte-service`, enlazar `/app/node_modules` y
+    correr `env -i PATH=... node --test` (la clave de API del contenedor pisa la de las pruebas).
+- [x] **Paso 2: migración 0137 y dominio.** `sale_id` opcional y `transfer_id` (FK compuesta al traslado), con
+  CHECK: 04 lleva traslado y no pedido; 01/03/05/06 llevan pedido. Índice único de NR vigente por traslado.
+  Dominio `transfer_remission.py`: líneas desde lo despachado con costo, receptor, observaciones y solicitud.
+  Verificar: unitarias y prueba de migración.
+  - Hecho: 0137 (`transfer_id`, `sale_id` opcional, `ck_sales_fiscal_documents_origin`, índice
+    `uq_sales_fiscal_documents_active_transfer`, guarda del downgrade). El repositorio une pedido y cliente con
+    `outerjoin` y trae `transfer_code`; `active_for_transfer` y `latest_for_transfer`.
+    `FiscalDocument.order_id()` exige el pedido en las acciones de pedido (`sales_invoice_not_an_order_document`);
+    reintentar una NR fallida mira la vigente del traslado. Dominio `transfer_remission.py` (líneas al costo,
+    receptor = la empresa en el destino, observaciones del transporte, solicitud y conciliación por
+    `montoTotalOperacion`). Pruebas: `test_transfer_remission.py` (5) y
+    `test_sales_transfer_remission_migration.py`; unitarias de ventas y e2e de facturas y notas en verde.
+    La base de desarrollo ya está en 0137.
+- [x] **Paso 3: despacho, trabajador y API.** Al despachar, si la empresa habilitó 04: crear la NR pendiente y
+  encolarla. El trabajador emite 04 sin pedido (sin correo ni renta). `GET /inventory/transfers/{id}/remission`,
+  `POST .../remission/retry` (rechazada) y corrección tipo 1 desde el documento. Verificar: e2e contra el
+  servicio simulado.
+  - Hecho: `application/sales_invoices/remission.py` (`TransferRemissionUseCases`: `on_dispatch`, `reissue`,
+    `prepare_replacement`, `status`) con el adaptador `infrastructure/transfer_remission_source.py` (lee el
+    traslado despachado). `SalesInvoiceUseCases.issuer_at` y `establishment_for` arman el emisor por
+    establecimiento. El despacho y la NR van en un savepoint (`dispatch_transfer`) y la NR se encola tras el
+    commit. Router `transfer_remissions.py` (GET `/remission`, POST `/remission/reissue`). El trabajador emite
+    04 (`/api/dte/v2/nota-remision`) y concilia por `montoTotalOperacion`; la NR no lleva correo. Corrección
+    tipo 1 por la invalidación; `require_annullable` impide el tipo 2. E2e `test_transfer_remission.py` (4) y
+    1500 pruebas relacionadas en verde.
+- [x] **Paso 4: interfaz.** Tarjeta «Nota de remisión» en el traslado (estado, número, PDF, «Emitir de nuevo»);
+  la bandeja y el detalle del documento muestran el 04 con enlace al traslado y sin correo ni notas. Verificar:
+  vitest.
+  - Hecho: `TransferRemissionCard.svelte` en el detalle del traslado (estado, número enlazado, valor al costo,
+    «Emitir de nuevo»); bandeja con el tipo 04 y el código del traslado; detalle sin cliente, renta ni correo y
+    con enlace a `/transfers?transfer=`; el panel de invalidación solo ofrece «Corregir» para el 04. Vitest 85.
+- [x] **Paso 5: documentación.** Manual de traslados y de facturación, `api.md`, esquema y README del servicio.
+  - Hecho: manual de traslados («Nota de remisión al despachar»), manual de facturación 4.3 y bandeja,
+    `api.md`, `database-schema.md` §45 y README del servicio.
+- [x] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
+  - Batería completa en verde: backend 2056, servicio 501, frontend 196 archivos, ruff, mypy, svelte-check,
+    ESLint y el build.
+  - QA en el navegador (Grupo Lorena, que ya tenía el 04 habilitado): se despachó el traslado de demostración
+    TR-20261114-3BBA0609 (Bodega Central → tienda Usulután, queda en tránsito); su NR DTE-04-M001P001-…001 salió
+    simulada por $3,163.81 al costo, con transporte en observaciones, enlace al traslado y solo «Corregir». El
+    traslado recibido antes de V4d muestra «salió sin nota de remisión». Bandeja a 375 px sin desborde.
+  - Ajustes del QA: la placa no se repite si el nombre del vehículo ya la trae; la tarjeta se actualiza sola
+    mientras dice «Emitiendo»; textos de la bandeja.
+  - Para que el frontend tome cambios hay que reiniciar su contenedor (Vite no detecta cambios en este montaje).
+
+### V4d2 — Evento de retorno (rama `feature/ventas-v4d2-retorno`)
+
+Decisiones (25/11/2026, el usuario dijo «Sí, empieza V4d2»), sobre la investigación del 19/11 y la del 25/11:
+- **Qué es** (Normativa 2.0, regla 13.3; Manual Funcional §X; esquema `fe-eret-v1`): un evento firmado que
+  documenta el retorno de bienes vendidos con factura (01). Reduce la venta y el débito fiscal del emisor; no da
+  crédito fiscal al receptor; **no es un descuento** (solo por cantidad) y no pasa de lo vendido. Los bienes se
+  individualizan: líneas de la factura con la cantidad devuelta. Se entrega al cliente (JSON y PDF).
+- **Alcance**: solo FE (el ERP no emite FEXE ni FSEE). Cada retorno relaciona **una** factura (la norma admite
+  50 del mismo emisor y receptor; se deja para después). Varios retornos por factura mientras su suma no pase
+  de lo vendido (Manual §X, condición 4). Solo fiscal, como las notas: el enlace con las devoluciones físicas
+  (`sales_returns`) llega en V8.
+- **Plazo**: la Normativa (13.3, cuadro 8) cuenta 3 meses desde el **sello** de la factura; la sección de fechas
+  del Manual (§X) los cuenta desde su **fecha de generación**. Se usa la más estricta: 3 meses desde la fecha de
+  generación de la factura. **Excepción**: si el emisor de la factura tiene la actividad 01282, 21001, 46484 o
+  47721 (medicamentos; concuerda con la Ley de IVA art. 62), son **2 años**. Solo facturas con sello.
+- **Montos**: con IVA incluido, estilo factura (`ivaItem` por línea, `totalIva`). La devolución se valora al
+  precio neto con el que se vendió (descuento por línea y descuento global prorrateados, como la NC); las
+  últimas unidades toman el saldo exacto. Retención de IVA espejo si la factura retuvo.
+- **Transmisión**: no hay servicio propio para el retorno en el Manual Técnico (solo contingencia e
+  invalidación); el retorno tiene código de generación y es el tipo 18 de CAT-002, así que se transmite por
+  `recepciondte` (uno a uno) con `tipoDte` "18" y `version` 1. Admite modelo diferido y contingencia (Manual §X,
+  condición 7). Queda **por confirmar en la certificación**; la URL es configurable.
+- **Anulación**: el retorno no se corrige ni se ajusta (13.3.2.1); se anula con el evento de invalidación tipo 2,
+  referenciando su código de generación, `numeroControl` null y sin reemplazo (Manual VII; el esquema
+  `invalidacion-schema-v3` admite `numeroControl` null). Una factura con un retorno vigente no se anula ni se
+  corrige (Manual VII, nota 3): primero se anula el retorno.
+- **Dónde vive en el ERP**: tabla propia `sales_fiscal_returns` (es un evento: sin número de control) con sus
+  líneas, como `sales_fiscal_invalidations`; no entra a `sales_fiscal_documents` ni a la bandeja. Se ve en el
+  detalle de la factura. Correo al cliente con su JSON y PDF.
+
+Hechos verificados en el código:
+- Servicio: hay esquema `fe-eret-v1` y validador de eventos, pero no generador ni ruta. Los eventos se guardan en la
+  tabla `eventos` (invalidación y contingencia) y el evento de invalidación se arma desde el DTE guardado.
+- ERP: `sales_fiscal_notes.py` ya sabe leer las líneas de un CCF y prorratear el descuento global; la factura
+  trae `ivaItem` por línea y precios con IVA.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [x] **Paso 1: servicio.** Generador `fe-eret-v1` desde la FE guardada (emisor, receptor y relacionado de la
+  factura) con las líneas que manda el ERP; ruta `POST /api/dte/:codigoGeneracion/retorno` (simulado, normal y
+  contingencia), guardado en `eventos` (tipo RETORNO), transmisión por `recepciondte` tipo 18; JSON y PDF del
+  evento; anulación del retorno (tipo 2) por la ruta de invalidación. Verificar: pruebas del servicio.
+  - Hecho: `eventoRetornoBuilder.js` (emisor, receptor y relacionado de la FE guardada; líneas del ERP validadas
+    contra la factura; IVA incluido; retención espejo si la FE retuvo) y `retornoService.js` (`eventos` tipo
+    RETORNO; real: firma y `recepciondte` con tipoDte 18; simulado: firma y marcador sintéticos con escenario
+    `rejected`). Rutas `POST /api/dte/:codigo/retorno` y `POST /api/dte/eventos/:codigo/anular` (invalidación
+    tipo 2 del retorno: `numeroControl` null, cuelga de la FE y apunta al retorno en `evento_relacionado`). El
+    generador de invalidación admite el tipo 18 y la fecha del evento del 17 y 18 es la de generación. JSON y PDF
+    del retorno por `/eventos/:codigo/json` y `/pdf/render` (PDF con la representación de la factura y título
+    «EVENTO DE RETORNO»). La FE con retornos vigentes no se invalida (`DTE_HAS_RETURN`). Servicio: 507 en verde.
+- [x] **Paso 2: migración 0138 y dominio.** `sales_fiscal_returns` y `sales_fiscal_return_lines`, `return_id` en
+  los envíos de correo, permiso `sales_invoices:returns`. Dominio `sales_fiscal_returns.py`: líneas de la FE,
+  saldo por línea, plazo con la excepción de medicamentos, totales con IVA y solicitud. Verificar: unitarias y
+  prueba de migración.
+  - Hecho: 0138 (`sales_fiscal_returns` con su anulación en columnas `annul_*`, `sales_fiscal_return_lines` con
+    cantidad, monto con IVA e IVA, `return_id` en los envíos con su índice único y el automático de la factura sin
+    los de retorno, permiso, guarda del downgrade). Dominio `sales_fiscal_returns.py` (plazo 3 meses o 2 años con
+    medicamentos, factura vigente con sello, líneas y saldo con las funciones de las notas, plan por cantidad al
+    precio neto, IVA 13/113, retención espejo, solicitud y conciliación). Pruebas
+    `test_sales_fiscal_returns.py` (5) y `test_sales_fiscal_returns_migration.py`. Desarrollo en 0138.
+- [x] **Paso 3: casos de uso, trabajador y API.** `GET /sales/fiscal-documents/{id}/returns`, `POST .../returns`,
+  `POST /sales/fiscal-returns/{id}/annul`; el trabajador emite y anula; correo al cliente; la FE con retorno
+  vigente no se invalida ni se corrige. Verificar: e2e contra el servicio simulado.
+- [x] **Paso 4: interfaz.** En el detalle de una factura: saldo por línea, «Registrar retorno», lista de
+  retornos con estado, PDF y «Anular». Verificar: vitest.
+- [x] **Paso 5: documentación.** `api.md`, esquema §46, manual de facturación §4.3 y README del servicio.
+- [x] **Paso 6: verificación y PR.** Batería: backend 2063, OCR 5, servicio 507, frontend 1222, ruff, mypy,
+  svelte-check, ESLint y build. QA con Grupo Lorena sobre DTE-01-…002 (simulada): retorno de 5 bolsas ($0.60,
+  IVA $0.07), PDF, correo con PDF y JSON, bloqueo de la anulación de la factura, anulación del retorno y
+  saldo restituido; modo claro y 375 px. Ajuste del QA: la etiqueta visible es «Cantidad devuelta».
+
+Detalle original de V4d (antes de partirlo):
 - Nota de remisión (04) al despachar un traslado, si la empresa habilita el tipo; queda vinculada al traslado.
 - Evento de retorno sobre facturas selladas: el servicio tiene el esquema pero no el generador. Hasta 50
   documentos del mismo tipo; una factura con un evento de retorno vigente no se invalida sin invalidar antes
   el evento.
 - Plantillas PDF que falten.
+
+Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su confirmación:
+- **Evento de retorno = como la NC, con tres diferencias.** Fuentes: Normativa 2.0, regla 13.3 (págs. 31-32),
+  Manual Funcional V2.0 §X, esquema `fe-eret-v1`. Se arma con las líneas de la factura tal como se selló, la
+  cantidad devuelta por línea y el saldo (los retornos vigentes no pasan de lo vendido: «no deberá exceder al
+  valor de lo vendido»; «los bienes … retornados deberán individualizarse»). Diferencias con la NC:
+  1. **Solo devolución por cantidad**, sin rebaja por monto: «El retorno no constituye un descuento».
+  2. **Plazo de tres meses desde el sello** de la factura (la NC cuenta desde la fecha del CCF).
+  3. **Montos con IVA incluido** (estilo factura: `ivaItem`, `ivaRete`) y sin efecto en el crédito fiscal del
+     receptor; reduce la venta y el débito fiscal del emisor (13.3.2).
+  Además: aplica a FE (también FEXE y FSEE, que el ERP no emite); un evento por factura (la norma admite 50);
+  no se ajusta con otro evento ni documento; se invalida con el evento de invalidación; la factura con un
+  retorno vigente no se invalida ni se corrige. El cambio de producto exige una factura nueva (Manual §X).
+  Solo fiscal en V4d, como las notas; el enlace con las devoluciones físicas de B08 (`sales_returns`) llega en V8.
+- **Una nota de remisión por traslado, al despachar.** CT art. 109 inciso 4 («traslados que no constituyan
+  transferencias»), Decreto 487 (requisitos de la NRE) y plan de Ventas 6.8. Título CAT-025 04 «Traslado»;
+  emisor: establecimiento de origen; receptor: la misma empresa con la dirección del establecimiento de
+  destino; líneas: lo despachado; placa y conductor en observaciones o apéndice (el esquema no trae
+  transporte). Vale para las tres rutas (distribución, entre sucursales y retorno a matriz).
+  - **Recepción parcial, averías, sobrantes y faltantes no cambian la nota**: ampara la circulación de lo que
+    salió, no transfiere propiedad ni causa IVA, y no admite notas de crédito o débito (solo se relacionan con
+    CCF o CR). Las diferencias se resuelven en el traslado (ajustes que ya existen).
+  - **Error en la nota** (cantidades o datos mal despachados): invalidación tipo 1 con una NR de reemplazo;
+    **traslado cancelado** después de emitirla: invalidación tipo 2. Plazo: décimo día hábil del mes siguiente.
+  - El despacho no se confirma si la nota no se pudo generar (o queda en contingencia).
+- **Entregas de venta: no en V4d.** CT art. 109 inciso 1 exige NR cuando la mercadería sale **antes** del CCF
+  (y la Normativa, regla 2a del campo 17, deja que FE, CCFE o FEXE relacionen la NR, emitiéndose en el mismo
+  período o hasta 3 días después). Si se factura antes de entregar, el DTE de venta ampara el tránsito y no hace
+  falta NR. Hoy el ERP permite confirmar una entrega sin factura. El plan de Ventas lo deja en el módulo
+  «Entregas y despacho»: NR título 02 «Propiedad» si la entrega sale sin factura, y control del plazo para
+  facturar relacionándola.
 
 ### V4e — Lote de certificación (se detalla al empezar)
 - Pantalla por empresa: cuántos documentos pide Hacienda por tipo, cuántos van transmitidos y aceptados, y
@@ -332,7 +646,8 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V4c terminado; falta el merge de su PR. Sigue V4d (detallarlo al empezar). Tras cambiar el servicio DTE:
+- **Paso en curso**: V4d2 terminado; PR a develop con Auto-fix y auto-merge. Pasos 1 a 6 hechos (panel `FiscalReturnsPanel.svelte` con vitest) (e2e `test_sales_fiscal_returns.py` y regresión fiscal: 1490 en verde). V4d en develop (#59). PI terminado y en develop (#58); V4c en develop (#57).
+Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
     svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la

@@ -685,7 +685,9 @@ inadvertido hasta que Hacienda rechaza algo en producción:
 
 - `POST /api/dte/factura` — Factura (tipo 01)
 - `POST /api/dte/ccf` — Comprobante de Crédito Fiscal (tipo 03)
-- `POST /api/dte/nota-remision` — Nota de Remisión (tipo 04)
+- `POST /api/dte/nota-remision` y `POST /api/dte/v2/nota-remision` — Nota de Remisión (tipo 04). La v2 usa el
+  emisor de la solicitud (contrato multiemisor), admite contingencia y escenarios simulados, `bienTitulo`
+  (CAT-025) y `observaciones`; el resumen informa el IVA como el CCF (`montoTotalOperacion = subTotal + IVA`).
 - `POST /api/dte/nota-credito` y `POST /api/dte/v2/nota-credito` (emisor de
   la revisión del panel) — Nota de Crédito (tipo 05). Solo ajusta CCF:
   `{ emisor, receptor, items, documentosRelacionados, observaciones }`, con el
@@ -711,6 +713,14 @@ inadvertido hasta que Hacienda rechaza algo en producción:
 - `POST /api/dte/:codigoGeneracion/anular` — Evento de Invalidación (ver
   sección "Invalidación"); `GET /api/dte/:codigoGeneracion/invalidacion`,
   `GET /api/dte/:codigoGeneracion/eventos`, `GET /api/dte/eventos/:codigo/json`
+- `POST /api/dte/:codigoGeneracion/retorno` (scope `issue`, idempotente) — Evento de Retorno
+  (CAT-002 tipo 18, esquema `fe-eret-v1`) sobre una Factura guardada:
+  `{ items: [{ numItem, cantidad, montoDescu, ventaNoSuj, ventaExenta, ventaGravada, ivaItem }] }`.
+  Emisor, receptor y documento relacionado salen de la FE tal como se selló; las cantidades no
+  pasan de lo vendido. Se transmite con `tipoDte` 18 y versión 1 (por confirmar en certificación).
+  Una FE con retornos vigentes no se invalida (409 `DTE_HAS_RETURN`).
+  `POST /api/dte/eventos/:codigo/anular` (scope `invalidate`) anula el evento con una invalidación
+  tipo 2 sin reemplazo; `GET /api/dte/eventos/:codigo/json` y `/pdf/render` sirven el evento
 - `GET|POST /api/dte/contingencia...` — operación en contingencia (ver
   sección "Contingencia")
 - `GET /api/catalogos*` — ver sección "Catálogos oficiales" arriba

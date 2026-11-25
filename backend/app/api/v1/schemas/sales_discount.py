@@ -16,13 +16,11 @@ class DiscountPolicyIn(BaseModel):
 
     max_line_discount_percent: Decimal = Field(ge=0, le=100, max_digits=5, decimal_places=2)
     max_global_discount_percent: Decimal = Field(ge=0, le=100, max_digits=5, decimal_places=2)
-    can_sell_below_cost: bool = False
 
 
 class DiscountPolicyOut(BaseModel):
     max_line_discount_percent: Decimal
     max_global_discount_percent: Decimal
-    can_sell_below_cost: bool
 
 
 class RolePolicyOut(DiscountPolicyOut):
@@ -98,6 +96,8 @@ class EvaluationLineOut(BaseModel):
     cost: Decimal | None
     margin_percent: Decimal | None
     requires_authorization: bool
+    below_cost: bool = False
+    """Queda bajo el costo del kardex: se bloquea, no se autoriza."""
     reasons: list[str]
     reason_messages: list[str]
 

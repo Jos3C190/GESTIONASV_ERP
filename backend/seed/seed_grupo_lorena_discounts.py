@@ -33,8 +33,8 @@ WHOLESALE_SCALES_SKU = "PRD-EMP-010"
 WHOLESALE_SCALES = ((Decimal("10"), Decimal("3")), (Decimal("50"), Decimal("6")))
 CUSTOMER_DISCOUNT = ("CLI-00001", Decimal("3"))
 ROLE_POLICIES = {
-    "GERENTE DE SUCURSAL": DiscountPolicy(Decimal("10"), Decimal("5"), False),
-    "EMPLEADO": DiscountPolicy(Decimal("3"), Decimal("0"), False),
+    "GERENTE DE SUCURSAL": DiscountPolicy(Decimal("10"), Decimal("5")),
+    "EMPLEADO": DiscountPolicy(Decimal("3"), Decimal("0")),
 }
 
 

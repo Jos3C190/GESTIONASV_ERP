@@ -19,8 +19,10 @@ from app.api.v1.deps import (
     SessionDep,
     get_audit_service,
     get_check_permission_use_case,
+    get_sales_delivery_service,
     get_sales_order_use_cases,
     get_sales_quotation_use_cases,
+    require_any_permission,
     require_permission,
 )
 from app.api.v1.routers.sales_quotations import (
@@ -30,6 +32,7 @@ from app.api.v1.routers.sales_quotations import (
     reasons_out,
 )
 from app.api.v1.schemas.sales_order import (
+    AutoDeliveryOut,
     DeliveryIn,
     OrderActionIn,
     OrderDraftIn,
@@ -39,11 +42,13 @@ from app.api.v1.schemas.sales_order import (
     OrderOut,
     OrderPage,
     OrderReasonIn,
+    OrderSettings,
     OrderUpdateIn,
 )
 from app.api.v1.schemas.sales_quotation import QuotationPageMeta
 from app.application.audit.audit_service import AuditService
 from app.application.rbac.check_permission import CheckPermissionUseCase
+from app.application.sales.deliveries import SalesDeliveryService
 from app.application.sales_documents.pricing import Actor, DraftLine
 from app.application.sales_orders import Change, Delivery, OrderDraft, OrderView, SalesOrderUseCases
 from app.application.sales_quotations import SalesQuotationUseCases
@@ -56,6 +61,7 @@ UseCases = Annotated[SalesOrderUseCases, Depends(get_sales_order_use_cases)]
 Quotations = Annotated[SalesQuotationUseCases, Depends(get_sales_quotation_use_cases)]
 Audit = Annotated[AuditService, Depends(get_audit_service)]
 Checker = Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)]
+Deliveries = Annotated[SalesDeliveryService, Depends(get_sales_delivery_service)]
 CompanyId = Annotated[uuid.UUID, Depends(request_company_id)]
 _READ = [Depends(require_permission("sales:read"))]
 _MANAGE = [Depends(require_permission("sales:manage"))]
@@ -271,10 +277,78 @@ async def _respond(
     checker: CheckPermissionUseCase,
     current: CurrentUser,
     order: Order,
+    auto_delivery: AutoDeliveryOut | None = None,
 ) -> OrderOut:
     visible = await costs_visible_for(checker, current.id, order.company_id)
     open_order = order.status in (OrderStatus.DRAFT, OrderStatus.PENDING_AUTHORIZATION)
-    return _out(await use_cases.view(order, with_availability=open_order), visible)
+    out = _out(await use_cases.view(order, with_availability=open_order), visible)
+    out.auto_delivery = auto_delivery
+    return out
+
+
+async def _deliver_confirmed(
+    deliveries: SalesDeliveryService,
+    use_cases: SalesOrderUseCases,
+    request: Request,
+    current: CurrentUser,
+    order: Order,
+) -> tuple[Order, AutoDeliveryOut | None]:
+    """Al quedar confirmado, descuenta las existencias y deja la salida en el kardex."""
+
+    if order.status is not OrderStatus.CONFIRMED:
+        return order, None
+    if not await deliveries.auto_deliver_enabled(order.company_id):
+        return order, None
+    result = await deliveries.auto_deliver(
+        company_id=order.company_id, actor_id=current.id, sale_id=order.id, request=request
+    )
+    # La entrega cambia el avance del pedido: se vuelve a leer.
+    return await use_cases.get(order.company_id, order.id), AutoDeliveryOut(**result)
+
+
+# --- configuración ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/settings/orders",
+    response_model=OrderSettings,
+    summary="Si confirmar un pedido descuenta las existencias",
+    dependencies=[Depends(require_any_permission("sales:read", "fiscal_settings:read"))],
+)
+async def order_settings(company_id: CompanyId, deliveries: Deliveries) -> OrderSettings:
+    return OrderSettings(auto_deliver_on_confirm=await deliveries.auto_deliver_enabled(company_id))
+
+
+@router.put(
+    "/settings/orders",
+    response_model=OrderSettings,
+    summary="Cambiar si confirmar un pedido descuenta las existencias",
+    dependencies=[Depends(require_permission("fiscal_settings:manage"))],
+)
+async def save_order_settings(
+    body: OrderSettings,
+    request: Request,
+    company_id: CompanyId,
+    current: CurrentUser,
+    deliveries: Deliveries,
+    audit: Audit,
+) -> OrderSettings:
+    before, after = await deliveries.set_auto_deliver(
+        company_id, body.auto_deliver_on_confirm, current.id
+    )
+    await audit.record(
+        action="SALES_SETTINGS_UPDATED",
+        user_id=current.id,
+        company_id=company_id,
+        resource_type="sales_settings",
+        resource_id=str(company_id),
+        before_state={"auto_deliver_on_confirm": before},
+        after_state={"auto_deliver_on_confirm": after},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        required=True,
+    )
+    return OrderSettings(auto_deliver_on_confirm=after)
 
 
 # --- consulta y borrador -----------------------------------------------------------------------
@@ -459,6 +533,7 @@ async def confirm_order(
     use_cases: UseCases,
     checker: Checker,
     audit: Audit,
+    deliveries: Deliveries,
 ) -> OrderOut:
     await _scoped(use_cases, session, current, company_id, order_id)
     change = await use_cases.confirm(company_id, current.id, order_id, body.expected_version)
@@ -468,7 +543,8 @@ async def confirm_order(
         else "SALES_ORDER_SUBMITTED_FOR_AUTHORIZATION"
     )
     await _record(audit, request, action=action, actor=current.id, change=change)
-    return await _respond(use_cases, checker, current, change.order)
+    order, auto = await _deliver_confirmed(deliveries, use_cases, request, current, change.order)
+    return await _respond(use_cases, checker, current, order, auto)
 
 
 @router.post(
@@ -487,13 +563,15 @@ async def authorize_order(
     use_cases: UseCases,
     checker: Checker,
     audit: Audit,
+    deliveries: Deliveries,
 ) -> OrderOut:
     await _scoped(use_cases, session, current, company_id, order_id)
     change = await use_cases.authorize(
         company_id, current.id, order_id, body.expected_version, body.note
     )
     await _record(audit, request, action="SALES_ORDER_AUTHORIZED", actor=current.id, change=change)
-    return await _respond(use_cases, checker, current, change.order)
+    order, auto = await _deliver_confirmed(deliveries, use_cases, request, current, change.order)
+    return await _respond(use_cases, checker, current, order, auto)
 
 
 @router.post(

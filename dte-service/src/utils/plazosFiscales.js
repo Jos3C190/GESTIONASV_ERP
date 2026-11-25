@@ -9,7 +9,8 @@
  *   de la fecha de generación, y el evento se transmite dentro de los 3 meses
  *   siguientes al sello de recepción.
  */
-const TIPOS_FECHA_EVENTO_IGUAL_A_GENERACION = new Set(['03', '04', '05', '06', '07', '08', '09', '15']);
+// 17 y 18: Eventos de Operaciones Especiales y de Retorno (Manual Funcional VII).
+const TIPOS_FECHA_EVENTO_IGUAL_A_GENERACION = new Set(['03', '04', '05', '06', '07', '08', '09', '15', '17', '18']);
 const TIPOS_PLAZO_TRES_MESES = new Set(['01', '11', '14']);
 
 function aFecha(iso) {

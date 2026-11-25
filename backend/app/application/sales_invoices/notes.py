@@ -196,7 +196,7 @@ class SalesFiscalNoteUseCases:
         reason: str,
         actor_id: uuid.UUID,
     ) -> FiscalDocument:
-        order = await self._invoices.order(ccf.company_id, ccf.sale_id)
+        order = await self._invoices.order(ccf.company_id, ccf.order_id())
         issuer, establishment, point, mode = await self._invoices.issuer_for(
             order, ccf.point_of_sale_id
         )

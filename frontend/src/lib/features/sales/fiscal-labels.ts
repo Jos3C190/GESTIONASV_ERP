@@ -3,12 +3,14 @@ import type {
   FiscalDocumentStatus,
   FiscalDocumentType,
   FiscalEmailStatus,
-  FiscalNature
+  FiscalNature,
+  ReturnStatus
 } from '#lib/types/sales-invoices.ts';
 
 export const FISCAL_DOCUMENT_LABELS: Record<FiscalDocumentType, string> = {
   '01': 'Factura',
   '03': 'Crédito fiscal',
+  '04': 'Nota de remisión',
   '05': 'Nota de crédito',
   '06': 'Nota de débito'
 };
@@ -26,6 +28,11 @@ export const NOTE_LINE_KIND_LABELS: Record<string, string> = {
 };
 
 /** Una nota que se puede anular (tipo 2) pero no corregir. */
+/** La nota de remisión pertenece a un traslado: no tiene pedido, cliente ni correo (V4d). */
+export function isRemission(document: Pick<FiscalDocument, 'document_type'>): boolean {
+  return document.document_type === '04';
+}
+
 export function isNote(document: Pick<FiscalDocument, 'document_type'>): boolean {
   return document.document_type === '05' || document.document_type === '06';
 }
@@ -43,6 +50,24 @@ export const FISCAL_STATUS_LABELS: Record<FiscalDocumentStatus, string> = {
   rejected: 'Rechazado',
   failed: 'Falló',
   invalidated: 'Invalidado'
+};
+
+export const RETURN_STATUS_LABELS: Record<ReturnStatus, string> = {
+  pending: 'Transmitiendo',
+  issued: 'Aceptado',
+  simulated: 'Simulado',
+  rejected: 'Rechazado',
+  failed: 'Falló',
+  invalidated: 'Anulado'
+};
+
+export const RETURN_STATUS_BADGES: Record<ReturnStatus, string> = {
+  pending: 'bg-warning/10 text-warning',
+  issued: 'bg-success/10 text-success',
+  simulated: 'bg-primary/10 text-primary',
+  rejected: 'bg-danger/10 text-danger',
+  failed: 'bg-danger/10 text-danger',
+  invalidated: 'bg-surface-muted text-foreground-muted'
 };
 
 export const FISCAL_STATUS_BADGES: Record<FiscalDocumentStatus, string> = {

@@ -69,16 +69,19 @@ from app.api.v1.routers import (
     sales,
     sales_contingencies,
     sales_discounts,
+    sales_fiscal_returns,
     sales_invalidations,
     sales_invoices,
     sales_notes,
     sales_orders,
+    sales_promotions,
     sales_quotations,
     sales_tax,
     supplier_master,
     suppliers,
     tracking,
     tracking_simulator,
+    transfer_remissions,
     users,
     warehouse_receiving,
     workforce,
@@ -114,6 +117,7 @@ api_router.include_router(inventory_lots.router, prefix="/api/v1")
 api_router.include_router(inventory_putaway_groups.router, prefix="/api/v1")
 api_router.include_router(inventory_trace.router, prefix="/api/v1")
 api_router.include_router(inventory_trace.public_router, prefix="/api/v1")
+api_router.include_router(transfer_remissions.router, prefix="/api/v1")
 api_router.include_router(inventory_transfers.router, prefix="/api/v1")
 api_router.include_router(inventory_valuation.router, prefix="/api/v1")
 api_router.include_router(operational_context.router, prefix="/api/v1")
@@ -158,7 +162,9 @@ api_router.include_router(sales_quotations.router, prefix="/api/v1")
 api_router.include_router(sales_contingencies.router, prefix="/api/v1")
 api_router.include_router(sales_invalidations.router, prefix="/api/v1")
 api_router.include_router(sales_notes.router, prefix="/api/v1")
+api_router.include_router(sales_promotions.router, prefix="/api/v1")
 api_router.include_router(sales_invoices.router, prefix="/api/v1")
+api_router.include_router(sales_fiscal_returns.router, prefix="/api/v1")
 api_router.include_router(sales_orders.router, prefix="/api/v1")
 api_router.include_router(sales.router, prefix="/api/v1")
 api_router.include_router(suppliers.router, prefix="/api/v1")

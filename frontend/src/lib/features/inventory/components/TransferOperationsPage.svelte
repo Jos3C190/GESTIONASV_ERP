@@ -23,6 +23,7 @@
   import TransferAssignmentPicker from './TransferAssignmentPicker.svelte';
   import TransferDiscrepancyPanel from './TransferDiscrepancyPanel.svelte';
   import TransferTransportCard from './TransferTransportCard.svelte';
+  import TransferRemissionCard from './TransferRemissionCard.svelte';
   import TransferRouteBadge from './TransferRouteBadge.svelte';
   import TransferVehicleCatalog from './TransferVehicleCatalog.svelte';
   import {
@@ -2709,6 +2710,11 @@
 
             {#if selectedTransfer.dispatched_at}
               <TransferTransportCard transfer={selectedTransfer} {formatDate} />
+              <TransferRemissionCard
+                transferId={selectedTransfer.id}
+                canReissue={canMoveInventory}
+                canOpenDocument={permissions.hasPermission('sales_invoices:read')}
+              />
             {/if}
 
             {#if selectedTransfer.status === 'preparation' || selectedTransfer.status === 'pending_approval' || selectedTransfer.status === 'approved'}

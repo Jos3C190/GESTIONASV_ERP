@@ -1964,7 +1964,7 @@ average cost (it already includes the retaceo) × the unit factor. Suggested pri
 | GET | `/price-lists/{id}/volume-discounts` | `price_lists:read` | Volume tiers with `status`. |
 | POST | `/price-lists/{id}/volume-discounts` | `price_lists:manage` | Body: `product_id`, `variant_id`, `unit_id`, `min_quantity` (> 0), `discount_percent` (> 0, ≤ 100), `valid_from` (today by default). A new tier for the same product, unit and quantity closes the one in force the day before. Audited as `sales_volume_discount`. |
 | DELETE | `/price-lists/volume-discounts/{scale_id}` | `price_lists:manage` | Cancels a scheduled tier or ends a current one today. Returns 204. |
-| GET | `/sales/discount-policies` | `sales_discounts:manage` | Every role of the company with `max_line_discount_percent`, `max_global_discount_percent`, `can_sell_below_cost` and `configured`. |
+| GET | `/sales/discount-policies` | `sales_discounts:manage` | Every role of the company with `max_line_discount_percent`, `max_global_discount_percent` and `configured`. |
 | PUT | `/sales/discount-policies/{role_id}` | `sales_discounts:manage` | Sets the limits of a role. Audited as `sales_discount_policy`. |
 | GET | `/sales/my-discount-policy` | `sales_quotations:read`, `sales:read` or `price_lists:read` | Effective limits of the current user: the maximum of their roles; none without policies; unlimited for superusers. |
 | POST | `/sales/discount-evaluation` | same as above | Body: optional `customer_id`, `branch_id`, `on`, `global_discount_percent`, and `lines` (`product_id`, `variant_id`, `unit_id`, `quantity`, optional `discount_percent`). Each line returns the resolved list price, the suggested discount (customer or volume, the larger one, never both added), the applied discount, `net_price`, `cost` and `margin_percent` (only with `sales_costs:read`), and `reasons` (`discount_above_limit`, `below_cost`) with Spanish messages. Also returns `global_reasons` and `requires_authorization`. |
@@ -2312,3 +2312,103 @@ Audited: `ISSUE_CREDIT_NOTE`, `ISSUE_DEBIT_NOTE` and the usual issuance events. 
 `sales_note_line_invalid`, `sales_note_line_repeated`, `sales_note_quantity_exceeded`,
 `sales_note_amount_exceeded`, `sales_note_charge_invalid`, `sales_invoice_has_notes`,
 `sales_note_cancel_order_invalid`.
+
+## Engineer's rules (revisions 0134–0136)
+
+**Never below cost.** The final net price of a line (its discount plus its share of the global
+discount) is compared with the current kardex cost. Previews flag it with the line reason
+`below_cost`; saving a quotation, issuing it, and confirming or authorizing an order reject it
+with `sales_price_below_cost` (422). No role or authorization overrides it.
+`can_sell_below_cost` is gone from the discount policies.
+
+**Branch promotions.**
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/sales/promotions` | `sales:read` or `sales_promotions:manage` | Optional `branch_id`, `include_ended`. Limited to the user's branches. Each item has `status`: `current`, `scheduled`, `expired` or `ended`. |
+| POST | `/sales/promotions` | `sales_promotions:manage` | Body: `branch_id`, `product_id`, `discount_percent` (> 0, < 100), optional `valid_from` (today by default), `valid_to`, `notes`. Audited as `CREATE` on `sales_branch_promotion`. |
+| POST | `/sales/promotions/{id}/end` | `sales_promotions:manage` | Ends a current promotion today or cancels a scheduled one. Audited as `END_PROMOTION`. |
+
+A current promotion replaces every other discount on its lines (`suggested_discount_source =
+'promotion'`): the vendor's discount is ignored, customer and volume discounts do not apply, no
+role limit is checked, and the document rejects a global discount
+(`sales_global_discount_with_promotion`).
+
+**Stock exit on confirm.**
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/sales/settings/orders` | `sales:read` or `fiscal_settings:read` | `{ "auto_deliver_on_confirm": true }`. |
+| PUT | `/sales/settings/orders` | `fiscal_settings:manage` | Same body. Audited. |
+
+When it is on, `POST /sales/orders/{id}/confirm` and `/authorize` also create and confirm a delivery
+with the whole handling units that cover each line (FEFO). The response carries `auto_delivery`:
+`delivery_id`, `delivery_code`, `pending_products` (lines that need a unit split in the warehouse)
+and `message` (why nothing could be delivered). A failure there never undoes the confirmation.
+
+Error codes: `sales_price_below_cost`, `sales_global_discount_with_promotion`,
+`sales_promotion_percent_invalid`, `sales_promotion_backdated`, `sales_promotion_validity_invalid`,
+`sales_promotion_branch_invalid` (404), `sales_promotion_product_invalid`, `sales_promotion_overlap` (409),
+`sales_promotion_not_found` (404), `sales_promotion_already_ended`.
+
+## Remission note of a transfer (revision 0137, block V4d)
+
+When the company enables document type `04`, `POST /inventory/transfers/{id}/dispatch` also creates the
+transfer's remission note in `pending`, in the same transaction, and the DTE worker issues it
+(`/api/dte/v2/nota-remision`). If the note cannot be built the dispatch is rolled back.
+
+- Issuer: the fiscal establishment of the origin warehouse's branch and its first active point of sale.
+- Receiver: the company itself at the destination establishment's address; `bienTitulo` `04`.
+- Lines: what was dispatched, at the kardex average cost, taxed (informative VAT); vehicle, plate and
+  driver in `observaciones`. `total` is `montoTotalOperacion` and is reconciled with the issued JSON.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/inventory/transfers/{id}/remission` | `inventory:read` (either side) | `{ enabled, document }`: the vigent note or the latest one. |
+| POST | `/inventory/transfers/{id}/remission/reissue` | `inventory:read` + `inventory:move` (origin side) | New note with the dispatch data when the latest was rejected or failed. Audited as `REISSUE_TRANSFER_REMISSION`. |
+
+Fiscal documents (`/sales/fiscal-documents`) now include `04` (filter `document_type=04`), with
+`sale_id: null`, `transfer_id` and `transfer_code`. A sealed note is corrected with `/correct` (type 1, the
+replacement is rebuilt from the transfer); `/invalidate` answers `transfer_remission_not_annullable`.
+
+Error codes: `transfer_remission_issuer_missing`, `transfer_remission_receiver_incomplete`,
+`transfer_remission_lines_missing`, `transfer_remission_already_issued`, `transfer_remission_not_reissuable`,
+`transfer_remission_disabled`, `transfer_remission_not_annullable`,
+`transfer_remission_transfer_not_dispatched` (404), `sales_invoice_not_an_order_document`.
+
+## Return events (revision 0138, block V4d2)
+
+A return event (evento de retorno, CAT-002 type 18; Normativa 2.0 rule 13.3) records goods a
+consumer gives back on a sealed invoice (`01`, issued or simulated, not being replaced and
+without a pending invalidation). It is built from the invoice as it was sealed: issuer, receiver
+and the related document come from the stored DTE. It is fiscal only: it moves no stock and no
+money. The event stays `pending` and `dte-worker` issues it through
+`POST /api/dte/{codigo}/retorno`; when it is accepted the customer gets it by email with its PDF
+and JSON.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/fiscal-documents/{id}/returns` | `sales_invoices:read` | Invoice lines with `net`, `returned`, `remaining_quantity` and `remaining_amount`; `deadline`, `withholding` (whether the invoice withheld VAT), `blocker` (why a return cannot be registered now) and the `returns` with their lines. |
+| POST | `/sales/fiscal-documents/{id}/returns` | `sales_invoices:returns` | `reason` (5–300) and `lines`: `{invoice_line_number, quantity}`. Each line at most once, within its balance; the last units take the exact remaining amount. `202`. |
+| POST | `/sales/fiscal-returns/{id}/annul` | `sales_invoices:returns` | `requester` (`name`, `document_type`, `document_number`). Annuls the event with an invalidation type 2 (no replacement); the branch responsible signs it. `202`. |
+| GET | `/sales/fiscal-returns/{id}/json` | `sales_invoices:read` | The event as transmitted. |
+| GET | `/sales/fiscal-returns/{id}/pdf` | `sales_invoices:read` | Graphic representation («EVENTO DE RETORNO»). |
+
+Amounts include VAT (13/113 of the taxed amount is shown as `vat`). If the invoice withheld VAT,
+the event repeats 1 % of its taxed base. The deadline is three months from the invoice
+generation date, or two years when the issuer's activity sells medicines (01282, 21001, 46484,
+47721; VAT Law art. 62). Return statuses: `pending`, `issued`, `simulated`, `rejected`,
+`failed`, `invalidated`; `annul_status`: `pending`, `accepted`, `rejected`, `failed`.
+
+An invoice with vigent returns (pending, issued or simulated) cannot be invalidated or corrected
+(`sales_invoice_has_returns`): annul its returns first.
+
+Audited: `ISSUE_FISCAL_RETURN`, `ANNUL_FISCAL_RETURN`, and from the worker `FISCAL_RETURN_ISSUED`,
+`FISCAL_RETURN_REJECTED`, `FISCAL_RETURN_FAILED`, `FISCAL_RETURN_ANNULLED`,
+`FISCAL_RETURN_ANNUL_REJECTED` and `FISCAL_RETURN_ANNUL_FAILED`. Error codes (`422`):
+`sales_return_document_invalid`, `sales_return_document_not_issued`,
+`sales_return_invoice_not_sealed`, `sales_return_invalidation_pending`,
+`sales_return_deadline_passed`, `sales_return_reason_required`, `sales_return_lines_required`,
+`sales_return_line_invalid`, `sales_return_line_repeated`, `sales_return_quantity_exceeded`,
+`sales_return_amount_exceeded`, `sales_return_not_annullable`, `sales_invoice_has_returns`;
+`sales_return_not_found` (`404`).

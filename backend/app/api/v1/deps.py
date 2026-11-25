@@ -62,6 +62,8 @@ from app.application.sales_invoices.contingency import ContingencyUseCases
 from app.application.sales_invoices.emails import SalesInvoiceEmailUseCases
 from app.application.sales_invoices.invalidation import FiscalInvalidationUseCases
 from app.application.sales_invoices.notes import SalesFiscalNoteUseCases
+from app.application.sales_invoices.remission import TransferRemissionUseCases
+from app.application.sales_invoices.returns import SalesFiscalReturnUseCases
 from app.application.sales_orders import SalesOrderUseCases
 from app.application.sales_quotations import SalesQuotationUseCases
 from app.application.sales_tax import SalesTaxUseCases
@@ -238,6 +240,9 @@ def get_fiscal_invalidation_use_cases(session: SessionDep) -> FiscalInvalidation
     from app.infrastructure.repositories.sales_fiscal_repository import (
         SqlAlchemySalesFiscalRepository,
     )
+    from app.infrastructure.repositories.sales_fiscal_return_repository import (
+        SqlAlchemySalesFiscalReturnRepository,
+    )
 
     return FiscalInvalidationUseCases(
         SqlAlchemySalesFiscalRepository(session),
@@ -246,6 +251,52 @@ def get_fiscal_invalidation_use_cases(session: SessionDep) -> FiscalInvalidation
         SqlAlchemyContingencyResponsibleRepository(session),
         SqlAlchemySalesOrderRepository(session),
         dte_client(),
+        get_transfer_remission_use_cases(session),
+        SqlAlchemySalesFiscalReturnRepository(session),
+    )
+
+
+def get_sales_fiscal_return_use_cases(session: SessionDep) -> SalesFiscalReturnUseCases:
+    from app.infrastructure.repositories.contingency_responsible_repository import (
+        SqlAlchemyContingencyResponsibleRepository,
+    )
+    from app.infrastructure.repositories.sales_fiscal_invalidation_repository import (
+        SqlAlchemySalesFiscalInvalidationRepository,
+    )
+    from app.infrastructure.repositories.sales_fiscal_repository import (
+        SqlAlchemySalesFiscalRepository,
+    )
+    from app.infrastructure.repositories.sales_fiscal_return_repository import (
+        SqlAlchemySalesFiscalReturnRepository,
+    )
+
+    return SalesFiscalReturnUseCases(
+        SqlAlchemySalesFiscalRepository(session),
+        SqlAlchemySalesFiscalReturnRepository(session),
+        SqlAlchemySalesFiscalInvalidationRepository(session),
+        SqlAlchemyContingencyResponsibleRepository(session),
+    )
+
+
+def get_transfer_remission_use_cases(session: SessionDep) -> TransferRemissionUseCases:
+    from app.infrastructure.repositories.price_list_repository import (
+        SqlAlchemyPriceListRepository,
+    )
+    from app.infrastructure.repositories.product_fiscal_repository import (
+        SqlAlchemyProductFiscalRepository,
+    )
+    from app.infrastructure.repositories.sales_fiscal_repository import (
+        SqlAlchemySalesFiscalRepository,
+    )
+    from app.infrastructure.transfer_remission_source import SqlAlchemyDispatchedTransferSource
+
+    return TransferRemissionUseCases(
+        SqlAlchemySalesFiscalRepository(session),
+        get_sales_invoice_use_cases(session),
+        SqlAlchemyFiscalRepository(session),
+        SqlAlchemyProductFiscalRepository(session),
+        SqlAlchemyPriceListRepository(session),
+        SqlAlchemyDispatchedTransferSource(session),
     )
 
 

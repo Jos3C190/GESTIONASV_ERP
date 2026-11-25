@@ -212,7 +212,7 @@ async def test_rules_deadline_and_permission(e2e_client: AsyncClient) -> None:
     assert on_invoice.json()["code"] == "sales_note_requires_ccf"
 
     admin, _order, ccf = await _ccf(e2e_client)
-    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2", False)
+    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2")
     denied = await e2e_client.post(
         f"{DOCUMENTS}/{ccf['id']}/credit-note",
         json={

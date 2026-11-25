@@ -31,7 +31,11 @@ from app.infrastructure.db.base import Base
 
 
 class SalesFiscalDocumentModel(Base):
-    """Copia del ERP de cada factura o crédito fiscal emitido por el servicio DTE."""
+    """Copia del ERP de cada documento emitido por el servicio DTE.
+
+    Factura, crédito fiscal y notas pertenecen a un pedido; la nota de remisión (04), a un
+    traslado (V4d).
+    """
 
     __tablename__ = "sales_fiscal_documents"
 
@@ -42,7 +46,8 @@ class SalesFiscalDocumentModel(Base):
         PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
     )
     branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    sale_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    sale_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    transfer_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     establishment_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     point_of_sale_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     document_type: Mapped[str] = mapped_column(String(2), nullable=False)
@@ -96,6 +101,12 @@ class SalesFiscalDocumentModel(Base):
             name="fk_sales_fiscal_documents_sale",
         ),
         ForeignKeyConstraint(
+            ["company_id", "transfer_id"],
+            ["inventory_transfers.company_id", "inventory_transfers.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_documents_transfer",
+        ),
+        ForeignKeyConstraint(
             ["branch_id", "company_id"],
             ["branches.id", "branches.company_id"],
             ondelete="RESTRICT",
@@ -120,7 +131,12 @@ class SalesFiscalDocumentModel(Base):
             name="fk_sales_fiscal_documents_creator",
         ),
         CheckConstraint(
-            "document_type IN ('01','03','05','06')", name="ck_sales_fiscal_documents_document"
+            "document_type IN ('01','03','04','05','06')", name="ck_sales_fiscal_documents_document"
+        ),
+        CheckConstraint(
+            "(document_type = '04') = (transfer_id IS NOT NULL) "
+            "AND (document_type = '04') = (sale_id IS NULL)",
+            name="ck_sales_fiscal_documents_origin",
         ),
         CheckConstraint(
             "(document_type IN ('05','06')) = (related_document_id IS NOT NULL) "
@@ -289,6 +305,7 @@ class SalesFiscalDocumentEmailModel(Base):
     message_id: Mapped[str | None] = mapped_column(String(255))
     requested_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     invalidation_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    return_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -332,7 +349,26 @@ class SalesFiscalDocumentEmailModel(Base):
             "company_id",
             "document_id",
             unique=True,
-            postgresql_where=text("origin = 'auto' AND invalidation_id IS NULL"),
+            postgresql_where=text(
+                "origin = 'auto' AND invalidation_id IS NULL AND return_id IS NULL"
+            ),
+        ),
+        Index(
+            "uq_sales_fiscal_document_emails_return",
+            "company_id",
+            "return_id",
+            unique=True,
+            postgresql_where=text("origin = 'auto' AND return_id IS NOT NULL"),
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "return_id"],
+            ["sales_fiscal_returns.company_id", "sales_fiscal_returns.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_document_emails_return",
+        ),
+        CheckConstraint(
+            "invalidation_id IS NULL OR return_id IS NULL",
+            name="ck_sales_fiscal_document_emails_subject",
         ),
         Index(
             "uq_sales_fiscal_document_emails_invalidation",
@@ -451,4 +487,155 @@ class SalesFiscalInvalidationModel(Base):
             postgresql_where=text("status = 'pending'"),
         ),
         Index("ix_sales_fiscal_invalidations_status", "status", "updated_at"),
+    )
+
+
+class SalesFiscalReturnModel(Base):
+    """Evento de retorno sobre una factura y su anulación (revisión 0138, bloque V4d2)."""
+
+    __tablename__ = "sales_fiscal_returns"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    reason: Mapped[str] = mapped_column(String(300), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending")
+    idempotency_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    request_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    total: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    generation_code: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    seal: Mapped[str | None] = mapped_column(String(100))
+    dte_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    json_object_key: Mapped[str | None] = mapped_column(Text)
+    pdf_object_key: Mapped[str | None] = mapped_column(Text)
+    error_code: Mapped[str | None] = mapped_column(String(80))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    annul_status: Mapped[str | None] = mapped_column(String(16))
+    annul_idempotency_key: Mapped[str | None] = mapped_column(String(120))
+    annul_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    annul_requester_name: Mapped[str | None] = mapped_column(String(100))
+    annul_requester_document_type: Mapped[str | None] = mapped_column(String(2))
+    annul_requester_document_number: Mapped[str | None] = mapped_column(String(25))
+    annul_responsible_name: Mapped[str | None] = mapped_column(String(100))
+    annul_responsible_document_type: Mapped[str | None] = mapped_column(String(2))
+    annul_responsible_document_number: Mapped[str | None] = mapped_column(String(25))
+    annul_generation_code: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    annul_seal: Mapped[str | None] = mapped_column(String(100))
+    annul_error_code: Mapped[str | None] = mapped_column(String(80))
+    annul_error_message: Mapped[str | None] = mapped_column(Text)
+    annul_requested_by_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    annul_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    annulled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "id", name="uq_sales_fiscal_returns_company_id"),
+        UniqueConstraint(
+            "company_id", "idempotency_key", name="uq_sales_fiscal_returns_idempotency"
+        ),
+        UniqueConstraint(
+            "company_id", "generation_code", name="uq_sales_fiscal_returns_generation"
+        ),
+        UniqueConstraint(
+            "company_id", "annul_idempotency_key", name="uq_sales_fiscal_returns_annul_key"
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "document_id"],
+            ["sales_fiscal_documents.company_id", "sales_fiscal_documents.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_returns_document",
+        ),
+        ForeignKeyConstraint(
+            ["created_by_id", "company_id"],
+            ["user_companies.user_id", "user_companies.company_id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_returns_creator",
+        ),
+        ForeignKeyConstraint(
+            ["annul_requested_by_id", "company_id"],
+            ["user_companies.user_id", "user_companies.company_id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_returns_annul_requester",
+        ),
+        CheckConstraint(
+            "status IN ('pending','issued','simulated','rejected','failed','invalidated') "
+            "AND char_length(btrim(reason)) BETWEEN 5 AND 300 "
+            "AND total >= 0 AND attempts >= 0 AND annul_attempts >= 0 "
+            "AND (status NOT IN ('issued','simulated','invalidated') "
+            "OR (generation_code IS NOT NULL AND issued_at IS NOT NULL)) "
+            "AND (status <> 'issued' OR seal IS NOT NULL)",
+            name="ck_sales_fiscal_returns_status",
+        ),
+        CheckConstraint(
+            "(annul_status IS NULL OR annul_status IN ('pending','accepted','rejected','failed')) "
+            "AND (annul_status IS NULL) = (annul_idempotency_key IS NULL) "
+            "AND (annul_status IS NULL) = (annul_requester_name IS NULL) "
+            "AND (annul_status IS NULL) = (annul_requested_by_id IS NULL) "
+            "AND (annul_requester_document_type IS NULL "
+            "OR annul_requester_document_type IN ('36','13','37','03','02')) "
+            "AND (status = 'invalidated') = (annul_status = 'accepted' AND annulled_at IS NOT NULL)",
+            name="ck_sales_fiscal_returns_annul",
+        ),
+        Index("ix_sales_fiscal_returns_document", "company_id", "document_id", "created_at"),
+        Index(
+            "ix_sales_fiscal_returns_pending",
+            "updated_at",
+            postgresql_where=text("status = 'pending' OR annul_status = 'pending'"),
+        ),
+    )
+
+
+class SalesFiscalReturnLineModel(Base):
+    """Lo devuelto de una línea de la factura en un evento de retorno (revisión 0138)."""
+
+    __tablename__ = "sales_fiscal_return_lines"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
+    )
+    return_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    line_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    invoice_line_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    nature: Mapped[str] = mapped_column(String(12), nullable=False)
+    description: Mapped[str] = mapped_column(String(1000), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    vat: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, server_default=text("0"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id", "return_id", "line_number", name="uq_sales_fiscal_return_lines_number"
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "return_id"],
+            ["sales_fiscal_returns.company_id", "sales_fiscal_returns.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_fiscal_return_lines_return",
+        ),
+        CheckConstraint(
+            "nature IN ('taxed','exempt','not_subject') "
+            "AND line_number > 0 AND invoice_line_number > 0 "
+            "AND quantity > 0 AND amount > 0 AND vat >= 0 AND vat <= amount "
+            "AND (nature = 'taxed' OR vat = 0) "
+            "AND char_length(btrim(description)) > 0",
+            name="ck_sales_fiscal_return_lines_values",
+        ),
     )

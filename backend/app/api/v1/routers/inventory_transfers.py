@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
+from app.api.v1.after_commit import run_after_commit
 from app.api.v1.company_access import (
     assigned_warehouse_ids,
     authorize_warehouse_assignment,
@@ -27,6 +28,7 @@ from app.api.v1.deps import (
     SessionDep,
     get_audit_service,
     get_check_permission_use_case,
+    get_transfer_remission_use_cases,
     require_permission,
 )
 from app.api.v1.fleet_scope import get_fleet_scope
@@ -80,6 +82,7 @@ from app.application.inventory_adjustments import InventoryAdjustmentUseCases
 from app.application.inventory_transfers.settings import policy_from
 from app.application.inventory_transfers.use_cases import InventoryTransferUseCases
 from app.application.rbac.check_permission import CheckPermissionUseCase
+from app.application.sales_invoices.remission import TransferRemissionUseCases
 from app.core.exceptions import AuthorizationError
 from app.domain.entities.inventory import InventoryOperationError
 from app.domain.entities.inventory_adjustment import InventoryAdjustmentError
@@ -89,6 +92,8 @@ from app.domain.entities.inventory_transfer import (
     TransferRoute,
     TransferStatus,
 )
+from app.domain.entities.sales_fiscal_document import FiscalDocumentStatus
+from app.infrastructure.dte_worker import enqueue_fiscal_document
 from app.infrastructure.models.fleet import FleetVehicleModel
 from app.infrastructure.models.inventory import InventoryHandlingUnitModel
 from app.infrastructure.models.inventory_transfer import (
@@ -1470,6 +1475,7 @@ async def dispatch_transfer(
     session: SessionDep,
     current: CurrentUser,
     checker: Annotated[CheckPermissionUseCase, Depends(get_check_permission_use_case)],
+    remissions: Annotated[TransferRemissionUseCases, Depends(get_transfer_remission_use_cases)],
     audit: AuditService = Depends(get_audit_service),
 ) -> InventoryTransferOut:
     company_id = effective_company_id(request)
@@ -1518,50 +1524,56 @@ async def dispatch_transfer(
                 },
             )
         override_reason = body.override_reason.strip()
-    dispatched = await _persist_command(
-        session=session,
-        audit=audit,
-        current=current,
-        request=request,
-        company_id=company_id,
-        branch_id=branch_id,
-        action=(
-            "DISPATCH_TRANSFER_OVERRIDE"
-            if override_reason
-            else "DISPATCH_TRANSFER_SUBSTITUTION"
-            if substitution
-            else "DISPATCH_TRANSFER"
-        ),
-        resource_type="inventory_transfers",
-        resource_id=str(transfer_id),
-        operation=_use_cases(session).dispatch_transfer(
-            company_id=company_id,
-            transfer_id=transfer_id,
-            vehicle_id=body.vehicle_id,
-            driver_id=evaluation.driver_id,
-            compliance_override_reason=override_reason,
-            # Whatever the client sent is part of the request; the repository decides if needed.
-            substitution_code=body.substitution_code,
-            substitution_reason=body.substitution_reason,
-            idempotency_key=body.idempotency_key,
-            actor_id=current.id,
-        ),
-        response_model=InventoryTransferOut,
-    )
-    if substitution and override_reason:
-        # The exception is the audit action; the change of transport is recorded on its own.
-        await audit.record(
-            action="DISPATCH_TRANSFER_SUBSTITUTION",
-            user_id=current.id,
+    # El despacho y su nota de remisión (V4d) van juntos: si la nota no se puede armar, el
+    # traslado no sale.
+    async with session.begin_nested():
+        dispatched = await _persist_command(
+            session=session,
+            audit=audit,
+            current=current,
+            request=request,
             company_id=company_id,
             branch_id=branch_id,
+            action=(
+                "DISPATCH_TRANSFER_OVERRIDE"
+                if override_reason
+                else "DISPATCH_TRANSFER_SUBSTITUTION"
+                if substitution
+                else "DISPATCH_TRANSFER"
+            ),
             resource_type="inventory_transfers",
             resource_id=str(transfer_id),
-            after_state=jsonable_encoder(dispatched.assignment_substitution),
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            required=True,
+            operation=_use_cases(session).dispatch_transfer(
+                company_id=company_id,
+                transfer_id=transfer_id,
+                vehicle_id=body.vehicle_id,
+                driver_id=evaluation.driver_id,
+                compliance_override_reason=override_reason,
+                # Whatever the client sent is part of the request; the repository decides if needed.
+                substitution_code=body.substitution_code,
+                substitution_reason=body.substitution_reason,
+                idempotency_key=body.idempotency_key,
+                actor_id=current.id,
+            ),
+            response_model=InventoryTransferOut,
         )
+        if substitution and override_reason:
+            # The exception is the audit action; the change of transport is recorded on its own.
+            await audit.record(
+                action="DISPATCH_TRANSFER_SUBSTITUTION",
+                user_id=current.id,
+                company_id=company_id,
+                branch_id=branch_id,
+                resource_type="inventory_transfers",
+                resource_id=str(transfer_id),
+                after_state=jsonable_encoder(dispatched.assignment_substitution),
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                required=True,
+            )
+        remission = await remissions.on_dispatch(company_id, transfer_id, current.id)
+    if remission is not None and remission.status == FiscalDocumentStatus.PENDING:
+        run_after_commit(session, lambda: enqueue_fiscal_document(remission.id))
     return dispatched
 
 

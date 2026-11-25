@@ -344,6 +344,8 @@ function _datosReceptor(dte) {
     correo: receptor.correo || null,
     telefono: _formatoTelefono(receptor.telefono),
     condicion: textoCondicion,
+    // Nota de remisión: título a que se remiten los bienes (CAT-025) en lugar de la condición.
+    bienTitulo: receptor.bienTitulo ? etiquetas.nombreBienTitulo(receptor.bienTitulo) : null,
   };
 }
 
@@ -812,7 +814,8 @@ function _dibujarReceptor(ctx) {
     ['NRC:', receptor.nrc], ['Tipo Documento:', receptor.tipoDocumento], ['No. Documento:', receptor.numDocumento],
   ]) + separacion;
   y += _filaColumnas(doc, y, [
-    ['Correo electrónico:', receptor.correo], ['Número de Teléfono:', receptor.telefono], ['Condición de la Operación:', receptor.condicion],
+    ['Correo electrónico:', receptor.correo], ['Número de Teléfono:', receptor.telefono],
+    receptor.bienTitulo ? ['Título de los bienes:', receptor.bienTitulo] : ['Condición de la Operación:', receptor.condicion],
   ]);
   y += 5;
 

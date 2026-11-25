@@ -23,6 +23,7 @@ from app.domain.entities.sales_quotation import (
     require_cancellable,
     require_convertible,
     require_editable,
+    require_not_below_cost,
     require_price_override_allowed,
     require_rejection_reason,
     require_valid_until,
@@ -40,7 +41,8 @@ TAXPAYER = TaxParties(
     customer_is_taxpayer=True,
     customer_category=TaxpayerCategory.OTHER,
 )
-SELLER = DiscountPolicy(D("10"), D("3"), False)
+SELLER = DiscountPolicy(D("10"), D("3"))
+UNLIMITED_POLICY = DiscountPolicy(D("100"), D("100"))
 TODAY = date(2026, 11, 16)
 
 
@@ -107,11 +109,28 @@ def test_manual_price_counts_as_discount_and_below_cost() -> None:
     assert item.price_overridden
     assert item.unit_price == D("9")
     assert item.effective_discount_percent == D("20.35")
-    assert item.reasons == (
-        AuthorizationReason.DISCOUNT_ABOVE_LIMIT,
-        AuthorizationReason.BELOW_COST,
-    )
+    assert item.reasons == (AuthorizationReason.DISCOUNT_ABOVE_LIMIT,)
     assert result.requires_authorization
+    # $9 con IVA son $7.96 sin IVA, bajo el costo de $8: no se puede vender así.
+    assert item.below_cost
+    assert result.below_cost_lines == (1,)
+    with pytest.raises(BusinessRuleError) as error:
+        require_not_below_cost(result)
+    assert error.value.code == "sales_price_below_cost"
+    assert "$7.96" in error.value.message
+
+
+def test_global_discount_also_counts_against_the_cost() -> None:
+    fine = calculate_quote(INVOICE, False, [line("1", "10", cost="9.60")], CONSUMER, D("0"), SELLER)
+    require_not_below_cost(fine)
+    # 5 % global deja la línea en $9.50 sin IVA, bajo el costo de $9.60.
+    global_ = calculate_quote(
+        INVOICE, False, [line("1", "10", cost="9.60")], CONSUMER, D("5"), UNLIMITED_POLICY
+    )
+    assert global_.lines[0].final_net_without_vat == D("9.50")
+    assert global_.below_cost_lines == (1,)
+    with pytest.raises(BusinessRuleError):
+        require_not_below_cost(global_)
 
 
 def test_manual_price_above_list_is_not_a_discount() -> None:
@@ -167,16 +186,14 @@ def test_discount_out_of_range(percent: str) -> None:
 
 def test_authorizer_needs_own_sufficient_limit() -> None:
     quote = calculate_quote(
-        INVOICE, True, [line("1", "11.30", manual="9", cost="8")], CONSUMER, D("5"), SELLER
+        INVOICE, True, [line("1", "11.30", manual="9", cost="7")], CONSUMER, D("5"), SELLER
     )
-    assert missing_authority(quote, DiscountPolicy(D("25"), D("10"), False)) == (
-        AuthorizationReason.BELOW_COST,
-    )
-    assert missing_authority(quote, DiscountPolicy(D("20"), D("4"), True)) == (
+    assert missing_authority(quote, DiscountPolicy(D("25"), D("10"))) == ()
+    assert missing_authority(quote, DiscountPolicy(D("20"), D("4"))) == (
         AuthorizationReason.DISCOUNT_ABOVE_LIMIT,
         AuthorizationReason.GLOBAL_DISCOUNT_ABOVE_LIMIT,
     )
-    require_authority(quote, DiscountPolicy(D("25"), D("10"), True))
+    require_authority(quote, DiscountPolicy(D("25"), D("10")))
     with pytest.raises(BusinessRuleError) as error:
         require_authority(quote, SELLER)
     assert error.value.code == "sales_quote_authority_insufficient"
