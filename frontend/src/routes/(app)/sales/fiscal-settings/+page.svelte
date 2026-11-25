@@ -7,6 +7,7 @@
   import FiscalEstablishmentsPanel from '#lib/features/fiscal/components/FiscalEstablishmentsPanel.svelte';
   import FiscalProfilePanel from '#lib/features/fiscal/components/FiscalProfilePanel.svelte';
   import FiscalUnitsPanel from '#lib/features/fiscal/components/FiscalUnitsPanel.svelte';
+  import OrderSettingsPanel from '#lib/features/sales/components/OrderSettingsPanel.svelte';
   import QuotationSettingsPanel from '#lib/features/sales/components/QuotationSettingsPanel.svelte';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
 
@@ -18,7 +19,7 @@
     { id: 'hacienda', label: 'Hacienda' },
     { id: 'correo', label: 'Correo' },
     { id: 'unidades', label: 'Unidades' },
-    { id: 'cotizaciones', label: 'Cotizaciones' }
+    { id: 'cotizaciones', label: 'Cotizaciones y pedidos' }
   ];
 
   let active = $state('emisor');
@@ -64,7 +65,10 @@
     {:else if active === 'unidades'}
       <FiscalUnitsPanel {canManage} />
     {:else}
-      <QuotationSettingsPanel {canManage} />
+      <div class="space-y-5">
+        <QuotationSettingsPanel {canManage} />
+        <OrderSettingsPanel {canManage} />
+      </div>
     {/if}
   </div>
 {/if}

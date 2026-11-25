@@ -8,7 +8,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Protocol
 
-from app.domain.entities.sales_margin import DiscountPolicy
+from app.domain.entities.sales_margin import BranchPromotion, DiscountPolicy
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +77,42 @@ class SalesDiscountRepository(Protocol):
     async def set_volume_valid_to(self, scale_id: uuid.UUID, valid_to: date | None) -> None: ...
 
     async def delete_volume_discount(self, scale_id: uuid.UUID) -> None: ...
+
+    # --- promociones por sucursal ---
+    async def promotions(
+        self,
+        company_id: uuid.UUID,
+        *,
+        branch_ids: tuple[uuid.UUID, ...] | None = None,
+        product_id: int | None = None,
+        include_ended: bool = True,
+    ) -> list[BranchPromotion]:
+        """Promociones de la empresa; ``branch_ids`` limita a esas sucursales."""
+        ...
+
+    async def get_promotion(
+        self, company_id: uuid.UUID, promotion_id: uuid.UUID, *, lock: bool = False
+    ) -> BranchPromotion | None: ...
+
+    async def insert_promotion(
+        self,
+        company_id: uuid.UUID,
+        branch_id: uuid.UUID,
+        product_id: int,
+        discount_percent: Decimal,
+        valid_from: date,
+        valid_to: date | None,
+        notes: str | None,
+        actor_id: uuid.UUID,
+    ) -> uuid.UUID: ...
+
+    async def end_promotion(self, promotion_id: uuid.UUID, actor_id: uuid.UUID) -> None: ...
+
+    async def lock_promotion_scope(
+        self, company_id: uuid.UUID, branch_id: uuid.UUID, product_id: int
+    ) -> None:
+        """Serializa altas del mismo producto y sucursal para validar que no se encimen."""
+        ...
 
     async def customer_discount(
         self, company_id: uuid.UUID, customer_id: uuid.UUID

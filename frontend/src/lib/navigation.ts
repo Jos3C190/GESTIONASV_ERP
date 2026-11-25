@@ -337,6 +337,13 @@ export const NAV_GROUPS: NavGroup[] = [
         requiredPermission: 'sales_discounts:manage'
       },
       {
+        label: 'Promociones',
+        icon: ICONS.pricing,
+        route: '/sales/promotions',
+        implemented: true,
+        requiredPermission: 'sales:read'
+      },
+      {
         label: 'Configuración fiscal',
         icon: ICONS.settings,
         route: '/sales/fiscal-settings',

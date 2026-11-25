@@ -46,7 +46,7 @@ export interface SalesQuotationLine {
   unit_price: string;
   discount_percent: string;
   suggested_discount_percent: string;
-  suggested_discount_source: 'none' | 'customer' | 'volume';
+  suggested_discount_source: 'none' | 'customer' | 'volume' | 'promotion';
   tax_treatment: 'taxed' | 'exempt' | 'not_subject';
   item_type: '1' | '2' | '3';
   document_unit_price: string;
@@ -204,8 +204,21 @@ export interface Sale {
   cancelled_at: string | null;
   cancellation_reason: string | null;
   lines: SalesLine[];
+  /** Salida automática al confirmar (solo en la respuesta de confirmar o autorizar). */
+  auto_delivery?: AutoDelivery | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+export interface AutoDelivery {
+  delivery_id: string | null;
+  delivery_code: string | null;
+  pending_products: string[];
+  message: string | null;
+}
+
+export interface OrderSettings {
+  auto_deliver_on_confirm: boolean;
 }
 
 export interface OrderDelivery {

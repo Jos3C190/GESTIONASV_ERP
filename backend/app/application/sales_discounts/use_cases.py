@@ -1,4 +1,7 @@
-"""Escalas por volumen, topes de descuento por rol y evaluación de líneas (bloque V2c)."""
+"""Escalas por volumen, topes por rol, promociones por sucursal y evaluación de líneas.
+
+Bloque V2c; las promociones por sucursal son del pedido del ingeniero (24/11/2026).
+"""
 
 from __future__ import annotations
 
@@ -11,8 +14,11 @@ from app.application.price_lists import PriceListUseCases, today_in_el_salvador
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.domain.entities.price_list import PriceKey, PriceList
 from app.domain.entities.sales_margin import (
+    UNLIMITED,
     AuthorizationReason,
+    BranchPromotion,
     DiscountPolicy,
+    DiscountSource,
     LineEvaluation,
     ScheduledScale,
     SuggestedDiscount,
@@ -22,7 +28,9 @@ from app.domain.entities.sales_margin import (
     evaluate_line,
     pick_volume_discount,
     plan_scale_change,
+    require_no_overlap,
     require_policy,
+    require_promotion,
     require_volume_scale,
     suggested_discount,
 )
@@ -55,6 +63,8 @@ class EvaluatedLine:
     evaluation: LineEvaluation | None
     cost: Decimal | None = None
     """Costo unitario sin IVA en la unidad de la línea, aunque no haya precio de lista."""
+    promotion: BranchPromotion | None = None
+    """Promoción vigente del producto en la sucursal: fija el descuento de la línea."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +194,94 @@ class SalesDiscountUseCases:
         return scale
 
     # --- evaluación ---
+    # --- promociones por sucursal ---
+    async def _active_promotions(
+        self, company_id: uuid.UUID, branch_id: uuid.UUID | None, day: date
+    ) -> dict[int, BranchPromotion]:
+        if branch_id is None:
+            return {}
+        found = await self._repo.promotions(
+            company_id, branch_ids=(branch_id,), include_ended=False
+        )
+        return {p.product_id: p for p in found if p.covers(day)}
+
+    async def promotions(
+        self,
+        company_id: uuid.UUID,
+        *,
+        branch_ids: tuple[uuid.UUID, ...] | None,
+        include_ended: bool,
+    ) -> list[BranchPromotion]:
+        return await self._repo.promotions(
+            company_id, branch_ids=branch_ids, include_ended=include_ended
+        )
+
+    async def promotion(self, company_id: uuid.UUID, promotion_id: uuid.UUID) -> BranchPromotion:
+        found = await self._repo.get_promotion(company_id, promotion_id)
+        if found is None:
+            raise NotFoundError("Promoción no encontrada.", code="sales_promotion_not_found")
+        return found
+
+    async def add_promotion(
+        self,
+        company_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        *,
+        branch_id: uuid.UUID,
+        product_id: int,
+        discount_percent: Decimal,
+        valid_from: date | None,
+        valid_to: date | None,
+        notes: str | None,
+    ) -> BranchPromotion:
+        today = today_in_el_salvador()
+        start = valid_from or today
+        require_promotion(discount_percent, start, valid_to, today)
+        if not await self._prices_repo.branch_exists(company_id, branch_id):
+            raise NotFoundError("Sucursal no encontrada.", code="sales_promotion_branch_invalid")
+        units = await self._prices_repo.sellable_units(company_id, product_id=product_id)
+        if not any(unit.product_id == product_id for unit in units):
+            raise BusinessRuleError(
+                "El producto no existe o no está marcado como vendible.",
+                code="sales_promotion_product_invalid",
+            )
+        await self._repo.lock_promotion_scope(company_id, branch_id, product_id)
+        existing = await self._repo.promotions(
+            company_id, branch_ids=(branch_id,), product_id=product_id, include_ended=False
+        )
+        require_no_overlap(existing, start, valid_to)
+        promotion_id = await self._repo.insert_promotion(
+            company_id,
+            branch_id,
+            product_id,
+            discount_percent,
+            start,
+            valid_to,
+            (notes or "").strip() or None,
+            actor_id,
+        )
+        return await self.promotion(company_id, promotion_id)
+
+    async def end_promotion(
+        self, company_id: uuid.UUID, actor_id: uuid.UUID, promotion_id: uuid.UUID
+    ) -> tuple[BranchPromotion, BranchPromotion]:
+        before = await self._repo.get_promotion(company_id, promotion_id, lock=True)
+        if before is None:
+            raise NotFoundError("Promoción no encontrada.", code="sales_promotion_not_found")
+        if before.ended:
+            raise BusinessRuleError(
+                "La promoción ya está terminada.", code="sales_promotion_already_ended"
+            )
+        await self._repo.end_promotion(promotion_id, actor_id)
+        return before, await self.promotion(company_id, promotion_id)
+
+    async def unit_costs(
+        self, company_id: uuid.UUID, inventory_item_ids: set[uuid.UUID]
+    ) -> dict[uuid.UUID, Decimal]:
+        """Costo promedio vigente del kardex por artículo, en su unidad base."""
+
+        return await self._prices_repo.unit_costs(company_id, inventory_item_ids)
+
     async def evaluate(
         self,
         company_id: uuid.UUID,
@@ -203,6 +301,13 @@ class SalesDiscountUseCases:
             if found is None:
                 raise NotFoundError("Cliente no encontrado.", code="sales_customer_not_found")
             customer_percent = found
+        promotions = await self._active_promotions(company_id, branch_id, day)
+        if global_discount_percent > 0 and any(line.product_id in promotions for line in lines):
+            raise BusinessRuleError(
+                "Hay productos en promoción en esta sucursal: el documento no admite descuento "
+                "global. Quita el descuento global.",
+                code="sales_global_discount_with_promotion",
+            )
         units = await self._prices_repo.sellable_units(company_id)
         costs = await self._prices_repo.unit_costs(
             company_id, {u.inventory_item_id for u in units if u.inventory_item_id}
@@ -255,20 +360,31 @@ class SalesDiscountUseCases:
                 variant_id=line.variant_id,
                 unit_id=line.unit_id,
             )
-            volume = pick_volume_discount([_as_scale(s) for s in scales], line.quantity, day)
-            suggested = suggested_discount(customer_percent, volume)
-            applied = (
-                line.discount_percent if line.discount_percent is not None else suggested.percent
-            )
+            promotion = promotions.get(line.product_id)
+            if promotion is not None:
+                # La promoción reemplaza todo: ni cliente, ni volumen, ni el descuento del vendedor,
+                # y no pasa por el tope del rol (la decidió la empresa).
+                suggested = SuggestedDiscount(promotion.discount_percent, DiscountSource.PROMOTION)
+                applied = promotion.discount_percent
+            else:
+                volume = pick_volume_discount([_as_scale(s) for s in scales], line.quantity, day)
+                suggested = suggested_discount(customer_percent, volume)
+                applied = (
+                    line.discount_percent
+                    if line.discount_percent is not None
+                    else suggested.percent
+                )
             evaluation = evaluate_line(
                 resolved.entry.price,
                 resolved.price_list.prices_include_vat,
                 applied,
                 cost,
-                policy,
+                UNLIMITED if promotion is not None else policy,
             )
             results.append(
-                EvaluatedLine(line, resolved.price_list, True, None, suggested, evaluation, cost)
+                EvaluatedLine(
+                    line, resolved.price_list, True, None, suggested, evaluation, cost, promotion
+                )
             )
         return Evaluation(
             policy=policy,

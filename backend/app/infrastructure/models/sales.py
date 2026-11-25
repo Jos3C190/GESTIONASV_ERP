@@ -533,7 +533,7 @@ class SalesQuotationLineModel(UUIDPKMixin, TimestampMixin, Base):
         CheckConstraint(
             "discount_percent >= 0 AND discount_percent <= 100 "
             "AND suggested_discount_percent >= 0 AND suggested_discount_percent <= 100 "
-            "AND suggested_discount_source IN ('none','customer','volume')",
+            "AND suggested_discount_source IN ('none','customer','volume','promotion')",
             name="ck_sales_quotation_lines_discounts",
         ),
         CheckConstraint(
@@ -858,7 +858,7 @@ class SaleLineModel(UUIDPKMixin, TimestampMixin, Base):
         CheckConstraint(
             "discount_percent >= 0 AND discount_percent <= 100 "
             "AND suggested_discount_percent >= 0 AND suggested_discount_percent <= 100 "
-            "AND suggested_discount_source IN ('none','customer','volume')",
+            "AND suggested_discount_source IN ('none','customer','volume','promotion')",
             name="ck_sales_lines_discounts",
         ),
         CheckConstraint(

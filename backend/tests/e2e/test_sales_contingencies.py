@@ -175,7 +175,7 @@ async def test_contingency_round_trip_in_simulated_mode(
 
 async def test_contingency_needs_its_permission(e2e_client: AsyncClient) -> None:
     admin, _order, point = await _confirmed_order(e2e_client)
-    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2", False)
+    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2")
     establishment = await _establishment(point)
     denied = await e2e_client.post(
         CONTINGENCIES,

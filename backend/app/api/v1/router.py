@@ -73,6 +73,7 @@ from app.api.v1.routers import (
     sales_invoices,
     sales_notes,
     sales_orders,
+    sales_promotions,
     sales_quotations,
     sales_tax,
     supplier_master,
@@ -158,6 +159,7 @@ api_router.include_router(sales_quotations.router, prefix="/api/v1")
 api_router.include_router(sales_contingencies.router, prefix="/api/v1")
 api_router.include_router(sales_invalidations.router, prefix="/api/v1")
 api_router.include_router(sales_notes.router, prefix="/api/v1")
+api_router.include_router(sales_promotions.router, prefix="/api/v1")
 api_router.include_router(sales_invoices.router, prefix="/api/v1")
 api_router.include_router(sales_orders.router, prefix="/api/v1")
 api_router.include_router(sales.router, prefix="/api/v1")

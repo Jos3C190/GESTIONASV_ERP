@@ -30,13 +30,116 @@ catálogos). El proyecto de referencia es de solo lectura.
   - Si no lo habilita, el despacho sigue como hoy.
 - **Certificación (V4e)**: se construye ahora la herramienta que arma y transmite el lote por tipo de
   documento y muestra su avance. Se prueba contra el stub; el lote real se corre cuando haya credenciales.
+- **Pendiente para V8 (decidido el 20/11/2026): invalidación tipo 3 «Otro» de CAT-024.**
+  - Qué es: el Manual Funcional V2.0 (§VII, pág. 12) dice «Otro (esta opción incluye el cambio de
+    bienes/servicios)». Igual que el tipo 1, exige que el documento de reemplazo esté sellado antes.
+  - Hoy (V4b) el ERP solo usa el tipo 1 («Corregir documento») y el 2 («Anular documento»). El servicio DTE
+    ya acepta el 3; el ERP no (`InvalidationKind` y el CHECK de `sales_fiscal_invalidations.kind` admiten
+    1 y 2).
+  - No se agrega ahora: el reemplazo se arma con los datos actuales del pedido y un pedido facturado no
+    permite cambiar el producto, así que un tipo 3 sería un tipo 1 con otra etiqueta. Además, un cambio de
+    producto también mueve inventario (devolución B08).
+  - En V8, al diseñar devoluciones y cambios, decidir por caso entre: invalidar con tipo 3 y emitir el
+    documento nuevo (si el cambio ocurre dentro del plazo de invalidación), o documentar la devolución con
+    evento de retorno (factura) o nota de crédito (CCF) y emitir el documento nuevo. Cambios: ampliar el
+    CHECK, acción «cambio» con motivo obligatorio y selector del tipo en el formulario.
 - Siguen vigentes:
   - merge delegado con los checks propios en verde, con Auto-fix y auto-merge (merge) en cada PR;
   - commits y PR sin atribución;
   - ignorar el check de Vercel;
   - el `.env` no se lee ni se toca sin un «sí» explícito del usuario.
 
+## Para el futuro: punto de venta y caja (antes V6, pospuesto el 24/11/2026)
+
+El ingeniero de la materia pidió un alcance más simple; el usuario decidió no hacer el POS ahora y guardarlo.
+Contenido previsto (plan de Ventas, módulo 4 y bloque V6), para retomarlo después:
+- Pantalla de venta rápida de mostrador: búsqueda o lector de código de barras, cobro mixto, tiquete de 80 mm.
+- Turnos por cajero, arqueo por denominación, depósito del día; el cierre aprobado no se modifica.
+- Existencia de vitrina que se descuenta por pieza (se alimenta abriendo una unidad logística).
+- Operación en contingencia, con enlace de respaldo o nodo local por tienda; anular una venta cobrada pide
+  supervisor.
+- Promociones de mostrador: 2×1, combos, precio por horario. (La **promoción por sucursal** que pidió el
+  ingeniero no depende del POS: ver «Pedido del ingeniero».)
+
+## Pedido del ingeniero (24/11/2026)
+
+Alcance simple que pidió el docente, y su estado al 24/11/2026:
+1. Kardex con costo promedio ponderado que viene del retaceo, sin editar ni borrar historial: **hecho**
+   (valoración por promedio móvil de la empresa, retaceo como ajuste de costo, triggers de inmutabilidad y
+   rutas de solo lectura).
+2. Precio de venta global con historial, y nunca por debajo del costo del kardex: **parcial**. Hay listas con
+   vigencia e historial (y precio opcional por sucursal), pero hoy vender bajo costo se permite con
+   autorización de un rol con `can_sell_below_cost`; el ingeniero pide bloquearlo siempre.
+3. Promoción por sucursal que bloquea el descuento manual del vendedor: **falta** (hay descuentos con topes
+   por rol, no promociones).
+4. Descontar existencias al confirmar la venta y verlo en el kardex: **parcial**. Confirmar el pedido aparta
+   (reserva comercial); la salida del kardex ocurre al confirmar la entrega.
+5. PDF de factura (01, IVA incluido) o crédito fiscal (03, IVA y retención desglosados) con empresa, cliente,
+   tabla, total en letras y QR: **hecho** (el sistema elige 03 si el cliente puede recibirlo y 01 si no; el
+   PDF dice «Total en Letras: …» en vez de «SON: …»).
+
 ## Bloques
+
+### PI — Pedido del ingeniero: puntos 2, 3 y 4 (rama `feature/ventas-pedido-ingeniero`)
+
+Se hace antes de V4d, a pedido del usuario (24/11/2026). Decisiones:
+- **Punto 2, venta bajo costo**: se bloquea siempre, sin excepción por rol. La línea compara su precio neto
+  sin IVA, ya con el descuento de línea **y el global**, contra el costo promedio del kardex. La vista previa lo
+  marca (no lanza error) para que la pantalla lo muestre; guardar, emitir, confirmar y autorizar lo rechazan
+  con `sales_price_below_cost`. Al confirmar se usa el costo vigente del kardex, no el guardado. Se retira el
+  permiso de rol «Puede vender bajo costo» (columna `can_sell_below_cost`) y el motivo de autorización
+  `below_cost`.
+- **Punto 3, promoción por sucursal** (el usuario eligió «la promoción reemplaza todo»): porcentaje por
+  producto y sucursal con vigencia. En una línea con promoción el descuento es el de la promoción: no se
+  aplican el del cliente ni el de volumen, el vendedor no puede cambiarlo (la pantalla lo deshabilita y el
+  servidor usa el de la promoción aunque llegue otro, para que un borrador viejo se siga abriendo) y el
+  documento no admite descuento global
+  (`sales_global_discount_with_promotion`). La promoción no pasa por el tope del rol, pero sí por el costo:
+  si deja la línea bajo costo, se bloquea. Permiso `sales_promotions:manage`; leer pide `sales:read`.
+- **Punto 4, salida al confirmar** (el usuario eligió «automático con cajas completas»): al quedar
+  confirmado (al confirmar o al autorizar), el pedido se entrega solo con unidades logísticas **completas**
+  de la sucursal, primero las que vencen antes (como «Preparar entrega»), y la salida queda en el kardex en la
+  misma transacción. Una línea que no se cubre exacto con unidades completas queda apartada y el pedido
+  muestra un aviso para separar la unidad en bodega y entregarla con «Preparar entrega». Aplica a retiro y a
+  entrega a domicilio. Se agregó la configuración por empresa `sales_settings.auto_deliver_on_confirm`
+  (migración 0136, **encendida por omisión**, `GET/PUT /sales/settings/orders`) para que una empresa que
+  despacha después conserve el flujo manual; las e2e de entregas la apagan mientras corren.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [x] **Paso 1: venta bajo costo bloqueada.** Dominio (`sales_quotation.py`, `sales_margin.py`), cálculo con
+  el descuento global, error al guardar/emitir/confirmar/autorizar, costo vigente al confirmar, migración 0134
+  que retira `can_sell_below_cost`, API y pantalla de topes sin «Puede vender bajo costo». Verificar:
+  unitarias, e2e de cotización y pedido.
+- [x] **Paso 2: promociones por sucursal (backend).** Migración 0135 (`sales_branch_promotions`, fuente de
+  descuento `promotion`, permiso), dominio, casos de uso, API `/sales/promotions` y su efecto en el cálculo.
+  Verificar: unitarias, prueba de migración, e2e.
+- [x] **Paso 3: salida automática al confirmar.** Entrega automática con unidades completas al confirmar o
+  autorizar, y aviso de lo pendiente. Verificar: e2e (kardex con la salida, línea que no se cubre).
+  - Pasos 1 a 3 hechos: migraciones 0134 (retira `can_sell_below_cost`), 0135 (`sales_branch_promotions`,
+    fuente `promotion`, permiso) y 0136 (configuración). `require_not_below_cost` en guardar, emitir,
+    confirmar y autorizar, con el costo vigente del kardex al confirmar (`reevaluate(current_costs=True)`).
+    Promociones en `SalesDiscountUseCases` y router `sales_promotions.py`. Entrega automática:
+    `SalesDeliveryService.auto_deliver` desde el router de pedidos al confirmar o autorizar; la respuesta trae
+    `auto_delivery`. Pruebas: `tests/unit/test_sales_engineer_rules.py`, `tests/e2e/test_sales_engineer_rules.py`
+    y `tests/integration/test_sales_engineer_rules_migration.py`; e2e de ventas en verde.
+- [x] **Paso 4: interfaz.** Pantalla Ventas → Promociones; en el editor, insignia de promoción y descuento
+  bloqueado, y línea bajo costo marcada con el guardado deshabilitado; aviso de entrega en el pedido.
+  Verificar: vitest.
+  - Hecho: `PromotionsPage` (ruta /sales/promotions), `OrderSettingsPanel` en Configuración de ventas
+    (interruptor «Descontar existencias al confirmar el pedido»), aviso `auto_delivery` en `SaleDetail`.
+    Políticas de descuento sin la casilla de vender bajo costo. vitest de ventas y listas: 92 en verde.
+- [x] **Paso 5: documentación.** Manuales de descuentos, cotizaciones, pedidos y entregas; `api.md` y
+  `database-schema.md` (sección 44).
+- [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
+  - QA en el navegador (24/11/2026): promoción creada y terminada en la Matriz; el editor fija el 10 %
+    y bloquea el descuento global; precio manual bajo costo muestra el aviso y deshabilita guardar;
+    confirmar un pedido de 1 kg de café (unidad de 120 kg en bodega) deja el aviso de separar la unidad.
+    Ajustes: pestaña «Cotizaciones y pedidos», textos de apartado/salida y botón sin salto de línea.
+  - Batería: backend 2044 pasan; `test_inventory_final_acceptance` apartaba y entregaba a mano, ahora apaga
+    la salida automática durante su confirmación; `test_sales_discounts` falló una vez por un loop de asyncio
+    y pasa al repetirla. Frontend completo (vitest, check, lint, build) en verde.
+
 
 ### V4a — Contingencia por empresa y establecimiento (rama `feature/ventas-v4a-contingencia`)
 
@@ -325,6 +428,37 @@ Pasos:
   el evento.
 - Plantillas PDF que falten.
 
+Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su confirmación:
+- **Evento de retorno = como la NC, con tres diferencias.** Fuentes: Normativa 2.0, regla 13.3 (págs. 31-32),
+  Manual Funcional V2.0 §X, esquema `fe-eret-v1`. Se arma con las líneas de la factura tal como se selló, la
+  cantidad devuelta por línea y el saldo (los retornos vigentes no pasan de lo vendido: «no deberá exceder al
+  valor de lo vendido»; «los bienes … retornados deberán individualizarse»). Diferencias con la NC:
+  1. **Solo devolución por cantidad**, sin rebaja por monto: «El retorno no constituye un descuento».
+  2. **Plazo de tres meses desde el sello** de la factura (la NC cuenta desde la fecha del CCF).
+  3. **Montos con IVA incluido** (estilo factura: `ivaItem`, `ivaRete`) y sin efecto en el crédito fiscal del
+     receptor; reduce la venta y el débito fiscal del emisor (13.3.2).
+  Además: aplica a FE (también FEXE y FSEE, que el ERP no emite); un evento por factura (la norma admite 50);
+  no se ajusta con otro evento ni documento; se invalida con el evento de invalidación; la factura con un
+  retorno vigente no se invalida ni se corrige. El cambio de producto exige una factura nueva (Manual §X).
+  Solo fiscal en V4d, como las notas; el enlace con las devoluciones físicas de B08 (`sales_returns`) llega en V8.
+- **Una nota de remisión por traslado, al despachar.** CT art. 109 inciso 4 («traslados que no constituyan
+  transferencias»), Decreto 487 (requisitos de la NRE) y plan de Ventas 6.8. Título CAT-025 04 «Traslado»;
+  emisor: establecimiento de origen; receptor: la misma empresa con la dirección del establecimiento de
+  destino; líneas: lo despachado; placa y conductor en observaciones o apéndice (el esquema no trae
+  transporte). Vale para las tres rutas (distribución, entre sucursales y retorno a matriz).
+  - **Recepción parcial, averías, sobrantes y faltantes no cambian la nota**: ampara la circulación de lo que
+    salió, no transfiere propiedad ni causa IVA, y no admite notas de crédito o débito (solo se relacionan con
+    CCF o CR). Las diferencias se resuelven en el traslado (ajustes que ya existen).
+  - **Error en la nota** (cantidades o datos mal despachados): invalidación tipo 1 con una NR de reemplazo;
+    **traslado cancelado** después de emitirla: invalidación tipo 2. Plazo: décimo día hábil del mes siguiente.
+  - El despacho no se confirma si la nota no se pudo generar (o queda en contingencia).
+- **Entregas de venta: no en V4d.** CT art. 109 inciso 1 exige NR cuando la mercadería sale **antes** del CCF
+  (y la Normativa, regla 2a del campo 17, deja que FE, CCFE o FEXE relacionen la NR, emitiéndose en el mismo
+  período o hasta 3 días después). Si se factura antes de entregar, el DTE de venta ampara el tránsito y no hace
+  falta NR. Hoy el ERP permite confirmar una entrega sin factura. El plan de Ventas lo deja en el módulo
+  «Entregas y despacho»: NR título 02 «Propiedad» si la entrega sale sin factura, y control del plazo para
+  facturar relacionándola.
+
 ### V4e — Lote de certificación (se detalla al empezar)
 - Pantalla por empresa: cuántos documentos pide Hacienda por tipo, cuántos van transmitidos y aceptados, y
   cuáles fueron rechazados con su motivo.
@@ -332,7 +466,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V4c terminado; falta el merge de su PR. Sigue V4d (detallarlo al empezar). Tras cambiar el servicio DTE:
+- **Paso en curso**: PI paso 6 (verificación y PR). Pasos 1 a 5 hechos. V4c ya está en develop (#57); V4d espera a PI. Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
     svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la
