@@ -713,7 +713,21 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: libros de IVA y F-07 terminados; PR a develop con Auto-fix y auto-merge. Pendiente con el contador: el retorno como fila negativa del anexo 2 y la clasificación de renta de compras de Grupo Lorena (por defecto 1 · 1 · 2 · 5).
+- **Paso en curso**: libros de IVA y F-07 terminados; PR #61 a develop con Auto-fix y auto-merge.
+- **Investigación del 25/11/2026** (el usuario pidió resolver con investigación los dos puntos para el contador):
+  - **Retorno en el anexo 2: se mantiene como fila negativa** con la fecha de la factura. La Normativa 2.0
+    (13.3.2 a) da al retorno el efecto de disminuir la venta y el débito de la FE sin invalidarla; el manual F-07
+    V14 solo admite negativos en el anexo 2 «para los documentos anulados/invalidados, de acuerdo al art. 111
+    CT», y el art. 111 CT cubre los ajustes que disminuyan, anulen o rescindan facturas dentro de tres meses (el
+    mismo plazo del retorno); el art. 87 del reglamento los anota en el libro del mes en que ocurren, restando.
+    Ninguna fuente pública (contaportable, facxi, FacturaLlama) describe el formato; queda verificarlo en la
+    primera carga real.
+  - **Renta de compras: el sector es el de la empresa, no el del proveedor.** Las columnas Q a T describen la
+    estructura de costos del declarante (tipo de costo: producidos, indirectos de fabricación, mano de obra;
+    «mixta» por la actividad que genera la renta). FacturaLlama lo toma del proveedor por palabras clave, sin
+    fuente oficial. Grupo Lorena es panadería (10712, industria): la propuesta pasa de 1·1·2·5 a 1·1·1·5. Sin
+    renta guardada, el ERP propone según la actividad principal (CAEES): industria 1·1·1·5, comercio 1·1·2·5,
+    agro 1·1·3·5, servicios 1·2·4·2.
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
