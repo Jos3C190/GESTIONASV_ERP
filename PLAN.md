@@ -697,7 +697,7 @@ Pasos:
 - [x] **Paso 2: dominio.** `app/domain/entities/fiscal_books.py`: filas de anexos 1, 2, 3, anulados y 169;
   libros y totales; reglas de invalidación y retorno entre meses; formato CSV. Verificar: pytest unitario
   (casos de Sublimarte: CCF invalidado, factura invalidada en otro mes, nota de crédito, retorno).
-- [ ] **Paso 3: repositorio, casos de uso y API.** Lectura del mes; `GET /fiscal-books/{period}` (pantalla),
+- [x] **Paso 3: repositorio, casos de uso y API.** Lectura del mes; `GET /fiscal-books/{period}` (pantalla),
   `/xlsx`, `/pdf?book=&first_folio=`, `/f07.zip`; datos fiscales de la compra (`PATCH /purchases/{id}/fiscal`)
   y valores de renta por defecto. Verificar: e2e con documentos simulados.
 - [ ] **Paso 4: Excel y PDF.** openpyxl y reportlab en infraestructura. Verificar: pruebas que abren el Excel y
@@ -709,7 +709,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: libros de IVA y F-07, paso 3 (repositorio, casos de uso y API); pasos 1 y 2 hechos (0139 aplicada en la base de desarrollo). V4d2 en develop (#60). V4e omitida por decisión del usuario (25/11/2026).
+- **Paso en curso**: libros de IVA y F-07, paso 4 (Excel, PDF y ZIP del F-07); pasos 1 a 3 hechos (API JSON, documento del proveedor en la compra y renta por defecto; la 0139 lleva además el nombre y NIT/NRC/DUI del proveedor tal como figura en el documento) (0139 aplicada en la base de desarrollo). V4d2 en develop (#60). V4e omitida por decisión del usuario (25/11/2026).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,

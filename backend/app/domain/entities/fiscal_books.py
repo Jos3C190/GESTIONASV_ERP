@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
+from app.core.exceptions import BusinessRuleError
+
 ZERO = Decimal("0")
 CENT = Decimal("0.01")
 VAT_RATE = Decimal("0.13")
@@ -842,3 +844,125 @@ def annex_file_name(annex: str, period: Period, mode: str) -> str:
 
     suffix = "" if mode == "production" else f"_{'SIMULADO' if mode == 'simulated' else 'PRUEBA'}"
     return f"F07_{annex}_{period.key}{suffix}.csv"
+
+
+# --- Documento del proveedor en una compra ------------------------------------------------------
+
+PURCHASE_CLASSES = {1: ("03", "05", "06"), 3: ("12", "13"), DTE_CLASS: ("03", "05", "06")}
+RENTA_OPERATIONS = (1, 2, 3, 4, 8, 9)
+RENTA_CLASSIFICATIONS = (1, 2, 8, 9)
+RENTA_SECTORS = (1, 2, 3, 4, 8, 9)
+RENTA_COST_TYPES = (1, 2, 3, 4, 5, 6, 7, 8, 9)
+MAX_NUMBER = 100
+MAX_NAME = 250
+SUPPLIER_ID_LENGTHS = {"nit": (14, 14), "dui": (9, 9), "nrc": (1, 14)}
+_CONTROL = re.compile(r"^DTE-(03|05|06)-[A-Z0-9]{8}-\d{15}$")
+_UUID = re.compile(r"^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$")
+
+
+def _error(code: str, message: str) -> BusinessRuleError:
+    return BusinessRuleError(message, code=code)
+
+
+@dataclass(frozen=True)
+class RentaPurchase:
+    operation: int
+    classification: int
+    sector: int
+    cost_type: int
+
+    def validate(self) -> RentaPurchase:
+        if (
+            self.operation not in RENTA_OPERATIONS
+            or self.classification not in RENTA_CLASSIFICATIONS
+            or self.sector not in RENTA_SECTORS
+            or self.cost_type not in RENTA_COST_TYPES
+        ):
+            raise _error(
+                "fiscal_purchase_renta_invalid",
+                "La clasificación de renta de la compra no está en los catálogos del F-07.",
+            )
+        return self
+
+
+@dataclass(frozen=True)
+class PurchaseFiscalData:
+    """Documento que entregó el proveedor, tal como se registra para el libro de compras."""
+
+    issued_on: date
+    document_class: int
+    document_type: str
+    number: str
+    control_number: str | None
+    seal: str | None
+    supplier_name: str
+    supplier_id_type: str
+    supplier_id: str
+    renta: RentaPurchase
+
+
+def validate_purchase_fiscal(data: PurchaseFiscalData, today: date) -> PurchaseFiscalData:
+    """Normaliza y valida el documento del proveedor (manual F-07 V14, anexo de compras)."""
+
+    types = PURCHASE_CLASSES.get(data.document_class)
+    if types is None or data.document_type not in types:
+        raise _error(
+            "fiscal_purchase_document_invalid",
+            "La clase y el tipo de documento no corresponden: el crédito fiscal y sus notas son de "
+            "imprenta o DTE; la declaración de mercancías y el mandamiento de ingreso, «Otros».",
+        )
+    if data.issued_on > today:
+        raise _error("fiscal_purchase_date_invalid", "La fecha del documento no puede ser futura.")
+    number = data.number.strip()
+    control = (data.control_number or "").strip().upper() or None
+    seal = (data.seal or "").strip() or None
+    if data.document_class == DTE_CLASS:
+        number = number.upper()
+        if not _UUID.match(number):
+            raise _error(
+                "fiscal_purchase_generation_code_invalid",
+                "En un DTE el número es el código de generación (36 caracteres con guiones).",
+            )
+        if not control or not _CONTROL.match(control) or control[4:6] != data.document_type:
+            raise _error(
+                "fiscal_purchase_control_number_invalid",
+                "El número de control del DTE no es válido o no es del tipo elegido.",
+            )
+        if not seal:
+            raise _error("fiscal_purchase_seal_required", "Indica el sello de recepción del DTE.")
+    else:
+        control, seal = None, None
+    if not 1 <= len(number) <= MAX_NUMBER:
+        raise _error("fiscal_purchase_number_required", "Indica el número del documento.")
+    name = re.sub(r"\s+", " ", data.supplier_name).strip()
+    if not 1 <= len(name) <= MAX_NAME:
+        raise _error("fiscal_purchase_supplier_required", "Indica el nombre del proveedor.")
+    kind = data.supplier_id_type
+    supplier_id = digits(data.supplier_id)
+    bounds = SUPPLIER_ID_LENGTHS.get(kind)
+    if bounds is None or not bounds[0] <= len(supplier_id) <= bounds[1]:
+        raise _error(
+            "fiscal_purchase_supplier_id_invalid",
+            "El NIT lleva 14 dígitos, el DUI 9 y el NRC hasta 14, sin guiones.",
+        )
+    return PurchaseFiscalData(
+        issued_on=data.issued_on,
+        document_class=data.document_class,
+        document_type=data.document_type,
+        number=number,
+        control_number=control,
+        seal=seal,
+        supplier_name=name,
+        supplier_id_type=kind,
+        supplier_id=supplier_id,
+        renta=data.renta.validate(),
+    )
+
+
+def supplier_party(name: str, id_type: str, value: str) -> Party:
+    return Party(
+        name,
+        nit=value if id_type == "nit" else None,
+        nrc=value if id_type == "nrc" else None,
+        dui=value if id_type == "dui" else None,
+    )

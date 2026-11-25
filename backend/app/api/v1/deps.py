@@ -31,6 +31,7 @@ from app.application.documents import (
 from app.application.fiscal import FiscalSettingsUseCases
 from app.application.fiscal.email_settings import CompanyEmailSettingsUseCases
 from app.application.fiscal.hacienda_credentials import HaciendaCredentialsUseCases
+from app.application.fiscal_books.use_cases import FiscalBookUseCases
 from app.application.inventory import InventoryUseCases
 from app.application.inventory.kardex_read import InventoryKardexReadUseCases
 from app.application.password_policy import PasswordPolicy
@@ -276,6 +277,14 @@ def get_sales_fiscal_return_use_cases(session: SessionDep) -> SalesFiscalReturnU
         SqlAlchemySalesFiscalInvalidationRepository(session),
         SqlAlchemyContingencyResponsibleRepository(session),
     )
+
+
+def get_fiscal_book_use_cases(session: SessionDep) -> FiscalBookUseCases:
+    from app.infrastructure.repositories.fiscal_book_repository import (
+        SqlAlchemyFiscalBookRepository,
+    )
+
+    return FiscalBookUseCases(SqlAlchemyFiscalBookRepository(session))
 
 
 def get_transfer_remission_use_cases(session: SessionDep) -> TransferRemissionUseCases:
