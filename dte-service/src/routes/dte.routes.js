@@ -411,7 +411,8 @@ router.post('/ccf', requireDteScope('issue'), escenarioSimulacion('emision'), co
 router.post('/v2/factura', requireDteScope('issue'), escenarioSimulacion('emision'), conIdempotencia((req) => emitir(TIPO_DTE.FACTURA, construirFactura, req), opcionesRevalidacionFiscal));
 router.post('/v2/ccf', requireDteScope('issue'), escenarioSimulacion('emision'), conIdempotencia((req) => emitir(TIPO_DTE.COMPROBANTE_CREDITO_FISCAL, construirCCF, req), opcionesRevalidacionFiscal));
 router.post('/v2/nota-credito', requireDteScope('issue'), escenarioSimulacion('emision'), conIdempotencia((req) => emitir(TIPO_DTE.NOTA_CREDITO, construirNotaCredito, req), opcionesRevalidacionFiscal));
-router.post('/nota-remision', requireDteScope('issue'), conIdempotencia((req) => emitir(TIPO_DTE.NOTA_REMISION, construirNotaRemision, req)));
+router.post('/v2/nota-remision', requireDteScope('issue'), escenarioSimulacion('emision'), conIdempotencia((req) => emitir(TIPO_DTE.NOTA_REMISION, construirNotaRemision, req)));
+router.post('/nota-remision', requireDteScope('issue'), escenarioSimulacion('emision'), conIdempotencia((req) => emitir(TIPO_DTE.NOTA_REMISION, (body, opciones) => construirNotaRemision({ ...body, emisor: null }, opciones), req)));
 router.post('/nota-credito', requireDteScope('issue'), escenarioSimulacion('emision'), conIdempotencia((req) => emitir(TIPO_DTE.NOTA_CREDITO, (body, opciones) => construirNotaCredito({ ...body, emisor: null }, opciones), req), opcionesRevalidacionFiscal));
 router.post('/v2/nota-debito', requireDteScope('issue'), escenarioSimulacion('emision'), conIdempotencia((req) => emitir(TIPO_DTE.NOTA_DEBITO, construirNotaDebito, req), opcionesRevalidacionFiscal));
 router.post('/nota-debito', requireDteScope('issue'), escenarioSimulacion('emision'), conIdempotencia((req) => emitir(TIPO_DTE.NOTA_DEBITO, (body, opciones) => construirNotaDebito({ ...body, emisor: null }, opciones), req), opcionesRevalidacionFiscal));

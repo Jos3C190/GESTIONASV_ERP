@@ -453,9 +453,16 @@ Hechos verificados en el código:
 
 Pasos:
 - [x] **Paso 0: plan y rama.**
-- [ ] **Paso 1: servicio.** `/v2/nota-remision` multiemisor como la NC: copia del emisor con establecimiento y
+- [x] **Paso 1: servicio.** `/v2/nota-remision` multiemisor como la NC: copia del emisor con establecimiento y
   punto de venta, contingencia y escenarios simulados; receptor y `bienTitulo` de la solicitud; `observaciones`.
   PDF con «Título: Traslado» y observaciones. Verificar: pruebas del servicio, esquema y PDF.
+  - Hecho: `construirNotaRemision` (dteBuilderNotas.js) con emisor v2 o del entorno, contingencia, receptor
+    validado, `bienTitulo` de CAT-025, relacionados opcionales y `observaciones`; totales como el CCF (IVA
+    informativo, `montoTotalOperacion = subTotal + IVA`). Rutas `/v2/nota-remision` y `/nota-remision` con
+    escenario simulado. El PDF muestra «Título de los bienes» en vez de la condición. `compose.yaml` habilita 04.
+    Servicio: 501 pruebas en verde. Para correr las pruebas del servicio sin npm (el registro falla por TLS),
+    copiar `package.json`, `src` y `test` al contenedor `dte-service`, enlazar `/app/node_modules` y
+    correr `env -i PATH=... node --test` (la clave de API del contenedor pisa la de las pruebas).
 - [ ] **Paso 2: migración 0137 y dominio.** `sale_id` opcional y `transfer_id` (FK compuesta al traslado), con
   CHECK: 04 lleva traslado y no pedido; 01/03/05/06 llevan pedido. Índice único de NR vigente por traslado.
   Dominio `transfer_remission.py`: líneas desde lo despachado con costo, receptor, observaciones y solicitud.
@@ -525,7 +532,8 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
 
 ## Estado actual
 
-- **Paso en curso**: V4d paso 1 (servicio). PI terminado y en develop (#58); V4c en develop (#57). Tras cambiar el servicio DTE:
+- **Paso en curso**: V4d paso 2 (migración 0137 y dominio). Paso 1 hecho. PI terminado y en develop (#58); V4c en develop (#57).
+Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
     svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la

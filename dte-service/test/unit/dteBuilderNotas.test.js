@@ -381,6 +381,58 @@ describe('dteBuilderNotas.js', () => {
       assert.equal(dte.documentoRelacionado, null);
       assert.equal(validarDte(dte).valido, true);
     });
+
+    test('con emisor v2 usa su establecimiento, punto de venta y serie, y valida el esquema', () => {
+      const { dte, numeroControl } = construirNotaRemision({
+        emisor: issuerV2({ internalPointOfSaleCode: 'P001' }),
+        receptor: RECEPTOR_CONTRIBUYENTE,
+        items: [ITEM_SIMPLE],
+        bienTitulo: '04',
+        observaciones: 'Traslado TR-0001. Vehículo P123-456, conductor Ana Pérez.',
+      });
+      const { valido, errores } = validarDte(dte);
+      assert.equal(valido, true, JSON.stringify(errores));
+      assert.equal(dte.emisor.nit, '06141804941035');
+      assert.equal(dte.emisor.codEstable, 'CASA');
+      assert.equal(dte.emisor.codPuntoVenta, 'P001');
+      assert.match(numeroControl, /^DTE-04-M001P001-\d{15}$/);
+      assert.equal(dte.resumen.observaciones, 'Traslado TR-0001. Vehículo P123-456, conductor Ana Pérez.');
+    });
+
+    test('informa el IVA como en el CCF: monto total = subtotal + IVA, en letras', () => {
+      const { dte } = construirNotaRemision({
+        receptor: RECEPTOR_CONTRIBUYENTE,
+        items: [ITEM_SIMPLE, { descripcion: 'Caja', cantidad: 2, precioUni: 12.5, ventaGravada: 25 }],
+        bienTitulo: '04',
+      });
+      assert.equal(dte.resumen.totalGravada, 75);
+      assert.equal(dte.resumen.subTotal, 75);
+      assert.deepEqual(dte.resumen.tributos.map((t) => t.valor), [9.75]);
+      assert.equal(dte.resumen.montoTotalOperacion, 84.75);
+      assert.match(dte.resumen.totalLetras, /OCHENTA Y CUATRO/);
+      assert.deepEqual(dte.cuerpoDocumento.map((linea) => linea.tributos), [['20'], ['20']]);
+    });
+
+    test('en contingencia lleva el tipo y el motivo', () => {
+      const { dte } = construirNotaRemision(
+        { receptor: RECEPTOR_CONTRIBUYENTE, items: [ITEM_SIMPLE], bienTitulo: '04' },
+        { contingencia: { tipoContingencia: 1, motivoContin: null } },
+      );
+      assert.equal(dte.identificacion.tipoContingencia, 1);
+      assert.equal(dte.identificacion.tipoOperacion, 2);
+      assert.equal(validarDte(dte).valido, true);
+    });
+
+    test('rechaza un título fuera de CAT-025 y un receptor sin dirección', () => {
+      assert.throws(
+        () => construirNotaRemision({ receptor: RECEPTOR_CONTRIBUYENTE, items: [ITEM_SIMPLE], bienTitulo: '09' }),
+        /CAT-025/,
+      );
+      assert.throws(
+        () => construirNotaRemision({ receptor: { ...RECEPTOR_CONTRIBUYENTE, direccion: null }, items: [ITEM_SIMPLE], bienTitulo: '04' }),
+        /faltan direccion/,
+      );
+    });
   });
 
   for (const zona of ZONAS_DEL_PROCESO) {
