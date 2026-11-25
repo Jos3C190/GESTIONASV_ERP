@@ -580,10 +580,16 @@ Pasos:
     generador de invalidación admite el tipo 18 y la fecha del evento del 17 y 18 es la de generación. JSON y PDF
     del retorno por `/eventos/:codigo/json` y `/pdf/render` (PDF con la representación de la factura y título
     «EVENTO DE RETORNO»). La FE con retornos vigentes no se invalida (`DTE_HAS_RETURN`). Servicio: 507 en verde.
-- [ ] **Paso 2: migración 0138 y dominio.** `sales_fiscal_returns` y `sales_fiscal_return_lines`, `return_id` en
+- [x] **Paso 2: migración 0138 y dominio.** `sales_fiscal_returns` y `sales_fiscal_return_lines`, `return_id` en
   los envíos de correo, permiso `sales_invoices:returns`. Dominio `sales_fiscal_returns.py`: líneas de la FE,
   saldo por línea, plazo con la excepción de medicamentos, totales con IVA y solicitud. Verificar: unitarias y
   prueba de migración.
+  - Hecho: 0138 (`sales_fiscal_returns` con su anulación en columnas `annul_*`, `sales_fiscal_return_lines` con
+    cantidad, monto con IVA e IVA, `return_id` en los envíos con su índice único y el automático de la factura sin
+    los de retorno, permiso, guarda del downgrade). Dominio `sales_fiscal_returns.py` (plazo 3 meses o 2 años con
+    medicamentos, factura vigente con sello, líneas y saldo con las funciones de las notas, plan por cantidad al
+    precio neto, IVA 13/113, retención espejo, solicitud y conciliación). Pruebas
+    `test_sales_fiscal_returns.py` (5) y `test_sales_fiscal_returns_migration.py`. Desarrollo en 0138.
 - [ ] **Paso 3: casos de uso, trabajador y API.** `GET /sales/fiscal-documents/{id}/returns`, `POST .../returns`,
   `POST /sales/fiscal-returns/{id}/annul`; el trabajador emite y anula; correo al cliente; la FE con retorno
   vigente no se invalida ni se corrige. Verificar: e2e contra el servicio simulado.
@@ -637,7 +643,7 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
 
 ## Estado actual
 
-- **Paso en curso**: V4d2 paso 2 (migración 0138 y dominio). Paso 1 hecho. V4d en develop (#59). PI terminado y en develop (#58); V4c en develop (#57).
+- **Paso en curso**: V4d2 paso 3 (casos de uso, trabajador y API). Pasos 1 y 2 hechos. V4d en develop (#59). PI terminado y en develop (#58); V4c en develop (#57).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
