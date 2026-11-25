@@ -76,4 +76,5 @@ class SqlAlchemySalesCreditRepository:
             open_balance=open_balance,
             pending_orders=Decimal(pending or 0),
             overdue_beyond_grace=overdue,
+            grace_days=int(grace or 0),
         )

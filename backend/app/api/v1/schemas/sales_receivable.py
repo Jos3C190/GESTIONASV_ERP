@@ -19,6 +19,10 @@ class CustomerRefOut(BaseModel):
     name: str
     credit_days: int
     credit_limit: Decimal | None
+    email: str | None = None
+    credit_blocked: bool = False
+    credit_block_reason: str | None = None
+    credit_blocked_at: datetime | None = None
 
 
 class CustomerSummaryOut(BaseModel):
@@ -123,3 +127,39 @@ class AccountOut(BaseModel):
     aging: dict[Bucket, Decimal]
     documents: list[AccountDocumentOut]
     receipts: list[ReceiptOut]
+
+
+class CollectionNoteOut(BaseModel):
+    id: uuid.UUID
+    note: str
+    next_action_on: date | None
+    created_by: str
+    created_at: datetime
+
+
+class CreditStatusOut(BaseModel):
+    customer: CustomerRefOut
+    credit_limit: Decimal | None
+    open_balance: Decimal
+    pending_orders: Decimal
+    available: Decimal | None
+    overdue_beyond_grace: Decimal
+    grace_days: int
+    notes: list[CollectionNoteOut]
+
+
+class CollectionNoteIn(BaseModel):
+    note: str = Field(min_length=5, max_length=1000)
+    next_action_on: date | None = None
+
+
+class BlockIn(BaseModel):
+    reason: str = Field(min_length=5, max_length=300)
+
+
+class SendStatementIn(BaseModel):
+    to: str | None = Field(default=None, max_length=320, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+class SentOut(BaseModel):
+    sent_to: str

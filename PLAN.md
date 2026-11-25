@@ -781,14 +781,14 @@ Pasos:
   `AuthorizationReason` de crédito y la evaluación pura. Verificar: prueba de migración y pytest.
 - [x] **Paso 2: confirmar, autorizar y facturar con crédito.** Verificar: e2e (cupo, mora, bloqueo, autorización
   con permiso y nota, reevaluación al facturar, contado sin evaluar).
-- [ ] **Paso 3: gestión de cobro.** Notas, bloqueo y correo del estado de cuenta (PDF), con API y auditoría.
+- [x] **Paso 3: gestión de cobro.** Notas, bloqueo y correo del estado de cuenta (PDF), con API y auditoría.
 - [ ] **Paso 4: interfaz.** Motivos de crédito en el pedido y su autorización; cupo y bloqueo en el estado de
   cuenta y en el cliente; notas y envío. Verificar: vitest.
 - [ ] **Paso 5: documentación, verificación y PR.**
 
 ## Estado actual
 
-- **Paso en curso**: V5b paso 3 (gestión de cobro); pasos 1 y 2 hechos (autorizar acepta `sales_discounts:authorize` o `sales_credit:authorize` y cada motivo pide su permiso; e2e `test_sales_credit.py`) (0141 en desarrollo, `app/domain/entities/sales_credit.py`). V5a en PR #63 (el usuario dijo «Yes, start V5b» el 25/11/2026).
+- **Paso en curso**: V5b paso 4 (interfaz); paso 3 hecho (`/sales/receivables/customers/{id}/credit|notes|block|unblock|statement.pdf|send-statement`; e2e `test_sales_collection.py`; V5a ya en develop por #63 y mezclado en la rama); pasos 1 y 2 hechos (autorizar acepta `sales_discounts:authorize` o `sales_credit:authorize` y cada motivo pide su permiso; e2e `test_sales_credit.py`) (0141 en desarrollo, `app/domain/entities/sales_credit.py`). V5a en PR #63 (el usuario dijo «Yes, start V5b» el 25/11/2026).
 - **Investigación del 25/11/2026** (el usuario pidió resolver con investigación los dos puntos para el contador):
   - **Retorno en el anexo 2: se mantiene como fila negativa** con la fecha de la factura. La Normativa 2.0
     (13.3.2 a) da al retorno el efecto de disminuir la venta y el débito de la FE sin invalidarla; el manual F-07

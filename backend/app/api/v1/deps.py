@@ -67,6 +67,7 @@ from app.application.sales_invoices.remission import TransferRemissionUseCases
 from app.application.sales_invoices.returns import SalesFiscalReturnUseCases
 from app.application.sales_orders import SalesOrderUseCases
 from app.application.sales_quotations import SalesQuotationUseCases
+from app.application.sales_receivables.collection import SalesCollectionUseCases
 from app.application.sales_receivables.use_cases import SalesReceivableUseCases
 from app.application.sales_tax import SalesTaxUseCases
 from app.core.config import settings
@@ -279,6 +280,14 @@ def get_sales_fiscal_return_use_cases(session: SessionDep) -> SalesFiscalReturnU
         SqlAlchemySalesFiscalInvalidationRepository(session),
         SqlAlchemyContingencyResponsibleRepository(session),
     )
+
+
+def get_sales_collection_use_cases(session: SessionDep) -> SalesCollectionUseCases:
+    from app.infrastructure.repositories.sales_receivable_repository import (
+        SqlAlchemySalesReceivableRepository,
+    )
+
+    return SalesCollectionUseCases(SqlAlchemySalesReceivableRepository(session), _credit(session))
 
 
 def get_sales_receivable_use_cases(session: SessionDep) -> SalesReceivableUseCases:

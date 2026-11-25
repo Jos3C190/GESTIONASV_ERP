@@ -38,6 +38,7 @@ class CreditSnapshot:
     open_balance: Decimal
     pending_orders: Decimal
     overdue_beyond_grace: Decimal
+    grace_days: int = 0
 
     def exposure_with(self, order_total: Decimal) -> Decimal:
         return self.open_balance + self.pending_orders + order_total
