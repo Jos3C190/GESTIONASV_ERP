@@ -166,8 +166,10 @@ def build_receiver(receiver: CompanyReceiver) -> dict[str, Any]:
 def observations(transport: TransferTransport) -> str:
     parts = [f"Traslado {transport.transfer_code} de {transport.origin} a {transport.destination}."]
     if transport.vehicle_plate or transport.vehicle_name:
-        vehicle = " ".join(
-            part for part in (transport.vehicle_name, transport.vehicle_plate) if part
+        name, plate = transport.vehicle_name, transport.vehicle_plate
+        # Hay vehículos cuyo nombre ya lleva la placa: no se repite.
+        vehicle = (
+            name if name and plate and plate in name else " ".join(p for p in (name, plate) if p)
         )
         parts.append(f"Vehículo: {vehicle}.")
     if transport.driver_name:

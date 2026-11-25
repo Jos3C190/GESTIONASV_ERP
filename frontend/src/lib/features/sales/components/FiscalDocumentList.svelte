@@ -105,8 +105,8 @@
     <p class="text-xs font-semibold uppercase tracking-widest text-primary">Ventas</p>
     <h1 class="page-title-echo mt-1 text-2xl font-bold text-foreground">Documentos fiscales</h1>
     <p class="mt-1 text-sm text-foreground-muted">
-      Facturas y comprobantes de crédito fiscal emitidos desde los pedidos, con su número de
-      control, su JSON y su PDF.
+      Facturas, créditos fiscales y sus notas, emitidos desde los pedidos, y notas de remisión de
+      los traslados, con su número de control, su JSON y su PDF.
     </p>
   </header>
 
@@ -132,7 +132,7 @@
       <input
         id="fiscal-search"
         class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground sm:w-72"
-        placeholder="Número de control, pedido o cliente"
+        placeholder="Número de control, pedido, cliente o traslado"
         maxlength="80"
         bind:value={search}
         oninput={onSearch}

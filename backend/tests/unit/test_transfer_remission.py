@@ -93,6 +93,8 @@ def test_transport_goes_in_the_observations() -> None:
         "Traslado TR-0001 de Bodega Central a Bodega de tienda Usulután. "
         "Vehículo: Camión Isuzu P123-456. Conductor: Ana Pérez."
     )
+    named = replace(TRANSPORT, vehicle_name="Camión Isuzu (P123-456)")
+    assert "Vehículo: Camión Isuzu (P123-456). Conductor" in observations(named)
     bare = replace(TRANSPORT, vehicle_plate=None, vehicle_name=None, driver_name=None)
     assert observations(bare) == "Traslado TR-0001 de Bodega Central a Bodega de tienda Usulután."
 

@@ -26,8 +26,8 @@
     document != null && (document.status === 'rejected' || document.status === 'failed')
   );
 
-  async function load(id: string) {
-    loading = true;
+  async function load(id: string, quiet = false) {
+    if (!quiet) loading = true;
     loadError = null;
     try {
       const result = await salesInvoicesApi.transferRemission(id);
@@ -46,6 +46,14 @@
 
   $effect(() => {
     void load(transferId);
+  });
+
+  // Mientras el trabajador la emite, la tarjeta se actualiza sola.
+  $effect(() => {
+    if (document?.status !== 'pending') return;
+    const id = transferId;
+    const timer = setTimeout(() => void load(id, true), 5000);
+    return () => clearTimeout(timer);
   });
 
   async function reissue() {
