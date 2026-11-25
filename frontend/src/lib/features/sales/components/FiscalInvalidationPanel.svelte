@@ -10,6 +10,7 @@
     RESPONSIBLE_DOCUMENT_LABELS,
     formatMoment,
     isNote,
+    isRemission,
     isSealed
   } from '#lib/features/sales/fiscal-labels.ts';
   import { formatDay } from '#lib/features/sales/quotation-labels.ts';
@@ -28,6 +29,8 @@
     onChanged?: () => void;
   } = $props();
   const note = $derived(isNote(document));
+  /** La nota de remisión no se anula: el traslado ya salió; solo se corrige (V4d). */
+  const remission = $derived(isRemission(document));
 
   const inputClass =
     'h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary';
@@ -155,7 +158,7 @@
       <p class={`text-sm ${overview.expired ? 'text-danger' : 'text-foreground-muted'}`}>
         {overview.expired
           ? `El plazo para anularlo venció el ${formatDay(overview.deadline)}; Hacienda ya no lo acepta.`
-          : `Se puede ${note ? 'anular' : 'anular o corregir'} hasta el ${formatDay(overview.deadline)}${overview.estimated ? ' (fecha estimada por los feriados)' : ''}.`}
+          : `Se puede ${note ? 'anular' : remission ? 'corregir' : 'anular o corregir'} hasta el ${formatDay(overview.deadline)}${overview.estimated ? ' (fecha estimada por los feriados)' : ''}.`}
       </p>
     {/if}
     {#if notice}
@@ -172,7 +175,9 @@
         {#if !note}
           <Button variant="secondary" onclick={() => open('correct')}>Corregir documento</Button>
         {/if}
-        <Button variant="secondary" onclick={() => open('cancel')}>Anular documento</Button>
+        {#if !remission}
+          <Button variant="secondary" onclick={() => open('cancel')}>Anular documento</Button>
+        {/if}
       </div>
     {/if}
 

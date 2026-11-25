@@ -146,6 +146,7 @@
           <option value="">Todos</option>
           <option value="01">Factura</option>
           <option value="03">Crédito fiscal</option>
+          <option value="04">Nota de remisión</option>
           <option value="05">Nota de crédito</option>
           <option value="06">Nota de débito</option>
         </select></label
@@ -219,11 +220,19 @@
                   >{FISCAL_DOCUMENT_LABELS[item.document_type]}</td
                 >
                 <td class="px-4 py-3">
-                  <a
-                    class="font-mono text-xs text-primary hover:underline"
-                    href={`/sales/${item.sale_id}`}>{item.sale_code}</a
-                  >
-                  <p class="text-foreground">{item.customer_name}</p>
+                  {#if item.sale_id}
+                    <a
+                      class="font-mono text-xs text-primary hover:underline"
+                      href={`/sales/${item.sale_id}`}>{item.sale_code}</a
+                    >
+                    <p class="text-foreground">{item.customer_name}</p>
+                  {:else if item.transfer_id}
+                    <a
+                      class="font-mono text-xs text-primary hover:underline"
+                      href={`/transfers?transfer=${item.transfer_id}`}>{item.transfer_code}</a
+                    >
+                    <p class="text-foreground-muted">Traslado</p>
+                  {/if}
                 </td>
                 <td class="px-4 py-3">
                   <span
