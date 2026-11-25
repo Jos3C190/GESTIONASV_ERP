@@ -71,6 +71,31 @@ Desde la migración `0116` el vehículo y el conductor se eligen al **preparar**
 - **Excepción de cumplimiento.** Sigue siendo independiente: quien tenga el permiso de excepciones puede despachar con documentos vencidos y la tarjeta **Transporte** muestra «Salió con una excepción autorizada».
 - **Solicitudes antiguas.** Un pendiente enviado antes de esta versión sin vehículo ni conductor no se puede aprobar (`transfer_assignment_required`); recházelo o retírelo y complételo.
 
+## Nota de remisión al despachar
+
+Si la empresa habilitó la **Nota de remisión (04)** en **Ventas → Configuración fiscal → Documentos**,
+despachar un traslado emite sola su nota de remisión electrónica. La nota ampara la circulación de lo que
+salió (Código Tributario, art. 109): no es una venta, no transfiere la propiedad ni causa IVA.
+
+- **Quién emite.** El establecimiento fiscal de la sucursal de la bodega de origen, con su primer punto de
+  venta activo. Si el origen no tiene establecimiento con punto de venta, el despacho no se hace y el sistema
+  lo explica (`transfer_remission_issuer_missing`): créalo o deshabilita la nota.
+- **Receptor.** La misma empresa, con la dirección del establecimiento de destino. Título de los bienes:
+  CAT-025 04 «Traslado».
+- **Líneas.** Lo despachado, en la unidad base, valorado al **costo promedio del kardex** al despachar (gravado;
+  el IVA del resumen es informativo). El contador debe confirmar este criterio de valoración.
+- **Transporte.** El vehículo, la placa y el conductor van en las observaciones de la nota.
+- **Un solo paso.** El despacho y la nota se guardan juntos: si la nota no se puede armar, el traslado no sale.
+  Después la emite el trabajador del DTE; el detalle del traslado muestra la tarjeta **Nota de remisión** con
+  su estado, su número de control (enlazado al documento para quien tiene permiso de facturación) y el valor.
+- **Rechazada o fallida.** La tarjeta explica el motivo y ofrece **Emitir de nuevo** (lado de origen, permiso
+  para mover inventario), con los datos del despacho.
+- **Recepción parcial, averías, sobrantes y faltantes** no cambian la nota: se resuelven en el traslado.
+- **Error en una nota sellada.** Desde el documento fiscal, **Corregir documento** emite una nota de reemplazo
+  y anula la original (invalidación tipo 1). La nota de remisión **no se anula** sin reemplazo
+  (`transfer_remission_not_annullable`): los bienes ya salieron.
+- Un traslado despachado antes de habilitar la nota no la tiene; la tarjeta lo indica.
+
 ## Recepción parcial, averías y sobrantes
 
 **Recepción parcial.** Cuando el destino recibe menos de lo despachado, el traslado pasa a **Recepción parcial** (antes seguía como En tránsito). El detalle muestra «Recepción parcial: faltan {n} por llegar. ¿Llegará el resto?» con dos salidas:

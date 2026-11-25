@@ -108,6 +108,13 @@ Una nota no se corrige: se **anula** (rescindir la operación) y, si hace falta,
 Anularla devuelve el saldo y no cancela el pedido. Un crédito fiscal con notas vigentes no se
 anula ni se corrige: primero se anulan sus notas.
 
+## 4.3 Nota de remisión de los traslados
+
+La nota de remisión (04) no se emite desde un pedido: sale sola al despachar un traslado si la empresa
+la habilitó. Ver [manual-traslados.md](manual-traslados.md) («Nota de remisión al despachar»). En la
+bandeja aparece con el código del traslado en lugar del pedido; su detalle no tiene cliente, correo ni
+clasificación de renta. Se corrige con **Corregir documento** (reemplazo); no se anula.
+
 ## 5. Contingencia
 
 Cuando no hay comunicación con Hacienda se sigue facturando «en contingencia». Los documentos
@@ -133,7 +140,7 @@ transmiten a Hacienda cuando la comunicación se restablece.
 ## 6. Bandeja «Documentos fiscales»
 
 En **Ventas → Documentos fiscales** están todos los documentos de la sucursal (facturas, créditos
-fiscales y sus notas), con filtros por estado y tipo y búsqueda por número de control, pedido o cliente. El detalle muestra el código
+fiscales, sus notas y las notas de remisión de los traslados), con filtros por estado y tipo y búsqueda por número de control, pedido, cliente o traslado. El detalle muestra el código
 de generación, el sello, los intentos y el último error, y permite descargar el JSON y el PDF.
 
 ## 7. Envío por correo

@@ -198,3 +198,20 @@ it('una nota solo se anula, y un CCF con notas vigentes no se anula', async () =
   expect(await screen.findByText('Este crédito fiscal tiene notas vigentes.')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Anular documento' })).not.toBeInTheDocument();
 });
+
+it('la nota de remisión solo se corrige: no ofrece anularla', async () => {
+  salesInvoicesApi.invalidation.mockResolvedValue({
+    deadline: '2027-02-18',
+    expired: false,
+    estimated: false,
+    history: []
+  });
+  render(FiscalInvalidationPanel, {
+    document: { ...DOCUMENT, document_type: '04' } as FiscalDocument,
+    canInvalidate: true
+  });
+
+  expect(await screen.findByText(/Se puede corregir hasta el 18\/02\/2027/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Corregir documento' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Anular documento' })).not.toBeInTheDocument();
+});

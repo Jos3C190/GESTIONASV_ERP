@@ -80,6 +80,7 @@ from app.api.v1.routers import (
     suppliers,
     tracking,
     tracking_simulator,
+    transfer_remissions,
     users,
     warehouse_receiving,
     workforce,
@@ -115,6 +116,7 @@ api_router.include_router(inventory_lots.router, prefix="/api/v1")
 api_router.include_router(inventory_putaway_groups.router, prefix="/api/v1")
 api_router.include_router(inventory_trace.router, prefix="/api/v1")
 api_router.include_router(inventory_trace.public_router, prefix="/api/v1")
+api_router.include_router(transfer_remissions.router, prefix="/api/v1")
 api_router.include_router(inventory_transfers.router, prefix="/api/v1")
 api_router.include_router(inventory_valuation.router, prefix="/api/v1")
 api_router.include_router(operational_context.router, prefix="/api/v1")

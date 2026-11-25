@@ -9,7 +9,7 @@ const HEADER = 'x-dte-simulation-scenario';
 
 /** Rutas que aceptan el header, y solo en modo simulated. */
 const RUTAS_CON_ESCENARIO = [
-  /^\/api\/dte\/(v2\/)?(factura|ccf|nota-credito|nota-debito)$/,
+  /^\/api\/dte\/(v2\/)?(factura|ccf|nota-credito|nota-debito|nota-remision)$/,
   /^\/api\/dte\/simulacion\/[^/]+\/anular$/,
 ];
 

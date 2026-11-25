@@ -2350,3 +2350,28 @@ Error codes: `sales_price_below_cost`, `sales_global_discount_with_promotion`,
 `sales_promotion_percent_invalid`, `sales_promotion_backdated`, `sales_promotion_validity_invalid`,
 `sales_promotion_branch_invalid` (404), `sales_promotion_product_invalid`, `sales_promotion_overlap` (409),
 `sales_promotion_not_found` (404), `sales_promotion_already_ended`.
+
+## Remission note of a transfer (revision 0137, block V4d)
+
+When the company enables document type `04`, `POST /inventory/transfers/{id}/dispatch` also creates the
+transfer's remission note in `pending`, in the same transaction, and the DTE worker issues it
+(`/api/dte/v2/nota-remision`). If the note cannot be built the dispatch is rolled back.
+
+- Issuer: the fiscal establishment of the origin warehouse's branch and its first active point of sale.
+- Receiver: the company itself at the destination establishment's address; `bienTitulo` `04`.
+- Lines: what was dispatched, at the kardex average cost, taxed (informative VAT); vehicle, plate and
+  driver in `observaciones`. `total` is `montoTotalOperacion` and is reconciled with the issued JSON.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/inventory/transfers/{id}/remission` | `inventory:read` (either side) | `{ enabled, document }`: the vigent note or the latest one. |
+| POST | `/inventory/transfers/{id}/remission/reissue` | `inventory:read` + `inventory:move` (origin side) | New note with the dispatch data when the latest was rejected or failed. Audited as `REISSUE_TRANSFER_REMISSION`. |
+
+Fiscal documents (`/sales/fiscal-documents`) now include `04` (filter `document_type=04`), with
+`sale_id: null`, `transfer_id` and `transfer_code`. A sealed note is corrected with `/correct` (type 1, the
+replacement is rebuilt from the transfer); `/invalidate` answers `transfer_remission_not_annullable`.
+
+Error codes: `transfer_remission_issuer_missing`, `transfer_remission_receiver_incomplete`,
+`transfer_remission_lines_missing`, `transfer_remission_already_issued`, `transfer_remission_not_reissuable`,
+`transfer_remission_disabled`, `transfer_remission_not_annullable`,
+`transfer_remission_transfer_not_dispatched` (404), `sales_invoice_not_an_order_document`.
