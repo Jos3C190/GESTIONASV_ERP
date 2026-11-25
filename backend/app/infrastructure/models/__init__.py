@@ -200,6 +200,12 @@ from app.infrastructure.models.sales_pricing import (
     SalesSettingsModel,
     SalesVolumeDiscountModel,
 )
+from app.infrastructure.models.sales_receivable import (
+    SalesReceiptApplicationModel,
+    SalesReceiptModel,
+    SalesReceiptPaymentModel,
+    SalesWithholdingCertificateModel,
+)
 from app.infrastructure.models.sales_return import (
     SalesReturnCommandModel,
     SalesReturnDocumentModel,
@@ -369,6 +375,9 @@ __all__: list[str] = [
     "SalesPriceListModel",
     "SalesQuotationLineModel",
     "SalesQuotationModel",
+    "SalesReceiptApplicationModel",
+    "SalesReceiptModel",
+    "SalesReceiptPaymentModel",
     "SalesReturnCommandModel",
     "SalesReturnDocumentModel",
     "SalesReturnEventModel",
@@ -376,6 +385,7 @@ __all__: list[str] = [
     "SalesReturnModel",
     "SalesSettingsModel",
     "SalesVolumeDiscountModel",
+    "SalesWithholdingCertificateModel",
     "SubCategoryModel",
     "SupplierAddressModel",
     "SupplierBankAccountModel",

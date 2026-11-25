@@ -1373,3 +1373,22 @@ Revision `0139` (revises `0138`). Sales books need no tables: they are computed 
 
 **Downgrade** refuses while purchases have a supplier document recorded. Covered by
 `backend/tests/integration/test_fiscal_books_migration.py`.
+
+## 48. Receivables: collection receipts (0140)
+
+Revision `0140` (revises `0139`), block V5a. Balances are computed, not stored.
+
+- `sales_receipts`: company, branch (composite FK), customer (composite FK to `sales_customers`),
+  `number` (unique per company), `received_on`, `total` (> 0), `notes`, `status` (`issued` or
+  `annulled`, with `annul_reason` ≥ 5 characters, `annulled_by_id` and `annulled_at` exactly when
+  annulled), `idempotency_key` (unique per company), `created_by_id`.
+- `sales_receipt_payments`: `line_number`, `method` (`cash`, `card`, `transfer`, `check`, `other`),
+  `amount` (> 0) and `reference` (required except cash).
+- `sales_receipt_applications`: receipt, fiscal document (composite FK), `amount` (> 0),
+  `applied_on`, `created_by_id`. Unapplied amount is the customer's credit.
+- `sales_withholding_certificates`: one per fiscal document: `certificate_number`, `issued_on`,
+  `amount`.
+- Permissions `sales_receivables:read` and `sales_receivables:collect`, granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while receipts or certificates exist. Covered by
+`backend/tests/integration/test_sales_receivables_migration.py`.
