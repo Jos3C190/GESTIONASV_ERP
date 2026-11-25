@@ -10,6 +10,7 @@
   import type { LocationOut } from '#lib/features/locations/types.ts';
   import { getWarehouse } from '#lib/services/warehouses.ts';
   import { branch } from '#lib/stores/branch.svelte.ts';
+  import PurchaseFiscalForm from '#lib/features/fiscal-books/PurchaseFiscalForm.svelte';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
   import type { Purchase, PurchaseStatus } from '#lib/types/purchase.ts';
 
@@ -36,10 +37,14 @@
   let requestSequence = 0;
 
   let canManageRetaceo = $derived(permissions.hasPermission('retaceos:manage'));
+  let canReadBooks = $derived(permissions.hasPermission('fiscal_books:read'));
+  let canManageBooks = $derived(permissions.hasPermission('fiscal_books:manage'));
   let canCreateRetaceo = $derived(
     canManageRetaceo &&
       item !== null &&
-      !['retaceo_before_inventory', 'placement_before_inventory'].includes(item.inventory_workflow ?? '') &&
+      !['retaceo_before_inventory', 'placement_before_inventory'].includes(
+        item.inventory_workflow ?? ''
+      ) &&
       (item.status === 'verified' || item.status === 'closed') &&
       item.details.some(
         (detail) => detail.quantity_accepted == null || Number(detail.quantity_accepted) > 0
@@ -267,6 +272,10 @@
       {unitLabels}
       onupdated={handleUpdated}
     />
+
+    {#if canReadBooks && ['received', 'verified', 'closed'].includes(item.status)}
+      <PurchaseFiscalForm purchaseId={item.id} canManage={canManageBooks} />
+    {/if}
 
     {#if canCreateRetaceo}
       <section
