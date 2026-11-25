@@ -201,7 +201,7 @@
               </p>
             </div>
             <input
-              class="{inputClass} w-32"
+              class={inputClass.replace('w-full', 'w-32 shrink-0')}
               type="number"
               min="0"
               step="0.01"
