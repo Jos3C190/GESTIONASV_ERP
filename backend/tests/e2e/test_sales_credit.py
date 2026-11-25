@@ -86,6 +86,20 @@ async def test_credit_limit_block_and_invoice_recheck(e2e_client: AsyncClient) -
     )
     assert blocked_invoice.status_code == 422
     assert blocked_invoice.json()["code"] == "sales_credit_authorization_required"
+    # Quien controla el crédito lo autoriza sobre el pedido confirmado y ya se factura.
+    credit_ok = await _order_act(
+        e2e_client, admin, confirmed.json(), "authorize-credit", note="Pagará con cheque"
+    )
+    assert credit_ok.status_code == 200, credit_ok.text
+    assert "credit_limit_exceeded" in [r["code"] for r in credit_ok.json()["authorization_reasons"]]
+    again = await _order_act(
+        e2e_client, admin, credit_ok.json(), "authorize-credit", note="Pagará con cheque"
+    )
+    assert again.json()["code"] == "sales_credit_already_authorized"
+    allowed = await e2e_client.post(
+        f"{ORDERS}/{second['id']}/invoice", json={"point_of_sale_id": str(point)}, headers=admin
+    )
+    assert allowed.status_code == 202, allowed.text
 
     # Cliente bloqueado: sin límite igual pide autorización; el contado no se evalúa.
     async with async_session_factory() as session:

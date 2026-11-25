@@ -123,8 +123,8 @@ class SalesInvoiceUseCases:
         if reasons:
             detail = " ".join(REASON_TEXT[reason] for reason in reasons)
             raise BusinessRuleError(
-                f"{detail} Pide una autorización de crédito antes de facturar: devuelve el pedido a "
-                "borrador y vuelve a confirmarlo.",
+                f"{detail} Pide a quien controla el crédito que lo autorice desde el pedido "
+                "(«Autorizar crédito para facturar»).",
                 code="sales_credit_authorization_required",
             )
 

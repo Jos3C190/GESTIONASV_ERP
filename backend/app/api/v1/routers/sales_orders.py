@@ -588,6 +588,33 @@ async def authorize_order(
 
 
 @router.post(
+    "/{order_id:uuid}/authorize-credit",
+    response_model=OrderOut,
+    summary="Autorizar el crédito de un pedido confirmado para poder facturarlo",
+    dependencies=[Depends(require_permission("sales_credit:authorize"))],
+)
+async def authorize_order_credit(
+    order_id: uuid.UUID,
+    body: OrderNoteIn,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    company_id: CompanyId,
+    use_cases: UseCases,
+    checker: Checker,
+    audit: Audit,
+) -> OrderOut:
+    await _scoped(use_cases, session, current, company_id, order_id)
+    change = await use_cases.authorize_credit(
+        company_id, current.id, order_id, body.expected_version, body.note
+    )
+    await _record(
+        audit, request, action="SALES_ORDER_CREDIT_AUTHORIZED", actor=current.id, change=change
+    )
+    return await _respond(use_cases, checker, current, change.order)
+
+
+@router.post(
     "/{order_id:uuid}/return",
     response_model=OrderOut,
     summary="Devolver a borrador un pedido por autorizar",
