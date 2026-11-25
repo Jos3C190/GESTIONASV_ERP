@@ -22,11 +22,12 @@ Este módulo decide, sin tocar la base:
 from __future__ import annotations
 
 import calendar
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
 
 from app.core.exceptions import BusinessRuleError
 from app.domain.entities.sales_fiscal_document import INVOICE, FiscalDocumentStatus
@@ -273,9 +274,20 @@ class ReturnTotals:
         return self.subtotal - self.withheld
 
 
-def return_totals(
-    lines: tuple[ReturnLine, ...] | list[ReturnLine], *, withholding: bool
-) -> ReturnTotals:
+class _ReturnAmount(Protocol):
+    @property
+    def nature(self) -> Nature: ...
+
+    @property
+    def amount(self) -> Decimal: ...
+
+    @property
+    def vat(self) -> Decimal: ...
+
+
+def return_totals(lines: Sequence[_ReturnAmount], *, withholding: bool) -> ReturnTotals:
+    """Totales del retorno con sus líneas planeadas o guardadas."""
+
     def total(nature: Nature) -> Decimal:
         return sum((ln.amount for ln in lines if ln.nature == nature), ZERO)
 

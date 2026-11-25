@@ -89,6 +89,9 @@ from app.infrastructure.repositories.sales_fiscal_invalidation_repository import
     SqlAlchemySalesFiscalInvalidationRepository,
 )
 from app.infrastructure.repositories.sales_fiscal_repository import SqlAlchemySalesFiscalRepository
+from app.infrastructure.repositories.sales_fiscal_return_repository import (
+    SqlAlchemySalesFiscalReturnRepository,
+)
 from app.infrastructure.repositories.sales_order_repository import SqlAlchemySalesOrderRepository
 
 log = get_logger(__name__)
@@ -672,6 +675,38 @@ async def invalidate_fiscal_document(ctx: dict[str, Any], invalidation_id_text: 
         raise Retry(defer=min(15 * (2 ** (attempt - 1)), 300)) from error
 
 
+async def issue_fiscal_return(ctx: dict[str, Any], return_id_text: str) -> None:
+    from app.infrastructure.dte_returns_worker import process_fiscal_return
+
+    async def queue_email(email_id: uuid.UUID) -> None:
+        await ctx["redis"].enqueue_job(
+            "send_fiscal_email", str(email_id), _job_id=f"dte-email:{email_id}"
+        )
+
+    try:
+        await process_fiscal_return(
+            uuid.UUID(return_id_text),
+            client=ctx["dte"],
+            storage=ctx["storage"],
+            on_email=queue_email,
+        )
+    except DteServiceError as error:
+        attempt = int(ctx.get("job_try") or 1)
+        log.info("dte_return_retry", code=error.code, attempt=attempt)
+        raise Retry(defer=min(15 * (2 ** (attempt - 1)), 300)) from error
+
+
+async def annul_fiscal_return(ctx: dict[str, Any], return_id_text: str) -> None:
+    from app.infrastructure.dte_returns_worker import process_return_annulment
+
+    try:
+        await process_return_annulment(uuid.UUID(return_id_text), client=ctx["dte"])
+    except DteServiceError as error:
+        attempt = int(ctx.get("job_try") or 1)
+        log.info("dte_return_annul_retry", code=error.code, attempt=attempt)
+        raise Retry(defer=min(15 * (2 ** (attempt - 1)), 300)) from error
+
+
 async def _queue_waiting_invalidation(ctx: dict[str, Any], document: FiscalDocument | None) -> None:
     """Al sellarse un reemplazo, encola enseguida la invalidación de su original (V4b)."""
 
@@ -706,6 +741,14 @@ async def reconcile_fiscal_documents(ctx: dict[str, Any]) -> None:
             stale_before, 20
         )
         emails = await SqlAlchemySalesFiscalEmailRepository(session).pending_ids(stale_before, 20)
+        returns = await SqlAlchemySalesFiscalReturnRepository(session).pending_ids(stale_before, 20)
+    for return_id, annulment in returns:
+        function, prefix = (
+            ("annul_fiscal_return", "dte-ret-anul")
+            if annulment
+            else ("issue_fiscal_return", "dte-ret")
+        )
+        await ctx["redis"].enqueue_job(function, str(return_id), _job_id=f"{prefix}:{return_id}")
     for document_id in pending:
         await ctx["redis"].enqueue_job(
             "issue_fiscal_document", str(document_id), _job_id=f"dte:{document_id}"
@@ -724,13 +767,14 @@ async def reconcile_fiscal_documents(ctx: dict[str, Any]) -> None:
         await ctx["redis"].enqueue_job(
             "send_fiscal_email", str(email_id), _job_id=f"dte-email:{email_id}"
         )
-    if pending or contingency or invalidations or emails:
+    if pending or contingency or invalidations or emails or returns:
         log.info(
             "dte_reconciled",
             pending_enqueued=len(pending),
             contingency_followed=len(contingency),
             invalidations_enqueued=len(invalidations),
             emails_enqueued=len(emails),
+            returns_enqueued=len(returns),
         )
 
 
@@ -764,6 +808,8 @@ class WorkerSettings:
         issue_fiscal_document,
         follow_fiscal_contingency,
         invalidate_fiscal_document,
+        issue_fiscal_return,
+        annul_fiscal_return,
         send_fiscal_email,
     ]
     cron_jobs: ClassVar[list[Any]] = [
@@ -812,3 +858,11 @@ async def enqueue_fiscal_email(email_id: uuid.UUID) -> None:
 
 async def enqueue_fiscal_invalidation(invalidation_id: uuid.UUID) -> None:
     await _enqueue("invalidate_fiscal_document", invalidation_id, f"dte-inv:{invalidation_id}")
+
+
+async def enqueue_fiscal_return(return_id: uuid.UUID) -> None:
+    await _enqueue("issue_fiscal_return", return_id, f"dte-ret:{return_id}")
+
+
+async def enqueue_return_annulment(return_id: uuid.UUID) -> None:
+    await _enqueue("annul_fiscal_return", return_id, f"dte-ret-anul:{return_id}")
