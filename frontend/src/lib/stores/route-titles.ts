@@ -21,6 +21,7 @@ const TITLES: Record<string, string> = {
   '/sales/returns': 'Devoluciones',
   '/sales/fiscal-documents': 'Documentos fiscales',
   '/sales/contingencies': 'Contingencia',
+  '/sales/fiscal-books': 'Libros de IVA',
   '/sales/fiscal-settings': 'Configuración fiscal',
   '/sales/price-lists': 'Listas de precios',
   '/sales/discount-policies': 'Topes de descuento',

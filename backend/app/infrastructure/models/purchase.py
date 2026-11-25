@@ -16,6 +16,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -73,6 +74,23 @@ class PurchaseModel(UUIDPKMixin, TimestampMixin, Base):
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="draft")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Documento del proveedor para el libro y el anexo de compras (migración 0139).
+    fiscal_document_class: Mapped[int | None] = mapped_column(SmallInteger)
+    fiscal_document_type: Mapped[str | None] = mapped_column(String(2))
+    fiscal_document_number: Mapped[str | None] = mapped_column(String(100))
+    fiscal_control_number: Mapped[str | None] = mapped_column(String(31))
+    fiscal_seal: Mapped[str | None] = mapped_column(String(100))
+    fiscal_supplier_name: Mapped[str | None] = mapped_column(String(250))
+    fiscal_supplier_id_type: Mapped[str | None] = mapped_column(String(3))
+    fiscal_supplier_id: Mapped[str | None] = mapped_column(String(14))
+    renta_operation_type: Mapped[int | None] = mapped_column(SmallInteger)
+    renta_classification: Mapped[int | None] = mapped_column(SmallInteger)
+    renta_sector: Mapped[int | None] = mapped_column(SmallInteger)
+    renta_cost_type: Mapped[int | None] = mapped_column(SmallInteger)
+    fiscal_recorded_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    fiscal_recorded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     details: Mapped[list[PurchaseDetailModel]] = relationship(
         "PurchaseDetailModel",

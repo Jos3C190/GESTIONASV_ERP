@@ -101,6 +101,32 @@ class CompanyFiscalProfileModel(Base):
     )
 
 
+class FiscalBookSettingsModel(Base):
+    """Renta de compras que se propone al registrar el documento del proveedor (0139)."""
+
+    __tablename__ = "fiscal_book_settings"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), primary_key=True
+    )
+    purchase_operation_type: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default="1"
+    )
+    purchase_classification: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default="1"
+    )
+    purchase_sector: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="2")
+    purchase_cost_type: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default="5"
+    )
+    updated_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class CompanyEconomicActivityModel(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "company_economic_activities"
 

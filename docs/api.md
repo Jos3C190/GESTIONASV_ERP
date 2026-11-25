@@ -2412,3 +2412,32 @@ Audited: `ISSUE_FISCAL_RETURN`, `ANNUL_FISCAL_RETURN`, and from the worker `FISC
 `sales_return_line_invalid`, `sales_return_line_repeated`, `sales_return_quantity_exceeded`,
 `sales_return_amount_exceeded`, `sales_return_not_annullable`, `sales_invoice_has_returns`;
 `sales_return_not_found` (`404`).
+
+## VAT books and F-07 annexes (revision 0139)
+
+The three VAT books (Tax Code art. 141; regulation arts. 83, 85 and 86) and the F-07 upload annexes
+(DGII manual V14, January 2025) of one company and month. Sales come only from sealed (or
+simulated) fiscal documents and their stored DTE JSON; purchases from received purchases with the
+supplier's document recorded. A month is either `production`, `test` or `simulated`, never mixed.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/fiscal-books/{YYYY-MM}?mode=` | `fiscal_books:read` | `summary` (debit, credit, collected perception, balance), the three books (`contributor_book`, `consumer_book`, `purchase_book`), `annexes` (`anexo1`, `anexo2`, `anexo3`, `anexo9`, `anulados`, each with `file_name` and raw `rows`), `pending_purchases`, `warnings`, `modes`. Without `mode`, production if the month has it. |
+| GET | `/fiscal-books/{YYYY-MM}/xlsx` | `fiscal_books:read` | Workbook: summary, books with totals, annexes as text cells. |
+| GET | `/fiscal-books/{YYYY-MM}/pdf?book=&first_folio=` | `fiscal_books:read` | Landscape PDF of `contributors`, `consumers` or `purchases`, numbered from `first_folio`. |
+| GET | `/fiscal-books/{YYYY-MM}/f07.zip` | `fiscal_books:read` | Portal CSVs (`;`, Windows-1252, no header, two decimals), workbook and `LEEME.txt`. |
+| GET / PUT | `/fiscal-books/purchases/{purchase_id}` | `read` / `manage` | Supplier document of a purchase: `issued_on`, `document_class` (1, 3, 4), `document_type` (`03`, `05`, `06`, `12`, `13`), `number` (generation code for a DTE), `control_number` and `seal` (DTE), `supplier_name`, `supplier_id_type` (`nit`, `nrc`, `dui`), `supplier_id`, `renta` (`operation`, `classification`, `sector`, `cost_type`). Only received, verified or closed purchases. |
+| GET / PUT | `/fiscal-books/settings` | `read` / `manage` | Purchase income-tax classification proposed by default. |
+
+Month rules: an invalidated CCF or note leaves annex 1 of its month and goes to `anulados`; an
+invoice invalidated in a later month counts in its month and is subtracted in the month of the
+invalidation with a negative annex 2 row dated as the invoice; a return event does the same in its
+month. Credit notes go to annex 1 with type `05` and positive amounts.
+
+Audited: `RECORD_PURCHASE_FISCAL_DOCUMENT`, `UPDATE_FISCAL_BOOK_SETTINGS`, `EXPORT_FISCAL_BOOKS`.
+Error codes (`422`): `fiscal_book_period_invalid`, `fiscal_book_mode_invalid`,
+`fiscal_purchase_not_received`, `fiscal_purchase_document_invalid`, `fiscal_purchase_date_invalid`,
+`fiscal_purchase_generation_code_invalid`, `fiscal_purchase_control_number_invalid`,
+`fiscal_purchase_seal_required`, `fiscal_purchase_number_required`,
+`fiscal_purchase_supplier_required`, `fiscal_purchase_supplier_id_invalid`,
+`fiscal_purchase_renta_invalid`; `purchase_not_found` (`404`).

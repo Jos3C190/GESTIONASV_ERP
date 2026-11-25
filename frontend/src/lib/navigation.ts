@@ -63,6 +63,7 @@ const ICONS = {
     'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z',
   returns: 'M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6',
   fiscalDocuments: 'M9 14l2 2 4-4M7 3h10a2 2 0 012 2v16l-3-2-2 2-2-2-2 2-2-2-3 2V5a2 2 0 012-2z',
+  fiscalBooks: 'M4 5a2 2 0 012-2h12v16H6a2 2 0 00-2 2V5z M4 19a2 2 0 002 2h12v-2 M8 7h6 M8 11h6',
   contingency:
     'M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
   fleet:
@@ -314,6 +315,13 @@ export const NAV_GROUPS: NavGroup[] = [
         route: '/sales/contingencies',
         implemented: true,
         requiredPermission: 'sales_invoices:read'
+      },
+      {
+        label: 'Libros de IVA',
+        icon: ICONS.fiscalBooks,
+        route: '/sales/fiscal-books',
+        implemented: true,
+        requiredPermission: 'fiscal_books:read'
       },
       {
         label: 'Devoluciones',
