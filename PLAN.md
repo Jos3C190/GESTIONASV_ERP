@@ -596,7 +596,10 @@ Pasos:
 - [x] **Paso 4: interfaz.** En el detalle de una factura: saldo por línea, «Registrar retorno», lista de
   retornos con estado, PDF y «Anular». Verificar: vitest.
 - [x] **Paso 5: documentación.** `api.md`, esquema §46, manual de facturación §4.3 y README del servicio.
-- [ ] **Paso 6: verificación y PR.**
+- [x] **Paso 6: verificación y PR.** Batería: backend 2063, OCR 5, servicio 507, frontend 1222, ruff, mypy,
+  svelte-check, ESLint y build. QA con Grupo Lorena sobre DTE-01-…002 (simulada): retorno de 5 bolsas ($0.60,
+  IVA $0.07), PDF, correo con PDF y JSON, bloqueo de la anulación de la factura, anulación del retorno y
+  saldo restituido; modo claro y 375 px. Ajuste del QA: la etiqueta visible es «Cantidad devuelta».
 
 Detalle original de V4d (antes de partirlo):
 - Nota de remisión (04) al despachar un traslado, si la empresa habilita el tipo; queda vinculada al traslado.
@@ -643,7 +646,7 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
 
 ## Estado actual
 
-- **Paso en curso**: V4d2 paso 6 (batería, QA y PR). Pasos 1 a 5 hechos (panel `FiscalReturnsPanel.svelte` con vitest) (e2e `test_sales_fiscal_returns.py` y regresión fiscal: 1490 en verde). V4d en develop (#59). PI terminado y en develop (#58); V4c en develop (#57).
+- **Paso en curso**: V4d2 terminado; PR a develop con Auto-fix y auto-merge. Pasos 1 a 6 hechos (panel `FiscalReturnsPanel.svelte` con vitest) (e2e `test_sales_fiscal_returns.py` y regresión fiscal: 1490 en verde). V4d en develop (#59). PI terminado y en develop (#58); V4c en develop (#57).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,

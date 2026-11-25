@@ -273,8 +273,9 @@
                 >
               </p>
               <label class="space-y-1 text-sm text-foreground-muted"
-                >Cantidad devuelta de la línea {line.number}
+                >Cantidad devuelta
                 <input
+                  aria-label={`Cantidad devuelta de la línea ${line.number}`}
                   class={inputClass}
                   type="number"
                   min="0"
