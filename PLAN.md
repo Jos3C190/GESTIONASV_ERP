@@ -349,8 +349,15 @@ Decisiones (18/11/2026):
     exige para la ND (CT arts. 110 y 111; Ley IVA art. 62 num. 2 suma incrementos e intereses sin plazo; art. 63
     da al comprador tres períodos desde la emisión de la ND), pero Hacienda valida la regla al recibir el DTE.
     **Decisión del usuario (19/11/2026): se aplica el mismo plazo a la ND.** `note_deadline` y
-    `require_note_in_time` valen para las dos; la API expone `deadline`. Queda para el contador qué
-    son las «excepciones legales» que menciona la regla.
+    `require_note_in_time` valen para las dos; la API expone `deadline`.
+  - **Excepciones legales (investigado el 25/11/2026)**: la Normativa no las define (anexo IV, campo 17,
+    regla 2c, pág. 104). La única excepción en la ley es la **Ley de IVA, art. 62, numeral 1, literal a),
+    inciso segundo (reforma 14)**: en las devoluciones de **medicamentos y especialidades farmacéuticas
+    perecederos** para consumo humano el plazo «podrá ser ampliado hasta dos años», con registro detallado
+    por lote y vencimiento, la NC que cite el lote y el acta de destrucción de la autoridad sanitaria. El CT
+    art. 111, inciso tercero, da a las exportaciones el mismo plazo de tres meses (no es excepción). No aplica a
+    Grupo Lorena: el ERP conserva los 3 meses. Si una empresa del grupo vende medicamentos, se agrega como
+    opción por empresa (plazo de 2 años solo en NC de devolución de esos productos, con lote).
 - **Una nota relaciona un solo CCF**. La normativa admite hasta 50; se deja para después.
 - Un CCF con una nota vigente no se invalida ni se corrige (Manual Funcional, regla 633: primero se invalida
   la nota). Una nota se anula (tipo 2) y no se corrige.
@@ -436,7 +443,22 @@ Decisiones (24/11/2026, el usuario dijo «continúa» con PR #58 en develop, sob
   Si la empresa habilitó el 04 y el origen no tiene establecimiento con punto de venta, el despacho se rechaza
   (`transfer_remission_issuer_missing`) con el motivo a la vista.
 - **Valores**: cada línea al costo promedio del kardex al despachar, como gravada (la NR no causa IVA; el tributo
-  20 queda informativo en el resumen). Queda anotado para que lo confirme el contador.
+  20 queda informativo en el resumen).
+  - **Investigado el 25/11/2026: se confirma.**
+    - La ley exige que la NR lleve «el precio unitario y cantidad de los bienes» (CT art. 114 c) num. 2; para la
+      electrónica, Decreto 487, literal d) romano V), pero **no dice qué precio** usar en un traslado.
+    - Un traslado entre establecimientos propios **no es hecho generador**: no transfiere dominio (Ley IVA
+      art. 4) ni es retiro (art. 11; el precio de venta al público del art. 48 c) es solo para retiros), y el CT
+      art. 109 inciso 4 lo nombra «traslados que no constituyan transferencias». El valor es referencial: el
+      costo es el que tienen los bienes en el inventario y no inventa un margen que no existe.
+    - La Normativa 2.0, anexo IV, fija la forma: precios **sin IVA** (campo 87, regla 2); si hay ventas
+      gravadas el **valor del tributo es obligatorio** (campo 138, regla 2) y el **monto total = subtotal +
+      tributo** (campo 150, regla 2), para FE, CCFE y NRE. Eso es lo que ya hace el servicio.
+    - No se declara: los libros de IVA y los anexos del F-07 toman facturas, CCF y notas, no la NR.
+    - Cuidado: un DTE rechazado o transitorio sin sello se presume ingreso gravado (Normativa 10.1 y 10.2, CT
+      art. 199 inciso segundo). Una NR rechazada debe emitirse de nuevo pronto (la tarjeta lo ofrece).
+    - Sigue siendo una decisión del contribuyente: si el contador prefiere precio de venta, solo cambia
+      `unit_cost` en `TransferRemissionUseCases._lines`.
 - **Transporte**: placa, vehículo y conductor en `observaciones` del resumen (el esquema no trae transporte).
 - El despacho y la NR pendiente se guardan en la misma transacción; el trabajador la transmite. Si no se pudo
   crear, no hay despacho. Rechazada: el traslado ofrece «Emitir de nuevo» con los datos del despacho.
@@ -508,15 +530,76 @@ Pasos:
     mientras dice «Emitiendo»; textos de la bandeja.
   - Para que el frontend tome cambios hay que reiniciar su contenedor (Vite no detecta cambios en este montaje).
 
-### V4d2 — Evento de retorno (se detalla al empezar)
-- Sobre facturas (01) selladas, como la NC: líneas de la factura, cantidad devuelta y saldo; plazo de 3 meses
-  desde el sello; IVA incluido. Varios eventos por factura mientras no pasen de lo vendido (Manual Funcional
-  §X, condición 4); cada evento relaciona una factura.
-- Tipo 18 de CAT-002: el esquema `fe-eret-v1` no trae número de control. **Por confirmar** el endpoint de
-  Hacienda (el Manual Técnico disponible no tiene texto extraíble): se supone `recepciondte` con `tipoDte` 18,
-  como sugiere el Manual Funcional (modelo diferido y contingencia); se prueba contra el stub y se confirma en
-  la certificación.
-- Una factura con un retorno vigente no se invalida ni se corrige; el retorno se invalida con tipo 2.
+### V4d2 — Evento de retorno (rama `feature/ventas-v4d2-retorno`)
+
+Decisiones (25/11/2026, el usuario dijo «Sí, empieza V4d2»), sobre la investigación del 19/11 y la del 25/11:
+- **Qué es** (Normativa 2.0, regla 13.3; Manual Funcional §X; esquema `fe-eret-v1`): un evento firmado que
+  documenta el retorno de bienes vendidos con factura (01). Reduce la venta y el débito fiscal del emisor; no da
+  crédito fiscal al receptor; **no es un descuento** (solo por cantidad) y no pasa de lo vendido. Los bienes se
+  individualizan: líneas de la factura con la cantidad devuelta. Se entrega al cliente (JSON y PDF).
+- **Alcance**: solo FE (el ERP no emite FEXE ni FSEE). Cada retorno relaciona **una** factura (la norma admite
+  50 del mismo emisor y receptor; se deja para después). Varios retornos por factura mientras su suma no pase
+  de lo vendido (Manual §X, condición 4). Solo fiscal, como las notas: el enlace con las devoluciones físicas
+  (`sales_returns`) llega en V8.
+- **Plazo**: la Normativa (13.3, cuadro 8) cuenta 3 meses desde el **sello** de la factura; la sección de fechas
+  del Manual (§X) los cuenta desde su **fecha de generación**. Se usa la más estricta: 3 meses desde la fecha de
+  generación de la factura. **Excepción**: si el emisor de la factura tiene la actividad 01282, 21001, 46484 o
+  47721 (medicamentos; concuerda con la Ley de IVA art. 62), son **2 años**. Solo facturas con sello.
+- **Montos**: con IVA incluido, estilo factura (`ivaItem` por línea, `totalIva`). La devolución se valora al
+  precio neto con el que se vendió (descuento por línea y descuento global prorrateados, como la NC); las
+  últimas unidades toman el saldo exacto. Retención de IVA espejo si la factura retuvo.
+- **Transmisión**: no hay servicio propio para el retorno en el Manual Técnico (solo contingencia e
+  invalidación); el retorno tiene código de generación y es el tipo 18 de CAT-002, así que se transmite por
+  `recepciondte` (uno a uno) con `tipoDte` "18" y `version` 1. Admite modelo diferido y contingencia (Manual §X,
+  condición 7). Queda **por confirmar en la certificación**; la URL es configurable.
+- **Anulación**: el retorno no se corrige ni se ajusta (13.3.2.1); se anula con el evento de invalidación tipo 2,
+  referenciando su código de generación, `numeroControl` null y sin reemplazo (Manual VII; el esquema
+  `invalidacion-schema-v3` admite `numeroControl` null). Una factura con un retorno vigente no se anula ni se
+  corrige (Manual VII, nota 3): primero se anula el retorno.
+- **Dónde vive en el ERP**: tabla propia `sales_fiscal_returns` (es un evento: sin número de control) con sus
+  líneas, como `sales_fiscal_invalidations`; no entra a `sales_fiscal_documents` ni a la bandeja. Se ve en el
+  detalle de la factura. Correo al cliente con su JSON y PDF.
+
+Hechos verificados en el código:
+- Servicio: hay esquema `fe-eret-v1` y validador de eventos, pero no generador ni ruta. Los eventos se guardan en la
+  tabla `eventos` (invalidación y contingencia) y el evento de invalidación se arma desde el DTE guardado.
+- ERP: `sales_fiscal_notes.py` ya sabe leer las líneas de un CCF y prorratear el descuento global; la factura
+  trae `ivaItem` por línea y precios con IVA.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [x] **Paso 1: servicio.** Generador `fe-eret-v1` desde la FE guardada (emisor, receptor y relacionado de la
+  factura) con las líneas que manda el ERP; ruta `POST /api/dte/:codigoGeneracion/retorno` (simulado, normal y
+  contingencia), guardado en `eventos` (tipo RETORNO), transmisión por `recepciondte` tipo 18; JSON y PDF del
+  evento; anulación del retorno (tipo 2) por la ruta de invalidación. Verificar: pruebas del servicio.
+  - Hecho: `eventoRetornoBuilder.js` (emisor, receptor y relacionado de la FE guardada; líneas del ERP validadas
+    contra la factura; IVA incluido; retención espejo si la FE retuvo) y `retornoService.js` (`eventos` tipo
+    RETORNO; real: firma y `recepciondte` con tipoDte 18; simulado: firma y marcador sintéticos con escenario
+    `rejected`). Rutas `POST /api/dte/:codigo/retorno` y `POST /api/dte/eventos/:codigo/anular` (invalidación
+    tipo 2 del retorno: `numeroControl` null, cuelga de la FE y apunta al retorno en `evento_relacionado`). El
+    generador de invalidación admite el tipo 18 y la fecha del evento del 17 y 18 es la de generación. JSON y PDF
+    del retorno por `/eventos/:codigo/json` y `/pdf/render` (PDF con la representación de la factura y título
+    «EVENTO DE RETORNO»). La FE con retornos vigentes no se invalida (`DTE_HAS_RETURN`). Servicio: 507 en verde.
+- [x] **Paso 2: migración 0138 y dominio.** `sales_fiscal_returns` y `sales_fiscal_return_lines`, `return_id` en
+  los envíos de correo, permiso `sales_invoices:returns`. Dominio `sales_fiscal_returns.py`: líneas de la FE,
+  saldo por línea, plazo con la excepción de medicamentos, totales con IVA y solicitud. Verificar: unitarias y
+  prueba de migración.
+  - Hecho: 0138 (`sales_fiscal_returns` con su anulación en columnas `annul_*`, `sales_fiscal_return_lines` con
+    cantidad, monto con IVA e IVA, `return_id` en los envíos con su índice único y el automático de la factura sin
+    los de retorno, permiso, guarda del downgrade). Dominio `sales_fiscal_returns.py` (plazo 3 meses o 2 años con
+    medicamentos, factura vigente con sello, líneas y saldo con las funciones de las notas, plan por cantidad al
+    precio neto, IVA 13/113, retención espejo, solicitud y conciliación). Pruebas
+    `test_sales_fiscal_returns.py` (5) y `test_sales_fiscal_returns_migration.py`. Desarrollo en 0138.
+- [x] **Paso 3: casos de uso, trabajador y API.** `GET /sales/fiscal-documents/{id}/returns`, `POST .../returns`,
+  `POST /sales/fiscal-returns/{id}/annul`; el trabajador emite y anula; correo al cliente; la FE con retorno
+  vigente no se invalida ni se corrige. Verificar: e2e contra el servicio simulado.
+- [x] **Paso 4: interfaz.** En el detalle de una factura: saldo por línea, «Registrar retorno», lista de
+  retornos con estado, PDF y «Anular». Verificar: vitest.
+- [x] **Paso 5: documentación.** `api.md`, esquema §46, manual de facturación §4.3 y README del servicio.
+- [x] **Paso 6: verificación y PR.** Batería: backend 2063, OCR 5, servicio 507, frontend 1222, ruff, mypy,
+  svelte-check, ESLint y build. QA con Grupo Lorena sobre DTE-01-…002 (simulada): retorno de 5 bolsas ($0.60,
+  IVA $0.07), PDF, correo con PDF y JSON, bloqueo de la anulación de la factura, anulación del retorno y
+  saldo restituido; modo claro y 375 px. Ajuste del QA: la etiqueta visible es «Cantidad devuelta».
 
 Detalle original de V4d (antes de partirlo):
 - Nota de remisión (04) al despachar un traslado, si la empresa habilita el tipo; queda vinculada al traslado.
@@ -563,7 +646,7 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
 
 ## Estado actual
 
-- **Paso en curso**: V4d en PR hacia develop. Siguiente: V4d2 (evento de retorno). PI terminado y en develop (#58); V4c en develop (#57).
+- **Paso en curso**: V4d2 terminado; PR a develop con Auto-fix y auto-merge. Pasos 1 a 6 hechos (panel `FiscalReturnsPanel.svelte` con vitest) (e2e `test_sales_fiscal_returns.py` y regresión fiscal: 1490 en verde). V4d en develop (#59). PI terminado y en develop (#58); V4c en develop (#57).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,

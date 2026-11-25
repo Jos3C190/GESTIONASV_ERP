@@ -115,6 +115,26 @@ la habilitó. Ver [manual-traslados.md](manual-traslados.md) («Nota de remisió
 bandeja aparece con el código del traslado en lugar del pedido; su detalle no tiene cliente, correo ni
 clasificación de renta. Se corrige con **Corregir documento** (reemplazo); no se anula.
 
+## 4.3 Eventos de retorno
+
+El **evento de retorno** registra ante Hacienda la mercadería que un consumidor devuelve sobre una
+**factura** sellada (Normativa 2.0, regla 13.3). Es solo fiscal: no mueve inventario ni reintegra
+dinero (las devoluciones con mercadería se gestionan aparte).
+
+En el detalle de la factura, la sección **Eventos de retorno** muestra cada línea con lo vendido,
+lo ya devuelto y el saldo, y la lista de retornos con su estado, PDF y JSON.
+
+- **Registrar retorno**: escribe la cantidad devuelta en cada línea y el **motivo**. Los montos
+  llevan el IVA incluido; la sección muestra el total estimado y el IVA. Si la factura retuvo el
+  1 % de IVA, el retorno repite la retención. No pasa del saldo de cada línea.
+- Se registra hasta **tres meses** desde la fecha de la factura, o hasta **dos años** si la
+  empresa vende medicamentos (Ley IVA, art. 62). Vencido el plazo, la sección lo indica.
+- Cuando Hacienda lo acepta, el cliente lo recibe por correo con el PDF y el JSON.
+- **Anular retorno**: pide el nombre y documento del solicitante; lo firma el responsable de la
+  sucursal. Anularlo devuelve el saldo a las líneas.
+
+Una factura con retornos vigentes no se anula ni se corrige: primero se anulan sus retornos.
+
 ## 5. Contingencia
 
 Cuando no hay comunicación con Hacienda se sigue facturando «en contingencia». Los documentos
@@ -177,4 +197,5 @@ En desarrollo, los correos no salen a internet: llegan al buzón de prueba Mailp
 | `sales_invoices:issue` | Facturar, reintentar y enviar por correo. |
 | `sales_invoices:invalidate` | Anular y corregir documentos emitidos; con `sales:cancel`, cancelar un pedido facturado. |
 | `sales_invoices:notes` | Emitir notas de crédito y de débito sobre un crédito fiscal. Ver su saldo y sus notas pide `sales_invoices:read`. |
+| `sales_invoices:returns` | Registrar y anular eventos de retorno sobre una factura. Verlos pide `sales_invoices:read`. |
 | `sales_invoices:contingency` | Activar y cerrar contingencias, informar el evento y registrar al responsable. Ver la pantalla Contingencia pide `sales_invoices:read`. |

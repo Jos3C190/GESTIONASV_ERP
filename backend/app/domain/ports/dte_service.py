@@ -90,6 +90,19 @@ class InvalidationResult:
     response: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class ReturnEventResult:
+    """Respuesta del servicio a un evento de retorno o a su anulación (V4d2)."""
+
+    accepted: bool
+    generation_code: str | None
+    seal: str | None
+    """Sello de Hacienda o, en simulado, el marcador del evento."""
+    simulated: bool
+    message: str | None
+    response: dict[str, Any] = field(default_factory=dict)
+
+
 class DteService(Protocol):
     async def register_issuer(
         self,
@@ -130,6 +143,25 @@ class DteService(Protocol):
         ...
 
     async def invalidation_pdf(self, nit: str, event_generation_code: str) -> bytes: ...
+
+    # --- evento de retorno (V4d2) ---
+
+    async def issue_return(
+        self, nit: str, invoice_generation_code: str, *, idempotency_key: str, body: dict[str, Any]
+    ) -> ReturnEventResult:
+        """Aceptado o rechazado; lanza ``DteServiceError`` si no hubo respuesta."""
+        ...
+
+    async def annul_return(
+        self,
+        nit: str,
+        return_generation_code: str,
+        *,
+        idempotency_key: str,
+        request: InvalidationRequest,
+    ) -> ReturnEventResult: ...
+
+    async def event_json(self, nit: str, event_generation_code: str) -> dict[str, Any]: ...
 
     # --- contingencia por establecimiento (V4a) ---
 

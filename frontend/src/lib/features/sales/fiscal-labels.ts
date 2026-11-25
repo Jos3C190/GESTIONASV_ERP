@@ -3,7 +3,8 @@ import type {
   FiscalDocumentStatus,
   FiscalDocumentType,
   FiscalEmailStatus,
-  FiscalNature
+  FiscalNature,
+  ReturnStatus
 } from '#lib/types/sales-invoices.ts';
 
 export const FISCAL_DOCUMENT_LABELS: Record<FiscalDocumentType, string> = {
@@ -49,6 +50,24 @@ export const FISCAL_STATUS_LABELS: Record<FiscalDocumentStatus, string> = {
   rejected: 'Rechazado',
   failed: 'Falló',
   invalidated: 'Invalidado'
+};
+
+export const RETURN_STATUS_LABELS: Record<ReturnStatus, string> = {
+  pending: 'Transmitiendo',
+  issued: 'Aceptado',
+  simulated: 'Simulado',
+  rejected: 'Rechazado',
+  failed: 'Falló',
+  invalidated: 'Anulado'
+};
+
+export const RETURN_STATUS_BADGES: Record<ReturnStatus, string> = {
+  pending: 'bg-warning/10 text-warning',
+  issued: 'bg-success/10 text-success',
+  simulated: 'bg-primary/10 text-primary',
+  rejected: 'bg-danger/10 text-danger',
+  failed: 'bg-danger/10 text-danger',
+  invalidated: 'bg-surface-muted text-foreground-muted'
 };
 
 export const FISCAL_STATUS_BADGES: Record<FiscalDocumentStatus, string> = {

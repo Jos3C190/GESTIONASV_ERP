@@ -218,3 +218,51 @@ export interface TransferRemission {
   /** La nota vigente o, si no hay, la última. */
   document: FiscalDocument | null;
 }
+
+/** Evento de retorno sobre una factura (V4d2). */
+export type ReturnStatus =
+  'pending' | 'issued' | 'simulated' | 'rejected' | 'failed' | 'invalidated';
+export type ReturnAnnulStatus = 'pending' | 'accepted' | 'rejected' | 'failed';
+
+export interface FiscalReturnLine {
+  line_number: number;
+  invoice_line_number: number;
+  nature: FiscalNature;
+  description: string;
+  quantity: string;
+  /** Monto devuelto con IVA incluido. */
+  amount: string;
+  vat: string;
+}
+
+export interface FiscalReturn {
+  id: string;
+  document_id: string;
+  reason: string;
+  status: ReturnStatus;
+  total: string;
+  generation_code: string | null;
+  seal: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  issued_at: string | null;
+  has_json: boolean;
+  lines: FiscalReturnLine[];
+  annul_status: ReturnAnnulStatus | null;
+  annul_requester: Person | null;
+  annul_seal: string | null;
+  annul_error_code: string | null;
+  annul_error_message: string | null;
+  annulled_at: string | null;
+  created_at: string | null;
+}
+
+export interface ReturnsOverview {
+  invoice_id: string;
+  /** Último día para registrar retornos (3 meses, o 2 años con medicamentos). */
+  deadline: string | null;
+  withholding: boolean;
+  blocker: string | null;
+  lines: CcfLineBalance[];
+  returns: FiscalReturn[];
+}
