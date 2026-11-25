@@ -3,7 +3,8 @@
 Para cada línea:
 1. resuelve la lista y el precio (V2b), el descuento sugerido y el costo (V2c);
 2. aplica el precio manual si quien guarda tiene permiso;
-3. calcula impuestos y totales con el motor fiscal (V2a) y evalúa el tope del usuario.
+3. calcula impuestos y totales con el motor fiscal (V2a) y evalúa el tope del usuario;
+4. marca las líneas que quedan bajo el costo: no se pueden guardar ni confirmar así.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from app.domain.entities.sales_quotation import (
     calculate_quote,
     require_price_override_allowed,
 )
-from app.domain.entities.sales_tax import SalesDocumentKind, TaxParties
+from app.domain.entities.sales_tax import SalesDocumentKind, TaxParties, line_round
 from app.domain.ports.customer_repository import CustomerRepository
 from app.domain.ports.fiscal_repository import FiscalRepository
 from app.domain.ports.product_fiscal_repository import ProductFiscalRepository
@@ -245,15 +246,18 @@ class SalesDocumentPricing:
         ):
             treatment, item_type = await self._fiscal_class(company_id, line.product_id, position)
             suggested = evaluated.suggested
+            if evaluated.promotion is not None:
+                # En promoción el descuento es el de la promoción; el del vendedor no cuenta.
+                discount = evaluated.promotion.discount_percent
+            elif line.discount_percent is not None:
+                discount = line.discount_percent
+            else:
+                discount = suggested.percent if suggested else Decimal("0")
             item = QuoteLineInput(
                 quantity=quantity,
                 list_price=evaluated.evaluation.list_price if evaluated.evaluation else None,
                 manual_price=line.manual_price,
-                discount_percent=(
-                    line.discount_percent
-                    if line.discount_percent is not None
-                    else (suggested.percent if suggested else Decimal("0"))
-                ),
+                discount_percent=discount,
                 tax_treatment=treatment,
                 item_type=item_type,
                 cost=evaluated.cost,
@@ -310,7 +314,8 @@ class SalesDocumentPricing:
                     line_total=result.line_total,
                     cost=item.cost,
                     margin_percent=result.margin_percent,
-                    authorization_reasons=tuple(r.value for r in result.reasons),
+                    authorization_reasons=tuple(r.value for r in result.reasons)
+                    + (("below_cost",) if result.below_cost else ()),
                 )
             )
         return PricedDocument(
@@ -331,11 +336,28 @@ class SalesDocumentPricing:
         global_discount_percent: Decimal,
         lines: list[DocumentLine],
         policy: DiscountPolicy,
+        *,
+        current_costs: bool = False,
     ) -> QuoteCalculation:
-        """Vuelve a evaluar lo guardado con el tope de otro usuario, sin tocar los precios."""
+        """Vuelve a evaluar lo guardado con el tope de otro usuario, sin tocar los precios.
+
+        Con ``current_costs`` compara contra el costo vigente del kardex y no contra el guardado,
+        para que confirmar nunca venda bajo un costo que subió después de cotizar.
+        """
 
         customer = await self.active_customer(company_id, customer_id)
         parties = await self._parties(company_id, customer)
+        costs = [line.cost for line in lines]
+        if current_costs:
+            unit_costs = await self._discounts.unit_costs(
+                company_id, {line.identity.inventory_item_id for line in lines}
+            )
+            costs = [
+                line_round(unit_costs[line.identity.inventory_item_id] * line.identity.unit_factor)
+                if line.identity.inventory_item_id in unit_costs
+                else line.cost
+                for line in lines
+            ]
         inputs = [
             QuoteLineInput(
                 quantity=line.quantity,
@@ -344,9 +366,11 @@ class SalesDocumentPricing:
                 discount_percent=line.discount_percent,
                 tax_treatment=TaxTreatment(line.tax_treatment),
                 item_type=DteItemType(line.item_type),
-                cost=line.cost,
+                cost=cost,
+                suggested_discount_percent=line.suggested_discount_percent,
+                suggested_discount_source=DiscountSource(line.suggested_discount_source),
             )
-            for line in lines
+            for line, cost in zip(lines, costs, strict=True)
         ]
         return calculate_quote(
             SalesDocumentKind(document_type),

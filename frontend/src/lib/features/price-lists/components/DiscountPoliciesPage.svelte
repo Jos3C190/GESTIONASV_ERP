@@ -9,7 +9,6 @@
   interface Draft {
     line: string;
     global: string;
-    belowCost: boolean;
   }
 
   let roles = $state<RolePolicy[]>([]);
@@ -23,8 +22,7 @@
   function toDraft(role: RolePolicy): Draft {
     return {
       line: String(Number(role.max_line_discount_percent)),
-      global: String(Number(role.max_global_discount_percent)),
-      belowCost: role.can_sell_below_cost
+      global: String(Number(role.max_global_discount_percent))
     };
   }
 
@@ -52,8 +50,7 @@
     return (
       !!draft &&
       (Number(draft.line) !== Number(original.line) ||
-        Number(draft.global) !== Number(original.global) ||
-        draft.belowCost !== original.belowCost)
+        Number(draft.global) !== Number(original.global))
     );
   }
 
@@ -66,8 +63,7 @@
     try {
       const updated = await discountPoliciesApi.save(role.role_id, {
         max_line_discount_percent: String(draft.line || 0),
-        max_global_discount_percent: String(draft.global || 0),
-        can_sell_below_cost: draft.belowCost
+        max_global_discount_percent: String(draft.global || 0)
       });
       roles = roles.map((r) => (r.role_id === role.role_id ? updated : r));
       drafts = { ...drafts, [role.role_id]: toDraft(updated) };
@@ -99,9 +95,9 @@
       Topes de descuento
     </h1>
     <p class="mt-1 max-w-3xl text-sm text-foreground-muted">
-      Cuánto descuento puede dar cada rol sin pedir autorización, por línea y sobre el total, y si
-      puede vender por debajo del costo. Un usuario con varios roles toma el tope más alto. Un rol
-      sin topes no puede dar descuento.
+      Cuánto descuento puede dar cada rol sin pedir autorización, por línea y sobre el total. Un
+      usuario con varios roles toma el tope más alto. Un rol sin topes no puede dar descuento.
+      Ningún rol puede vender por debajo del costo del kardex.
     </p>
   </header>
 
@@ -146,9 +142,7 @@
         {#each roles as role (role.role_id)}
           {@const draft = drafts[role.role_id]}
           {#if draft}
-            <li
-              class="grid gap-3 p-4 md:grid-cols-[minmax(0,1.4fr)_8rem_8rem_minmax(0,1fr)_auto] md:items-end"
-            >
+            <li class="grid gap-3 p-4 md:grid-cols-[minmax(0,1.4fr)_8rem_8rem_auto] md:items-end">
               <div class="min-w-0">
                 <p class="truncate text-sm font-medium text-foreground">{role.role_name}</p>
                 {#if !role.configured}<Badge variant="neutral">Sin topes</Badge>{/if}
@@ -177,14 +171,6 @@
                   class="mt-1 h-10 w-full rounded-lg border border-border bg-surface px-2 text-sm text-foreground"
                 />
               </label>
-              <label class="flex min-h-10 items-center gap-2 text-sm text-foreground">
-                <input
-                  type="checkbox"
-                  checked={draft.belowCost}
-                  onchange={(e) => update(role.role_id, { belowCost: e.currentTarget.checked })}
-                />
-                Puede vender bajo costo
-              </label>
               <Button
                 size="sm"
                 disabled={!changed(role) || savingId === role.role_id}
@@ -193,7 +179,7 @@
                 {savingId === role.role_id ? 'Guardando…' : 'Guardar'}
               </Button>
               {#if rowError[role.role_id]}
-                <p class="text-sm text-danger md:col-span-5" role="alert">
+                <p class="text-sm text-danger md:col-span-4" role="alert">
                   {rowError[role.role_id]}
                 </p>
               {/if}

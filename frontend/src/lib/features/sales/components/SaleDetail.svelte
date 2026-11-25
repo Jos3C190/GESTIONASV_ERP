@@ -20,7 +20,7 @@
   } from '#lib/features/sales/quotation-labels.ts';
   import { branch } from '#lib/stores/branch.svelte.ts';
   import { permissions } from '#lib/stores/permissions.svelte.ts';
-  import type { Sale } from '#lib/types/sales.ts';
+  import type { AutoDelivery, Sale } from '#lib/types/sales.ts';
   import type { FiscalDocument } from '#lib/types/sales-invoices.ts';
   import SalesDeliveryPanel from './SalesDeliveryPanel.svelte';
   import SalesInvoicePanel from './SalesInvoicePanel.svelte';
@@ -78,6 +78,21 @@
   }
   onMount(() => void load());
 
+  function autoDeliveryNotice(auto: AutoDelivery | null | undefined): string | null {
+    if (!auto) return null;
+    const parts: string[] = [];
+    if (auto.delivery_code) {
+      parts.push(`Se entregó con ${auto.delivery_code}: la salida ya está en el kardex.`);
+    }
+    if (auto.message) parts.push(auto.message);
+    else if (auto.pending_products.length) {
+      parts.push(
+        `Queda apartado para «Preparar entrega» (hay que separar una unidad en bodega): ${auto.pending_products.join(', ')}.`
+      );
+    }
+    return parts.join(' ') || null;
+  }
+
   async function run(action: Action) {
     if (!sale || busy) return;
     const prompt = action === 'confirm' ? null : prompts[action];
@@ -110,6 +125,7 @@
         ...(action === 'authorize' ? { note: text.trim() || null } : {}),
         ...(prompt?.required ? { reason: text.trim() } : {})
       });
+      notice = autoDeliveryNotice(sale.auto_delivery);
       text = '';
       pending = null;
     } catch (cause) {
@@ -201,7 +217,7 @@
         <p class="text-xs text-foreground-muted">
           {sale.status === 'confirmed'
             ? 'Lo pendiente queda apartado en la sucursal.'
-            : 'Se aparta al confirmar el pedido.'}
+            : 'Sale de la bodega o se aparta al confirmar el pedido.'}
         </p>
       </div>
       <div class="rounded-xl border border-border bg-surface p-4">

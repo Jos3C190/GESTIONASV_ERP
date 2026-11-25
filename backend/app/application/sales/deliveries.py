@@ -35,6 +35,7 @@ from app.infrastructure.models.sales_delivery import (
     SalesDeliveryLineModel,
     SalesDeliveryModel,
 )
+from app.infrastructure.models.sales_pricing import SalesSettingsModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1017,6 +1018,119 @@ class SalesDeliveryService:
                 request=request,
             )
         return await self.delivery_out(company_id, delivery_id)
+
+    # --- salida automática al confirmar el pedido (pedido del ingeniero, 24/11/2026) ---------
+
+    @staticmethod
+    def _whole_units_for(pending: Decimal, units: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Unidades completas que suman exacto lo pendiente, primero las que vencen antes.
+
+        No parte cajas: una unidad mayor que lo que falta se salta. Si no se llega exacto, no
+        devuelve nada y la línea queda para «Preparar entrega».
+        """
+
+        chosen: list[dict[str, Any]] = []
+        remaining = pending
+        for unit in units:
+            quantity = Decimal(unit["quantity_base"])
+            if quantity <= remaining:
+                chosen.append(unit)
+                remaining -= quantity
+            if remaining == ZERO:
+                return chosen
+        return []
+
+    async def auto_deliver_enabled(self, company_id: uuid.UUID) -> bool:
+        enabled = await self.session.scalar(
+            select(SalesSettingsModel.auto_deliver_on_confirm).where(
+                SalesSettingsModel.company_id == company_id
+            )
+        )
+        return True if enabled is None else bool(enabled)
+
+    async def set_auto_deliver(
+        self, company_id: uuid.UUID, enabled: bool, actor_id: uuid.UUID
+    ) -> tuple[bool, bool]:
+        before = await self.auto_deliver_enabled(company_id)
+        row = await self.session.get(SalesSettingsModel, company_id)
+        if row is None:
+            row = SalesSettingsModel(company_id=company_id)
+            self.session.add(row)
+        row.auto_deliver_on_confirm = enabled
+        row.updated_by = actor_id
+        row.updated_at = datetime.now(UTC)
+        await self.session.flush()
+        return before, enabled
+
+    async def auto_deliver(
+        self,
+        *,
+        company_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        sale_id: uuid.UUID,
+        request: Any,
+    ) -> dict[str, Any]:
+        """Entrega sola lo que se cubre con unidades completas y registra la salida en el kardex.
+
+        Se llama al quedar confirmado el pedido. Lo que no se cubre exacto queda apartado y se
+        devuelve en ``pending_products`` para entregarlo con «Preparar entrega».
+        """
+
+        assignments: list[dict[str, Any]] = []
+        pending_products: list[str] = []
+        assigned_products: list[str] = []
+        for option in await self.stock_options(company_id, sale_id):
+            chosen = self._whole_units_for(
+                Decimal(option["quantity_pending_base"]), option["units"]
+            )
+            if not chosen:
+                pending_products.append(option["product_name"])
+                continue
+            assigned_products.append(option["product_name"])
+            assignments.extend(
+                {
+                    "sale_line_id": option["sale_line_id"],
+                    "handling_unit_id": unit["handling_unit_id"],
+                }
+                for unit in chosen
+            )
+        result: dict[str, Any] = {
+            "delivery_id": None,
+            "delivery_code": None,
+            "pending_products": pending_products,
+            "message": None,
+        }
+        if not assignments:
+            return result
+        try:
+            # Todo o nada: si la confirmación falla, no queda un borrador a medias.
+            async with self.session.begin_nested():
+                draft = await self.create_draft(
+                    company_id=company_id,
+                    actor_id=actor_id,
+                    sale_id=sale_id,
+                    assignments=assignments,
+                    notes="Entrega automática al confirmar el pedido.",
+                    idempotency_key=f"auto-create-{sale_id}",
+                    request=request,
+                )
+                delivered = await self.confirm(
+                    company_id=company_id,
+                    actor_id=actor_id,
+                    delivery_id=uuid.UUID(str(draft["id"])),
+                    expected_version=int(draft["version"]),
+                    idempotency_key=f"auto-confirm-{sale_id}",
+                    request=request,
+                )
+        except (BusinessRuleError, ConflictError, ValidationError) as error:
+            result["pending_products"] = pending_products + assigned_products
+            result["message"] = (
+                f"No se pudo entregar en automático: {error.message} Prepara la entrega a mano."
+            )
+            return result
+        result["delivery_id"] = delivered["id"]
+        result["delivery_code"] = delivered["code"]
+        return result
 
     async def deliveries_for_sale(
         self, company_id: uuid.UUID, sale_id: uuid.UUID

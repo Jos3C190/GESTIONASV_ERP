@@ -204,8 +204,8 @@ async def test_reservation_confirm_cancel_and_concurrency(e2e_client: AsyncClien
 async def test_order_from_quotation_keeps_accepted_terms(e2e_client: AsyncClient) -> None:
     admin, body, _unit = await _setup(e2e_client)
     await _stock(admin, body, "10")
-    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2", False)
-    high = await _with_policy(e2e_client, admin, AUTHORIZER, "20", "10", True)
+    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2")
+    high = await _with_policy(e2e_client, admin, AUTHORIZER, "20", "10")
 
     discounted = {
         **body,
@@ -240,8 +240,8 @@ async def test_order_from_quotation_keeps_accepted_terms(e2e_client: AsyncClient
 async def test_edited_order_is_reevaluated_and_scoped(e2e_client: AsyncClient) -> None:
     admin, body, _unit = await _setup(e2e_client)
     await _stock(admin, body, "10")
-    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2", False)
-    high = await _with_policy(e2e_client, admin, AUTHORIZER, "20", "10", True)
+    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2")
+    high = await _with_policy(e2e_client, admin, AUTHORIZER, "20", "10")
 
     order = await _create(e2e_client, seller, _order_body(body, "1"))
     edited = await e2e_client.put(

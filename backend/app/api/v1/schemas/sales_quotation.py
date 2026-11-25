@@ -77,7 +77,7 @@ class QuotationLineOut(BaseModel):
     unit_price: Decimal
     discount_percent: Decimal
     suggested_discount_percent: Decimal
-    suggested_discount_source: Literal["none", "customer", "volume"]
+    suggested_discount_source: Literal["none", "customer", "volume", "promotion"]
     tax_treatment: Literal["taxed", "exempt", "not_subject"]
     item_type: Literal["1", "2", "3"]
     document_unit_price: Decimal

@@ -28,6 +28,7 @@ from app.application.sales_documents.pricing import (
 )
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError, ValidationError
 from app.domain.entities.customer import Customer
+from app.domain.entities.sales_margin import DiscountPolicy
 from app.domain.entities.sales_order import (
     DeliveryMode,
     OrderStatus,
@@ -41,7 +42,12 @@ from app.domain.entities.sales_order import (
     require_promised_date,
     shortages,
 )
-from app.domain.entities.sales_quotation import QuotationStatus, require_authority
+from app.domain.entities.sales_quotation import (
+    QuotationStatus,
+    QuoteCalculation,
+    require_authority,
+    require_not_below_cost,
+)
 from app.domain.ports.customer_repository import CustomerRepository
 from app.domain.ports.price_list_repository import PriceListRepository
 from app.domain.ports.sales_order_repository import (
@@ -226,6 +232,7 @@ class SalesOrderUseCases:
         today: date,
         *,
         kept_prices: dict[PriceKey, Decimal] | None = None,
+        enforce_cost: bool = True,
     ) -> Order:
         priced = await self._pricing.price(
             company_id,
@@ -240,6 +247,8 @@ class SalesOrderUseCases:
             today,
             kept_prices=kept_prices,
         )
+        if enforce_cost:
+            require_not_below_cost(priced.calculation)
         address_text = await self._delivery_text(
             company_id, draft.customer_id, draft.delivery, today
         )
@@ -271,7 +280,25 @@ class SalesOrderUseCases:
         )
 
     async def preview(self, company_id: uuid.UUID, actor: Actor, draft: OrderDraft) -> Order:
-        return await self._build(company_id, actor, draft, today_in_el_salvador())
+        return await self._build(
+            company_id, actor, draft, today_in_el_salvador(), enforce_cost=False
+        )
+
+    async def _current(self, order: Order, policy: DiscountPolicy) -> QuoteCalculation:
+        """Lo guardado con el tope de ``policy`` y el costo vigente del kardex; nunca bajo costo."""
+
+        calculation = await self._pricing.reevaluate(
+            order.company_id,
+            order.customer_id,
+            order.document_type,
+            order.prices_include_vat,
+            order.global_discount_percent,
+            [item.line for item in order.lines],
+            policy,
+            current_costs=True,
+        )
+        require_not_below_cost(calculation)
+        return calculation
 
     async def _replay(
         self, company_id: uuid.UUID, action: str, key: str, fingerprint: str
@@ -430,17 +457,9 @@ class SalesOrderUseCases:
     ) -> Change:
         current = await self._locked(company_id, order_id, expected_version)
         before = _copy(current)
+        policy = await self._pricing.policy(company_id, actor_id)
+        calculation = await self._current(current, policy)
         if current.authorized_by_id is None:
-            policy = await self._pricing.policy(company_id, actor_id)
-            calculation = await self._pricing.reevaluate(
-                company_id,
-                current.customer_id,
-                current.document_type,
-                current.prices_include_vat,
-                current.global_discount_percent,
-                [item.line for item in current.lines],
-                policy,
-            )
             current.status = confirm_target(current.status, calculation.requires_authorization)
             current.requires_authorization = calculation.requires_authorization
             current.authorization_reasons = tuple(r.value for r in calculation.reasons)
@@ -466,18 +485,7 @@ class SalesOrderUseCases:
         current = await self._locked(company_id, order_id, expected_version)
         require_pending_authorization(current.status)
         policy = await self._pricing.policy(company_id, actor_id)
-        require_authority(
-            await self._pricing.reevaluate(
-                company_id,
-                current.customer_id,
-                current.document_type,
-                current.prices_include_vat,
-                current.global_discount_percent,
-                [item.line for item in current.lines],
-                policy,
-            ),
-            policy,
-        )
+        require_authority(await self._current(current, policy), policy)
         before = _copy(current)
         await self._reserve(current)
         now = datetime.now(UTC)

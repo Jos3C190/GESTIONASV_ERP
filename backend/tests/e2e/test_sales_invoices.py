@@ -233,7 +233,7 @@ async def test_rules_permissions_and_company_isolation(e2e_client: AsyncClient) 
     assert options["blockers"] == ["Solo se factura un pedido confirmado."]
 
     order = (await _order_act(e2e_client, admin, draft, "confirm")).json()
-    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2", False)
+    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2")
     denied = await e2e_client.post(
         f"{ORDERS}/{order['id']}/invoice", json={"point_of_sale_id": str(point)}, headers=seller
     )
@@ -367,7 +367,7 @@ async def test_manual_email_rules_and_permissions(e2e_client: AsyncClient) -> No
     [message] = await _mailbox(target)
     assert message["Attachments"] == 2
 
-    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2", False)
+    seller = await _with_policy(e2e_client, admin, ORDER_SELLER, "5", "2")
     denied = await e2e_client.post(
         f"{DOCUMENTS}/{document['id']}/emails", json={"recipients": [target]}, headers=seller
     )

@@ -47,7 +47,6 @@ async def _with_policy(
     permissions: tuple[str, ...],
     line: str,
     global_: str,
-    below_cost: bool,
 ) -> dict[str, str]:
     user_id, headers = await _login(client, superuser=False, permissions=permissions)
     async with async_session_factory() as session:
@@ -59,7 +58,6 @@ async def _with_policy(
         json={
             "max_line_discount_percent": line,
             "max_global_discount_percent": global_,
-            "can_sell_below_cost": below_cost,
         },
         headers=admin,
     )
@@ -115,9 +113,9 @@ async def _act(
 
 async def test_list_price_limits_authorization_and_customer_answer(e2e_client: AsyncClient) -> None:
     admin, body, unit = await _setup(e2e_client)
-    seller = await _with_policy(e2e_client, admin, SELLER, "5", "2", False)
-    low = await _with_policy(e2e_client, admin, AUTHORIZER, "8", "5", False)
-    high = await _with_policy(e2e_client, admin, AUTHORIZER, "20", "10", True)
+    seller = await _with_policy(e2e_client, admin, SELLER, "5", "2")
+    low = await _with_policy(e2e_client, admin, AUTHORIZER, "8", "5")
+    high = await _with_policy(e2e_client, admin, AUTHORIZER, "20", "10")
 
     preview = await e2e_client.post(f"{QUOTES}/preview", json=body, headers=seller)
     assert preview.status_code == 200, preview.text
@@ -206,8 +204,8 @@ async def test_list_price_limits_authorization_and_customer_answer(e2e_client: A
 
 async def test_rejection_return_cancel_settings_and_isolation(e2e_client: AsyncClient) -> None:
     admin, body, unit = await _setup(e2e_client)
-    seller = await _with_policy(e2e_client, admin, SELLER, "5", "2", False)
-    authorizer = await _with_policy(e2e_client, admin, AUTHORIZER, "20", "10", True)
+    seller = await _with_policy(e2e_client, admin, SELLER, "5", "2")
+    authorizer = await _with_policy(e2e_client, admin, AUTHORIZER, "20", "10")
 
     plain = await _post(e2e_client, seller, body)
     issued = await _act(e2e_client, seller, plain, "issue")

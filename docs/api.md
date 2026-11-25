@@ -1964,7 +1964,7 @@ average cost (it already includes the retaceo) × the unit factor. Suggested pri
 | GET | `/price-lists/{id}/volume-discounts` | `price_lists:read` | Volume tiers with `status`. |
 | POST | `/price-lists/{id}/volume-discounts` | `price_lists:manage` | Body: `product_id`, `variant_id`, `unit_id`, `min_quantity` (> 0), `discount_percent` (> 0, ≤ 100), `valid_from` (today by default). A new tier for the same product, unit and quantity closes the one in force the day before. Audited as `sales_volume_discount`. |
 | DELETE | `/price-lists/volume-discounts/{scale_id}` | `price_lists:manage` | Cancels a scheduled tier or ends a current one today. Returns 204. |
-| GET | `/sales/discount-policies` | `sales_discounts:manage` | Every role of the company with `max_line_discount_percent`, `max_global_discount_percent`, `can_sell_below_cost` and `configured`. |
+| GET | `/sales/discount-policies` | `sales_discounts:manage` | Every role of the company with `max_line_discount_percent`, `max_global_discount_percent` and `configured`. |
 | PUT | `/sales/discount-policies/{role_id}` | `sales_discounts:manage` | Sets the limits of a role. Audited as `sales_discount_policy`. |
 | GET | `/sales/my-discount-policy` | `sales_quotations:read`, `sales:read` or `price_lists:read` | Effective limits of the current user: the maximum of their roles; none without policies; unlimited for superusers. |
 | POST | `/sales/discount-evaluation` | same as above | Body: optional `customer_id`, `branch_id`, `on`, `global_discount_percent`, and `lines` (`product_id`, `variant_id`, `unit_id`, `quantity`, optional `discount_percent`). Each line returns the resolved list price, the suggested discount (customer or volume, the larger one, never both added), the applied discount, `net_price`, `cost` and `margin_percent` (only with `sales_costs:read`), and `reasons` (`discount_above_limit`, `below_cost`) with Spanish messages. Also returns `global_reasons` and `requires_authorization`. |
@@ -2312,3 +2312,41 @@ Audited: `ISSUE_CREDIT_NOTE`, `ISSUE_DEBIT_NOTE` and the usual issuance events. 
 `sales_note_line_invalid`, `sales_note_line_repeated`, `sales_note_quantity_exceeded`,
 `sales_note_amount_exceeded`, `sales_note_charge_invalid`, `sales_invoice_has_notes`,
 `sales_note_cancel_order_invalid`.
+
+## Engineer's rules (revisions 0134–0136)
+
+**Never below cost.** The final net price of a line (its discount plus its share of the global
+discount) is compared with the current kardex cost. Previews flag it with the line reason
+`below_cost`; saving a quotation, issuing it, and confirming or authorizing an order reject it
+with `sales_price_below_cost` (422). No role or authorization overrides it.
+`can_sell_below_cost` is gone from the discount policies.
+
+**Branch promotions.**
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/sales/promotions` | `sales:read` or `sales_promotions:manage` | Optional `branch_id`, `include_ended`. Limited to the user's branches. Each item has `status`: `current`, `scheduled`, `expired` or `ended`. |
+| POST | `/sales/promotions` | `sales_promotions:manage` | Body: `branch_id`, `product_id`, `discount_percent` (> 0, < 100), optional `valid_from` (today by default), `valid_to`, `notes`. Audited as `CREATE` on `sales_branch_promotion`. |
+| POST | `/sales/promotions/{id}/end` | `sales_promotions:manage` | Ends a current promotion today or cancels a scheduled one. Audited as `END_PROMOTION`. |
+
+A current promotion replaces every other discount on its lines (`suggested_discount_source =
+'promotion'`): the vendor's discount is ignored, customer and volume discounts do not apply, no
+role limit is checked, and the document rejects a global discount
+(`sales_global_discount_with_promotion`).
+
+**Stock exit on confirm.**
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/sales/settings/orders` | `sales:read` or `fiscal_settings:read` | `{ "auto_deliver_on_confirm": true }`. |
+| PUT | `/sales/settings/orders` | `fiscal_settings:manage` | Same body. Audited. |
+
+When it is on, `POST /sales/orders/{id}/confirm` and `/authorize` also create and confirm a delivery
+with the whole handling units that cover each line (FEFO). The response carries `auto_delivery`:
+`delivery_id`, `delivery_code`, `pending_products` (lines that need a unit split in the warehouse)
+and `message` (why nothing could be delivered). A failure there never undoes the confirmation.
+
+Error codes: `sales_price_below_cost`, `sales_global_discount_with_promotion`,
+`sales_promotion_percent_invalid`, `sales_promotion_backdated`, `sales_promotion_validity_invalid`,
+`sales_promotion_branch_invalid` (404), `sales_promotion_product_invalid`, `sales_promotion_overlap` (409),
+`sales_promotion_not_found` (404), `sales_promotion_already_ended`.

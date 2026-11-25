@@ -260,9 +260,6 @@ class SalesDiscountPolicyModel(UUIDPKMixin, Base):
     max_global_discount_percent: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), nullable=False, server_default=text("0")
     )
-    can_sell_below_cost: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("false")
-    )
     updated_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), _user_fk())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -292,6 +289,10 @@ class SalesSettingsModel(Base):
     quotation_validity_days: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("15")
     )
+    auto_deliver_on_confirm: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    """Al confirmar el pedido se entrega lo que cubren unidades completas (revisión 0136)."""
     updated_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), _user_fk())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -300,5 +301,58 @@ class SalesSettingsModel(Base):
     __table_args__ = (
         CheckConstraint(
             "quotation_validity_days BETWEEN 1 AND 365", name="ck_sales_settings_validity"
+        ),
+    )
+
+
+class SalesBranchPromotionModel(UUIDPKMixin, Base):
+    """Promoción de un producto en una sucursal (revisión 0135, pedido del ingeniero)."""
+
+    __tablename__ = "sales_branch_promotions"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
+    )
+    branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    product_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    discount_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    valid_from: Mapped[date] = mapped_column(Date, nullable=False)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+    notes: Mapped[str | None] = mapped_column(String(200))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), _user_fk())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    ended_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), _user_fk())
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["branch_id", "company_id"],
+            ["branches.id", "branches.company_id"],
+            ondelete="RESTRICT",
+            name="fk_sales_branch_promotions_branch",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "product_id"],
+            ["products.company_id", "products.id_product"],
+            ondelete="RESTRICT",
+            name="fk_sales_branch_promotions_product",
+        ),
+        CheckConstraint(
+            "discount_percent > 0 AND discount_percent < 100",
+            name="ck_sales_branch_promotions_percent",
+        ),
+        CheckConstraint(
+            "valid_to IS NULL OR valid_to >= valid_from",
+            name="ck_sales_branch_promotions_validity",
+        ),
+        Index(
+            "ix_sales_branch_promotions_lookup",
+            "company_id",
+            "branch_id",
+            "product_id",
+            "valid_from",
+            postgresql_where=text("ended_at IS NULL"),
         ),
     )

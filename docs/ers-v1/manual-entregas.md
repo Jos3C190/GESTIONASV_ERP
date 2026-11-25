@@ -5,6 +5,10 @@ Estado: B07 implementado y verificado técnicamente en `erp_db` con revisión
 navegador, incluida la conciliación visual, queda pendiente para B08. La
 implementación está disponible desde el detalle de una venta confirmada.
 
+Si la empresa tiene encendida «Descontar existencias al confirmar el pedido», la entrega se crea
+y confirma sola al confirmar el pedido con las unidades completas que alcanzan. Lo que pida abrir
+una caja queda pendiente y se entrega con los pasos de abajo.
+
 ## Preparar una entrega
 
 1. Abre **Ventas**, entra al detalle de la venta y confirma que su estado sea

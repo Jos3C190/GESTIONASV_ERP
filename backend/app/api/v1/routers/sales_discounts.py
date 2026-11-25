@@ -31,7 +31,12 @@ from app.application.price_lists import today_in_el_salvador
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.application.sales_discounts import EvaluatedLine, LineRequest, SalesDiscountUseCases
 from app.domain.entities.price_list import PriceKey
-from app.domain.entities.sales_margin import NONE_ALLOWED, REASON_TEXT, DiscountPolicy
+from app.domain.entities.sales_margin import (
+    NONE_ALLOWED,
+    REASON_TEXT,
+    AuthorizationReason,
+    DiscountPolicy,
+)
 from app.domain.ports.sales_discount_repository import RolePolicy, VolumeDiscount
 
 router = APIRouter(tags=["sales-discounts"])
@@ -51,7 +56,6 @@ def _policy_out(policy: DiscountPolicy) -> DiscountPolicyOut:
     return DiscountPolicyOut(
         max_line_discount_percent=policy.max_line_percent,
         max_global_discount_percent=policy.max_global_percent,
-        can_sell_below_cost=policy.can_sell_below_cost,
     )
 
 
@@ -144,7 +148,6 @@ async def save_policy(
         DiscountPolicy(
             max_line_percent=body.max_line_discount_percent,
             max_global_percent=body.max_global_discount_percent,
-            can_sell_below_cost=body.can_sell_below_cost,
         ),
         current.id,
     )
@@ -247,6 +250,7 @@ async def remove_volume_discount(
 def _line_out(line: EvaluatedLine, with_costs: bool) -> EvaluationLineOut:
     request, evaluation, price_list = line.request, line.evaluation, line.price_list
     reasons = list(evaluation.reasons) if evaluation else []
+    blocked = bool(evaluation and evaluation.below_cost)
     return EvaluationLineOut(
         product_id=request.product_id,
         variant_id=request.variant_id,
@@ -265,8 +269,10 @@ def _line_out(line: EvaluatedLine, with_costs: bool) -> EvaluationLineOut:
         cost=evaluation.cost if evaluation and with_costs else None,
         margin_percent=evaluation.margin_percent if evaluation and with_costs else None,
         requires_authorization=bool(reasons),
-        reasons=[r.value for r in reasons],
-        reason_messages=[REASON_TEXT[r] for r in reasons],
+        below_cost=blocked,
+        reasons=[r.value for r in reasons] + (["below_cost"] if blocked else []),
+        reason_messages=[REASON_TEXT[r] for r in reasons]
+        + ([REASON_TEXT[AuthorizationReason.BELOW_COST]] if blocked else []),
     )
 
 

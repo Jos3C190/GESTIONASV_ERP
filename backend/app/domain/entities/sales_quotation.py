@@ -24,6 +24,7 @@ from app.domain.entities.sales_margin import (
     DiscountPolicy,
     DiscountSource,
     evaluate_global,
+    is_below_cost,
     margin_percent,
     percent_round,
     without_vat,
@@ -42,6 +43,7 @@ from app.domain.entities.sales_tax import (
     line_round,
 )
 
+ONE = Decimal("1")
 MAX_VALIDITY_DAYS = 365
 DEFAULT_VALIDITY_DAYS = 15
 MIN_REASON_LENGTH = 3
@@ -186,6 +188,12 @@ class QuoteLineInput:
     suggested_discount_percent: Decimal = ZERO
     suggested_discount_source: DiscountSource = DiscountSource.NONE
 
+    @property
+    def promotion(self) -> bool:
+        """El descuento lo fija la promoción de la sucursal: no pasa por el tope del rol."""
+
+        return self.suggested_discount_source is DiscountSource.PROMOTION
+
 
 @dataclass(frozen=True, slots=True)
 class QuoteLineResult:
@@ -206,6 +214,9 @@ class QuoteLineResult:
     cost: Decimal | None
     margin_percent: Decimal | None
     reasons: tuple[AuthorizationReason, ...]
+    below_cost: bool = False
+    """El precio neto sin IVA, con el descuento de la línea y el global, queda bajo el costo."""
+    final_net_without_vat: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,6 +229,27 @@ class QuoteCalculation:
     @property
     def requires_authorization(self) -> bool:
         return bool(self.reasons)
+
+    @property
+    def below_cost_lines(self) -> tuple[int, ...]:
+        """Las líneas (desde 1) que quedan por debajo del costo."""
+
+        return tuple(i for i, line in enumerate(self.lines, start=1) if line.below_cost)
+
+
+def require_not_below_cost(calculation: QuoteCalculation) -> None:
+    """Nunca se vende por debajo del costo del kardex, ni con descuentos (pedido del ingeniero)."""
+
+    if not calculation.below_cost_lines:
+        return
+    position = calculation.below_cost_lines[0]
+    line = calculation.lines[position - 1]
+    raise _rule(
+        f"La línea {position} queda por debajo del costo: ${line.final_net_without_vat:,.2f} sin IVA "
+        f"frente a un costo de ${line.cost:,.2f}. Sube el precio o baja el descuento; no se puede "
+        "vender bajo costo.",
+        "sales_price_below_cost",
+    )
 
 
 def _check_discount(value: Decimal) -> None:
@@ -243,17 +275,11 @@ def _base_price(index: int, line: QuoteLineInput) -> Decimal:
 
 
 def _line_reasons(
-    effective_discount: Decimal,
-    net_without_vat: Decimal,
-    cost: Decimal | None,
-    policy: DiscountPolicy,
+    effective_discount: Decimal, policy: DiscountPolicy
 ) -> tuple[AuthorizationReason, ...]:
-    reasons: list[AuthorizationReason] = []
     if effective_discount > policy.max_line_percent:
-        reasons.append(AuthorizationReason.DISCOUNT_ABOVE_LIMIT)
-    if cost is not None and net_without_vat < cost and not policy.can_sell_below_cost:
-        reasons.append(AuthorizationReason.BELOW_COST)
-    return tuple(reasons)
+        return (AuthorizationReason.DISCOUNT_ABOVE_LIMIT,)
+    return ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,13 +362,10 @@ def calculate_quote(
 
     results: list[QuoteLineResult] = []
     reasons: list[AuthorizationReason] = []
+    share = ONE - global_discount_percent / HUNDRED
     for line, item, result in zip(lines, priced, tax.lines, strict=True):
-        line_reasons = _line_reasons(
-            item.effective_discount,
-            without_vat(item.net, item.includes_vat),
-            line.cost,
-            policy,
-        )
+        line_reasons = () if line.promotion else _line_reasons(item.effective_discount, policy)
+        final_net = line_round(without_vat(item.net, item.includes_vat) * share)
         reasons.extend(reason for reason in line_reasons if reason not in reasons)
         results.append(
             QuoteLineResult(
@@ -361,6 +384,8 @@ def calculate_quote(
                 cost=line.cost,
                 margin_percent=margin_percent(item.net, item.includes_vat, line.cost),
                 reasons=line_reasons,
+                below_cost=is_below_cost(final_net, line.cost),
+                final_net_without_vat=final_net,
             )
         )
     reasons.extend(evaluate_global(global_discount_percent, policy))
@@ -387,12 +412,6 @@ def missing_authority(
             and AuthorizationReason.DISCOUNT_ABOVE_LIMIT not in pending
         ):
             pending.append(AuthorizationReason.DISCOUNT_ABOVE_LIMIT)
-        if (
-            AuthorizationReason.BELOW_COST in line.reasons
-            and not authorizer.can_sell_below_cost
-            and AuthorizationReason.BELOW_COST not in pending
-        ):
-            pending.append(AuthorizationReason.BELOW_COST)
     if calculation.global_discount_percent > authorizer.max_global_percent:
         pending.append(AuthorizationReason.GLOBAL_DISCOUNT_ABOVE_LIMIT)
     return tuple(pending)
