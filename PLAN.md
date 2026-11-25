@@ -705,11 +705,15 @@ Pasos:
 - [x] **Paso 5: interfaz.** Pantalla «Libros de IVA» (mes, modo, pestañas por libro y anexo, pendientes,
   descargas) y «Datos fiscales del documento» en la compra. Verificar: vitest.
 - [x] **Paso 6: documentación.** Manual de libros, `api.md`, esquema §47.
-- [ ] **Paso 7: verificación y PR.**
+- [x] **Paso 7: verificación y PR.** Batería: backend 2074, frontend 1229, ruff, mypy, svelte-check, ESLint y
+  build. QA con Grupo Lorena en noviembre (simulado): débito $3.47 (CCF $2.52 + ND $0.26 + $0.69 de la factura
+  de $6.00; la NC invalidada fuera); documento del proveedor de COM-00008 registrado desde el detalle de la
+  compra y visto en el libro y el anexo 3; modo claro y 375 px. La QA corrigió: el modo al cambiar de mes, los
+  valores de las listas (número contra texto) y la mayúscula del mes.
 
 ## Estado actual
 
-- **Paso en curso**: libros de IVA y F-07, paso 7 (batería, QA y PR); pasos 1 a 6 hechos (manual `docs/ers-v1/manual-libros-iva.md`) (Ventas → Libros de IVA en `/sales/fiscal-books` y «Documento del proveedor» en el detalle de la compra) (descargas `/fiscal-books/{AAAA-MM}/xlsx`, `/pdf?book=` y `/f07.zip`) (API JSON, documento del proveedor en la compra y renta por defecto; la 0139 lleva además el nombre y NIT/NRC/DUI del proveedor tal como figura en el documento) (0139 aplicada en la base de desarrollo). V4d2 en develop (#60). V4e omitida por decisión del usuario (25/11/2026).
+- **Paso en curso**: libros de IVA y F-07 terminados; PR a develop con Auto-fix y auto-merge. Pendiente con el contador: el retorno como fila negativa del anexo 2 y la clasificación de renta de compras de Grupo Lorena (por defecto 1 · 1 · 2 · 5).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
