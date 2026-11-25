@@ -115,7 +115,7 @@ la habilitó. Ver [manual-traslados.md](manual-traslados.md) («Nota de remisió
 bandeja aparece con el código del traslado en lugar del pedido; su detalle no tiene cliente, correo ni
 clasificación de renta. Se corrige con **Corregir documento** (reemplazo); no se anula.
 
-## 4.3 Eventos de retorno
+## 4.4 Eventos de retorno
 
 El **evento de retorno** registra ante Hacienda la mercadería que un consumidor devuelve sobre una
 **factura** sellada (Normativa 2.0, regla 13.3). Es solo fiscal: no mueve inventario ni reintegra
@@ -134,6 +134,9 @@ lo ya devuelto y el saldo, y la lista de retornos con su estado, PDF y JSON.
   sucursal. Anularlo devuelve el saldo a las líneas.
 
 Una factura con retornos vigentes no se anula ni se corrige: primero se anulan sus retornos.
+
+Los documentos emitidos, sus notas, anulaciones y retornos se reúnen cada mes en los libros de IVA y
+los anexos del F-07: ver [manual-libros-iva.md](manual-libros-iva.md).
 
 ## 5. Contingencia
 
