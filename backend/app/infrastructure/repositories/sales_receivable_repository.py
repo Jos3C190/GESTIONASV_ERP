@@ -24,6 +24,7 @@ from app.domain.ports.sales_receivable_repository import (
     Application,
     Certificate,
     CustomerRef,
+    Issuer,
     Receipt,
 )
 
@@ -109,6 +110,15 @@ def _document(row: Any) -> AccountDocument:
 class SqlAlchemySalesReceivableRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def issuer(self, company_id: uuid.UUID) -> Issuer:
+        row = (
+            await self._session.execute(
+                text("SELECT name, nit, nrc FROM companies WHERE id = :company"),
+                {"company": company_id},
+            )
+        ).one()
+        return Issuer(row.name, row.nit, row.nrc)
 
     async def customer(
         self, company_id: uuid.UUID, customer_id: uuid.UUID, *, lock: bool = False

@@ -59,6 +59,17 @@
     await load();
   }
 
+  async function openPdf(receipt: Receipt) {
+    actionError = null;
+    try {
+      const url = URL.createObjectURL(await salesReceivablesApi.receiptPdf(receipt.id));
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (cause) {
+      actionError = cause instanceof HttpError ? cause.message : 'No se pudo abrir el recibo.';
+    }
+  }
+
   async function annul(receipt: Receipt) {
     busy = true;
     actionError = null;
@@ -250,8 +261,9 @@
                 >
               {/if}
             </p>
-            {#if canCollect && receipt.status === 'issued'}
-              <div class="flex gap-2">
+            <div class="flex gap-2">
+              <Button variant="ghost" size="sm" onclick={() => openPdf(receipt)}>PDF</Button>
+              {#if canCollect && receipt.status === 'issued'}
                 {#if Number(receipt.unapplied) > 0 && openDocuments.length}
                   <Button variant="secondary" size="sm" onclick={() => (applying = receipt.id)}
                     >Aplicar saldo a favor</Button
@@ -260,8 +272,8 @@
                 <Button variant="ghost" size="sm" onclick={() => (annulling = receipt.id)}
                   >Anular</Button
                 >
-              </div>
-            {/if}
+              {/if}
+            </div>
           </div>
           <p class="text-xs text-foreground-muted">
             {receipt.payments

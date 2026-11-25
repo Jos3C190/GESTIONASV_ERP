@@ -751,7 +751,7 @@ Diseño común:
 - [x] **Paso 3: interfaz.** Ventas → Cuentas por cobrar (cartera, antigüedad, estado de cuenta, nuevo recibo con
   formas de pago y aplicación, anulación); «Cobro» en el detalle del documento fiscal (la sección Factura del
   pedido enlaza a él). Verificar: vitest.
-- [ ] **Paso 4: PDF del recibo y documentación.** Recibo imprimible; manual de cobros, `api.md`, esquema §48.
+- [x] **Paso 4: PDF del recibo y documentación.** Recibo imprimible; manual de cobros, `api.md`, esquema §48.
 - [ ] **Paso 5: verificación y PR.**
 
 ### V5b — Crédito y gestión de cobro (se detalla al terminar V5a)
@@ -762,7 +762,7 @@ Diseño común:
 
 ## Estado actual
 
-- **Paso en curso**: V5a paso 4 (PDF del recibo y documentación); pasos 1 a 3 hechos (rutas `/sales/receivables` y `/sales/receivables/[customerId]`; panel «Cobro» en el documento). En desarrollo ya existe RC-000001 (cobro de la FE DTE-01-…002 de Grupo Lorena).
+- **Paso en curso**: V5a paso 5 (batería, QA y PR); pasos 1 a 4 hechos (manual `docs/ers-v1/manual-cobros.md`) (rutas `/sales/receivables` y `/sales/receivables/[customerId]`; panel «Cobro» en el documento). En desarrollo ya existe RC-000001 (cobro de la FE DTE-01-…002 de Grupo Lorena).
 - **Investigación del 25/11/2026** (el usuario pidió resolver con investigación los dos puntos para el contador):
   - **Retorno en el anexo 2: se mantiene como fila negativa** con la fecha de la factura. La Normativa 2.0
     (13.3.2 a) da al retorno el efecto de disminuir la venta y el débito de la FE sin invalidarla; el manual F-07

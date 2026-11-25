@@ -144,6 +144,9 @@ async def test_collect_an_invoice_with_receipts(e2e_client: AsyncClient) -> None
         json={"certificate_number": "CR-1", "issued_on": today, "amount": "0.10"},
         headers=admin,
     )
+    pdf = await e2e_client.get(f"{RECEIPTS}/{receipt['id']}/pdf", headers=admin)
+    assert pdf.status_code == 200
+    assert pdf.content[:4] == b"%PDF"
     assert certificate.status_code == 422
     assert certificate.json()["code"] == "sales_withholding_not_applicable"
     assert order["id"]

@@ -50,6 +50,7 @@ from app.domain.ports.sales_receivable_repository import (
     CustomerRef,
     Receipt,
 )
+from app.infrastructure.sales_receipt_pdf import render_receipt_pdf
 
 router = APIRouter(tags=["sales-receivables"])
 
@@ -332,6 +333,20 @@ async def register_receipt(
 )
 async def get_receipt(receipt_id: uuid.UUID, company_id: CompanyId, cases: UseCases) -> ReceiptOut:
     return receipt_out(await cases.receipt(company_id, receipt_id))
+
+
+@router.get(
+    "/sales/receipts/{receipt_id}/pdf",
+    summary="Recibo de cobro en PDF",
+    dependencies=_READ,
+)
+async def receipt_pdf(receipt_id: uuid.UUID, company_id: CompanyId, cases: UseCases) -> Response:
+    receipt, customer, issuer = await cases.printable(company_id, receipt_id)
+    return Response(
+        content=render_receipt_pdf(receipt, customer, issuer),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{receipt_code(receipt.number)}.pdf"'},
+    )
 
 
 @router.post(

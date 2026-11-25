@@ -23,6 +23,7 @@ from app.domain.ports.sales_receivable_repository import (
     AccountDocument,
     Certificate,
     CustomerRef,
+    Issuer,
     Receipt,
     SalesReceivableRepository,
 )
@@ -130,6 +131,15 @@ class SalesReceivableUseCases:
         if found is None:
             raise NotFoundError("Recibo no encontrado.", code="sales_receipt_not_found")
         return found
+
+    async def printable(
+        self, company_id: uuid.UUID, receipt_id: uuid.UUID
+    ) -> tuple[Receipt, CustomerRef, Issuer]:
+        receipt = await self.receipt(company_id, receipt_id)
+        customer = await self._repository.customer(company_id, receipt.customer_id)
+        if customer is None:
+            raise _not_found()
+        return receipt, customer, await self._repository.issuer(company_id)
 
     async def _balances(
         self, company_id: uuid.UUID, customer_id: uuid.UUID

@@ -85,7 +85,16 @@ class Receipt:
         return self.total - applied
 
 
+@dataclass(frozen=True)
+class Issuer:
+    name: str
+    nit: str | None
+    nrc: str | None
+
+
 class SalesReceivableRepository(Protocol):
+    async def issuer(self, company_id: uuid.UUID) -> Issuer: ...
+
     async def customer(
         self, company_id: uuid.UUID, customer_id: uuid.UUID, *, lock: bool = False
     ) -> CustomerRef | None: ...
