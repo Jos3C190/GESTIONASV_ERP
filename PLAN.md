@@ -568,10 +568,18 @@ Hechos verificados en el código:
 
 Pasos:
 - [x] **Paso 0: plan y rama.**
-- [ ] **Paso 1: servicio.** Generador `fe-eret-v1` desde la FE guardada (emisor, receptor y relacionado de la
+- [x] **Paso 1: servicio.** Generador `fe-eret-v1` desde la FE guardada (emisor, receptor y relacionado de la
   factura) con las líneas que manda el ERP; ruta `POST /api/dte/:codigoGeneracion/retorno` (simulado, normal y
   contingencia), guardado en `eventos` (tipo RETORNO), transmisión por `recepciondte` tipo 18; JSON y PDF del
   evento; anulación del retorno (tipo 2) por la ruta de invalidación. Verificar: pruebas del servicio.
+  - Hecho: `eventoRetornoBuilder.js` (emisor, receptor y relacionado de la FE guardada; líneas del ERP validadas
+    contra la factura; IVA incluido; retención espejo si la FE retuvo) y `retornoService.js` (`eventos` tipo
+    RETORNO; real: firma y `recepciondte` con tipoDte 18; simulado: firma y marcador sintéticos con escenario
+    `rejected`). Rutas `POST /api/dte/:codigo/retorno` y `POST /api/dte/eventos/:codigo/anular` (invalidación
+    tipo 2 del retorno: `numeroControl` null, cuelga de la FE y apunta al retorno en `evento_relacionado`). El
+    generador de invalidación admite el tipo 18 y la fecha del evento del 17 y 18 es la de generación. JSON y PDF
+    del retorno por `/eventos/:codigo/json` y `/pdf/render` (PDF con la representación de la factura y título
+    «EVENTO DE RETORNO»). La FE con retornos vigentes no se invalida (`DTE_HAS_RETURN`). Servicio: 507 en verde.
 - [ ] **Paso 2: migración 0138 y dominio.** `sales_fiscal_returns` y `sales_fiscal_return_lines`, `return_id` en
   los envíos de correo, permiso `sales_invoices:returns`. Dominio `sales_fiscal_returns.py`: líneas de la FE,
   saldo por línea, plazo con la excepción de medicamentos, totales con IVA y solicitud. Verificar: unitarias y
@@ -629,7 +637,7 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
 
 ## Estado actual
 
-- **Paso en curso**: V4d2 paso 1 (servicio). V4d en develop (#59). PI terminado y en develop (#58); V4c en develop (#57).
+- **Paso en curso**: V4d2 paso 2 (migración 0138 y dominio). Paso 1 hecho. V4d en develop (#59). PI terminado y en develop (#58); V4c en develop (#57).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,

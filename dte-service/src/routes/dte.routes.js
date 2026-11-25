@@ -37,6 +37,7 @@ const { asociarIdentidad } = require('../services/idempotency');
 const conIdempotencia = require('../middleware/conIdempotencia');
 const { escenarioSimulacion } = require('../middleware/escenarioSimulacion');
 const invalidacionSimulada = require('../services/simulatedInvalidationProvider');
+const retornoService = require('../services/retornoService');
 
 const router = express.Router();
 // Multiemisor: un código de generación de otro emisor responde 404.
@@ -686,6 +687,70 @@ router.post(
   })
 );
 
+/**
+ * Evento de Retorno (V4d2 del ERP) sobre una Factura con sello: el ERP manda
+ * las líneas devueltas ({ items: [{ numItem, cantidad, montoDescu, ventaNoSuj,
+ * ventaExenta, ventaGravada, ivaItem }] }) y el evento toma emisor, receptor y
+ * relacionado de la factura guardada. Ver retornoService.js.
+ */
+router.post(
+  '/:codigoGeneracion/retorno',
+  requireDteScope('issue'),
+  escenarioSimulacion('emision'),
+  conIdempotencia(async (req) => {
+    const row = db.prepare('SELECT * FROM dtes WHERE codigo_generacion = ?').get(req.params.codigoGeneracion);
+    if (!row) return { status: 404, body: { error: 'DTE no encontrado localmente' } };
+    const escenario = req.dteSimulationScenario ?? undefined;
+    const identidad = req.dteIdempotency?.codigoGeneracion;
+    if (identidad) {
+      const evento = retornoService.leerEvento(identidad);
+      if (!evento || evento.tipo !== retornoService.TIPO || evento.dte_codigo_generacion !== row.codigo_generacion) {
+        return {
+          status: 409,
+          body: { error: 'La identidad idempotente no corresponde a un evento de retorno de esta factura', code: 'DTE_IDENTITY_REQUIRES_RECONCILIATION' },
+        };
+      }
+      return retornoService.procesar(evento.codigo_generacion, { escenario });
+    }
+    const { evento, respuesta } = retornoService.preparar({
+      row,
+      items: req.body?.items,
+      contingencia: req.body?.contingencia ?? null,
+      claveIdempotencia: req.dteIdempotency?.clave,
+    });
+    if (respuesta) return respuesta;
+    return retornoService.procesar(evento.codigo_generacion, { escenario });
+  })
+);
+
+/** Anula un Evento de Retorno vigente (invalidación tipo 2, sin reemplazo). */
+router.post(
+  '/eventos/:codigoGeneracion/anular',
+  requireDteScope('invalidate'),
+  conIdempotencia(async (req) => {
+    const retorno = retornoService.leerEvento(req.params.codigoGeneracion);
+    if (!retorno || retorno.tipo !== retornoService.TIPO) return { status: 404, body: { error: 'Evento de retorno no encontrado' } };
+    const identidad = req.dteIdempotency?.codigoGeneracion;
+    if (identidad) {
+      const evento = retornoService.leerEvento(identidad);
+      if (!evento || evento.tipo !== 'INVALIDACION' || evento.evento_relacionado !== retorno.codigo_generacion) {
+        return {
+          status: 409,
+          body: { error: 'La identidad idempotente no corresponde a una anulación de este retorno', code: 'DTE_IDENTITY_REQUIRES_RECONCILIATION' },
+        };
+      }
+      return retornoService.procesar(evento.codigo_generacion, { anulacion: true });
+    }
+    const { evento, respuesta } = retornoService.prepararAnulacion({
+      retorno,
+      motivo: normalizarMotivo(req.body?.motivo),
+      claveIdempotencia: req.dteIdempotency?.clave,
+    });
+    if (respuesta) return respuesta;
+    return retornoService.procesar(evento.codigo_generacion, { anulacion: true });
+  })
+);
+
 /** Fecha del evento, plazo y reglas de reemplazo antes de invalidar. */
 router.get('/:codigoGeneracion/invalidacion', requireDteScope('read'), (req, res) => {
   const row = db.prepare('SELECT * FROM dtes WHERE codigo_generacion = ?').get(req.params.codigoGeneracion);
@@ -723,7 +788,10 @@ router.get('/:codigoGeneracion/eventos', requireDteScope('read'), (req, res) => 
 router.get('/eventos/:codigoGeneracion/json', requireDteScope('read'), (req, res) => {
   const evento = invalidacionService.leerEvento(req.params.codigoGeneracion);
   if (!evento) return res.status(404).json({ error: 'Evento no encontrado' });
-  const archivo = invalidacionService.archivoEvento(evento);
+  // El retorno y su anulación (V4d2) también tienen archivo en simulado.
+  const delRetorno = evento.tipo === retornoService.TIPO || Boolean(evento.evento_relacionado);
+  const archivo = delRetorno ? retornoService.archivoEvento(evento) : invalidacionService.archivoEvento(evento);
+  if (archivo && evento.modo_emision === 'SIMULATED') res.setHeader('X-DTE-Issuance-Mode', 'simulated');
   if (!archivo) return res.status(409).json({ error: 'El evento aún no tiene sello de recepción', estado: evento.estado });
   res.type('application/json').send(JSON.stringify(archivo));
 });
@@ -734,10 +802,13 @@ router.get('/eventos/:codigoGeneracion/json', requireDteScope('read'), (req, res
  */
 router.post('/eventos/:codigoGeneracion/pdf/render', requireDteScope('read'), async (req, res) => {
   const evento = invalidacionService.leerEvento(req.params.codigoGeneracion);
+  if (evento?.tipo === retornoService.TIPO) return renderizarRetorno(req, res, evento);
   if (!evento || evento.tipo !== 'INVALIDACION') return res.status(404).json({ error: 'Evento de invalidación no encontrado' });
   // Evento de un emisor simulado (V4b del ERP): mismo PDF con la marca sin validez fiscal.
   const simulation = evento.modo_emision === 'SIMULATED';
-  const archivo = simulation ? invalidacionSimulada.archivoEvento(evento) : invalidacionService.archivoEvento(evento);
+  const archivo = evento.evento_relacionado
+    ? retornoService.archivoEvento(evento)
+    : simulation ? invalidacionSimulada.archivoEvento(evento) : invalidacionService.archivoEvento(evento);
   if (!archivo) return res.status(409).json({ error: 'El evento aún no tiene sello de recepción', estado: evento.estado });
   const { logoPngBuffer, error: errorLogo } = leerLogoPdf(req.body);
   if (errorLogo) return res.status(422).json({ error: errorLogo });
@@ -754,6 +825,54 @@ router.post('/eventos/:codigoGeneracion/pdf/render', requireDteScope('read'), as
     return res.status(500).json({ error: 'No se pudo generar la representación gráfica del evento' });
   }
 });
+
+/**
+ * PDF del Evento de Retorno: la representación de la factura con sus líneas
+ * devueltas, título «Evento de Retorno» y la factura relacionada. Emisor y
+ * receptor completos salen de la factura guardada.
+ */
+async function renderizarRetorno(req, res, evento) {
+  const archivo = retornoService.archivoEvento(evento);
+  if (!archivo) return res.status(409).json({ error: 'El evento aún no tiene sello de recepción', estado: evento.estado });
+  const factura = db.prepare('SELECT payload_json FROM dtes WHERE codigo_generacion = ?').get(evento.dte_codigo_generacion);
+  const fe = factura ? JSON.parse(factura.payload_json) : {};
+  const simulation = evento.modo_emision === 'SIMULATED';
+  const { logoPngBuffer, error: errorLogo } = leerLogoPdf(req.body);
+  if (errorLogo) return res.status(422).json({ error: errorLogo });
+  const representable = {
+    identificacion: {
+      ...archivo.identificacion,
+      tipoDte: TIPO_DTE.EVENTO_RETORNO,
+      numeroControl: null, // el evento no tiene número de control
+    },
+    documentoRelacionado: archivo.documentoRelacionado.map((relacionado) => ({
+      tipoDocumento: relacionado.tipoDocumento,
+      tipoGeneracion: 2,
+      numeroDocumento: relacionado.codigoGeneracion,
+      fechaEmision: relacionado.fechaEmision,
+    })),
+    emisor: fe.emisor ?? archivo.emisor,
+    receptor: fe.receptor ?? null,
+    cuerpoDocumento: archivo.cuerpoDocumento.map((linea) => ({ ...linea, numeroDocumento: linea.codigoGeneracion })),
+    resumen: { ...archivo.resumen, condicionOperacion: null },
+    firmaElectronica: archivo.firmaElectronica,
+    selloRecibido: archivo.selloRecibido,
+  };
+  try {
+    const bytes = await generarPDF(representable, {
+      selloRecepcion: archivo.selloRecibido,
+      ambiente: archivo.identificacion.ambiente,
+      ...(simulation ? { simulation, watermark: config.simulation.watermark } : {}),
+      logoPngBuffer,
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    if (simulation) res.setHeader('X-DTE-Issuance-Mode', 'simulated');
+    return res.status(200).send(bytes);
+  } catch (err) {
+    logger.error({ err: err.message, codigoGeneracion: evento.codigo_generacion }, 'Fallo al generar el PDF del evento de retorno');
+    return res.status(500).json({ error: 'No se pudo generar la representación gráfica del evento de retorno' });
+  }
+}
 
 /**
  * Vuelve a consultar un documento que quedó en RECONCILIACION (respuesta no
