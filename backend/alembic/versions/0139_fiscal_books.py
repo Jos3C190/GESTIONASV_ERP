@@ -7,7 +7,8 @@ Los libros de ventas salen de los documentos fiscales sellados y no necesitan ta
 anexo de compras necesitan saber qué documento entregó el proveedor, que hoy la compra no guarda:
 
 - ``purchases``: clase y tipo del documento del proveedor (manual de anexos F-07 V14, anexo de
-  compras), su número (o código de generación), número de control y sello si es DTE, y la
+  compras), su número (o código de generación), número de control y sello si es DTE, el
+  proveedor como figura en el documento (nombre y NIT, NRC o DUI, sin guiones), y la
   clasificación de renta de la compra (tipo de operación, clasificación, sector y tipo de costo o
   gasto). Todo o nada: una compra sin datos fiscales no entra al libro y se lista como pendiente.
 - ``fiscal_book_settings``: la clasificación de renta de compras que se propone por empresa.
@@ -46,6 +47,9 @@ def upgrade() -> None:
             ADD COLUMN fiscal_document_number varchar(100),
             ADD COLUMN fiscal_control_number varchar(31),
             ADD COLUMN fiscal_seal varchar(100),
+            ADD COLUMN fiscal_supplier_name varchar(250),
+            ADD COLUMN fiscal_supplier_id_type varchar(3),
+            ADD COLUMN fiscal_supplier_id varchar(14),
             ADD COLUMN renta_operation_type smallint,
             ADD COLUMN renta_classification smallint,
             ADD COLUMN renta_sector smallint,
@@ -57,7 +61,9 @@ def upgrade() -> None:
             ADD CONSTRAINT ck_purchases_fiscal_document CHECK (
                 (fiscal_document_class IS NULL AND fiscal_document_type IS NULL
                  AND fiscal_document_number IS NULL AND fiscal_control_number IS NULL
-                 AND fiscal_seal IS NULL AND renta_operation_type IS NULL
+                 AND fiscal_seal IS NULL AND fiscal_supplier_name IS NULL
+                 AND fiscal_supplier_id_type IS NULL AND fiscal_supplier_id IS NULL
+                 AND renta_operation_type IS NULL
                  AND renta_classification IS NULL AND renta_sector IS NULL
                  AND renta_cost_type IS NULL AND fiscal_recorded_by_id IS NULL
                  AND fiscal_recorded_at IS NULL)
@@ -65,6 +71,12 @@ def upgrade() -> None:
                     fiscal_document_class IN (1, 3, 4)
                     AND fiscal_document_type IN ('03', '05', '06', '12', '13')
                     AND length(btrim(fiscal_document_number)) BETWEEN 1 AND 100
+                    AND length(btrim(fiscal_supplier_name)) BETWEEN 1 AND 250
+                    AND (
+                        (fiscal_supplier_id_type = 'nit' AND fiscal_supplier_id ~ '^[0-9]{{14}}$')
+                        OR (fiscal_supplier_id_type = 'dui' AND fiscal_supplier_id ~ '^[0-9]{{9}}$')
+                        OR (fiscal_supplier_id_type = 'nrc' AND fiscal_supplier_id ~ '^[0-9]{{1,14}}$')
+                    )
                     AND renta_operation_type IN {_OPERATION}
                     AND renta_classification IN {_CLASSIFICATION}
                     AND renta_sector IN {_SECTOR}
@@ -134,6 +146,9 @@ def downgrade() -> None:
             DROP COLUMN renta_sector,
             DROP COLUMN renta_classification,
             DROP COLUMN renta_operation_type,
+            DROP COLUMN fiscal_supplier_id,
+            DROP COLUMN fiscal_supplier_id_type,
+            DROP COLUMN fiscal_supplier_name,
             DROP COLUMN fiscal_seal,
             DROP COLUMN fiscal_control_number,
             DROP COLUMN fiscal_document_number,

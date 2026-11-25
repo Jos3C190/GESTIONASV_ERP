@@ -22,6 +22,7 @@ _PURCHASE = (
 _FISCAL = (
     "UPDATE purchases SET fiscal_document_class = %s, fiscal_document_type = %s, "
     "fiscal_document_number = %s, fiscal_control_number = %s, fiscal_seal = %s, "
+    "fiscal_supplier_name = 'Molinos, S.A.', fiscal_supplier_id_type = %s, fiscal_supplier_id = %s, "
     "renta_operation_type = 1, renta_classification = 1, renta_sector = %s, "
     "renta_cost_type = 5, fiscal_recorded_by_id = gen_random_uuid(), fiscal_recorded_at = now() "
     "WHERE id = %s"
@@ -51,12 +52,14 @@ def test_fiscal_books_schema_and_downgrade_guard(
                 "SELECT count(*) FROM permissions WHERE code LIKE 'fiscal_books:%'"
             ).fetchone() == (2,)
             connection.execute(_PURCHASE, (purchase, company, "CMP-1"))
+            nit = ("nit", "06142410901022")
             for values in (
-                (2, "03", "145501", None, None, 2),  # clase fuera del catálogo
-                (1, "01", "145501", None, None, 2),  # una factura no da crédito fiscal
-                (1, "03", "  ", None, None, 2),  # sin número
-                (1, "03", "145501", None, None, 5),  # sector fuera del catálogo
-                (4, "03", "ABC", None, None, 2),  # DTE sin número de control ni sello
+                (2, "03", "145501", None, None, *nit, 2),  # clase fuera del catálogo
+                (1, "01", "145501", None, None, *nit, 2),  # una factura no da crédito fiscal
+                (1, "03", "  ", None, None, *nit, 2),  # sin número
+                (1, "03", "145501", None, None, *nit, 5),  # sector fuera del catálogo
+                (4, "03", "ABC", None, None, *nit, 2),  # DTE sin número de control ni sello
+                (1, "03", "145501", None, None, "dui", "0570289-18", 2),  # DUI con guion
             ):
                 with pytest.raises(errors.CheckViolation):
                     connection.execute(_FISCAL, (*values, purchase))
@@ -68,6 +71,7 @@ def test_fiscal_books_schema_and_downgrade_guard(
                     "6C7EF177-8C52-41EF-B073-B2968DA0652C",
                     "DTE-03-M001P001-000000000000003",
                     "2026A1B2C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7F8",
+                    *nit,
                     2,
                     purchase,
                 ),
