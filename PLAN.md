@@ -694,7 +694,7 @@ Pasos:
 - [x] **Paso 1: migración 0139 y modelos.** Datos fiscales en `purchases` (clase, tipo, número, sello, renta de
   compras) con CHECK de catálogos; `fiscal_book_settings` por empresa (renta de compras por defecto); permisos.
   Verificar: prueba de migración con guarda de downgrade.
-- [ ] **Paso 2: dominio.** `app/domain/entities/fiscal_books.py`: filas de anexos 1, 2, 3, anulados y 169;
+- [x] **Paso 2: dominio.** `app/domain/entities/fiscal_books.py`: filas de anexos 1, 2, 3, anulados y 169;
   libros y totales; reglas de invalidación y retorno entre meses; formato CSV. Verificar: pytest unitario
   (casos de Sublimarte: CCF invalidado, factura invalidada en otro mes, nota de crédito, retorno).
 - [ ] **Paso 3: repositorio, casos de uso y API.** Lectura del mes; `GET /fiscal-books/{period}` (pantalla),
@@ -709,7 +709,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: libros de IVA y F-07, paso 2 (dominio); paso 1 hecho (0139 aplicada en la base de desarrollo). V4d2 en develop (#60). V4e omitida por decisión del usuario (25/11/2026).
+- **Paso en curso**: libros de IVA y F-07, paso 3 (repositorio, casos de uso y API); pasos 1 y 2 hechos (0139 aplicada en la base de desarrollo). V4d2 en develop (#60). V4e omitida por decisión del usuario (25/11/2026).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
