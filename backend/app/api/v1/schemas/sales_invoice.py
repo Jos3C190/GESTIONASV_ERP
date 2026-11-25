@@ -27,13 +27,16 @@ class FiscalDocumentOut(BaseModel):
     id: uuid.UUID
     company_id: uuid.UUID
     branch_id: uuid.UUID
-    sale_id: uuid.UUID
+    sale_id: uuid.UUID | None
+    """El pedido; vacío en la nota de remisión (04), que pertenece a un traslado."""
+    transfer_id: uuid.UUID | None = None
+    transfer_code: str | None = None
     sale_code: str | None
     customer_name: str | None
     customer_email: str | None
     establishment_code: str | None
     point_of_sale_code: str | None
-    document_type: Literal["01", "03", "05", "06"]
+    document_type: Literal["01", "03", "04", "05", "06"]
     mode: str
     status: FiscalStatus
     generation_code: uuid.UUID | None

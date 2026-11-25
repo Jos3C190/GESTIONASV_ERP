@@ -403,7 +403,7 @@ class SalesInvoiceUseCases:
         No lo guarda: quien lo pide marca primero el original y después lo crea.
         """
 
-        order = await self._order(original.company_id, original.sale_id, lock=True)
+        order = await self._order(original.company_id, original.order_id(), lock=True)
         document, _issuer = await self._prepare(order, original.point_of_sale_id, replaces=original)
         # El reemplazo conserva la clasificación de renta del original.
         renta = await self._renta(
@@ -453,13 +453,22 @@ class SalesInvoiceUseCases:
             raise NotFoundError("El documento fiscal no existe.", code="sales_invoice_not_found")
         require_retryable(document.status)
         if document.status == FiscalDocumentStatus.FAILED:
-            await self._order(company_id, document.sale_id, lock=True)
-            active = await self._repo.active_for_order(company_id, document.sale_id)
-            if active is not None:
-                raise BusinessRuleError(
-                    "El pedido ya tiene otro documento fiscal vigente.",
-                    code="sales_invoice_already_issued",
-                )
+            if document.transfer_id is not None:
+                active = await self._repo.active_for_transfer(company_id, document.transfer_id)
+                if active is not None:
+                    raise BusinessRuleError(
+                        "El traslado ya tiene otra nota de remisión vigente.",
+                        code="transfer_remission_already_issued",
+                    )
+            else:
+                order_id = document.order_id()
+                await self._order(company_id, order_id, lock=True)
+                active = await self._repo.active_for_order(company_id, order_id)
+                if active is not None:
+                    raise BusinessRuleError(
+                        "El pedido ya tiene otro documento fiscal vigente.",
+                        code="sales_invoice_already_issued",
+                    )
         document.status = FiscalDocumentStatus.PENDING
         document.attempts = 0
         document.error_code = None

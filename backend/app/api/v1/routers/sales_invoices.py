@@ -65,6 +65,8 @@ def document_out(document: FiscalDocument) -> FiscalDocumentOut:
         company_id=document.company_id,
         branch_id=document.branch_id,
         sale_id=document.sale_id,
+        transfer_id=document.transfer_id,
+        transfer_code=document.transfer_code,
         sale_code=document.sale_code,
         customer_name=document.customer_name,
         customer_email=document.customer_email,

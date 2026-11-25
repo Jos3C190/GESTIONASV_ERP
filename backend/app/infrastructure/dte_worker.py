@@ -232,6 +232,8 @@ async def _differences(
 async def _totals(scope: SessionScope, document: FiscalDocument) -> Any:
     from app.application.sales_invoices import SalesInvoiceUseCases
 
+    if document.sale_id is None:
+        return None
     async with scope() as session:
         order = await SqlAlchemySalesOrderRepository(session).get(
             document.company_id, document.sale_id
@@ -620,7 +622,7 @@ async def _send_invalidation(
     item.resolved_at = datetime.now(UTC)
     document.status = FiscalDocumentStatus.INVALIDATED
     saved = await _save_invalidation(scope, item, "FISCAL_DOCUMENT_INVALIDATED", document)
-    if item.cancel_order:
+    if item.cancel_order and document.sale_id is not None:
         await _cancel_order(scope, item, document.sale_id)
     return saved
 

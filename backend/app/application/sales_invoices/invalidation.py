@@ -142,6 +142,11 @@ class FiscalInvalidationUseCases:
             pending_invalidation=pending is not None,
         )
         await self._require_without_notes(document)
+        if cancel_order and document.sale_id is None:
+            raise BusinessRuleError(
+                "La nota de remisión pertenece a un traslado: anularla no cancela ningún pedido.",
+                code="sales_invoice_not_an_order_document",
+            )
         if cancel_order and document.document_type in NOTE_TYPES:
             raise BusinessRuleError(
                 "Anular una nota no cancela el pedido: el pedido sigue con su crédito fiscal.",
@@ -153,7 +158,7 @@ class FiscalInvalidationUseCases:
         )
         responsible = await self._responsible(company_id)
         if cancel_order:
-            order = await self._orders.get(company_id, document.sale_id, lock=True)
+            order = await self._orders.get(company_id, document.order_id(), lock=True)
             if order is None:
                 raise NotFoundError("El pedido no existe.", code="sales_order_not_found")
             require_cancellable(order.status, order.delivered_any)

@@ -1,4 +1,4 @@
-"""Puerto de persistencia del documento fiscal del pedido (bloque V3b)."""
+"""Puerto de persistencia del documento fiscal del pedido (V3b) o del traslado (V4d)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Protocol
 
+from app.core.exceptions import BusinessRuleError
 from app.domain.entities.sales_fiscal_document import FiscalDocumentStatus
 
 
@@ -17,7 +18,8 @@ class FiscalDocument:
     id: uuid.UUID
     company_id: uuid.UUID
     branch_id: uuid.UUID
-    sale_id: uuid.UUID
+    sale_id: uuid.UUID | None
+    """El pedido; ``None`` en la nota de remisión, que pertenece a un traslado."""
     establishment_id: uuid.UUID
     point_of_sale_id: uuid.UUID
     document_type: str
@@ -50,6 +52,8 @@ class FiscalDocument:
     related_document_id: uuid.UUID | None = None
     """En una nota (05 o 06), el crédito fiscal que ajusta (V4c)."""
     note_reason: str | None = None
+    transfer_id: uuid.UUID | None = None
+    """En la nota de remisión (04), el traslado que ampara (V4d)."""
     created_at: datetime | None = None
     updated_at: datetime | None = None
     sale_code: str | None = None
@@ -57,6 +61,17 @@ class FiscalDocument:
     point_of_sale_code: str | None = None
     establishment_code: str | None = None
     customer_email: str | None = None
+    transfer_code: str | None = None
+
+    def order_id(self) -> uuid.UUID:
+        """El pedido del documento; la nota de remisión no tiene y no admite acciones de pedido."""
+
+        if self.sale_id is None:
+            raise BusinessRuleError(
+                "La nota de remisión pertenece a un traslado, no a un pedido.",
+                code="sales_invoice_not_an_order_document",
+            )
+        return self.sale_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +100,14 @@ class FiscalDocumentFilters:
 
 class SalesFiscalRepository(Protocol):
     async def create(self, document: FiscalDocument) -> FiscalDocument: ...
+
+    async def active_for_transfer(
+        self, company_id: uuid.UUID, transfer_id: uuid.UUID
+    ) -> FiscalDocument | None: ...
+
+    async def latest_for_transfer(
+        self, company_id: uuid.UUID, transfer_id: uuid.UUID
+    ) -> FiscalDocument | None: ...
 
     async def get(
         self, company_id: uuid.UUID, document_id: uuid.UUID, *, lock: bool = False

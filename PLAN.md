@@ -463,10 +463,19 @@ Pasos:
     Servicio: 501 pruebas en verde. Para correr las pruebas del servicio sin npm (el registro falla por TLS),
     copiar `package.json`, `src` y `test` al contenedor `dte-service`, enlazar `/app/node_modules` y
     correr `env -i PATH=... node --test` (la clave de API del contenedor pisa la de las pruebas).
-- [ ] **Paso 2: migración 0137 y dominio.** `sale_id` opcional y `transfer_id` (FK compuesta al traslado), con
+- [x] **Paso 2: migración 0137 y dominio.** `sale_id` opcional y `transfer_id` (FK compuesta al traslado), con
   CHECK: 04 lleva traslado y no pedido; 01/03/05/06 llevan pedido. Índice único de NR vigente por traslado.
   Dominio `transfer_remission.py`: líneas desde lo despachado con costo, receptor, observaciones y solicitud.
   Verificar: unitarias y prueba de migración.
+  - Hecho: 0137 (`transfer_id`, `sale_id` opcional, `ck_sales_fiscal_documents_origin`, índice
+    `uq_sales_fiscal_documents_active_transfer`, guarda del downgrade). El repositorio une pedido y cliente con
+    `outerjoin` y trae `transfer_code`; `active_for_transfer` y `latest_for_transfer`.
+    `FiscalDocument.order_id()` exige el pedido en las acciones de pedido (`sales_invoice_not_an_order_document`);
+    reintentar una NR fallida mira la vigente del traslado. Dominio `transfer_remission.py` (líneas al costo,
+    receptor = la empresa en el destino, observaciones del transporte, solicitud y conciliación por
+    `montoTotalOperacion`). Pruebas: `test_transfer_remission.py` (5) y
+    `test_sales_transfer_remission_migration.py`; unitarias de ventas y e2e de facturas y notas en verde.
+    La base de desarrollo ya está en 0137.
 - [ ] **Paso 3: despacho, trabajador y API.** Al despachar, si la empresa habilitó 04: crear la NR pendiente y
   encolarla. El trabajador emite 04 sin pedido (sin correo ni renta). `GET /inventory/transfers/{id}/remission`,
   `POST .../remission/retry` (rechazada) y corrección tipo 1 desde el documento. Verificar: e2e contra el
@@ -532,7 +541,7 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
 
 ## Estado actual
 
-- **Paso en curso**: V4d paso 2 (migración 0137 y dominio). Paso 1 hecho. PI terminado y en develop (#58); V4c en develop (#57).
+- **Paso en curso**: V4d paso 3 (despacho, trabajador y API). Pasos 1 y 2 hechos. PI terminado y en develop (#58); V4c en develop (#57).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
