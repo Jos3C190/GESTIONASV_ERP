@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 
 from app.api.v1.company_access import request_company_id
 from app.api.v1.deps import (
@@ -43,6 +43,7 @@ from app.domain.entities.fiscal_books import (
     annex_file_name,
 )
 from app.domain.ports.fiscal_book_repository import PurchaseFiscalView
+from app.infrastructure.fiscal_book_exports import render_book_pdf, render_f07_zip, render_xlsx
 
 router = APIRouter(prefix="/fiscal-books", tags=["fiscal-books"])
 
@@ -250,3 +251,118 @@ async def get_month(
     mode: Annotated[str | None, Query(pattern="^(production|test|simulated)$")] = None,
 ) -> FiscalMonthOut:
     return month_out(await cases.month(company_id, period, mode))
+
+
+ModeQuery = Annotated[str | None, Query(pattern="^(production|test|simulated)$")]
+_SUFFIX = {"production": "", "test": "_PRUEBA", "simulated": "_SIMULADO"}
+
+
+async def _export(
+    audit: AuditService,
+    request: Request,
+    current_id: uuid.UUID,
+    company_id: uuid.UUID,
+    view: MonthView,
+    kind: str,
+) -> None:
+    month = view.month
+    await audit.record(
+        action="EXPORT_FISCAL_BOOKS",
+        user_id=current_id,
+        company_id=company_id,
+        resource_type="fiscal_books",
+        resource_id=month.period.key,
+        metadata={
+            "format": kind,
+            "mode": month.mode,
+            "contributors": len(month.contributors),
+            "consumers": len(month.consumers),
+            "purchases": len(month.purchases),
+            "annulled": len(month.annulled),
+        },
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+
+def _download(content: bytes, media_type: str, filename: str) -> Response:
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/{period}/xlsx",
+    summary="Excel del mes: resumen, los tres libros y los anexos en formato Texto",
+    dependencies=_READ,
+)
+async def download_xlsx(
+    period: str,
+    request: Request,
+    current: CurrentUser,
+    company_id: CompanyId,
+    cases: UseCases,
+    audit: Audit,
+    mode: ModeQuery = None,
+) -> Response:
+    view = await cases.month(company_id, period, mode)
+    await _export(audit, request, current.id, company_id, view, "xlsx")
+    month = view.month
+    return _download(
+        render_xlsx(month, view.issuer, view.pending_purchases),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        f"F07_libros_{month.period.key}{_SUFFIX[month.mode]}.xlsx",
+    )
+
+
+@router.get(
+    "/{period}/pdf",
+    summary="PDF foliado de un libro de IVA, con totales y espacio para la firma del contador",
+    dependencies=_READ,
+)
+async def download_pdf(
+    period: str,
+    request: Request,
+    current: CurrentUser,
+    company_id: CompanyId,
+    cases: UseCases,
+    audit: Audit,
+    book: Annotated[Literal["contributors", "consumers", "purchases"], Query()],
+    first_folio: Annotated[int, Query(ge=1, le=99999)] = 1,
+    mode: ModeQuery = None,
+) -> Response:
+    view = await cases.month(company_id, period, mode)
+    await _export(audit, request, current.id, company_id, view, f"pdf:{book}")
+    month = view.month
+    names = {"contributors": "contribuyentes", "consumers": "consumidores", "purchases": "compras"}
+    return _download(
+        render_book_pdf(month, view.issuer, book, first_folio),
+        "application/pdf",
+        f"libro_{names[book]}_{month.period.key}{_SUFFIX[month.mode]}.pdf",
+    )
+
+
+@router.get(
+    "/{period}/f07.zip",
+    summary="ZIP del F-07: CSV de carga del portal, Excel del mes y LEEME",
+    dependencies=_READ,
+)
+async def download_zip(
+    period: str,
+    request: Request,
+    current: CurrentUser,
+    company_id: CompanyId,
+    cases: UseCases,
+    audit: Audit,
+    mode: ModeQuery = None,
+) -> Response:
+    view = await cases.month(company_id, period, mode)
+    await _export(audit, request, current.id, company_id, view, "zip")
+    month = view.month
+    return _download(
+        render_f07_zip(month, view.issuer, view.pending_purchases),
+        "application/zip",
+        f"F07_{month.period.key}{_SUFFIX[month.mode]}.zip",
+    )

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import uuid
+import zipfile
 from datetime import date, datetime
+from io import BytesIO
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -133,3 +135,18 @@ async def test_month_books_annexes_and_purchase_document(e2e_client: AsyncClient
     assert bad.json()["code"] == "fiscal_purchase_renta_invalid"
 
     assert (await e2e_client.get(f"{BOOKS}/2026-13", headers=admin)).status_code == 422
+
+    workbook = await e2e_client.get(f"{BOOKS}/{period}/xlsx", headers=admin)
+    assert workbook.status_code == 200
+    assert workbook.content[:2] == b"PK"
+    assert f"F07_libros_{period}_SIMULADO.xlsx" in workbook.headers["content-disposition"]
+    pdf = await e2e_client.get(
+        f"{BOOKS}/{period}/pdf", params={"book": "purchases", "first_folio": 7}, headers=admin
+    )
+    assert pdf.status_code == 200
+    assert pdf.content[:4] == b"%PDF"
+    archive = await e2e_client.get(f"{BOOKS}/{period}/f07.zip", headers=admin)
+    assert archive.status_code == 200
+    names = zipfile.ZipFile(BytesIO(archive.content)).namelist()
+    assert f"F07_anexo3_{period}_SIMULADO.csv" in names
+    assert "LEEME.txt" in names

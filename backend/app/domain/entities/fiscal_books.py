@@ -559,6 +559,13 @@ def _sign(document_type: str) -> Decimal:
     return Decimal("-1") if document_type == CREDIT_NOTE else Decimal("1")
 
 
+def _signed(sign: Decimal, value: Decimal) -> Decimal:
+    """Monto con el signo del libro, sin «-0.00» cuando es cero."""
+
+    result = sign * money(value)
+    return result if result else abs(result)
+
+
 @dataclass(frozen=True)
 class ContributorBookLine:
     number: int
@@ -629,12 +636,12 @@ def contributor_book(rows: Sequence[ContributorRow]) -> list[ContributorBookLine
                 control_number=doc.control_number,
                 customer=doc.receiver.name,
                 registry=doc.receiver.registry,
-                exempt=sign * money(doc.exempt),
-                not_subject=sign * money(doc.not_subject),
-                taxed=sign * money(doc.taxed),
-                vat=sign * money(doc.vat),
-                perception=sign * money(doc.perception),
-                total=sign * (row.total + money(doc.perception)),
+                exempt=_signed(sign, doc.exempt),
+                not_subject=_signed(sign, doc.not_subject),
+                taxed=_signed(sign, doc.taxed),
+                vat=_signed(sign, doc.vat),
+                perception=_signed(sign, doc.perception),
+                total=_signed(sign, row.total + doc.perception),
             )
         )
     return lines
@@ -674,13 +681,13 @@ def purchase_book(rows: Sequence[PurchaseRow]) -> list[PurchaseBookLine]:
                 registry=doc.supplier.registry,
                 excluded_subject_id="",
                 supplier=doc.supplier.name,
-                internal_exempt=sign * money(row.internal_exempt),
-                import_exempt=sign * money(row.import_exempt),
-                internal_taxed=sign * money(row.internal_taxed),
-                import_taxed=sign * money(row.import_taxed),
-                vat=sign * money(doc.vat),
+                internal_exempt=_signed(sign, row.internal_exempt),
+                import_exempt=_signed(sign, row.import_exempt),
+                internal_taxed=_signed(sign, row.internal_taxed),
+                import_taxed=_signed(sign, row.import_taxed),
+                vat=_signed(sign, doc.vat),
                 perception=ZERO,
-                total=sign * row.total,
+                total=_signed(sign, row.total),
                 third_party_withholding=ZERO,
                 excluded_subjects=ZERO,
             )
