@@ -497,7 +497,16 @@ Pasos:
 - [x] **Paso 5: documentación.** Manual de traslados y de facturación, `api.md`, esquema y README del servicio.
   - Hecho: manual de traslados («Nota de remisión al despachar»), manual de facturación 4.3 y bandeja,
     `api.md`, `database-schema.md` §45 y README del servicio.
-- [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
+- [x] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
+  - Batería completa en verde: backend 2056, servicio 501, frontend 196 archivos, ruff, mypy, svelte-check,
+    ESLint y el build.
+  - QA en el navegador (Grupo Lorena, que ya tenía el 04 habilitado): se despachó el traslado de demostración
+    TR-20261114-3BBA0609 (Bodega Central → tienda Usulután, queda en tránsito); su NR DTE-04-M001P001-…001 salió
+    simulada por $3,163.81 al costo, con transporte en observaciones, enlace al traslado y solo «Corregir». El
+    traslado recibido antes de V4d muestra «salió sin nota de remisión». Bandeja a 375 px sin desborde.
+  - Ajustes del QA: la placa no se repite si el nombre del vehículo ya la trae; la tarjeta se actualiza sola
+    mientras dice «Emitiendo»; textos de la bandeja.
+  - Para que el frontend tome cambios hay que reiniciar su contenedor (Vite no detecta cambios en este montaje).
 
 ### V4d2 — Evento de retorno (se detalla al empezar)
 - Sobre facturas (01) selladas, como la NC: líneas de la factura, cantidad devuelta y saldo; plazo de 3 meses
@@ -554,7 +563,7 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
 
 ## Estado actual
 
-- **Paso en curso**: V4d paso 6 (verificación y PR). Pasos 1 a 5 hechos. PI terminado y en develop (#58); V4c en develop (#57).
+- **Paso en curso**: V4d en PR hacia develop. Siguiente: V4d2 (evento de retorno). PI terminado y en develop (#58); V4c en develop (#57).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
