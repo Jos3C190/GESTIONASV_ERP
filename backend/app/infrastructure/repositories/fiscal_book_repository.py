@@ -22,6 +22,7 @@ from app.domain.entities.fiscal_books import (
     RentaPurchase,
     ReturnEvent,
     SaleDocument,
+    default_purchase_renta,
     money,
     supplier_party,
 )
@@ -416,10 +417,16 @@ class SqlAlchemyFiscalBookRepository:
                 {"company": company_id},
             )
         ).one_or_none()
-        if row is None:
-            # Compra de mercadería para revender: gravada, costo, comercio, costo interno.
-            return RentaPurchase(1, 1, 2, 5)
-        return RentaPurchase(*row)
+        if row is not None:
+            return RentaPurchase(*row)
+        activity = await self._session.scalar(
+            text(
+                "SELECT activity_code FROM company_economic_activities "
+                "WHERE company_id = :company AND is_primary"
+            ),
+            {"company": company_id},
+        )
+        return default_purchase_renta(activity)
 
     async def save_renta_defaults(
         self, company_id: uuid.UUID, renta: RentaPurchase, actor_id: uuid.UUID
