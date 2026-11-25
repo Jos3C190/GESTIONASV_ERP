@@ -745,7 +745,7 @@ Diseño común:
   número, fecha, monto); permisos `sales_receivables:read` y `sales_receivables:collect`. Dominio: saldo del
   documento, vencimiento, antigüedad (por vencer, 1-30, 31-60, 61-90, más de 90), validación del recibo.
   Verificar: prueba de migración y pytest unitario.
-- [ ] **Paso 2: repositorio, casos de uso y API.** Cartera por cliente con antigüedad; estado de cuenta (documentos,
+- [x] **Paso 2: repositorio, casos de uso y API.** Cartera por cliente con antigüedad; estado de cuenta (documentos,
   vencimiento, saldo, recibos); registrar recibo; aplicar saldo a favor; anular; registrar comprobante de retención.
   Cobro al facturar: el detalle del documento de contado ofrece registrar su cobro. Verificar: e2e.
 - [ ] **Paso 3: interfaz.** Ventas → Cuentas por cobrar (cartera, antigüedad, estado de cuenta, nuevo recibo con
@@ -762,7 +762,7 @@ Diseño común:
 
 ## Estado actual
 
-- **Paso en curso**: V5a paso 2 (repositorio, casos de uso y API); paso 1 hecho (0140 aplicada en desarrollo). Libros de IVA en develop (#61); investigación del retorno y la renta de compras también (#62).
+- **Paso en curso**: V5a paso 3 (interfaz); pasos 1 y 2 hechos (API en `/sales/receivables` y `/sales/receipts`; e2e `test_sales_receivables.py`). El cobro al facturar usa esos mismos endpoints desde el detalle del documento. Libros de IVA en develop (#61); investigación del retorno y la renta de compras también (#62).
 - **Investigación del 25/11/2026** (el usuario pidió resolver con investigación los dos puntos para el contador):
   - **Retorno en el anexo 2: se mantiene como fila negativa** con la fecha de la factura. La Normativa 2.0
     (13.3.2 a) da al retorno el efecto de disminuir la venta y el débito de la FE sin invalidarla; el manual F-07

@@ -67,6 +67,7 @@ from app.application.sales_invoices.remission import TransferRemissionUseCases
 from app.application.sales_invoices.returns import SalesFiscalReturnUseCases
 from app.application.sales_orders import SalesOrderUseCases
 from app.application.sales_quotations import SalesQuotationUseCases
+from app.application.sales_receivables.use_cases import SalesReceivableUseCases
 from app.application.sales_tax import SalesTaxUseCases
 from app.core.config import settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
@@ -277,6 +278,14 @@ def get_sales_fiscal_return_use_cases(session: SessionDep) -> SalesFiscalReturnU
         SqlAlchemySalesFiscalInvalidationRepository(session),
         SqlAlchemyContingencyResponsibleRepository(session),
     )
+
+
+def get_sales_receivable_use_cases(session: SessionDep) -> SalesReceivableUseCases:
+    from app.infrastructure.repositories.sales_receivable_repository import (
+        SqlAlchemySalesReceivableRepository,
+    )
+
+    return SalesReceivableUseCases(SqlAlchemySalesReceivableRepository(session))
 
 
 def get_fiscal_book_use_cases(session: SessionDep) -> FiscalBookUseCases:
