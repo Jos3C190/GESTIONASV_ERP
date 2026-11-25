@@ -644,9 +644,72 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
   cuáles fueron rechazados con su motivo.
 - Generación del lote con datos de prueba, transmisión y avance; probado contra el stub.
 
+## Decisión del 25/11/2026: sin V4e; libros de IVA y anexos del F-07
+
+El ingeniero de la materia dijo que no evaluará colas de contingencia ni plazos de 72 horas, ni pedirá mandar
+paquetes en vivo a Hacienda, ni los libros de IVA. El usuario decidió:
+- **V4e (lote de certificación) se omite.** Queda descrita abajo por si se retoma.
+- **Aun así se terminan los libros**, con este alcance (respuestas del usuario el 25/11/2026):
+  - los **tres libros de IVA** (ventas a contribuyentes, ventas a consumidores y compras) y los **anexos del
+    F-07** para los que el ERP tiene datos;
+  - **en pantalla, en Excel y en PDF** (el PDF con nombre y NRC, mes, folio y totales para firmar).
+
+### Libros de IVA y F-07 (rama `feature/fiscal-libros-iva`)
+
+Fuentes: plantilla «PLANTILLAS IVA F-07» v11.7.4 de contaportable (`D:\josec\Downloads`, leída sin macros),
+manual de anexos F-07 V14 (DGII, enero 2025), CT art. 141 y Reglamento arts. 82 a 88, y la implementación probada
+de Sublimarte (`DTE_CONTABILIDAD_F07.md`, solo lectura), de donde salen las reglas de §6 y §7 de ese documento.
+
+Diseño:
+- **Origen**: solo documentos fiscales y eventos sellados (el JSON del DTE manda: receptor, resumen, sello), nunca
+  ventas ni compras internas. Por empresa y mes (fecha de emisión en hora de El Salvador).
+- **Modo**: un libro es de producción o de simulado, nunca mezcla. Si el mes tiene documentos simulados se
+  puede elegir «Simulado»: archivos con `_SIMULADO`, aviso «NO CARGAR AL PORTAL» y el marcador en lugar del sello.
+- **Anexo 1 (contribuyentes, 20 columnas)**: un renglón por CCF (03), nota de crédito (05) y de débito (06)
+  vigentes, montos positivos; renta del documento (V4b2).
+- **Anexo 2 (consumidor final, 23 columnas)**: facturas (01) por día y punto de venta, con el código del primer y
+  último DTE; gravado con IVA. Filas negativas con su fecha original para las facturas de meses anteriores
+  invalidadas en el mes y para los **eventos de retorno** del mes (art. 87 del Reglamento; por confirmar con el
+  contador). Separadas por clasificación de renta.
+- **Anulados (10 columnas)**: DTE invalidados, tipo de detalle «D».
+- **Casilla 169 (anexo 9)**: percepción del 1 % cobrada en CCF. La 162 queda fuera: su soporte es el
+  comprobante de retención que emite el cliente, que el ERP no registra. Las demás casillas no tienen origen.
+- **Anexo de compras (21 columnas, anexo 3) y libro de compras**: de las compras recibidas, con datos fiscales del
+  documento del proveedor que hoy no existen. Se agregan a la compra: clase (1 imprenta, 4 DTE), tipo (03, 05,
+  06, 01, 14), número (o código de generación), sello, y renta (tipo de operación, clasificación, sector, tipo de
+  costo o gasto) con valores por defecto por empresa. Montos: gravado = subtotal − descuento, crédito fiscal =
+  impuesto; exento si no hay impuesto. Las compras sin datos fiscales se listan como pendientes y no entran.
+  Gastos de flota y generales siguen fuera (V7).
+- **Libros** (columnas del reglamento, como la plantilla): contribuyentes (art. 85, con no sujetas), consumidores
+  (art. 83, una fila por día y caja, con observación en las negativas), compras (art. 86, con NIT o DUI del
+  sujeto excluido y retención a terceros en cero). Totales del mes; folio inicial elegido al imprimir.
+- **Salida**: pantalla (Ventas → Libros de IVA), Excel (libros, anexos con celdas en Texto y resumen de cuadre),
+  PDF de cada libro, y ZIP del F-07 con los CSV (punto y coma, Windows-1252, sin encabezado, 2 decimales,
+  nombre ≤ 25 caracteres) más LEEME.
+- **Permiso** `fiscal_books:read` (ver y descargar) y `fiscal_books:configure` (valores de renta de compras);
+  descargas auditadas.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [ ] **Paso 1: migración 0139 y modelos.** Datos fiscales en `purchases` (clase, tipo, número, sello, renta de
+  compras) con CHECK de catálogos; `fiscal_book_settings` por empresa (renta de compras por defecto); permisos.
+  Verificar: prueba de migración con guarda de downgrade.
+- [ ] **Paso 2: dominio.** `app/domain/entities/fiscal_books.py`: filas de anexos 1, 2, 3, anulados y 169;
+  libros y totales; reglas de invalidación y retorno entre meses; formato CSV. Verificar: pytest unitario
+  (casos de Sublimarte: CCF invalidado, factura invalidada en otro mes, nota de crédito, retorno).
+- [ ] **Paso 3: repositorio, casos de uso y API.** Lectura del mes; `GET /fiscal-books/{period}` (pantalla),
+  `/xlsx`, `/pdf?book=&first_folio=`, `/f07.zip`; datos fiscales de la compra (`PATCH /purchases/{id}/fiscal`)
+  y valores de renta por defecto. Verificar: e2e con documentos simulados.
+- [ ] **Paso 4: Excel y PDF.** openpyxl y reportlab en infraestructura. Verificar: pruebas que abren el Excel y
+  el PDF y cuadran totales con los anexos.
+- [ ] **Paso 5: interfaz.** Pantalla «Libros de IVA» (mes, modo, pestañas por libro y anexo, pendientes,
+  descargas) y «Datos fiscales del documento» en la compra. Verificar: vitest.
+- [ ] **Paso 6: documentación.** Manual de libros, `api.md`, esquema §47.
+- [ ] **Paso 7: verificación y PR.**
+
 ## Estado actual
 
-- **Paso en curso**: V4d2 terminado; PR a develop con Auto-fix y auto-merge. Pasos 1 a 6 hechos (panel `FiscalReturnsPanel.svelte` con vitest) (e2e `test_sales_fiscal_returns.py` y regresión fiscal: 1490 en verde). V4d en develop (#59). PI terminado y en develop (#58); V4c en develop (#57).
+- **Paso en curso**: libros de IVA y F-07, paso 1 (migración 0139). V4d2 en develop (#60). V4e omitida por decisión del usuario (25/11/2026).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
