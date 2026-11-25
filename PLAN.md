@@ -711,9 +711,58 @@ Pasos:
   compra y visto en el libro y el anexo 3; modo claro y 375 px. La QA corrigió: el modo al cambiar de mes, los
   valores de las listas (número contra texto) y la mayúscula del mes.
 
+## V5 — Pedidos y cobros (decidido el 25/11/2026)
+
+El usuario dijo «Continúa» tras los libros de IVA y eligió (25/11/2026):
+- **Corte: solo V5a y V5b**, un PR cada uno. Los **encargos con anticipo quedan fuera** (su tratamiento fiscal
+  necesita investigación aparte).
+- **Contado: cobro al facturar.** Al facturar un pedido de contado se registra la forma de pago; si no se
+  registra, el documento queda como cuenta por cobrar vencida hasta que se cobre.
+
+Lo que ya existe (no se rehace): pedido directo sin cotización (V2e); `credit_days` y `credit_limit` del cliente,
+copiados al pedido como `payment_terms`/`credit_days` y usados en `condicionOperacion` del DTE.
+
+Diseño común:
+- **Saldo de un documento** = `totalPagar` del DTE (ya descuenta la retención del 1 %: `total − ivaRete`) menos
+  las notas de crédito vigentes que lo ajustan (CCF), los eventos de retorno vigentes (FE) y lo aplicado por
+  recibos vigentes. Una nota de débito es su propio documento por cobrar. Un documento invalidado no se cobra;
+  lo que ya tenía aplicado pasa a saldo a favor del cliente.
+- **Vencimiento** = fecha de emisión + `credit_days` del pedido (contado: el mismo día).
+- **Recibo de cobro** (no es un DTE): número correlativo por empresa, cliente, fecha, formas de pago (efectivo,
+  tarjeta, transferencia, cheque, otro, con referencia) y aplicaciones a uno o varios documentos, con pagos
+  parciales. Una aplicación nunca excede el saldo; lo no aplicado queda como **saldo a favor** y se aplica después
+  desde el mismo recibo. Anular un recibo exige motivo, restituye los saldos y queda en la bitácora; un recibo no se
+  edita.
+- **Retención recibida**: en un documento con retención se registra el comprobante de retención del cliente
+  (número o código de generación, fecha y monto); no mueve el saldo (ya está descontada) y servirá a la casilla 162.
+
+### V5a — Cuentas por cobrar y recibos de cobro (rama `feature/ventas-v5a-cobros`)
+
+- [x] **Paso 0: plan y rama.**
+- [ ] **Paso 1: migración 0140 y dominio.** `sales_receipts` (número, cliente, fecha, total, estado
+  issued/annulled, motivo y datos de anulación), `sales_receipt_payments` (método, monto, referencia) y
+  `sales_receipt_applications` (recibo, documento, monto, fecha), `sales_withholding_certificates` (documento,
+  número, fecha, monto); permisos `sales_receivables:read` y `sales_receivables:collect`. Dominio: saldo del
+  documento, vencimiento, antigüedad (por vencer, 1-30, 31-60, 61-90, más de 90), validación del recibo.
+  Verificar: prueba de migración y pytest unitario.
+- [ ] **Paso 2: repositorio, casos de uso y API.** Cartera por cliente con antigüedad; estado de cuenta (documentos,
+  vencimiento, saldo, recibos); registrar recibo; aplicar saldo a favor; anular; registrar comprobante de retención.
+  Cobro al facturar: el detalle del documento de contado ofrece registrar su cobro. Verificar: e2e.
+- [ ] **Paso 3: interfaz.** Ventas → Cuentas por cobrar (cartera, antigüedad, estado de cuenta, nuevo recibo con
+  formas de pago y aplicación, anulación); «Cobro» en el detalle del documento fiscal y en la sección Factura del
+  pedido. Verificar: vitest.
+- [ ] **Paso 4: PDF del recibo y documentación.** Recibo imprimible; manual de cobros, `api.md`, esquema §48.
+- [ ] **Paso 5: verificación y PR.**
+
+### V5b — Crédito y gestión de cobro (se detalla al terminar V5a)
+- Límite de crédito al confirmar el pedido y al facturar: cupo = límite − saldo abierto − pedidos a crédito
+  confirmados sin facturar; bloqueo si hay saldos vencidos. Autorización con motivo por un rol con permiso propio.
+- Gestión de cobro: notas de seguimiento por cliente, envío del estado de cuenta por correo, bloqueo por mora
+  (manual o automático tras N días de vencido).
+
 ## Estado actual
 
-- **Paso en curso**: libros de IVA y F-07 terminados; PR #61 a develop con Auto-fix y auto-merge.
+- **Paso en curso**: V5a paso 0 (plan y rama). Libros de IVA en develop (#61); investigación del retorno y la renta de compras también (#62).
 - **Investigación del 25/11/2026** (el usuario pidió resolver con investigación los dos puntos para el contador):
   - **Retorno en el anexo 2: se mantiene como fila negativa** con la fecha de la factura. La Normativa 2.0
     (13.3.2 a) da al retorno el efecto de disminuir la venta y el débito de la FE sin invalidarla; el manual F-07
