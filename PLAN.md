@@ -595,7 +595,7 @@ Pasos:
   vigente no se invalida ni se corrige. Verificar: e2e contra el servicio simulado.
 - [x] **Paso 4: interfaz.** En el detalle de una factura: saldo por línea, «Registrar retorno», lista de
   retornos con estado, PDF y «Anular». Verificar: vitest.
-- [ ] **Paso 5: documentación.**
+- [x] **Paso 5: documentación.** `api.md`, esquema §46, manual de facturación §4.3 y README del servicio.
 - [ ] **Paso 6: verificación y PR.**
 
 Detalle original de V4d (antes de partirlo):
@@ -643,7 +643,7 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
 
 ## Estado actual
 
-- **Paso en curso**: V4d2 paso 5 (documentación). Pasos 1 a 4 hechos (panel `FiscalReturnsPanel.svelte` con vitest) (e2e `test_sales_fiscal_returns.py` y regresión fiscal: 1490 en verde). V4d en develop (#59). PI terminado y en develop (#58); V4c en develop (#57).
+- **Paso en curso**: V4d2 paso 6 (batería, QA y PR). Pasos 1 a 5 hechos (panel `FiscalReturnsPanel.svelte` con vitest) (e2e `test_sales_fiscal_returns.py` y regresión fiscal: 1490 en verde). V4d en develop (#59). PI terminado y en develop (#58); V4c en develop (#57).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
