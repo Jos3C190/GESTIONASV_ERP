@@ -14,6 +14,8 @@ import type {
   NotesOverview,
   InvoiceOptions,
   Person,
+  FiscalReturn,
+  ReturnsOverview,
   TransferRemission
 } from '#lib/types/sales-invoices.ts';
 
@@ -83,6 +85,31 @@ export const salesInvoicesApi = {
       method: 'POST',
       body: JSON.stringify(payload)
     });
+  },
+  /** Eventos de retorno de una factura (V4d2). */
+  returns(id: string) {
+    return apiFetch<ReturnsOverview>(`/sales/fiscal-documents/${id}/returns`);
+  },
+  registerReturn(
+    id: string,
+    payload: { reason: string; lines: { invoice_line_number: number; quantity: string }[] }
+  ) {
+    return apiFetch<FiscalReturn>(`/sales/fiscal-documents/${id}/returns`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+  annulReturn(returnId: string, requester: Person) {
+    return apiFetch<FiscalReturn>(`/sales/fiscal-returns/${returnId}/annul`, {
+      method: 'POST',
+      body: JSON.stringify({ requester })
+    });
+  },
+  returnPdf(returnId: string) {
+    return apiDownload(`/sales/fiscal-returns/${returnId}/pdf`);
+  },
+  returnJson(returnId: string) {
+    return apiDownload(`/sales/fiscal-returns/${returnId}/json`);
   },
   correct(id: string, requester: Person) {
     return apiFetch<Correction>(`/sales/fiscal-documents/${id}/correct`, {

@@ -21,7 +21,12 @@
   import FiscalDocumentEmails from './FiscalDocumentEmails.svelte';
   import FiscalInvalidationPanel from './FiscalInvalidationPanel.svelte';
   import FiscalNotesPanel from './FiscalNotesPanel.svelte';
-  import type { FiscalDocument, NotesOverview } from '#lib/types/sales-invoices.ts';
+  import FiscalReturnsPanel from './FiscalReturnsPanel.svelte';
+  import type {
+    FiscalDocument,
+    NotesOverview,
+    ReturnsOverview
+  } from '#lib/types/sales-invoices.ts';
 
   let { id }: { id: string } = $props();
   let document = $state<FiscalDocument | null>(null);
@@ -29,7 +34,14 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
   let vigentNotes = $state(0);
+  let vigentReturns = $state(0);
   let generation = 0;
+
+  function returned(overview: ReturnsOverview) {
+    vigentReturns = overview.returns.filter((item) =>
+      ['pending', 'issued', 'simulated'].includes(item.status)
+    ).length;
+  }
 
   function noted(overview: NotesOverview) {
     vigentNotes = overview.notes.filter((note) => isVigent(note.document)).length;
@@ -265,12 +277,21 @@
           onOverview={noted}
         />
       {/if}
+      {#if document.document_type === '01' && isFinal(document)}
+        <FiscalReturnsPanel
+          {document}
+          canReturn={permissions.hasPermission('sales_invoices:returns')}
+          onOverview={returned}
+        />
+      {/if}
       <FiscalInvalidationPanel
         {document}
         canInvalidate={permissions.hasPermission('sales_invoices:invalidate')}
         lockedReason={vigentNotes > 0
           ? 'Este crédito fiscal tiene notas vigentes: anúlalas antes de anularlo o corregirlo.'
-          : null}
+          : vigentReturns > 0
+            ? 'Esta factura tiene eventos de retorno vigentes: anúlalos antes de anularla o corregirla.'
+            : null}
         onChanged={() => void load()}
       />
       {#if !isRemission(document)}
