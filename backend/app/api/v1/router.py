@@ -26,6 +26,7 @@ from app.api.v1.routers import (
     employees,
     expense_types,
     fiscal,
+    fiscal_books,
     fleet,
     fleet_circulation_captures,
     fleet_corrections,
@@ -164,6 +165,7 @@ api_router.include_router(sales_notes.router, prefix="/api/v1")
 api_router.include_router(sales_promotions.router, prefix="/api/v1")
 api_router.include_router(sales_invoices.router, prefix="/api/v1")
 api_router.include_router(sales_fiscal_returns.router, prefix="/api/v1")
+api_router.include_router(fiscal_books.router, prefix="/api/v1")
 api_router.include_router(sales_orders.router, prefix="/api/v1")
 api_router.include_router(sales.router, prefix="/api/v1")
 api_router.include_router(suppliers.router, prefix="/api/v1")

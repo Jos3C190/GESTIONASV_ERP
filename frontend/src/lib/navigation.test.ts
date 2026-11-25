@@ -38,6 +38,15 @@ describe('catalog navigation', () => {
     });
   });
 
+  it('exposes the VAT books under sales with their own permission', () => {
+    expect(itemByRoute('/sales/fiscal-books')).toMatchObject({
+      label: 'Libros de IVA',
+      implemented: true,
+      requiredPermission: 'fiscal_books:read'
+    });
+    expect(routeTitle('/sales/fiscal-books')).toBe('Libros de IVA');
+  });
+
   it('exposes the DTE issuer settings with the fiscal read permission', () => {
     expect(itemByRoute('/sales/fiscal-settings')).toMatchObject({
       label: 'Configuración fiscal',

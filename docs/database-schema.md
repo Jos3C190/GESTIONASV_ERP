@@ -1355,3 +1355,21 @@ Revision `0138` (revises `0137`), block V4d2.
 
 **Downgrade** refuses while return events exist. Covered by
 `backend/tests/integration/test_sales_fiscal_returns_migration.py`.
+
+## 47. VAT books: supplier document of a purchase (0139)
+
+Revision `0139` (revises `0138`). Sales books need no tables: they are computed from
+`sales_fiscal_documents`, `sales_fiscal_invalidations` and `sales_fiscal_returns`.
+
+- `purchases` gains the supplier's document: `fiscal_document_class` (1 printed, 3 other, 4 DTE),
+  `fiscal_document_type` (`03`, `05`, `06`, `12`, `13`), `fiscal_document_number`,
+  `fiscal_control_number` and `fiscal_seal` (required for a DTE), `fiscal_supplier_name`,
+  `fiscal_supplier_id_type` (`nit` 14 digits, `dui` 9, `nrc` up to 14) and `fiscal_supplier_id`,
+  the income-tax classification `renta_operation_type`, `renta_classification`, `renta_sector`,
+  `renta_cost_type` (F-07 V14 catalogs) and `fiscal_recorded_by_id` / `fiscal_recorded_at`.
+  `ck_purchases_fiscal_document` keeps them all-or-nothing.
+- `fiscal_book_settings` (one row per company): the purchase classification proposed by default.
+- Permissions `fiscal_books:read` and `fiscal_books:manage`, granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while purchases have a supplier document recorded. Covered by
+`backend/tests/integration/test_fiscal_books_migration.py`.
