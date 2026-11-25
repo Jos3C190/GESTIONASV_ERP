@@ -43,7 +43,7 @@ art. 141) y los anexos de la declaración mensual de IVA (F-07) listos para el p
 | Crédito fiscal o nota invalidados | Salen del anexo 1 de su mes y van a anulados de ese mes. |
 | Factura invalidada en su mismo mes | Sale del anexo 2 y va a anulados. |
 | Factura de un mes anterior invalidada en este | El mes anterior la cuenta; este la resta con una fila negativa con su fecha original y la reporta en anulados (art. 111 CT). |
-| Evento de retorno del mes | Fila negativa en el anexo 2 y en el libro, con la fecha de la factura (art. 87 del reglamento). Por confirmar con el contador. |
+| Evento de retorno del mes | Fila negativa en el anexo 2 y en el libro, con la fecha de la factura. El retorno disminuye la venta y el débito sin invalidar la factura (Normativa 2.0, 13.3.2); el manual admite negativos en el anexo 2 para los ajustes del art. 111 CT, que incluye los que «disminuyan» una factura, y el art. 87 del reglamento los anota en el mes en que ocurren. Se confirma en la primera carga real. |
 | Documento en contingencia sin sello | No aparece todavía; la pantalla avisa cuántos hay. |
 
 Las notas de crédito van en el anexo 1 con su tipo (05) y en positivo: el portal las resta.
@@ -60,8 +60,11 @@ documento** en Compras pendientes) pide:
 - **Proveedor** como figura en el documento, con su NIT, NRC o DUI sin guiones. Se propone el del
   catálogo de proveedores.
 - **Clasificación de renta**: tipo de operación, clasificación (costo o gasto), sector y tipo de
-  costo o gasto. Se propone la **renta de compras por defecto**, que se cambia al pie de la
-  pantalla de libros.
+  costo o gasto. Describen cómo usa la compra la empresa (su estructura de costos), no la
+  actividad del proveedor. Se propone la **renta de compras por defecto**, que se cambia al pie
+  de la pantalla de libros. Mientras no se guarde, sale de la actividad principal de la empresa:
+  industria (como una panadería) 1 · 1 · 1 · 5, comercio 1 · 1 · 2 · 5, agropecuaria
+  1 · 1 · 3 · 5 y servicios 1 · 2 · 4 · 2 (gasto de administración).
 
 Los montos salen de la compra: gravado (líneas con IVA), exento (sin IVA) y crédito fiscal. Los
 gastos de flota y los generales todavía no entran al libro de compras.

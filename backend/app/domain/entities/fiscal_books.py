@@ -12,7 +12,10 @@ Reglas entre meses (las mismas del proyecto de referencia, probadas con el porta
   mes (se invalida hasta el décimo día hábil del mes siguiente, el plazo de la declaración).
 - Factura: su mes la cuenta si se invalidó después; el mes de la invalidación la resta con una
   fila negativa con su fecha original (art. 111 CT) y la reporta en anulados. Igual resta el mes
-  de un evento de retorno (art. 87 del reglamento).
+  de un evento de retorno: la Normativa 2.0 (13.3.2 a) le da el efecto de disminuir la venta y el
+  débito fiscal sin invalidar la factura; el art. 111 CT, que el manual cita para los negativos
+  del anexo 2, cubre los ajustes que «disminuyan, anulen o rescindan» facturas en tres meses, y el
+  art. 87 del reglamento los anota en el libro del mes en que ocurren, restando.
 - Los anexos no llevan negativos, salvo esas filas del anexo 2. Las notas de crédito van en el
   anexo 1 con su tipo (05) y en positivo: el portal las resta. En los libros restan.
 """
@@ -964,6 +967,33 @@ def validate_purchase_fiscal(data: PurchaseFiscalData, today: date) -> PurchaseF
         supplier_id=supplier_id,
         renta=data.renta.validate(),
     )
+
+
+# Divisiones de la CAEES (CIIU rev. 4) por sector de renta: el «sector» y el «tipo de costo o
+# gasto» del anexo de compras describen cómo usa la compra la empresa que declara (su estructura de
+# costos), no la actividad del proveedor (manual F-07 V14, anexo de compras, columnas Q a T).
+_AGRO_DIVISIONS = range(1, 4)
+_INDUSTRY_DIVISIONS = range(5, 34)
+_COMMERCE_DIVISIONS = range(45, 48)
+
+
+def default_purchase_renta(activity_code: str | None) -> RentaPurchase:
+    """Renta de compras que se propone según la actividad principal de la empresa.
+
+    Gravada en todos los casos. Industria, comercio y agro compran sobre todo lo que producen o
+    revenden (costo de artículos comprados en el país); los servicios, gastos de administración.
+    """
+
+    division = int(activity_code[:2]) if activity_code and activity_code[:2].isdigit() else 0
+    if division in _AGRO_DIVISIONS:
+        return RentaPurchase(1, 1, 3, 5)
+    if division in _INDUSTRY_DIVISIONS:
+        return RentaPurchase(1, 1, 1, 5)
+    if division in _COMMERCE_DIVISIONS:
+        return RentaPurchase(1, 1, 2, 5)
+    if division:
+        return RentaPurchase(1, 2, 4, 2)
+    return RentaPurchase(1, 1, 2, 5)
 
 
 def supplier_party(name: str, id_type: str, value: str) -> Party:
