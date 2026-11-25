@@ -131,7 +131,9 @@ Pasos:
     Políticas de descuento sin la casilla de vender bajo costo. vitest de ventas y listas: 92 en verde.
 - [x] **Paso 5: documentación.** Manuales de descuentos, cotizaciones, pedidos y entregas; `api.md` y
   `database-schema.md` (sección 44).
-- [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
+- [x] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
+  - PR #58 mergeado en develop (24/11/2026). En CI, el fixture autouse de entregas cerraba después de liberar
+    la pool y dejaba una conexión en otro loop; ahora depende de `e2e_client`.
   - QA en el navegador (24/11/2026): promoción creada y terminada en la Matriz; el editor fija el 10 %
     y bloquea el descuento global; precio manual bajo costo muestra el aviso y deshabilita guardar;
     confirmar un pedido de 1 kg de café (unidad de 120 kg en bodega) deja el aviso de separar la unidad.
@@ -421,7 +423,64 @@ Pasos:
     totales y con correo al cliente; anulación del CCF bloqueada con notas vigentes; al anular la NC el saldo
     vuelve a $19.40. Modo oscuro y claro a 375 px sin desbordes.
 
-### V4d — Nota de remisión y evento de retorno (se detalla al empezar)
+### V4d — Nota de remisión al despachar traslados (rama `feature/ventas-v4d-remision`)
+
+Decisiones (24/11/2026, el usuario dijo «continúa» con PR #58 en develop, sobre la propuesta del 19/11):
+- **V4d se parte en dos PR**, como V4b y V4b2: **V4d** la nota de remisión de traslados y **V4d2** el evento de
+  retorno. Son flujos distintos (inventario frente a factura) y cada uno toca servicio, base, trabajador e
+  interfaz.
+- Se sigue la investigación del 19/11 (abajo): una NR por traslado al despachar, título CAT-025 04
+  «Traslado», receptor la misma empresa con la dirección del establecimiento destino; recepción parcial y
+  diferencias no cambian la nota.
+- **Emisor**: el establecimiento fiscal de la sucursal de la bodega de origen y su primer punto de venta activo.
+  Si la empresa habilitó el 04 y el origen no tiene establecimiento con punto de venta, el despacho se rechaza
+  (`transfer_remission_issuer_missing`) con el motivo a la vista.
+- **Valores**: cada línea al costo promedio del kardex al despachar, como gravada (la NR no causa IVA; el tributo
+  20 queda informativo en el resumen). Queda anotado para que lo confirme el contador.
+- **Transporte**: placa, vehículo y conductor en `observaciones` del resumen (el esquema no trae transporte).
+- El despacho y la NR pendiente se guardan en la misma transacción; el trabajador la transmite. Si no se pudo
+  crear, no hay despacho. Rechazada: el traslado ofrece «Emitir de nuevo» con los datos del despacho.
+- **Corrección**: invalidación tipo 1 con una NR de reemplazo armada con los datos del despacho y el catálogo
+  actual. Tipo 2 no se ofrece: un traslado despachado no se cancela (se resuelve con incidencias y ajustes).
+- La NR no se envía por correo ni lleva clasificación de renta.
+
+Hechos verificados en el código:
+- Servicio: `/nota-remision` es la ruta antigua (emisor del `.env`, sin escenarios simulados ni contingencia);
+  `construirNotaRemision` no usa el emisor de la solicitud. El PDF ya trata 04 como documento de venta.
+- ERP: `sales_fiscal_documents.sale_id` es obligatorio y el trabajador, la bandeja y el detalle suponen pedido.
+  Hay un establecimiento por sucursal (`uq_fiscal_establishments_branch`) y la empresa habilita tipos en
+  «Documentos» (`DOCUMENT_TYPES` ya trae 04).
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [ ] **Paso 1: servicio.** `/v2/nota-remision` multiemisor como la NC: copia del emisor con establecimiento y
+  punto de venta, contingencia y escenarios simulados; receptor y `bienTitulo` de la solicitud; `observaciones`.
+  PDF con «Título: Traslado» y observaciones. Verificar: pruebas del servicio, esquema y PDF.
+- [ ] **Paso 2: migración 0137 y dominio.** `sale_id` opcional y `transfer_id` (FK compuesta al traslado), con
+  CHECK: 04 lleva traslado y no pedido; 01/03/05/06 llevan pedido. Índice único de NR vigente por traslado.
+  Dominio `transfer_remission.py`: líneas desde lo despachado con costo, receptor, observaciones y solicitud.
+  Verificar: unitarias y prueba de migración.
+- [ ] **Paso 3: despacho, trabajador y API.** Al despachar, si la empresa habilitó 04: crear la NR pendiente y
+  encolarla. El trabajador emite 04 sin pedido (sin correo ni renta). `GET /inventory/transfers/{id}/remission`,
+  `POST .../remission/retry` (rechazada) y corrección tipo 1 desde el documento. Verificar: e2e contra el
+  servicio simulado.
+- [ ] **Paso 4: interfaz.** Tarjeta «Nota de remisión» en el traslado (estado, número, PDF, «Emitir de nuevo»);
+  la bandeja y el detalle del documento muestran el 04 con enlace al traslado y sin correo ni notas. Verificar:
+  vitest.
+- [ ] **Paso 5: documentación.** Manual de traslados y de facturación, `api.md`, esquema y README del servicio.
+- [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
+
+### V4d2 — Evento de retorno (se detalla al empezar)
+- Sobre facturas (01) selladas, como la NC: líneas de la factura, cantidad devuelta y saldo; plazo de 3 meses
+  desde el sello; IVA incluido. Varios eventos por factura mientras no pasen de lo vendido (Manual Funcional
+  §X, condición 4); cada evento relaciona una factura.
+- Tipo 18 de CAT-002: el esquema `fe-eret-v1` no trae número de control. **Por confirmar** el endpoint de
+  Hacienda (el Manual Técnico disponible no tiene texto extraíble): se supone `recepciondte` con `tipoDte` 18,
+  como sugiere el Manual Funcional (modelo diferido y contingencia); se prueba contra el stub y se confirma en
+  la certificación.
+- Una factura con un retorno vigente no se invalida ni se corrige; el retorno se invalida con tipo 2.
+
+Detalle original de V4d (antes de partirlo):
 - Nota de remisión (04) al despachar un traslado, si la empresa habilita el tipo; queda vinculada al traslado.
 - Evento de retorno sobre facturas selladas: el servicio tiene el esquema pero no el generador. Hasta 50
   documentos del mismo tipo; una factura con un evento de retorno vigente no se invalida sin invalidar antes
@@ -466,7 +525,7 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
 
 ## Estado actual
 
-- **Paso en curso**: PI paso 6 (verificación y PR). Pasos 1 a 5 hechos. V4c ya está en develop (#57); V4d espera a PI. Tras cambiar el servicio DTE:
+- **Paso en curso**: V4d paso 1 (servicio). PI terminado y en develop (#58); V4c en develop (#57). Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,
     svelte-check, ESLint y el build). QA en el navegador con Grupo Lorena: en Actividades se guardó para la
