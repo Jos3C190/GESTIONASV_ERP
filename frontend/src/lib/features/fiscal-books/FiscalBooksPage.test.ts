@@ -149,3 +149,14 @@ it('muestra el error de carga', async () => {
   render(FiscalBooksPage, { canManage: true });
   expect(await screen.findByText('No se pudieron cargar los libros.')).toBeInTheDocument();
 });
+
+it('al cambiar de mes deja que el servidor proponga el modo', async () => {
+  fiscalBooksApi.month
+    .mockResolvedValueOnce(month({ period: '2026-10', mode: 'production', modes: [] }))
+    .mockResolvedValue(month());
+  render(FiscalBooksPage, { canManage: false });
+  await screen.findByText('$14.30');
+  await fireEvent.input(screen.getByLabelText('Mes'), { target: { value: '2026-11' } });
+  await fireEvent.click(screen.getByRole('button', { name: 'Consultar' }));
+  expect(fiscalBooksApi.month).toHaveBeenLastCalledWith('2026-11', null);
+});

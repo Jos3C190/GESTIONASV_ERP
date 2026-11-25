@@ -223,12 +223,12 @@
             >Clase de documento
             <select
               class={inputClass}
-              value={documentClass}
+              value={String(documentClass)}
               onchange={(event) =>
                 changeClass(Number(event.currentTarget.value) as PurchaseDocumentClass)}
             >
               {#each PURCHASE_CLASSES as item (item.value)}
-                <option value={item.value}>{item.label}</option>
+                <option value={String(item.value)}>{item.label}</option>
               {/each}
             </select>
           </label>
@@ -298,7 +298,7 @@
               >{field.label}
               <select
                 class={inputClass}
-                value={renta[field.key]}
+                value={String(renta[field.key])}
                 onchange={(event) =>
                   (renta = { ...renta, [field.key]: Number(event.currentTarget.value) })}
               >

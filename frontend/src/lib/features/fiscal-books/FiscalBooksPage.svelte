@@ -68,7 +68,9 @@
     loading = true;
     loadError = null;
     try {
-      month = await fiscalBooksApi.month(period, mode);
+      // El modo elegido vale para el mismo mes; en otro mes lo propone el servidor.
+      const requested = month && month.period === period ? mode : null;
+      month = await fiscalBooksApi.month(period, requested);
       mode = month.mode;
     } catch (cause) {
       month = null;
@@ -174,7 +176,9 @@
   {:else if month}
     <section class="space-y-3" aria-label="Resumen del mes">
       <div class="flex flex-wrap items-center gap-2 text-sm text-foreground-muted">
-        <span class="font-medium capitalize text-foreground">{month.label}</span>
+        <span class="font-medium text-foreground"
+          >{month.label.charAt(0).toUpperCase()}{month.label.slice(1)}</span
+        >
         <span>·</span>
         <span>{month.issuer.name}</span>
         <span
@@ -461,7 +465,7 @@
                 >{field.label}
                 <select
                   class="{inputClass} w-full"
-                  value={defaults[field.key]}
+                  value={String(defaults[field.key])}
                   onchange={(event) => {
                     if (defaults)
                       defaults = { ...defaults, [field.key]: Number(event.currentTarget.value) };

@@ -54,6 +54,7 @@ it('registra un crédito fiscal de imprenta con el proveedor y la renta por defe
   render(PurchaseFiscalForm, { purchaseId: 'p-1', canManage: true, onSaved });
 
   expect(await screen.findByText('$240.50')).toBeInTheDocument();
+  expect(screen.getByLabelText('Clase de documento')).toHaveValue('4');
   // Un DTE pide número de control y sello; uno de imprenta no.
   expect(screen.getByLabelText('Número de control')).toBeInTheDocument();
   await fireEvent.change(screen.getByLabelText('Clase de documento'), { target: { value: '1' } });
@@ -62,6 +63,8 @@ it('registra un crédito fiscal de imprenta con el proveedor y la renta por defe
     target: { value: '145501' }
   });
   expect(screen.getByLabelText('Número de identificación')).toHaveValue('123456');
+  expect(screen.getByLabelText('Tipo de operación')).toHaveValue('1');
+  expect(screen.getByLabelText('Tipo de costo o gasto')).toHaveValue('5');
   await fireEvent.click(screen.getByRole('button', { name: 'Guardar documento' }));
 
   expect(fiscalBooksApi.recordPurchase).toHaveBeenCalledExactlyOnceWith('p-1', {
