@@ -124,7 +124,7 @@ export const salesApi = {
   },
   orderAction(
     id: string,
-    action: 'confirm' | 'authorize' | 'return' | 'cancel',
+    action: 'confirm' | 'authorize' | 'authorize-credit' | 'return' | 'cancel',
     payload: { expected_version: number; note?: string | null; reason?: string }
   ) {
     return apiFetch<Sale>(`/sales/${id}/${action}`, {

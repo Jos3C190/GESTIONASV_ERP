@@ -3,6 +3,7 @@
   import Button from '#lib/components/ui/Button.svelte';
   import { HttpError } from '#lib/api/client.ts';
   import { salesReceivablesApi } from '#lib/api/sales-receivables.ts';
+  import CreditPanel from '#lib/features/sales-receivables/CreditPanel.svelte';
   import ReceiptForm from '#lib/features/sales-receivables/ReceiptForm.svelte';
   import {
     BUCKETS,
@@ -15,7 +16,11 @@
   import { formatDay, formatMoney } from '#lib/features/sales/quotation-labels.ts';
   import type { CustomerAccount, Receipt } from '#lib/types/sales-receivables.ts';
 
-  let { customerId, canCollect }: { customerId: string; canCollect: boolean } = $props();
+  let {
+    customerId,
+    canCollect,
+    canControlCredit = false
+  }: { customerId: string; canCollect: boolean; canControlCredit?: boolean } = $props();
 
   const inputClass =
     'h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary';
@@ -168,6 +173,8 @@
         </div>
       {/each}
     </dl>
+
+    <CreditPanel customerId={account.customer.id} {canCollect} {canControlCredit} />
 
     {#if creating}
       <ReceiptForm
