@@ -16,6 +16,7 @@ from app.domain.entities.fiscal_books import (
     annex_csv,
     annex_file_name,
     build_month,
+    default_purchase_renta,
 )
 
 NOV = Period(2026, 11)
@@ -248,3 +249,20 @@ def test_unclassified_documents_warn_and_use_zero() -> None:
     assert month.contributors[0].cells()[17:19] == ["0", "0"]
     assert month.warnings
     assert "sin clasificación de renta" in month.warnings[0]
+
+
+@pytest.mark.parametrize(
+    ("activity", "expected"),
+    [
+        ("10712", (1, 1, 1, 5)),  # panadería: industria
+        ("47215", (1, 1, 2, 5)),  # venta al por menor: comercio
+        ("01131", (1, 1, 3, 5)),  # cultivo: agropecuaria
+        ("62010", (1, 2, 4, 2)),  # programación: servicios, gasto de administración
+        (None, (1, 1, 2, 5)),
+    ],
+)
+def test_purchase_renta_follows_the_main_activity(
+    activity: str | None, expected: tuple[int, int, int, int]
+) -> None:
+    renta = default_purchase_renta(activity)
+    assert (renta.operation, renta.classification, renta.sector, renta.cost_type) == expected

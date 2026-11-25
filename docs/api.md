@@ -2427,7 +2427,7 @@ supplier's document recorded. A month is either `production`, `test` or `simulat
 | GET | `/fiscal-books/{YYYY-MM}/pdf?book=&first_folio=` | `fiscal_books:read` | Landscape PDF of `contributors`, `consumers` or `purchases`, numbered from `first_folio`. |
 | GET | `/fiscal-books/{YYYY-MM}/f07.zip` | `fiscal_books:read` | Portal CSVs (`;`, Windows-1252, no header, two decimals), workbook and `LEEME.txt`. |
 | GET / PUT | `/fiscal-books/purchases/{purchase_id}` | `read` / `manage` | Supplier document of a purchase: `issued_on`, `document_class` (1, 3, 4), `document_type` (`03`, `05`, `06`, `12`, `13`), `number` (generation code for a DTE), `control_number` and `seal` (DTE), `supplier_name`, `supplier_id_type` (`nit`, `nrc`, `dui`), `supplier_id`, `renta` (`operation`, `classification`, `sector`, `cost_type`). Only received, verified or closed purchases. |
-| GET / PUT | `/fiscal-books/settings` | `read` / `manage` | Purchase income-tax classification proposed by default. |
+| GET / PUT | `/fiscal-books/settings` | `read` / `manage` | Purchase income-tax classification proposed by default. Until saved, it follows the company's primary activity (CAEES division): industry `1·1·1·5`, commerce `1·1·2·5`, agriculture `1·1·3·5`, services `1·2·4·2`. |
 
 Month rules: an invalidated CCF or note leaves annex 1 of its month and goes to `anulados`; an
 invoice invalidated in a later month counts in its month and is subtracted in the month of the
