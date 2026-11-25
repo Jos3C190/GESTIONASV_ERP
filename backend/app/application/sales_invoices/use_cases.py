@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, replace
 
+from app.application.price_lists import today_in_el_salvador
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.domain.entities.customer import CustomerType
 from app.domain.entities.fiscal import (
@@ -20,6 +21,7 @@ from app.domain.entities.fiscal import (
     dte_nit,
     dte_nrc,
 )
+from app.domain.entities.sales_credit import evaluate_credit, has_credit_authorization
 from app.domain.entities.sales_fiscal_document import (
     FiscalDocumentStatus,
     FiscalLine,
@@ -36,10 +38,12 @@ from app.domain.entities.sales_fiscal_document import (
     require_invoiceable,
     require_retryable,
 )
+from app.domain.entities.sales_margin import REASON_TEXT
 from app.domain.entities.sales_order import PaymentTerms
 from app.domain.entities.sales_renta import RentaClassification
 from app.domain.ports.customer_repository import CustomerRepository
 from app.domain.ports.fiscal_repository import FiscalRepository
+from app.domain.ports.sales_credit_repository import SalesCreditRepository
 from app.domain.ports.sales_fiscal_repository import (
     FiscalDocument,
     FiscalDocumentFilters,
@@ -89,11 +93,40 @@ class SalesInvoiceUseCases:
         orders: SalesOrderRepository,
         customers: CustomerRepository,
         fiscal: FiscalRepository,
+        credit: SalesCreditRepository | None = None,
     ) -> None:
         self._repo = repo
         self._orders = orders
         self._customers = customers
         self._fiscal = fiscal
+        self._credit = credit
+
+    async def _require_credit(self, order: Order) -> None:
+        """Al facturar a crédito se reevalúa el cupo, la mora y el bloqueo (V5b).
+
+        Si el pedido ya se autorizó con motivos de crédito, la autorización vale para facturarlo.
+        """
+
+        if self._credit is None or order.payment_terms is not PaymentTerms.CREDIT:
+            return
+        if has_credit_authorization(
+            order.authorization_reasons, order.authorized_by_id is not None
+        ):
+            return
+        snapshot = await self._credit.snapshot(
+            order.company_id,
+            order.customer_id,
+            exclude_sale_id=order.id,
+            today=today_in_el_salvador(),
+        )
+        reasons = evaluate_credit(snapshot, order.payment_terms, order.totals.total)
+        if reasons:
+            detail = " ".join(REASON_TEXT[reason] for reason in reasons)
+            raise BusinessRuleError(
+                f"{detail} Pide una autorización de crédito antes de facturar: devuelve el pedido a "
+                "borrador y vuelve a confirmarlo.",
+                code="sales_credit_authorization_required",
+            )
 
     # --- consulta ------------------------------------------------------------------------------
 
@@ -448,6 +481,7 @@ class SalesInvoiceUseCases:
         existing = await self._repo.active_for_order(company_id, order_id)
         if existing is not None:
             return Issued(document=existing, created=False)
+        await self._require_credit(order)
         document, _issuer = await self._prepare(order, point_of_sale_id)
         classification = await self._renta(order, renta)
         created = await self._repo.create(

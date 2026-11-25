@@ -98,6 +98,7 @@ from app.domain.ports.purchase_request_repository import PurchaseRequestReposito
 from app.domain.ports.refresh_token_repository import RefreshTokenRepository
 from app.domain.ports.retaceo_repository import RetaceoRepository
 from app.domain.ports.role_repository import RoleRepository
+from app.domain.ports.sales_credit_repository import SalesCreditRepository
 from app.domain.ports.sales_document import SalesCatalog
 from app.domain.ports.token_service import TokenService
 from app.domain.ports.user_repository import UserRepository
@@ -373,7 +374,16 @@ def get_sales_order_use_cases(session: SessionDep) -> SalesOrderUseCases:
         _sales_pricing(session, repository),
         SqlAlchemyPriceListRepository(session),
         SqlAlchemyCustomerRepository(session),
+        _credit(session),
     )
+
+
+def _credit(session: AsyncSession) -> SalesCreditRepository:
+    from app.infrastructure.repositories.sales_credit_repository import (
+        SqlAlchemySalesCreditRepository,
+    )
+
+    return SqlAlchemySalesCreditRepository(session)
 
 
 def get_sales_invoice_email_use_cases(session: SessionDep) -> SalesInvoiceEmailUseCases:
@@ -412,6 +422,7 @@ def get_sales_invoice_use_cases(session: SessionDep) -> SalesInvoiceUseCases:
         SqlAlchemySalesOrderRepository(session),
         SqlAlchemyCustomerRepository(session),
         SqlAlchemyFiscalRepository(session),
+        _credit(session),
     )
 
 
