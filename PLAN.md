@@ -752,7 +752,11 @@ Diseño común:
   formas de pago y aplicación, anulación); «Cobro» en el detalle del documento fiscal (la sección Factura del
   pedido enlaza a él). Verificar: vitest.
 - [x] **Paso 4: PDF del recibo y documentación.** Recibo imprimible; manual de cobros, `api.md`, esquema §48.
-- [ ] **Paso 5: verificación y PR.**
+- [x] **Paso 5: verificación y PR.** Batería: backend 2085, frontend 1235, ruff, mypy, svelte-check, ESLint y build.
+  QA con Grupo Lorena: cartera (El Trigal $27.18 = CCF $21.92 + ND $5.26, por vencer el 04/12); cobro de la FE
+  DTE-01-…002 desde su detalle (RC-000001); en el estado de cuenta, RC-000002 por $30.00 con transferencia, repartido
+  a los más antiguos y $2.82 de saldo a favor, luego anulado con motivo (saldos restituidos); 375 px y modo
+  claro. La QA compactó las casillas de monto.
 
 ### V5b — Crédito y gestión de cobro (rama `feature/ventas-v5b-credito`, después de V5a)
 
@@ -784,7 +788,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V5a paso 5 (batería, QA y PR); pasos 1 a 4 hechos (manual `docs/ers-v1/manual-cobros.md`) (rutas `/sales/receivables` y `/sales/receivables/[customerId]`; panel «Cobro» en el documento). En desarrollo ya existe RC-000001 (cobro de la FE DTE-01-…002 de Grupo Lorena).
+- **Paso en curso**: V5a terminado; PR a develop con Auto-fix y auto-merge. Sigue V5b (plan detallado arriba).
 - **Investigación del 25/11/2026** (el usuario pidió resolver con investigación los dos puntos para el contador):
   - **Retorno en el anexo 2: se mantiene como fila negativa** con la fecha de la factura. La Normativa 2.0
     (13.3.2 a) da al retorno el efecto de disminuir la venta y el débito de la FE sin invalidarla; el manual F-07
