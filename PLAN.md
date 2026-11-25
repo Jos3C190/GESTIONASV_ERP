@@ -775,7 +775,7 @@ Diseño (detallado el 25/11/2026 sobre lo que dejó V5a y el flujo de autorizaci
   estado de cuenta por correo al cliente (PDF) y bloqueo/desbloqueo manual con motivo, auditados.
 
 Pasos:
-- [ ] **Paso 0: rama desde develop con V5a.**
+- [x] **Paso 0: rama desde develop con V5a.** Creada sobre `feature/ventas-v5a-cobros` mientras #63 corre su CI; se mezcla develop antes del PR.
 - [ ] **Paso 1: migración 0141 y dominio.** `sales_customers.credit_blocked`, motivo y quién/cuándo;
   `sales_settings.credit_overdue_grace_days`; `sales_collection_notes`; permiso `sales_credit:authorize`;
   `AuthorizationReason` de crédito y la evaluación pura. Verificar: prueba de migración y pytest.
@@ -788,7 +788,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V5a terminado; PR a develop con Auto-fix y auto-merge. Sigue V5b (plan detallado arriba).
+- **Paso en curso**: V5b paso 1 (migración 0141 y dominio). V5a en PR #63 (el usuario dijo «Yes, start V5b» el 25/11/2026).
 - **Investigación del 25/11/2026** (el usuario pidió resolver con investigación los dos puntos para el contador):
   - **Retorno en el anexo 2: se mantiene como fila negativa** con la fecha de la factura. La Normativa 2.0
     (13.3.2 a) da al retorno el efecto de disminuir la venta y el débito de la FE sin invalidarla; el manual F-07
