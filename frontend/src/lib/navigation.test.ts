@@ -38,6 +38,16 @@ describe('catalog navigation', () => {
     });
   });
 
+  it('exposes receivables under sales with their own permission', () => {
+    expect(itemByRoute('/sales/receivables')).toMatchObject({
+      label: 'Cuentas por cobrar',
+      implemented: true,
+      requiredPermission: 'sales_receivables:read'
+    });
+    expect(routeTitle('/sales/receivables')).toBe('Cuentas por cobrar');
+    expect(routeTitle('/sales/receivables/customer-1')).toBe('Cuentas por cobrar');
+  });
+
   it('exposes the VAT books under sales with their own permission', () => {
     expect(itemByRoute('/sales/fiscal-books')).toMatchObject({
       label: 'Libros de IVA',

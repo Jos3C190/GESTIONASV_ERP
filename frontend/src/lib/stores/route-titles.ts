@@ -22,6 +22,7 @@ const TITLES: Record<string, string> = {
   '/sales/fiscal-documents': 'Documentos fiscales',
   '/sales/contingencies': 'Contingencia',
   '/sales/fiscal-books': 'Libros de IVA',
+  '/sales/receivables': 'Cuentas por cobrar',
   '/sales/fiscal-settings': 'Configuración fiscal',
   '/sales/price-lists': 'Listas de precios',
   '/sales/discount-policies': 'Topes de descuento',
@@ -60,6 +61,7 @@ export function routeTitle(pathname: string): string {
   if (TITLES[pathname]) return TITLES[pathname];
   // Gestión de estructuras físicas dentro de un almacén
   if (/^\/customers\/[^/]+\/?$/.test(pathname)) return 'Clientes';
+  if (/^\/sales\/receivables\/[^/]+\/?$/.test(pathname)) return 'Cuentas por cobrar';
   if (/^\/fleet\/[^/]+\/edit\/?$/.test(pathname)) return 'Editar vehículo';
   if (/^\/fleet\/[^/]+\/?$/.test(pathname)) return 'Flota';
   if (/^\/drivers\/[^/]+\/?$/.test(pathname)) return 'Conductores';

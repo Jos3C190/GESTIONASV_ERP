@@ -2441,3 +2441,33 @@ Error codes (`422`): `fiscal_book_period_invalid`, `fiscal_book_mode_invalid`,
 `fiscal_purchase_seal_required`, `fiscal_purchase_number_required`,
 `fiscal_purchase_supplier_required`, `fiscal_purchase_supplier_id_invalid`,
 `fiscal_purchase_renta_invalid`; `purchase_not_found` (`404`).
+
+## Receivables and collection receipts (revision 0140, block V5a)
+
+A document's balance is not stored: it is the DTE `totalPagar` (already net of the 1 % VAT
+withholding) minus vigent credit notes (CCF) and return events (invoice) minus what vigent receipts
+applied. Due date = issue date + the order's `credit_days` (cash sales are due the same day). An
+invalidated document is no longer collectable; what was applied becomes customer credit. A receipt
+is not a DTE: it is numbered per company (`RC-000001`), never edited, and annulled with a reason.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/receivables` | `sales_receivables:read` | Portfolio: per customer `balance`, `overdue`, `credit` (unapplied), `aging` (`current`, `1_30`, `31_60`, `61_90`, `over_90`) and `oldest_due`. |
+| GET | `/sales/receivables/customers/{customer_id}` | `sales_receivables:read` | Statement: documents (`payable`, `credited`, `applied`, `balance`, `due_on`, `bucket`, `overdue`, `withholding`, `certificate`) and receipts. |
+| GET | `/sales/receivables/documents/{document_id}` | `sales_receivables:read` | Balance of one fiscal document (01, 03, 06). |
+| PUT | `/sales/receivables/documents/{document_id}/withholding-certificate` | `sales_receivables:collect` | Customer's withholding certificate: `certificate_number`, `issued_on`, `amount` (up to the document's withholding). Does not change the balance. |
+| POST | `/sales/receipts` | `sales_receivables:collect` | `branch_id`, `customer_id`, `received_on`, `payments` (`method`: `cash`, `card`, `transfer`, `check`, `other`; `amount`; `reference`, required except cash), `applications` (`document_id`, `amount`), `notes`, `idempotency_key`. `201`; replaying the key returns the same receipt with `200`. |
+| GET | `/sales/receipts/{id}` · `/sales/receipts/{id}/pdf` | `sales_receivables:read` | Receipt and its printable PDF. |
+| POST | `/sales/receipts/{id}/apply` | `sales_receivables:collect` | Apply the receipt's unapplied credit to other documents. |
+| POST | `/sales/receipts/{id}/annul` | `sales_receivables:collect` | `reason` (5–300). Restores the balances. |
+
+Audited: `REGISTER_SALES_RECEIPT`, `APPLY_SALES_RECEIPT_CREDIT`, `ANNUL_SALES_RECEIPT`,
+`RECORD_WITHHOLDING_CERTIFICATE`. Error codes (`422`): `sales_receipt_payments_required`,
+`sales_receipt_payments_too_many`, `sales_receipt_amount_invalid`, `sales_receipt_reference_required`,
+`sales_receipt_applications_too_many`, `sales_receipt_applications_required`,
+`sales_receipt_document_repeated`, `sales_receipt_document_invalid`, `sales_receipt_exceeds_balance`,
+`sales_receipt_exceeds_available`, `sales_receipt_date_invalid`, `sales_receipt_key_invalid`,
+`sales_receipt_annulled`, `sales_receipt_annul_reason_required`, `sales_withholding_not_applicable`,
+`sales_withholding_certificate_invalid`, `sales_withholding_certificate_date_invalid`;
+`sales_receipt_key_conflict` (`409`); `sales_receipt_not_found`, `sales_receivable_not_found`,
+`sales_customer_not_found` (`404`).
