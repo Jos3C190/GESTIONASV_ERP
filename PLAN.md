@@ -754,11 +754,33 @@ Diseño común:
 - [x] **Paso 4: PDF del recibo y documentación.** Recibo imprimible; manual de cobros, `api.md`, esquema §48.
 - [ ] **Paso 5: verificación y PR.**
 
-### V5b — Crédito y gestión de cobro (se detalla al terminar V5a)
-- Límite de crédito al confirmar el pedido y al facturar: cupo = límite − saldo abierto − pedidos a crédito
-  confirmados sin facturar; bloqueo si hay saldos vencidos. Autorización con motivo por un rol con permiso propio.
-- Gestión de cobro: notas de seguimiento por cliente, envío del estado de cuenta por correo, bloqueo por mora
-  (manual o automático tras N días de vencido).
+### V5b — Crédito y gestión de cobro (rama `feature/ventas-v5b-credito`, después de V5a)
+
+Diseño (detallado el 25/11/2026 sobre lo que dejó V5a y el flujo de autorización de V2):
+- **Exposición del cliente** = saldo abierto de sus documentos (V5a) + total de sus pedidos a crédito
+  confirmados sin facturar + el pedido que se confirma. Supera el **límite de crédito** → motivo
+  `credit_limit_exceeded`. Sin límite configurado no se evalúa el cupo.
+- **Mora**: saldo vencido con más de N días (configurable por empresa, por omisión 0) → motivo
+  `customer_overdue`. **Bloqueo manual** del cliente con motivo → `customer_blocked`.
+- Solo los pedidos **a crédito** se evalúan; el contado no.
+- Al **confirmar**, esos motivos se suman a los de descuento: el pedido pasa a «pendiente de autorización» como hoy.
+  Autorizar exige `sales_credit:authorize` si hay motivos de crédito y `sales_discounts:authorize` si hay de
+  descuento; la nota es obligatoria con motivos de crédito. Al **facturar** se reevalúa: si la exposición creció y
+  el pedido no tenía autorización de crédito, se bloquea con `sales_credit_authorization_required`.
+- **Gestión de cobro** en el estado de cuenta: notas de seguimiento (fecha, texto, próxima acción), envío del
+  estado de cuenta por correo al cliente (PDF) y bloqueo/desbloqueo manual con motivo, auditados.
+
+Pasos:
+- [ ] **Paso 0: rama desde develop con V5a.**
+- [ ] **Paso 1: migración 0141 y dominio.** `sales_customers.credit_blocked`, motivo y quién/cuándo;
+  `sales_settings.credit_overdue_grace_days`; `sales_collection_notes`; permiso `sales_credit:authorize`;
+  `AuthorizationReason` de crédito y la evaluación pura. Verificar: prueba de migración y pytest.
+- [ ] **Paso 2: confirmar, autorizar y facturar con crédito.** Verificar: e2e (cupo, mora, bloqueo, autorización
+  con permiso y nota, reevaluación al facturar, contado sin evaluar).
+- [ ] **Paso 3: gestión de cobro.** Notas, bloqueo y correo del estado de cuenta (PDF), con API y auditoría.
+- [ ] **Paso 4: interfaz.** Motivos de crédito en el pedido y su autorización; cupo y bloqueo en el estado de
+  cuenta y en el cliente; notas y envío. Verificar: vitest.
+- [ ] **Paso 5: documentación, verificación y PR.**
 
 ## Estado actual
 
