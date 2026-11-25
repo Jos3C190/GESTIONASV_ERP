@@ -22,6 +22,7 @@
   import FiscalInvalidationPanel from './FiscalInvalidationPanel.svelte';
   import FiscalNotesPanel from './FiscalNotesPanel.svelte';
   import FiscalReturnsPanel from './FiscalReturnsPanel.svelte';
+  import DocumentCollectionPanel from '#lib/features/sales-receivables/DocumentCollectionPanel.svelte';
   import type {
     FiscalDocument,
     NotesOverview,
@@ -270,6 +271,12 @@
     </section>
 
     {#key `${document.status}-${document.superseded_by_id ?? ''}`}
+      {#if ['01', '03', '06'].includes(document.document_type) && ['issued', 'simulated', 'contingency'].includes(document.status) && permissions.hasPermission('sales_receivables:read')}
+        <DocumentCollectionPanel
+          documentId={document.id}
+          canCollect={permissions.hasPermission('sales_receivables:collect')}
+        />
+      {/if}
       {#if document.document_type === '03' && isFinal(document)}
         <FiscalNotesPanel
           {document}
