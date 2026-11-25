@@ -1321,3 +1321,15 @@ Revision `0133` (revises `0132`), block V4c.
 
 **Downgrade** refuses while promotions exist. Covered by
 `backend/tests/integration/test_sales_engineer_rules_migration.py`.
+
+## 45. Remission notes of transfers (0137)
+
+- `sales_fiscal_documents.transfer_id` (composite FK to `inventory_transfers`, RESTRICT): the transfer a
+  remission note (`04`) covers. `sale_id` becomes nullable.
+- `ck_sales_fiscal_documents_origin`: a `04` has a transfer and no sale; every other type has a sale and
+  no transfer. `ck_sales_fiscal_documents_document` admits `04`.
+- `uq_sales_fiscal_documents_active_transfer`: one vigent note per transfer (pending, contingency, issued or
+  simulated, without a replacement).
+
+**Downgrade** refuses while remission notes exist. Covered by
+`backend/tests/integration/test_sales_transfer_remission_migration.py`.

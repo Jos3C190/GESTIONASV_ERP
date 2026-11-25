@@ -476,14 +476,27 @@ Pasos:
     `montoTotalOperacion`). Pruebas: `test_transfer_remission.py` (5) y
     `test_sales_transfer_remission_migration.py`; unitarias de ventas y e2e de facturas y notas en verde.
     La base de desarrollo ya está en 0137.
-- [ ] **Paso 3: despacho, trabajador y API.** Al despachar, si la empresa habilitó 04: crear la NR pendiente y
+- [x] **Paso 3: despacho, trabajador y API.** Al despachar, si la empresa habilitó 04: crear la NR pendiente y
   encolarla. El trabajador emite 04 sin pedido (sin correo ni renta). `GET /inventory/transfers/{id}/remission`,
   `POST .../remission/retry` (rechazada) y corrección tipo 1 desde el documento. Verificar: e2e contra el
   servicio simulado.
-- [ ] **Paso 4: interfaz.** Tarjeta «Nota de remisión» en el traslado (estado, número, PDF, «Emitir de nuevo»);
+  - Hecho: `application/sales_invoices/remission.py` (`TransferRemissionUseCases`: `on_dispatch`, `reissue`,
+    `prepare_replacement`, `status`) con el adaptador `infrastructure/transfer_remission_source.py` (lee el
+    traslado despachado). `SalesInvoiceUseCases.issuer_at` y `establishment_for` arman el emisor por
+    establecimiento. El despacho y la NR van en un savepoint (`dispatch_transfer`) y la NR se encola tras el
+    commit. Router `transfer_remissions.py` (GET `/remission`, POST `/remission/reissue`). El trabajador emite
+    04 (`/api/dte/v2/nota-remision`) y concilia por `montoTotalOperacion`; la NR no lleva correo. Corrección
+    tipo 1 por la invalidación; `require_annullable` impide el tipo 2. E2e `test_transfer_remission.py` (4) y
+    1500 pruebas relacionadas en verde.
+- [x] **Paso 4: interfaz.** Tarjeta «Nota de remisión» en el traslado (estado, número, PDF, «Emitir de nuevo»);
   la bandeja y el detalle del documento muestran el 04 con enlace al traslado y sin correo ni notas. Verificar:
   vitest.
-- [ ] **Paso 5: documentación.** Manual de traslados y de facturación, `api.md`, esquema y README del servicio.
+  - Hecho: `TransferRemissionCard.svelte` en el detalle del traslado (estado, número enlazado, valor al costo,
+    «Emitir de nuevo»); bandeja con el tipo 04 y el código del traslado; detalle sin cliente, renta ni correo y
+    con enlace a `/transfers?transfer=`; el panel de invalidación solo ofrece «Corregir» para el 04. Vitest 85.
+- [x] **Paso 5: documentación.** Manual de traslados y de facturación, `api.md`, esquema y README del servicio.
+  - Hecho: manual de traslados («Nota de remisión al despachar»), manual de facturación 4.3 y bandeja,
+    `api.md`, `database-schema.md` §45 y README del servicio.
 - [ ] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
 
 ### V4d2 — Evento de retorno (se detalla al empezar)
@@ -541,7 +554,7 @@ Investigación del 19/11/2026 (pedida por el usuario). Propuesta pendiente de su
 
 ## Estado actual
 
-- **Paso en curso**: V4d paso 3 (despacho, trabajador y API). Pasos 1 y 2 hechos. PI terminado y en develop (#58); V4c en develop (#57).
+- **Paso en curso**: V4d paso 6 (verificación y PR). Pasos 1 a 5 hechos. PI terminado y en develop (#58); V4c en develop (#57).
 Tras cambiar el servicio DTE:
   `docker compose up -d --build dte-service` (también toma `DTE_ALLOWED_DOCUMENT_TYPES`).
   - Paso 5: batería completa en verde (backend 2014, OCR 5, servicio 489, frontend 1200, ruff, mypy,

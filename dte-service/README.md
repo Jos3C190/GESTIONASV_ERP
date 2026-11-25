@@ -685,7 +685,9 @@ inadvertido hasta que Hacienda rechaza algo en producción:
 
 - `POST /api/dte/factura` — Factura (tipo 01)
 - `POST /api/dte/ccf` — Comprobante de Crédito Fiscal (tipo 03)
-- `POST /api/dte/nota-remision` — Nota de Remisión (tipo 04)
+- `POST /api/dte/nota-remision` y `POST /api/dte/v2/nota-remision` — Nota de Remisión (tipo 04). La v2 usa el
+  emisor de la solicitud (contrato multiemisor), admite contingencia y escenarios simulados, `bienTitulo`
+  (CAT-025) y `observaciones`; el resumen informa el IVA como el CCF (`montoTotalOperacion = subTotal + IVA`).
 - `POST /api/dte/nota-credito` y `POST /api/dte/v2/nota-credito` (emisor de
   la revisión del panel) — Nota de Crédito (tipo 05). Solo ajusta CCF:
   `{ emisor, receptor, items, documentosRelacionados, observaciones }`, con el
