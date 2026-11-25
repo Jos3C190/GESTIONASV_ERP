@@ -739,7 +739,7 @@ Diseño común:
 ### V5a — Cuentas por cobrar y recibos de cobro (rama `feature/ventas-v5a-cobros`)
 
 - [x] **Paso 0: plan y rama.**
-- [ ] **Paso 1: migración 0140 y dominio.** `sales_receipts` (número, cliente, fecha, total, estado
+- [x] **Paso 1: migración 0140 y dominio.** `sales_receipts` (número, cliente, fecha, total, estado
   issued/annulled, motivo y datos de anulación), `sales_receipt_payments` (método, monto, referencia) y
   `sales_receipt_applications` (recibo, documento, monto, fecha), `sales_withholding_certificates` (documento,
   número, fecha, monto); permisos `sales_receivables:read` y `sales_receivables:collect`. Dominio: saldo del
@@ -762,7 +762,7 @@ Diseño común:
 
 ## Estado actual
 
-- **Paso en curso**: V5a paso 0 (plan y rama). Libros de IVA en develop (#61); investigación del retorno y la renta de compras también (#62).
+- **Paso en curso**: V5a paso 2 (repositorio, casos de uso y API); paso 1 hecho (0140 aplicada en desarrollo). Libros de IVA en develop (#61); investigación del retorno y la renta de compras también (#62).
 - **Investigación del 25/11/2026** (el usuario pidió resolver con investigación los dos puntos para el contador):
   - **Retorno en el anexo 2: se mantiene como fila negativa** con la fecha de la factura. La Normativa 2.0
     (13.3.2 a) da al retorno el efecto de disminuir la venta y el débito de la FE sin invalidarla; el manual F-07
