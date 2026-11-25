@@ -349,8 +349,15 @@ Decisiones (18/11/2026):
     exige para la ND (CT arts. 110 y 111; Ley IVA art. 62 num. 2 suma incrementos e intereses sin plazo; art. 63
     da al comprador tres períodos desde la emisión de la ND), pero Hacienda valida la regla al recibir el DTE.
     **Decisión del usuario (19/11/2026): se aplica el mismo plazo a la ND.** `note_deadline` y
-    `require_note_in_time` valen para las dos; la API expone `deadline`. Queda para el contador qué
-    son las «excepciones legales» que menciona la regla.
+    `require_note_in_time` valen para las dos; la API expone `deadline`.
+  - **Excepciones legales (investigado el 25/11/2026)**: la Normativa no las define (anexo IV, campo 17,
+    regla 2c, pág. 104). La única excepción en la ley es la **Ley de IVA, art. 62, numeral 1, literal a),
+    inciso segundo (reforma 14)**: en las devoluciones de **medicamentos y especialidades farmacéuticas
+    perecederos** para consumo humano el plazo «podrá ser ampliado hasta dos años», con registro detallado
+    por lote y vencimiento, la NC que cite el lote y el acta de destrucción de la autoridad sanitaria. El CT
+    art. 111, inciso tercero, da a las exportaciones el mismo plazo de tres meses (no es excepción). No aplica a
+    Grupo Lorena: el ERP conserva los 3 meses. Si una empresa del grupo vende medicamentos, se agrega como
+    opción por empresa (plazo de 2 años solo en NC de devolución de esos productos, con lote).
 - **Una nota relaciona un solo CCF**. La normativa admite hasta 50; se deja para después.
 - Un CCF con una nota vigente no se invalida ni se corrige (Manual Funcional, regla 633: primero se invalida
   la nota). Una nota se anula (tipo 2) y no se corrige.
@@ -436,7 +443,22 @@ Decisiones (24/11/2026, el usuario dijo «continúa» con PR #58 en develop, sob
   Si la empresa habilitó el 04 y el origen no tiene establecimiento con punto de venta, el despacho se rechaza
   (`transfer_remission_issuer_missing`) con el motivo a la vista.
 - **Valores**: cada línea al costo promedio del kardex al despachar, como gravada (la NR no causa IVA; el tributo
-  20 queda informativo en el resumen). Queda anotado para que lo confirme el contador.
+  20 queda informativo en el resumen).
+  - **Investigado el 25/11/2026: se confirma.**
+    - La ley exige que la NR lleve «el precio unitario y cantidad de los bienes» (CT art. 114 c) num. 2; para la
+      electrónica, Decreto 487, literal d) romano V), pero **no dice qué precio** usar en un traslado.
+    - Un traslado entre establecimientos propios **no es hecho generador**: no transfiere dominio (Ley IVA
+      art. 4) ni es retiro (art. 11; el precio de venta al público del art. 48 c) es solo para retiros), y el CT
+      art. 109 inciso 4 lo nombra «traslados que no constituyan transferencias». El valor es referencial: el
+      costo es el que tienen los bienes en el inventario y no inventa un margen que no existe.
+    - La Normativa 2.0, anexo IV, fija la forma: precios **sin IVA** (campo 87, regla 2); si hay ventas
+      gravadas el **valor del tributo es obligatorio** (campo 138, regla 2) y el **monto total = subtotal +
+      tributo** (campo 150, regla 2), para FE, CCFE y NRE. Eso es lo que ya hace el servicio.
+    - No se declara: los libros de IVA y los anexos del F-07 toman facturas, CCF y notas, no la NR.
+    - Cuidado: un DTE rechazado o transitorio sin sello se presume ingreso gravado (Normativa 10.1 y 10.2, CT
+      art. 199 inciso segundo). Una NR rechazada debe emitirse de nuevo pronto (la tarjeta lo ofrece).
+    - Sigue siendo una decisión del contribuyente: si el contador prefiere precio de venta, solo cambia
+      `unit_cost` en `TransferRemissionUseCases._lines`.
 - **Transporte**: placa, vehículo y conductor en `observaciones` del resumen (el esquema no trae transporte).
 - El despacho y la NR pendiente se guardan en la misma transacción; el trabajador la transmite. Si no se pudo
   crear, no hay despacho. Rechazada: el traslado ofrece «Emitir de nuevo» con los datos del despacho.
