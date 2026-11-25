@@ -184,8 +184,7 @@ class SalesInvoiceUseCases:
     async def _issuer(
         self, order: Order, point_of_sale_id: uuid.UUID | None
     ) -> tuple[IssuerSnapshot, Establishment, PointOfSale, OperatingMode]:
-        company_id = order.company_id
-        establishment = await self._establishment(company_id, order.branch_id)
+        establishment = await self._establishment(order.company_id, order.branch_id)
         if establishment is None:
             raise BusinessRuleError(
                 "La sucursal del pedido no tiene un establecimiento fiscal activo. Créalo en "
@@ -193,6 +192,20 @@ class SalesInvoiceUseCases:
                 code="sales_invoice_establishment_missing",
             )
         point = self._point_of_sale(establishment, point_of_sale_id)
+        return await self.issuer_at(order.company_id, establishment, point)
+
+    async def establishment_for(
+        self, company_id: uuid.UUID, branch_id: uuid.UUID
+    ) -> Establishment | None:
+        """El establecimiento fiscal activo de la sucursal, o ``None``."""
+
+        return await self._establishment(company_id, branch_id)
+
+    async def issuer_at(
+        self, company_id: uuid.UUID, establishment: Establishment, point: PointOfSale
+    ) -> tuple[IssuerSnapshot, Establishment, PointOfSale, OperatingMode]:
+        """Emisor de la empresa en ese establecimiento y punto de venta (también la NR, V4d)."""
+
         identity = await self._fiscal.company_identity(company_id)
         profile = await self._fiscal.get_profile(company_id)
         activities = await self._fiscal.list_activities(company_id)

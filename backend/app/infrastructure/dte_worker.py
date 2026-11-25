@@ -54,6 +54,8 @@ from app.domain.entities.sales_fiscal_notes import (
     note_totals,
 )
 from app.domain.entities.sales_order import OrderStatus
+from app.domain.entities.transfer_remission import REMISSION
+from app.domain.entities.transfer_remission import dte_differences as remission_differences
 from app.domain.ports.dte_service import (
     DteService,
     DteServiceError,
@@ -122,7 +124,8 @@ async def _audit(session: AsyncSession, document: FiscalDocument, action: str) -
         resource_id=str(document.id),
         after_state={
             "status": document.status.value,
-            "sale_id": str(document.sale_id),
+            "sale_id": str(document.sale_id) if document.sale_id else None,
+            "transfer_id": str(document.transfer_id) if document.transfer_id else None,
             "document_type": document.document_type,
             "control_number": document.control_number,
             "generation_code": str(document.generation_code) if document.generation_code else None,
@@ -150,7 +153,8 @@ async def _enabled_types(scope: SessionScope, company_id: uuid.UUID) -> list[str
     return sorted(
         item.document_type
         for item in settings_list
-        if item.is_enabled and item.document_type in (*INVOICEABLE_DOCUMENTS, *NOTE_TYPES)
+        if item.is_enabled
+        and item.document_type in (*INVOICEABLE_DOCUMENTS, *NOTE_TYPES, REMISSION)
     )
 
 
@@ -225,6 +229,8 @@ async def _differences(
 ) -> list[str]:
     if document.document_type in NOTE_TYPES:
         return await _note_differences(scope, document, dte_json)
+    if document.document_type == REMISSION:
+        return remission_differences(dte_json, document.total)
     totals = await _totals(scope, document)
     return dte_differences(dte_json, totals) if totals is not None else []
 

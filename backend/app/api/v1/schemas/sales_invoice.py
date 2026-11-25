@@ -122,3 +122,10 @@ class FiscalEmailHistoryOut(BaseModel):
     """Si el servidor tiene configurado el correo saliente."""
     customer_email: str | None
     items: list[FiscalEmailOut]
+
+
+class TransferRemissionOut(BaseModel):
+    """Nota de remisión de un traslado: si la empresa la usa y su documento vigente o el último."""
+
+    enabled: bool
+    document: FiscalDocumentOut | None

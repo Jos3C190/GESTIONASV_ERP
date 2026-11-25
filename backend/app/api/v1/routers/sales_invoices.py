@@ -246,7 +246,7 @@ async def list_fiscal_documents(
     branch_id: uuid.UUID | None = None,
     sale_id: uuid.UUID | None = None,
     status: Annotated[str | None, Query(pattern=_STATUS_PATTERN)] = None,
-    document_type: Annotated[str | None, Query(pattern="^(01|03|05|06)$")] = None,
+    document_type: Annotated[str | None, Query(pattern="^(01|03|04|05|06)$")] = None,
     q: Annotated[str | None, Query(max_length=80)] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 25,

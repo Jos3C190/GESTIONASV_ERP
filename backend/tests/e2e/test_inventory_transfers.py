@@ -81,6 +81,7 @@ async def _committed_transfer_context(
             actor_id=context.actor_id,
             origin_id=context.origin.id,
             destination_id=context.destination.id,
+            origin_branch_id=context.origin.branch_id,
             destination_branch_id=context.destination.branch_id,
             destination_location_id=context.destination_location.id,
             handling_unit_id=context.handling_unit_id,
