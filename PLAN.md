@@ -788,7 +788,13 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V5b paso 5 (documentación, verificación y PR); paso 4 hecho (`CreditPanel.svelte` en el estado de cuenta; autorizar crédito con motivo en `SaleDetail.svelte`); paso 3 hecho (`/sales/receivables/customers/{id}/credit|notes|block|unblock|statement.pdf|send-statement`; e2e `test_sales_collection.py`; V5a ya en develop por #63 y mezclado en la rama); pasos 1 y 2 hechos (autorizar acepta `sales_discounts:authorize` o `sales_credit:authorize` y cada motivo pide su permiso; e2e `test_sales_credit.py`) (0141 en desarrollo, `app/domain/entities/sales_credit.py`). V5a en PR #63 (el usuario dijo «Yes, start V5b» el 25/11/2026).
+- **Paso en curso**: V5b paso 5 (batería, QA y PR). Pasos 1 a 4 hechos y documentación escrita. V5a en develop (#63),
+  mezclado en la rama. Hecho en V5b: motivos de crédito al confirmar (cupo, mora, bloqueo), autorizar con permiso y
+  nota, reevaluación al facturar y «Autorizar crédito para facturar» sobre un pedido confirmado (`/sales/{id}/authorize-credit`),
+  gestión de cobro en el estado de cuenta (`CreditPanel.svelte`).
+- **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
+  los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó
+  intacta. Si vuelve a pasar: revisar `%LOCALAPPDATA%\Temp` (WSL deja un swap de ~3 GB por arranque).
 - **Investigación del 25/11/2026** (el usuario pidió resolver con investigación los dos puntos para el contador):
   - **Retorno en el anexo 2: se mantiene como fila negativa** con la fecha de la factura. La Normativa 2.0
     (13.3.2 a) da al retorno el efecto de disminuir la venta y el débito de la FE sin invalidarla; el manual F-07
