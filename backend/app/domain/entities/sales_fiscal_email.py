@@ -290,6 +290,96 @@ def compose_invalidation(content: InvalidationEmailContent) -> ComposedEmail:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class ReturnEmailContent:
+    """Entrega al cliente del evento de retorno de su factura (bloque V4d2)."""
+
+    company_name: str
+    invoice_control_number: str
+    generation_code: str
+    issued_at: datetime
+    customer_name: str
+    simulated: bool
+    total: str
+    reason: str
+    reply_to: str | None = None
+    privacy_notice: PrivacyNoticeText | None = None
+
+
+def compose_return(content: ReturnEmailContent) -> ComposedEmail:
+    """El evento de retorno se entrega al receptor de la factura (Manual Funcional V2.0, X)."""
+
+    subject = (
+        f"Evento de retorno de la factura {content.invoice_control_number} — {content.company_name}"
+    )
+    if content.simulated:
+        subject = f"[{SIMULATED_MARK}] {subject}"
+    summary = (
+        f"{content.company_name} le informa que registró ante el Ministerio de Hacienda el "
+        f"retorno de bienes de su factura número de control {content.invoice_control_number} "
+        f"el {_day(content.issued_at)}, por {content.total}."
+    )
+    facts = [
+        ("Factura", content.invoice_control_number),
+        ("Código de generación del evento", content.generation_code.upper()),
+        ("Fecha", _day(content.issued_at)),
+        ("Monto devuelto", content.total),
+        ("Motivo", content.reason),
+    ]
+    reply = (
+        f"Si tiene dudas, responda a este correo ({content.reply_to})."
+        if content.reply_to
+        else "Si tiene dudas, comuníquese con nosotros."
+    )
+    lines = [f"Estimado/a {content.customer_name}:", ""]
+    if content.simulated:
+        lines += [f"*** {SIMULATED_MARK}: aviso de prueba, no se envió a Hacienda. ***", ""]
+    lines += [
+        summary,
+        "",
+        *(f"{label}: {value}" for label, value in facts),
+        "",
+        "Adjuntamos el evento de retorno.",
+        "",
+        reply,
+    ]
+    if content.privacy_notice:
+        lines += ["", "—", content.privacy_notice.title, content.privacy_notice.body]
+    e = html.escape
+    rows = "".join(
+        f"<tr><td style='padding:4px 12px 4px 0;color:#555'>{e(label)}</td>"
+        f"<td style='padding:4px 0'><strong>{e(value)}</strong></td></tr>"
+        for label, value in facts
+    )
+    banner = (
+        f"<p style='padding:8px 12px;background:#fff4e5;border:1px solid #f0b46c;"
+        f"color:#8a4b00'><strong>{e(SIMULATED_MARK)}</strong>: aviso de prueba, no se envió a "
+        "Hacienda.</p>"
+        if content.simulated
+        else ""
+    )
+    notice = (
+        f"<hr><p style='font-size:12px;color:#666'><strong>{e(content.privacy_notice.title)}"
+        f"</strong></p><p style='font-size:12px;color:#666;white-space:pre-wrap'>"
+        f"{e(content.privacy_notice.body)}</p>"
+        if content.privacy_notice
+        else ""
+    )
+    body_html = (
+        "<div style='font-family:Arial,sans-serif;font-size:14px;color:#222'>"
+        f"<p>Estimado/a {e(content.customer_name)}:</p>{banner}<p>{e(summary)}</p>"
+        f"<table>{rows}</table><p>Adjuntamos el evento de retorno.</p>"
+        f"<p>{e(reply)}</p>{notice}</div>"
+    )
+    return ComposedEmail(
+        subject=subject,
+        text="\n".join(lines) + "\n",
+        html=body_html,
+        pdf_filename=f"retorno-{content.invoice_control_number}.pdf",
+        json_filename=f"retorno-{content.invoice_control_number}.json",
+    )
+
+
 def require_sendable(status: str) -> None:
     """Se envía un documento emitido, simulado o generado en contingencia (V4a)."""
 

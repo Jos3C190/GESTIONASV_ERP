@@ -40,6 +40,7 @@ from app.domain.ports.sales_fiscal_invalidation_repository import (
     SalesFiscalInvalidationRepository,
 )
 from app.domain.ports.sales_fiscal_repository import FiscalDocument, SalesFiscalRepository
+from app.domain.ports.sales_fiscal_return_repository import SalesFiscalReturnRepository
 from app.domain.ports.sales_order_repository import SalesOrderRepository
 
 CORRECTION_REASON = "Error en la información del documento; se reemplaza por uno corregido."
@@ -68,8 +69,10 @@ class FiscalInvalidationUseCases:
         orders: SalesOrderRepository,
         dte: DteService | None,
         remissions: TransferRemissionUseCases | None = None,
+        returns: SalesFiscalReturnRepository | None = None,
     ) -> None:
         self._remissions = remissions
+        self._returns = returns
         self._documents = documents
         self._invalidations = invalidations
         self._invoices = invoices
@@ -113,6 +116,15 @@ class FiscalInvalidationUseCases:
     async def _require_without_notes(self, document: FiscalDocument) -> None:
         notes = await self._documents.notes_for(document.company_id, document.id)
         require_without_vigent_notes(sum(1 for n in notes if n.status in VIGENT_STATUSES))
+        # Una factura con un evento de retorno vigente no se invalida (Manual Funcional VII, nota 3).
+        if self._returns is not None and await self._returns.vigent_count(
+            document.company_id, document.id
+        ):
+            raise BusinessRuleError(
+                "Esta factura tiene eventos de retorno vigentes: anúlalos antes de anularla o "
+                "corregirla.",
+                code="sales_invoice_has_returns",
+            )
 
     async def _require_in_time(self, document: FiscalDocument) -> None:
         window = await self.window(document.company_id, document.id)

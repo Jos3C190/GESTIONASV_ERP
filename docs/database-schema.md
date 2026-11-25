@@ -1333,3 +1333,25 @@ Revision `0133` (revises `0132`), block V4c.
 
 **Downgrade** refuses while remission notes exist. Covered by
 `backend/tests/integration/test_sales_transfer_remission_migration.py`.
+
+## 46. Return events (0138)
+
+Revision `0138` (revises `0137`), block V4d2.
+
+- `sales_fiscal_returns`: company, the invoice (`document_id`, composite FK), `reason`, `status`
+  (`pending`, `issued`, `simulated`, `rejected`, `failed`, `invalidated`), `idempotency_key`,
+  `request_payload`, `total` (with VAT), `generation_code`, `seal`, `dte_json`, the PDF and JSON
+  object keys, error fields, `issued_at` and `created_by_id`. The annulment lives in the same row
+  (`annul_status`, `annul_idempotency_key`, `annul_attempts`, requester and responsible,
+  `annul_generation_code`, `annul_seal`, errors, `annul_requested_by_id`, `annul_requested_at`,
+  `annulled_at`), checked by `ck_sales_fiscal_returns_status` and `ck_sales_fiscal_returns_annul`.
+- `sales_fiscal_return_lines`: `return_id`, `line_number`, `invoice_line_number`, `nature`,
+  `description`, `quantity`, `amount` (with VAT) and `vat`. Vigent returns give each invoice line
+  its balance.
+- `sales_fiscal_document_emails.return_id` (FK): the email that sends a return. An email belongs to
+  an invalidation or to a return, never both; `uq_..._auto` no longer covers return emails and
+  `uq_..._return` allows one per return.
+- Permission `sales_invoices:returns`, granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while return events exist. Covered by
+`backend/tests/integration/test_sales_fiscal_returns_migration.py`.

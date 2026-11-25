@@ -2375,3 +2375,40 @@ Error codes: `transfer_remission_issuer_missing`, `transfer_remission_receiver_i
 `transfer_remission_lines_missing`, `transfer_remission_already_issued`, `transfer_remission_not_reissuable`,
 `transfer_remission_disabled`, `transfer_remission_not_annullable`,
 `transfer_remission_transfer_not_dispatched` (404), `sales_invoice_not_an_order_document`.
+
+## Return events (revision 0138, block V4d2)
+
+A return event (evento de retorno, CAT-002 type 18; Normativa 2.0 rule 13.3) records goods a
+consumer gives back on a sealed invoice (`01`, issued or simulated, not being replaced and
+without a pending invalidation). It is built from the invoice as it was sealed: issuer, receiver
+and the related document come from the stored DTE. It is fiscal only: it moves no stock and no
+money. The event stays `pending` and `dte-worker` issues it through
+`POST /api/dte/{codigo}/retorno`; when it is accepted the customer gets it by email with its PDF
+and JSON.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/fiscal-documents/{id}/returns` | `sales_invoices:read` | Invoice lines with `net`, `returned`, `remaining_quantity` and `remaining_amount`; `deadline`, `withholding` (whether the invoice withheld VAT), `blocker` (why a return cannot be registered now) and the `returns` with their lines. |
+| POST | `/sales/fiscal-documents/{id}/returns` | `sales_invoices:returns` | `reason` (5–300) and `lines`: `{invoice_line_number, quantity}`. Each line at most once, within its balance; the last units take the exact remaining amount. `202`. |
+| POST | `/sales/fiscal-returns/{id}/annul` | `sales_invoices:returns` | `requester` (`name`, `document_type`, `document_number`). Annuls the event with an invalidation type 2 (no replacement); the branch responsible signs it. `202`. |
+| GET | `/sales/fiscal-returns/{id}/json` | `sales_invoices:read` | The event as transmitted. |
+| GET | `/sales/fiscal-returns/{id}/pdf` | `sales_invoices:read` | Graphic representation («EVENTO DE RETORNO»). |
+
+Amounts include VAT (13/113 of the taxed amount is shown as `vat`). If the invoice withheld VAT,
+the event repeats 1 % of its taxed base. The deadline is three months from the invoice
+generation date, or two years when the issuer's activity sells medicines (01282, 21001, 46484,
+47721; VAT Law art. 62). Return statuses: `pending`, `issued`, `simulated`, `rejected`,
+`failed`, `invalidated`; `annul_status`: `pending`, `accepted`, `rejected`, `failed`.
+
+An invoice with vigent returns (pending, issued or simulated) cannot be invalidated or corrected
+(`sales_invoice_has_returns`): annul its returns first.
+
+Audited: `ISSUE_FISCAL_RETURN`, `ANNUL_FISCAL_RETURN`, and from the worker `FISCAL_RETURN_ISSUED`,
+`FISCAL_RETURN_REJECTED`, `FISCAL_RETURN_FAILED`, `FISCAL_RETURN_ANNULLED`,
+`FISCAL_RETURN_ANNUL_REJECTED` and `FISCAL_RETURN_ANNUL_FAILED`. Error codes (`422`):
+`sales_return_document_invalid`, `sales_return_document_not_issued`,
+`sales_return_invoice_not_sealed`, `sales_return_invalidation_pending`,
+`sales_return_deadline_passed`, `sales_return_reason_required`, `sales_return_lines_required`,
+`sales_return_line_invalid`, `sales_return_line_repeated`, `sales_return_quantity_exceeded`,
+`sales_return_amount_exceeded`, `sales_return_not_annullable`, `sales_invoice_has_returns`;
+`sales_return_not_found` (`404`).

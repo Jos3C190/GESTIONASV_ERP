@@ -174,6 +174,8 @@ class FiscalDocumentEmail:
     requested_by_name: str | None = None
     invalidation_id: uuid.UUID | None = None
     """Aviso de una invalidación aceptada (V4b), en lugar del documento."""
+    return_id: uuid.UUID | None = None
+    """Entrega de un evento de retorno de la factura (V4d2), en lugar del documento."""
     sent_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

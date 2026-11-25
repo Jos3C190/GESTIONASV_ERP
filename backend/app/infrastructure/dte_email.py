@@ -28,8 +28,10 @@ from app.domain.entities.sales_fiscal_email import (
     FiscalEmailContent,
     InvalidationEmailContent,
     PrivacyNoticeText,
+    ReturnEmailContent,
     compose,
     compose_invalidation,
+    compose_return,
     customer_recipients,
 )
 from app.domain.ports.company_email_repository import StoredEmailSettings
@@ -183,6 +185,95 @@ async def queue_invalidation_email(
             )
         )
     return email.id
+
+
+async def queue_return_email(
+    scope: SessionScope, document: FiscalDocument, return_id: uuid.UUID
+) -> uuid.UUID | None:
+    """Crea el envío automático de un evento de retorno emitido (V4d2); ``None`` si no corresponde."""
+
+    recipients = customer_recipients(document.customer_email)
+    if not recipients or not await email_available(scope, document.company_id):
+        return None
+    async with scope() as session:
+        repo = SqlAlchemySalesFiscalEmailRepository(session)
+        if await repo.return_email_exists(document.company_id, return_id):
+            return None
+        email = await repo.create(
+            FiscalDocumentEmail(
+                id=uuid.uuid4(),
+                company_id=document.company_id,
+                document_id=document.id,
+                recipients=recipients,
+                origin=EmailOrigin.AUTO.value,
+                status=EmailStatus.PENDING.value,
+                return_id=return_id,
+            )
+        )
+    return email.id
+
+
+async def _return_message(
+    scope: SessionScope,
+    document: FiscalDocument,
+    email: FiscalDocumentEmail,
+    client: DteService | None,
+    sender_name: str | None,
+) -> OutgoingEmail:
+    from app.infrastructure.repositories.sales_fiscal_return_repository import (
+        SqlAlchemySalesFiscalReturnRepository,
+    )
+
+    assert email.return_id is not None
+    async with scope() as session:
+        item = await SqlAlchemySalesFiscalReturnRepository(session).get(
+            document.company_id, email.return_id
+        )
+        notice = await SqlAlchemyPrivacyRepository(session).current_notice(document.company_id)
+    if item is None or item.generation_code is None or client is None:
+        raise EmailDeliveryError(
+            "El evento de retorno no está disponible.",
+            code="email_pdf_missing",
+            transient=client is not None,
+        )
+    nit = str(document.issuer_snapshot["nit"])
+    code = str(item.generation_code).upper()
+    pdf = await client.invalidation_pdf(nit, code)
+    issuer = document.issuer_snapshot
+    company = str(issuer.get("tradeName") or issuer.get("legalName") or "")
+    reply_to = issuer.get("email")
+    composed = compose_return(
+        ReturnEmailContent(
+            company_name=company,
+            invoice_control_number=document.control_number or str(document.id),
+            generation_code=code,
+            issued_at=item.issued_at or datetime.now(UTC),
+            customer_name=document.customer_name or "cliente",
+            simulated=document.mode == "simulated",
+            total=f"${item.total:,.2f}",
+            reason=item.reason,
+            reply_to=str(reply_to) if reply_to else None,
+            privacy_notice=PrivacyNoticeText(notice.title, notice.body) if notice else None,
+        )
+    )
+    attachments = [EmailAttachment(composed.pdf_filename, "application/pdf", pdf)]
+    if item.dte_json:
+        attachments.append(
+            EmailAttachment(
+                composed.json_filename,
+                "application/json",
+                json.dumps(item.dte_json, ensure_ascii=False).encode("utf-8"),
+            )
+        )
+    return OutgoingEmail(
+        sender_name=sender_name or company,
+        recipients=email.recipients,
+        subject=composed.subject,
+        text=composed.text,
+        html=composed.html,
+        reply_to=str(reply_to) if reply_to else None,
+        attachments=tuple(attachments),
+    )
 
 
 async def _invalidation_message(
@@ -357,6 +448,8 @@ async def process_fiscal_email(
         from_name = stored.settings.from_name if stored else None
         if email.invalidation_id is not None:
             message = await _invalidation_message(scope, document, email, client, from_name)
+        elif email.return_id is not None:
+            message = await _return_message(scope, document, email, client, from_name)
         else:
             pdf = await _pdf(document, storage, client)
             message = await _message(scope, document, email, pdf, from_name)

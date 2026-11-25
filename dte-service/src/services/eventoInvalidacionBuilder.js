@@ -16,8 +16,12 @@ const { TIPO_ANULACION, TIPO_DOCUMENTO_IDENTIFICACION } = require('../config/cat
  *   vigente); los códigos de establecimiento y punto de venta MH salen de su
  *   número de control, y el receptor de un CCF se identifica con 36 + NIT.
  * - La "Fecha del Evento" (identificacion.fecEmi) sigue plazosFiscales.js.
+ * - Un Evento de Retorno (18) también se invalida (Manual Funcional VII, «ER»):
+ *   se referencia solo su código de generación, sin número de control y sin
+ *   reemplazo; su emisor trae los códigos MH y el receptor va en "documento".
  */
-const TIPOS_SIN_REEMPLAZO = new Set(['05', '08']);
+const TIPO_EVENTO_RETORNO = '18';
+const TIPOS_SIN_REEMPLAZO = new Set(['05', '08', TIPO_EVENTO_RETORNO]);
 const TIPOS_ANULACION_VALIDOS = new Set(Object.values(TIPO_ANULACION));
 const TIPOS_DOCUMENTO_RESPONSABLE = new Set(Object.values(TIPO_DOCUMENTO_IDENTIFICACION));
 const CODIGO_GENERACION_REGEX = /^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$/;
@@ -54,7 +58,7 @@ function identificacionDe(persona, rol) {
 
 /** Receptor tal como figura en el DTE invalidado (null si la factura no lo detalla). */
 function receptorDelDocumento(dte) {
-  const receptor = dte.receptor ?? dte.sujetoExcluido ?? dte.donante ?? null;
+  const receptor = dte.receptor ?? dte.sujetoExcluido ?? dte.donante ?? dte.documento ?? null;
   const contacto = {
     telefono: textoONull(receptor?.telefono),
     correo: textoONull(receptor?.correo),
@@ -78,25 +82,32 @@ function receptorDelDocumento(dte) {
  * @param {object} p.motivo                  { tipoAnulacion, motivoAnulacion?, responsable, solicitante }
  *   responsable/solicitante = { nombre, tipoDocumento (CAT-022), numeroDocumento }
  * @param {string|null} p.codigoGeneracionReemplazo
+ * @param {object} [p.contactoEmisor]        { telefono, correo }: para un Evento de Retorno, que no los trae.
  * @param {Date} [p.ahora]
  */
-function construirEventoInvalidacion({ dte, selloRecibido, motivo, codigoGeneracionReemplazo = null, ahora } = {}) {
+function construirEventoInvalidacion({ dte, selloRecibido, motivo, codigoGeneracionReemplazo = null, contactoEmisor = null, ahora } = {}) {
   const identificacion = dte?.identificacion;
-  if (!identificacion?.codigoGeneracion || !identificacion.tipoDte || !identificacion.fecEmi || !dte.emisor) {
+  const esRetorno = identificacion?.tipoEvento === TIPO_EVENTO_RETORNO;
+  const tipoDocumento = esRetorno ? TIPO_EVENTO_RETORNO : identificacion?.tipoDte;
+  if (!identificacion?.codigoGeneracion || !tipoDocumento || !identificacion.fecEmi || !dte.emisor) {
     throw errorSolicitud('Se requiere el JSON completo del DTE que se va a invalidar');
   }
   let establecimiento;
-  try {
-    establecimiento = parsearNumeroControl(identificacion.numeroControl);
-  } catch {
-    throw errorSolicitud('El número de control del DTE a invalidar no es válido');
+  if (esRetorno) {
+    establecimiento = { codEstableMH: dte.emisor.codEstableMH, codPuntoVentaMHCompleto: dte.emisor.codPuntoVentaMH };
+  } else {
+    try {
+      establecimiento = parsearNumeroControl(identificacion.numeroControl);
+    } catch {
+      throw errorSolicitud('El número de control del DTE a invalidar no es válido');
+    }
   }
   if (typeof selloRecibido !== 'string' || selloRecibido.trim().length !== 40) {
     throw errorSolicitud('El DTE a invalidar no tiene un sello de recepción válido');
   }
   if (!motivo || typeof motivo !== 'object') throw errorSolicitud('Se requiere el motivo de la invalidación');
 
-  const tipoDte = identificacion.tipoDte;
+  const tipoDte = tipoDocumento;
   const tipoAnulacion = Number(motivo.tipoAnulacion);
   if (!TIPOS_ANULACION_VALIDOS.has(tipoAnulacion)) {
     throw errorSolicitud('tipoAnulacion debe ser 1 (error en la información), 2 (rescindir la operación) o 3 (otro)');
@@ -145,14 +156,14 @@ function construirEventoInvalidacion({ dte, selloRecibido, motivo, codigoGenerac
       codEstable: dte.emisor.codEstable ?? null,
       codPuntoVentaMH: establecimiento.codPuntoVentaMHCompleto,
       codPuntoVenta: dte.emisor.codPuntoVenta ?? null,
-      telefono: dte.emisor.telefono,
-      correo: dte.emisor.correo,
+      telefono: contactoEmisor?.telefono ?? dte.emisor.telefono,
+      correo: contactoEmisor?.correo ?? dte.emisor.correo,
     },
     documento: {
       tipoDte,
       codigoGeneracion: identificacion.codigoGeneracion,
       selloRecibido: selloRecibido.trim(),
-      numeroControl: identificacion.numeroControl,
+      numeroControl: esRetorno ? null : identificacion.numeroControl,
       fecEmi: identificacion.fecEmi,
       codigoGeneracionR: reemplazo,
       ...receptorDelDocumento(dte),
@@ -172,4 +183,4 @@ function construirEventoInvalidacion({ dte, selloRecibido, motivo, codigoGenerac
   return { evento, codigoGeneracion, requiereReemplazo };
 }
 
-module.exports = { construirEventoInvalidacion, TIPO_ANULACION, TIPOS_SIN_REEMPLAZO };
+module.exports = { construirEventoInvalidacion, TIPO_ANULACION, TIPOS_SIN_REEMPLAZO, TIPO_EVENTO_RETORNO };

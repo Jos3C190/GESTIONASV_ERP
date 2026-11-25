@@ -11,6 +11,7 @@ const HEADER = 'x-dte-simulation-scenario';
 const RUTAS_CON_ESCENARIO = [
   /^\/api\/dte\/(v2\/)?(factura|ccf|nota-credito|nota-debito|nota-remision)$/,
   /^\/api\/dte\/simulacion\/[^/]+\/anular$/,
+  /^\/api\/dte\/[^/]+\/retorno$/,
 ];
 
 /**

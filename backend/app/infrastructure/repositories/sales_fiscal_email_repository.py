@@ -48,6 +48,7 @@ def _entity(row: Any) -> FiscalDocumentEmail:
         requested_by_id=model.requested_by_id,
         requested_by_name=full or username,
         invalidation_id=model.invalidation_id,
+        return_id=model.return_id,
         sent_at=model.sent_at,
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -77,6 +78,7 @@ class SqlAlchemySalesFiscalEmailRepository:
                 status=email.status,
                 requested_by_id=email.requested_by_id,
                 invalidation_id=email.invalidation_id,
+                return_id=email.return_id,
             )
         )
         await self._session.flush()
@@ -89,6 +91,17 @@ class SqlAlchemySalesFiscalEmailRepository:
                 SalesFiscalDocumentEmailModel.document_id == document_id,
                 SalesFiscalDocumentEmailModel.origin == EmailOrigin.AUTO.value,
                 SalesFiscalDocumentEmailModel.invalidation_id.is_(None),
+                SalesFiscalDocumentEmailModel.return_id.is_(None),
+            )
+        )
+        return found is not None
+
+    async def return_email_exists(self, company_id: uuid.UUID, return_id: uuid.UUID) -> bool:
+        found = await self._session.scalar(
+            select(SalesFiscalDocumentEmailModel.id).where(
+                SalesFiscalDocumentEmailModel.company_id == company_id,
+                SalesFiscalDocumentEmailModel.return_id == return_id,
+                SalesFiscalDocumentEmailModel.origin == EmailOrigin.AUTO.value,
             )
         )
         return found is not None
