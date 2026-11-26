@@ -965,13 +965,50 @@ Pasos:
 - [x] **Paso 4: documentación, verificación y PR.** `manual-analisis-comercial.md`, `api.md`, esquema §53; unitarias,
   migración y e2e del análisis, RBAC y unitarias (1515), vitest completo (1256); QA: análisis de noviembre y Dashboard.
 
-### V9b — Datos de demostración (se detalla al terminar V9a)
+### V9b — Datos de demostración (rama `feature/ventas-v9b-demo`)
+
+Decisiones del usuario (26/11/2026):
+- **Mes anterior completo, simulado**: la siembra recorre cada día hábil del mes anterior con el reloj del proceso movido
+  a ese día (solo desarrollo, solo con el emisor simulado), para que facturas, entregas, kardex, cobros y libros queden
+  con fechas coherentes.
+- **Volumen mediano**: unas 150 ventas (~5 por día hábil) entre clientes, con cobros (algunas a crédito), ~5
+  devoluciones con su nota o retorno, un cambio de producto y metas por sucursal.
+- **Fraccionar pallets en cajas**: al inicio del mes la siembra fracciona pallets de la bodega central en unidades
+  pequeñas (medir, etiquetar y liberar, como en bodega) para que cada venta salga entregada del kardex.
+
+Hechos que cambian el diseño:
+- La fecha del DTE (`fecEmi`, `horEmi`) y el año del número de control los pone el **servicio DTE** con su propio
+  reloj, no el ERP. El servicio ya tiene un reloj reemplazable (`usarReloj` en `utils/fechaHoraSV.js`).
+- Solo la Matriz tiene existencias, en pallets grandes; las entregas solo despachan unidades completas.
+- La siembra existente (`seed/seed_data.py`) tiene pasos opcionales con marca y llama a la API en proceso como los
+  empleados sembrados (`seed_grupo_lorena_operations.py`, referencias `GLOPS-` para retomar sin duplicar).
+
+Diseño:
+- **Reloj de demostración en el servicio DTE**: encabezado `X-DTE-Demo-Clock` (instante ISO). Se acepta solo si
+  `DTE_DEMO_CLOCK_ENABLED=true` (solo en `compose.yaml` de desarrollo) y el despliegue es simulado; si no, se rechaza
+  (falla cerrado). Con él, `ahora()` devuelve ese instante durante la solicitud (`AsyncLocalStorage`).
+- **ERP**: el cliente DTE manda el encabezado solo si la siembra activó el reloj de demostración (variable de
+  contexto); en uso normal nunca lo envía.
+- **Siembra `seed/seed_grupo_lorena_sales.py`** (paso opcional `SEED_DEMO_SALES`, nunca en producción; también
+  `python -m seed.seed_grupo_lorena_sales`): con `time-machine` (dependencia de desarrollo) recorre los días hábiles
+  del mes anterior; prepara cajas, crea pedidos que salen al confirmar, factura (simulado), cobra, registra
+  devoluciones y un cambio, y define metas. Cada documento lleva `Ref. GLVTA-…`; una nueva corrida continúa sin
+  duplicar.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [ ] **Paso 1: reloj de demostración.** Servicio DTE (middleware, prueba de node) y ERP (variable de contexto y
+  encabezado, prueba unitaria). Verificar: `run-tests.sh dte` y pytest.
+- [ ] **Paso 2: siembra del mes.** Preparación de cajas, ventas por día, cobros, devoluciones, cambio y metas.
+  Verificar: corrida local completa y repetida (no duplica).
+- [ ] **Paso 3: verificación.** Análisis y libros de IVA del mes anterior en el navegador; kardex con salidas.
+- [ ] **Paso 4: documentación y PR.**
 
 ### V9c — Manual consolidado y prueba integral (se detalla al terminar V9b)
 
 ## Estado actual
 
-- **Paso en curso**: V9a en PR; sigue V9b (datos de demostración, se detalla al empezar).
+- **Paso en curso**: V9b paso 1 (reloj de demostración en el servicio DTE y en el ERP). V9a en PR #69.
 - **V8a**: en develop (#65); pasos 1 a 5 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
 - **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
   los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó
