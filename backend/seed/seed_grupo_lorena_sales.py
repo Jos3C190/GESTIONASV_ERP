@@ -492,6 +492,10 @@ async def load_catalog(runtime: Runtime) -> Catalog:
     return Catalog(hq.id, warehouse.id, customers, products, units, default.id)
 
 
+def customer_by_id(catalog: Catalog, customer_id: Any) -> Any:
+    return next(row for row in catalog.customers.values() if row.id == customer_id)
+
+
 def customer_for(catalog: Catalog, code: str) -> Any:
     for key, row in catalog.customers.items():
         if key.startswith(code):
@@ -755,7 +759,9 @@ async def run_order(runtime: Runtime, catalog: Catalog, plan: OrderPlan) -> UUID
         )
         runtime.report.add("orders")
     else:
+        # Una corrida anterior pudo planear otro cliente para esta referencia: manda el pedido.
         order = await runtime.call("GET", f"/sales/{found.id}")
+        customer = customer_by_id(catalog, found.customer_id)
     if order["status"] == "draft":
         order = await runtime.call(
             "POST", f"/sales/{order['id']}/confirm", json={"expected_version": order["version"]}
@@ -955,11 +961,13 @@ async def collect_credit(
     """Cobra las ventas a crédito que vencen ``day`` (si el cliente paga a tiempo)."""
 
     for plan in plans:
-        customer = customer_for(catalog, plan.customer)
+        order = await existing_order(runtime, plan.ref)
+        if order is None:
+            continue
+        customer = customer_by_id(catalog, order.customer_id)
         if customer.credit_days == 0 or plan.day + timedelta(days=customer.credit_days) != day:
             continue
-        order = await existing_order(runtime, plan.ref)
-        document = await active_document(runtime, order.id) if order else None
+        document = await active_document(runtime, order.id)
         if document is not None:
             await collect(runtime, catalog, customer, document.id, day, f"{plan.ref}-RC")
 
@@ -1010,6 +1018,42 @@ async def _box_targets(runtime: Runtime, catalog: Catalog) -> dict[str, int]:
         total = sum((unit.quantity_base for unit in units), D("0"))
         target[sku] = min(MAX_BOXES, int(total / pack * STOCK_SHARE))
     return target
+
+
+async def _month_boxes(runtime: Runtime, catalog: Catalog, first: date) -> dict[str, int] | None:
+    """Si el mes ya empezó, las cajas con que se planeó: las disponibles más las ya entregadas.
+
+    Así una nueva corrida reconstruye el mismo presupuesto y no fracciona más pallets.
+    """
+
+    prefix = f"%Ref. {REF}-{first:%Y%m}%"
+    started = await runtime.rows(
+        "SELECT 1 FROM sales WHERE company_id = :c AND notes LIKE :ref LIMIT 1",
+        c=COMPANY_ID,
+        ref=prefix,
+    )
+    if not started:
+        return None
+    boxes: dict[str, int] = {}
+    for sku, pack in PACKS.items():
+        if sku not in catalog.products:
+            continue
+        units = await available_boxes(runtime, catalog, sku)
+        [delivered] = await runtime.rows(
+            "SELECT coalesce(sum(a.quantity_base), 0) AS quantity "
+            "FROM sales_delivery_allocations a "
+            "JOIN sales_delivery_lines dl ON dl.company_id = a.company_id AND dl.id = a.delivery_line_id "
+            "JOIN sales_deliveries dv ON dv.company_id = dl.company_id AND dv.id = dl.delivery_id "
+            "JOIN sales s ON s.company_id = dl.company_id AND s.id = dl.sale_id "
+            "WHERE s.company_id = :c AND s.notes LIKE :ref AND dv.status = 'confirmed' "
+            "AND dl.inventory_item_id = :item",
+            c=COMPANY_ID,
+            ref=prefix,
+            item=catalog.products[sku].item_id,
+        )
+        on_hand = sum(1 for unit in units if unit.quantity_base == pack)
+        boxes[sku] = on_hand + int(D(delivered.quantity) / pack)
+    return boxes
 
 
 async def _run_month(
@@ -1067,10 +1111,12 @@ async def seed() -> Report:
             await ensure_month_prices(runtime, first)
             with on_day(first, time(7)):
                 catalog = await load_catalog(runtime)
-                target = await _box_targets(runtime, catalog)
+                boxes = await _month_boxes(runtime, catalog, first)
+                target = await _box_targets(runtime, catalog) if boxes is None else {}
             with capture_queues(runtime):
-                with on_day(first, time(7, 15)):
-                    boxes = await prepare_boxes(runtime, catalog, target)
+                if boxes is None:
+                    with on_day(first, time(7, 15)):
+                        boxes = await prepare_boxes(runtime, catalog, target)
                 plan = build_plan(days, boxes, random.Random(SEED))
                 await _run_month(runtime, catalog, days, plan)
                 with on_day(days[-1], time(18)):
