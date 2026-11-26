@@ -11,6 +11,7 @@ const catalogosRoutes = require('./routes/catalogos.routes');
 const apiKeyAuth = require('./middleware/apiKeyAuth');
 const rateLimiter = require('./middleware/rateLimiter');
 const { rechazarEscenarioNoAdmitido } = require('./middleware/escenarioSimulacion');
+const { relojDemostracion } = require('./middleware/relojDemostracion');
 const { contextoEmisor, emisorSolicitud } = require('./middleware/emisorSolicitud');
 
 // En simulated ninguna conexión saliente es legítima (DEC-010, plan §7).
@@ -44,7 +45,7 @@ if (config.dteMode === 'simulated') {
 }
 // Registro de emisores (multiemisor): lo administra el ERP con el alcance `issuers`.
 app.use('/api/emisores', apiKeyAuth, rateLimiter, require('./routes/emisores.routes'));
-app.use('/api/dte', apiKeyAuth, rateLimiter, emisorSolicitud, contextoEmisor, rechazarEscenarioNoAdmitido, dteRoutes);
+app.use('/api/dte', apiKeyAuth, rateLimiter, emisorSolicitud, contextoEmisor, rechazarEscenarioNoAdmitido, relojDemostracion, dteRoutes);
 app.use('/api/catalogos', apiKeyAuth, rateLimiter, catalogosRoutes);
 
 // Manejador de errores centralizado

@@ -51,7 +51,11 @@
   });
 
   const series = $derived(
-    (analysis?.by_day ?? []).map((item) => ({ date: item.key, value: Number(item.net_sales) }))
+    // «AAAA-MM-DD» solo se lee como medianoche UTC (el día anterior en El Salvador): mediodía local.
+    (analysis?.by_day ?? []).map((item) => ({
+      date: `${item.key}T12:00:00`,
+      value: Number(item.net_sales)
+    }))
   );
   const peak = $derived(
     Math.max(1, ...(analysis?.by_hour ?? []).map((item) => Number(item.net_sales)))

@@ -1033,6 +1033,9 @@ class SqlAlchemyInventoryRepository:
                     for reservation_id in expired_reservation_ids
                 ]
             )
+        # La sesión no vuelca sola (autoflush=False): sin esto, el saldo que el mismo movimiento ya
+        # descontó del origen seguía ocupando la ubicación y la unidad se contaba dos veces.
+        await self._session.flush()
         balance_filters = [
             InventoryBalanceModel.company_id == company_id,
             InventoryBalanceModel.warehouse_id == warehouse_id,

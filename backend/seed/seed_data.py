@@ -76,6 +76,12 @@ def demo_operations_enabled() -> bool:
     return _flag("SEED_DEMO_OPERATIONS") and not production
 
 
+def demo_sales_enabled() -> bool:
+    """Un mes de ventas de demostración (V9b): opcional y nunca en producción."""
+    production = os.environ.get("ENVIRONMENT", "development").strip().casefold() == "production"
+    return _flag("SEED_DEMO_SALES") and not production
+
+
 async def _soft_flour_units() -> bool:
     async with session_scope() as session:
         for note in await ensure_soft_flour_units(session):
@@ -126,6 +132,15 @@ async def _operations() -> bool:
     return True
 
 
+async def _sales_month() -> bool:
+    from seed.seed_grupo_lorena_sales import seed as seed_sales
+
+    report = await seed_sales()
+    for error in report.errors:
+        print(f"[seed] ventas de demostración: {error}")
+    return not report.errors
+
+
 @dataclass(frozen=True, slots=True)
 class FollowUp:
     """A step after the base seed; ``run`` returns False to be retried next time."""
@@ -145,6 +160,7 @@ FOLLOW_UPS: tuple[FollowUp, ...] = (
     FollowUp("seed.grupo_lorena.price_lists", "2026-11-16-v2", _price_lists),
     FollowUp("seed.grupo_lorena.sales_discounts", "2026-11-16-v1", _sales_discounts),
     FollowUp("seed.grupo_lorena.operations", "2026-11-14-v1", _operations, demo_operations_enabled),
+    FollowUp("seed.grupo_lorena.sales_month", "2026-11-26-v1", _sales_month, demo_sales_enabled),
 )
 
 
