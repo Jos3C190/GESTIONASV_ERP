@@ -58,6 +58,7 @@ from app.application.sales.deliveries import SalesDeliveryService
 from app.application.sales.return_fiscal import ReturnFiscalAdjuster
 from app.application.sales.returns import SalesReturnService
 from app.application.sales.service import SalesService
+from app.application.sales_analytics import SalesAnalyticsUseCases
 from app.application.sales_discounts import SalesDiscountUseCases
 from app.application.sales_documents.pricing import SalesDocumentPricing
 from app.application.sales_invoices import SalesInvoiceUseCases
@@ -319,6 +320,14 @@ def _periods(session: AsyncSession) -> SqlAlchemyFiscalPeriodRepository:
     )
 
     return SqlAlchemyFiscalPeriodRepository(session)
+
+
+def get_sales_analytics_use_cases(session: SessionDep) -> SalesAnalyticsUseCases:
+    from app.infrastructure.repositories.sales_analytics_repository import (
+        SqlAlchemySalesAnalyticsRepository,
+    )
+
+    return SalesAnalyticsUseCases(SqlAlchemySalesAnalyticsRepository(session))
 
 
 def get_fiscal_period_use_cases(session: SessionDep) -> FiscalPeriodUseCases:

@@ -2556,3 +2556,19 @@ While a month is closed, every movement dated in it answers `422 fiscal_period_c
 correcting a DTE issued in the month, annulling a return event of the month, recording a purchase's supplier
 document dated (or previously dated) in the month, registering or annulling a receipt or a refund dated in
 the month, and recording a withholding certificate dated in the month.
+
+## Sales analytics and goals (revision 0145, block V9a)
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/analytics?from=&to=&branch_id=` | `sales_analytics:read` | Net sales (without VAT) of valid 01/03 documents in the range (default: this month to today), `documents`, `average_ticket`, `returns` (credit notes and return events) and `returns_percent`; with `sales_costs:read` also `cost` (delivery issue cost, else the line cost), `margin`, `margin_percent` (`costs_visible`). Cuts: `by_day`, `by_hour`, `by_branch` (with `goal`, `goal_percent`), `by_category`, `top_customers`, `top_products`, `bottom_products`. Branch scope as in the rest of Sales. |
+| GET | `/sales/goals/{period}?branch_id=` | `sales_analytics:read` | Active branches in scope with their goal for the month (`amount` or `null`). |
+| PUT | `/sales/goals/{period}?branch_id=` | `sales_goals:manage` | `goals`: `branch_id`, `amount` (> 0, or `null` to remove). Audited as `SET_SALES_GOALS`. |
+
+Errors (`422`): `sales_analytics_range_invalid`, `sales_analytics_range_too_long` (more than a year),
+`sales_goal_period_invalid`, `sales_goal_amount_invalid`, `sales_goal_branch_invalid`.
+
+The permission catalogue (`app/application/rbac/catalogue.py`) now also lists the permissions created by
+migrations in V3–V8 (`fiscal_books:*`, `fiscal_periods:manage`, `sales_credit:authorize`,
+`sales_invoices:contingency`, `:invalidate`, `:notes`, `:returns`, `sales_receivables:*`), so they are
+protected and included for superusers.
