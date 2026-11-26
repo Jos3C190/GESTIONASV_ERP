@@ -111,6 +111,16 @@ from app.infrastructure.models.organization import (
     WarehouseCapacityGroup,
     WarehouseCategory,
 )
+from app.infrastructure.models.pos import (
+    PosCashMovementModel,
+    PosDepositModel,
+    PosDepositShiftModel,
+    PosRegisterModel,
+    PosShiftCountLineModel,
+    PosShiftCountModel,
+    PosShiftModel,
+    PosSupervisorPinModel,
+)
 from app.infrastructure.models.privacy import (
     CustomerConsentModel,
     DataSubjectRequestModel,
@@ -321,6 +331,14 @@ __all__: list[str] = [
     "PaymentTermsModel",
     "Permission",
     "PersonalDataIncidentModel",
+    "PosCashMovementModel",
+    "PosDepositModel",
+    "PosDepositShiftModel",
+    "PosRegisterModel",
+    "PosShiftCountLineModel",
+    "PosShiftCountModel",
+    "PosShiftModel",
+    "PosSupervisorPinModel",
     "PrivacyNoticeModel",
     "ProductBrandModel",
     "ProductFamilyAttributeModel",
