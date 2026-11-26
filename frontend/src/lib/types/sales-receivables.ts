@@ -103,6 +103,32 @@ export interface Receipt {
   annul_reason: string | null;
   annulled_at: string | null;
   created_at: string | null;
+  /** V8a: excedente que volvió al recibo por notas de crédito o retornos sobre lo ya cobrado. */
+  released?: string;
+  refunds?: Refund[];
+}
+
+/** Reintegro de dinero al cliente desde el saldo a favor de un recibo (no es documento tributario). */
+export interface Refund {
+  id: string;
+  code: string;
+  refunded_on: string;
+  amount: string;
+  method: PaymentMethod;
+  reference: string | null;
+  reason: string;
+  status: 'issued' | 'annulled';
+  annul_reason: string | null;
+  annulled_at: string | null;
+}
+
+export interface RefundInput {
+  refunded_on: string;
+  amount: string;
+  method: PaymentMethod;
+  reference: string | null;
+  reason: string;
+  idempotency_key: string;
 }
 
 export interface CustomerAccount {

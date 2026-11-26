@@ -1407,3 +1407,24 @@ Revision `0141` (revises `0140`), block V5b.
 
 **Downgrade** refuses while collection notes or blocked customers exist. Covered by
 `backend/tests/integration/test_sales_credit_migration.py`.
+
+## 50. Fiscal effect of returns and refunds (0142)
+
+Revision `0142` (revises `0141`), block V8a.
+
+- `sales_return_fiscal_adjustments`: one row per acceptance of a return (B08) — `return_id`
+  (composite FK to `sales_returns`), `document_id` (the order's 01/03), `fiscal_note_id` (credit note)
+  or `fiscal_return_id` (return event), `status` (`issued`, `skipped`), `message` (why it was not
+  issued, ≥ 5 characters), `lines` (jsonb: fiscal `line_number`, `quantity`), `resolution_key`,
+  `created_by_id`, `created_at`. `ck_sales_return_fiscal_adjustments_status`: issued ⇒ document and
+  exactly one of note or event, no message; skipped ⇒ neither link and a message. Unique
+  `(company_id, return_id, resolution_key)`.
+- `sales_refunds`: money returned to the customer from a receipt's credit — branch, customer and
+  receipt (composite FKs), `number` (unique per company, shown as `RI-000001`), `refunded_on`,
+  `amount` (> 0), `method`, `reference` (required unless cash), `reason` (≥ 5), `status`
+  (`issued`/`annulled` with `annul_reason`, `annulled_by_id`, `annulled_at` set together) and
+  `idempotency_key` (unique per company).
+- The credit released to receipts by notes and return events is computed, not stored.
+
+**Downgrade** refuses while adjustments or refunds exist. Covered by
+`backend/tests/integration/test_sales_return_fiscal_migration.py`.

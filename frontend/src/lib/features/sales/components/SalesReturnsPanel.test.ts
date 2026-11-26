@@ -125,6 +125,49 @@ describe('SalesReturnsPanel', () => {
     });
   });
 
+  it('muestra el ajuste fiscal emitido y el motivo cuando no se emitió', async () => {
+    permissions.set(['sales_returns:read'], false);
+    salesApi.returnsForSale.mockResolvedValue([
+      {
+        ...returnDocument('accepted'),
+        fiscal_adjustments: [
+          {
+            id: 'adj-1',
+            status: 'issued',
+            document_id: 'ccf-1',
+            fiscal_note_id: 'note-1',
+            fiscal_return_id: null,
+            message: null,
+            lines: [{ line_number: 1, quantity: '1.000000' }],
+            created_at: '2026-11-25T12:00:00Z'
+          },
+          {
+            id: 'adj-2',
+            status: 'skipped',
+            document_id: 'ccf-1',
+            fiscal_note_id: null,
+            fiscal_return_id: null,
+            message: 'El plazo para emitir la nota venció.',
+            lines: [{ line_number: 1, quantity: '1.000000' }],
+            created_at: '2026-11-25T12:05:00Z'
+          }
+        ]
+      }
+    ]);
+    setup();
+
+    expect(await screen.findByText('Nota de crédito emitida')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver nota' })).toHaveAttribute(
+      'href',
+      '/sales/fiscal-documents/note-1'
+    );
+    expect(screen.getByText(/El plazo para emitir la nota venció/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver documento' })).toHaveAttribute(
+      'href',
+      '/sales/fiscal-documents/ccf-1'
+    );
+  });
+
   it('normaliza la unidad base repetida en la asignación y en el historial', async () => {
     permissions.set(['sales_returns:read', 'sales_returns:manage'], false);
     allocation.base_unit_name = 'Unidad (u) (u)';

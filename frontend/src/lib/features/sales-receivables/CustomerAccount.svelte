@@ -5,6 +5,7 @@
   import { salesReceivablesApi } from '#lib/api/sales-receivables.ts';
   import CreditPanel from '#lib/features/sales-receivables/CreditPanel.svelte';
   import ReceiptForm from '#lib/features/sales-receivables/ReceiptForm.svelte';
+  import RefundForm from '#lib/features/sales-receivables/RefundForm.svelte';
   import {
     BUCKETS,
     BUCKET_LABELS,
@@ -14,7 +15,7 @@
     sumCents
   } from '#lib/features/sales-receivables/labels.ts';
   import { formatDay, formatMoney } from '#lib/features/sales/quotation-labels.ts';
-  import type { CustomerAccount, Receipt } from '#lib/types/sales-receivables.ts';
+  import type { CustomerAccount, Receipt, Refund } from '#lib/types/sales-receivables.ts';
 
   let {
     customerId,
@@ -38,6 +39,9 @@
   let applyAmounts = $state<Record<string, string>>({});
   let actionError = $state<string | null>(null);
   let busy = $state(false);
+  let refunding = $state<string | null>(null);
+  let annullingRefund = $state<string | null>(null);
+  let refundAnnulReason = $state('');
 
   const openDocuments = $derived(
     account ? account.documents.filter((item) => Number(item.balance) > 0) : []
@@ -86,6 +90,31 @@
       await load();
     } catch (cause) {
       actionError = cause instanceof HttpError ? cause.message : 'No se pudo anular el recibo.';
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function refunded(receipt: Receipt) {
+    refunding = null;
+    const last = receipt.refunds?.at(-1);
+    notice = last
+      ? `Se registró el reintegro ${last.code} por ${formatMoney(last.amount)}.`
+      : 'Se registró el reintegro.';
+    await load();
+  }
+
+  async function annulRefund(refund: Refund) {
+    busy = true;
+    actionError = null;
+    try {
+      await salesReceivablesApi.annulRefund(refund.id, refundAnnulReason.trim());
+      annullingRefund = null;
+      refundAnnulReason = '';
+      notice = `Se anuló el reintegro ${refund.code}; el saldo a favor volvió al recibo.`;
+      await load();
+    } catch (cause) {
+      actionError = cause instanceof HttpError ? cause.message : 'No se pudo anular el reintegro.';
     } finally {
       busy = false;
     }
@@ -276,6 +305,11 @@
                     >Aplicar saldo a favor</Button
                   >
                 {/if}
+                {#if Number(receipt.unapplied) > 0}
+                  <Button variant="secondary" size="sm" onclick={() => (refunding = receipt.id)}
+                    >Reintegrar</Button
+                  >
+                {/if}
                 <Button variant="ghost" size="sm" onclick={() => (annulling = receipt.id)}
                   >Anular</Button
                 >
@@ -299,6 +333,52 @@
           {/if}
           {#if receipt.annul_reason}
             <p class="text-xs text-foreground-muted">Motivo de anulación: {receipt.annul_reason}</p>
+          {/if}
+          {#if Number(receipt.released ?? 0) > 0}
+            <p class="text-xs text-foreground-muted">
+              Volvió al recibo {formatMoney(receipt.released ?? '0')} por notas de crédito o retornos
+              sobre lo ya cobrado.
+            </p>
+          {/if}
+          {#if receipt.refunds?.length}
+            <ul class="space-y-1 text-xs text-foreground-muted" aria-label="Reintegros">
+              {#each receipt.refunds as refund (refund.id)}
+                <li class="flex flex-wrap items-center gap-2">
+                  <span class="font-medium text-foreground">{refund.code}</span>
+                  <span
+                    >{formatDay(refund.refunded_on)} · {METHOD_LABELS[refund.method]}
+                    {formatMoney(refund.amount)}{refund.reference ? ` (${refund.reference})` : ''} · {refund.reason}</span
+                  >
+                  {#if refund.status === 'annulled'}
+                    <span class="rounded-full bg-surface-muted px-2 py-0.5">Anulado</span>
+                    {#if refund.annul_reason}<span>· {refund.annul_reason}</span>{/if}
+                  {:else if canCollect}
+                    <Button variant="ghost" size="sm" onclick={() => (annullingRefund = refund.id)}
+                      >Anular reintegro</Button
+                    >
+                  {/if}
+                </li>
+                {#if annullingRefund === refund.id}
+                  <li class="flex flex-wrap items-end gap-2">
+                    <label class="flex-1 space-y-1"
+                      >Motivo de la anulación del reintegro
+                      <input class={inputClass} maxlength="300" bind:value={refundAnnulReason} />
+                    </label>
+                    <Button
+                      variant="danger"
+                      disabled={busy || refundAnnulReason.trim().length < 5}
+                      onclick={() => annulRefund(refund)}>Confirmar anulación</Button
+                    >
+                    <Button variant="ghost" onclick={() => (annullingRefund = null)}
+                      >Cancelar</Button
+                    >
+                  </li>
+                {/if}
+              {/each}
+            </ul>
+          {/if}
+          {#if refunding === receipt.id}
+            <RefundForm {receipt} onDone={refunded} onCancel={() => (refunding = null)} />
           {/if}
           {#if annulling === receipt.id}
             <div class="flex flex-wrap items-end gap-2">

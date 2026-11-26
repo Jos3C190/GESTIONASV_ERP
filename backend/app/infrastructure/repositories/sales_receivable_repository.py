@@ -19,6 +19,11 @@ from app.domain.entities.sales_receivables import (
     ReceivableDocument,
     due_date,
 )
+from app.domain.entities.sales_return_fiscal import (
+    AppliedAmount,
+    DocumentDue,
+    released_by_receipt,
+)
 from app.domain.ports.sales_receivable_repository import (
     AccountDocument,
     Application,
@@ -27,6 +32,7 @@ from app.domain.ports.sales_receivable_repository import (
     CustomerRef,
     Issuer,
     Receipt,
+    Refund,
 )
 
 # El saldo de cada documento sale del DTE (totalPagar ya descuenta la retención), de sus notas de
@@ -65,6 +71,7 @@ _DOCUMENTS = """
       AND d.status IN ('issued', 'simulated', 'contingency', 'invalidated')
       AND (CAST(:customer AS uuid) IS NULL OR s.customer_id = :customer)
       AND (CAST(:document AS uuid) IS NULL OR d.id = :document)
+      AND (CAST(:ids AS uuid[]) IS NULL OR d.id = ANY(:ids))
     ORDER BY issued_on, d.control_number
 """
 
@@ -214,7 +221,8 @@ class SqlAlchemySalesReceivableRepository:
         self, company_id: uuid.UUID, customer_id: uuid.UUID | None = None
     ) -> list[AccountDocument]:
         rows = await self._session.execute(
-            text(_DOCUMENTS), {"company": company_id, "customer": customer_id, "document": None}
+            text(_DOCUMENTS),
+            {"company": company_id, "customer": customer_id, "document": None, "ids": None},
         )
         return [_document(row) for row in rows]
 
@@ -224,7 +232,7 @@ class SqlAlchemySalesReceivableRepository:
         row = (
             await self._session.execute(
                 text(_DOCUMENTS),
-                {"company": company_id, "customer": None, "document": document_id},
+                {"company": company_id, "customer": None, "document": document_id, "ids": None},
             )
         ).one_or_none()
         return _document(row) if row else None
@@ -280,6 +288,16 @@ class SqlAlchemySalesReceivableRepository:
                     row.invalidated,
                 )
             )
+        released = await self._released(
+            company_id,
+            {
+                item.document_id
+                for items in applications.values()
+                for item in items
+                if not item.document_invalidated
+            },
+        )
+        refunds = await self._refunds(company_id, receipt_ids=ids)
         return [
             Receipt(
                 id=row.id,
@@ -296,9 +314,168 @@ class SqlAlchemySalesReceivableRepository:
                 annul_reason=row.annul_reason,
                 annulled_at=row.annulled_at,
                 created_at=row.created_at,
+                released=released.get(row.id, Decimal("0"))
+                if row.status == "issued"
+                else Decimal("0"),
+                refunds=refunds[row.id],
             )
             for row in rows
         ]
+
+    async def _released(
+        self, company_id: uuid.UUID, document_ids: set[uuid.UUID]
+    ) -> dict[object, Decimal]:
+        """Excedente de los documentos pagados de más, devuelto a sus recibos (V8a)."""
+
+        if not document_ids:
+            return {}
+        documents = [
+            DocumentDue(row.id, Decimal(row.payable), Decimal(row.credited))
+            for row in await self._session.execute(
+                text(_DOCUMENTS),
+                {
+                    "company": company_id,
+                    "customer": None,
+                    "document": None,
+                    "ids": list(document_ids),
+                },
+            )
+            if row.status != "invalidated"
+        ]
+        applications = [
+            AppliedAmount(row.receipt_id, row.document_id, Decimal(row.amount), row.created_at)
+            for row in await self._session.execute(
+                text(
+                    "SELECT a.receipt_id, a.document_id, a.amount, a.created_at "
+                    "FROM sales_receipt_applications a JOIN sales_receipts r "
+                    "  ON r.company_id = a.company_id AND r.id = a.receipt_id "
+                    "WHERE a.company_id = :company AND a.document_id = ANY(:docs) "
+                    "  AND r.status = 'issued'"
+                ),
+                {"company": company_id, "docs": list(document_ids)},
+            )
+        ]
+        return released_by_receipt(documents, applications)
+
+    async def _refunds(
+        self,
+        company_id: uuid.UUID,
+        *,
+        receipt_ids: list[uuid.UUID] | None = None,
+        refund_id: uuid.UUID | None = None,
+        key: str | None = None,
+    ) -> dict[uuid.UUID, list[Refund]]:
+        found: dict[uuid.UUID, list[Refund]] = defaultdict(list)
+        for row in await self._session.execute(
+            text(
+                "SELECT id, receipt_id, number, refunded_on, amount, method, reference, reason, "
+                "status, annul_reason, annulled_at FROM sales_refunds WHERE company_id = :company "
+                "AND (CAST(:receipts AS uuid[]) IS NULL OR receipt_id = ANY(:receipts)) "
+                "AND (CAST(:refund AS uuid) IS NULL OR id = :refund) "
+                "AND (CAST(:key AS text) IS NULL OR idempotency_key = :key) "
+                "ORDER BY refunded_on, number"
+            ),
+            {"company": company_id, "receipts": receipt_ids, "refund": refund_id, "key": key},
+        ):
+            found[row.receipt_id].append(
+                Refund(
+                    id=row.id,
+                    receipt_id=row.receipt_id,
+                    number=row.number,
+                    refunded_on=row.refunded_on,
+                    amount=Decimal(row.amount),
+                    method=PaymentMethod(row.method),
+                    reference=row.reference,
+                    reason=row.reason,
+                    status=ReceiptStatus(row.status),
+                    annul_reason=row.annul_reason,
+                    annulled_at=row.annulled_at,
+                )
+            )
+        return found
+
+    async def refund(
+        self, company_id: uuid.UUID, refund_id: uuid.UUID, *, lock: bool = False
+    ) -> Refund | None:
+        if lock:
+            await self._session.execute(
+                text(
+                    "SELECT id FROM sales_refunds WHERE company_id = :company AND id = :refund "
+                    "FOR UPDATE"
+                ),
+                {"company": company_id, "refund": refund_id},
+            )
+        found = await self._refunds(company_id, refund_id=refund_id)
+        return next((item for items in found.values() for item in items), None)
+
+    async def refund_by_key(self, company_id: uuid.UUID, key: str) -> Refund | None:
+        found = await self._refunds(company_id, key=key)
+        return next((item for items in found.values() for item in items), None)
+
+    async def create_refund(
+        self,
+        *,
+        company_id: uuid.UUID,
+        receipt: Receipt,
+        refunded_on: date,
+        amount: Decimal,
+        method: PaymentMethod,
+        reference: str | None,
+        reason: str,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+    ) -> uuid.UUID:
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+            {"key": f"sales_refunds:{company_id}"},
+        )
+        number = await self._session.scalar(
+            text("SELECT COALESCE(max(number), 0) + 1 FROM sales_refunds WHERE company_id = :c"),
+            {"c": company_id},
+        )
+        refund_id = uuid.uuid4()
+        await self._session.execute(
+            text(
+                "INSERT INTO sales_refunds (id, company_id, branch_id, customer_id, receipt_id, "
+                "number, refunded_on, amount, method, reference, reason, idempotency_key, "
+                "created_by_id) VALUES (:id, :company, :branch, :customer, :receipt, :number, "
+                ":refunded_on, :amount, :method, :reference, :reason, :key, :actor)"
+            ),
+            {
+                "id": refund_id,
+                "company": company_id,
+                "branch": receipt.branch_id,
+                "customer": receipt.customer_id,
+                "receipt": receipt.id,
+                "number": number,
+                "refunded_on": refunded_on,
+                "amount": amount,
+                "method": method.value,
+                "reference": reference,
+                "reason": reason,
+                "key": idempotency_key,
+                "actor": actor_id,
+            },
+        )
+        return refund_id
+
+    async def annul_refund(
+        self, company_id: uuid.UUID, refund_id: uuid.UUID, reason: str, actor_id: uuid.UUID
+    ) -> None:
+        await self._session.execute(
+            text(
+                "UPDATE sales_refunds SET status = 'annulled', annul_reason = :reason, "
+                "annulled_by_id = :actor, annulled_at = :now "
+                "WHERE company_id = :company AND id = :refund AND status = 'issued'"
+            ),
+            {
+                "company": company_id,
+                "refund": refund_id,
+                "reason": reason,
+                "actor": actor_id,
+                "now": datetime.now(UTC),
+            },
+        )
 
     async def receipts(
         self, company_id: uuid.UUID, customer_id: uuid.UUID | None = None

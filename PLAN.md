@@ -790,10 +790,70 @@ Pasos:
   375 px. Agregado en la verificación: «Autorizar crédito para facturar» sobre un pedido confirmado (sin él, un
   pedido que agota el cupo entre confirmar y facturar quedaba trabado).
 
+## V8 — Devoluciones con efecto fiscal y cierre (decidido el 25/11/2026)
+
+Tras V5 el usuario preguntó «¿Qué sigue?» y luego dijo «Continúa» con la recomendación: V8 empezando por las
+devoluciones con efecto fiscal. Decisiones (25/11/2026):
+- **Ajuste fiscal automático al aceptar** una devolución (B08) de un pedido facturado: nota de crédito si el documento
+  es un crédito fiscal (03), evento de retorno si es una factura (01), por las cantidades aceptadas y vinculado a la
+  devolución. Si no se puede (plazo vencido, documento sin sellar, invalidación en curso, pedido sin facturar), la
+  devolución se acepta igual y queda el motivo visible.
+- **Saldo a favor y reintegro**: lo pagado de más tras la nota o el retorno vuelve como saldo a favor del cliente; si se
+  le devuelve dinero, se registra un reintegro (forma de pago y referencia) que descuenta ese saldo.
+
+Lo que ya existe (no se rehace): B08 recibe, inspecciona y acepta o rechaza por línea; lo aceptado vuelve al
+inventario con el costo de la salida original (`app/application/sales/returns.py`). V4c/V4d2 emiten notas y retornos;
+V5a calcula saldos y recibos.
+
+### V8a — Devolución con nota o retorno, saldo a favor y reintegro (rama `feature/ventas-v8a-devoluciones`)
+
+Diseño:
+- **Cantidades**: lo aceptado se registra en unidad base; la línea fiscal es la línea del pedido en su unidad de venta
+  (el documento se arma con las líneas del pedido en orden). Cantidad fiscal = aceptada × cantidad / cantidad base de
+  la línea del pedido, sin pasar del saldo de la línea del documento.
+- **Saldo a favor por documento sobrepagado**: si lo aplicado supera lo que queda por pagar tras notas y retornos, el
+  excedente vuelve a los recibos que lo aplicaron (del más reciente al más antiguo) como saldo a favor. Se calcula, no
+  se guarda.
+- **Reintegro**: sale del saldo a favor de un recibo; número propio, forma de pago, referencia y motivo; se anula con
+  motivo y restituye el saldo. No es un documento fiscal.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [x] **Paso 1: migración 0142 y dominio.** `sales_returns.fiscal_note_id` (nota 05), `fiscal_return_id` (retorno),
+  `fiscal_status` y `fiscal_message`; `sales_refunds`. Dominio: conversión de cantidades y reparto del excedente.
+  Verificar: prueba de migración y pytest.
+- [x] **Paso 2: saldo a favor por sobrepago y reintegros.** Repositorio y API (`POST /sales/receipts/{id}/refunds`,
+  anular). Verificar: e2e (nota sobre un CCF pagado deja saldo a favor; reintegro y su anulación).
+- [x] **Paso 3: ajuste fiscal automático al aceptar.** En la resolución de B08: emitir la nota o el retorno, guardar el
+  vínculo o el motivo; encolar después del commit. Verificar: e2e con CCF y con factura.
+  Hecho: `app/application/sales/return_fiscal.py` (`ReturnFiscalAdjuster`), llamado desde `resolve_sale_return`
+  con la llave `Idempotency-Key` como `resolution_key` (única en 0142: un reintento no emite otra nota). La línea
+  fiscal es la posición de la línea del pedido (el DTE se arma en ese orden); la cantidad pasa de base a unidad de
+  venta con `fiscal_quantity`. Sin documento, sin sello, sin servicio DTE o si el emisor rechaza (plazo, saldo)
+  queda `skipped` con el motivo; la emisión va en un punto de guardado. `return_out` trae `fiscal_adjustments`.
+  e2e `test_sales_return_fiscal.py` (los ayudantes `_ccf`, `_confirmed_order` e `_issued` aceptan `stock`: la
+  salida automática solo entrega unidades logísticas completas).
+- [x] **Paso 4: interfaz.** Ajuste fiscal en el detalle de la devolución; reintegros en el estado de cuenta.
+  Verificar: vitest.
+  Hecho: bloque «Ajuste fiscal» en `SalesReturnsPanel` (nota o retorno con enlace, o motivo en aviso);
+  `RefundForm.svelte` y lista de reintegros con anulación en `CustomerAccount`; saldo liberado en el recibo.
+  El `select` de forma de reintegro usa `value` + `onchange` (con `bind:value` jsdom no actualizaba el estado).
+- [x] **Paso 5: documentación, verificación y PR.** Manual de cobros §8, `api.md` (ajuste fiscal de
+  devoluciones y reintegros), esquema §50. QA en el navegador (25/11/2026, Grupo Lorena): pedido CCF de 20
+  harinas entregado al confirmar, cobrado (RC-000003), devolución de 2 aceptada → nota DTE-05 …002 simulada de
+  $76.68 enlazada en la devolución; el recibo muestra «Volvió al recibo $76.68»; reintegro RI-000001 por
+  transferencia (pide referencia) y su anulación devuelve el saldo a favor; devolución de un pedido con CCF
+  fallido → «Sin ajuste fiscal: El pedido no está facturado…». Modo claro y 375 px sin scroll horizontal.
+
+### V8b — Cambio de producto e invalidación tipo 3, cierre de período (se detalla al terminar V8a)
+
 ## Estado actual
 
-- **Paso en curso**: V5b terminado; PR a develop con Auto-fix y auto-merge. V5 (pedidos y cobros) queda completo
-  salvo los encargos con anticipo, que el usuario dejó fuera.
+- **Error encontrado en la QA de V8a (fuera de alcance)**: el servicio DTE rechazó un CCF con
+  `ventaGravada` 658.242 (20 × $33.93 con 3 % de descuento): `multipleOf 1e-8` falla por precisión de punto
+  flotante en la validación del esquema. Pedido PED-20261125-F2CA0F48 quedó con su CCF `failed` (se puede
+  volver a facturar cuando se corrija). Se propone como tarea aparte.
+- **Paso en curso**: V8a PR; pasos 1 a 5 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
 - **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
   los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó
   intacta. Si vuelve a pasar: revisar `%LOCALAPPDATA%\Temp` (WSL deja un swap de ~3 GB por arranque).

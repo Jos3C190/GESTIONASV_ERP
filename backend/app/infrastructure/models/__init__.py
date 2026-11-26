@@ -205,6 +205,8 @@ from app.infrastructure.models.sales_receivable import (
     SalesReceiptApplicationModel,
     SalesReceiptModel,
     SalesReceiptPaymentModel,
+    SalesRefundModel,
+    SalesReturnFiscalAdjustmentModel,
     SalesWithholdingCertificateModel,
 )
 from app.infrastructure.models.sales_return import (
@@ -380,9 +382,11 @@ __all__: list[str] = [
     "SalesReceiptApplicationModel",
     "SalesReceiptModel",
     "SalesReceiptPaymentModel",
+    "SalesRefundModel",
     "SalesReturnCommandModel",
     "SalesReturnDocumentModel",
     "SalesReturnEventModel",
+    "SalesReturnFiscalAdjustmentModel",
     "SalesReturnLineModel",
     "SalesReturnModel",
     "SalesSettingsModel",

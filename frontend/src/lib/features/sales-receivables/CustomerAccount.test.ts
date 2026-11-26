@@ -7,7 +7,9 @@ const { salesReceivablesApi } = vi.hoisted(() => ({
     annul: vi.fn(),
     apply: vi.fn(),
     register: vi.fn(),
-    credit: vi.fn()
+    credit: vi.fn(),
+    refund: vi.fn(),
+    annulRefund: vi.fn()
   }
 }));
 vi.mock('#lib/api/sales-receivables.ts', () => ({ salesReceivablesApi }));
@@ -134,4 +136,101 @@ it('sin permiso de cobro solo consulta, y avisa si falla la carga', async () => 
   salesReceivablesApi.account.mockRejectedValue(new Error('down'));
   render(CustomerAccountView, { customerId: 'cust-2', canCollect: true });
   expect(await screen.findByText('No se pudo cargar el estado de cuenta.')).toBeInTheDocument();
+});
+
+it('reintegra el saldo a favor con referencia y motivo', async () => {
+  salesReceivablesApi.account.mockResolvedValue(account());
+  salesReceivablesApi.refund.mockResolvedValue({
+    ...RECEIPT,
+    unapplied: '0.00',
+    refunds: [
+      {
+        id: 'ri-1',
+        code: 'RI-000001',
+        refunded_on: '2026-11-25',
+        amount: '37.00',
+        method: 'transfer',
+        reference: 'TRF-R1',
+        reason: 'Devolución de mercadería',
+        status: 'issued',
+        annul_reason: null,
+        annulled_at: null
+      }
+    ]
+  });
+  render(CustomerAccountView, { customerId: 'cust-1', canCollect: true });
+
+  await fireEvent.click(await screen.findByRole('button', { name: 'Reintegrar' }));
+  const form = screen.getByRole('form', { name: 'Reintegro del recibo RC-000001' });
+  expect(screen.getByLabelText('Monto del reintegro')).toHaveValue(37);
+  await fireEvent.change(screen.getByLabelText('Forma de reintegro'), {
+    target: { value: 'transfer' }
+  });
+  await fireEvent.input(screen.getByLabelText('Motivo del reintegro'), {
+    target: { value: 'Devolución de mercadería' }
+  });
+  expect(screen.getByText('Indica la referencia del reintegro.')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Reintegrar $37.00' })).toBeDisabled();
+  await fireEvent.input(screen.getByLabelText('Número de transferencia'), {
+    target: { value: 'TRF-R1' }
+  });
+  await fireEvent.submit(form);
+
+  const [receiptId, payload] = salesReceivablesApi.refund.mock.calls[0] ?? [];
+  expect(receiptId).toBe('r-1');
+  expect(payload).toMatchObject({
+    amount: '37.00',
+    method: 'transfer',
+    reference: 'TRF-R1',
+    reason: 'Devolución de mercadería'
+  });
+  expect(payload.idempotency_key).toMatch(/^ri-/);
+  expect(
+    await screen.findByText('Se registró el reintegro RI-000001 por $37.00.')
+  ).toBeInTheDocument();
+});
+
+it('muestra el saldo liberado y anula un reintegro con motivo', async () => {
+  salesReceivablesApi.account.mockResolvedValue(
+    account({
+      receipts: [
+        {
+          ...RECEIPT,
+          unapplied: '0.00',
+          released: '37.00',
+          refunds: [
+            {
+              id: 'ri-1',
+              code: 'RI-000001',
+              refunded_on: '2026-11-25',
+              amount: '37.00',
+              method: 'cash',
+              reference: null,
+              reason: 'Devolución de mercadería',
+              status: 'issued',
+              annul_reason: null,
+              annulled_at: null
+            }
+          ]
+        }
+      ]
+    })
+  );
+  salesReceivablesApi.annulRefund.mockResolvedValue(RECEIPT);
+  render(CustomerAccountView, { customerId: 'cust-1', canCollect: true });
+
+  expect(await screen.findByText(/Volvió al recibo \$37.00/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Reintegrar' })).not.toBeInTheDocument();
+  await fireEvent.click(screen.getByRole('button', { name: 'Anular reintegro' }));
+  const confirm = screen.getByRole('button', { name: 'Confirmar anulación' });
+  expect(confirm).toBeDisabled();
+  await fireEvent.input(screen.getByLabelText('Motivo de la anulación del reintegro'), {
+    target: { value: 'El cliente no retiró el efectivo' }
+  });
+  await fireEvent.click(confirm);
+  expect(salesReceivablesApi.annulRefund).toHaveBeenCalledWith(
+    'ri-1',
+    'El cliente no retiró el efectivo'
+  );
+  expect(await screen.findByText(/Se anuló el reintegro RI-000001/)).toBeInTheDocument();
 });
