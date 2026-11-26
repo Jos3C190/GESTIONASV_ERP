@@ -24,6 +24,7 @@ Cliente → (Cotización) → Pedido → Confirmar (sale de bodega) → Factura 
 | Devolución | Mercadería que vuelve, con su nota de crédito o evento de retorno automático; cambio de producto; reintegro | [cobros §8–9](manual-cobros.md) |
 | Libros y F-07 | Libros de contribuyentes, consumidor final y compras; anexos en CSV; cierre del mes | [libros de IVA](manual-libros-iva.md) |
 | Análisis | Venta sin IVA, margen, devoluciones y metas por sucursal | [análisis comercial](manual-analisis-comercial.md) |
+| Punto de venta | Cajas, turnos, efectivo, cierre ciego con aprobación y depósitos | [punto de venta](manual-pos.md) |
 
 ## 1. Antes de vender
 
@@ -109,6 +110,9 @@ producto. El **Dashboard** resume la venta del mes para quien puede ver cifras.
 | `fiscal_settings:read` / `:manage` | Configuración fiscal del emisor |
 | `fiscal_books:read` / `:manage` | Libros de IVA / datos fiscales de compras |
 | `fiscal_periods:manage` | Cerrar y reabrir el mes |
+| `pos:sell`, `pos:shift_open`, `pos:shift_close`, `pos:cash_movements`, `pos:reprint` | Trabajar en la caja con su propio turno (rol Cajero) |
+| `pos:supervise`, `pos:reports`, `pos:deposits`, `pos:showcase` | Autorizar en caja, aprobar cierres, informes, depósitos y vitrina (rol Supervisor de tienda) |
+| `pos:registers_manage` | Configurar las cajas |
 
 ## Recorrido de demostración
 

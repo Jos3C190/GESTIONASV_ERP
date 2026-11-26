@@ -1465,3 +1465,36 @@ Revision `0145` (revises `0144`), block V9a.
   `fiscal_periods:manage` moves to the `fiscal` module.
 
 **Downgrade** refuses while goals exist. Covered by `backend/tests/integration/test_sales_goals_migration.py`.
+
+## 54. Point of sale: registers and shifts (0146)
+
+Revision `0146` (revises `0145`), block V6a.
+
+- `fiscal_establishments` gains `UNIQUE (company_id, id, branch_id)` and `fiscal_points_of_sale`
+  `UNIQUE (company_id, establishment_id, id)`, so a register cannot point to another branch's point of sale.
+- `pos_registers`: `branch_id`, `establishment_id`, `point_of_sale_id` (unique per company), `code` (unique,
+  upper case), `name`, `opening_float` (0–10,000), `cash_out_approval_threshold`, `cash_drawer_limit`,
+  `is_active`, `version`, audit columns.
+- `pos_shifts`: `register_id` and `branch_id` (composite FK to the register), `cashier_id`, `number`,
+  `status` (`open`, `counted`, `recount`, `closed`), `opening_float`, `counted_at`, `recount_reason`,
+  `closed_at`, `approved_by_id` (never the cashier), `approval_notes`, `expected_cash` / `_card` /
+  `_transfer`, `counted_cash`, `declared_card`, `declared_transfer`, `cash_difference` (= counted −
+  expected), `retained_float` + `cash_to_deposit` (= counted), `version`, `idempotency_key`. One unclosed
+  shift per register and per cashier (partial unique indexes). A closed shift is immutable and shifts are
+  never deleted (trigger `guard_pos_shift_closed`).
+- `pos_cash_movements`: `kind` (`cash_in`, `cash_out`, `safe_drop`), `amount` > 0, `reason` (≥ 5),
+  `reference`, `authorized_by_id` (never the creator), `idempotency_key`. Append-only.
+- `pos_shift_counts` (`opening` once, `closing` with a `sequence` per recount; cash, card and transfer totals)
+  and `pos_shift_count_lines` (`form` `coin`/`bill`, USD denomination, quantity). Append-only.
+- `pos_deposits` (`number`, `deposited_on`, bank, account, slip unique per bank, expected, deposited,
+  `difference`, notes required when it is not zero) and `pos_deposit_shifts` (one deposit per shift).
+  Append-only.
+- `pos_supervisor_pins`: `user_id`, Argon2id `pin_hash`, `failed_attempts`, `locked_until`.
+- Function `pos_user_name(uuid)`: the employee's name or the username, for screens, tickets and reports.
+- Permissions `pos:sell`, `pos:shift_open`, `pos:shift_close`, `pos:cash_movements`, `pos:reprint`,
+  `pos:supervise`, `pos:registers_manage`, `pos:showcase`, `pos:reports`, `pos:deposits` (module `pos`,
+  granted to `SUPER_ADMIN`) and the system role templates `CAJERO` and `SUPERVISOR_TIENDA` (same lists as
+  `POS_CASHIER_PERMISSIONS` and `POS_SUPERVISOR_PERMISSIONS` in `rbac/catalogue.py`).
+
+**Downgrade** refuses while registers, PINs or assignments of the two roles exist. Covered by
+`backend/tests/integration/test_pos_registers_migration.py`.

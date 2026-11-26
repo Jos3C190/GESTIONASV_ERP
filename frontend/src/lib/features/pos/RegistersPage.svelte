@@ -39,10 +39,13 @@
     loading = true;
     error = null;
     try {
-      [registers, options] = await Promise.all([
+      const [found, points] = await Promise.all([
         posApi.registers(branch.id),
         posApi.pointOfSaleOptions()
       ]);
+      registers = found;
+      // Con una sucursal elegida, solo se ofrecen sus puntos de venta: la caja nueva aparece aquí.
+      options = branch.id ? points.filter((item) => item.branch_id === branch.id) : points;
     } catch (err) {
       error = err instanceof Error ? err.message : 'No se pudieron cargar las cajas.';
     } finally {

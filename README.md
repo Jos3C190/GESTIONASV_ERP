@@ -391,6 +391,7 @@ El área de Ventas quedó completa en la v2.1.0. Lo siguiente:
 - `docs/troubleshooting-faq.md` — resolución de problemas y FAQ
 - `docs/ers-v1/guia-maestra.md` — guía maestra de compras e inventario
 - `docs/ers-v1/manual-ventas.md` — ciclo completo de Ventas y facturación electrónica, permisos y recorrido de demostración
+- `docs/ers-v1/manual-pos.md` — punto de venta: cajas, turnos, cierre ciego, depósitos y roles de caja
 - `docs/ers-v1/manual-traslados.md`, `manual-ajustes.md`, `manual-entregas.md` y `manual-ventas-base.md` — manuales de operación
 - `docs/ers-v1/manual-pruebas-y-demostracion.md` — recorrido de pruebas y demostración
 - `docs/flujo-compras-inventario-retaceo.md` — flujo de compras, inventario y retaceo

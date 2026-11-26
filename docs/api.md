@@ -2585,3 +2585,38 @@ Inventory capacity: a movement that changes a unit's status without leaving its 
 warehouse) no longer counts the unit twice. The occupancy query now flushes the source decrement first
 (`SqlAlchemyInventoryRepository._usage`); before, pallets using more than half of a location could not be split.
 
+## Point of sale: registers, shifts, cash and deposits (revision 0146, block V6a)
+
+All paths are under `/pos`. Every write is audited and keeps the branch scope of the register or shift.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/pos/me` | any `pos:*` | The caller's unclosed shift (blind view), whether they have a supervisor PIN and `can_supervise`. |
+| PUT | `/pos/me/pin` | `pos:supervise` | `password` (the caller's current password) and `pin` (6 digits, not repeated or sequential). Argon2id; resets failed attempts. Audited as `SET_POS_SUPERVISOR_PIN`. |
+| GET | `/pos/branches/{branch_id}/supervisors` | any `pos:*` | People who can authorize at that branch's registers (`pos:supervise` or superuser, with branch access), without the caller. |
+| GET | `/pos/point-of-sale-options` | `pos:registers_manage` | Fiscal points of sale of the user's branches with `available` / `unavailable_reason`. |
+| GET | `/pos/registers?branch_id=` | `pos:registers_manage`, `pos:shift_open` or `pos:supervise` | Registers with their unclosed shift, if any. |
+| POST | `/pos/registers` | `pos:registers_manage` | `point_of_sale_id`, `code` (stored upper case), `name`, `opening_float`, `cash_out_approval_threshold`, `cash_drawer_limit`, `is_active`. One register per point of sale. `CREATE_POS_REGISTER`. |
+| PUT | `/pos/registers/{id}` | `pos:registers_manage` | Same fields plus `expected_version`. The code of a register with shifts never changes; a register with an unclosed shift cannot be deactivated. `UPDATE_POS_REGISTER`. |
+| POST | `/pos/shifts` | `pos:shift_open` | Open the caller's shift: `register_id`, `denominations` (the opening count), `notes` (required when the count differs from the register float), `idempotency_key`. `OPEN_POS_SHIFT`; a replay returns `200` with the same shift. |
+| GET | `/pos/shifts?branch_id=&status=&from=&to=&limit=&offset=` | `pos:supervise` or `pos:reports` | Shifts of the user's branches (dates in America/El_Salvador). |
+| GET | `/pos/shifts/{id}` | any `pos:*` (own shift) or `pos:supervise` / `pos:reports` | Shift, register, cash movements, counts and `totals`. `totals`, `expected_*` and `cash_difference` are `null` for the cashier until the shift is closed (blind close). `drawer_limit_reached` warns that a safe drop is due. |
+| POST | `/pos/shifts/{id}/movements` | `pos:cash_movements` (own open shift) | `kind` (`cash_in`, `cash_out`, `safe_drop`), `amount`, `reason`, `reference`, `approval` (`supervisor_id`, `pin`) and `idempotency_key`. A `cash_out` above the register threshold needs a supervisor; an outflow never exceeds the cash in the drawer. `POS_CASH_MOVEMENT`. |
+| POST | `/pos/shifts/{id}/count` | `pos:shift_close` (own shift, `open` or `recount`) | `expected_version`, `denominations`, `declared_card`, `declared_transfer`, `notes`. The shift stops selling (`counted`). `COUNT_POS_SHIFT`. |
+| POST | `/pos/shifts/{id}/recount` | `pos:supervise` (not the cashier) | `expected_version`, `reason`. `REQUEST_POS_SHIFT_RECOUNT`. |
+| POST | `/pos/shifts/{id}/approve` | `pos:supervise` (not the cashier) | `expected_version`, `retained_float` (≤ counted cash), `notes` (required when the count differs). The shift becomes `closed` and immutable. `APPROVE_POS_SHIFT`. |
+| GET | `/pos/deposits/candidates?branch_id=` | `pos:deposits` | Closed, undeposited shifts with cash: `cash_to_deposit` plus their safe drops. |
+| GET | `/pos/deposits?branch_id=` / `/pos/deposits/{id}` | `pos:deposits` | Deposits with their shifts. |
+| POST | `/pos/deposits` | `pos:deposits` | `branch_id`, `shift_ids`, `deposited_on` (not in the future, not before the last shift close), `bank_name`, `account_reference`, `slip_number`, `deposited_amount`, `notes` (required when it differs from the expected amount), `idempotency_key`. `CREATE_POS_DEPOSIT`. |
+
+Expected cash = opening float + cash in − cash out − safe drops + cash sales (net of change) − cash refunds;
+cash sales and refunds arrive with blocks V6c and V6e. Supervisor authorization checks, in this order: another
+person, `pos:supervise` and branch access, a configured PIN, the lock (5 failures lock it for 15 minutes) and the
+PIN itself; failed attempts are stored in their own transaction (`SqlAlchemyPinAttempts`).
+
+Errors: `pos_register_*`, `pos_point_of_sale_*`, `pos_shift_not_open`, `pos_shift_not_countable`,
+`pos_shift_not_counted`, `pos_shift_version`, `pos_shift_not_yours`, `pos_shift_forbidden`, `pos_cashier_has_shift`,
+`pos_register_busy`, `pos_opening_float_differs`, `pos_movement_amount_invalid`, `pos_movement_exceeds_cash`,
+`pos_movement_requires_supervisor`, `pos_self_authorization`, `pos_supervisor_invalid`, `pos_pin_not_set`,
+`pos_pin_locked`, `pos_pin_incorrect`, `pos_pin_invalid`, `pos_pin_weak`, `pos_pin_password_incorrect`,
+`pos_difference_requires_notes`, `pos_retained_float_invalid`, `pos_deposit_*`, `pos_idempotency_conflict`.

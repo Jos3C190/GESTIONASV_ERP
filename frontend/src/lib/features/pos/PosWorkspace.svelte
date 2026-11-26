@@ -64,7 +64,7 @@
 <div class="flex min-h-full flex-col bg-surface-muted/40">
   <div class="border-b border-border bg-surface px-4 py-3 md:px-6">
     <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3">
-      <div class="min-w-0 flex-1">
+      <div class="min-w-0 basis-full sm:basis-0 sm:flex-1">
         <p class="text-xs font-semibold uppercase tracking-wider text-primary">Punto de venta</p>
         <h1 class="truncate text-lg font-bold text-foreground">
           {shift ? `${shift.register_code} · ${shift.register_name}` : 'Caja'}
