@@ -97,6 +97,8 @@ services:
 
   dte-service:
     profiles: [dte]
+    environment:
+      DTE_DEMO_CLOCK_ENABLED: "false"
 
   dte-worker:
     profiles: [dte]

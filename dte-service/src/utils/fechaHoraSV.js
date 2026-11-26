@@ -15,10 +15,24 @@
  * de la zona del proceso ni de los datos de zonas horarias del contenedor.
  */
 
+const { AsyncLocalStorage } = require('node:async_hooks');
+
 const ZONA_HORARIA_SV = 'America/El_Salvador';
 const DESFASE_SV_MS = -6 * 60 * 60 * 1000;
 
 let relojActivo = () => new Date();
+
+/**
+ * Instante fijado para una sola solicitud (reloj de demostración, V9b del ERP).
+ * Solo lo fija el middleware `relojDemostracion`, que exige el permiso de
+ * entorno y un emisor simulado; fuera de esa solicitud no existe.
+ */
+const relojDeSolicitud = new AsyncLocalStorage();
+
+/** Corre `fn` con `instante` como «ahora» (y todo lo que dispare de forma asíncrona). */
+function conInstante(instante, fn) {
+  return relojDeSolicitud.run(instante, fn);
+}
 
 /** Permite fijar el reloj en pruebas; sin argumento vuelve al reloj real. */
 function usarReloj(fn) {
@@ -27,7 +41,8 @@ function usarReloj(fn) {
 
 /** Instante actual según el reloj activo (el real, o el fijado con usarReloj). */
 function ahora() {
-  return relojActivo();
+  const fijado = relojDeSolicitud.getStore();
+  return fijado ? new Date(fijado.getTime()) : relojActivo();
 }
 
 /**
@@ -48,4 +63,4 @@ function fechaHoraSV(instante = ahora()) {
   };
 }
 
-module.exports = { fechaHoraSV, ZONA_HORARIA_SV, usarReloj, ahora };
+module.exports = { fechaHoraSV, ZONA_HORARIA_SV, usarReloj, ahora, conInstante };

@@ -997,7 +997,7 @@ Diseño:
 
 Pasos:
 - [x] **Paso 0: plan y rama.**
-- [ ] **Paso 1: reloj de demostración.** Servicio DTE (middleware, prueba de node) y ERP (variable de contexto y
+- [x] **Paso 1: reloj de demostración.** Servicio DTE (middleware, prueba de node) y ERP (variable de contexto y
   encabezado, prueba unitaria). Verificar: `run-tests.sh dte` y pytest.
 - [ ] **Paso 2: siembra del mes.** Preparación de cajas, ventas por día, cobros, devoluciones, cambio y metas.
   Verificar: corrida local completa y repetida (no duplica).
@@ -1008,7 +1008,12 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V9b paso 1 (reloj de demostración en el servicio DTE y en el ERP). V9a en PR #69.
+- **Paso en curso**: V9b paso 2 (siembra del mes anterior). Paso 1 hecho: `X-DTE-Demo-Clock` en el servicio
+  (`middleware/relojDemostracion.js`) y `app/infrastructure/dte_demo_clock.py` en el ERP. V9a en develop (#69).
+- **Red del contenedor**: el backend no descarga de PyPI (un certificado intercepta TLS: `UnknownIssuer`). `time-machine`
+  se agregó al lock desde el equipo con `uv add --native-tls --no-sync --group dev` y se instaló en el contenedor con la
+  rueda Linux bajada por `pip download --platform manylinux2014_x86_64 --python-version 3.12` (`uv pip install --offline`).
+  Usar `uv run --no-sync` dentro del contenedor.
 - **V8a**: en develop (#65); pasos 1 a 5 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
 - **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
   los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó

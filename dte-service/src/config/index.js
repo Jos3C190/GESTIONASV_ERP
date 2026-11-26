@@ -268,6 +268,8 @@ const config = {
   db: {
     path: rutaSqlite(process.env),
   },
+  // Reloj de demostración (V9b del ERP): solo desarrollo, nunca en producción.
+  demoClockEnabled: process.env.DTE_DEMO_CLOCK_ENABLED === 'true' && dteMode !== 'production',
   retry: {
     maxAttempts: parseInt(process.env.RETRY_MAX_ATTEMPTS || '5', 10),
     baseDelayMs: parseInt(process.env.RETRY_BASE_DELAY_MS || '2000', 10),

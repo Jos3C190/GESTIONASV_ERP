@@ -30,6 +30,7 @@ from app.domain.ports.dte_service import (
     IssueResult,
     ReturnEventResult,
 )
+from app.infrastructure.dte_demo_clock import demo_clock_headers
 
 _PATHS = {
     "01": "/api/dte/v2/factura",
@@ -104,6 +105,7 @@ class HttpDteServiceClient:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         if nit:
             headers["X-DTE-Issuer-NIT"] = nit
+        headers.update(demo_clock_headers())
         return httpx.AsyncClient(
             base_url=self._base_url,
             headers=headers,

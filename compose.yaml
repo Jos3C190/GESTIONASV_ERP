@@ -553,6 +553,8 @@ services:
       DTE_MODE: ${DTE_MODE:-simulated}
       DTE_SIMULATION_ACKNOWLEDGED: "true"
       DTE_SIMULATION_SQLITE_PATH: /app/data/dte-simulation.db
+      # Datos de demostración del mes anterior (V9b): solo emisores simulados.
+      DTE_DEMO_CLOCK_ENABLED: ${DTE_DEMO_CLOCK_ENABLED:-true}
       SQLITE_PATH: /app/data/dte.db
       MS_API_KEYS: ${DTE_SERVICE_API_KEY:-}
       DTE_CREDENTIALS_KEY: ${DTE_CREDENTIALS_KEY:-}
