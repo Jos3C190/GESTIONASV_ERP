@@ -388,6 +388,7 @@ para El Salvador:
 - `docs/testing-strategy.md` — estrategia de testing (Pytest + Vitest)
 - `docs/troubleshooting-faq.md` — resolución de problemas y FAQ
 - `docs/ers-v1/guia-maestra.md` — guía maestra de compras e inventario
+- `docs/ers-v1/manual-ventas.md` — ciclo completo de Ventas y facturación electrónica, permisos y recorrido de demostración
 - `docs/ers-v1/manual-traslados.md`, `manual-ajustes.md`, `manual-entregas.md` y `manual-ventas-base.md` — manuales de operación
 - `docs/ers-v1/manual-pruebas-y-demostracion.md` — recorrido de pruebas y demostración
 - `docs/flujo-compras-inventario-retaceo.md` — flujo de compras, inventario y retaceo
