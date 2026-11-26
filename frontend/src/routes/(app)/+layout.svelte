@@ -17,6 +17,7 @@
   import Button from '#lib/components/ui/Button.svelte';
   import { clearPrivateQueryCache } from '#lib/services/query-client.ts';
   import { restoreAppContext } from '#lib/auth/restore-app-context.ts';
+  import { hasOnlyPosModules, isPosWorkspace } from '#lib/features/pos/workspace.ts';
 
   interface Props {
     children: Snippet;
@@ -35,18 +36,23 @@
   let contextLoading = $state(true);
   let contextError = $state<string | null>(null);
   let companyLogoFailed = $state(false);
+  // Un cajero que solo tiene el punto de venta trabaja en la caja, sin el menú del ERP; quien solo
+  // tiene módulos del punto de venta (supervisor de tienda) entra a la caja con su menú.
+  let posWorkspace = $derived(isPosWorkspace(permissions));
+  let posHome = $derived(posWorkspace || hasOnlyPosModules(permissions));
   let operationalWorkspace = $derived(
-    !permissions.isSuperuser && permissions.hasPermission('inventory:warehouse_receipts')
+    posWorkspace ||
+      (!permissions.isSuperuser && permissions.hasPermission('inventory:warehouse_receipts'))
   );
 
   $effect(() => {
     if (
       !contextLoading &&
       !contextError &&
-      operationalWorkspace &&
+      (operationalWorkspace || posHome) &&
       page.url.pathname === '/dashboard'
     ) {
-      void goto('/inventory', { replaceState: true });
+      void goto(posHome ? '/pos' : '/inventory', { replaceState: true });
     }
   });
 
@@ -69,12 +75,15 @@
 
   // Screens that draw edge to edge (live map) opt out of the shared gutter.
   const FULL_BLEED_ROUTES = ['/tracking'];
+  // La caja dibuja su propia superficie; sus pantallas de gestión usan el margen común.
+  const FULL_BLEED_PAGES = ['/pos'];
 
   let showSearch = $derived(SEARCHABLE_ROUTES.includes(page.url.pathname));
   let fullBleed = $derived(
-    FULL_BLEED_ROUTES.some(
-      (route) => page.url.pathname === route || page.url.pathname.startsWith(`${route}/`)
-    )
+    FULL_BLEED_PAGES.includes(page.url.pathname) ||
+      FULL_BLEED_ROUTES.some(
+        (route) => page.url.pathname === route || page.url.pathname.startsWith(`${route}/`)
+      )
   );
   let title = $derived(routeTitle(page.url.pathname));
 
@@ -260,9 +269,9 @@
       <div class="flex flex-1 items-center gap-2">
         {#if operationalWorkspace}
           <a
-            href="/inventory"
+            href={posWorkspace ? '/pos' : '/inventory'}
             class="rounded-md px-2 py-1 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >Bodega</a
+            >{posWorkspace ? 'Caja' : 'Bodega'}</a
           >
         {:else}
           <button
