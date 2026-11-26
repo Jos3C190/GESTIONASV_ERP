@@ -2,7 +2,13 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 const { salesReceivablesApi } = vi.hoisted(() => ({
-  salesReceivablesApi: { account: vi.fn(), annul: vi.fn(), apply: vi.fn(), register: vi.fn() }
+  salesReceivablesApi: {
+    account: vi.fn(),
+    annul: vi.fn(),
+    apply: vi.fn(),
+    register: vi.fn(),
+    credit: vi.fn()
+  }
 }));
 vi.mock('#lib/api/sales-receivables.ts', () => ({ salesReceivablesApi }));
 vi.mock('#lib/stores/branch.svelte.ts', () => ({
@@ -79,6 +85,8 @@ function account(overrides: Partial<CustomerAccount> = {}): CustomerAccount {
 
 beforeEach(() => {
   for (const fn of Object.values(salesReceivablesApi)) fn.mockReset();
+  // El panel de crédito carga aparte; aquí basta con que no falle.
+  salesReceivablesApi.credit.mockReturnValue(new Promise(() => {}));
 });
 
 it('muestra saldos, antigüedad y recibos, y anula con motivo', async () => {

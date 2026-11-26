@@ -1,6 +1,7 @@
 import { apiDownload, apiFetch } from '#lib/api/client.ts';
 import type {
   AccountDocument,
+  CreditStatus,
   CustomerAccount,
   CustomerSummary,
   Receipt,
@@ -42,5 +43,34 @@ export const salesReceivablesApi = {
   },
   receiptPdf(receiptId: string) {
     return apiDownload(`/sales/receipts/${receiptId}/pdf`);
+  },
+  credit(customerId: string) {
+    return apiFetch<CreditStatus>(`/sales/receivables/customers/${customerId}/credit`);
+  },
+  addNote(customerId: string, note: string, nextActionOn: string | null) {
+    return apiFetch<CreditStatus>(`/sales/receivables/customers/${customerId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ note, next_action_on: nextActionOn })
+    });
+  },
+  block(customerId: string, reason: string) {
+    return apiFetch<CreditStatus>(`/sales/receivables/customers/${customerId}/block`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+  },
+  unblock(customerId: string) {
+    return apiFetch<CreditStatus>(`/sales/receivables/customers/${customerId}/unblock`, {
+      method: 'POST'
+    });
+  },
+  statementPdf(customerId: string) {
+    return apiDownload(`/sales/receivables/customers/${customerId}/statement.pdf`);
+  },
+  sendStatement(customerId: string, to: string | null) {
+    return apiFetch<{ sent_to: string }>(
+      `/sales/receivables/customers/${customerId}/send-statement`,
+      { method: 'POST', body: JSON.stringify(to ? { to } : {}) }
+    );
   }
 };

@@ -1392,3 +1392,18 @@ Revision `0140` (revises `0139`), block V5a. Balances are computed, not stored.
 
 **Downgrade** refuses while receipts or certificates exist. Covered by
 `backend/tests/integration/test_sales_receivables_migration.py`.
+
+## 49. Credit control (0141)
+
+Revision `0141` (revises `0140`), block V5b.
+
+- `sales_customers` gains `credit_blocked`, `credit_block_reason` (≥ 5 characters), `credit_blocked_by_id`
+  and `credit_blocked_at`, all set exactly when blocked (`ck_sales_customers_credit_block`).
+- `sales_settings.credit_overdue_grace_days` (0–365, default 0).
+- `sales_collection_notes`: customer (composite FK), `note` (≥ 5 characters), `next_action_on`,
+  `created_by_id`, `created_at`.
+- Credit reasons are stored in `sales.authorization_reasons` with the discount ones.
+- Permission `sales_credit:authorize`, granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while collection notes or blocked customers exist. Covered by
+`backend/tests/integration/test_sales_credit_migration.py`.

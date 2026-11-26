@@ -61,3 +61,38 @@ del F-07.
 |---|---|
 | `sales_receivables:read` | Ver la cartera, los estados de cuenta, los recibos y su PDF. |
 | `sales_receivables:collect` | Registrar y anular recibos, aplicar saldo a favor y registrar comprobantes de retención. |
+
+## 6. Límite de crédito y mora (V5b)
+
+Un pedido **a crédito** pide autorización al confirmarlo cuando:
+
+- **Pasa el límite** del cliente: lo que debe (saldo abierto) más sus pedidos a crédito confirmados
+  sin facturar más este pedido supera su límite de crédito. Sin límite configurado no se evalúa.
+- **Tiene mora**: saldos vencidos con más días que los de gracia de la empresa (por omisión, 0).
+- **Su crédito está bloqueado.**
+
+Los pedidos de contado no se evalúan. Estos motivos se suman a los de descuento: el pedido queda
+«Espera autorización». Lo autoriza quien tiene `sales_credit:authorize`, escribiendo **por qué se
+autoriza el crédito**; si además tiene descuentos fuera de tope, hace falta también el permiso de
+descuentos.
+
+Al **facturar** se vuelve a revisar: si desde que se confirmó el cliente pasó su cupo, entró en mora
+o se bloqueó, la factura no se emite. Quien controla el crédito usa **Autorizar crédito para
+facturar** en el pedido, con su motivo, y entonces se factura. Un pedido que ya se autorizó por
+crédito se factura sin volver a preguntar.
+
+## 7. Gestión de cobro
+
+En el estado de cuenta, la sección **Crédito y cobranza** muestra el límite, los pedidos sin
+facturar, el **disponible** y la **mora**, y permite:
+
+- **Notas de seguimiento**: qué se habló con el cliente y la fecha de la próxima acción.
+- **Estado de cuenta (PDF)** y **Enviar por correo** al cliente (o a otra dirección), con el SMTP de la
+  empresa o el del servidor.
+- **Bloquear o desbloquear el crédito** con motivo (permiso `sales_credit:authorize`).
+
+Todo queda en la bitácora.
+
+| Permiso | Qué permite |
+|---|---|
+| `sales_credit:authorize` | Autorizar pedidos a crédito fuera de cupo, con mora o de un cliente bloqueado, y bloquear o desbloquear clientes. |

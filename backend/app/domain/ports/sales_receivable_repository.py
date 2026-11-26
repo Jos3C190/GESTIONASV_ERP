@@ -23,6 +23,10 @@ class CustomerRef:
     name: str
     credit_days: int
     credit_limit: Decimal | None
+    email: str | None = None
+    credit_blocked: bool = False
+    credit_block_reason: str | None = None
+    credit_blocked_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -92,8 +96,38 @@ class Issuer:
     nrc: str | None
 
 
+@dataclass(frozen=True)
+class CollectionNote:
+    id: uuid.UUID
+    note: str
+    next_action_on: date | None
+    created_by: str
+    created_at: datetime
+
+
 class SalesReceivableRepository(Protocol):
     async def issuer(self, company_id: uuid.UUID) -> Issuer: ...
+
+    async def notes(
+        self, company_id: uuid.UUID, customer_id: uuid.UUID
+    ) -> list[CollectionNote]: ...
+
+    async def add_note(
+        self,
+        company_id: uuid.UUID,
+        customer_id: uuid.UUID,
+        note: str,
+        next_action_on: date | None,
+        actor_id: uuid.UUID,
+    ) -> None: ...
+
+    async def set_block(
+        self,
+        company_id: uuid.UUID,
+        customer_id: uuid.UUID,
+        reason: str | None,
+        actor_id: uuid.UUID,
+    ) -> None: ...
 
     async def customer(
         self, company_id: uuid.UUID, customer_id: uuid.UUID, *, lock: bool = False

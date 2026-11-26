@@ -70,6 +70,13 @@ class SalesCustomerModel(UUIDPKMixin, TimestampMixin, Base):
     country_code: Mapped[str | None] = mapped_column(String(4))
     credit_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     credit_limit: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    # Bloqueo manual de crédito (revisión 0141).
+    credit_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    credit_block_reason: Mapped[str | None] = mapped_column(String(300))
+    credit_blocked_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    credit_blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     seller_employee_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL")
     )

@@ -67,7 +67,10 @@ _READ = [Depends(require_permission("sales:read"))]
 _MANAGE = [Depends(require_permission("sales:manage"))]
 _CONFIRM = [Depends(require_permission("sales:confirm"))]
 _CANCEL = [Depends(require_permission("sales:cancel"))]
-_AUTHORIZE = [Depends(require_permission("sales_discounts:authorize"))]
+# Descuentos fuera de tope o crédito (V5b): cada motivo pide su permiso dentro del caso de uso.
+_AUTHORIZE = [
+    Depends(require_any_permission("sales_discounts:authorize", "sales_credit:authorize"))
+]
 _STATUS_PATTERN = "^(draft|pending_authorization|confirmed|cancelled)$"
 ZERO = Decimal("0")
 QUANTITY = Decimal("0.000001")
@@ -567,11 +570,48 @@ async def authorize_order(
 ) -> OrderOut:
     await _scoped(use_cases, session, current, company_id, order_id)
     change = await use_cases.authorize(
-        company_id, current.id, order_id, body.expected_version, body.note
+        company_id,
+        current.id,
+        order_id,
+        body.expected_version,
+        body.note,
+        can_authorize_discounts=(
+            await checker.execute(current.id, company_id, "sales_discounts:authorize")
+        ).allowed,
+        can_authorize_credit=(
+            await checker.execute(current.id, company_id, "sales_credit:authorize")
+        ).allowed,
     )
     await _record(audit, request, action="SALES_ORDER_AUTHORIZED", actor=current.id, change=change)
     order, auto = await _deliver_confirmed(deliveries, use_cases, request, current, change.order)
     return await _respond(use_cases, checker, current, order, auto)
+
+
+@router.post(
+    "/{order_id:uuid}/authorize-credit",
+    response_model=OrderOut,
+    summary="Autorizar el crédito de un pedido confirmado para poder facturarlo",
+    dependencies=[Depends(require_permission("sales_credit:authorize"))],
+)
+async def authorize_order_credit(
+    order_id: uuid.UUID,
+    body: OrderNoteIn,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    company_id: CompanyId,
+    use_cases: UseCases,
+    checker: Checker,
+    audit: Audit,
+) -> OrderOut:
+    await _scoped(use_cases, session, current, company_id, order_id)
+    change = await use_cases.authorize_credit(
+        company_id, current.id, order_id, body.expected_version, body.note
+    )
+    await _record(
+        audit, request, action="SALES_ORDER_CREDIT_AUTHORIZED", actor=current.id, change=change
+    )
+    return await _respond(use_cases, checker, current, change.order)
 
 
 @router.post(

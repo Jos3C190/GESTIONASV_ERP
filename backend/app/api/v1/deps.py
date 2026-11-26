@@ -67,6 +67,7 @@ from app.application.sales_invoices.remission import TransferRemissionUseCases
 from app.application.sales_invoices.returns import SalesFiscalReturnUseCases
 from app.application.sales_orders import SalesOrderUseCases
 from app.application.sales_quotations import SalesQuotationUseCases
+from app.application.sales_receivables.collection import SalesCollectionUseCases
 from app.application.sales_receivables.use_cases import SalesReceivableUseCases
 from app.application.sales_tax import SalesTaxUseCases
 from app.core.config import settings
@@ -98,6 +99,7 @@ from app.domain.ports.purchase_request_repository import PurchaseRequestReposito
 from app.domain.ports.refresh_token_repository import RefreshTokenRepository
 from app.domain.ports.retaceo_repository import RetaceoRepository
 from app.domain.ports.role_repository import RoleRepository
+from app.domain.ports.sales_credit_repository import SalesCreditRepository
 from app.domain.ports.sales_document import SalesCatalog
 from app.domain.ports.token_service import TokenService
 from app.domain.ports.user_repository import UserRepository
@@ -280,6 +282,14 @@ def get_sales_fiscal_return_use_cases(session: SessionDep) -> SalesFiscalReturnU
     )
 
 
+def get_sales_collection_use_cases(session: SessionDep) -> SalesCollectionUseCases:
+    from app.infrastructure.repositories.sales_receivable_repository import (
+        SqlAlchemySalesReceivableRepository,
+    )
+
+    return SalesCollectionUseCases(SqlAlchemySalesReceivableRepository(session), _credit(session))
+
+
 def get_sales_receivable_use_cases(session: SessionDep) -> SalesReceivableUseCases:
     from app.infrastructure.repositories.sales_receivable_repository import (
         SqlAlchemySalesReceivableRepository,
@@ -373,7 +383,16 @@ def get_sales_order_use_cases(session: SessionDep) -> SalesOrderUseCases:
         _sales_pricing(session, repository),
         SqlAlchemyPriceListRepository(session),
         SqlAlchemyCustomerRepository(session),
+        _credit(session),
     )
+
+
+def _credit(session: AsyncSession) -> SalesCreditRepository:
+    from app.infrastructure.repositories.sales_credit_repository import (
+        SqlAlchemySalesCreditRepository,
+    )
+
+    return SqlAlchemySalesCreditRepository(session)
 
 
 def get_sales_invoice_email_use_cases(session: SessionDep) -> SalesInvoiceEmailUseCases:
@@ -412,6 +431,7 @@ def get_sales_invoice_use_cases(session: SessionDep) -> SalesInvoiceUseCases:
         SqlAlchemySalesOrderRepository(session),
         SqlAlchemyCustomerRepository(session),
         SqlAlchemyFiscalRepository(session),
+        _credit(session),
     )
 
 

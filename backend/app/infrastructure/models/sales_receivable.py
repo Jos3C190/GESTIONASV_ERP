@@ -160,3 +160,30 @@ class SalesWithholdingCertificateModel(Base):
             ondelete="RESTRICT",
         ),
     )
+
+
+class SalesCollectionNoteModel(Base):
+    """Nota de seguimiento de cobro de un cliente (revisión 0141)."""
+
+    __tablename__ = "sales_collection_notes"
+
+    id: Mapped[uuid.UUID] = _id()
+    company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    customer_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    note: Mapped[str] = mapped_column(String(1000), nullable=False)
+    next_action_on: Mapped[date | None] = mapped_column(Date)
+    created_by_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["company_id", "customer_id"],
+            ["sales_customers.company_id", "sales_customers.id"],
+            name="fk_sales_collection_notes_customer",
+            ondelete="RESTRICT",
+        ),
+    )

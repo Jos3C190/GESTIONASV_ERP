@@ -132,6 +132,9 @@ class SalesReceivableUseCases:
             raise NotFoundError("Recibo no encontrado.", code="sales_receipt_not_found")
         return found
 
+    async def issuer(self, company_id: uuid.UUID) -> Issuer:
+        return await self._repository.issuer(company_id)
+
     async def printable(
         self, company_id: uuid.UUID, receipt_id: uuid.UUID
     ) -> tuple[Receipt, CustomerRef, Issuer]:

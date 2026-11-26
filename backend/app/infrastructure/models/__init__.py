@@ -201,6 +201,7 @@ from app.infrastructure.models.sales_pricing import (
     SalesVolumeDiscountModel,
 )
 from app.infrastructure.models.sales_receivable import (
+    SalesCollectionNoteModel,
     SalesReceiptApplicationModel,
     SalesReceiptModel,
     SalesReceiptPaymentModel,
@@ -359,6 +360,7 @@ __all__: list[str] = [
     "SaleLineModel",
     "SaleModel",
     "SalesBranchPromotionModel",
+    "SalesCollectionNoteModel",
     "SalesCustomerDeliveryAddressModel",
     "SalesCustomerModel",
     "SalesDeliveryAllocationModel",

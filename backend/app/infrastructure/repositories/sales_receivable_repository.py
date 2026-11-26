@@ -23,6 +23,7 @@ from app.domain.ports.sales_receivable_repository import (
     AccountDocument,
     Application,
     Certificate,
+    CollectionNote,
     CustomerRef,
     Issuer,
     Receipt,
@@ -111,6 +112,66 @@ class SqlAlchemySalesReceivableRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def notes(self, company_id: uuid.UUID, customer_id: uuid.UUID) -> list[CollectionNote]:
+        rows = await self._session.execute(
+            text(
+                "SELECT n.id, n.note, n.next_action_on, u.username AS by, "
+                "n.created_at FROM sales_collection_notes n JOIN users u ON u.id = n.created_by_id "
+                "WHERE n.company_id = :company AND n.customer_id = :customer "
+                "ORDER BY n.created_at DESC LIMIT 100"
+            ),
+            {"company": company_id, "customer": customer_id},
+        )
+        return [CollectionNote(r.id, r.note, r.next_action_on, r.by, r.created_at) for r in rows]
+
+    async def add_note(
+        self,
+        company_id: uuid.UUID,
+        customer_id: uuid.UUID,
+        note: str,
+        next_action_on: date | None,
+        actor_id: uuid.UUID,
+    ) -> None:
+        await self._session.execute(
+            text(
+                "INSERT INTO sales_collection_notes (company_id, customer_id, note, next_action_on, "
+                "created_by_id) VALUES (:company, :customer, :note, :next, :actor)"
+            ),
+            {
+                "company": company_id,
+                "customer": customer_id,
+                "note": note,
+                "next": next_action_on,
+                "actor": actor_id,
+            },
+        )
+
+    async def set_block(
+        self,
+        company_id: uuid.UUID,
+        customer_id: uuid.UUID,
+        reason: str | None,
+        actor_id: uuid.UUID,
+    ) -> None:
+        """Con motivo bloquea el crédito del cliente; sin motivo lo desbloquea."""
+
+        blocked = reason is not None
+        await self._session.execute(
+            text(
+                "UPDATE sales_customers SET credit_blocked = :blocked, "
+                "credit_block_reason = :reason, credit_blocked_by_id = :actor, "
+                "credit_blocked_at = :now WHERE company_id = :company AND id = :customer"
+            ),
+            {
+                "company": company_id,
+                "customer": customer_id,
+                "blocked": blocked,
+                "reason": reason,
+                "actor": actor_id if blocked else None,
+                "now": datetime.now(UTC) if blocked else None,
+            },
+        )
+
     async def issuer(self, company_id: uuid.UUID) -> Issuer:
         row = (
             await self._session.execute(
@@ -124,7 +185,8 @@ class SqlAlchemySalesReceivableRepository:
         self, company_id: uuid.UUID, customer_id: uuid.UUID, *, lock: bool = False
     ) -> CustomerRef | None:
         sql = (
-            "SELECT id, code, name, credit_days, credit_limit FROM sales_customers "
+            "SELECT id, code, name, credit_days, credit_limit, email, credit_blocked, "
+            "credit_block_reason, credit_blocked_at FROM sales_customers "
             "WHERE company_id = :company AND id = :customer"
         )
         row = (
@@ -140,7 +202,8 @@ class SqlAlchemySalesReceivableRepository:
             return []
         rows = await self._session.execute(
             text(
-                "SELECT id, code, name, credit_days, credit_limit FROM sales_customers "
+                "SELECT id, code, name, credit_days, credit_limit, email, credit_blocked, "
+                "credit_block_reason, credit_blocked_at FROM sales_customers "
                 "WHERE company_id = :company AND id = ANY(:ids) ORDER BY name"
             ),
             {"company": company_id, "ids": list(ids)},

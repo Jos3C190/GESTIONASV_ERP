@@ -21,7 +21,13 @@ export type QuotationStatus =
   'draft' | 'pending_authorization' | 'issued' | 'accepted' | 'rejected' | 'cancelled';
 
 export interface AuthorizationReason {
-  code: 'discount_above_limit' | 'below_cost' | 'global_discount_above_limit';
+  code:
+    | 'discount_above_limit'
+    | 'below_cost'
+    | 'global_discount_above_limit'
+    | 'credit_limit_exceeded'
+    | 'customer_overdue'
+    | 'customer_blocked';
   message: string;
 }
 

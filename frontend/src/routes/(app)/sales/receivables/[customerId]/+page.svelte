@@ -6,6 +6,7 @@
   const customerId = $derived(page.params.customerId ?? '');
   const canRead = $derived(permissions.hasPermission('sales_receivables:read'));
   const canCollect = $derived(permissions.hasPermission('sales_receivables:collect'));
+  const canControlCredit = $derived(permissions.hasPermission('sales_credit:authorize'));
 </script>
 
 <svelte:head>
@@ -18,6 +19,6 @@
   </div>
 {:else}
   {#key customerId}
-    <CustomerAccount {customerId} {canCollect} />
+    <CustomerAccount {customerId} {canCollect} {canControlCredit} />
   {/key}
 {/if}
