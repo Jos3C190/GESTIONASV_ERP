@@ -40,6 +40,8 @@ class OrderDraftIn(DeliveryIn):
     global_discount_percent: Decimal = Field(default=Decimal("0"), ge=0, le=100, decimal_places=2)
     notes: str | None = Field(default=None, max_length=4000)
     lines: list[QuotationLineIn] = Field(min_length=1, max_length=200)
+    exchange_return_id: UUID | None = None
+    """V8b1: devolución aceptada que este pedido cambia por otro producto."""
 
 
 class OrderUpdateIn(OrderDraftIn):
@@ -97,6 +99,8 @@ class OrderOut(BaseModel):
     customer_name: str
     quotation_id: UUID | None
     quotation_code: str | None
+    exchange_return_id: UUID | None = None
+    exchange_return_code: str | None = None
     code: str
     document_type: Literal["01", "03"]
     price_list_id: UUID | None

@@ -868,10 +868,10 @@ Diseño:
 
 Pasos:
 - [x] **Paso 0: plan y rama.**
-- [ ] **Paso 1: migración 0143, servicio de pedidos y API.** Columna, índice, validación en borrador y edición,
+- [x] **Paso 1: migración 0143, servicio de pedidos y API.** Columna, índice, validación en borrador y edición,
   salidas del pedido y de la devolución. Verificar: prueba de migración y e2e (cambio válido, cliente distinto, sin
   aceptar, devolución ya tomada; el pedido de cambio se factura y se le aplica el saldo a favor).
-- [ ] **Paso 2: interfaz.** «Cambiar por otro producto» en la devolución aceptada abre el pedido nuevo con cliente y
+- [x] **Paso 2: interfaz.** «Cambiar por otro producto» en la devolución aceptada abre el pedido nuevo con cliente y
   sucursal; aviso del cambio en el editor y enlaces en el pedido y en la devolución; aplicar saldo a favor en el panel
   Cobro. Verificar: vitest.
 - [ ] **Paso 3: documentación, verificación y PR.**
@@ -901,7 +901,9 @@ los decimales de la representación más corta del número (la misma que va en e
 
 ## Estado actual
 
-- **Paso en curso**: V8b1 paso 1 (migración 0143 y API del cambio de producto). V8a en develop (#65) y
+- **Paso en curso**: V8b1 paso 3 (docs, batería y PR); pasos 1 y 2 hechos. La vista previa del pedido ignora
+  `exchange_return_id` (solo se valida al guardar, con el id del pedido que se edita). QA del 25/11: PED-20261125-F4596AE0
+  cambia DEV-20261126-A30FE3F7 y se le aplicó $34.66 del saldo a favor de RC-000003. V8a en develop (#65) y
   multipleOf del DTE corregido en develop (#66); la imagen de `dte-service` se reconstruyó tras el merge. Las pruebas del servicio corren sin
   `node_modules` local (better-sqlite3 no compila en Windows) montando `src` y `test` en la imagen:
   `MSYS_NO_PATHCONV=1 docker run --rm -v "<ruta>\dte-service\src:/app/src" -v "<ruta>\dte-service\test:/app/test" -w /app proyecto_erp-dte-service npm test`.

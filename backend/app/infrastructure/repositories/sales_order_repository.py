@@ -13,11 +13,16 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Select, delete, func, select
+from sqlalchemy import Select, delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.sales_fiscal_document import INVOICEABLE_DOCUMENTS
-from app.domain.entities.sales_order import DeliveryMode, OrderStatus, PaymentTerms
+from app.domain.entities.sales_order import (
+    DeliveryMode,
+    ExchangeSource,
+    OrderStatus,
+    PaymentTerms,
+)
 from app.domain.ports.sales_document import DocumentTotals
 from app.domain.ports.sales_order_repository import (
     DeliveryAddress,
@@ -46,6 +51,7 @@ _HEADER_FIELDS = (
     "branch_id",
     "customer_id",
     "quotation_id",
+    "exchange_return_id",
     "code",
     "document_type",
     "price_list_id",
@@ -184,6 +190,41 @@ class SqlAlchemySalesOrderRepository(SalesDocumentSupport):
             return None
         lines, delivered = await self._children(company_id, [row.id])
         return _order(row, lines[row.id], delivered)
+
+    async def exchange_source(
+        self, company_id: uuid.UUID, return_id: uuid.UUID, *, exclude_order: uuid.UUID | None
+    ) -> ExchangeSource | None:
+        row = (
+            await self._session.execute(
+                text(
+                    """
+                    SELECT r.id, r.code, s.customer_id,
+                        COALESCE((SELECT sum(e.quantity_base) FROM sales_return_events e
+                                  WHERE e.company_id = r.company_id AND e.return_id = r.id
+                                    AND e.decision = 'accepted'), 0) AS accepted,
+                        (SELECT o.code FROM sales o
+                         WHERE o.company_id = r.company_id AND o.exchange_return_id = r.id
+                           AND o.status <> 'cancelled'
+                           AND (CAST(:exclude AS uuid) IS NULL OR o.id <> CAST(:exclude AS uuid))
+                         LIMIT 1) AS taken_by
+                    FROM sales_returns r
+                    JOIN sales s ON s.company_id = r.company_id AND s.id = r.sale_id
+                    WHERE r.company_id = :company_id AND r.id = :return_id
+                    FOR UPDATE OF r
+                    """
+                ),
+                {"company_id": company_id, "return_id": return_id, "exclude": exclude_order},
+            )
+        ).first()
+        if row is None:
+            return None
+        return ExchangeSource(
+            return_id=row.id,
+            code=row.code,
+            customer_id=row.customer_id,
+            accepted_base=Decimal(row.accepted),
+            taken_by=row.taken_by,
+        )
 
     async def for_quotation(self, company_id: uuid.UUID, quotation_id: uuid.UUID) -> Order | None:
         order_id = await self._session.scalar(

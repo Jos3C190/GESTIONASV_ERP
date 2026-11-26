@@ -45,6 +45,7 @@ from app.domain.entities.sales_order import (
     require_cancellable,
     require_delivery_place,
     require_editable,
+    require_exchange,
     require_pending_authorization,
     require_promised_date,
     shortages,
@@ -110,6 +111,8 @@ class OrderDraft:
     document_type: str | None = None
     global_discount_percent: Decimal = Decimal("0")
     notes: str | None = None
+    exchange_return_id: uuid.UUID | None = None
+    """V8b1: la devolución que este pedido cambia por otro producto."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +135,7 @@ class OrderView:
     price_list_name: str | None
     quotation_code: str | None
     people: PeopleNames
+    exchange_return_code: str | None = None
     availability: Availability | None = None
 
 
@@ -224,11 +228,19 @@ class SalesOrderUseCases:
                 if user
             }
         )
+        exchange = (
+            await self._repo.exchange_source(
+                order.company_id, order.exchange_return_id, exclude_order=order.id
+            )
+            if order.exchange_return_id
+            else None
+        )
         return OrderView(
             order=order,
             customer=customer,
             price_list_name=price_list.name if price_list else None,
             quotation_code=quotation.code if quotation else None,
+            exchange_return_code=exchange.code if exchange else None,
             people=people,
             availability=await self.availability(order) if with_availability else None,
         )
@@ -259,7 +271,10 @@ class SalesOrderUseCases:
         *,
         kept_prices: dict[PriceKey, Decimal] | None = None,
         enforce_cost: bool = True,
+        order_id: uuid.UUID | None = None,
     ) -> Order:
+        if draft.exchange_return_id is not None:
+            await self._require_exchange(company_id, draft, order_id)
         priced = await self._pricing.price(
             company_id,
             actor,
@@ -302,12 +317,31 @@ class SalesOrderUseCases:
             payment_terms=condition.terms,
             credit_days=condition.credit_days,
             created_by_id=actor.user_id,
+            exchange_return_id=draft.exchange_return_id,
             lines=[OrderLine(line=line) for line in priced.lines],
         )
 
+    async def _require_exchange(
+        self, company_id: uuid.UUID, draft: OrderDraft, order_id: uuid.UUID | None
+    ) -> None:
+        assert draft.exchange_return_id is not None
+        source = await self._repo.exchange_source(
+            company_id, draft.exchange_return_id, exclude_order=order_id
+        )
+        if source is None:
+            raise NotFoundError(
+                "La devolución del cambio no existe.", code="sales_exchange_return_not_found"
+            )
+        require_exchange(source, draft.customer_id)
+
     async def preview(self, company_id: uuid.UUID, actor: Actor, draft: OrderDraft) -> Order:
+        # La vista previa solo calcula: el vínculo del cambio se valida al guardar.
         return await self._build(
-            company_id, actor, draft, today_in_el_salvador(), enforce_cost=False
+            company_id,
+            actor,
+            replace(draft, exchange_return_id=None),
+            today_in_el_salvador(),
+            enforce_cost=False,
         )
 
     async def _current(self, order: Order, policy: DiscountPolicy) -> QuoteCalculation:
@@ -431,7 +465,7 @@ class SalesOrderUseCases:
         }
         before = _copy(current)
         rebuilt = await self._build(
-            company_id, actor, draft, today_in_el_salvador(), kept_prices=kept
+            company_id, actor, draft, today_in_el_salvador(), kept_prices=kept, order_id=current.id
         )
         # Editar invalida la autorización heredada de la cotización: se vuelve a evaluar.
         rebuilt.id, rebuilt.code = current.id, current.code

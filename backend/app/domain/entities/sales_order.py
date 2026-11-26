@@ -159,3 +159,38 @@ def pending_to_deliver(ordered: Decimal, delivered: Decimal) -> Decimal:
     """Lo que un pedido confirmado sigue apartando: lo pedido menos lo ya entregado."""
 
     return max(ZERO, ordered - delivered)
+
+
+# --- Cambio de producto (V8b1) ---------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ExchangeSource:
+    """La devolución que un pedido cambia por otro producto."""
+
+    return_id: uuid.UUID
+    code: str
+    customer_id: uuid.UUID
+    accepted_base: Decimal
+    taken_by: str | None
+    """Código del otro pedido de cambio vigente de esta devolución, si lo hay."""
+
+
+def require_exchange(source: ExchangeSource, customer_id: uuid.UUID) -> None:
+    """El pedido de cambio es del mismo cliente y la devolución tiene mercadería aceptada libre."""
+
+    if source.customer_id != customer_id:
+        raise _rule(
+            "La devolución es de otro cliente; el cambio se hace al mismo cliente.",
+            "sales_exchange_customer_mismatch",
+        )
+    if source.accepted_base <= 0:
+        raise _rule(
+            f"La devolución {source.code} no tiene mercadería aceptada; acéptala antes del cambio.",
+            "sales_exchange_return_not_accepted",
+        )
+    if source.taken_by:
+        raise _rule(
+            f"La devolución {source.code} ya se cambió en el pedido {source.taken_by}.",
+            "sales_exchange_return_taken",
+        )
