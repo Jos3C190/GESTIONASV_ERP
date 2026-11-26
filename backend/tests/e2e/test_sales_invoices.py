@@ -127,9 +127,11 @@ async def _process(document_id: str) -> None:
     await process_fiscal_document(uuid.UUID(document_id), client=client, storage=object_storage())
 
 
-async def _confirmed_order(client: AsyncClient) -> tuple[dict[str, str], dict, uuid.UUID]:
+async def _confirmed_order(
+    client: AsyncClient, stock: str = "5"
+) -> tuple[dict[str, str], dict, uuid.UUID]:
     admin, body, _unit = await _setup(client)
-    await _stock(admin, body, "5")
+    await _stock(admin, body, stock)
     company_id = uuid.UUID(admin["X-Company-ID"])
     point = await _issuer(company_id, uuid.UUID(str(body["branch_id"])))
     order = await _create(client, admin, _order_body(body, "2"))

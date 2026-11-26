@@ -205,6 +205,7 @@ class SalesReturnFiscalAdjustmentModel(Base):
     status: Mapped[str] = mapped_column(String(12), nullable=False)
     message: Mapped[str | None] = mapped_column(String(500))
     lines: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    resolution_key: Mapped[str] = mapped_column(String(120), nullable=False)
     created_by_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )

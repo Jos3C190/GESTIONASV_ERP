@@ -17,8 +17,9 @@ pytestmark = pytest.mark.integration
 
 _ADJUSTMENT = (
     "INSERT INTO sales_return_fiscal_adjustments (company_id, return_id, document_id, "
-    "fiscal_note_id, fiscal_return_id, status, message, lines, created_by_id) VALUES "
-    "(%s, gen_random_uuid(), %s, %s, %s, %s, %s, %s, gen_random_uuid())"
+    "fiscal_note_id, fiscal_return_id, status, message, lines, resolution_key, created_by_id) "
+    "VALUES (%s, gen_random_uuid(), %s, %s, %s, %s, %s, %s, gen_random_uuid()::text, "
+    "gen_random_uuid())"
 )
 _REFUND = (
     "INSERT INTO sales_refunds (company_id, branch_id, customer_id, receipt_id, number, "

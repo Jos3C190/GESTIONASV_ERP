@@ -38,11 +38,11 @@ async def _enable_notes(client: AsyncClient, admin: dict[str, str]) -> None:
         assert enabled.status_code == 200, enabled.text
 
 
-async def _ccf(client: AsyncClient) -> tuple[dict[str, str], dict, dict]:
+async def _ccf(client: AsyncClient, stock: str = "5") -> tuple[dict[str, str], dict, dict]:
     """Un CCF simulado de 4 unidades a $10.00 sin IVA para un cliente contribuyente."""
 
     admin, body, _unit = await _setup(client)
-    await _stock(admin, body, "5")
+    await _stock(admin, body, stock)
     company_id = uuid.UUID(admin["X-Company-ID"])
     point = await _issuer(company_id, uuid.UUID(str(body["branch_id"])))
     await _enable_notes(client, admin)

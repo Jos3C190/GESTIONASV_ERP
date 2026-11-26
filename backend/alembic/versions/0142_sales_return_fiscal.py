@@ -9,7 +9,8 @@ Bloque V8a del área de Ventas.
   deja su ajuste fiscal: la nota de crédito (si el documento es un crédito fiscal) o el evento de
   retorno (si es una factura), con las líneas y cantidades; o el motivo por el que no se pudo
   emitir (plazo vencido, documento sin sellar, pedido sin facturar…). Una devolución puede
-  aceptarse en varias veces, así que hay una fila por aceptación.
+  aceptarse en varias veces, así que hay una fila por aceptación, única por la llave de
+  idempotencia de esa resolución (un reintento no emite otra nota).
 - ``sales_refunds``: reintegro de dinero al cliente desde el saldo a favor de un recibo de cobro;
   no es un documento tributario. Se anula con motivo y restituye el saldo.
 """
@@ -35,8 +36,11 @@ def upgrade() -> None:
             status varchar(12) NOT NULL,
             message varchar(500),
             lines jsonb NOT NULL DEFAULT '[]'::jsonb,
+            resolution_key varchar(120) NOT NULL,
             created_by_id uuid NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
             created_at timestamptz NOT NULL DEFAULT now(),
+            CONSTRAINT uq_sales_return_fiscal_adjustments_resolution
+                UNIQUE (company_id, return_id, resolution_key),
             CONSTRAINT fk_sales_return_fiscal_adjustments_return FOREIGN KEY (company_id, return_id)
                 REFERENCES sales_returns (company_id, id) ON DELETE RESTRICT,
             CONSTRAINT fk_sales_return_fiscal_adjustments_document

@@ -38,7 +38,7 @@ from app.infrastructure.models.sales_return import (
     SalesReturnLineModel,
     SalesReturnModel,
 )
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1160,6 +1160,18 @@ class SalesReturnService:
                 for document_id, title, file_name in evidence_rows
             ],
             "lines": output_lines,
+            "fiscal_adjustments": [
+                dict(row._mapping)
+                for row in await self.session.execute(
+                    text(
+                        "SELECT id, status, document_id, fiscal_note_id, fiscal_return_id, "
+                        "message, lines, created_at FROM sales_return_fiscal_adjustments "
+                        "WHERE company_id = :company_id AND return_id = :return_id "
+                        "ORDER BY created_at, id"
+                    ),
+                    {"company_id": company_id, "return_id": return_id},
+                )
+            ],
         }
 
 

@@ -9,12 +9,14 @@ from typing import Annotated, Any, TypeVar
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 
+from app.api.v1.after_commit import run_after_commit
 from app.api.v1.company_access import get_branch_context, request_company_id, resolve_branch_scope
 from app.api.v1.deps import (
     CurrentUser,
     SessionDep,
     get_audit_service,
     get_check_permission_use_case,
+    get_return_fiscal_adjuster,
     get_sales_delivery_service,
     get_sales_return_service,
     get_sales_service,
@@ -41,10 +43,12 @@ from app.application.audit.audit_service import AuditService
 from app.application.inventory import InventoryApplicationError
 from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.application.sales.deliveries import SalesDeliveryService
+from app.application.sales.return_fiscal import AcceptedLine, ReturnFiscalAdjuster
 from app.application.sales.returns import SalesReturnService
 from app.application.sales.service import SalesService
 from app.core.exceptions import AuthorizationError
 from app.domain.entities.inventory import InventoryOperationError
+from app.infrastructure.dte_worker import enqueue_fiscal_document, enqueue_fiscal_return
 
 T = TypeVar("T")
 
@@ -53,6 +57,7 @@ SalesServiceDep = Annotated[SalesService, Depends(get_sales_service)]
 SalesDeliveryServiceDep = Annotated[SalesDeliveryService, Depends(get_sales_delivery_service)]
 SalesReturnServiceDep = Annotated[SalesReturnService, Depends(get_sales_return_service)]
 AuditDep = Annotated[AuditService, Depends(get_audit_service)]
+ReturnFiscalDep = Annotated[ReturnFiscalAdjuster, Depends(get_return_fiscal_adjuster)]
 
 
 async def _delivery_call(awaitable: Awaitable[T]) -> T:
@@ -289,11 +294,12 @@ async def resolve_sale_return(
     session: SessionDep,
     current: CurrentUser,
     service: SalesReturnServiceDep,
+    fiscal: ReturnFiscalDep,
     company_id: Annotated[uuid.UUID, Depends(request_company_id)],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
 ) -> dict[str, Any]:
     await _authorize_return_branch(session, current, company_id, service, return_id)
-    return await _delivery_call(
+    await _delivery_call(
         service.resolve(
             company_id=company_id,
             actor_id=current.id,
@@ -303,6 +309,25 @@ async def resolve_sale_return(
             request=request,
         )
     )
+    # V8a: lo aceptado de un pedido facturado emite su nota de crédito o evento de retorno.
+    issued = await fiscal.adjust(
+        company_id=company_id,
+        return_id=return_id,
+        actor_id=current.id,
+        resolution_key=idempotency_key,
+        accepted=[
+            AcceptedLine(line.return_line_id, line.quantity_base)
+            for line in body.lines
+            if line.decision == "accepted"
+        ],
+        request=request,
+    )
+    note_id, event_id = issued.fiscal_note_id, issued.fiscal_return_id
+    if note_id is not None:
+        run_after_commit(session, lambda: enqueue_fiscal_document(note_id))
+    if event_id is not None:
+        run_after_commit(session, lambda: enqueue_fiscal_return(event_id))
+    return await service.return_out(company_id, return_id)
 
 
 @router.post(
