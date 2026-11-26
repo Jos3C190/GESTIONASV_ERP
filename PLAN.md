@@ -858,13 +858,17 @@ los decimales de la representación más corta del número (la misma que va en e
 
 - [x] **Paso 1: validador y pruebas.** `dte-service/src/validators/dteSchema.js` (`esMultiploDe`) y
   `dte-service/test/unit/multipleOfDecimales.test.js` (reproduce el CCF). Verificar: suite del servicio en verde.
-- [ ] **Paso 2: volver a facturar el pedido de ejemplo.** Reconstruir `dte-service` y facturar de nuevo
+- [x] **Paso 2: volver a facturar el pedido de ejemplo.** Reconstruir `dte-service` y facturar de nuevo
   PED-20261125-F2CA0F48 (Grupo Lorena, simulado). Verificar: CCF sellado en simulado.
+  Hecho (25/11/2026): con el validador copiado al contenedor (`docker cp` y reinicio), «Facturar» emitió
+  DTE-03-M001P001-000000000000003 simulado por $743.81 con `ventaGravada` 658.242; el intento `failed` queda
+  como historial.
 
 ## Estado actual
 
-- **Paso en curso**: corrección de multipleOf del servicio DTE (sección propia arriba); paso 1 hecho, falta
-  reconstruir el servicio y volver a facturar PED-20261125-F2CA0F48. Las pruebas del servicio corren sin
+- **Paso en curso**: corrección de multipleOf del servicio DTE (sección propia arriba); pasos 1 y 2 hechos, en
+  PR a develop. El contenedor `dte-service` tiene el validador copiado a mano: tras el merge, reconstruirlo con
+  `docker compose up -d --build dte-service` para que la imagen lo traiga. Las pruebas del servicio corren sin
   `node_modules` local (better-sqlite3 no compila en Windows) montando `src` y `test` en la imagen:
   `MSYS_NO_PATHCONV=1 docker run --rm -v "<ruta>\dte-service\src:/app/src" -v "<ruta>\dte-service\test:/app/test" -w /app proyecto_erp-dte-service npm test`.
 - **V8a**: en develop (#65); pasos 1 a 5 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
