@@ -169,6 +169,9 @@ export interface Sale {
   customer_name: string;
   quotation_id: string | null;
   quotation_code: string | null;
+  /** V8b1: devolución que este pedido cambia por otro producto. */
+  exchange_return_id?: string | null;
+  exchange_return_code?: string | null;
   code: string;
   document_type: '01' | '03';
   price_list_id: string | null;
@@ -233,7 +236,16 @@ export interface OrderDelivery {
   delivery_address_id: string | null;
 }
 
-export type OrderDraftInput = Omit<QuotationDraftInput, 'valid_until'> & OrderDelivery;
+export type OrderDraftInput = Omit<QuotationDraftInput, 'valid_until'> &
+  OrderDelivery & { exchange_return_id?: string | null };
+
+/** Cambio de producto (V8b1): el pedido nuevo nace de una devolución aceptada. */
+export interface OrderExchange {
+  returnId: string;
+  code: string;
+  customerId: string;
+  branchId: string;
+}
 
 export interface SalesDeliveryStockUnit {
   handling_unit_id: string;
@@ -373,6 +385,8 @@ export interface SalesReturn {
   lines: SalesReturnLine[];
   /** V8a: nota de crédito o evento de retorno emitido por cada aceptación, o el motivo de no emitirlo. */
   fiscal_adjustments?: SalesReturnFiscalAdjustment[];
+  /** V8b1: pedidos que cambian esta devolución por otro producto. */
+  exchange_orders?: { id: string; code: string; status: string }[];
 }
 
 export interface SalesReturnFiscalAdjustment {

@@ -51,6 +51,24 @@
   const canReadEvidence = $derived(permissions.hasPermission('documents:read'));
   const canReceive = $derived(permissions.hasPermission('sales_returns:receive'));
   const canResolve = $derived(permissions.hasPermission('sales_returns:resolve'));
+  const canSell = $derived(permissions.hasPermission('sales:manage'));
+
+  /** V8b1: lo aceptado puede cambiarse por otro producto mientras no haya otro pedido de cambio. */
+  function exchangeable(document: SalesReturn): boolean {
+    const accepted = document.lines.some((line) => Number(line.quantity_accepted_base) > 0);
+    const active = (document.exchange_orders ?? []).some((item) => item.status !== 'cancelled');
+    return accepted && !active;
+  }
+
+  function exchangeHref(document: SalesReturn): string {
+    const params = new URLSearchParams({
+      exchange_return: document.id,
+      code: document.code,
+      customer: sale.customer_id,
+      branch: sale.branch_id
+    });
+    return `/sales/new?${params.toString()}`;
+  }
   const canCancel = $derived(permissions.hasPermission('sales_returns:cancel'));
   const eligible = $derived(sale.status === 'confirmed' && sale.delivery_progress !== 'pending');
 
@@ -753,6 +771,27 @@
                           <span class="font-mono">{file.document_id}</span>
                         </p>
                       {/each}
+                    </div>
+                  {/if}
+                  {#if document.exchange_orders?.length || (canSell && exchangeable(document))}
+                    <div
+                      class="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3 text-xs text-foreground-muted"
+                    >
+                      {#each document.exchange_orders ?? [] as item (item.id)}
+                        <span
+                          >Cambio de producto:
+                          <a
+                            class="font-mono text-primary hover:underline"
+                            href={`/sales/${item.id}`}>{item.code}</a
+                          >{item.status === 'cancelled' ? ' (cancelado)' : ''}</span
+                        >
+                      {/each}
+                      {#if canSell && exchangeable(document)}
+                        <a
+                          class="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-surface-muted"
+                          href={exchangeHref(document)}>Cambiar por otro producto</a
+                        >
+                      {/if}
                     </div>
                   {/if}
                   {#if document.fiscal_adjustments?.length}

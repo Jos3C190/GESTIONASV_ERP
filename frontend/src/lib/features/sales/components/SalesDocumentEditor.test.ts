@@ -178,6 +178,30 @@ it('el pedido pide fecha y lugar de entrega y calcula con la vista previa del pe
   expect(await screen.findByText(/Disponible en la sucursal: 0/)).toBeInTheDocument();
 });
 
+it('el pedido de cambio fija el cliente, avisa del cambio y envía la devolución', async () => {
+  salesApi.previewOrder = vi.fn().mockResolvedValue(previewWith({}));
+  render(SalesDocumentEditor, {
+    kind: 'order',
+    exchange: {
+      returnId: 'return-1',
+      code: 'DEV-20261125-ABCD',
+      customerId: 'customer-1',
+      branchId: 'branch-1'
+    }
+  });
+  expect(await screen.findByText('Cambio de producto')).toBeInTheDocument();
+  expect(screen.getByText('DEV-20261125-ABCD')).toBeInTheDocument();
+  const [customer, , , , product] = screen.getAllByRole('combobox');
+  expect(customer).toBeDisabled();
+  expect(customer).toHaveValue('customer-1');
+  await fireEvent.change(product!, { target: { value: '7:' } });
+  await waitFor(() => expect(salesApi.previewOrder).toHaveBeenCalled(), { timeout: 2000 });
+  expect(salesApi.previewOrder.mock.calls.at(-1)![0]).toMatchObject({
+    customer_id: 'customer-1',
+    exchange_return_id: 'return-1'
+  });
+});
+
 function previewWith(line: Record<string, unknown>) {
   return {
     document_type: '01',
