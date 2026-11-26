@@ -84,7 +84,9 @@ motivo queda en el historial.
 
 Las notas ajustan un **crédito fiscal** sellado (Código Tributario, art. 110). La **nota de
 crédito** rebaja lo documentado; la **nota de débito** lo aumenta. Las dos son solo fiscales: no
-mueven inventario ni reintegran dinero (las devoluciones con mercadería llegan con V8). La
+mueven inventario ni reintegran dinero. Cuando el cliente devuelve mercadería, la nota de crédito (o el
+evento de retorno de una factura) se emite sola al aceptar la devolución; ver
+[manual-cobros.md §8](manual-cobros.md). La
 empresa debe tener habilitados los tipos 05 y 06 en **Configuración fiscal → Documentos**.
 
 En el detalle del crédito fiscal, la sección **Notas de crédito y de débito** muestra cada línea

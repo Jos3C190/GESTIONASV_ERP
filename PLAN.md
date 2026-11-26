@@ -1004,11 +1004,30 @@ Pasos:
 - [x] **Paso 3: verificación.** Análisis y libros de IVA del mes anterior en el navegador; kardex con salidas.
 - [x] **Paso 4: documentación y PR.**
 
-### V9c — Manual consolidado y prueba integral (se detalla al terminar V9b)
+### V9c — Manual consolidado y prueba integral (rama `feature/ventas-v9c-aceptacion`, desde la de V9b)
+
+El usuario dijo «Sí, sigue con V9c» (26/11/2026). Decisiones por defecto:
+- **Manual consolidado** `docs/ers-v1/manual-ventas.md`: el ciclo completo de Ventas (V1–V9), quién puede hacer qué
+  (permisos) y un recorrido de demostración paso a paso con los datos de octubre; enlaza a los manuales de detalle en
+  lugar de repetirlos. Los manuales existentes se revisan contra lo construido.
+- **Prueba integral** `tests/e2e/test_sales_full_cycle.py`: pedido → salida al confirmar → crédito fiscal → cobro →
+  devolución aceptada con nota → saldo a favor → reintegro, y conciliación: cartera en cero, kardex (salida y
+  devolución), análisis (venta, devolución y costo) y libros de IVA del mes (el CCF y su nota); permisos: un
+  vendedor sin permiso no ve cifras ni libros.
+- El recorrido en gestionasv.lat lo hace el usuario al desplegar (fuera del alcance de esta sesión).
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [x] **Paso 1: prueba integral.** Verificar: pasa en local. Hecho: `test_sales_full_cycle.py` pasa a la primera.
+- [x] **Paso 2: manual consolidado** y revisión de los manuales de Ventas. Verificar: enlaces y datos contra lo construido.
+  Hecho: `docs/ers-v1/manual-ventas.md` (ciclo, permisos del catálogo, recorrido con octubre); corregidos textos viejos en
+  ventas-base, facturación, configuración fiscal, entregas y pedidos; enlace en el README. Enlaces verificados.
+- [x] **Paso 3: batería completa y PR.** Hecho: suite local 2114 pasan; `test_sales_deliveries` (rollback) falla a veces
+  solo dentro de la suite completa y pasa sola (intermitente, no causado por V9c). PR #71 con Auto-fix y auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: V9b en PR. Mes generado: octubre de 2026 (169 ventas y documentos simulados —127 facturas y 42
+- **Paso en curso**: ninguno. V9 completo: V9a #69 y V9b #70 en develop; V9c en PR #71 (auto-merge).
   créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
   no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)
   y libros de IVA de octubre. Batería de inventario tras la corrección de capacidad: 567 pasan. Sigue V9c (manual

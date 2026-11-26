@@ -67,8 +67,9 @@ crédito. Para facturar, ver [manual-facturacion.md](manual-facturacion.md).
 ## 5. Lo que todavía no hace
 
 - Los traslados y los ajustes de inventario aún no respetan lo apartado.
-- El bloqueo por cupo de crédito y saldos vencidos llega con las cuentas por cobrar.
-- La factura o el crédito fiscal del pedido llegan con el DTE.
+
+El control de crédito (cupo, mora y clientes bloqueados) está en [manual-cobros.md §6](manual-cobros.md) y la
+factura o el crédito fiscal del pedido, en [manual-facturacion.md](manual-facturacion.md).
 
 ## 6. Permisos
 

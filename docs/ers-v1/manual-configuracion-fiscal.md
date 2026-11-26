@@ -7,8 +7,8 @@ Aquí se configura con qué datos emite **la empresa activa** sus documentos tri
 electrónicos (DTE). La pantalla solo muestra la configuración de esa empresa; la interfaz
 no hace referencia a otras empresas.
 
-Todavía no se emiten documentos desde esta pantalla. Esta configuración es la base que usarán
-la facturación y el punto de venta en los bloques siguientes.
+Esta pantalla no emite documentos: configura el emisor. Los documentos se emiten desde el pedido
+(ver [manual-facturacion.md](manual-facturacion.md)).
 
 ## 1. Emisor
 
