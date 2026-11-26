@@ -26,7 +26,7 @@
   import SalesInvoicePanel from './SalesInvoicePanel.svelte';
   import SalesReturnsPanel from './SalesReturnsPanel.svelte';
 
-  type Action = 'confirm' | 'authorize' | 'return' | 'cancel';
+  type Action = 'confirm' | 'authorize' | 'authorize-credit' | 'return' | 'cancel';
 
   let { id }: { id: string } = $props();
   let sale = $state<Sale | null>(null);
@@ -48,18 +48,42 @@
   const branchName = $derived(
     sale ? (branch.branches.find((item) => item.id === sale?.branch_id)?.name ?? '') : ''
   );
+  // Motivos de crédito (V5b): los autoriza quien controla el crédito y piden una nota.
+  const CREDIT_CODES = ['credit_limit_exceeded', 'customer_overdue', 'customer_blocked'];
+  const creditPending = $derived(
+    Boolean(sale?.authorization_reasons.some((reason) => CREDIT_CODES.includes(reason.code)))
+  );
+  const discountPending = $derived(
+    Boolean(sale?.authorization_reasons.some((reason) => !CREDIT_CODES.includes(reason.code)))
+  );
+  const canAuthorize = $derived(
+    (!creditPending || can('sales_credit:authorize')) &&
+      (!discountPending || can('sales_discounts:authorize')) &&
+      (can('sales_credit:authorize') || can('sales_discounts:authorize'))
+  );
   const prompts: Record<
     Exclude<Action, 'confirm'>,
     { label: string; required: boolean; button: string }
-  > = {
-    authorize: {
-      label: 'Nota de la autorización (opcional)',
-      required: false,
-      button: 'Autorizar y confirmar'
+  > = $derived({
+    authorize: creditPending
+      ? {
+          label: 'Por qué se autoriza el crédito',
+          required: true,
+          button: 'Autorizar crédito y confirmar'
+        }
+      : {
+          label: 'Nota de la autorización (opcional)',
+          required: false,
+          button: 'Autorizar y confirmar'
+        },
+    'authorize-credit': {
+      label: 'Por qué se autoriza el crédito',
+      required: true,
+      button: 'Autorizar crédito'
     },
     return: { label: 'Qué debe corregirse', required: true, button: 'Devolver a borrador' },
     cancel: { label: 'Motivo de la cancelación', required: true, button: 'Cancelar pedido' }
-  };
+  });
 
   async function load() {
     const current = ++generation;
@@ -96,8 +120,10 @@
   async function run(action: Action) {
     if (!sale || busy) return;
     const prompt = action === 'confirm' ? null : prompts[action];
-    if (prompt?.required && text.trim().length < 3) {
-      error = `${prompt.label}: escribe al menos 3 caracteres.`;
+    const credit = action === 'authorize' || action === 'authorize-credit';
+    const minimum = credit ? 5 : 3;
+    if (prompt?.required && text.trim().length < minimum) {
+      error = `${prompt.label}: escribe al menos ${minimum} caracteres.`;
       return;
     }
     busy = true;
@@ -122,8 +148,8 @@
       }
       sale = await salesApi.orderAction(sale.id, action, {
         expected_version: sale.version,
-        ...(action === 'authorize' ? { note: text.trim() || null } : {}),
-        ...(prompt?.required ? { reason: text.trim() } : {})
+        ...(credit ? { note: text.trim() || null } : {}),
+        ...(prompt?.required && !credit ? { reason: text.trim() } : {})
       });
       notice = autoDeliveryNotice(sale.auto_delivery);
       text = '';
@@ -383,7 +409,7 @@
             </button>
           {/if}
         {/if}
-        {#if sale.status === 'pending_authorization' && can('sales_discounts:authorize')}
+        {#if sale.status === 'pending_authorization' && canAuthorize}
           <button
             class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
             onclick={() => (pending = 'authorize')}>Autorizar</button
@@ -391,6 +417,13 @@
           <button
             class="rounded-md border border-border px-4 py-2 text-sm text-foreground"
             onclick={() => (pending = 'return')}>Devolver a borrador</button
+          >
+        {/if}
+        {#if sale.status === 'confirmed' && sale.payment_terms === 'credit' && !invoiced && !creditPending && can('sales_credit:authorize')}
+          <button
+            class="rounded-md border border-border px-4 py-2 text-sm text-foreground"
+            title="Si al facturar el cliente pasó su cupo, entró en mora o está bloqueado"
+            onclick={() => (pending = 'authorize-credit')}>Autorizar crédito para facturar</button
           >
         {/if}
         {#if sale.status !== 'cancelled' && sale.delivery_progress === 'pending' && can('sales:cancel') && (!invoiced || (invoicedDocument && isSealed(invoicedDocument) && !invoicedDocument.superseded_by_id && can('sales_invoices:invalidate')))}

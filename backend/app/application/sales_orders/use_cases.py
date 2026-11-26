@@ -28,10 +28,17 @@ from app.application.sales_documents.pricing import (
 )
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError, ValidationError
 from app.domain.entities.customer import Customer
+from app.domain.entities.sales_credit import (
+    credit_reasons,
+    evaluate_credit,
+    has_credit_authorization,
+    require_credit_note,
+)
 from app.domain.entities.sales_margin import DiscountPolicy
 from app.domain.entities.sales_order import (
     DeliveryMode,
     OrderStatus,
+    PaymentTerms,
     available_to_sell,
     confirm_target,
     payment_condition,
@@ -50,6 +57,7 @@ from app.domain.entities.sales_quotation import (
 )
 from app.domain.ports.customer_repository import CustomerRepository
 from app.domain.ports.price_list_repository import PriceListRepository
+from app.domain.ports.sales_credit_repository import SalesCreditRepository
 from app.domain.ports.sales_order_repository import (
     Order,
     OrderFilters,
@@ -143,12 +151,30 @@ class SalesOrderUseCases:
         pricing: SalesDocumentPricing,
         prices: PriceListRepository,
         customers: CustomerRepository,
+        credit: SalesCreditRepository | None = None,
     ) -> None:
         self._repo = repository
         self._quotations = quotations
         self._pricing = pricing
         self._prices = prices
         self._customers = customers
+        self._credit = credit
+
+    async def _credit_reasons(self, order: Order) -> list[str]:
+        """Motivos de crédito del pedido (V5b): cupo, mora y bloqueo; el contado no se evalúa."""
+
+        if self._credit is None or order.payment_terms is not PaymentTerms.CREDIT:
+            return []
+        snapshot = await self._credit.snapshot(
+            order.company_id,
+            order.customer_id,
+            exclude_sale_id=order.id,
+            today=today_in_el_salvador(),
+        )
+        return [
+            reason.value
+            for reason in evaluate_credit(snapshot, order.payment_terms, order.totals.total)
+        ]
 
     # --- consultas ---------------------------------------------------------------------------
 
@@ -460,10 +486,14 @@ class SalesOrderUseCases:
         policy = await self._pricing.policy(company_id, actor_id)
         calculation = await self._current(current, policy)
         if current.authorized_by_id is None:
-            current.status = confirm_target(current.status, calculation.requires_authorization)
-            current.requires_authorization = calculation.requires_authorization
-            current.authorization_reasons = tuple(r.value for r in calculation.reasons)
             current.totals = totals_of(calculation)
+            credit = await self._credit_reasons(current)
+            requires = calculation.requires_authorization or bool(credit)
+            current.status = confirm_target(current.status, requires)
+            current.requires_authorization = requires
+            current.authorization_reasons = tuple(r.value for r in calculation.reasons) + tuple(
+                credit
+            )
         else:
             confirm_target(current.status, requires_authorization=False)
             current.status = OrderStatus.CONFIRMED
@@ -481,17 +511,82 @@ class SalesOrderUseCases:
         order_id: uuid.UUID,
         expected_version: int,
         note: str | None,
+        *,
+        can_authorize_discounts: bool = True,
+        can_authorize_credit: bool = False,
     ) -> Change:
         current = await self._locked(company_id, order_id, expected_version)
         require_pending_authorization(current.status)
-        policy = await self._pricing.policy(company_id, actor_id)
-        require_authority(await self._current(current, policy), policy)
+        credit = credit_reasons(current.authorization_reasons)
+        if credit:
+            if not can_authorize_credit:
+                raise BusinessRuleError(
+                    "Este pedido necesita una autorización de crédito: pídela a quien controla "
+                    "el crédito de los clientes.",
+                    code="sales_credit_authority_required",
+                )
+            note = require_credit_note(note)
+        if len(credit) < len(current.authorization_reasons):
+            if not can_authorize_discounts:
+                raise BusinessRuleError(
+                    "Este pedido también tiene descuentos que pasan el tope: debe autorizarlo "
+                    "alguien con permiso de autorizar descuentos.",
+                    code="sales_discount_authority_required",
+                )
+            policy = await self._pricing.policy(company_id, actor_id)
+            require_authority(await self._current(current, policy), policy)
         before = _copy(current)
         await self._reserve(current)
         now = datetime.now(UTC)
         current.authorized_by_id, current.authorized_at = actor_id, now
         current.authorization_note = (note or "").strip() or None
         self._confirm(current, actor_id)
+        current.version += 1
+        await self._repo.save(current, replace_lines=False)
+        return Change(current, before)
+
+    async def authorize_credit(
+        self,
+        company_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        order_id: uuid.UUID,
+        expected_version: int,
+        note: str | None,
+    ) -> Change:
+        """Autoriza el crédito de un pedido ya confirmado que al facturar pasó el cupo (V5b).
+
+        Entre confirmar y facturar el cliente puede agotar su cupo, caer en mora o bloquearse; el
+        pedido confirmado no vuelve a borrador, así que la autorización de crédito se registra
+        sobre él y vale para facturarlo.
+        """
+
+        current = await self._locked(company_id, order_id, expected_version)
+        if current.status is not OrderStatus.CONFIRMED:
+            raise BusinessRuleError(
+                "Solo un pedido confirmado se autoriza para facturar a crédito.",
+                code="sales_credit_not_applicable",
+            )
+        if has_credit_authorization(
+            current.authorization_reasons, current.authorized_by_id is not None
+        ):
+            raise BusinessRuleError(
+                "El crédito de este pedido ya está autorizado.",
+                code="sales_credit_already_authorized",
+            )
+        reasons = await self._credit_reasons(current)
+        if not reasons:
+            raise BusinessRuleError(
+                "El pedido no necesita autorización de crédito para facturarse.",
+                code="sales_credit_not_required",
+            )
+        text = require_credit_note(note)
+        before = _copy(current)
+        current.authorization_reasons = tuple(
+            dict.fromkeys((*current.authorization_reasons, *reasons))
+        )
+        current.requires_authorization = True
+        current.authorized_by_id, current.authorized_at = actor_id, datetime.now(UTC)
+        current.authorization_note = text
         current.version += 1
         await self._repo.save(current, replace_lines=False)
         return Change(current, before)

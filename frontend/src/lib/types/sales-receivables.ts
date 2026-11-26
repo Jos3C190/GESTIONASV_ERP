@@ -8,6 +8,31 @@ export interface CustomerRef {
   name: string;
   credit_days: number;
   credit_limit: string | null;
+  email?: string | null;
+  credit_blocked?: boolean;
+  credit_block_reason?: string | null;
+  credit_blocked_at?: string | null;
+}
+
+export interface CollectionNote {
+  id: string;
+  note: string;
+  next_action_on: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+/** Situación de crédito del cliente (V5b). */
+export interface CreditStatus {
+  customer: CustomerRef;
+  credit_limit: string | null;
+  open_balance: string;
+  /** Pedidos a crédito confirmados sin facturar. */
+  pending_orders: string;
+  available: string | null;
+  overdue_beyond_grace: string;
+  grace_days: number;
+  notes: CollectionNote[];
 }
 
 export interface CustomerSummary {

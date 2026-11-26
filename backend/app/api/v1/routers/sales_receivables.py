@@ -19,6 +19,7 @@ from app.api.v1.deps import (
     CurrentUser,
     SessionDep,
     get_audit_service,
+    get_sales_collection_use_cases,
     get_sales_receivable_use_cases,
     require_permission,
 )
@@ -28,16 +29,24 @@ from app.api.v1.schemas.sales_receivable import (
     AnnulReceiptIn,
     ApplicationOut,
     ApplyIn,
+    BlockIn,
     CertificateIn,
     CertificateOut,
+    CollectionNoteIn,
+    CollectionNoteOut,
+    CreditStatusOut,
     CustomerRefOut,
     CustomerSummaryOut,
     PaymentIn,
     ReceiptIn,
     ReceiptOut,
+    SendStatementIn,
+    SentOut,
 )
 from app.application.audit.audit_service import AuditService
+from app.application.sales_receivables.collection import CreditStatus, SalesCollectionUseCases
 from app.application.sales_receivables.use_cases import SalesReceivableUseCases
+from app.core.exceptions import BusinessRuleError
 from app.domain.entities.sales_receivables import (
     ApplicationRequest,
     PaymentLine,
@@ -51,14 +60,18 @@ from app.domain.ports.sales_receivable_repository import (
     Receipt,
 )
 from app.infrastructure.sales_receipt_pdf import render_receipt_pdf
+from app.infrastructure.sales_statement_pdf import render_statement_pdf
+from app.infrastructure.statement_email import send_statement
 
 router = APIRouter(tags=["sales-receivables"])
 
 UseCases = Annotated[SalesReceivableUseCases, Depends(get_sales_receivable_use_cases)]
+Collection = Annotated[SalesCollectionUseCases, Depends(get_sales_collection_use_cases)]
 Audit = Annotated[AuditService, Depends(get_audit_service)]
 CompanyId = Annotated[uuid.UUID, Depends(request_company_id)]
 _READ = [Depends(require_permission("sales_receivables:read"))]
 _COLLECT = [Depends(require_permission("sales_receivables:collect"))]
+_CREDIT = [Depends(require_permission("sales_credit:authorize"))]
 _TZ = ZoneInfo("America/El_Salvador")
 
 
@@ -73,6 +86,10 @@ def _customer(customer: CustomerRef) -> CustomerRefOut:
         name=customer.name,
         credit_days=customer.credit_days,
         credit_limit=customer.credit_limit,
+        email=customer.email,
+        credit_blocked=customer.credit_blocked,
+        credit_block_reason=customer.credit_block_reason,
+        credit_blocked_at=customer.credit_blocked_at,
     )
 
 
@@ -416,3 +433,201 @@ async def annul_receipt(
         after=_state(after),
     )
     return receipt_out(after)
+
+
+# --- Gestión de cobro (V5b) ---------------------------------------------------------------------
+
+
+def _status_out(found: CreditStatus) -> CreditStatusOut:
+    snapshot = found.snapshot
+    return CreditStatusOut(
+        customer=_customer(found.customer),
+        credit_limit=snapshot.credit_limit,
+        open_balance=snapshot.open_balance,
+        pending_orders=snapshot.pending_orders,
+        available=snapshot.available(),
+        overdue_beyond_grace=snapshot.overdue_beyond_grace,
+        grace_days=snapshot.grace_days,
+        notes=[CollectionNoteOut(**note.__dict__) for note in found.notes],
+    )
+
+
+def _block_state(customer: CustomerRef) -> dict[str, object]:
+    return {"credit_blocked": customer.credit_blocked, "reason": customer.credit_block_reason}
+
+
+@router.get(
+    "/sales/receivables/customers/{customer_id}/credit",
+    response_model=CreditStatusOut,
+    summary="Cupo, mora, bloqueo y notas de cobro del cliente",
+    dependencies=_READ,
+)
+async def credit_status(
+    customer_id: uuid.UUID, company_id: CompanyId, collection: Collection
+) -> CreditStatusOut:
+    return _status_out(await collection.status(company_id, customer_id, _today().date()))
+
+
+@router.post(
+    "/sales/receivables/customers/{customer_id}/notes",
+    response_model=CreditStatusOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Agregar una nota de seguimiento de cobro",
+    dependencies=_COLLECT,
+)
+async def add_collection_note(
+    customer_id: uuid.UUID,
+    body: CollectionNoteIn,
+    request: Request,
+    current: CurrentUser,
+    company_id: CompanyId,
+    collection: Collection,
+    audit: Audit,
+) -> CreditStatusOut:
+    today = _today().date()
+    note = await collection.add_note(
+        company_id, customer_id, body.note, body.next_action_on, current.id, today
+    )
+    await _audit(
+        audit,
+        request,
+        action="ADD_COLLECTION_NOTE",
+        actor=current.id,
+        company_id=company_id,
+        branch_id=None,
+        resource_type="sales_customer",
+        resource_id=str(customer_id),
+        before=None,
+        after={"note": note, "next_action_on": str(body.next_action_on or "")},
+    )
+    return _status_out(await collection.status(company_id, customer_id, today))
+
+
+@router.post(
+    "/sales/receivables/customers/{customer_id}/block",
+    response_model=CreditStatusOut,
+    summary="Bloquear el crédito del cliente con motivo",
+    dependencies=_CREDIT,
+)
+async def block_customer(
+    customer_id: uuid.UUID,
+    body: BlockIn,
+    request: Request,
+    current: CurrentUser,
+    company_id: CompanyId,
+    collection: Collection,
+    audit: Audit,
+) -> CreditStatusOut:
+    before, after = await collection.block(company_id, customer_id, body.reason, current.id)
+    await _audit(
+        audit,
+        request,
+        action="BLOCK_CUSTOMER_CREDIT",
+        actor=current.id,
+        company_id=company_id,
+        branch_id=None,
+        resource_type="sales_customer",
+        resource_id=str(customer_id),
+        before=_block_state(before),
+        after=_block_state(after),
+    )
+    return _status_out(await collection.status(company_id, customer_id, _today().date()))
+
+
+@router.post(
+    "/sales/receivables/customers/{customer_id}/unblock",
+    response_model=CreditStatusOut,
+    summary="Desbloquear el crédito del cliente",
+    dependencies=_CREDIT,
+)
+async def unblock_customer(
+    customer_id: uuid.UUID,
+    request: Request,
+    current: CurrentUser,
+    company_id: CompanyId,
+    collection: Collection,
+    audit: Audit,
+) -> CreditStatusOut:
+    before, after = await collection.unblock(company_id, customer_id, current.id)
+    await _audit(
+        audit,
+        request,
+        action="UNBLOCK_CUSTOMER_CREDIT",
+        actor=current.id,
+        company_id=company_id,
+        branch_id=None,
+        resource_type="sales_customer",
+        resource_id=str(customer_id),
+        before=_block_state(before),
+        after=_block_state(after),
+    )
+    return _status_out(await collection.status(company_id, customer_id, _today().date()))
+
+
+async def _statement(
+    cases: SalesReceivableUseCases, company_id: uuid.UUID, customer_id: uuid.UUID
+) -> tuple[bytes, CustomerRef, str]:
+    today = _today().date()
+    found = await cases.account(company_id, customer_id, today)
+    issuer = await cases.issuer(company_id)
+    return render_statement_pdf(found, issuer, today), found.customer, issuer.name
+
+
+@router.get(
+    "/sales/receivables/customers/{customer_id}/statement.pdf",
+    summary="Estado de cuenta del cliente en PDF",
+    dependencies=_READ,
+)
+async def statement_pdf(customer_id: uuid.UUID, company_id: CompanyId, cases: UseCases) -> Response:
+    pdf, customer, _name = await _statement(cases, company_id, customer_id)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="estado-de-cuenta-{customer.code}.pdf"'},
+    )
+
+
+@router.post(
+    "/sales/receivables/customers/{customer_id}/send-statement",
+    response_model=SentOut,
+    summary="Enviar el estado de cuenta por correo al cliente",
+    dependencies=_COLLECT,
+)
+async def send_customer_statement(
+    customer_id: uuid.UUID,
+    body: SendStatementIn,
+    request: Request,
+    session: SessionDep,
+    current: CurrentUser,
+    company_id: CompanyId,
+    cases: UseCases,
+    audit: Audit,
+) -> SentOut:
+    pdf, customer, company_name = await _statement(cases, company_id, customer_id)
+    recipient = body.to or customer.email
+    if not recipient:
+        raise BusinessRuleError(
+            "El cliente no tiene correo: indica a quién enviarlo.",
+            code="sales_statement_recipient_required",
+        )
+    await send_statement(
+        session,
+        company_id,
+        company_name=company_name,
+        recipient=recipient,
+        customer_name=customer.name,
+        pdf=pdf,
+    )
+    await _audit(
+        audit,
+        request,
+        action="SEND_CUSTOMER_STATEMENT",
+        actor=current.id,
+        company_id=company_id,
+        branch_id=None,
+        resource_type="sales_customer",
+        resource_id=str(customer_id),
+        before=None,
+        after={"to": recipient},
+    )
+    return SentOut(sent_to=recipient)

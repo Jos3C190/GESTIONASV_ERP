@@ -2471,3 +2471,32 @@ Audited: `REGISTER_SALES_RECEIPT`, `APPLY_SALES_RECEIPT_CREDIT`, `ANNUL_SALES_RE
 `sales_withholding_certificate_invalid`, `sales_withholding_certificate_date_invalid`;
 `sales_receipt_key_conflict` (`409`); `sales_receipt_not_found`, `sales_receivable_not_found`,
 `sales_customer_not_found` (`404`).
+
+## Credit control and collection follow-up (revision 0141, block V5b)
+
+A **credit** order (`payment_terms = credit`) gains authorization reasons at confirm time:
+`credit_limit_exceeded` (open balance + confirmed uninvoiced credit orders + this order > customer
+`credit_limit`; no limit, no check), `customer_overdue` (overdue balance beyond the company's
+`credit_overdue_grace_days`) and `customer_blocked`. They are added to the discount reasons in
+`authorization_reasons`. `POST /sales/{id}/authorize` now accepts `sales_discounts:authorize` or
+`sales_credit:authorize`; credit reasons need `sales_credit:authorize` and a `note` (≥ 5 characters)
+— `sales_credit_authority_required`, `sales_credit_note_required`; discount reasons still need the
+discount permission (`sales_discount_authority_required`). Invoicing a credit order re-evaluates
+credit unless it was already authorized for credit: `sales_credit_authorization_required` (`422`).
+`POST /sales/{id}/authorize-credit` (`sales_credit:authorize`, `expected_version`, `note`) records
+the credit authorization on a confirmed order so it can be invoiced (`sales_credit_not_applicable`,
+`sales_credit_not_required`, `sales_credit_already_authorized`); audited as `SALES_ORDER_CREDIT_AUTHORIZED`.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/sales/receivables/customers/{id}/credit` | `sales_receivables:read` | `credit_limit`, `open_balance`, `pending_orders`, `available`, `overdue_beyond_grace`, `grace_days`, block state and collection `notes`. |
+| POST | `/sales/receivables/customers/{id}/notes` | `sales_receivables:collect` | `note` (5–1000), `next_action_on` (today or later). `201`. |
+| POST | `/sales/receivables/customers/{id}/block` · `/unblock` | `sales_credit:authorize` | Block with `reason` (5–300) or unblock the customer's credit. |
+| GET | `/sales/receivables/customers/{id}/statement.pdf` | `sales_receivables:read` | Statement PDF. |
+| POST | `/sales/receivables/customers/{id}/send-statement` | `sales_receivables:collect` | Email the statement to `to` or the customer's email, with the company SMTP or the server's. |
+
+Audited: `ADD_COLLECTION_NOTE`, `BLOCK_CUSTOMER_CREDIT`, `UNBLOCK_CUSTOMER_CREDIT`,
+`SEND_CUSTOMER_STATEMENT`. Errors (`422`): `sales_collection_note_invalid`,
+`sales_collection_next_action_invalid`, `sales_credit_block_reason_required`,
+`sales_credit_already_blocked`, `sales_credit_not_blocked`, `sales_statement_recipient_required`,
+`sales_statement_email_unavailable`, `sales_statement_email_failed`.

@@ -21,6 +21,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -293,6 +294,10 @@ class SalesSettingsModel(Base):
         Boolean, nullable=False, server_default=text("true")
     )
     """Al confirmar el pedido se entrega lo que cubren unidades completas (revisión 0136)."""
+    credit_overdue_grace_days: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("0")
+    )
+    """Días tras el vencimiento antes de que la mora detenga los pedidos a crédito (0141)."""
     updated_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), _user_fk())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

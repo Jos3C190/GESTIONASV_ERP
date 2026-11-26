@@ -168,12 +168,19 @@ class AuthorizationReason(StrEnum):
     BELOW_COST = "below_cost"
     """Ya no se genera: vender bajo costo se bloquea. Queda para leer documentos anteriores."""
     GLOBAL_DISCOUNT_ABOVE_LIMIT = "global_discount_above_limit"
+    # Crédito (V5b): los autoriza quien tiene ``sales_credit:authorize``.
+    CREDIT_LIMIT_EXCEEDED = "credit_limit_exceeded"
+    CUSTOMER_OVERDUE = "customer_overdue"
+    CUSTOMER_BLOCKED = "customer_blocked"
 
 
 REASON_TEXT: dict[AuthorizationReason, str] = {
     AuthorizationReason.DISCOUNT_ABOVE_LIMIT: "El descuento supera el tope de tu rol.",
     AuthorizationReason.BELOW_COST: "Queda por debajo del costo: no se puede vender así.",
     AuthorizationReason.GLOBAL_DISCOUNT_ABOVE_LIMIT: "El descuento global supera el tope de tu rol.",
+    AuthorizationReason.CREDIT_LIMIT_EXCEEDED: "El pedido pasa el límite de crédito del cliente.",
+    AuthorizationReason.CUSTOMER_OVERDUE: "El cliente tiene saldos vencidos.",
+    AuthorizationReason.CUSTOMER_BLOCKED: "El crédito del cliente está bloqueado.",
 }
 
 

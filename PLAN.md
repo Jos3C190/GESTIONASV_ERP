@@ -775,20 +775,28 @@ Diseño (detallado el 25/11/2026 sobre lo que dejó V5a y el flujo de autorizaci
   estado de cuenta por correo al cliente (PDF) y bloqueo/desbloqueo manual con motivo, auditados.
 
 Pasos:
-- [ ] **Paso 0: rama desde develop con V5a.**
-- [ ] **Paso 1: migración 0141 y dominio.** `sales_customers.credit_blocked`, motivo y quién/cuándo;
+- [x] **Paso 0: rama desde develop con V5a.** Creada sobre `feature/ventas-v5a-cobros` mientras #63 corre su CI; se mezcla develop antes del PR.
+- [x] **Paso 1: migración 0141 y dominio.** `sales_customers.credit_blocked`, motivo y quién/cuándo;
   `sales_settings.credit_overdue_grace_days`; `sales_collection_notes`; permiso `sales_credit:authorize`;
   `AuthorizationReason` de crédito y la evaluación pura. Verificar: prueba de migración y pytest.
-- [ ] **Paso 2: confirmar, autorizar y facturar con crédito.** Verificar: e2e (cupo, mora, bloqueo, autorización
+- [x] **Paso 2: confirmar, autorizar y facturar con crédito.** Verificar: e2e (cupo, mora, bloqueo, autorización
   con permiso y nota, reevaluación al facturar, contado sin evaluar).
-- [ ] **Paso 3: gestión de cobro.** Notas, bloqueo y correo del estado de cuenta (PDF), con API y auditoría.
-- [ ] **Paso 4: interfaz.** Motivos de crédito en el pedido y su autorización; cupo y bloqueo en el estado de
+- [x] **Paso 3: gestión de cobro.** Notas, bloqueo y correo del estado de cuenta (PDF), con API y auditoría.
+- [x] **Paso 4: interfaz.** Motivos de crédito en el pedido y su autorización; cupo y bloqueo en el estado de
   cuenta y en el cliente; notas y envío. Verificar: vitest.
-- [ ] **Paso 5: documentación, verificación y PR.**
+- [x] **Paso 5: documentación, verificación y PR.** Manual de cobros §6-7, `api.md`, esquema §49. Batería:
+  backend 2091, frontend 1239, ruff, mypy, svelte-check, ESLint y build. QA con Grupo Lorena: panel «Crédito y
+  cobranza» de El Trigal (disponible $472.82 = $500 − $27.18), nota de cobro, bloqueo con motivo y desbloqueo,
+  375 px. Agregado en la verificación: «Autorizar crédito para facturar» sobre un pedido confirmado (sin él, un
+  pedido que agota el cupo entre confirmar y facturar quedaba trabado).
 
 ## Estado actual
 
-- **Paso en curso**: V5a terminado; PR a develop con Auto-fix y auto-merge. Sigue V5b (plan detallado arriba).
+- **Paso en curso**: V5b terminado; PR a develop con Auto-fix y auto-merge. V5 (pedidos y cobros) queda completo
+  salvo los encargos con anticipo, que el usuario dejó fuera.
+- **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
+  los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó
+  intacta. Si vuelve a pasar: revisar `%LOCALAPPDATA%\Temp` (WSL deja un swap de ~3 GB por arranque).
 - **Investigación del 25/11/2026** (el usuario pidió resolver con investigación los dos puntos para el contador):
   - **Retorno en el anexo 2: se mantiene como fila negativa** con la fecha de la factura. La Normativa 2.0
     (13.3.2 a) da al retorno el efecto de disminuir la venta y el débito de la FE sin invalidarla; el manual F-07

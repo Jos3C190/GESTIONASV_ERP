@@ -90,6 +90,61 @@ it('quien autoriza ve los motivos y devolver exige qué corregir', async () => {
   );
 });
 
+it('el crédito lo autoriza quien controla el crédito, con motivo', async () => {
+  const credit = {
+    code: 'credit_limit_exceeded' as const,
+    message: 'El pedido pasa el límite de crédito del cliente.'
+  };
+  const pending = order({
+    status: 'pending_authorization',
+    version: 5,
+    authorization_reasons: [credit]
+  });
+  // Quien solo autoriza descuentos no puede autorizar crédito.
+  permissions.set(['sales:read', 'sales_discounts:authorize'], false);
+  salesApi.sale.mockResolvedValue(pending);
+  const view = render(SaleDetail, { id: pending.id });
+  expect(await screen.findByText(credit.message)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Autorizar' })).not.toBeInTheDocument();
+  view.unmount();
+
+  permissions.set(['sales:read', 'sales_credit:authorize'], false);
+  salesApi.orderAction.mockResolvedValue({ ...pending, status: 'confirmed', version: 6 });
+  render(SaleDetail, { id: pending.id });
+  await fireEvent.click(await screen.findByRole('button', { name: 'Autorizar' }));
+  await fireEvent.input(screen.getByPlaceholderText('Por qué se autoriza el crédito'), {
+    target: { value: 'Cliente con garantía' }
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Autorizar crédito y confirmar' }));
+  await waitFor(() =>
+    expect(salesApi.orderAction).toHaveBeenCalledWith(pending.id, 'authorize', {
+      expected_version: 5,
+      note: 'Cliente con garantía'
+    })
+  );
+});
+
+it('autoriza el crédito de un pedido confirmado para poder facturarlo', async () => {
+  permissions.set(['sales:read', 'sales_credit:authorize'], false);
+  const confirmed = order({ status: 'confirmed', version: 7, payment_terms: 'credit' });
+  salesApi.sale.mockResolvedValue(confirmed);
+  salesApi.orderAction.mockResolvedValue({ ...confirmed, version: 8 });
+  render(SaleDetail, { id: confirmed.id });
+  await fireEvent.click(
+    await screen.findByRole('button', { name: 'Autorizar crédito para facturar' })
+  );
+  await fireEvent.input(screen.getByPlaceholderText('Por qué se autoriza el crédito'), {
+    target: { value: 'Pagará con cheque' }
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Autorizar crédito' }));
+  await waitFor(() =>
+    expect(salesApi.orderAction).toHaveBeenCalledWith(confirmed.id, 'authorize-credit', {
+      expected_version: 7,
+      note: 'Pagará con cheque'
+    })
+  );
+});
+
 it('un pedido con entregas ya no ofrece cancelar', async () => {
   salesApi.sale.mockResolvedValue(order({ delivery_progress: 'partial' }));
   render(SaleDetail, { id: 'sale-1' });
