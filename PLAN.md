@@ -1018,13 +1018,13 @@ El usuario dijo «Sí, sigue con V9c» (26/11/2026). Decisiones por defecto:
 
 Pasos:
 - [x] **Paso 0: plan y rama.**
-- [ ] **Paso 1: prueba integral.** Verificar: pasa en local.
+- [x] **Paso 1: prueba integral.** Verificar: pasa en local. Hecho: `test_sales_full_cycle.py` pasa a la primera.
 - [ ] **Paso 2: manual consolidado** y revisión de los manuales de Ventas. Verificar: enlaces y datos contra lo construido.
 - [ ] **Paso 3: batería completa y PR.**
 
 ## Estado actual
 
-- **Paso en curso**: V9c paso 1 (prueba integral). V9b en PR #70.
+- **Paso en curso**: V9c paso 2 (manual consolidado). V9b en PR #70.
   créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
   no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)
   y libros de IVA de octubre. Batería de inventario tras la corrección de capacidad: 567 pasan. Sigue V9c (manual
