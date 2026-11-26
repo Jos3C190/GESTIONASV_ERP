@@ -1008,8 +1008,29 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V9b paso 2 (siembra del mes anterior). Paso 1 hecho: `X-DTE-Demo-Clock` en el servicio
-  (`middleware/relojDemostracion.js`) y `app/infrastructure/dte_demo_clock.py` en el ERP. V9a en develop (#69).
+- **Paso en curso**: V9b paso 2 (siembra del mes anterior), **pausado por el usuario el 26/11/2026** («Para,
+  continuaremos después»). Paso 1 hecho y en commit (reloj de demostración).
+  - **Hecho en este paso (en commit)**: corrección de capacidad en `inventory_repository._usage`: la sesión tiene
+    `autoflush=False` y la ocupación se leía sin volcar el saldo que el mismo movimiento ya descontó del origen; la
+    unidad se contaba dos veces y no se podía fraccionar ningún pallet que ocupara más de la mitad de su ubicación
+    (decisión del usuario: «Corregir el error aquí primero»). Prueba `tests/integration/test_inventory_capacity_in_place.py`
+    (falla sin la corrección, pasa con ella) y `test_inventory_split_prepare_route.py` sigue pasando. **Falta** correr
+    la batería de inventario completa (se detuvo a medias).
+  - **Sin commit (en el disco)**: `backend/seed/seed_grupo_lorena_sales.py`. Prepara cajas fraccionando pallets de
+    BOD-CENTRAL-01 (prepare-split, medir, etiquetar —reimpresión si ya hubo inicial— y liberar con `putaway`), arma el
+    plan con las cajas listas, crea ventas por día con `time-machine` + `demo_clock()`, procesa los documentos en el
+    proceso (parcha los `enqueue_*` de los routers) y cobra, devuelve, cambia y fija la meta. Agrega tramos de precio
+    desde el día 1 del mes (los precios sembrados rigen desde el 16/11) con el precio **vigente** (el primero quedaba
+    bajo el costo) y alinea los tramos que una corrida anterior creó.
+  - **Siguiente**: correr `docker compose exec -T -e SEED_DEMO_SALES_DAYS=2 backend uv run --no-sync python -m
+    seed.seed_grupo_lorena_sales` y corregir lo que falle; luego el mes completo, enganchar el paso opcional
+    `SEED_DEMO_SALES` en `seed/seed_data.py`, bajar la complejidad de `seed()` (ruff C901 y PLC0206) y verificar en el
+    navegador análisis, libros y kardex de octubre.
+  - **Estado de la base de desarrollo**: corridas parciales ya fraccionaron algunas cajas (café y relleno) y crearon
+    tramos de precio de octubre; la siembra los reconoce y continúa. Dos unidades `HU-RET-…` de harina en cuarentena
+    vienen de la QA de V8a y no se tocan.
+  - **Fecha de la siembra**: el mes anterior se calcula con la fecha real; si se retoma en diciembre, generará
+    noviembre salvo `SEED_DEMO_SALES_MONTH=2026-10`.
 - **Red del contenedor**: el backend no descarga de PyPI (un certificado intercepta TLS: `UnknownIssuer`). `time-machine`
   se agregó al lock desde el equipo con `uv add --native-tls --no-sync --group dev` y se instaló en el contenedor con la
   rueda Linux bajada por `pip download --platform manylinux2014_x86_64 --python-version 3.12` (`uv pip install --offline`).
