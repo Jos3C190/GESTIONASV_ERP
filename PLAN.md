@@ -1175,9 +1175,48 @@ Pasos:
   Pendiente para V6f (con usuarios de demostración sembrados): QA en el navegador del cajero sin menú y de la
   aprobación por otro supervisor (cubiertos por vitest y e2e). Batería del backend: 2140 pasan. PR #73.
 
+### V6b — Vitrina (rama `feature/pos-v6b-vitrina`, desde develop con V6a, PR #73)
+
+Lo que hay en el motor (revisado el 26/11/2026): el inventario vive en unidades logísticas con etiqueta, lote y
+ubicación. Fraccionar una unidad etiquetada solo se permite hacia cuarentena, y una salida parcial en su lugar solo
+existe para el ajuste de pérdida (`adjustment_out`), que además invalida la etiqueta. Vender por pieza desde ahí no
+es posible sin una regla nueva.
+
+Diseño:
+- **Vitrina de la sucursal** (`pos_showcases`): una por sucursal, en una ubicación nueva de tipo `showcase` de una
+  bodega de esa sucursal, sin control de capacidad. La crea quien configura cajas; todas las cajas de la sucursal
+  venden de ella.
+- **Pasar a vitrina**: mueve unidades logísticas **completas y disponibles** de la bodega de la sucursal a la
+  vitrina (`transfer`, idempotente) y las marca abiertas (`opened_at`, `opened_by_id`). Una unidad abierta ya no es
+  una caja cerrada: su etiqueta deja de importar. Si solo una parte va a vitrina, primero se fracciona en bodega con
+  el flujo actual.
+- **Salida por pieza**: el motor admite una salida parcial **en su lugar** (`shipment` o `adjustment_out`) solo
+  desde una unidad abierta en una ubicación `showcase`, sin invalidar etiqueta; valoración al costo promedio. Una
+  unidad que llega a cero se cierra. Fuera de vitrina las reglas actuales no cambian.
+- **Consumo FEFO** (para V6c): de la vitrina de la sucursal, por producto, primero lo que vence antes; si no
+  alcanza, la venta no pasa (`pos_showcase_stock_insufficient`).
+- **Conteo de cierre** (`pos_showcase_counts` y sus líneas, solo se agregan): el supervisor (`pos:showcase`) cuenta
+  cada producto; la diferencia contra el sistema es la **merma** y se registra como `adjustment_out` desde las
+  unidades de vitrina (FEFO) con el motivo. Contar de más no crea existencia: se rechaza y pide pasar a vitrina lo
+  que falta registrar.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [ ] **Paso 1: migración 0147 y modelos.** Tipo de ubicación `showcase` (restricción y dominio), `pos_showcases`,
+  `opened_at`/`opened_by_id` en unidades logísticas, `pos_showcase_counts` y `pos_showcase_count_lines`.
+  Verificar: prueba de migración.
+- [ ] **Paso 2: motor de inventario.** Salida parcial en su lugar desde unidad abierta en vitrina; el resto de las
+  reglas intactas. Verificar: integración (parcial, cierre en cero, valoración, rechazo fuera de vitrina).
+- [ ] **Paso 3: casos de uso y API.** Crear vitrina, existencias de vitrina, candidatas en bodega, pasar a vitrina,
+  consumo FEFO, conteo y merma; permisos (`pos:registers_manage`, `pos:showcase`, `pos:sell` para consultar) y
+  bitácora. Verificar: unitarias y e2e.
+- [ ] **Paso 4: interfaz.** Pantalla «Vitrina»: existencias por producto y vencimiento, pasar a vitrina, conteo de
+  cierre con merma e historial. Verificar: vitest.
+- [ ] **Paso 5: documentación, batería, QA y PR.**
+
 ## Estado actual
 
-- **Paso en curso**: V6a en PR #73 (Auto-fix y auto-merge); sigue V6b (vitrina) cuando entre a develop, rama `feature/pos-v6a-cajas`. V9 completo en develop
+- **Paso en curso**: V6b paso 1 (migración 0147). V6a en develop (#73, 26/11/2026)., rama `feature/pos-v6a-cajas`. V9 completo en develop
   (#69–#71) y versión v2.1.0 publicada (26/11/2026). El plan del POS (V6a–V6f) está arriba, con las decisiones del usuario.
   créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
   no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)
