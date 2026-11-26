@@ -237,6 +237,25 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec(
         "sales_goals:manage", "Definir las metas mensuales de venta por sucursal", "sales"
     ),
+    # --- punto de venta (V6a, migración 0146) ---
+    PermissionSpec("pos:sell", "Vender en el punto de venta con su turno abierto", "pos"),
+    PermissionSpec("pos:shift_open", "Abrir su turno de caja", "pos"),
+    PermissionSpec("pos:shift_close", "Contar y entregar su turno de caja", "pos"),
+    PermissionSpec(
+        "pos:cash_movements",
+        "Registrar entradas, salidas y retiros de efectivo de su turno",
+        "pos",
+    ),
+    PermissionSpec("pos:reprint", "Reimprimir los tiquetes de su turno", "pos"),
+    PermissionSpec(
+        "pos:supervise",
+        "Autorizar en caja, aprobar cierres y ver los turnos de la sucursal",
+        "pos",
+    ),
+    PermissionSpec("pos:registers_manage", "Configurar las cajas del punto de venta", "pos"),
+    PermissionSpec("pos:showcase", "Pasar productos a vitrina y contar la vitrina", "pos"),
+    PermissionSpec("pos:reports", "Ver los informes de caja (X, Z y por cajero)", "pos"),
+    PermissionSpec("pos:deposits", "Registrar los depósitos bancarios de los turnos", "pos"),
     PermissionSpec(
         "fiscal_books:read", "Ver y descargar los libros de IVA y los anexos del F-07", "fiscal"
     ),
@@ -426,6 +445,22 @@ def permissions_by_module() -> dict[str, tuple[PermissionSpec, ...]]:
     return {k: tuple(v) for k, v in out.items()}
 
 
+# Plantillas del punto de venta (migración 0146): deben coincidir con la migración.
+POS_CASHIER_PERMISSIONS: tuple[str, ...] = (
+    "pos:sell",
+    "pos:shift_open",
+    "pos:shift_close",
+    "pos:cash_movements",
+    "pos:reprint",
+)
+POS_SUPERVISOR_PERMISSIONS: tuple[str, ...] = (
+    *POS_CASHIER_PERMISSIONS,
+    "pos:supervise",
+    "pos:showcase",
+    "pos:reports",
+    "pos:deposits",
+)
+
 # Base roles and the permission codes they get by default (seed).
 BASE_ROLES: tuple[tuple[str, str, bool, tuple[str, ...]], ...] = (
     (
@@ -525,5 +560,17 @@ BASE_ROLES: tuple[tuple[str, str, bool, tuple[str, ...]], ...] = (
         "Empleado — autogestión de perfil",
         False,
         (),
+    ),
+    (
+        "CAJERO",
+        "Cajero: vende y cobra en el punto de venta con su propio turno",
+        True,
+        POS_CASHIER_PERMISSIONS,
+    ),
+    (
+        "SUPERVISOR_TIENDA",
+        "Supervisor de tienda: autoriza en caja, aprueba cierres, vitrina y depósitos",
+        True,
+        POS_SUPERVISOR_PERMISSIONS,
     ),
 )

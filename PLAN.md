@@ -1052,6 +1052,11 @@ cajero que atiende (según la cuenta usada), e investigar otros ERP.
    DTE (correo, descarga, reimpresión). Sin agente instalado en la caja.
 2. **Medios de pago**: efectivo con vuelto, tarjeta (autorización y 4 últimos dígitos; sin integración con el
    datáfono) y transferencia o QR bancario (referencia obligatoria). Sin vales.
+   - Aclaración del usuario (26/11/2026): «como solo es desarrollo no tenemos POS físico para probar, así que
+     cualquier método de pago lo dejaríamos en teoría como pagado». Todo pago registrado queda cobrado al
+     confirmar la venta, sin estado pendiente ni verificación externa; la referencia de tarjeta o transferencia
+     se captura tal como la escribe el cajero y solo se valida su formato. El cuadre contra el lote del banco es
+     un control del arqueo (total declarado por medio), no una integración.
 3. **Sin conexión**: opción A del plan: en línea contra el ERP; si Hacienda o el servicio DTE fallan, contingencia. Sin
    nodo de tienda.
 4. **Vitrina por sucursal**: «pasar a vitrina» abre una unidad logística y la vuelve existencia suelta; la caja descuenta
@@ -1127,10 +1132,13 @@ efectivo menos vuelto, reintegros); las ventas y los reintegros valen cero hasta
 
 Pasos:
 - [x] **Paso 0: plan y rama.**
-- [ ] **Paso 1: migración 0146 y modelos.** Tablas `pos_registers`, `pos_shifts`, `pos_cash_movements`,
+- [x] **Paso 1: migración 0146 y modelos.** Tablas `pos_registers`, `pos_shifts`, `pos_cash_movements`,
   `pos_shift_counts` (con renglones por denominación), `pos_shift_deposits`, `pos_supervisor_pins`; permisos `pos:*` y
   roles CAJERO y SUPERVISOR_TIENDA; restricciones (un turno abierto por caja y por cajero, montos y estados válidos,
   inmutabilidad de lo aprobado); guarda de downgrade. Verificar: prueba de migración (sube, baja, guarda).
+  Hecho: `0146_pos_registers_shifts.py`, `models/pos.py`, permisos y plantillas en `rbac/catalogue.py`
+  (`POS_CASHIER_PERMISSIONS`, `POS_SUPERVISOR_PERMISSIONS`); `test_pos_registers_migration.py` pasa. El fondo
+  inicial vive en el turno y su conteo de apertura (no hay movimiento «fondo»).
 - [ ] **Paso 2: dominio.** Estados del turno y transiciones, cálculo del esperado y la diferencia, denominaciones USD,
   reglas de movimientos y de aprobación. Verificar: unitarias.
 - [ ] **Paso 3: repositorios y casos de uso.** Abrir turno con conteo, entradas/salidas/retiros (supervisor sobre el
@@ -1148,7 +1156,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V6a paso 1 (migración de cajas y turnos), rama `feature/pos-v6a-cajas`. V9 completo en develop
+- **Paso en curso**: V6a paso 2 (dominio de turnos), rama `feature/pos-v6a-cajas`. V9 completo en develop
   (#69–#71) y versión v2.1.0 publicada (26/11/2026). El plan del POS (V6a–V6f) está arriba, con las decisiones del usuario.
   créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
   no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)
