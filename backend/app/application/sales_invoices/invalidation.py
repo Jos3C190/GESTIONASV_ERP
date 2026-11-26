@@ -14,6 +14,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
+from app.application.period_guard import local_day, require_open
 from app.application.sales_invoices.remission import TransferRemissionUseCases
 from app.application.sales_invoices.use_cases import SalesInvoiceUseCases
 from app.core.exceptions import BusinessRuleError, NotFoundError
@@ -36,6 +37,7 @@ from app.domain.entities.sales_fiscal_notes import (
 from app.domain.entities.sales_order import require_cancellable
 from app.domain.ports.contingency_repository import ContingencyResponsibleRepository
 from app.domain.ports.dte_service import DteService, DteServiceError, InvalidationWindow
+from app.domain.ports.fiscal_period_repository import ClosedPeriods
 from app.domain.ports.sales_fiscal_invalidation_repository import (
     SalesFiscalInvalidationRepository,
 )
@@ -70,9 +72,11 @@ class FiscalInvalidationUseCases:
         dte: DteService | None,
         remissions: TransferRemissionUseCases | None = None,
         returns: SalesFiscalReturnRepository | None = None,
+        periods: ClosedPeriods | None = None,
     ) -> None:
         self._remissions = remissions
         self._returns = returns
+        self._periods = periods
         self._documents = documents
         self._invalidations = invalidations
         self._invoices = invoices
@@ -159,6 +163,7 @@ class FiscalInvalidationUseCases:
             pending_invalidation=pending is not None,
         )
         await self._require_without_notes(document)
+        await require_open(self._periods, company_id, local_day(document.issued_at))
         require_annullable(document.document_type)
         if cancel_order and document.sale_id is None:
             raise BusinessRuleError(
@@ -214,6 +219,7 @@ class FiscalInvalidationUseCases:
             pending_invalidation=pending is not None,
         )
         await self._require_without_notes(original)
+        await require_open(self._periods, company_id, local_day(original.issued_at))
         person = validate_requester(
             requester.name, requester.document_type, requester.document_number
         )

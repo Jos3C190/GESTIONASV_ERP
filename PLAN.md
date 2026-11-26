@@ -897,12 +897,14 @@ El usuario dijo «Sí, sigue con V8b2» (25/11/2026). Decisiones tomadas por def
 
 Pasos:
 - [x] **Paso 0: plan y rama.**
-- [ ] **Paso 1: migración 0144 y dominio.** Tabla `fiscal_period_closes` (cierre vigente único por mes), permiso;
+- [x] **Paso 1: migración 0144 y dominio.** Tabla `fiscal_period_closes` (cierre vigente único por mes), permiso;
   reglas puras (mes cerrable, motivo, mensaje del bloqueo). Verificar: prueba de migración y unitarias.
-- [ ] **Paso 2: cierre, reapertura y bloqueos.** Repositorio, casos de uso y API (`GET/POST /fiscal-books/{period}/close`,
+- [x] **Paso 2: cierre, reapertura y bloqueos.** Repositorio, casos de uso y API (`GET/POST /fiscal-books/{period}/close`,
   `POST .../reopen`); guardia inyectada en cobros, libros (compras), invalidación y retornos. Verificar: e2e.
-- [ ] **Paso 3: interfaz.** Estado y acciones del cierre en Libros de IVA. Verificar: vitest.
-- [ ] **Paso 4: documentación, verificación y PR.**
+- [x] **Paso 3: interfaz.** Estado y acciones del cierre en Libros de IVA. Verificar: vitest.
+- [x] **Paso 4: documentación, verificación y PR.** Manual de libros (cierre), `api.md`, esquema §52; unitarias,
+  migración, e2e `test_fiscal_period_close.py`, suites de cobros, libros, invalidación, retornos y notas (1514 pasan);
+  vitest; QA (cerrar octubre, cobro de octubre rechazado, reabrir con motivo).
 
 ## Corrección: multipleOf del servicio DTE (rama `feature/dte-multipleof-precision`, 25/11/2026)
 
@@ -923,7 +925,8 @@ los decimales de la representación más corta del número (la misma que va en e
 
 ## Estado actual
 
-- **Paso en curso**: V8b2 paso 1 (migración 0144 y dominio del cierre de período). V8b1 en PR #67. La vista previa del pedido ignora
+- **Paso en curso**: V8b2 en PR (sobre V8b1, #67). Lo siguiente es V9. El CHECK de reapertura exige
+  `reopen_reason IS NOT NULL` (con NULL, `length(...) >= 10` da NULL y el CHECK lo dejaba pasar). La vista previa del pedido ignora
   `exchange_return_id` (solo se valida al guardar, con el id del pedido que se edita). QA del 25/11: PED-20261125-F4596AE0
   cambia DEV-20261126-A30FE3F7 y se le aplicó $34.66 del saldo a favor de RC-000003. V8a en develop (#65) y
   multipleOf del DTE corregido en develop (#66); la imagen de `dte-service` se reconstruyó tras el merge. Las pruebas del servicio corren sin

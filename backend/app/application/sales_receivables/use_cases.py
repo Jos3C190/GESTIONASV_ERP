@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from app.application.period_guard import require_open
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from app.domain.entities.sales_receivables import (
     ZERO,
@@ -21,6 +22,7 @@ from app.domain.entities.sales_receivables import (
     validate_payments,
 )
 from app.domain.entities.sales_return_fiscal import validate_refund
+from app.domain.ports.fiscal_period_repository import ClosedPeriods
 from app.domain.ports.sales_receivable_repository import (
     AccountDocument,
     Certificate,
@@ -67,8 +69,11 @@ def _visible(document: AccountDocument) -> bool:
 
 
 class SalesReceivableUseCases:
-    def __init__(self, repository: SalesReceivableRepository) -> None:
+    def __init__(
+        self, repository: SalesReceivableRepository, periods: ClosedPeriods | None = None
+    ) -> None:
         self._repository = repository
+        self._periods = periods
 
     async def portfolio(self, company_id: uuid.UUID, today: date) -> list[CustomerSummary]:
         documents = await self._repository.documents(company_id)
@@ -187,6 +192,7 @@ class SalesReceivableUseCases:
             raise BusinessRuleError(
                 "La fecha del cobro no puede ser futura.", code="sales_receipt_date_invalid"
             )
+        await require_open(self._periods, company_id, received_on)
         if await self._repository.customer(company_id, customer_id, lock=True) is None:
             raise _not_found()
         clean_payments, total = validate_payments(payments)
@@ -246,6 +252,7 @@ class SalesReceivableUseCases:
             raise NotFoundError("Recibo no encontrado.", code="sales_receipt_not_found")
         if before.status is not ReceiptStatus.ISSUED:
             raise BusinessRuleError("El recibo ya está anulado.", code="sales_receipt_annulled")
+        await require_open(self._periods, company_id, before.received_on)
         await self._repository.annul_receipt(
             company_id, receipt_id, require_annul_reason(reason), actor_id
         )
@@ -285,6 +292,7 @@ class SalesReceivableUseCases:
             raise BusinessRuleError(
                 "Un recibo anulado no tiene saldo a favor.", code="sales_receipt_annulled"
             )
+        await require_open(self._periods, company_id, refunded_on)
         clean_reference, clean_reason = validate_refund(
             amount=amount,
             available=receipt.unapplied,
@@ -317,6 +325,7 @@ class SalesReceivableUseCases:
             raise NotFoundError("Reintegro no encontrado.", code="sales_refund_not_found")
         if refund.status is not ReceiptStatus.ISSUED:
             raise BusinessRuleError("El reintegro ya está anulado.", code="sales_refund_annulled")
+        await require_open(self._periods, company_id, refund.refunded_on)
         await self._repository.annul_refund(
             company_id, refund_id, require_annul_reason(reason), actor_id
         )
@@ -347,6 +356,7 @@ class SalesReceivableUseCases:
                 "La fecha del comprobante va desde la del documento hasta hoy.",
                 code="sales_withholding_certificate_date_invalid",
             )
+        await require_open(self._periods, company_id, certificate.issued_on)
         await self._repository.save_certificate(
             company_id,
             document_id,
